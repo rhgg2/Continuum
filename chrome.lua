@@ -4,7 +4,7 @@
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(d)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: libPickerSpec = { key: string, current?: any, excludeOthers?: {name->true}, off?: bool = true }
 --shape: chrome (shared row primitives) = { rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
---shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool, tier?='project'|'global'|'factory', publishable?=bool}], onPick: fn(key), onCancel?: fn(), onCreate?: fn(text), onDelete?: fn(key, tier), onPublish?: fn(key), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?, groupLabel?: string, current?=bool, tier?='project'|'global'}], groups?: [{key, label?}], onPick: fn(key, tier), onCancel?: fn(), onCreate?: fn(text, group), onDelete?: fn(key, tier), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
@@ -411,7 +411,7 @@ end
 -- Per-kind state; popups close on focus loss so a missing entry just
 -- means "default empty filter / cursor at top".
 local pickerFilter, pickerCursor = {}, {}
-local pickerArmed    = {}    -- per kind: { key, action } of the one row button clicked once
+local pickerDeleting = {}    -- per kind: the row key whose delete button has been clicked once
 local pickerActive   = false -- frame-scoped: any picker popup live this frame
 -- EEL callback: drops SetKeyboardFocusHere's select-all so a seeded filter
 -- appends instead of being overwritten by the next keystroke. Attached lazily.
@@ -422,19 +422,19 @@ function chrome.pickerIsActive()        return pickerActive end
 function chrome.resetPickerActive()     pickerActive = false end
 
 -- Sentinel key for drawPicker's synthetic '+ new' row (see onCreate handling below).
-local CREATE = {}
+local BULLET = ' \xe2\x80\xa2'   -- trailing mark on a project entry that has diverged from its source
 
 -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
 -- 'tempers'); groups, modified badge, excludeOthers — see docs/chrome.md § Picker.
 function chrome.libPicker(d)
   local key, current = d.key, d.current
   local excludeOthers = d.excludeOthers or {}
-  local proj    = cm:getAt('project', key) or {}
-  local library = cm:getAt('global',  key) or {}
-  local merged  = cm:get(key, { mergeTiers = true }) or {}
+  local proj   = cm:getAt('project', key) or {}
+  local merged = cm:get(key, { mergeTiers = true }) or {}
 
   local items = {}
   -- A catalogue you read *from* offers Off; one you write *into* has nothing to turn off.
+  -- No groupLabel: Off is no tier, and a heading over a single row is noise.
   if d.off ~= false then
     util.add(items, { label = 'Off', key = nil, group = 1, current = current == nil })
   end
@@ -443,12 +443,9 @@ function chrome.libPicker(d)
   for k in pairs(proj) do util.add(projNames, k) end
   table.sort(projNames)
   for _, name in ipairs(projNames) do
-    -- publishable only where a publish would change the library: a fresh publish leaves no other
-    -- visible mark, so the ↑ going is the gesture's only feedback. see docs/chrome.md § Picker
-    local diverged = lib.modified(key, name)
-    local label    = diverged and (name .. ' \xe2\x80\xa2') or name
-    util.add(items, { label = label, key = name, group = 2, current = current == name,
-                      tier = 'project', publishable = (library[name] == nil or diverged) or nil })
+    local label = lib.modified(key, name) and (name .. BULLET) or name
+    util.add(items, { label = label, key = name, group = 2, groupLabel = 'Project',
+                      current = current == name, tier = 'project' })
   end
 
   local otherNames = {}
@@ -459,71 +456,88 @@ function chrome.libPicker(d)
   end
   table.sort(otherNames)
   for _, name in ipairs(otherNames) do
-    util.add(items, { label = '+ ' .. name, key = name, group = 3, current = false,
-                      tier = library[name] ~= nil and 'global' or 'factory' })
+    -- Always the library tier, never the factory one -- a merged name the library lacks is a seeded
+    -- row that was deleted; see docs/chrome.md § Picker for why 'global' names it, not 'factory'.
+    util.add(items, { label = '+ ' .. name, key = name, group = 3, groupLabel = 'Library',
+                      current = false, tier = 'global' })
   end
   return items
 end
 
--- Two-press row buttons: first click arms (reddens the glyph, no undo past this point), second
+-- The two tiers of a by-copy catalogue, in the order they are drawn. Callers pass this as the
+-- picker's `groups`, so a tier standing empty still shows and can still be created into.
+chrome.tierGroups = { { key = 'project', label = 'Project' },
+                      { key = 'global',  label = 'Library'  } }
+
+-- Build the picker-item list for a catalogue held by *copy* (`fxPatches`): both tiers in full, so
+-- a name held twice draws under each heading. See docs/chrome.md § Picker.
+--contract: project entries then library entries, each sorted; a divergent project copy is badged
+function chrome.tierPicker(d)
+  local key   = d.key
+  local names = lib.names(key)
+  local items = {}
+  for _, name in ipairs(names.project) do
+    local label = lib.modified(key, name) and (name .. BULLET) or name
+    util.add(items, { label = label, key = name, group = 'project', tier = 'project' })
+  end
+  for _, name in ipairs(names.library) do
+    util.add(items, { label = name, key = name, group = 'global', tier = 'global' })
+  end
+  return items
+end
+
+-- Two-press row delete: first click arms (turns the × red, no undo past this point), second
 -- fires. See docs/chrome.md § Picker for the full rationale and the glyph/hit-box mechanics.
-local DEL_GLYPH = 9   -- px across a drawn glyph
+local DEL_GLYPH = 9   -- px across the drawn ×
 
-local function drawCross(p, cx, cy, r, ink)
-  p.line(cx - r, cy - r, cx + r, cy + r, ink, 1)
-  p.line(cx - r, cy + r, cx + r, cy - r, ink, 1)
-end
-
--- A stem and two head strokes, sized off DEL_GLYPH as the × is.
-local function drawUpArrow(p, cx, cy, r, ink)
-  p.line(cx, cy + r, cx, cy - r, ink, 1)
-  p.line(cx, cy - r, cx - r, cy, ink, 1)
-  p.line(cx, cy - r, cx + r, cy, ink, 1)
-end
-
--- The two buttons differ in tag, action, rest ink and strokes, and in nothing else.
-local DELETE_BTN  = { action = 'delete',  tag = 'del', ink = 'picker.remove',  glyph = drawCross }
-local PUBLISH_BTN = { action = 'publish', tag = 'pub', ink = 'picker.publish', glyph = drawUpArrow }
-
--- One armed slot per picker kind, so arming either glyph on either row disarms whatever held it.
-local function isArmed(kind, key, action)
-  local a = pickerArmed[kind]
-  return a ~= nil and a.key == key and a.action == action
-end
-
--- The box both buttons take: the square side, and the width including the reserved '?' slot.
+-- The box the button takes: the square side, and the width including the reserved '?' slot.
 local function rowButtonBox()
   local side = math.max(DEL_GLYPH + 4, ImGui.GetTextLineHeight(ctx))
   return side, side + ImGui.CalcTextSize(ctx, '?')
 end
 
--- The '?' slot is always reserved, so arming never shifts the glyph. Placement has two gotchas
+-- The '?' slot is always reserved, so arming never shifts the ×. Placement has two gotchas
 -- (SameLine's offset base, the Selectable's extended rect) -- see docs/chrome.md § Picker.
-local function rowButton(kind, key, id, rowLeft, rowW, btn, inset)
-  local armed      = isArmed(kind, key, btn.action)
+local function rowButton(kind, key, id, rowLeft, rowW)
+  local armed      = pickerDeleting[kind] == key
   local side, boxW = rowButtonBox()
   local winX       = ImGui.GetWindowPos(ctx)
 
-  ImGui.SameLine(ctx, rowLeft - winX + rowW - boxW - inset)
-  local clicked = ImGui.InvisibleButton(ctx, '##' .. btn.tag .. id, boxW, side)
+  ImGui.SameLine(ctx, rowLeft - winX + rowW - boxW)
+  local clicked = ImGui.InvisibleButton(ctx, '##del' .. id, boxW, side)
 
   local x0, y0 = ImGui.GetItemRectMin(ctx)
   local _,  y1 = ImGui.GetItemRectMax(ctx)
   local cx, cy = math.floor(x0 + side / 2), math.floor((y0 + y1) / 2)
-  local ink    = btn.ink
+  local r      = DEL_GLYPH // 2
+  local ink    = 'picker.remove'
   if armed then ink = 'picker.armed'
   elseif ImGui.IsItemHovered(ctx) then ink = 'text' end
   local p = chrome.screenPainter()
-  btn.glyph(p, cx, cy, DEL_GLYPH // 2, ink)
-  -- The '?' rides the row font, so it need not match the hand-sized glyph exactly. Its ink sits high
-  -- in the text box (no descender), so centring the box leaves it above the middle: nudge it down.
+  p.line(cx - r, cy - r, cx + r, cy + r, ink, 1)
+  p.line(cx - r, cy + r, cx + r, cy - r, ink, 1)
+  -- The '?' rides the row font, so it need not match the hand-sized × exactly. Its ink sits high in
+  -- the text box (no descender), so centring the box leaves it above the ×'s middle: nudge it down.
   if armed then
     p.text(x0 + side, math.floor(cy - ImGui.GetTextLineHeight(ctx) / 2) + 1, ink, '?')
   end
 
   if not clicked then return false end
-  pickerArmed[kind] = (not armed) and { key = key, action = btn.action } or nil
+  pickerDeleting[kind] = (not armed) and key or nil
   return armed
+end
+
+-- Groups a caller did not declare: one per distinct `group` in item order, taking its heading from
+-- the first item carrying one. See docs/chrome.md § Picker.
+local DEFAULT_GROUP = 1
+local function inferGroups(items)
+  local out, seen = {}, {}
+  for _, it in ipairs(items) do
+    local k = it.group or DEFAULT_GROUP
+    if not seen[k] then seen[k] = true; util.add(out, { key = k, label = it.groupLabel }) end
+  end
+  if #out == 0 then util.add(out, { key = DEFAULT_GROUP }) end
+  return out
 end
 
 -- Generic typeahead picker. Enter picks the highlighted match; group
@@ -602,36 +616,44 @@ function chrome.drawPicker(d)
                or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
   ImGui.Separator(ctx)
 
+  -- The popup body, in the order it draws: one block per group, each with its heading, optional
+  -- create row, then matching items; `rows` is the flat cursor domain over that order. See docs/chrome.md § Picker.
   local lf = filter:lower()
-  local matches, currentMatch = {}, nil
-  for _, it in ipairs(d.items) do
-    if filter == '' or it.label:lower():find(lf, 1, true) then
-      util.add(matches, it)
-      if it.current then currentMatch = #matches end
+  local blocks, rows, currentRow = {}, {}, nil
+  for _, g in ipairs(d.groups or inferGroups(d.items)) do
+    local block, matched, exact = { key = g.key, label = g.label, rows = {} }, {}, false
+    for _, it in ipairs(d.items) do
+      if (it.group or DEFAULT_GROUP) == g.key
+         and (filter == '' or it.label:lower():find(lf, 1, true)) then
+        util.add(matched, it)
+        if it.label:lower() == lf then exact = true end
+      end
     end
-  end
-
-  -- onCreate: a non-empty filter with no exact item match earns a synthetic '+ new' row so Enter
-  -- creates instead of overwrites. see docs/chrome.md § Picker
-  if d.onCreate and filter ~= '' then
-    local exact = false
-    for _, it in ipairs(matches) do
-      if it.label:lower() == lf then exact = true; break end
+    local function addRow(r)
+      util.add(rows, r); r.index = #rows; util.add(block.rows, r)
     end
-    if not exact then
-      table.insert(matches, 1, { label = '+ new: ' .. filter, key = CREATE })
-      if currentMatch then currentMatch = currentMatch + 1 end
+    -- The create row leads its group: were it to trail, three letters and Enter would land on the
+    -- first name they partly matched and overwrite it.
+    if d.onCreate and filter ~= '' and not exact then
+      addRow{ create = g.key, label = '+ new: ' .. filter }
     end
+    for _, it in ipairs(matched) do
+      addRow{ item = it, label = it.label }
+      if it.current then currentRow = #rows end
+    end
+    -- A declared group stands even when empty -- that is how a tier holding nothing still shows, and
+    -- can still be created into. An inferred one is its items, so it never is.
+    if #block.rows > 0 or (d.groups and filter == '') then util.add(blocks, block) end
   end
 
   -- On open or filter-change, highlight the current pick if it survived; else top, and disarm any
-  -- row button: everything but a second click on the same one counts as a change of mind.
+  -- armed delete: everything but a second click on the same row counts as a change of mind.
   if ImGui.IsWindowAppearing(ctx) or filter ~= prevFilter then
-    pickerCursor[d.kind] = currentMatch or 1
-    pickerArmed[d.kind]  = nil
+    pickerCursor[d.kind]   = currentRow or 1
+    pickerDeleting[d.kind] = nil
   end
   local cursor = pickerCursor[d.kind] or 1
-  local n = #matches
+  local n = #rows
   if n > 0 then
     if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) or ImGui.IsKeyPressed(ctx, ImGui.Key_RightArrow) then
       cursor = cursor % n + 1
@@ -642,42 +664,39 @@ function chrome.drawPicker(d)
   cursor = math.min(math.max(cursor, 1), math.max(n, 1))
   pickerCursor[d.kind] = cursor
 
-  local function choose(it)
-    if it.key == CREATE then d.onCreate(filter) else d.onPick(it.key) end
+  -- A row is a create row or an item row; the group it sits in is the tier either one acts on.
+  local function choose(r)
+    if r.create then d.onCreate(filter, r.create) else d.onPick(r.item.key, r.item.tier) end
   end
 
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     if d.onCancel then d.onCancel() end
     ImGui.CloseCurrentPopup(ctx)
   elseif entered then
-    if matches[cursor] then choose(matches[cursor]) end
+    if rows[cursor] then choose(rows[cursor]) end
     ImGui.CloseCurrentPopup(ctx)
   else
-    local lastGroup
-    -- Content left and full row width, for placing the trailing row buttons, plus the width of one
-    -- such button, which the ↑ is inset by; all three constant down the list.
+    -- Content left and full row width, for placing a trailing delete button; constant down the list.
     local rowLeft = ImGui.GetCursorScreenPos(ctx)
-    local rowW       = ImGui.GetContentRegionAvail(ctx)
-    local _, rowBtnW = rowButtonBox()
-    for i, it in ipairs(matches) do
-      if filter == '' and lastGroup and lastGroup ~= (it.group or 1) then
-        ImGui.Separator(ctx)
+    local rowW    = ImGui.GetContentRegionAvail(ctx)
+    for bi, block in ipairs(blocks) do
+      -- A heading divides as well as names, so only an unlabelled group needs a rule above it.
+      if bi > 1 and not block.label then ImGui.Separator(ctx) end
+      if block.label then ImGui.TextDisabled(ctx, block.label) end
+      -- A name held in two tiers draws two rows under one label, and every group's create row reads
+      -- alike: scope each block's ids by its group, as the editor's library tree scopes its leaves.
+      ImGui.PushID(ctx, tostring(block.key))
+      for _, r in ipairs(block.rows) do
+        local deletable = d.onDelete and r.item and r.item.key ~= nil
+        -- Without AllowOverlap the full-width Selectable swallows the clicks aimed at the delete
+        -- button drawn over it: the later item only gets hover priority once the earlier one yields.
+        local flags = deletable and ImGui.SelectableFlags_AllowOverlap or nil
+        if ImGui.Selectable(ctx, r.label, r.index == cursor, flags) then choose(r) end
+        if deletable and rowButton(d.kind, r.item.key, r.index, rowLeft, rowW) then
+          d.onDelete(r.item.key, r.item.tier)
+        end
       end
-      local deletable   = d.onDelete   and it.key ~= nil and it.key ~= CREATE
-      local publishable = d.onPublish  and it.publishable and it.key ~= CREATE
-      -- Without AllowOverlap the full-width Selectable swallows the clicks aimed at the buttons
-      -- drawn over it: the later item only gets hover priority once the earlier one yields.
-      local flags = (deletable or publishable) and ImGui.SelectableFlags_AllowOverlap or nil
-      if ImGui.Selectable(ctx, it.label, i == cursor, flags) then choose(it) end
-      -- The × holds the flush-right slot wherever both are drawn, and the ↑ steps one box left of it.
-      local pubInset = deletable and rowBtnW or 0
-      if publishable and rowButton(d.kind, it.key, i, rowLeft, rowW, PUBLISH_BTN, pubInset) then
-        d.onPublish(it.key)
-      end
-      if deletable and rowButton(d.kind, it.key, i, rowLeft, rowW, DELETE_BTN, 0) then
-        d.onDelete(it.key, it.tier)
-      end
-      lastGroup = it.group or 1
+      ImGui.PopID(ctx)
     end
   end
 

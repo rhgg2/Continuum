@@ -115,18 +115,22 @@ are already pushed) as tree rows echoing the parameters tab: two action rows
 swap picker, current kind flagged) with `↑`/`↓` reorder, `byp` and `del` aligned to
 the value column's left edge, then one row per field: label left, `fxFieldWidget` in
 a fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
-around the arrow) between stages and a terminal **add** row. `save`
-(`tv:saveFxPatch`) names the host's chain into the project tier of `fxPatches`; it
-is disabled where the tab stands hostless or the chain is empty, and mints no host
-of its own — that is `add`'s job. `load` (`tv:loadFxPatch`) is the read half: it
-copies a named chain out of the catalogue onto the host, replacing whatever chain
-it held, and parks the strip cursor on stage 1. It is disabled only on an empty
-catalogue — where `save` refuses to mint, `load` mints through `tv:fxHostForEdit`
-just as `add` does, so a bare selection with the fx tab chosen loads onto a fresh
-region. `load`'s rows carry the catalogue's own housekeeping with them: `↑`
-publishes a project patch into the library tier (`tv:publishFxPatch`) and `×`
-deletes the copy the row is showing (`tv:deleteFxPatch`), both two-press, and
-neither touching the host or the chain under the caret.
+around the arrow) between stages and a terminal **add** row. Both catalogue
+pickers list `fxPatches` through `chrome.tierPicker` under the `Project` and
+`Library` headings, in full and unresolved, so a name held in both tiers draws a
+row under each and a pick carries the tier its row was drawn from. `save`
+(`tv:saveFxPatch`) names the host's chain into whichever tier you picked or
+created in — there is no separate publish, saving under `Library` being what
+putting a patch where it travels with you means. It is disabled where the tab
+stands hostless or the chain is empty, and mints no host of its own — that is
+`add`'s job. `load` (`tv:loadFxPatch`) is the read half: it copies that row's
+chain onto the host, replacing whatever chain it held, and parks the strip cursor
+on stage 1. It is disabled only on an empty catalogue — where `save` refuses to
+mint, `load` mints through `tv:fxHostForEdit` just as `add` does, so a bare
+selection with the fx tab chosen loads onto a fresh region. `load`'s rows also
+carry the catalogue's one piece of housekeeping: a two-press `×` deleting the
+copy that row is showing (`tv:deleteFxPatch`), which leaves the same name in the
+other tier standing and touches neither host nor chain.
 Nothing filters the offered list: no kind declares a host it requires, so every
 patch offers onto every host — including one naming a kind the registry has lost,
 which draws a `? kind` heading with no field rows rather than faulting.

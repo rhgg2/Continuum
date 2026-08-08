@@ -14,7 +14,8 @@ local fakeImGui = setmetatable({ Mod_None = 0 }, {
 local filterText, pressed = '', {}
 for _, name in ipairs({ 'AlignTextToFramePadding', 'Text', 'SameLine', 'PushStyleVar', 'PopStyleVar',
   'PushStyleColor', 'PopStyleColor', 'OpenPopup', 'SetNextWindowPos', 'SetKeyboardFocusHere',
-  'SetNextItemWidth', 'Attach', 'Separator', 'EndPopup', 'CloseCurrentPopup' }) do
+  'SetNextItemWidth', 'Attach', 'Separator', 'EndPopup', 'CloseCurrentPopup',
+  'PushID', 'PopID' }) do
   fakeImGui[name] = function() end
 end
 fakeImGui.Button                = function() return true end   -- always "opening" so the popup runs

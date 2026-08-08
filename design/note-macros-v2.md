@@ -1233,11 +1233,11 @@ catalogues — the project's, which travels with the file, and the library,
 which travels with the user — plus publish, delete, and project-over-library
 resolution.
 
-`save` therefore writes into the project tier and `↑` on a row of the load
-picker publishes it to the library: local first, kept when it proves
-itself. The inverse is deferred. Localizing a library patch, so that it
-travels with the file, has no gesture of its own; until one is wanted it is
-done by loading the patch onto a host and saving it again.
+`save` therefore writes into whichever tier its picker row was drawn from, and
+there is no promotion gesture: the two catalogues are two destinations for one
+verb. Localizing a library patch, so that it travels with the file, has no
+gesture of its own either; until one is wanted it is done by loading the patch
+onto a host and saving it under `Project`.
 
 *Decision taken — the catalogue is not a derivation input (2026-08-07).*
 `fxPatches` joins tm's `tvOnlyKeys`. Its `configChanged` subscriber marks every
@@ -1274,32 +1274,53 @@ registry entry that declared them, so the stage draws as a heading alone. It sta
 addressable, and that heading is the swap picker — pointing it at a live kind is
 the repair.
 
-*Decisions taken — the guard is the picker's own two-press, and the delete acts
-on the row's tier (2026-08-08).* Publishing over a divergent library copy
-destroys content that no undo point covers, a config write minting none. It wants
-a guard, and the house already has one: the swing and temper editors put their
-publish behind `modalHost:openConfirm`. But this gesture lives inside a live
-ImGui popup, where a modal opening over it is untested, and the picker carries a
-guard of its own a few pixels away — the `×`'s two presses. So the `↑` takes the
-same one. The two glyphs then share a single armed slot per picker, so arming
-either disarms whatever was armed before: one thing on a picker is ever a click
-from firing.
+*Decision taken — the catalogue shows both tiers, and publish dissolves into save
+(2026-08-08; replaces a promotion glyph on the load picker's rows, taken and
+withdrawn the same day).* The first shape put a publish arrow on the load
+picker's rows: `save` wrote the project tier, and a row glyph promoted a patch
+from there to the library. Three complaints landed on it, and they turned out to
+be one. A save gesture on a button labelled `load` makes no sense. Nothing said
+there were two levels of save, nor which one plain `save` wrote. And a name held
+in both tiers showed only once, the project row hiding the library one — which
+meant the hidden copy could not be picked, deleted, or told apart from a name
+with no twin at all.
 
-Which copy, then, does a `×` delete? The one the row is showing. `libPicker`
-stamps each item with the tier it drew the row from and the picker hands it back
-as `onDelete(key, tier)`, so a project row's `×` leaves any library copy standing
-and the name returns to the list as a `+` row. The `↑` shows only where a publish
-would change the library — a project row the library lacks, or one it holds a
-divergent copy of. This is not tidiness. A fresh publish produces no other visible
-change, no `•` badge appearing or going, so the `↑` vanishing is the only feedback
-the gesture has.
+The root is that `libPicker` builds a *resolved* list: one row per name,
+answering "what will I get if I pick this". That is right for an artifact held by
+reference — a take names a swing, so resolution is the question. A patch is
+instantiated by copy and nothing names it once it has landed, so there is no
+reference for resolution to serve, and the shadowing was doing work for a
+question nobody asks. `tierPicker` lists both tiers in full instead, under
+`Project` and `Library` headings, the same two words the editor's library tree
+puts on its folders — and it was the tree that had this right all along, listing
+its tiers independently and pushing an ImGui id per tier because it expects the
+same label in both.
 
-One gap is accepted rather than built for. A project row with a *pristine*
-library twin looks exactly like one with no twin at all, so nothing on screen
-distinguishes a delete that leaves a copy behind from one that takes the name
-away. Closing it would mean a second badge in `libPicker`'s vocabulary, which the
-swing and temper pickers share and neither needs. The outcome is the least
-destructive one, and the row reappearing as `+ <name>` says so a moment later.
+Everything else follows. A pick carries the tier its row was drawn from, so
+`save` has two destinations and needs no second verb: saving under `Library` *is*
+publishing, and `lib.publish` goes back to serving the swing and temper editors
+alone, where a promotion between two visible trees means something. The `×`
+becomes unambiguous, deleting the copy its row shows and leaving the same name in
+the other tier standing. And `+ new: <name>` appears at the head of each group
+rather than once above the list, because a create with no tier is exactly the
+unstated default the whole complaint was about; the project one leads, so
+type-and-Enter still saves locally, but as a resting place you can see rather
+than a rule you cannot.
+
+One guard survives from the withdrawn shape, and one correction. The `×` keeps
+its two presses: a delete destroys content no undo point covers, a config write
+minting none, and the house's confirm modal is untested opening over a live ImGui
+popup. And factory stops being named as a tier — it is a seed source,
+`lib.seedIfEmpty` stocking the library from it once with nothing resolving
+through it afterwards. `libPicker` had been stamping `factory` on a name the
+library tier lacked, which is a seeded row since deleted; `lib.delete` raises on
+that tier, so the first picker over a seeded key to grow a `×` would have errored
+instead of deleting.
+
+What this costs: "local first, kept when it proves itself" stops being enforced
+and becomes what the layout encourages, `Project` being the group met first. It
+was being enforced by making the library reachable only through a promotion
+gesture, which is how a save came to sit on the load picker in the first place.
 
 **Scripted kinds — an editor-page pane.** `generators.kinds` is already
 the seam: one registry entry per kind, user-extensible by construction. A

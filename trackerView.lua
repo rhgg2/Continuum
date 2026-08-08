@@ -2588,34 +2588,27 @@ function tv:replaceFxStage(uuid, index, entry)
   self:setNoteFx(uuid, list)
 end
 
--- Stamp the host's chain into the project tier under `name`, verbatim -- bypass flags and
--- inline pattern bodies included. A patch is instantiated by copy, so nothing points back here.
+-- Stamp the host's chain into `tier` under `name`, verbatim -- bypass flags and inline pattern
+-- bodies included. A patch is instantiated by copy, so nothing points back here.
 --contract: no host, no chain, or a blank name is a silent no-op; never mints a host
-function tv:saveFxPatch(uuid, name)
+function tv:saveFxPatch(uuid, tier, name)
   local fx = self:noteFx(uuid)
   if not (name and name ~= '' and fx and #fx > 0) then return end
-  lib.save('fxPatches', name, fx)
+  lib.save('fxPatches', tier, name, fx)
 end
 
--- Instantiate a named chain onto the host, replacing whatever it held (see design/note-macros-v2.md
--- § The chain surface). cm deep-copies on the way out, so the loaded list aliases nothing.
---contract: unknown host or unresolvable name is a silent no-op; never mints a host
-function tv:loadFxPatch(uuid, name)
-  local patch = name and lib.get('fxPatches', name)
+-- Instantiate the named tier's chain onto the host, replacing whatever it held. The picker row
+-- names its tier rather than the load resolving one; cm deep-copies on the way out. See design/note-macros-v2.md § The chain surface.
+--contract: unknown host, or a name that tier does not hold, is a silent no-op; never mints a host
+function tv:loadFxPatch(uuid, tier, name)
+  local patch = name and lib.getAt('fxPatches', tier, name)
   if not (uuid and patch) then return end
   self:setNoteFx(uuid, patch)
 end
 
--- Lift a project patch into the library tier, where it travels with the user rather than the file.
---contract: a nil name, or one with no project copy, is a silent no-op
-function tv:publishFxPatch(name)
-  if not name then return end
-  lib.publish('fxPatches', name)
-end
-
--- Delete the copy the picker row is showing: a project row leaves any library copy standing.
+-- Delete the copy the picker row is showing; the same name in the other tier stands.
 --contract: a nil name is a silent no-op; any tier but project/global raises
-function tv:deleteFxPatch(name, tier)
+function tv:deleteFxPatch(tier, name)
   if not name then return end
   lib.delete('fxPatches', tier, name)
 end
@@ -2663,7 +2656,6 @@ tv.freezeToGroup    = util.atomic('Freeze FX to group', tv.freezeToGroup)
 tv.saveFxPatch      = util.atomic('Save FX patch',     tv.saveFxPatch)
 tv.loadFxPatch      = util.atomic('Load FX patch',     tv.loadFxPatch)
 tv.deleteFxPatch    = util.atomic('Delete FX patch',   tv.deleteFxPatch)
--- publishFxPatch stays unwrapped: it writes the global tier alone, which is no part of the document.
 
 ----- Deletion
 

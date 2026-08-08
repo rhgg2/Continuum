@@ -1,4 +1,4 @@
-@spec picker_create_spec  src=tests/specs/picker_create_spec.lua  loc=72  cases=2
+@spec picker_create_spec  src=tests/specs/picker_create_spec.lua  loc=73  cases=2
 @harness   mk
 
 # Intent
@@ -8,42 +8,42 @@
   from libpicker_badge_spec, extended with InputText/IsKeyPressed/Selectable.
 
 # Helpers
-  @fn mkChrome(h)  @ 36-39
-  @fn drawWith(chrome, text)  @ 44-52
+  @fn mkChrome(h)  @ 37-40
+  @fn drawWith(chrome, text)  @ 45-53
       -- Draw one Save picker frame with filter `text` and Enter pressed; return the fired callback name.
 
 # Cases
-  @case 'a non-exact filter prepends a create row; Enter fires onCreate with the filter'  [harness]  @ 56-61
-  @case 'a filter equal to an existing label suppresses the create row; Enter overwrites via onPick'  [harness]  @ 65-70
+  @case 'a non-exact filter prepends a create row; Enter fires onCreate with the filter'  [harness]  @ 57-62
+  @case 'a filter equal to an existing label suppresses the create row; Enter overwrites via onPick'  [harness]  @ 66-71
 
 # Fields (r read / w write incl. constructor keys)
-  @field w BeginPopup  @ 23
-  @field w Button  @ 20
-  @field w CreateFunctionFromEEL  @ 25
-  @field w GetItemRectMax  @ 22
-  @field w GetItemRectMin  @ 21
-  @field w ImGui_GetBuiltinPath  @ 32
-  @field w InputText  @ 26
-  @field w IsKeyPressed  @ 27
-  @field w IsWindowAppearing  @ 24
-  @field r Key_Enter  @ 46
+  @field w BeginPopup  @ 24
+  @field w Button  @ 21
+  @field w CreateFunctionFromEEL  @ 26
+  @field w GetItemRectMax  @ 23
+  @field w GetItemRectMin  @ 22
+  @field w ImGui_GetBuiltinPath  @ 33
+  @field w InputText  @ 27
+  @field w IsKeyPressed  @ 28
+  @field w IsWindowAppearing  @ 25
+  @field r Key_Enter  @ 47
   @field w Mod_None  @ 9
-  @field w Selectable  @ 28
+  @field w Selectable  @ 29
   @field w __index  @ 10
-  @field w buttonLabel  @ 48
-  @field w cm  @ 37,38
-  @field w ctx  @ 38
-  @field w items  @ 48
-  @field w key  @ 41
-  @field w kind  @ 48
-  @field w label  @ 41
-  @field w lib  @ 38
-  @field r loaded  @ 31
-  @field w name  @ 56,65
-  @field w onCreate  @ 50
-  @field w onPick  @ 49
-  @field r preload  @ 30
-  @field r reaper  @ 32
-  @field w run  @ 57,66
-  @field w synthetic  @ 37
-  @field w uiSize  @ 38
+  @field w buttonLabel  @ 49
+  @field w cm  @ 38,39
+  @field w ctx  @ 39
+  @field w items  @ 49
+  @field w key  @ 42
+  @field w kind  @ 49
+  @field w label  @ 42
+  @field w lib  @ 39
+  @field r loaded  @ 32
+  @field w name  @ 57,66
+  @field w onCreate  @ 51
+  @field w onPick  @ 50
+  @field r preload  @ 31
+  @field r reaper  @ 33
+  @field w run  @ 58,67
+  @field w synthetic  @ 38
+  @field w uiSize  @ 39

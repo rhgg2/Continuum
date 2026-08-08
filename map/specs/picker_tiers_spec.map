@@ -1,0 +1,93 @@
+@spec picker_tiers_spec  src=tests/specs/picker_tiers_spec.lua  loc=206  cases=8
+@harness   mk
+
+# Intent
+  Chrome-level pin for the by-copy catalogue picker: `tierPicker` lists both tiers in full, so a
+  name held twice appears twice and neither copy hides the other, and `drawPicker` puts a create row
+  at the head of each declared group, so a typed name lands in the tier you point at rather than a
+  default nothing states. Recipe from picker_groups_spec, extended with picker_create_spec's Enter.
+
+# Helpers
+  @fn mkChrome(h)  @ 51-54
+  @fn withCatalogue(harness, project, library)  @ 57-60
+      -- A catalogue with `wobble` in both tiers -- the case a resolved list could not show.
+  @fn labels(items, tier)  @ 62-66
+  @fn frame(chrome, items, text, opts)  @ 70-81
+  @fn rowsDrawn(drawn)  @ 83-87
+
+# Cases
+  @case 'both tiers are listed in full, so a name held twice appears in each'  [harness]  @ 93-103
+  @case 'a name held in both tiers draws two rows alike, each under its own id scope'  [harness]  @ 107-119
+  @case 'each row names the tier and the group it was drawn from, and wears no prefix'  [harness]  @ 123-135
+  @case 'a non-exact filter offers to create in either tier, the project one first'  [harness]  @ 141-150
+  @case 'Enter on a typed name creates in the project tier, the cursor resting there'  [harness]  @ 154-163
+  @case 'an exact filter suppresses only its own group\'s create row'  [harness]  @ 167-180
+  @case 'a declared tier with nothing in it still shows, so it can be created into'  [harness]  @ 184-192
+  @case 'the groups survive a filter, there being two create rows to tell apart'  [harness]  @ 196-204
+
+# Fields (r read / w write incl. constructor keys)
+  @field w BeginPopup  @ 31
+  @field w Button  @ 24
+  @field w CalcTextSize  @ 30
+  @field w CreateFunctionFromEEL  @ 33
+  @field w GetContentRegionAvail  @ 27
+  @field w GetCursorScreenPos  @ 28
+  @field w GetItemRectMax  @ 26
+  @field w GetItemRectMin  @ 25
+  @field w GetTextLineHeight  @ 29
+  @field w ImGui_GetBuiltinPath  @ 45
+  @field w InputText  @ 34
+  @field w IsKeyPressed  @ 35
+  @field w IsWindowAppearing  @ 32
+  @field r Key_Enter  @ 73
+  @field w Mod_None  @ 9
+  @field w PopID  @ 23
+  @field w PushID  @ 22
+  @field w Selectable  @ 38
+  @field w Separator  @ 36
+  @field w TextDisabled  @ 37
+  @field w __index  @ 10
+  @field r alpha  @ 130,131
+  @field w alpha  @ 95,125
+  @field w buttonLabel  @ 76
+  @field w cm  @ 52,53
+  @field w config  @ 58
+  @field w ctx  @ 53
+  @field r enter  @ 73
+  @field w enter  @ 158,177
+  @field w fxPatches  @ 58,59
+  @field w global  @ 59
+  @field r group  @ 131
+  @field w groups  @ 76
+  @field r heading  @ 85
+  @field w heading  @ 37
+  @field w items  @ 76
+  @field r key  @ 128,161
+  @field w key  @ 77,78,97,111,126,144,157,170,187,199
+  @field w kind  @ 76
+  @field r label  @ 64,133
+  @field w lib  @ 53
+  @field r loaded  @ 44
+  @field w name  @ 93,107,123,141,154,167,184,196
+  @field w onCreate  @ 78
+  @field w onPick  @ 77
+  @field r preload  @ 43
+  @field w project  @ 58
+  @field r reaper  @ 45
+  @field r row  @ 85,114,116
+  @field w row  @ 39
+  @field w rule  @ 36
+  @field w run  @ 94,108,124,142,155,168,185,197
+  @field r scope  @ 117
+  @field w scope  @ 39
+  @field r shelved  @ 132,133
+  @field w shelved  @ 96,125,186
+  @field w synthetic  @ 52
+  @field r tier  @ 64,130,132,162,179
+  @field w tier  @ 77,78
+  @field r tierGroups  @ 76
+  @field w uiSize  @ 53
+  @field r verb  @ 160,178
+  @field w verb  @ 77,78
+  @field w wobble  @ 95,96,110,143,156,169
+  @field w wobbly  @ 143

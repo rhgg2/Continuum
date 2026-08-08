@@ -1,4 +1,4 @@
-@spec picker_delete_spec  src=tests/specs/picker_delete_spec.lua  loc=119  cases=4
+@spec picker_delete_spec  src=tests/specs/picker_delete_spec.lua  loc=120  cases=4
 @harness   mk
 
 # Intent
@@ -8,59 +8,59 @@
   InvisibleButton that recognises a queued row and a draw list that records what the × was drawn in.
 
 # Helpers
-  @fn mkChrome(h)  @ 60-63
-  @fn frame(chrome, click, noDelete)  @ 69-76
+  @fn mkChrome(h)  @ 61-64
+  @fn frame(chrome, click, noDelete)  @ 70-77
       -- One Load picker frame, clicking the trailing × on row `click` (nil: click nothing).
       -- Returns the key onDelete fired with, and the buttons drawn this frame.
 
 # Cases
-  @case 'the first click arms the row: no delete, and its × changes ink'  [harness]  @ 80-90
-  @case 'a second click on the armed row fires onDelete with its key'  [harness]  @ 94-99
-  @case 'arming a different row disarms the first'  [harness]  @ 103-109
-  @case 'a picker without onDelete draws no buttons at all'  [harness]  @ 113-117
+  @case 'the first click arms the row: no delete, and its × changes ink'  [harness]  @ 81-91
+  @case 'a second click on the armed row fires onDelete with its key'  [harness]  @ 95-100
+  @case 'arming a different row disarms the first'  [harness]  @ 104-110
+  @case 'a picker without onDelete draws no buttons at all'  [harness]  @ 114-118
 
 # Fields (r read / w write incl. constructor keys)
-  @field w BeginPopup  @ 30
-  @field w Button  @ 21
-  @field w CalcTextSize  @ 26
-  @field w ColorConvertDouble4ToU32  @ 37
-  @field w CreateFunctionFromEEL  @ 33
-  @field w DrawList_AddLine  @ 46
-  @field w DrawList_AddText  @ 50
-  @field w GetContentRegionAvail  @ 24
-  @field w GetCursorScreenPos  @ 28
-  @field w GetItemRectMax  @ 23
-  @field w GetItemRectMin  @ 22
-  @field w GetTextLineHeight  @ 25
-  @field w GetWindowDrawList  @ 29
-  @field w GetWindowPos  @ 27
-  @field w ImGui_GetBuiltinPath  @ 56
-  @field w InputText  @ 34
-  @field w InvisibleButton  @ 40
-  @field w IsItemHovered  @ 32
-  @field w IsKeyPressed  @ 35
-  @field w IsWindowAppearing  @ 31
+  @field w BeginPopup  @ 31
+  @field w Button  @ 22
+  @field w CalcTextSize  @ 27
+  @field w ColorConvertDouble4ToU32  @ 38
+  @field w CreateFunctionFromEEL  @ 34
+  @field w DrawList_AddLine  @ 47
+  @field w DrawList_AddText  @ 51
+  @field w GetContentRegionAvail  @ 25
+  @field w GetCursorScreenPos  @ 29
+  @field w GetItemRectMax  @ 24
+  @field w GetItemRectMin  @ 23
+  @field w GetTextLineHeight  @ 26
+  @field w GetWindowDrawList  @ 30
+  @field w GetWindowPos  @ 28
+  @field w ImGui_GetBuiltinPath  @ 57
+  @field w InputText  @ 35
+  @field w InvisibleButton  @ 41
+  @field w IsItemHovered  @ 33
+  @field w IsKeyPressed  @ 36
+  @field w IsWindowAppearing  @ 32
   @field w Mod_None  @ 9
-  @field w Selectable  @ 36
+  @field w Selectable  @ 37
   @field w __index  @ 10
-  @field w buttonLabel  @ 72
-  @field w cm  @ 61,62
-  @field w ctx  @ 62
-  @field r ink  @ 48,87
-  @field w ink  @ 48
-  @field w items  @ 72
-  @field w key  @ 65
-  @field w kind  @ 72
-  @field w label  @ 41,65
-  @field w lib  @ 62
-  @field r loaded  @ 55
-  @field w name  @ 80,94,103,113
-  @field w onDelete  @ 73
-  @field w onPick  @ 72
-  @field r preload  @ 54
-  @field r reaper  @ 56
-  @field w run  @ 81,95,104,114
-  @field w synthetic  @ 61
-  @field r text  @ 88,89
-  @field w text  @ 51
-  @field w uiSize  @ 62
+  @field w buttonLabel  @ 73
+  @field w cm  @ 62,63
+  @field w ctx  @ 63
+  @field r ink  @ 49,88
+  @field w ink  @ 49
+  @field w items  @ 73
+  @field w key  @ 66
+  @field w kind  @ 73
+  @field w label  @ 42,66
+  @field w lib  @ 63
+  @field r loaded  @ 56
+  @field w name  @ 81,95,104,114
+  @field w onDelete  @ 74
+  @field w onPick  @ 73
+  @field r preload  @ 55
+  @field r reaper  @ 57
+  @field w run  @ 82,96,105,115
+  @field w synthetic  @ 62
+  @field r text  @ 89,90
+  @field w text  @ 52
+  @field w uiSize  @ 63

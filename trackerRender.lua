@@ -1144,35 +1144,35 @@ local stripPlan do
     end)
   end
 
-  -- The catalogue's own row under the action row, both directions: `save` into the project tier,
-  -- `load` back onto the host, minting one where `save` refuses to. See docs/trackerRender.md § FX chain.
+  -- The catalogue's own row under the action row, both directions: `save` into whichever tier you
+  -- pick, `load` back onto the host, minting one where `save` refuses to. See docs/trackerRender.md § FX chain.
   local function catalogueRow(plan)
-    local fx = plan.host and tv:noteFx(plan.host)
+    local fx      = plan.host and tv:noteFx(plan.host)
+    local patches = chrome.tierPicker{ key = 'fxPatches' }
     -- Hostless, or a host standing empty: there is no chain to name. `add` is what mints one.
     chrome.disabledIf(not (fx and #fx > 0), function()
       chrome.drawPicker{
         kind = 'fxPatchSave', buttonLabel = 'save',
-        items    = chrome.libPicker{ key = 'fxPatches', off = false },
-        onPick   = function(name) tv:saveFxPatch(plan.host, name) end,
-        onCreate = function(name) tv:saveFxPatch(plan.host, name) end,
+        items = patches, groups = chrome.tierGroups,
+        onPick   = function(name, tier) tv:saveFxPatch(plan.host, tier, name) end,
+        onCreate = function(name, tier) tv:saveFxPatch(plan.host, tier, name) end,
       }
     end)
     ImGui.SameLine(ctx, 0, 4)
-    local patches = chrome.libPicker{ key = 'fxPatches', off = false }
     -- An empty catalogue offers nothing to load. No onCreate: you cannot create by loading; and no
     -- current: nothing names a patch once it has landed, so no row is the current one.
     chrome.disabledIf(#patches == 0, function()
       chrome.drawPicker{
-        kind = 'fxPatchLoad', buttonLabel = 'load', items = patches,
+        kind = 'fxPatchLoad', buttonLabel = 'load',
+        items = patches, groups = chrome.tierGroups,
         -- Lazy mint, as the add row's own pick does: no host under the caret, materialise the
         -- selection's region now. The cursor then lands on the loaded chain's first stage.
-        onPick = function(name)
+        onPick = function(name, tier)
           local h = plan.host or tv:fxHostForEdit()
-          if h then tv:loadFxPatch(h, name); tv:setStripCursor{ stage = 1, param = 0 } end
+          if h then tv:loadFxPatch(h, tier, name); tv:setStripCursor{ stage = 1, param = 0 } end
         end,
-        -- The catalogue's own housekeeping, on the rows: neither touches the host or the chain.
-        onPublish = function(name)       tv:publishFxPatch(name)      end,
-        onDelete  = function(name, tier) tv:deleteFxPatch(name, tier) end,
+        -- The catalogue's own housekeeping, on the rows: it touches neither host nor chain.
+        onDelete = function(name, tier) tv:deleteFxPatch(tier, name) end,
       }
     end)
   end

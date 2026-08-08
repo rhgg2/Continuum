@@ -1,7 +1,8 @@
 -- Pin-tests for the fx patch catalogue: `tv:saveFxPatch` stamps the caret host's
--- chain into the project tier of `fxPatches` -- verbatim, by copy, and without
--- costing a re-derivation; `tv:loadFxPatch` copies a named chain back out onto a
--- host, replacing what it held. see design/note-macros-v2.md § The chain surface
+-- chain into the tier it was handed -- verbatim, by copy, and without costing a
+-- re-derivation; `tv:loadFxPatch` copies a named chain back out onto a host,
+-- replacing what it held. Both name their tier rather than resolving one, a patch
+-- being held by copy. see design/note-macros-v2.md § The chain surface
 
 local t = require('support')
 
@@ -32,12 +33,24 @@ end
 
 return {
   {
-    name = 'save stamps the host chain into the project tier, verbatim',
+    name = 'save stamps the host chain into the tier it was given, verbatim',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h, chain)
-      h.vm:saveFxPatch('fxr-1', 'wobble')
+      h.vm:saveFxPatch('fxr-1', 'project', 'wobble')
       t.deepEq(projectPatches(h).wobble, chain, 'the stored patch is the fx list as it stood')
+      t.eq(next(libraryPatches(h)), nil, 'and lands in that tier alone')
+    end,
+  },
+
+  {
+    name = 'save into the library tier writes the library tier, no project copy in the way',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h, chain)
+      h.vm:saveFxPatch('fxr-1', 'global', 'wobble')
+      t.deepEq(libraryPatches(h).wobble, chain, 'the library carries the chain the host held')
+      t.eq(next(projectPatches(h)), nil, 'without minting a project copy on the way through')
     end,
   },
 
@@ -46,7 +59,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       injectRegion(h, chain)
-      h.vm:saveFxPatch('fxr-1', 'wobble')
+      h.vm:saveFxPatch('fxr-1', 'project', 'wobble')
       h.vm:setFxField('fxr-1', 1, 'dir', 'down')
       t.eq(projectPatches(h).wobble[1].dir, 'up', 'editing the host afterwards leaves the patch alone')
     end,
@@ -59,7 +72,7 @@ return {
       injectRegion(h, chain)
       local rebuilds = 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
-      h.vm:saveFxPatch('fxr-1', 'wobble')
+      h.vm:saveFxPatch('fxr-1', 'project', 'wobble')
       t.eq(rebuilds, 0, 'the catalogue is no derivation input, so its write costs no rebuild')
     end,
   },
@@ -69,7 +82,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       injectRegion(h, chain)
-      h.vm:saveFxPatch('nope', 'ghost')
+      h.vm:saveFxPatch('nope', 'project', 'ghost')
       t.eq(next(projectPatches(h)), nil, 'an unknown uuid authors no name')
     end,
   },
@@ -80,7 +93,7 @@ return {
     name = 'the load replaces the host chain rather than appending to it',
     run = function(harness)
       local h = withCatalogue(harness, { wobble = patch })
-      h.vm:loadFxPatch('fxr-1', 'wobble')
+      h.vm:loadFxPatch('fxr-1', 'project', 'wobble')
       t.deepEq(h.vm:noteFx('fxr-1'), patch, 'a patch *is* the chain -- the two stages it replaced are gone')
     end,
   },
@@ -89,7 +102,7 @@ return {
     name = 'the host holds a copy, not a live handle on the catalogue',
     run = function(harness)
       local h = withCatalogue(harness, { wobble = patch })
-      h.vm:loadFxPatch('fxr-1', 'wobble')
+      h.vm:loadFxPatch('fxr-1', 'project', 'wobble')
       h.vm:setFxField('fxr-1', 1, 'dir', 'up')
       t.eq(projectPatches(h).wobble[1].dir, 'down', 'editing the host afterwards leaves the stored patch standing')
     end,
@@ -100,77 +113,64 @@ return {
     run = function(harness)
       local h = withCatalogue(harness, { wobble = chain })
       injectRegion(h, patch)   -- the host stands bypass-free, so the flag can only arrive with the patch
-      h.vm:loadFxPatch('fxr-1', 'wobble')
+      h.vm:loadFxPatch('fxr-1', 'project', 'wobble')
       t.eq(h.vm:noteFx('fxr-1')[2].bypass, true, 'a stage stored inert arrives inert')
     end,
   },
 
   {
-    name = 'project resolves over library, and a library-only name still loads',
+    name = 'each tier\'s copy of a name loads on its own, neither shadowing the other',
     run = function(harness)
-      local h = withCatalogue(harness, { wobble = patch }, { wobble = chain, shelved = patch })
-      h.vm:loadFxPatch('fxr-1', 'wobble')
-      t.deepEq(h.vm:noteFx('fxr-1'), patch, 'the project body wins where both tiers carry the name')
-      h.vm:loadFxPatch('fxr-1', 'shelved')
-      t.deepEq(h.vm:noteFx('fxr-1'), patch, 'a name only the library tier carries loads too')
+      local h = withCatalogue(harness, { wobble = patch }, { wobble = chain })
+      h.vm:loadFxPatch('fxr-1', 'global', 'wobble')
+      t.deepEq(h.vm:noteFx('fxr-1'), chain, 'the library body loads though a project copy holds the name')
+      h.vm:loadFxPatch('fxr-1', 'project', 'wobble')
+      t.deepEq(h.vm:noteFx('fxr-1'), patch, 'and the project body loads when that is the row picked')
     end,
   },
 
   {
-    name = 'a name in neither tier loads nothing',
+    name = 'a name the named tier does not hold loads nothing',
     run = function(harness)
-      local h = withCatalogue(harness, { wobble = patch })
-      h.vm:loadFxPatch('fxr-1', 'ghost')
+      local h = withCatalogue(harness, { wobble = patch }, { shelved = patch })
+      h.vm:loadFxPatch('fxr-1', 'project', 'ghost')
       t.deepEq(h.vm:noteFx('fxr-1'), chain, "the host's chain stands untouched")
+      h.vm:loadFxPatch('fxr-1', 'project', 'shelved')
+      t.deepEq(h.vm:noteFx('fxr-1'), chain, 'and a name the *other* tier holds is no more resolvable')
     end,
   },
 
-  ----- publish / delete: the load picker's two gestures over the tiered catalogue
+  ----- delete: the picker rows' own gesture over the tiered catalogue
 
   {
-    name = 'publish lifts the project body into the library tier, leaving the project copy standing',
+    name = 'deleting a project row leaves the library copy that shared the name standing',
     run = function(harness)
-      local h = withCatalogue(harness, { wobble = patch }, { shelved = chain })
-      h.vm:publishFxPatch('wobble')
-      t.deepEq(libraryPatches(h).wobble, patch, 'the library tier carries the body now')
-      t.deepEq(projectPatches(h).wobble, patch, 'and the project copy stands where it was')
-      t.deepEq(libraryPatches(h).shelved, chain, 'the rest of the library tier is untouched')
-    end,
-  },
-
-  {
-    name = 'deleting a project row leaves the library copy it shadowed standing',
-    run = function(harness)
-      -- Project body = chain (what the host holds); library body = patch, so the load after the
-      -- delete only matches if the name resolved through to the library tier.
       local h = withCatalogue(harness, { wobble = chain }, { wobble = patch })
-      h.vm:deleteFxPatch('wobble', 'project')
+      h.vm:deleteFxPatch('project', 'wobble')
       t.eq(projectPatches(h).wobble, nil, 'the project copy is gone')
-      h.vm:loadFxPatch('fxr-1', 'wobble')
-      t.deepEq(h.vm:noteFx('fxr-1'), patch, 'the name resolves to the library body now')
+      t.deepEq(libraryPatches(h).wobble, patch, 'and the library copy is where it was')
     end,
   },
 
   {
-    name = 'deleting a library row takes the name out of the catalogue outright',
+    name = 'deleting a library row takes that copy and no other',
     run = function(harness)
-      local h = withCatalogue(harness, {}, { shelved = patch })
-      h.vm:deleteFxPatch('shelved', 'global')
+      local h = withCatalogue(harness, { shelved = chain }, { shelved = patch })
+      h.vm:deleteFxPatch('global', 'shelved')
       t.eq(libraryPatches(h).shelved, nil, 'the library copy is gone')
-      h.vm:loadFxPatch('fxr-1', 'shelved')
-      t.deepEq(h.vm:noteFx('fxr-1'), chain, 'the name resolves nowhere, so the host chain stands')
+      t.deepEq(projectPatches(h).shelved, chain, 'the project copy of the same name stands')
     end,
   },
 
   {
-    name = 'neither gesture re-realises anything',
+    name = 'the catalogue verbs re-realise nothing',
     run = function(harness)
       local h = withCatalogue(harness, { wobble = patch }, { shelved = patch })
       local rebuilds = 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
-      h.vm:publishFxPatch('wobble')
-      h.vm:deleteFxPatch('wobble', 'project')
-      h.vm:deleteFxPatch('shelved', 'global')
+      h.vm:saveFxPatch('fxr-1', 'global', 'wobble')
+      h.vm:deleteFxPatch('project', 'wobble')
+      h.vm:deleteFxPatch('global', 'shelved')
       t.eq(rebuilds, 0, 'the catalogue is no derivation input, so its writes cost no rebuild')
     end,
   },
@@ -182,7 +182,7 @@ return {
       injectRegion(h, patch)   -- one stage standing, two arriving: a per-stage load would rebuild twice
       local rebuilds = 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
-      h.vm:loadFxPatch('fxr-1', 'wobble')
+      h.vm:loadFxPatch('fxr-1', 'project', 'wobble')
       t.eq(rebuilds, 1, 'one whole-list write, not a stage at a time')
     end,
   },

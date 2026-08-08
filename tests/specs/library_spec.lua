@@ -30,16 +30,17 @@ return {
     end,
   },
   {
-    name = 'get resolves project over library',
+    name = 'getAt reads the tier it is told, neither copy shadowing the other',
     run = function(harness)
       local h = harness.mk{ config = {
         project = { swings = { p = { factors = { 'P' } } } },
         global  = { swings = { p = { factors = { 'G' } }, g = { factors = { 'G' } } } },
       } }
       local L = mkLib(h)
-      t.deepEq(L.get('swings', 'p').factors, { 'P' }, 'project shadows library')
-      t.deepEq(L.get('swings', 'g').factors, { 'G' }, 'library resolves when no project copy')
-      t.eq(L.get('swings', 'nope'), nil, 'unknown name resolves to nil (no factory floor)')
+      t.deepEq(L.getAt('swings', 'project', 'p').factors, { 'P' }, 'the project copy')
+      t.deepEq(L.getAt('swings', 'global',  'p').factors, { 'G' }, 'and the library copy of the same name')
+      t.eq(L.getAt('swings', 'project', 'g'), nil, 'a name the named tier lacks reads nil, not the other tier')
+      t.eq(L.getAt('swings', 'global', 'nope'), nil, 'and an unknown name reads nil (no factory floor)')
     end,
   },
   {
@@ -82,10 +83,12 @@ return {
         global = { swings = { shared = { factors = { 'G' } } } },
       } }
       local L = mkLib(h)
-      L.save('swings', 'shared', { factors = { 'P' } })
+      L.save('swings', 'project', 'shared', { factors = { 'P' } })
       t.deepEq(h.cm:getAt('project', 'swings')['shared'].factors, { 'P' }, 'the project copy carries the saved value')
-      t.deepEq(h.cm:getAt('global',  'swings')['shared'].factors, { 'G' }, 'the library copy it shadows still stands')
-      L.save('swings', 'identity', { factors = { 'X' } })
+      t.deepEq(h.cm:getAt('global',  'swings')['shared'].factors, { 'G' }, 'the library copy of that name still stands')
+      L.save('swings', 'global', 'shelved', { factors = { 'L' } })
+      t.deepEq(h.cm:getAt('global', 'swings')['shelved'].factors, { 'L' }, 'and a save can name the library tier')
+      L.save('swings', 'project', 'identity', { factors = { 'X' } })
       t.eq(h.cm:getAt('project', 'swings')['identity'], nil, 'a synthetic name never authors')
     end,
   },

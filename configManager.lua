@@ -247,9 +247,8 @@ local declarations = {
   -- Pane-selector pills on the editor body: editor.button a zone below toolbar.button.
   { 'colour.chrome.editor.button',        'base.zone9' },
   { 'colour.chrome.editor.buttonActive',  'base.zone7' },
-  { 'colour.chrome.picker.remove',  'base.zone5' },  -- picker row-delete × at rest (muted)
-  { 'colour.chrome.picker.publish', 'base.zone5' },  -- picker row-publish ↑ at rest (muted alike)
-  { 'colour.chrome.picker.armed',   'red'        },  -- either glyph armed: the next click fires
+  { 'colour.chrome.picker.remove', 'base.zone5' },  -- picker row-delete × at rest (muted)
+  { 'colour.chrome.picker.armed',  'red'        },  -- armed: the next click deletes
 
   { 'colour.chrome.scrollHandle', 'colour.global.text' },
   { 'colour.chrome.scrollBg',     'colour.global.bg'   },

@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-08 tv: the fx catalogue on both tiers, saving into either (§ The chain surface)
 - 2026-08-08 tv: publish and delete on the fx patch load picker's rows (§ The chain surface)
 - 2026-08-08 tv: load a patch from the fxPatches catalogue onto a host (§ The chain surface)
 - 2026-08-07 tv: save a host's chain into the fxPatches catalogue (§ The chain surface)
-- 2026-08-07 tv: withdraw the provisional columns (§ The chain surface)
 
 ## Now
 

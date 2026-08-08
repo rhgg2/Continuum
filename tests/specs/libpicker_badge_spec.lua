@@ -1,8 +1,8 @@
 -- Pin-test for chrome.libPicker's modified badge: project rows whose entry has
 -- diverged from its library source carry a trailing bullet; pristine
 -- project rows and `+`others rows stay bare. Instantiated over a harness cm
--- with a lib service (mirrors the coordinator wiring). The second case covers
--- the fields the row carries about its own provenance: `tier` and `publishable`.
+-- with a lib service (mirrors the coordinator wiring). The later cases cover the
+-- fields a row carries about its own provenance: `tier` and `groupLabel`.
 
 -- chrome requires ImGui + painter at module scope; stub imgui via package.preload
 -- before the first require so it loads in the pure-Lua harness. Recipe lifted
@@ -69,7 +69,7 @@ return {
   },
 
   {
-    name = 'each row carries the tier it was drawn from, and publishable where a publish would bite',
+    name = 'each row carries the tier it was drawn from',
     run = function(harness)
       local h = harness.mk{ config = {
         project = { swings = {
@@ -88,11 +88,28 @@ return {
       t.eq(itemByKey(items, 'alpha').tier,   'project', 'a project row names the project tier')
       t.eq(itemByKey(items, 'gamma').tier,   'project', 'and so does one the library never saw')
       t.eq(itemByKey(items, 'shelved').tier, 'global',  'a `+` row names the tier it was drawn from')
+    end,
+  },
 
-      t.eq(itemByKey(items, 'beta').publishable,  true, 'publishing the divergent row rewrites the library copy')
-      t.eq(itemByKey(items, 'gamma').publishable, true, 'and publishing the project-only row mints one')
-      t.eq(itemByKey(items, 'alpha').publishable,   nil, 'a pristine row has nothing to publish')
-      t.eq(itemByKey(items, 'shelved').publishable, nil, 'and a library row is already where a publish would put it')
+  {
+    name = 'the two tiers name themselves, and a seeded name names the library one too',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        project = { swings = { gamma   = { factors = { 'g' } } } },
+        global  = { swings = { shelved = { factors = { 's' } } } },
+      } }
+      local items = mkChrome(h).libPicker{ key = 'swings' }
+
+      t.eq(itemByKey(items, 'gamma').groupLabel,   'Project', 'the project group announces itself')
+      t.eq(itemByKey(items, 'shelved').groupLabel, 'Library', 'and so does the group below it')
+      t.eq(itemByKey(items, nil).groupLabel, nil, 'Off is no tier, and announces nothing')
+
+      -- The factory catalogue is a seed source, not a resolution tier: a name it alone carries is
+      -- one whose library row was never stocked or has been deleted, and it belongs to no third
+      -- place the user could be shown.
+      local seeded = itemByKey(items, 'classic-55')
+      t.truthy(seeded, 'a seeded name the library tier lacks still reaches the merged view')
+      t.eq(seeded.tier, 'global', 'and names the library tier, there being no other to name')
     end,
   },
 }

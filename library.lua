@@ -23,6 +23,13 @@ end
 
 ----- Tier writes
 
+-- The tiers a caller may name: factory is a seed source, not somewhere a name lives.
+local function checkLevel(level)
+  if level ~= 'project' and level ~= 'global' then
+    error('library: not an addressable tier: ' .. tostring(level), 3)
+  end
+end
+
 -- Read-modify-write a whole tier through one cm:set; cm deep-copies the value in.
 local function writeTier(level, key, name, value)
   local tier = cm:getAt(level, key) or {}
@@ -52,11 +59,10 @@ end
 
 ----- Reads
 
---contract: resolved deep copy, project over library; nil if neither tier has the name
-function lib.get(key, name)
-  local p = projectTier(key)[name]
-  if p ~= nil then return p end
-  return libraryTier(key)[name]
+--contract: deep copy from the named tier alone; nil where that tier lacks the name
+function lib.getAt(key, level, name)
+  checkLevel(level)
+  return (cm:getAt(level, key) or {})[name]
 end
 
 --contract: true iff a project copy and a same-named source both exist and differ (util.deepEq)
@@ -88,10 +94,11 @@ end
 
 ----- Author
 
---contract: write a name into the project tier (cm:set deep-copies); synthetic names never
-function lib.save(key, name, value)
+--contract: write a name into the named tier (cm:set deep-copies); synthetic names never
+function lib.save(key, level, name, value)
+  checkLevel(level)
   if synth(key)[name] then return end
-  writeTier('project', key, name, value)
+  writeTier(level, key, name, value)
 end
 
 ----- Publish / revert
@@ -183,9 +190,7 @@ end
 
 --contract: remove name from tier level (project|global); synthetic names never
 function lib.delete(key, level, name)
-  if level ~= 'project' and level ~= 'global' then
-    error('library.delete: not a deletable level: ' .. tostring(level), 2)
-  end
+  checkLevel(level)
   if synth(key)[name] then return end
   local tier = cm:getAt(level, key) or {}
   if tier[name] == nil then return end

@@ -1,12 +1,12 @@
-@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=98  cases=2
+@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=115  cases=3
 @harness   mk
 
 # Intent
   Pin-test for chrome.libPicker's modified badge: project rows whose entry has
   diverged from its library source carry a trailing bullet; pristine
   project rows and `+`others rows stay bare. Instantiated over a harness cm
-  with a lib service (mirrors the coordinator wiring). The second case covers
-  the fields the row carries about its own provenance: `tier` and `publishable`.
+  with a lib service (mirrors the coordinator wiring). The later cases cover the
+  fields a row carries about its own provenance: `tier` and `groupLabel`.
 
 # Helpers
   @fn mkChrome(h)  @ 28-34
@@ -14,7 +14,8 @@
 
 # Cases
   @case 'libPicker badges the divergent project row, leaves the pristine one bare'  [harness]  @ 42-68
-  @case 'each row carries the tier it was drawn from, and publishable where a publish would bite'  [harness]  @ 72-96
+  @case 'each row carries the tier it was drawn from'  [harness]  @ 72-91
+  @case 'the two tiers name themselves, and a seeded name names the library one too'  [harness]  @ 95-113
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 22
@@ -27,27 +28,27 @@
   @field w alpha  @ 46,50,76,81
   @field w beta  @ 47,51,77,82
   @field w cm  @ 30,33
-  @field w config  @ 44,74
+  @field w config  @ 44,74,97
   @field w ctx  @ 33
-  @field w factors  @ 46,47,50,51,76,77,78,81,82,83
-  @field w gamma  @ 78
-  @field w global  @ 49,80
+  @field w factors  @ 46,47,50,51,76,77,78,81,82,83,98,99
+  @field w gamma  @ 78,98
+  @field w global  @ 49,80,99
+  @field r groupLabel  @ 103,104,105
   @field w identity  @ 31
   @field r key  @ 37
-  @field w key  @ 56,65,86
+  @field w key  @ 56,65,86,101
   @field r label  @ 62,63
   @field w lib  @ 33
   @field r loaded  @ 21
-  @field w name  @ 42,72
+  @field w name  @ 42,72,95
   @field w off  @ 65
   @field r preload  @ 18
-  @field w project  @ 45,75
-  @field r publishable  @ 92,93,94,95
+  @field w project  @ 45,75,98
   @field r reaper  @ 22
-  @field w run  @ 43,73
-  @field w shelved  @ 83
-  @field w swings  @ 31,45,49,75,80
+  @field w run  @ 43,73,96
+  @field w shelved  @ 83,99
+  @field w swings  @ 31,45,49,75,80,98,99
   @field w synthetic  @ 31
   @field w tempers  @ 31
-  @field r tier  @ 88,89,90
+  @field r tier  @ 88,89,90,112
   @field w uiSize  @ 33

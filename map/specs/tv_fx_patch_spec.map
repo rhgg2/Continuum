@@ -1,72 +1,72 @@
 @spec tv_fx_patch_spec  src=tests/specs/tv_fx_patch_spec.lua  loc=189  cases=14
 @exercises dataStore (h.ds), trackerManager (h.tm), configManager (h.cm), trackerView (h.vm)
-@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe, vm:loadFxPatch, vm:noteFx, vm:publishFxPatch, vm:deleteFxPatch
+@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe, vm:loadFxPatch, vm:noteFx, vm:deleteFxPatch
 @harness   mk
 
 # Intent
   Pin-tests for the fx patch catalogue: `tv:saveFxPatch` stamps the caret host's
-  chain into the project tier of `fxPatches` -- verbatim, by copy, and without
-  costing a re-derivation; `tv:loadFxPatch` copies a named chain back out onto a
-  host, replacing what it held. see design/note-macros-v2.md § The chain surface
+  chain into the tier it was handed -- verbatim, by copy, and without costing a
+  re-derivation; `tv:loadFxPatch` copies a named chain back out onto a host,
+  replacing what it held. Both name their tier rather than resolving one, a patch
+  being held by copy. see design/note-macros-v2.md § The chain surface
 
 # Helpers
-  @fn injectRegion(h, fx)  @ 13-16
-  @fn projectPatches(h)  @ 18
-  @fn libraryPatches(h)  @ 19
-  @fn withCatalogue(harness, project, library)  @ 26-31
+  @fn injectRegion(h, fx)  @ 14-17
+  @fn projectPatches(h)  @ 19
+  @fn libraryPatches(h)  @ 20
+  @fn withCatalogue(harness, project, library)  @ 27-32
       -- A region carrying `chain`, with the catalogue's two tiers seeded around it.
 
 # Cases
-  @case 'save stamps the host chain into the project tier, verbatim'  [harness]  @ 35-41
-  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 45-52
-  @case 'saving re-realises nothing'  [harness]  @ 56-64
-  @case 'a host with no chain saves nothing'  [harness]  @ 68-74
-  @case 'the load replaces the host chain rather than appending to it'  [harness]  @ 80-85
-  @case 'the host holds a copy, not a live handle on the catalogue'  [harness]  @ 89-95
-  @case 'bypass rides the patch onto the host'  [harness]  @ 99-105
-  @case 'project resolves over library, and a library-only name still loads'  [harness]  @ 109-116
-  @case 'a name in neither tier loads nothing'  [harness]  @ 120-125
-  @case 'publish lifts the project body into the library tier, leaving the project copy standing'  [harness]  @ 131-138
-  @case 'deleting a project row leaves the library copy it shadowed standing'  [harness]  @ 142-151
-  @case 'deleting a library row takes the name out of the catalogue outright'  [harness]  @ 155-162
-  @case 'neither gesture re-realises anything'  [harness]  @ 166-175
+  @case 'save stamps the host chain into the tier it was given, verbatim'  [harness]  @ 36-43
+  @case 'save into the library tier writes the library tier, no project copy in the way'  [harness]  @ 47-54
+  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 58-65
+  @case 'saving re-realises nothing'  [harness]  @ 69-77
+  @case 'a host with no chain saves nothing'  [harness]  @ 81-87
+  @case 'the load replaces the host chain rather than appending to it'  [harness]  @ 93-98
+  @case 'the host holds a copy, not a live handle on the catalogue'  [harness]  @ 102-108
+  @case 'bypass rides the patch onto the host'  [harness]  @ 112-118
+  @case 'each tier\'s copy of a name loads on its own, neither shadowing the other'  [harness]  @ 122-129
+  @case 'a name the named tier does not hold loads nothing'  [harness]  @ 133-140
+  @case 'deleting a project row leaves the library copy that shared the name standing'  [harness]  @ 146-152
+  @case 'deleting a library row takes that copy and no other'  [harness]  @ 156-162
+  @case 'the catalogue verbs re-realise nothing'  [harness]  @ 166-175
   @case 'the whole list lands in one write'  [harness]  @ 179-187
 
 # Uses (outbound edges)
-  @use call ds:assign  @ 14
-  @use call tm:rebuild  @ 15
-  @use call cm:getAt  @ 18,19
-  @use call vm:saveFxPatch  @ 39,49,62,72
-  @use call vm:setFxField  @ 50,93
-  @use call tm:subscribe  @ 61,170,184
-  @use call vm:loadFxPatch  @ 83,92,103,112,114,123,149,160,185
-  @use call vm:noteFx  @ 84,104,113,115,124,150,161
-  @use call vm:publishFxPatch  @ 134,171
-  @use call vm:deleteFxPatch  @ 147,158,172,173
+  @use call ds:assign  @ 15
+  @use call tm:rebuild  @ 16
+  @use call cm:getAt  @ 19,20
+  @use call vm:saveFxPatch  @ 40,51,62,75,85,171
+  @use call vm:setFxField  @ 63,106
+  @use call tm:subscribe  @ 74,170,184
+  @use call vm:loadFxPatch  @ 96,105,116,125,127,136,138,185
+  @use call vm:noteFx  @ 97,117,126,128,137,139
+  @use call vm:deleteFxPatch  @ 149,159,172,173
 
 # Fields (r read / w write incl. constructor keys)
-  @field r bypass  @ 104
-  @field w bypass  @ 11
-  @field w chan  @ 14
-  @field w config  @ 27
-  @field w depth  @ 11
-  @field r dir  @ 51,94
-  @field w dir  @ 10,23
-  @field w endppq  @ 14
-  @field w fx  @ 14
-  @field w fxPatches  @ 27,28
-  @field w global  @ 28
-  @field w kind  @ 10,11,23
-  @field w name  @ 35,45,56,68,80,89,99,109,120,131,142,155
+  @field r bypass  @ 117
+  @field w bypass  @ 12
+  @field w chan  @ 15
+  @field w config  @ 28
+  @field w depth  @ 12
+  @field r dir  @ 64,107
+  @field w dir  @ 11,24
+  @field w endppq  @ 15
+  @field w fx  @ 15
+  @field w fxPatches  @ 28,29
+  @field w global  @ 29
+  @field w kind  @ 11,12,24
+  @field w name  @ 36,47,58,69,81,93,102,112,122,133,146,156
   @field w name  @ 166,179
-  @field w onset  @ 11
-  @field w period  @ 10,11,23
-  @field w project  @ 27
-  @field w run  @ 36,46,57,69,81,90,100,110,121,132,143,156
+  @field w onset  @ 12
+  @field w period  @ 11,12,24
+  @field w project  @ 28
+  @field w run  @ 37,48,59,70,82,94,103,113,123,134,147,157
   @field w run  @ 167,180
-  @field r shelved  @ 137,159
-  @field w shelved  @ 111,133,157,168
-  @field w startppq  @ 14
-  @field w uuid  @ 14
-  @field r wobble  @ 40,51,94,135,136,148
-  @field w wobble  @ 82,91,101,111,122,133,146,168,181
+  @field r shelved  @ 160,161
+  @field w shelved  @ 135,158,168
+  @field w startppq  @ 15
+  @field w uuid  @ 15
+  @field r wobble  @ 41,52,64,107,150,151
+  @field w wobble  @ 95,104,114,124,135,148,168,181
