@@ -81,3 +81,39 @@ step-shaped.
 
 **When it lands, the build order writes itself:** segment cutter + state
 threading in the runner, vibrato ported as the proving kind.
+
+## Scripted kinds — a user-authored kind in a third editor pane
+
+> From `design/note-macros-v2.md` § The chain surface. Read § Generators
+> as config for the ctx discipline this rests on.
+
+`generators.kinds` is already the seam. There is one registry entry per
+kind, and nothing downstream asks where an entry came from, so a
+user-authored kind is a Lua chunk evaluating to that same entry-shape and
+the registry cannot tell it from a built-in. It would be edited in a
+third editor pane beside swing and temper, riding `libraryTreeSpec`
+whole — global/project tiers, promote/demote, new/import/delete, dirty
+tracking — machinery that already models named, tiered, user-authored
+artifacts and would gain a third artifact rather than a second shape.
+
+The contract a script writes against is not a new one: it is the ctx
+discipline. A scripted `expand` composes stream, host, params and the
+named ctx ops, pure, with no reach into tm. That is what makes the idea
+cheap rather than an interpreter project — a kind shaped this way is
+already very nearly data, and the pane only has to load it.
+
+What it would cost is that the registry stops being a constant. Loading
+is eval-into-registry at startup and at library-save, so a kind can
+arrive late, and a broken chunk has to degrade to its kind vanishing from
+the registry with a status-bar complaint rather than a rebuild fault. The
+readers are largely ready for that already, because a kind can go missing
+by other means: `glyphOf` answers `?` for a kind the registry has lost,
+and the fx tab resolves a lost kind through `labelOf` and draws the stage
+as a heading alone (2026-08-08). What is untested is the load path
+itself — a sandbox, an eval order, and a failure that must stay confined
+to one entry.
+
+**The obligation now:** hold the ctx discipline — new kinds as arithmetic
+plus named ctx ops, ctx accreting as named operations and never as an
+escape hatch into tm — and keep every reader of `generators.kinds`
+tolerant of an entry that isn't there.

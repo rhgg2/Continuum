@@ -1322,19 +1322,6 @@ and becomes what the layout encourages, `Project` being the group met first. It
 was being enforced by making the library reachable only through a promotion
 gesture, which is how a save came to sit on the load picker in the first place.
 
-**Scripted kinds — an editor-page pane.** `generators.kinds` is already
-the seam: one registry entry per kind, user-extensible by construction. A
-scripted kind is a user Lua chunk evaluating to that entry-shape, edited
-in a third editor-page pane beside swing and temper. The pane rides the
-existing `libraryTreeSpec` machinery whole — global/project tiers,
-promote/demote, new/import/delete, dirty tracking — which already models
-exactly this: named, tiered, user-authored artifacts. The ctx discipline
-is the contract surface: a scripted `expand` composes stream + host +
-params + named ctx ops, pure, no reach into tm. Loading is
-eval-into-registry at startup / library-save; a broken script degrades to
-its kind vanishing from the registry with a status-bar complaint, never a
-rebuild fault.
-
 ## Known gaps and accepted quirks
 
 - **A slide into a parked successor arrives late when the host's tail
@@ -1403,6 +1390,10 @@ rebuild fault.
   only: keep `dest` a clean single axis, and shape new continuous kinds
   *incrementally* — phase accumulators and step loops, never closed forms
   over the window — so the window can shrink without rewriting the body.
+- **The scripted-kinds pane** → `design/pipe-dreams.md` § Scripted kinds
+  (withdrawn from `plan/chain-surface.md` 2026-08-08). Its obligation is
+  the ctx discipline already stated in § Generators as config, plus
+  keeping every reader of `generators.kinds` tolerant of a missing entry.
 - **R5 — plink via MIDI; retire the listen bank**, and the **single-node
   packaging** it unblocks → `design/cv-2.md`. Do not build under
   note-macros.
