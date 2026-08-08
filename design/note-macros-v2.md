@@ -1,6 +1,7 @@
 # note macros v2 — region hosts and the generator spectrum
 
-> opened: 2026-06-26 · status: in flight — `plan/chain-surface.md`
+> opened: 2026-06-26 · status: built out — the programme's plan closed
+> 2026-08-08 as `plan/archive/chain-surface.md`; no live plan
 >
 > Working design doc. Supersedes the forward-looking half of
 > `design/archive/note-macros.md`, now the **frozen record of v1** — the
@@ -20,9 +21,9 @@
 >
 > **Companions.** `design/archive/fx-patterns.md` — generator params whose value
 > is a note pattern or a curve. `design/archive/fx-freeze.md` — committing
-> generator output. `design/pipe-dreams.md` — param modulation and the
-> stepped feed, the gleam this doc used to carry. What remains to build
-> is queued in `plan/chain-surface.md`.
+> generator output. `design/pipe-dreams.md` — param modulation, the
+> stepped feed and the scripted-kinds pane, the gleam this doc used to
+> carry. Nothing is queued and nothing is left open.
 
 ## The five roles of the host note
 
@@ -192,9 +193,10 @@ fill or an arp folding back onto a pitch.
 gate the v1 doc flagged ("bind to the window, or to a regenerated first
 hit") resolves cleanly: PA binds to the region — channel × ppq, stable,
 persisted. The degenerate note host still binds PA to its note. A PA
-parks with its host note, region-parked or self-parked; what stays
-deferred is PA *replace* — a generator consuming and re-emitting one —
-which is a different operation (§ *Deferred — no consumer*).
+parks with its host note, region-parked or self-parked; what has no
+generic form is PA *replace* — a generator consuming and re-emitting one —
+which is a different operation (`docs/generators.md` § What the model does
+not express).
 
 ## Authoring and editing the fx
 
@@ -244,8 +246,8 @@ storage order, § *The fx chain*).
 region is its column entry. The badge shows the region's *primary* kind
 only — growing it into a chain signature is § *The chain surface*. A
 later per-lane note-fx **pop-out** column — proximity-gated, the only
-pop-down thing — earns its keep once parameter stops land and there is
-inline editing the badge can't carry.
+pop-down thing — was to answer the inline editing the badge can't carry.
+Dropped 2026-08-08: nothing wanted it (§ Closed rather than deferred).
 
 **Visibility — invisible now, ghost later.** Generated notes are
 take-only, routed out of columns as v1's derived notes are: visible +
@@ -298,8 +300,9 @@ contract is already region-shaped and an fx-region's membership is
 replay template and per-instance override tables a bare fx-region has
 none of. Authoring likewise went to an fx **column** rather than gm's
 region-mode/wash, a column being more native to the tracker than a second
-region object. So (1) stays unextracted, and gm is untouched; the
-extraction waits for a consumer that justifies the shape.
+region object. So (1) stays unextracted and gm is untouched. Dropped
+2026-08-08 rather than left waiting: two tracks looked at the substrate and
+neither wanted it.
 
 ## Generators as config — the ctx discipline
 
@@ -319,7 +322,7 @@ instructive non-example — looks temper-bound, is pure note arithmetic,
 lives as a module helper. **Build no interpreter**: the move costs ~nothing
 if new kinds are shaped as composition and ctx accretes as named ops. The
 same discipline is the contract surface a scripted kind would be written
-against (§ *The chain surface*).
+against (`design/pipe-dreams.md` § Scripted kinds).
 
 ## Offline continuous realisation
 
@@ -1322,64 +1325,24 @@ and becomes what the layout encourages, `Project` being the group met first. It
 was being enforced by making the library reachable only through a promotion
 gesture, which is how a save came to sit on the load picker in the first place.
 
-## Known gaps and accepted quirks
+## Closed rather than deferred
 
-- **A slide into a parked successor arrives late when the host's tail
-  runs past it.** `ctx.nextSameLaneNote` reads lane occupancy as column ∪
-  parked (2026-08-04, replacing the wider gap where a parked host got no
-  successor at all and `[trill, slide]` gave the trill alone), so the
-  target is right. The host's *window* clip is still column-only
-  (`hostWindowEnd` → `nextLaneOnset`), so a host whose authored ceiling
-  runs past the parked cell glides across the whole tail and arrives
-  after the note it aimed at. Where the ceiling ends at the successor —
-  the ordinary case — the glide is exact. That clip governs every kind's
-  window, not slide's, so unioning it is its own change.
-- **A member straddling a window edge is parked whole** — **accepted**
-  (2026-08-04, examined against a derived-remainder design and refused).
-  Membership is by onset, so the member belongs to the region entire.
-  Realising the uncovered tail would mean a note-on at the window edge:
-  an attack the author never wrote, standing in for a note the region
-  has already spoken for. Silence is the honest realisation, and the
-  authored note loses nothing by it — the parked cell is the whole of
-  it, visible and editable throughout. The rule reads the same in the
-  other direction: a note whose onset precedes the window is not a
-  member, and sustains through it.
-- **A host minted by the mouse draws nowhere until the caret reaches it.**
-  `stripPlan` resolves its host as the pinned session's or `tv:fxHostAtCursor()`,
-  and a region minted from a selection sits in an fx column the caret is not in,
-  so a chain added or loaded that way is invisible until the caret moves onto the
-  region. The keyboard door pins the host it mints (`editFx`) and shows it at
-  once; only the mouse path is affected, and nothing is lost — the chain is
-  written, and one caret move shows it. Closing it means either pinning on a
-  mouse mint, which changes what Esc reverts, or moving the caret as a side
-  effect of a picker pick; both are wider than the gesture that exposed it.
-- **A region-parked note's own fx stays suppressed** while the region
-  covers it. It survives in the spec and returns when the region moves
-  off, so this is a quirk rather than data loss.
-- ~~**A replace region's parked PAs stay take-side**~~ — **withdrawn**
-  (2026-08-04, probed in a spike tree against `tm_fx_region_spec`'s
-  harness). A PA parks exactly when its host note parks, and that holds
-  for both host kinds: a region-parked chord's PAs leave the take (the
-  standing case at `tm_fx_region_spec.lua:319`), and so do a self-parked
-  trill host's — one parked cell, zero PAs on the wire, one PA in the
-  stash. Nor is the symptom reachable from the other side: a note whose
-  onset precedes the window is not parked, and a replace region's members
-  *are* its parked cells (`trackerManager.lua:3620`), so it derives
-  nothing to sound against. What remains is narrower and inert — a PA
-  inside the window but past its host cell's end stays take-side, on a
-  pitch where no derived tile reaches it.
+Nothing stood open at the close (2026-08-08). **Bake-on-export**
+was overtaken by § Offline continuous realisation: the continuous channels
+are realised wholly in the take, so an export has nothing left to merge and
+what is written is already plain MIDI. **The per-lane pop-out column** is
+dropped — the in-cell badge and the fx column carry authoring between them,
+and no one has wanted inline editing enough to pay for a column that appears
+and vanishes with the caret. **The shared `regions` substrate (R7 piece 1)**
+is dropped with it: both tracks resolved standalone (§ The generator spectrum
+and the regions substrate), which leaves the extraction without even a second
+consumer.
 
-## Deferred — no consumer
-
-- **PA replace.** No generic park/rebind path can exist — see
-  § *Generator input streams* for why the operation is undefined.
-- **Note-fx hosted on a region-parked note.**
-- **Bake-on-export.** Address rewrite + merge of delta streams into their
-  target lanes for plain-MIDI export; densification cost paid only there.
-- **The per-lane note-fx pop-out column** — earns its keep once parameter
-  stops land and there is inline editing the badge can't carry.
-- **The shared `regions` substrate (R7 piece 1)** — both tracks resolved
-  standalone, so nothing has justified its shape.
+The gaps and quirks the programme found are claims about live behaviour, so
+they stand on `docs/oddities.md` § Generators and fx rather than here. So does
+the one remaining deferral: **note-fx on a region-parked note** is an accepted
+quirk of coverage, not a feature waiting. **PA replace** has no generic form at
+all, and that limit is `docs/generators.md` § What the model does not express.
 
 ## Owned elsewhere — not this doc's work
 
@@ -1396,16 +1359,9 @@ gesture, which is how a save came to sit on the load picker in the first place.
   keeping every reader of `generators.kinds` tolerant of a missing entry.
 - **R5 — plink via MIDI; retire the listen bank**, and the **single-node
   packaging** it unblocks → `design/cv-2.md`. Do not build under
-  note-macros.
+  note-macros. The open `plink.midi_*` parm names are cv-2's question too.
 - **R4 — flush-time mechanism registry (`dirtyFxHosts`).** Measured
   not-warranted; the apparent cost was a carrier-reconcile churn bug
   (fixed). Build only if a measured hotspot reappears.
 - **R3 — `forEachEffectiveNote`.** Extract on its third real occurrence;
   not before.
-
-## Open questions
-
-- **Bake-on-export.** Address rewrite + merge of delta streams into their
-  target lanes for plain-MIDI export.
-- **`plink.midi_*` parms.** Exact config-parm names and automation-bus
-  addressing for R5 (→ cv-2); gates the listen-bank retirement.
