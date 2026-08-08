@@ -29,7 +29,9 @@ when it closed, which is where a claim about live behaviour goes to be unread.
 > **gap** · tm · 2026-08-04
 
 `ctx.nextSameLaneNote` reads lane occupancy as column ∪ parked, so a slide
-aimed at a parked note finds the right target. The host's *window* clip does
+aimed at a parked note finds the right target — itself the fix for a wider gap
+where a parked host got no successor at all and `[trill, slide]` realised the
+trill alone. The host's *window* clip does
 not: `hostWindowEnd` asks `nextLaneOnset` of the column alone
 (`trackerManager.lua:709`), so a host whose authored ceiling runs past the
 parked cell glides across the whole tail and arrives after the note it aimed
