@@ -1,7 +1,8 @@
 -- Pin-test for chrome.libPicker's modified badge: project rows whose entry has
 -- diverged from its library source carry a trailing bullet; pristine
 -- project rows and `+`others rows stay bare. Instantiated over a harness cm
--- with a lib service (mirrors the coordinator wiring).
+-- with a lib service (mirrors the coordinator wiring). The second case covers
+-- the fields the row carries about its own provenance: `tier` and `publishable`.
 
 -- chrome requires ImGui + painter at module scope; stub imgui via package.preload
 -- before the first require so it loads in the pure-Lua harness. Recipe lifted
@@ -64,6 +65,34 @@ return {
       local bare = chrome.libPicker{ key = 'swings', off = false }
       t.eq(itemByKey(bare, nil), nil, 'off = false drops the Off row')
       t.eq(#bare, #items - 1, 'and takes nothing else with it')
+    end,
+  },
+
+  {
+    name = 'each row carries the tier it was drawn from, and publishable where a publish would bite',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        project = { swings = {
+          alpha = { factors = { 'a' } },          -- deep-equal to its library source
+          beta  = { factors = { 'b' } },          -- diverges from its library source
+          gamma = { factors = { 'g' } },          -- project-only: the library has nowhere to be shadowed
+        } },
+        global = { swings = {
+          alpha   = { factors = { 'a' } },
+          beta    = { factors = { 'DIFFERENT' } },
+          shelved = { factors = { 's' } },        -- library-only: drawn as a `+` row
+        } },
+      } }
+      local items = mkChrome(h).libPicker{ key = 'swings' }
+
+      t.eq(itemByKey(items, 'alpha').tier,   'project', 'a project row names the project tier')
+      t.eq(itemByKey(items, 'gamma').tier,   'project', 'and so does one the library never saw')
+      t.eq(itemByKey(items, 'shelved').tier, 'global',  'a `+` row names the tier it was drawn from')
+
+      t.eq(itemByKey(items, 'beta').publishable,  true, 'publishing the divergent row rewrites the library copy')
+      t.eq(itemByKey(items, 'gamma').publishable, true, 'and publishing the project-only row mints one')
+      t.eq(itemByKey(items, 'alpha').publishable,   nil, 'a pristine row has nothing to publish')
+      t.eq(itemByKey(items, 'shelved').publishable, nil, 'and a library row is already where a publish would put it')
     end,
   },
 }

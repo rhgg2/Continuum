@@ -2606,6 +2606,20 @@ function tv:loadFxPatch(uuid, name)
   self:setNoteFx(uuid, patch)
 end
 
+-- Lift a project patch into the library tier, where it travels with the user rather than the file.
+--contract: a nil name, or one with no project copy, is a silent no-op
+function tv:publishFxPatch(name)
+  if not name then return end
+  lib.publish('fxPatches', name)
+end
+
+-- Delete the copy the picker row is showing: a project row leaves any library copy standing.
+--contract: a nil name is a silent no-op; any tier but project/global raises
+function tv:deleteFxPatch(name, tier)
+  if not name then return end
+  lib.delete('fxPatches', tier, name)
+end
+
 --contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
 
@@ -2648,6 +2662,8 @@ tv.freezeToGroup    = util.atomic('Freeze FX to group', tv.freezeToGroup)
 -- A project-tier cm write is undoable but mints no point either, so the catalogue verb wraps alike.
 tv.saveFxPatch      = util.atomic('Save FX patch',     tv.saveFxPatch)
 tv.loadFxPatch      = util.atomic('Load FX patch',     tv.loadFxPatch)
+tv.deleteFxPatch    = util.atomic('Delete FX patch',   tv.deleteFxPatch)
+-- publishFxPatch stays unwrapped: it writes the global tier alone, which is no part of the document.
 
 ----- Deletion
 

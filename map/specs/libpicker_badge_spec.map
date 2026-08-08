@@ -1,47 +1,53 @@
-@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=69  cases=1
+@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=98  cases=2
 @harness   mk
 
 # Intent
   Pin-test for chrome.libPicker's modified badge: project rows whose entry has
   diverged from its library source carry a trailing bullet; pristine
   project rows and `+`others rows stay bare. Instantiated over a harness cm
-  with a lib service (mirrors the coordinator wiring).
+  with a lib service (mirrors the coordinator wiring). The second case covers
+  the fields the row carries about its own provenance: `tier` and `publishable`.
 
 # Helpers
-  @fn mkChrome(h)  @ 27-33
-  @fn itemByKey(items, key)  @ 35-37
+  @fn mkChrome(h)  @ 28-34
+  @fn itemByKey(items, key)  @ 36-38
 
 # Cases
-  @case 'libPicker badges the divergent project row, leaves the pristine one bare'  [harness]  @ 41-67
+  @case 'libPicker badges the divergent project row, leaves the pristine one bare'  [harness]  @ 42-68
+  @case 'each row carries the tier it was drawn from, and publishable where a publish would bite'  [harness]  @ 72-96
 
 # Fields (r read / w write incl. constructor keys)
-  @field w ImGui_GetBuiltinPath  @ 21
-  @field w Mod_None  @ 11
-  @field w PopFont  @ 12
-  @field w PopStyleColor  @ 13
-  @field w PushFont  @ 12
-  @field w PushStyleColor  @ 13
-  @field w __index  @ 14
-  @field w alpha  @ 45,49
-  @field w beta  @ 46,50
-  @field w cm  @ 29,32
-  @field w config  @ 43
-  @field w ctx  @ 32
-  @field w factors  @ 45,46,49,50
-  @field w global  @ 48
-  @field w identity  @ 30
-  @field r key  @ 36
-  @field w key  @ 55,64
-  @field r label  @ 61,62
-  @field w lib  @ 32
-  @field r loaded  @ 20
-  @field w name  @ 41
-  @field w off  @ 64
-  @field r preload  @ 17
-  @field w project  @ 44
-  @field r reaper  @ 21
-  @field w run  @ 42
-  @field w swings  @ 30,44,48
-  @field w synthetic  @ 30
-  @field w tempers  @ 30
-  @field w uiSize  @ 32
+  @field w ImGui_GetBuiltinPath  @ 22
+  @field w Mod_None  @ 12
+  @field w PopFont  @ 13
+  @field w PopStyleColor  @ 14
+  @field w PushFont  @ 13
+  @field w PushStyleColor  @ 14
+  @field w __index  @ 15
+  @field w alpha  @ 46,50,76,81
+  @field w beta  @ 47,51,77,82
+  @field w cm  @ 30,33
+  @field w config  @ 44,74
+  @field w ctx  @ 33
+  @field w factors  @ 46,47,50,51,76,77,78,81,82,83
+  @field w gamma  @ 78
+  @field w global  @ 49,80
+  @field w identity  @ 31
+  @field r key  @ 37
+  @field w key  @ 56,65,86
+  @field r label  @ 62,63
+  @field w lib  @ 33
+  @field r loaded  @ 21
+  @field w name  @ 42,72
+  @field w off  @ 65
+  @field r preload  @ 18
+  @field w project  @ 45,75
+  @field r publishable  @ 92,93,94,95
+  @field r reaper  @ 22
+  @field w run  @ 43,73
+  @field w shelved  @ 83
+  @field w swings  @ 31,45,49,75,80
+  @field w synthetic  @ 31
+  @field w tempers  @ 31
+  @field r tier  @ 88,89,90
+  @field w uiSize  @ 33

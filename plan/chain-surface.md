@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-08 tv: publish and delete on the fx patch load picker's rows (§ The chain surface)
 - 2026-08-08 tv: load a patch from the fxPatches catalogue onto a host (§ The chain surface)
 - 2026-08-07 tv: save a host's chain into the fxPatches catalogue (§ The chain surface)
 - 2026-08-07 tv: withdraw the provisional columns (§ The chain surface)
-- 2026-08-06 tv: scope the ghost overlay to the chain the caret addresses (§ The chain surface)
 
 ## Now
 
@@ -25,10 +25,5 @@
 
 ## Queued (current phase; one-liners)
 
-- **Publish and delete on the load picker's rows.** `chrome.drawPicker`
-  gains an `onPublish` hook beside `onDelete`, drawn as a `↑` on the
-  rows that have somewhere to go. Publishing copies a project patch
-  into the library tier through `lib.publish`. Deleting acts on the
-  tier the row is showing, so a project row's `×` leaves the library
-  copy standing and the row returns as a `+` row.
+(empty)
 

@@ -1,0 +1,81 @@
+@spec picker_publish_spec  src=tests/specs/picker_publish_spec.lua  loc=149  cases=5
+@harness   mk
+
+# Intent
+  Chrome-level pin for drawPicker's onPublish hook (chain surface). Real chrome over a fake imgui:
+  a row the item list marks `publishable` grows a trailing ↑, placed left of the ×, two-press as the
+  × is -- and the two share one armed slot per picker kind, so arming either disarms the other.
+  Recipe from picker_delete_spec, with an InvisibleButton answering to both tags and a SameLine that
+  records the offset each button was placed at.
+
+# Helpers
+  @fn mkChrome(h)  @ 63-66
+  @fn frame(chrome, click, opts)  @ 74-87
+      -- One Load picker frame, clicking the button tagged `click` ('pub1', 'del2', ...; nil clicks
+      -- nothing). Returns what fired -- { action, key } -- and the buttons drawn this frame.
+  @fn buttonAt(buttons, tag)  @ 89-91
+
+# Cases
+  @case 'only a publishable row grows a ↑'  [harness]  @ 95-101
+  @case 'the first click arms the ↑ and the second publishes the row'  [harness]  @ 105-118
+  @case 'a picker without onPublish draws no ↑ even on a publishable row'  [harness]  @ 122-127
+  @case 'the ↑ sits left of the ×, which keeps the flush-right slot'  [harness]  @ 131-136
+  @case 'the two glyphs share one armed slot, so arming either disarms the other'  [harness]  @ 140-147
+
+# Fields (r read / w write incl. constructor keys)
+  @field w BeginPopup  @ 33
+  @field w Button  @ 23
+  @field w CalcTextSize  @ 29
+  @field w ColorConvertDouble4ToU32  @ 40
+  @field w CreateFunctionFromEEL  @ 36
+  @field w DrawList_AddLine  @ 49
+  @field w DrawList_AddText  @ 53
+  @field w GetContentRegionAvail  @ 27
+  @field w GetCursorScreenPos  @ 31
+  @field w GetItemRectMax  @ 26
+  @field w GetItemRectMin  @ 25
+  @field w GetTextLineHeight  @ 28
+  @field w GetWindowDrawList  @ 32
+  @field w GetWindowPos  @ 30
+  @field w ImGui_GetBuiltinPath  @ 59
+  @field w InputText  @ 37
+  @field w InvisibleButton  @ 43
+  @field w IsItemHovered  @ 35
+  @field w IsKeyPressed  @ 38
+  @field w IsWindowAppearing  @ 34
+  @field w Mod_None  @ 10
+  @field w SameLine  @ 24
+  @field w Selectable  @ 39
+  @field w __index  @ 11
+  @field r action  @ 116,146
+  @field w action  @ 80,83
+  @field w buttonLabel  @ 78
+  @field w cm  @ 64,65
+  @field w ctx  @ 65
+  @field r ink  @ 51,112
+  @field w ink  @ 51
+  @field w items  @ 78
+  @field r key  @ 117
+  @field w key  @ 69,70,80,83
+  @field w kind  @ 78
+  @field r label  @ 90
+  @field w label  @ 44,69,70
+  @field w lib  @ 65
+  @field r loaded  @ 58
+  @field w name  @ 95,105,122,131,140
+  @field r noDelete  @ 79
+  @field r noPublish  @ 82
+  @field w noPublish  @ 124
+  @field w onDelete  @ 80
+  @field w onPick  @ 78
+  @field w onPublish  @ 83
+  @field r preload  @ 57
+  @field w publishable  @ 69
+  @field r reaper  @ 59
+  @field w run  @ 96,106,123,132,141
+  @field w synthetic  @ 64
+  @field r text  @ 111
+  @field w text  @ 54
+  @field w uiSize  @ 65
+  @field r x  @ 134
+  @field w x  @ 44

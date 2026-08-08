@@ -123,7 +123,10 @@ copies a named chain out of the catalogue onto the host, replacing whatever chai
 it held, and parks the strip cursor on stage 1. It is disabled only on an empty
 catalogue — where `save` refuses to mint, `load` mints through `tv:fxHostForEdit`
 just as `add` does, so a bare selection with the fx tab chosen loads onto a fresh
-region.
+region. `load`'s rows carry the catalogue's own housekeeping with them: `↑`
+publishes a project patch into the library tier (`tv:publishFxPatch`) and `×`
+deletes the copy the row is showing (`tv:deleteFxPatch`), both two-press, and
+neither touching the host or the chain under the caret.
 Nothing filters the offered list: no kind declares a host it requires, so every
 patch offers onto every host — including one naming a kind the registry has lost,
 which draws a `? kind` heading with no field rows rather than faulting.

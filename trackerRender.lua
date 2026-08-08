@@ -1170,6 +1170,9 @@ local stripPlan do
           local h = plan.host or tv:fxHostForEdit()
           if h then tv:loadFxPatch(h, name); tv:setStripCursor{ stage = 1, param = 0 } end
         end,
+        -- The catalogue's own housekeeping, on the rows: neither touches the host or the chain.
+        onPublish = function(name)       tv:publishFxPatch(name)      end,
+        onDelete  = function(name, tier) tv:deleteFxPatch(name, tier) end,
       }
     end)
   end

@@ -1,6 +1,6 @@
-@spec tv_fx_patch_spec  src=tests/specs/tv_fx_patch_spec.lua  loc=138  cases=10
+@spec tv_fx_patch_spec  src=tests/specs/tv_fx_patch_spec.lua  loc=189  cases=14
 @exercises dataStore (h.ds), trackerManager (h.tm), configManager (h.cm), trackerView (h.vm)
-@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe, vm:loadFxPatch, vm:noteFx
+@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe, vm:loadFxPatch, vm:noteFx, vm:publishFxPatch, vm:deleteFxPatch
 @harness   mk
 
 # Intent
@@ -12,51 +12,61 @@
 # Helpers
   @fn injectRegion(h, fx)  @ 13-16
   @fn projectPatches(h)  @ 18
-  @fn withCatalogue(harness, project, library)  @ 25-30
+  @fn libraryPatches(h)  @ 19
+  @fn withCatalogue(harness, project, library)  @ 26-31
       -- A region carrying `chain`, with the catalogue's two tiers seeded around it.
 
 # Cases
-  @case 'save stamps the host chain into the project tier, verbatim'  [harness]  @ 34-40
-  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 44-51
-  @case 'saving re-realises nothing'  [harness]  @ 55-63
-  @case 'a host with no chain saves nothing'  [harness]  @ 67-73
-  @case 'the load replaces the host chain rather than appending to it'  [harness]  @ 79-84
-  @case 'the host holds a copy, not a live handle on the catalogue'  [harness]  @ 88-94
-  @case 'bypass rides the patch onto the host'  [harness]  @ 98-104
-  @case 'project resolves over library, and a library-only name still loads'  [harness]  @ 108-115
-  @case 'a name in neither tier loads nothing'  [harness]  @ 119-124
-  @case 'the whole list lands in one write'  [harness]  @ 128-136
+  @case 'save stamps the host chain into the project tier, verbatim'  [harness]  @ 35-41
+  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 45-52
+  @case 'saving re-realises nothing'  [harness]  @ 56-64
+  @case 'a host with no chain saves nothing'  [harness]  @ 68-74
+  @case 'the load replaces the host chain rather than appending to it'  [harness]  @ 80-85
+  @case 'the host holds a copy, not a live handle on the catalogue'  [harness]  @ 89-95
+  @case 'bypass rides the patch onto the host'  [harness]  @ 99-105
+  @case 'project resolves over library, and a library-only name still loads'  [harness]  @ 109-116
+  @case 'a name in neither tier loads nothing'  [harness]  @ 120-125
+  @case 'publish lifts the project body into the library tier, leaving the project copy standing'  [harness]  @ 131-138
+  @case 'deleting a project row leaves the library copy it shadowed standing'  [harness]  @ 142-151
+  @case 'deleting a library row takes the name out of the catalogue outright'  [harness]  @ 155-162
+  @case 'neither gesture re-realises anything'  [harness]  @ 166-175
+  @case 'the whole list lands in one write'  [harness]  @ 179-187
 
 # Uses (outbound edges)
   @use call ds:assign  @ 14
   @use call tm:rebuild  @ 15
-  @use call cm:getAt  @ 18
-  @use call vm:saveFxPatch  @ 38,48,61,71
-  @use call vm:setFxField  @ 49,92
-  @use call tm:subscribe  @ 60,133
-  @use call vm:loadFxPatch  @ 82,91,102,111,113,122,134
-  @use call vm:noteFx  @ 83,103,112,114,123
+  @use call cm:getAt  @ 18,19
+  @use call vm:saveFxPatch  @ 39,49,62,72
+  @use call vm:setFxField  @ 50,93
+  @use call tm:subscribe  @ 61,170,184
+  @use call vm:loadFxPatch  @ 83,92,103,112,114,123,149,160,185
+  @use call vm:noteFx  @ 84,104,113,115,124,150,161
+  @use call vm:publishFxPatch  @ 134,171
+  @use call vm:deleteFxPatch  @ 147,158,172,173
 
 # Fields (r read / w write incl. constructor keys)
-  @field r bypass  @ 103
+  @field r bypass  @ 104
   @field w bypass  @ 11
   @field w chan  @ 14
-  @field w config  @ 26
+  @field w config  @ 27
   @field w depth  @ 11
-  @field r dir  @ 50,93
-  @field w dir  @ 10,22
+  @field r dir  @ 51,94
+  @field w dir  @ 10,23
   @field w endppq  @ 14
   @field w fx  @ 14
-  @field w fxPatches  @ 26,27
-  @field w global  @ 27
-  @field w kind  @ 10,11,22
-  @field w name  @ 34,44,55,67,79,88,98,108,119,128
+  @field w fxPatches  @ 27,28
+  @field w global  @ 28
+  @field w kind  @ 10,11,23
+  @field w name  @ 35,45,56,68,80,89,99,109,120,131,142,155
+  @field w name  @ 166,179
   @field w onset  @ 11
-  @field w period  @ 10,11,22
-  @field w project  @ 26
-  @field w run  @ 35,45,56,68,80,89,99,109,120,129
-  @field w shelved  @ 110
+  @field w period  @ 10,11,23
+  @field w project  @ 27
+  @field w run  @ 36,46,57,69,81,90,100,110,121,132,143,156
+  @field w run  @ 167,180
+  @field r shelved  @ 137,159
+  @field w shelved  @ 111,133,157,168
   @field w startppq  @ 14
   @field w uuid  @ 14
-  @field r wobble  @ 39,50,93
-  @field w wobble  @ 81,90,100,110,121,130
+  @field r wobble  @ 40,51,94,135,136,148
+  @field w wobble  @ 82,91,101,111,122,133,146,168,181

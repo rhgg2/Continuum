@@ -1274,6 +1274,33 @@ registry entry that declared them, so the stage draws as a heading alone. It sta
 addressable, and that heading is the swap picker — pointing it at a live kind is
 the repair.
 
+*Decisions taken — the guard is the picker's own two-press, and the delete acts
+on the row's tier (2026-08-08).* Publishing over a divergent library copy
+destroys content that no undo point covers, a config write minting none. It wants
+a guard, and the house already has one: the swing and temper editors put their
+publish behind `modalHost:openConfirm`. But this gesture lives inside a live
+ImGui popup, where a modal opening over it is untested, and the picker carries a
+guard of its own a few pixels away — the `×`'s two presses. So the `↑` takes the
+same one. The two glyphs then share a single armed slot per picker, so arming
+either disarms whatever was armed before: one thing on a picker is ever a click
+from firing.
+
+Which copy, then, does a `×` delete? The one the row is showing. `libPicker`
+stamps each item with the tier it drew the row from and the picker hands it back
+as `onDelete(key, tier)`, so a project row's `×` leaves any library copy standing
+and the name returns to the list as a `+` row. The `↑` shows only where a publish
+would change the library — a project row the library lacks, or one it holds a
+divergent copy of. This is not tidiness. A fresh publish produces no other visible
+change, no `•` badge appearing or going, so the `↑` vanishing is the only feedback
+the gesture has.
+
+One gap is accepted rather than built for. A project row with a *pristine*
+library twin looks exactly like one with no twin at all, so nothing on screen
+distinguishes a delete that leaves a copy behind from one that takes the name
+away. Closing it would mean a second badge in `libPicker`'s vocabulary, which the
+swing and temper pickers share and neither needs. The outcome is the least
+destructive one, and the row reappearing as `+ <name>` says so a moment later.
+
 **Scripted kinds — an editor-page pane.** `generators.kinds` is already
 the seam: one registry entry per kind, user-extensible by construction. A
 scripted kind is a user Lua chunk evaluating to that entry-shape, edited
