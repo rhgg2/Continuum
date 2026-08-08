@@ -15,4 +15,5 @@
    *preservation of scope*: any contraction of scope should be
    explicitly agreed, and either go in the design document, or be
    queued as a follow-up item. 
-4. Stage the plan update as one `apply_patches` call, then stop.
+4. Stage the plan update as one `apply_patches` call, then stop and
+   point at `/commit` for the landed phase plan.

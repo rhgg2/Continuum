@@ -8,13 +8,13 @@
    the item without the doc. Use the scratchpad and spike worktree to
    settle design questions — a fork you can name before writing the
    code, whose answer changes what the brief says.
-3. Bring the search to chat: what's involved, the forks, what you'd
-   do, what you're unsure of. Anything the design doc left open is
-   settled here too, and the design doc gets updated. Apply the
-   principle of *preservation of scope*: the scope should not contract
-   without being explicitly agreed upon, and either noted in the
-   design document as a contraction of scope, or immediately queued as
-   a follow-up item.
+3. Bring the search to chat: a summary of what the item actually is,
+   the forks, what you'd do, and what you're unsure of. Anything the
+   design doc left open is settled here too, and the design doc gets
+   updated. Apply the principle of *preservation of scope*: the scope
+   should not contract without being explicitly agreed upon, and
+   either noted in the design document as a contraction of scope, or
+   immediately queued as a follow-up item.
 4. Once you have received an explicit go, write the brief as
    `plan/IMPL.md`. The implementer gets this and nothing else, so it
    should be self-contained. It opens with a header:
@@ -53,8 +53,11 @@
    code is test-shaped code which forms part of the completion
    parameters of the brief from step 4.
 7. Stage the brief and the plan-file update as one `apply_patches`
-   call: the brief as a create with `overwrite: true`, and Now
-   replaced by a single line naming the item and its design reference.
+   call: the brief as a create with `overwrite: true`, the item cut
+   from Queued, and Now replaced by a single line naming the item and
+   its design reference. The item moves rather than copies — in flight
+   the brief is its text, and the plan names it in one place, so the
+   landing has nothing left to clear.
 
    ```markdown
    **Teach `usedby` the intra-file `@call` index** — brief in

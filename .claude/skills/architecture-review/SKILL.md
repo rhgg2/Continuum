@@ -44,8 +44,10 @@ fan-out.
 One `Explore` agent per cluster, in parallel. Each brief asks what
 state the cluster owns; what it reads that another wrote; what arrives
 as a parameter versus ambiently; and if extraction yields a small
-interface or one nearly as wide as the body. Ask for `file:line`
-evidence, and ask each agent to say where the code is well-factored —
+interface or one nearly as wide as the body. For anything that looks
+like a pass-through, ask the deletion test: would deleting it
+concentrate complexity, or only move it? Concentrating is the signal.
+Ask for `file:line` evidence, and ask each agent to say where the code is well-factored —
 you want a read, not a complaint list.
 
 Give each agent one sharp question aimed at what its cluster
@@ -85,4 +87,4 @@ for the work:
 
 Carry a section for the claims that did not survive step 5, your own
 included. Stage the whole set as one `apply_patches` call, then stop —
-`/plan-new` compiles it when I am ready.
+`/mature` picks a finding up when I am ready.

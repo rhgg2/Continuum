@@ -17,7 +17,9 @@ disable-model-invocation: true
 3. The brief is self-standing; open the anchors the brief names, write
    the specs and production code, and verify the brief's own
    completion conditions. Don't relitigate settled decisions unless
-   necessary; see §5 below.
+   necessary; see §5 below. Once it is written, say that `/reconcile`
+   checks the brief against the diff: the brief dies at the commit, so
+   this is the only moment it can be asked.
 
 4. Some briefs point at `plan/IMPL.diff`; this is a spike's working
    kernel. The brief will classify its hunks as **source code** or
