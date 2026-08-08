@@ -4,50 +4,92 @@ description: Close the live plan and archive its documentation, pop the CURRENT 
 disable-model-invocation: true
 ---
 
-Pop the top of the CURRENT stack and put the files where a finished
-programme's files live.
+This skill closes out a plan, and splits its design doc into current
+WHY, historical decision record, and items left open. The hook injects
+the live plan, the CURRENT stack and the plan and design listings —
+work from those.
 
-1. The hook injects the live plan, the CURRENT stack and the plan and
-   design listings — work from those.
-2. Establish which of two things this is, and say so before doing
-   anything:
-   - **Close** — the work is finished: every phase marked landed
-     (phased), or Queued and Now both empty (phaseless). Files move
-     to the archives.
-   - **Park** — the work is unfinished and attention is moving
-     elsewhere. The plan stays in `plan/`, nothing is archived, and
-     only the CURRENT line goes. Its design doc's `status:` moves to
-     `parked — plan/<name>`, since the hook checks that "in flight"
-     appears in exactly the live plan's doc. Note in Now what's left,
-     since a parked plan comes back cold. If the hook reports a brief in
-     flight, that note absorbs whatever of it still matters and
-     `plan/IMPL.md` goes in the same batch: it holds one item for
-     whichever plan is live, so leaving it would let the next plan's
-     `/plan-next` overwrite it unseen — and it would be stale by the
-     time you came back regardless.
-   If the plan looks finished but you're inferring it from a Now note
-   rather than the phase markers, ask me. Archiving mid-programme is
-   how a phase gets lost.
-3. Close only: `git mv plan/<name> plan/archive/<name>`, and tidy the
-   file as it goes — clear any leftover `← in flight` marker, leave
-   Landed as the record rather than pruning it.
-4. Close only, the design doc — every plan has one. If the work is
-   complete and the doc describes nothing beyond it,
-   `git mv design/<doc>.md design/archive/`, update its `status:` line
-   to say so, and point the plan's `> source:` line at the new path. A
-   doc that still carries live intent stays where it is — say which you
-   did and why. Either way the decisions in it stay readable and stay
-   cited: `design/archive/` is the shelf below `design/`, not a bin.
-5. Pop `plan/CURRENT`: remove the top line. Whatever sat under it is
-   live again, so read it and report what I'm back to — its name, its
-   in-flight phase, and whether Now holds a brief or is empty. Set that
-   plan's design doc `status:` back to `in flight — plan/<name>` in the
-   same batch: the revive is where the claim leaked before there was a
-   check, because parking writes it and nothing wrote it back. An empty
-   CURRENT means no live plan; leave the file in place and empty, since
-   the hook reads it.
-6. Do the `git mv`s first (patches works on paths, not renames), then
-   stage the content edits (the `status:` lines included), the CURRENT
-   pop and the brief's deletion if you're parking as one `apply_patches`
-   call. Don't commit — that's `/commit`, and this one carries no
-   landing bookkeeping.
+Offer to commit after steps 2, 3 and 4. Do these yourself, `git add`
+then `git commit -m "<headline>"`, no body, scopes as indicated below.
+
+## 1. Check we are done
+
+The live plan is done when:
+
+- There is no live implementation brief;
+- Every phase in the plan is marked as landed, or the last in-flight
+  phase has no remaining Queued items.
+
+**Check in** if it seems we are not done.
+
+## 2. Sweep design citations
+
+A design doc archives as the record of what was decided, not a model
+reference for live code. So grep the tree for the doc's path — `grep
+-rn 'design/<doc>' --include='*.lua' .`, source and specs alike.
+Every hit is a piece of the operating model with no home in `docs/`
+yet. The job of this step is to write the doc sections these should
+now point at, and repoint the references. This step is purely
+additive, and doesn't touch the design doc.
+
+**Check in** with a summary of what you are going to do before
+starting the repoint.
+
+**Done when**: The grep is clean; this means the extraction is done
+and archiving is safe. Commit scope `docs:`.
+
+## 3. Sweep forward-looking design residue
+
+We now extract the design doc's open items. There are three
+categories:
+
+- **Unimplemented, dropped**: this stays where it is, carrying its
+  date and its reason: it's history, which is what archives
+  hold. 
+- **Unimplemented, still wanted**: this moves to a live doc that owns
+  it, because nobody rereads an archive. This could be another live
+  design doc, or else `design/pipe-dreams.md`
+- **Quirks and oddities**: things which stop short of being actual
+  bugs, but are wrinkles which may want fixing up in future. These
+  move to `docs/oddities.md`.
+  
+This step is *not* additive; open items genuinely leave the design
+doc, or are closed in-place.
+
+If the doc has live intent with **nowhere** to go, a new design doc is
+probably the answer; you are welcome to propose this.
+
+**Check in** with your proposed classification of open items, and
+their proposed destinations.
+
+**Done when** the design doc is entirely historical record. Commit
+scope `design:`.
+  
+## 4. Archive the plan and design doc
+
+Start with `git mv plan/<name>.md plan/archive/` 
+and `git mv design/<doc>.md design/archive/`. The two rarely share a
+name — read the doc's off the plan's `> source:` line.
+
+Tidy the two files:
+
+- for the plan, clear any leftover `← in flight` marker, leave Landed
+  as the record rather than pruning it, and point the plan's 
+  `> source:` line at the archived design doc.
+  
+- for the design doc, `status:` says complete and dated, and one line
+  demotes the doc — which `docs/` files carry the model as built, and
+  the rule that where the two accounts differ, `docs/` is right. Name
+  the files and not their sections, as a hedge against staleness:
+  section names change, while module names rarely do. Don't thin the
+  prose further: this is a historical decision record.
+
+Now pop `plan/CURRENT` by removing the top line. Whatever sat under it
+is live again, so set that plan's design doc `status:` back to `in
+flight — plan/<revived>` in the same batch. An empty CURRENT means no
+live plan; leave the file in place and empty, since the hook reads it.
+
+**Done when** both files read as historical record: dated, demoted,
+and cited by nothing live, and the planning apparatus is consistent
+and ready for `/plan-next` on the new plan. Commit
+scope `plan:`.
