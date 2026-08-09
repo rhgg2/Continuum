@@ -30,34 +30,37 @@ reading is yours.
 **Done when** you can say what stage the doc is at and what holds it
 there.
 
-## 2. Name the advance
+## 2. Choose and research the advance
 
 There is no ladder of stages to consult; the status lines are prose
-because the arc resists enumeration. Ask instead what would have to be
-true for this doc to be further along than it is, and which of those
-comes next.
+because the arc resists enumeration. Ask instead what things would
+have to be true for this doc to be further along than it is, and which
+of those comes next. If what comes next is a
+tree of decisions rather than one, you have named too large an
+advance: take the first decision in the tree instead.
 
-**Check in.** Name the stage, what holds it there, and the one advance
-you propose. When I give you the go-ahead, we'll settle it.
+Research how you would settle the chosen advance. Dispatch for
+anything the tree can answer, and verify every claim whose evidence
+you have not seen yourself, either from the source or via the
+session's spike worktree.
 
-## 3. Settle it
-
-`/grilling` works the frontier in rounds. Finding facts is your job:
-dispatch for anything the tree can answer, and put only the decisions
-to me.
-
-Verify every claim whose evidence you have not seen yourself. Grilling
-turns up claims about the code as fast as reading does, and a citation
-is settled by grep in seconds. Identity, aliasing and mutation order
-need the session's spike worktree.
-
-Where the blocker is what shape an interface should take, and the shape
-is not already obvious, design it twice: subagents in parallel, each
-under a different constraint — the smallest interface, the most
+Where the blocker is what shape an interface should take, and the
+shape is not already obvious, design it twice: subagents in parallel,
+each under a different constraint — the smallest interface, the most
 flexible, the easiest for the commonest caller. Compare them on what
 each hides and where change would concentrate.
 
-**Done when** the advance is settled, or you can say what stopped it.
+**Done when** you have everything the proposal needs and nothing left
+to look up.
+
+## 3. Settle the advance
+
+Once you have gathered everything, and have a proposal, bring it to
+chat. Name the stage, what holds it there, and the advance you
+propose; then lay out the forks, each with the decision you would
+make.
+
+**Done when** I give you the nod to land the round.
 
 ## 4. Land the round
 
