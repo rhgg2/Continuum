@@ -4,23 +4,16 @@ description: Advance a design doc one stage along its arc.
 disable-model-invocation: true
 ---
 
-`design/` holds docs from "vague, pre-design" through to "approved,
-ready to implement", and the status line under the title says where on
-that arc each one sits. A round moves one doc one step. The status line
-is how you tell that it moved.
+This skill takes a file from `design/` and advances it one step
+towards an implementation-ready document. 
 
-Not every doc should advance, and none has to advance far. A review's
-findings can sit unproposed for as long as they need to, and
-`design/pipe-dreams.md` is a standing collection that should never move
-at all.
+## 1. Locate the doc and find the blocker
 
-## 1. Locate the doc
+The invocation holds the file to consider; read it whole. A subject
+with no doc yet belongs to `/design-new`, which opens one.
 
-Read it whole, and read `design/decisions.md` and `design/archive/` on
-the same subject, so that a question settled earlier is not reopened
-as an open one. A doc that does not exist yet is one step behind
-vague: handed a `todo.md` line or a brand new request via arguments,
-open one.
+Also search `design/decisions.md` and `design/archive/` for any
+related material, so that a question settled earlier is not reopened.
 
 Most docs say what holds them back — `## Open`, or a section titled as
 the blocker. Where there is no such section, because the doc is a
@@ -32,12 +25,14 @@ there.
 
 ## 2. Choose and research the advance
 
-There is no ladder of stages to consult; the status lines are prose
-because the arc resists enumeration. Ask instead what things would
-have to be true for this doc to be further along than it is, and which
-of those comes next. If what comes next is a
-tree of decisions rather than one, you have named too large an
-advance: take the first decision in the tree instead.
+There is no ladder of stages to consult. Ask instead what is the
+single next thing that would have to be true for this doc to be
+further along than it is.
+
+If what comes next is a tree of decisions rather than one, you have
+named too large an advance. As soon as you can see a first necessary
+decision come into focus, scope your attention to that. We can
+continue with further rounds if needed after step 4.
 
 Research how you would settle the chosen advance. Dispatch for
 anything the tree can answer, and verify every claim whose evidence
@@ -57,20 +52,23 @@ to look up.
 
 Once you have gathered everything, and have a proposal, bring it to
 chat. Name the stage, what holds it there, and the advance you
-propose; then lay out the forks, each with the decision you would
-make.
+propose; then lay out any fork, each with the decision you would make.
+If there are four or five forks, you did too much in round 2. Propose
+explicitly any new vocabulary you wish to adopt, so we can settle its
+scope and meaning.
 
 **Done when** I give you the nod to land the round.
 
-## 4. Land the round
+## 4. Update the design doc
 
-Amend the doc in the register of `docs/STYLE.md`, and rewrite the
-status line. If you cannot honestly rewrite it, the round advanced
-nothing — say so, rather than dress a shuffle as progress.
+Rebuild the doc in light of the advance. When an open question is
+settled, delete the question and rewrite the section it bears upon.
+When this supercedes part of the document, delete it. This is an
+active working document, not a historical record of all avenues
+explored. Stage the rebuild as one `apply_patches` call.
 
-Stage the round as one `apply_patches` call. A landed round is a
-stopping point: the doc is whole and committable as it stands.
+After this initial pass, apply the `/refining` skill, scoped to the
+changed parts.
 
-**Check in.** Say what the status line now reads and what the next
-advance would be. We stop there unless I ask for another round — and if
-we go again, return to step 2, because the doc is already located.
+**Done when** the run of `/refining` is complete. We stop here unless
+I ask for another round, which returns us to step 2.
