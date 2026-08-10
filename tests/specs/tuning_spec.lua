@@ -1,13 +1,22 @@
 -- Pins tuning.lua's pure display + derivation layer: the Option-B nameless
--- step labels and the derived octaveStep / cellWidth fields. Realisation
--- invariants (I1-I5) live in tm_tuning_spec; projection wiring in
--- view_context_spec.
+-- step labels, the derived octaveStep / cellWidth fields, and the coordinate
+-- conversions between MIDI and step-octave. Realisation invariants (I1-I5)
+-- live in tm_tuning_spec; projection wiring in view_context_spec.
 
 local t      = require('support')
 local tuning = require('tuning')
 
 local function nameless(cents)
   return tuning.derive{ name = 'scale', period = 1200, cents = cents, stepNames = {} }
+end
+
+-- A 12EDO scale with the root fields the case is about; everything else default.
+local function rooted(root)
+  local cents = {}
+  for i = 1, 12 do cents[i] = (i - 1) * 100 end
+  local temper = { name = 'rooted', period = 1200, cents = cents, stepNames = {} }
+  for k, v in pairs(root) do temper[k] = v end
+  return tuning.derive(temper)
 end
 
 return {
@@ -147,6 +156,88 @@ return {
       t.eq(twelve.rootDetune, nil)
       t.eq(twelve.rootStep, nil)
       t.eq(twelve.rootOctave, nil)
+    end,
+  },
+
+  {
+    name = 'the default root reduces the conversions to MIDI-relative arithmetic',
+    run = function()
+      local twelve = tuning.presets['12EDO']
+      local step, oct = tuning.midiToStep(twelve, 60, 0)
+      t.eq(step, 1); t.eq(oct, 4, 'MIDI 60 is the unison of octave 4')
+      local midi, detune = tuning.stepToMidi(twelve, 1, 4)
+      t.eq(midi, 60); t.eq(detune, 0)
+
+      local _, low = tuning.midiToStep(twelve, 0, 0)
+      t.eq(low, -1, 'MIDI 0 is the unison of octave -1')
+
+      local nineteen = tuning.presets['19EDO']
+      midi, detune = tuning.stepToMidi(nineteen, 2, 4)
+      t.eq(midi, 61)
+      t.truthy(math.abs(detune - (1200 / 19 - 100)) < 1e-9, 'detune ' .. detune)
+    end,
+  },
+
+  {
+    name = 'a flattened root moves every pitch by its offset and renames nothing',
+    run = function()
+      local base = rooted{}
+      local flat = rooted{ rootDetune = -31.77 }
+      t.truthy(math.abs(flat.rootCents + 31.77) < 1e-9, 'rootCents ' .. flat.rootCents)
+      t.eq(flat.octaveBase, -1, 'the octave half of the root is untouched')
+
+      for _, coord in ipairs{ { 1, 4 }, { 10, 4 }, { 12, 2 } } do
+        local step, oct = coord[1], coord[2]
+        local bm, bd = tuning.stepToMidi(base, step, oct)
+        local fm, fd = tuning.stepToMidi(flat, step, oct)
+        t.truthy(math.abs((fm * 100 + fd) - (bm * 100 + bd) + 31.77) < 1e-9,
+                 ('step %d octave %d sounds %g cents lower'):format(step, oct,
+                   (bm * 100 + bd) - (fm * 100 + fd)))
+      end
+
+      for midi = 0, 127 do
+        local bs, bo = tuning.midiToStep(base, midi, 0)
+        local fs, fo = tuning.midiToStep(flat, midi, 0)
+        t.eq(fs, bs, 'step of MIDI ' .. midi)
+        t.eq(fo, bo, 'octave of MIDI ' .. midi)
+      end
+    end,
+  },
+
+  {
+    name = 'an octave-shifted root renames every octave and moves no pitch',
+    run = function()
+      local base    = rooted{}
+      local shifted = rooted{ rootOctave = 3 }
+      t.eq(shifted.rootCents, 0, 'the sounding half of the root is untouched')
+      t.eq(shifted.octaveBase, 3)
+
+      for midi = 0, 127 do
+        local bs, bo = tuning.midiToStep(base, midi, 0)
+        local ss, so = tuning.midiToStep(shifted, midi, 0)
+        t.eq(ss, bs, 'step of MIDI ' .. midi)
+        t.eq(so, bo + 4, 'octave of MIDI ' .. midi)
+        local bm, bd = tuning.stepToMidi(base, bs, bo)
+        local sm, sd = tuning.stepToMidi(shifted, ss, so)
+        t.eq(sm, bm, 'pitch of MIDI ' .. midi); t.eq(sd, bd)
+      end
+    end,
+  },
+
+  {
+    name = 'the conversions invert each other at every root',
+    run = function()
+      for _, temper in ipairs{ tuning.presets['12EDO'], tuning.presets['19EDO'],
+                               rooted{ rootDetune = -31.77 }, rooted{ rootOctave = 3 },
+                               rooted{ rootPitch = 69, rootStep = 10, rootOctave = 4 } } do
+        for midi = 12, 115 do
+          local step, oct = tuning.midiToStep(temper, midi, 0)
+          local m, d      = tuning.stepToMidi(temper, step, oct)
+          local step2, oct2 = tuning.midiToStep(temper, m, d)
+          t.eq(step2, step, temper.name .. ' step at MIDI ' .. midi)
+          t.eq(oct2, oct, temper.name .. ' octave at MIDI ' .. midi)
+        end
+      end
     end,
   },
 

@@ -5,7 +5,7 @@
 --invariant: intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
 --invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToText
---invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
+--invariant: an octave is period-index + octaveBase; default root makes it MIDI-relative (C4 → 4)
 --shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, rootPitch=int?, rootDetune=cents?, rootStep=int?, rootOctave=int?, cents=number[derived], period=cents[derived], rootCents=cents[derived], octaveBase=int[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
 local util = require 'util'
 
@@ -398,10 +398,10 @@ end
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
---contract: returned octave is MIDI-relative (C-1 → -1)
+--contract: returned octave is period-index + temper.octaveBase (at the default root, C-1 → -1)
 function tuning.midiToStep(temper, midi, detune)
   detune = detune or 0
-  local cents  = midi * 100 + detune
+  local cents  = midi * 100 + detune - temper.rootCents
   local period = temper.period
   local octave = math.floor(cents / period)
   local res    = cents - octave * period
@@ -417,7 +417,7 @@ function tuning.midiToStep(temper, midi, detune)
     best, octave = 1, octave + 1
   end
 
-  return best, octave - 1
+  return best, octave + temper.octaveBase
 end
 
 --contract: wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
@@ -426,7 +426,7 @@ function tuning.stepToMidi(temper, step, octave)
   while step < 1 do step = step + n; octave = octave - 1 end
   while step > n do step = step - n; octave = octave + 1 end
 
-  local cents  = (octave + 1) * temper.period + steps[step]
+  local cents  = (octave - temper.octaveBase) * temper.period + steps[step] + temper.rootCents
   local midi   = math.floor(cents / 100 + 0.5)
   local detune = cents - midi * 100
 

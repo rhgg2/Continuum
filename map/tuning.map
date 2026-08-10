@@ -5,7 +5,7 @@
   @invariant  intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain  @ 5
   @invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here  @ 6
   @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via stepToText  @ 7
-  @invariant  octave parameters are MIDI-relative (C4 → 4), not period-index  @ 8
+  @invariant  an octave is period-index + octaveBase; default root makes it MIDI-relative (C4 → 4)  @ 8
 
 # Shapes
   @shape  Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, rootPitch=int?, rootDetune=cents?, rootStep=int?, rootOctave=int?, cents=number[derived], period=cents[derived], rootCents=cents[derived], octaveBase=int[derived], octaveStep=int, octaveWidth=int, cellWidth=int}  @ 9
@@ -96,7 +96,7 @@
   -- Coordinate conversions
   @api tuning.midiToStep(temper, midi, detune)  @ 402-421
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)  @ 400
-      @contract  returned octave is MIDI-relative (C-1 → -1)  @ 401
+      @contract  returned octave is period-index + temper.octaveBase (at the default root, C-1 → -1)  @ 401
   @api tuning.stepToMidi(temper, step, octave)  @ 424-440
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)  @ 423
   @api tuning.snap(temper, midi, detune)  @ 442-444
@@ -164,6 +164,7 @@
   @field w mosInfo  @ mosInfo:381
   @field w name  @ edo:101 scalaToTemper:181
   @field w nextMosSize  @ nextMosSize:388
+  @field r octaveBase  @ midiToStep:420 stepToMidi:429
   @field w octaveBase  @ derive:91
   @field r octaveStep  @ stepToParts:463
   @field w octaveStep  @ derive:89
@@ -180,6 +181,7 @@
   @field w pitches  @ edo:103 scalaToTemper:183 genEqual:228 genHarmonics:236 genSubharmonics:243 genChord:267 genCPS:308 genRank2:377
   @field r presets  @ findTemper:133
   @field w presets  @ 108
+  @field r rootCents  @ midiToStep:404 stepToMidi:429
   @field w rootCents  @ derive:90
   @field r rootDetune  @ computeRootCents:41
   @field r rootOctave  @ derive:91

@@ -133,27 +133,33 @@ scale coordinate.**
    `temper.cents` and `temper.period` are scale-internal, measured from
    the unison, and the root never enters them.
 
-4. `temperEditor.lua` gains rows for the four authored fields, and
+4. A temper is persisted whole, derived stamps included, and never
+   re-derived on load (`configManager.lua:349-355`). So a project saved
+   before the pair existed reads nil at the conversions. Pre-beta: the
+   break is accepted rather than guarded, and `tuning.derive` stays the
+   single owner of the default.
+
+5. `temperEditor.lua` gains rows for the four authored fields, and
    restates `rootStep` when a step edit renumbers the steps below the
    root, so the correspondence goes on naming the step it named.
 
-5. Deleting the step a root names is the one edit with no step to
+6. Deleting the step a root names is the one edit with no step to
    renumber onto: the editor restates the root on the unison at the
    same `rootCents`, which is the same tuning written differently (§
    What a root is 4).
 
-6. So `addStep`'s clamp of a new step against the period
+7. So `addStep`'s clamp of a new step against the period
    (`temperEditor.lua:150-155`) is unaffected despite reading both. The
    callers further out want a count of steps (`trackerRender.lua:943`),
    a difference between adjacent steps (`viewContext.lua:39-42`), or a
    character width (`trackerView.lua:3036-3037`).
 
-7. A generator does not disturb the root. `generateInto` overwrites the
+8. A generator does not disturb the root. `generateInto` overwrites the
    pitches, the period and the step names (`temperEditor.lua:177-184`),
    and the root is a property of where the scale sits rather than of the
    intervals a generator makes.
 
-8. `docs/tuning.md` § Coordinate systems states the anchoring as prose,
+9. `docs/tuning.md` § Coordinate systems states the anchoring as prose,
    including that the first step of every temperament is `C`, which
    `(69, 0) = (1, 4)` falsifies. That passage is rewritten when the root
    lands.
