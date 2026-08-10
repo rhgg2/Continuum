@@ -6,7 +6,7 @@
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
 --invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToText
 --invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
---shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
+--shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, rootPitch=int?, rootDetune=cents?, rootStep=int?, rootOctave=int?, cents=number[derived], period=cents[derived], rootCents=cents[derived], octaveBase=int[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
 local util = require 'util'
 
 local tuning = {}
@@ -33,6 +33,13 @@ end
 -- natural [0,12700]¢ range (floor at -1 ⇒ "M"). See docs/tuning.md § Display.
 local function octaveFieldWidth(temper)
   return #octaveLabel(math.floor(12700 / temper.period) - 1)
+end
+
+-- rootCents: where the scale's unison sits in sound, given the root's four
+-- authored fields. See docs/tuning.md § The root.
+local function computeRootCents(temper)
+  local pitch, detune = temper.rootPitch or 0, temper.rootDetune or 0
+  return pitch * 100 + detune - temper.cents[temper.rootStep or 1]
 end
 
 -- cellWidth: widest step label + the octave field; see docs/tuning.md § Display.
@@ -68,7 +75,7 @@ function tuning.scalaPitch(token)
   return nil
 end
 
---contract: pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.
+--contract: pitches→cents, periodPitch→period; stamps root/octave/cell fields. Pure; returns temper.
 function tuning.derive(temper)
   if temper.pitches then
     local cents = {}
@@ -80,6 +87,8 @@ function tuning.derive(temper)
   end
   local n = #temper.cents
   temper.octaveStep  = computeOctaveStep(temper.stepNames or {}, n)
+  temper.rootCents   = computeRootCents(temper)
+  temper.octaveBase  = temper.rootOctave or -1
   temper.octaveWidth = octaveFieldWidth(temper)
   temper.cellWidth   = computeCellWidth(temper)
   return temper

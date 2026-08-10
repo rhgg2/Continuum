@@ -124,6 +124,33 @@ return {
   },
 
   {
+    name = 'derive reduces an authored root to rootCents + octaveBase',
+    run = function()
+      local cents = {}
+      for i = 1, 12 do cents[i] = (i - 1) * 100 end
+      local s = tuning.derive{ name = 'a415', period = 1200, cents = cents, stepNames = {},
+        rootPitch = 69, rootDetune = -101.27, rootStep = 10, rootOctave = 4 }
+      t.eq(s.rootCents, 5898.73,
+        'step 10 of 12EDO sits 900c above the unison, so an A tuned to 415Hz '
+        .. 'puts the scale unison at 5898.73c')
+      t.eq(s.octaveBase, 4, 'period-index 0 carries the root octave untransformed')
+    end,
+  },
+
+  {
+    name = 'a preset states no root and derives the default (0,0) = (1,-1)',
+    run = function()
+      local twelve = tuning.presets['12EDO']
+      t.eq(twelve.rootCents, 0, 'MIDI 0 on the unison leaves the unison at 0c')
+      t.eq(twelve.octaveBase, -1, 'MIDI 0 is C-1')
+      t.eq(twelve.rootPitch, nil, 'derive reads the root through, never writes it back')
+      t.eq(twelve.rootDetune, nil)
+      t.eq(twelve.rootStep, nil)
+      t.eq(twelve.rootOctave, nil)
+    end,
+  },
+
+  {
     name = 'EDO presets carry n\\m source tokens that derive back to their cents',
     run = function()
       local twelve = tuning.presets['12EDO']

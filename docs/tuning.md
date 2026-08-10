@@ -267,6 +267,20 @@ cannot drift apart.
 (`octaveStep = #cents + 1`, never reached by a real step). `stepToText`
 adds 1 to the displayed octave when `step >= octaveStep`.
 
+### The root
+
+1. `rootPitch`, `rootDetune`, `rootStep` and `rootOctave` state where
+   a temper's root sits in sound and which MIDI octave carries it,
+   authored where a preset states them and defaulting to `(0, 0) = (1,
+   -1)` — MIDI 0 at the unison of octave -1 — where absent, which is
+   the arithmetic an unrooted temper already assumed.
+
+2. `tuning.derive` reduces the four into `rootCents` (the unison's
+   cents position) and `octaveBase` (the octave number for
+   period-index 0), read by `midiToStep`/`stepToMidi` in place of the
+   constants they replace. The four authored fields are read through,
+   never written back, so presets keep the shape they were written in.
+
 ### Snapping and clamping
 
 - `midiToStep` snaps to the nearest scale point **including the period

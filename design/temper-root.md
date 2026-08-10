@@ -1,6 +1,6 @@
 # Design — The temper's root
 
-> opened: 2026-08-10 · status: settled; plan open at `plan/temper-root.md`
+> opened: 2026-08-10 · status: in flight; plan at `plan/temper-root.md`
 
 **A temper states where its scale sits in sound and which octave numbers
 its steps carry, as one correspondence between a sounding pitch and a
