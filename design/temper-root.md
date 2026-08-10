@@ -106,6 +106,10 @@ scale coordinate.**
    `colour.tracker.negative`, which is what the delay lane already
    does with a negative offset (`gridPane.lua:139-143`).
 
+3. The `M` convention retires with it. Octave −1 reads a tinted `1`,
+   in the tracker's untempered fallback label as much as under a
+   temper.
+
 3. The field is then sized on magnitudes, and either end of the range
    may be the wider: the bottom is `floor(−rootCents / period) +
    octaveBase`, the top `floor((12700 − rootCents) / period) +
