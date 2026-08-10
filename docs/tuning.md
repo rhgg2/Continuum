@@ -351,16 +351,20 @@ rather than a reading position, so it may sit on left padding for a
 short label without harm.
 
 **5** `cellWidth` is the derived char width of the widest label: the
-longest name (or a 2-digit degree) plus the **octave field**. The octave
-field is one char for octave-or-larger periods — their displayed octave
-never leaves `-1..9`, one char as a magnitude. A **sub-octave period** packs more
-than ten period-cycles into the MIDI range, so its octave labels reach
-two digits and the field grows to match.
+longest name (or a 2-digit degree) plus the **octave field**. The field is
+sized on the octave numbers at the two ends of the range — the bottom
+`floor(-rootCents / period) + octaveBase`, the top `floor((12700 -
+rootCents) / period) + octaveBase` — and as magnitudes either end may be
+the wider, because the root moves both the pitch the range starts at and
+the number that octave carries.
 
-**6** 12-EDO and the other octave-period presets derive 3, the historic
-fixed width; only sub-octave scales widen. The budget comes from the top
-of the natural `[0, 12700]`¢ range (floor anchored at `-1`), which holds
-only because edits keep notes in range — see *Addressable range*.
+**6** At the default root the bottom is `-1` and the top is `floor(12700 /
+period) - 1`: 12-EDO and the other octave-period presets derive 3, and a
+**sub-octave period** — more than ten period-cycles in the MIDI range —
+widens the field to two digits. A root can widen the bottom past that, and
+can equally narrow a sub-octave scale by numbering the octaves it spans
+closer to zero. The budget is exact only because edits keep notes in
+range — see *Addressable range*.
 
 ## Slot registry
 

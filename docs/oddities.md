@@ -138,3 +138,18 @@ Write-through commits on every mini rebuild, so editing a pattern is as chatty
 as editing the host directly — which is precisely the cost it is measured
 against. `setFxField` scopes each rebuild to the owning channel, and a
 `deepEq` against the last committed body drops the no-op writes.
+
+## Tuning
+
+### The octave field's budget ignores the `octaveStep` bump
+
+> **gap** · tuning · 2026-08-10
+
+The field is sized from the octave numbers at the two ends of the addressable
+range, and `stepToParts` can render one higher than the top of it: a temper
+whose C-tail bumps at a step sitting just under the ceiling reads an octave the
+budget did not reserve for. No preset does — the bump needs a residual near the
+top of the period, which at the topmost period-index is already out of range —
+and both ways to close it cost more than the gap. An unconditional `+1` widens
+every preset's cell by a column, and scanning the top period's steps puts a
+snap inside a width computation.

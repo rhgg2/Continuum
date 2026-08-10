@@ -110,18 +110,18 @@ scale coordinate.**
    in the tracker's untempered fallback label as much as under a
    temper.
 
-3. The field is then sized on magnitudes, and either end of the range
+4. The field is then sized on magnitudes, and either end of the range
    may be the wider: the bottom is `floor(−rootCents / period) +
    octaveBase`, the top `floor((12700 − rootCents) / period) +
    octaveBase`.
 
-4. `tuning.stepToParts` returns the label as a string, so the negative
+5. `tuning.stepToParts` returns the label as a string, so the negative
    travels beside it through `viewContext.noteProjection` and
    `trackerView` to `gridPane`, which tints columns of a cell through
    its `overrides` table. The bump at `octaveStep` means the sign is
    the rendered octave's, not the caller's.
 
-5. Entry follows display. The octave column takes `-` for octave −1
+6. Entry follows display. The octave column takes `-` for octave −1
    and a digit for 0 to 9 (`trackerView.lua:910-918`), which is the
    range the default root addresses; for roots that reach −2 a new
    form will be required.
@@ -170,7 +170,8 @@ scale coordinate.**
 
 9. `docs/tuning.md` § Coordinate systems states the anchoring as prose,
    including that the first step of every temperament is `C`, which
-   `(69, 0) = (1, 4)` falsifies. That passage is rewritten when the root
+   `(69, 0) = (1, 4)` falsifies, and § Addressable range 1 states it again
+   as `cents 0 ≡ MIDI 0 (C-1)`. Both passages are rewritten when the root
    lands.
 
 ## Open

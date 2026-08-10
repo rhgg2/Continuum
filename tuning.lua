@@ -29,10 +29,13 @@ local function octaveLabel(o)
   return tostring(math.abs(o))
 end
 
--- octaveFieldWidth: char width of the octave field, fixed by the top of the
--- natural [0,12700]¢ range. See docs/tuning.md § Display.
+-- octaveFieldWidth: char width of the octave field, sized on the octave
+-- numbers at both ends of the range the root opens. See docs/tuning.md § Display.
 local function octaveFieldWidth(temper)
-  return #octaveLabel(math.floor(12700 / temper.period) - 1)
+  local period = temper.period
+  local bottom = math.floor(-temper.rootCents / period) + temper.octaveBase
+  local top    = math.floor((12700 - temper.rootCents) / period) + temper.octaveBase
+  return math.max(#octaveLabel(bottom), #octaveLabel(top))
 end
 
 -- rootCents: where the scale's unison sits in sound, given the root's four

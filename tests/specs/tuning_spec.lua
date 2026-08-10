@@ -111,6 +111,46 @@ return {
   },
 
   {
+    name = 'a root numbering the octaves near zero narrows the field',
+    run = function()
+      -- A compressed-octave temper packs 11 period-cycles into the MIDI range,
+      -- so sizing on the count of cycles reserves two chars. Rooted so middle C
+      -- sits in octave 0 the range runs -5..6, and one char covers both ends.
+      local function compressed(root)
+        local temper = { name = 'compressed', period = 1100,
+                         cents = { 0, 275, 550, 825 }, stepNames = {} }
+        for k, v in pairs(root) do temper[k] = v end
+        return tuning.derive(temper)
+      end
+
+      local rooted0 = compressed{ rootOctave = -5 }
+      t.eq(rooted0.octaveWidth, 1, 'both ends of -5..6 are one char')
+      t.eq(rooted0.cellWidth, 3, '1-digit degree + dash + octave')
+      local _, oct = tuning.midiToStep(rooted0, 60, 0)
+      t.eq(oct, 0, 'the root is the one that puts middle C in octave 0')
+
+      t.eq(compressed{}.octaveWidth, 2,
+        'the same period at the default root spans -1..10 and needs two')
+    end,
+  },
+
+  {
+    name = 'a root numbering the range low makes the bottom end the wider',
+    run = function()
+      -- (1, 0) = (1, -9): the range runs -10..1, so the bottom carries two
+      -- chars where the top carries one.
+      local low = rooted{ rootPitch = 1, rootOctave = -9 }
+      t.eq(low.octaveWidth, 2, 'the bottom end sizes the field')
+      t.eq(low.cellWidth, 5, '2-digit degree + dash + 2-char octave')
+
+      local step, oct = tuning.midiToStep(low, 0, 0)
+      t.eq(stepText(low, step, oct), '12-10', 'MIDI 0 fills the cell exactly')
+      local _, topOct = tuning.midiToStep(low, 127, 0)
+      t.eq(topOct, 1, 'while the top end is a single char')
+    end,
+  },
+
+  {
     name = 'derive recomputes width when names are dropped',
     run = function()
       local s = tuning.derive{ name = 'x', period = 1200,
