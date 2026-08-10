@@ -645,10 +645,23 @@ def _unsearched_note(relational) -> str:
 # like `chan` still runs to 315 rows, per name it is 20. The site listing is
 # what kind='fields' is for, and each row carries the call that gets there.
 _FIELD_SUMMARY_ROWS = 10
+# — except where the pointer costs more than the answer. Half the field names
+# in the corpus have two sites or fewer, and for those the row already knows
+# everything the re-query would say, so it spends its tail on the sites
+# instead. Three is what one row holds; past that the module list reads better
+# than a wall of locations, and kind='fields' is there for the wall.
+_FIELD_INLINE_SITES = 3
+
+
+def _inline_site(src, caller, line) -> str:
+    """A site as it reads mid-row: `file:line (in caller)`, one space not two."""
+    where = _where(caller).strip()
+    return f"{src}:{line} {where}" if where else f"{src}:{line}"
 
 
 def _field_summaries(module_files, query_rx, limit) -> tuple:
-    """Matching field names, widest first: r/w, site total, declaring modules.
+    """Matching field names, widest first: r/w, then the sites themselves where
+    few, else site total, declaring modules and the call that lists them.
     Returns (rows, names_dropped)."""
     agg: dict = {}
     for mp in module_files:
@@ -658,20 +671,25 @@ def _field_summaries(module_files, query_rx, limit) -> tuple:
             mf = _FIELD.match(raw)
             if not mf or not query_rx.search(mf.group("name")):
                 continue
-            rec = agg.setdefault(mf.group("name"),
-                                 {'rw': set(), 'sites': 0, 'mods': Counter()})
+            rec = agg.setdefault(mf.group("name"), {'rw': set(), 'sites': []})
             rec['rw'].add(mf.group("fkind"))
-            n = sum(1 for _ in _iter_use_sites(mf.group("sites")))
-            rec['sites'] += n
-            rec['mods'][src] += n
+            rec['sites'] += [(src, caller, line) for caller, line
+                             in _iter_use_sites(mf.group("sites"))]
 
     rows = []
-    for name, rec in sorted(agg.items(), key=lambda kv: -kv[1]['sites'])[:limit]:
-        mods = [m for m, _ in rec['mods'].most_common()]
+    for name, rec in sorted(agg.items(),
+                            key=lambda kv: -len(kv[1]['sites']))[:limit]:
+        sites = rec['sites']
+        head = (f"  @field {''.join(sorted(rec['rw']))} {name}  "
+                f"{len(sites)} site{'' if len(sites) == 1 else 's'}")
+        if len(sites) <= _FIELD_INLINE_SITES:
+            listed = sorted(sites, key=lambda s: (s[0], int(s[2])))
+            rows.append(f"{head}: "
+                        + ", ".join(_inline_site(*s) for s in listed))
+            continue
+        mods = [m for m, _ in Counter(s[0] for s in sites).most_common()]
         more = f" +{len(mods) - 3}" if len(mods) > 3 else ""
-        rows.append(f"  @field {''.join(sorted(rec['rw']))} {name}  "
-                    f"{rec['sites']} site{'' if rec['sites'] == 1 else 's'} in "
-                    f"{', '.join(mods[:3])}{more}  "
+        rows.append(f"{head} in {', '.join(mods[:3])}{more}  "
                     f"[kind='fields', query='^{name}$']")
     return rows, len(agg) - len(rows)
 
@@ -748,8 +766,9 @@ def map_query(
       trace signal S end to end?          query='S', kind='flow'
 
     A bare `query` with no `kind` searches declarations and annotations, and
-    summarises the field names it matched — kind='fields' for the access sites
-    themselves. Lua declaration syntax in a query (`^function tm:foo`) reduces
+    summarises the field names it matched, listing the sites outright for a
+    name that has few — kind='fields' for the access sites of the rest. Lua
+    declaration syntax in a query (`^function tm:foo`) reduces
     to the bare name the map indexes.
 
     Args:
@@ -1182,8 +1201,9 @@ def _map_query(query, kind, module, scope, max_results) -> str:
                  or len(field_rows) > keep_f)
     results = decl_rows[:keep_d]
     if keep_f:
-        results.append("--- field names matching "
-                       "(access sites behind kind='fields') ---")
+        # No standing pointer in the header: an inlined row has nothing left to
+        # fetch, and a summarised one carries its own re-query in the tail.
+        results.append("--- field names matching ---")
         results.extend(field_rows[:keep_f])
         unshown = dropped + len(field_rows) - keep_f
         if unshown:
