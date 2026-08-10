@@ -25,6 +25,13 @@ scale coordinate.**
    `(4, 0) = (5, −1)` and `(60, 0) = (1, 4)` are one tuning written three
    times.
 
+5. Root state is project-tier. The library and factory copies of a temper
+   carry none of the four fields, so what the library holds is a scale and
+   what a project holds is a scale placed. Editing a root field forks the
+   row to project as any other edit does, and publishing back to the
+   library drops the four. Divergence from a library source is therefore
+   measured on the scale alone.
+
 ## Sound and notation
 
 1. The root fixes where the scale sits in sound and which octave numbers
@@ -121,10 +128,16 @@ scale coordinate.**
    its `overrides` table. The bump at `octaveStep` means the sign is
    the rendered octave's, not the caller's.
 
-6. Entry follows display. The octave column takes `-` for octave −1
-   and a digit for 0 to 9 (`trackerView.lua:910-918`), which is the
-   range the default root addresses; for roots that reach −2 a new
-   form will be required.
+6. Entry follows display. `-` negates the octave under the cursor, and
+   arms a pending flip at 0 so the sign shows before the digit lands,
+   which is the gesture the delay lane takes for a negative offset
+   (`trackerView.lua:948-956`). A plain digit sets the magnitude and
+   keeps the sign.
+
+7. A period well below the octave puts multiple digits in range. A
+   shift-held digit overwrites one place and stays on the row, which
+   is how the multi-digit fields already take a value
+   (`trackerView.lua:871-873`).
 
 ## The blast radius
 
@@ -150,7 +163,8 @@ scale coordinate.**
 
 5. `temperEditor.lua` gains rows for the four authored fields, and
    restates `rootStep` when a step edit renumbers the steps below the
-   root, so the correspondence goes on naming the step it named.
+   root, so the correspondence goes on naming the step it named. The copy
+   it publishes to the library drops the four (§ What a root is).
 
 6. Deleting the step a root names is the one edit with no step to
    renumber onto: the editor restates the root on the unison at the

@@ -12,12 +12,12 @@
 2. **Phase 2 — Negative octaves** (§ Negative octaves) — the octave
    label as a magnitude in `colour.tracker.negative`, the field sized
    over both ends of the range, and the tint routed from `stepToParts`
-   out to `gridPane`.  ← in flight
-3. **Phase 3 — Authoring the root** (§ The blast radius 5–9, § Negative
-   octaves 5) — editor rows for the four fields, `rootStep` restated as
-   step edits renumber around it, the root surviving a round-trip
-   through the library, an octave column that can type the range a root
-   opens, and the `docs/tuning.md` § Coordinate systems rewrite.
+   out to `gridPane`.  landed 2026-08-10, 2 commits
+3. **Phase 3 — Authoring the root** (§ The blast radius, § Negative
+   octaves) — editor rows for the four fields with the root kept out of
+   the library, the root restated as step edits renumber around it, an
+   octave column that can type the range a root opens, and the
+   `docs/tuning.md` § Coordinate systems rewrite.  ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -32,4 +32,32 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — the phase's last item is in flight.)
+1. Four root rows in the temper editor — `rootPitch`, `rootDetune`,
+   `rootStep` and `rootOctave`, beside the period box — committing through
+   `temperWrite` so `derive` restamps the pair. The copy `publish` sends to
+   the library is stripped of the four, so a library temper carries no
+   root, and the divergence `lib.modified` and `lib.publishOverwrites`
+   report ignores them — a root is not drift from the library's scale.
+   Spec through the `temperEditor_tree_spec` harness.
+
+2. Restate the root when a step edit moves or deletes the step it names,
+   preserving `rootCents`. The rooted step keeps its cents where it
+   survives a renumber; where it is deleted the root restates on the
+   unison at the same `rootCents`, which is the same tuning written
+   differently. A pure function in `tuning.lua` called from the editor's
+   write path, so the arithmetic stays where the rest of it lives; spec in
+   `tuning_spec`.
+
+3. The octave column takes a negative octave: `-` negates the octave under
+   the cursor and arms a pending flip at 0, as the delay lane does with a
+   negative offset, and a digit sets the magnitude and keeps the sign.
+   Spec in `vm_temper_entry_spec`.
+
+4. A shift-held digit overwrites one place of the octave field and stays
+   on the row, the gesture the sample and delay fields already take, so an
+   octave of two digits can be typed. Spec in `vm_temper_entry_spec`.
+
+5. Rewrite `docs/tuning.md` § Coordinate systems and § Addressable range
+   so the anchor is the root rather than `cents 0 ≡ MIDI 0`, drop the
+   claim that the first step of every temperament is `C`, and list the
+   four authored fields in § Temper shape.
