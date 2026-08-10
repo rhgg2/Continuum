@@ -307,6 +307,17 @@ return {
   },
 
   {
+    name = 'noteProjection reports a negative octave alongside its magnitude',
+    run = function()
+      local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
+      local note, octave, _, _, negative = ctx:noteProjection({ pitch = 0 })
+      t.eq(note, 'C-')
+      t.eq(octave, '1', 'octave -1 renders as its magnitude')
+      t.eq(negative, true, 'and reports itself negative, for the tint')
+    end,
+  },
+
+  {
     name = 'noteProjection signed gap: positive detune yields positive gap (sharp)',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }

@@ -1,4 +1,4 @@
-@module gridPane  src=gridPane.lua  loc=1167  mode=chunk  self=gridPane
+@module gridPane  src=gridPane.lua  loc=1178  mode=chunk  self=gridPane
 @deps cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry
 
 # Invariants & contracts
@@ -8,16 +8,16 @@
   @invariant  page-persistent state: cellW/H, dragging, laneConsumed, paintLast  @ 21
   @contract  host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates  @ 22
   @contract  host chordEntry=false gates the chord gesture off (the pattern editor passes false)  @ 23
-  @contract  bails if laneConsumed; lane strip wins gestures over the tracker grid  @ 964
-  @contract  right-click on channel-label row toggles mute  @ 965
-  @contract  click on label rows selects channel/column  @ 966
-  @contract  body click moves cursor and arms drag  @ 967
-  @contract  no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip  @ 1107
-  @contract  every fresh press enters; only lastEditKey autorepeats  @ 1108
-  @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)  @ 1109
-  @contract  a note key typed while armed exits region mode then enters (execute-through)  @ 1110
-  @contract  Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk  @ 1111
-  @contract  Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits  @ 1112
+  @contract  bails if laneConsumed; lane strip wins gestures over the tracker grid  @ 975
+  @contract  right-click on channel-label row toggles mute  @ 976
+  @contract  click on label rows selects channel/column  @ 977
+  @contract  body click moves cursor and arms drag  @ 978
+  @contract  no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip  @ 1118
+  @contract  every fresh press enters; only lastEditKey autorepeats  @ 1119
+  @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)  @ 1120
+  @contract  a note key typed while armed exits region mode then enters (execute-through)  @ 1121
+  @contract  Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk  @ 1122
+  @contract  Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits  @ 1123
 
 # Imports
   @require util = 'util'  @ 24
@@ -45,178 +45,178 @@
   @state dragging = false  @ 72   -- tracker-grid selection drag: click → held → release
   @state laneConsumed = false  @ 74
   @state paintLast = nil  @ 76   -- region-paint per-cell debounce
-  @state renderFns = {  @ 175
-  @state VNAME_MAX = 14  @ 291
-  @state laneRenderable = { cc = true, pb = true, at = true }  @ 361
-      @invariant  lane strip renders only cc/pb/at; other types show as tinted background  @ 360
-  @state LANE_ROW_MIN = 3  @ 363
-  @state LANE_ROW_MAX = 32  @ 364
-  @state PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = ...  @ 493
-      @contract  assumes computeLayout ran this frame; reads chanLeft/Width/Order, gridOriginX/Y  @ 490
-  @state NO_OVERLAY = { notes = {}, values = {}, hidden = {} }  @ 509   -- caret outside every chain: no ghosts, nothing suppressed
-  @state editKeys = {}  @ 856
-  @state lastEditKey  @ 874
-  @state gridPane = {}  @ 878
+  @state renderFns = {  @ 186
+  @state VNAME_MAX = 14  @ 302
+  @state laneRenderable = { cc = true, pb = true, at = true }  @ 372
+      @invariant  lane strip renders only cc/pb/at; other types show as tinted background  @ 371
+  @state LANE_ROW_MIN = 3  @ 374
+  @state LANE_ROW_MAX = 32  @ 375
+  @state PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = ...  @ 504
+      @contract  assumes computeLayout ran this frame; reads chanLeft/Width/Order, gridOriginX/Y  @ 501
+  @state NO_OVERLAY = { notes = {}, values = {}, hidden = {} }  @ 520   -- caret outside every chain: no ghosts, nothing suppressed
+  @state editKeys = {}  @ 867
+  @state lastEditKey  @ 885
+  @state gridPane = {}  @ 889
 
 # Private functions
   @fn layoutColumns(cols, scrollCol)  @ 55-69
       @contract  clears col.x on every col before assigning; off-screen cols stay nil  @ 54
   -- Cell renderers
-  @fn renderNote(evt, col, row)  @ 80-147
-  @fn renderPB(evt)  @ 149-154
-  @fn renderCC(evt, col)  @ 156-163
-  @fn renderFx(_, col, row)  @ 167-173
+  @fn renderNote(evt, col, row)  @ 80-158
+  @fn renderPB(evt)  @ 160-165
+  @fn renderCC(evt, col)  @ 167-174
+  @fn renderFx(_, col, row)  @ 178-184
       -- The region's chain, one stage per row from the badge down, resolved off the registry as the
       -- view minted the stack; live stages keep the cell's default colour, bypassed ones dim like the fx tab.
-  @fn renderCell(evt, col, row)  @ 185-188
-  @fn delayMarkerOffset(col, pitchWidth)  @ 192-194
+  @fn renderCell(evt, col, row)  @ 196-199
+  @fn delayMarkerOffset(col, pitchWidth)  @ 203-205
       -- Offset of the gap before the 3 delay digits in a note cell (* marker slot).
       -- Layout: pitch(W) + optional sample(3) + ' ' + vel(2); W = active pitchWidth.
-  @fn fxMarkerOffset(col, pitchWidth)  @ 198-200
+  @fn fxMarkerOffset(col, pitchWidth)  @ 209-211
       -- The fx badge sits in the pre-vel separator slot -- one column inboard of
       -- the delay-marker slot, so the two markers never collide.
   -- Drawing
-  @fn printer(x0, y0)  @ 206-271
+  @fn printer(x0, y0)  @ 217-282
       -- Cell adapter over the shared painter: col/row → screen via one transform.
       -- cellW/cellH are odd integers (whole-pixel landing); snap handles fractional cases.
-  @fn laneStripRows()  @ 274-277
-      @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this  @ 273
-  @fn drawLocalScrim(draw, hole, w, h)  @ 281-287
+  @fn laneStripRows()  @ 285-288
+      @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this  @ 284
+  @fn drawLocalScrim(draw, hole, w, h)  @ 292-298
       -- Local-mode wash: dim the whole grid except a hole at the instance the caret sits
       -- inside (`hole`, grid units); nil hole washes everything. Overlays the cell pass.
-  @fn vnameSize()  @ 293
-  @fn vnameGap()  @ 297
+  @fn vnameSize()  @ 304
+  @fn vnameGap()  @ 308
       -- Bottom gap under a vertical name, in rows: clear of the grid's top rule
       -- with a couple of px of breathing room.
-  @fn vname(label)  @ 301-326
+  @fn vname(label)  @ 312-337
       -- Rotated param name, trimmed to fit the fixed header. Binary search finds
       -- the longest prefix whose rotated strip fits, exact under variable-width fonts.
-  @fn ensureCellSize()  @ 330-338
+  @fn ensureCellSize()  @ 341-349
       -- cellW/cellH: odd px so 1px strokes land on pixel centres. Lazy: first layout or measure.
       -- Measure under the grid font: naturalWidth() may trigger this before draw's font push.
-  @fn computeLayout(budgetW, budgetH)  @ 343-356
+  @fn computeLayout(budgetW, budgetH)  @ 354-367
       -- RESERVE_ROWS of breathing is kept clear at the bottom for every caller; the grid fills the rest.
-      @contract  must run before draws reading chanLeft/chanWidth/totalWidth/viewRows  @ 340
-      @contract  calls tv:setGridSize so tv scroll math sees the live viewport  @ 341
+      @contract  must run before draws reading chanLeft/chanWidth/totalWidth/viewRows  @ 351
+      @contract  calls tv:setGridSize so tv scroll math sees the live viewport  @ 352
   -- Lane strip
-  @fn curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)  @ 368-413
+  @fn curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)  @ 379-424
       -- Build the curve-editor FrameArgs for `col` over row-space [tMin,tMax] in `rect`; returns
       -- true iff it consumed the mouse. Shared by the lane strip and the pattern editor's curve pane.
-  @fn drawLaneStrip()  @ 417-488
-      @contract  publishes laneConsumed=true if curve editor claimed input this frame  @ 415
-      @contract  handleMouse short-circuits on laneConsumed  @ 416
-  @fn notePartHeaders(col)  @ 495-507
-  @fn drawTracker()  @ 511-824
+  @fn drawLaneStrip()  @ 428-499
+      @contract  publishes laneConsumed=true if curve editor claimed input this frame  @ 426
+      @contract  handleMouse short-circuits on laneConsumed  @ 427
+  @fn notePartHeaders(col)  @ 506-518
+  @fn drawTracker()  @ 522-835
   -- Input
-  @fn cellAt(mouseX, mouseY)  @ 830-833
+  @fn cellAt(mouseX, mouseY)  @ 841-844
       -- Screen point -> (fractional column, integer row) through the grid painter's
       -- inverse, so a click resolves against the exact transform the draw pass used.
-  @fn nearestStop(mouseX, mouseY)  @ 837-852
-      @contract  returns (col, stop, fracX) or (nil, nil, fracX)  @ 835
-      @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'  @ 836
-  @fn add(key, byte, digit)  @ 858
+  @fn nearestStop(mouseX, mouseY)  @ 848-863
+      @contract  returns (col, stop, fracX) or (nil, nil, fracX)  @ 846
+      @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'  @ 847
+  @fn add(key, byte, digit)  @ 869
 
 # Public API (gridPane:*)
-  @api gridPane:draw(gridW, gridH)  @ 883-890
+  @api gridPane:draw(gridW, gridH)  @ 894-901
       -- Draw pass: computeLayout twice (lane-drag callbacks may rebuild grid.cols,
       -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
-      @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x  @ 882
-  @api gridPane:geom()  @ 893-895
+      @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x  @ 893
+  @api gridPane:geom()  @ 904-906
       -- Grid geometry for the host's help:anchor (which spans grid + palette).
-  @api gridPane:naturalWidth()  @ 899-904
+  @api gridPane:naturalWidth()  @ 910-915
       -- Intrinsic pixel width of the current grid (gutter + every column). Lets the pattern
       -- editor size the grid to its exact content and hand the rest of the width to the curve.
-  @api gridPane:heightForRows(rows)  @ 908-911
+  @api gridPane:heightForRows(rows)  @ 919-922
       -- Content-region pixel height for `rows` grid rows (header, lane strip, bottom breathing);
       -- inverts computeLayout. +2px cancels its RESERVE subtraction so pixel rounding can't clip the last row.
-  @api gridPane:cellHeight()  @ 913
-  @api gridPane:cellWidth()  @ 914
-  @api gridPane:drawCurveEditor(rect)  @ 919-962
+  @api gridPane:cellHeight()  @ 924
+  @api gridPane:cellWidth()  @ 925
+  @api gridPane:drawCurveEditor(rect)  @ 930-973
       -- time -> X across the grid's scrolled window, so scrolling pans/zooms the curve and a
       -- fitting pattern shows whole; assumes gridPane:draw ran first this frame (reads viewRows).
-      @contract  renders the current column's curve into `rect`; sets laneConsumed  @ 916
-  @api gridPane:handleMouse()  @ 968-1103
-  @api gridPane:handleKeys(kr)  @ 1113-1165
+      @contract  renders the current column's curve into `rect`; sets laneConsumed  @ 927
+  @api gridPane:handleMouse()  @ 979-1114
+  @api gridPane:handleKeys(kr)  @ 1124-1176
       -- commandHeld gates note entry per key: a key bound to both a command and note
       -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
 
 # Uses (outbound edges)
-  @use call    ImGui.CalcTextSize  @ ensureCellSize:333
-  @use call    ImGui.Dummy  @ drawLaneStrip:473 drawTracker:823
-  @use call    ImGui.GetCursorScreenPos  @ drawLaneStrip:422,453,475 drawTracker:517 drawCurveEditor:949
-  @use call    ImGui.GetKeyMods  @ handleMouse:984,1041 handleKeys:1114
-  @use call    ImGui.GetMousePos  @ handleMouse:988,1005,1018,1053
-  @use call    ImGui.GetMouseWheel  @ handleMouse:1087
-  @use call    ImGui.InvisibleButton  @ drawLaneStrip:455 drawCurveEditor:953
-  @use call    ImGui.IsItemActive  @ drawLaneStrip:457 drawCurveEditor:955
-  @use call    ImGui.IsItemHovered  @ drawLaneStrip:457 drawCurveEditor:955
-  @use call    ImGui.IsKeyPressed  @ handleKeys:1124,1141,1142
-  @use call    ImGui.IsMouseClicked  @ handleMouse:976,977
-  @use call    ImGui.IsMouseDown  @ handleMouse:978
-  @use call    ImGui.IsWindowHovered  @ handleMouse:983,1004,1017,1086
-  @use call    ImGui.PopFont  @ ensureCellSize:334 draw:889
-  @use call    ImGui.PushFont  @ ensureCellSize:332 draw:884
-  @use call    ImGui.SameLine  @ drawLaneStrip:482
-  @use call    ImGui.SetCursorScreenPos  @ drawLaneStrip:454,458,477,487 drawCurveEditor:952,956
-  @use call    ImGui.SmallButton  @ drawLaneStrip:479,483
-  @use call    chrome.popChromeStyles  @ drawLaneStrip:486
-  @use call    chrome.pushChromeStyles  @ drawLaneStrip:478
-  @use call    cm:get  @ laneStripRows:275,276 curveEditorFrame:377 drawLaneStrip:476
-  @use call    cm:set  @ drawLaneStrip:480,484
-  @use call    cmgr:invoke  @ handleMouse:1092,1099
-  @use call    cmgr:isPrefixActive  @ handleKeys:1133
-  @use call    cmgr:noteChars  @ handleKeys:1147
-  @use call    curveEditor:frame  @ curveEditorFrame:383
-  @use call    groups.outlineKey  @ drawTracker:661
-  @use call    groups.regionKey  @ drawTracker:627
-  @use call    groups.tintKey  @ drawTracker:644,647
-  @use call    painter.measureRotated  @ vname:312
-  @use call    painter.new  @ printer:207 drawLaneStrip:427 drawTracker:527 drawCurveEditor:934
-  @use call    tv:activeTemper  @ drawTracker:765
-  @use call    tv:addLaneEvent  @ curveEditorFrame:407
-  @use call    tv:cellWidth  @ renderNote:95 drawTracker:695
-  @use call    tv:chordActive  @ handleKeys:1118,1125
-  @use call    tv:chordBackspace  @ handleKeys:1125
-  @use call    tv:chordCommit  @ handleKeys:1118
-  @use call    tv:chordStrike  @ handleKeys:1152
-  @use call    tv:cycleLaneShape  @ curveEditorFrame:410
-  @use call    tv:deleteLaneEvent  @ curveEditorFrame:408
-  @use call    tv:deletedCells  @ drawTracker:613
-  @use call    tv:digitsActive  @ handleKeys:1119,1126
-  @use call    tv:digitsBackspace  @ handleKeys:1126
-  @use call    tv:digitsCommit  @ handleKeys:1119
-  @use call    tv:digitsStrike  @ handleKeys:1153
-  @use call    tv:eachInstance  @ drawTracker:610
-  @use call    tv:ec  @ drawLaneStrip:461 drawTracker:513,603,604 drawCurveEditor:920 handleMouse:972 handleKeys:1128
-  @use call    tv:editEvent  @ handleKeys:1137
-  @use call    tv:endReselectCascades  @ handleMouse:1035,1044,1078
-  @use call    tv:entrySignAt  @ drawTracker:737
-  @use call    tv:ghostOverlay  @ drawTracker:607
-  @use call    tv:isChannelEffectivelyMuted  @ drawTracker:745
-  @use call    tv:isChannelMuted  @ drawTracker:545
-  @use call    tv:isChannelSoloed  @ drawTracker:544
-  @use call    tv:localMode  @ drawTracker:608
-  @use call    tv:logPerRow  @ drawTracker:601
-  @use call    tv:moveLaneEvent  @ curveEditorFrame:405,406
-  @use call    tv:movePreview  @ drawTracker:605
-  @use call    tv:noteProjection  @ renderNote:107 drawTracker:777
-  @use call    tv:octaveWidth  @ renderNote:96
-  @use call    tv:paintRegionStream  @ handleMouse:995
-  @use call    tv:paramBinding  @ drawTracker:553
-  @use call    tv:ppqToRow  @ curveEditorFrame:388
-  @use call    tv:rowBeatInfo  @ drawLaneStrip:441 drawTracker:578 drawCurveEditor:940
-  @use call    tv:rowToPPQ  @ curveEditorFrame:407
-  @use call    tv:sampleCurve  @ curveEditorFrame:393
-  @use call    tv:scroll  @ computeLayout:345 drawLaneStrip:428 drawTracker:515 drawCurveEditor:930 handleMouse:974
-  @use call    tv:setGridSize  @ computeLayout:353
-  @use call    tv:setLaneTension  @ curveEditorFrame:409
-  @use call    tv:stateOf  @ drawTracker:642
-  @use call    tv:streamRefAt  @ drawTracker:631
-  @use call    tv:toggleChannelMute  @ handleMouse:1011
-  @use call    util.add  @ printer:242 curveEditorFrame:372 notePartHeaders:501 add:858
-  @use call    util.clamp  @ drawTracker:780
+  @use call    ImGui.CalcTextSize  @ ensureCellSize:344
+  @use call    ImGui.Dummy  @ drawLaneStrip:484 drawTracker:834
+  @use call    ImGui.GetCursorScreenPos  @ drawLaneStrip:433,464,486 drawTracker:528 drawCurveEditor:960
+  @use call    ImGui.GetKeyMods  @ handleMouse:995,1052 handleKeys:1125
+  @use call    ImGui.GetMousePos  @ handleMouse:999,1016,1029,1064
+  @use call    ImGui.GetMouseWheel  @ handleMouse:1098
+  @use call    ImGui.InvisibleButton  @ drawLaneStrip:466 drawCurveEditor:964
+  @use call    ImGui.IsItemActive  @ drawLaneStrip:468 drawCurveEditor:966
+  @use call    ImGui.IsItemHovered  @ drawLaneStrip:468 drawCurveEditor:966
+  @use call    ImGui.IsKeyPressed  @ handleKeys:1135,1152,1153
+  @use call    ImGui.IsMouseClicked  @ handleMouse:987,988
+  @use call    ImGui.IsMouseDown  @ handleMouse:989
+  @use call    ImGui.IsWindowHovered  @ handleMouse:994,1015,1028,1097
+  @use call    ImGui.PopFont  @ ensureCellSize:345 draw:900
+  @use call    ImGui.PushFont  @ ensureCellSize:343 draw:895
+  @use call    ImGui.SameLine  @ drawLaneStrip:493
+  @use call    ImGui.SetCursorScreenPos  @ drawLaneStrip:465,469,488,498 drawCurveEditor:963,967
+  @use call    ImGui.SmallButton  @ drawLaneStrip:490,494
+  @use call    chrome.popChromeStyles  @ drawLaneStrip:497
+  @use call    chrome.pushChromeStyles  @ drawLaneStrip:489
+  @use call    cm:get  @ laneStripRows:286,287 curveEditorFrame:388 drawLaneStrip:487
+  @use call    cm:set  @ drawLaneStrip:491,495
+  @use call    cmgr:invoke  @ handleMouse:1103,1110
+  @use call    cmgr:isPrefixActive  @ handleKeys:1144
+  @use call    cmgr:noteChars  @ handleKeys:1158
+  @use call    curveEditor:frame  @ curveEditorFrame:394
+  @use call    groups.outlineKey  @ drawTracker:672
+  @use call    groups.regionKey  @ drawTracker:638
+  @use call    groups.tintKey  @ drawTracker:655,658
+  @use call    painter.measureRotated  @ vname:323
+  @use call    painter.new  @ printer:218 drawLaneStrip:438 drawTracker:538 drawCurveEditor:945
+  @use call    tv:activeTemper  @ drawTracker:776
+  @use call    tv:addLaneEvent  @ curveEditorFrame:418
+  @use call    tv:cellWidth  @ renderNote:96 drawTracker:706
+  @use call    tv:chordActive  @ handleKeys:1129,1136
+  @use call    tv:chordBackspace  @ handleKeys:1136
+  @use call    tv:chordCommit  @ handleKeys:1129
+  @use call    tv:chordStrike  @ handleKeys:1163
+  @use call    tv:cycleLaneShape  @ curveEditorFrame:421
+  @use call    tv:deleteLaneEvent  @ curveEditorFrame:419
+  @use call    tv:deletedCells  @ drawTracker:624
+  @use call    tv:digitsActive  @ handleKeys:1130,1137
+  @use call    tv:digitsBackspace  @ handleKeys:1137
+  @use call    tv:digitsCommit  @ handleKeys:1130
+  @use call    tv:digitsStrike  @ handleKeys:1164
+  @use call    tv:eachInstance  @ drawTracker:621
+  @use call    tv:ec  @ drawLaneStrip:472 drawTracker:524,614,615 drawCurveEditor:931 handleMouse:983 handleKeys:1139
+  @use call    tv:editEvent  @ handleKeys:1148
+  @use call    tv:endReselectCascades  @ handleMouse:1046,1055,1089
+  @use call    tv:entrySignAt  @ drawTracker:748
+  @use call    tv:ghostOverlay  @ drawTracker:618
+  @use call    tv:isChannelEffectivelyMuted  @ drawTracker:756
+  @use call    tv:isChannelMuted  @ drawTracker:556
+  @use call    tv:isChannelSoloed  @ drawTracker:555
+  @use call    tv:localMode  @ drawTracker:619
+  @use call    tv:logPerRow  @ drawTracker:612
+  @use call    tv:moveLaneEvent  @ curveEditorFrame:416,417
+  @use call    tv:movePreview  @ drawTracker:616
+  @use call    tv:noteProjection  @ renderNote:108 drawTracker:788
+  @use call    tv:octaveWidth  @ renderNote:97
+  @use call    tv:paintRegionStream  @ handleMouse:1006
+  @use call    tv:paramBinding  @ drawTracker:564
+  @use call    tv:ppqToRow  @ curveEditorFrame:399
+  @use call    tv:rowBeatInfo  @ drawLaneStrip:452 drawTracker:589 drawCurveEditor:951
+  @use call    tv:rowToPPQ  @ curveEditorFrame:418
+  @use call    tv:sampleCurve  @ curveEditorFrame:404
+  @use call    tv:scroll  @ computeLayout:356 drawLaneStrip:439 drawTracker:526 drawCurveEditor:941 handleMouse:985
+  @use call    tv:setGridSize  @ computeLayout:364
+  @use call    tv:setLaneTension  @ curveEditorFrame:420
+  @use call    tv:stateOf  @ drawTracker:653
+  @use call    tv:streamRefAt  @ drawTracker:642
+  @use call    tv:toggleChannelMute  @ handleMouse:1022
+  @use call    util.add  @ printer:253 curveEditorFrame:383 notePartHeaders:512 add:869
+  @use call    util.clamp  @ drawTracker:791
   @use call    util.instantiate  @ <load>:73
-  @use call    util.round  @ curveEditorFrame:395 handleMouse:1089,1096
+  @use call    util.round  @ curveEditorFrame:406 handleMouse:1100,1107
   @use require curveEditor  @ <load>:73
   @use require groups  @ <load>:25
   @use require imgui  @ <load>:31
@@ -224,70 +224,70 @@
   @use require util  @ <load>:24
 
 # Calls (intra-file)
-  @call add  @ <load>:859,861,862,864,865,866,867,868,869
-  @call cellAt  @ nearestStop:839 handleMouse:989,1006,1019,1054
-  @call computeLayout  @ draw:885,887
-  @call curveEditorFrame  @ drawLaneStrip:464 drawCurveEditor:958
-  @call delayMarkerOffset  @ drawTracker:756
-  @call drawLaneStrip  @ draw:886
-  @call drawLocalScrim  @ drawTracker:793
-  @call drawTracker  @ draw:888
-  @call ensureCellSize  @ computeLayout:347 naturalWidth:900 heightForRows:909 cellHeight:913 cellWidth:914
-  @call fxMarkerOffset  @ drawTracker:759
-  @call laneStripRows  @ computeLayout:350 drawLaneStrip:419 heightForRows:910
-  @call layoutColumns  @ computeLayout:355
-  @call nearestStop  @ handleMouse:991,1007,1020,1072
-  @call notePartHeaders  @ drawTracker:562
-  @call printer  @ drawTracker:522
-  @call renderCell  @ drawTracker:723,726,728,817
-  @call vname  @ drawTracker:555
-  @call vnameGap  @ vname:307 drawTracker:556,557
-  @call vnameSize  @ vname:312 drawTracker:556,563,566
+  @call add  @ <load>:870,872,873,875,876,877,878,879,880
+  @call cellAt  @ nearestStop:850 handleMouse:1000,1017,1030,1065
+  @call computeLayout  @ draw:896,898
+  @call curveEditorFrame  @ drawLaneStrip:475 drawCurveEditor:969
+  @call delayMarkerOffset  @ drawTracker:767
+  @call drawLaneStrip  @ draw:897
+  @call drawLocalScrim  @ drawTracker:804
+  @call drawTracker  @ draw:899
+  @call ensureCellSize  @ computeLayout:358 naturalWidth:911 heightForRows:920 cellHeight:924 cellWidth:925
+  @call fxMarkerOffset  @ drawTracker:770
+  @call laneStripRows  @ computeLayout:361 drawLaneStrip:430 heightForRows:921
+  @call layoutColumns  @ computeLayout:366
+  @call nearestStop  @ handleMouse:1002,1018,1031,1083
+  @call notePartHeaders  @ drawTracker:573
+  @call printer  @ drawTracker:533
+  @call renderCell  @ drawTracker:734,737,739,828
+  @call vname  @ drawTracker:566
+  @call vnameGap  @ vname:318 drawTracker:567,568
+  @call vnameSize  @ vname:323 drawTracker:567,574,577
 
 # Bindings (by name)
-  @bind renderCC  @ 178,179,180,181
-  @bind renderFx  @ 182
-  @bind renderNote  @ 176
-  @bind renderPB  @ 177
+  @bind renderCC  @ 189,190,191,192
+  @bind renderFx  @ 193
+  @bind renderNote  @ 187
+  @bind renderPB  @ 188
 
 # Unresolved receivers
-  @drop draw:box  @ drawLocalScrim:282,283,284,285,286 drawTracker:584,636,645,647,806,815
-  @drop draw:hLine  @ drawTracker:572
-  @drop draw:smallGlyph  @ drawTracker:756,759
-  @drop draw:text  @ drawTracker:530,590,752,819
-  @drop draw:textCentred  @ drawTracker:547,560
-  @drop draw:textCentredSmall  @ drawTracker:563,566
-  @drop draw:textVertical  @ drawTracker:557
-  @drop ec:extendTo  @ handleMouse:1045,1079
-  @drop ec:hasSelection  @ drawTracker:796
-  @drop ec:isInRegionMode  @ handleMouse:983,1000 handleKeys:1150,1156
-  @drop ec:isSticky  @ handleKeys:1151,1157
-  @drop ec:pos  @ drawTracker:514 handleMouse:973 handleKeys:1135
-  @drop ec:region  @ drawTracker:797
-  @drop ec:regionCursor  @ handleMouse:982
-  @drop ec:regionExit  @ handleKeys:1150,1156
-  @drop ec:selClear  @ handleMouse:1047 handleKeys:1151,1157
-  @drop ec:selectChannel  @ handleMouse:1036
-  @drop ec:selectColumn  @ handleMouse:1037
-  @drop ec:selectionStopSpan  @ drawTracker:802,803
-  @drop ec:setPos  @ handleMouse:1048
-  @drop gridPainter.fromScreen  @ cellAt:831
-  @drop label:sub  @ vname:303,311
-  @drop p.border  @ drawTracker:663
-  @drop p.fill  @ printer:267 drawLaneStrip:444 drawCurveEditor:942
-  @drop p.measure  @ printer:222,252
-  @drop p.segment  @ printer:258,263 drawLaneStrip:446 drawCurveEditor:945
-  @drop p.stroke  @ drawLaneStrip:470 drawCurveEditor:960
-  @drop p.text  @ printer:215,235,244,254
-  @drop p.textUp  @ drawTracker:556
-  @drop screenPainter.line  @ drawTracker:781,783
-  @drop screenPainter.pathArcTo  @ drawTracker:684,687
-  @drop screenPainter.pathClear  @ drawTracker:683,689
-  @drop screenPainter.pathLineTo  @ drawTracker:685,686
-  @drop screenPainter.pathStroke  @ drawTracker:688
-  @drop text:gmatch  @ drawTracker:749
-  @drop text:sub  @ drawTracker:818
-  @drop txt:gmatch  @ printer:214,242
+  @drop draw:box  @ drawLocalScrim:293,294,295,296,297 drawTracker:595,647,656,658,817,826
+  @drop draw:hLine  @ drawTracker:583
+  @drop draw:smallGlyph  @ drawTracker:767,770
+  @drop draw:text  @ drawTracker:541,601,763,830
+  @drop draw:textCentred  @ drawTracker:558,571
+  @drop draw:textCentredSmall  @ drawTracker:574,577
+  @drop draw:textVertical  @ drawTracker:568
+  @drop ec:extendTo  @ handleMouse:1056,1090
+  @drop ec:hasSelection  @ drawTracker:807
+  @drop ec:isInRegionMode  @ handleMouse:994,1011 handleKeys:1161,1167
+  @drop ec:isSticky  @ handleKeys:1162,1168
+  @drop ec:pos  @ drawTracker:525 handleMouse:984 handleKeys:1146
+  @drop ec:region  @ drawTracker:808
+  @drop ec:regionCursor  @ handleMouse:993
+  @drop ec:regionExit  @ handleKeys:1161,1167
+  @drop ec:selClear  @ handleMouse:1058 handleKeys:1162,1168
+  @drop ec:selectChannel  @ handleMouse:1047
+  @drop ec:selectColumn  @ handleMouse:1048
+  @drop ec:selectionStopSpan  @ drawTracker:813,814
+  @drop ec:setPos  @ handleMouse:1059
+  @drop gridPainter.fromScreen  @ cellAt:842
+  @drop label:sub  @ vname:314,322
+  @drop p.border  @ drawTracker:674
+  @drop p.fill  @ printer:278 drawLaneStrip:455 drawCurveEditor:953
+  @drop p.measure  @ printer:233,263
+  @drop p.segment  @ printer:269,274 drawLaneStrip:457 drawCurveEditor:956
+  @drop p.stroke  @ drawLaneStrip:481 drawCurveEditor:971
+  @drop p.text  @ printer:226,246,255,265
+  @drop p.textUp  @ drawTracker:567
+  @drop screenPainter.line  @ drawTracker:792,794
+  @drop screenPainter.pathArcTo  @ drawTracker:695,698
+  @drop screenPainter.pathClear  @ drawTracker:694,700
+  @drop screenPainter.pathLineTo  @ drawTracker:696,697
+  @drop screenPainter.pathStroke  @ drawTracker:699
+  @drop text:gmatch  @ drawTracker:760
+  @drop text:sub  @ drawTracker:829
+  @drop txt:gmatch  @ printer:225,253
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -295,171 +295,171 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 27
-  @field r Key_0  @ 861
-  @field r Key_A  @ 859
-  @field r Key_Apostrophe  @ 869
-  @field r Key_Backspace  @ handleKeys:1124
-  @field r Key_Comma  @ 866
-  @field r Key_Keypad0  @ 862
-  @field r Key_KeypadSubtract  @ 865
-  @field r Key_Minus  @ 864
-  @field r Key_Period  @ 867
-  @field r Key_Semicolon  @ 868
-  @field r Mod_Alt  @ handleMouse:986 handleKeys:1132
-  @field r Mod_None  @ handleKeys:1133
-  @field r Mod_Shift  @ handleMouse:985,1041 handleKeys:1117,1131,1132
-  @field r anchor  @ drawTracker:620,621,622
-  @field w anchor  @ curveEditorFrame:401
-  @field w anchorActive  @ curveEditorFrame:402
-  @field w at  @ 180,361
-  @field w axis  @ curveEditorFrame:399
-  @field r bypass  @ renderFx:170
-  @field w callbacks  @ curveEditorFrame:404
-  @field r cc  @ drawTracker:553,566
-  @field w cc  @ 178,361
-  @field w cellH  @ geom:894
-  @field r cells  @ drawTracker:638,701,709,767,775,816 handleKeys:1137
-  @field r chan  @ drawTracker:620
-  @field r chanDelta  @ drawTracker:620
-  @field r char  @ handleKeys:1147,1148,1152,1153,1159
-  @field w char  @ add:858
-  @field r charpattern  @ printer:214,242 drawTracker:749
+  @field r Key_0  @ 872
+  @field r Key_A  @ 870
+  @field r Key_Apostrophe  @ 880
+  @field r Key_Backspace  @ handleKeys:1135
+  @field r Key_Comma  @ 877
+  @field r Key_Keypad0  @ 873
+  @field r Key_KeypadSubtract  @ 876
+  @field r Key_Minus  @ 875
+  @field r Key_Period  @ 878
+  @field r Key_Semicolon  @ 879
+  @field r Mod_Alt  @ handleMouse:997 handleKeys:1143
+  @field r Mod_None  @ handleKeys:1144
+  @field r Mod_Shift  @ handleMouse:996,1052 handleKeys:1128,1142,1143
+  @field r anchor  @ drawTracker:631,632,633
+  @field w anchor  @ curveEditorFrame:412
+  @field w anchorActive  @ curveEditorFrame:413
+  @field w at  @ 191,372
+  @field w axis  @ curveEditorFrame:410
+  @field r bypass  @ renderFx:181
+  @field w callbacks  @ curveEditorFrame:415
+  @field r cc  @ drawTracker:564,577
+  @field w cc  @ 189,372
+  @field w cellH  @ geom:905
+  @field r cells  @ drawTracker:649,712,720,778,786,827 handleKeys:1148
+  @field r chan  @ drawTracker:631
+  @field r chanDelta  @ drawTracker:631
+  @field r char  @ handleKeys:1158,1159,1163,1164,1170
+  @field w char  @ add:869
+  @field r charpattern  @ printer:225,253 drawTracker:760
   @field r chordEntry  @ 35
   @field r chrome  @ 35
   @field w chrome  @ 73
   @field r cm  @ 35
   @field r cmgr  @ 35
-  @field r col  @ drawTracker:614,615
-  @field r colour  @ drawTracker:627,662
-  @field w colours  @ curveEditorFrame:398
-  @field r cols  @ computeLayout:355 drawLaneStrip:462 drawTracker:534,550,629,638,675,699,708,766,801
-  @field r cols  @ drawTracker:801,810 nearestStop:841 naturalWidth:901 drawCurveEditor:921 handleMouse:1009,1024,1056,1062,1067,1068
-  @field r cols  @ handleMouse:1069 handleKeys:1136
-  @field r commandHeld  @ handleKeys:1129
+  @field r col  @ drawTracker:625,626
+  @field r colour  @ drawTracker:638,673
+  @field w colours  @ curveEditorFrame:409
+  @field r cols  @ computeLayout:366 drawLaneStrip:473 drawTracker:545,561,640,649,686,710,719,777,812
+  @field r cols  @ drawTracker:812,821 nearestStop:852 naturalWidth:912 drawCurveEditor:932 handleMouse:1020,1035,1067,1073,1078,1079
+  @field r cols  @ handleMouse:1080 handleKeys:1147
+  @field r commandHeld  @ handleKeys:1140
   @field r ctx  @ 71
   @field w ctx  @ 73
-  @field r delay  @ renderNote:132,135
-  @field w delay  @ 493
-  @field r delayC  @ renderNote:132
-  @field r delta  @ drawTracker:619,705,709
-  @field r destSrc  @ drawTracker:637,704
-  @field r digit  @ handleKeys:1149
-  @field w digit  @ add:858
-  @field w dragId  @ curveEditorFrame:397
-  @field r dur  @ drawTracker:623
-  @field r endRow  @ drawTracker:678,680 drawCurveEditor:929
-  @field w envelope  @ curveEditorFrame:400
-  @field r evType  @ renderNote:106,116
-  @field w evalCurve  @ curveEditorFrame:391
-  @field r events  @ curveEditorFrame:371
-  @field w events  @ curveEditorFrame:387
-  @field r evt  @ drawTracker:678
+  @field r delay  @ renderNote:143,146
+  @field w delay  @ 504
+  @field r delayC  @ renderNote:143
+  @field r delta  @ drawTracker:630,716,720
+  @field r destSrc  @ drawTracker:648,715
+  @field r digit  @ handleKeys:1160
+  @field w digit  @ add:869
+  @field w dragId  @ curveEditorFrame:408
+  @field r dur  @ drawTracker:634
+  @field r endRow  @ drawTracker:689,691 drawCurveEditor:940
+  @field w envelope  @ curveEditorFrame:411
+  @field r evType  @ renderNote:107,120
+  @field w evalCurve  @ curveEditorFrame:402
+  @field r events  @ curveEditorFrame:382
+  @field w events  @ curveEditorFrame:398
+  @field r evt  @ drawTracker:689
   @field r font  @ 71
-  @field r fontSize  @ printer:226 vnameSize:293 vname:313 ensureCellSize:332 drawTracker:557 draw:884
-  @field r fx  @ drawTracker:758
-  @field w fx  @ 182
-  @field r ghosts  @ drawTracker:718
-  @field r glyph  @ renderFx:170
-  @field r grid  @ printer:226 ensureCellSize:332 computeLayout:344 drawLaneStrip:429,462 drawTracker:512 nearestStop:838 draw:884 naturalWidth:901 drawCurveEditor:921,929 handleMouse:971
-  @field r grid  @ handleKeys:1136
-  @field r groupId  @ drawTracker:613,617,657 handleMouse:995
+  @field r fontSize  @ printer:237 vnameSize:304 vname:324 ensureCellSize:343 drawTracker:568 draw:895
+  @field r fx  @ drawTracker:769
+  @field w fx  @ 193
+  @field r ghosts  @ drawTracker:729
+  @field r glyph  @ renderFx:181
+  @field r grid  @ printer:237 ensureCellSize:343 computeLayout:355 drawLaneStrip:440,473 drawTracker:523 nearestStop:849 draw:895 naturalWidth:912 drawCurveEditor:932,940 handleMouse:982
+  @field r grid  @ handleKeys:1147
+  @field r groupId  @ drawTracker:624,628,668 handleMouse:1006
   @field r gui  @ 35
-  @field r h  @ drawCurveEditor:926
-  @field w h  @ drawLaneStrip:465 drawCurveEditor:959
-  @field w height  @ geom:894
-  @field r hidden  @ renderPB:150 curveEditorFrame:372 drawTracker:678,714,776
-  @field w hidden  @ 509
-  @field w hovered  @ curveEditorFrame:396
-  @field r huge  @ nearestStop:840
+  @field r h  @ drawCurveEditor:937
+  @field w h  @ drawLaneStrip:476 drawCurveEditor:970
+  @field w height  @ geom:905
+  @field r hidden  @ renderPB:161 curveEditorFrame:383 drawTracker:689,725,787
+  @field w hidden  @ 520
+  @field w hovered  @ curveEditorFrame:407
+  @field r huge  @ nearestStop:851
   @field r inputAllowed  @ 35
-  @field r instId  @ drawTracker:613,618,658 handleMouse:995
-  @field r key  @ handleKeys:1140,1141,1142,1143,1158
-  @field w key  @ add:858
-  @field r label  @ drawTracker:555,560,563
-  @field w label  @ notePartHeaders:502
-  @field r laneDelta  @ drawTracker:621
-  @field r midiChan  @ layoutColumns:63 curveEditorFrame:369 drawTracker:536,538,553,745 handleMouse:1011,1036
-  @field w note  @ 176
-  @field r notes  @ drawTracker:719
-  @field w notes  @ 509
-  @field r numRows  @ drawLaneStrip:429 drawTracker:521 drawCurveEditor:929
-  @field r offGrid  @ drawTracker:731
-  @field w onCycleShape  @ curveEditorFrame:410
-  @field w onDelete  @ curveEditorFrame:408
-  @field w onInsert  @ curveEditorFrame:407
-  @field w onMove  @ curveEditorFrame:405
-  @field w onMoveFree  @ curveEditorFrame:406
-  @field w onTension  @ curveEditorFrame:409
-  @field w originX  @ geom:894
-  @field w originY  @ geom:894
-  @field r overflow  @ drawTracker:729
-  @field w ox  @ printer:207
-  @field w oy  @ printer:207
-  @field w pa  @ 179
+  @field r instId  @ drawTracker:624,629,669 handleMouse:1006
+  @field r key  @ handleKeys:1151,1152,1153,1154,1169
+  @field w key  @ add:869
+  @field r label  @ drawTracker:566,571,574
+  @field w label  @ notePartHeaders:513
+  @field r laneDelta  @ drawTracker:632
+  @field r midiChan  @ layoutColumns:63 curveEditorFrame:380 drawTracker:547,549,564,756 handleMouse:1022,1047
+  @field w note  @ 187
+  @field r notes  @ drawTracker:730
+  @field w notes  @ 520
+  @field r numRows  @ drawLaneStrip:440 drawTracker:532 drawCurveEditor:940
+  @field r offGrid  @ drawTracker:742
+  @field w onCycleShape  @ curveEditorFrame:421
+  @field w onDelete  @ curveEditorFrame:419
+  @field w onInsert  @ curveEditorFrame:418
+  @field w onMove  @ curveEditorFrame:416
+  @field w onMoveFree  @ curveEditorFrame:417
+  @field w onTension  @ curveEditorFrame:420
+  @field w originX  @ geom:905
+  @field w originY  @ geom:905
+  @field r overflow  @ drawTracker:740
+  @field w ox  @ printer:218
+  @field w oy  @ printer:218
+  @field w pa  @ 190
   @field w page  @ 73
-  @field r partAt  @ notePartHeaders:496
+  @field r partAt  @ notePartHeaders:507
   @field r path  @ 30
   @field w path  @ 30
-  @field w pb  @ 177,361
-  @field w pc  @ 181
-  @field r pi  @ drawTracker:684,687
-  @field r pitch  @ renderNote:113 drawTracker:776
-  @field w pitch  @ 493
-  @field r ppq  @ curveEditorFrame:388,392 drawTracker:622
-  @field r rect  @ drawTracker:611
-  @field w rect  @ curveEditorFrame:384
-  @field r row  @ drawTracker:615
-  @field r sample  @ renderNote:119
-  @field w sample  @ 493
-  @field r sampleShadowed  @ renderNote:125
-  @field r showDelay  @ renderNote:93 drawTracker:755
-  @field w snap  @ printer:207 curveEditorFrame:395
-  @field r srcHi  @ drawTracker:706,710
-  @field r srcLo  @ drawTracker:705,706,710
-  @field r srcMember  @ drawTracker:710
-  @field r stack  @ renderFx:169
-  @field r startRow  @ drawTracker:678,679
-  @field r stopPos  @ notePartHeaders:496 drawTracker:804,805,812 nearestStop:843 handleMouse:1062,1067,1069
-  @field r streams  @ drawTracker:632
-  @field w sx  @ printer:207
-  @field w sy  @ printer:207
-  @field w tMax  @ curveEditorFrame:386
-  @field w tMin  @ curveEditorFrame:386
-  @field w tOf  @ curveEditorFrame:388
-  @field r tails  @ renderFx:168 drawTracker:676,677
-  @field r trackerMode  @ renderNote:94 delayMarkerOffset:193 fxMarkerOffset:199
+  @field w pb  @ 188,372
+  @field w pc  @ 192
+  @field r pi  @ drawTracker:695,698
+  @field r pitch  @ renderNote:115 drawTracker:787
+  @field w pitch  @ 504
+  @field r ppq  @ curveEditorFrame:399,403 drawTracker:633
+  @field r rect  @ drawTracker:622
+  @field w rect  @ curveEditorFrame:395
+  @field r row  @ drawTracker:626
+  @field r sample  @ renderNote:123
+  @field w sample  @ 504
+  @field r sampleShadowed  @ renderNote:129
+  @field r showDelay  @ renderNote:94 drawTracker:766
+  @field w snap  @ printer:218 curveEditorFrame:406
+  @field r srcHi  @ drawTracker:717,721
+  @field r srcLo  @ drawTracker:716,717,721
+  @field r srcMember  @ drawTracker:721
+  @field r stack  @ renderFx:180
+  @field r startRow  @ drawTracker:689,690
+  @field r stopPos  @ notePartHeaders:507 drawTracker:815,816,823 nearestStop:854 handleMouse:1073,1078,1080
+  @field r streams  @ drawTracker:643
+  @field w sx  @ printer:218
+  @field w sy  @ printer:218
+  @field w tMax  @ curveEditorFrame:397
+  @field w tMin  @ curveEditorFrame:397
+  @field w tOf  @ curveEditorFrame:399
+  @field r tails  @ renderFx:179 drawTracker:687,688
+  @field r trackerMode  @ renderNote:95 delayMarkerOffset:204 fxMarkerOffset:210
   @field r tv  @ 35
-  @field r type  @ renderCell:186 curveEditorFrame:376 drawLaneStrip:463 drawTracker:535,553,561,565,758,767 drawCurveEditor:923
-  @field r ui  @ vnameSize:293 vname:313 drawTracker:557
+  @field r type  @ renderCell:197 curveEditorFrame:387 drawLaneStrip:474 drawTracker:546,564,572,576,769,778 drawCurveEditor:934
+  @field r ui  @ vnameSize:304 vname:324 drawTracker:568
   @field r uiFont  @ 71
-  @field r uuid  @ drawTracker:642
-  @field w vMax  @ curveEditorFrame:385
-  @field w vMin  @ curveEditorFrame:385
-  @field r val  @ renderPB:150,151,152 renderCC:158,159,160 drawTracker:723
-  @field w val  @ drawTracker:723
-  @field r values  @ drawTracker:718
-  @field w values  @ 509
-  @field r vel  @ renderNote:118
-  @field w vel  @ 493
-  @field r w  @ drawCurveEditor:926
-  @field w w  @ drawLaneStrip:465 drawCurveEditor:959
-  @field r width  @ layoutColumns:61,65,66 drawTracker:537,538,552,633 naturalWidth:902 handleMouse:1010,1025,1056
-  @field r x  @ notePartHeaders:502 drawTracker:535,537,538,551,552,556,557,560,566
-  @field r x  @ drawTracker:630,633,676,681,700,748,756,759,767,768,804
-  @field r x  @ drawTracker:804,805,811,813 nearestStop:842,844 handleMouse:1010,1025,1056
+  @field r uuid  @ drawTracker:653
+  @field w vMax  @ curveEditorFrame:396
+  @field w vMin  @ curveEditorFrame:396
+  @field r val  @ renderPB:161,162,163 renderCC:169,170,171 drawTracker:734
+  @field w val  @ drawTracker:734
+  @field r values  @ drawTracker:729
+  @field w values  @ 520
+  @field r vel  @ renderNote:122
+  @field w vel  @ 504
+  @field r w  @ drawCurveEditor:937
+  @field w w  @ drawLaneStrip:476 drawCurveEditor:970
+  @field r width  @ layoutColumns:61,65,66 drawTracker:548,549,563,644 naturalWidth:913 handleMouse:1021,1036,1067
+  @field r x  @ notePartHeaders:513 drawTracker:546,548,549,562,563,567,568,571,577
+  @field r x  @ drawTracker:641,644,687,692,711,759,767,770,778,779,815
+  @field r x  @ drawTracker:815,816,822,824 nearestStop:853,855 handleMouse:1021,1036,1067
   @field w x  @ layoutColumns:56,62
-  @field r x0  @ drawCurveEditor:925
-  @field w x0  @ printer:267 drawLaneStrip:444,465,470 drawTracker:663 drawCurveEditor:942,959,960
-  @field w x1  @ printer:267 drawLaneStrip:444,470 drawTracker:663 drawCurveEditor:942,960
-  @field r xHi  @ drawLocalScrim:286 drawTracker:547,563
-  @field w xHi  @ notePartHeaders:502 drawTracker:537,538,666
-  @field r xLo  @ drawLocalScrim:285 drawTracker:547,563
-  @field w xLo  @ notePartHeaders:502 drawTracker:538,666
-  @field w y0  @ printer:267 drawLaneStrip:444,470 drawTracker:663 drawCurveEditor:942,960
-  @field w y1  @ printer:267 drawLaneStrip:444,470 drawTracker:663 drawCurveEditor:942,960
-  @field r yHi  @ drawLocalScrim:284,285,286
-  @field w yHi  @ drawTracker:666
-  @field r yLo  @ drawLocalScrim:283,285,286
-  @field w yLo  @ drawTracker:666
-  @field r yTop  @ drawCurveEditor:925
-  @field w yTop  @ drawLaneStrip:465 drawCurveEditor:959
+  @field r x0  @ drawCurveEditor:936
+  @field w x0  @ printer:278 drawLaneStrip:455,476,481 drawTracker:674 drawCurveEditor:953,970,971
+  @field w x1  @ printer:278 drawLaneStrip:455,481 drawTracker:674 drawCurveEditor:953,971
+  @field r xHi  @ drawLocalScrim:297 drawTracker:558,574
+  @field w xHi  @ notePartHeaders:513 drawTracker:548,549,677
+  @field r xLo  @ drawLocalScrim:296 drawTracker:558,574
+  @field w xLo  @ notePartHeaders:513 drawTracker:549,677
+  @field w y0  @ printer:278 drawLaneStrip:455,481 drawTracker:674 drawCurveEditor:953,971
+  @field w y1  @ printer:278 drawLaneStrip:455,481 drawTracker:674 drawCurveEditor:953,971
+  @field r yHi  @ drawLocalScrim:295,296,297
+  @field w yHi  @ drawTracker:677
+  @field r yLo  @ drawLocalScrim:294,296,297
+  @field w yLo  @ drawTracker:677
+  @field r yTop  @ drawCurveEditor:936
+  @field w yTop  @ drawLaneStrip:476 drawCurveEditor:970

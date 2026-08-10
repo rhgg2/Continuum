@@ -121,6 +121,11 @@ scale coordinate.**
    its `overrides` table. The bump at `octaveStep` means the sign is
    the rendered octave's, not the caller's.
 
+5. Entry follows display. The octave column takes `-` for octave −1
+   and a digit for 0 to 9 (`trackerView.lua:910-918`), which is the
+   range the default root addresses; for roots that reach −2 a new
+   form will be required.
+
 ## The blast radius
 
 1. The arithmetic is confined to `tuning.lua`. `tuning.derive` stamps

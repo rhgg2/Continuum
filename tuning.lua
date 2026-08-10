@@ -4,7 +4,7 @@
 --invariant: pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
 --invariant: intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
---invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToText
+--invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToParts
 --invariant: an octave is period-index + octaveBase; default root makes it MIDI-relative (C4 → 4)
 --shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, rootPitch=int?, rootDetune=cents?, rootStep=int?, rootOctave=int?, cents=number[derived], period=cents[derived], rootCents=cents[derived], octaveBase=int[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
 local util = require 'util'
@@ -23,14 +23,14 @@ local function computeOctaveStep(stepNames, n)
   return n + 1
 end
 
--- Octave -1 renders as "M" so the bottom (the cents-0 anchor) stays one char,
--- matching MIDI's C-1. See docs/tuning.md § Addressable range.
+-- A negative octave renders as its magnitude, for the caller to tint — the
+-- sign costs no column. See docs/tuning.md § Display.
 local function octaveLabel(o)
-  return o == -1 and 'M' or tostring(o)
+  return tostring(math.abs(o))
 end
 
 -- octaveFieldWidth: char width of the octave field, fixed by the top of the
--- natural [0,12700]¢ range (floor at -1 ⇒ "M"). See docs/tuning.md § Display.
+-- natural [0,12700]¢ range. See docs/tuning.md § Display.
 local function octaveFieldWidth(temper)
   return #octaveLabel(math.floor(12700 / temper.period) - 1)
 end
@@ -458,18 +458,12 @@ end
 
 ----- Display
 
---contract: returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
+--contract: (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep
 function tuning.stepToParts(temper, step, octave)
   if step >= temper.octaveStep then octave = octave + 1 end
   local name = temper.stepNames and temper.stepNames[step]
   local note = (name and name ~= '') and name or (step .. '-')
-  return note, octaveLabel(octave)
-end
-
---contract: name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
-function tuning.stepToText(temper, step, octave)
-  local note, octaveStr = tuning.stepToParts(temper, step, octave)
-  return note .. octaveStr
+  return note, octaveLabel(octave), octave < 0
 end
 
 return tuning

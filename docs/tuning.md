@@ -264,7 +264,7 @@ octave. The derivation lives next to the temperament table so the two
 cannot drift apart.
 
 **3** A nameless scale has no C-tail, so the bump sits at the period
-(`octaveStep = #cents + 1`, never reached by a real step). `stepToText`
+(`octaveStep = #cents + 1`, never reached by a real step). `stepToParts`
 adds 1 to the displayed octave when `step >= octaveStep`.
 
 ### The root
@@ -320,20 +320,24 @@ from it — stays exact.
 ## Display
 
 ```
-C-4 / 7-4 / 12-M               -- pitch-cell labels
+C-4 / 7-4 / 12-1               -- pitch-cell labels
 ```
 
 **1** A step renders as its name plus the octave (`C-4`). A **nameless
 step** — one whose `stepNames` entry is blank — falls back to its degree
 with a dash separator (`7-4`), reusing the named cell's shape: *the
 seventh step* does the work the name would have done, in the same number
-of columns. Octave -1 renders as `"M"` (so `C-M` for MIDI 0 vs `C-4` for
-MIDI 60).
+of columns. A **negative octave** renders as its magnitude, tinted in
+`colour.tracker.negative` (so MIDI 0 reads `C-1` with a tinted `1`,
+against `C-4` for MIDI 60), which is what the delay lane already does
+with a negative offset: the sign costs no column, and a temper root puts
+octaves below -1 in reach, where a one-off like `M` has no answer.
 
 **2** In the tracker cell the note and octave are each **right-aligned
 within their own field** — the note in the left `cellWidth -
 octaveWidth` columns, the octave in the right `octaveWidth` columns.
-`tuning.stepToParts` exposes the two parts.
+`tuning.stepToParts` exposes the two parts, and the negativity the octave
+is tinted by.
 
 **3** So the separator and the octave's units digit each keep a fixed
 column across rows, even where octave labels vary in width (a sub-octave
@@ -349,7 +353,7 @@ short label without harm.
 **5** `cellWidth` is the derived char width of the widest label: the
 longest name (or a 2-digit degree) plus the **octave field**. The octave
 field is one char for octave-or-larger periods — their displayed octave
-never leaves `-1..9` (`"M".."9"`). A **sub-octave period** packs more
+never leaves `-1..9`, one char as a magnitude. A **sub-octave period** packs more
 than ten period-cycles into the MIDI range, so its octave labels reach
 two digits and the field grows to match.
 

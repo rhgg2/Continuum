@@ -1,10 +1,10 @@
-@module tuning  src=tuning.lua  loc=475  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=469  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4
   @invariant  intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain  @ 5
   @invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here  @ 6
-  @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via stepToText  @ 7
+  @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via stepToParts  @ 7
   @invariant  an octave is period-index + octaveBase; default root makes it MIDI-relative (C4 → 4)  @ 8
 
 # Shapes
@@ -23,11 +23,11 @@
       -- octaveStep: first step whose label reads as the next octave's C. Scans from
       -- the end for the last non-C name; nameless scale → bump at period (n+1).
   @fn octaveLabel(o)  @ 28-30
-      -- Octave -1 renders as "M" so the bottom (the cents-0 anchor) stays one char,
-      -- matching MIDI's C-1. See docs/tuning.md § Addressable range.
+      -- A negative octave renders as its magnitude, for the caller to tint — the
+      -- sign costs no column. See docs/tuning.md § Display.
   @fn octaveFieldWidth(temper)  @ 34-36
       -- octaveFieldWidth: char width of the octave field, fixed by the top of the
-      -- natural [0,12700]¢ range (floor at -1 ⇒ "M"). See docs/tuning.md § Display.
+      -- natural [0,12700]¢ range. See docs/tuning.md § Display.
   @fn computeRootCents(temper)  @ 40-43
       -- rootCents: where the scale's unison sits in sound, given the root's four
       -- authored fields. See docs/tuning.md § The root.
@@ -106,9 +106,7 @@
       @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 452
   -- Display
   @api tuning.stepToParts(temper, step, octave)  @ 462-467
-      @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep  @ 461
-  @api tuning.stepToText(temper, step, octave)  @ 470-473
-      @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 469
+      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 461
 
 # Uses (outbound edges)
   @use call    util.add  @ parseScalaPitches:144 parseScalaFile:154,161 scalaToTemper:179 edoDegrees:198,203,208 degreesToSpec:217 genHarmonics:235 genSubharmonics:242 parseChord:253 combinations:276 genCPS:294 stepSpectrum:343,351 genRank2:372
@@ -131,7 +129,6 @@
   @call tuning.midiToStep  @ snap:443 transposeStep:448 stepsBetween:454,455
   @call tuning.scalaPitch  @ scalaPitch:66 derive:82,86 scalaToTemper:172,177 genCPS:307 genRank2:364 mosInfo:382 nextMosSize:389
   @call tuning.stepToMidi  @ snap:443 transposeStep:449
-  @call tuning.stepToParts  @ stepToText:471
 
 # Unresolved receivers
   @drop equave:match  @ genCPS:287,288
@@ -195,7 +192,6 @@
   @field w stepNames  @ edo:104 scalaToTemper:184
   @field w stepToMidi  @ stepToMidi:424
   @field w stepToParts  @ stepToParts:462
-  @field w stepToText  @ stepToText:470
   @field w stepsBetween  @ stepsBetween:453
   @field r token  @ genRank2:376
   @field w token  @ genRank2:372

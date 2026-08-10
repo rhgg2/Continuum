@@ -78,11 +78,12 @@ local paintLast   = nil     -- region-paint per-cell debounce
 ----- Cell renderers
 
 local function renderNote(evt, col, row)
+  -- Untempered fallback: pitch 0-127 puts the octave in -1..9, so its
+  -- magnitude is always the one char the field allows.
   local function noteName(pitch)
     local NOTE_NAMES = {'C-','C#','D-','D#','E-','F-','F#','G-','G#','A-','A#','B-'}
     local oct = math.floor(pitch / 12) - 1
-    local octChar = oct >= 0 and tostring(oct) or 'M'
-    return NOTE_NAMES[(pitch % 12) + 1] .. octChar
+    return NOTE_NAMES[(pitch % 12) + 1] .. math.abs(oct), oct < 0
   end
 
   local function rightAlign(s, w)
@@ -102,15 +103,18 @@ local function renderNote(evt, col, row)
     return s
   end
 
-  local label
+  local label, negOctave, octaveLen
   if evt.evType ~= 'pa' then
-    local note, octave = tv:noteProjection(evt)
+    local note, octave, _, _, negative = tv:noteProjection(evt)
     if note then
       -- Both parts right-aligned in their own fields (note field = pitchWidth -
       -- octaveWidth) so the separator and octave units keep fixed columns.
       label = rightAlign(note, pitchWidth - octaveWidth) .. rightAlign(octave, octaveWidth)
+      negOctave, octaveLen = negative, utf8.len(octave)
     else
-      label = rightAlign(noteName(evt.pitch), pitchWidth)
+      local name, negativeFallback = noteName(evt.pitch)
+      label = rightAlign(name, pitchWidth)
+      negOctave, octaveLen = negativeFallback, 1
     end
   end
   local isPA      = evt.evType == 'pa'
@@ -120,10 +124,17 @@ local function renderNote(evt, col, row)
   local text      = noteTxt .. sampleTxt .. ' ' .. velTxt
 
   -- Sample digits at pitchWidth+2, +3 (after note label + trailing space).
-  -- Shadowed and negative-delay overrides occupy disjoint ranges.
+  -- Shadowed, octave-tint and negative-delay overrides occupy disjoint ranges.
   local overrides
   if showSample and evt.sampleShadowed then
     overrides = { [pitchWidth + 2] = 'shadowed', [pitchWidth + 3] = 'shadowed' }
+  end
+
+  -- A negative octave carries its sign as a tint; the octave is right-aligned
+  -- to the end of the pitch field, so it ends at column pitchWidth.
+  if negOctave then
+    overrides = overrides or {}
+    for i = pitchWidth - octaveLen + 1, pitchWidth do overrides[i] = 'negative' end
   end
 
   -- delayC is the realised-frame delay; divergence (delay ~= delayC) means

@@ -10,6 +10,13 @@ local function nameless(cents)
   return tuning.derive{ name = 'scale', period = 1200, cents = cents, stepNames = {} }
 end
 
+-- The two label parts joined, so a case that is about the whole label can
+-- assert it as one string.
+local function stepText(temper, step, octave)
+  local note, octaveStr = tuning.stepToParts(temper, step, octave)
+  return note .. octaveStr
+end
+
 -- A 12EDO scale with the root fields the case is about; everything else default.
 local function rooted(root)
   local cents = {}
@@ -37,9 +44,33 @@ return {
   {
     name = 'named step renders name + octave',
     run = function()
-      t.eq(tuning.stepToText(tuning.presets['12EDO'], 1, 4), 'C-4')
-      t.eq(tuning.stepToText(tuning.presets['31EDO'], 31, 3), 'C↓4',
+      t.eq(stepText(tuning.presets['12EDO'], 1, 4), 'C-4')
+      t.eq(stepText(tuning.presets['31EDO'], 31, 3), 'C↓4',
         'octaveStep bump: step 31 reads as the next octave')
+    end,
+  },
+
+  {
+    name = 'a negative octave renders as its magnitude and reports the sign',
+    run = function()
+      local note, octave, negative = tuning.stepToParts(tuning.presets['12EDO'], 1, -1)
+      t.eq(note .. octave, 'C-1', 'octave -1 renders as the magnitude')
+      t.eq(negative, true, 'and reports itself negative, for the tint')
+
+      local _, octave4, negative4 = tuning.stepToParts(tuning.presets['12EDO'], 1, 4)
+      t.eq(octave4, '4')
+      t.eq(negative4, false, 'an octave at or above zero is not negative')
+    end,
+  },
+
+  {
+    name = 'the octaveStep bump owns the sign: a step that crosses zero is not negative',
+    run = function()
+      local temper = tuning.presets['31EDO']
+      t.eq(temper.octaveStep, 31, '31EDO bumps at its last step')
+      local _, octave, negative = tuning.stepToParts(temper, 31, -1)
+      t.eq(octave, '0', 'the bump lands the rendered octave on zero')
+      t.eq(negative, false, 'the sign is the rendered octave\'s, taken after the bump')
     end,
   },
 
@@ -49,9 +80,9 @@ return {
       local s = nameless{ 0, 400, 800 }
       t.eq(s.octaveStep, 4, 'no C-tail ⇒ bump sits past the last step')
       t.eq(s.cellWidth, 3, '1-digit degree + dash + octave')
-      t.eq(tuning.stepToText(s, 1, 4), '1-4')
-      t.eq(tuning.stepToText(s, 3, 4), '3-4')
-      t.eq(tuning.stepToText(s, 1, -1), '1-M', 'octave -1 still renders as M')
+      t.eq(stepText(s, 1, 4), '1-4')
+      t.eq(stepText(s, 3, 4), '3-4')
+      t.eq(stepText(s, 1, -1), '1-1', 'octave -1 renders as its magnitude')
     end,
   },
 
@@ -62,7 +93,7 @@ return {
       for i = 1, 12 do cents[i] = (i - 1) * 100 end
       local s = nameless(cents)
       t.eq(s.cellWidth, 4, '2-digit degree + dash + octave')
-      t.eq(tuning.stepToText(s, 12, 4), '12-4')
+      t.eq(stepText(s, 12, 4), '12-4')
     end,
   },
 
@@ -75,7 +106,7 @@ return {
                                cents = { 0, 300 }, stepNames = {} }
       t.eq(s.cellWidth, 4, '1-digit degree + dash + 2-digit octave')
       t.eq(s.octaveWidth, 2, 'octave field widens to two chars')
-      t.eq(tuning.stepToText(s, 1, 20), '1-20', 'two-digit octave renders in full')
+      t.eq(stepText(s, 1, 20), '1-20', 'two-digit octave renders in full')
     end,
   },
 
@@ -96,9 +127,9 @@ return {
     run = function()
       local s = tuning.derive{ name = 'x', period = 1200,
         cents = { 0, 400, 800 }, stepNames = { 'C', '', 'G' } }
-      t.eq(tuning.stepToText(s, 1, 4), 'C4')
-      t.eq(tuning.stepToText(s, 2, 4), '2-4', 'blank name ⇒ degree fallback')
-      t.eq(tuning.stepToText(s, 3, 4), 'G4')
+      t.eq(stepText(s, 1, 4), 'C4')
+      t.eq(stepText(s, 2, 4), '2-4', 'blank name ⇒ degree fallback')
+      t.eq(stepText(s, 3, 4), 'G4')
     end,
   },
 
