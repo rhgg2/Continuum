@@ -12,8 +12,9 @@ written on.**
 
 1. This is the command of `design/adaptive-tuning.md` with one part
    exchanged: the candidate model, what the solve may choose from.
-   Everything else that document settles stands unaltered, and is cited
-   here rather than restated.
+   Everything else that document settles is cited here rather than
+   restated, and where the exchange breaks something the section that
+   breaks it says so.
 
 2. There a note lands on a point of a chosen scale, so the tunings
    available to a passage are that scale's points and nothing else.
@@ -62,9 +63,10 @@ written on.**
    parent's plus its move's, and the root's are zero. The tree fixes
    them.
 
-2. The score is the span of the coords on each axis, and a span is
-   unchanged by adding a constant to every coord, so the choice of root
-   does not enter it.
+2. The score sums the span of the coords on each axis, each weighted by
+   `log₂ p` (`design/adaptive-tuning.md` § What "in tune" means). A span
+   is unchanged by adding a constant to every coord, so the choice of
+   root does not enter it.
 
 3. The objective is reusable without amendment.
 
@@ -105,24 +107,32 @@ written on.**
    to any pitch, so reachability alone admits everything and decides
    nothing.
 
-2. Two bounds make a note's candidates finite and neither suffices
-   alone. The window bounds a note in cents; complexity bounds the move
-   set.
+2. Complexity bounds the move set, and that is what makes a note's
+   candidates finite. Each candidate is one move from a note already
+   placed, so a note has the move set's size times the notes placed
+   before it.
 
 3. The window is the notation's, reaching half way to the adjacent step
    on either side (`design/adaptive-tuning.md` § The window). It bounds
-   where a note may go and says nothing about how it got there.
+   where a note may go and says nothing about how it got there: what it
+   adds is a smaller count and a note that keeps its step.
 
-4. Complexity is bounded by **octave-free Tenney height**: the logarithm
-   of the product of the odd parts of a move's two terms. `5/4` and
-   `8/5` are one move and its inversion, and both read 2.32.
+4. Complexity is bounded by **octave-free Tenney height**: the base-2
+   logarithm of the product of the odd parts of a move's two terms.
+   `5/4` and `8/5` are one move and its inversion, and both read 2.32.
+   A move set's **complexity bound** is the largest height it holds.
 
-5. That measure is the objective's own: a sonority's score is the
-   Tenney height of its octave-free `lcm/gcd`
-   (`design/adaptive-tuning.md` § What "in tune" means), so one measure
-   bounds what may be admitted and scores what results.
+5. The bound does not fix the primes. Every figure here is measured over
+   a move set holding all of 3, 5 and 7 under a stated bound, and prime
+   11 would displace them: `11/8` reads 3.46 and sounds a tritone as one
+   move, where nothing on 3, 5 and 7 sounds one under 3.91.
 
-6. Odd limit is the wrong bound here, though it is the right one for a
+6. That measure is the objective's own. A sonority's score (§ Coords
+   accumulate along it) is the Tenney height of its octave-free
+   `lcm/gcd`, so one measure bounds what may be admitted and scores what
+   results.
+
+7. Odd limit is the wrong bound here, though it is the right one for a
    scale. It does not add along a chain: two `5/4`s are odd limit 5
    apiece and `25/16` is odd limit 25, where the Tenney heights are
    2.32 apiece and 4.64 together, which is exactly `25/16`'s.
@@ -151,9 +161,10 @@ written on.**
 
 ## What it costs to solve
 
-1. The DP's shape survives. Its state is the chosen tuning of each of
-   the most recently distinct pitches, counted distinct by the step a
-   note was written on rather than the tuning it took
+1. The DP's shape survives. Its state is the chosen tuning of the `n−1`
+   most recently distinct pitches, for a sonority of `n`, counted
+   distinct by the step a note was written on rather than the tuning it
+   took
    (`design/adaptive-tuning.md` § The model).
 
 2. Its count is one entry for each way of choosing a candidate for
@@ -168,11 +179,13 @@ written on.**
    already placed, whether from the state or from the same onset, so
    the choices are not independent as the sibling's were.
 
-5. The usable band is narrow: a Tenney bound between about 2.8 and 3.3,
-   admitting seven to nine moves. Below it a dominant seventh cannot be
-   spelled; above it the state count runs away, reaching 59,049 at 4.0.
+5. Only a narrow range of complexity bounds is usable: between about 2.8
+   and 3.3, admitting seven to nine moves. Below it a dominant seventh
+   standing alone is spelled only by running a note to 49¢ of a 50¢
+   window; in a ii–V–I the same chord solves inside 27¢. Above it the
+   state count runs away, reaching 59,049 at 4.0.
 
-6. Inside the band the state count is thirteen to thirty-two times the
+6. Inside that range the state count is thirteen to thirty-two times the
    sibling's. Measured against a 12-EDO notation over a ii–V–I and a
    comma pump, candidates average 2.4 a note at the lower bound and 3.1
    at the upper, with maxima of five and six where the sibling's fixed
@@ -205,62 +218,75 @@ written on.**
 
 ## Drift
 
-1. A passage can now drift, where under a bounded set of points there
-   was nowhere to drift to.
+1. Drift is what the model produces when nothing resists it. Coords
+   accumulate along the tree, so a note's tuning follows the chain that
+   reached it rather than the pitch class it belongs to.
 
-2. A comma pump is the case that tests it. A progression whose moves
-   multiply to a comma around the loop returns its opening note to a
-   different pitch, and the pull is what resists.
+2. A comma pump is the case that tests it: a progression whose moves
+   multiply to a comma returns to its opening step at a different
+   tuning.
 
 3. Drift cannot accumulate without bound, because the window bounds
    every note against the step it was written on. A passage returning
-   repeatedly to a pitch class is held within half a step of it every
+   repeatedly to a pitch class is held inside that note's window every
    time.
 
 4. What the pull decides is where inside the window the trade lands, and
    its scale is the sibling's (`design/adaptive-tuning.md` § Harmonic
-   lock). Whether the band that document fixes still holds against a
-   reachable set this much larger is unmeasured.
+   lock).
 
-## When a chord can't be spelled
+## When a chord is misspelled
 
-1. A chord no tree connects has no placement and cannot be seated. The
-   diminished triad is the common case: stacking minor thirds needs
-   `6/5`, which a bound below 3.91 does not admit.
+1. A chord can be seated by moves that spell a different chord. Nothing
+   in the model reads the notated intervals: a tree is admissible when
+   every note lands inside its window, however far its moves depart from
+   what was written.
 
-2. That failure names the move set rather than the note. An author reads
-   it as a theory too narrow for the material, and widening the bound
-   answers it.
+2. The objective prefers the respelling. A written diminished triad
+   read as 4:5:7 on its middle note scores 5.13 where the notated
+   stacking of two `6/5`s scores 7.81, so the compact reading wins
+   wherever the windows admit it.
 
-3. It is better shaped than the sibling's. There an excluded point
-   leaves a pitch class with nowhere to go, a hole at a place in the
-   notation the author neither chose nor can see
-   (`design/adaptive-tuning.md` § What the solver takes).
+3. What refuses it is the pull, and only above a strength of about
+   1.85. Below that a diminished triad standing alone takes the
+   respelling and runs a note to the edge of its window, where the
+   sibling puts the commonest trade at 1 and the top of the dial's
+   travel at 2 (`design/adaptive-tuning.md` § Harmonic lock).
+
+4. A move set reaching to 3.91 admits the notated reading without
+   making it preferred, and that is above the range that keeps the
+   state count in hand (§ What it costs to solve).
 
 ## Open
 
-1. Whether the two models share a command. Scope, window, pull, collar
-   and undo are common and only the candidate model differs, which
-   argues for one command choosing on the kind of target it is handed;
-   two commands would state the choice more plainly.
+1. Whether the two models share a command. Scope, window, pull and undo
+   are common, which argues for one command choosing on the kind of
+   target it is handed; two commands would state the choice more
+   plainly.
 
-2. What the solver's module boundary becomes (§ What the solver loses).
-   What can still be specified and pinned on its own has not been worked
-   out.
+2. What the solver's module boundary becomes, and what can still be
+   specified and pinned on its own (§ What the solver loses).
 
-3. What the command does with a chord it cannot spell (§ When a chord
-   can't be spelled). Refusing, seating it unmoved, and widening the
-   bound for that chord alone are all available and none is obviously
+3. What the command does with a chord the move set misspells (§ When a
+   chord is misspelled). Refusing, seating it unmoved, and stiffening the
+   pull for that chord alone are all available and none is obviously
    right.
 
-4. Whether a collar note can root a placement across a seam. It cannot
-   move, which is what a placement's root is, so the two may be one
-   mechanism (`design/adaptive-tuning.md` § Seams).
+4. How a solve sees the take before it. The sibling's collar arrives
+   with its tuning already chosen (`design/adaptive-tuning.md`
+   § Seams), but a take stores cents where the objective reads coords,
+   and a dense reachable set puts no ratio at a pitch in particular; a
+   take left in 12-EDO has no coords to recover at all. Either a note
+   carries its coords as metadata, or one solve spans the takes in
+   sequence and carries the tree across.
 
 5. Whether the search enumerates placements or the assignments they
    produce. Two trees reaching the same pitches are one answer to be
    scored once, and an enumeration over trees counts it twice.
 
-6. Whether the pull's scale survives (§ Drift). The band the sibling
-   fixes was measured against a bounded set of points, and a reachable
-   set this much larger may reach the ambiguous end sooner.
+6. What the pull's scale becomes (§ When a chord is misspelled).
+   Defending a notated spelling takes about 1.85, the top of the
+   sibling's useful travel, where its own account has the solve tending
+   to a no-op (`design/adaptive-tuning.md` § Harmonic lock). Whether
+   the dial is renormalised for this model or the objective reweighted
+   is undecided.
