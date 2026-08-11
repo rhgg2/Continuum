@@ -97,6 +97,39 @@ function tuning.derive(temper)
   return temper
 end
 
+-- The root's step is gone: restate it on the unison, at the rootCents standing before the
+-- edit — the same tuning, written at the one step every scale keeps.
+local function restateOnUnison(temper)
+  local pitch = math.min(127, math.max(0, math.floor(temper.rootCents / 100 + 0.5)))
+  temper.rootStep, temper.rootPitch = 1, pitch
+  temper.rootDetune = temper.rootCents - pitch * 100
+end
+
+--contract: sort (pitches, stepNames) ascending by compiled cents, rootStep riding with its step
+function tuning.sortSteps(temper)
+  local rows = {}
+  for i, tok in ipairs(temper.pitches) do
+    rows[i] = { tok = tok, nm = temper.stepNames[i] or '', c = tuning.scalaPitch(tok) or 0,
+                rooted = i == temper.rootStep }
+  end
+  table.sort(rows, function(a, b) return a.c < b.c end)
+  for i, row in ipairs(rows) do
+    temper.pitches[i]   = row.tok
+    temper.stepNames[i] = row.nm
+    if row.rooted then temper.rootStep = i end
+  end
+  return temper
+end
+
+--contract: drop step i, the root following the step it names; a root on i restates on the unison
+function tuning.removeStep(temper, i)
+  table.remove(temper.pitches, i)
+  table.remove(temper.stepNames, i)
+  if temper.rootStep == i then restateOnUnison(temper)
+  elseif temper.rootStep and temper.rootStep > i then temper.rootStep = temper.rootStep - 1 end
+  return temper
+end
+
 --contract: copy with the four root fields dropped and stamps refreshed at the default root
 function tuning.unrooted(temper)
   local out = util.deepClone(temper)

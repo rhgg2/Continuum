@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=869  mode=chunk  self=temperEditor
+@module temperEditor  src=temperEditor.lua  loc=851  mode=chunk  self=temperEditor
 @deps cm, chrome, ctx, gui, modalHost, lib, facade
 
 # Imports
@@ -17,12 +17,12 @@
   @state MIN_GEN_AREA = 175  @ 25   -- px kept below the splitter for the generators pane
   @state MIN_TOP_AREA = 110  @ 26   -- px kept above it for the two header rows + step table
   @state genState = {  @ 30
-  @state STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44  @ 316
-  @state COL_LABELS = { 'step', 'pitch', 'name', '' }  @ 317
-  @state MIDI_NAMES = {}  @ 320
-  @state GEN_KINDS = {  @ 583
-  @state GEN_LABEL_W = 90  @ 615
-  @state temperEditor = {}  @ 860
+  @state STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44  @ 298
+  @state COL_LABELS = { 'step', 'pitch', 'name', '' }  @ 299
+  @state MIDI_NAMES = {}  @ 302
+  @state GEN_KINDS = {  @ 565
+  @state GEN_LABEL_W = 90  @ 597
+  @state temperEditor = {}  @ 842
 
 # Private functions
   @fn viewedName()  @ 42
@@ -43,276 +43,275 @@
       -- Select without closing the pane; recapture the snapshot so dirty / Reset stay
       -- coherent. tier defaults to the home tier.
   -- Authoring writes
-  @fn sortSteps(temper)  @ 82-92
-      -- Sort the (pitch, name) pairs ascending by compiled cents so tuning.lua's
-      -- ordered assumptions hold; the unison (1/1 = 0) stays at the front.
-  @fn forkToProject()  @ 96-99
-  @fn temperWrite(temper, normalize)  @ 103-110
+  @fn forkToProject()  @ 82-85
+  @fn temperWrite(temper, normalize)  @ 89-96
       -- Sole write path; forks non-project rows to project first. normalize sorts steps
       -- after a cents edit crosses a neighbour; tuning.derive restamps octaveStep/cellWidth.
-  @fn cloneForEdit()  @ 114-122
+  @fn cloneForEdit()  @ 100-108
       -- Editable clone with pitches/stepNames densified to a common length ('' for
       -- unnamed) so sort and table.remove stay array operations.
-  @fn setStepPitch(i, tok)  @ 126-130
+  @fn setStepPitch(i, tok)  @ 112-116
       -- Re-sort on commit so the edited step lands in pitch order; derive recompiles
       -- cents from the token.
-  @fn setStepName(i, nm)  @ 132-136
-  @fn setPeriodPitch(tok)  @ 138-142
-  @fn setPeriodAsStep(on)  @ 144-148
-  @fn setRoot(key, value)  @ 152-161
+  @fn setStepName(i, nm)  @ 118-122
+  @fn setPeriodPitch(tok)  @ 124-128
+  @fn setPeriodAsStep(on)  @ 130-134
+  @fn setRoot(key, value)  @ 138-147
       -- One writer for the four root fields; each box names its key. Clamp policy
       -- differs per field — see docs/tuning.md § The root.
-  @fn addStep()  @ 163-169
-  @fn removeStep(i)  @ 171-179
-  @fn dirty()  @ 181-184
-  @fn resetToSnapshot()  @ 186-189
-  @fn generateInto(gen)  @ 193-200
+  @fn addStep()  @ 149-155
+  @fn removeStep(i)  @ 157-161
+  @fn dirty()  @ 163-166
+  @fn resetToSnapshot()  @ 168-171
+  @fn generateInto(gen)  @ 175-182
       -- Replace the selected temper's scale wholesale from a generator result
       -- ({pitches, periodPitch, periodAsStep}); names clear, tokens arrive ascending.
   -- Tier-aware library writes
-  @fn inUseNames()  @ 205
+  @fn inUseNames()  @ 187
       -- Project tempers a live take/track references can't be deleted or tidied away.
-  @fn tidy()  @ 206
-  @fn reloadFactory()  @ 210-228
+  @fn tidy()  @ 188
+  @fn reloadFactory()  @ 192-210
       -- Re-import the factory catalogue into the shared library: new names land
       -- silently, each divergent library copy prompts before being overwritten.
-  @fn importFactory(name)  @ 232-243
+  @fn importFactory(name)  @ 214-225
       -- Reimport one factory entry into the library, guarding a divergent library copy
       -- with a confirm (mirrors publish; a fresh or identical name imports silently).
-  @fn publish(name)  @ 247-258
+  @fn publish(name)  @ 229-240
       -- Publishing over a divergent library copy is the one gesture that destroys
       -- library content; guard it with a confirm. Fresh/identical names publish silently.
-  @fn revert(name)  @ 262-266
-  @fn deleteSel(tier, name)  @ 268-279
-  @fn buildDescriptor()  @ 281-311
+  @fn revert(name)  @ 244-248
+  @fn deleteSel(tier, name)  @ 250-261
+  @fn buildDescriptor()  @ 263-293
   -- Draw
-  @fn tokenBox(idStr, key, current, commit)  @ 325-333
+  @fn tokenBox(idStr, key, current, commit)  @ 307-315
       -- Pitch-token text box: shows `current` until focused; commits via commit(tok) on
       -- deactivate only when the token parses — invalid input reverts next frame.
-  @fn rootBox(key, current, width)  @ 337-347
+  @fn rootBox(key, current, width)  @ 319-329
       -- Numeric root box, with tokenBox's in-flight discipline: shows the buffer
       -- while focused, commits on deactivate only when the text parses as a number.
-  @fn drawRootRow(temper)  @ 351-370
+  @fn drawRootRow(temper)  @ 333-352
       -- The root under the period row: pitch/detune say where the unison sounds,
       -- step/octave what it's called. See docs/tuning.md § The root.
-  @fn drawHeader(temper)  @ 374-385
+  @fn drawHeader(temper)  @ 356-367
       -- Period sits in its own box, unless periodAsStep moves it to the table's last
       -- row; the checkbox toggles that per-temper display preference.
-  @fn pushUiPadToGrid()  @ 389-396
+  @fn pushUiPadToGrid()  @ 371-378
       -- The grid name box and ui-font cells round to different frame heights at one
       -- nominal size; measure the grid box and pad ui widgets up so the row is flush.
-  @fn drawStepRow(temper, i)  @ 398-431
-  @fn drawColumnLabels()  @ 435-441
+  @fn drawStepRow(temper, i)  @ 380-413
+  @fn drawColumnLabels()  @ 417-423
       -- Plain dimmed labels rather than TableHeadersRow, whose filled background
       -- clashes with the flat chrome.
-  @fn drawStepTable(temper)  @ 443-483
-  @fn openNewModal()  @ 487-497
+  @fn drawStepTable(temper)  @ 425-465
+  @fn openNewModal()  @ 469-479
       -- New + Import modals, hosted by modalHost (kinds registered below). Creates at
       -- the project tier; the render keeps the popup open on a name clash.
-  @fn openImportModal()  @ 499-509
+  @fn openImportModal()  @ 481-491
   -- Generators pane
-  @fn pillButton(label, active)  @ 594-601
+  @fn pillButton(label, active)  @ 576-583
       -- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
       -- toolbar's, since editor.bg is darker); active stays recessed/lit.
-  @fn genKindSelector()  @ 603-608
-  @fn genDesc()  @ 610-612
-  @fn labeledInput(label, w, value)  @ 616-620
-  @fn reseedEqual(e, n)  @ 622-627
-  @fn drawEqualFields()  @ 629-654
-  @fn drawSeriesFields(p, lowLabel, highLabel)  @ 656-661
-  @fn drawChordFields()  @ 663-669
-  @fn drawCpsFields()  @ 671-679
-  @fn stepMos(r, dir)  @ 683-691
+  @fn genKindSelector()  @ 585-590
+  @fn genDesc()  @ 592-594
+  @fn labeledInput(label, w, value)  @ 598-602
+  @fn reseedEqual(e, n)  @ 604-609
+  @fn drawEqualFields()  @ 611-636
+  @fn drawSeriesFields(p, lowLabel, highLabel)  @ 638-643
+  @fn drawChordFields()  @ 645-651
+  @fn drawCpsFields()  @ 653-661
+  @fn stepMos(r, dir)  @ 665-673
       -- Step Size: jump to the prev/next moment-of-symmetry count when snapMos (and
       -- tokens are valid), else move by 1. Clamps Bright into the new range.
-  @fn drawRank2Fields()  @ 693-720
-  @fn buildGen()  @ 724-770
+  @fn drawRank2Fields()  @ 675-702
+  @fn buildGen()  @ 706-752
       -- Build (and validate) a generator result for the active kind. Re-run each
       -- frame to drive the Generate button's enabled state + the error hint.
-  @fn drawGenerators()  @ 772-793
+  @fn drawGenerators()  @ 754-775
   -- Draw body
-  @fn drawStepsTop()  @ 799-816
+  @fn drawStepsTop()  @ 781-798
       -- Top region: the active temper's header + step table, greyed when the
       -- selection has no editable tier copy (merge-floor or active slot).
-  @fn drawEditBody(availW, bodyAvailH)  @ 820-846
+  @fn drawEditBody(availW, bodyAvailH)  @ 802-828
       -- Step table (topH) over the generators pane; draggable divider doubles as
       -- the 'generators' header, mirrors swingEditor's preview/factor splitter.
-  @fn draw(w, h)  @ 848-857
+  @fn draw(w, h)  @ 830-839
 
 # Handlers registered
-  @handler modalHost:temperNew(s, close)  @ 511-539
-  @handler modalHost:temperImport(s, close)  @ 541-579
+  @handler modalHost:temperNew(s, close)  @ 493-521
+  @handler modalHost:temperImport(s, close)  @ 523-561
 
 # Public API (temperEditor:*)
   -- Public
-  @api temperEditor:open(name)  @ 862-865
-      @contract  open(name?) selects entry; default is active tuning, 12EDO treated as nil.  @ 861
-  @api temperEditor:hasSelection()  @ 866
-  @api temperEditor:render(w, h)  @ 867
-  @api temperEditor:libraryDescriptor()  @ 868
+  @api temperEditor:open(name)  @ 844-847
+      @contract  open(name?) selects entry; default is active tuning, 12EDO treated as nil.  @ 843
+  @api temperEditor:hasSelection()  @ 848
+  @api temperEditor:render(w, h)  @ 849
+  @api temperEditor:libraryDescriptor()  @ 850
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ drawRootRow:353 drawHeader:375 drawStepRow:403 drawStepTable:462 modalHost:temperNew:515 modalHost:temperImport:542 labeledInput:617 drawRank2Fields:700
-  @use call    ImGui.BeginChild  @ drawEditBody:825 draw:850
-  @use call    ImGui.BeginDisabled  @ drawStepRow:409 drawGenerators:774 drawStepsTop:806,811
-  @use call    ImGui.BeginTable  @ drawStepTable:447
-  @use call    ImGui.Button  @ drawStepRow:426 drawStepTable:477 modalHost:temperNew:525,527 modalHost:temperImport:549,563,565 pillButton:598 drawGenerators:789
-  @use call    ImGui.EndChild  @ drawEditBody:828 draw:855
-  @use call    ImGui.EndDisabled  @ drawStepRow:411 drawGenerators:791 drawStepsTop:809,815
-  @use call    ImGui.EndTable  @ drawStepTable:480
-  @use call    ImGui.GetContentRegionAvail  @ drawStepTable:444 draw:852
-  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:831
-  @use call    ImGui.GetFrameHeight  @ pushUiPadToGrid:391,395
-  @use call    ImGui.GetMousePos  @ drawEditBody:836
-  @use call    ImGui.GetStyleVar  @ pushUiPadToGrid:393
-  @use call    ImGui.InputText  @ tokenBox:327 rootBox:340 drawStepRow:419 modalHost:temperNew:521 modalHost:temperImport:546 labeledInput:619
-  @use call    ImGui.InputTextMultiline  @ modalHost:temperImport:561
-  @use call    ImGui.InvisibleButton  @ drawEditBody:833
-  @use call    ImGui.IsItemActive  @ drawEditBody:834
-  @use call    ImGui.IsItemDeactivatedAfterEdit  @ tokenBox:329 rootBox:342 drawEqualFields:633
-  @use call    ImGui.IsItemHovered  @ drawEditBody:834
-  @use call    ImGui.IsKeyPressed  @ modalHost:temperNew:527 modalHost:temperImport:565
-  @use call    ImGui.IsWindowAppearing  @ modalHost:temperNew:512
-  @use call    ImGui.PopFont  @ pushUiPadToGrid:392 drawStepRow:420
-  @use call    ImGui.PopID  @ drawStepRow:430 drawStepTable:469 modalHost:temperNew:522
-  @use call    ImGui.PopStyleColor  @ pillButton:599
-  @use call    ImGui.PopStyleVar  @ drawStepRow:412,427 drawStepTable:468,478,482 drawStepsTop:814
-  @use call    ImGui.PushFont  @ pushUiPadToGrid:390 drawStepRow:418
-  @use call    ImGui.PushID  @ drawStepRow:400 drawStepTable:460 modalHost:temperNew:520
-  @use call    ImGui.PushStyleColor  @ pillButton:596,597
-  @use call    ImGui.PushStyleVar  @ pushUiPadToGrid:394 drawStepTable:446 drawStepsTop:812
-  @use call    ImGui.SameLine  @ drawRootRow:355,357,360,362,364,366,368 drawHeader:378,381 modalHost:temperNew:517,524,526 modalHost:temperImport:544,548,564 genKindSelector:605 labeledInput:617 drawRank2Fields:700,707,713 drawGenerators:792
-  @use call    ImGui.Separator  @ drawGenerators:776 drawStepsTop:810
-  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:832,843
-  @use call    ImGui.SetKeyboardFocusHere  @ modalHost:temperNew:513
-  @use call    ImGui.SetMouseCursor  @ drawEditBody:842
-  @use call    ImGui.SetNextItemWidth  @ rootBox:339 drawHeader:379 drawStepRow:407,417 drawStepTable:465 modalHost:temperNew:518 modalHost:temperImport:545 labeledInput:618
-  @use call    ImGui.Spacing  @ drawGenerators:778,787
-  @use call    ImGui.TableNextColumn  @ drawStepRow:402,406,416,423 drawColumnLabels:438 drawStepTable:461,464,474,475
-  @use call    ImGui.TableNextRow  @ drawStepRow:399 drawColumnLabels:436 drawStepTable:459,473
-  @use call    ImGui.TableSetupColumn  @ drawStepTable:448,449,450,451
-  @use call    ImGui.Text  @ drawRootRow:354,363,367 drawHeader:377 drawStepRow:404 modalHost:temperNew:516 modalHost:temperImport:543 labeledInput:617 drawRank2Fields:700 drawStepsTop:803
-  @use call    ImGui.TextColored  @ modalHost:temperNew:538 modalHost:temperImport:578 drawGenerators:792
-  @use call    ImGui.TextDisabled  @ drawColumnLabels:439 drawStepTable:463 modalHost:temperImport:560 drawRank2Fields:715 drawGenerators:777
-  @use call    chrome.checkbox  @ drawHeader:383 drawChordFields:667 drawRank2Fields:708
-  @use call    chrome.colour  @ modalHost:temperNew:538 modalHost:temperImport:578 pillButton:595 drawGenerators:792
-  @use call    chrome.disabledIf  @ drawGenerators:788
-  @use call    chrome.dropdown  @ drawRootRow:358
-  @use call    chrome.numberStepper  @ drawRank2Fields:701
-  @use call    chrome.paletteHeader  @ drawEditBody:830 draw:851
-  @use call    chrome.popChromeStyles  @ draw:856
-  @use call    chrome.pushChromeStyles  @ draw:849
-  @use call    chrome.row  @ drawGenerators:775 drawStepsTop:807,808
-  @use call    cm:get  @ viewedName:42 temperFor:55 activeTemper:60 buildDescriptor:284 modalHost:temperNew:532 modalHost:temperImport:570
-  @use call    cm:getAt  @ projectTempers:44 globalTempers:46 editedTemper:67 temperWrite:107
-  @use call    cm:set  @ temperWrite:109 deleteSel:272 openNewModal:493 openImportModal:505
-  @use call    facade.get  @ inUseNames:205
-  @use call    fs.basename  @ modalHost:temperImport:556
-  @use call    fs.readText  @ modalHost:temperImport:552
-  @use call    lib.factoryOverwrites  @ importFactory:234
-  @use call    lib.forkToProject  @ forkToProject:97
-  @use call    lib.importFactory  @ reloadFactory:212,222 importFactory:238,241
-  @use call    lib.modified  @ buildDescriptor:288
-  @use call    lib.names  @ buildDescriptor:282
-  @use call    lib.publish  @ publish:253,256
-  @use call    lib.publishOverwrites  @ publish:249
-  @use call    lib.reloadPlan  @ reloadFactory:211
-  @use call    lib.revert  @ revert:264
-  @use call    lib.tidy  @ tidy:206
-  @use call    modalHost:open  @ openNewModal:488 openImportModal:500
-  @use call    modalHost:openConfirm  @ reloadFactory:218 importFactory:235 publish:250
-  @use call    modalHost:registerKind  @ <load>:511,541
-  @use call    tuning.degreesToSpec  @ reseedEqual:624,625 drawEqualFields:646,652
-  @use call    tuning.derive  @ temperWrite:106 openNewModal:492
-  @use call    tuning.edoDegrees  @ drawEqualFields:645,651 buildGen:727
+  @use call    ImGui.AlignTextToFramePadding  @ drawRootRow:335 drawHeader:357 drawStepRow:385 drawStepTable:444 modalHost:temperNew:497 modalHost:temperImport:524 labeledInput:599 drawRank2Fields:682
+  @use call    ImGui.BeginChild  @ drawEditBody:807 draw:832
+  @use call    ImGui.BeginDisabled  @ drawStepRow:391 drawGenerators:756 drawStepsTop:788,793
+  @use call    ImGui.BeginTable  @ drawStepTable:429
+  @use call    ImGui.Button  @ drawStepRow:408 drawStepTable:459 modalHost:temperNew:507,509 modalHost:temperImport:531,545,547 pillButton:580 drawGenerators:771
+  @use call    ImGui.EndChild  @ drawEditBody:810 draw:837
+  @use call    ImGui.EndDisabled  @ drawStepRow:393 drawGenerators:773 drawStepsTop:791,797
+  @use call    ImGui.EndTable  @ drawStepTable:462
+  @use call    ImGui.GetContentRegionAvail  @ drawStepTable:426 draw:834
+  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:813
+  @use call    ImGui.GetFrameHeight  @ pushUiPadToGrid:373,377
+  @use call    ImGui.GetMousePos  @ drawEditBody:818
+  @use call    ImGui.GetStyleVar  @ pushUiPadToGrid:375
+  @use call    ImGui.InputText  @ tokenBox:309 rootBox:322 drawStepRow:401 modalHost:temperNew:503 modalHost:temperImport:528 labeledInput:601
+  @use call    ImGui.InputTextMultiline  @ modalHost:temperImport:543
+  @use call    ImGui.InvisibleButton  @ drawEditBody:815
+  @use call    ImGui.IsItemActive  @ drawEditBody:816
+  @use call    ImGui.IsItemDeactivatedAfterEdit  @ tokenBox:311 rootBox:324 drawEqualFields:615
+  @use call    ImGui.IsItemHovered  @ drawEditBody:816
+  @use call    ImGui.IsKeyPressed  @ modalHost:temperNew:509 modalHost:temperImport:547
+  @use call    ImGui.IsWindowAppearing  @ modalHost:temperNew:494
+  @use call    ImGui.PopFont  @ pushUiPadToGrid:374 drawStepRow:402
+  @use call    ImGui.PopID  @ drawStepRow:412 drawStepTable:451 modalHost:temperNew:504
+  @use call    ImGui.PopStyleColor  @ pillButton:581
+  @use call    ImGui.PopStyleVar  @ drawStepRow:394,409 drawStepTable:450,460,464 drawStepsTop:796
+  @use call    ImGui.PushFont  @ pushUiPadToGrid:372 drawStepRow:400
+  @use call    ImGui.PushID  @ drawStepRow:382 drawStepTable:442 modalHost:temperNew:502
+  @use call    ImGui.PushStyleColor  @ pillButton:578,579
+  @use call    ImGui.PushStyleVar  @ pushUiPadToGrid:376 drawStepTable:428 drawStepsTop:794
+  @use call    ImGui.SameLine  @ drawRootRow:337,339,342,344,346,348,350 drawHeader:360,363 modalHost:temperNew:499,506,508 modalHost:temperImport:526,530,546 genKindSelector:587 labeledInput:599 drawRank2Fields:682,689,695 drawGenerators:774
+  @use call    ImGui.Separator  @ drawGenerators:758 drawStepsTop:792
+  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:814,825
+  @use call    ImGui.SetKeyboardFocusHere  @ modalHost:temperNew:495
+  @use call    ImGui.SetMouseCursor  @ drawEditBody:824
+  @use call    ImGui.SetNextItemWidth  @ rootBox:321 drawHeader:361 drawStepRow:389,399 drawStepTable:447 modalHost:temperNew:500 modalHost:temperImport:527 labeledInput:600
+  @use call    ImGui.Spacing  @ drawGenerators:760,769
+  @use call    ImGui.TableNextColumn  @ drawStepRow:384,388,398,405 drawColumnLabels:420 drawStepTable:443,446,456,457
+  @use call    ImGui.TableNextRow  @ drawStepRow:381 drawColumnLabels:418 drawStepTable:441,455
+  @use call    ImGui.TableSetupColumn  @ drawStepTable:430,431,432,433
+  @use call    ImGui.Text  @ drawRootRow:336,345,349 drawHeader:359 drawStepRow:386 modalHost:temperNew:498 modalHost:temperImport:525 labeledInput:599 drawRank2Fields:682 drawStepsTop:785
+  @use call    ImGui.TextColored  @ modalHost:temperNew:520 modalHost:temperImport:560 drawGenerators:774
+  @use call    ImGui.TextDisabled  @ drawColumnLabels:421 drawStepTable:445 modalHost:temperImport:542 drawRank2Fields:697 drawGenerators:759
+  @use call    chrome.checkbox  @ drawHeader:365 drawChordFields:649 drawRank2Fields:690
+  @use call    chrome.colour  @ modalHost:temperNew:520 modalHost:temperImport:560 pillButton:577 drawGenerators:774
+  @use call    chrome.disabledIf  @ drawGenerators:770
+  @use call    chrome.dropdown  @ drawRootRow:340
+  @use call    chrome.numberStepper  @ drawRank2Fields:683
+  @use call    chrome.paletteHeader  @ drawEditBody:812 draw:833
+  @use call    chrome.popChromeStyles  @ draw:838
+  @use call    chrome.pushChromeStyles  @ draw:831
+  @use call    chrome.row  @ drawGenerators:757 drawStepsTop:789,790
+  @use call    cm:get  @ viewedName:42 temperFor:55 activeTemper:60 buildDescriptor:266 modalHost:temperNew:514 modalHost:temperImport:552
+  @use call    cm:getAt  @ projectTempers:44 globalTempers:46 editedTemper:67 temperWrite:93
+  @use call    cm:set  @ temperWrite:95 deleteSel:254 openNewModal:475 openImportModal:487
+  @use call    facade.get  @ inUseNames:187
+  @use call    fs.basename  @ modalHost:temperImport:538
+  @use call    fs.readText  @ modalHost:temperImport:534
+  @use call    lib.factoryOverwrites  @ importFactory:216
+  @use call    lib.forkToProject  @ forkToProject:83
+  @use call    lib.importFactory  @ reloadFactory:194,204 importFactory:220,223
+  @use call    lib.modified  @ buildDescriptor:270
+  @use call    lib.names  @ buildDescriptor:264
+  @use call    lib.publish  @ publish:235,238
+  @use call    lib.publishOverwrites  @ publish:231
+  @use call    lib.reloadPlan  @ reloadFactory:193
+  @use call    lib.revert  @ revert:246
+  @use call    lib.tidy  @ tidy:188
+  @use call    modalHost:open  @ openNewModal:470 openImportModal:482
+  @use call    modalHost:openConfirm  @ reloadFactory:200 importFactory:217 publish:232
+  @use call    modalHost:registerKind  @ <load>:493,523
+  @use call    tuning.degreesToSpec  @ reseedEqual:606,607 drawEqualFields:628,634
+  @use call    tuning.derive  @ temperWrite:92 openNewModal:474
+  @use call    tuning.edoDegrees  @ drawEqualFields:627,633 buildGen:709
   @use call    tuning.findTemper  @ temperFor:55
-  @use call    tuning.genCPS  @ buildGen:756
-  @use call    tuning.genChord  @ buildGen:769
-  @use call    tuning.genEqual  @ buildGen:730
-  @use call    tuning.genHarmonics  @ buildGen:737
-  @use call    tuning.genRank2  @ buildGen:765
-  @use call    tuning.genSubharmonics  @ buildGen:737
-  @use call    tuning.midiName  @ <load>:321 drawRootRow:358
-  @use call    tuning.mosInfo  @ drawRank2Fields:714
-  @use call    tuning.nextMosSize  @ stepMos:686
-  @use call    tuning.parseChord  @ buildGen:767
-  @use call    tuning.parseScalaFile  @ modalHost:temperImport:554
-  @use call    tuning.parseScalaPitches  @ modalHost:temperImport:573
-  @use call    tuning.scalaPitch  @ sortSteps:85 tokenBox:330 stepMos:685 drawRank2Fields:712 buildGen:729,759,760
-  @use call    tuning.scalaToTemper  @ modalHost:temperImport:573
-  @use call    util.add  @ addStep:166 buildGen:743
-  @use call    util.atomic  @ <load>:96,206,262,268
-  @use call    util.deepClone  @ selectTemper:75 cloneForEdit:117 resetToSnapshot:188
-  @use call    util.deepEq  @ dirty:183
+  @use call    tuning.genCPS  @ buildGen:738
+  @use call    tuning.genChord  @ buildGen:751
+  @use call    tuning.genEqual  @ buildGen:712
+  @use call    tuning.genHarmonics  @ buildGen:719
+  @use call    tuning.genRank2  @ buildGen:747
+  @use call    tuning.genSubharmonics  @ buildGen:719
+  @use call    tuning.midiName  @ <load>:303 drawRootRow:340
+  @use call    tuning.mosInfo  @ drawRank2Fields:696
+  @use call    tuning.nextMosSize  @ stepMos:668
+  @use call    tuning.parseChord  @ buildGen:749
+  @use call    tuning.parseScalaFile  @ modalHost:temperImport:536
+  @use call    tuning.parseScalaPitches  @ modalHost:temperImport:555
+  @use call    tuning.removeStep  @ removeStep:159
+  @use call    tuning.scalaPitch  @ tokenBox:312 stepMos:667 drawRank2Fields:694 buildGen:711,741,742
+  @use call    tuning.scalaToTemper  @ modalHost:temperImport:555
+  @use call    tuning.sortSteps  @ temperWrite:91
+  @use call    tuning.unrooted  @ generateInto:181
+  @use call    util.add  @ addStep:152 buildGen:725
+  @use call    util.atomic  @ <load>:82,188,244,250
+  @use call    util.deepClone  @ selectTemper:75 cloneForEdit:103 resetToSnapshot:170
+  @use call    util.deepEq  @ dirty:165
   @use require fs  @ <load>:5
   @use require imgui  @ <load>:11
   @use require tuning  @ <load>:4
   @use require util  @ <load>:3
 
 # Calls (intra-file)
-  @call activeTemper  @ open:863
-  @call addStep  @ drawStepTable:477
-  @call buildDescriptor  @ libraryDescriptor:868
-  @call buildGen  @ drawGenerators:786
-  @call cloneForEdit  @ setStepPitch:127 setStepName:133 setPeriodPitch:139 setPeriodAsStep:145 setRoot:153 addStep:164 removeStep:172 generateInto:194
-  @call dirty  @ buildDescriptor:309
-  @call draw  @ render:867
-  @call drawChordFields  @ drawGenerators:784
-  @call drawColumnLabels  @ drawStepTable:452
-  @call drawCpsFields  @ drawGenerators:782
-  @call drawEditBody  @ draw:853
-  @call drawEqualFields  @ drawGenerators:779
-  @call drawGenerators  @ drawEditBody:845
-  @call drawHeader  @ drawStepsTop:807
-  @call drawRank2Fields  @ drawGenerators:783
-  @call drawRootRow  @ drawStepsTop:808
-  @call drawSeriesFields  @ drawGenerators:780,781
-  @call drawStepRow  @ drawStepTable:454
-  @call drawStepTable  @ drawStepsTop:813
-  @call drawStepsTop  @ drawEditBody:826
-  @call editedTemper  @ selectTemper:75 cloneForEdit:115 dirty:182,183 drawGenerators:773 drawStepsTop:800,801
-  @call forkToProject  @ temperWrite:104
-  @call genDesc  @ drawGenerators:777
-  @call generateInto  @ drawGenerators:789
-  @call globalTempers  @ deleteSel:269,274
+  @call activeTemper  @ open:845
+  @call addStep  @ drawStepTable:459
+  @call buildDescriptor  @ libraryDescriptor:850
+  @call buildGen  @ drawGenerators:768
+  @call cloneForEdit  @ setStepPitch:113 setStepName:119 setPeriodPitch:125 setPeriodAsStep:131 setRoot:139 addStep:150 removeStep:158 generateInto:176
+  @call dirty  @ buildDescriptor:291
+  @call draw  @ render:849
+  @call drawChordFields  @ drawGenerators:766
+  @call drawColumnLabels  @ drawStepTable:434
+  @call drawCpsFields  @ drawGenerators:764
+  @call drawEditBody  @ draw:835
+  @call drawEqualFields  @ drawGenerators:761
+  @call drawGenerators  @ drawEditBody:827
+  @call drawHeader  @ drawStepsTop:789
+  @call drawRank2Fields  @ drawGenerators:765
+  @call drawRootRow  @ drawStepsTop:790
+  @call drawSeriesFields  @ drawGenerators:762,763
+  @call drawStepRow  @ drawStepTable:436
+  @call drawStepTable  @ drawStepsTop:795
+  @call drawStepsTop  @ drawEditBody:808
+  @call editedTemper  @ selectTemper:75 cloneForEdit:101 dirty:164,165 drawGenerators:755 drawStepsTop:782,783
+  @call forkToProject  @ temperWrite:90
+  @call genDesc  @ drawGenerators:759
+  @call generateInto  @ drawGenerators:771
+  @call globalTempers  @ deleteSel:251,256
   @call homeTier  @ selectTemper:74
-  @call inUseNames  @ tidy:206 buildDescriptor:308
-  @call labeledInput  @ drawEqualFields:631,637,642,648 drawSeriesFields:657,659 drawChordFields:665 drawCpsFields:673,675,677 drawRank2Fields:695,697
-  @call labeledInput  @ drawRank2Fields:718
-  @call pillButton  @ genKindSelector:606
-  @call projectTempers  @ homeTier:51 deleteSel:269,274 openNewModal:491 openImportModal:503
-  @call pushUiPadToGrid  @ drawStepRow:408,425 drawStepTable:466,476
-  @call removeStep  @ drawStepRow:426
-  @call reseedEqual  @ drawEqualFields:635
-  @call rootBox  @ drawRootRow:356,361,365,369
-  @call selectTemper  @ revert:265 deleteSel:275,277 buildDescriptor:298 openNewModal:494 openImportModal:506 open:864
-  @call setPeriodAsStep  @ drawHeader:384
-  @call setRoot  @ rootBox:344 drawRootRow:359
-  @call setStepName  @ drawStepRow:421
-  @call setStepPitch  @ drawStepRow:410
-  @call sortSteps  @ temperWrite:105
-  @call stepMos  @ drawRank2Fields:703
-  @call temperFor  @ selectTemper:75 cloneForEdit:115 drawStepsTop:800
-  @call temperWrite  @ setStepPitch:129 setStepName:135 setPeriodPitch:141 setPeriodAsStep:147 setRoot:160 addStep:168 removeStep:178 resetToSnapshot:188 generateInto:199
-  @call tokenBox  @ drawHeader:380 drawStepRow:410 drawStepTable:467
-  @call viewedName  @ drawStepsTop:800
+  @call inUseNames  @ tidy:188 buildDescriptor:290
+  @call labeledInput  @ drawEqualFields:613,619,624,630 drawSeriesFields:639,641 drawChordFields:647 drawCpsFields:655,657,659 drawRank2Fields:677,679
+  @call labeledInput  @ drawRank2Fields:700
+  @call pillButton  @ genKindSelector:588
+  @call projectTempers  @ homeTier:51 deleteSel:251,256 openNewModal:473 openImportModal:485
+  @call pushUiPadToGrid  @ drawStepRow:390,407 drawStepTable:448,458
+  @call removeStep  @ drawStepRow:408
+  @call reseedEqual  @ drawEqualFields:617
+  @call rootBox  @ drawRootRow:338,343,347,351
+  @call selectTemper  @ revert:247 deleteSel:257,259 buildDescriptor:280 openNewModal:476 openImportModal:488 open:846
+  @call setPeriodAsStep  @ drawHeader:366
+  @call setRoot  @ rootBox:326 drawRootRow:341
+  @call setStepName  @ drawStepRow:403
+  @call setStepPitch  @ drawStepRow:392
+  @call stepMos  @ drawRank2Fields:685
+  @call temperFor  @ selectTemper:75 cloneForEdit:101 drawStepsTop:782
+  @call temperWrite  @ setStepPitch:115 setStepName:121 setPeriodPitch:127 setPeriodAsStep:133 setRoot:146 addStep:154 removeStep:160 resetToSnapshot:170 generateInto:181
+  @call tokenBox  @ drawHeader:362 drawStepRow:392 drawStepTable:449
+  @call viewedName  @ drawStepsTop:782
 
 # Bindings (by name)
-  @bind deleteSel  @ buildDescriptor:303
-  @bind genKindSelector  @ drawGenerators:775
-  @bind importFactory  @ buildDescriptor:307
-  @bind openImportModal  @ buildDescriptor:300
-  @bind openNewModal  @ buildDescriptor:299
-  @bind publish  @ buildDescriptor:301
-  @bind reloadFactory  @ buildDescriptor:306
-  @bind resetToSnapshot  @ buildDescriptor:304
-  @bind revert  @ buildDescriptor:302
-  @bind setPeriodPitch  @ drawHeader:380 drawStepTable:467
-  @bind tidy  @ buildDescriptor:305
+  @bind deleteSel  @ buildDescriptor:285
+  @bind genKindSelector  @ drawGenerators:757
+  @bind importFactory  @ buildDescriptor:289
+  @bind openImportModal  @ buildDescriptor:282
+  @bind openNewModal  @ buildDescriptor:281
+  @bind publish  @ buildDescriptor:283
+  @bind reloadFactory  @ buildDescriptor:288
+  @bind resetToSnapshot  @ buildDescriptor:286
+  @bind revert  @ buildDescriptor:284
+  @bind setPeriodPitch  @ drawHeader:362 drawStepTable:449
+  @bind tidy  @ buildDescriptor:287
 
 # Unresolved receivers
-  @drop equave:match  @ buildGen:748,751
-  @drop factors:gmatch  @ buildGen:740
+  @drop equave:match  @ buildGen:730,733
+  @drop factors:gmatch  @ buildGen:722
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -320,153 +319,145 @@
   @reaper GetUserFileNameForRead
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Col_Button  @ pillButton:596
-  @field r Col_ButtonHovered  @ pillButton:597
+  @field r Col_Button  @ pillButton:578
+  @field r Col_ButtonHovered  @ pillButton:579
   @field r ImGui_GetBuiltinPath  @ 7
-  @field r InputTextFlags_EnterReturnsTrue  @ modalHost:temperNew:521
-  @field r Key_Escape  @ modalHost:temperNew:527 modalHost:temperImport:565
-  @field r MouseCursor_ResizeNS  @ drawEditBody:842
-  @field r StyleVar_CellPadding  @ drawStepTable:446
-  @field r StyleVar_FramePadding  @ pushUiPadToGrid:393,394 drawStepsTop:812
-  @field r TableColumnFlags_WidthFixed  @ drawStepTable:448,449,450,451
-  @field r TableFlags_ScrollY  @ drawStepTable:447
-  @field r absolute  @ drawEqualFields:648,651 buildGen:727
-  @field w absolute  @ 34 reseedEqual:625 drawEqualFields:646,650
-  @field w active  @ buildDescriptor:292
-  @field r add  @ reloadFactory:212
-  @field r buf  @ tokenBox:326,330 rootBox:338,343 modalHost:temperNew:521 modalHost:temperImport:561,573
-  @field w buf  @ tokenBox:328 rootBox:341 openNewModal:489 openImportModal:501 modalHost:temperNew:523,533 modalHost:temperImport:555,562
-  @field r c  @ sortSteps:87
-  @field w c  @ sortSteps:85
-  @field w callback  @ reloadFactory:221 importFactory:238 publish:253 openNewModal:490 openImportModal:502
-  @field r cents  @ setRoot:157 addStep:165
-  @field r chord  @ drawChordFields:664 buildGen:767,769
+  @field r InputTextFlags_EnterReturnsTrue  @ modalHost:temperNew:503
+  @field r Key_Escape  @ modalHost:temperNew:509 modalHost:temperImport:547
+  @field r MouseCursor_ResizeNS  @ drawEditBody:824
+  @field r StyleVar_CellPadding  @ drawStepTable:428
+  @field r StyleVar_FramePadding  @ pushUiPadToGrid:375,376 drawStepsTop:794
+  @field r TableColumnFlags_WidthFixed  @ drawStepTable:430,431,432,433
+  @field r TableFlags_ScrollY  @ drawStepTable:429
+  @field r absolute  @ drawEqualFields:630,633 buildGen:709
+  @field w absolute  @ 34 reseedEqual:607 drawEqualFields:628,632
+  @field w active  @ buildDescriptor:274
+  @field r add  @ reloadFactory:194
+  @field r buf  @ tokenBox:308,312 rootBox:320,325 modalHost:temperNew:503 modalHost:temperImport:543,555
+  @field w buf  @ tokenBox:310 rootBox:323 openNewModal:471 openImportModal:483 modalHost:temperNew:505,515 modalHost:temperImport:537,544
+  @field w callback  @ reloadFactory:203 importFactory:220 publish:235 openNewModal:472 openImportModal:484
+  @field r cents  @ setRoot:143 addStep:151
+  @field r chord  @ drawChordFields:646 buildGen:749,751
   @field w chord  @ 37
   @field r chrome  @ 14
   @field r cm  @ 14
-  @field w col  @ buildDescriptor:285
-  @field r count  @ drawCpsFields:675 buildGen:746
-  @field w count  @ 38 drawCpsFields:676
-  @field r cps  @ drawCpsFields:672 buildGen:740,746,748,751,752,756
+  @field w col  @ buildDescriptor:267
+  @field r count  @ drawCpsFields:657 buildGen:728
+  @field w count  @ 38 drawCpsFields:658
+  @field r cps  @ drawCpsFields:654 buildGen:722,728,730,733,734,738
   @field w cps  @ 38
   @field r ctx  @ 14
-  @field r desc  @ genDesc:611
-  @field w desc  @ 584,585,586,587,588,589
-  @field w dirty  @ buildDescriptor:309
-  @field r divisions  @ drawEqualFields:631,634
-  @field w divisions  @ 32 reseedEqual:626 drawEqualFields:632,646,652
-  @field r equal  @ drawEqualFields:630 buildGen:727,729,730
+  @field r desc  @ genDesc:593
+  @field w desc  @ 566,567,568,569,570,571
+  @field w dirty  @ buildDescriptor:291
+  @field r divisions  @ drawEqualFields:613,616
+  @field w divisions  @ 32 reseedEqual:608 drawEqualFields:614,628,634
+  @field r equal  @ drawEqualFields:612 buildGen:709,711,712
   @field w equal  @ 32
-  @field r equave  @ drawCpsFields:677 buildGen:748,751,752,756
-  @field w equave  @ 38 drawCpsFields:678
-  @field r err  @ modalHost:temperNew:538 modalHost:temperImport:578
-  @field w err  @ modalHost:temperNew:531,533 modalHost:temperImport:569,571,574
+  @field r equave  @ drawCpsFields:659 buildGen:730,733,734,738
+  @field w equave  @ 38 drawCpsFields:660
+  @field r err  @ modalHost:temperNew:520 modalHost:temperImport:560
+  @field w err  @ modalHost:temperNew:513,515 modalHost:temperImport:551,553,556
   @field r facade  @ 14
-  @field r factors  @ drawCpsFields:673 buildGen:740
-  @field w factors  @ 38 drawCpsFields:674
-  @field r font  @ pushUiPadToGrid:390 drawStepRow:418
-  @field r fontSize  @ pushUiPadToGrid:390 drawStepRow:418
-  @field r gen  @ modalHost:temperNew:519,520,533
-  @field w gen  @ modalHost:temperNew:519,533
-  @field r generator  @ stepMos:685,686 drawRank2Fields:695,712,714 buildGen:759,765
-  @field w generator  @ 39 drawRank2Fields:696
+  @field r factors  @ drawCpsFields:655 buildGen:722
+  @field w factors  @ 38 drawCpsFields:656
+  @field r font  @ pushUiPadToGrid:372 drawStepRow:400
+  @field r fontSize  @ pushUiPadToGrid:372 drawStepRow:400
+  @field r gen  @ modalHost:temperNew:501,502,515
+  @field w gen  @ modalHost:temperNew:501,515
+  @field r generator  @ stepMos:667,668 drawRank2Fields:677,694,696 buildGen:741,747
+  @field w generator  @ 39 drawRank2Fields:678
   @field r gui  @ 14
-  @field r h0  @ drawEditBody:838
-  @field w h0  @ drawEditBody:837
-  @field r harm  @ drawGenerators:780
+  @field r h0  @ drawEditBody:820
+  @field w h0  @ drawEditBody:819
+  @field r harm  @ drawGenerators:762
   @field w harm  @ 35
-  @field r hi  @ drawSeriesFields:659 buildGen:733
-  @field w hi  @ 35,36 drawSeriesFields:660
-  @field r id  @ genKindSelector:606 genDesc:611
-  @field w id  @ 584,585,586,587,588,589
-  @field r interval  @ drawEqualFields:637 buildGen:729,730
-  @field w interval  @ 32 drawEqualFields:638
-  @field r invert  @ drawChordFields:667 buildGen:769
-  @field w invert  @ 37 drawChordFields:668
-  @field r isMos  @ drawRank2Fields:715
-  @field r key  @ tokenBox:326,329 rootBox:338,342
-  @field w key  @ tokenBox:328 rootBox:341
-  @field r kind  @ genKindSelector:606 genDesc:611 buildGen:726,731,732,737,738,757 drawGenerators:779,780,781
-  @field r kind  @ drawGenerators:782,783
-  @field w kind  @ 31 openNewModal:489 openImportModal:501 genKindSelector:606
-  @field r label  @ genKindSelector:606
-  @field w label  @ buildDescriptor:291 584,585,586,587,588,589
-  @field r large  @ drawRank2Fields:715
+  @field r hi  @ drawSeriesFields:641 buildGen:715
+  @field w hi  @ 35,36 drawSeriesFields:642
+  @field r id  @ genKindSelector:588 genDesc:593
+  @field w id  @ 566,567,568,569,570,571
+  @field r interval  @ drawEqualFields:619 buildGen:711,712
+  @field w interval  @ 32 drawEqualFields:620
+  @field r invert  @ drawChordFields:649 buildGen:751
+  @field w invert  @ 37 drawChordFields:650
+  @field r isMos  @ drawRank2Fields:697
+  @field r key  @ tokenBox:308,311 rootBox:320,324
+  @field w key  @ tokenBox:310 rootBox:323
+  @field r kind  @ genKindSelector:588 genDesc:593 buildGen:708,713,714,719,720,739 drawGenerators:761,762,763
+  @field r kind  @ drawGenerators:764,765
+  @field w kind  @ 31 openNewModal:471 openImportModal:483 genKindSelector:588
+  @field r label  @ genKindSelector:588
+  @field w label  @ buildDescriptor:273 566,567,568,569,570,571
+  @field r large  @ drawRank2Fields:697
   @field r lib  @ 14
-  @field r library  @ buildDescriptor:294
-  @field w library  @ buildDescriptor:294
-  @field r lo  @ drawSeriesFields:657 buildGen:733
-  @field w lo  @ 35,36 drawSeriesFields:658
-  @field r members  @ drawChordFields:665 buildGen:767
-  @field w members  @ 37 drawChordFields:666
-  @field w mergeTiers  @ modalHost:temperNew:532 modalHost:temperImport:570
-  @field w min  @ drawRank2Fields:702
+  @field r library  @ buildDescriptor:276
+  @field w library  @ buildDescriptor:276
+  @field r lo  @ drawSeriesFields:639 buildGen:715
+  @field w lo  @ 35,36 drawSeriesFields:640
+  @field r members  @ drawChordFields:647 buildGen:749
+  @field w members  @ 37 drawChordFields:648
+  @field w mergeTiers  @ modalHost:temperNew:514 modalHost:temperImport:552
+  @field w min  @ drawRank2Fields:684
   @field r modalHost  @ 14
-  @field w modified  @ buildDescriptor:296
-  @field r name  @ modalHost:temperImport:546,556,567
-  @field w name  @ buildDescriptor:285,297 openNewModal:492 openImportModal:501 modalHost:temperImport:547,556
-  @field r nm  @ sortSteps:90
-  @field w nm  @ sortSteps:85
-  @field w onDelete  @ buildDescriptor:303
-  @field w onImport  @ buildDescriptor:300
-  @field w onImportFactory  @ buildDescriptor:307
-  @field w onNew  @ buildDescriptor:299
-  @field w onPublish  @ buildDescriptor:301
-  @field w onReloadFactory  @ buildDescriptor:306
-  @field w onReset  @ buildDescriptor:304
-  @field w onRevert  @ buildDescriptor:302
-  @field w onSelect  @ buildDescriptor:298
-  @field w onStep  @ drawRank2Fields:703
-  @field w onTidy  @ buildDescriptor:305
-  @field r overwrite  @ reloadFactory:216
+  @field w modified  @ buildDescriptor:278
+  @field r name  @ modalHost:temperImport:528,538,549
+  @field w name  @ buildDescriptor:267,279 openNewModal:474 openImportModal:483 modalHost:temperImport:529,538
+  @field w onDelete  @ buildDescriptor:285
+  @field w onImport  @ buildDescriptor:282
+  @field w onImportFactory  @ buildDescriptor:289
+  @field w onNew  @ buildDescriptor:281
+  @field w onPublish  @ buildDescriptor:283
+  @field w onReloadFactory  @ buildDescriptor:288
+  @field w onReset  @ buildDescriptor:286
+  @field w onRevert  @ buildDescriptor:284
+  @field w onSelect  @ buildDescriptor:280
+  @field w onStep  @ drawRank2Fields:685
+  @field w onTidy  @ buildDescriptor:287
+  @field r overwrite  @ reloadFactory:198
   @field r path  @ 10
   @field w path  @ 10
-  @field r period  @ addStep:166 stepMos:685,686 drawRank2Fields:697,712,714 buildGen:760,765
-  @field w period  @ 39 drawRank2Fields:698
-  @field r periodAsStep  @ generateInto:197 drawHeader:376,383 drawStepTable:458
-  @field w periodAsStep  @ setPeriodAsStep:146 generateInto:197
-  @field r periodPitch  @ generateInto:196 drawHeader:380 drawStepTable:467
-  @field w periodPitch  @ setPeriodPitch:140 generateInto:196 openNewModal:492
-  @field r pitches  @ sortSteps:84,89 cloneForEdit:118,120 setStepPitch:128 addStep:166,167 removeStep:172,173,177 generateInto:195
-  @field r pitches  @ drawStepRow:410 drawStepTable:454
-  @field w pitches  @ cloneForEdit:118 generateInto:195 openNewModal:492
-  @field r project  @ buildDescriptor:287,293
-  @field w project  @ buildDescriptor:293
-  @field w prompt  @ reloadFactory:220 importFactory:237 publish:252
-  @field r rank2  @ drawRank2Fields:694 buildGen:758
+  @field r period  @ addStep:152 stepMos:667,668 drawRank2Fields:679,694,696 buildGen:742,747
+  @field w period  @ 39 drawRank2Fields:680
+  @field r periodAsStep  @ generateInto:179 drawHeader:358,365 drawStepTable:440
+  @field w periodAsStep  @ setPeriodAsStep:132 generateInto:179
+  @field r periodPitch  @ generateInto:178 drawHeader:362 drawStepTable:449
+  @field w periodPitch  @ setPeriodPitch:126 generateInto:178 openNewModal:474
+  @field r pitches  @ cloneForEdit:104,106 setStepPitch:114 addStep:152,153 removeStep:158 generateInto:177 drawStepRow:392 drawStepTable:436
+  @field w pitches  @ cloneForEdit:104 generateInto:177 openNewModal:474
+  @field r project  @ buildDescriptor:269,275
+  @field w project  @ buildDescriptor:275
+  @field w prompt  @ reloadFactory:202 importFactory:219 publish:234
+  @field r rank2  @ drawRank2Fields:676 buildGen:740
   @field w rank2  @ 39
-  @field r refocus  @ modalHost:temperNew:512
-  @field w refocus  @ modalHost:temperNew:513,533
-  @field r relative  @ drawEqualFields:642,645
-  @field w relative  @ 33 reseedEqual:624 drawEqualFields:644,652
-  @field r rootDetune  @ drawRootRow:361
-  @field r rootOctave  @ drawRootRow:369
-  @field r rootPitch  @ drawRootRow:352
-  @field r rootStep  @ removeStep:177 drawRootRow:365
-  @field w rootStep  @ removeStep:177
-  @field w sel  @ buildDescriptor:297
-  @field r size  @ stepMos:684 drawRank2Fields:701,703,711 buildGen:761
-  @field w size  @ 39 stepMos:688 drawRank2Fields:705
-  @field r small  @ drawRank2Fields:715
-  @field r snapMos  @ stepMos:685 drawRank2Fields:708
-  @field w snapMos  @ 39 drawRank2Fields:709
-  @field r splitDrag  @ drawEditBody:837,838
-  @field w splitDrag  @ 31 drawEditBody:837,840
-  @field r stepNames  @ sortSteps:85,90 cloneForEdit:119,120 setStepName:134 addStep:167 removeStep:174 drawStepRow:419
-  @field w stepNames  @ cloneForEdit:119 generateInto:198 openNewModal:492
-  @field r subharm  @ drawGenerators:781
+  @field r refocus  @ modalHost:temperNew:494
+  @field w refocus  @ modalHost:temperNew:495,515
+  @field r relative  @ drawEqualFields:624,627
+  @field w relative  @ 33 reseedEqual:606 drawEqualFields:626,634
+  @field r rootDetune  @ drawRootRow:343
+  @field r rootOctave  @ drawRootRow:351
+  @field r rootPitch  @ drawRootRow:334
+  @field r rootStep  @ drawRootRow:347
+  @field w sel  @ buildDescriptor:279
+  @field r size  @ stepMos:666 drawRank2Fields:683,685,693 buildGen:743
+  @field w size  @ 39 stepMos:670 drawRank2Fields:687
+  @field r small  @ drawRank2Fields:697
+  @field r snapMos  @ stepMos:667 drawRank2Fields:690
+  @field w snapMos  @ 39 drawRank2Fields:691
+  @field r splitDrag  @ drawEditBody:819,820
+  @field w splitDrag  @ 31 drawEditBody:819,822
+  @field r stepNames  @ cloneForEdit:105,106 setStepName:120 addStep:153 drawStepRow:401
+  @field w stepNames  @ cloneForEdit:105 generateInto:180 openNewModal:474
+  @field r subharm  @ drawGenerators:763
   @field w subharm  @ 36
-  @field w synthetic  @ buildDescriptor:295
-  @field w tier  @ buildDescriptor:297
-  @field w title  @ reloadFactory:219 importFactory:236 publish:251 openNewModal:489 openImportModal:501
-  @field r tok  @ sortSteps:89
-  @field w tok  @ sortSteps:85
-  @field r topH  @ drawEditBody:823,825,837
-  @field w topH  @ 31 drawEditBody:823,838
-  @field r ui  @ pushUiPadToGrid:390 drawStepRow:418
-  @field w undeletable  @ buildDescriptor:308
-  @field r up  @ stepMos:689 drawRank2Fields:718 buildGen:763
-  @field w up  @ 39 stepMos:690 drawRank2Fields:719
-  @field w width  @ drawRank2Fields:702
-  @field r y0  @ drawEditBody:838
-  @field w y0  @ drawEditBody:837
+  @field w synthetic  @ buildDescriptor:277
+  @field w tier  @ buildDescriptor:279
+  @field w title  @ reloadFactory:201 importFactory:218 publish:233 openNewModal:471 openImportModal:483
+  @field r topH  @ drawEditBody:805,807,819
+  @field w topH  @ 31 drawEditBody:805,820
+  @field r ui  @ pushUiPadToGrid:372 drawStepRow:400
+  @field w undeletable  @ buildDescriptor:290
+  @field r up  @ stepMos:671 drawRank2Fields:700 buildGen:745
+  @field w up  @ 39 stepMos:672 drawRank2Fields:701
+  @field w width  @ drawRank2Fields:684
+  @field r y0  @ drawEditBody:820
+  @field w y0  @ drawEditBody:819

@@ -77,20 +77,6 @@ end
 
 ----- Authoring writes
 
--- Sort the (pitch, name) pairs ascending by compiled cents so tuning.lua's
--- ordered assumptions hold; the unison (1/1 = 0) stays at the front.
-local function sortSteps(temper)
-  local rows = {}
-  for i, tok in ipairs(temper.pitches) do
-    rows[i] = { tok = tok, nm = temper.stepNames[i] or '', c = tuning.scalaPitch(tok) or 0 }
-  end
-  table.sort(rows, function(a, b) return a.c < b.c end)
-  for i, row in ipairs(rows) do
-    temper.pitches[i]   = row.tok
-    temper.stepNames[i] = row.nm
-  end
-end
-
 -- Fork the selected non-project row into project so the edit lands there,
 -- not on the library source. Atomic: shares the gesture's undo point.
 local forkToProject = util.atomic('Fork temper', function()
@@ -102,7 +88,7 @@ end)
 -- after a cents edit crosses a neighbour; tuning.derive restamps octaveStep/cellWidth.
 local function temperWrite(temper, normalize)
   if selTier ~= 'project' and not SYNTHETIC[selected] then forkToProject() end
-  if normalize then sortSteps(temper) end
+  if normalize then tuning.sortSteps(temper) end
   tuning.derive(temper)
   local map = cm:getAt(selTier, 'tempers') or {}
   map[selected] = temper
@@ -170,11 +156,7 @@ end
 
 local function removeStep(i)
   local t = cloneForEdit(); if not t or i == 1 or #t.pitches <= 1 then return end
-  table.remove(t.pitches, i)
-  table.remove(t.stepNames, i)
-  -- Stopgap until the root is restated across step edits: computeRootCents
-  -- indexes cents[rootStep], so a root past the end of a shortened scale raises.
-  if t.rootStep and t.rootStep > #t.pitches then t.rootStep = #t.pitches end
+  tuning.removeStep(t, i)
   temperWrite(t, false)
 end
 
@@ -196,7 +178,7 @@ local function generateInto(gen)
   t.periodPitch  = gen.periodPitch
   t.periodAsStep = gen.periodAsStep
   t.stepNames    = {}
-  temperWrite(t, true)
+  temperWrite(tuning.unrooted(t), true)   -- the scale the root placed is gone; the root resets
 end
 
 ----- Tier-aware library writes

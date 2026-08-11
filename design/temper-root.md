@@ -25,6 +25,11 @@ scale coordinate.**
    `(4, 0) = (5, −1)` and `(60, 0) = (1, 4)` are one tuning written three
    times.
 
+5. The correspondence names a step, not a cents value. So retuning the
+   step a root names moves the scale: that step goes on sounding what the
+   root says it sounds, and every other step shifts by the change. Every
+   other scale edit leaves the placement where it was.
+
 5. Root state is project-tier. The library and factory copies of a temper
    carry none of the four fields, so what the library holds is a scale and
    what a project holds is a scale placed. Editing a root field forks the
@@ -184,30 +189,37 @@ scale coordinate.**
    break is accepted rather than guarded, and `tuning.derive` stays the
    single owner of the default.
 
-5. `temperEditor.lua` gains rows for the four authored fields, and
-   restates `rootStep` when a step edit renumbers the steps below the
-   root, so the correspondence goes on naming the step it named. The copy
-   it publishes to the library drops the four (§ What a root is). `rootPitch`
-   is spelled beside its number in the untempered twelve-name convention —
-   `60` reads `C4` — since the temper's own naming is the thing the root fixes.
+5. `temperEditor.lua` gains rows for the four authored fields, and the
+   copy it publishes to the library drops them (§ What a root is).
+   `rootPitch` is spelled beside its number in the untempered twelve-name
+   convention — `60` reads `C4` — since the temper's own naming is the
+   thing the root fixes.
 
-6. Deleting the step a root names is the one edit with no step to
-   renumber onto: the editor restates the root on the unison at the
-   same `rootCents`, which is the same tuning written differently (§
-   What a root is 4).
+6. A step edit renumbers the steps around the root, and the root follows
+   the step it names. Which step that is, the edit knows, so following it
+   is index bookkeeping rather than a search: `tuning.sortSteps` carries
+   `rootStep` with its row through the sort, and `tuning.removeStep` walks
+   it down past a deleted step.
 
-7. So `addStep`'s clamp of a new step against the period
+7. Both live in `tuning.lua` rather than in the editor, because both
+   maintain the ascending-cents order the module's own arithmetic assumes.
+
+8. Deleting the step a root names is the one edit with no step to renumber
+   onto. The root restates on the unison at the same `rootCents`, which is
+   the same tuning written differently (§ What a root is).
+
+9. So `addStep`'s clamp of a new step against the period
    (`temperEditor.lua:150-155`) is unaffected despite reading both. The
    callers further out want a count of steps (`trackerRender.lua:943`),
    a difference between adjacent steps (`viewContext.lua:39-42`), or a
    character width (`trackerView.lua:3036-3037`).
 
-8. A generator does not disturb the root. `generateInto` overwrites the
-   pitches, the period and the step names (`temperEditor.lua:177-184`),
-   and the root is a property of where the scale sits rather than of the
-   intervals a generator makes.
+10. A generator resets the root. `generateInto` overwrites the pitches,
+    the period and the step names, so the scale a root placed is gone, and
+    what the editor writes is the unrooted form the library keeps (§ What a
+    root is).
 
-9. `docs/tuning.md` § Coordinate systems states the anchoring as prose,
+11. `docs/tuning.md` § Coordinate systems states the anchoring as prose,
    including that the first step of every temperament is `C`, which
    `(69, 0) = (1, 4)` falsifies, and § Addressable range 1 states it again
    as `cents 0 ≡ MIDI 0 (C-1)`. Both passages are rewritten when the root

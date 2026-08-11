@@ -281,7 +281,15 @@ adds 1 to the displayed octave when `step >= octaveStep`.
    constants they replace. The four authored fields are read through,
    never written back, so presets keep the shape they were written in.
 
-3. The editor clamps `rootPitch` and `rootStep` on entry, since they derive
+3. The root names a step, so a step edit carries `rootStep` with the step it
+   names: a deletion below it, or a sort that moves it, leaves it on the same
+   step sounding what it sounded. Deleting the rooted step is the one edit with
+   no successor — there the root restates on the unison at the `rootCents`
+   standing before the edit, which is the same tuning written at the step every
+   scale keeps. A generator replaces the scale the root placed, so it resets the
+   root to the default.
+
+4. The editor clamps `rootPitch` and `rootStep` on entry, since they derive
    indexes into the scale; `rootOctave` and `rootDetune` are left free, since
    an out-of-range value only moves the root's display label, not which
    pitch it names. The root picker spells `rootPitch` in the untempered

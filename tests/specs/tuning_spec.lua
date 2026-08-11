@@ -27,6 +27,27 @@ local function rooted(root)
   return tuning.derive(temper)
 end
 
+-- The same 12EDO in the shape a step edit sees: pitch tokens, names densified
+-- to '' as cloneForEdit leaves them, so sortSteps and removeStep can drive it.
+local function authored(root)
+  local temper = { name = 'authored', periodPitch = '2/1', pitches = {}, stepNames = {} }
+  for i = 1, 12 do temper.pitches[i], temper.stepNames[i] = (i - 1) .. '\\12', '' end
+  for k, v in pairs(root) do temper[k] = v end
+  return tuning.derive(temper)
+end
+
+-- A4 = 415Hz: the root placed off the unison, so an edit that moves its step
+-- shows up in every pitch the scale sounds.
+local A415 = { rootPitch = 69, rootDetune = -101.27, rootStep = 10, rootOctave = 4 }
+
+-- What the rooted step sounds, as (midi, detune); the deletions and sorts below
+-- all claim to leave it alone.
+local function soundsA415(temper, step, why)
+  local midi, detune = tuning.stepToMidi(temper, step, 4)
+  t.eq(midi, 68, why)
+  t.truthy(math.abs(detune + 1.27) < 1e-9, 'detune ' .. detune)
+end
+
 return {
   {
     name = 'preset EDOs derive width 3 and a past-the-end octaveStep',
@@ -243,6 +264,86 @@ return {
                'the library form of a placed scale is the scale, stamps and all')
       t.eq(placed.rootPitch, 69, 'the placed copy is left alone')
       t.eq(placed.rootCents, 5898.73)
+    end,
+  },
+
+  {
+    name = 'a deleted step takes the root\'s index down with it',
+    run = function()
+      local below = tuning.derive(tuning.removeStep(authored(A415), 3))
+      t.eq(below.rootStep, 9, 'the rooted step lost a step from under it')
+      t.eq(below.rootCents, 5898.73, 'so it names the same 900c step, and the scale is unmoved')
+      soundsA415(below, 9, 'the rooted step still sounds A415')
+
+      local above = tuning.derive(tuning.removeStep(authored(A415), 11))
+      t.eq(above.rootStep, 10, 'a step above the root leaves its index alone')
+      t.eq(above.rootCents, 5898.73)
+    end,
+  },
+
+  {
+    name = 'deleting the rooted step restates the root on the unison',
+    run = function()
+      local before = authored(A415)
+      local after  = tuning.derive(tuning.removeStep(authored(A415), 10))
+
+      t.eq(after.rootStep, 1, 'the step the root named is gone, so it moves to the one every scale keeps')
+      t.eq(after.rootPitch, 59, 'MIDI 59 is where the unison was already sounding')
+      t.truthy(math.abs(after.rootDetune + 1.27) < 1e-9, 'rootDetune ' .. after.rootDetune)
+      t.eq(after.rootOctave, 4, 'the octave the root was authored in is untouched')
+      t.eq(after.rootCents, 5898.73, '(59, -1.27) = (1, 4) is (69, -101.27) = (10, 4) rewritten')
+
+      for i, was in ipairs{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12 } do
+        local bm, bd = tuning.stepToMidi(before, was, 4)
+        local am, ad = tuning.stepToMidi(after, i, 4)
+        t.truthy(math.abs((am * 100 + ad) - (bm * 100 + bd)) < 1e-9,
+                 ('step %d sounds what step %d sounded'):format(i, was))
+      end
+    end,
+  },
+
+  {
+    name = 'a step sorted below the root carries the root\'s index',
+    run = function()
+      local s = authored(A415)
+      s.pitches[12] = '50.0'
+      tuning.derive(tuning.sortSteps(s))
+
+      t.eq(s.rootStep, 11, 'the retuned step sorted in below the root, pushing it up one')
+      t.eq(s.rootCents, 5898.73, 'the root names the same step, so nothing else moves')
+      soundsA415(s, 11, 'the rooted step still sounds A415')
+    end,
+  },
+
+  {
+    name = 'retuning the rooted step moves the scale, not the root',
+    run = function()
+      local s = authored(A415)
+      s.pitches[10] = '905.0'
+      tuning.derive(tuning.sortSteps(s))
+
+      t.eq(s.rootStep, 10, 'the step kept its place in the order, so the root kept its index')
+      soundsA415(s, 10, 'and A415 is still what that step sounds — that is what the root fixes')
+      t.eq(s.rootCents, 5893.73, 'so the unison, 905c below it now, drops the 5 cents')
+
+      local midi, detune = tuning.stepToMidi(s, 1, 4)
+      t.eq(midi, 59)
+      t.truthy(math.abs(detune + 6.27) < 1e-9, 'detune ' .. detune)
+    end,
+  },
+
+  {
+    name = 'a temper stating no root comes through both edits unstamped',
+    run = function()
+      local s = authored{}
+      tuning.removeStep(s, 4)
+      s.pitches[11] = '50.0'
+      tuning.derive(tuning.sortSteps(s))
+
+      t.eq(s.rootPitch, nil, 'no root was stated, so a step edit states none')
+      t.eq(s.rootDetune, nil)
+      t.eq(s.rootStep, nil)
+      t.eq(s.rootOctave, nil)
     end,
   },
 
