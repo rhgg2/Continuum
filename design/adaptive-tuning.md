@@ -21,10 +21,10 @@ step it was written on.**
    and `allGroups` for the note set, `registerAll`'s tuple form for the
    undo label.
 
-4. Behind the command sits a pure function, notes in and a choice per
-   note out (§ What the solver takes). Points and their placement belong
-   to `tuning.lua`; the solver is a module of its own and carries no
-   tuning vocabulary at all.
+4. Behind the command sits a pure function, strands in and a choice per
+   strand out (§ The strand). Points and their placement belong to
+   `tuning.lua`; the solver is a module of its own and carries no tuning
+   vocabulary at all.
 
 5. Detune is not realised beyond lane-1 notes; that is the author's
    problem, not the function's.
@@ -46,8 +46,8 @@ step it was written on.**
 3. Target — the temper whose points a note may be moved to
    (§ What a target is).
 
-4. Sonority size — `n`, the arity of the largest chord to be recognised
-   when spread out in time (§ The model).
+4. Sonority size — `n`, set above the arity of the largest chord to be
+   recognised when spread out in time (§ The model).
 
 5. Pull strength — how hard the written pitch pulls back
    (§ Harmonic lock).
@@ -84,8 +84,8 @@ step it was written on.**
    model holds no reference pitch and none has to be chosen.
 
 7. The **objective** sums that score over the sonorities in the
-   selection, together with a **pull** on each note toward the pitch it
-   was written at (§ The model).
+   selection, together with a **pull** toward where the notes were
+   written (§ The model).
 
 8. A small box is a sonority whose notes share a strong virtual
    fundamental, so the score measures root fusion — Terhardt's
@@ -112,10 +112,10 @@ step it was written on.**
 5. The pull is toward that recovered step rather than the note's
    current cents, which makes the operation idempotent.
 
-6. The window is spent before the solve, in building a note's
+6. The window is spent before the solve, in building a strand's
    shortlist (§ What the solver takes). `ctx:noteProjection` already
-   computes both half-gaps, but returns only the smaller
-   (`viewContext.lua:42`); the two-sided window is new.
+   computes both neighbours, but returns only the smaller half-gap
+   (`viewContext.lua:40-42`); the two-sided window is new.
 
 7. In 12-EDO the window never binds. Widening it to two and then four
    half-steps, at a pull strength in the usable band (§ Harmonic lock),
@@ -236,80 +236,126 @@ step it was written on.**
 
 1. The cost lives on a whole sonority at once rather than on its pairs.
 
-2. Take the sonority current at an onset to be the last `n` distinct
-   pitches struck.
+2. A **step-class** is a step of the notation together with every step
+   an octave from it. Take the sonority current at an onset to be the
+   last `n` distinct step-classes struck.
 
-3. A block chord and an arpeggio of the same chord then hand the
-   objective the same set.
+3. The score quotients out the octave (§ What "in tune" means), so a
+   step-class's members carry one set of coords between them.
 
-4. *Distinct* carries weight: a plain last-`n` window counts strikes, so
-   a repeated note spends a slot the harmony has already paid for.
+4. A block chord and an arpeggio of the same chord hand the objective
+   the same set, as do a chord and the same chord doubled at the octave.
 
-5. `n` must exceed the arity of the largest sonority to be recognised
+5. *Distinct* carries weight: a plain last-`n` window counts strikes, so
+   a repeated note spends an entry the harmony has already paid for.
+
+6. `n` must exceed the arity of the largest sonority to be recognised
    when spread out in time. It must exceed it strictly, or else each
    sonority displaces its predecessor whole and the passage falls apart
    into independent solves.
 
-6. Each note has one detune, chosen once for its whole length.
+7. Each note has one detune, chosen once for its whole length.
 
-7. The pull kills comma drift: each note is held near where it was
+8. The pull kills comma drift: each note is held near where it was
    written, so the piece cannot drift by syntonic commas the way naïve
    chained-JI does.
 
-8. It also stops the solver collapsing a sonority into a drone, the box
+9. It also stops the solver collapsing a sonority into a drone, the box
    being globally minimised at zero by putting every note on one pitch.
 
-9. A note in two sonorities has one detune serving both, and takes the
-   best compromise they can agree on. That coupling is what makes this
-   one global problem rather than a bag of chords.
-
-10. Two notes written on the same step share an anchor and hold one
-    entry between them, the later strike replacing the earlier.
+10. A note in two sonorities has one detune serving both, and takes the
+    best compromise they can agree on. That coupling is what makes this
+    one global problem rather than a bag of chords.
 
 11. The objective is evaluated once per onset, over the set current when
     every note struck there has been placed.
 
+## The strand
+
+1. The notes of a step-class that overlap in time are a **strand**. They
+   hold one tuning between them.
+
+2. The constraint is acoustic where the sonority is harmonic. Two notes
+   of a step-class sounding at once at different tunings beat, whatever
+   the window remembers.
+
+3. The window can forget a note that is still sounding, being a memory
+   of what was struck rather than a record of what sounds. Under a
+   five-class window a D held through the following chord has left the
+   sonority by the time its octave is struck, and with nothing to hold
+   them the two part by a syntonic comma.
+
+4. A note that overlaps nothing else in its class starts a new strand,
+   which retunes freely: one step takes one tuning under the ii and
+   another under the V.
+
+5. A note held across a chord change therefore bends the harmony to it
+   rather than the reverse. Holding the ii's D through the V costs the V
+   0.118 of box and leaves the D where the ii put it.
+
+6. The strand is what earns the collapse to step-classes: an entry
+   carries one tuning at a time only because every note that could write
+   it agrees.
+
 ## What the solver takes
 
-1. The solver takes notes and returns a choice for each. It knows
+1. The solver takes strands and returns a choice for each. It knows
    nothing of tempers, targets or ratios; every conversion has happened
    before it is called.
 
-2. A **candidate** is a point placed on the pitch line: absolute cents,
-   and the coords of § What "in tune" means.
+2. The solver's pitch line is reduced into the octave, the score being
+   unable to tell a point from the same point an octave away
+   (§ What a target is). A strand's notes may sit in several registers,
+   and one reading serves them all.
 
-3. A note arrives as `{ onset, anchor, shortlist }`. The **anchor** is
-   the absolute cents of the step it was written on; the **shortlist**
-   is the candidates it may take.
+3. A **candidate** is a point placed on that line: cents, and the coords
+   of § What "in tune" means.
 
-4. The anchor does two jobs — what the pull pulls toward, and the
-   identity under which a sonority counts distinct pitches
-   (§ The model).
+4. A strand arrives as `{ onsets, class, anchor, shortlist }`. The
+   **onsets** are where its notes are struck, the **anchor** is where
+   the step they were written on falls on that line, the **class** is
+   the step-class it belongs to, and the **shortlist** is the candidates
+   it may take.
 
-5. Beside the notes it takes the sonority size and the pull strength,
+5. The anchor is what the pull pulls toward. The class is the identity
+   under which a sonority counts distinct entries (§ The model), so two
+   strands of one class are one entry in turn rather than two at once.
+
+6. Beside the strands it takes the sonority size and the pull strength,
    and nothing else.
 
-6. It returns an index per note into that note's shortlist. The command
-   reads the chosen candidate's cents and seats them as
-   `(pitch, detune)`.
+7. It returns an index per strand into that strand's shortlist. The
+   command reads the chosen candidate's cents and seats them as
+   `(pitch, detune)` on every note of the strand, each in its own
+   register.
 
-7. Building a shortlist — the target's points, in every octave, that
-   fall inside the note's window (§ The window) — is `tuning.lua`'s
-   work, and the only place the notation and the target meet.
+8. Building a strand's shortlist — the target's points, in every octave,
+   that fall inside the windows of all its notes (§ The window) — is
+   `tuning.lua`'s work, and the only place the notation and the target
+   meet.
 
-8. Fixing a note is a shortlist of one, and nothing in the solver
-   distinguishes it. A collar note (§ Seams) is that. It still
-   contributes its coords to every sonority it joins, and its pull is a
-   constant that cannot move the answer.
+9. Those windows coincide wherever the notation's period divides the
+   octave, the scale then repeating identically in every register.
 
-9. An empty shortlist is asserted against rather than handled. An
-   excluded point does not score badly — it does not score, so the solve
-   converges, answers confidently, and answers differently under a
-   target the author took for a small variation.
+10. Where it does not, a step usually has no octave among the scale's
+    steps at all, and a strand gathers unisons only. Where one does fall
+    an octave away it is a different step with different neighbours, so
+    the two windows differ and their intersection can be narrower than
+    either, or empty.
 
-10. The hole is not hypothetical. The 5-limit diamond at odd limit 15
+11. Fixing a strand is a shortlist of one, and nothing in the solver
+    distinguishes it. The collar (§ Seams) arrives as strands of one.
+    Each still contributes its coords to every sonority it joins, and
+    its pull is a constant that cannot move the answer.
+
+12. An empty shortlist is asserted against rather than handled. An
+    excluded strand does not score badly — it does not score, so the
+    solve converges, answers confidently, and answers differently under a
+    target the author took for a small variation.
+
+13. The hole is not hypothetical. The 5-limit diamond at odd limit 15
     holds no point within 50¢ of the tritone, `45/32` being 590¢ at odd
-    limit 45, so against a 12-EDO notation that pitch class has nowhere
+    limit 45, so against a 12-EDO notation that step-class has nowhere
     to go.
 
 ## Solving it
@@ -319,32 +365,40 @@ step it was written on.**
 
 2. The sonority is what puts it in reach. Because a sonority is one set
    over all parts rather than a window per part, the state carries the
-   chosen tuning of the `n−1` most recently distinct pitches and nothing
-   else.
+   chosen tuning of the `n−1` most recently distinct step-classes.
 
-3. It costs `D^(n−1)` states for `D` candidates per note, whatever the
-   number of parts sounding.
+3. It also carries a strand's tuning for as long as that strand has
+   strikes to come, which can outlast the window (§ The strand). That
+   part of the state is bounded by the polyphony rather than by `n`.
 
-4. `D` is small. The twenty three-factor products of
+4. Where no strand outlasts the window it costs `D^(n−1)` states for `D`
+   candidates per step-class, whatever the number of parts sounding.
+
+5. `D` is small. The twenty three-factor products of
    `{1, 3, 5, 7, 9, 11}` put on average 1.7 points inside a 12-EDO
    window and never more than three; the 5-limit diamond at odd limit 15
    never more than two. At three, `n=6` is 243 states and `n=8` is
    2,187.
 
-5. An onset carrying `m` simultaneous notes enumerates `D^m` placements
-   against each state, so a wide chord costs more than a wide `n`.
+6. Collapsing the octave is what holds the count down where a chord is
+   doubled. A four-voice chord doubled at two of its notes holds four
+   step-classes rather than six, so `n` stays at five rather than
+   climbing to seven, and at three candidates the count is 81 states
+   rather than 729.
 
-6. Counting distinct pitches (§ The model) is what keeps `n` small
-   enough for those counts to stay in reach.
+7. An onset carrying `m` simultaneous strands enumerates `D^m`
+   placements against each state. A note added to a chord widens `m` and
+   forces `n` up with it (§ The model), so it costs a factor of `D` more
+   than a note added to `n` alone.
 
-7. The DP is exact, not causal: the passage is solved globally and the
+8. The DP is exact, not causal: the passage is solved globally and the
    pull balanced across all of it at once, where a left-to-right chase
    accumulates drift.
 
-8. Beyond a stated budget on the state count an annealer takes over,
-   though the measured `D` leaves ordinary material far inside it. It is a
-   fallback because its noise does not shrink with the correction it is
-   there to compute — the spike disagreed with itself by about 2¢
+9. Beyond a stated budget on the state count an annealer takes over,
+   though the measured `D` leaves ordinary material far inside it. It is
+   a fallback because its noise does not shrink with the correction it
+   is there to compute — the spike disagreed with itself by about 2¢
    between seeds where the whole correction averaged 1.9¢, and a solver
    whose error is half its output is not solving anything.
 
@@ -356,24 +410,31 @@ step it was written on.**
 2. It is **harmonic lock** on the modal: a field beside the scope, set
    per invocation.
 
-3. The pull is quadratic in the note's deviation from its anchor,
-   normalised by the half-width of the window on the side it moved. One
-   dial value then means the same thing under any notation.
+3. The pull is quadratic in a strand's deviation from its anchor,
+   normalised by the half-width of the window its notes share on the
+   side it moved. One dial value then means the same thing under any
+   notation.
 
-4. A worked case fixes the scale. Under the 7-limit diamond at odd limit
+4. It is counted once per strand rather than once per note, which is
+   what makes an octave doubling change no answer at all. The box
+   already charges a doubling nothing (§ The model); counted per note
+   the pull would charge it twice, halving the strength at which a
+   written C7's doubled seventh gives up its otonal tuning.
+
+5. A worked case fixes the scale. Under the 7-limit diamond at odd limit
    9, a written C7 takes the otonal `4:5:6:7` below a pull of 0.97 and
    the Pythagorean `16/9` above it, trading 0.36 of box against 27¢ of
    fidelity.
 
-5. So the dial's useful travel is roughly 0 → 2, and 1 is where the
+6. So the dial's useful travel is roughly 0 → 2, and 1 is where the
    commonest trade turns over.
 
-6. At the free end the solve is ambiguous rather than expressive:
+7. At the free end the solve is ambiguous rather than expressive:
    several tunings score alike and the winner is arbitrary rather than
    musical. At the stiff end it is a no-op. The usable band is the
    middle.
 
-7. The pull rather than `n` bounds an edit's blast radius: at a pull
+8. The pull rather than `n` bounds an edit's blast radius: at a pull
    near 1, changing one note of twenty moved two or three of the others,
    by under 4¢.
 
@@ -459,10 +520,17 @@ step it was written on.**
    is the smallest that buys any; the other bound on `n` is the state
    count (§ Solving it).
 
-3. Whether a sonority holds pitches or pitch classes. The octave
-   quotient gives `C4` and `C5` the same coords, so they should be one
-   entry — but they remain two variables, and nothing in the objective
-   stops them drifting apart.
+3. Whether the sonority should hold what is sounding as well as what was
+   struck. A held note leaves the window while it still sounds
+   (§ The strand), and what is struck after it in another class is then
+   tuned without reference to it. The coupling usually survives
+   regardless, each note being tuned against its predecessors and so, at
+   one remove, against the note still held. What breaks that chain is a
+   run of notes the target fixes outright, which a sparse target makes
+   ordinary — the 5-limit diamond at odd limit 15 fixes nine of twelve
+   classes. Behind a run of five such, the answer moved by a syntonic
+   comma. Taking in everything sounding closes it at 27 times the state
+   count.
 
 4. Whether the pull wants a shape. A flat window with a quadratic pull
    was enough to make the spike stable; whether a well — soft near the
@@ -478,11 +546,10 @@ step it was written on.**
    lands on a target point, where a blend lands between two. It would
    be a post-pass on the solved displacement, idempotent for the same
    reason the solve is (§ The window) — re-derive the target from the
-   recovered step, and α applied twice is α rather than `1−(1−α)²`. It
-   waits on there being off-grid material to soften: capture snaps to
-   the active temper (`design/midi-capture.md`), an import arrives on
-   its source's grid, and this command's own output is the only
-   off-grid material Continuum makes.
+   recovered step, and α applied twice is α rather than `1−(1−α)²`.
+   There is no shortage of material for it: switching temper relabels
+   rather than moves, so a take authored under one notation reads wholly
+   off the grid of the next.
 
 7. Where the key belongs. A root says where a scale sits in sound;
    which of a target's points the material meets is a further question,

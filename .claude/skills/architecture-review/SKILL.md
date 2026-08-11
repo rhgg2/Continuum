@@ -5,34 +5,23 @@ disable-model-invocation: true
 ---
 
 Survey a subsystem for architectural friction. The output is a survey
-and not a proposal: what the code is, not what to do about it. It lands
-in `design/` — amending the live doc where one exists, so the review
-never stands a second account beside the first.
+rather than a proposal. 
 
 ## 1. Scope
 
-Take the direction I named. Absent one, run `git log --oneline -400
---name-only --pretty=format: -- '*.lua'` and count the files; churn
-picks the target more honestly than reading does.
+Whatever is named in the invocation; failing that, run `git log
+--oneline -400 --name-only --pretty=format: -- '*.lua'` and pick
+whatever has been most active recently.
 
-**Done when** one file or cluster is named, with its churn share and
-its size.
+## 2. Research
 
-## 2. Read the prior art before anything else
+search `design/` an `plan/` for relevant live proposals that may bear
+on what you propose. For the history, check also `design/archive/`,
+`design/decisions.md` and `doc/oddities.md`.
 
-`ls design/ plan/` and read what is live on the target. Design docs
-are live proposals, not settled decisions, and may already hold
-conclusions you would reach; `design/decisions.md` and
-`design/archive/` hold it settled earlier.
-
-**Done when** you can say what has been proposed about this target, or
-that nothing has.
-
-## 3. Map the structure
-
-`map_query` with `module=<target>`, and `kind='uses'` on the
-orchestrating function for the call graph: deterministic, free, and it
-gives each brief real line ranges to name.
+Also map the call graph using `map_query` with `module=<target>`, and
+`kind='uses'` on the orchestrating function: deterministic, free, and
+it gives you real line ranges for the next step.
 
 **Check in.** Name the target with its churn share and size, what
 `design/` and `plan/` already propose about it, and the clusters you
