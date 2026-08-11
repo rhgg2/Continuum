@@ -32,6 +32,29 @@ scale coordinate.**
    library drops the four. Divergence from a library source is therefore
    measured on the scale alone.
 
+6. The **library form** of a temper is that copy: the four dropped and the
+   derived stamps refreshed at the default root. `publish` writes it, and the
+   divergence checks compare the two copies in it — the library copy is
+   reduced as well as the project one. `tuning.unrooted` computes it, and
+   `library` takes it per key as the form that tier keeps, so the tier logic
+   never learns what a root is.
+
+   Reducing both sides was not the first plan; the library copy looked like a
+   fixed point, since it carries no root to drop. It isn't, because the form
+   re-derives: a library copy stored before `rootCents` existed carries no
+   stamps, and one round-tripped through `util.serialise` carries cents a
+   `tostring` short of the recomputed ones. Both read as drift against a
+   freshly derived project copy, and a stock 19EDO forked and rooted duly wore
+   the modified badge. The comparison is therefore between canonical forms,
+   and publishing heals the library copy it compared against. The narrower
+   reading — that derived state has no business being persisted at all, and
+   `findTemper` should derive on read — is a separate question, and `tidy`,
+   which compares whole, is still exposed to it.
+
+7. `tidy` and `revert` go on comparing and copying whole. `tidy` destroys a
+   project copy, so it needs identity rather than identity-of-scale; `revert`
+   restores the library's copy, so it drops the root the project copy carried.
+
 ## Sound and notation
 
 1. The root fixes where the scale sits in sound and which octave numbers
@@ -164,7 +187,9 @@ scale coordinate.**
 5. `temperEditor.lua` gains rows for the four authored fields, and
    restates `rootStep` when a step edit renumbers the steps below the
    root, so the correspondence goes on naming the step it named. The copy
-   it publishes to the library drops the four (§ What a root is).
+   it publishes to the library drops the four (§ What a root is). `rootPitch`
+   is spelled beside its number in the untempered twelve-name convention —
+   `60` reads `C4` — since the temper's own naming is the thing the root fixes.
 
 6. Deleting the step a root names is the one edit with no step to
    renumber onto: the editor restates the root on the unison at the

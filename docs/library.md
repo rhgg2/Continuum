@@ -39,14 +39,17 @@ share it:
 - **localize** (`localize`, `forkToProject`) — copy-on-use: picking an entry
   for a take or channel copies it into project if absent. A synthetic name or
   an existing project copy is a no-op.
-- **publish** (`publish`) — project copy → library. `publishOverwrites`
-  reports when it would clobber a *divergent* library copy so the editor can
-  confirm first; a fresh name or an identical copy publishes silently.
-- **revert** (`revert`) — library copy → project, discarding project drift.
-  No-op when there is no library copy to fall back to.
+- **publish** (`publish`) — project copy → library, in the library form of that
+  copy. `publishOverwrites` reports when it would clobber a *divergent* library
+  copy so the editor can confirm first; a fresh name or an identical copy
+  publishes silently.
+- **revert** (`revert`) — library copy → project, whole, discarding project
+  drift and any project-tier-only state the copy carried. No-op when there is
+  no library copy to fall back to.
 - **tidy** (`tidy`) — drop project entries that deep-equal their library
   source and aren't in the passed `inUse` set, in one undo entry; returns the
-  names removed.
+  names removed. It compares whole, since it destroys a project copy: identity,
+  not identity of the library form.
 - **delete** (`delete`) — remove a name from the `project` or `global`
   (library) tier. Synthetic names never delete.
 - **import** (`importFactory`, `reloadPlan`, `factoryOverwrites`) — copy
@@ -58,8 +61,15 @@ share it:
 ## Modified badge
 
 `modified` is true when a project copy exists, shadows a same-named library
-source, and differs from it (`util.deepEq`). Both copies are local, so it is
-computed on demand — no provenance metadata, no hashes. The tree and pickers
+source, and differs from it (`util.deepEq`). Divergence is measured between the
+library *forms* of the two copies, not the copies: a key may carry
+project-tier-only state — a temper's root places a scale, and placing it is not
+drifting from it. The form is injected per key as `libraryForm`, so the library
+never learns what the state means. Reducing the library copy too is not
+symmetry for its own sake: for tempers the form re-derives, which is what lets
+a copy stored before a derived field existed, or stored at a coarser float
+precision, still read as the same scale. Both copies are local, so it is computed on demand — no
+provenance metadata, no hashes. The tree and pickers
 render it as a dirty marker on the project row.
 
 ## Synthetic floor

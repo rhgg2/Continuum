@@ -23,7 +23,7 @@ local editing  = nil   -- { key, buf } in-flight pitch token; commits on deactiv
 
 local DIVIDER_GRAB = 7     -- px hit-height of the steps / generators splitter
 local MIN_GEN_AREA = 175   -- px kept below the splitter for the generators pane
-local MIN_TOP_AREA = 88    -- px kept above it for the step table
+local MIN_TOP_AREA = 110   -- px kept above it for the two header rows + step table
 
 -- Generators pane state. equal keeps relative + absolute degree specs mirrored:
 -- editing either updates the other and the divisions readout, live.
@@ -147,6 +147,19 @@ local function setPeriodAsStep(on)
   temperWrite(t, false)
 end
 
+-- One writer for the four root fields; each box names its key. Clamp policy
+-- differs per field — see docs/tuning.md § The root.
+local function setRoot(key, value)
+  local t = cloneForEdit(); if not t then return end
+  if key == 'rootPitch' then
+    value = math.min(127, math.max(0, math.floor(value)))
+  elseif key == 'rootStep' then
+    value = math.min(#t.cents, math.max(1, math.floor(value)))
+  end
+  t[key] = value
+  temperWrite(t, false)
+end
+
 local function addStep()
   local t = cloneForEdit(); if not t then return end
   local maxC = t.cents[#t.cents] or 0
@@ -159,6 +172,9 @@ local function removeStep(i)
   local t = cloneForEdit(); if not t or i == 1 or #t.pitches <= 1 then return end
   table.remove(t.pitches, i)
   table.remove(t.stepNames, i)
+  -- Stopgap until the root is restated across step edits: computeRootCents
+  -- indexes cents[rootStep], so a root past the end of a shortened scale raises.
+  if t.rootStep and t.rootStep > #t.pitches then t.rootStep = #t.pitches end
   temperWrite(t, false)
 end
 
@@ -300,6 +316,10 @@ end
 local STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44
 local COL_LABELS = { 'step', 'pitch', 'name', '' }
 
+-- The root picker's 128 spellings; index is pitch + 1.
+local MIDI_NAMES = {}
+for p = 0, 127 do MIDI_NAMES[p + 1] = tuning.midiName(p) end
+
 -- Pitch-token text box: shows `current` until focused; commits via commit(tok) on
 -- deactivate only when the token parses — invalid input reverts next frame.
 local function tokenBox(idStr, key, current, commit)
@@ -310,6 +330,43 @@ local function tokenBox(idStr, key, current, commit)
     if tuning.scalaPitch(editing.buf) then commit(editing.buf) end
     editing = nil
   end
+end
+
+-- Numeric root box, with tokenBox's in-flight discipline: shows the buffer
+-- while focused, commits on deactivate only when the text parses as a number.
+local function rootBox(key, current, width)
+  local shown = (editing and editing.key == key) and editing.buf or current
+  ImGui.SetNextItemWidth(ctx, width)
+  local rv, buf = ImGui.InputText(ctx, '##' .. key, shown)
+  if rv then editing = { key = key, buf = buf } end
+  if ImGui.IsItemDeactivatedAfterEdit(ctx) and editing and editing.key == key then
+    local n = tonumber(editing.buf)
+    if n then setRoot(key, n) end
+    editing = nil
+  end
+end
+
+-- The root under the period row: pitch/detune say where the unison sounds,
+-- step/octave what it's called. See docs/tuning.md § The root.
+local function drawRootRow(temper)
+  local pitch = temper.rootPitch or 0
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, 'Root:')
+  ImGui.SameLine(ctx)
+  rootBox('rootPitch', tostring(pitch), 40)
+  ImGui.SameLine(ctx)
+  local picked = chrome.dropdown('rootPitchName', tuning.midiName(pitch), MIDI_NAMES)
+  if picked then setRoot('rootPitch', picked - 1) end
+  ImGui.SameLine(ctx)
+  rootBox('rootDetune', ('%.2f'):format(temper.rootDetune or 0), 60)
+  ImGui.SameLine(ctx)
+  ImGui.Text(ctx, '¢  =  step')
+  ImGui.SameLine(ctx)
+  rootBox('rootStep', tostring(temper.rootStep or 1), 40)
+  ImGui.SameLine(ctx)
+  ImGui.Text(ctx, 'oct')
+  ImGui.SameLine(ctx)
+  rootBox('rootOctave', tostring(temper.rootOctave or -1), 40)
 end
 
 -- Period sits in its own box, unless periodAsStep moves it to the table's last
@@ -748,6 +805,7 @@ local function drawStepsTop()
   end
   if not editable then ImGui.BeginDisabled(ctx) end
   chrome.row(function() drawHeader(temper) end)
+  chrome.row(function() drawRootRow(temper) end)
   if not editable then ImGui.EndDisabled(ctx) end
   ImGui.Separator(ctx)
   if not editable then ImGui.BeginDisabled(ctx) end

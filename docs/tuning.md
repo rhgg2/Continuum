@@ -281,6 +281,14 @@ adds 1 to the displayed octave when `step >= octaveStep`.
    constants they replace. The four authored fields are read through,
    never written back, so presets keep the shape they were written in.
 
+3. The editor clamps `rootPitch` and `rootStep` on entry, since they derive
+   indexes into the scale; `rootOctave` and `rootDetune` are left free, since
+   an out-of-range value only moves the root's display label, not which
+   pitch it names. The root picker spells `rootPitch` in the untempered
+   twelve names (sharps, signed octave) — deliberately not the tracker's
+   `-`-marked naturals, since the temper's own naming is the thing a root
+   fixes and so can't be used to name the root itself.
+
 ### Snapping and clamping
 
 - `midiToStep` snaps to the nearest scale point **including the period

@@ -4,7 +4,8 @@
 --invariant: no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
 --invariant: each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall
 
-local util  = require 'util'
+local util   = require 'util'
+local tuning = require 'tuning'   -- pure; only the library form of a temper is wanted here
 
 if not reaper.ImGui_GetBuiltinPath then
   reaper.MB('ReaImGui is required. Install it via ReaPack.', 'Continuum', 0)
@@ -18,8 +19,11 @@ local cm, ds, eventMeta, cmgr, gui = (...).cm, (...).ds, (...).eventMeta, (...).
 local ctx, uiFont   = gui.ctx, gui.uiFont
 local uiSize        = gui.fontSize.ui
 
+-- libraryForm: what the library holds is a scale, what a project holds is a
+-- scale placed, so a temper publishes and compares without its root.
 local lib = util.instantiate('library',
-  { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
+  { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } },
+    libraryForm = { tempers = tuning.unrooted } })
 -- Seed each user library from the factory catalogue on first run (empty tier).
 for _, key in ipairs{ 'swings', 'tempers' } do lib.seedIfEmpty(key) end
 

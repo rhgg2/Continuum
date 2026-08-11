@@ -4,6 +4,7 @@
 -- live in tm_tuning_spec; projection wiring in view_context_spec.
 
 local t      = require('support')
+local util   = require('util')
 local tuning = require('tuning')
 
 local function nameless(cents)
@@ -227,6 +228,31 @@ return {
       t.eq(twelve.rootDetune, nil)
       t.eq(twelve.rootStep, nil)
       t.eq(twelve.rootOctave, nil)
+    end,
+  },
+
+  {
+    name = 'unrooted is the library form: the four dropped, the stamps back at the default',
+    run = function()
+      local plain  = rooted{}
+      local placed = rooted{ rootPitch = 69, rootDetune = -101.27, rootStep = 10, rootOctave = 4 }
+
+      local stripped = tuning.unrooted(placed)
+
+      t.truthy(util.deepEq(stripped, plain),
+               'the library form of a placed scale is the scale, stamps and all')
+      t.eq(placed.rootPitch, 69, 'the placed copy is left alone')
+      t.eq(placed.rootCents, 5898.73)
+    end,
+  },
+
+  {
+    name = 'midiName spells a pitch in the untempered twelve names',
+    run = function()
+      t.eq(tuning.midiName(0), 'C-1', 'the bottom of the range is C of octave -1')
+      t.eq(tuning.midiName(60), 'C4')
+      t.eq(tuning.midiName(61), 'C#4', 'sharps, no natural marker')
+      t.eq(tuning.midiName(127), 'G9')
     end,
   },
 

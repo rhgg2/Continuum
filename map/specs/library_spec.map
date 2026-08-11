@@ -1,6 +1,6 @@
-@spec library_spec  src=tests/specs/library_spec.lua  loc=268  cases=17
-@exercises configManager (h.cm)
-@surface   cm:getAt, cm:set, cm:defaultFor
+@spec library_spec  src=tests/specs/library_spec.lua  loc=295  cases=18
+@exercises library (L), configManager (h.cm)
+@surface   L.names, L.getAt, cm:getAt, L.localize, cm:set, L.forkToProject, L.save, L.publish, L.publishOverwrites, L.revert, L.modified, L.tidy, L.delete, L.seedIfEmpty, cm:defaultFor, L.reloadPlan, L.importFactory
 @harness   mk
 
 # Intent
@@ -26,49 +26,69 @@
   @case 'revert overwrites the project copy from its library source'  [harness]  @ 137-147
   @case 'revert no-ops without a library source'  [harness]  @ 150-159
   @case 'modified: false pristine, true divergent, false for a source-less entry'  [harness]  @ 162-179
-  @case 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones'  [harness]  @ 182-205
-  @case 'delete removes from the named tier and refuses synthetic names'  [harness]  @ 208-221
-  @case 'seedIfEmpty stocks an empty library from the factory catalogue, once'  [harness]  @ 224-238
-  @case 'reloadPlan splits absent factory names from divergent library copies'  [harness]  @ 241-254
-  @case 'importFactory copies one entry into the library, refusing synthetic'  [harness]  @ 257-266
+  @case 'libraryForm reduces both copies before comparing, so form-only state is not drift'  [harness]  @ 182-206
+  @case 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones'  [harness]  @ 209-232
+  @case 'delete removes from the named tier and refuses synthetic names'  [harness]  @ 235-248
+  @case 'seedIfEmpty stocks an empty library from the factory catalogue, once'  [harness]  @ 251-265
+  @case 'reloadPlan splits absent factory names from divergent library copies'  [harness]  @ 268-281
+  @case 'importFactory copies one entry into the library, refusing synthetic'  [harness]  @ 284-293
 
 # Uses (outbound edges)
-  @use call cm:getAt  @ 51,53,56,66,76,87,88,90,92,104,113,145,157,200,216,218,220,228,230,235,262,265
-  @use call cm:set  @ 54,173,192,233,246
-  @use call cm:defaultFor  @ 245,262
+  @use call L.names  @ 26
+  @use call L.getAt  @ 40,41,42,43
+  @use call cm:getAt  @ 51,53,56,66,76,87,88,90,92,104,113,145,157,204,227,243,245,247,255,257,262,289,292
+  @use call L.localize  @ 52,55,65
+  @use call cm:set  @ 54,173,200,219,260,273
+  @use call L.forkToProject  @ 74
+  @use call L.save  @ 86,89,91
+  @use call L.publish  @ 103,112,203
+  @use call L.publishOverwrites  @ 131,132,133,197
+  @use call L.revert  @ 144,156
+  @use call L.modified  @ 172,177,178,195,201
+  @use call L.tidy  @ 225
+  @use call L.delete  @ 242,244,246
+  @use call L.seedIfEmpty  @ 256,261
+  @use call cm:defaultFor  @ 272,289
+  @use call L.reloadPlan  @ 278
+  @use call L.importFactory  @ 288,291
 
 # Fields (r read / w write incl. constructor keys)
-  @field w a  @ 186,193
-  @field r add  @ 252
-  @field w b  @ 187,194,198
-  @field w c  @ 188,195
-  @field w cm  @ 12
-  @field w config  @ 21,35,82,99,119,139,152,164,184,210
+  @field w a  @ 213,220
+  @field r add  @ 279
+  @field w b  @ 214,221,225
+  @field w c  @ 215,222
+  @field w cm  @ 12,191
+  @field w config  @ 21,35,82,99,119,139,152,164,186,211,237
   @field w drift  @ 123,127
-  @field r factors  @ 40,41,56,87,88,90,104,145,157
+  @field r factors  @ 40,41,56,87,88,90,104,145,157,192
   @field w factors  @ 22,23,36,37,54,83,86,89,91,100
   @field w factors  @ 121,122,123,126,127,140,141,153,166,167,169,174
-  @field w factors  @ 175,186,187,188,193,194,195,196,211,212,233
-  @field w factors  @ 248
+  @field w factors  @ 175,187,188,192,200,204,213,214,215,220,221,222
+  @field w factors  @ 223,238,239,260,275
   @field r factory  @ 29
   @field w fresh  @ 121
   @field w g  @ 37
-  @field w global  @ 23,37,83,125,141,169,185,212
-  @field w identity  @ 13,23,211
+  @field w global  @ 23,37,83,125,141,169,187,212,239
+  @field w identity  @ 13,23,238
   @field r library  @ 28
-  @field w mine  @ 22,100,153,166,174,196,211
+  @field w libraryForm  @ 192
+  @field w mine  @ 22,100,153,166,174,223,238
   @field w name  @ 19,33,47,61,70,80,97,108,117,137,150,162
-  @field w name  @ 182,208,224,241,257
-  @field w only  @ 233
-  @field r overwrite  @ 253
+  @field w name  @ 182,209,235,251,268,284
+  @field w only  @ 260
+  @field r overwrite  @ 280
   @field w p  @ 36,37
+  @field w placed  @ 188,200
   @field r project  @ 27
-  @field w project  @ 22,36,100,120,140,153,165,211
+  @field w project  @ 22,36,100,120,140,153,165,188,238
   @field w run  @ 20,34,48,62,71,81,98,109,118,138,151,163
-  @field w run  @ 183,209,225,242,258
+  @field w run  @ 183,210,236,252,269,285
+  @field r s  @ 204
+  @field w s  @ 187,188,200
   @field w same  @ 122,126
-  @field w shared  @ 23,83,140,141,167,169,175,212
+  @field w shared  @ 23,83,140,141,167,169,175,239
+  @field w span  @ 187,188,192,200,204
   @field w swings  @ 13,22,23,36,37,83,100,120,125,140,141,153
-  @field w swings  @ 165,169,185,211,212
-  @field w synthetic  @ 13
+  @field w swings  @ 165,169,187,188,192,212,238,239
+  @field w synthetic  @ 13,191
   @field w tempers  @ 13

@@ -179,6 +179,33 @@ return {
     end,
   },
   {
+    name = 'libraryForm reduces both copies before comparing, so form-only state is not drift',
+    run = function(harness)
+      -- The library copy is stale: it carries a derived field the current code
+      -- would recompute differently, and none of the project-only state.
+      local h = harness.mk{ config = {
+        global  = { swings = { s = { factors = { 'A' }, span = 3 } } },
+        project = { swings = { s = { factors = { 'A' }, span = 4, placed = true } } },
+      } }
+      local L = util.instantiate('library', {
+        cm = h.cm, synthetic = {},
+        libraryForm = { swings = function(s) return { factors = s.factors, span = 9 } end },
+      })
+
+      t.truthy(not L.modified('swings', 's'),
+               'neither the project-only state nor the library copy stale field is drift')
+      t.truthy(not L.publishOverwrites('swings', 's'),
+               'so publishing over that library copy overwrites nothing divergent')
+
+      h.cm:set('project', 'swings', { s = { factors = { 'B' }, span = 4, placed = true } })
+      t.truthy(L.modified('swings', 's'), 'a difference the form keeps is drift')
+
+      L.publish('swings', 's')
+      t.deepEq(h.cm:getAt('global', 'swings').s, { factors = { 'B' }, span = 9 },
+               'publish writes the library form of the project copy')
+    end,
+  },
+  {
     name = 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones',
     run = function(harness)
       local h = harness.mk{ config = {

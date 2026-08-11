@@ -97,6 +97,13 @@ function tuning.derive(temper)
   return temper
 end
 
+--contract: copy with the four root fields dropped and stamps refreshed at the default root
+function tuning.unrooted(temper)
+  local out = util.deepClone(temper)
+  out.rootPitch, out.rootDetune, out.rootStep, out.rootOctave = nil, nil, nil, nil
+  return tuning.derive(out)
+end
+
 local function edo(n, names)
   local pitches = {}
   for i = 1, n do pitches[i] = (i - 1) .. '\\' .. n end
@@ -460,6 +467,15 @@ function tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)
 end
 
 ----- Display
+
+-- The untempered twelve names, for spelling a root — the temper's own naming
+-- is what a root fixes, so naming it in-temper would be circular. See docs/tuning.md § The root.
+local MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B' }
+
+--contract: MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')
+function tuning.midiName(pitch)
+  return MIDI_NAMES[pitch % 12 + 1] .. (math.floor(pitch / 12) - 1)
+end
 
 --contract: (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep
 function tuning.stepToParts(temper, step, octave)

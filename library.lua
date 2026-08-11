@@ -3,8 +3,9 @@
 
 local util = require 'util'
 
-local cm        = (...).cm
-local synthetic = (...).synthetic or {}
+local cm          = (...).cm
+local synthetic   = (...).synthetic or {}
+local libraryForm = (...).libraryForm or {}
 
 local lib = {}
 
@@ -14,6 +15,13 @@ local function synth(key)       return synthetic[key]           or {} end
 local function projectTier(key) return cm:getAt('project', key) or {} end
 local function libraryTier(key) return cm:getAt('global',  key) or {} end
 local function factoryTier(key) return cm:defaultFor(key)       or {} end
+
+-- Some state is project-tier only; publish and modified compare the library
+-- *form* of each copy, not the copy itself. See docs/library.md § Modified badge.
+local function asLibrary(key, value)
+  local form = libraryForm[key]
+  return (form and value ~= nil) and form(value) or value
+end
 
 -- Publishable/revertable source for a name: the library copy, never the
 -- project copy. (The factory catalogue is a seed source, not a live source.)
@@ -71,7 +79,7 @@ function lib.modified(key, name)
   if p == nil then return false end
   local src = sourceOf(key, name)
   if src == nil then return false end
-  return not util.deepEq(p, src)
+  return not util.deepEq(asLibrary(key, p), asLibrary(key, src))
 end
 
 ----- Localize / fork
@@ -106,7 +114,7 @@ end
 --contract: project copy -> library tier (deepClone via cm:set); no-op when there is no project copy
 function lib.publish(key, name)
   local p = projectTier(key)[name]
-  if p ~= nil then writeTier('global', key, name, p) end
+  if p ~= nil then writeTier('global', key, name, asLibrary(key, p)) end
 end
 
 --contract: true iff publish would overwrite a divergent library copy (both tiers exist and differ)
@@ -115,7 +123,7 @@ function lib.publishOverwrites(key, name)
   local p = projectTier(key)[name]
   local g = libraryTier(key)[name]
   if p == nil or g == nil then return false end
-  return not util.deepEq(p, g)
+  return not util.deepEq(asLibrary(key, p), asLibrary(key, g))
 end
 
 --contract: library source -> project, discarding drift; no-op if no library copy exists
