@@ -750,6 +750,11 @@ local function drawTracker()
           local n = utf8.len(text)
           overrides = overrides or {}
           overrides[n-2], overrides[n-1], overrides[n] = 'negative', 'negative', 'negative'
+        elseif hintPart == 'pitch' and text then
+          -- The armed octave is 0: one char, right-aligned to the end of the
+          -- pitch field, tinted as the negative it will become.
+          overrides = overrides or {}
+          overrides[pitchWidth] = 'negative'
         elseif hintPart == 'pb' then
           textCol = hintSign < 0 and 'negative' or (ghost and 'ghost' or textCol)
         end

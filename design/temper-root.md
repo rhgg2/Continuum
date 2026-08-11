@@ -30,14 +30,14 @@ scale coordinate.**
    root says it sounds, and every other step shifts by the change. Every
    other scale edit leaves the placement where it was.
 
-5. Root state is project-tier. The library and factory copies of a temper
+6. Root state is project-tier. The library and factory copies of a temper
    carry none of the four fields, so what the library holds is a scale and
    what a project holds is a scale placed. Editing a root field forks the
    row to project as any other edit does, and publishing back to the
    library drops the four. Divergence from a library source is therefore
    measured on the scale alone.
 
-6. The **library form** of a temper is that copy: the four dropped and the
+7. The **library form** of a temper is that copy: the four dropped and the
    derived stamps refreshed at the default root. `publish` writes it, and the
    divergence checks compare the two copies in it — the library copy is
    reduced as well as the project one. `tuning.unrooted` computes it, and
@@ -56,7 +56,7 @@ scale coordinate.**
    `findTemper` should derive on read — is a separate question, and `tidy`,
    which compares whole, is still exposed to it.
 
-7. `tidy` and `revert` go on comparing and copying whole. `tidy` destroys a
+8. `tidy` and `revert` go on comparing and copying whole. `tidy` destroys a
    project copy, so it needs identity rather than identity-of-scale; `revert`
    restores the library's copy, so it drops the root the project copy carried.
 
@@ -135,7 +135,7 @@ scale coordinate.**
 
 1. A root puts octaves below −1 in reach. `(69, 0) = (1, 4)` addresses
    −2 to 8 in 12EDO, and the `M` convention for octave −1
-   (`docs/tuning.md` § Display 1) has no answer for −2.
+   (`docs/tuning.md` § Display) has no answer for −2.
 
 2. So a negative octave renders as its magnitude in
    `colour.tracker.negative`, which is what the delay lane already
@@ -162,7 +162,16 @@ scale coordinate.**
    (`trackerView.lua:948-956`). A plain digit sets the magnitude and
    keeps the sign.
 
-7. A period well below the octave puts multiple digits in range. A
+7. An octave the note cannot sit on is refused, not clamped. The tempered
+   path already reads a fold past half a semitone as a rejection; the
+   untempered fallback clamped into MIDI range instead, which under a
+   negating `-` would move a note an octave and say nothing about it.
+
+8. The arm is per part rather than per cell, since a note column now has
+   two fields that arm. The pending flip is matched on its part as well as
+   its row and column, and the sign a digit inherits is its own field's.
+
+9. A period well below the octave puts multiple digits in range. A
    shift-held digit overwrites one place and stays on the row, which
    is how the multi-digit fields already take a value
    (`trackerView.lua:871-873`).

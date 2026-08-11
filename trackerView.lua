@@ -826,7 +826,8 @@ do
   local pendingFlip   -- { row, colIdx, part } | nil
   local function toggleSignFlip(part)
     local row, colIdx = ec:pos()
-    if pendingFlip and pendingFlip.row == row and pendingFlip.colIdx == colIdx then
+    if pendingFlip and pendingFlip.row == row and pendingFlip.colIdx == colIdx
+       and pendingFlip.part == part then
       pendingFlip = nil
     else
       pendingFlip = { row = row, colIdx = colIdx, part = part }
@@ -850,6 +851,7 @@ do
     local armed = pendingFlip and pendingFlip.row == row and pendingFlip.colIdx == colIdx
       and pendingFlip.part
     if armed == 'delay' then return 'delay', -1 end
+    if armed == 'pitch' then return 'pitch', -1 end
     local col = grid.cols[colIdx]
     if not (col and col.type == 'pb') then return end
     if col.normalized and not col.bipolar then return end
@@ -871,10 +873,10 @@ do
     -- keep = the shift-held value gesture: overwrite one place, stay on the row;
     -- plain entry (keep nil) zeroes below the place and advances.
     local skipAdvance    = keep or false
-    local function entrySign(old)
+    local function entrySign(old, part)
       if old ~= 0 then return old < 0 and -1 or 1 end
-      local _, sign = tv:entrySignAt(ec:pos())
-      return sign or 1
+      local armed, sign = tv:entrySignAt(ec:pos())
+      return (armed == part and sign) or 1
     end
 
     local function commit(auditionPitch, auditionVel, auditionDetune)
@@ -909,24 +911,39 @@ do
 
       elseif part == 'pitch' then  -- octave digit
         if not util.isNote(evt) then return end
+        -- The octave under the cursor, as displayed (octaveStep bump included),
+        -- so both gestures act on the number the cell shows.
+        local temper = ctx:activeTemper()
+        local step, bump, old
+        if temper then
+          local index
+          step, index = tuning.midiToStep(temper, evt.pitch, evt.detune)
+          bump = step >= temper.octaveStep and 1 or 0
+          old  = index + bump
+        else
+          old = math.floor(evt.pitch / 12) - 1
+        end
+
         local oct
-        if char == string.byte('-') then oct = -1
+        if char == string.byte('-') then
+          if old == 0 then toggleSignFlip('pitch'); return end
+          oct = -old
+          skipAdvance = true
         else
           local d = char - string.byte('0')
           if d < 0 or d > 9 then return end
-          oct = d
+          oct = entrySign(old, 'pitch') * d
         end
+
         -- Octave column edits the period-cycle octave: keep the step,
         -- re-derive, reject if it clamps out of MIDI range (|detune|>½ st).
-        local temper = ctx:activeTemper()
         local pitch, detune
         if temper then
-          local step = tuning.midiToStep(temper, evt.pitch, evt.detune)
-          local bump = step >= temper.octaveStep and 1 or 0
           pitch, detune = tuning.stepToMidi(temper, step, oct - bump)
           if math.abs(detune) > 50 then return end
         else
-          pitch, detune = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127), evt.detune
+          pitch, detune = (oct + 1) * 12 + evt.pitch % 12, evt.detune
+          if pitch < 0 or pitch > 127 then return end
         end
         edit.assign(evt, { pitch = pitch, detune = detune })
         return commit(pitch, evt.vel, detune)
@@ -965,7 +982,7 @@ do
             if d < 0 or d > 9 then return end
             mag = util.clamp(util.setDigit(math.abs(old), d, place, 10, keep), 0, 999)
           end
-          newDelay = entrySign(old) * mag
+          newDelay = entrySign(old, 'delay') * mag
         end
 
         -- Authored delay is intent: write through unbounded (modulo the
@@ -1047,7 +1064,7 @@ do
             mag = digit == 0 and 1000 or mag % 1000
           end
         end
-        update = { val = entrySign(old) * mag }
+        update = { val = entrySign(old, 'pb') * mag }
       end
     else
       return

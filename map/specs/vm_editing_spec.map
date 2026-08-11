@@ -1,110 +1,115 @@
-@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=538  cases=15
+@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=567  cases=16
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm)
-@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel, vm:editEvent, ec:setSelection
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, vm:entrySignAt, cmgr:invoke, fm:dump, tm:getChannel, ec:setSelection
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
   Exercises vm editing commands against seeded tm state.
 
 # Cases
-  @case 'delete on delay stop zeroes delay metadata'  [harness]  @ 14-38
-  @case 'growNote past a same-pitch successor authors a tail past, tm clips realised'  [harness]  @ 47-67
-  @case 'noteOff at the rendered tail row reopens authored endppq to util.OPEN'  [harness]  @ 75-92
-  @case 'noteOff reopens a tail to util.OPEN under fractional ppqPerRow'  [harness]  @ 102-121
-  @case 'placing a new note clears same-pitch coverage in other cols of the channel'  [harness]  @ 131-171
-  @case 'placing a new note clamps its endppq to a same-pitch successor in another col'  [harness]  @ 179-215
-  @case 'delete on pitch tied predecessor extends to next note'  [harness]  @ 223-256
-  @case 'growNote past an open-tailed same-pitch predecessor does not throw'  [harness]  @ 266-290
-  @case 'delete on vel inherits from a prior PA event'  [harness]  @ 296-319
-  @case 'delete on pitch over a PA cell is a no-op'  [harness]  @ 325-348
-  @case 'selection pitch delete leaves PAs alone'  [harness]  @ 356-384
-  @case 'selection vel delete deletes PAs and resets note vels'  [harness]  @ 389-415
-  @case 'edit existing PA value reads vel and persists via val'  [harness]  @ 423-448
-  @case 'PA stamped under swing is reachable and deletable'  [harness]  @ 456-513
-  @case 'delete on delay stop is a no-op when delay is already 0'  [harness]  @ 517-536
+  @case 'untempered octave column: minus negates, and refuses an octave out of range'  [harness]  @ 11-33
+  @case 'delete on delay stop zeroes delay metadata'  [harness]  @ 43-67
+  @case 'growNote past a same-pitch successor authors a tail past, tm clips realised'  [harness]  @ 76-96
+  @case 'noteOff at the rendered tail row reopens authored endppq to util.OPEN'  [harness]  @ 104-121
+  @case 'noteOff reopens a tail to util.OPEN under fractional ppqPerRow'  [harness]  @ 131-150
+  @case 'placing a new note clears same-pitch coverage in other cols of the channel'  [harness]  @ 160-200
+  @case 'placing a new note clamps its endppq to a same-pitch successor in another col'  [harness]  @ 208-244
+  @case 'delete on pitch tied predecessor extends to next note'  [harness]  @ 252-285
+  @case 'growNote past an open-tailed same-pitch predecessor does not throw'  [harness]  @ 295-319
+  @case 'delete on vel inherits from a prior PA event'  [harness]  @ 325-348
+  @case 'delete on pitch over a PA cell is a no-op'  [harness]  @ 354-377
+  @case 'selection pitch delete leaves PAs alone'  [harness]  @ 385-413
+  @case 'selection vel delete deletes PAs and resets note vels'  [harness]  @ 418-444
+  @case 'edit existing PA value reads vel and persists via val'  [harness]  @ 452-477
+  @case 'PA stamped under swing is reachable and deletable'  [harness]  @ 485-542
+  @case 'delete on delay stop is a no-op when delay is already 0'  [harness]  @ 546-565
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 28,53,81,110,150,201,243,278,309,337,370,402,435,473,528
-  @use call ec:setPos  @ 31,55,83,112,159,206,244,279,310,338,439,477,486,496,506,529
-  @use call cmgr:invoke  @ 32,56,84,113,245,280,311,339,375,406,497,507,530
-  @use call fm:dump  @ 34,162,210,247,283,314,341,377,408,443,500,509,532
-  @use call tm:getChannel  @ 59,87,116
-  @use call vm:editEvent  @ 160,207,440,478,487
-  @use call ec:setSelection  @ 373,404
+  @use call vm:setGridSize  @ 16,57,82,110,139,179,230,272,307,338,366,399,431,464,502,557
+  @use call ec:setPos  @ 22,60,84,112,141,188,235,273,308,339,367,468,506,515,525,535,558
+  @use call vm:editEvent  @ 23,189,236,469,507,516
+  @use call vm:entrySignAt  @ 30
+  @use call cmgr:invoke  @ 61,85,113,142,274,309,340,368,404,435,526,536,559
+  @use call fm:dump  @ 63,191,239,276,312,343,370,406,437,472,529,538,561
+  @use call tm:getChannel  @ 88,116,145
+  @use call ec:setSelection  @ 402,433
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 91,120,237,272
-  @field w atom  @ 458
-  @field w c58  @ 468
-  @field r ccs  @ 344,380,411,443,500,509
-  @field w ccs  @ 304,332,364,397,430
-  @field r cells  @ 437,481,490,491
-  @field w chan  @ 22,50,51,78,79,107,144,145,194,195,196,237
-  @field w chan  @ 238,239,271,273,301,302,305,330,333,362,366,395
-  @field w chan  @ 398,428,431,463,522
-  @field w col1  @ 373,404
-  @field w col2  @ 373,404
-  @field w colSwing  @ 459
-  @field r cols  @ 152,203,436,474,480,487,489
-  @field r columns  @ 59,87,116
-  @field w config  @ 105,148,199,467
-  @field w currentOctave  @ 148,199
-  @field w data  @ 26,471,526
-  @field r delay  @ 35,533
-  @field w delay  @ 23,50,51,78,79,107,144,145,194,195,196,237
-  @field w delay  @ 238,239,272,274,301,302,330,362,395,428,464,523
-  @field w detune  @ 23,50,51,78,79,107,144,145,194,195,196,237
-  @field w detune  @ 238,239,272,274,301,302,330,362,395,428,464,523
-  @field r endppq  @ 37,63,65,91,120,169,214,255,288,289,535
-  @field w endppq  @ 22,50,51,78,79,107,144,145,194,195,196,237
-  @field w endppq  @ 238,239,271,273,301,302,330,362,395,428,463,522
-  @field r endppqC  @ 66
-  @field w endppqL  @ 237,272
-  @field r evType  @ 345,381,412,438,444,482,490,491,501,510
-  @field w evType  @ 305,333,366,398,431
-  @field r events  @ 59,87,116
-  @field w factors  @ 458
-  @field w frame  @ 464
-  @field w global  @ 471
-  @field r grid  @ 152,203,436,474,480,487,489
-  @field r lane  @ 155,204
-  @field w lane  @ 144,145
-  @field r midiChan  @ 154
-  @field w name  @ 14,47,75,102,131,179,223,266,296,325,356,389
-  @field w name  @ 423,456,517
-  @field w noteDelay  @ 26,526
-  @field r notes  @ 34,59,87,116,162,210,247,283,314,342,378,409
-  @field r notes  @ 532
-  @field w notes  @ 21,49,77,106,143,193,236,270,300,329,360,393
-  @field w notes  @ 427,462,521
-  @field r overflow  @ 483,492,493
-  @field w part1  @ 373,404
-  @field w part2  @ 373,404
-  @field w period  @ 458
-  @field r pitch  @ 60,88,117,165,166,211
-  @field w pitch  @ 22,50,51,78,79,107,144,145,194,195,196,237
-  @field w pitch  @ 238,239,271,273,301,302,305,330,333,362,366,395
-  @field w pitch  @ 398,428,431,463,522
-  @field r ppq  @ 36,60,88,117,165,166,211,251,252,284,285,315
-  @field r ppq  @ 345,381,412,534
-  @field w ppq  @ 22,50,51,78,79,107,144,145,194,195,196,237
-  @field w ppq  @ 238,239,271,273,301,302,305,330,333,362,366,395
-  @field w ppq  @ 398,428,431,463,522
-  @field w project  @ 468
-  @field w row1  @ 373,404
-  @field w row2  @ 373,404
-  @field w rowPerBeat  @ 105,469
-  @field w rpb  @ 459
-  @field w run  @ 15,48,76,103,132,180,224,267,297,326,357,390
-  @field w run  @ 424,457,518
-  @field w seed  @ 20,49,77,106,142,192,235,269,299,328,359,392
-  @field w seed  @ 426,461,520
-  @field w shift  @ 458
-  @field w swing  @ 459,471
-  @field w swings  @ 468
-  @field w take  @ 105,148,199,469
-  @field r type  @ 153
-  @field r vel  @ 318,447
-  @field w vel  @ 22,50,51,78,79,107,144,145,194,195,196,237
-  @field w vel  @ 238,239,271,273,301,302,305,330,333,362,366,395
-  @field w vel  @ 398,428,431,463,522
+  @field r OPEN  @ 120,149,266,301
+  @field w atom  @ 487
+  @field w c58  @ 497
+  @field r ccs  @ 373,409,440,472,529,538
+  @field w ccs  @ 333,361,393,426,459
+  @field r cells  @ 23,24,466,510,519,520
+  @field w chan  @ 14,51,79,80,107,108,136,173,174,223,224,225
+  @field w chan  @ 266,267,268,300,302,330,331,334,359,362,391,395
+  @field w chan  @ 424,427,457,460,492,551
+  @field w col1  @ 402,433
+  @field w col2  @ 402,433
+  @field w colSwing  @ 488
+  @field r cols  @ 18,21,24,181,232,465,503,509,516,518
+  @field r columns  @ 88,116,145
+  @field w config  @ 134,177,228,496
+  @field w currentOctave  @ 177,228
+  @field w data  @ 55,500,555
+  @field r delay  @ 64,562
+  @field w delay  @ 52,79,80,107,108,136,173,174,223,224,225,266
+  @field w delay  @ 267,268,301,303,330,331,359,391,424,457,493,552
+  @field w detune  @ 14,52,79,80,107,108,136,173,174,223,224,225
+  @field w detune  @ 266,267,268,301,303,330,331,359,391,424,457,493
+  @field w detune  @ 552
+  @field r endppq  @ 66,92,94,120,149,198,243,284,317,318,564
+  @field w endppq  @ 14,51,79,80,107,108,136,173,174,223,224,225
+  @field w endppq  @ 266,267,268,300,302,330,331,359,391,424,457,492
+  @field w endppq  @ 551
+  @field r endppqC  @ 95
+  @field w endppqL  @ 266,301
+  @field r evType  @ 374,410,441,467,473,511,519,520,530,539
+  @field w evType  @ 334,362,395,427,460
+  @field r events  @ 88,116,145
+  @field w factors  @ 487
+  @field w frame  @ 493
+  @field w global  @ 500
+  @field r grid  @ 18,21,24,181,232,465,503,509,516,518
+  @field r lane  @ 184,233
+  @field w lane  @ 173,174
+  @field r midiChan  @ 183
+  @field w name  @ 11,43,76,104,131,160,208,252,295,325,354,385
+  @field w name  @ 418,452,485,546
+  @field w noteDelay  @ 55,555
+  @field r notes  @ 63,88,116,145,191,239,276,312,343,371,407,438
+  @field r notes  @ 561
+  @field w notes  @ 14,50,78,106,135,172,222,265,299,329,358,389
+  @field w notes  @ 422,456,491,550
+  @field r overflow  @ 512,521,522
+  @field w part1  @ 402,433
+  @field w part2  @ 402,433
+  @field r partAt  @ 18
+  @field w period  @ 487
+  @field r pitch  @ 27,28,29,31,32,89,117,146,194,195,240
+  @field w pitch  @ 14,51,79,80,107,108,136,173,174,223,224,225
+  @field w pitch  @ 266,267,268,300,302,330,331,334,359,362,391,395
+  @field w pitch  @ 424,427,457,460,492,551
+  @field r ppq  @ 65,89,117,146,194,195,240,280,281,313,314,344
+  @field r ppq  @ 374,410,441,563
+  @field w ppq  @ 14,51,79,80,107,108,136,173,174,223,224,225
+  @field w ppq  @ 266,267,268,300,302,330,331,334,359,362,391,395
+  @field w ppq  @ 424,427,457,460,492,551
+  @field w project  @ 497
+  @field w row1  @ 402,433
+  @field w row2  @ 402,433
+  @field w rowPerBeat  @ 134,498
+  @field w rpb  @ 488
+  @field w run  @ 12,44,77,105,132,161,209,253,296,326,355,386
+  @field w run  @ 419,453,486,547
+  @field w seed  @ 14,49,78,106,135,171,221,264,298,328,357,388
+  @field w seed  @ 421,455,490,549
+  @field w shift  @ 487
+  @field w swing  @ 488,500
+  @field w swings  @ 497
+  @field w take  @ 134,177,228,498
+  @field r type  @ 182
+  @field r vel  @ 347,476
+  @field w vel  @ 14,51,79,80,107,108,136,173,174,223,224,225
+  @field w vel  @ 266,267,268,300,302,330,331,334,359,362,391,395
+  @field w vel  @ 424,427,457,460,492,551

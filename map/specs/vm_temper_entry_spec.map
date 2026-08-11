@@ -1,6 +1,6 @@
-@spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=136  cases=3
+@spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=237  cases=6
 @exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
-@surface   tuning.derive, vm:setGridSize, ec:setPos, vm:editEvent, tuning.midiToStep, vm:noteProjection, cmgr:invoke
+@surface   tuning.derive, vm:setGridSize, tuning.midiToStep, ec:setPos, vm:editEvent, ec:row, vm:entrySignAt, vm:noteProjection, cmgr:invoke
 @harness   mk{seed.notes}
 
 # Intent
@@ -11,49 +11,64 @@
   cannot sit on exactly. See docs/tuning.md for the coordinate model.
 
 # Helpers
-  @fn mk(harness)  @ 18-28
-  @fn lane1(h)  @ 30-34
-  @fn pitchStops(col)  @ 38-45
+  @fn mk(harness, temper)  @ 29-40
+  @fn lane1(h)  @ 42-46
+  @fn pitchStops(col)  @ 50-57
       -- The pitch part spans two cursor stops (note letter, octave digit);
       -- discover them so the test is independent of cellWidth.
+  @fn octaveShown(h, temper)  @ 60-64
+      -- The octave the cell shows: the period-index octave plus the octaveStep bump.
+  @fn rootedNote(harness)  @ 67-82
+      -- Places a note at the cursor and returns a typist for its octave stop.
 
 # Cases
-  @case 'octave column keeps the scale step and sets the period-cycle octave'  [harness]  @ 49-77
-  @case 'octave column rejects an octave the note cannot sit on exactly'  [harness]  @ 81-103
-  @case 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)'  [harness]  @ 107-134
+  @case 'the octave column negates in place, and the next digit keeps the sign'  [harness]  @ 86-107
+  @case 'minus on octave zero arms the sign before the digit lands'  [harness]  @ 111-131
+  @case 'a negated octave the note cannot sit on is a no-op'  [harness]  @ 135-146
+  @case 'octave column keeps the scale step and sets the period-cycle octave'  [harness]  @ 150-178
+  @case 'octave column rejects an octave the note cannot sit on exactly'  [harness]  @ 182-204
+  @case 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)'  [harness]  @ 208-235
 
 # Uses (outbound edges)
-  @use call tuning.derive  @ 12
-  @use call vm:setGridSize  @ 26
-  @use call ec:setPos  @ 56,65,87,96,113,119
-  @use call vm:editEvent  @ 57,66,88,97,114
-  @use call tuning.midiToStep  @ 61,70
-  @use call vm:noteProjection  @ 75
-  @use call cmgr:invoke  @ 120,130
+  @use call tuning.derive  @ 12,21
+  @use call vm:setGridSize  @ 38
+  @use call tuning.midiToStep  @ 62,162,171
+  @use call ec:setPos  @ 74,79,157,166,188,197,214,220
+  @use call vm:editEvent  @ 75,80,158,167,189,198,215
+  @use call ec:row  @ 93,97
+  @use call vm:entrySignAt  @ 124,130
+  @use call vm:noteProjection  @ 176
+  @use call cmgr:invoke  @ 221,231
 
 # Fields (r read / w write incl. constructor keys)
-  @field w JI  @ 23
-  @field r cells  @ 60,69,91,100,115,122,131
-  @field r cols  @ 31
-  @field w config  @ 21
-  @field w currentOctave  @ 22
-  @field r detune  @ 61,70,92,102,125,126,129,133
-  @field r grid  @ 31
-  @field r lane  @ 32
-  @field r midiChan  @ 32
-  @field w name  @ 13,49,81,107
-  @field w notes  @ 20
-  @field r octaveStep  @ 71
-  @field r partAt  @ 40
+  @field r cells  @ 61,80,161,170,192,201,216,223,232
+  @field r cols  @ 43,71
+  @field w config  @ 33
+  @field w currentOctave  @ 34
+  @field r detune  @ 62,103,116,122,140,145,162,171,193,203,226,227
+  @field r detune  @ 230,234
+  @field r grid  @ 43,71
+  @field r lane  @ 44
+  @field r midiChan  @ 44
+  @field r name  @ 35
+  @field w name  @ 13,22,86,111,135,150,182,208
+  @field w notes  @ 32
+  @field r octaveStep  @ 63,172
+  @field r partAt  @ 52
   @field w periodAsStep  @ 15
-  @field w periodPitch  @ 13
-  @field r pitch  @ 61,70,92,101,115,123,124,129,132
-  @field w pitches  @ 14
-  @field w project  @ 23
-  @field w run  @ 50,82,108
-  @field w seed  @ 20
-  @field w stepNames  @ 15
-  @field w take  @ 22
-  @field w temper  @ 23
-  @field w tempers  @ 23
-  @field r type  @ 32
+  @field w periodPitch  @ 13,22
+  @field r pitch  @ 62,102,116,121,140,144,162,171,193,202,216,224
+  @field r pitch  @ 225,230,233
+  @field w pitches  @ 14,23
+  @field w project  @ 35
+  @field w rootDetune  @ 26
+  @field w rootOctave  @ 26
+  @field w rootPitch  @ 26
+  @field w rootStep  @ 26
+  @field w run  @ 87,112,136,151,183,209
+  @field w seed  @ 32
+  @field w stepNames  @ 15,25
+  @field w take  @ 34
+  @field w temper  @ 35
+  @field w tempers  @ 35
+  @field r type  @ 44

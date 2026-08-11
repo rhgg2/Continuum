@@ -15,12 +15,24 @@ local JI = tuning.derive{
   stepNames = {}, periodAsStep = true,
 }
 
-local function mk(harness)
+-- 12EDO rooted at A4 = (step 1, octave 4), the root that puts octaves -2..8
+-- in reach (design/temper-root.md § Negative octaves). MIDI 60 reads D#3
+-- under it, and octave -2 step 4 is MIDI 0.
+local ROOTED = tuning.derive{
+  name = 'ROOTED', periodPitch = '2/1',
+  pitches   = { '0.', '100.', '200.', '300.', '400.', '500.', '600.', '700.',
+                '800.', '900.', '1000.', '1100.' },
+  stepNames = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B' },
+  rootPitch = 69, rootDetune = 0, rootStep = 1, rootOctave = 4,
+}
+
+local function mk(harness, temper)
+  temper = temper or JI
   local h = harness.mk{
     seed   = { notes = {} },
     config = {
       take    = { currentOctave = 4 },
-      project = { tempers = { JI = JI }, temper = 'JI' },
+      project = { tempers = { [temper.name] = temper }, temper = temper.name },
     },
   }
   h.vm:setGridSize(80, 40)
@@ -44,7 +56,96 @@ local function pitchStops(col)
   return stops[1], stops[#stops]
 end
 
+-- The octave the cell shows: the period-index octave plus the octaveStep bump.
+local function octaveShown(h, temper)
+  local note = lane1(h).cells[0]
+  local step, oct = tuning.midiToStep(temper, note.pitch, note.detune)
+  return oct + (step >= temper.octaveStep and 1 or 0), note
+end
+
+-- Places a note at the cursor and returns a typist for its octave stop.
+local function rootedNote(harness)
+  local h   = mk(harness, ROOTED)
+  local col = lane1(h)
+  local colIdx
+  for i, c in ipairs(h.vm.grid.cols) do if c == col then colIdx = i end end
+  local letterStop, octStop = pitchStops(col)
+
+  h.ec:setPos(0, colIdx, letterStop)
+  h.vm:editEvent(col, nil, letterStop, string.byte('z'), false)
+
+  return h, colIdx, function(ch)
+    local live = lane1(h)
+    h.ec:setPos(0, colIdx, octStop)
+    h.vm:editEvent(live, live.cells[0], octStop, string.byte(ch), false)
+  end
+end
+
 return {
+  {
+    name = "the octave column negates in place, and the next digit keeps the sign",
+    run = function(harness)
+      local h, _, type_ = rootedNote(harness)
+      t.eq((octaveShown(h, ROOTED)), 3, 'MIDI 60 places at octave 3 under this root')
+
+      type_('1')
+      t.eq((octaveShown(h, ROOTED)), 1, 'digit sets the octave')
+      t.eq(h.ec:row(), 1, 'a digit advances')
+
+      type_('-')
+      t.eq((octaveShown(h, ROOTED)), -1, 'minus negates the octave under the cursor')
+      t.eq(h.ec:row(), 0, 'the negation stays on the row')
+
+      type_('2')
+      local oct, note = octaveShown(h, ROOTED)
+      t.eq(oct, -2, 'the digit sets the magnitude and keeps the sign')
+      t.eq(note.pitch, 0, 'octave -2 of this root is MIDI 0')
+      t.eq(note.detune, 0, 'and sits exactly on its step')
+
+      type_('-')
+      t.eq((octaveShown(h, ROOTED)), 2, 'minus flips back')
+    end,
+  },
+
+  {
+    name = "minus on octave zero arms the sign before the digit lands",
+    run = function(harness)
+      local h, colIdx, type_ = rootedNote(harness)
+      type_('0')
+      local _, before = octaveShown(h, ROOTED)
+      local pitch0, detune0 = before.pitch, before.detune
+
+      type_('-')
+      local oct, note = octaveShown(h, ROOTED)
+      t.eq(oct, 0, 'the arm writes no octave')
+      t.eq(note.pitch, pitch0, 'nor a pitch')
+      t.eq(note.detune, detune0, 'nor a detune')
+
+      local part, sign = h.vm:entrySignAt(0, colIdx)
+      t.eq(part, 'pitch', 'the octave cell is armed')
+      t.eq(sign, -1, 'and reads negative, so the tint shows it')
+
+      type_('1')
+      t.eq((octaveShown(h, ROOTED)), -1, 'the digit consumed the arm')
+      t.eq(h.vm:entrySignAt(0, colIdx), nil, 'a signed octave carries its own sign')
+    end,
+  },
+
+  {
+    name = 'a negated octave the note cannot sit on is a no-op',
+    run = function(harness)
+      local h, _, type_ = rootedNote(harness)
+      type_('3')
+      local _, before = octaveShown(h, ROOTED)
+      local pitch0, detune0 = before.pitch, before.detune
+
+      type_('-')   -- octave -3 is below MIDI 0 under this root
+      local _, after = octaveShown(h, ROOTED)
+      t.eq(after.pitch,  pitch0,  'pitch unchanged by the rejected negation')
+      t.eq(after.detune, detune0, 'detune unchanged by the rejected negation')
+    end,
+  },
+
   {
     name = 'octave column keeps the scale step and sets the period-cycle octave',
     run = function(harness)

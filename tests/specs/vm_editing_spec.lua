@@ -4,6 +4,35 @@ local t    = require('support')
 local util = require('util')
 
 return {
+  -- The untempered fallback takes the same octave gestures as a tempered
+  -- column: minus negates, zero arms, and an octave off the MIDI range is
+  -- refused rather than clamped into a different one.
+  {
+    name = 'untempered octave column: minus negates, and refuses an octave out of range',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = { { ppq = 0, endppq = 60, chan = 1, pitch = 60, vel = 100, detune = 0 } } },
+      }
+      h.vm:setGridSize(80, 40)
+      local octStop = 2
+      t.eq(h.vm.grid.cols[1].partAt[octStop], 'pitch', 'stop 2 is the octave digit')
+
+      local function type_(ch)
+        local col = h.vm.grid.cols[1]
+        h.ec:setPos(0, 1, octStop)
+        h.vm:editEvent(col, col.cells[0], octStop, string.byte(ch), false)
+        return h.vm.grid.cols[1].cells[0]
+      end
+
+      t.eq(type_('-').pitch, 60, 'octave -4 is off the MIDI range: no-op')
+      t.eq(type_('0').pitch, 12, 'octave 0')
+      t.eq(type_('-').pitch, 12, 'the arm writes nothing')
+      t.eq(select(2, h.vm:entrySignAt(0, 1)), -1, 'the octave cell is armed negative')
+      t.eq(type_('1').pitch, 0, 'the digit consumed the arm: octave -1')
+      t.eq(type_('2').pitch, 0, 'octave -2 is off the MIDI range: no-op')
+    end,
+  },
+
   -- Delete on a note's delay stop (selGrp 3, no block selection) resets
   -- the delay metadata to 0 and lets the realisation line shift the
   -- note-on back to the intent row. Endppq is intent in storage and
