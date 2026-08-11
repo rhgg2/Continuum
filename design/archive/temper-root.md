@@ -1,6 +1,12 @@
 # Design — The temper's root
 
-> opened: 2026-08-10 · status: in flight; plan at `plan/temper-root.md`
+> **Closed 2026-08-11.** All three phases landed; this file is the record of
+> what was decided and why. The model as built lives in `docs/tuning.md`, with
+> `docs/editCursor.md` and `docs/library.md` for the octave field's cursor
+> stops and the library form of a temper. Where those and this file differ,
+> they are right.
+>
+> Was: opened 2026-08-10, plan at `plan/archive/temper-root.md`.
 
 **A temper states where its scale sits in sound and which octave numbers
 its steps carry, as one correspondence between a sounding pitch and a
