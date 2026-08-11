@@ -50,8 +50,8 @@ scopes without branching.
 `decorateCol` builds the pitch part's `width`/`stops` per column from the
 temper: `width` is the active `cellWidth`, and `stops` opens with the note
 name before one stop per octave char, so a temper whose period sits well
-under an octave (`temper-root.md` § Negative octaves) still gets one
-cursor stop per digit of it.
+under an octave (`docs/tuning.md` § Display) still gets one cursor stop
+per digit of it.
 
 ## moveHook
 

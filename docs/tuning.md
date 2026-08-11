@@ -385,9 +385,10 @@ column downward, and a separator that shifts between rows breaks the
 scan with nothing to mark where it broke.
 
 **4** The octave cursor stop (cell column `cellWidth-1`) lands on the
-units digit. The note-entry stop (column `0`) is a keyboard affordance
-rather than a reading position, so it may sit on left padding for a
-short label without harm.
+units digit, and a field wide enough to need them takes one stop per
+place (`docs/editCursor.md` § Decoration). The note-entry stop (column
+`0`) is a keyboard affordance rather than a reading position, so it may
+sit on left padding for a short label without harm.
 
 **5** `cellWidth` is the derived char width of the widest label: the
 longest name (or a 2-digit degree) plus the **octave field**. The field is
