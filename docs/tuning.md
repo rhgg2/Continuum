@@ -179,14 +179,22 @@ live in `docs/trackerManager.md`.
 
 ## Coordinate systems
 
-Two views on the same cents line:
+**1** Two views on the same cents line:
 
 - **MIDI**: `(pitch, detune)` — pitch in 0..127, detune in cents.
 - **Scale**: `(step, octave)` — step is 1-indexed into `temper.cents`.
 
-Cents 0 corresponds to `C-1` (MIDI 0). The first step of every
-temperament is `C`. Octave labels follow the ASCII-MIDI convention
-(C4 = MIDI 60).
+**2** The temper's **root** is the correspondence between them: it names
+one `(pitch, detune)` and the `(step, octave)` that sounds there, and
+every other pair follows from that one by the period. So the anchor is
+authored rather than fixed — see *The root*.
+
+**3** The default root is `(0, 0) = (1, -1)`: MIDI 0 is the unison of
+octave -1. An unrooted temper therefore puts its unison on `C-1` and
+numbers its octaves in the ASCII-MIDI convention (C4 = MIDI 60).
+
+**4** A root moves both. Under `(69, 0) = (1, 4)` the unison of a 12-EDO
+scale sounds A4, and MIDI 60 reads `D#3`.
 
 ## Temper shape
 
@@ -197,8 +205,14 @@ temper = {
   periodPitch = '2/1',                   -- source token for the period (equave)
   stepNames   = { 'C-', 'C↑', ... },     -- one per step ('' = nameless → degree)
   periodAsStep = false,                  -- display: show the period as a trailing row?
+  rootPitch   = 69,                      -- root: MIDI pitch of the correspondence (absent = 0)
+  rootDetune  = -101.27,                 -- root: cents offset on that pitch (absent = 0)
+  rootStep    = 10,                      -- root: the step it names (absent = 1)
+  rootOctave  = 4,                       -- root: the octave it names (absent = -1)
   cents       = { 0, 39, 77, ... },      -- DERIVED from pitches by tuning.derive
   period      = 1200,                    -- DERIVED from periodPitch
+  rootCents   = <cents>,                 -- derived; where the unison sits in sound
+  octaveBase  = <octave>,                -- derived; the octave number for period-index 0
   octaveStep  = <index>,                 -- derived; see below
   octaveWidth = <chars>,                 -- derived; octave-field width within the cell
   cellWidth   = <chars>,                 -- derived; tracker pitch-cell width
@@ -289,7 +303,13 @@ adds 1 to the displayed octave when `step >= octaveStep`.
    scale keeps. A generator replaces the scale the root placed, so it resets the
    root to the default.
 
-4. The editor clamps `rootPitch` and `rootStep` on entry, since they derive
+4. Root state is project-tier. The library form of a temper — what
+   `tuning.unrooted` computes, and what publishing writes — drops the four
+   and re-derives at the default root, so the library holds a scale and a
+   project holds a scale placed. Divergence from a library source is
+   measured on the scale alone.
+
+5. The editor clamps `rootPitch` and `rootStep` on entry, since they derive
    indexes into the scale; `rootOctave` and `rootDetune` are left free, since
    an out-of-range value only moves the root's display label, not which
    pitch it names. The root picker spells `rootPitch` in the untempered
@@ -311,23 +331,26 @@ adds 1 to the displayed octave when `step >= octaveStep`.
 
 ### Addressable range
 
-**1** The temperament hangs from a single anchor: cents 0 ≡ MIDI 0
-(`C-1`). Everything grows upward from there by the fixed slope
-100¢ = 1 semitone, so a note is *addressable* only while its cents sit
-in `[0, 12700]` — from the anchor to MIDI 127.
+**1** The addressable range is the MIDI range: a note is *addressable*
+only while the cents it sounds at sit in `[0, 12700]`, MIDI 0 to MIDI
+127, at the fixed slope 100¢ = 1 semitone.
 
-**2** The pitchbend window (`pbRange`) can bend the *sound* a little
-past either end, but the note's own `(pitch, octave)` cannot follow it:
-below the anchor you have crossed cents 0, and above 127 the MIDI note
-clamps.
+**2** Which `(step, octave)` coordinates fall inside it is the root's
+doing, since the root moves both the pitch the unison sounds and the
+number the octave carries. That is why the octave field is sized from
+`rootCents` and `octaveBase` at either end — see *Display*.
 
-**3** A seated note's detune is always in `[-50, 50]` (it is
-`cents − round(cents/100)·100`), and only a clamp-fold past the anchor or
+**3** The pitchbend window (`pbRange`) can bend the *sound* a little
+past either end, but the note's own `(step, octave)` cannot follow it:
+below MIDI 0 and above MIDI 127 there is no coordinate to move to.
+
+**4** A seated note's detune is always in `[-50, 50]` (it is
+`cents − round(cents/100)·100`), and only a clamp-fold past the floor or
 the ceiling pushes `|detune|` beyond 50. That makes `|detune| > 50` a
 serviceable criterion for *this result has left the range*, and it is
 what both the octave-column entry and the pitch **nudge** test.
 
-**4** They reject rather than clamp, and the note stays put. An
+**5** They reject rather than clamp, and the note stays put. An
 unaddressable pitch is not a quieter pitch but no pitch at all here, so
 drifting onto one is worse than refusing to move. Editing operations
 enforce this, so the range — and the `cellWidth` octave budget derived
