@@ -17,32 +17,36 @@ The register the project's prose is written in.
 1. A document states the current model. It says nothing about how that
    model was reached.
 
-2. The document reads linearly. Each sentence follows logically and
-   without external context from everything that precedes it.
+2. The document reads linearly. Each sentence follows logically from
+   everything that precedes it. External content is scoped to
+   cross-references to other project docs, and terms pulled in get a
+   brief gloss before use.
 
-3. When any part of it is superseded, delete the part. Do not record
-   the change; replace the old model and let the new one stand alone.
+3. When any part of the document is superseded, it leaves no trace of
+   what came before. The document is not a historical record; the old
+   model is removed and the new one stands alone.
 
-4. Do not relitigate the path not chosen. We are only interested in the
-   path we are going to take.
+4. The document does not relitigate paths not chosen. It is only
+   concerned with the path that will be taken.
 
-5. A heading that names a refutation, and a preamble inventorying what
-   was tried and discarded are two shapes this failure takes.
+5. Thus, there are no headings that name refutations, or preambles
+   inventorying what was tried and discarded.
 
 ## The register
 
 1. The tone is analytic, dry, sparse, but always clear.
 
-2. Every sentence makes a claim. The test is to delete it; if only the
-   tone changed, it was ornament.
+2. Every sentence and every clause in a sentence makes a claim. The
+   test is to delete it; if only the tone changed, it was ornament.
 
-3. For a sentence that earns its existence, prefer the phrasing that
-   expresses it most vividly.
+3. For a sentence or clause that earns its existence, it adopts the
+   phrasing that expresses it most vividly.
+
 
 ## Nomenclature
 
-1. Assign specific meanings to terms; state those meanings before using
-   them; do not allow them to wander.
+1. Terms are assigned specific meanings terms; state those meanings
+   before using them; do not allow them to wander.
 
 2. One word names one thing. A word doing double duty is two words.
 
@@ -51,6 +55,9 @@ The register the project's prose is written in.
 
 4. Bold marks a term where it is defined, and a document's opening
    thesis. It marks nothing else. Italics carry emphasis.
+
+5. Definitions bear no preamble or preparation. They are stated
+   flatly, and unpacked only when there is a non-obvious WHY.
 
 ## Structure
 
@@ -62,9 +69,9 @@ The register the project's prose is written in.
 3. One concept per section. If a section weaves several threads
    together, separate them out and rewrite.
 
-4. Lead a section with its central claim. The support follows.
+4. A section starts with its central claim. The support follows.
 
-5. Do not enumerate in a heading or a lead sentence. "The five slots"
+5. Heading and lead sentences carry no enumerations. "The five slots"
    and "three properties arrive together" are obligations to maintain.
 
 6. A section's paragraphs are a numbered list.
