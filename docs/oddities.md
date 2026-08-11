@@ -153,3 +153,20 @@ top of the period, which at the topmost period-index is already out of range —
 and both ways to close it cost more than the gap. An unconditional `+1` widens
 every preset's cell by a column, and scanning the top period's steps puts a
 snap inside a width computation.
+
+### A project temper equal to its source can fail to tidy
+
+> **gap** · tuning · 2026-08-11
+
+`lib.modified` and `lib.publish` compare the library *form* of each copy — the
+root dropped and the derived stamps refreshed (`library.lua:82`) — but
+`lib.tidy` compares the copies whole (`library.lua:188`), and deliberately:
+tidy destroys the project copy, so it needs identity rather than
+identity-of-scale, and a reduced comparison would tidy away a rooted project
+copy and lose the root with it. The exposure is the derived stamps. A library
+copy stored before `rootCents` existed carries none, and one round-tripped
+through `util.serialise` carries cents a `tostring` short of the recomputed
+ones, so a project copy equal in every authored field can read as different
+and stay. Declining is the safe direction — the cost is clutter, not a lost
+edit — and the close is not in tidy but in never persisting derived state at
+all, with `findTemper` deriving on read.

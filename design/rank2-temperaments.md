@@ -27,6 +27,12 @@ tuning. The path today:
 So: QWERTY is a 12-semitone-per-octave piano (n·100¢ over C-1), snapped
 to the nearest tuning step.
 
+The placement half of that welding is now authored rather than fixed: a
+temper states where its scale sits in sound and which octave numbers its
+steps carry (`docs/tuning.md` § The root). The QWERTY path itself is
+unchanged, but what it lands on moves with the root, since the snap goes
+through the conversions that read it.
+
 ## Rank
 
 - **Rank 1** — one generator: every pitch a multiple of one step. An

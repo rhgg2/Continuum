@@ -152,7 +152,7 @@ written on.**
 
 4. The temper's own root does not enter. A move set has no place on the
    pitch line, so `rootCents` is never read and the question of where a
-   key belongs (`design/temper-root.md` § Open) does not arise.
+   key belongs (`design/adaptive-tuning.md` § Open) does not arise.
 
 5. A temper holding a pitch in cents or in equal divisions cannot be a
    move set, for the reason `design/adaptive-tuning.md` § What a target

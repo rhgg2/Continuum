@@ -483,3 +483,13 @@ step it was written on.**
    the active temper (`design/midi-capture.md`), an import arrives on
    its source's grid, and this command's own output is the only
    off-grid material Continuum makes.
+
+7. Where the key belongs. A root says where a scale sits in sound;
+   which of a target's points the material meets is a further question,
+   and nothing answers it yet. Root state showed the tier an answer
+   could sit on: the library holds a scale and a project holds a scale
+   placed (`docs/tuning.md` § The root), so a key would be one more
+   project-tier field beside the four, and a second key a second project
+   copy the temper editor forks — not the library copy per key that made
+   the question look expensive. Whether it is a temper field at all, or a
+   slot on the command beside the target, is what stays open.

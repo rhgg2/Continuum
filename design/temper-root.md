@@ -51,10 +51,8 @@ scale coordinate.**
    `tostring` short of the recomputed ones. Both read as drift against a
    freshly derived project copy, and a stock 19EDO forked and rooted duly wore
    the modified badge. The comparison is therefore between canonical forms,
-   and publishing heals the library copy it compared against. The narrower
-   reading — that derived state has no business being persisted at all, and
-   `findTemper` should derive on read — is a separate question, and `tidy`,
-   which compares whole, is still exposed to it.
+   and publishing heals the library copy it compared against. `tidy` compares
+   whole and is exposed to the same drift (`docs/oddities.md` § Tuning).
 
 8. `tidy` and `revert` go on comparing and copying whole. `tidy` destroys a
    project copy, so it needs identity rather than identity-of-scale; `revert`
@@ -240,14 +238,3 @@ scale coordinate.**
    `(69, 0) = (1, 4)` falsifies, and § Addressable range 1 states it again
    as `cents 0 ≡ MIDI 0 (C-1)`. Both passages are rewritten when the root
    lands.
-
-## Open
-
-1. Whether the temper editor should speak in hertz. A root is stated in
-   cents; concert pitch is thought about in hertz. The editor could show
-   a derived reading, or take hertz as an entry form.
-
-2. Where the key belongs. A root says where a scale sits in sound; which
-   of a target's points the material meets is a different question, and
-   answering it in the temper would mean a library copy of every target
-   per key. The two add rather than conflict, and the key is deferred.

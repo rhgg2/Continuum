@@ -118,3 +118,26 @@ to one entry.
 plus named ctx ops, ctx accreting as named operations and never as an
 escape hatch into tm — and keep every reader of `generators.kinds`
 tolerant of an entry that isn't there.
+
+## Concert pitch in hertz — a reading, or an entry form
+
+> From `design/archive/temper-root.md` § Open. Read `docs/tuning.md`
+> § The root for the four fields this would sit beside.
+
+A root is authored in cents, and concert pitch is thought about in
+hertz. `(69, −101.27) = (10, 4)` is A=415 written the way the arithmetic
+wants it rather than the way the ear asks for it. The editor could show
+the hertz a root implies beside the fields, or take hertz as an entry
+form and solve back to the detune.
+
+What it costs is an anchor. Cents are a ratio and hertz are a frequency,
+so a reading needs one absolute correspondence — MIDI 69 = 440 Hz — and
+that correspondence is exactly the convention a root exists to make
+editable. The figure would therefore be read against a nominal reference
+the temper does not hold. Naming that reference in the pane is honest and
+verbose; leaving it implicit invites reading the number as a promise
+about what comes out of the synth.
+
+**The obligation now:** the four authored fields stay the truth. A hertz
+figure is derived at the pane and never persisted, so nothing downstream
+has to learn what a reference frequency is.
