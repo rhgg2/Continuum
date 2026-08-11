@@ -45,6 +45,14 @@ set `part1=part2='*'`, a name no real part matches, so
 trick that lets the same code path serve part-typed and whole-col
 scopes without branching.
 
+## Decoration
+
+`decorateCol` builds the pitch part's `width`/`stops` per column from the
+temper: `width` is the active `cellWidth`, and `stops` opens with the note
+name before one stop per octave char, so a temper whose period sits well
+under an octave (`temper-root.md` § Negative octaves) still gets one
+cursor stop per digit of it.
+
 ## moveHook
 
 Every position-changing path ends with `clampPos()` followed by

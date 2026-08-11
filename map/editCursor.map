@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=889  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=893  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -201,9 +201,10 @@
       -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
       -- regionBail (Super-G) also clears the selection.
   @api ec:registerCommands(scope)  @ 797-824
-  @api ec:decorateCol(col, pitchWidth)  @ 859-886
-      @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth  @ 857
+  @api ec:decorateCol(col, pitchWidth, octaveWidth)  @ 860-890
+      @contract  derives col parts from type/showDelay/trackerMode; pitchWidth,octaveWidth size pitch  @ 857
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}  @ 858
+      @invariant  pitchWidth >= 1 (name) + octaveWidth, so the name stop never collides with the octave  @ 859
 
 # Uses (outbound edges)
   @use call    cm:get  @ selUpdate:102 advance:459
@@ -218,7 +219,7 @@
   @use call    groupBridge.instanceAt  @ regionArm:731 hopInstance:777
   @use call    groupBridge.paintStream  @ paintCell:717
   @use call    groupBridge.selectionAsRect  @ newFromSelection:532
-  @use call    util.add  @ blockKeys:631 hopInstance:781 partsFor:844,845,846 decorateCol:876,877,878
+  @use call    util.add  @ blockKeys:631 hopInstance:781 partsFor:844,845,846 decorateCol:866,880,881,882
   @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:449,450,451 moveBy:582 moveByChan:599
   @use require util  @ <load>:25
 
@@ -255,7 +256,7 @@
   @call orderedInstances  @ currentEntry:330 dropInstance:565,567
   @call paintCell  @ regionScope.regionPaintExtend:762 regionScope.regionPaintShrink:763
   @call partAt  @ cursorPart:70 selUpdate:123
-  @call partsFor  @ decorateCol:860
+  @call partsFor  @ decorateCol:861
   @call resizeBy  @ redirect.growNote:754 redirect.shrinkNote:755
   @call sealMove  @ exitMode:519 newInstance:551 duplicate:556 regionArm:725
   @call selClear  @ moveRow:194 moveStop:205 moveUnit:232 reset:363 selClear:435 newFromSelection:537 regionScope.regionBail:761 registerCommands:813
@@ -360,11 +361,11 @@
   @field r part2  @ region:376 setSelection:412 selectionStopSpan:429
   @field w part2  @ selStart:90 selUpdate:133 setSelection:412
   @field r partAt  @ partAt:67 firstStopForPart:76 selectionStopSpan:423,428,429
-  @field w partAt  @ decorateCol:883
+  @field w partAt  @ decorateCol:887
   @field r partStart  @ selUpdate:128
-  @field w partStart  @ decorateCol:884
+  @field w partStart  @ decorateCol:888
   @field r parts  @ moveCol:258,265
-  @field w parts  @ decorateCol:861
+  @field w parts  @ decorateCol:862
   @field w paste  @ 749
   @field w pb  @ 835
   @field r ppq  @ sealMove:508 duplicate:560 moveBy:580 hopInstance:783,790,791
@@ -389,20 +390,20 @@
   @field w selectLeft  @ 491 registerCommands:812
   @field w selectRight  @ 491 registerCommands:811
   @field w selectUp  @ 491 registerCommands:810
-  @field r showDelay  @ decorateCol:860
+  @field r showDelay  @ decorateCol:861
   @field w shrinkNote  @ redirect.shrinkNote:755
   @field w springLoaded  @ 745
   @field r stop  @ selUpdate:123,128 swapEnds:182
   @field w stop  @ selStart:88 cycleHBlock:145 cycleVBlock:161 moveStop:208 setSelection:413 selectSpan:464
   @field r stopPos  @ clampPos:60 moveStop:214,221 moveCol:260,264,267 moveChannel:287 selectionStopSpan:421 selectColumn:476
-  @field w stopPos  @ decorateCol:882
-  @field r stops  @ decorateCol:875
-  @field w stops  @ 832,833,834,835,836,837 decorateCol:863,865
+  @field w stopPos  @ decorateCol:886
+  @field r stops  @ decorateCol:879
+  @field w stops  @ 832,833,834,835,836,837 decorateCol:867,869
   @field r streams  @ moveByChan:595 blockKeys:629 laneWalkable:646
   @field w swapBlockEnds  @ 492 registerCommands:820
-  @field r trackerMode  @ decorateCol:860
-  @field r type  @ moveChannel:294 noteLanesIn:614 caretToBlock:661 decorateCol:860
+  @field r trackerMode  @ decorateCol:861
+  @field r type  @ moveChannel:294 noteLanesIn:614 caretToBlock:661 decorateCol:861
   @field w val  @ 836
   @field w vel  @ 833
-  @field r width  @ decorateCol:880
-  @field w width  @ 832,833,834,835,836,837 decorateCol:863,865,885
+  @field r width  @ decorateCol:884
+  @field w width  @ 832,833,834,835,836,837 decorateCol:867,869,889

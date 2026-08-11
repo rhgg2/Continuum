@@ -1,6 +1,6 @@
-@spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=237  cases=6
+@spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=316  cases=10
 @exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
-@surface   tuning.derive, vm:setGridSize, tuning.midiToStep, ec:setPos, vm:editEvent, ec:row, vm:entrySignAt, vm:noteProjection, cmgr:invoke
+@surface   tuning.derive, vm:setGridSize, tuning.midiToStep, ec:setPos, vm:editEvent, vm:digitsStrike, ec:pos, ec:row, vm:digitsBackspace, vm:digitsCommit, vm:digitsActive, vm:entrySignAt, vm:noteProjection, cmgr:invoke
 @harness   mk{seed.notes}
 
 # Intent
@@ -11,64 +11,79 @@
   cannot sit on exactly. See docs/tuning.md for the coordinate model.
 
 # Helpers
-  @fn mk(harness, temper)  @ 29-40
-  @fn lane1(h)  @ 42-46
-  @fn pitchStops(col)  @ 50-57
+  @fn mk(harness, temper)  @ 37-48
+  @fn lane1(h)  @ 50-54
+  @fn pitchStops(col)  @ 58-65
       -- The pitch part spans two cursor stops (note letter, octave digit);
       -- discover them so the test is independent of cellWidth.
-  @fn octaveShown(h, temper)  @ 60-64
+  @fn octaveShown(h, temper)  @ 68-72
       -- The octave the cell shows: the period-index octave plus the octaveStep bump.
-  @fn rootedNote(harness)  @ 67-82
+  @fn rootedNote(harness)  @ 75-90
       -- Places a note at the cursor and returns a typist for its octave stop.
+  @fn narrowNote(harness)  @ 94-105
+      -- Places a note under NARROW and returns the harness, its column index and the
+      -- pitch part's three stops: the note name, then the octave's tens and units.
 
 # Cases
-  @case 'the octave column negates in place, and the next digit keeps the sign'  [harness]  @ 86-107
-  @case 'minus on octave zero arms the sign before the digit lands'  [harness]  @ 111-131
-  @case 'a negated octave the note cannot sit on is a no-op'  [harness]  @ 135-146
-  @case 'octave column keeps the scale step and sets the period-cycle octave'  [harness]  @ 150-178
-  @case 'octave column rejects an octave the note cannot sit on exactly'  [harness]  @ 182-204
-  @case 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)'  [harness]  @ 208-235
+  @case 'a shift-held digit walks the places of a two-char octave field'  [harness]  @ 109-130
+  @case 'the octave gesture declines on the note-name stop'  [harness]  @ 134-140
+  @case 'the octave gesture declines on a cell with no note'  [harness]  @ 144-150
+  @case 'a plain digit on the tens place zeroes the units below it'  [harness]  @ 154-161
+  @case 'the octave column negates in place, and the next digit keeps the sign'  [harness]  @ 165-186
+  @case 'minus on octave zero arms the sign before the digit lands'  [harness]  @ 190-210
+  @case 'a negated octave the note cannot sit on is a no-op'  [harness]  @ 214-225
+  @case 'octave column keeps the scale step and sets the period-cycle octave'  [harness]  @ 229-257
+  @case 'octave column rejects an octave the note cannot sit on exactly'  [harness]  @ 261-283
+  @case 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)'  [harness]  @ 287-314
 
 # Uses (outbound edges)
-  @use call tuning.derive  @ 12,21
-  @use call vm:setGridSize  @ 38
-  @use call tuning.midiToStep  @ 62,162,171
-  @use call ec:setPos  @ 74,79,157,166,188,197,214,220
-  @use call vm:editEvent  @ 75,80,158,167,189,198,215
-  @use call ec:row  @ 93,97
-  @use call vm:entrySignAt  @ 124,130
-  @use call vm:noteProjection  @ 176
-  @use call cmgr:invoke  @ 221,231
+  @use call tuning.derive  @ 12,21,31
+  @use call vm:setGridSize  @ 46
+  @use call tuning.midiToStep  @ 70,241,250
+  @use call ec:setPos  @ 82,87,101,116,137,147,158,236,245,267,276,293,299
+  @use call vm:editEvent  @ 83,88,102,159,237,246,268,277,294
+  @use call vm:digitsStrike  @ 117,122,138,148
+  @use call ec:pos  @ 119
+  @use call ec:row  @ 120,129,172,176
+  @use call vm:digitsBackspace  @ 125
+  @use call vm:digitsCommit  @ 128
+  @use call vm:digitsActive  @ 139,149
+  @use call vm:entrySignAt  @ 203,209
+  @use call vm:noteProjection  @ 255
+  @use call cmgr:invoke  @ 300,310
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cells  @ 61,80,161,170,192,201,216,223,232
-  @field r cols  @ 43,71
-  @field w config  @ 33
-  @field w currentOctave  @ 34
-  @field r detune  @ 62,103,116,122,140,145,162,171,193,203,226,227
-  @field r detune  @ 230,234
-  @field r grid  @ 43,71
-  @field r lane  @ 44
-  @field r midiChan  @ 44
-  @field r name  @ 35
-  @field w name  @ 13,22,86,111,135,150,182,208
-  @field w notes  @ 32
-  @field r octaveStep  @ 63,172
-  @field r partAt  @ 52
+  @field r cellWidth  @ 113
+  @field r cells  @ 69,88,159,240,249,271,280,295,302,311
+  @field r cols  @ 51,79,98
+  @field w config  @ 41
+  @field w currentOctave  @ 42
+  @field r detune  @ 70,182,195,201,219,224,241,250,272,282,305,306
+  @field r detune  @ 309,313
+  @field r grid  @ 51,79,98
+  @field r lane  @ 52
+  @field r midiChan  @ 52
+  @field r name  @ 43
+  @field w name  @ 13,22,32,109,134,144,154,165,190,214,229,261
+  @field w name  @ 287
+  @field w notes  @ 40
+  @field r octaveStep  @ 71,251
+  @field r octaveWidth  @ 112
+  @field r partAt  @ 60
   @field w periodAsStep  @ 15
-  @field w periodPitch  @ 13,22
-  @field r pitch  @ 62,102,116,121,140,144,162,171,193,202,216,224
-  @field r pitch  @ 225,230,233
-  @field w pitches  @ 14,23
-  @field w project  @ 35
+  @field w periodPitch  @ 13,22,32
+  @field r pitch  @ 70,181,195,200,219,223,241,250,272,281,295,303
+  @field r pitch  @ 304,309,312
+  @field w pitches  @ 14,23,33
+  @field w project  @ 43
   @field w rootDetune  @ 26
   @field w rootOctave  @ 26
   @field w rootPitch  @ 26
   @field w rootStep  @ 26
-  @field w run  @ 87,112,136,151,183,209
-  @field w seed  @ 32
-  @field w stepNames  @ 15,25
-  @field w take  @ 34
-  @field w temper  @ 35
-  @field w tempers  @ 35
-  @field r type  @ 44
+  @field w run  @ 110,135,145,155,166,191,215,230,262,288
+  @field w seed  @ 40
+  @field w stepNames  @ 15,25,34
+  @field w take  @ 42
+  @field w temper  @ 43
+  @field w tempers  @ 43
+  @field r type  @ 52

@@ -932,7 +932,9 @@ do
         else
           local d = char - string.byte('0')
           if d < 0 or d > 9 then return end
-          oct = entrySign(old, 'pitch') * d
+          -- The octave field's places, MS-first: digit 1 is its leading char.
+          local place = (temper and temper.octaveWidth or 1) - digit
+          oct = entrySign(old, 'pitch') * util.setDigit(math.abs(old), d, place, 10, keep)
         end
 
         -- Octave column edits the period-cycle octave: keep the step,
@@ -1227,20 +1229,31 @@ do
 
   ----- Value entry (shift-held gesture: a left-to-right overwrite cursor over a field's places)
 
-  -- Gesture-editable value parts → the event field each stores (pb rides on val).
-  local DIGIT_FIELD = { sample = 'sample', vel = 'vel', delay = 'delay', pb = 'val', val = 'val' }
-  local HEX_PART    = { sample = true, vel = true, val = true }   -- decimal: delay, pb
+  -- Gesture-editable parts → the event fields each writes (pb rides on val; an
+  -- octave edit moves pitch and detune together).
+  local DIGIT_FIELD = { sample = {'sample'}, vel = {'vel'}, delay = {'delay'},
+                        pb = {'val'}, val = {'val'}, pitch = {'pitch', 'detune'} }
+  local HEX_PART    = { sample = true, vel = true, val = true }   -- decimal: delay, pb, pitch
 
-  --shape: digits = { colIdx, row, part, stop0, undo = { { existed, val, stop }, ... } }
+  --shape: digits = { colIdx, row, part, stop0, undo = { { existed, vals, stop }, ... } }
   --invariant: pins (col,row,part); overwrites a place keep-below, steps the sub-caret right
   --invariant: field re-read via cells[row] each keystroke; undo snapshots drive backspace-restore
   local digits = nil
 
-  -- The pinned field's part if the caret sits on a gesture-editable value part.
+  -- The pinned field's part if the caret sits on a gesture-editable part. The
+  -- pitch part's first stop is the note name, which is chordStrike's to take.
   local function digitPartAt(colIdx, stop)
     local col  = grid.cols[colIdx]
     local part = col and col.partAt and col.partAt[stop]
+    if part == 'pitch' and col.partStart[stop] == stop then return end
     if part and DIGIT_FIELD[part] then return part, col end
+  end
+
+  -- The fields a part's gesture writes, as they stand before this keystroke.
+  local function fieldSnapshot(evt, part)
+    local vals = {}
+    for _, f in ipairs(DIGIT_FIELD[part]) do vals[f] = evt[f] end
+    return vals
   end
 
   local function validDigit(part, char)
@@ -1257,12 +1270,16 @@ do
     local part, col = digitPartAt(colIdx, stop)
     if not part or not validDigit(part, char) then return false end
 
+    local evt = col.cells and col.cells[row]
+    -- Every other field's gesture creates its event; an octave has no note to name.
+    if part == 'pitch' and not util.isNote(evt) then return false end
+
     if not (digits and digits.colIdx == colIdx and digits.row == row and digits.part == part) then
       digits = { colIdx = colIdx, row = row, part = part, stop0 = stop, undo = {} }
     end
 
-    local evt = col.cells and col.cells[row]
-    util.add(digits.undo, { existed = evt ~= nil, val = evt and evt[DIGIT_FIELD[part]], stop = stop })
+    util.add(digits.undo,
+      { existed = evt ~= nil, vals = evt and fieldSnapshot(evt, part), stop = stop })
 
     tv:editEvent(col, evt, stop, char, true)   -- keep-below, no per-keystroke advance
 
@@ -1279,7 +1296,7 @@ do
     local col = grid.cols[digits.colIdx]
     local evt = col and col.cells and col.cells[digits.row]
     if snap.existed then
-      if evt then edit.assign(evt, { [DIGIT_FIELD[digits.part]] = snap.val }) end
+      if evt then edit.assign(evt, snap.vals) end
     elseif evt then
       edit.delete(evt)   -- the gesture created this event; drop it
     end
@@ -3845,7 +3862,8 @@ function tv:rebuild(takeChanged)
     local colDisplay   = ds:get('columnDisplay') or {}
     local trackerMode  = cm:get('trackerMode')
     local temper       = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
-    local pitchWidth   = temper and temper.cellWidth or 3
+    local pitchWidth   = temper and temper.cellWidth   or 3
+    local octaveWidth  = temper and temper.octaveWidth or 1
 
     local function addGridCol(chan, type, key, events)
       local showDelay = type == 'note' and (noteDelayCfg[chan] or {})[key] or false
@@ -3873,7 +3891,7 @@ function tv:rebuild(takeChanged)
         gridCol['14bit']   = flags['14bit']
         if flags.label then gridCol.label = flags.label end   -- curve columns override the type label (e.g. 'Curve')
       end
-      ec:decorateCol(gridCol, pitchWidth)   -- stamps parts/stopPos/partAt/partStart/width
+      ec:decorateCol(gridCol, pitchWidth, octaveWidth)   -- stamps parts/stopPos/partAt/partStart/width
       util.add(grid.cols, gridCol)
       grid.chanFirstCol[chan] = grid.chanFirstCol[chan] or #grid.cols
       grid.chanLastCol[chan]  = #grid.cols

@@ -827,7 +827,7 @@ end
 
 do
   -- Part primitives: char `width` and `stops` (cursor offsets within the part).
-  -- pitch is built per-column in decorateCol (width = active cellWidth, stops {0, width-1}).
+  -- pitch is built per-column in decorateCol; see docs/editCursor.md § Decoration.
   local PARTS = {
     sample = { width = 2, stops = {0, 1}    },   -- 7F (tracker mode)
     vel    = { width = 2, stops = {0, 1}    },   -- 30
@@ -854,13 +854,17 @@ do
     end
   end
 
-  --contract: derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
+  --contract: derives col parts from type/showDelay/trackerMode; pitchWidth,octaveWidth size pitch
   --invariant: ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
-  function ec:decorateCol(col, pitchWidth)
+  --invariant: pitchWidth >= 1 (name) + octaveWidth, so the name stop never collides with the octave
+  function ec:decorateCol(col, pitchWidth, octaveWidth)
     local parts = partsFor(col.type, col.showDelay, col.trackerMode)
     col.parts = parts
-    pitchWidth = pitchWidth or 3
-    local pitch = { width = pitchWidth, stops = { 0, pitchWidth - 1 } }
+    pitchWidth  = pitchWidth  or 3
+    octaveWidth = octaveWidth or 1
+    local stops = { 0 }
+    for place = octaveWidth, 1, -1 do util.add(stops, pitchWidth - place) end
+    local pitch = { width = pitchWidth, stops = stops }
     -- 14-bit cc widens the scalar part to 4 hex digits (even last: 0000..7FFE).
     local val14 = { width = 4, stops = { 0, 1, 2, 3 } }
 

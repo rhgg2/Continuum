@@ -26,6 +26,14 @@ local ROOTED = tuning.derive{
   rootPitch = 69, rootDetune = 0, rootStep = 1, rootOctave = 4,
 }
 
+-- A 300-cent period puts 43 periods inside MIDI range, so the octave field is
+-- two chars wide (design/temper-root.md § Negative octaves).
+local NARROW = tuning.derive{
+  name = 'NARROW', periodPitch = '300.',
+  pitches = { '0.', '100.', '200.' },
+  stepNames = {},
+}
+
 local function mk(harness, temper)
   temper = temper or JI
   local h = harness.mk{
@@ -81,7 +89,78 @@ local function rootedNote(harness)
   end
 end
 
+-- Places a note under NARROW and returns the harness, its column index and the
+-- pitch part's three stops: the note name, then the octave's tens and units.
+local function narrowNote(harness)
+  local h   = mk(harness, NARROW)
+  local col = lane1(h)
+  local colIdx
+  for i, c in ipairs(h.vm.grid.cols) do if c == col then colIdx = i end end
+  local nameStop, unitsStop = pitchStops(col)
+
+  h.ec:setPos(0, colIdx, nameStop)
+  h.vm:editEvent(col, nil, nameStop, string.byte('z'), false)
+
+  return h, colIdx, nameStop, unitsStop - 1, unitsStop
+end
+
 return {
+  {
+    name = 'a shift-held digit walks the places of a two-char octave field',
+    run = function(harness)
+      local h, colIdx, _, tensStop, unitsStop = narrowNote(harness)
+      t.eq(NARROW.octaveWidth, 2, 'the octave field is two chars wide')
+      t.eq(NARROW.cellWidth,   4, 'and the cell is a two-char label plus it')
+      t.eq((octaveShown(h, NARROW)), 19, 'MIDI 60 sits at octave 19 under this period')
+
+      h.ec:setPos(0, colIdx, tensStop)
+      t.truthy(h.vm:digitsStrike(string.byte('2')), 'the tens digit is consumed')
+      t.eq((octaveShown(h, NARROW)), 29, 'the tens place is overwritten keep-below')
+      t.eq(select(3, h.ec:pos()), unitsStop, 'the sub-caret stepped to the units place')
+      t.eq(h.ec:row(), 0, 'and the gesture holds the row')
+
+      t.truthy(h.vm:digitsStrike(string.byte('5')), 'the units digit is consumed')
+      t.eq((octaveShown(h, NARROW)), 25, 'the units place is overwritten')
+
+      t.truthy(h.vm:digitsBackspace(), 'backspace is consumed')
+      t.eq((octaveShown(h, NARROW)), 29, 'both pitch and detune came back')
+
+      h.vm:digitsCommit()
+      t.eq(h.ec:row(), 1, 'shift release advances a row')
+    end,
+  },
+
+  {
+    name = 'the octave gesture declines on the note-name stop',
+    run = function(harness)
+      local h, colIdx, nameStop = narrowNote(harness)
+      h.ec:setPos(0, colIdx, nameStop)
+      t.eq(h.vm:digitsStrike(string.byte('2')), false, 'the name stop is chordStrike\'s')
+      t.falsy(h.vm:digitsActive(), 'no gesture armed')
+    end,
+  },
+
+  {
+    name = 'the octave gesture declines on a cell with no note',
+    run = function(harness)
+      local h, colIdx, _, tensStop = narrowNote(harness)
+      h.ec:setPos(4, colIdx, tensStop)
+      t.eq(h.vm:digitsStrike(string.byte('2')), false, 'no note to name an octave of')
+      t.falsy(h.vm:digitsActive(), 'no gesture armed')
+    end,
+  },
+
+  {
+    name = 'a plain digit on the tens place zeroes the units below it',
+    run = function(harness)
+      local h, colIdx, _, tensStop = narrowNote(harness)
+      local col = lane1(h)
+      h.ec:setPos(0, colIdx, tensStop)
+      h.vm:editEvent(col, col.cells[0], tensStop, string.byte('2'), false)
+      t.eq((octaveShown(h, NARROW)), 20, '19 → 2 → 20, as sample and vel behave')
+    end,
+  },
+
   {
     name = "the octave column negates in place, and the next digit keeps the sign",
     run = function(harness)

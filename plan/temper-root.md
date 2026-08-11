@@ -21,10 +21,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-11 tuning: walk the octave field's places with a shift-held digit (§ Negative octaves 9–11)
 - 2026-08-11 tuning: enter a negative octave in the octave column (§ Negative octaves 6–8)
 - 2026-08-11 tuning: follow the root when a step edit moves or deletes its step (§ The blast radius 6–8)
 - 2026-08-11 tuning: author the temper root, keeping it out of the library (§ What a root is, § The blast radius)
-- 2026-08-10 tuning: size the octave field over both ends of the range (§ Negative octaves 4)
 
 ## Now
 
@@ -32,11 +32,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. A shift-held digit overwrites one place of the octave field and stays
-   on the row, the gesture the sample and delay fields already take, so an
-   octave of two digits can be typed. Spec in `vm_temper_entry_spec`.
-
-2. Rewrite `docs/tuning.md` § Coordinate systems and § Addressable range
+1. Rewrite `docs/tuning.md` § Coordinate systems and § Addressable range
    so the anchor is the root rather than `cents 0 ≡ MIDI 0`, drop the
    claim that the first step of every temperament is `C`, and list the
    four authored fields in § Temper shape.

@@ -171,10 +171,17 @@ scale coordinate.**
    two fields that arm. The pending flip is matched on its part as well as
    its row and column, and the sign a digit inherits is its own field's.
 
-9. A period well below the octave puts multiple digits in range. A
-   shift-held digit overwrites one place and stays on the row, which
-   is how the multi-digit fields already take a value
-   (`trackerView.lua:871-873`).
+9. A period well below the octave puts multiple digits in range. The
+   octave field then takes a cursor stop per place, as the other
+   multi-digit fields do, and the note name keeps the single stop it has.
+
+10. A shift-held digit overwrites the place under the caret and stays on
+    the row, which is how the multi-digit fields already take a value
+    (`trackerView.lua:871-873`). Backspace restores that place — for an
+    octave, the pitch and the detune it moved together.
+
+11. The gesture declines on a cell holding no note. Every other field's
+    gesture creates the event it writes to; an octave has no note to name.
 
 ## The blast radius
 

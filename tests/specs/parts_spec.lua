@@ -19,13 +19,13 @@ end
 
 -- Decorate a col through ec; ec needs deps but only `grid` is touched by
 -- decorateCol. Pass an empty grid.
-local function decorate(col, pitchWidth)
+local function decorate(col, pitchWidth, octaveWidth)
   local ec = util.instantiate('editCursor', {
     grid = { cols = {}, numRows = 1 },
     cm = { get = function() return 0 end },
     rowPerBar = function() return 4 end,
   })
-  ec:decorateCol(col, pitchWidth)
+  ec:decorateCol(col, pitchWidth, octaveWidth)
   return col
 end
 
@@ -58,6 +58,17 @@ return {
       t.deepEq(c.parts,   {'pitch', 'vel'}, 'parts')
       t.deepEq(c.stopPos, {0, 3, 5, 6},     'stopPos: pitch {0,3} then vel {5,6}')
       t.eq    (c.width,   7,                'width')
+    end,
+  },
+
+  {
+    -- A temper whose period is well under an octave needs two octave chars, and
+    -- the field takes one stop per char so a digit gesture can walk them.
+    name = 'a two-char octave field takes a stop each: width 4 → pitch stops {0,2,3}',
+    run = function()
+      local c = decorate(mkCol('note', false), 4, 2)
+      t.deepEq(c.stopPos, {0, 2, 3, 5, 6}, 'stopPos: pitch {0,2,3} then vel {5,6}')
+      t.eq    (c.width,   7,               'width')
     end,
   },
 

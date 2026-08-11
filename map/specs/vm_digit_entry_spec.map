@@ -32,7 +32,7 @@
   @case 'backspace restores the overwritten place so you can retype it'  [harness]  @ 100-111
   @case 'hex velocity: nibbles overwrite high then low, keep-below'  [harness]  @ 115-125
   @case 'backspace on a gesture-created cell deletes it'  [harness]  @ 129-138
-  @case 'declines on the pitch part (not a value field)'  [harness]  @ 142-150
+  @case 'declines on the note-name stop of the pitch part'  [harness]  @ 142-150
   @case 'declines a char that is not a digit of the field'  [harness]  @ 154-161
   @case 'a take switch abandons the gesture'  [harness]  @ 165-174
 

@@ -139,7 +139,7 @@ return {
   },
 
   {
-    name = 'declines on the pitch part (not a value field)',
+    name = 'declines on the note-name stop of the pitch part',
     run = function(harness)
       local h = mkNote(harness, 0x40)
       local col, ci = noteCol(h)
