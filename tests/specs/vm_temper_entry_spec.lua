@@ -16,7 +16,7 @@ local JI = tuning.derive{
 }
 
 -- 12EDO rooted at A4 = (step 1, octave 4), the root that puts octaves -2..8
--- in reach (design/temper-root.md § Negative octaves). MIDI 60 reads D#3
+-- in reach (docs/tuning.md § Addressable range). MIDI 60 reads D#3
 -- under it, and octave -2 step 4 is MIDI 0.
 local ROOTED = tuning.derive{
   name = 'ROOTED', periodPitch = '2/1',
@@ -27,7 +27,7 @@ local ROOTED = tuning.derive{
 }
 
 -- A 300-cent period puts 43 periods inside MIDI range, so the octave field is
--- two chars wide (design/temper-root.md § Negative octaves).
+-- two chars wide (docs/tuning.md § Display).
 local NARROW = tuning.derive{
   name = 'NARROW', periodPitch = '300.',
   pitches = { '0.', '100.', '200.' },

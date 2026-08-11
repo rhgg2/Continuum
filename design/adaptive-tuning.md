@@ -146,7 +146,7 @@ step it was written on.**
    target is never displayed.
 
 7. Which of a target's points a note meets depends on where the music
-   sits against that root (`design/temper-root.md`).
+   sits against that root (`docs/tuning.md` § The root).
 
 8. A target's own period is not consulted. The octave is quotiented out
    of the score, so the solver cannot tell a point from the same point
