@@ -127,9 +127,9 @@ step it was written on.**
    (§ Strength).
 
 6. The window is spent before the solve, in building a strand's
-   shortlist (§ What the solver takes). `ctx:noteProjection` already
-   computes both neighbours, but returns only the smaller half-gap
-   (`viewContext.lua:40-42`); the two-sided window is new.
+   shortlist (§ What the solver takes). `tuning.stepWindow` returns both
+   halves; `ctx:noteDeviation` takes the one the note moved toward, which
+   is what the grid's deviation tick normalises by.
 
 7. In 12-EDO the window never binds. Widening it to two and then four
    half-steps, at a pull strength in the usable band (§ Harmonic lock),

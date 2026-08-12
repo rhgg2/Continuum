@@ -252,7 +252,7 @@ return {
 
       t.eq(step, step0, 'scale step preserved across the octave edit')
       t.eq(oct + bump, 5, 'displayed period-cycle octave is the typed digit')
-      local _, _, gap = h.vm:noteProjection(note)
+      local gap = h.vm:noteDeviation(note)
       t.eq(gap, 0, 'note stays exactly on its step (in-temper)')
     end,
   },

@@ -25,23 +25,26 @@ function ctx:activeTemper() return temper end
 -- see docs/viewContext.md § ON_TEMPER_EPS
 local ON_TEMPER_EPS = 1e-6
 
-function ctx:noteProjection(evt)
+--contract: (note, octaveLabel, negative) for the note's step, or nil with no temper bound
+function ctx:noteLabel(evt)
+  if not (temper and evt and evt.pitch) then return end
+  local step, oct = tuning.midiToStep(temper, evt.pitch, evt.detune or 0)
+  return tuning.stepToParts(temper, step, oct)
+end
+
+--contract: (gap, half) in cents off the note's step; half is the gap-side window half, nil unbound
+function ctx:noteDeviation(evt)
   if not (temper and evt and evt.pitch) then return end
   local detune    = evt.detune or 0
   local step, oct = tuning.midiToStep(temper, evt.pitch, detune)
-  local note, octave, negative = tuning.stepToParts(temper, step, oct)
   local tm_, td_  = tuning.stepToMidi(temper, step, oct)
   local gap       = (evt.pitch * 100 + detune) - (tm_ * 100 + td_)
   -- A snapped note's gap is serialisation float dust, not a bend; clear it
   -- or the deviation tick (drawn iff gap ~= 0) paints every note off-temper.
   if math.abs(gap) < ON_TEMPER_EPS then gap = 0 end
 
-  local steps, n, period = temper.cents, #temper.cents, temper.period
-  local left    = step == 1 and steps[n] - period or steps[step - 1]
-  local right   = step == n and steps[1] + period or steps[step + 1]
-  local halfGap = math.min(steps[step] - left, right - steps[step]) / 2
-
-  return note, octave, gap, halfGap, negative
+  local halfDown, halfUp = tuning.stepWindow(temper, step)
+  return gap, gap >= 0 and halfUp or halfDown
 end
 
 ----- Timing

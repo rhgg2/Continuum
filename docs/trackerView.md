@@ -22,9 +22,11 @@ Two responsibilities:
   `chan` argument is retained on the call signature but unused at this
   layer — column-level swing transforms happen above, when events are
   written into / read out of the column tree.
-- **Temperament lens.** `noteProjection(evt)` resolves `(pitch, detune)`
-  into `(label, gap, halfGap)` under the bound temperament, or nil if
-  none active. (Pure coordinate query — see `docs/tuning.md` for the
+- **Temperament lenses.** `noteLabel(evt)` spells `(pitch, detune)` as the
+  parts of a cell label under the bound temperament; `noteDeviation(evt)`
+  reports how far off its step the note sits, and the half of that step's
+  window lying on the side the note moved. Both are nil if no temperament
+  is active. (Pure coordinate queries — see `docs/tuning.md` for the
   underlying model.)
 
 Row placement and off-grid follow the swing-boundary model in
@@ -456,7 +458,7 @@ or `'all'` — on its own step of the active temper. Snap sets no target — it 
 the absence of one (design/adaptive-tuning.md § When an adaptive solve
 exists) — and with no active temper the verb does nothing, there being
 nothing to snap to. A note already seated is skipped:
-`ctx:noteProjection`'s `gap` clears sub-1e-6 serialisation dust before
+`ctx:noteDeviation`'s `gap` clears sub-1e-6 serialisation dust before
 returning, so `gap ~= 0` reads "off its step" with no second epsilon
 anywhere.
 

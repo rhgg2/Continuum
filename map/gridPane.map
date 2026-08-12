@@ -199,7 +199,8 @@
   @use call    tv:logPerRow  @ drawTracker:612
   @use call    tv:moveLaneEvent  @ curveEditorFrame:416,417
   @use call    tv:movePreview  @ drawTracker:616
-  @use call    tv:noteProjection  @ renderNote:108 drawTracker:793
+  @use call    tv:noteDeviation  @ drawTracker:793
+  @use call    tv:noteLabel  @ renderNote:108
   @use call    tv:octaveWidth  @ renderNote:97
   @use call    tv:paintRegionStream  @ handleMouse:1011
   @use call    tv:paramBinding  @ drawTracker:564

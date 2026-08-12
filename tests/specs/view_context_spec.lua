@@ -16,6 +16,14 @@ local function logicalGrid()
   return length // ppqPerRow, length
 end
 
+-- Quarter-comma meantone's twelve-note MOS (Eb..G#, C at the unison): an
+-- unequal scale, so a step's two neighbours sit at different distances.
+local function meantone12()
+  local s = tuning.genRank2('696.5784', '2/1', 12, 8)
+  return tuning.derive{ name = 'QCM12', periodPitch = s.periodPitch,
+                        pitches = s.pitches, stepNames = {} }
+end
+
 local function mkCtx(overrides)
   local numRows, length = logicalGrid()
   local args = {
@@ -289,28 +297,35 @@ return {
   },
 
   {
-    name = 'noteProjection returns nil when no temperament is bound',
+    name = 'both temperament lenses return nil when no temperament is bound',
     run = function()
-      t.eq(mkCtx():noteProjection({ pitch = 60 }), nil)
+      t.eq(mkCtx():noteLabel({ pitch = 60 }), nil)
+      t.eq(mkCtx():noteDeviation({ pitch = 60 }), nil)
     end,
   },
 
   {
-    name = 'noteProjection under 12EDO: pitch 60 maps to C-4 with zero gap',
+    name = 'noteLabel under 12EDO: pitch 60 spells C-4',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
-      local note, octave, gap, halfGap = ctx:noteProjection({ pitch = 60 })
+      local note, octave = ctx:noteLabel({ pitch = 60 })
       t.eq(note .. octave, 'C-4')
-      t.eq(gap, 0)
-      t.eq(halfGap, 50)   -- half of 100¢ between adjacent 12EDO steps
     end,
   },
 
   {
-    name = 'noteProjection reports a negative octave alongside its magnitude',
+    name = 'noteDeviation under 12EDO: an undetuned pitch 60 sits on its step',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
-      local note, octave, _, _, negative = ctx:noteProjection({ pitch = 0 })
+      t.eq(ctx:noteDeviation({ pitch = 60 }), 0)
+    end,
+  },
+
+  {
+    name = 'noteLabel reports a negative octave alongside its magnitude',
+    run = function()
+      local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
+      local note, octave, negative = ctx:noteLabel({ pitch = 0 })
       t.eq(note, 'C-')
       t.eq(octave, '1', 'octave -1 renders as its magnitude')
       t.eq(negative, true, 'and reports itself negative, for the tint')
@@ -318,44 +333,49 @@ return {
   },
 
   {
-    name = 'noteProjection signed gap: positive detune yields positive gap (sharp)',
+    name = 'noteDeviation signed gap: positive detune yields positive gap (sharp)',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
-      local _, _, gap = ctx:noteProjection({ pitch = 60, detune = 20 })
+      local gap = ctx:noteDeviation({ pitch = 60, detune = 20 })
       t.truthy(gap > 0, 'sharp detune ⇒ positive gap, got ' .. tostring(gap))
-      local _, _, gapDown = ctx:noteProjection({ pitch = 60, detune = -20 })
+      local gapDown = ctx:noteDeviation({ pitch = 60, detune = -20 })
       t.truthy(gapDown < 0, 'flat detune ⇒ negative gap, got ' .. tostring(gapDown))
     end,
   },
 
   {
-    name = 'noteProjection: sub-epsilon detune offset reads on-temper (gap clamped)',
+    name = 'noteDeviation: sub-epsilon detune offset reads on-temper (gap clamped)',
     run = function()
       -- Pin the tolerance contract: sub-epsilon offset must read on-temper.
       -- see docs/viewContext.md § ON_TEMPER_EPS
       local temper = tuning.presets['19EDO']
       local pitch, detune = tuning.stepToMidi(temper, 4, 4)
       local ctx = mkCtx{ temper = temper }
-      local _, _, gapDust = ctx:noteProjection({ pitch = pitch, detune = detune + 1e-9 })
+      local gapDust = ctx:noteDeviation({ pitch = pitch, detune = detune + 1e-9 })
       t.eq(gapDust, 0, 'sub-epsilon offset clamps to on-temper')
-      local _, _, gapReal = ctx:noteProjection({ pitch = pitch, detune = detune + 5 })
+      local gapReal = ctx:noteDeviation({ pitch = pitch, detune = detune + 5 })
       t.truthy(math.abs(gapReal) > 1, 'a real bend still registers off-temper, got ' .. tostring(gapReal))
     end,
   },
 
   {
-    name = 'noteProjection halfGap is half the cents-distance to the nearest neighbour',
+    name = 'noteDeviation returns the half of the window the note moved into',
     run = function()
-      local temper = tuning.presets['19EDO']
-      local ctx = mkCtx{ temper = temper }
-      local _, _, _, halfGap = ctx:noteProjection({ pitch = 60 })   -- midi 60 ⇒ step 1
-      -- Step 1 is symmetric: neighbours at -(period - steps[n]) and +steps[2].
-      local n        = #temper.cents
-      local period   = temper.period
-      local left     = temper.cents[n] - period
-      local right    = temper.cents[2]
-      local expected = math.min(temper.cents[1] - left, right - temper.cents[1]) / 2
-      t.eq(halfGap, expected, 'halfGap = half min-neighbour-distance')
+      -- QCM12's unison has 38.02c of room upward and 58.55c downward, so the
+      -- half the deviation carries depends on which way the note bent.
+      local ctx = mkCtx{ temper = meantone12() }
+      local gap, half = ctx:noteDeviation({ pitch = 60, detune = 20 })
+      t.eq(gap, 20)
+      t.truthy(math.abs(half - 38.0244) < 1e-6, 'sharp ⇒ the half toward C#, got ' .. tostring(half))
+
+      gap, half = ctx:noteDeviation({ pitch = 60, detune = -20 })
+      t.eq(gap, -20)
+      t.truthy(math.abs(half - 58.554) < 1e-6, 'flat ⇒ the wider half toward B, got ' .. tostring(half))
+
+      local equal = mkCtx{ temper = tuning.presets['12EDO'] }
+      t.eq(select(2, equal:noteDeviation({ pitch = 60, detune = 20 })), 50)
+      t.eq(select(2, equal:noteDeviation({ pitch = 60, detune = -20 })), 50,
+           'an equal scale keeps both halves the same, so nothing moves there')
     end,
   },
 

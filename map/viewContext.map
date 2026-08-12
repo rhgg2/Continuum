@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=127  mode=chunk  self=ctx
+@module viewContext  src=viewContext.lua  loc=130  mode=chunk  self=ctx
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
@@ -19,57 +19,59 @@
   @state temper = args.temper  @ 17
   @state ctx = {}  @ 18
   @state ON_TEMPER_EPS = 1e-6  @ 26
-  @state PPQ_GRID_EPS = 0.5  @ 71
+  @state PPQ_GRID_EPS = 0.5  @ 74
 
 # Private functions
   -- Temperament
   -- Timing
-  @fn timeSigAt(ppq)  @ 90-97
-  @fn tsRow(ts)  @ 99
+  @fn timeSigAt(ppq)  @ 93-100
+  @fn tsRow(ts)  @ 102
 
 # Public API (ctx:*)
   @api ctx:activeTemper()  @ 22
-  @api ctx:noteProjection(evt)  @ 28-45
-  @api ctx:ppqToRow(ppqI, chan)  @ 50-54
-      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).  @ 49
-  @api ctx:rowToPPQ(row, chan)  @ 57-61
-      @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.  @ 56
-  @api ctx:snapRow(ppqI, chan)  @ 63
-  @api ctx:ppqPerRow()  @ 65
-  @api ctx:isOnGrid(ppqI, chan)  @ 74-77
-      @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.  @ 73
-  @api ctx:placeRow(ppqI, chan)  @ 82-87
+  @api ctx:noteLabel(evt)  @ 29-33
+      @contract  (note, octaveLabel, negative) for the note's step, or nil with no temper bound  @ 28
+  @api ctx:noteDeviation(evt)  @ 36-48
+      @contract  (gap, half) in cents off the note's step; half is the gap-side window half, nil unbound  @ 35
+  @api ctx:ppqToRow(ppqI, chan)  @ 53-57
+      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).  @ 52
+  @api ctx:rowToPPQ(row, chan)  @ 60-64
+      @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.  @ 59
+  @api ctx:snapRow(ppqI, chan)  @ 66
+  @api ctx:ppqPerRow()  @ 68
+  @api ctx:isOnGrid(ppqI, chan)  @ 77-80
+      @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.  @ 76
+  @api ctx:placeRow(ppqI, chan)  @ 85-90
       -- The place loop asks all three of these questions of every event; asking
       -- them separately re-derives the same row ~16 method calls deep.
-      @contract  one row computation; returns (row, cellRow, onGrid) ≡ (ppqToRow, ppqRowOf, isOnGrid)  @ 81
-  @api ctx:rowBeatInfo(row)  @ 101-106
-  @api ctx:barBeatSub(row)  @ 108-124
+      @contract  one row computation; returns (row, cellRow, onGrid) ≡ (ppqToRow, ppqRowOf, isOnGrid)  @ 84
+  @api ctx:rowBeatInfo(row)  @ 104-109
+  @api ctx:barBeatSub(row)  @ 111-127
 
 # Uses (outbound edges)
-  @use call    tuning.midiToStep  @ noteProjection:31
-  @use call    tuning.stepToMidi  @ noteProjection:33
-  @use call    tuning.stepToParts  @ noteProjection:32
-  @use call    util.round  @ snapRow:63 placeRow:84
+  @use call    tuning.midiToStep  @ noteLabel:31 noteDeviation:39
+  @use call    tuning.stepToMidi  @ noteDeviation:40
+  @use call    tuning.stepToParts  @ noteLabel:32
+  @use call    tuning.stepWindow  @ noteDeviation:46
+  @use call    util.round  @ snapRow:66 placeRow:87
   @use require tuning  @ <load>:8
   @use require util  @ <load>:7
 
 # Calls (intra-file)
-  @call ctx:ppqToRow  @ snapRow:63 placeRow:83 tsRow:99
-  @call ctx:rowToPPQ  @ isOnGrid:75 placeRow:85 rowBeatInfo:102
-  @call ctx:snapRow  @ isOnGrid:75
-  @call timeSigAt  @ rowBeatInfo:102
-  @call tsRow  @ rowBeatInfo:104 barBeatSub:113,115,121
+  @call ctx:ppqToRow  @ snapRow:66 placeRow:86 tsRow:102
+  @call ctx:rowToPPQ  @ isOnGrid:78 placeRow:88 rowBeatInfo:105
+  @call ctx:snapRow  @ isOnGrid:78
+  @call timeSigAt  @ rowBeatInfo:105
+  @call tsRow  @ rowBeatInfo:107 barBeatSub:116,118,124
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cents  @ noteProjection:39
-  @field r detune  @ noteProjection:30
-  @field r huge  @ barBeatSub:113
+  @field r detune  @ noteLabel:31 noteDeviation:38
+  @field r huge  @ barBeatSub:116
   @field r length  @ 12
-  @field r num  @ rowBeatInfo:105 barBeatSub:111
+  @field r num  @ rowBeatInfo:108 barBeatSub:114
   @field r numRows  @ 13
-  @field r period  @ noteProjection:39
-  @field r pitch  @ noteProjection:29,31,34
-  @field r ppq  @ timeSigAt:93 tsRow:99
+  @field r pitch  @ noteLabel:30,31 noteDeviation:37,39,41
+  @field r ppq  @ timeSigAt:96 tsRow:102
   @field r ppqPerRow  @ 15
   @field r rowPerBeat  @ 14
   @field r temper  @ 17

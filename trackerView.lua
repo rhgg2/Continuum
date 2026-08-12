@@ -2054,7 +2054,7 @@ local function snapToTemperScope(groups, strength)
   for _, g in ipairs(groups) do
     for _, e in pairs(g.locs) do
       if util.isNote(e) then
-        local _, _, gap = ctx:noteProjection(e)
+        local gap = ctx:noteDeviation(e)
         if gap ~= 0 then
           local pitch, detune = blend(e, strength, tuning.snap(temper, e.pitch, e.detune))
           edit.assign(e, { pitch = pitch, detune = detune })
@@ -3105,7 +3105,8 @@ function tv:takeName()       return tm:name() end
 function tv:activeTemper()   return ctx:activeTemper() end
 function tv:cellWidth()      local t = ctx:activeTemper(); return t and t.cellWidth or 3 end
 function tv:octaveWidth()    local t = ctx:activeTemper(); return t and t.octaveWidth or 1 end
-function tv:noteProjection(evt) return ctx:noteProjection(evt) end
+function tv:noteLabel(evt)     return ctx:noteLabel(evt) end
+function tv:noteDeviation(evt) return ctx:noteDeviation(evt) end
 function tv:rowBeatInfo(row) return ctx:rowBeatInfo(row) end
 function tv:barBeatSub(row) return ctx:barBeatSub(row) end
 function tv:ppqToRow(ppq, chan) return ctx:ppqToRow(ppq, chan) end

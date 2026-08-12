@@ -36,6 +36,14 @@ local function authored(root)
   return tuning.derive(temper)
 end
 
+-- Quarter-comma meantone's twelve-note MOS (Eb..G#, C at the unison): an
+-- unequal scale, so a step's two neighbours sit at different distances.
+local function meantone12()
+  local s = tuning.genRank2('696.5784', '2/1', 12, 8)
+  return tuning.derive{ name = 'QCM12', periodPitch = s.periodPitch,
+                        pitches = s.pitches, stepNames = {} }
+end
+
 -- A4 = 415Hz: the root placed off the unison, so an edit that moves its step
 -- shows up in every pitch the scale sounds.
 local A415 = { rootPitch = 69, rootDetune = -101.27, rootStep = 10, rootOctave = 4 }
@@ -373,6 +381,39 @@ return {
       midi, detune = tuning.stepToMidi(nineteen, 2, 4)
       t.eq(midi, 61)
       t.truthy(math.abs(detune - (1200 / 19 - 100)) < 1e-9, 'detune ' .. detune)
+    end,
+  },
+
+  {
+    name = 'stepWindow halves the distance to each neighbour, wrapping at both ends',
+    run = function()
+      local twelve = tuning.presets['12EDO']
+      local down, up = tuning.stepWindow(twelve, 5)
+      t.eq(down, 50); t.eq(up, 50, 'an interior step of an equal scale is symmetric')
+
+      down, up = tuning.stepWindow(twelve, 1)
+      t.eq(down, 50, 'step 1 finds its lower neighbour a period below the top step')
+      t.eq(up, 50)
+
+      down, up = tuning.stepWindow(twelve, 12)
+      t.eq(down, 50)
+      t.eq(up, 50, 'and the top step finds its upper neighbour a period above the unison')
+    end,
+  },
+
+  {
+    name = 'stepWindow under an unequal scale reports two different halves',
+    run = function()
+      -- QCM12's chromatic semitone (76.05c) is far narrower than the diatonic
+      -- one that wraps the period (117.11c), so the unison's window is lopsided.
+      local qcm = meantone12()
+      local down, up = tuning.stepWindow(qcm, 1)
+      t.truthy(math.abs(down - 58.554) < 1e-6, 'halfDown ' .. down)
+      t.truthy(math.abs(up - 38.0244) < 1e-6, 'halfUp ' .. up)
+
+      down, up = tuning.stepWindow(qcm, 12)
+      t.truthy(math.abs(down - 38.0244) < 1e-6, 'halfDown ' .. down)
+      t.truthy(math.abs(up - 58.554) < 1e-6, 'the same wrap seen from the other end, halfUp ' .. up)
     end,
   },
 

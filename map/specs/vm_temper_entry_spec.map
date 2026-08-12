@@ -1,6 +1,6 @@
 @spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=316  cases=10
 @exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
-@surface   tuning.derive, vm:setGridSize, tuning.midiToStep, ec:setPos, vm:editEvent, vm:digitsStrike, ec:pos, ec:row, vm:digitsBackspace, vm:digitsCommit, vm:digitsActive, vm:entrySignAt, vm:noteProjection, cmgr:invoke
+@surface   tuning.derive, vm:setGridSize, tuning.midiToStep, ec:setPos, vm:editEvent, vm:digitsStrike, ec:pos, ec:row, vm:digitsBackspace, vm:digitsCommit, vm:digitsActive, vm:entrySignAt, vm:noteDeviation, cmgr:invoke
 @harness   mk{seed.notes}
 
 # Intent
@@ -49,7 +49,7 @@
   @use call vm:digitsCommit  @ 128
   @use call vm:digitsActive  @ 139,149
   @use call vm:entrySignAt  @ 203,209
-  @use call vm:noteProjection  @ 255
+  @use call vm:noteDeviation  @ 255
   @use call cmgr:invoke  @ 300,310
 
 # Fields (r read / w write incl. constructor keys)

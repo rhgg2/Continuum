@@ -25,6 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-12 tuning: split noteProjection into label and two-sided deviation (§ The window)
 - 2026-08-12 tv: strength dial on the retune modal (§ Strength)
 - 2026-08-12 tracker: the retune modal on Ctrl+T (§ Where it sits)
 - 2026-08-12 Snap the scope onto the notation (§ First brick 1)
@@ -35,17 +36,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. The window as both half-gaps: `ctx:noteProjection` returns the distance
-   to the step below and the step above in place of the smaller of the two
-   (`viewContext.lua:39-42`), which is the two-sided window of § The
-   window. Its one consumer, the deviation tick in `gridPane.lua:793-796`,
-   then normalises by the side the note moved, so a note 38¢ below C in a
-   twelve-note quarter-comma meantone stops painting as though it sat at
-   the edge of a window that reaches 58.6¢ on that side. Spec in
-   `view_context_spec`: both halves at 50¢ under 12EDO, restating the
-   existing case, and +38.0¢ / −58.6¢ under the meantone MOS.
-
-2. The quantize undo label, which today wraps nothing on the whole-take path
+1. The quantize undo label, which today wraps nothing on the whole-take path
    — adjacent to this phase rather than of it, found while compiling item 1.
    `quantize` and `quantizeKeepRealised` register with `registerAll`'s tuple
    form (`trackerRender.lua:1450-1451`), so the atomic block wraps

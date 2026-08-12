@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=521  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=530  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4
@@ -16,7 +16,7 @@
 # Module-level constants
   @const tuning = {}  @ 12
   @const RATIO_CAP = 1 << 40  @ 368
-  @const MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', '...  @ 506
+  @const MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', '...  @ 515
 
 # Private functions
   -- Temperament presets
@@ -110,15 +110,17 @@
   @api tuning.stepToMidi(temper, step, octave)  @ 467-483
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)  @ 466
   @api tuning.snap(temper, midi, detune)  @ 485-487
-  @api tuning.transposeStep(temper, midi, detune, n)  @ 490-493
-      @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 489
-  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 496-500
-      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 495
+  @api tuning.stepWindow(temper, step)  @ 490-496
+      @contract  half-gaps in cents to steps below/above `step`; both positive, wraps the period  @ 489
+  @api tuning.transposeStep(temper, midi, detune, n)  @ 499-502
+      @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 498
+  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 505-509
+      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 504
   -- Display
-  @api tuning.midiName(pitch)  @ 509-511
-      @contract  MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')  @ 508
-  @api tuning.stepToParts(temper, step, octave)  @ 514-519
-      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 513
+  @api tuning.midiName(pitch)  @ 518-520
+      @contract  MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')  @ 517
+  @api tuning.stepToParts(temper, step, octave)  @ 523-528
+      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 522
 
 # Uses (outbound edges)
   @use call    util.add  @ parseScalaPitches:187 parseScalaFile:197,204 scalaToTemper:222 edoDegrees:241,246,251 degreesToSpec:260 genHarmonics:278 genSubharmonics:285 parseChord:296 combinations:319 genCPS:337 stepSpectrum:386,394 genRank2:415
@@ -134,15 +136,15 @@
   @call edo  @ <load>:152,155,159,164
   @call gcd  @ genCPS:346 stackRatio:378
   @call octaveFieldWidth  @ computeCellWidth:57 derive:95
-  @call octaveLabel  @ octaveFieldWidth:38 stepToParts:518
+  @call octaveLabel  @ octaveFieldWidth:38 stepToParts:527
   @call reduceCents  @ stepSpectrum:386 genRank2:412
   @call restateOnUnison  @ removeStep:128
   @call stackRatio  @ genRank2:411
   @call stepSpectrum  @ mosInfo:425 nextMosSize:435
   @call tuning.derive  @ unrooted:137 edo:143 scalaToTemper:223
-  @call tuning.midiToStep  @ snap:486 transposeStep:491 stepsBetween:497,498
+  @call tuning.midiToStep  @ snap:486 transposeStep:500 stepsBetween:506,507
   @call tuning.scalaPitch  @ scalaPitch:69 derive:85,89 sortSteps:112 scalaToTemper:215,220 genCPS:350 genRank2:407 mosInfo:425 nextMosSize:432
-  @call tuning.stepToMidi  @ snap:486 transposeStep:492
+  @call tuning.stepToMidi  @ snap:486 transposeStep:501
 
 # Unresolved receivers
   @drop equave:match  @ genCPS:330,331
@@ -157,7 +159,8 @@
   @field r c  @ sortSteps:115
   @field w c  @ sortSteps:112
   @field w cellWidth  @ derive:96
-  @field r cents  @ computeRootCents:45 computeCellWidth:50 derive:91 stepSpectrum:392,396 genRank2:417 midiToStep:451 stepToMidi:468 stepsBetween:499
+  @field r cents  @ computeRootCents:45 computeCellWidth:50 derive:91 stepSpectrum:392,396 genRank2:417 midiToStep:451 stepToMidi:468 stepWindow:491
+  @field r cents  @ stepWindow:491 stepsBetween:508
   @field w cents  @ derive:86 stepSpectrum:394 genRank2:415
   @field r count  @ stepSpectrum:393 mosInfo:427
   @field w count  @ stepSpectrum:393,394
@@ -173,7 +176,7 @@
   @field w genSubharmonics  @ genSubharmonics:283
   @field w isMos  @ mosInfo:426,427
   @field w large  @ mosInfo:427
-  @field w midiName  @ midiName:509
+  @field w midiName  @ midiName:518
   @field w midiToStep  @ midiToStep:445
   @field w mosInfo  @ mosInfo:424
   @field w name  @ edo:144 scalaToTemper:224
@@ -182,13 +185,13 @@
   @field w nm  @ sortSteps:112
   @field r octaveBase  @ octaveFieldWidth:36,37 midiToStep:463 stepToMidi:472
   @field w octaveBase  @ derive:94
-  @field r octaveStep  @ stepToParts:515
+  @field r octaveStep  @ stepToParts:524
   @field w octaveStep  @ derive:92
   @field w octaveWidth  @ derive:95
   @field w parseChord  @ parseChord:291
   @field w parseScalaFile  @ parseScalaFile:194
   @field w parseScalaPitches  @ parseScalaPitches:183
-  @field r period  @ octaveFieldWidth:35 derive:89 midiToStep:448 stepToMidi:472
+  @field r period  @ octaveFieldWidth:35 derive:89 midiToStep:448 stepToMidi:472 stepWindow:492
   @field w period  @ derive:89
   @field w periodAsStep  @ scalaToTemper:228 genEqual:271 genHarmonics:279 genSubharmonics:286 genChord:310 genCPS:351 genRank2:420
   @field r periodPitch  @ derive:88,89
@@ -215,14 +218,15 @@
   @field w small  @ mosInfo:427
   @field w snap  @ snap:485
   @field w sortSteps  @ sortSteps:109
-  @field r stepNames  @ computeCellWidth:50 derive:92 sortSteps:112,118 removeStep:127 stepToParts:516
+  @field r stepNames  @ computeCellWidth:50 derive:92 sortSteps:112,118 removeStep:127 stepToParts:525
   @field w stepNames  @ edo:147 scalaToTemper:227
   @field w stepToMidi  @ stepToMidi:467
-  @field w stepToParts  @ stepToParts:514
-  @field w stepsBetween  @ stepsBetween:496
+  @field w stepToParts  @ stepToParts:523
+  @field w stepWindow  @ stepWindow:490
+  @field w stepsBetween  @ stepsBetween:505
   @field r tok  @ sortSteps:117
   @field w tok  @ sortSteps:112
   @field r token  @ genRank2:419
   @field w token  @ genRank2:415
-  @field w transposeStep  @ transposeStep:490
+  @field w transposeStep  @ transposeStep:499
   @field w unrooted  @ unrooted:134

@@ -486,6 +486,15 @@ function tuning.snap(temper, midi, detune)
   return tuning.stepToMidi(temper, tuning.midiToStep(temper, midi, detune))
 end
 
+--contract: half-gaps in cents to steps below/above `step`; both positive, wraps the period
+function tuning.stepWindow(temper, step)
+  local steps, n = temper.cents, #temper.cents
+  local period   = temper.period
+  local below    = step == 1 and steps[n] - period or steps[step - 1]
+  local above    = step == n and steps[1] + period or steps[step + 1]
+  return (steps[step] - below) / 2, (above - steps[step]) / 2
+end
+
 --contract: moves by n scale steps under temper, carrying the octave; n may be negative
 function tuning.transposeStep(temper, midi, detune, n)
   local step, oct = tuning.midiToStep(temper, midi, detune)

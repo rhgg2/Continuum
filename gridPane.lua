@@ -105,7 +105,7 @@ local function renderNote(evt, col, row)
 
   local label, negOctave, octaveLen
   if evt.evType ~= 'pa' then
-    local note, octave, _, _, negative = tv:noteProjection(evt)
+    local note, octave, negative = tv:noteLabel(evt)
     if note then
       -- Both parts right-aligned in their own fields (note field = pitchWidth -
       -- octaveWidth) so the separator and octave units keep fixed columns.
@@ -790,10 +790,10 @@ local function drawTracker()
           if row >= numRows then break end
           local evt = col.cells[row]
           if evt and evt.pitch and not overlay.hidden[evt] then
-            local _, _, gap, halfGap = tv:noteProjection(evt)
-            if gap and gap ~= 0 and halfGap > 0 then
+            local gap, half = tv:noteDeviation(evt)
+            if gap ~= 0 and half > 0 then
               local yTop = gridOriginY + y * cellH + 1
-              local offset = util.clamp(gap / halfGap, -1, 1) * halfW
+              local offset = util.clamp(gap / half, -1, 1) * halfW
               screenPainter.line(fieldLeft, yTop, fieldRight, yTop, 'accent', 1)
               local tickX = fieldMid + offset
               screenPainter.line(tickX, yTop - 1, tickX, yTop + 2, 'accent', 1)
