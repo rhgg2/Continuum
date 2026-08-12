@@ -199,30 +199,35 @@ step it was written on.**
 1. Score the common chords two ways: with prime 5 admitted, and with
    only prime 3.
 
-   | chord | 5-limit | fifths only |
-   |---|---|---|
-   | fifth C–G | 1.58 | 1.58 |
-   | sus4 C–F–G | 3.17 | 3.17 |
-   | major C–E–G | 3.91 | 6.34 |
-   | minor C–E♭–G | 3.91 | 6.34 |
-   | maj7 C–E–G–B | 3.91 | 7.92 |
-   | dom7 C–E–G–B♭ | 7.81 | 9.51 |
-   | dim C–E♭–G♭ | 7.81 | 9.51 |
-   | **aug C–E–G♯** | **4.64** | **12.68** |
-   | septimal C–B♭ | *no reading* | *no reading* |
+   | chord | 5-limit spelling | 5-limit | fifths only |
+   |---|---|---|---|
+   | fifth C–G | 1/1 3/2 | 1.58 | 1.58 |
+   | sus4 C–F–G | 1/1 4/3 3/2 | 3.17 | 3.17 |
+   | major C–E–G | 1/1 5/4 3/2 | 3.91 | 6.34 |
+   | minor C–E♭–G | 1/1 6/5 3/2 | 3.91 | 6.34 |
+   | maj7 C–E–G–B | 1/1 5/4 3/2 15/8 | 3.91 | 7.92 |
+   | dom7 C–E–G–B♭ | 1/1 5/4 3/2 9/5 | 7.81 | 9.51 |
+   | dim C–E♭–G♭ | 1/1 6/5 36/25 | 7.81 | 9.51 |
+   | **aug C–E–G♯** | **1/1 5/4 25/16** | **4.64** | **12.68** |
+   | septimal C–B♭ | — | *no reading* | *no reading* |
 
-2. They agree exactly where the music needs only fifths, and their
+2. The spellings are the notation's. Where the target offers a more
+   compact reading, the solver takes it, and the two rows at 7.81 both
+   fall to 7.08 — the dom7 at `16/9`, the dim at `64/45`. Every other
+   row already takes the most compact 5-limit reading.
+
+3. They agree exactly where the music needs only fifths, and their
    orderings agree down the middle.
 
-3. They part at the augmented triad: with prime 5 it is two stacked
+4. They part at the augmented triad: with prime 5 it is two stacked
    `5/4`s and scores below the dominant seventh; on fifths alone it is
    eight of them and the most remote sonority in the system.
 
-4. A solver told to make sonorities compact will treat that chord as
+5. A solver told to make sonorities compact will treat that chord as
    ordinary or as a crisis depending on nothing but which target it was
    handed.
 
-5. Which primes a target admits also decides which sonorities exist at
+6. Which primes a target admits also decides which sonorities exist at
    all. The septimal seventh has an address in neither column; admit
    prime 7 and the same dyad scores 2.81.
 

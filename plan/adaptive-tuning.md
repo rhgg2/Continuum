@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-13 sonority: the box score over a set of coords (§ What "in tune" means)
 - 2026-08-12 tv: undo labels on the verb, not the command (adjacent to § Where it sits)
 - 2026-08-12 tuning: split noteProjection into label and two-sided deviation (§ The window)
 - 2026-08-12 tv: strength dial on the retune modal (§ Strength)
-- 2026-08-12 tracker: the retune modal on Ctrl+T (§ Where it sits)
 
 ## Now
 
@@ -41,31 +41,21 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The box score.** `sonority.score`, in a new pure module
-   `sonority.lua`, takes a set of coord tables and returns the sum over
-   the odd primes of the highest exponent less the lowest, each span
-   weighted by `log₂ p` (§ What "in tune" means). The spec pins the
-   5-limit column of § Choosing the target chooses the theory: the fifth
-   at 1.58, sus4 at 3.17, major, minor and maj7 at 3.91, aug at 4.64,
-   dom7 and dim at 7.81. It pins that adding a constant to every coord
-   on an axis leaves the score alone, and that repeating a member of the
-   set does too.
-
-2. **The sonority walk.** `sonority.walk` takes the strands and `n`, and
+1. **The sonority walk.** `sonority.walk` takes the strands and `n`, and
    returns for each onset the last `n` distinct step-classes struck at
    or before it (§ The model). Distinctness is by class, so a repeated
    note and an octave doubling each spend one entry. The spec pins that
    a block chord and an arpeggio of it hand back the same set, and that
    at `n` one above the arity consecutive sonorities still overlap.
 
-3. **The objective over a placement.** `sonority.cost` takes the
+2. **The objective over a placement.** `sonority.cost` takes the
    strands, `n`, the pull strength and one candidate index per strand,
    and returns the box summed over the walk's sonorities plus
    `strength × strain²` per strand (§ Harmonic lock). The pull is
    counted once per strand, so an octave doubling changes no answer.
    This scorer is what the next item's spec measures the DP against.
 
-4. **The DP.** `sonority.solve` returns the index per strand minimising
+3. **The DP.** `sonority.solve` returns the index per strand minimising
    that cost, by dynamic programming along the onsets (§ Solving it).
    The state carries the chosen candidate of the `n−1` most recently
    distinct step-classes, together with any strand whose strikes are not
@@ -76,7 +66,7 @@
    holding the ii's D through the V costs the V 0.118 of box
    (§ The strand).
 
-5. **The dominant seventh.** A spec fixes the pull's scale on a
+4. **The dominant seventh.** A spec fixes the pull's scale on a
    hand-worked C7 resolving to its tonic (§ First brick). Its shortlists
    are ratio lists written into the spec, so no target mechanism is
    needed to run it. Below a pull of 0.97 the chord takes the otonal

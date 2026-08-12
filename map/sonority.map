@@ -1,0 +1,26 @@
+@module sonority  src=sonority.lua  loc=41  mode=namespace  self=sonority
+
+# Shapes
+  @shape  Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing  @ 6
+
+# Module-level constants
+  @const sonority = {}  @ 7
+      @invariant  pure module: no module state, no ratios, no cents — coords in, a number out  @ 5
+  @const weights = {}  @ 12
+
+# Private functions
+  -- The box
+  @fn weight(prime)  @ 13-17
+
+# Public API (sonority.*)
+  @api sonority.score(coordSet)  @ 23-39
+      -- The axes are gathered before any is measured: a member holding no exponent on
+      -- an axis sits at 0 there, and that 0 is only in the span once the axis is known
+      -- to exist — an axis every member names does not reach back to the origin.
+      @contract  coords[] → Σ over the odd primes of (highest exponent − lowest) × log₂ p  @ 22
+
+# Calls (intra-file)
+  @call weight  @ score:36
+
+# Fields (r read / w write incl. constructor keys)
+  @field w score  @ score:23
