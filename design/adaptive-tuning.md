@@ -286,10 +286,15 @@ step it was written on.**
     best compromise they can agree on. That coupling is what makes this
     one global problem rather than a bag of chords.
 
-11. The objective is evaluated once per onset, over the set current when
+11. The compromise can overturn a chord's own preference. A C7
+    sounding alone takes the otonal `4:5:6:7` (§ Harmonic lock); when
+    resolving to F–A–C it takes the Pythagorean `16/9` under any pull.
+    The global solve imposes a kind of harmonic utilitarianism.
+
+12. The objective is evaluated once per onset, over the set current when
     every note struck there has been placed.
 
-12. Where classes strike together the lowest counts as the most recent.
+13. Where classes strike together the lowest counts as the most recent.
     A released chord at `n` one above the arity leaves one class to the
     sonority that follows, and that class is its bass — in root
     position, its root.
@@ -455,9 +460,9 @@ step it was written on.**
    written C7's doubled seventh gives up its otonal tuning.
 
 5. A worked case fixes the scale. Under the 7-limit diamond at odd limit
-   9, a written C7 takes the otonal `4:5:6:7` below a pull of 0.97 and
-   the Pythagorean `16/9` above it, trading 0.36 of box against 27¢ of
-   fidelity.
+   9, a written C7 sounding alone takes the otonal `4:5:6:7` below a pull
+   of 0.95 and the Pythagorean `16/9` above it, trading 0.36 of box
+   against 27¢ of fidelity.
 
 6. So the dial's useful travel is roughly 0 → 2, and 1 is where the
    commonest trade turns over.
@@ -558,9 +563,9 @@ step it was written on.**
    grid's deviation ticks.
 
 2. Then the objective, as a pure module: the score and the sonority
-   walk, hand-worked on a dominant seventh resolving to a tonic,
-   confirming the solver picks the otonal `4:5:6:7` and the resolution
-   the ear expects.
+   walk, hand-worked on a dominant seventh sounding alone, confirming
+   the solver picks the otonal `4:5:6:7` and gives it up where
+   § Harmonic lock says it does.
 
 3. Its shortlists are built from a list of ratios written into the spec
    — the shape a target takes (§ What a target is) — so no target

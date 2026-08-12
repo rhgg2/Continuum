@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-13 sonority: the objective over a placement (§ What "in tune" means)
 - 2026-08-13 sonority: the walk over strands, one sonority per onset (§ The model)
 - 2026-08-13 sonority: the box score over a set of coords (§ What "in tune" means)
 - 2026-08-12 tv: undo labels on the verb, not the command (adjacent to § Where it sits)
-- 2026-08-12 tuning: split noteProjection into label and two-sided deviation (§ The window)
 
 ## Now
 
@@ -41,14 +41,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The objective over a placement.** `sonority.cost` takes the
-   strands, `n`, the pull strength and one candidate index per strand,
-   and returns the box summed over the walk's sonorities plus
-   `strength × strain²` per strand (§ Harmonic lock). The pull is
-   counted once per strand, so an octave doubling changes no answer.
-   This scorer is what the next item's spec measures the DP against.
-
-2. **The DP.** `sonority.solve` returns the index per strand minimising
+1. **The DP.** `sonority.solve` returns the index per strand minimising
    that cost, by dynamic programming along the onsets (§ Solving it).
    The state carries the chosen candidate of the `n−1` most recently
    distinct step-classes, together with any strand whose strikes are not
@@ -59,14 +52,16 @@
    holding the ii's D through the V costs the V 0.118 of box
    (§ The strand).
 
-3. **The dominant seventh.** A spec fixes the pull's scale on a
-   hand-worked C7 resolving to its tonic (§ First brick). Its shortlists
+2. **The dominant seventh.** A spec fixes the pull's scale on a
+   hand-worked C7 sounding alone (§ First brick). Its shortlists
    are ratio lists written into the spec, so no target mechanism is
-   needed to run it. Below a pull of 0.97 the chord takes the otonal
+   needed to run it. Below a pull of 0.95 the chord takes the otonal
    `4:5:6:7` and above it the Pythagorean `16/9`, trading 0.36 of box
-   against 27¢ of fidelity (§ Harmonic lock).
+   against 27¢ of fidelity (§ Harmonic lock). Resolving it to F–A–C
+   takes the Pythagorean under any pull (§ The model), so the
+   calibration chord stands alone.
 
-4. **The walk over what sounds.** `sonority.walk` reads the notes'
+3. **The walk over what sounds.** `sonority.walk` reads the notes'
    releases and takes everything sounding at an onset together with the
    last `n−1` distinct classes struck before it (§ Open). The extra
    state is bounded by the polyphony rather than by `n`. The item

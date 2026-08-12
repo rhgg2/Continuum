@@ -6,6 +6,9 @@
 -- Pins the walk of § The model too: which strands are current at each onset,
 -- distinctness by step-class, and the bass as the class a released chord
 -- leaves behind it.
+--
+-- Pins the objective the solve minimises: the box summed over the walk's
+-- sonorities, and the pull counted once per strand (§ Harmonic lock).
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -95,6 +98,50 @@ local function struck(list)
   local strands = {}
   for i, note in ipairs(list) do strands[i] = strand(note[1], { { note[2], note[3] } }) end
   return strands
+end
+
+-- A strand as the solver reads it: the walk's shape with a shortlist of
+-- candidates, each carrying the coords it would take and its strain.
+local function placed(class, notes, candidates)
+  local built = strand(class, notes)
+  built.shortlist = candidates
+  return built
+end
+
+-- Strands of one note and one candidate, given as { class, ppq, pitch, coords,
+-- strain }, with the choice that takes each strand's only candidate.
+local function fixed(list)
+  local strands, choice = {}, {}
+  for i, entry in ipairs(list) do
+    strands[i] = placed(entry[1], { { entry[2], entry[3] } },
+      { { coords = entry[4], strain = entry[5] } })
+    choice[i] = 1
+  end
+  return strands, choice
+end
+
+-- The strain of a ratio written on a 12-EDO step: its distance from that step
+-- as a fraction of the 50¢ half-window.
+local function strainOf(num, den, step)
+  return math.abs(1200 * math.log(num / den, 2) - step) / 50
+end
+
+-- The pitches the objective's cases are built from.
+local just = {
+  C = {}, E = { [5] = 1 }, G = { [3] = 1 },
+  D = { [3] = 2 }, Fsharp = { [3] = 2, [5] = 1 }, A = { [3] = 3 },
+  septimal = { [7] = 1 }, pythagorean = { [3] = -2 },
+}
+
+-- C major then D major, disjoint in class: at n=3 each onset stands alone, and
+-- at n=5 the second sonority holds two classes of the first as well.
+local function triads(cStrain, dStrain)
+  return fixed{
+    { 0,   0, 60, just.C,      cStrain }, { 4, 0, 64, just.E,       0 },
+    { 7,   0, 67, just.G,      0       },
+    { 2, 960, 62, just.D,      dStrain }, { 6, 960, 66, just.Fsharp, 0 },
+    { 9, 960, 69, just.A,      0       },
+  }
 end
 
 local function classesAt(strands, sonorityAt)
@@ -208,6 +255,67 @@ return {
       for _, index in ipairs(walked[4].strands) do
         t.truthy(index ~= 1, 'the C that struck first has left the sonority')
       end
+    end,
+  },
+
+  {
+    name = 'the box is summed over the walk rather than over the onsets',
+    run = function()
+      local strands, choice = triads(0, 0)
+      near(sonority.cost(strands, 3, 0, choice), 7.81, 'two triads, neither straddling')
+      near(sonority.cost(strands, 5, 0, choice), 10.98, 'the second holding the C and E too')
+    end,
+  },
+
+  {
+    name = "the pull is the strength times the square of a strand's strain",
+    run = function()
+      local strands, choice = triads(0.2, 0.4)
+      near(sonority.cost(strands, 3, 0, choice), 7.81, 'at no strength the box stands alone')
+      near(sonority.cost(strands, 3, 3, choice), 8.41, 'and three times 0.04 + 0.16 above it')
+    end,
+  },
+
+  {
+    name = 'the pull is counted once per strand however many notes write it',
+    run = function()
+      local plain, choice = fixed{
+        { 0, 0, 60, just.C, 0.5 }, { 4, 0, 64, just.E, 0 }, { 7, 0, 67, just.G, 0 },
+      }
+      near(sonority.cost(plain, 3, 1, choice), 4.16, 'the triad and the one strain in it')
+
+      local doubled = {
+        placed(0, { { 0, 60 }, { 0, 72 } }, { { coords = just.C, strain = 0.5 } }),
+        plain[2], plain[3],
+      }
+      t.eq(sonority.cost(doubled, 3, 1, choice), sonority.cost(plain, 3, 1, choice),
+        'the octave doubling changes no answer')
+    end,
+  },
+
+  {
+    name = "the C7's two sevenths cross at a pull of 0.95",
+    run = function()
+      local strands, choice = fixed{
+        { 0, 0, 60, just.C, 0 },
+        { 4, 0, 64, just.E, strainOf(5, 4, 400) },
+        { 7, 0, 67, just.G, strainOf(3, 2, 700) },
+      }
+      strands[4] = placed(10, { { 0, 70 } }, {
+        { coords = just.septimal,    strain = strainOf(7,  4, 1000) },
+        { coords = just.pythagorean, strain = strainOf(16, 9, 1000) },
+      })
+      choice[4] = 1
+      local otonal, pythagorean = choice, { 1, 1, 1, 2 }
+
+      near(sonority.cost(strands, 5, 0, otonal), 6.71, 'the otonal 4:5:6:7')
+      near(sonority.cost(strands, 5, 0, pythagorean), 7.08, 'and 16/9 above it by 0.36 of box')
+      t.truthy(sonority.cost(strands, 5, 0.94, otonal)
+             < sonority.cost(strands, 5, 0.94, pythagorean),
+        'below the crossing the chord keeps its septimal seventh')
+      t.truthy(sonority.cost(strands, 5, 0.96, pythagorean)
+             < sonority.cost(strands, 5, 0.96, otonal),
+        'and above it gives it up for 27¢ of fidelity')
     end,
   },
 }

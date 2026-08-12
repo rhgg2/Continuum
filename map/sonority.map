@@ -1,4 +1,4 @@
-@module sonority  src=sonority.lua  loc=92  mode=namespace  self=sonority
+@module sonority  src=sonority.lua  loc=114  mode=namespace  self=sonority
 
 # Invariants & contracts
   @invariant  pure module: no state, no ratios, no cents — coords, strikes, classes in, indices out  @ 5
@@ -7,55 +7,68 @@
   @shape  Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing  @ 6
   @shape  Strand = { notes={ {ppq,pitch,..},.. }, class=<step-class>, shortlist={ Candidate,.. } }; the walk reads the strikes and the class only  @ 7
   @shape  Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, at most n entries  @ 8
+  @shape  Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }  @ 9
 
 # Imports
-  @const util = 'util'  @ 10
+  @const util = 'util'  @ 11
 
 # Module-level constants
-  @const sonority = {}  @ 11
-  @const weights = {}  @ 16
+  @const sonority = {}  @ 12
+  @const weights = {}  @ 17
 
 # Private functions
   -- The box
-  @fn weight(prime)  @ 17-21
+  @fn weight(prime)  @ 18-22
   -- The walk
-  @fn strikesInOrder(strands)  @ 49-62
+  @fn strikesInOrder(strands)  @ 50-63
       -- Every strike, in onset order, lowest last — so a released chord leaves its
       -- bass to the sonority that follows (design/adaptive-tuning.md § The model).
-  @fn promote(recent, strands, index)  @ 66-72
+  @fn promote(recent, strands, index)  @ 67-73
       -- The class holds one entry however many notes write it: a restrike moves its
       -- own entry to the front, and a second strand of the class takes the entry over.
 
 # Public API (sonority.*)
-  @api sonority.score(coordSet)  @ 27-43
+  @api sonority.score(coordSet)  @ 28-44
       -- The axes are gathered before any is measured: a member holding no exponent on
       -- an axis sits at 0 there, and that 0 is only in the span once the axis is known
       -- to exist — an axis every member names does not reach back to the origin.
-      @contract  coords[] → Σ over the odd primes of (highest exponent − lowest) × log₂ p  @ 26
-  @api sonority.walk(strands, n)  @ 77-90
+      @contract  coords[] → Σ over the odd primes of (highest exponent − lowest) × log₂ p  @ 27
+  @api sonority.walk(strands, n)  @ 78-91
       -- The whole onset is absorbed before the window is trimmed, so a chord wider
       -- than n leaves its own lowest notes standing rather than its predecessor's.
-      @contract  strands, n → a Sonority per distinct onset, the last n distinct classes struck so far  @ 76
+      @contract  strands, n → a Sonority per distinct onset, the last n distinct classes struck so far  @ 77
+  -- The objective
+  @api sonority.cost(strands, n, strength, choice)  @ 98-112
+      -- The pull is counted once per strand rather than once per note, so an octave
+      -- doubling changes no answer: the box already charges it nothing.
+      @contract  strands, n, strength, choice → box over the walk + strength × strain² per strand  @ 97
 
 # Uses (outbound edges)
-  @use call    util.add  @ strikesInOrder:53 walk:87
-  @use call    util.clone  @ walk:86
-  @use require util  @ <load>:10
+  @use call    util.add  @ strikesInOrder:54 walk:88 cost:103
+  @use call    util.clone  @ walk:87
+  @use require util  @ <load>:11
 
 # Calls (intra-file)
-  @call promote  @ walk:82
-  @call strikesInOrder  @ walk:78
-  @call weight  @ score:40
+  @call promote  @ walk:83
+  @call sonority.score  @ cost:105
+  @call sonority.walk  @ cost:100
+  @call strikesInOrder  @ walk:79
+  @call weight  @ score:41
 
 # Fields (r read / w write incl. constructor keys)
-  @field r class  @ promote:67,69
-  @field r notes  @ strikesInOrder:52
-  @field r pitch  @ strikesInOrder:53,58
-  @field w pitch  @ strikesInOrder:53
-  @field r ppq  @ strikesInOrder:53,57 walk:80,81
-  @field w ppq  @ strikesInOrder:53 walk:87
-  @field w score  @ score:27
-  @field r strand  @ strikesInOrder:59 walk:82
-  @field w strand  @ strikesInOrder:53
-  @field w strands  @ walk:87
-  @field w walk  @ walk:77
+  @field r class  @ promote:68,70
+  @field r coords  @ cost:103
+  @field w cost  @ cost:98
+  @field r notes  @ strikesInOrder:53
+  @field r pitch  @ strikesInOrder:54,59
+  @field w pitch  @ strikesInOrder:54
+  @field r ppq  @ strikesInOrder:54,58 walk:81,82
+  @field w ppq  @ strikesInOrder:54 walk:88
+  @field w score  @ score:28
+  @field r shortlist  @ cost:103,108
+  @field r strain  @ cost:108
+  @field r strand  @ strikesInOrder:60 walk:83
+  @field w strand  @ strikesInOrder:54
+  @field r strands  @ cost:102
+  @field w strands  @ walk:88
+  @field w walk  @ walk:78

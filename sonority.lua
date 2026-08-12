@@ -6,6 +6,7 @@
 --shape: Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing
 --shape: Strand = { notes={ {ppq,pitch,..},.. }, class=<step-class>, shortlist={ Candidate,.. } }; the walk reads the strikes and the class only
 --shape: Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, at most n entries
+--shape: Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }
 
 local util = require 'util'
 local sonority = {}
@@ -87,6 +88,27 @@ function sonority.walk(strands, n)
     util.add(sonorities, { ppq = ppq, strands = current })
   end
   return sonorities
+end
+
+----- The objective
+
+-- The pull is counted once per strand rather than once per note, so an octave
+-- doubling changes no answer: the box already charges it nothing.
+--contract: strands, n, strength, choice → box over the walk + strength × strain² per strand
+function sonority.cost(strands, n, strength, choice)
+  local total = 0
+  for _, current in ipairs(sonority.walk(strands, n)) do
+    local coordSet = {}
+    for _, index in ipairs(current.strands) do
+      util.add(coordSet, strands[index].shortlist[choice[index]].coords)
+    end
+    total = total + sonority.score(coordSet)
+  end
+  for index, strand in ipairs(strands) do
+    local strain = strand.shortlist[choice[index]].strain
+    total = total + strength * strain * strain
+  end
+  return total
 end
 
 return sonority
