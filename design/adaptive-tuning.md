@@ -1,7 +1,7 @@
 # Design — Adaptive tuning
 
-> opened: 2026-07-04 · status: working design — the solver's boundary
-> settled, unstarted
+> opened: 2026-07-04 · status: in flight — plan/adaptive-tuning.md, at
+> phase 1 (snap); the solver's boundary settled
 
 **Solve a selection in one pass for a single detune per note that
 makes its sounding sonorities as harmonious as they can jointly be
@@ -16,9 +16,9 @@ step it was written on.**
 2. The solve selects rather than adjusts: each note lands on exactly
    one point of the target (§ What a target is), never between two.
 
-3. The conventions it needs exist: `scopedAction` for
-   selection-or-whole-take (`trackerRender.lua:813-819`), `eventsByCol`
-   and `allGroups` for the note set, `registerAll`'s tuple form for the
+3. The conventions it needs exist: `eventsByCol` and `allGroups` for the
+   note set, `modalHost:registerKind` for a modal carrying the slots
+   (`trackerRender.lua:753-809`), and `registerAll`'s tuple form for the
    undo label.
 
 4. Behind the command sits a pure function, strands in and a choice per
@@ -35,6 +35,11 @@ step it was written on.**
    (`trackerView.lua:566-572`), and every consumer resolves exactly one
    name.
 
+7. One command opens one modal, and every retuning facility the tracker
+   offers is reached through it — this one, and the adaptive just
+   intonation of `design/adaptive-ji.md`. Scope and strength are common to
+   all of them; the remaining slots belong to the facility chosen.
+
 ## The command's slots
 
 1. Scope — which notes.
@@ -49,10 +54,13 @@ step it was written on.**
 4. Sonority size — `n`, set above the arity of the largest chord to be
    recognised when spread out in time (§ The model).
 
-5. Pull strength — how hard the written pitch pulls back
+5. Harmonic lock — how hard the written pitch pulls back
    (§ Harmonic lock).
 
 6. Boundary — how far the collar reaches (§ Seams).
+
+7. Strength — how far toward the answer the notes actually move
+   (§ Strength).
 
 ## What "in tune" means
 
@@ -110,7 +118,8 @@ step it was written on.**
    stashed beside the note to hold it.
 
 5. The pull is toward that recovered step rather than the note's
-   current cents, which makes the operation idempotent.
+   current cents, which makes the operation idempotent at full strength
+   (§ Strength).
 
 6. The window is spent before the solve, in building a strand's
    shortlist (§ What the solver takes). `ctx:noteProjection` already
@@ -404,8 +413,8 @@ step it was written on.**
 
 ## Harmonic lock
 
-1. The strength of the pull is the command's only expressive control —
-   how far fidelity to the written pitch yields to purity.
+1. The pull's strength is what trades fidelity to the written pitch
+   against purity.
 
 2. It is **harmonic lock** on the modal: a field beside the scope, set
    per invocation.
@@ -437,6 +446,37 @@ step it was written on.**
 8. The pull rather than `n` bounds an edit's blast radius: at a pull
    near 1, changing one note of twenty moved two or three of the others,
    by under 4¢.
+
+## Strength
+
+1. **Strength** is how far toward the answer a note actually moves: the
+   detune the note carries is interpolated with the one the command
+   computed, and α of the way is where it lands.
+
+2. It is a post-pass on the displacement rather than a term in the
+   objective. The solve always lands on a target point (§ What a target
+   is); a blend lands between two, which is a position no target holds and
+   no solve would choose.
+
+3. It is uniform over the facilities the command offers, reading only the
+   displacement each one computed. Snap is the trivial case: at full
+   strength every note reaches its step, and at half it closes half the
+   distance to it.
+
+4. Interpolating from the carried detune breaks idempotence deliberately.
+   A note taken half way is taken half way again on the next invocation.
+
+5. At full strength the operation is idempotent as before, the answer
+   depending on the recovered step alone (§ The window).
+
+6. The idempotent blend is a composition of two invocations rather than a
+   second dial: snap at full strength, then solve at α. The snap puts the
+   note on its step, so the detune the solve interpolates from is the
+   anchor.
+
+7. There is no shortage of material for it. Switching temper relabels
+   rather than moves, so a take authored under one notation reads wholly
+   off the grid of the next.
 
 ## Seams
 
@@ -541,17 +581,7 @@ step it was written on.**
    unmoved is quiet, and a target with a hole in it is common enough
    that refusal may be too blunt (§ What the solver takes).
 
-6. Whether to offer a strength dial — retuning the selection *half way*
-   toward the target. It is not the pull restated: the pull always
-   lands on a target point, where a blend lands between two. It would
-   be a post-pass on the solved displacement, idempotent for the same
-   reason the solve is (§ The window) — re-derive the target from the
-   recovered step, and α applied twice is α rather than `1−(1−α)²`.
-   There is no shortage of material for it: switching temper relabels
-   rather than moves, so a take authored under one notation reads wholly
-   off the grid of the next.
-
-7. Where the key belongs. A root says where a scale sits in sound;
+6. Where the key belongs. A root says where a scale sits in sound;
    which of a target's points the material meets is a further question,
    and nothing answers it yet. Root state showed the tier an answer
    could sit on: the library holds a scale and a project holds a scale
