@@ -108,3 +108,30 @@ matching them keeps the codebase reading as one voice.
   multi-line bodies are extracted to a named `local function` rather
   than inlining a closure that breaks the alignment.
 - Section banners: `----- Name`. Major: `----------- PUBLIC`.
+
+## `util.lua`
+
+This is a grab-bag of idioms that recur in the code.
+
+- `util.add(t, v)` for `t[#t+1] = v`
+- `util.bucket(t, k, v)` appends `v` to a table under `t[k]`, creating
+  it if `nil`.
+- `util.assign(t1, t2)` merges keys of `t2` into `t1`; clear a key
+  with the sentinel `util.REMOVE`.
+- `util.clone(src, exclude)` (shallow) and `util.deepClone` (deep).
+- `util.deepEq(t1, t2)`.
+- `util.key(...)` builds an opaque NUL-joined compound key; also
+  `util.keys(t)` for the key list of a table.
+- For ppq-sorted dense tables: `util.seek` for the event before/after
+  a ppq, `util.between` for a half-open window, `util.insertSorted` to
+  splice without a re-sort.
+- `util.isNote(e)` is the note/CC test.
+- Scalars: `util.clamp`, `util.round(n, to)`.
+- `util.installHooks(owner)` installs the subscribe/unsubscribe/forward
+  protocol on `owner` and returns its `fire`.
+- `util.atomic(label, fn)` wraps a call as one REAPER undo block.
+- `util.instantiate(name, deps)` runs a factory module, and is the test
+  seam via `util._stubs`.
+- Persistence: `util.serialise`/`unserialise` for the escaped P_EXT
+  wire form, `util.prettySerialise`/`prettyUnserialise` for a
+  hand-editable Lua literal.

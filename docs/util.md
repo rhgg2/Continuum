@@ -30,10 +30,16 @@ intent, and the note could never regrow. Openness as a *value of*
 overwritten from a realised clip.
 
 Unlike `REMOVE` (a unique table, identity-compared, transient), `OPEN`
-is a plain string: it round-trips `serialise`/`unserialise` by value
-and stays `==`-comparable across a take reload. `endppqL` is otherwise
-numeric, so the string is unambiguous; the one site feeding it into
-arithmetic (tm's tail pass) maps `OPEN` to `math.huge`.
+is `math.huge` — a persisted *value* of `endppqL`, and a number like
+any other ceiling. Arithmetic on an open tail then just works: `inf +
+finite` is `inf`, `inf > finite` is true, `math.min(inf, src)` is
+`src`. Callers compare against `OPEN` to say they mean an open tail,
+not to keep one out of a sum.
+
+`tostring` of a non-finite float is platform-dependent, so both disk
+formats pin the wire form themselves: `serialise` writes the literals
+`inf` / `-inf` / `nan`, `prettySerialise` the arithmetic forms `1/0`,
+`-1/0`, `0/0` (which need no environment to load).
 
 ## Serialisation format
 
@@ -91,7 +97,9 @@ restrict to note-ons, particular channels, etc. without a pre-pass.
   advances by a full step — callers never get a no-op snap.
 - **`nudgedScalar` is the canonical "arrow key" combinator.** Integer
   unit step without an interval, snap-to-next with one, clamped either way.
-- **`setDigit` supports half-step entry** via `half` — used by the
-  shift-digit path in the grid.
+- **`setDigit` writes one digit in place** — digit `d` at place `pos`
+  in `base`, clearing the places below it unless `keepBelow`. The grid's
+  shift-held entry gesture passes `keepBelow` to overwrite a single
+  place and stay on the row.
 - **`dotimes(n, v)` overloads on type** — function `v` means "call n
   times for side effect"; anything else means "build an n-array of v".
