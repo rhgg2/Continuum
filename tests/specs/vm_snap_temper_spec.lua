@@ -1,5 +1,5 @@
--- Notation snap: tv:snapToTemper{Selection,All} run every note in scope
--- through tuning.snap and write the pair back. The temper is a twelve-note
+-- Notation snap: tv:snapToTemper(scope) runs every note in scope
+-- through tuning.snap and writes the pair back. The temper is a twelve-note
 -- quarter-comma meantone MOS, so a step's seat carries a detune of its own
 -- and the window is asymmetric (+38.0 / -58.6 either side of step 1).
 
@@ -44,10 +44,10 @@ local function seat(step, oct) return tuning.stepToMidi(MEAN, step, oct) end
 
 return {
   {
-    name = 'snapToTemperAll seats an off-step note on its own step',
+    name = 'snapToTemper(all) seats an off-step note on its own step',
     run = function(harness)
       local h = mk(harness, { note(0, 76, 0) })       -- E5 written at 12EDO
-      h.vm:snapToTemperAll()
+      h.vm:snapToTemper('all')
       local m, d = seat(5, 5)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch of the meantone seat')
@@ -61,7 +61,7 @@ return {
     run = function(harness)
       -- Step 1 at octave 5 is (72, 0); its upper half-gap is 38.0 cents.
       local h = mk(harness, { note(0, 72, 40) })
-      h.vm:snapToTemperAll()
+      h.vm:snapToTemper('all')
       local m, d = seat(2, 5)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'crossed to step 2')
@@ -73,7 +73,7 @@ return {
     name = 'a note inside the window keeps its step',
     run = function(harness)
       local h = mk(harness, { note(0, 72, 37) })
-      h.vm:snapToTemperAll()
+      h.vm:snapToTemper('all')
       local n = cell(h, 0)
       t.eq(n.pitch, 72, 'still step 1')
       near(n.detune, 0, 'seated back on step 1')
@@ -85,7 +85,7 @@ return {
     run = function(harness)
       local m, d = seat(5, 5)
       local h = mk(harness, { note(0, m, d) })
-      h.vm:snapToTemperAll()
+      h.vm:snapToTemper('all')
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch untouched')
       near(n.detune, d, 'detune untouched')
@@ -98,7 +98,7 @@ return {
       local h = mk(harness, { note(0, 76, 0), note(600, 76, 0) })
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
                          part1 = 'pitch', part2 = 'pitch' }
-      h.vm:snapToTemperSelection()
+      h.vm:snapToTemper('selection')
       local _, d = seat(5, 5)
       near(cell(h, 0).detune, d,  'note inside the selection snapped')
       t.eq(cell(h, 10).detune, 0, 'note outside it untouched')

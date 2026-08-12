@@ -676,6 +676,7 @@ help:registerPage('tracker', {
     { cmd = 'scaleDouble', label = 'Scale \xc3\x972' },
     { cmd = 'quantize', label = 'Quantize' },
     { cmd = 'quantizeKeepRealised', label = 'Quantize (keep realised)' },
+    { cmd = 'retune', label = 'Retune' },
     { cmd = 'editNoteFx', label = 'Edit note FX' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Selection', items = {
@@ -807,6 +808,39 @@ modalHost:registerKind('takeProps', function(s, close)
   if     okPressed     then close(true, s.nameBuf, tonumber(s.beatsBuf), s.mode)
   elseif cancelPressed then close(false) end
 end)
+
+-- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
+-- here, not scopedAction's confirm, and OK is the single commit point.
+modalHost:registerKind('retune', function(s, close)
+  -- Appearing frame: the opening chord's key is still IsKeyPressed=true — gate
+  -- OK/Cancel below so it can't self-dismiss.
+  local appearing = ImGui.IsWindowAppearing(ctx)
+
+  for i, m in ipairs{ {'selection', 'Selection'}, {'all', 'Whole take'} } do
+    if i > 1 then ImGui.SameLine(ctx) end
+    if chrome.radio(m[2], s.scope == m[1]) then s.scope = m[1] end
+  end
+
+  local okPressed     = ImGui.Button(ctx, 'OK')
+                     or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                                         or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
+  ImGui.SameLine(ctx)
+  local cancelPressed = ImGui.Button(ctx, 'Cancel')
+                     or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
+  if     okPressed     then close(true, s.scope)
+  elseif cancelPressed then close(false) end
+end)
+
+-- The undo block wraps the callback, not the command: the opener does nothing
+-- undoable and the edit lands frames later.
+local function openRetuneModal()
+  modalHost:open{
+    kind     = 'retune',
+    title    = 'Retune',
+    scope    = tv:ec():hasSelection() and 'selection' or 'all',
+    callback = util.atomic('Retune', function(scope) tv:snapToTemper(scope) end),
+  }
+end
 
 -- Naming convention <base>Selection / <base>All is the contract.
 --contract: requires tv to expose both `<base>Selection` and `<base>All` methods
@@ -1415,6 +1449,8 @@ tracker:registerAll{
 
   quantize             = { scopedAction('quantize',               'quantize'),             'Quantize' },
   quantizeKeepRealised = { scopedAction('quantize keep realised', 'quantizeKeepRealised'), 'Quantize (keep realised)' },
+
+  retune = openRetuneModal,
 
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,

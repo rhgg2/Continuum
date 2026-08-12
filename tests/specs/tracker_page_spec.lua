@@ -1,4 +1,5 @@
--- Pin-tests for trackerPage's Page interface (bind / unbind / focusState / bind-from-cursor).
+-- Pin-tests for trackerPage's Page interface (bind / unbind / focusState /
+-- bind-from-cursor) and the retune modal's scope default and dispatch.
 -- render / handleInput are stubs wired in step 3 and verified in REAPER, not here.
 
 -- trackerPage requires ImGui at module scope; stub via package.preload before
@@ -22,7 +23,17 @@ for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'gridPane', 'curveE
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
-local util = require('util')
+local util   = require('util')
+local tuning = require('tuning')
+
+-- Twelve-note quarter-comma meantone MOS: a step's seat carries a detune of
+-- its own, so a snap is visible in the cell.
+local MEAN = tuning.derive{
+  name = 'MEAN', periodPitch = '2/1',
+  pitches = { '0.0000', '76.0490', '193.1569', '310.2647', '386.3137', '503.4216',
+              '579.4706', '696.5784', '772.6274', '889.7353', '1006.8431', '1082.8921' },
+  stepNames = {},
+}
 
 -- Capturing fake: stash the last open state so tests can simulate the
 -- modal commit by calling fakeModalHost.last.callback(...). registerKind
@@ -186,6 +197,55 @@ return {
       t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'nextTake stepped to the next slot')
       h.cmgr:invoke('prevTake')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 0, 'prevTake stepped back')
+    end,
+  },
+
+  -- The retune modal (design/adaptive-tuning.md § Where it sits): scope is a
+  -- field on the modal, and OK calls the verb the radio names.
+  {
+    name = 'retune opens on the scope the selection implies and OK snaps that scope',
+    run = function(harness)
+      local h = harness.mk{ config = { project = { tempers = { MEAN = MEAN }, temper = 'MEAN' } } }
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:seedMidi('tr1/t1', { notes = {
+        { ppq = 0,   endppq = 60,  chan = 0, pitch = 76, vel = 100 },
+        { ppq = 480, endppq = 540, chan = 0, pitch = 76, vel = 100 } } })
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()
+      h.cmgr:push('tracker')
+
+      local function notes()
+        for _, col in ipairs(stack.tv.grid.cols) do
+          if col.midiChan == 1 and col.type == 'note' and col.lane == 1 then return col.events end
+        end
+      end
+      local _, seatDetune = tuning.stepToMidi(MEAN, 5, 5)
+
+      h.cmgr:invoke('retune')
+      t.eq(fakeModalHost.last.kind,  'retune', 'the retune modal opened')
+      t.eq(fakeModalHost.last.scope, 'all',    'no selection opens on whole take')
+
+      stack.tv:ec():setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+                                  part1 = 'pitch', part2 = 'pitch' }
+      h.cmgr:invoke('retune')
+      t.eq(fakeModalHost.last.scope, 'selection', 'a selection opens on Selection')
+
+      fakeModalHost.last.callback('selection')
+      local ns = notes()
+      t.truthy(math.abs(ns[1].detune - seatDetune) < 1e-6, 'the selected note took the meantone seat')
+      t.eq(ns[2].detune, 0, 'the note outside the selection is untouched')
+
+      h.cmgr:invoke('retune')
+      fakeModalHost.last.callback('all')
+      ns = notes()
+      t.truthy(math.abs(ns[2].detune - seatDetune) < 1e-6, 'whole take snapped the rest')
     end,
   },
 

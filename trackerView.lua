@@ -2055,8 +2055,10 @@ local function snapToTemperScope(groups)
   tm:flush()
 end
 
-function tv:snapToTemperSelection() snapToTemperScope(eventsByCol()) end
-function tv:snapToTemperAll()       snapToTemperScope(allGroups())   end
+--contract: scope is 'selection' or 'all'; the retune modal passes its field through unread
+function tv:snapToTemper(scope)
+  snapToTemperScope(scope == 'selection' and eventsByCol() or allGroups())
+end
 
 local insertRow, deleteRow, insertRowCol, deleteRowCol do
   -- Absorber pbs are tm-managed, tied to note seats — row ops shift

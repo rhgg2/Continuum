@@ -17,25 +17,30 @@ step it was written on.**
    one point of the target (§ What a target is), never between two.
 
 3. The conventions it needs exist: `eventsByCol` and `allGroups` for the
-   note set, `modalHost:registerKind` for a modal carrying the slots
-   (`trackerRender.lua:753-809`), and `registerAll`'s tuple form for the
-   undo label.
+   note set, and `modalHost:registerKind` for a modal carrying the slots
+   (`trackerRender.lua:753-809`). The undo label goes on the modal's
+   callback, through `util.atomic`: the command body only opens the modal,
+   and the edit lands frames later.
 
-4. Behind the command sits a pure function, strands in and a choice per
+4. Scope is an argument on the verb the modal calls. The modal's field
+   passes through unread, and each further slot is another argument on that
+   same verb.
+
+5. Behind the command sits a pure function, strands in and a choice per
    strand out (§ The strand). Points and their placement belong to
    `tuning.lua`; the solver is a module of its own and carries no tuning
    vocabulary at all.
 
-5. Detune is not realised beyond lane-1 notes; that is the author's
+6. Detune is not realised beyond lane-1 notes; that is the author's
    problem, not the function's.
 
-6. The target is named at invocation rather than pinned as a config key.
+7. The target is named at invocation rather than pinned as a config key.
    `temper` is a single value on the tier merge (`configManager.lua:58`),
    pinned at take, track and project together by `tv:setTemperSlot`
    (`trackerView.lua:566-572`), and every consumer resolves exactly one
    name.
 
-7. One command opens one modal, and every retuning facility the tracker
+8. One command opens one modal, and every retuning facility the tracker
    offers is reached through it — this one, and the adaptive just
    intonation of `design/adaptive-ji.md`. Scope and strength are common to
    all of them; the remaining slots belong to the facility chosen.

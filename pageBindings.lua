@@ -89,6 +89,7 @@ pageBindings.tracker = {
   openSwingPicker        = { {ImGui.Key_S, ImGui.Mod_Super} },
   quantize               = { {ImGui.Key_K, ImGui.Mod_Ctrl} },
   quantizeKeepRealised   = { {ImGui.Key_K, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
+  retune                 = { {ImGui.Key_T, ImGui.Mod_Ctrl} },
   editNoteFx             = { {ImGui.Key_X, ImGui.Mod_Super} },
   freezeFxRegion         = { {ImGui.Key_E, ImGui.Mod_Ctrl} },
   freezeFxGroup          = { {ImGui.Key_E, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },

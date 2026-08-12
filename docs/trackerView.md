@@ -451,13 +451,20 @@ each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 
 ## Retune
 
-`vm:snapToTemper{Selection,All}` put every note in scope on its own step
-of the active temper. Snap sets no target — it is the absence of one
-(design/adaptive-tuning.md § When an adaptive solve exists) — and with no
-active temper the verbs do nothing, there being nothing to snap to. A
-note already seated is skipped: `ctx:noteProjection`'s `gap` clears
-sub-1e-6 serialisation dust before returning, so `gap ~= 0` reads "off
-its step" with no second epsilon anywhere.
+`vm:snapToTemper(scope)` puts every note in scope — `'selection'` or
+`'all'` — on its own step of the active temper. Snap sets no target — it is
+the absence of one (design/adaptive-tuning.md § When an adaptive solve
+exists) — and with no active temper the verb does nothing, there being
+nothing to snap to. A note already seated is skipped:
+`ctx:noteProjection`'s `gap` clears sub-1e-6 serialisation dust before
+returning, so `gap ~= 0` reads "off its step" with no second epsilon
+anywhere.
+
+Ctrl+T reaches the verb through the retune modal, whose Selection / Whole
+take radio is the scope argument and whose OK is the one commit point —
+every retuning facility the tracker grows arrives as a field beside it.
+Selection is offered whether or not there is one, `ec:region()` degenerating
+to the cursor cell, so it then snaps the note under the cursor.
 
 A note whose nearest step lies past MIDI 127 is a known exception.
 `tuning.stepToMidi` folds that overflow into detune rather than dropping
