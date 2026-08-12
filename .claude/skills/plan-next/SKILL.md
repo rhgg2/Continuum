@@ -23,9 +23,7 @@ dispatch in §3 below reads:
 - **A brief exists.** The last planned item hasn't landed; say so and
   stop, citing `/implement-next` to finish it or `/commit` to land.
 - **Queued is non-empty.** Compile its top entry into a brief:
-  [compile.md](compile.md). Say that `/reconcile` checks the brief
-  against the item it came from — the brief is gitignored, so no later
-  run can.
+  [compile.md](compile.md).
 - **Queued is empty and work remains unqueued.** Fill it from the next
   unlanded phase: [fill.md](fill.md).
 - **Queued is empty and all phases are landed.** The work is
