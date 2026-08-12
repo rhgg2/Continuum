@@ -289,6 +289,11 @@ step it was written on.**
 11. The objective is evaluated once per onset, over the set current when
     every note struck there has been placed.
 
+12. Where classes strike together the lowest counts as the most recent.
+    A released chord at `n` one above the arity leaves one class to the
+    sonority that follows, and that class is its bass — in root
+    position, its root.
+
 ## The strand
 
 1. The notes of a step-class that overlap in time are a **strand**. They
@@ -333,9 +338,16 @@ step it was written on.**
    as a fraction of the half-width of their window on that side
    (§ The window).
 
-4. A strand arrives as `{ onsets, class, shortlist }`. The **onsets**
-   are where its notes are struck, the **class** is the step-class it
-   belongs to, and the **shortlist** is the candidates it may take.
+4. A strand arrives as `{ notes, class, shortlist }`. The **notes** are
+   the note events themselves, each carrying when it is struck and when
+   it is released; the **class** is the step-class they share; the
+   **shortlist** is the candidates the strand may take.
+
+5. The solver reads the strike times and nothing else on a note. The
+   releases are what a sonority holding whatever sounds would read
+   (§ Open), and the note itself is what the command seats the answer
+   on, so one shape serves all three and no parallel structure maps a
+   strand back to its notes.
 
 5. The pull reads strain, so the solver never interprets a cents value.
    The class is the identity under which a sonority counts distinct
@@ -596,7 +608,18 @@ step it was written on.**
    ordinary — the 5-limit diamond at odd limit 15 fixes nine of twelve
    classes. Behind a run of five such, the answer moved by a syntonic
    comma. Taking in everything sounding closes it at 27 times the state
-   count.
+   count. A strand carries its notes' releases (§ What the solver
+   takes), so the variant is a change to the walk alone, and it waits
+   on measured cost rather than on a shape.
+
+4. Whether retention should follow the placement. The member nearest
+   the centroid of the box is the root wherever the chord is otonal and
+   the mirror of it wherever the chord is utonal: a minor triad is an
+   inverted major, so the rule that picks a major triad's `1/1` picks a
+   minor triad's `3/2`. Which member that is depends on the candidate
+   the solve has yet to choose, so the choice would move into the DP and
+   the state carry a class set per placement. Whether the survivor moves
+   an answer at all is measurable once the DP exists.
 
 4. Whether the pull wants a shape. A flat window with a quadratic pull
    was enough to make the spike stable; whether a well — soft near the

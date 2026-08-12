@@ -1,40 +1,64 @@
-@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=121  cases=4
+@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=213  cases=8
 @exercises sonority (sonority)
-@surface   sonority.score
+@surface   sonority.score, sonority.walk
 
 # Intent
   Pins the box score of design/adaptive-tuning.md § What "in tune" means: the
   5-limit column of § Choosing the target chooses the theory, its identity with
   the Tenney height of the sonority's lcm/gcd, and the two invariances that let
   the model hold no reference pitch.
+  
+  Pins the walk of § The model too: which strands are current at each onset,
+  distinctness by step-class, and the bass as the class a released chord
+  leaves behind it.
 
 # Helpers
-  @fn near(actual, expected, why)  @ 10-13
+  @fn near(actual, expected, why)  @ 14-17
       -- The doc's figures are given to 2dp.
-  @fn gcd(a, b)  @ 52
-  @fn lcm(a, b)  @ 53
-  @fn tenneyOfSpan(odd)  @ 57-67
+  @fn gcd(a, b)  @ 56
+  @fn lcm(a, b)  @ 57
+  @fn tenneyOfSpan(odd)  @ 61-71
       -- Tenney height of the set's lcm over its gcd, taken as rationals: the integers
       -- the coords reach the same number without ever forming.
-  @fn shifted(coordSet, prime, by)  @ 70-78
+  @fn shifted(coordSet, prime, by)  @ 74-82
       -- Every coord of the set moved by `by` on one axis, absent exponents included.
+  @fn strand(class, notes)  @ 87-91
+      -- A strand as the walk reads it: notes carrying when they are struck and how
+      -- low they sit, under the step-class they share. The shortlist is the solve's
+      -- business rather than the walk's, so these carry none.
+  @fn struck(list)  @ 94-98
+      -- Strands of one note each, given as { class, ppq, pitch }.
+  @fn classesAt(strands, sonorityAt)  @ 100-104
 
 # Cases
-  @case 'the 5-limit column of the theory table'  [pure]  @ 82-87
-  @case 'the score is the Tenney height of the sonority's octave-free lcm/gcd'  [pure]  @ 91-98
-  @case 'the score is blind to where the sonority sits'  [pure]  @ 102-108
-  @case 'a repeated member and an octave doubling cost nothing'  [pure]  @ 112-119
+  @case 'the 5-limit column of the theory table'  [pure]  @ 108-113
+  @case 'the score is the Tenney height of the sonority's octave-free lcm/gcd'  [pure]  @ 117-124
+  @case 'the score is blind to where the sonority sits'  [pure]  @ 128-134
+  @case 'a repeated member and an octave doubling cost nothing'  [pure]  @ 138-145
+  @case 'a block chord and an arpeggio of it hand back the same set'  [pure]  @ 149-161
+  @case 'at n one above the arity consecutive sonorities still overlap'  [pure]  @ 165-179
+  @case 'a repeated note and an octave doubling each spend one entry'  [pure]  @ 183-196
+  @case 'a later strand of a class replaces the earlier one'  [pure]  @ 200-211
 
 # Uses (outbound edges)
-  @use call sonority.score  @ 85,95,96,105,106,107,115,116,117,118
+  @use call sonority.score  @ 111,121,122,131,132,133,141,142,143,144
+  @use call sonority.walk  @ 153,172,189,192,203
 
 # Fields (r read / w write incl. constructor keys)
-  @field r coords  @ 85,95,96,104,114
-  @field w coords  @ 20,24,28,32,36,40,44,48
-  @field r name  @ 85,96
-  @field w name  @ 19,23,27,31,35,39,43,47,82,91,102,112
-  @field r odd  @ 94
-  @field w odd  @ 21,25,29,33,37,41,45,49
-  @field w run  @ 83,92,103,113
-  @field r score  @ 85
-  @field w score  @ 19,23,27,31,35,39,43,47
+  @field r class  @ 102,178,195
+  @field w class  @ 90
+  @field r coords  @ 111,121,122,130,140
+  @field w coords  @ 24,28,32,36,40,44,48,52
+  @field r name  @ 111,122
+  @field w name  @ 23,27,31,35,39,43,47,51,108,117,128,138
+  @field w name  @ 149,165,183,200
+  @field w notes  @ 90
+  @field r odd  @ 120
+  @field w odd  @ 25,29,33,37,41,45,49,53
+  @field w pitch  @ 89
+  @field r ppq  @ 159
+  @field w ppq  @ 89
+  @field w run  @ 109,118,129,139,150,166,184,201
+  @field r score  @ 111
+  @field w score  @ 23,27,31,35,39,43,47,51
+  @field r strands  @ 102,160,175,178,189,195,205,206,207,208

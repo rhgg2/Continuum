@@ -2,6 +2,10 @@
 -- 5-limit column of § Choosing the target chooses the theory, its identity with
 -- the Tenney height of the sonority's lcm/gcd, and the two invariances that let
 -- the model hold no reference pitch.
+--
+-- Pins the walk of § The model too: which strands are current at each onset,
+-- distinctness by step-class, and the bass as the class a released chord
+-- leaves behind it.
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -77,6 +81,28 @@ local function shifted(coordSet, prime, by)
   return out
 end
 
+-- A strand as the walk reads it: notes carrying when they are struck and how
+-- low they sit, under the step-class they share. The shortlist is the solve's
+-- business rather than the walk's, so these carry none.
+local function strand(class, notes)
+  local built = {}
+  for i, note in ipairs(notes) do built[i] = { ppq = note[1], pitch = note[2] } end
+  return { class = class, notes = built }
+end
+
+-- Strands of one note each, given as { class, ppq, pitch }.
+local function struck(list)
+  local strands = {}
+  for i, note in ipairs(list) do strands[i] = strand(note[1], { { note[2], note[3] } }) end
+  return strands
+end
+
+local function classesAt(strands, sonorityAt)
+  local out = {}
+  for i, index in ipairs(sonorityAt.strands) do out[i] = strands[index].class end
+  return out
+end
+
 return {
   {
     name = 'the 5-limit column of the theory table',
@@ -116,6 +142,72 @@ return {
       near(sonority.score{ major[1], major[2], major[3], { [3] = 1 } }, 3.91, 'G doubled an octave up')
       near(sonority.score{ { [3] = 1 } }, 0, 'one pitch spans nothing')
       near(sonority.score{}, 0, 'and neither does none')
+    end,
+  },
+
+  {
+    name = 'a block chord and an arpeggio of it hand back the same set',
+    run = function()
+      local chord  = struck{ { 0, 0, 60 }, { 4, 0, 64 }, { 7, 0, 67 }, { 11, 0, 71 } }
+      local spread = struck{ { 0, 0, 60 }, { 4, 240, 64 }, { 7, 480, 67 }, { 11, 720, 71 } }
+      local block, arpeggio = sonority.walk(chord, 5), sonority.walk(spread, 5)
+
+      t.eq(#block, 1, 'one onset, one sonority')
+      t.eq(#arpeggio, 4, 'four onsets, four sonorities')
+      t.bagEq(classesAt(chord, block[1]), classesAt(spread, arpeggio[4]),
+        'the chord spread out is the chord')
+      t.eq(arpeggio[4].ppq, 720, 'each sonority is stamped with its onset')
+      t.eq(#arpeggio[1].strands, 1, 'and the early ones hold only what has struck')
+    end,
+  },
+
+  {
+    name = 'at n one above the arity consecutive sonorities still overlap',
+    run = function()
+      -- Listed bass first, so a survivor chosen by position would be the G.
+      local strands = struck{
+        { 0, 0, 60 }, { 4, 0, 64 }, { 11, 0, 71 }, { 7, 0, 67 },
+        { 2, 960, 62 }, { 5, 960, 65 }, { 9, 960, 69 }, { 10, 960, 70 },
+      }
+      local walked = sonority.walk(strands, 5)
+
+      t.eq(#walked, 2, 'two onsets')
+      t.eq(#walked[2].strands, 5, 'four struck, one carried over')
+      t.bagEq(classesAt(strands, walked[2]), { 2, 5, 9, 10, 0 },
+        'the second chord and the bass of the first')
+      t.eq(strands[walked[2].strands[5]].class, 0, 'which stands as the oldest entry')
+    end,
+  },
+
+  {
+    name = 'a repeated note and an octave doubling each spend one entry',
+    run = function()
+      local doubled = {
+        strand(0, { { 0, 60 }, { 0, 72 } }), strand(4, { { 0, 64 } }),
+        strand(7, { { 0, 67 } }), strand(11, { { 0, 71 } }), strand(2, { { 0, 62 } }),
+      }
+      t.eq(#sonority.walk(doubled, 5)[1].strands, 5, 'the doubling spends one of the five')
+
+      local restruck = { strand(0, { { 0, 60 }, { 480, 60 } }), strand(4, { { 240, 64 } }) }
+      local walked   = sonority.walk(restruck, 2)
+      t.eq(#walked, 3, 'three strikes, three sonorities')
+      t.bagEq(classesAt(restruck, walked[3]), { 0, 4 }, 'the restrike displaces nothing')
+      t.eq(restruck[walked[3].strands[1]].class, 0, 'and stands as the most recent entry')
+    end,
+  },
+
+  {
+    name = 'a later strand of a class replaces the earlier one',
+    run = function()
+      local strands = struck{ { 0, 0, 60 }, { 4, 240, 64 }, { 7, 480, 67 }, { 0, 720, 72 } }
+      local walked  = sonority.walk(strands, 5)
+
+      t.eq(#walked[3].strands, 3, 'three classes before the C returns')
+      t.eq(#walked[4].strands, 3, 'and three after it, though five would fit')
+      t.eq(walked[4].strands[1], 4, 'the class stands as the strand that struck last')
+      for _, index in ipairs(walked[4].strands) do
+        t.truthy(index ~= 1, 'the C that struck first has left the sonority')
+      end
     end,
   },
 }
