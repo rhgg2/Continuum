@@ -821,13 +821,17 @@ modalHost:registerKind('retune', function(s, close)
     if chrome.radio(m[2], s.scope == m[1]) then s.scope = m[1] end
   end
 
+  ImGui.SetNextItemWidth(ctx, 150)
+  local rvS, strength = ImGui.SliderDouble(ctx, 'Strength', s.strength, 0, 1, '%.2f')
+  if rvS then s.strength = strength end
+
   local okPressed     = ImGui.Button(ctx, 'OK')
                      or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
                                          or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
                      or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if     okPressed     then close(true, s.scope)
+  if     okPressed     then close(true, s.scope, s.strength)
   elseif cancelPressed then close(false) end
 end)
 
@@ -838,7 +842,10 @@ local function openRetuneModal()
     kind     = 'retune',
     title    = 'Retune',
     scope    = tv:ec():hasSelection() and 'selection' or 'all',
-    callback = util.atomic('Retune', function(scope) tv:snapToTemper(scope) end),
+    strength = 1,
+    callback = util.atomic('Retune', function(scope, strength)
+      tv:snapToTemper(scope, strength)
+    end),
   }
 end
 

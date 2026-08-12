@@ -1,7 +1,8 @@
--- Notation snap: tv:snapToTemper(scope) runs every note in scope
--- through tuning.snap and writes the pair back. The temper is a twelve-note
--- quarter-comma meantone MOS, so a step's seat carries a detune of its own
--- and the window is asymmetric (+38.0 / -58.6 either side of step 1).
+-- Notation snap: tv:snapToTemper(scope, strength) runs every note in scope
+-- through tuning.snap and writes the pair back, strength being how far of the
+-- way there it actually lands. The temper is a twelve-note quarter-comma
+-- meantone MOS, so a step's seat carries a detune of its own and the window
+-- is asymmetric (+38.0 / -58.6 either side of step 1).
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -47,7 +48,7 @@ return {
     name = 'snapToTemper(all) seats an off-step note on its own step',
     run = function(harness)
       local h = mk(harness, { note(0, 76, 0) })       -- E5 written at 12EDO
-      h.vm:snapToTemper('all')
+      h.vm:snapToTemper('all', 1)
       local m, d = seat(5, 5)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch of the meantone seat')
@@ -61,7 +62,7 @@ return {
     run = function(harness)
       -- Step 1 at octave 5 is (72, 0); its upper half-gap is 38.0 cents.
       local h = mk(harness, { note(0, 72, 40) })
-      h.vm:snapToTemper('all')
+      h.vm:snapToTemper('all', 1)
       local m, d = seat(2, 5)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'crossed to step 2')
@@ -73,7 +74,7 @@ return {
     name = 'a note inside the window keeps its step',
     run = function(harness)
       local h = mk(harness, { note(0, 72, 37) })
-      h.vm:snapToTemper('all')
+      h.vm:snapToTemper('all', 1)
       local n = cell(h, 0)
       t.eq(n.pitch, 72, 'still step 1')
       near(n.detune, 0, 'seated back on step 1')
@@ -85,7 +86,7 @@ return {
     run = function(harness)
       local m, d = seat(5, 5)
       local h = mk(harness, { note(0, m, d) })
-      h.vm:snapToTemper('all')
+      h.vm:snapToTemper('all', 1)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch untouched')
       near(n.detune, d, 'detune untouched')
@@ -98,10 +99,50 @@ return {
       local h = mk(harness, { note(0, 76, 0), note(600, 76, 0) })
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
                          part1 = 'pitch', part2 = 'pitch' }
-      h.vm:snapToTemper('selection')
+      h.vm:snapToTemper('selection', 1)
       local _, d = seat(5, 5)
       near(cell(h, 0).detune, d,  'note inside the selection snapped')
       t.eq(cell(h, 10).detune, 0, 'note outside it untouched')
+    end,
+  },
+
+  {
+    name = 'half strength closes half the distance, and again on the next run',
+    run = function(harness)
+      -- 40 cents BELOW step 1 at octave 5: the window reaches only 38.0 above
+      -- it, so a note at +40 would snap to step 2 instead (the case above).
+      local h = mk(harness, { note(0, 72, -40) })
+      h.vm:snapToTemper('all', 0.5)
+      near(cell(h, 0).detune, -20, 'half way to the step')
+      h.vm:snapToTemper('all', 0.5)
+      near(cell(h, 0).detune, -10, 'half of what was left')
+      t.eq(cell(h, 0).pitch, 72, 'still written as step 1')
+    end,
+  },
+
+  {
+    name = 'a blend below full strength is re-seated on the nearest semitone',
+    run = function(harness)
+      -- (73, +40) snaps to step 3 of octave 5, seated at (74, -6.8431); the
+      -- blend at 0.5 is 7366.5784 cents, which seats on 74.
+      local h = mk(harness, { note(0, 73, 40) })
+      h.vm:snapToTemper('all', 0.5)
+      local n = cell(h, 0)
+      t.eq(n.pitch, 74, 'the written pitch moved a semitone')
+      t.truthy(math.abs(n.detune + 33.4216) < 0.01,
+               'half way to the seat, re-seated: ' .. tostring(n.detune))
+    end,
+  },
+
+  {
+    name = 'zero strength moves nothing, not even the written pitch',
+    run = function(harness)
+      -- More detune than half a semitone, so an enharmonic re-seat would show.
+      local h = mk(harness, { note(0, 72, 70) })
+      h.vm:snapToTemper('all', 0)
+      local n = cell(h, 0)
+      t.eq(n.pitch, 72, 'pitch untouched')
+      near(n.detune, 70, 'detune untouched')
     end,
   },
 }

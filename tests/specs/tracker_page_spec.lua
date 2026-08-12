@@ -231,19 +231,20 @@ return {
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.kind,  'retune', 'the retune modal opened')
       t.eq(fakeModalHost.last.scope, 'all',    'no selection opens on whole take')
+      t.eq(fakeModalHost.last.strength, 1,     'the strength dial opens at full')
 
       stack.tv:ec():setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
                                   part1 = 'pitch', part2 = 'pitch' }
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.scope, 'selection', 'a selection opens on Selection')
 
-      fakeModalHost.last.callback('selection')
+      fakeModalHost.last.callback('selection', 1)
       local ns = notes()
       t.truthy(math.abs(ns[1].detune - seatDetune) < 1e-6, 'the selected note took the meantone seat')
       t.eq(ns[2].detune, 0, 'the note outside the selection is untouched')
 
       h.cmgr:invoke('retune')
-      fakeModalHost.last.callback('all')
+      fakeModalHost.last.callback('all', 1)
       ns = notes()
       t.truthy(math.abs(ns[2].detune - seatDetune) < 1e-6, 'whole take snapped the rest')
     end,

@@ -2036,17 +2036,27 @@ end
 
 ----- Retune
 
+-- Strength: blend from carried cents toward snap's pair, re-seated on the
+-- nearest semitone. See docs/trackerView.md § Retune.
+local function blend(e, strength, pitch, detune)
+  if strength >= 1 then return pitch, detune end
+  local cents = (1 - strength) * (e.pitch * 100 + e.detune)
+              + strength * (pitch * 100 + detune)
+  local seat  = math.floor(cents / 100 + 0.5)
+  return seat, cents - seat * 100
+end
+
 -- Notation snap: every note in scope onto its own step of the active
 -- temper. See docs/trackerView.md § Retune.
-local function snapToTemperScope(groups)
+local function snapToTemperScope(groups, strength)
   local temper = ctx:activeTemper()
-  if not temper then return end
+  if not temper or strength <= 0 then return end
   for _, g in ipairs(groups) do
     for _, e in pairs(g.locs) do
       if util.isNote(e) then
         local _, _, gap = ctx:noteProjection(e)
         if gap ~= 0 then
-          local pitch, detune = tuning.snap(temper, e.pitch, e.detune)
+          local pitch, detune = blend(e, strength, tuning.snap(temper, e.pitch, e.detune))
           edit.assign(e, { pitch = pitch, detune = detune })
         end
       end
@@ -2055,9 +2065,9 @@ local function snapToTemperScope(groups)
   tm:flush()
 end
 
---contract: scope is 'selection' or 'all'; the retune modal passes its field through unread
-function tv:snapToTemper(scope)
-  snapToTemperScope(scope == 'selection' and eventsByCol() or allGroups())
+--contract: scope is 'selection' or 'all'; strength is 0..1, the fraction of the way each note moves
+function tv:snapToTemper(scope, strength)
+  snapToTemperScope(scope == 'selection' and eventsByCol() or allGroups(), strength)
 end
 
 local insertRow, deleteRow, insertRowCol, deleteRowCol do

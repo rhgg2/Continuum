@@ -451,8 +451,8 @@ each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 
 ## Retune
 
-`vm:snapToTemper(scope)` puts every note in scope — `'selection'` or
-`'all'` — on its own step of the active temper. Snap sets no target — it is
+`vm:snapToTemper(scope, strength)` puts every note in scope — `'selection'`
+or `'all'` — on its own step of the active temper. Snap sets no target — it is
 the absence of one (design/adaptive-tuning.md § When an adaptive solve
 exists) — and with no active temper the verb does nothing, there being
 nothing to snap to. A note already seated is skipped:
@@ -460,11 +460,26 @@ nothing to snap to. A note already seated is skipped:
 returning, so `gap ~= 0` reads "off its step" with no second epsilon
 anywhere.
 
+Strength is how far toward that step the note actually moves: it interpolates
+in cents from the pitch and detune the note carries to the pair snap computed,
+so at 1 every note reaches its step and at 0.5 each closes half the distance.
+A blend sits between two steps, so it is re-seated on the nearest semitone —
+plain snap never needs that, `stepToMidi` handing back a seated pair already.
+At 1 the computed pair therefore stands untouched, which is what keeps the
+past-127 fold below; at 0 the verb returns early, since re-seating a note
+carrying more than 50¢ of authored detune would rewrite `(72, +70)` as
+`(73, −30)` — same sound, different notation, absorber churn — for a command
+asked to do nothing. Below 1 the note is deliberately left off its step and a
+second invocation halves the remainder again: the broken idempotence is the
+point, not a tolerance.
+
 Ctrl+T reaches the verb through the retune modal, whose Selection / Whole
-take radio is the scope argument and whose OK is the one commit point —
-every retuning facility the tracker grows arrives as a field beside it.
-Selection is offered whether or not there is one, `ec:region()` degenerating
-to the cursor cell, so it then snaps the note under the cursor.
+take radio is the scope argument, whose slider is the strength, and whose OK
+is the one commit point — every retuning facility the tracker grows arrives
+as a field beside them. Selection is offered whether or not there is one,
+`ec:region()` degenerating to the cursor cell, so it then snaps the note under
+the cursor. The slider is seeded at 1 on each open, like the scope radio;
+nothing remembers it between invocations.
 
 A note whose nearest step lies past MIDI 127 is a known exception.
 `tuning.stepToMidi` folds that overflow into detune rather than dropping

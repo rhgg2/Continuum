@@ -468,20 +468,34 @@ step it was written on.**
    strength every note reaches its step, and at half it closes half the
    distance to it.
 
-4. Interpolating from the carried detune breaks idempotence deliberately.
+4. A blend sits between two steps, so nothing seats the pair for it. The
+   blended cents are re-seated on the nearest semitone, and what remains
+   is written as detune.
+
+5. Interpolating from the carried detune breaks idempotence deliberately.
    A note taken half way is taken half way again on the next invocation.
 
-5. At full strength the operation is idempotent as before, the answer
-   depending on the recovered step alone (§ The window).
+6. At full strength the operation is idempotent as before, the answer
+   depending on the recovered step alone (§ The window). The computed pair
+   stands as it is, so `stepToMidi`'s fold of a step past MIDI 127 into
+   detune survives the blend.
 
-6. The idempotent blend is a composition of two invocations rather than a
+7. At zero strength the command returns before touching anything.
+   Re-seating would otherwise rewrite a note carrying more than half a
+   semitone of authored detune, `(72, +70)` as `(73, −30)`, for an
+   invocation asked to move nothing.
+
+8. The idempotent blend is a composition of two invocations rather than a
    second dial: snap at full strength, then solve at α. The snap puts the
    note on its step, so the detune the solve interpolates from is the
    anchor.
 
-7. There is no shortage of material for it. Switching temper relabels
+9. There is no shortage of material for it. Switching temper relabels
    rather than moves, so a take authored under one notation reads wholly
    off the grid of the next.
+
+10. The dial opens at full strength on every invocation. Nothing carries
+    it between them.
 
 ## Seams
 

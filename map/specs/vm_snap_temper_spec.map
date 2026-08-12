@@ -1,68 +1,72 @@
-@spec vm_snap_temper_spec  src=tests/specs/vm_snap_temper_spec.lua  loc=107  cases=5
+@spec vm_snap_temper_spec  src=tests/specs/vm_snap_temper_spec.lua  loc=148  cases=8
 @exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec)
 @surface   tuning.derive, vm:setGridSize, tuning.stepToMidi, vm:snapToTemper, ec:setSelection
 @harness   mk{seed.notes}
 
 # Intent
-  Notation snap: tv:snapToTemper(scope) runs every note in scope
-  through tuning.snap and writes the pair back. The temper is a twelve-note
-  quarter-comma meantone MOS, so a step's seat carries a detune of its own
-  and the window is asymmetric (+38.0 / -58.6 either side of step 1).
+  Notation snap: tv:snapToTemper(scope, strength) runs every note in scope
+  through tuning.snap and writes the pair back, strength being how far of the
+  way there it actually lands. The temper is a twelve-note quarter-comma
+  meantone MOS, so a step's seat carries a detune of its own and the window
+  is asymmetric (+38.0 / -58.6 either side of step 1).
 
 # Helpers
-  @fn mk(harness, notes)  @ 16-23
-  @fn note(ppq, pitch, detune)  @ 25-28
-  @fn lane1(h)  @ 30-34
-  @fn cell(h, row)  @ 36
-  @fn near(a, b, msg)  @ 38-40
-  @fn seat(step, oct)  @ 43
+  @fn mk(harness, notes)  @ 17-24
+  @fn note(ppq, pitch, detune)  @ 26-29
+  @fn lane1(h)  @ 31-35
+  @fn cell(h, row)  @ 37
+  @fn near(a, b, msg)  @ 39-41
+  @fn seat(step, oct)  @ 44
       -- Seat of (step, octave) under MEAN, as the spec's expectation frame.
 
 # Cases
-  @case 'snapToTemper(all) seats an off-step note on its own step'  [harness]  @ 47-56
-  @case 'a note past the half-way point lands on its neighbour'  [harness]  @ 60-69
-  @case 'a note inside the window keeps its step'  [harness]  @ 73-80
-  @case 'a note already on its step is left where it is'  [harness]  @ 84-92
-  @case 'a selection confines the snap to the notes inside it'  [harness]  @ 96-105
+  @case 'snapToTemper(all) seats an off-step note on its own step'  [harness]  @ 48-57
+  @case 'a note past the half-way point lands on its neighbour'  [harness]  @ 61-70
+  @case 'a note inside the window keeps its step'  [harness]  @ 74-81
+  @case 'a note already on its step is left where it is'  [harness]  @ 85-93
+  @case 'a selection confines the snap to the notes inside it'  [harness]  @ 97-106
+  @case 'half strength closes half the distance, and again on the next run'  [harness]  @ 110-120
+  @case 'a blend below full strength is re-seated on the nearest semitone'  [harness]  @ 124-134
+  @case 'zero strength moves nothing, not even the written pitch'  [harness]  @ 138-146
 
 # Uses (outbound edges)
-  @use call tuning.derive  @ 9
-  @use call vm:setGridSize  @ 21
-  @use call tuning.stepToMidi  @ 43
-  @use call vm:snapToTemper  @ 50,64,76,88,101
-  @use call ec:setSelection  @ 99
+  @use call tuning.derive  @ 10
+  @use call vm:setGridSize  @ 22
+  @use call tuning.stepToMidi  @ 44
+  @use call vm:snapToTemper  @ 51,65,77,89,102,115,117,129,142
+  @use call ec:setSelection  @ 100
 
 # Fields (r read / w write incl. constructor keys)
-  @field w MEAN  @ 19
-  @field r cells  @ 36
-  @field w chan  @ 26
-  @field w col1  @ 99
-  @field w col2  @ 99
-  @field r cols  @ 31
-  @field w config  @ 19
-  @field w delay  @ 27
-  @field r detune  @ 54,55,68,79,91,103,104
-  @field w detune  @ 27
-  @field w endppq  @ 26
-  @field r grid  @ 31
-  @field r lane  @ 32
-  @field r midiChan  @ 32
-  @field w name  @ 10,47,60,73,84,96
-  @field w notes  @ 18
-  @field w part1  @ 100
-  @field w part2  @ 100
-  @field w periodPitch  @ 10
-  @field r pitch  @ 53,67,78,90
-  @field w pitch  @ 26
-  @field w pitches  @ 11
-  @field w ppq  @ 26
-  @field w project  @ 19
-  @field w row1  @ 99
-  @field w row2  @ 99
-  @field w run  @ 48,61,74,85,97
-  @field w seed  @ 18
-  @field w stepNames  @ 13
-  @field w temper  @ 19
-  @field w tempers  @ 19
-  @field r type  @ 32
-  @field w vel  @ 26
+  @field w MEAN  @ 20
+  @field r cells  @ 37
+  @field w chan  @ 27
+  @field w col1  @ 100
+  @field w col2  @ 100
+  @field r cols  @ 32
+  @field w config  @ 20
+  @field w delay  @ 28
+  @field r detune  @ 55,56,69,80,92,104,105,116,118,132,133,145
+  @field w detune  @ 28
+  @field w endppq  @ 27
+  @field r grid  @ 32
+  @field r lane  @ 33
+  @field r midiChan  @ 33
+  @field w name  @ 11,48,61,74,85,97,110,124,138
+  @field w notes  @ 19
+  @field w part1  @ 101
+  @field w part2  @ 101
+  @field w periodPitch  @ 11
+  @field r pitch  @ 54,68,79,91,119,131,144
+  @field w pitch  @ 27
+  @field w pitches  @ 12
+  @field w ppq  @ 27
+  @field w project  @ 20
+  @field w row1  @ 100
+  @field w row2  @ 100
+  @field w run  @ 49,62,75,86,98,111,125,139
+  @field w seed  @ 19
+  @field w stepNames  @ 14
+  @field w temper  @ 20
+  @field w tempers  @ 20
+  @field r type  @ 33
+  @field w vel  @ 27

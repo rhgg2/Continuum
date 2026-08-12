@@ -25,6 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-12 tv: strength dial on the retune modal (§ Strength)
 - 2026-08-12 tracker: the retune modal on Ctrl+T (§ Where it sits)
 - 2026-08-12 Snap the scope onto the notation (§ First brick 1)
 
@@ -34,18 +35,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. The strength field beside the scope (§ Strength) — a 0–1 slider opening
-   at full strength every time, passed to `tv:snapToTemper` beside the
-   scope, interpolating each
-   note from the detune it carries toward the snapped one. Below 1 the note
-   is left off its step, so the blended cents are re-seated on the nearest
-   semitone rather than kept against the snapped pitch, which plain snap
-   never needs because `stepToMidi` seats the pair itself. Spec in
-   `vm_snap_temper_spec`: a note 40¢ off its step lands 20¢ off at 0.5, and
-   10¢ off when the same command runs again — the broken idempotence, pinned
-   as intended rather than tolerated.
-
-2. The window as both half-gaps: `ctx:noteProjection` returns the distance
+1. The window as both half-gaps: `ctx:noteProjection` returns the distance
    to the step below and the step above in place of the smaller of the two
    (`viewContext.lua:39-42`), which is the two-sided window of § The
    window. Its one consumer, the deviation tick in `gridPane.lua:793-796`,
@@ -55,10 +45,10 @@
    `view_context_spec`: both halves at 50¢ under 12EDO, restating the
    existing case, and +38.0¢ / −58.6¢ under the meantone MOS.
 
-3. The quantize undo label, which today wraps nothing on the whole-take path
+2. The quantize undo label, which today wraps nothing on the whole-take path
    — adjacent to this phase rather than of it, found while compiling item 1.
    `quantize` and `quantizeKeepRealised` register with `registerAll`'s tuple
-   form (`trackerRender.lua:1416-1417`), so the atomic block wraps
+   form (`trackerRender.lua:1450-1451`), so the atomic block wraps
    `scopedAction`, which only opens a confirm; the edit lands frames later in
    its callback, outside the block. Move the label onto the two `tv:quantize*`
    verbs, so both scopes carry it, and drop the tuple.
