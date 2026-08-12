@@ -192,6 +192,7 @@ local specs = {
   'tv_param_learn_spec',
   'vm_quantize_lane_stability_spec',
   'vm_quantize_keep_realised_lane_spec',
+  'vm_undo_label_spec',
   'vm_insert_delete_row_lane_spec',
   'vm_row_shift_same_pitch_spec',
   'vm_conform_overlap_spec',

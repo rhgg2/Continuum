@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-12 tv: undo labels on the verb, not the command (adjacent to § Where it sits)
 - 2026-08-12 tuning: split noteProjection into label and two-sided deviation (§ The window)
 - 2026-08-12 tv: strength dial on the retune modal (§ Strength)
 - 2026-08-12 tracker: the retune modal on Ctrl+T (§ Where it sits)
-- 2026-08-12 Snap the scope onto the notation (§ First brick 1)
 
 ## Now
 
@@ -36,10 +36,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. The quantize undo label, which today wraps nothing on the whole-take path
-   — adjacent to this phase rather than of it, found while compiling item 1.
-   `quantize` and `quantizeKeepRealised` register with `registerAll`'s tuple
-   form (`trackerRender.lua:1450-1451`), so the atomic block wraps
-   `scopedAction`, which only opens a confirm; the edit lands frames later in
-   its callback, outside the block. Move the label onto the two `tv:quantize*`
-   verbs, so both scopes carry it, and drop the tuple.
+(empty — /plan-next fills it from the phase in flight.)

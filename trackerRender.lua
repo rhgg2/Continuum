@@ -849,7 +849,8 @@ local function openRetuneModal()
   }
 end
 
--- Naming convention <base>Selection / <base>All is the contract.
+-- Naming convention <base>Selection / <base>All is the contract. The undo
+-- label belongs on the tv verb, not here -- see docs/trackerView.md § Commands & wrappers.
 --contract: requires tv to expose both `<base>Selection` and `<base>All` methods
 local function scopedAction(title, base)
   return function()
@@ -1452,10 +1453,10 @@ tracker:registerAll{
 
   addNoteLane = { function() tv:addExtraCol('note') end, 'Add note lane' },
   addTypedCol = addColumn,
-  hideExtraCol = { removeOrHideCol, 'Hide / remove column' },
+  hideExtraCol = removeOrHideCol,
 
-  quantize             = { scopedAction('quantize',               'quantize'),             'Quantize' },
-  quantizeKeepRealised = { scopedAction('quantize keep realised', 'quantizeKeepRealised'), 'Quantize (keep realised)' },
+  quantize             = scopedAction('quantize',               'quantize'),
+  quantizeKeepRealised = scopedAction('quantize keep realised', 'quantizeKeepRealised'),
 
   retune = openRetuneModal,
 

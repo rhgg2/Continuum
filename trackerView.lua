@@ -1948,6 +1948,11 @@ do
     tm:flush()
   end
 
+  -- The label sits on the verb, not the command -- see docs/trackerView.md
+  -- § Commands & wrappers.
+  quantizeScope             = util.atomic('Quantize', quantizeScope)
+  quantizeKeepRealisedScope = util.atomic('Quantize (keep realised)', quantizeKeepRealisedScope)
+
   function tv:quantizeSelection()             quantizeScope(eventsByCol())              end
   function tv:quantizeAll()                   quantizeScope(allGroups())                end
   function tv:quantizeKeepRealisedSelection() quantizeKeepRealisedScope(eventsByCol())  end
@@ -3680,6 +3685,11 @@ function tv:unautomateParam()
   tv:rebuild()
   tv:hideExtraCol()
 end
+
+-- Labels on the verbs again -- see docs/trackerView.md § Commands & wrappers
+-- for why, and how the nested hideExtraCol collapses into this block.
+tv.hideExtraCol    = util.atomic('Hide column',       tv.hideExtraCol)
+tv.unautomateParam = util.atomic('Remove automation', tv.unautomateParam)
 
 function tv:showDelay()
   local nd = ds:get('noteDelay') or {}

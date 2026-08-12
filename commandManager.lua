@@ -92,6 +92,8 @@ local function newScope(scopeName)
     cmgr.gates[name]    = self
   end
 
+  -- The tuple wraps the command's body, so a command whose body only opens a
+  -- modal must label the verb its callback reaches rather than itself.
   --contract: registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label
   function s:registerAll(tbl)
     for name, v in pairs(tbl) do

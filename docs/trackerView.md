@@ -647,6 +647,25 @@ vm then applies three families of `cmgr:wrap`:
 - **auto-selClear** — `delete` / `deleteSel` / `cut` clear the
   selection after running, since the affected events are gone.
 
+The undo label sits on the verb that makes the edit, not on the command that
+reaches it. `registerAll`'s tuple form wraps the command's own body in a
+labelled block, so a body that only opens a confirm or a modal closes that
+block before the edit arrives — in a callback frames later.
+
+`tv:quantizeSelection/All`, `tv:quantizeKeepRealisedSelection/All`,
+`tv:hideExtraCol`, and `tv:unautomateParam` each wrap themselves with
+`util.atomic` instead, so the label covers every path in — key, menu, confirm
+callback, and patternEditor's own registration of `hideExtraCol`.
+`util.atomic` reads `Undo_BeginBlock`/`Undo_EndBlock` lazily, so a wrapped
+verb invoked from inside another wrapped verb (`unautomateParam` calling
+`hideExtraCol`) collapses into the outer block rather than opening a nested
+one.
+
+The retune modal keeps its label on the callback (`openRetuneModal` in
+`trackerRender.lua`) rather than on `vm:snapToTemper`: the callback is the
+only place holding the scope and strength the modal chose, so it is the only
+place the block can open.
+
 ## Conventions
 
 - **Rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed.**

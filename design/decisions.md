@@ -12,6 +12,15 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-12** — The undo label sits on the view verb that makes the edit, not on the command that
+  starts it. `registerAll`'s tuple form wraps the command's body, so a body that only opens a modal
+  closes its block before the edit arrives in the callback — which is how quantize's whole-take
+  scope, and the removal of a populated automation column, came to land unlabelled. Labelling the
+  verb covers every entry point into it, patternEditor's own registration of `hideExtraCol`
+  included. Rejected: labelling each confirm callback, which fixes one command at a time and leaves
+  the verb's other callers bare; the callback keeps the label only where it hands the verb slots
+  reachable nowhere else, as the retune modal does.
+
 - **2026-08-08** — `docs/` carries the WHY of live code, and a design doc archives as the record of
   what was decided rather than as the reference the code cites. `generators.lua` had no doc at all
   while forty of its comments reached into `design/archive/note-macros-v2.md` for the operating model, which
