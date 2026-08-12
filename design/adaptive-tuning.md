@@ -1,7 +1,7 @@
 # Design — Adaptive tuning
 
 > opened: 2026-07-04 · status: in flight — plan/adaptive-tuning.md, at
-> phase 1 (snap); the solver's boundary settled
+> phase 2 (the objective); the solver's boundary settled
 
 **Solve a selection in one pass for a single detune per note that
 makes its sounding sonorities as harmonious as they can jointly be
@@ -322,18 +322,20 @@ step it was written on.**
    (§ What a target is). A strand's notes may sit in several registers,
    and one reading serves them all.
 
-3. A **candidate** is a point placed on that line: cents, and the coords
-   of § What "in tune" means.
+3. A **candidate** is a point placed on that line, carrying its cents
+   and the coords of § What "in tune" means. It carries its **strain**
+   too: its distance from the step the strand's notes were written on,
+   as a fraction of the half-width of their window on that side
+   (§ The window).
 
-4. A strand arrives as `{ onsets, class, anchor, shortlist }`. The
-   **onsets** are where its notes are struck, the **anchor** is where
-   the step they were written on falls on that line, the **class** is
-   the step-class it belongs to, and the **shortlist** is the candidates
-   it may take.
+4. A strand arrives as `{ onsets, class, shortlist }`. The **onsets**
+   are where its notes are struck, the **class** is the step-class it
+   belongs to, and the **shortlist** is the candidates it may take.
 
-5. The anchor is what the pull pulls toward. The class is the identity
-   under which a sonority counts distinct entries (§ The model), so two
-   strands of one class are one entry in turn rather than two at once.
+5. The pull reads strain, so the solver never interprets a cents value.
+   The class is the identity under which a sonority counts distinct
+   entries (§ The model), so two strands of one class are one entry in
+   turn rather than two at once.
 
 6. Beside the strands it takes the sonority size and the pull strength,
    and nothing else.
@@ -346,7 +348,8 @@ step it was written on.**
 8. Building a strand's shortlist — the target's points, in every octave,
    that fall inside the windows of all its notes (§ The window) — is
    `tuning.lua`'s work, and the only place the notation and the target
-   meet.
+   meet. Strain is computed in the same pass, the window's half-widths
+   being at hand there and nowhere else.
 
 9. Those windows coincide wherever the notation's period divides the
    octave, the scale then repeating identically in every register.
@@ -424,10 +427,9 @@ step it was written on.**
 2. It is **harmonic lock** on the modal: a field beside the scope, set
    per invocation.
 
-3. The pull is quadratic in a strand's deviation from its anchor,
-   normalised by the half-width of the window its notes share on the
-   side it moved. One dial value then means the same thing under any
-   notation.
+3. The pull is quadratic in the strain of the candidate a strand takes
+   (§ What the solver takes). One dial value then means the same thing
+   under any notation.
 
 4. It is counted once per strand rather than once per note, which is
    what makes an octave doubling change no answer at all. The box
