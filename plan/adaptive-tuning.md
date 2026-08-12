@@ -25,7 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-12 Snap the scope onto the notation (§ First brick 1)
 
 ## Now
 
@@ -33,20 +33,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. Snap the scope onto the notation: `snapToTemperScope(groups)` in
-   `trackerView.lua` beside `quantizeScope`, running every note in the scope
-   through `tuning.snap` and writing the pair back with `edit.assign`, then
-   `tm:flush()`. A note already on its step is not written, and non-note
-   events are passed over. `tv:snapToTemperSelection` and
-   `tv:snapToTemperAll` take `eventsByCol()` and `allGroups()`; nothing
-   reaches them yet, the command that does arriving with the modal below.
-   Spec `vm_snap_temper_spec` against the two verbs — an
-   off-step note lands on its step's `(pitch, detune)`, a note past the
-   half-way point lands on its neighbour, an on-step note is left alone,
-   and a selection confines the edit. `docs/trackerView.md` gains the pair
-   beside the quantize verbs.
-
-2. The retune modal, opened by Ctrl+T: `modalHost:registerKind('retune',
+1. The retune modal, opened by Ctrl+T: `modalHost:registerKind('retune',
    …)` in `trackerRender.lua` beside `takeProps`, carrying one field for
    now — scope, as a Selection · Whole take radio opening on Selection
    where there is one — with OK and Cancel. OK calls whichever of the two
@@ -56,7 +43,7 @@
    `scopedAction` is not in the path: the scope is a field, and OK replaces
    the whole-take confirm. Bound in `pageBindings.tracker`.
 
-3. The strength field beside the scope (§ Strength) — a 0–1 slider opening
+2. The strength field beside the scope (§ Strength) — a 0–1 slider opening
    at full strength every time, passed to both verbs, interpolating each
    note from the detune it carries toward the snapped one. Below 1 the note
    is left off its step, so the blended cents are re-seated on the nearest
@@ -66,7 +53,7 @@
    10¢ off when the same command runs again — the broken idempotence, pinned
    as intended rather than tolerated.
 
-4. The window as both half-gaps: `ctx:noteProjection` returns the distance
+3. The window as both half-gaps: `ctx:noteProjection` returns the distance
    to the step below and the step above in place of the smaller of the two
    (`viewContext.lua:39-42`), which is the two-sided window of § The
    window. Its one consumer, the deviation tick in `gridPane.lua:793-796`,

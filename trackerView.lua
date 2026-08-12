@@ -392,6 +392,17 @@ end
 
 ----- Show events by column, used by lots of selection ops
 
+-- Every column, every event, as a groups list (for *-all variants).
+local function allGroups()
+  local groups = {}
+  for _, col in ipairs(grid.cols) do
+    local locs = {}
+    for _, e in ipairs(col.events) do locs[e.uuid] = e end
+    util.add(groups, { col = col, locs = locs })
+  end
+  return groups
+end
+
 local function eventsByCol()
   local r1, r2, c1, c2, part1, part2 = ec:region()
   local singleNotePart = (c1 == c2 and part1 == part2
@@ -1874,17 +1885,6 @@ end
 
 do
 
-  -- Every column, every event, as a groups list (for *-all variants).
-  local function allGroups()
-    local groups = {}
-    for _, col in ipairs(grid.cols) do
-      local locs = {}
-      for _, e in ipairs(col.events) do locs[e.uuid] = e end
-      util.add(groups, { col = col, locs = locs })
-    end
-    return groups
-  end
-
   -- Plan-then-write so conformOverlaps can clip plan geometry against
   -- col-mates before the writes commit. Two off-grid col-mates can
   -- otherwise quantize-collapse onto the same ppq (or onto adjacent
@@ -2033,6 +2033,30 @@ do
   function tv:scaleSelection(kNum, kDen) scaleScope(eventsByCol(), kNum, kDen) end
   function tv:scaleAll(kNum, kDen)       scaleScope(allGroups(),   kNum, kDen) end
 end
+
+----- Retune
+
+-- Notation snap: every note in scope onto its own step of the active
+-- temper. See docs/trackerView.md § Retune.
+local function snapToTemperScope(groups)
+  local temper = ctx:activeTemper()
+  if not temper then return end
+  for _, g in ipairs(groups) do
+    for _, e in pairs(g.locs) do
+      if util.isNote(e) then
+        local _, _, gap = ctx:noteProjection(e)
+        if gap ~= 0 then
+          local pitch, detune = tuning.snap(temper, e.pitch, e.detune)
+          edit.assign(e, { pitch = pitch, detune = detune })
+        end
+      end
+    end
+  end
+  tm:flush()
+end
+
+function tv:snapToTemperSelection() snapToTemperScope(eventsByCol()) end
+function tv:snapToTemperAll()       snapToTemperScope(allGroups())   end
 
 local insertRow, deleteRow, insertRowCol, deleteRowCol do
   -- Absorber pbs are tm-managed, tied to note seats — row ops shift

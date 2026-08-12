@@ -449,6 +449,21 @@ tm's subscriber marks affected channels via `tm:markSwingStale` and
 new swing. Cross-take propagation is `seqMgr:reswingAll`, which binds
 each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 
+## Retune
+
+`vm:snapToTemper{Selection,All}` put every note in scope on its own step
+of the active temper. Snap sets no target — it is the absence of one
+(design/adaptive-tuning.md § When an adaptive solve exists) — and with no
+active temper the verbs do nothing, there being nothing to snap to. A
+note already seated is skipped: `ctx:noteProjection`'s `gap` clears
+sub-1e-6 serialisation dust before returning, so `gap ~= 0` reads "off
+its step" with no second epsilon anywhere.
+
+A note whose nearest step lies past MIDI 127 is a known exception.
+`tuning.stepToMidi` folds that overflow into detune rather than dropping
+it, so under a twelve-note meantone `(127, +40)` snaps to `(127, +72.63)`
+— a pitch on no step. `nudgePitch` refuses the case; snap does not.
+
 ## Extra columns & delay sub-column
 
 Columns beyond the data-driven ones are materialised by tm from

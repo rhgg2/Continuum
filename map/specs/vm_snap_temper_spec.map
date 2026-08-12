@@ -1,0 +1,69 @@
+@spec vm_snap_temper_spec  src=tests/specs/vm_snap_temper_spec.lua  loc=107  cases=5
+@exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec)
+@surface   tuning.derive, vm:setGridSize, tuning.stepToMidi, vm:snapToTemperAll, ec:setSelection, vm:snapToTemperSelection
+@harness   mk{seed.notes}
+
+# Intent
+  Notation snap: tv:snapToTemper{Selection,All} run every note in scope
+  through tuning.snap and write the pair back. The temper is a twelve-note
+  quarter-comma meantone MOS, so a step's seat carries a detune of its own
+  and the window is asymmetric (+38.0 / -58.6 either side of step 1).
+
+# Helpers
+  @fn mk(harness, notes)  @ 16-23
+  @fn note(ppq, pitch, detune)  @ 25-28
+  @fn lane1(h)  @ 30-34
+  @fn cell(h, row)  @ 36
+  @fn near(a, b, msg)  @ 38-40
+  @fn seat(step, oct)  @ 43
+      -- Seat of (step, octave) under MEAN, as the spec's expectation frame.
+
+# Cases
+  @case 'snapToTemperAll seats an off-step note on its own step'  [harness]  @ 47-56
+  @case 'a note past the half-way point lands on its neighbour'  [harness]  @ 60-69
+  @case 'a note inside the window keeps its step'  [harness]  @ 73-80
+  @case 'a note already on its step is left where it is'  [harness]  @ 84-92
+  @case 'a selection confines the snap to the notes inside it'  [harness]  @ 96-105
+
+# Uses (outbound edges)
+  @use call tuning.derive  @ 9
+  @use call vm:setGridSize  @ 21
+  @use call tuning.stepToMidi  @ 43
+  @use call vm:snapToTemperAll  @ 50,64,76,88
+  @use call ec:setSelection  @ 99
+  @use call vm:snapToTemperSelection  @ 101
+
+# Fields (r read / w write incl. constructor keys)
+  @field w MEAN  @ 19
+  @field r cells  @ 36
+  @field w chan  @ 26
+  @field w col1  @ 99
+  @field w col2  @ 99
+  @field r cols  @ 31
+  @field w config  @ 19
+  @field w delay  @ 27
+  @field r detune  @ 54,55,68,79,91,103,104
+  @field w detune  @ 27
+  @field w endppq  @ 26
+  @field r grid  @ 31
+  @field r lane  @ 32
+  @field r midiChan  @ 32
+  @field w name  @ 10,47,60,73,84,96
+  @field w notes  @ 18
+  @field w part1  @ 100
+  @field w part2  @ 100
+  @field w periodPitch  @ 10
+  @field r pitch  @ 53,67,78,90
+  @field w pitch  @ 26
+  @field w pitches  @ 11
+  @field w ppq  @ 26
+  @field w project  @ 19
+  @field w row1  @ 99
+  @field w row2  @ 99
+  @field w run  @ 48,61,74,85,97
+  @field w seed  @ 18
+  @field w stepNames  @ 13
+  @field w temper  @ 19
+  @field w tempers  @ 19
+  @field r type  @ 32
+  @field w vel  @ 26
