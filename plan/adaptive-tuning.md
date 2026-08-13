@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-13 sonority: the exact solve by DP along the onsets (§ Solving it)
 - 2026-08-13 sonority: the objective over a placement (§ What "in tune" means)
 - 2026-08-13 sonority: the walk over strands, one sonority per onset (§ The model)
 - 2026-08-13 sonority: the box score over a set of coords (§ What "in tune" means)
-- 2026-08-12 tv: undo labels on the verb, not the command (adjacent to § Where it sits)
 
 ## Now
 
@@ -41,18 +41,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The DP.** `sonority.solve` returns the index per strand minimising
-   that cost, by dynamic programming along the onsets (§ Solving it).
-   The state carries the chosen candidate of the `n−1` most recently
-   distinct step-classes, together with any strand whose strikes are not
-   yet spent. An empty shortlist is asserted against, and a state count
-   past the stated budget raises (§ What the solver takes). The spec
-   pins agreement with exhaustive enumeration on small inputs, that a
-   shortlist of one is fixed and still contributes its coords, and that
-   holding the ii's D through the V costs the V 0.118 of box
-   (§ The strand).
-
-2. **The dominant seventh.** A spec fixes the pull's scale on a
+1. **The dominant seventh.** A spec fixes the pull's scale on a
    hand-worked C7 sounding alone (§ First brick). Its shortlists
    are ratio lists written into the spec, so no target mechanism is
    needed to run it. Below a pull of 0.95 the chord takes the otonal
@@ -61,7 +50,7 @@
    takes the Pythagorean under any pull (§ The model), so the
    calibration chord stands alone.
 
-3. **The walk over what sounds.** `sonority.walk` reads the notes'
+2. **The walk over what sounds.** `sonority.walk` reads the notes'
    releases and takes everything sounding at an onset together with the
    last `n−1` distinct classes struck before it (§ Open). The extra
    state is bounded by the polyphony rather than by `n`. The item

@@ -111,4 +111,134 @@ function sonority.cost(strands, n, strength, choice)
   return total
 end
 
+----- The solve
+
+-- A strand is live from the onset it is chosen at to the last that reads it, both
+-- known before enumeration (§ Solving it), and listed in strand order for keying.
+--contract: strands, sonorities → per onset the strands born there, live there, and held from before
+local function schedule(strands, sonorities)
+  local onsetAt = {}
+  for i, current in ipairs(sonorities) do onsetAt[current.ppq] = i end
+
+  local bornAt, lastAt = {}, {}
+  for index, strand in ipairs(strands) do
+    local first = strand.notes[1].ppq
+    for _, note in ipairs(strand.notes) do
+      if note.ppq < first then first = note.ppq end
+    end
+    bornAt[index], lastAt[index] = onsetAt[first], onsetAt[first]
+  end
+  for i, current in ipairs(sonorities) do
+    for _, index in ipairs(current.strands) do lastAt[index] = i end
+  end
+
+  local plan = {}
+  for i = 1, #sonorities do plan[i] = { born = {}, live = {}, held = {} } end
+  for index = 1, #strands do
+    util.add(plan[bornAt[index]].born, index)
+    for i = bornAt[index], lastAt[index] do
+      util.add(plan[i].live, index)
+      if i > bornAt[index] then util.add(plan[i].held, index) end
+    end
+  end
+  return plan
+end
+
+-- Placements at an onset: the states carried in times the candidates born there,
+-- so the shortlists of everything live. Counted upfront to refuse, not begin.
+local budget = 200000
+
+local function assertAffordable(strands, plan)
+  for i, onset in ipairs(plan) do
+    local placements = 1
+    for _, index in ipairs(onset.live) do
+      placements = placements * #strands[index].shortlist
+    end
+    assert(placements <= budget, string.format(
+      'sonority.solve: onset %d needs %d placements, over the budget of %d',
+      i, placements, budget))
+  end
+end
+
+-- Every combination of the shortlists of the strands born at an onset, with the
+-- pull each charges — the same against every state, so charged once here.
+local function placementsAt(strands, born, strength)
+  local placements, at = {}, {}
+  for k = 1, #born do at[k] = 1 end
+  while true do
+    local pull = 0
+    for k, index in ipairs(born) do
+      local strain = strands[index].shortlist[at[k]].strain
+      pull = pull + strength * strain * strain
+    end
+    util.add(placements, { choice = util.clone(at), pull = pull })
+
+    local k = #born
+    while k >= 1 do
+      at[k] = at[k] + 1
+      if at[k] <= #strands[born[k]].shortlist then break end
+      at[k] = 1; k = k - 1
+    end
+    if k < 1 then return placements end
+  end
+end
+
+local function keyOf(choice, list)
+  local parts = {}
+  for k, index in ipairs(list) do parts[k] = choice[index] end
+  return util.key(table.unpack(parts))
+end
+
+-- The state carries the whole choice vector rather than a backpointer: two
+-- generations are alive at a time and the budget bounds them.
+--contract: strands, n, strength → the index per strand minimising sonority.cost, exactly
+function sonority.solve(strands, n, strength)
+  for index, strand in ipairs(strands) do
+    assert(#strand.shortlist > 0,
+      'sonority.solve: strand ' .. index .. ' has an empty shortlist')
+  end
+  local sonorities = sonority.walk(strands, n)
+  local plan       = schedule(strands, sonorities)
+  assertAffordable(strands, plan)
+
+  local states = { [util.key()] = { cost = 0, choice = {} } }
+  for i, current in ipairs(sonorities) do
+    local onset = plan[i]
+
+    local carried = {}
+    for _, state in pairs(states) do
+      local key  = keyOf(state.choice, onset.held)
+      local best = carried[key]
+      if not best or state.cost < best.cost then carried[key] = state end
+    end
+
+    -- Every member of this sonority is now assigned: born here, or live from
+    -- before and still carrying what it chose then.
+    local reached = {}
+    for _, placement in ipairs(placementsAt(strands, onset.born, strength)) do
+      for _, state in pairs(carried) do
+        local choice = util.clone(state.choice)
+        for k, index in ipairs(onset.born) do choice[index] = placement.choice[k] end
+
+        local coordSet = {}
+        for k, index in ipairs(current.strands) do
+          coordSet[k] = strands[index].shortlist[choice[index]].coords
+        end
+
+        local cost = state.cost + sonority.score(coordSet) + placement.pull
+        local key  = keyOf(choice, onset.live)
+        local best = reached[key]
+        if not best or cost < best.cost then reached[key] = { cost = cost, choice = choice } end
+      end
+    end
+    states = reached
+  end
+
+  local best
+  for _, state in pairs(states) do
+    if not best or state.cost < best.cost then best = state end
+  end
+  return best.choice
+end
+
 return sonority

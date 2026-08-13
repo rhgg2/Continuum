@@ -9,6 +9,10 @@
 --
 -- Pins the objective the solve minimises: the box summed over the walk's
 -- sonorities, and the pull counted once per strand (§ Harmonic lock).
+--
+-- Pins the solve of § Solving it: that the DP returns the exact minimum of that
+-- objective, held against exhaustive enumeration; that a strand held across a
+-- chord change bends the harmony to it (§ The strand); and the two guards.
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -148,6 +152,113 @@ local function classesAt(strands, sonorityAt)
   local out = {}
   for i, index in ipairs(sonorityAt.strands) do out[i] = strands[index].class end
   return out
+end
+
+-- The DP is exact, so its answer is held to the enumeration's to the bit.
+local function exactly(actual, expected, why)
+  t.truthy(math.abs(actual - expected) < 1e-9, string.format(
+    '%s: expected %.6f, got %.6f', why, expected, actual))
+end
+
+-- The solve's own figures are worked further out than the doc's two places.
+local function nearly(actual, expected, why)
+  t.truthy(math.abs(actual - expected) < 5e-4, string.format(
+    '%s: expected %.4f, got %.6f', why, expected, actual))
+end
+
+-- What one sonority of the walk scores under a choice, so a passage can be read
+-- chord by chord rather than as its total.
+local function scoreAt(strands, choice, sonorityAt)
+  local coordSet = {}
+  for i, index in ipairs(sonorityAt.strands) do
+    coordSet[i] = strands[index].shortlist[choice[index]].coords
+  end
+  return sonority.score(coordSet)
+end
+
+-- Every choice vector over the strands' shortlists, in odometer order.
+local function everyChoice(strands, fn)
+  local choice = {}
+  for i = 1, #strands do choice[i] = 1 end
+  while true do
+    fn(choice)
+    local i = #strands
+    while i >= 1 do
+      choice[i] = choice[i] + 1
+      if choice[i] <= #strands[i].shortlist then break end
+      choice[i] = 1; i = i - 1
+    end
+    if i < 1 then return end
+  end
+end
+
+local function bruteMinimum(strands, n, strength)
+  local best
+  everyChoice(strands, function(choice)
+    local cost = sonority.cost(strands, n, strength, choice)
+    if not best or cost < best then best = cost end
+  end)
+  return best
+end
+
+-- One shortlist shared by every strand of the layouts below: three candidates
+-- far enough apart that the box and the pull want different ones.
+local threeWays = {
+  { coords = just.C,           strain = 0   },
+  { coords = just.E,           strain = 0.3 },
+  { coords = just.pythagorean, strain = 0.6 },
+}
+
+-- Strands given as { class, {{ppq,pitch},..} }, each taking threeWays.
+local function laidOut(list)
+  local strands = {}
+  for i, entry in ipairs(list) do strands[i] = placed(entry[1], entry[2], threeWays) end
+  return strands
+end
+
+-- The shapes the schedule has to get right: strands born together and born
+-- apart, a strand outliving the window, and one that no sonority ever holds.
+local layouts = {
+  { name    = 'a block chord',
+    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 0, 64 } } }, { 7, { { 0, 67 } } } } },
+
+  { name    = 'the same chord arpeggiated',
+    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 240, 64 } } }, { 7, { { 480, 67 } } } } },
+
+  { name    = 'a strand restruck across another strand\'s onset',
+    strands = laidOut{ { 0, { { 0, 60 }, { 480, 60 } } }, { 4, { { 240, 64 } } } } },
+
+  { name    = 'a strand striking at the first onset and the last',
+    strands = laidOut{ { 0, { { 0, 60 }, { 960, 60 } } }, { 4, { { 240, 64 } } },
+                       { 7, { { 480, 67 } } }, { 11, { { 720, 71 } } } } },
+
+  { name    = 'an onset wider than n',
+    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 0, 64 } } },
+                       { 7, { { 0, 67 } } }, { 11, { { 0, 71 } } } } },
+
+  { name    = 'two strands of one class, disjoint in time',
+    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 0, 64 } } }, { 0, { { 960, 72 } } } } },
+}
+
+-- The ninth of § The strand, with everything but the D fixed: the D is asked
+-- to serve a G–B♭–D–F it is struck before, and the onsets it strikes at say
+-- whether it must hold one tuning across the change or may take two.
+local dorianD = {
+  { coords = { [3] = -2, [5] = 1 }, strain = strainOf(10, 9, 200) },
+  { coords = { [3] = 2 },           strain = strainOf(9,  8, 200) },
+}
+
+local function dorian(dOnsets)
+  local strands = fixed{
+    { 5,    0, 65, { [3] = -1 },          strainOf(4,  3,  500) },
+    { 9,    0, 69, { [3] = -1, [5] = 1 }, strainOf(5,  3,  900) },
+    { 7,  960, 55, { [3] = 1 },           strainOf(3,  2,  700) },
+    { 10, 960, 58, { [3] = -2 },          strainOf(16, 9, 1000) },
+  }
+  for i, ppq in ipairs(dOnsets) do
+    strands[4 + i] = placed(2, { { ppq, 62 } }, dorianD)
+  end
+  return strands
 end
 
 return {
@@ -316,6 +427,90 @@ return {
       t.truthy(sonority.cost(strands, 5, 0.96, pythagorean)
              < sonority.cost(strands, 5, 0.96, otonal),
         'and above it gives it up for 27¢ of fidelity')
+    end,
+  },
+
+  {
+    name = 'the solve is the minimum exhaustive enumeration finds',
+    run = function()
+      for _, layout in ipairs(layouts) do
+        for _, n in ipairs{ 2, 3, 4 } do
+          for _, strength in ipairs{ 0, 1, 3 } do
+            local choice = sonority.solve(layout.strands, n, strength)
+            exactly(sonority.cost(layout.strands, n, strength, choice),
+              bruteMinimum(layout.strands, n, strength),
+              string.format('%s at n=%d, strength %d', layout.name, n, strength))
+          end
+        end
+      end
+    end,
+  },
+
+  {
+    name = 'a shortlist of one is fixed and still contributes its coords',
+    run = function()
+      local third = placed(4, { { 0, 64 } }, {
+        { coords = just.E,      strain = strainOf(5,  4, 400) },
+        { coords = { [3] = 4 }, strain = strainOf(81, 64, 400) },
+      })
+
+      for _, strength in ipairs{ 0.5, 1, 3 } do
+        t.eq(sonority.solve({ third }, 4, strength)[1], 2,
+          'alone, the pull takes the Pythagorean third at strength ' .. strength)
+      end
+
+      local anchored = fixed{ { 0, 0, 60, just.C, 0 }, { 7, 0, 67, just.G, 0 } }
+      anchored[3] = third
+      local pure, pythagorean = { 1, 1, 1 }, { 1, 1, 2 }
+      nearly(sonority.cost(anchored, 4, 0, pythagorean) - sonority.cost(anchored, 4, 0, pure),
+        2.4330, 'the box saving the fixed C and G buy')
+      nearly((sonority.cost(anchored, 4, 1, pure)        - sonority.cost(anchored, 4, 0, pure))
+           - (sonority.cost(anchored, 4, 1, pythagorean) - sonority.cost(anchored, 4, 0, pythagorean)),
+        0.0505, 'against the pull it costs at strength 1')
+      t.eq(sonority.solve(anchored, 4, 1)[3], 1, 'so in the chord it takes 5/4')
+    end,
+  },
+
+  {
+    name = 'a held strand bends the harmony to it',
+    run = function()
+      local held = dorian{ 0 }
+      for _, strength in ipairs{ 0, 1, 2 } do
+        t.eq(sonority.solve(held, 4, strength)[5], 1,
+          'the D held across the change takes 10/9 at strength ' .. strength)
+      end
+      local heldChoice, heldWalk = sonority.solve(held, 4, 0), sonority.walk(held, 4)
+      nearly(scoreAt(held, heldChoice, heldWalk[1]), 3.907, 'the chord the D is chosen in')
+      nearly(scoreAt(held, heldChoice, heldWalk[2]), 7.077, 'and the one that pays for it')
+      nearly(sonority.cost(held, 4, 0, heldChoice), 10.9837, 'the passage held')
+
+      local restruck   = dorian{ 0, 960 }
+      local freeChoice = sonority.solve(restruck, 4, 0)
+      local freeWalk   = sonority.walk(restruck, 4)
+      t.eq(freeChoice[6], 2, 'a D struck again in the second chord takes 9/8')
+      nearly(scoreAt(restruck, freeChoice, freeWalk[2]), 6.340, 'which is what the chord wants')
+      nearly(sonority.cost(restruck, 4, 0, freeChoice), 10.2467, 'the passage restruck')
+      nearly(sonority.cost(held, 4, 0, heldChoice) - sonority.cost(restruck, 4, 0, freeChoice),
+        0.7370, 'so the hold costs the second chord a 5/3')
+      t.bagEq(classesAt(held, heldWalk[2]), classesAt(restruck, freeWalk[2]),
+        'the same four classes standing in both, only the D tuned differently')
+    end,
+  },
+
+  {
+    name = 'an empty shortlist and an unaffordable solve are both refused',
+    run = function()
+      local strands = fixed{ { 0, 0, 60, just.C, 0 }, { 4, 0, 64, just.E, 0 } }
+      strands[2].shortlist = {}
+      local ok, err = pcall(function() sonority.solve(strands, 4, 1) end)
+      t.falsy(ok, 'a strand with nowhere to go raises')
+      t.truthy(tostring(err):find('strand 2', 1, true), 'naming it: ' .. tostring(err))
+
+      local wide = {}
+      for i = 1, 12 do wide[i] = placed(i - 1, { { 0, 72 - i } }, threeWays) end
+      local affordable, why = pcall(function() sonority.solve(wide, 12, 1) end)
+      t.falsy(affordable, 'twelve strands of three candidates at n=12 raises')
+      t.truthy(tostring(why):find('531441', 1, true), 'naming the count: ' .. tostring(why))
     end,
   },
 }

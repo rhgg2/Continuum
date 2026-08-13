@@ -319,8 +319,10 @@ step it was written on.**
    another under the V.
 
 5. A note held across a chord change therefore bends the harmony to it
-   rather than the reverse. Holding the ii's D through the V costs the V
-   0.118 of box and leaves the D where the ii put it.
+   rather than the reverse. Under a 5-limit target, at `n` one above the
+   arity, a D held from D–F–A into G–B♭–D keeps the 10/9 the first chord
+   gives it. Restruck it would take the 9/8 the second chord prefers, so
+   the hold costs that chord 0.737 of box.
 
 6. The strand is what earns the collapse to step-classes: an entry
    carries one tuning at a time only because every note that could write
@@ -403,43 +405,55 @@ step it was written on.**
    still exactly solvable: dynamic programming along the time axis.
 
 2. The sonority is what puts it in reach. Because a sonority is one set
-   over all parts rather than a window per part, the state carries the
-   chosen tuning of the `n−1` most recently distinct step-classes.
+   over all parts rather than a window per part, the state is one chosen
+   tuning per live strand.
 
-3. It also carries a strand's tuning for as long as that strand has
-   strikes to come, which can outlast the window (§ The strand). That
-   part of the state is bounded by the polyphony rather than by `n`.
+3. A strand is **live** on either of two counts. It stands among the
+   `n−1` most recently distinct step-classes; or it has yet to strike
+   again, and must keep the tuning its first strike chose until it does,
+   which the window may have let go long before (§ The strand). The
+   second count is bounded by the polyphony rather than by `n`.
 
-4. Where no strand outlasts the window it costs `D^(n−1)` states for `D`
+4. The walk does not depend on the choices, so when a strand is chosen
+   and how long it stays live are read off it before any enumeration
+   begins.
+
+5. Where no strand outlasts the window it costs `D^(n−1)` states for `D`
    candidates per step-class, whatever the number of parts sounding.
 
-5. `D` is small. The twenty three-factor products of
+6. `D` is small. The twenty three-factor products of
    `{1, 3, 5, 7, 9, 11}` put on average 1.7 points inside a 12-EDO
    window and never more than three; the 5-limit diamond at odd limit 15
    never more than two. At three, `n=6` is 243 states and `n=8` is
    2,187.
 
-6. Collapsing the octave is what holds the count down where a chord is
+7. Collapsing the octave is what holds the count down where a chord is
    doubled. A four-voice chord doubled at two of its notes holds four
    step-classes rather than six, so `n` stays at five rather than
    climbing to seven, and at three candidates the count is 81 states
    rather than 729.
 
-7. An onset carrying `m` simultaneous strands enumerates `D^m`
+8. An onset carrying `m` simultaneous strands enumerates `D^m`
    placements against each state. A note added to a chord widens `m` and
    forces `n` up with it (§ The model), so it costs a factor of `D` more
    than a note added to `n` alone.
 
-8. The DP is exact, not causal: the passage is solved globally and the
+9. The DP is exact, not causal: the passage is solved globally and the
    pull balanced across all of it at once, where a left-to-right chase
    accumulates drift.
 
-9. Beyond a stated budget on the state count an annealer takes over,
-   though the measured `D` leaves ordinary material far inside it. It is
-   a fallback because its noise does not shrink with the correction it
-   is there to compute — the spike disagreed with itself by about 2¢
-   between seeds where the whole correction averaged 1.9¢, and a solver
-   whose error is half its output is not solving anything.
+10. The budget is 200,000 placements at an onset: the states carried
+    into it times the candidates of the strands born there. Reading it
+    off the walk refuses an impossible solve rather than beginning one,
+    and counts a chord wider than `n`, whose strands leave the window at
+    once and so leave no state behind them.
+
+11. Beyond it an annealer takes over, though the measured `D` leaves
+    ordinary material far inside it. It is a fallback because its noise
+    does not shrink with the correction it is there to compute — the
+    spike disagreed with itself by about 2¢ between seeds where the whole
+    correction averaged 1.9¢, and a solver whose error is half its output
+    is not solving anything.
 
 ## Harmonic lock
 
