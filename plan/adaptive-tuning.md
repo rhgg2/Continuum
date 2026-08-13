@@ -19,11 +19,11 @@
    the temper editor entry that authors one. — landed 2026-08-14, two
    commits.
 4. **Phase 4 — The solve on a take** (§ What a target is 1–3, 7–10,
-   § The command's slots, § What the solver takes 8–13) — the token
-   factoriser and the eligibility predicate answered from it, strands and
-   their shortlists built in `tuning.lua`, the target, key and
-   harmonic-lock slots on the modal, and the chosen candidate seated as
-   `(pitch, detune)`.
+   § The command's slots, § What the solver takes 8–14) — the token
+   factoriser and the eligibility predicate answered from it, shortlists
+   in `tuning.lua` and strands assembled by the command, the target, key,
+   sonority-size and harmonic-lock slots on the modal, and the chosen
+   candidate seated as `(pitch, detune)`.  ← in flight
 5. **Phase 5 — Seams** (§ Seams) — the collar as strands of one, and the
    serial sweep across takes in take order.
 
@@ -44,4 +44,44 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 3's last item is in flight.)
+1. `tuning.coords(token)` returns the exponents of the odd primes in a
+   ratio token — `15/8` as `{[3]=1,[5]=1}`, `1/1` as `{}` — and nil for a
+   token written in cents or equal divisions. `tuning.isTarget(temper)`
+   answers true when every one of a temper's pitches factorises, so
+   eligibility is settled where the target is chosen rather than where the
+   solve runs.
+
+2. `tuning.shortlist(notation, target, keyStep, notes)` returns the
+   candidates a strand may take: each of the target's points, placed at
+   the key's step and reduced into the octave, that falls inside the
+   window of every one of the strand's notes. A candidate carries its
+   deviation in cents from the step those notes were written on, the
+   coords of its token, and its strain — that deviation over the half-width
+   of the window on the side it lies, taken largest where the notes'
+   windows differ.
+
+3. The command groups the notes in scope into strands: a step-class by
+   `tuning.midiToStep`, and within a class the notes overlapping in time,
+   transitively, so a chain of overlaps is one strand and a note
+   overlapping nothing in its class starts another. Each strand carries
+   its notes, its class and the shortlist of item 2.
+
+4. The retune modal takes four more fields: target, chosen from the
+   library's eligible tempers with "none" — which is snap — the default;
+   key, chosen from the notation's step names; sonority size; and harmonic
+   lock. The slots reach `tv` as one table. Target and key are declared cm
+   keys written at take tier on OK, so the modal reopens on them; sonority
+   size opens at 5 and harmonic lock at 1 every time.
+
+5. `tv:retune` builds the strands of the scope, hands them to
+   `sonority.solve` with the sonority size and the harmonic lock, and
+   seats the chosen candidate on every note of a strand in its own
+   register, blended by strength, through `edit.assign` in the one undo
+   block. With no target it is the snap that stands today. A strand whose
+   shortlist is empty refuses the whole solve and names its step. The spec
+   drives a written dominant seventh in a take against a diamond target
+   and pins the otonal answer the pure module already fixes.
+
+6. The refusal offers a nudge: the notes of the offending class are
+   respelled onto the step whose window holds the target's nearest point,
+   and the solve run again.

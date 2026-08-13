@@ -22,23 +22,21 @@ step it was written on.**
    callback, through `util.atomic`: the command body only opens the modal,
    and the edit lands frames later.
 
-4. Scope is an argument on the verb the modal calls. The modal's field
-   passes through unread, and each further slot is another argument on that
-   same verb.
+4. The modal's slots reach the verb it calls as one table, unread by the
+   modal itself (§ The command's slots).
 
-5. Behind the command sits a pure function, strands in and a choice per
+5. Behind the command is a pure function, strands in and a choice per
    strand out (§ The strand). Points and their placement belong to
-   `tuning.lua`; the solver is a module of its own and carries no tuning
-   vocabulary at all.
+   `tuning.lua`, since the solver carries no tuning vocabulary; strand
+   assembly happens in the command, so that neither of the others need
+   hold the notes and their times.
 
 6. Detune is not realised beyond lane-1 notes; that is the author's
    problem, not the function's.
 
-7. The target is named at invocation rather than pinned as a config key.
-   `temper` is a single value on the tier merge (`configManager.lua:58`),
-   pinned at take, track and project together by `tv:setTemperSlot`
-   (`trackerView.lua:566-572`), and every consumer resolves exactly one
-   name.
+7. The target and the key are config keys of their own, written at take
+   tier as the command runs, so the modal opens on the answers the take
+   already carries.
 
 8. One command opens one modal, and every retuning facility the tracker
    offers is reached through it — this one, and the adaptive just
@@ -412,7 +410,8 @@ step it was written on.**
     steps at all, and a strand gathers unisons only. Where one does fall
     an octave away it is a different step with different neighbours, so
     the two windows differ and their intersection can be narrower than
-    either, or empty.
+    either, or empty. A candidate's strain is then the largest its notes
+    give it, the pull answering to the note that strains most.
 
 11. Fixing a strand is a shortlist of one, and nothing in the solver
     distinguishes it. The collar (§ Seams) arrives as strands of one.
@@ -428,6 +427,12 @@ step it was written on.**
     holds no point within 50¢ of the tritone, `45/32` being 590¢ at odd
     limit 45, so against a 12-EDO notation that step-class has nowhere
     to go.
+
+14. The command refuses the solve and names the step, and offers the
+    nudge: the class's notes are respelled onto the step whose window
+    holds the target's nearest point, and the solve run again. That is the
+    solver editing the score rather than tuning it (§ The window), so it
+    is offered rather than taken.
 
 ## Solving it
 
@@ -667,17 +672,3 @@ step it was written on.**
    was enough to make the spike stable; whether a well — soft near the
    centre, stiff at the edge — buys anything is unmeasured.
 
-5. What the command does with a note whose shortlist is empty. Refusing
-   the solve and naming the step is loud where passing the note through
-   unmoved is quiet, and a target with a hole in it is common enough
-   that refusal may be too blunt (§ What the solver takes).
-
-6. Where the key belongs. A root says where a scale sits in sound;
-   which of a target's points the material meets is a further question,
-   and nothing answers it yet. Root state showed the tier an answer
-   could sit on: the library holds a scale and a project holds a scale
-   placed (`docs/tuning.md` § The root), so a key would be one more
-   project-tier field beside the four, and a second key a second project
-   copy the temper editor forks — not the library copy per key that made
-   the question look expensive. Whether it is a temper field at all, or a
-   slot on the command beside the target, is what stays open.
