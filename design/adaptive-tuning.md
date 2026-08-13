@@ -288,8 +288,10 @@ step it was written on.**
 
 11. The compromise can overturn a chord's own preference. A C7
     sounding alone takes the otonal `4:5:6:7` (§ Harmonic lock); when
-    resolving to F–A–C it takes the Pythagorean `16/9` under any pull.
-    The global solve imposes a kind of harmonic utilitarianism.
+    resolving to F–A–C it takes the Pythagorean `16/9` under any pull,
+    the resolution saving 1.22 of box against the 0.36 the seventh
+    chord pays for it. The global solve imposes a kind of harmonic
+    utilitarianism.
 
 12. The objective is evaluated once per onset, over the set current when
     every note struck there has been placed.
@@ -298,6 +300,12 @@ step it was written on.**
     A released chord at `n` one above the arity leaves one class to the
     sonority that follows, and that class is its bass — in root
     position, its root.
+
+14. A compromise across a chord change therefore wants `n` to reach the
+    classes the two chords hold between them, six where a C7 resolves to
+    F–A–C. At one above the C7's own arity the resolution reads its bass
+    alone, scores the same under either seventh, and the chord is
+    sounding alone after all.
 
 ## The strand
 

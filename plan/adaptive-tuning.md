@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-13 sonority: the pull's scale fixed on the dominant seventh (§ Harmonic lock)
 - 2026-08-13 sonority: the exact solve by DP along the onsets (§ Solving it)
 - 2026-08-13 sonority: the objective over a placement (§ What "in tune" means)
 - 2026-08-13 sonority: the walk over strands, one sonority per onset (§ The model)
-- 2026-08-13 sonority: the box score over a set of coords (§ What "in tune" means)
 
 ## Now
 
@@ -41,16 +41,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The dominant seventh.** A spec fixes the pull's scale on a
-   hand-worked C7 sounding alone (§ First brick). Its shortlists
-   are ratio lists written into the spec, so no target mechanism is
-   needed to run it. Below a pull of 0.95 the chord takes the otonal
-   `4:5:6:7` and above it the Pythagorean `16/9`, trading 0.36 of box
-   against 27¢ of fidelity (§ Harmonic lock). Resolving it to F–A–C
-   takes the Pythagorean under any pull (§ The model), so the
-   calibration chord stands alone.
-
-2. **The walk over what sounds.** `sonority.walk` reads the notes'
+1. **The walk over what sounds.** `sonority.walk` reads the notes'
    releases and takes everything sounding at an onset together with the
    last `n−1` distinct classes struck before it (§ Open). The extra
    state is bounded by the polyphony rather than by `n`. The item

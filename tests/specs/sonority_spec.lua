@@ -13,6 +13,10 @@
 -- Pins the solve of § Solving it: that the DP returns the exact minimum of that
 -- objective, held against exhaustive enumeration; that a strand held across a
 -- chord change bends the harmony to it (§ The strand); and the two guards.
+--
+-- Pins the pull's scale on the calibration C7 (§ Harmonic lock): the crossing
+-- from the otonal seventh to the Pythagorean, and what resolving the chord to
+-- F–A–C does to that trade (§ The model).
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -261,6 +265,51 @@ local function dorian(dOnsets)
   return strands
 end
 
+-- The 7-limit diamond at odd limit 9, cut to the points each 12-EDO window
+-- holds: the shape a target takes (§ What a target is), written out so the
+-- calibration runs before any generator exists (§ First brick). Each point is
+-- given as its coords and the ratio its strain is taken from.
+local diamond = {
+  C  = { { {},                    1, 1,    0 } },
+  E  = { { { [5] = 1 },           5, 4,  400 }, { { [3] = 2, [7] = -1 },  9, 7,  400 } },
+  F  = { { { [3] = -1 },          4, 3,  500 } },
+  G  = { { { [3] = 1 },           3, 2,  700 } },
+  A  = { { { [3] = -1, [5] = 1 }, 5, 3,  900 }, { { [3] = 1, [7] = -1 }, 12, 7,  900 } },
+  Bb = { { { [7] = 1 },           7, 4, 1000 }, { { [3] = -2 },          16, 9, 1000 },
+         { { [3] = 2, [5] = -1 }, 9, 5, 1000 } },
+}
+
+local function fromDiamond(class, ppq, pitch, step)
+  local candidates = {}
+  for i, point in ipairs(diamond[step]) do
+    candidates[i] = { coords = point[1], strain = strainOf(point[2], point[3], point[4]) }
+  end
+  return placed(class, { { ppq, pitch } }, candidates)
+end
+
+-- The written C7, every note taking what its own window holds. The seventh is
+-- strand 4, its candidates 7/4, 16/9 and 9/5 in that order.
+local function seventh()
+  return {
+    fromDiamond(0,  0, 60, 'C'), fromDiamond(4, 0, 64, 'E'),
+    fromDiamond(7,  0, 67, 'G'), fromDiamond(10, 0, 70, 'Bb'),
+  }
+end
+
+-- The same chord resolving to F–A–C a bar later.
+local function resolving()
+  local strands = seventh()
+  strands[5] = fromDiamond(5, 960, 65, 'F')
+  strands[6] = fromDiamond(9, 960, 69, 'A')
+  strands[7] = fromDiamond(0, 960, 72, 'C')
+  return strands
+end
+
+-- The readings the calibration is taken between, septimal seventh first.
+local c7Septimal,        c7Pythagorean        = { 1, 1, 1, 1 }, { 1, 1, 1, 2 }
+local resolvingSeptimal, resolvingPythagorean = { 1, 1, 1, 1, 1, 1, 1 },
+                                                { 1, 1, 1, 2, 1, 1, 1 }
+
 return {
   {
     name = 'the 5-limit column of the theory table',
@@ -494,6 +543,94 @@ return {
         0.7370, 'so the hold costs the second chord a 5/3')
       t.bagEq(classesAt(held, heldWalk[2]), classesAt(restruck, freeWalk[2]),
         'the same four classes standing in both, only the D tuned differently')
+    end,
+  },
+
+  {
+    name = "the C7 sounding alone crosses at a pull of 0.95",
+    run = function()
+      local strands = seventh()
+      for _, strength in ipairs{ 0, 0.5, 0.94 } do
+        t.eq(sonority.solve(strands, 5, strength)[4], 1,
+          'the otonal 4:5:6:7 at strength ' .. strength)
+      end
+      for _, strength in ipairs{ 0.96, 1, 2 } do
+        t.eq(sonority.solve(strands, 5, strength)[4], 2,
+          'and 16/9 above the crossing at strength ' .. strength)
+      end
+
+      local boxSaved  = sonority.cost(strands, 5, 0, c7Pythagorean)
+                      - sonority.cost(strands, 5, 0, c7Septimal)
+      local pullSaved = (sonority.cost(strands, 5, 1, c7Septimal)
+                       - sonority.cost(strands, 5, 0, c7Septimal))
+                      - (sonority.cost(strands, 5, 1, c7Pythagorean)
+                       - sonority.cost(strands, 5, 0, c7Pythagorean))
+      nearly(boxSaved, 0.3626, 'the box the septimal seventh buys')
+      nearly(50 * (strainOf(7, 4, 1000) - strainOf(16, 9, 1000)), 27.264,
+        'against the fidelity it spends, in cents')
+      nearly(boxSaved / pullSaved, 0.9476, 'so the two cross here')
+    end,
+  },
+
+  {
+    name = 'the rest of the chord stands still, and the third seventh is dominated',
+    run = function()
+      local strands = seventh()
+      for _, strength in ipairs{ 0, 0.94, 0.96, 2, 6 } do
+        local choice = sonority.solve(strands, 5, strength)
+        t.eq(choice[2], 1, '5/4 rather than 9/7 at strength ' .. strength)
+        t.truthy(choice[4] ~= 3, 'and 9/5 elected by no pull, at strength ' .. strength)
+      end
+
+      -- 9/5 spans more than 16/9 and sits further from the written step besides,
+      -- so it loses on both terms and no strength turns the trade its way.
+      t.truthy(sonority.cost(strands, 5, 0, { 1, 1, 1, 3 })
+             > sonority.cost(strands, 5, 0, c7Pythagorean), 'it costs more box')
+      t.truthy(strainOf(9, 5, 1000) > strainOf(16, 9, 1000), 'and more strain')
+    end,
+  },
+
+  {
+    name = 'resolving to F–A–C the seventh takes the Pythagorean under any pull',
+    run = function()
+      local strands = resolving()
+      for _, strength in ipairs{ 0, 0.5, 0.94, 2 } do
+        t.eq(sonority.solve(strands, 6, strength)[4], 2, '16/9 at strength ' .. strength)
+      end
+
+      local walked = sonority.walk(strands, 6)
+      t.bagEq(classesAt(strands, walked[2]), { 5, 9, 0, 4, 7, 10 },
+        'the resolution standing with the seventh chord whole behind it')
+      nearly(scoreAt(strands, resolvingSeptimal,  walked[2])
+           - scoreAt(strands, resolvingPythagorean, walked[2]),
+        1.2224, 'the box the resolution saves by it')
+      nearly(scoreAt(strands, resolvingPythagorean, walked[1])
+           - scoreAt(strands, resolvingSeptimal,    walked[1]),
+        0.3626, 'against what the seventh chord pays for it')
+      t.truthy(strainOf(16, 9, 1000) < strainOf(7, 4, 1000),
+        'and it strains less too, so there is nothing to cross')
+    end,
+  },
+
+  {
+    name = "at n one above the arity the resolution reads the seventh chord's bass alone",
+    run = function()
+      local strands = resolving()
+      local walked  = sonority.walk(strands, 5)
+      t.bagEq(classesAt(strands, walked[2]), { 5, 9, 0, 4, 7 },
+        'the seventh having left the window by the time F–A–C strikes')
+      exactly(scoreAt(strands, resolvingSeptimal,   walked[2]),
+              scoreAt(strands, resolvingPythagorean, walked[2]),
+        'so the resolution scores the same under either seventh')
+
+      local alone = seventh()
+      exactly(sonority.cost(strands, 5, 0, resolvingPythagorean)
+            - sonority.cost(strands, 5, 0, resolvingSeptimal),
+              sonority.cost(alone,   5, 0, c7Pythagorean)
+            - sonority.cost(alone,   5, 0, c7Septimal),
+        'leaving exactly the trade the chord made alone')
+      t.eq(sonority.solve(strands, 5, 0.94)[4], 1, 'and the crossing where it was')
+      t.eq(sonority.solve(strands, 5, 0.96)[4], 2, 'on both sides of it')
     end,
   },
 
