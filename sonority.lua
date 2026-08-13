@@ -213,7 +213,8 @@ function sonority.solve(strands, n, strength)
     end
 
     -- Every member of this sonority is now assigned: born here, or live from
-    -- before and still carrying what it chose then.
+    -- before. Held and born partition live, so each (state, placement) pair
+    -- writes its own key, and no dominance check is needed as it is above.
     local reached = {}
     for _, placement in ipairs(placementsAt(strands, onset.born, strength)) do
       for _, state in pairs(carried) do
@@ -226,9 +227,7 @@ function sonority.solve(strands, n, strength)
         end
 
         local cost = state.cost + sonority.score(coordSet) + placement.pull
-        local key  = keyOf(choice, onset.live)
-        local best = reached[key]
-        if not best or cost < best.cost then reached[key] = { cost = cost, choice = choice } end
+        reached[keyOf(choice, onset.live)] = { cost = cost, choice = choice }
       end
     end
     states = reached
