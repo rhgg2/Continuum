@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-13 sonority: the sonority holds every class still sounding (§ The model)
 - 2026-08-13 sonority: the pull's scale fixed on the dominant seventh (§ Harmonic lock)
 - 2026-08-13 sonority: the exact solve by DP along the onsets (§ Solving it)
 - 2026-08-13 sonority: the objective over a placement (§ What "in tune" means)
-- 2026-08-13 sonority: the walk over strands, one sonority per onset (§ The model)
 
 ## Now
 
@@ -41,9 +41,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The walk over what sounds.** `sonority.walk` reads the notes'
-   releases and takes everything sounding at an onset together with the
-   last `n−1` distinct classes struck before it (§ Open). The extra
-   state is bounded by the polyphony rather than by `n`. The item
-   carries the measurement that decides it: the state count, and the
-   answers moved against the struck-only walk on the same material.
+(empty — the phase's last item is in flight.)

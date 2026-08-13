@@ -4,8 +4,8 @@
 -- the model hold no reference pitch.
 --
 -- Pins the walk of § The model too: which strands are current at each onset,
--- distinctness by step-class, and the bass as the class a released chord
--- leaves behind it.
+-- distinctness by step-class, the bass as the class a released chord leaves
+-- behind it, and the class still sounding that the last n struck have dropped.
 --
 -- Pins the objective the solve minimises: the box summed over the walk's
 -- sonorities, and the pull counted once per strand (§ Harmonic lock).
@@ -92,19 +92,24 @@ local function shifted(coordSet, prime, by)
   return out
 end
 
--- A strand as the walk reads it: notes carrying when they are struck and how
--- low they sit, under the step-class they share. The shortlist is the solve's
--- business rather than the walk's, so these carry none.
+-- A strand as the walk reads it: notes given as { ppq, pitch, endppq }, under
+-- the step-class they share. The shortlist is the solve's business rather than
+-- the walk's, so these carry none.
 local function strand(class, notes)
   local built = {}
-  for i, note in ipairs(notes) do built[i] = { ppq = note[1], pitch = note[2] } end
+  for i, note in ipairs(notes) do
+    built[i] = { ppq = note[1], pitch = note[2], endppq = note[3] }
+  end
   return { class = class, notes = built }
 end
 
--- Strands of one note each, given as { class, ppq, pitch }.
-local function struck(list)
+-- Strands of one note each, given as { class, ppq, pitch }, every note `over`
+-- long so that it is released where the next strikes.
+local function struck(over, list)
   local strands = {}
-  for i, note in ipairs(list) do strands[i] = strand(note[1], { { note[2], note[3] } }) end
+  for i, note in ipairs(list) do
+    strands[i] = strand(note[1], { { note[2], note[3], note[2] + over } })
+  end
   return strands
 end
 
@@ -117,11 +122,12 @@ local function placed(class, notes, candidates)
 end
 
 -- Strands of one note and one candidate, given as { class, ppq, pitch, coords,
--- strain }, with the choice that takes each strand's only candidate.
-local function fixed(list)
+-- strain } and `over` long, with the choice that takes each strand's only
+-- candidate.
+local function fixed(over, list)
   local strands, choice = {}, {}
   for i, entry in ipairs(list) do
-    strands[i] = placed(entry[1], { { entry[2], entry[3] } },
+    strands[i] = placed(entry[1], { { entry[2], entry[3], entry[2] + over } },
       { { coords = entry[4], strain = entry[5] } })
     choice[i] = 1
   end
@@ -144,12 +150,12 @@ local just = {
 -- C major then D major, disjoint in class: at n=3 each onset stands alone, and
 -- at n=5 the second sonority holds two classes of the first as well.
 local function triads(cStrain, dStrain)
-  return fixed{
+  return fixed(960, {
     { 0,   0, 60, just.C,      cStrain }, { 4, 0, 64, just.E,       0 },
     { 7,   0, 67, just.G,      0       },
     { 2, 960, 62, just.D,      dStrain }, { 6, 960, 66, just.Fsharp, 0 },
     { 9, 960, 69, just.A,      0       },
-  }
+  })
 end
 
 local function classesAt(strands, sonorityAt)
@@ -213,7 +219,7 @@ local threeWays = {
   { coords = just.pythagorean, strain = 0.6 },
 }
 
--- Strands given as { class, {{ppq,pitch},..} }, each taking threeWays.
+-- Strands given as { class, {{ppq,pitch,endppq},..} }, each taking threeWays.
 local function laidOut(list)
   local strands = {}
   for i, entry in ipairs(list) do strands[i] = placed(entry[1], entry[2], threeWays) end
@@ -221,46 +227,57 @@ local function laidOut(list)
 end
 
 -- The shapes the schedule has to get right: strands born together and born
--- apart, a strand outliving the window, and one that no sonority ever holds.
+-- apart, a strand outliving the last n struck, one sounding under them, and
+-- one that no sonority ever holds.
 local layouts = {
   { name    = 'a block chord',
-    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 0, 64 } } }, { 7, { { 0, 67 } } } } },
+    strands = laidOut{ { 0, { { 0, 60, 240 } } }, { 4, { { 0, 64, 240 } } },
+                       { 7, { { 0, 67, 240 } } } } },
 
   { name    = 'the same chord arpeggiated',
-    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 240, 64 } } }, { 7, { { 480, 67 } } } } },
+    strands = laidOut{ { 0, { { 0, 60, 240 } } }, { 4, { { 240, 64, 480 } } },
+                       { 7, { { 480, 67, 720 } } } } },
 
   { name    = 'a strand restruck across another strand\'s onset',
-    strands = laidOut{ { 0, { { 0, 60 }, { 480, 60 } } }, { 4, { { 240, 64 } } } } },
+    strands = laidOut{ { 0, { { 0, 60, 240 }, { 480, 60, 720 } } },
+                       { 4, { { 240, 64, 480 } } } } },
 
   { name    = 'a strand striking at the first onset and the last',
-    strands = laidOut{ { 0, { { 0, 60 }, { 960, 60 } } }, { 4, { { 240, 64 } } },
-                       { 7, { { 480, 67 } } }, { 11, { { 720, 71 } } } } },
+    strands = laidOut{ { 0, { { 0, 60, 240 }, { 960, 60, 1200 } } },
+                       { 4, { { 240, 64, 480 } } },
+                       { 7, { { 480, 67, 720 } } }, { 11, { { 720, 71, 960 } } } } },
+
+  { name    = 'a strand sounding under the classes that follow it',
+    strands = laidOut{ { 0, { { 0, 60, 1200 } } }, { 4, { { 240, 64, 480 } } },
+                       { 7, { { 480, 67, 720 } } }, { 11, { { 720, 71, 960 } } },
+                       { 2, { { 960, 62, 1200 } } } } },
 
   { name    = 'an onset wider than n',
-    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 0, 64 } } },
-                       { 7, { { 0, 67 } } }, { 11, { { 0, 71 } } } } },
+    strands = laidOut{ { 0, { { 0, 60, 240 } } }, { 4, { { 0, 64, 240 } } },
+                       { 7, { { 0, 67, 240 } } }, { 11, { { 0, 71, 240 } } } } },
 
   { name    = 'two strands of one class, disjoint in time',
-    strands = laidOut{ { 0, { { 0, 60 } } }, { 4, { { 0, 64 } } }, { 0, { { 960, 72 } } } } },
+    strands = laidOut{ { 0, { { 0, 60, 240 } } }, { 4, { { 0, 64, 240 } } },
+                       { 0, { { 960, 72, 1200 } } } } },
 }
 
--- The ninth of § The strand, with everything but the D fixed: the D is asked
--- to serve a G–B♭–D–F it is struck before, and the onsets it strikes at say
+-- The held D of § The strand, with everything but the D fixed: the D is asked
+-- to serve a G–B♭–D–F it is struck before, and the spans it sounds over say
 -- whether it must hold one tuning across the change or may take two.
 local dorianD = {
   { coords = { [3] = -2, [5] = 1 }, strain = strainOf(10, 9, 200) },
   { coords = { [3] = 2 },           strain = strainOf(9,  8, 200) },
 }
 
-local function dorian(dOnsets)
-  local strands = fixed{
+local function dorian(dSpans)
+  local strands = fixed(960, {
     { 5,    0, 65, { [3] = -1 },          strainOf(4,  3,  500) },
     { 9,    0, 69, { [3] = -1, [5] = 1 }, strainOf(5,  3,  900) },
     { 7,  960, 55, { [3] = 1 },           strainOf(3,  2,  700) },
     { 10, 960, 58, { [3] = -2 },          strainOf(16, 9, 1000) },
-  }
-  for i, ppq in ipairs(dOnsets) do
-    strands[4 + i] = placed(2, { { ppq, 62 } }, dorianD)
+  })
+  for i, span in ipairs(dSpans) do
+    strands[4 + i] = placed(2, { { span[1], 62, span[2] } }, dorianD)
   end
   return strands
 end
@@ -279,12 +296,13 @@ local diamond = {
          { { [3] = 2, [5] = -1 }, 9, 5, 1000 } },
 }
 
+-- Each chord is released where the next strikes, a bar of 960 later.
 local function fromDiamond(class, ppq, pitch, step)
   local candidates = {}
   for i, point in ipairs(diamond[step]) do
     candidates[i] = { coords = point[1], strain = strainOf(point[2], point[3], point[4]) }
   end
-  return placed(class, { { ppq, pitch } }, candidates)
+  return placed(class, { { ppq, pitch, ppq + 960 } }, candidates)
 end
 
 -- The written C7, every note taking what its own window holds. The seventh is
@@ -303,6 +321,39 @@ local function resolving()
   strands[6] = fromDiamond(9, 960, 69, 'A')
   strands[7] = fromDiamond(0, 960, 72, 'C')
   return strands
+end
+
+-- The 5-limit diamond at odd limit 15 over the classes the run below uses. It
+-- fixes nine of the twelve, and B♭ is one of the two it leaves a choice at,
+-- between readings a syntonic comma apart.
+local sparse = {
+  [0]  = { { {},                     1, 1 } },
+  [4]  = { { { [5] = 1 },            5, 4 } },
+  [5]  = { { { [3] = -1 },           4, 3 } },
+  [7]  = { { { [3] = 1 },            3, 2 } },
+  [10] = { { { [3] = -2 },          16, 9 }, { { [3] = 2, [5] = -1 }, 9, 5 } },
+  [11] = { { { [3] = 1, [5] = 1 },  15, 8 } },
+}
+
+local function fromSparse(class, ppq, pitch, endppq)
+  local candidates = {}
+  for i, point in ipairs(sparse[class]) do
+    candidates[i] = { coords = point[1],
+                      strain = strainOf(point[2], point[3], class * 100) }
+  end
+  return placed(class, { { ppq, pitch, endppq } }, candidates)
+end
+
+-- A B♭ struck first and released at `endppq`, under a run of five classes the
+-- target fixes: nothing the run transmits says how to read the B♭, so only its
+-- own release decides whether it stands in the sonorities behind it.
+local function underRun(endppq)
+  return {
+    fromSparse(10,    0, 70, endppq),
+    fromSparse(11,  480, 83,  960), fromSparse(7,  960, 79, 1440),
+    fromSparse(0,  1440, 72, 1920), fromSparse(4, 1920, 76, 2400),
+    fromSparse(5,  2400, 77, 2880),
+  }
 end
 
 -- The readings the calibration is taken between, septimal seventh first.
@@ -355,8 +406,8 @@ return {
   {
     name = 'a block chord and an arpeggio of it hand back the same set',
     run = function()
-      local chord  = struck{ { 0, 0, 60 }, { 4, 0, 64 }, { 7, 0, 67 }, { 11, 0, 71 } }
-      local spread = struck{ { 0, 0, 60 }, { 4, 240, 64 }, { 7, 480, 67 }, { 11, 720, 71 } }
+      local chord  = struck(240, { { 0, 0, 60 }, { 4, 0, 64 }, { 7, 0, 67 }, { 11, 0, 71 } })
+      local spread = struck(240, { { 0, 0, 60 }, { 4, 240, 64 }, { 7, 480, 67 }, { 11, 720, 71 } })
       local block, arpeggio = sonority.walk(chord, 5), sonority.walk(spread, 5)
 
       t.eq(#block, 1, 'one onset, one sonority')
@@ -372,10 +423,10 @@ return {
     name = 'at n one above the arity consecutive sonorities still overlap',
     run = function()
       -- Listed bass first, so a survivor chosen by position would be the G.
-      local strands = struck{
+      local strands = struck(960, {
         { 0, 0, 60 }, { 4, 0, 64 }, { 11, 0, 71 }, { 7, 0, 67 },
         { 2, 960, 62 }, { 5, 960, 65 }, { 9, 960, 69 }, { 10, 960, 70 },
-      }
+      })
       local walked = sonority.walk(strands, 5)
 
       t.eq(#walked, 2, 'two onsets')
@@ -390,12 +441,14 @@ return {
     name = 'a repeated note and an octave doubling each spend one entry',
     run = function()
       local doubled = {
-        strand(0, { { 0, 60 }, { 0, 72 } }), strand(4, { { 0, 64 } }),
-        strand(7, { { 0, 67 } }), strand(11, { { 0, 71 } }), strand(2, { { 0, 62 } }),
+        strand(0, { { 0, 60, 240 }, { 0, 72, 240 } }), strand(4, { { 0, 64, 240 } }),
+        strand(7, { { 0, 67, 240 } }), strand(11, { { 0, 71, 240 } }),
+        strand(2, { { 0, 62, 240 } }),
       }
       t.eq(#sonority.walk(doubled, 5)[1].strands, 5, 'the doubling spends one of the five')
 
-      local restruck = { strand(0, { { 0, 60 }, { 480, 60 } }), strand(4, { { 240, 64 } }) }
+      local restruck = { strand(0, { { 0, 60, 240 }, { 480, 60, 720 } }),
+                         strand(4, { { 240, 64, 480 } }) }
       local walked   = sonority.walk(restruck, 2)
       t.eq(#walked, 3, 'three strikes, three sonorities')
       t.bagEq(classesAt(restruck, walked[3]), { 0, 4 }, 'the restrike displaces nothing')
@@ -406,7 +459,8 @@ return {
   {
     name = 'a later strand of a class replaces the earlier one',
     run = function()
-      local strands = struck{ { 0, 0, 60 }, { 4, 240, 64 }, { 7, 480, 67 }, { 0, 720, 72 } }
+      local strands = struck(240, { { 0, 0, 60 }, { 4, 240, 64 }, { 7, 480, 67 },
+                                    { 0, 720, 72 } })
       local walked  = sonority.walk(strands, 5)
 
       t.eq(#walked[3].strands, 3, 'three classes before the C returns')
@@ -415,6 +469,23 @@ return {
       for _, index in ipairs(walked[4].strands) do
         t.truthy(index ~= 1, 'the C that struck first has left the sonority')
       end
+    end,
+  },
+
+  {
+    name = 'a class still sounding stands where the last n struck have dropped it',
+    run = function()
+      local held    = underRun(3360)
+      local shorter = underRun(480)
+      local walked, cut = sonority.walk(held, 5), sonority.walk(shorter, 5)
+
+      t.eq(#walked, 6, 'six strikes, six sonorities')
+      t.eq(#walked[6].strands, 6, 'five struck and the B♭ sounding under them')
+      t.bagEq(classesAt(held, walked[6]), { 5, 4, 0, 7, 11, 10 }, 'the run and the hold')
+      t.eq(held[walked[6].strands[6]].class, 10, 'the hold standing as the oldest entry')
+
+      t.eq(#cut[6].strands, 5, 'released where the next strikes, it drops out')
+      t.bagEq(classesAt(shorter, cut[6]), { 5, 4, 0, 7, 11 }, 'leaving the run alone')
     end,
   },
 
@@ -439,13 +510,13 @@ return {
   {
     name = 'the pull is counted once per strand however many notes write it',
     run = function()
-      local plain, choice = fixed{
+      local plain, choice = fixed(960, {
         { 0, 0, 60, just.C, 0.5 }, { 4, 0, 64, just.E, 0 }, { 7, 0, 67, just.G, 0 },
-      }
+      })
       near(sonority.cost(plain, 3, 1, choice), 4.16, 'the triad and the one strain in it')
 
       local doubled = {
-        placed(0, { { 0, 60 }, { 0, 72 } }, { { coords = just.C, strain = 0.5 } }),
+        placed(0, { { 0, 60, 960 }, { 0, 72, 960 } }, { { coords = just.C, strain = 0.5 } }),
         plain[2], plain[3],
       }
       t.eq(sonority.cost(doubled, 3, 1, choice), sonority.cost(plain, 3, 1, choice),
@@ -456,12 +527,12 @@ return {
   {
     name = "the C7's two sevenths cross at a pull of 0.95",
     run = function()
-      local strands, choice = fixed{
+      local strands, choice = fixed(960, {
         { 0, 0, 60, just.C, 0 },
         { 4, 0, 64, just.E, strainOf(5, 4, 400) },
         { 7, 0, 67, just.G, strainOf(3, 2, 700) },
-      }
-      strands[4] = placed(10, { { 0, 70 } }, {
+      })
+      strands[4] = placed(10, { { 0, 70, 960 } }, {
         { coords = just.septimal,    strain = strainOf(7,  4, 1000) },
         { coords = just.pythagorean, strain = strainOf(16, 9, 1000) },
       })
@@ -498,7 +569,7 @@ return {
   {
     name = 'a shortlist of one is fixed and still contributes its coords',
     run = function()
-      local third = placed(4, { { 0, 64 } }, {
+      local third = placed(4, { { 0, 64, 960 } }, {
         { coords = just.E,      strain = strainOf(5,  4, 400) },
         { coords = { [3] = 4 }, strain = strainOf(81, 64, 400) },
       })
@@ -508,7 +579,7 @@ return {
           'alone, the pull takes the Pythagorean third at strength ' .. strength)
       end
 
-      local anchored = fixed{ { 0, 0, 60, just.C, 0 }, { 7, 0, 67, just.G, 0 } }
+      local anchored = fixed(960, { { 0, 0, 60, just.C, 0 }, { 7, 0, 67, just.G, 0 } })
       anchored[3] = third
       local pure, pythagorean = { 1, 1, 1 }, { 1, 1, 2 }
       nearly(sonority.cost(anchored, 4, 0, pythagorean) - sonority.cost(anchored, 4, 0, pure),
@@ -523,7 +594,7 @@ return {
   {
     name = 'a held strand bends the harmony to it',
     run = function()
-      local held = dorian{ 0 }
+      local held = dorian{ { 0, 1920 } }
       for _, strength in ipairs{ 0, 1, 2 } do
         t.eq(sonority.solve(held, 4, strength)[5], 1,
           'the D held across the change takes 10/9 at strength ' .. strength)
@@ -533,7 +604,7 @@ return {
       nearly(scoreAt(held, heldChoice, heldWalk[2]), 7.077, 'and the one that pays for it')
       nearly(sonority.cost(held, 4, 0, heldChoice), 10.9837, 'the passage held')
 
-      local restruck   = dorian{ 0, 960 }
+      local restruck   = dorian{ { 0, 960 }, { 960, 1920 } }
       local freeChoice = sonority.solve(restruck, 4, 0)
       local freeWalk   = sonority.walk(restruck, 4)
       t.eq(freeChoice[6], 2, 'a D struck again in the second chord takes 9/8')
@@ -543,6 +614,16 @@ return {
         0.7370, 'so the hold costs the second chord a 5/3')
       t.bagEq(classesAt(held, heldWalk[2]), classesAt(restruck, freeWalk[2]),
         'the same four classes standing in both, only the D tuned differently')
+    end,
+  },
+
+  {
+    name = 'behind a run of fixed classes the answer hangs on the hold',
+    run = function()
+      t.eq(sonority.solve(underRun(3360), 5, 0.5)[1], 1,
+        'the B♭ sounding under the run takes 16/9')
+      t.eq(sonority.solve(underRun(480), 5, 0.5)[1], 2,
+        'and released as the run begins takes 9/5, a syntonic comma away')
     end,
   },
 
@@ -637,14 +718,14 @@ return {
   {
     name = 'an empty shortlist and an unaffordable solve are both refused',
     run = function()
-      local strands = fixed{ { 0, 0, 60, just.C, 0 }, { 4, 0, 64, just.E, 0 } }
+      local strands = fixed(960, { { 0, 0, 60, just.C, 0 }, { 4, 0, 64, just.E, 0 } })
       strands[2].shortlist = {}
       local ok, err = pcall(function() sonority.solve(strands, 4, 1) end)
       t.falsy(ok, 'a strand with nowhere to go raises')
       t.truthy(tostring(err):find('strand 2', 1, true), 'naming it: ' .. tostring(err))
 
       local wide = {}
-      for i = 1, 12 do wide[i] = placed(i - 1, { { 0, 72 - i } }, threeWays) end
+      for i = 1, 12 do wide[i] = placed(i - 1, { { 0, 72 - i, 960 } }, threeWays) end
       local affordable, why = pcall(function() sonority.solve(wide, 12, 1) end)
       t.falsy(affordable, 'twelve strands of three candidates at n=12 raises')
       t.truthy(tostring(why):find('531441', 1, true), 'naming the count: ' .. tostring(why))

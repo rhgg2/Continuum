@@ -257,7 +257,8 @@ step it was written on.**
 
 2. A **step-class** is a step of the notation together with every step
    an octave from it. Take the sonority current at an onset to be the
-   last `n` distinct step-classes struck.
+   last `n` distinct step-classes struck, together with every class
+   still sounding.
 
 3. The score quotients out the octave (§ What "in tune" means), so a
    step-class's members carry one set of coords between them.
@@ -265,43 +266,61 @@ step it was written on.**
 4. A block chord and an arpeggio of the same chord hand the objective
    the same set, as do a chord and the same chord doubled at the octave.
 
-5. *Distinct* carries weight: a plain last-`n` window counts strikes, so
-   a repeated note spends an entry the harmony has already paid for.
+5. *Distinct* carries weight: counting strikes instead would spend an
+   entry, on a repeated note, that the harmony has already paid for.
 
-6. `n` must exceed the arity of the largest sonority to be recognised
-   when spread out in time. It must exceed it strictly, or else each
-   sonority displaces its predecessor whole and the passage falls apart
-   into independent solves.
+6. The sonority forgets only what has fallen silent. A note held through
+   the chords behind it leaves the last `n` struck while it is still
+   sounding, and what strikes after it would then be tuned without
+   reference to it.
 
-7. Each note has one detune, chosen once for its whole length.
+7. The coupling usually survives that on its own, each note being tuned
+   against its predecessors and so, at one remove, against the note
+   still held.
 
-8. The pull kills comma drift: each note is held near where it was
-   written, so the piece cannot drift by syntonic commas the way naïve
-   chained-JI does.
+8. What breaks the chain is a run of classes the target fixes outright,
+   which a sparse target makes ordinary: the 5-limit diamond at odd
+   limit 15 fixes nine of twelve classes, and behind a run of five such
+   the answer moves by a syntonic comma about one time in seven.
 
-9. It also stops the solver collapsing a sonority into a drone, the box
-   being globally minimised at zero by putting every note on one pitch.
+9. A note released where the next is struck does not sound there, so a
+   passage whose notes stop as the next begin reads as the last `n`
+   struck alone.
 
-10. A note in two sonorities has one detune serving both, and takes the
+10. `n` must exceed the arity of the largest sonority to be recognised
+    when spread out in time. It must exceed it strictly, or else each
+    sonority displaces its predecessor whole and the passage falls apart
+    into independent solves.
+
+11. Each note has one detune, chosen once for its whole length.
+
+12. The pull kills comma drift: each note is held near where it was
+    written, so the piece cannot drift by syntonic commas the way naïve
+    chained-JI does.
+
+13. It also stops the solver collapsing a sonority into a drone, the box
+    being globally minimised at zero by putting every note on one pitch.
+
+14. A note in two sonorities has one detune serving both, and takes the
     best compromise they can agree on. That coupling is what makes this
     one global problem rather than a bag of chords.
 
-11. The compromise can overturn a chord's own preference. A C7
+15. The compromise can overturn a chord's own preference. A C7
     sounding alone takes the otonal `4:5:6:7` (§ Harmonic lock); when
     resolving to F–A–C it takes the Pythagorean `16/9` under any pull,
     the resolution saving 1.22 of box against the 0.36 the seventh
     chord pays for it. The global solve imposes a kind of harmonic
     utilitarianism.
 
-12. The objective is evaluated once per onset, over the set current when
+16. The objective is evaluated once per onset, over the set current when
     every note struck there has been placed.
 
-13. Where classes strike together the lowest counts as the most recent.
-    A released chord at `n` one above the arity leaves one class to the
-    sonority that follows, and that class is its bass — in root
-    position, its root.
+17. Where classes strike together the lowest counts as the most recent.
+    A chord released as the next strikes, at `n` one above the arity,
+    leaves one class to the sonority that follows, and that class is its
+    bass — in root position, its root.
 
-14. A compromise across a chord change therefore wants `n` to reach the
+18. A compromise across a chord change therefore wants `n` to reach the
     classes the two chords hold between them, six where a C7 resolves to
     F–A–C. At one above the C7's own arity the resolution reads its bass
     alone, scores the same under either seventh, and the chord is
@@ -314,25 +333,19 @@ step it was written on.**
 
 2. The constraint is acoustic where the sonority is harmonic. Two notes
    of a step-class sounding at once at different tunings beat, whatever
-   the window remembers.
+   the sonority remembers.
 
-3. The window can forget a note that is still sounding, being a memory
-   of what was struck rather than a record of what sounds. Under a
-   five-class window a D held through the following chord has left the
-   sonority by the time its octave is struck, and with nothing to hold
-   them the two part by a syntonic comma.
-
-4. A note that overlaps nothing else in its class starts a new strand,
+3. A note that overlaps nothing else in its class starts a new strand,
    which retunes freely: one step takes one tuning under the ii and
    another under the V.
 
-5. A note held across a chord change therefore bends the harmony to it
+4. A note held across a chord change therefore bends the harmony to it
    rather than the reverse. Under a 5-limit target, at `n` one above the
    arity, a D held from D–F–A into G–B♭–D keeps the 10/9 the first chord
    gives it. Restruck it would take the 9/8 the second chord prefers, so
    the hold costs that chord 0.737 of box.
 
-6. The strand is what earns the collapse to step-classes: an entry
+5. The strand is what earns the collapse to step-classes: an entry
    carries one tuning at a time only because every note that could write
    it agrees.
 
@@ -358,18 +371,18 @@ step it was written on.**
    it is released; the **class** is the step-class they share; the
    **shortlist** is the candidates the strand may take.
 
-5. The solver reads the strike times and nothing else on a note. The
-   releases are what a sonority holding whatever sounds would read
-   (§ Open), and the note itself is what the command seats the answer
-   on, so one shape serves all three and no parallel structure maps a
-   strand back to its notes.
+5. The solver reads a note's strike and its release, and nothing else
+   on it. The strike orders the walk, the release says what is still
+   sounding (§ The model), and the note itself is what the command
+   seats the answer on, so one shape serves all three and no parallel
+   structure maps a strand back to its notes.
 
-5. The pull reads strain, so the solver never interprets a cents value.
+6. The pull reads strain, so the solver never interprets a cents value.
    The class is the identity under which a sonority counts distinct
    entries (§ The model), so two strands of one class are one entry in
    turn rather than two at once.
 
-6. Beside the strands it takes the sonority size and the pull strength,
+7. Beside the strands it takes the sonority size and the pull strength,
    and nothing else.
 
 7. It returns an index per strand into that strand's shortlist. The
@@ -416,18 +429,19 @@ step it was written on.**
    over all parts rather than a window per part, the state is one chosen
    tuning per live strand.
 
-3. A strand is **live** on either of two counts. It stands among the
-   `n−1` most recently distinct step-classes; or it has yet to strike
-   again, and must keep the tuning its first strike chose until it does,
-   which the window may have let go long before (§ The strand). The
-   second count is bounded by the polyphony rather than by `n`.
+3. A strand is **live** on any of three counts. It stands among the
+   `n−1` most recently distinct step-classes; or it is still sounding;
+   or it has yet to strike again, and must keep the tuning its first
+   strike chose until it does. The last two are bounded by the
+   polyphony rather than by `n`.
 
 4. The walk does not depend on the choices, so when a strand is chosen
    and how long it stays live are read off it before any enumeration
    begins.
 
-5. Where no strand outlasts the window it costs `D^(n−1)` states for `D`
-   candidates per step-class, whatever the number of parts sounding.
+5. Where no strand outlives the last `n` classes it costs `D^(n−1)`
+   states for `D` candidates per step-class, whatever the number of
+   parts sounding.
 
 6. `D` is small. The twenty three-factor products of
    `{1, 3, 5, 7, 9, 11}` put on average 1.7 points inside a 12-EDO
@@ -435,28 +449,34 @@ step it was written on.**
    never more than two. At three, `n=6` is 243 states and `n=8` is
    2,187.
 
-7. Collapsing the octave is what holds the count down where a chord is
+7. Live strands are distinct step-classes, so the count cannot exceed
+   the product of `D` over the classes a passage uses, which neither
+   `n` nor the polyphony enters. Diatonic material against the 7-limit
+   diamond at odd limit 15 ceilings at 36 states, and eight voices with
+   every note held reach exactly that.
+
+8. Collapsing the octave is what holds the count down where a chord is
    doubled. A four-voice chord doubled at two of its notes holds four
    step-classes rather than six, so `n` stays at five rather than
    climbing to seven, and at three candidates the count is 81 states
    rather than 729.
 
-8. An onset carrying `m` simultaneous strands enumerates `D^m`
+9. An onset carrying `m` simultaneous strands enumerates `D^m`
    placements against each state. A note added to a chord widens `m` and
    forces `n` up with it (§ The model), so it costs a factor of `D` more
    than a note added to `n` alone.
 
-9. The DP is exact, not causal: the passage is solved globally and the
-   pull balanced across all of it at once, where a left-to-right chase
-   accumulates drift.
+10. The DP is exact, not causal: the passage is solved globally and the
+    pull balanced across all of it at once, where a left-to-right chase
+    accumulates drift.
 
-10. The budget is 200,000 placements at an onset: the states carried
+11. The budget is 200,000 placements at an onset: the states carried
     into it times the candidates of the strands born there. Reading it
     off the walk refuses an impossible solve rather than beginning one,
-    and counts a chord wider than `n`, whose strands leave the window at
-    once and so leave no state behind them.
+    and counts a chord wider than `n`, whose strands leave the sonority
+    at once and so leave no state behind them.
 
-11. Beyond it an annealer takes over, though the measured `D` leaves
+12. Beyond it an annealer takes over, though the measured `D` leaves
     ordinary material far inside it. It is a fallback because its noise
     does not shrink with the correction it is there to compute — the
     spike disagreed with itself by about 2¢ between seeds where the whole
@@ -625,21 +645,7 @@ step it was written on.**
    is the smallest that buys any; the other bound on `n` is the state
    count (§ Solving it).
 
-3. Whether the sonority should hold what is sounding as well as what was
-   struck. A held note leaves the window while it still sounds
-   (§ The strand), and what is struck after it in another class is then
-   tuned without reference to it. The coupling usually survives
-   regardless, each note being tuned against its predecessors and so, at
-   one remove, against the note still held. What breaks that chain is a
-   run of notes the target fixes outright, which a sparse target makes
-   ordinary — the 5-limit diamond at odd limit 15 fixes nine of twelve
-   classes. Behind a run of five such, the answer moved by a syntonic
-   comma. Taking in everything sounding closes it at 27 times the state
-   count. A strand carries its notes' releases (§ What the solver
-   takes), so the variant is a change to the walk alone, and it waits
-   on measured cost rather than on a shape.
-
-4. Whether retention should follow the placement. The member nearest
+3. Whether retention should follow the placement. The member nearest
    the centroid of the box is the root wherever the chord is otonal and
    the mirror of it wherever the chord is utonal: a minor triad is an
    inverted major, so the rule that picks a major triad's `1/1` picks a

@@ -2,10 +2,10 @@
 -- See design/adaptive-tuning.md § What "in tune" means.
 -- @noindex
 
---invariant: pure module: no state, no ratios, no cents — coords, strikes, classes in, indices out
+--invariant: pure module: no state, no ratios, no cents — coords/strikes/releases/classes → indices
 --shape: Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing
---shape: Strand = { notes={ {ppq,pitch,..},.. }, class=<step-class>, shortlist={ Candidate,.. } }; the walk reads the strikes and the class only
---shape: Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, at most n entries
+--shape: Strand = { notes={ {ppq,pitch,endppq,..},.. }, class=<step-class>, shortlist={ Candidate,.. } }; the walk reads the strikes, the releases and the class
+--shape: Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, the last n struck and whatever else still sounds
 --shape: Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }
 
 local util = require 'util'
@@ -62,6 +62,15 @@ local function strikesInOrder(strands)
   return strikes
 end
 
+-- Half-open, so a note released where the next is struck does not sound there,
+-- and a passage whose notes stop as the next begin reads as the last n struck.
+local function sounding(strand, ppq)
+  for _, note in ipairs(strand.notes) do
+    if note.ppq <= ppq and ppq < note.endppq then return true end
+  end
+  return false
+end
+
 -- The class holds one entry however many notes write it: a restrike moves its
 -- own entry to the front, and a second strand of the class takes the entry over.
 local function promote(recent, strands, index)
@@ -72,9 +81,9 @@ local function promote(recent, strands, index)
   table.insert(recent, 1, index)
 end
 
--- The whole onset is absorbed before the window is trimmed, so a chord wider
+-- The whole onset is absorbed before the sonority is taken, so a chord wider
 -- than n leaves its own lowest notes standing rather than its predecessor's.
---contract: strands, n → a Sonority per distinct onset, the last n distinct classes struck so far
+--contract: strands, n → a Sonority per onset: last n distinct classes struck, plus sounding
 function sonority.walk(strands, n)
   local strikes, sonorities, recent, at = strikesInOrder(strands), {}, {}, 1
   while at <= #strikes do
@@ -83,8 +92,10 @@ function sonority.walk(strands, n)
       promote(recent, strands, strikes[at].strand)
       at = at + 1
     end
-    for k = #recent, n + 1, -1 do recent[k] = nil end
-    local current = util.clone(recent)
+    local current = {}
+    for position, index in ipairs(recent) do
+      if position <= n or sounding(strands[index], ppq) then util.add(current, index) end
+    end
     util.add(sonorities, { ppq = ppq, strands = current })
   end
   return sonorities
