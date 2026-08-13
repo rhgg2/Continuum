@@ -36,6 +36,7 @@ local genState = {
   subharm = { lo = '4', hi = '8' },
   chord   = { members = '4:5:6:7', invert = false },
   cps     = { factors = '1 3 5 7', count = '2', equave = '2/1' },
+  diamond = { odd = '15', prime = '5' },
   rank2   = { generator = '3/2', period = '2/1', size = '7', up = '5', snapMos = true },
 }
 
@@ -568,6 +569,7 @@ local GEN_KINDS = {
   { id = 'subharm', label = 'Subharmonics', desc = 'Generate subharmonic series segment' },
   { id = 'chord',   label = 'Chord',        desc = 'Generate scale from a chord' },
   { id = 'cps',     label = 'CPS',          desc = 'Generate combination product set' },
+  { id = 'diamond', label = 'Diamond',      desc = 'Generate an odd-limit tonality diamond' },
   { id = 'rank2',   label = 'Rank-2 / MOS', desc = 'Stack a generator into a period' },
 }
 
@@ -660,6 +662,37 @@ local function drawCpsFields()
   if rvE then c.equave = e end
 end
 
+-- Past this the diamond is a curiosity: 31 already holds 213 points.
+local DIAMOND_MAX = 31
+
+-- Validate the two limits and build the diamond, memoised on them: both the points
+-- readout and buildGen ask every frame, and the build is quadratic in the odd limit.
+local diamondMemo = {}
+local function diamondGen(d)
+  local odd, prime = tonumber(d.odd), tonumber(d.prime)
+  if not (odd and odd == math.floor(odd) and odd % 2 == 1 and odd >= 1 and odd <= DIAMOND_MAX) then
+    return nil, 'odd limit: odd number to ' .. DIAMOND_MAX
+  end
+  if not (prime and prime == math.floor(prime) and prime >= 3) then return nil, 'prime limit: 3 or more' end
+  if diamondMemo.odd ~= odd or diamondMemo.prime ~= prime then
+    diamondMemo = { odd = odd, prime = prime, gen = tuning.genDiamond(odd, prime) }
+  end
+  return diamondMemo.gen
+end
+
+local function drawDiamondFields()
+  local d = genState.diamond
+  local rvO, o = labeledInput('Odd limit', 56, d.odd)
+  if rvO then d.odd = o end
+  local rvP, p = labeledInput('Prime limit', 56, d.prime)
+  if rvP then d.prime = p end
+  local gen = diamondGen(d)
+  if gen then
+    ImGui.SameLine(ctx, 0, 8)
+    ImGui.TextDisabled(ctx, #gen.pitches .. ' points')
+  end
+end
+
 -- Step Size: jump to the prev/next moment-of-symmetry count when snapMos (and
 -- tokens are valid), else move by 1. Clamps Bright into the new range.
 local function stepMos(r, dir)
@@ -736,6 +769,8 @@ local function buildGen()
       return nil, 'equave must be a ratio'
     end
     return tuning.genCPS(factors, k, g.cps.equave)
+  elseif g.kind == 'diamond' then
+    return diamondGen(g.diamond)
   elseif g.kind == 'rank2' then
     local r = g.rank2
     if not tuning.scalaPitch(r.generator) then return nil, 'bad generator' end
@@ -762,6 +797,7 @@ local function drawGenerators()
   elseif genState.kind == 'harm' then drawSeriesFields(genState.harm, 'Lowest', 'Highest')
   elseif genState.kind == 'subharm' then drawSeriesFields(genState.subharm, 'Lowest', 'Highest')
   elseif genState.kind == 'cps' then drawCpsFields()
+  elseif genState.kind == 'diamond' then drawDiamondFields()
   elseif genState.kind == 'rank2' then drawRank2Fields()
   else drawChordFields() end
 

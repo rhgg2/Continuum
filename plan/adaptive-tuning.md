@@ -16,7 +16,8 @@
    — landed 2026-08-13, seven commits.
 3. **Phase 3 — The diamond** (§ The diamond, § What a target is 4–5,
    § First brick 7) — the odd-limit generator with its prime filter, and
-   the temper editor entry that authors one. ← in flight
+   the temper editor entry that authors one. — landed 2026-08-14, two
+   commits.
 4. **Phase 4 — The solve on a take** (§ What a target is 1–3,
    § The command's slots, § What the solver takes 8–13) — the token
    factoriser and the eligibility predicate answered from it, strands and
@@ -32,10 +33,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-14 tuning: author the diamond from the generators pane (§ What a target is 4)
 - 2026-08-14 tuning: generate the odd-limit diamond with its prime filter (§ The diamond)
 - 2026-08-13 sonority: the sonority holds every class still sounding (§ The model)
 - 2026-08-13 sonority: the pull's scale fixed on the dominant seventh (§ Harmonic lock)
-- 2026-08-13 sonority: the exact solve by DP along the onsets (§ Solving it)
 
 ## Now
 
@@ -43,9 +44,4 @@
 
 ## Queued (current phase; one-liners)
 
-- The diamond in the temper editor, so no new mechanism authors a target
-  (§ What a target is 4): a `GEN_KINDS` entry with odd-limit and prime-limit
-  fields (`temperEditor.lua:571`), its `genState` defaults, a
-  `drawDiamondFields` in the house pattern of the other five, and a
-  `buildGen` branch validating both as whole numbers with the usual inline
-  error strings (`temperEditor.lua:706`, `:754`).
+(empty — phase 3's last item is in flight.)
