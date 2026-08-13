@@ -1,6 +1,6 @@
-@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=678  cases=45
+@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=707  cases=47
 @exercises tuning (tuning)
-@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.nextMosSize, tuning.mosInfo
+@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.nextMosSize, tuning.mosInfo
 
 # Intent
   Pins tuning.lua's pure display + derivation layer: the Option-B nameless
@@ -67,18 +67,20 @@
   @case 'genChord: otonal vs inverted, last member is the period'  [pure]  @ 602-614
   @case 'parseChord rejects fewer than two notes or non-integers'  [pure]  @ 618-622
   @case 'genCPS: hexany rooted on the smallest product, 1/1 first, ascending'  [pure]  @ 626-632
-  @case 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first'  [pure]  @ 636-642
-  @case 'genRank2: size 4 / up 2 matches the Scale Workshop worked example'  [pure]  @ 646-651
-  @case 'genRank2: irrational (EDO-step) generator emits cents tokens'  [pure]  @ 655-660
-  @case 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s'  [pure]  @ 664-676
+  @case 'genDiamond: the 9-diamond entire, and the counts either side of it'  [pure]  @ 636-646
+  @case 'genDiamond: the prime limit filters in place, and leaves a tritone hole'  [pure]  @ 650-661
+  @case 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first'  [pure]  @ 665-671
+  @case 'genRank2: size 4 / up 2 matches the Scale Workshop worked example'  [pure]  @ 675-680
+  @case 'genRank2: irrational (EDO-step) generator emits cents tokens'  [pure]  @ 684-689
+  @case 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s'  [pure]  @ 693-705
 
 # Uses (outbound edges)
   @use call tuning.derive  @ 11,27,36,43,135,153,186,190,198,227,241,281,286,296,318,331,349
   @use call tuning.stepToParts  @ 17,86,90,101
-  @use call tuning.genRank2  @ 42,638,648,657
+  @use call tuning.genRank2  @ 42,667,677,686
   @use call tuning.stepToMidi  @ 54,305,306,337,374,381,430,431,459,460,474
   @use call tuning.midiToStep  @ 159,176,178,372,377,438,439,455,456,473,475
-  @use call tuning.scalaPitch  @ 209,210,211,212,213,214,215,217,218,219,220
+  @use call tuning.scalaPitch  @ 209,210,211,212,213,214,215,217,218,219,220,658
   @use call tuning.unrooted  @ 269
   @use call tuning.removeStep  @ 281,286,296,347
   @use call tuning.sortSteps  @ 318,331,349
@@ -95,33 +97,34 @@
   @use call tuning.parseChord  @ 604,620,621
   @use call tuning.genChord  @ 607,611
   @use call tuning.genCPS  @ 628
-  @use call tuning.nextMosSize  @ 666,667,668,669,670
-  @use call tuning.mosInfo  @ 671,675
+  @use call tuning.genDiamond  @ 638,643,644,645,652
+  @use call tuning.nextMosSize  @ 695,696,697,698,699
+  @use call tuning.mosInfo  @ 700,704
 
 # Fields (r read / w write incl. constructor keys)
   @field r cellWidth  @ 64,69,112,125,137,158,174,188,191
   @field r cents  @ 230,231,232,488,526,537,538
   @field w cents  @ 11,25,136,151,187,199,241
-  @field r isMos  @ 672,675
-  @field r large  @ 673
+  @field r isMos  @ 701,704
+  @field r large  @ 702
   @field r name  @ 476,477,519
   @field w name  @ 11,25,33,43,61,75,84,97,108,120,131,135
   @field w name  @ 144,150,168,184,186,196,198,207,225,227,237,241
   @field w name  @ 251,264,279,293,314,327,344,359,369,388,405,421
   @field w name  @ 447,467,484,495,507,516,531,544,553,569,581,589
-  @field w name  @ 602,618,626,636,646,655,664
+  @field w name  @ 602,618,626,636,650,665,675,684,693
   @field r octaveBase  @ 246,255,426,452
   @field r octaveStep  @ 66,70,100,111
   @field r octaveWidth  @ 65,138,157,162,173
   @field r period  @ 229,490,521
   @field w period  @ 11,25,135,150,186,198,241
-  @field r periodAsStep  @ 525,559,641
-  @field r periodPitch  @ 43,489,520,534,558,564,576,597,609,613,630,640
-  @field r periodPitch  @ 650
+  @field r periodAsStep  @ 525,559,642,670
+  @field r periodPitch  @ 43,489,520,534,558,564,576,597,609,613,630,641
+  @field r periodPitch  @ 669,679
   @field w periodPitch  @ 33,43,227
   @field r pitches  @ 34,44,317,330,348,487,522,523,524,535,536,556
-  @field r pitches  @ 557,562,563,596,608,612,629,631,639,649,658,659
-  @field r pitches  @ 659
+  @field r pitches  @ 557,562,563,596,608,612,629,631,639,643,644,645
+  @field r pitches  @ 653,655,657,668,678,687,688
   @field w pitches  @ 33,44,228
   @field r presets  @ 63,68,77,78,86,90,99,253,371,380,390,469
   @field r presets  @ 469,486
@@ -137,7 +140,7 @@
   @field w run  @ 62,76,85,98,109,121,132,145,169,185,197,208
   @field w run  @ 226,238,252,265,280,294,315,328,345,360,370,389
   @field w run  @ 406,422,448,468,485,496,508,517,532,545,554,570
-  @field w run  @ 582,590,603,619,627,637,647,656,665
-  @field r small  @ 674
+  @field w run  @ 582,590,603,619,627,637,651,666,676,685,694
+  @field r small  @ 703
   @field r stepNames  @ 34
   @field w stepNames  @ 11,25,33,44,136,151,187,189,199,228,241

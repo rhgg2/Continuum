@@ -351,6 +351,38 @@ function tuning.genCPS(factors, k, equave)
   return { pitches = tokens, periodPitch = equave, periodAsStep = true }
 end
 
+-- Check if every prime factor of the odd `n` is at or below `limit`.
+local function primeFactorsBelow(n, limit)
+  local p = 3
+  while p * p <= n do
+    if n % p == 0 then
+      if p > limit then return false end
+      repeat n = n // p until n % p ~= 0
+    end
+    p = p + 2
+  end
+  return n <= limit
+end
+
+-- N-odd-limit tonality diamond: coprime odd pairs to `oddLimit`, reduced into the
+-- octave; `primeLimit` filters larger primes. See design/adaptive-tuning.md § The diamond.
+function tuning.genDiamond(oddLimit, primeLimit)
+  primeLimit = primeLimit or oddLimit
+  local tokens = {}
+  for a = 1, oddLimit, 2 do
+    for b = 1, oddLimit, 2 do
+      if gcd(a, b) == 1 and primeFactorsBelow(a, primeLimit) and primeFactorsBelow(b, primeLimit) then
+        local num, den = a, b
+        while num >= den * 2 do den = den * 2 end
+        while num < den do num = num * 2 end
+        util.add(tokens, num .. '/' .. den)
+      end
+    end
+  end
+  table.sort(tokens, function(x, y) return tuning.scalaPitch(x) < tuning.scalaPitch(y) end)
+  return { pitches = tokens, periodPitch = '2/1', periodAsStep = true }
+end
+
 -- Reduce a cents value into [0, period).
 local function reduceCents(c, period)
   return c - period * math.floor(c / period)

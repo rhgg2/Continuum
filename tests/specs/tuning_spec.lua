@@ -633,6 +633,35 @@ return {
   },
 
   {
+    name = 'genDiamond: the 9-diamond entire, and the counts either side of it',
+    run = function()
+      local nine = tuning.genDiamond(9)
+      t.eq(table.concat(nine.pitches, ' '),
+           '1/1 10/9 9/8 8/7 7/6 6/5 5/4 9/7 4/3 7/5 10/7 3/2 14/9 8/5 5/3 12/7 7/4 16/9 9/5')
+      t.eq(nine.periodPitch, '2/1')
+      t.truthy(nine.periodAsStep)
+      t.eq(#tuning.genDiamond(11).pitches, 29, 'odd limit 11')
+      t.eq(#tuning.genDiamond(15).pitches, 49, 'odd limit 15')
+      t.eq(#tuning.genDiamond(21).pitches, 95, 'odd limit 21')
+    end,
+  },
+
+  {
+    name = 'genDiamond: the prime limit filters in place, and leaves a tritone hole',
+    run = function()
+      local d = tuning.genDiamond(15, 5)
+      t.eq(table.concat(d.pitches, ' '),
+           '1/1 16/15 10/9 9/8 6/5 5/4 4/3 3/2 8/5 5/3 16/9 9/5 15/8')
+      t.eq(#d.pitches, 13, 'the 15-diamond less every point holding a prime above 5')
+      local nearest = 1200
+      for _, token in ipairs(d.pitches) do
+        nearest = math.min(nearest, math.abs(tuning.scalaPitch(token) - 600))
+      end
+      t.truthy(nearest > 50, 'nothing within 50c of the tritone; nearest is ' .. nearest)
+    end,
+  },
+
+  {
     name = 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first',
     run = function()
       local s = tuning.genRank2('3/2', '2/1', 7, 5)

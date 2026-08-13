@@ -32,26 +32,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-14 tuning: generate the odd-limit diamond with its prime filter (§ The diamond)
 - 2026-08-13 sonority: the sonority holds every class still sounding (§ The model)
 - 2026-08-13 sonority: the pull's scale fixed on the dominant seventh (§ Harmonic lock)
 - 2026-08-13 sonority: the exact solve by DP along the onsets (§ Solving it)
-- 2026-08-13 sonority: the objective over a placement (§ What "in tune" means)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- `tuning.genDiamond(oddLimit, primeLimit)`: the double loop over the odd
-  numbers up to the odd limit, keeping the coprime pairs and reducing each
-  ratio into the octave, returning the generators' usual
-  `{ pitches, periodPitch = '2/1', periodAsStep = true }`. The prime limit
-  filters in the same pass rather than in a second generator, so the
-  5-limit at odd limit 15 is the 15-diamond less every point with a factor
-  above 5. The spec pins the point counts — 19 at 9, 29 at 11, 49 at 15, 95
-  at 21, and 13 for the 5-limit at 15 — and the tritone hole that last one
-  leaves (§ What the solver takes 13).
 
 - The diamond in the temper editor, so no new mechanism authors a target
   (§ What a target is 4): a `GEN_KINDS` entry with odd-limit and prime-limit
