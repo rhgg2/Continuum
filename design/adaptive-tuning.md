@@ -56,15 +56,18 @@ step it was written on.**
 3. Target — the temper whose points a note may be moved to
    (§ What a target is).
 
-4. Sonority size — `n`, set above the arity of the largest chord to be
+4. Key — the notation step the target's `1/1` sits on
+   (§ What a target is).
+
+5. Sonority size — `n`, set above the arity of the largest chord to be
    recognised when spread out in time (§ The model).
 
-5. Harmonic lock — how hard the written pitch pulls back
+6. Harmonic lock — how hard the written pitch pulls back
    (§ Harmonic lock).
 
-6. Boundary — how far the collar reaches (§ Seams).
+7. Boundary — how far the collar reaches (§ Seams).
 
-7. Strength — how far toward the answer the notes actually move
+8. Strength — how far toward the answer the notes actually move
    (§ Strength).
 
 ## What "in tune" means
@@ -155,16 +158,22 @@ step it was written on.**
 
 5. The one generator still to write is the diamond (§ The diamond).
 
-6. The role reads a temper's `pitches` and its `rootCents`. Step names,
+6. The role reads a temper's `pitches` and nothing more. Step names,
    octave numbering and cell width are the notation's business, and a
    target is never displayed.
 
-7. Which of a target's points a note meets depends on where the music
-   sits against that root (`docs/tuning.md` § The root).
+7. A target's own root therefore has no force. It is a list of
+   intervals, and where the `1/1` sits in sound is determined by the
+   key slot (§ The command's slots).
 
-8. A target's own period is not consulted. The octave is quotiented out
-   of the score, so the solver cannot tell a point from the same point
-   an octave away, and every point is available in every register.
+8. A target's period has no force either, since the octave is
+   quotiented out of the score.
+
+9. The key is stated as a step of the notation.
+
+10. Every temper holds the `1/1` on its first step, so the key's own
+    step keeps a candidate at strain zero where it was written. The
+    tonic does not move, at any strength.
 
 ## The diamond
 

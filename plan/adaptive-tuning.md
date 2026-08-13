@@ -18,11 +18,11 @@
    § First brick 7) — the odd-limit generator with its prime filter, and
    the temper editor entry that authors one. — landed 2026-08-14, two
    commits.
-4. **Phase 4 — The solve on a take** (§ What a target is 1–3,
+4. **Phase 4 — The solve on a take** (§ What a target is 1–3, 7–10,
    § The command's slots, § What the solver takes 8–13) — the token
    factoriser and the eligibility predicate answered from it, strands and
-   their shortlists built in `tuning.lua`, the target and harmonic-lock
-   slots on the modal, and the chosen candidate seated as
+   their shortlists built in `tuning.lua`, the target, key and
+   harmonic-lock slots on the modal, and the chosen candidate seated as
    `(pitch, detune)`.
 5. **Phase 5 — Seams** (§ Seams) — the collar as strands of one, and the
    serial sweep across takes in take order.
