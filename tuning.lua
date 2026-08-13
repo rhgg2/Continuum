@@ -540,6 +540,46 @@ function tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)
   return (bOct - aOct) * #temper.cents + (bStep - aStep)
 end
 
+----- Targets
+
+-- The odd primes of `n` accumulated into `coords` at `sign`. Twos are divided
+-- out first; whatever survives trial division past sqrt(n) is itself a prime.
+local function addOddFactors(n, coords, sign)
+  while n % 2 == 0 do n = n // 2 end
+  local p = 3
+  while p * p <= n do
+    while n % p == 0 do
+      coords[p] = (coords[p] or 0) + sign
+      n = n // p
+    end
+    p = p + 2
+  end
+  if n > 1 then coords[n] = (coords[n] or 0) + sign end
+end
+
+-- Numerator and denominator are factorised apart and their exponents subtracted,
+-- so 6/4 and 3/2 read alike and a prime on both sides cancels rather than sitting at zero.
+--contract: ratio token -> {[oddPrime]=exponent}, prime 2 divided out; nil for cents or n\m
+function tuning.coords(token)
+  local num, den = asRatio(token:match('^%s*(.-)%s*$'))
+  if not num or num == 0 or den == 0 then return nil end
+  local coords = {}
+  addOddFactors(num, coords, 1)
+  addOddFactors(den, coords, -1)
+  for prime, exponent in pairs(coords) do
+    if exponent == 0 then coords[prime] = nil end
+  end
+  return coords
+end
+
+--contract: true when every pitch of `temper` is a ratio, so its points carry coords to score
+function tuning.isTarget(temper)
+  for _, token in ipairs(temper.pitches) do
+    if not tuning.coords(token) then return false end
+  end
+  return true
+end
+
 ----- Display
 
 -- The untempered twelve names, for spelling a root — the temper's own naming

@@ -704,4 +704,49 @@ return {
       t.eq(tuning.mosInfo('3/2', '2/1', 6).isMos, false, '6 notes is not a MOS')
     end,
   },
+
+  {
+    name = 'coords: the exponents of the odd primes, prime 2 divided out',
+    run = function()
+      t.deepEq(tuning.coords('1/1'), {}, 'the unison names no prime')
+      t.deepEq(tuning.coords('15/8'), { [3] = 1, [5] = 1 }, '2^-3 . 3 . 5')
+      t.deepEq(tuning.coords('4/3'), { [3] = -1 }, 'the fourth is the fifth inverted')
+      t.deepEq(tuning.coords('9/8'), { [3] = 2 })
+      t.deepEq(tuning.coords('7/4'), { [7] = 1 })
+      t.deepEq(tuning.coords('45/32'), { [3] = 2, [5] = 1 })
+      t.deepEq(tuning.coords('243/128'), { [3] = 5 })
+      t.deepEq(tuning.coords('2'), {}, 'a bare integer is that integer over 1')
+    end,
+  },
+
+  {
+    name = 'coords: an unreduced token reads as the interval it states',
+    run = function()
+      t.deepEq(tuning.coords('6/4'), { [3] = 1 }, 'genHarmonics states its points over its root')
+      t.deepEq(tuning.coords('4/4'), {})
+      t.deepEq(tuning.coords('3/3'), {}, 'a prime on both sides cancels rather than sitting at 0')
+    end,
+  },
+
+  {
+    name = 'coords: a token that is not a ratio carries none',
+    run = function()
+      t.eq(tuning.coords('701.955'), nil, 'cents')
+      t.eq(tuning.coords('7\\12'), nil, 'equal divisions')
+      t.eq(tuning.coords('7\\12<3/1>'), nil, 'equal divisions of a stated equave')
+      t.eq(tuning.coords('0/1'), nil, 'a zero term states no interval')
+    end,
+  },
+
+  {
+    name = 'isTarget: a temper whose every pitch factorises, and nothing else',
+    run = function()
+      t.eq(tuning.isTarget(tuning.genDiamond(9)), true, 'the diamond is ratios throughout')
+      t.eq(tuning.isTarget(tuning.genCPS({ 1, 3, 5, 7 }, 2, '2/1')), true, 'so is the hexany')
+      t.eq(tuning.isTarget(tuning.genRank2('3/2', '2/1', 7, 5)), true, 'a rational generator stacks to ratios')
+      t.eq(tuning.isTarget(tuning.presets['12EDO']), false, 'EDO steps carry no coords')
+      t.eq(tuning.isTarget(tuning.genRank2('7\\12', '2/1', 3, 2)), false, 'an irrational generator emits cents')
+      t.eq(tuning.isTarget{ pitches = { '1/1', '5/4', '701.955' } }, false, 'one cents pitch is enough')
+    end,
+  },
 }
