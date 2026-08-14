@@ -107,10 +107,10 @@ test code which is the subject of the brief itself.
 - **target** code: test-shaped code which forms part of the completion
 parameters of the brief from step 4.
 
-Stage the brief and the plan-file update as one `apply_patches`
-call: the brief as a create with `overwrite: true`, the item cut
-from Queued, and Now replaced by a single line naming the item and
-its design reference:
+Stage the brief and the plan-file update as one `apply_patches` call:
+the brief as a create with `overwrite: true`, the item cut from
+Queued, leaving the numbering as it is, and Now replaced by a single
+line naming the item and its design reference:
 
 ```markdown
 **Teach `usedby` the intra-file `@call` index** — brief in
@@ -121,9 +121,9 @@ Stop here, and point to `/implement-next`.
 
 ## 5. Direct implementation
 
-Update the plan file first: cut the item from Queued and name it in
-Now as a single line, noting that it was implemented directly, without
-a brief.
+Update the plan file first: cut the item from Queued, leaving the
+numbering as it is, and name it in Now as a single line, noting that
+it was implemented directly, without a brief.
 
 Then say in the chat what §4 would have put on paper: the target
 shape, the files you will touch, the spec you will write and whether

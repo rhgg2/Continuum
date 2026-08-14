@@ -18,7 +18,7 @@
 - fx on groups (group instances)
 - randomness/humanize as an fx (overlay OR note generator)
 - cv-2
-- chord-stamp, roll, strum, echo
+- roll, strum, echo
 - scales
 - Live/MIDI-in capture — promoted to `design/midi-capture.md`.
 - Quarantine UX (Open questions) — a darkened component still needs to
@@ -31,3 +31,11 @@ the projection is caught by nothing in the 2241-test suite. The
 ordering is real — a refused duplicate or paste empties the
 destination and mints nothing over it — and it belongs to
 `groupDuplicate`, not to freeze.
+
+- PA events inside a copied span ride through the structural emitter
+  and land as notes at the destination. Predates this change; fixing
+  it means deciding whether a copied PA follows its host note.
+- `sample` is wired as a lane and will fill forward like velocity, but
+  nothing exercises it — the specs cover pitch, vel and delay only. It
+  needs tracker mode to have a part at all, so a case there would be
+  worth having before anyone relies on it.
