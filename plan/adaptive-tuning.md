@@ -26,17 +26,16 @@
    candidate seated as `(pitch, detune)`.  ← in flight
 5. **Phase 5 — Seams** (§ Seams) — the collar as strands of one, and the
    serial sweep across takes in take order.
-
 6. **Phase 6 — The annealer** (§ Solving it 9) — the fallback past the
    stated budget on the state count, which ordinary material does not
    reach.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-14 tuning: offer to widen the window of a class with nowhere to go (§ What the solver takes)
 - 2026-08-14 tuning: solve the scope against the target and seat each strand (§ What the solver takes)
 - 2026-08-14 tuning: give the retune modal its target, key, size and lock (§ The command's slots)
 - 2026-08-14 tuning: group notes into strands by step-class and overlap (§ The strand)
-- 2026-08-14 tuning: build a strand's shortlist from the notation and the target (§ What the solver takes)
 
 ## Now
 
@@ -44,6 +43,4 @@
 
 ## Queued (current phase; one-liners)
 
-2. The refusal offers a nudge: the notes of the offending class are
-   respelled onto the step whose window holds the target's nearest point,
-   and the solve run again.
+(empty)

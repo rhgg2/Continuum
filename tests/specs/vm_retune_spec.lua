@@ -190,13 +190,13 @@ return {
       h.cm:set('global', 'tempers', { DIA = DIA })
       -- Three points against a meantone window: the E has nowhere to go, so this
       -- take refuses, and the slots are remembered all the same.
-      local step = h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', key = 3,
-                               sonoritySize = 5, harmonicLock = 1 }
+      local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', key = 3,
+                                   sonoritySize = 5, harmonicLock = 1 }
       t.eq(h.cm:getAt('take', 'retune.target'), 'DIA', 'the target is written at take tier')
       t.eq(h.cm:getAt('take', 'retune.key'), 3, 'so is the key')
       t.truthy((h.cm:getAt('project', 'tempers') or {}).DIA,
                'the target is localized into the project library')
-      t.eq(step, 5, 'the step the refusal names')
+      t.deepEq(refused, { 5 }, 'the step the refusal names')
       near(cell(h, 0).detune, 0, 'and the refused note stands where it was written')
     end,
   },
@@ -256,10 +256,33 @@ return {
     run = function(harness)
       local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 66, 0) },
                    '12EDO', { FIVES = FIVES })
-      local step = h.vm:retune{ scope = 'all', strength = 1, target = 'FIVES', key = 1,
-                               sonoritySize = 5, harmonicLock = 0.5 }
-      t.eq(step, 7, 'the tritone, step 7 of the notation')
+      local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'FIVES', key = 1,
+                                   sonoritySize = 5, harmonicLock = 0.5 }
+      t.deepEq(refused, { 7 }, 'the tritone, step 7 of the notation')
       t.eq(chordAt(h, 0)[64], 0, 'and the third that would have moved is untouched')
+    end,
+  },
+
+  {
+    name = 'widened, the refusing class takes the point the music around it wants',
+    run = function(harness)
+      local slots = { scope = 'all', strength = 1, target = 'FIVES', key = 1,
+                      sonoritySize = 5, harmonicLock = 1 }
+      -- The tritone beside one other note, its window stretched to the pair either side.
+      local function beside(pitch)
+        local h = mk(harness, { note(0, 60, 0), note(0, pitch, 0), note(0, 66, 0) },
+                     '12EDO', { FIVES = FIVES })
+        t.eq(h.vm:retune(slots, true), nil, 'the widened solve refuses nothing')
+        return chordAt(h, 0)
+      end
+
+      local withA = beside(69)
+      near(withA[65], offset('4/3', 5), 'beside A the tritone leaves F# for F, taking 4/3')
+      t.eq(withA[66], nil, 'so nothing is left on the step it was written on')
+
+      local withD = beside(62)
+      near(withD[67], offset('3/2', 7), 'and beside D it leaves F# for G, taking 3/2')
+      near(withD[62], offset('9/8', 2), 'the D standing on the point its own window holds')
     end,
   },
 }

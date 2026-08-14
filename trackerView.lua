@@ -2074,26 +2074,34 @@ local function snapToTemper(notes, notation, strength)
   end
 end
 
--- The scope's strands, shortlisted against the target; or nil and the step with
--- nowhere to go. One window serves a strand in every register, so notes[1] speaks for all.
-local function shortlisted(notes, notation, target, keyStep)
+-- The scope's strands, shortlisted against the target; or nil and the steps with nowhere
+-- to go, in notation order and named once however many strands wrote it.
+local function shortlisted(notes, notation, target, keyStep, widen)
   local strands = sonority.strands(notes, function(e)
     return tuning.stepClass(notation, e.pitch, e.detune)
   end)
+  local nowhere = {}
   for _, strand in ipairs(strands) do
+    -- One window serves a strand in every register, so notes[1] speaks for all.
     local note = strand.notes[1]
-    strand.shortlist = tuning.shortlist(notation, target, keyStep, note)
+    strand.shortlist = tuning.shortlist(notation, target, keyStep, note, widen)
     if #strand.shortlist == 0 then
-      return nil, (tuning.midiToStep(notation, note.pitch, note.detune))
+      nowhere[(tuning.midiToStep(notation, note.pitch, note.detune))] = true
     end
   end
+
+  local refused = {}
+  for step = 1, #notation.cents do
+    if nowhere[step] then util.add(refused, step) end
+  end
+  if refused[1] then return nil, refused end
   return strands
 end
 
 -- The adaptive solve: one point per strand, seated on every note that writes it, in its own register.
 -- see design/adaptive-tuning.md § What the solver takes
-local function solveToTarget(notes, notation, target, slots)
-  local strands, refused = shortlisted(notes, notation, target, slots.key)
+local function solveToTarget(notes, notation, target, slots, widen)
+  local strands, refused = shortlisted(notes, notation, target, slots.key, widen)
   if not strands then return refused end
 
   local choice = sonority.solve(strands, slots.sonoritySize, slots.harmonicLock)
@@ -2111,8 +2119,9 @@ end
 --shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, key=step, sonoritySize, harmonicLock }
 --contract: target and key are remembered at take tier; the rest is per invocation
 --contract: with no target the whole of it is the notation snap
---contract: returns the step a strand's empty shortlist refused the solve at, else nil
-function tv:retune(slots)
+--contract: returns the steps whose empty shortlists refused the solve, else nil
+--contract: widen stretches those windows to the nearest points instead, so none refuses
+function tv:retune(slots, widen)
   if slots.target then lib.localize('tempers', slots.target) end
   cm:set('take', 'retune.target', slots.target)
   cm:set('take', 'retune.key',    slots.key)
@@ -2123,7 +2132,7 @@ function tv:retune(slots)
   local target = slots.target and tuning.findTemper(slots.target, cm:get('tempers'))
 
   local refused
-  if target then refused = solveToTarget(notes, notation, target, slots)
+  if target then refused = solveToTarget(notes, notation, target, slots, widen)
   else           snapToTemper(notes, notation, slots.strength) end
   tm:flush()
   return refused

@@ -1,4 +1,4 @@
-@spec vm_retune_spec  src=tests/specs/vm_retune_spec.lua  loc=265  cases=14
+@spec vm_retune_spec  src=tests/specs/vm_retune_spec.lua  loc=288  cases=15
 @exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), configManager (h.cm)
 @surface   tuning.derive, tuning.genDiamond, vm:setGridSize, tuning.stepToMidi, tuning.scalaPitch, vm:retune, ec:setSelection, cm:set, cm:getAt
 @harness   mk{seed.notes}
@@ -47,6 +47,7 @@
   @case 'above the crossing the seventh gives up the otonal tuning'  [harness]  @ 229-237
   @case 'an octave doubling is seated in its own register, and moves no answer'  [harness]  @ 241-251
   @case 'a step the target leaves nowhere to go refuses the solve and names it'  [harness]  @ 255-263
+  @case 'widened, the refusing class takes the point the music around it wants'  [harness]  @ 267-286
 
 # Uses (outbound edges)
   @use call tuning.derive  @ 17,25,32,33
@@ -54,7 +55,7 @@
   @use call vm:setGridSize  @ 41
   @use call tuning.stepToMidi  @ 63
   @use call tuning.scalaPitch  @ 81
-  @use call vm:retune  @ 88,102,114,126,139,152,154,166,179,193,209,218,232,246,259
+  @use call vm:retune  @ 88,102,114,126,139,152,154,166,179,193,209,218,232,246,259,275
   @use call ec:setSelection  @ 137
   @use call cm:set  @ 190,208
   @use call cm:getAt  @ 195,196,197,210
@@ -62,7 +63,7 @@
 # Fields (r read / w write incl. constructor keys)
   @field r DIA  @ 197
   @field w DIA  @ 190
-  @field w FIVES  @ 258
+  @field w FIVES  @ 258,274
   @field w MEAN  @ 38
   @field w SEPTIMAL  @ 217,231,245
   @field r cells  @ 56,74
@@ -77,12 +78,12 @@
   @field w detune  @ 47
   @field w endppq  @ 46
   @field r grid  @ 51,73
-  @field w harmonicLock  @ 194,209,219,233,247,260
-  @field w key  @ 193,209,218,232,246,259
+  @field w harmonicLock  @ 194,209,219,233,247,260,270
+  @field w key  @ 193,209,218,232,246,259,269
   @field r lane  @ 52
   @field r midiChan  @ 52,74
   @field w name  @ 18,26,85,98,111,122,134,147,161,175,187,205
-  @field w name  @ 215,229,241,255
+  @field w name  @ 215,229,241,255,267
   @field w notes  @ 37
   @field w part1  @ 138
   @field w part2  @ 138
@@ -95,15 +96,15 @@
   @field w row1  @ 137
   @field w row2  @ 137
   @field w run  @ 86,99,112,123,135,148,162,176,188,206,216,230
-  @field w run  @ 242,256
+  @field w run  @ 242,256,268
   @field w scope  @ 88,102,114,126,139,152,154,166,179,193,209,218
-  @field w scope  @ 232,246,259
+  @field w scope  @ 232,246,259,269
   @field w seed  @ 37
-  @field w sonoritySize  @ 194,209,219,233,247,260
+  @field w sonoritySize  @ 194,209,219,233,247,260,270
   @field w stepNames  @ 21,28
   @field w strength  @ 88,102,114,126,139,152,154,166,179,193,209,218
-  @field w strength  @ 232,246,259
-  @field w target  @ 193,218,232,246,259
+  @field w strength  @ 232,246,259,269
+  @field w target  @ 193,218,232,246,259,269
   @field w temper  @ 39
   @field w tempers  @ 38
   @field r type  @ 52,74

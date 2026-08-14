@@ -1,6 +1,6 @@
-@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=345  cases=10
+@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=400  cases=11
 @exercises tuning (tuning), configManager (h.cm), commandManager (h.cmgr), midiManager (h.mm), trackerManager (h.tm)
-@surface   tuning.derive, cm:setContext, cmgr:push, cmgr:invoke, cm:getAt, tuning.stepToMidi, cm:set, mm:subscribe, mm:notes, tm:assignEvent, tm:byUuid, tm:flush
+@surface   tuning.derive, tuning.genDiamond, cm:setContext, cmgr:push, cmgr:invoke, cm:getAt, tuning.stepToMidi, cm:set, mm:subscribe, mm:notes, tm:assignEvent, tm:byUuid, tm:flush
 @harness   mk, reaper:setProjectTracks, reaper:addItem, reaper:seedMidi
 
 # Intent
@@ -9,158 +9,173 @@
   render / handleInput are stubs wired in step 3 and verified in REAPER, not here.
 
 # Helpers
-  @fn resetArrange()  @ 55-76
-  @fn newTrackerPage(cm, ds, cmgr, chrome, gui)  @ 88-95
+  @fn resetArrange()  @ 59-80
+  @fn newTrackerPage(cm, ds, cmgr, chrome, gui)  @ 92-101
 
 # Cases
-  @case 'bind(take) drives cm:setContext via the page's own tm:bindTake'  [harness]  @ 99-107
-  @case 'unbind() drives cm:setContext(nil) via the page's own tm:bindTake'  [harness]  @ 110-119
-  @case 'focusState before any render returns both bits false'  [harness]  @ 122-129
-  @case 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots'  [harness]  @ 135-148
-  @case 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it'  [harness]  @ 152-173
-  @case 'prev/next track + take drive the tv selection, not the arrange cursor'  [harness]  @ 177-200
-  @case 'retune opens on the scope the selection implies and OK snaps that scope'  [harness]  @ 206-260
-  @case 'empty grid shows the single no-takes message'  [harness]  @ 266-280
-  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 287-319
-  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 323-343
+  @case 'bind(take) drives cm:setContext via the page's own tm:bindTake'  [harness]  @ 105-113
+  @case 'unbind() drives cm:setContext(nil) via the page's own tm:bindTake'  [harness]  @ 116-125
+  @case 'focusState before any render returns both bits false'  [harness]  @ 128-135
+  @case 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots'  [harness]  @ 141-154
+  @case 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it'  [harness]  @ 158-179
+  @case 'prev/next track + take drive the tv selection, not the arrange cursor'  [harness]  @ 183-206
+  @case 'retune opens on the scope the selection implies and OK snaps that scope'  [harness]  @ 212-266
+  @case 'a refused retune offers to widen, and the offer taken solves again'  [harness]  @ 272-315
+  @case 'empty grid shows the single no-takes message'  [harness]  @ 321-335
+  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 342-374
+  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 378-398
 
 # Uses (outbound edges)
-  @use call tuning.derive  @ 31
-  @use call cm:setContext  @ 110
-  @use call cmgr:push  @ 161,190,222
-  @use call cmgr:invoke  @ 163,169,192,194,196,198,231,242,250,257
-  @use call cm:getAt  @ 167,171,193,195,197,199
-  @use call tuning.stepToMidi  @ 229
-  @use call cm:set  @ 255,256
-  @use call mm:subscribe  @ 303
-  @use call mm:notes  @ 308
-  @use call tm:assignEvent  @ 309
-  @use call tm:byUuid  @ 309
-  @use call tm:flush  @ 310
+  @use call tuning.derive  @ 31,40
+  @use call tuning.genDiamond  @ 40
+  @use call cm:setContext  @ 116
+  @use call cmgr:push  @ 167,196,228,289
+  @use call cmgr:invoke  @ 169,175,198,200,202,204,237,248,256,263,301
+  @use call cm:getAt  @ 173,177,199,201,203,205
+  @use call tuning.stepToMidi  @ 235
+  @use call cm:set  @ 261,262
+  @use call mm:subscribe  @ 358
+  @use call mm:notes  @ 363
+  @use call tm:assignEvent  @ 364
+  @use call tm:byUuid  @ 364
+  @use call tm:flush  @ 365
 
 # Fields (r read / w write incl. constructor keys)
+  @field w FIVES  @ 274
   @field w ImGui_GetBuiltinPath  @ 24
-  @field w MEAN  @ 208
+  @field w MEAN  @ 214
   @field w Mod_None  @ 11
   @field w PopFont  @ 12
   @field w PopStyleColor  @ 13
   @field w PushFont  @ 12
   @field w PushStyleColor  @ 13
-  @field r ShowConsoleMsg  @ 335
-  @field w ShowConsoleMsg  @ 336,340
-  @field w Text  @ 274,279
+  @field r ShowConsoleMsg  @ 390
+  @field w ShowConsoleMsg  @ 391,395
+  @field w Text  @ 329,334
   @field w __index  @ 14
-  @field r acceptCmds  @ 128
-  @field w beats  @ 73
-  @field r calls  @ 73,165,166,170
-  @field w calls  @ 56
-  @field w chan  @ 213,214,294,316
-  @field w chrome  @ 91,93
-  @field w cm  @ 93
-  @field w cmgr  @ 91,93
-  @field w col1  @ 240
-  @field w col2  @ 240
-  @field w colour  @ 270
-  @field r cols  @ 225
-  @field w config  @ 208
-  @field r ctx  @ 91
-  @field w ctx  @ 91
-  @field w currentTrackIdx  @ 61
-  @field r detune  @ 247,248,253
-  @field w ds  @ 93
-  @field w endppq  @ 213,214,294,316
-  @field r events  @ 226
-  @field w facade  @ 94
-  @field r focusName  @ 172
-  @field w fontSize  @ 271
-  @field w get  @ 81
-  @field r grid  @ 225
-  @field w gui  @ 93
-  @field r guid  @ 63
-  @field w guid  @ 57,183,184
-  @field r harmonicLock  @ 238
-  @field w help  @ 94
-  @field r idx  @ 63
-  @field w idx  @ 57,58,183,184,187,188
-  @field w isMidi  @ 139,156,210,291,327
-  @field w isOpen  @ 47
-  @field w isParkedTake  @ 70
-  @field r key  @ 236,259
-  @field w keyForSlot  @ 68
-  @field r kind  @ 232
-  @field w kind  @ 58,187,188
-  @field r lane  @ 226
-  @field r last  @ 164,172,232,233,234,235,236,237,238,243,245,251
-  @field r last  @ 258,259
-  @field w last  @ 42,43,44,45,49
-  @field w len  @ 140,157,211,292,328
+  @field r acceptCmds  @ 134
+  @field w beats  @ 77
+  @field r callback  @ 309
+  @field r calls  @ 77,171,172,176
+  @field w calls  @ 60
+  @field r cells  @ 295
+  @field w chan  @ 219,220,280,281,349,371
+  @field w chrome  @ 95,99
+  @field w cm  @ 97,99
+  @field w cmgr  @ 95,99
+  @field w col1  @ 246
+  @field w col2  @ 246
+  @field w colour  @ 325
+  @field r cols  @ 231,294
+  @field w config  @ 214,274
+  @field r ctx  @ 95
+  @field w ctx  @ 95
+  @field w currentTrackIdx  @ 65
+  @field r detune  @ 253,254,259,296
+  @field w ds  @ 99
+  @field w endppq  @ 219,220,280,281,349,371
+  @field r events  @ 232
+  @field w facade  @ 100
+  @field r focusName  @ 178
+  @field w fontSize  @ 326
+  @field w get  @ 85
+  @field r grid  @ 231,294
+  @field w gui  @ 99
+  @field r guid  @ 67
+  @field w guid  @ 61,189,190
+  @field r harmonicLock  @ 244
+  @field w harmonicLock  @ 303
+  @field w help  @ 100
+  @field w identity  @ 97
+  @field r idx  @ 67
+  @field w idx  @ 61,62,189,190,193,194
+  @field w isMidi  @ 145,162,216,277,346,382
+  @field w isOpen  @ 51
+  @field w isParkedTake  @ 74
+  @field r key  @ 242,265
+  @field w key  @ 303
+  @field w keyForSlot  @ 72
+  @field r kind  @ 238
+  @field w kind  @ 62,193,194
+  @field r lane  @ 232
+  @field r last  @ 170,178,238,239,240,241,242,243,244,249,251,257
+  @field r last  @ 264,265,302,304,309
+  @field w last  @ 46,47,48,49,53
+  @field w len  @ 146,163,217,278,347,383
+  @field w lib  @ 99
   @field r loaded  @ 22
-  @field r midiChan  @ 226
-  @field w midiSlots  @ 66
-  @field r mint  @ 165,166,170
-  @field w mint  @ 73
-  @field w mintParkedTake  @ 72
-  @field r mm  @ 303,308
-  @field w modalHost  @ 94
-  @field r name  @ 65,165
-  @field w name  @ 32,57,58,73,99,110,122,135,152,177,183,184
-  @field w name  @ 206,266,287,323
-  @field w nextFreeSlot  @ 69
-  @field w notes  @ 212,294,316
-  @field w open  @ 43
-  @field w openConfirm  @ 45
-  @field w openPrompt  @ 44
-  @field w ownerTrack  @ 71
-  @field w part1  @ 241
-  @field w part2  @ 241
+  @field r midiChan  @ 232,295
+  @field w midiSlots  @ 70
+  @field r mint  @ 171,172,176
+  @field w mint  @ 77
+  @field w mintParkedTake  @ 76
+  @field r mm  @ 358,363
+  @field w modalHost  @ 100
+  @field r name  @ 69,171
+  @field w name  @ 32,61,62,77,105,116,128,141,158,183,189,190
+  @field w name  @ 212,272,321,342,378
+  @field w nextFreeSlot  @ 73
+  @field w notes  @ 218,279,349,371
+  @field w open  @ 47
+  @field w openConfirm  @ 49
+  @field w openPrompt  @ 48
+  @field w ownerTrack  @ 75
+  @field w part1  @ 247
+  @field w part2  @ 247
   @field w periodPitch  @ 32
-  @field w pitch  @ 213,214,294,309,316
+  @field r pitch  @ 296
+  @field w pitch  @ 219,220,280,281,349,364,371
   @field w pitches  @ 33
-  @field w poolGuid  @ 140,157,211,292,328
-  @field w pos  @ 140,157,211,292,328
-  @field w ppq  @ 213,214,294,316
+  @field w poolGuid  @ 146,163,217,278,347,383
+  @field w pos  @ 146,163,217,278,347,383
+  @field w ppq  @ 219,220,280,281,349,371
   @field r preload  @ 16
-  @field w project  @ 208
-  @field w publish  @ 79
-  @field r publishDebug  @ 216,296
-  @field w publishDebug  @ 80,217,219,297,299
-  @field r reaper  @ 24,335,336,340
-  @field w registerKind  @ 46
-  @field w reset  @ 49
-  @field w row1  @ 240
-  @field w row2  @ 240
-  @field w run  @ 100,111,123,136,153,178,207,267,288,324
-  @field w samplerReachable  @ 77
-  @field r scope  @ 233,243
-  @field w scope  @ 245,251
-  @field w setContext  @ 104,115,334
-  @field r slotsByIdx  @ 66,145,272
-  @field w slotsByIdx  @ 58,186
-  @field r sonoritySize  @ 237
-  @field r src  @ 166,170
-  @field w src  @ 73
+  @field w project  @ 214,274
+  @field r prompt  @ 304
+  @field w publish  @ 83
+  @field r publishDebug  @ 222,283,351
+  @field w publishDebug  @ 84,223,225,284,286,352,354
+  @field r reaper  @ 24,390,391,395
+  @field w registerKind  @ 50
+  @field w reset  @ 53
+  @field w row1  @ 246
+  @field w row2  @ 246
+  @field w run  @ 106,117,129,142,159,184,213,273,322,343,379
+  @field w samplerReachable  @ 81
+  @field r scope  @ 239,249
+  @field w scope  @ 251,257,302
+  @field w setContext  @ 110,121,389
+  @field r slotsByIdx  @ 70,151,327
+  @field w slotsByIdx  @ 62,192
+  @field r sonoritySize  @ 243
+  @field w sonoritySize  @ 303
+  @field r src  @ 172,176
+  @field w src  @ 77
   @field w stepNames  @ 35
-  @field r strength  @ 234
-  @field w strength  @ 245,251
-  @field r suppressKbd  @ 127
-  @field w take  @ 139,156,210,291,327
-  @field r takeByKey  @ 67,142,159,220,300,330
-  @field w takeByKey  @ 59
-  @field w takeForSlot  @ 67
-  @field r target  @ 235,258
-  @field w temper  @ 208
-  @field w tempers  @ 208
-  @field r tm  @ 309,310
-  @field w trackHandle  @ 65
-  @field w trackIdx  @ 73
-  @field w trackIdxForGuid  @ 62
-  @field w tracks  @ 60
-  @field r tracksList  @ 60,63,65
-  @field w tracksList  @ 57,182
-  @field r tv  @ 225,240
-  @field r type  @ 226
-  @field w ui  @ 271
-  @field r uuid  @ 309
-  @field w vel  @ 213,214,294,316
-  @field w wasOpenAtFrameStart  @ 48
-  @field r wholesale  @ 304
+  @field r strength  @ 240
+  @field w strength  @ 251,257,302
+  @field r suppressKbd  @ 133
+  @field w swings  @ 97
+  @field w synthetic  @ 97
+  @field w take  @ 145,162,216,277,346,382
+  @field r takeByKey  @ 71,148,165,226,287,355,385
+  @field w takeByKey  @ 63
+  @field w takeForSlot  @ 71
+  @field r target  @ 241,264
+  @field w target  @ 302
+  @field w temper  @ 214,275
+  @field w tempers  @ 97,214,274
+  @field r tm  @ 364,365
+  @field w trackHandle  @ 69
+  @field w trackIdx  @ 77
+  @field w trackIdxForGuid  @ 66
+  @field w tracks  @ 64
+  @field r tracksList  @ 64,67,69
+  @field w tracksList  @ 61,188
+  @field r tv  @ 231,246,294
+  @field r type  @ 232,295
+  @field w ui  @ 326
+  @field r uuid  @ 364
+  @field w vel  @ 219,220,280,281,349,371
+  @field w wasOpenAtFrameStart  @ 52
+  @field r wholesale  @ 359

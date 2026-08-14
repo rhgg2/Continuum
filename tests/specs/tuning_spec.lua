@@ -861,6 +861,25 @@ return {
   },
 
   {
+    name = 'shortlist: widened, the hole reaches the nearest points either side',
+    run = function()
+      local edo12, diamond = tuning.presets['12EDO'], tuning.genDiamond(15, 5)
+
+      local widened = tuning.shortlist(edo12, diamond, 1, { pitch = 66 }, true)
+      t.eq(#widened, 2, 'the window stretches until it reaches, and reaches both at once')
+      nearly(widened[1].cents, 498.0450, '4/3 below the tritone')
+      nearly(widened[2].cents, 701.9550, '3/2 above it')
+      nearly(widened[1].strain, 2.0391, 'two windows out, so the strain runs past 1')
+      t.eq(widened[1].strain, widened[2].strain, 'and runs alike, so the pull cannot pick between them')
+
+      local onD = tuning.shortlist(edo12, diamond, 1, { pitch = 62 }, true)
+      local held = tuning.shortlist(edo12, diamond, 1, { pitch = 62 })
+      t.eq(#onD, #held, 'a step with a point in reach keeps the window it had')
+      nearly(onD[1].strain, held[1].strain)
+    end,
+  },
+
+  {
     name = 'shortlist: an unequal notation strains by the side the point lies on',
     run = function()
       local mt = meantone12()

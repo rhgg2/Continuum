@@ -229,6 +229,19 @@ local function placementsAt(strands, born, strength)
   end
 end
 
+-- Cost, then the choice vector, so an exact tie breaks deterministically rather than by
+-- table order (design/adaptive-tuning.md § What the solver takes).
+--contract: true iff `state` is the better of the two, the earlier candidate winning a tie
+local function outranks(state, best, count)
+  if not best then return true end
+  if state.cost ~= best.cost then return state.cost < best.cost end
+  for index = 1, count do
+    local mine, theirs = state.choice[index], best.choice[index]
+    if mine ~= theirs then return mine < theirs end
+  end
+  return false
+end
+
 local function keyOf(choice, list)
   local parts = {}
   for k, index in ipairs(list) do parts[k] = choice[index] end
@@ -253,9 +266,8 @@ function sonority.solve(strands, n, strength)
 
     local carried = {}
     for _, state in pairs(states) do
-      local key  = keyOf(state.choice, onset.held)
-      local best = carried[key]
-      if not best or state.cost < best.cost then carried[key] = state end
+      local key = keyOf(state.choice, onset.held)
+      if outranks(state, carried[key], #strands) then carried[key] = state end
     end
 
     -- Every member of this sonority is now assigned: born here, or live from
@@ -281,7 +293,7 @@ function sonority.solve(strands, n, strength)
 
   local best
   for _, state in pairs(states) do
-    if not best or state.cost < best.cost then best = state end
+    if outranks(state, best, #strands) then best = state end
   end
   return best.choice
 end

@@ -458,10 +458,35 @@ step it was written on.**
     to go.
 
 15. The command refuses the solve whole, writing nothing and answering
-    with the step, and offers the nudge: the class's notes are respelled onto the step whose window
-    holds the target's nearest point, and the solve run again. That is the
-    solver editing the score rather than tuning it (§ The window), so it
-    is offered rather than taken.
+    with every step that has nowhere to go.
+
+16. The offer against that refusal is to **widen**: the class's window
+    is scaled, both halves by the smallest factor that brings a point
+    inside it, and the solve run again. A point past the half-way mark
+    relabels the cell (§ The window), so widening is the solver editing
+    the score rather than tuning it, and is offered rather than taken.
+
+17. Every point that factor admits comes with it. A hole usually admits
+    two: a diamond is closed under inversion, so its points stand
+    symmetrically about the tritone, and `4/3` and `3/2` lie 101.955¢
+    either side of a 12-EDO one.
+
+18. Which of them the class takes is the objective's answer, and the
+    sonority around it decides: against `1/1 5/3` the tritone takes
+    `4/3`, and against `1/1 9/8` it takes `3/2`.
+
+19. Those two distances agree to thirteen places, so the admitting test
+    carries a tolerance. Without one the tie breaks on the last bit of a
+    logarithm, and the class renames itself by arithmetic noise.
+
+20. A widened candidate's strain runs past 1, the window it measures
+    being one the note stands outside. It is equal across the admitted
+    set, so the pull it charges is a constant and cannot move the
+    answer.
+
+21. Only a class that refused widens. One with a point already in reach
+    keeps its window, so the offer moves the solve where it had no
+    answer and nowhere else.
 
 ## Solving it
 
@@ -676,11 +701,12 @@ step it was written on.**
 
 ## Open
 
-1. Whether the window should ever widen. A fine notation excludes the
-   rival spelling outright — 31-EDO's ±19.4¢ against the syntonic
-   comma's 21.5¢ (§ When an adaptive solve exists) — so there is almost
-   nothing to choose between. Whether that is a limit to accept or a
-   case for letting the note rename is undecided.
+1. Whether a window already holding a point should ever widen. A hole
+   widens on offer (§ What the solver takes), but a fine notation
+   excludes the rival spelling outright — 31-EDO's ±19.4¢ against the
+   syntonic comma's 21.5¢ (§ When an adaptive solve exists) — and there
+   is then almost nothing to choose between. Whether that is a limit to
+   accept or a case for letting the note rename is undecided.
 
 2. Where the trade at a chord change sits. A sonority straddling one
    holds notes from two chords and asks them to be compact together.

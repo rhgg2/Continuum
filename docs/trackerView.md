@@ -481,8 +481,16 @@ the target's points its window holds, and `sonority.solve` returns the point eac
 strand takes; `tuning.seat` puts that point in the register of every note that
 writes it, and strength blends the pair exactly as snap's is blended. Shortlists
 are built before anything moves, so a step the target leaves nowhere to go
-refuses the whole solve rather than half of it, and the verb answers with that
-step for its caller to name.
+refuses the whole solve rather than half of it, and the verb answers with those
+steps for its caller to name.
+
+The caller names them in a confirm and re-enters the verb with `widen` set if the
+offer is taken. Each refusing window then stretches by the smallest factor that
+reaches a point of the target, which reaches the pair either side of it wherever
+the target is closed under inversion, and the solve picks between them on the
+sonorities they stand in. A point outside a window relabels the cell it is
+written in, which is why the widening is offered rather than taken: no other
+facility the command offers moves a note off the step it was written on.
 
 Ctrl+T reaches the verb through the retune modal, whose fields are the slots
 the verb takes and whose OK is the one commit point — every retuning facility
@@ -682,10 +690,11 @@ verb invoked from inside another wrapped verb (`unautomateParam` calling
 `hideExtraCol`) collapses into the outer block rather than opening a nested
 one.
 
-The retune modal keeps its label on the callback (`openRetuneModal` in
+The retune modal keeps its label on the callback (`runRetune` in
 `trackerRender.lua`) rather than on `vm:retune`: the callback is the only
 place holding the slots the modal chose, so it is the only place the block
-can open.
+can open. A refused solve writes nothing, so its block is empty and the
+widened solve the offer re-enters opens one of its own.
 
 ## Conventions
 

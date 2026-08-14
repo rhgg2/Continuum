@@ -1,4 +1,4 @@
-@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=780  cases=24
+@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=804  cases=25
 @exercises sonority (sonority)
 @surface   sonority.score, sonority.cost, sonority.strands, sonority.walk, sonority.solve
 
@@ -108,24 +108,25 @@
   @case 'the rest of the chord stands still, and the third seventh is dominated'  [pure]  @ 703-717
   @case 'resolving to F–A–C the seventh takes the Pythagorean under any pull'  [pure]  @ 721-739
   @case 'at n one above the arity the resolution reads the seventh chord's bass alone'  [pure]  @ 743-761
-  @case 'an empty shortlist and an unaffordable solve are both refused'  [pure]  @ 765-778
+  @case 'an exact tie goes to the first candidate rather than to table order'  [pure]  @ 765-785
+  @case 'an empty shortlist and an unaffordable solve are both refused'  [pure]  @ 789-802
 
 # Uses (outbound edges)
   @use call sonority.score  @ 194,377,387,388,397,398,399,407,408,409,410
-  @use call sonority.cost  @ 216,542,543,551,552,562,568,588,589,590,591,593,594,606,631,633,634,651,658,659,689,690,691,692,693,694,714,715,754,755,756,757
+  @use call sonority.cost  @ 216,542,543,551,552,562,568,588,589,590,591,593,594,606,631,633,634,651,658,659,689,690,691,692,693,694,714,715,754,755,756,757,780
   @use call sonority.strands  @ 422,443
   @use call sonority.walk  @ 457,476,494,498,510,526,648,655,728,746
-  @use call sonority.solve  @ 605,624,636,645,648,654,669,671,681,685,707,725,759,760,769,775
+  @use call sonority.solve  @ 605,624,636,645,648,654,669,671,681,685,707,725,759,760,783,793,799
 
 # Fields (r read / w write incl. constructor keys)
   @field r A  @ 165
   @field w A  @ 154,302
   @field w Bb  @ 303
-  @field r C  @ 162,225,560,565,577,628,767
+  @field r C  @ 162,225,560,565,577,628,770,791
   @field w C  @ 153,298
   @field r D  @ 164
   @field w D  @ 154
-  @field r E  @ 162,226,560,578,619,767
+  @field r E  @ 162,226,560,578,619,791
   @field w E  @ 153,299
   @field w F  @ 300
   @field r Fsharp  @ 164
@@ -136,13 +137,13 @@
   @field w class  @ 111
   @field r coords  @ 192,377,387,388,396,406
   @field w coords  @ 35,39,43,47,51,55,59,63,139,225,226,227
-  @field w coords  @ 276,277,311,349,565,582,583,619,620
+  @field w coords  @ 276,277,311,349,565,582,583,619,620,770,773,774
   @field w endppq  @ 97,109
   @field r name  @ 377,388,608
   @field w name  @ 34,38,42,46,50,54,58,62,241,245,249,253
   @field w name  @ 258,263,267,374,383,394,404,415,436,453,469,487
   @field w name  @ 506,522,539,548,557,574,600,616,641,667,677,703
-  @field w name  @ 721,743,765
+  @field w name  @ 721,743,765,789
   @field r notes  @ 424,425,426,427,430,431,445,446,447,448
   @field w notes  @ 111
   @field r odd  @ 386
@@ -155,14 +156,15 @@
   @field w pythagorean  @ 155
   @field w run  @ 375,384,395,405,416,437,454,470,488,507,523,540
   @field w run  @ 549,558,575,601,617,642,668,678,704,722,744,766
+  @field w run  @ 790
   @field r score  @ 377
   @field w score  @ 34,38,42,46,50,54,58,62
   @field r septimal  @ 582
   @field w septimal  @ 155
   @field r shortlist  @ 192,206,429
-  @field w shortlist  @ 128,768
+  @field w shortlist  @ 128,792
   @field w strain  @ 139,225,226,227,276,277,311,350,565,582,583,619
-  @field w strain  @ 620
+  @field w strain  @ 620,770,773,774
   @field r strands  @ 171,191,464,479,482,494,501,512,513,514,515,529
   @field r strands  @ 531,533,605,606,607
   @field w strands  @ 242,246,250,254,259,264,268

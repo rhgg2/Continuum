@@ -1,4 +1,4 @@
-@module sonority  src=sonority.lua  loc=289  mode=namespace  self=sonority
+@module sonority  src=sonority.lua  loc=301  mode=namespace  self=sonority
 
 # Invariants & contracts
   @invariant  pure module: no state, no ratios, no cents — coords/strikes/releases/classes → indices  @ 4
@@ -41,7 +41,11 @@
   @fn placementsAt(strands, born, strength)  @ 211-230
       -- Every combination of the shortlists of the strands born at an onset, with the
       -- pull each charges — the same against every state, so charged once here.
-  @fn keyOf(choice, list)  @ 232-236
+  @fn outranks(state, best, count)  @ 235-243
+      -- Cost, then the choice vector, so an exact tie breaks deterministically rather than by
+      -- table order (design/adaptive-tuning.md § What the solver takes).
+      @contract  true iff `state` is the better of the two, the earlier candidate winning a tie  @ 234
+  @fn keyOf(choice, list)  @ 245-249
 
 # Public API (sonority.*)
   @api sonority.score(coordSet)  @ 27-43
@@ -62,44 +66,45 @@
       -- The pull is counted once per strand rather than once per note, so an octave
       -- doubling changes no answer: the box already charges it nothing.
       @contract  strands, n, strength, choice → box over the walk + strength × strain² per strand  @ 143
-  @api sonority.solve(strands, n, strength)  @ 241-287
+  @api sonority.solve(strands, n, strength)  @ 254-299
       -- The state carries the whole choice vector rather than a backpointer: two
       -- generations are alive at a time and the budget bounds them.
-      @contract  strands, n, strength → the index per strand minimising sonority.cost, exactly  @ 240
+      @contract  strands, n, strength → the index per strand minimising sonority.cost, exactly  @ 253
 
 # Uses (outbound edges)
   @use call    util.add  @ strands:55,70,74 strikesInOrder:89 walk:132,134 cost:149 schedule:184,186,187 placementsAt:220
   @use call    util.bucket  @ strands:56
-  @use call    util.clone  @ placementsAt:220 solve:267
-  @use call    util.key  @ keyOf:235 solve:250
+  @use call    util.clone  @ placementsAt:220 solve:279
+  @use call    util.key  @ keyOf:248 solve:263
   @use require util  @ <load>:10
 
 # Calls (intra-file)
-  @call assertAffordable  @ solve:248
-  @call keyOf  @ solve:256,276
-  @call placementsAt  @ solve:265
+  @call assertAffordable  @ solve:261
+  @call keyOf  @ solve:269,288
+  @call outranks  @ solve:270,296
+  @call placementsAt  @ solve:277
   @call promote  @ walk:127
-  @call schedule  @ solve:247
-  @call sonority.score  @ cost:151 solve:275
-  @call sonority.walk  @ cost:146 solve:246
+  @call schedule  @ solve:260
+  @call sonority.score  @ cost:151 solve:287
+  @call sonority.walk  @ cost:146 solve:259
   @call sounding  @ walk:132
   @call strikesInOrder  @ walk:123
   @call weight  @ score:40
 
 # Fields (r read / w write incl. constructor keys)
-  @field r born  @ schedule:184 solve:265,268
+  @field r born  @ schedule:184 solve:277,280
   @field w born  @ schedule:182
-  @field r choice  @ solve:256,267,268,286
-  @field w choice  @ placementsAt:220 solve:250,276
+  @field r choice  @ outranks:239 solve:269,279,280,298
+  @field w choice  @ placementsAt:220 solve:263,288
   @field r class  @ promote:112,114
   @field w class  @ strands:73
-  @field r coords  @ cost:149 solve:272
-  @field r cost  @ solve:258,275,284
-  @field w cost  @ cost:144 solve:250,276
+  @field r coords  @ cost:149 solve:284
+  @field r cost  @ outranks:237 solve:287
+  @field w cost  @ cost:144 solve:263,288
   @field r endppq  @ strands:65,71,73 sounding:104
-  @field r held  @ schedule:187 solve:256
+  @field r held  @ schedule:187 solve:269
   @field w held  @ schedule:182
-  @field r live  @ schedule:186 assertAffordable:200 solve:276
+  @field r live  @ schedule:186 assertAffordable:200 solve:288
   @field w live  @ schedule:182
   @field r notes  @ strands:70 strikesInOrder:88 sounding:103 schedule:171,172
   @field w notes  @ strands:73
@@ -108,14 +113,14 @@
   @field r ppq  @ strands:64,69 strikesInOrder:89,93 sounding:104 walk:125
   @field r ppq  @ walk:126 schedule:167,171,173
   @field w ppq  @ strikesInOrder:89 walk:134
-  @field r pull  @ solve:275
+  @field r pull  @ solve:287
   @field w pull  @ placementsAt:220
   @field w score  @ score:27
-  @field r shortlist  @ cost:149,154 assertAffordable:201 placementsAt:217,225 solve:243,272
-  @field w solve  @ solve:241
+  @field r shortlist  @ cost:149,154 assertAffordable:201 placementsAt:217,225 solve:256,284
+  @field w solve  @ solve:254
   @field r strain  @ cost:154 placementsAt:217
   @field r strand  @ strikesInOrder:95 walk:127
   @field w strand  @ strikesInOrder:89
-  @field r strands  @ cost:148 schedule:178 solve:271
+  @field r strands  @ cost:148 schedule:178 solve:283
   @field w strands  @ strands:51 walk:134
   @field w walk  @ walk:122

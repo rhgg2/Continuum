@@ -472,6 +472,9 @@ end
 
 local OCTAVE = 1200
 
+-- Slack on the reach a widened window takes, in half-windows.
+local REACH_TOL = 1e-9
+
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
@@ -600,22 +603,37 @@ end
 -- § What the solver takes for why the line is reduced into the octave.
 --contract: candidates {cents, coords, strain} for the target's points inside the note's step window
 --contract: strain is the point's gap over the window half it lies in; nearest first
-function tuning.shortlist(notation, target, keyStep, note)
+--contract: widen: where the window holds nothing, the nearest points instead, at strain past 1
+function tuning.shortlist(notation, target, keyStep, note, widen)
   local keyCents     = notation.rootCents + notation.cents[keyStep]
   local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
   local midi, detune = tuning.stepToMidi(notation, step, octave)
   local seat         = midi * 100 + detune
   local below, above = tuning.stepWindow(notation, step)
 
-  local candidates = {}
+  local points = {}
   for _, token in ipairs(target.pitches) do
     local cents = reduceCents(keyCents + tuning.scalaPitch(token), OCTAVE)
     local gap   = gapTo(seat, cents)
     local half  = gap < 0 and below or above
-    if math.abs(gap) <= half then
-      util.add(candidates, { cents = cents, coords = tuning.coords(token),
-                             strain = math.abs(gap) / half })
+    util.add(points, { cents = cents, coords = tuning.coords(token),
+                       strain = math.abs(gap) / half })
+  end
+
+  -- Strain 1 is the window's own edge; reach stands there until nothing is inside it, then
+  -- widens to the nearest point (design/adaptive-tuning.md § What the solver takes).
+  local reach = 1
+  if widen then
+    local nearest = math.huge
+    for _, point in ipairs(points) do
+      if point.strain < nearest then nearest = point.strain end
     end
+    if nearest > reach then reach = nearest end
+  end
+
+  local candidates = {}
+  for _, point in ipairs(points) do
+    if point.strain <= reach + REACH_TOL then util.add(candidates, point) end
   end
 
   table.sort(candidates, function(a, b)

@@ -35,6 +35,10 @@ local MEAN = tuning.derive{
   stepNames = {},
 }
 
+-- The 5-limit tonality diamond at odd limit 15: a target whose points leave the
+-- tritone of a 12-EDO notation nowhere to go.
+local FIVES = tuning.derive(tuning.genDiamond(15, 5))
+
 -- Capturing fake: stash the last open state so tests can simulate the
 -- modal commit by calling fakeModalHost.last.callback(...). registerKind
 -- accepts but ignores renderer bodies (no rendering happens here).
@@ -89,8 +93,10 @@ local function newTrackerPage(cm, ds, cmgr, chrome, gui)
   fakeModalHost:reset()
   resetArrange()
   local help = util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
+  local lib  = util.instantiate('library',
+    { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
   return util.instantiate('trackerPage',
-    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
+    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, lib = lib,
       modalHost = fakeModalHost, help = help, facade = fakeFacade })
 end
 
@@ -257,6 +263,55 @@ return {
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.target, 'DIA', 'the modal reopens on the target the take carries')
       t.eq(fakeModalHost.last.key, 12, 'a key past the notation clamps into it')
+    end,
+  },
+
+  -- A refused solve is offered the widening rather than dropped
+  -- (design/adaptive-tuning.md § What the solver takes).
+  {
+    name = 'a refused retune offers to widen, and the offer taken solves again',
+    run = function(harness)
+      local h = harness.mk{ config = { project = { tempers = { FIVES = FIVES },
+                                                  temper  = '12EDO' } } }
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:seedMidi('tr1/t1', { notes = {
+        { ppq = 0, endppq = 60, chan = 0, pitch = 62, vel = 100 },
+        { ppq = 0, endppq = 60, chan = 0, pitch = 66, vel = 100 } } })
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()
+      h.cmgr:push('tracker')
+
+      -- The chord at the top row, as detune by written pitch.
+      local function chord()
+        local byPitch = {}
+        for _, col in ipairs(stack.tv.grid.cols) do
+          local e = col.type == 'note' and col.midiChan == 1 and col.cells[0]
+          if e then byPitch[e.pitch] = e.detune end
+        end
+        return byPitch
+      end
+
+      h.cmgr:invoke('retune')
+      fakeModalHost.last.callback{ scope = 'all', strength = 1, target = 'FIVES',
+                                   key = 1, sonoritySize = 5, harmonicLock = 1 }
+      local prompt = fakeModalHost.last.prompt
+      t.truthy(prompt:find('F#', 1, true), 'the offer names the step with nowhere to go: ' .. prompt)
+      t.truthy(prompt:find('FIVES', 1, true), 'and the target that left it there')
+      t.eq(chord()[66], 0, 'the refusal itself moved nothing')
+
+      local offer = fakeModalHost.last.callback
+      offer(false)
+      t.eq(chord()[66], 0, 'declined, the take stands as written')
+      offer(true)
+      t.eq(chord()[66], nil, 'taken, the tritone leaves F#')
+      t.truthy(math.abs(chord()[67] - 1.9550) < 0.01, 'for the 3/2 the D beside it wants')
     end,
   },
 

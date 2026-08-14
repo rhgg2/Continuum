@@ -931,8 +931,30 @@ modalHost:registerKind('retune', function(s, close)
   elseif cancelPressed then close(false) end
 end)
 
+-- A refused step's window widens to the nearest points on offer, not by default -- widening
+-- relabels the cell. see docs/trackerView.md § Retune, design/adaptive-tuning.md § What the solver takes
+local runRetune
+
+local function offerWiden(slots, steps)
+  local notation, names = tv:activeTemper(), {}
+  for _, step in ipairs(steps) do util.add(names, stepLabel(notation, step)) end
+  modalHost:openConfirm{
+    title    = 'Retune',
+    prompt   = ('%s has no point inside %s — widen the window and solve again? (y/n)')
+               :format(slots.target, table.concat(names, ', ')),
+    callback = function(widen) if widen then runRetune(slots, true) end end,
+  }
+end
+
 -- The undo block wraps the callback, not the command: the opener does nothing undoable
--- and the edit lands frames later; target and key open on what the take carries, the rest on its default. see design/adaptive-tuning.md § The command's slots
+-- and the edit lands frames later. see docs/trackerView.md § Retune
+runRetune = util.atomic('Retune', function(slots, widen)
+  local refused = tv:retune(slots, widen)
+  if refused then offerWiden(slots, refused) end
+end)
+
+-- Target and key open on what the take carries, the rest on its default.
+-- see design/adaptive-tuning.md § The command's slots
 local function openRetuneModal()
   local notation = tv:activeTemper()
   local key      = cm:getAt('take', 'retune.key') or 1
@@ -945,7 +967,7 @@ local function openRetuneModal()
     key          = notation and math.min(key, #notation.cents) or key,
     sonoritySize = 5,
     harmonicLock = 1,
-    callback     = util.atomic('Retune', function(slots) tv:retune(slots) end),
+    callback     = runRetune,
   }
 end
 

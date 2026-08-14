@@ -762,6 +762,30 @@ return {
   },
 
   {
+    name = 'an exact tie goes to the first candidate rather than to table order',
+    run = function()
+      -- A widened class reads as a point and its inversion (design/adaptive-tuning.md
+      -- § What the solver takes), which a bare fifth scores alike, so four strikes of
+      -- one tie sixteen ways.
+      local tied = { placed(0, { { 0, 60, 3840 } }, { { coords = just.C, strain = 0 } }) }
+      for i = 1, 4 do
+        tied[i + 1] = placed(6, { { (i - 1) * 960, 66, i * 960 } }, {
+          { coords = { [3] = -1 }, strain = 2.0391 },
+          { coords = { [3] =  1 }, strain = 2.0391 },
+        })
+      end
+
+      local best, minimisers = bruteMinimum(tied, 4, 1), 0
+      everyChoice(tied, function(choice)
+        if sonority.cost(tied, 4, 1, choice) == best then minimisers = minimisers + 1 end
+      end)
+      t.eq(minimisers, 16, 'every reading of the four scores the same')
+      t.deepEq(sonority.solve(tied, 4, 1), { 1, 1, 1, 1, 1 },
+        'and the first candidate takes each of them')
+    end,
+  },
+
+  {
     name = 'an empty shortlist and an unaffordable solve are both refused',
     run = function()
       local strands = fixed(960, { { 0, 0, 60, just.C, 0 }, { 4, 0, 64, just.E, 0 } })
