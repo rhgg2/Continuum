@@ -33,10 +33,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-14 tuning: build a strand's shortlist from the notation and the target (§ What the solver takes)
 - 2026-08-14 tuning: factorise a token into coords, and answer eligibility (§ What a target is 1-3)
 - 2026-08-14 tuning: author the diamond from the generators pane (§ What a target is 4)
 - 2026-08-14 tuning: generate the odd-limit diamond with its prime filter (§ The diamond)
-- 2026-08-13 sonority: the sonority holds every class still sounding (§ The model)
 
 ## Now
 
@@ -44,29 +44,20 @@
 
 ## Queued (current phase; one-liners)
 
-1. `tuning.shortlist(notation, target, keyStep, notes)` returns the
-   candidates a strand may take: each of the target's points, placed at
-   the key's step and reduced into the octave, that falls inside the
-   window of every one of the strand's notes. A candidate carries its
-   deviation in cents from the step those notes were written on, the
-   coords of its token, and its strain — that deviation over the half-width
-   of the window on the side it lies, taken largest where the notes'
-   windows differ.
-
-2. The command groups the notes in scope into strands: a step-class by
+1. The command groups the notes in scope into strands: a step-class by
    `tuning.midiToStep`, and within a class the notes overlapping in time,
    transitively, so a chain of overlaps is one strand and a note
    overlapping nothing in its class starts another. Each strand carries
-   its notes, its class and the shortlist of item 2.
+   its notes, its class and the shortlist `tuning.shortlist` returns.
 
-3. The retune modal takes four more fields: target, chosen from the
+2. The retune modal takes four more fields: target, chosen from the
    library's eligible tempers with "none" — which is snap — the default;
    key, chosen from the notation's step names; sonority size; and harmonic
    lock. The slots reach `tv` as one table. Target and key are declared cm
    keys written at take tier on OK, so the modal reopens on them; sonority
    size opens at 5 and harmonic lock at 1 every time.
 
-4. `tv:retune` builds the strands of the scope, hands them to
+3. `tv:retune` builds the strands of the scope, hands them to
    `sonority.solve` with the sonority size and the harmonic lock, and
    seats the chosen candidate on every note of a strand in its own
    register, blended by strength, through `edit.assign` in the one undo
@@ -75,6 +66,6 @@
    drives a written dominant seventh in a take against a diamond target
    and pins the otonal answer the pure module already fixes.
 
-5. The refusal offers a nudge: the notes of the offending class are
+4. The refusal offers a nudge: the notes of the offending class are
    respelled onto the step whose window holds the target's nearest point,
    and the solve run again.

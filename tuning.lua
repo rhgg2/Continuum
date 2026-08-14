@@ -580,6 +580,47 @@ function tuning.isTarget(temper)
   return true
 end
 
+local OCTAVE = 1200
+
+-- The only place the notation and the target meet. See design/adaptive-tuning.md
+-- § What the solver takes for why the line is reduced into the octave.
+--contract: candidates {cents, coords, strain} for the target's points inside every note's window
+--contract: strain is the point's gap over its window half, largest over the notes; nearest first
+function tuning.shortlist(notation, target, keyStep, notes)
+  local keyCents = notation.rootCents + notation.cents[keyStep]
+
+  local written = {}
+  for i, note in ipairs(notes) do
+    local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
+    local midi, detune = tuning.stepToMidi(notation, step, octave)
+    local below, above = tuning.stepWindow(notation, step)
+    written[i] = { cents = midi * 100 + detune, below = below, above = above }
+  end
+
+  local candidates = {}
+  for _, token in ipairs(target.pitches) do
+    local cents = reduceCents(keyCents + tuning.scalaPitch(token), OCTAVE)
+    local inside, strain = true, 0
+    for _, seat in ipairs(written) do
+      -- The gap is signed and reduced into the half-octave either side, so a point
+      -- below a note reads as a descent rather than an ascent of nearly an octave.
+      local gap  = reduceCents(cents - seat.cents + OCTAVE / 2, OCTAVE) - OCTAVE / 2
+      local half = gap < 0 and seat.below or seat.above
+      if math.abs(gap) > half then inside = false; break end
+      strain = math.max(strain, math.abs(gap) / half)
+    end
+    if inside then
+      util.add(candidates, { cents = cents, coords = tuning.coords(token), strain = strain })
+    end
+  end
+
+  table.sort(candidates, function(a, b)
+    if a.strain ~= b.strain then return a.strain < b.strain end
+    return a.cents < b.cents
+  end)
+  return candidates
+end
+
 ----- Display
 
 -- The untempered twelve names, for spelling a root — the temper's own naming

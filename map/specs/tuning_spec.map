@@ -1,6 +1,6 @@
-@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=752  cases=51
+@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=868  cases=56
 @exercises tuning (tuning)
-@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.nextMosSize, tuning.mosInfo, tuning.coords, tuning.isTarget
+@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.nextMosSize, tuning.mosInfo, tuning.coords, tuning.isTarget, tuning.shortlist
 
 # Intent
   Pins tuning.lua's pure display + derivation layer: the Option-B nameless
@@ -21,134 +21,152 @@
   @fn meantone12()  @ 41-45
       -- Quarter-comma meantone's twelve-note MOS (Eb..G#, C at the unison): an
       -- unequal scale, so a step's two neighbours sit at different distances.
-  @fn soundsA415(temper, step, why)  @ 53-57
+  @fn nearly(got, want, why)  @ 49-51
+      -- A candidate's cents and strain are irrational in general, so a case that names
+      -- one names it to four places.
+  @fn bp13()  @ 55-60
+      -- Bohlen-Pierce's thirteen equal divisions of 3/1, rooted so step 1 is C4: a
+      -- period that is not the octave, so the step an octave up is a different step.
+  @fn soundsA415(temper, step, why)  @ 68-72
       -- What the rooted step sounds, as (midi, detune); the deletions and sorts below
       -- all claim to leave it alone.
 
 # Cases
-  @case 'preset EDOs derive width 3 and a past-the-end octaveStep'  [pure]  @ 61-71
-  @case 'named step renders name + octave'  [pure]  @ 75-80
-  @case 'a negative octave renders as its magnitude and reports the sign'  [pure]  @ 84-93
-  @case 'the octaveStep bump owns the sign: a step that crosses zero is not negative'  [pure]  @ 97-104
-  @case 'nameless step falls back to degree-octave with a dash'  [pure]  @ 108-116
-  @case 'nameless scale past 9 steps widens the cell for 2-digit degrees'  [pure]  @ 120-127
-  @case 'sub-octave period widens the octave field for 2-digit octaves'  [pure]  @ 131-140
-  @case 'a root numbering the octaves near zero narrows the field'  [pure]  @ 144-164
-  @case 'a root numbering the range low makes the bottom end the wider'  [pure]  @ 168-180
-  @case 'derive recomputes width when names are dropped'  [pure]  @ 184-192
-  @case 'partially named scale: named steps keep their label, blanks fall back'  [pure]  @ 196-203
-  @case 'scalaPitch parses ratios, cents, bare integers and n\\m steps'  [pure]  @ 207-221
-  @case 'derive compiles pitches → cents and periodPitch → period'  [pure]  @ 225-233
-  @case 'derive reduces an authored root to rootCents + octaveBase'  [pure]  @ 237-247
-  @case 'a preset states no root and derives the default (0,0) = (1,-1)'  [pure]  @ 251-260
-  @case 'unrooted is the library form: the four dropped, the stamps back at the default'  [pure]  @ 264-275
-  @case 'a deleted step takes the root\'s index down with it'  [pure]  @ 279-289
-  @case 'deleting the rooted step restates the root on the unison'  [pure]  @ 293-310
-  @case 'a step sorted below the root carries the root\'s index'  [pure]  @ 314-323
-  @case 'retuning the rooted step moves the scale, not the root'  [pure]  @ 327-340
-  @case 'a temper stating no root comes through both edits unstamped'  [pure]  @ 344-355
-  @case 'midiName spells a pitch in the untempered twelve names'  [pure]  @ 359-365
-  @case 'the default root reduces the conversions to MIDI-relative arithmetic'  [pure]  @ 369-384
-  @case 'stepWindow halves the distance to each neighbour, wrapping at both ends'  [pure]  @ 388-401
-  @case 'stepWindow under an unequal scale reports two different halves'  [pure]  @ 405-417
-  @case 'a flattened root moves every pitch by its offset and renames nothing'  [pure]  @ 421-443
-  @case 'an octave-shifted root renames every octave and moves no pitch'  [pure]  @ 447-463
-  @case 'the conversions invert each other at every root'  [pure]  @ 467-480
-  @case 'EDO presets carry n\\m source tokens that derive back to their cents'  [pure]  @ 484-491
-  @case 'parseScalaFile strips comments, description and count; returns pitch tokens'  [pure]  @ 495-503
-  @case 'parseScalaPitches keeps every non-comment, non-blank line'  [pure]  @ 507-512
-  @case 'scalaToTemper prepends the unison, splits the period, flags periodAsStep'  [pure]  @ 516-527
-  @case 'scalaToTemper sorts unordered pitches ascending; widest becomes the period'  [pure]  @ 531-540
-  @case 'scalaToTemper rejects an unparseable token'  [pure]  @ 544-549
-  @case 'genEqual: full EDO and a diatonic subset, base implicit, period last'  [pure]  @ 553-565
-  @case 'edoDegrees: relative cumulates, absolute sorts; non-octave equave suffixes'  [pure]  @ 569-577
-  @case 'degreesToSpec round-trips edoDegrees in both modes'  [pure]  @ 581-585
-  @case 'genHarmonics / genSubharmonics: rooted on the low harmonic, top is period'  [pure]  @ 589-598
-  @case 'genChord: otonal vs inverted, last member is the period'  [pure]  @ 602-614
-  @case 'parseChord rejects fewer than two notes or non-integers'  [pure]  @ 618-622
-  @case 'genCPS: hexany rooted on the smallest product, 1/1 first, ascending'  [pure]  @ 626-632
-  @case 'genDiamond: the 9-diamond entire, and the counts either side of it'  [pure]  @ 636-646
-  @case 'genDiamond: the prime limit filters in place, and leaves a tritone hole'  [pure]  @ 650-661
-  @case 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first'  [pure]  @ 665-671
-  @case 'genRank2: size 4 / up 2 matches the Scale Workshop worked example'  [pure]  @ 675-680
-  @case 'genRank2: irrational (EDO-step) generator emits cents tokens'  [pure]  @ 684-689
-  @case 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s'  [pure]  @ 693-705
-  @case 'coords: the exponents of the odd primes, prime 2 divided out'  [pure]  @ 709-719
-  @case 'coords: an unreduced token reads as the interval it states'  [pure]  @ 723-728
-  @case 'coords: a token that is not a ratio carries none'  [pure]  @ 732-738
-  @case 'isTarget: a temper whose every pitch factorises, and nothing else'  [pure]  @ 742-750
+  @case 'preset EDOs derive width 3 and a past-the-end octaveStep'  [pure]  @ 76-86
+  @case 'named step renders name + octave'  [pure]  @ 90-95
+  @case 'a negative octave renders as its magnitude and reports the sign'  [pure]  @ 99-108
+  @case 'the octaveStep bump owns the sign: a step that crosses zero is not negative'  [pure]  @ 112-119
+  @case 'nameless step falls back to degree-octave with a dash'  [pure]  @ 123-131
+  @case 'nameless scale past 9 steps widens the cell for 2-digit degrees'  [pure]  @ 135-142
+  @case 'sub-octave period widens the octave field for 2-digit octaves'  [pure]  @ 146-155
+  @case 'a root numbering the octaves near zero narrows the field'  [pure]  @ 159-179
+  @case 'a root numbering the range low makes the bottom end the wider'  [pure]  @ 183-195
+  @case 'derive recomputes width when names are dropped'  [pure]  @ 199-207
+  @case 'partially named scale: named steps keep their label, blanks fall back'  [pure]  @ 211-218
+  @case 'scalaPitch parses ratios, cents, bare integers and n\\m steps'  [pure]  @ 222-236
+  @case 'derive compiles pitches → cents and periodPitch → period'  [pure]  @ 240-248
+  @case 'derive reduces an authored root to rootCents + octaveBase'  [pure]  @ 252-262
+  @case 'a preset states no root and derives the default (0,0) = (1,-1)'  [pure]  @ 266-275
+  @case 'unrooted is the library form: the four dropped, the stamps back at the default'  [pure]  @ 279-290
+  @case 'a deleted step takes the root\'s index down with it'  [pure]  @ 294-304
+  @case 'deleting the rooted step restates the root on the unison'  [pure]  @ 308-325
+  @case 'a step sorted below the root carries the root\'s index'  [pure]  @ 329-338
+  @case 'retuning the rooted step moves the scale, not the root'  [pure]  @ 342-355
+  @case 'a temper stating no root comes through both edits unstamped'  [pure]  @ 359-370
+  @case 'midiName spells a pitch in the untempered twelve names'  [pure]  @ 374-380
+  @case 'the default root reduces the conversions to MIDI-relative arithmetic'  [pure]  @ 384-399
+  @case 'stepWindow halves the distance to each neighbour, wrapping at both ends'  [pure]  @ 403-416
+  @case 'stepWindow under an unequal scale reports two different halves'  [pure]  @ 420-432
+  @case 'a flattened root moves every pitch by its offset and renames nothing'  [pure]  @ 436-458
+  @case 'an octave-shifted root renames every octave and moves no pitch'  [pure]  @ 462-478
+  @case 'the conversions invert each other at every root'  [pure]  @ 482-495
+  @case 'EDO presets carry n\\m source tokens that derive back to their cents'  [pure]  @ 499-506
+  @case 'parseScalaFile strips comments, description and count; returns pitch tokens'  [pure]  @ 510-518
+  @case 'parseScalaPitches keeps every non-comment, non-blank line'  [pure]  @ 522-527
+  @case 'scalaToTemper prepends the unison, splits the period, flags periodAsStep'  [pure]  @ 531-542
+  @case 'scalaToTemper sorts unordered pitches ascending; widest becomes the period'  [pure]  @ 546-555
+  @case 'scalaToTemper rejects an unparseable token'  [pure]  @ 559-564
+  @case 'genEqual: full EDO and a diatonic subset, base implicit, period last'  [pure]  @ 568-580
+  @case 'edoDegrees: relative cumulates, absolute sorts; non-octave equave suffixes'  [pure]  @ 584-592
+  @case 'degreesToSpec round-trips edoDegrees in both modes'  [pure]  @ 596-600
+  @case 'genHarmonics / genSubharmonics: rooted on the low harmonic, top is period'  [pure]  @ 604-613
+  @case 'genChord: otonal vs inverted, last member is the period'  [pure]  @ 617-629
+  @case 'parseChord rejects fewer than two notes or non-integers'  [pure]  @ 633-637
+  @case 'genCPS: hexany rooted on the smallest product, 1/1 first, ascending'  [pure]  @ 641-647
+  @case 'genDiamond: the 9-diamond entire, and the counts either side of it'  [pure]  @ 651-661
+  @case 'genDiamond: the prime limit filters in place, and leaves a tritone hole'  [pure]  @ 665-676
+  @case 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first'  [pure]  @ 680-686
+  @case 'genRank2: size 4 / up 2 matches the Scale Workshop worked example'  [pure]  @ 690-695
+  @case 'genRank2: irrational (EDO-step) generator emits cents tokens'  [pure]  @ 699-704
+  @case 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s'  [pure]  @ 708-720
+  @case 'coords: the exponents of the odd primes, prime 2 divided out'  [pure]  @ 724-734
+  @case 'coords: an unreduced token reads as the interval it states'  [pure]  @ 738-743
+  @case 'coords: a token that is not a ratio carries none'  [pure]  @ 747-753
+  @case 'isTarget: a temper whose every pitch factorises, and nothing else'  [pure]  @ 757-765
+  @case 'shortlist: the key step holds the unison, and the tonic does not move'  [pure]  @ 769-787
+  @case 'shortlist: the rival spellings of a step, nearest first'  [pure]  @ 791-807
+  @case 'shortlist: the hole at the tritone is the target\'s, not the step\'s'  [pure]  @ 811-822
+  @case 'shortlist: an unequal notation strains by the side the point lies on'  [pure]  @ 826-838
+  @case 'shortlist: a strand takes the intersection of its notes, and the strain of the worst'  [pure]  @ 842-866
 
 # Uses (outbound edges)
-  @use call tuning.derive  @ 11,27,36,43,135,153,186,190,198,227,241,281,286,296,318,331,349
-  @use call tuning.stepToParts  @ 17,86,90,101
-  @use call tuning.genRank2  @ 42,667,677,686,746,748
-  @use call tuning.stepToMidi  @ 54,305,306,337,374,381,430,431,459,460,474
-  @use call tuning.midiToStep  @ 159,176,178,372,377,438,439,455,456,473,475
-  @use call tuning.scalaPitch  @ 209,210,211,212,213,214,215,217,218,219,220,658
-  @use call tuning.unrooted  @ 269
-  @use call tuning.removeStep  @ 281,286,296,347
-  @use call tuning.sortSteps  @ 318,331,349
-  @use call tuning.midiName  @ 361,362,363,364
-  @use call tuning.stepWindow  @ 391,394,398,410,414
-  @use call tuning.parseScalaFile  @ 497
-  @use call tuning.parseScalaPitches  @ 509
-  @use call tuning.scalaToTemper  @ 518,533,546
-  @use call tuning.genEqual  @ 555,561,575
-  @use call tuning.edoDegrees  @ 555,561,571,572,573,575
-  @use call tuning.degreesToSpec  @ 583,584
-  @use call tuning.genHarmonics  @ 591
-  @use call tuning.genSubharmonics  @ 595
-  @use call tuning.parseChord  @ 604,620,621
-  @use call tuning.genChord  @ 607,611
-  @use call tuning.genCPS  @ 628,745
-  @use call tuning.genDiamond  @ 638,643,644,645,652,744
-  @use call tuning.nextMosSize  @ 695,696,697,698,699
-  @use call tuning.mosInfo  @ 700,704
-  @use call tuning.coords  @ 711,712,713,714,715,716,717,718,725,726,727,734,735,736,737
-  @use call tuning.isTarget  @ 744,745,746,747,748,749
+  @use call tuning.derive  @ 11,27,36,43,58,150,168,201,205,213,242,256,296,301,311,333,346,364
+  @use call tuning.stepToParts  @ 17,101,105,116
+  @use call tuning.genRank2  @ 42,682,692,701,761,763
+  @use call tuning.stepToMidi  @ 69,320,321,352,389,396,445,446,474,475,489,833,851,852
+  @use call tuning.midiToStep  @ 174,191,193,387,392,453,454,470,471,488,490
+  @use call tuning.scalaPitch  @ 224,225,226,227,228,229,230,232,233,234,235,673
+  @use call tuning.unrooted  @ 284
+  @use call tuning.removeStep  @ 296,301,311,362
+  @use call tuning.sortSteps  @ 333,346,364
+  @use call tuning.midiName  @ 376,377,378,379
+  @use call tuning.stepWindow  @ 406,409,413,425,429,829
+  @use call tuning.parseScalaFile  @ 512
+  @use call tuning.parseScalaPitches  @ 524
+  @use call tuning.scalaToTemper  @ 533,548,561
+  @use call tuning.genEqual  @ 570,576,590
+  @use call tuning.edoDegrees  @ 570,576,586,587,588,590
+  @use call tuning.degreesToSpec  @ 598,599
+  @use call tuning.genHarmonics  @ 606
+  @use call tuning.genSubharmonics  @ 610
+  @use call tuning.parseChord  @ 619,635,636
+  @use call tuning.genChord  @ 622,626
+  @use call tuning.genCPS  @ 643,760
+  @use call tuning.genDiamond  @ 653,658,659,660,667,759,771,793,814,817,834,844
+  @use call tuning.nextMosSize  @ 710,711,712,713,714
+  @use call tuning.mosInfo  @ 715,719
+  @use call tuning.coords  @ 726,727,728,729,730,731,732,733,740,741,742,749,750,751,752
+  @use call tuning.isTarget  @ 759,760,761,762,763,764
+  @use call tuning.shortlist  @ 773,779,783,795,803,814,817,834,845,857,861
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cellWidth  @ 64,69,112,125,137,158,174,188,191
-  @field r cents  @ 230,231,232,488,526,537,538
-  @field w cents  @ 11,25,136,151,187,199,241
-  @field r isMos  @ 701,704
-  @field r large  @ 702
-  @field r name  @ 476,477,519
-  @field w name  @ 11,25,33,43,61,75,84,97,108,120,131,135
-  @field w name  @ 144,150,168,184,186,196,198,207,225,227,237,241
-  @field w name  @ 251,264,279,293,314,327,344,359,369,388,405,421
-  @field w name  @ 447,467,484,495,507,516,531,544,553,569,581,589
-  @field w name  @ 602,618,626,636,650,665,675,684,693,709,723,732
-  @field w name  @ 742
-  @field r octaveBase  @ 246,255,426,452
-  @field r octaveStep  @ 66,70,100,111
-  @field r octaveWidth  @ 65,138,157,162,173
-  @field r period  @ 229,490,521
-  @field w period  @ 11,25,135,150,186,198,241
-  @field r periodAsStep  @ 525,559,642,670
-  @field r periodPitch  @ 43,489,520,534,558,564,576,597,609,613,630,641
-  @field r periodPitch  @ 669,679
-  @field w periodPitch  @ 33,43,227
-  @field r pitches  @ 34,44,317,330,348,487,522,523,524,535,536,556
-  @field r pitches  @ 557,562,563,596,608,612,629,631,639,643,644,645
-  @field r pitches  @ 653,655,657,668,678,687,688
-  @field w pitches  @ 33,44,228,749
-  @field r presets  @ 63,68,77,78,86,90,99,253,371,380,390,469
-  @field r presets  @ 469,486,747
-  @field r rootCents  @ 243,254,274,283,288,302,321,335,425,451
-  @field r rootDetune  @ 257,300,352
-  @field w rootDetune  @ 49,242,267,424,470
-  @field r rootOctave  @ 259,301,354
-  @field w rootOctave  @ 49,156,172,242,267,450,470,471
-  @field r rootPitch  @ 256,273,299,351
-  @field w rootPitch  @ 49,172,242,267,471
-  @field r rootStep  @ 258,282,287,298,320,333,353
-  @field w rootStep  @ 49,242,267,471
-  @field w run  @ 62,76,85,98,109,121,132,145,169,185,197,208
-  @field w run  @ 226,238,252,265,280,294,315,328,345,360,370,389
-  @field w run  @ 406,422,448,468,485,496,508,517,532,545,554,570
-  @field w run  @ 582,590,603,619,627,637,651,666,676,685,694,710
-  @field w run  @ 724,733,743
-  @field r small  @ 703
+  @field r cellWidth  @ 79,84,127,140,152,173,189,203,206
+  @field r cents  @ 245,246,247,503,541,552,553,775,780,785,797
+  @field r cents  @ 799,801,805,819,820,836,864
+  @field w cents  @ 11,25,151,166,202,214,256
+  @field r coords  @ 777,786
+  @field w detune  @ 803,834,857,861,862
+  @field r isMos  @ 716,719
+  @field r large  @ 717
+  @field r name  @ 491,492,534
+  @field w name  @ 11,25,33,43,58,76,90,99,112,123,135,146
+  @field w name  @ 150,159,165,183,199,201,211,213,222,240,242,252
+  @field w name  @ 256,266,279,294,308,329,342,359,374,384,403,420
+  @field w name  @ 436,462,482,499,510,522,531,546,559,568,584,596
+  @field w name  @ 604,617,633,641,651,665,680,690,699,708,724,738
+  @field w name  @ 747,757,769,791,811,826,842
+  @field r octaveBase  @ 261,270,441,467
+  @field r octaveStep  @ 81,85,115,126
+  @field r octaveWidth  @ 80,153,172,177,188
+  @field r period  @ 244,505,536
+  @field w period  @ 11,25,150,165,201,213,256
+  @field r periodAsStep  @ 540,574,657,685
+  @field r periodPitch  @ 43,504,535,549,573,579,591,612,624,628,645,656
+  @field r periodPitch  @ 684,694
+  @field w periodPitch  @ 33,43,58,242
+  @field w pitch  @ 773,779,783,795,803,814,817,834,845,857,861
+  @field w pitch  @ 862
+  @field r pitches  @ 34,44,332,345,363,502,537,538,539,550,551,571
+  @field r pitches  @ 572,577,578,611,623,627,644,646,654,658,659,660
+  @field r pitches  @ 668,670,672,683,693,702,703
+  @field w pitches  @ 33,44,58,243,764,850
+  @field r presets  @ 78,83,92,93,101,105,114,268,386,395,405,484
+  @field r presets  @ 484,501,762,771,793,813,844
+  @field r rootCents  @ 258,269,289,298,303,317,336,350,440,466
+  @field r rootDetune  @ 272,315,367
+  @field w rootDetune  @ 59,64,257,282,439,485
+  @field r rootOctave  @ 274,316,369
+  @field w rootOctave  @ 59,64,171,187,257,282,465,485,486
+  @field r rootPitch  @ 271,288,314,366
+  @field w rootPitch  @ 59,64,187,257,282,486
+  @field r rootStep  @ 273,297,302,313,335,348,368
+  @field w rootStep  @ 59,64,257,282,486
+  @field w run  @ 77,91,100,113,124,136,147,160,184,200,212,223
+  @field w run  @ 241,253,267,280,295,309,330,343,360,375,385,404
+  @field w run  @ 421,437,463,483,500,511,523,532,547,560,569,585
+  @field w run  @ 597,605,618,634,642,652,666,681,691,700,709,725
+  @field w run  @ 739,748,758,770,792,812,827,843
+  @field r small  @ 718
   @field r stepNames  @ 34
-  @field w stepNames  @ 11,25,33,44,136,151,187,189,199,228,241
+  @field w stepNames  @ 11,25,33,44,58,151,166,202,204,214,243,256
+  @field r strain  @ 776,781,798,800,806,821,837,847,859,865

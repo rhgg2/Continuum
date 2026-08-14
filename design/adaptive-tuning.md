@@ -368,7 +368,10 @@ step it was written on.**
    and one reading serves them all.
 
 3. A **candidate** is a point placed on that line, carrying its cents
-   and the coords of § What "in tune" means. It carries its **strain**
+   and the coords of § What "in tune" means. The cents are the point's
+   own position on the line, not an offset from a note: a strand's notes
+   may sit on different steps, and no offset then serves them all. It
+   carries its **strain**
    too: its distance from the step the strand's notes were written on,
    as a fraction of the half-width of their window on that side
    (§ The window).
@@ -392,43 +395,43 @@ step it was written on.**
 7. Beside the strands it takes the sonority size and the pull strength,
    and nothing else.
 
-7. It returns an index per strand into that strand's shortlist. The
+8. It returns an index per strand into that strand's shortlist. The
    command reads the chosen candidate's cents and seats them as
    `(pitch, detune)` on every note of the strand, each in its own
    register.
 
-8. Building a strand's shortlist — the target's points, in every octave,
+9. Building a strand's shortlist — the target's points, in every octave,
    that fall inside the windows of all its notes (§ The window) — is
    `tuning.lua`'s work, and the only place the notation and the target
    meet. Strain is computed in the same pass, the window's half-widths
    being at hand there and nowhere else.
 
-9. Those windows coincide wherever the notation's period divides the
+10. Those windows coincide wherever the notation's period divides the
    octave, the scale then repeating identically in every register.
 
-10. Where it does not, a step usually has no octave among the scale's
+11. Where it does not, a step usually has no octave among the scale's
     steps at all, and a strand gathers unisons only. Where one does fall
     an octave away it is a different step with different neighbours, so
     the two windows differ and their intersection can be narrower than
     either, or empty. A candidate's strain is then the largest its notes
     give it, the pull answering to the note that strains most.
 
-11. Fixing a strand is a shortlist of one, and nothing in the solver
+12. Fixing a strand is a shortlist of one, and nothing in the solver
     distinguishes it. The collar (§ Seams) arrives as strands of one.
     Each still contributes its coords to every sonority it joins, and
     its pull is a constant that cannot move the answer.
 
-12. An empty shortlist is asserted against rather than handled. An
+13. An empty shortlist is asserted against rather than handled. An
     excluded strand does not score badly — it does not score, so the
     solve converges, answers confidently, and answers differently under a
     target the author took for a small variation.
 
-13. The hole is not hypothetical. The 5-limit diamond at odd limit 15
+14. The hole is not hypothetical. The 5-limit diamond at odd limit 15
     holds no point within 50¢ of the tritone, `45/32` being 590¢ at odd
     limit 45, so against a 12-EDO notation that step-class has nowhere
     to go.
 
-14. The command refuses the solve and names the step, and offers the
+15. The command refuses the solve and names the step, and offers the
     nudge: the class's notes are respelled onto the step whose window
     holds the target's nearest point, and the solve run again. That is the
     solver editing the score rather than tuning it (§ The window), so it

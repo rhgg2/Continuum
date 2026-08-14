@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=602  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=643  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4
@@ -16,7 +16,8 @@
 # Module-level constants
   @const tuning = {}  @ 12
   @const RATIO_CAP = 1 << 40  @ 400
-  @const MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', '...  @ 587
+  @const OCTAVE = 1200  @ 583
+  @const MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', '...  @ 628
 
 # Private functions
   -- Temperament presets
@@ -131,14 +132,19 @@
       @contract  ratio token -> {[oddPrime]=exponent}, prime 2 divided out; nil for cents or n\m  @ 562
   @api tuning.isTarget(temper)  @ 576-581
       @contract  true when every pitch of `temper` is a ratio, so its points carry coords to score  @ 575
+  @api tuning.shortlist(notation, target, keyStep, notes)  @ 589-622
+      -- The only place the notation and the target meet. See design/adaptive-tuning.md
+      -- § What the solver takes for why the line is reduced into the octave.
+      @contract  candidates {cents, coords, strain} for the target's points inside every note's window  @ 587
+      @contract  strain is the point's gap over its window half, largest over the notes; nearest first  @ 588
   -- Display
-  @api tuning.midiName(pitch)  @ 590-592
-      @contract  MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')  @ 589
-  @api tuning.stepToParts(temper, step, octave)  @ 595-600
-      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 594
+  @api tuning.midiName(pitch)  @ 631-633
+      @contract  MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')  @ 630
+  @api tuning.stepToParts(temper, step, octave)  @ 636-641
+      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 635
 
 # Uses (outbound edges)
-  @use call    util.add  @ parseScalaPitches:187 parseScalaFile:197,204 scalaToTemper:222 edoDegrees:241,246,251 degreesToSpec:260 genHarmonics:278 genSubharmonics:285 parseChord:296 combinations:319 genCPS:337 genDiamond:378 stepSpectrum:418,426 genRank2:447
+  @use call    util.add  @ parseScalaPitches:187 parseScalaFile:197,204 scalaToTemper:222 edoDegrees:241,246,251 degreesToSpec:260 genHarmonics:278 genSubharmonics:285 parseChord:296 combinations:319 genCPS:337 genDiamond:378 stepSpectrum:418,426 genRank2:447 shortlist:613
   @use call    util.deepClone  @ unrooted:135
   @use require util  @ <load>:10
 
@@ -152,17 +158,18 @@
   @call edo  @ <load>:152,155,159,164
   @call gcd  @ genCPS:346 genDiamond:374 stackRatio:410
   @call octaveFieldWidth  @ computeCellWidth:57 derive:95
-  @call octaveLabel  @ octaveFieldWidth:38 stepToParts:599
+  @call octaveLabel  @ octaveFieldWidth:38 stepToParts:640
   @call primeFactorsBelow  @ genDiamond:374
-  @call reduceCents  @ stepSpectrum:418 genRank2:444
+  @call reduceCents  @ stepSpectrum:418 genRank2:444 shortlist:602,607
   @call restateOnUnison  @ removeStep:128
   @call stackRatio  @ genRank2:443
   @call stepSpectrum  @ mosInfo:457 nextMosSize:467
-  @call tuning.coords  @ isTarget:578
+  @call tuning.coords  @ isTarget:578 shortlist:613
   @call tuning.derive  @ unrooted:137 edo:143 scalaToTemper:223
-  @call tuning.midiToStep  @ snap:518 transposeStep:532 stepsBetween:538,539
-  @call tuning.scalaPitch  @ scalaPitch:69 derive:85,89 sortSteps:112 scalaToTemper:215,220 genCPS:350 genDiamond:382 genRank2:439 mosInfo:457 nextMosSize:464
-  @call tuning.stepToMidi  @ snap:518 transposeStep:533
+  @call tuning.midiToStep  @ snap:518 transposeStep:532 stepsBetween:538,539 shortlist:594
+  @call tuning.scalaPitch  @ scalaPitch:69 derive:85,89 sortSteps:112 scalaToTemper:215,220 genCPS:350 genDiamond:382 genRank2:439 mosInfo:457 nextMosSize:464 shortlist:602
+  @call tuning.stepToMidi  @ snap:518 transposeStep:533 shortlist:595
+  @call tuning.stepWindow  @ shortlist:596
 
 # Unresolved receivers
   @drop equave:match  @ genCPS:330,331
@@ -174,17 +181,22 @@
   @drop token:match  @ scalaPitch:62,64,65,75,77 asRatio:392,394 coords:564
 
 # Fields (r read / w write incl. constructor keys)
+  @field r above  @ shortlist:608
+  @field w above  @ shortlist:597
+  @field r below  @ shortlist:608
+  @field w below  @ shortlist:597
   @field r c  @ sortSteps:115
   @field w c  @ sortSteps:112
   @field w cellWidth  @ derive:96
   @field r cents  @ computeRootCents:45 computeCellWidth:50 derive:91 stepSpectrum:424,428 genRank2:449 midiToStep:483 stepToMidi:500 stepWindow:523
-  @field r cents  @ stepWindow:523 stepsBetween:540
-  @field w cents  @ derive:86 stepSpectrum:426 genRank2:447
-  @field w coords  @ coords:563
+  @field r cents  @ stepWindow:523 stepsBetween:540 shortlist:590,607,619
+  @field w cents  @ derive:86 stepSpectrum:426 genRank2:447 shortlist:597,613
+  @field w coords  @ coords:563 shortlist:613
   @field r count  @ stepSpectrum:425 mosInfo:459
   @field w count  @ stepSpectrum:425,426
   @field w degreesToSpec  @ degreesToSpec:257
   @field w derive  @ derive:82
+  @field r detune  @ shortlist:594
   @field w edoDegrees  @ edoDegrees:236
   @field w findTemper  @ findTemper:174
   @field w genCPS  @ genCPS:328
@@ -197,7 +209,7 @@
   @field w isMos  @ mosInfo:458,459
   @field w isTarget  @ isTarget:576
   @field w large  @ mosInfo:459
-  @field w midiName  @ midiName:590
+  @field w midiName  @ midiName:631
   @field w midiToStep  @ midiToStep:477
   @field w mosInfo  @ mosInfo:456
   @field w name  @ edo:144 scalaToTemper:224
@@ -206,7 +218,7 @@
   @field w nm  @ sortSteps:112
   @field r octaveBase  @ octaveFieldWidth:36,37 midiToStep:495 stepToMidi:504
   @field w octaveBase  @ derive:94
-  @field r octaveStep  @ stepToParts:596
+  @field r octaveStep  @ stepToParts:637
   @field w octaveStep  @ derive:92
   @field w octaveWidth  @ derive:95
   @field w parseChord  @ parseChord:291
@@ -217,12 +229,13 @@
   @field w periodAsStep  @ scalaToTemper:228 genEqual:271 genHarmonics:279 genSubharmonics:286 genChord:310 genCPS:351 genDiamond:383 genRank2:452
   @field r periodPitch  @ derive:88,89
   @field w periodPitch  @ edo:145 scalaToTemper:225 genEqual:271 genHarmonics:279 genSubharmonics:286 genChord:310 genCPS:351 genDiamond:383 genRank2:452
-  @field r pitches  @ derive:83,85 sortSteps:111,117 removeStep:126 isTarget:577
+  @field r pitch  @ shortlist:594
+  @field r pitches  @ derive:83,85 sortSteps:111,117 removeStep:126 isTarget:577 shortlist:601
   @field w pitches  @ edo:146 scalaToTemper:226 genEqual:271 genHarmonics:279 genSubharmonics:286 genChord:310 genCPS:351 genDiamond:383 genRank2:452
   @field r presets  @ findTemper:176
   @field w presets  @ 151
   @field w removeStep  @ removeStep:125
-  @field r rootCents  @ octaveFieldWidth:36,37 restateOnUnison:103,105 midiToStep:479 stepToMidi:504
+  @field r rootCents  @ octaveFieldWidth:36,37 restateOnUnison:103,105 midiToStep:479 stepToMidi:504 shortlist:590
   @field w rootCents  @ derive:93
   @field r rootDetune  @ computeRootCents:44 unrooted:136
   @field w rootDetune  @ restateOnUnison:105
@@ -236,15 +249,18 @@
   @field w rooted  @ sortSteps:113
   @field w scalaPitch  @ scalaPitch:61
   @field w scalaToTemper  @ scalaToTemper:212
+  @field w shortlist  @ shortlist:589
   @field w small  @ mosInfo:459
   @field w snap  @ snap:517
   @field w sortSteps  @ sortSteps:109
-  @field r stepNames  @ computeCellWidth:50 derive:92 sortSteps:112,118 removeStep:127 stepToParts:597
+  @field r stepNames  @ computeCellWidth:50 derive:92 sortSteps:112,118 removeStep:127 stepToParts:638
   @field w stepNames  @ edo:147 scalaToTemper:227
   @field w stepToMidi  @ stepToMidi:499
-  @field w stepToParts  @ stepToParts:595
+  @field w stepToParts  @ stepToParts:636
   @field w stepWindow  @ stepWindow:522
   @field w stepsBetween  @ stepsBetween:537
+  @field r strain  @ shortlist:618
+  @field w strain  @ shortlist:613
   @field r tok  @ sortSteps:117
   @field w tok  @ sortSteps:112
   @field r token  @ genRank2:451
