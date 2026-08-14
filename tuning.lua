@@ -470,6 +470,8 @@ function tuning.nextMosSize(generator, period, fromN, dir)
   return nil
 end
 
+local OCTAVE = 1200
+
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
@@ -516,6 +518,14 @@ end
 
 function tuning.snap(temper, midi, detune)
   return tuning.stepToMidi(temper, tuning.midiToStep(temper, midi, detune))
+end
+
+-- The step a note is written on, taken modulo the octave the score quotients
+-- out. See design/adaptive-tuning.md § The model.
+--contract: the note's written seat reduced into the octave; an octave apart answers alike
+function tuning.stepClass(temper, midi, detune)
+  local seatMidi, seatDetune = tuning.snap(temper, midi, detune)
+  return util.round(reduceCents(seatMidi * 100 + seatDetune, OCTAVE), 1e-6)
 end
 
 --contract: half-gaps in cents to steps below/above `step`; both positive, wraps the period
@@ -580,37 +590,27 @@ function tuning.isTarget(temper)
   return true
 end
 
-local OCTAVE = 1200
-
 -- The only place the notation and the target meet. See design/adaptive-tuning.md
 -- § What the solver takes for why the line is reduced into the octave.
---contract: candidates {cents, coords, strain} for the target's points inside every note's window
---contract: strain is the point's gap over its window half, largest over the notes; nearest first
-function tuning.shortlist(notation, target, keyStep, notes)
-  local keyCents = notation.rootCents + notation.cents[keyStep]
-
-  local written = {}
-  for i, note in ipairs(notes) do
-    local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
-    local midi, detune = tuning.stepToMidi(notation, step, octave)
-    local below, above = tuning.stepWindow(notation, step)
-    written[i] = { cents = midi * 100 + detune, below = below, above = above }
-  end
+--contract: candidates {cents, coords, strain} for the target's points inside the note's step window
+--contract: strain is the point's gap over the window half it lies in; nearest first
+function tuning.shortlist(notation, target, keyStep, note)
+  local keyCents     = notation.rootCents + notation.cents[keyStep]
+  local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
+  local midi, detune = tuning.stepToMidi(notation, step, octave)
+  local seat         = midi * 100 + detune
+  local below, above = tuning.stepWindow(notation, step)
 
   local candidates = {}
   for _, token in ipairs(target.pitches) do
     local cents = reduceCents(keyCents + tuning.scalaPitch(token), OCTAVE)
-    local inside, strain = true, 0
-    for _, seat in ipairs(written) do
-      -- The gap is signed and reduced into the half-octave either side, so a point
-      -- below a note reads as a descent rather than an ascent of nearly an octave.
-      local gap  = reduceCents(cents - seat.cents + OCTAVE / 2, OCTAVE) - OCTAVE / 2
-      local half = gap < 0 and seat.below or seat.above
-      if math.abs(gap) > half then inside = false; break end
-      strain = math.max(strain, math.abs(gap) / half)
-    end
-    if inside then
-      util.add(candidates, { cents = cents, coords = tuning.coords(token), strain = strain })
+    -- The gap is signed and reduced into the half-octave either side, so a point
+    -- below the note reads as a descent rather than an ascent of nearly an octave.
+    local gap   = reduceCents(cents - seat + OCTAVE / 2, OCTAVE) - OCTAVE / 2
+    local half  = gap < 0 and below or above
+    if math.abs(gap) <= half then
+      util.add(candidates, { cents = cents, coords = tuning.coords(token),
+                             strain = math.abs(gap) / half })
     end
   end
 

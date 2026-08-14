@@ -1,6 +1,5 @@
--- The objective an adaptive-tuning solve minimises.
--- See design/adaptive-tuning.md § What "in tune" means.
--- @noindex
+-- The objective an adaptive-tuning solve minimises, and the strands it is taken over.
+-- See design/adaptive-tuning.md § What "in tune" means. @noindex
 
 --invariant: pure module: no state, no ratios, no cents — coords/strikes/releases/classes → indices
 --shape: Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing
@@ -41,6 +40,42 @@ function sonority.score(coordSet)
     total = total + (high - low) * weight(prime)
   end
   return total
+end
+
+----- The strands
+
+-- Notes of a class that overlap hold one tuning (§ The strand); the running
+-- release is half-open, so a note struck at a release starts another.
+--contract: notes, classOf → a Strand per class per run of overlapping notes, shortlists unfilled
+--contract: grouped by ascending class, each in strike order, whatever order the notes arrive in
+function sonority.strands(notes, classOf)
+  local byClass, classes = {}, {}
+  for _, note in ipairs(notes) do
+    local class = classOf(note)
+    if not byClass[class] then util.add(classes, class) end
+    util.bucket(byClass, class, note)
+  end
+  table.sort(classes)
+
+  local strands = {}
+  for _, class in ipairs(classes) do
+    local members = byClass[class]
+    table.sort(members, function(a, b)
+      if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+      return a.endppq < b.endppq
+    end)
+    local open, release
+    for _, note in ipairs(members) do
+      if open and note.ppq < release then
+        util.add(open.notes, note)
+        if note.endppq > release then release = note.endppq end
+      else
+        open, release = { notes = { note }, class = class }, note.endppq
+        util.add(strands, open)
+      end
+    end
+  end
+  return strands
 end
 
 ----- The walk

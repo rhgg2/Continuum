@@ -50,6 +50,14 @@ local function nearly(got, want, why)
   t.truthy(math.abs(got - want) < 5e-4, (why or 'nearly') .. ': got ' .. got)
 end
 
+-- 12EDO written as six equal steps of a half-octave period: a step index that
+-- recurs inside the octave, on a step a tritone from the one it repeats.
+local function half12()
+  local pitches = {}
+  for i = 0, 5 do pitches[i + 1] = i .. '\\6<600.0>' end
+  return tuning.derive{ name = 'HALF6', periodPitch = '600.0', pitches = pitches, stepNames = {} }
+end
+
 -- Bohlen-Pierce's thirteen equal divisions of 3/1, rooted so step 1 is C4: a
 -- period that is not the octave, so the step an octave up is a different step.
 local function bp13()
@@ -766,21 +774,51 @@ return {
   },
 
   {
+    name = 'stepClass: an exact octave shares a class, and nothing else does',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      local onC   = tuning.stepClass(edo12, 60, 0)
+      t.eq(tuning.stepClass(edo12, 72, 0), onC, 'the octave above answers alike')
+      t.eq(tuning.stepClass(edo12,  0, 0), onC, 'and so does C-1, five octaves below')
+      t.eq(tuning.stepClass(edo12, 60, 30), onC, 'a note inside its window is written on the step')
+      t.truthy(tuning.stepClass(edo12, 61, 0) ~= onC, 'the semitone next door is another class')
+
+      local mt = meantone12()
+      local lowMidi,  lowDetune  = tuning.stepToMidi(mt, 5, 1)
+      local highMidi, highDetune = tuning.stepToMidi(mt, 5, 7)
+      t.eq(tuning.stepClass(mt, highMidi, highDetune), tuning.stepClass(mt, lowMidi, lowDetune),
+           'an unequal scale repeats its steps exactly, six octaves apart')
+
+      local half = half12()
+      t.eq(tuning.stepClass(half, 72, 0), tuning.stepClass(half, 60, 0),
+           'a period dividing the octave still puts the octave in the class')
+      t.truthy(tuning.stepClass(half, 66, 0) ~= tuning.stepClass(half, 60, 0),
+           'where the same step index a period up is a tritone away')
+
+      local bp = bp13()
+      local rootMidi,  rootDetune  = tuning.stepToMidi(bp, 1, 4)
+      local shortMidi, shortDetune = tuning.stepToMidi(bp, 9, 4)
+      t.truthy(tuning.stepClass(bp, shortMidi, shortDetune) ~= tuning.stepClass(bp, rootMidi, rootDetune),
+           'the step 29.6c shy of the octave is a class of its own')
+    end,
+  },
+
+  {
     name = 'shortlist: the key step holds the unison, and the tonic does not move',
     run = function()
       local edo12, diamond = tuning.presets['12EDO'], tuning.genDiamond(9, 7)
 
-      local onC = tuning.shortlist(edo12, diamond, 1, { { pitch = 60 } })
+      local onC = tuning.shortlist(edo12, diamond, 1, { pitch = 60 })
       t.eq(#onC, 1, 'one point of the 9-diamond inside C\'s window')
       nearly(onC[1].cents, 0, 'the unison, octave-reduced')
       nearly(onC[1].strain, 0, 'sitting where the note was written')
       t.deepEq(onC[1].coords, {}, 'the unison names no prime')
 
-      local onG = tuning.shortlist(edo12, diamond, 8, { { pitch = 67 } })
+      local onG = tuning.shortlist(edo12, diamond, 8, { pitch = 67 })
       nearly(onG[1].cents, 700, 'the key moved, so the unison moved with it')
       nearly(onG[1].strain, 0)
 
-      local cUnderG = tuning.shortlist(edo12, diamond, 8, { { pitch = 60 } })
+      local cUnderG = tuning.shortlist(edo12, diamond, 8, { pitch = 60 })
       t.eq(#cUnderG, 1)
       nearly(cUnderG[1].cents, 1198.0450, 'C reads as the 4/3 below the key')
       t.deepEq(cUnderG[1].coords, { [3] = -1 })
@@ -792,7 +830,7 @@ return {
     run = function()
       local edo12, diamond = tuning.presets['12EDO'], tuning.genDiamond(15, 5)
 
-      local onD = tuning.shortlist(edo12, diamond, 1, { { pitch = 62 } })
+      local onD = tuning.shortlist(edo12, diamond, 1, { pitch = 62 })
       t.eq(#onD, 2, '9/8 and 10/9 both inside the window')
       nearly(onD[1].cents, 203.9100, '9/8 first, straining least')
       nearly(onD[1].strain, 0.0782)
@@ -800,7 +838,7 @@ return {
       nearly(onD[2].strain, 0.3519)
       nearly(onD[1].cents - onD[2].cents, 21.5063, 'a syntonic comma between them')
 
-      local bent = tuning.shortlist(edo12, diamond, 1, { { pitch = 62, detune = 30 } })
+      local bent = tuning.shortlist(edo12, diamond, 1, { pitch = 62, detune = 30 })
       t.eq(#bent, 2, 'a note written sharp reads off the step it was written on')
       nearly(bent[1].cents, onD[1].cents)
       nearly(bent[1].strain, onD[1].strain)
@@ -811,10 +849,10 @@ return {
     name = 'shortlist: the hole at the tritone is the target\'s, not the step\'s',
     run = function()
       local edo12 = tuning.presets['12EDO']
-      t.eq(#tuning.shortlist(edo12, tuning.genDiamond(15, 5), 1, { { pitch = 66 } }), 0,
+      t.eq(#tuning.shortlist(edo12, tuning.genDiamond(15, 5), 1, { pitch = 66 }), 0,
            'the 5-limit diamond leaves F# nowhere to go')
 
-      local septimal = tuning.shortlist(edo12, tuning.genDiamond(9, 7), 1, { { pitch = 66 } })
+      local septimal = tuning.shortlist(edo12, tuning.genDiamond(9, 7), 1, { pitch = 66 })
       t.eq(#septimal, 2, 'where prime 7 offers it two')
       nearly(septimal[1].cents, 582.5122, '7/5, the lower of the pair on a tie')
       nearly(septimal[2].cents, 617.4878, '10/7')
@@ -831,7 +869,7 @@ return {
       nearly(above, 58.5540)
 
       local midi, detune = tuning.stepToMidi(mt, 2, 4)
-      local list = tuning.shortlist(mt, tuning.genDiamond(15, 5), 1, { { pitch = midi, detune = detune } })
+      local list = tuning.shortlist(mt, tuning.genDiamond(15, 5), 1, { pitch = midi, detune = detune })
       t.eq(#list, 1)
       nearly(list[1].cents, 111.7313, '16/15, 35.7c above the step')
       nearly(list[1].strain, 0.6094, 'over the upper half, not the lower and not their mean')
@@ -839,30 +877,30 @@ return {
   },
 
   {
-    name = 'shortlist: a strand takes the intersection of its notes, and the strain of the worst',
+    name = 'shortlist: one window serves the strand, in every register',
     run = function()
       local edo12, diamond = tuning.presets['12EDO'], tuning.genDiamond(15, 5)
-      local pair = tuning.shortlist(edo12, diamond, 1, { { pitch = 60 }, { pitch = 72 } })
-      t.eq(#pair, 1, 'an octave period puts the same window in every register')
-      nearly(pair[1].strain, 0)
+      local low  = tuning.shortlist(edo12, diamond, 1, { pitch = 62 })
+      local high = tuning.shortlist(edo12, diamond, 1, { pitch = 74 })
+      t.eq(#low, 2, 'the rival spellings of D')
+      t.eq(#high, #low, 'which the octave above reads alike, the line being octave-reduced')
+      for i, candidate in ipairs(low) do
+        nearly(high[i].cents,  candidate.cents)
+        nearly(high[i].strain, candidate.strain)
+      end
 
       local bp     = bp13()
-      local target = { pitches = { '1/1', '28/27', '16/15' } }
       local am, ad = tuning.stepToMidi(bp, 1, 4)
       local bm, bd = tuning.stepToMidi(bp, 9, 4)
       t.eq(am, 60, 'step 1 is C4')
       t.eq(bm, 72)
-      nearly(bd, -29.5662, 'and the step an octave up is 29.6c flat of C5')
+      nearly(bd, -29.5662, 'and the step nearest an octave up is 29.6c flat of C5')
 
-      local lower = tuning.shortlist(bp, target, 1, { { pitch = am, detune = ad } })
-      t.eq(#lower, 2, 'the lower note reaches 28/27 as well')
-      nearly(lower[1].strain, 0, 'and strains none on the unison')
-
-      local strand = tuning.shortlist(bp, target, 1, { { pitch = am, detune = ad },
-                                                       { pitch = bm, detune = bd } })
-      t.eq(#strand, 1, 'which the upper note, on a step of its own, excludes')
-      nearly(strand[1].cents, 0)
-      nearly(strand[1].strain, 0.4042, 'the strain of the note that strains most')
+      local target = { pitches = { '1/1', '28/27', '16/15' } }
+      t.eq(#tuning.shortlist(bp, target, 1, { pitch = am, detune = ad }), 2,
+           'the step below reaches 28/27 as well')
+      t.eq(#tuning.shortlist(bp, target, 1, { pitch = bm, detune = bd }), 1,
+           'where the step above, a class of its own, reads its own window')
     end,
   },
 }

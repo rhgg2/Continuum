@@ -27,9 +27,10 @@ step it was written on.**
 
 5. Behind the command is a pure function, strands in and a choice per
    strand out (§ The strand). Points and their placement belong to
-   `tuning.lua`, since the solver carries no tuning vocabulary; strand
-   assembly happens in the command, so that neither of the others need
-   hold the notes and their times.
+   `tuning.lua`, since the solver carries no tuning vocabulary. The
+   solver's module also groups notes into strands. The command carries
+   each note's class between the two, and asks `tuning.lua` for each
+   strand's shortlist.
 
 6. Detune is not realised beyond lane-1 notes; that is the author's
    problem, not the function's.
@@ -262,9 +263,10 @@ step it was written on.**
 
 1. The cost lives on a whole sonority at once rather than on its pairs.
 
-2. A **step-class** is a step of the notation together with every step
-   an octave from it. Take the sonority current at an onset to be the
-   last `n` distinct step-classes struck, together with every class
+2. A **step-class** is a step of the notation together with every step an
+   exact octave from it, recovered from a note's written seat reduced into
+   the octave (§ The window). Take the sonority current at an onset to be
+   the last `n` distinct step-classes struck, together with every class
    still sounding.
 
 3. The score quotients out the octave (§ What "in tune" means), so a
@@ -346,13 +348,16 @@ step it was written on.**
    which retunes freely: one step takes one tuning under the ii and
    another under the V.
 
-4. A note held across a chord change therefore bends the harmony to it
+4. A note released where the next is struck does not overlap it, the
+   release being half-open as the sonority reads it (§ The model).
+
+5. A note held across a chord change therefore bends the harmony to it
    rather than the reverse. Under a 5-limit target, at `n` one above the
    arity, a D held from D–F–A into G–B♭–D keeps the 10/9 the first chord
    gives it. Restruck it would take the 9/8 the second chord prefers, so
    the hold costs that chord 0.737 of box.
 
-5. The strand is what earns the collapse to step-classes: an entry
+6. The strand is what earns the collapse to step-classes: an entry
    carries one tuning at a time only because every note that could write
    it agrees.
 
@@ -372,9 +377,9 @@ step it was written on.**
    own position on the line, not an offset from a note: a strand's notes
    may sit on different steps, and no offset then serves them all. It
    carries its **strain**
-   too: its distance from the step the strand's notes were written on,
-   as a fraction of the half-width of their window on that side
-   (§ The window).
+   too: its distance from the step the strand was written on, as a
+   fraction of the half-width of that step's window on the side it lies
+   on (§ The window).
 
 4. A strand arrives as `{ notes, class, shortlist }`. The **notes** are
    the note events themselves, each carrying when it is struck and when
@@ -400,21 +405,20 @@ step it was written on.**
    `(pitch, detune)` on every note of the strand, each in its own
    register.
 
-9. Building a strand's shortlist — the target's points, in every octave,
-   that fall inside the windows of all its notes (§ The window) — is
+9. Building a strand's shortlist — the target's points that fall inside
+   the window of the step it was written on (§ The window) — is
    `tuning.lua`'s work, and the only place the notation and the target
    meet. Strain is computed in the same pass, the window's half-widths
    being at hand there and nowhere else.
 
-10. Those windows coincide wherever the notation's period divides the
-   octave, the scale then repeating identically in every register.
+10. One window serves the whole strand. Its notes stand exact octaves
+    apart on one step of the notation, so the window folds onto itself in
+    every register and one of them answers for all.
 
-11. Where it does not, a step usually has no octave among the scale's
-    steps at all, and a strand gathers unisons only. Where one does fall
-    an octave away it is a different step with different neighbours, so
-    the two windows differ and their intersection can be narrower than
-    either, or empty. A candidate's strain is then the largest its notes
-    give it, the pull answering to the note that strains most.
+11. Where the notation's period is not the octave, no step usually stands
+    an exact octave from another, and a strand gathers unisons only. A
+    step a near-octave away — Bohlen-Pierce's ninth, 29.6¢ shy of it — is
+    a class of its own.
 
 12. Fixing a strand is a shortlist of one, and nothing in the solver
     distinguishes it. The collar (§ Seams) arrives as strands of one.

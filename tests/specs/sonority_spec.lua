@@ -92,6 +92,14 @@ local function shifted(coordSet, prime, by)
   return out
 end
 
+-- A note as the command hands it over, which the grouping holds by reference.
+local function event(ppq, pitch, endppq)
+  return { ppq = ppq, pitch = pitch, endppq = endppq }
+end
+
+-- The pitch class, which is what a step-class comes to under an octave notation.
+local function pitchClass(note) return note.pitch % 12 end
+
 -- A strand as the walk reads it: notes given as { ppq, pitch, endppq }, under
 -- the step-class they share. The shortlist is the solve's business rather than
 -- the walk's, so these carry none.
@@ -400,6 +408,44 @@ return {
       near(sonority.score{ major[1], major[2], major[3], { [3] = 1 } }, 3.91, 'G doubled an octave up')
       near(sonority.score{ { [3] = 1 } }, 0, 'one pitch spans nothing')
       near(sonority.score{}, 0, 'and neither does none')
+    end,
+  },
+
+  {
+    name = 'strands: a class chains through its overlaps and splits where they stop',
+    run = function()
+      local held  = event(0,   60, 480)
+      local over  = event(240, 72, 720)
+      local late  = event(600, 60, 900)
+      local after = event(900, 60, 1000)
+
+      local strands = sonority.strands({ after, over, late, held }, pitchClass)
+      t.eq(#strands, 2, 'the chain, and the note struck where it is released')
+      t.eq(#strands[1].notes, 3, 'held reaches over, and over reaches late')
+      t.eq(strands[1].notes[1], held, 'the notes are the events themselves, in strike order')
+      t.eq(strands[1].notes[2], over)
+      t.eq(strands[1].notes[3], late)
+      t.eq(strands[1].class, 0, 'under the class they share')
+      t.eq(strands[1].shortlist, nil, 'whose shortlist is the command\'s to fill')
+      t.eq(#strands[2].notes, 1, 'a note struck at a release overlaps nothing')
+      t.eq(strands[2].notes[1], after)
+    end,
+  },
+
+  {
+    name = 'strands: classes never share one, and the order does not follow the input',
+    run = function()
+      local c     = event(0,   60, 960)
+      local e     = event(0,   64, 960)
+      local g     = event(480, 67, 960)
+      local eHigh = event(960, 76, 1200)
+
+      local strands = sonority.strands({ g, eHigh, e, c }, pitchClass)
+      t.eq(#strands, 4, 'three classes sounding together, and E again after them')
+      t.eq(strands[1].class, 0); t.eq(strands[1].notes[1], c)
+      t.eq(strands[2].class, 4); t.eq(strands[2].notes[1], e)
+      t.eq(strands[3].class, 4); t.eq(strands[3].notes[1], eHigh)
+      t.eq(strands[4].class, 7); t.eq(strands[4].notes[1], g)
     end,
   },
 
