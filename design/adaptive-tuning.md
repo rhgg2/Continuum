@@ -214,6 +214,14 @@ step it was written on.**
    point with a prime factor above 5, and holds 13 points rather than
    49.
 
+7. What a diamond costs is therefore the points that survive the filter,
+   not the odd limit that admits them: at odd limit 31 the 5-limit
+   diamond holds 25 points where the unfiltered one holds 213. A hundred
+   points put ten rivals in the widest 12-EDO window, which at sonority
+   size 6 is 100,000 placements — half the budget of § Solving it, and
+   past it at 7. So a hundred is where authoring one stops, and the
+   21-odd-limit diamond, at 95, is the largest that fits.
+
 ## Choosing the target chooses the theory
 
 1. Score the common chords two ways: with prime 5 admitted, and with

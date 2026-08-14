@@ -662,22 +662,31 @@ local function drawCpsFields()
   if rvE then c.equave = e end
 end
 
--- Past this the diamond is a curiosity: 31 already holds 213 points.
-local DIAMOND_MAX = 31
+-- The points that survive the prime filter are what a diamond costs, not the odd limit;
+-- 100 admits Partch's 21-odd-limit diamond (95) but nears the solver's budget. see design/adaptive-tuning.md § The diamond
+local DIAMOND_MAX_POINTS = 100
+
+-- The odd limit carries a ceiling of its own, since the double loop runs before there
+-- are any points to count: at 199 the unfiltered build is 37ms, one dropped frame.
+local DIAMOND_MAX_ODD = 199
 
 -- Validate the two limits and build the diamond, memoised on them: both the points
 -- readout and buildGen ask every frame, and the build is quadratic in the odd limit.
 local diamondMemo = {}
 local function diamondGen(d)
   local odd, prime = tonumber(d.odd), tonumber(d.prime)
-  if not (odd and odd == math.floor(odd) and odd % 2 == 1 and odd >= 1 and odd <= DIAMOND_MAX) then
-    return nil, 'odd limit: odd number to ' .. DIAMOND_MAX
+  if not (odd and odd == math.floor(odd) and odd % 2 == 1 and odd >= 1 and odd <= DIAMOND_MAX_ODD) then
+    return nil, 'odd limit: odd number to ' .. DIAMOND_MAX_ODD
   end
   if not (prime and prime == math.floor(prime) and prime >= 3) then return nil, 'prime limit: 3 or more' end
   if diamondMemo.odd ~= odd or diamondMemo.prime ~= prime then
     diamondMemo = { odd = odd, prime = prime, gen = tuning.genDiamond(odd, prime) }
   end
-  return diamondMemo.gen
+  local gen = diamondMemo.gen
+  if #gen.pitches > DIAMOND_MAX_POINTS then
+    return nil, #gen.pitches .. ' points: over ' .. DIAMOND_MAX_POINTS .. ', lower a limit'
+  end
+  return gen
 end
 
 local function drawDiamondFields()
