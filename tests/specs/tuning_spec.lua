@@ -774,6 +774,75 @@ return {
   },
 
   {
+    name = 'height: what the odd primes of a ratio cost, over the coords that name them',
+    run = function()
+      nearly(tuning.height{}, 0, 'the unison names no prime')
+      nearly(tuning.height{ [3] = 1 }, 1.5850, '3/2')
+      nearly(tuning.height{ [3] = -1 }, 1.5850, '4/3, the same move inverted')
+      nearly(tuning.height{ [5] = 1 }, 2.3219, '5/4')
+      nearly(tuning.height{ [5] = 2 }, 4.6439, 'two major thirds cost two major thirds')
+      nearly(tuning.height{ [3] = 1, [5] = 1 }, 3.9069, '15/8')
+      nearly(tuning.height(tuning.coords('9/6')), tuning.height(tuning.coords('3/2')),
+             'the terms are the reduced ratio\'s')
+    end,
+  },
+
+  {
+    name = 'moves: every pitch a move, and every move\'s inversion beside it',
+    run = function()
+      local ms = tuning.moves{ pitches = { '1/1', '3/2' } }
+      t.eq(#ms, 3, 'the unison is its own inversion, so it appears once')
+      t.deepEq(ms[1].coords, {}, 'and names no prime')
+      nearly(ms[1].cents, 0)
+      nearly(ms[2].cents, 498.0450, '4/3, the fifth inverted and reduced into the octave')
+      t.deepEq(ms[2].coords, { [3] = -1 }, 'the fifth\'s coords negated')
+      nearly(ms[3].cents, 701.9550, '3/2 as the temper wrote it')
+      t.deepEq(ms[3].coords, { [3] = 1 })
+    end,
+  },
+
+  {
+    name = 'moves: two pitches naming one interval are one move',
+    run = function()
+      t.eq(#tuning.moves{ pitches = { '1/1', '3/2', '4/3' } }, 3,
+           'a temper holding a move and its inversion keeps one of each')
+      t.eq(#tuning.moves{ pitches = { '1/1', '3/2', '9/6' } }, 3,
+           'an unreduced token states the move it sounds')
+      t.eq(#tuning.moves{ pitches = { '1/1', '2/1' } }, 1,
+           'the octave moves nothing the coords can see')
+    end,
+  },
+
+  {
+    name = 'moves: simplest first, the last move stating the complexity bound',
+    run = function()
+      local ms = tuning.moves{ pitches = { '1/1', '25/16', '3/2', '5/4' } }
+      t.eq(#ms, 7, 'three intervals and their inversions, over the unison')
+      for i = 2, #ms do
+        t.truthy(ms[i].height >= ms[i - 1].height, 'height ascends at ' .. i)
+      end
+
+      nearly(ms[4].height, 2.3219, '5/4')
+      nearly(ms[4].cents, 386.3137)
+      nearly(ms[5].height, 2.3219, '8/5 reads alike, and sits beside it')
+      nearly(ms[5].cents, 813.6863)
+
+      nearly(ms[#ms].height, 4.6439, '25/16 bounds the set at two major thirds')
+      nearly(ms[#ms].cents, 772.6274)
+      t.deepEq(ms[#ms].coords, { [5] = 2 })
+    end,
+  },
+
+  {
+    name = 'moves: a temper holding a pitch that is not a ratio is no move set',
+    run = function()
+      t.eq(pcall(tuning.moves, { pitches = { '1/1', '701.955' } }), false, 'cents')
+      t.eq(pcall(tuning.moves, { pitches = { '1/1', '7\\12' } }), false, 'equal divisions')
+      t.eq(pcall(tuning.moves, tuning.genDiamond(9, 7)), true, 'the diamond is ratios throughout')
+    end,
+  },
+
+  {
     name = 'stepClass: an exact octave shares a class, and nothing else does',
     run = function()
       local edo12 = tuning.presets['12EDO']

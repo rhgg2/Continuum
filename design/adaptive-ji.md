@@ -156,7 +156,11 @@ written on.**
    `5/4` and `8/5` are one move and its inversion, and both read 2.32.
    A move set's **complexity bound** is the largest height it holds.
 
-5. The bound does not fix the primes. Every figure here is measured over
+5. The terms are the reduced ratio's. A generator stating its points over
+   a common root emits `9/6` for the fifth, and read literally that is
+   4.75 rather than the 1.58 the move sounds.
+
+6. The bound does not fix the primes. Every figure here is measured over
    a move set holding all of 3, 5 and 7 under a stated bound, and prime
    11 would displace them: `11/8` reads 3.46 and sounds a tritone as one
    move, where nothing on 3, 5 and 7 sounds one under 3.91.

@@ -33,26 +33,13 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-15 tuning: read a ratio temper as a move set (§ Where a move set comes from)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- `tuning.moves(temper)` reads a ratio temper as a move set (§ Where a
-  move set comes from): every pitch as a move, every move's inversion
-  beside it, deduped by coords, each carrying its coords and its
-  octave-reduced cents. The list is sorted by octave-free Tenney height
-  — the base-2 logarithm of the product of the odd parts of the two
-  terms — so a move set's complexity bound is the height of its last
-  move, and a strand's candidates arrive simplest-first (§ What makes
-  the candidate set finite). A temper `tuning.isTarget` rejects is
-  refused. Spec: `1/1` self-inverse and appearing once; `3/2` yielding
-  `4/3`'s coords negated; a temper holding both keeping one; `5/4` and
-  `8/5` both reading 2.32 where `25/16` reads 4.64; a cents token
-  refused.
 
 - `tuning.reach(notation, moves, anchors, note, offset)` gives the
   candidates one move reaches from the strands already placed in a

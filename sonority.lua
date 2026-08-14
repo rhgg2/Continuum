@@ -7,39 +7,30 @@
 --shape: Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, the last n struck and whatever else still sounds
 --shape: Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }
 
-local util = require 'util'
+local util    = require 'util'
+local tuning  = require 'tuning'
 local sonority = {}
 
 ----- The box
 
--- log₂ p, the ear's distance to a prime; memoised, the solve scoring in its inner loop.
-local weights = {}
-local function weight(prime)
-  local w = weights[prime]
-  if not w then w = math.log(prime, 2); weights[prime] = w end
-  return w
-end
-
--- The axes are gathered before any is measured: a member holding no exponent on
--- an axis sits at 0 there, and that 0 is only in the span once the axis is known
--- to exist — an axis every member names does not reach back to the origin.
---contract: coords[] → Σ over the odd primes of (highest exponent − lowest) × log₂ p
+-- The axes are gathered before any is measured, so an axis no member names doesn't reach
+-- back to 0; the spans are the octave-free lcm/gcd's coords, whose height tuning.height gives.
+--contract: coords[] → tuning.height of the coords of the set's octave-free lcm/gcd
 function sonority.score(coordSet)
-  local primes = {}
+  local spans = {}
   for _, coords in ipairs(coordSet) do
-    for prime in pairs(coords) do primes[prime] = true end
+    for prime in pairs(coords) do spans[prime] = 0 end
   end
-  local total = 0
-  for prime in pairs(primes) do
+  for prime in pairs(spans) do
     local high, low = coordSet[1][prime] or 0, coordSet[1][prime] or 0
     for i = 2, #coordSet do
       local exponent = coordSet[i][prime] or 0
       if exponent > high then high = exponent end
       if exponent < low  then low  = exponent end
     end
-    total = total + (high - low) * weight(prime)
+    spans[prime] = high - low
   end
-  return total
+  return tuning.height(spans)
 end
 
 ----- The strands

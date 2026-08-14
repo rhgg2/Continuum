@@ -585,12 +585,80 @@ function tuning.coords(token)
   return coords
 end
 
+-- log₂ p, the ear's distance to a prime; memoised, the solve scoring in its inner loop.
+local weights = {}
+local function weight(prime)
+  local w = weights[prime]
+  if not w then w = math.log(prime, 2); weights[prime] = w end
+  return w
+end
+
+-- Read off the coords, so an unreduced token costs the interval it sounds, not its terms.
+-- See design/adaptive-ji.md § What makes the candidate set finite.
+--contract: coords → the octave-free Tenney height of the ratio they name: Σ |exponent| × log₂ p
+function tuning.height(coords)
+  local total = 0
+  for prime, exponent in pairs(coords) do
+    total = total + math.abs(exponent) * weight(prime)
+  end
+  return total
+end
+
 --contract: true when every pitch of `temper` is a ratio, so its points carry coords to score
 function tuning.isTarget(temper)
   for _, token in ipairs(temper.pitches) do
     if not tuning.coords(token) then return false end
   end
   return true
+end
+
+-- Coords fix a ratio up to the octave, so they identify a move outright: same coords,
+-- same reduced cents. Sorted, so a temper's two spellings of one move key alike.
+local function coordKey(coords)
+  local primes = util.keys(coords)
+  table.sort(primes)
+  local parts = {}
+  for _, prime in ipairs(primes) do
+    util.add(parts, prime)
+    util.add(parts, coords[prime])
+  end
+  return util.key(table.unpack(parts))
+end
+
+-- A move set read as intervals from its unison, per design/adaptive-ji.md § Where a move
+-- set comes from; an inversion carries the same height, so it sorts beside the move it inverts.
+--contract: a ratio temper read as intervals from its unison: {cents, coords, height} per move
+--contract: every pitch and its inversion, deduped by coords; cents octave-reduced
+--contract: simplest first by height, so the last move states the set's complexity bound
+--contract: raises where a pitch is not a ratio, isTarget being what a move set must pass
+function tuning.moves(temper)
+  if not tuning.isTarget(temper) then
+    error('tuning.moves: every pitch of a move set must be a ratio')
+  end
+
+  local moves, seen = {}, {}
+  local function admit(cents, coords)
+    local key = coordKey(coords)
+    if seen[key] then return end
+    seen[key] = true
+    util.add(moves, { cents  = reduceCents(cents, OCTAVE),
+                      coords = coords,
+                      height = tuning.height(coords) })
+  end
+
+  for _, token in ipairs(temper.pitches) do
+    local coords  = tuning.coords(token)
+    local inverse = {}
+    for prime, exponent in pairs(coords) do inverse[prime] = -exponent end
+    admit(tuning.scalaPitch(token), coords)
+    admit(-tuning.scalaPitch(token), inverse)
+  end
+
+  table.sort(moves, function(a, b)
+    if a.height ~= b.height then return a.height < b.height end
+    return a.cents < b.cents
+  end)
+  return moves
 end
 
 -- The gap from a seat to a point of the octave-reduced line, signed and reduced so a
