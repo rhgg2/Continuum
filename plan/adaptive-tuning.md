@@ -23,9 +23,10 @@
    factoriser and the eligibility predicate answered from it, shortlists
    in `tuning.lua` and strands assembled by the command, the target, key,
    sonority-size and harmonic-lock slots on the modal, and the chosen
-   candidate seated as `(pitch, detune)`.  ← in flight
+   candidate seated as `(pitch, detune)`. — landed 2026-08-14, six
+   commits.
 5. **Phase 5 — Seams** (§ Seams) — the collar as strands of one, and the
-   serial sweep across takes in take order.
+   serial sweep across takes in take order.  ← in flight
 6. **Phase 6 — The annealer** (§ Solving it 9) — the fallback past the
    stated budget on the state count, which ordinary material does not
    reach.

@@ -1,8 +1,9 @@
 # Design — Adaptive just intonation
 
-> opened: 2026-08-11 · status: working design — unstarted, behind the
-> command `design/adaptive-tuning.md` has built; the state counts of
-> § What it costs to solve await re-measurement
+> opened: 2026-08-11 · status: in flight — plan/adaptive-ji.md, at
+> phase 1 (the move set), behind the command
+> `design/adaptive-tuning.md` has built; the state counts of § What it
+> costs to solve await re-measurement
 
 **Tune a selection so that the notes of each sonority are joined by pure
 intervals from a stated set, letting those intervals compose into
