@@ -12,6 +12,16 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-14** — A single-column clip records the parts its span covered, not the kind of column it
+  came from. The enum of column kinds — `note`, `notevel`, `7bit`, `pb` — could express two of a note
+  column's four parts, so a span ending in the delay part copied as pitch-only and lost the velocity
+  it had covered, a delay-only span pasted as nothing at all, and the `'*'` sentinel fell through to
+  `7bit` and crashed on paste. Parts also settle what fills a gap: an excluded lane takes the
+  destination's running value, while a field whose part the column doesn't show rides with the note,
+  since a span can only exclude what it could address. Rejected: matching the span's endpoints
+  against `(pitch, vel)`, which needs a new member per part pair and leaves the hidden-part case
+  undecided.
+
 - **2026-08-12** — The undo label sits on the view verb that makes the edit, not on the command that
   starts it. `registerAll`'s tuple form wraps the command's body, so a body that only opens a modal
   closes its block before the edit arrives in the callback — which is how quantize's whole-take

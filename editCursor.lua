@@ -15,8 +15,8 @@
 --shape: selection = { row1, row2, col1, col2, part1, part2 }  -- inclusive both axes
 --invariant: sel.part1/part2 are part names, or '*' sentinel under hBlock=2/3
 --shape: selAnchor = { row, col, stop }  -- fixed end of an active selection
---shape: clip.single = { mode='single', type, numRows, events=[clipEvent,...] }
---invariant: clip.single.type ∈ {'note', '7bit', 'pb'}
+--shape: clip.single = { mode='single', parts, numRows, events=[clipEvent,...] }
+--invariant: clip.single.parts = the parts the span covered, in column order
 --shape: clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }
 --shape: clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }
 --invariant: clipColEntry.key: note→lane-pos, cc→cc#, nil for singletons

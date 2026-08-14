@@ -111,16 +111,58 @@ The mode is decided at copy by the resolved selection: one column
 means **single**, multiple means **multi**. They paste differently
 because they encode different intents:
 
-- **single** — "these values, on this kind of part." Dispatch is by
-  `(clip.type, dstCol.type, cursorPart)`. A note→note paste drops
-  pitches; a 7bit→note paste drops velocities (via `pasteVelocities`,
-  with PA emission on sustain rows when polyAftertouch is on); a
-  pb→pb paste drops pitch-bend values; mismatched combos silently
-  no-op.
+- **single** — "these parts, from this column." The clip records
+  `parts`: the parts the span covered, in column order. It carries the
+  fields those parts own, and nothing else.
 - **multi** — "this rectangle of channels." Each clip col carries
   `chanDelta` from the leftmost source channel, and the cursor's
   channel becomes the leftmost destination. Out-of-range channels
-  and missing destinations skip silently.
+  and missing destinations skip silently. A multi entry always carries
+  whole cells; there is no per-part split at this granularity.
+
+### Lanes, and what fills the gap
+
+A note column's parts are `pitch`, `vel`, and — when the column shows
+them — `sample` and `delay`. Every part but `pitch` is a **lane**: a
+column of values laid over the notes, editable on its own. A span
+covering `pitch` carries notes; a span that doesn't carries lane
+values, to impose on the notes already at the destination.
+
+A lane the span excluded is dropped at copy and filled at paste from
+the destination's own running value — the lane's value at the last
+note-on before the pasted region, carried forward through it. That is
+what makes a pitch-only paste "impose a new set of notes on a
+collection of velocities", and a vel-only paste its converse.
+
+Fields with no part — detune, the note's duration — are not lanes, and
+ride with the note whenever pitch does. So does a field whose part the
+column isn't showing: a span can only exclude what it could address,
+so with the delay part hidden a copied note keeps its delay and a
+duplicated passage keeps its groove. The `'*'` sentinel (hBlock 2/3)
+addresses no part in particular, and so covers them all.
+
+### Where a part pastes
+
+Lane values land in the destination lane anchored at the cursor's
+part, each further part of the clip in the part after it. A part
+writes into its own name, with one exception: `vel` and `val` are both
+7-bit lane values and interchange, so a velocity span pastes into a cc
+lane and a cc span into a velocity column. Everything else — a pb span
+onto a cc column, a delay span onto a velocity column — skips.
+
+The destination decides how a lane is written. On a note column the
+lane is a view onto notes, so the values are assigned to the note-ons
+already in the region, and a value landing on a sustain row becomes a
+PA event when `polyAftertouch` is on. On a cc or pb column the events
+*are* the lane, so the region's events are replaced outright and their
+metadata rides through.
+
+A clip carrying notes replaces the region's notes wholesale. Deletion
+is direct rather than via `queueDeleteNotes`, whose survivor-extension
+fixup is for leaving a hole where this fills one. Neither the pasted
+note's tail nor its predecessor's is pre-trimmed: `endppq` is the
+authored intent, and tm's universal tail pass clips the realised
+note-off against whatever blocks it, then regrows it when that goes.
 
 ## Persistence
 
@@ -134,3 +176,11 @@ the script doesn't lose the last copy.
 is stripped at paste; everything else round-trips. So custom
 metadata on a source event survives a copy/paste cycle without the
 clipboard layer needing to know what it is.
+
+Each reserved group has its own reason: position (`ppq`/`endppq`)
+rebuilds from `row` at paste; identity (`chan`/`rpb`/`lane`/`cc`) and
+kind (`type`/`evType`) are the destination's to decide, not the
+source's; REAPER bookkeeping (`idx`/`uuid`/`uuidIdx`/`realised`) must
+not round-trip regardless. Do not allowlist event payload instead —
+the list stays small and rule-based so unknown fields keep riding
+through.

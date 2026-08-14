@@ -388,27 +388,10 @@ paste decodes them into the **destination column's** frame via
 destination have different effective swings, because both sides go
 through `(row, chan)`.
 
-Two clip modes:
-
-- **single** — one column selected. `type` ∈ `{ note, 7bit, pb }`;
-  the selgrp at copy time picks `note` vs `7bit` for note columns.
-- **multi** — multiple columns. Each entry carries `chanDelta`
-  (relative to leftmost source channel) and a `key`: lane index for
-  notes, cc number for ccs, nil for singletons.
-
-Paste heuristics:
-
-| clip.type | dstCol.type   | selgrp | behaviour                                      |
-|-----------|---------------|--------|------------------------------------------------|
-| note      | note          | 1      | wipe region, write notes with carried velocities |
-| pb        | pb            | *      | wipe region, write pb stream                   |
-| 7bit      | cc / at / pc  | *      | wipe region, write val stream                  |
-| 7bit      | note          | 2      | `pasteVelocities` — carry-forward onto note-ons, optionally synth PAs on sustain rows |
-
-Multi paste resolves each clip col via `chanDelta` from the cursor's
-channel; destinations missing (out-of-range channel, no matching
-cc/singleton column) are skipped. Notes anchor to the cursor's lane,
-other clip cols shift relative.
+A clip is single (one column, recording the parts its span covered) or
+multi (a rectangle of channels, each entry rebased by `chanDelta`).
+What a clip carries and where each part pastes is the clipboard's own
+model: see docs/editCursor.md § Clipboard: single vs multi.
 
 `duplicate(dir)` copies the selection to the adjacent block without
 touching the user clipboard: it calls `clipboard:collect()` and

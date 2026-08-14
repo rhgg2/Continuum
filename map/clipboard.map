@@ -1,177 +1,225 @@
-@module clipboard  src=clipboard.lua  loc=488  mode=chunk  self=clipboard
+@module clipboard  src=clipboard.lua  loc=574  mode=chunk  self=clipboard
 @deps ec, grid, tm, cm, currentRpb, getCtx, edit, aliases, fx
 
 # Invariants & contracts
   @invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise  @ 4
   @invariant  clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row  @ 5
   @invariant  single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi  @ 6
-  @invariant  single.type ∈ { 'note', '7bit', 'pb' } — note/vel split decided at copy by region's part1  @ 7
-  @invariant  multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination  @ 8
-  @invariant  CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips  @ 9
-  @invariant  velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations  @ 10
+  @invariant  single.parts = the parts the span covered, in column order  @ 7
+  @invariant  a single clip carries notes iff parts[1] == 'pitch'  @ 8
+  @invariant  a lane the span excluded is dropped at copy, filled at paste from the destination  @ 9
+  @invariant  a field whose part the column doesn't show can't be excluded — it rides with the note  @ 10
+  @invariant  multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination  @ 11
+  @invariant  CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips  @ 12
+  @invariant  laneEvent synthesises, never clones — no note payload may ride onto a cc destination  @ 13
 
 # Imports
-  @require util = 'util'  @ 11
+  @require util = 'util'  @ 14
 
 # Private state
-  @state CLIP_RESERVED = {  @ 19
-  @state CLIP_ARTIFACTS = { row = true, endRow = true }  @ 30
-  @state ec = deps.ec  @ 36
-  @state grid = deps.grid  @ 37
-  @state tm = deps.tm  @ 38
-  @state cm = deps.cm  @ 39
-  @state currentRpb = deps.currentRpb  @ 40
-  @state getCtx = deps.getCtx  @ 41
-  @state edit = deps.edit  @ 42   -- leaf-edit facade: routes add/delete/assign to gm or tm by cell kind
-  @state aliases = deps.aliases  @ 43   -- (cells) -> bool: refuse a paste whose footprint aliases one group
-  @state fx = deps.fx  @ 44   -- { gather(r1,r2,c1,c2,anchorChan), paste(list) }: fx regions ride the clip
-  @state clipboard = {}  @ 471
+  @state CLIP_RESERVED = {  @ 18
+  @state CLIP_ARTIFACTS = { row = true, endRow = true }  @ 29
+  @state PART_FIELD = { pitch = 'pitch', vel = 'vel', sample = 'sample',  @ 33
+  @state COMPATIBLE = {  @ 38
+  @state ec = deps.ec  @ 52
+  @state grid = deps.grid  @ 53
+  @state tm = deps.tm  @ 54
+  @state cm = deps.cm  @ 55
+  @state currentRpb = deps.currentRpb  @ 56
+  @state getCtx = deps.getCtx  @ 57
+  @state edit = deps.edit  @ 58   -- leaf-edit facade: routes add/delete/assign to gm or tm by cell kind
+  @state aliases = deps.aliases  @ 59   -- (cells) -> bool: refuse a paste whose footprint aliases one group
+  @state fx = deps.fx  @ 60   -- { gather(r1,r2,c1,c2,anchorChan), paste(list) }: fx regions ride the clip
+  @state clipboard = {}  @ 557
 
 # Private functions
-  @fn save(clip)  @ 46-48
-  @fn load()  @ 50-54
-  @fn collect()  @ 57-167
-      @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.  @ 56
-  @fn refusePaste(chan, evType, lane, cc, startRow, numRows)  @ 172-179
+  @fn save(clip)  @ 62-64
+  @fn load()  @ 66-73
+  -- Lanes
+  @fn isNoteOn(evt)  @ 78-80
+      -- A note-on carries the lane values; a note-off spells itself vel 0.
+  @fn laneRest(part)  @ 83-85
+      -- Only velocity has a configured resting value; other lanes rest at zero.
+  @fn laneValue(part, v)  @ 89-93
+      -- vel 0 is a note-off rather than a velocity, so it neither survives the
+      -- clamp nor displaces the running value. Other lanes take what they're given.
+  @fn carrier(series, seed)  @ 97-103
+      -- Step a ppq-sorted series with carry-forward: the value at any ppq is the
+      -- last one at or before it, seeded from before the region.
+  @fn spannedParts(col, part1, part2)  @ 107-119
+      -- The parts a span covered, in column order. The '*' sentinel addresses no
+      -- part in particular, so it covers them all.
+  @fn collect()  @ 122-241
+      @contract  nil if empty; single-col -> {mode='single',parts}; multi-col -> {mode='multi',cols}.  @ 121
+  @fn refusePaste(chan, evType, lane, cc, startRow, numRows)  @ 246-253
       -- One footprint cell per destination row, fed to aliases() so a paste covering
       -- >=2 instances of one group is refused in global mode (decision 5). Mirrors the
       -- shiftEvents gate; see design/group-aware-editing.md § Injectivity predicate.
-  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 182-223
-      @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set  @ 181
-  @fn pasteSingle(clip)  @ 226-315
-      @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.  @ 225
-  @fn pasteMulti(clip)  @ 318-436
-      @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.  @ 317
-  @fn pasteClip(clip)  @ 438-443
-  @fn trimTop(clip, trim)  @ 447-467
+  @fn destCarrier(dstCol, part, startppq, endppq)  @ 257-265
+      -- The destination lane's own running value across the region, seeded from
+      -- the event before it. Values are snapshotted: their events are about to go.
+  @fn emitSustainPA(dstCol, values)  @ 268-277
+      @contract  a value on a sustain row becomes PA on its host note; onset rows are the note's own  @ 267
+  @fn assignLane(dstCol, part, values, startppq, endppq)  @ 280-294
+      @contract  carry-forward over the note-ons in region; vel additionally clears and re-emits PA  @ 279
+  @fn replaceLane(dstCol, part, srcField, events, startppq, endppq)  @ 297-311
+      @contract  replaces the region's events with the clip's, under the destination's identity and field  @ 296
+  @fn pasteNotes(dstCol, events, startppq, endppq)  @ 315-340
+      -- see docs/editCursor.md § Clipboard: single vs multi
+      @contract  replaces the region's notes; lanes the clip omits take the destination's running value  @ 313
+  @fn pasteLanes(clip, dstCol, events, startppq, endppq)  @ 343-365
+      @contract  clip parts write into the destination parts from the cursor's onward; incompatible skip  @ 342
+  @fn pasteSingle(clip)  @ 369-401
+      -- see docs/editCursor.md § Clipboard: single vs multi
+      @contract  a clip carrying notes replaces the region's; a lane clip writes into the cursor's lane  @ 367
+  @fn pasteMulti(clip)  @ 404-522
+      @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.  @ 403
+  @fn pasteClip(clip)  @ 524-529
+  @fn trimTop(clip, trim)  @ 533-553
       -- A note whose start row falls within the trimmed band is dropped entirely.
-      @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative  @ 445
+      @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative  @ 531
 
 # Public API (clipboard:*)
-  @api clipboard:collect()  @ 472
-  @api clipboard:copy()  @ 473
-  @api clipboard:pasteClip(clip)  @ 474
-  @api clipboard:trimTop(clip, trim)  @ 475
-  @api clipboard:registerCommands(scope)  @ 477-486
+  @api clipboard:collect()  @ 558
+  @api clipboard:copy()  @ 559
+  @api clipboard:pasteClip(clip)  @ 560
+  @api clipboard:trimTop(clip, trim)  @ 561
+  @api clipboard:registerCommands(scope)  @ 563-572
 
 # Uses (outbound edges)
-  @use call    cm:get  @ pasteVelocities:184,206 pasteSingle:263
-  @use call    ec:col  @ pasteSingle:228 pasteMulti:320
-  @use call    ec:cursorPart  @ pasteSingle:234
-  @use call    ec:eachSelectedCol  @ collect:133
-  @use call    ec:isSticky  @ registerCommands:481
-  @use call    ec:region  @ collect:59
-  @use call    ec:row  @ pasteSingle:231 pasteMulti:367
-  @use call    ec:selClear  @ registerCommands:479,481
-  @use call    edit.add  @ pasteVelocities:211 pasteSingle:288,310 pasteMulti:431
-  @use call    edit.assign  @ pasteVelocities:201
-  @use call    edit.delete  @ pasteVelocities:188 pasteSingle:273,302 pasteMulti:410,414
-  @use call    fx.gather  @ collect:97
-  @use call    fx.paste  @ pasteClip:441
-  @use call    tm:flush  @ pasteVelocities:222 pasteSingle:290,312 pasteMulti:435 pasteClip:442
-  @use call    util.add  @ collect:119,153,155,158 refusePaste:175 pasteSingle:250,259 pasteMulti:396
-  @use call    util.between  @ collect:118,151 pasteVelocities:187,193 pasteSingle:257,272,301 pasteMulti:409,413
-  @use call    util.clamp  @ pasteVelocities:197,215 pasteSingle:280
-  @use call    util.clone  @ collect:74,83 pasteSingle:242 pasteMulti:388
-  @use call    util.isNote  @ collect:76
-  @use call    util.seek  @ pasteVelocities:183,208 pasteSingle:262
-  @use call    util.serialise  @ save:47
-  @use call    util.unserialise  @ load:53
-  @use require util  @ <load>:11
+  @use call    cm:get  @ laneRest:84 assignLane:293
+  @use call    ec:col  @ pasteSingle:371 pasteMulti:406
+  @use call    ec:cursorPart  @ pasteLanes:344
+  @use call    ec:eachSelectedCol  @ collect:207
+  @use call    ec:isSticky  @ registerCommands:567
+  @use call    ec:region  @ collect:124
+  @use call    ec:row  @ pasteSingle:374 pasteMulti:453
+  @use call    ec:selClear  @ registerCommands:565,567
+  @use call    edit.add  @ emitSustainPA:273 replaceLane:309 pasteNotes:337 pasteMulti:517
+  @use call    edit.assign  @ assignLane:291
+  @use call    edit.delete  @ assignLane:287 replaceLane:300 pasteNotes:327 pasteMulti:496,500
+  @use call    fx.gather  @ collect:157
+  @use call    fx.paste  @ pasteClip:527
+  @use call    tm:flush  @ pasteNotes:339 pasteLanes:364 pasteMulti:521 pasteClip:528
+  @use call    util.add  @ spannedParts:117 collect:193,227,229,232 refusePaste:249 destCarrier:261 pasteLanes:356 pasteSingle:392 pasteMulti:482
+  @use call    util.between  @ collect:192,225 destCarrier:259 assignLane:286,290 replaceLane:299 pasteNotes:326 pasteMulti:495,499
+  @use call    util.clamp  @ laneValue:92
+  @use call    util.clone  @ spannedParts:108 collect:139,149 pasteSingle:384 pasteMulti:474
+  @use call    util.isNote  @ isNoteOn:79 collect:141
+  @use call    util.seek  @ destCarrier:263 emitSustainPA:271 assignLane:282
+  @use call    util.serialise  @ save:63
+  @use call    util.unserialise  @ load:69
+  @use require util  @ <load>:14
 
 # Calls (intra-file)
-  @call collect  @ collect:472 copy:473 registerCommands:479
-  @call load  @ registerCommands:482
-  @call pasteClip  @ pasteClip:474 registerCommands:482
-  @call pasteMulti  @ pasteClip:440
-  @call pasteSingle  @ pasteClip:439
-  @call pasteVelocities  @ pasteSingle:295
-  @call refusePaste  @ pasteSingle:236 pasteMulti:374
-  @call save  @ copy:473 registerCommands:479
-  @call trimTop  @ trimTop:475
+  @call assignLane  @ pasteLanes:358
+  @call carrier  @ destCarrier:264 assignLane:283
+  @call collect  @ collect:558 copy:559 registerCommands:565
+  @call destCarrier  @ pasteNotes:320
+  @call emitSustainPA  @ assignLane:293
+  @call isNoteOn  @ destCarrier:260
+  @call laneRest  @ destCarrier:264 assignLane:283
+  @call laneValue  @ destCarrier:260 pasteLanes:355
+  @call load  @ registerCommands:568
+  @call pasteClip  @ pasteClip:560 registerCommands:568
+  @call pasteLanes  @ pasteSingle:400
+  @call pasteMulti  @ pasteClip:526
+  @call pasteNotes  @ pasteSingle:399
+  @call pasteSingle  @ pasteClip:525
+  @call refusePaste  @ pasteSingle:378 pasteMulti:460
+  @call replaceLane  @ pasteLanes:360
+  @call save  @ copy:559 registerCommands:565
+  @call spannedParts  @ collect:165
+  @call trimTop  @ trimTop:561
 
 # Unresolved receivers
-  @drop ctx:ppqPerRow  @ collect:61 pasteSingle:235 pasteMulti:368
-  @drop ctx:rowToPPQ  @ collect:107,150 refusePaste:175 pasteSingle:232,233,241 pasteMulti:380,381,387
-  @drop scope:registerAll  @ registerCommands:478
+  @drop ctx:ppqPerRow  @ collect:126 pasteSingle:377 pasteMulti:454
+  @drop ctx:rowToPPQ  @ collect:188,224 refusePaste:249 pasteSingle:375,376,383 pasteMulti:466,467,473
+  @drop scope:registerAll  @ registerCommands:564
 
 # REAPER API surface
   @reaper SetExtState
   @reaper GetExtState
 
 # Fields (r read / w write incl. constructor keys)
-  @field r aliases  @ 43
-  @field r cc  @ collect:147 pasteSingle:236,308 pasteMulti:340
-  @field w cc  @ 23 refusePaste:176 pasteSingle:308 pasteMulti:428
-  @field r ccCols  @ pasteMulti:340,361
-  @field w ccCols  @ pasteMulti:331
-  @field r ccNum  @ pasteMulti:374,428
-  @field w ccNum  @ pasteMulti:361
-  @field r chan  @ pasteSingle:286,307 pasteMulti:374,380,381,387,424
-  @field w chan  @ 23 refusePaste:175 pasteVelocities:214 pasteMulti:359,361,363
-  @field r chanDelta  @ pasteMulti:352,357
-  @field w chanDelta  @ collect:139
-  @field r chanFirstCol  @ pasteMulti:332
-  @field r chanLastCol  @ pasteMulti:332
-  @field r cm  @ 39
-  @field r col  @ pasteMulti:379
-  @field w col  @ pasteMulti:359,361,363
-  @field r cols  @ collect:96,101 pasteSingle:228 pasteMulti:320,335,372,376 trimTop:464
-  @field w cols  @ collect:164
-  @field w copy  @ registerCommands:479
-  @field r currentRpb  @ 40
-  @field r ec  @ 36
-  @field r edit  @ 42
-  @field r endRow  @ pasteSingle:244,248 pasteMulti:390,394 trimTop:453
-  @field w endRow  @ 30 collect:77 trimTop:453
-  @field r endppq  @ collect:77 pasteVelocities:209
-  @field w endppq  @ 21 pasteSingle:248 pasteMulti:394
-  @field r evType  @ pasteVelocities:188
-  @field w evType  @ 27 refusePaste:176 pasteVelocities:212 pasteSingle:287,309 pasteMulti:430
-  @field r events  @ collect:118,151,153,155 pasteVelocities:183,187,193,208 pasteSingle:239,257,262,272
-  @field r events  @ pasteSingle:301 pasteMulti:385,409,413 trimTop:462,464
-  @field w events  @ collect:125,140
-  @field r fx  @ 44
-  @field r fxRegions  @ pasteClip:441 trimTop:466
-  @field w fxRegions  @ collect:126,165
-  @field r getCtx  @ 41
-  @field r grid  @ 37
-  @field w idx  @ 25
-  @field r isNote  @ pasteVelocities:208 pasteMulti:409
-  @field r key  @ pasteMulti:358,361
-  @field w key  @ collect:144,147
-  @field r lane  @ pasteSingle:236,265,286 pasteMulti:349,374,426
-  @field w lane  @ 23 refusePaste:176 pasteMulti:359,426
-  @field r midiChan  @ collect:96,107,135,139,143,145,150 pasteVelocities:214 pasteSingle:230,286
-  @field r midiChan  @ pasteSingle:307 pasteMulti:352
-  @field r mode  @ pasteClip:439 trimTop:461
-  @field w mode  @ collect:124,163
-  @field r noteCols  @ pasteMulti:338,359
-  @field w noteCols  @ pasteMulti:331
-  @field r numRows  @ pasteSingle:233,236 pasteMulti:369,374 trimTop:460
-  @field w numRows  @ collect:124,163 trimTop:460
-  @field r other  @ pasteMulti:342,363
-  @field w other  @ pasteMulti:331
-  @field w paste  @ registerCommands:480
-  @field r pitch  @ pasteVelocities:194,215 pasteSingle:258
-  @field w pitch  @ pasteVelocities:215
-  @field r ppq  @ collect:75,84,91 pasteVelocities:195,208,209,210,213 pasteSingle:253
-  @field r ppq  @ pasteSingle:259,279 pasteMulti:399
-  @field w ppq  @ 21 refusePaste:175 pasteVelocities:213 pasteSingle:243,259 pasteMulti:389
-  @field w realised  @ 25
-  @field r row  @ pasteSingle:240,241 pasteMulti:386,387 trimTop:451,452
-  @field w row  @ 30 collect:75,84,91 trimTop:452
-  @field w rpb  @ 23 pasteVelocities:216 pasteSingle:286,307 pasteMulti:424
-  @field r startType  @ pasteMulti:324
-  @field w startType  @ collect:163
-  @field r tm  @ 38
-  @field r type  @ collect:106,109,111,113,134,138,142,146,152,163 pasteSingle:236,255
-  @field r type  @ pasteSingle:255,294,299,300,308,309 pasteMulti:324,336
-  @field r type  @ pasteMulti:339,342,356,360,363,374,408,425,427,430
-  @field w type  @ 27 collect:124,138 pasteMulti:359,361,363
-  @field w uuid  @ 25
-  @field w uuidIdx  @ 25
-  @field r val  @ pasteVelocities:196,197,215 pasteSingle:280
-  @field w val  @ collect:91 pasteVelocities:215 pasteSingle:259
-  @field r vel  @ collect:91 pasteVelocities:184 pasteSingle:258,259,263,286
-  @field w vel  @ pasteVelocities:201
+  @field r aliases  @ 59
+  @field r cc  @ collect:221 replaceLane:307 pasteSingle:378 pasteMulti:426
+  @field w cc  @ 22 refusePaste:250 replaceLane:307 pasteMulti:514
+  @field r ccCols  @ pasteMulti:426,447
+  @field w ccCols  @ pasteMulti:417
+  @field r ccNum  @ pasteMulti:460,514
+  @field w ccNum  @ pasteMulti:447
+  @field r chan  @ replaceLane:306 pasteNotes:335 pasteMulti:460,466,467,473,510
+  @field w chan  @ 22 refusePaste:249 emitSustainPA:273 pasteMulti:445,447,449
+  @field r chanDelta  @ pasteMulti:438,443
+  @field w chanDelta  @ collect:213
+  @field r chanFirstCol  @ pasteMulti:418
+  @field r chanLastCol  @ pasteMulti:418
+  @field r cm  @ 55
+  @field r col  @ pasteMulti:465
+  @field w col  @ pasteMulti:445,447,449
+  @field r cols  @ collect:156,161 pasteSingle:371 pasteMulti:406,421,458,462 trimTop:550
+  @field w cols  @ collect:238
+  @field w copy  @ registerCommands:565
+  @field r currentRpb  @ 56
+  @field w delay  @ 34,42
+  @field r ec  @ 52
+  @field r edit  @ 58
+  @field r endRow  @ pasteSingle:386,390 pasteMulti:476,480 trimTop:539
+  @field w endRow  @ 29 collect:142 trimTop:539
+  @field r endppq  @ collect:142 emitSustainPA:272
+  @field w endppq  @ 20 pasteSingle:390 pasteMulti:480
+  @field r evType  @ assignLane:287
+  @field w evType  @ 26 refusePaste:250 emitSustainPA:273 replaceLane:308 pasteNotes:336 pasteMulti:516
+  @field r events  @ collect:192,225,227,229 destCarrier:259,263 emitSustainPA:271 assignLane:282,286,290 replaceLane:299 pasteNotes:326
+  @field r events  @ pasteSingle:381 pasteMulti:471,495,499 trimTop:548,550
+  @field w events  @ collect:199,214
+  @field r fx  @ 60
+  @field w fx  @ 45
+  @field r fxRegions  @ pasteClip:527 trimTop:552
+  @field w fxRegions  @ collect:200,239
+  @field r getCtx  @ 57
+  @field r grid  @ 53
+  @field w idx  @ 24
+  @field r isNote  @ emitSustainPA:271 pasteMulti:495
+  @field r key  @ pasteMulti:444,447
+  @field w key  @ collect:218,221
+  @field r lane  @ pasteNotes:335 pasteSingle:378 pasteMulti:435,460,512
+  @field w lane  @ 22 refusePaste:250 pasteMulti:445,512
+  @field r midiChan  @ collect:156,188,209,213,217,219,224 emitSustainPA:273 replaceLane:306 pasteNotes:335
+  @field r midiChan  @ pasteSingle:373 pasteMulti:438
+  @field r mode  @ load:71 pasteClip:525 trimTop:547
+  @field w mode  @ collect:198,237
+  @field r noteCols  @ pasteMulti:424,445
+  @field w noteCols  @ pasteMulti:417
+  @field r numRows  @ pasteSingle:376,378 pasteMulti:455,460 trimTop:546
+  @field w numRows  @ collect:198,237 trimTop:546
+  @field r other  @ pasteMulti:428,449
+  @field w other  @ pasteMulti:417
+  @field r parts  @ load:71 spannedParts:108,111,112,117 collect:173 pasteNotes:318 pasteLanes:345,349,350 pasteSingle:399
+  @field w parts  @ collect:198
+  @field w paste  @ registerCommands:566
+  @field w pb  @ 34,44
+  @field r pitch  @ collect:190 emitSustainPA:274 assignLane:291
+  @field w pitch  @ 33,39 emitSustainPA:274
+  @field r ppq  @ carrier:100 collect:140,150,182 destCarrier:261 emitSustainPA:271,272,273 assignLane:291 pasteNotes:333
+  @field r ppq  @ pasteLanes:356 pasteSingle:395 pasteMulti:485
+  @field w ppq  @ 20 refusePaste:249 destCarrier:261 emitSustainPA:273 pasteLanes:356 pasteSingle:385 pasteMulti:475
+  @field w realised  @ 24
+  @field r row  @ pasteSingle:382,383 pasteMulti:472,473 trimTop:537,538
+  @field w row  @ 29 collect:140,150,182 trimTop:538
+  @field w rpb  @ 22 emitSustainPA:274 replaceLane:306 pasteNotes:335 pasteMulti:510
+  @field w sample  @ 33,43
+  @field r startType  @ pasteMulti:410
+  @field w startType  @ collect:237
+  @field r tm  @ 54
+  @field r type  @ collect:187,189,208,212,216,220,226,237 replaceLane:307,308 pasteNotes:316 pasteLanes:352
+  @field r type  @ pasteSingle:378 pasteMulti:410,422,425,428,442,446,449,460,494,511
+  @field r type  @ pasteMulti:513,516
+  @field w type  @ 26 collect:212 pasteMulti:445,447,449
+  @field w uuid  @ 24
+  @field w uuidIdx  @ 24
+  @field r val  @ carrier:100 emitSustainPA:274
+  @field w val  @ 34,40,41 destCarrier:261 emitSustainPA:274 pasteLanes:356
+  @field r vel  @ isNoteOn:79
+  @field w vel  @ 33,40,41

@@ -6,14 +6,35 @@
 
 local t = require('support')
 
+local function noteCol(h, chan)
+  for i, col in ipairs(h.vm.grid.cols) do
+    if col.type == 'note' and col.midiChan == chan then return i, col end
+  end
+end
+
+local function stopForPart(h, colIdx, part)
+  for s, name in ipairs(h.vm.grid.cols[colIdx].partAt) do
+    if name == part then return s end
+  end
+end
+
+local function noteOn(h, chan, pitch)
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.chan == chan and n.pitch == pitch then return n end
+  end
+end
+
 return {
 
   -- 1. collect() over a 1×1 pitch-part sel returns a single-mode clip
-  -- whose one event carries (row, pitch, vel, endRow) relative to the
-  -- selection's top row. Pins the encoding so pasteClip's decoder
-  -- (rowToPPQ on r + ce.row) stays compatible.
+  -- whose one event carries (row, pitch, endRow) relative to the
+  -- selection's top row, and whose parts list records what the span
+  -- covered. vel is a lane the span excluded, so the clip never captures
+  -- it; paste fills it from the destination instead (see 1b for the
+  -- vel-inclusive span, 6 for the fill). Pins the encoding so pasteClip's
+  -- decoder (rowToPPQ on r + ce.row) stays compatible.
   {
-    name = 'clipboard:collect on 1×1 pitch sel produces single-mode clip with row-relative event',
+    name = 'clipboard:collect on 1×1 pitch sel produces single-mode clip with row-relative event, no vel',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = {
@@ -28,14 +49,14 @@ return {
 
       local clip = h.clipboard:collect()
       t.eq(clip.mode,    'single', 'mode')
-      t.eq(clip.type,    'note',   'type')
+      t.eq(table.concat(clip.parts, ','), 'pitch', 'parts record the covered span')
       t.eq(clip.numRows, 1,        'numRows = sel height')
       t.eq(#clip.events, 1,        'one event captured')
       local e = clip.events[1]
       t.eq(e.row,    0,   'row encoded relative to r1')
       t.eq(e.endRow, 1,   'endRow encoded relative to r1 (note ends row 5)')
       t.eq(e.pitch,  60,  'pitch carried')
-      t.eq(e.vel,    100, 'vel carried')
+      t.eq(e.vel,    nil, 'vel dropped -- the span excluded that lane')
       -- Reserved keys must not round-trip: position is rebuilt from row,
       -- identity from the destination column, REAPER bookkeeping mustn't
       -- ride. If any of these leak into the clip, paste will overwrite
@@ -43,6 +64,55 @@ return {
       for _, k in ipairs{'ppq','endppq','chan','frame','lane','loc','idx','uuid','uuidIdx','realised'} do
         t.eq(e[k], nil, k .. ' not carried in clip event')
       end
+    end,
+  },
+
+  -- 1b. A selection spanning both the pitch and vel stops of one column
+  -- (a drag across the whole note cell, not just the pitch part) covers
+  -- both parts, so both fields travel -- the "impose a new set of notes,
+  -- velocities included" case, distinct from 1's pitch-only "impose
+  -- notes onto a collection of velocities."
+  {
+    name = 'clipboard:collect on pitch+vel-spanning single-col sel carries both parts',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq = 0, endppq = 60, chan = 1, pitch = 60, vel = 77,
+            detune = 0, delay = 0 },
+        }},
+      }
+      h.vm:setGridSize(80, 40)
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+                          part1 = 'pitch', part2 = 'vel' }
+
+      local clip = h.clipboard:collect()
+      t.eq(clip.mode, 'single',  'mode')
+      t.eq(table.concat(clip.parts, ','), 'pitch,vel', 'both parts covered')
+      local e = clip.events[1]
+      t.eq(e.pitch, 60, 'pitch carried')
+      t.eq(e.vel,   77, 'vel carried')
+    end,
+  },
+
+  -- 1c. The '*' sentinel (hBlock=2/3, a channel- or all-column
+  -- selection) addresses no part in particular, so it covers every part
+  -- the column has: nothing was excludable, so nothing is excluded.
+  {
+    name = 'clipboard:collect on a *-part sel covers every part of the column',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq = 0, endppq = 60, chan = 1, pitch = 60, vel = 77,
+            detune = 0, delay = 0 },
+        }},
+      }
+      h.vm:setGridSize(80, 40)
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+                          part1 = '*', part2 = '*' }
+
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'pitch,vel', 'every part of the column')
+      t.eq(clip.events[1].vel, 77, 'vel carried')
     end,
   },
 
@@ -55,7 +125,7 @@ return {
     run = function(harness)
       local h = harness.mk{}  -- no seed; we only need the clipboard ref
       local clip = {
-        mode = 'single', type = 'note', numRows = 4, sourceIdx = 1,
+        mode = 'single', parts = {'pitch','vel'}, numRows = 4, sourceIdx = 1,
         events = {
           { row = 0, endRow = 1, pitch = 60, vel = 100 },  -- dropped
           { row = 2, endRow = 3, pitch = 62, vel = 100 },  -- shifted
@@ -326,6 +396,237 @@ return {
       t.eq(pasted.mood,   'blue', 'mood survives the round-trip')
       t.eq(pasted.tag,    42,     'tag survives the round-trip')
       t.eq(pasted.val,    64,     'val survives the round-trip')
+    end,
+  },
+
+  -- 5. Bug pin: a selection covering both parts of a note cell (pitch +
+  -- vel) must paste with the SOURCE's velocity, not whatever velocity
+  -- happened to already be sitting in the destination. While the clip
+  -- recorded a column kind rather than a covered span, this fell through
+  -- the pitch-only path and lost the copied vel to destination fill.
+  {
+    name = 'paste of a pitch+vel clip imposes source vel, ignoring destination context',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          -- Source on chan 1: vel 100.
+          { ppq = 0,   endppq = 60,  chan = 1, pitch = 60, vel = 100,
+            detune = 0, delay = 0 },
+          -- Destination on chan 2: an existing note with a DIFFERENT
+          -- vel, in the region the paste will overwrite.
+          { ppq = 480, endppq = 540, chan = 2, pitch = 65, vel = 40,
+            detune = 0, delay = 0 },
+        }},
+      }
+      h.vm:setGridSize(80, 80)
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+                          part1 = 'pitch', part2 = 'vel' }
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'pitch,vel', 'sanity: whole-cell span')
+
+      local c2
+      for i, col in ipairs(h.vm.grid.cols) do
+        if col.type == 'note' and col.midiChan == 2 then c2 = i end
+      end
+      h.ec:setPos(8, c2, 1)   -- row 8 = ppq 480 @ rpb=4, res=240
+      h.clipboard:pasteClip(clip)
+
+      local pasted
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.chan == 2 and n.ppq == 480 then pasted = n end
+      end
+      t.truthy(pasted, 'note pasted at row 8 on chan 2')
+      t.eq(pasted.pitch, 60,  'pitch carried from clip')
+      t.eq(pasted.vel,   100, 'vel carried from clip, not the prior destination vel of 40')
+    end,
+  },
+
+  -- 6. Companion pin: a pitch-ONLY selection (never touched the vel
+  -- stop) deliberately does the opposite -- it carries the
+  -- DESTINATION's velocity forward, not the source's. This is the
+  -- "impose new notes on a collection of velocities" mode.
+  {
+    name = 'paste of a pitch-only note clip carries destination vel forward, not source vel',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq = 0,   endppq = 60,  chan = 1, pitch = 60, vel = 100,
+            detune = 0, delay = 0 },
+          { ppq = 480, endppq = 540, chan = 2, pitch = 65, vel = 40,
+            detune = 0, delay = 0 },
+        }},
+      }
+      h.vm:setGridSize(80, 80)
+      h.ec:setPos(0, 1, 1)
+      h.ec:extendTo(h.ec:pos())  -- degenerate pitch-only sel
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'pitch', 'sanity: pitch-only')
+
+      local c2
+      for i, col in ipairs(h.vm.grid.cols) do
+        if col.type == 'note' and col.midiChan == 2 then c2 = i end
+      end
+      h.ec:setPos(8, c2, 1)
+      h.clipboard:pasteClip(clip)
+
+      local pasted
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.chan == 2 and n.ppq == 480 then pasted = n end
+      end
+      t.truthy(pasted, 'note pasted at row 8 on chan 2')
+      t.eq(pasted.pitch, 60, 'pitch carried from clip')
+      t.eq(pasted.vel,   40, 'vel carried forward from destination context, not source vel')
+    end,
+  },
+
+  -- 7. A lane the span covers travels on its own. A delay-only
+  -- selection carries delay values and no note payload, and pastes onto
+  -- the notes already at the destination: they keep their identity, the
+  -- lane takes the clip's values. Velocity is not a special case, it is
+  -- just the lane with the most machinery behind it.
+  {
+    name = 'paste of a delay-only clip assigns delay onto existing destination notes',
+    run = function(harness)
+      local h = harness.mk{
+        -- Seeds are raw take positions: a delay of -20 sounds the note 5
+        -- ticks early, so raw 235 puts its logical onset on row 4.
+        seed = { notes = {
+          { ppq = 235, endppq = 295, chan = 1, pitch = 60, vel = 100,
+            detune = 0, delay = -20 },
+          { ppq = 480, endppq = 540, chan = 2, pitch = 65, vel = 40,
+            detune = 0, delay = 0 },
+        }},
+        data = { noteDelay = { [1] = { [1] = true }, [2] = { [1] = true } } },
+      }
+      h.vm:setGridSize(80, 80)
+      local c1, c2 = noteCol(h, 1), noteCol(h, 2)
+      h.ec:setSelection{ row1 = 4, row2 = 4, col1 = c1, col2 = c1,
+                          part1 = 'delay', part2 = 'delay' }
+
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'delay', 'the delay lane alone')
+      t.eq(clip.events[1].pitch, nil, 'a lane clip carries no note payload')
+
+      h.ec:setPos(8, c2, stopForPart(h, c2, 'delay'))
+      h.clipboard:pasteClip(clip)
+
+      local dst = noteOn(h, 2, 65)
+      t.truthy(dst, 'the destination note is still there')
+      t.eq(dst.delay, -20, 'delay taken from the clip')
+      t.eq(dst.vel,    40, 'velocity untouched')
+    end,
+  },
+
+  -- 8. A part the column does not show cannot have been excluded from a
+  -- span, so its field rides with the note. With the delay part hidden,
+  -- a pitch-only copy still carries the source note's delay -- otherwise
+  -- a display toggle would silently flatten the groove of every
+  -- duplicated passage.
+  {
+    name = 'a hidden part rides with the note through a pitch-only copy',
+    run = function(harness)
+      local h = harness.mk{
+        -- Raw 235 with delay -20: logical onset on row 4 (see case 7).
+        seed = { notes = {
+          { ppq = 235, endppq = 295, chan = 1, pitch = 60, vel = 100,
+            detune = 0, delay = -20 },
+          { ppq = 480, endppq = 540, chan = 2, pitch = 65, vel = 40,
+            detune = 0, delay = 0 },
+        }},
+      }
+      h.vm:setGridSize(80, 80)
+      local c1, c2 = noteCol(h, 1), noteCol(h, 2)
+      h.ec:setPos(4, c1, 1)
+      h.ec:extendTo(h.ec:pos())
+
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'pitch', 'the column shows pitch and vel only')
+      t.eq(clip.events[1].delay, -20, 'delay rides along, having no part to exclude it')
+
+      h.ec:setPos(8, c2, 1)
+      h.clipboard:pasteClip(clip)
+
+      local pasted = noteOn(h, 2, 60)
+      t.truthy(pasted, 'note pasted on chan 2')
+      t.eq(pasted.delay, -20, 'and lands with the note at the destination')
+      t.eq(pasted.vel,    40, 'while vel, which does have a part, comes from the destination')
+    end,
+  },
+
+  -- 9. The counterpart to 8: with the delay part shown, the same
+  -- pitch-only span excludes it, and paste fills it from the
+  -- destination's own running value -- here the delay of the note
+  -- before the pasted region.
+  {
+    name = 'paste of a pitch-only clip fills a shown delay lane from the destination',
+    run = function(harness)
+      local h = harness.mk{
+        -- Source logical row 4 (raw 235, delay -20); destination logical
+        -- row 7 (raw 425, delay 20), the note the fill reads back from.
+        seed = { notes = {
+          { ppq = 235, endppq = 295, chan = 1, pitch = 60, vel = 100,
+            detune = 0, delay = -20 },
+          { ppq = 425, endppq = 485, chan = 2, pitch = 65, vel = 40,
+            detune = 0, delay = 20 },
+        }},
+        data = { noteDelay = { [1] = { [1] = true }, [2] = { [1] = true } } },
+      }
+      h.vm:setGridSize(80, 80)
+      local c1, c2 = noteCol(h, 1), noteCol(h, 2)
+      h.ec:setPos(4, c1, 1)
+      h.ec:extendTo(h.ec:pos())
+
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'pitch', 'pitch alone')
+      t.eq(clip.events[1].delay, nil, 'delay excluded -- it has a part the span did not cover')
+
+      h.ec:setPos(8, c2, 1)
+      h.clipboard:pasteClip(clip)
+
+      local pasted = noteOn(h, 2, 60)
+      t.truthy(pasted, 'note pasted on chan 2')
+      t.eq(pasted.delay, 20, 'delay filled from the destination, not imposed by the clip')
+      t.eq(pasted.vel,   40, 'vel likewise')
+    end,
+  },
+
+  -- 10. Velocity and a cc value are both 7-bit lane values, so a
+  -- velocity span pastes into a cc lane. It is the one cross-part move
+  -- the compatibility rule allows, and the reason a lane clip
+  -- synthesises its events rather than cloning the note: the note's
+  -- pitch and metadata have no business on a cc destination.
+  {
+    name = 'paste of a vel-only clip writes its values into a cc lane',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 240, endppq = 300, chan = 1, pitch = 60, vel = 77,
+                      detune = 0, delay = 0 } },
+          ccs   = { { ppq = 0, chan = 1, evType = 'cc', cc = 74, val = 10 } },
+        },
+      }
+      h.vm:setGridSize(80, 80)
+      local c1 = noteCol(h, 1)
+      local ccCol
+      for i, col in ipairs(h.vm.grid.cols) do
+        if col.type == 'cc' and col.cc == 74 and col.midiChan == 1 then ccCol = i end
+      end
+      h.ec:setSelection{ row1 = 4, row2 = 4, col1 = c1, col2 = c1,
+                          part1 = 'vel', part2 = 'vel' }
+
+      local clip = h.clipboard:collect()
+      t.eq(table.concat(clip.parts, ','), 'vel', 'the vel lane alone')
+      t.eq(clip.events[1].pitch, nil, 'no note payload rides onto a cc destination')
+
+      h.ec:setPos(8, ccCol, 1)
+      h.clipboard:pasteClip(clip)
+
+      local pasted
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.ppq == 480 and c.cc == 74 then pasted = c end
+      end
+      t.truthy(pasted, 'cc written at the cursor row')
+      t.eq(pasted.val, 77, 'the velocity value lands as the cc value')
     end,
   },
 
