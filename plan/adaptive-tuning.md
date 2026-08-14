@@ -33,25 +33,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-14 tuning: solve the scope against the target and seat each strand (§ What the solver takes)
 - 2026-08-14 tuning: give the retune modal its target, key, size and lock (§ The command's slots)
 - 2026-08-14 tuning: group notes into strands by step-class and overlap (§ The strand)
 - 2026-08-14 tuning: build a strand's shortlist from the notation and the target (§ What the solver takes)
-- 2026-08-14 tuning: factorise a token into coords, and answer eligibility (§ What a target is 1-3)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. `tv:retune` builds the strands of the scope, hands them to
-   `sonority.solve` with the sonority size and the harmonic lock, and
-   seats the chosen candidate on every note of a strand in its own
-   register, blended by strength, through `edit.assign` in the one undo
-   block. With no target it is the snap that stands today. A strand whose
-   shortlist is empty refuses the whole solve and names its step. The spec
-   drives a written dominant seventh in a take against a diamond target
-   and pins the otonal answer the pure module already fixes.
 
 2. The refusal offers a nudge: the notes of the offending class are
    respelled onto the step whose window holds the target's nearest point,

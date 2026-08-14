@@ -1,0 +1,110 @@
+@spec vm_retune_spec  src=tests/specs/vm_retune_spec.lua  loc=265  cases=14
+@exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), configManager (h.cm)
+@surface   tuning.derive, tuning.genDiamond, vm:setGridSize, tuning.stepToMidi, tuning.scalaPitch, vm:retune, ec:setSelection, cm:set, cm:getAt
+@harness   mk{seed.notes}
+
+# Intent
+  Retune: with no target tv:retune(slots) runs every note in scope through
+  tuning.snap and writes the pair back, strength being how far of the way there
+  it actually lands, and remembers the target and key on the take. The notation
+  is a twelve-note quarter-comma meantone MOS, so a step's seat carries a detune
+  of its own and the window is asymmetric (+38.0 / -58.6 either side of step 1).
+  
+  With a target it is the solve: the scope's notes grouped into strands by
+  step-class, shortlisted from the notation and the target, and handed to
+  sonority.solve. Those cases write a dominant seventh under a 12-EDO notation
+  against the 7-limit diamond at odd limit 9 -- the chord the pull is calibrated
+  on (design/adaptive-tuning.md § Harmonic lock) -- and a tritone against the
+  5-limit diamond at odd limit 15, the hole that refuses a solve.
+
+# Helpers
+  @fn mk(harness, notes, temper, tempers)  @ 35-43
+  @fn note(ppq, pitch, detune)  @ 45-48
+  @fn lane1(h)  @ 50-54
+  @fn cell(h, row)  @ 56
+  @fn near(a, b, msg)  @ 58-60
+  @fn seat(step, oct)  @ 63
+      -- Seat of (step, octave) under MEAN, as the spec's expectation frame.
+  @fn c7()  @ 66-68
+      -- The C7 the pull is calibrated on, written at 12-EDO.
+  @fn chordAt(h, row)  @ 71-78
+      -- The chord at a row, as detune by written pitch: every chan-1 note lane at once.
+  @fn offset(token, semitones)  @ 81
+      -- The detune a target point lands as, seated on the 12-EDO note it is written on.
+
+# Cases
+  @case 'retune(all) seats an off-step note on its own step'  [harness]  @ 85-94
+  @case 'a note past the half-way point lands on its neighbour'  [harness]  @ 98-107
+  @case 'a note inside the window keeps its step'  [harness]  @ 111-118
+  @case 'a note already on its step is left where it is'  [harness]  @ 122-130
+  @case 'a selection confines the snap to the notes inside it'  [harness]  @ 134-143
+  @case 'half strength closes half the distance, and again on the next run'  [harness]  @ 147-157
+  @case 'a blend below full strength is re-seated on the nearest semitone'  [harness]  @ 161-171
+  @case 'zero strength moves nothing, not even the written pitch'  [harness]  @ 175-183
+  @case 'retune remembers the target and the key on the take'  [harness]  @ 187-201
+  @case 'retune with no target forgets the one the take carried'  [harness]  @ 205-211
+  @case 'a dominant seventh takes the otonal seventh the diamond offers'  [harness]  @ 215-225
+  @case 'above the crossing the seventh gives up the otonal tuning'  [harness]  @ 229-237
+  @case 'an octave doubling is seated in its own register, and moves no answer'  [harness]  @ 241-251
+  @case 'a step the target leaves nowhere to go refuses the solve and names it'  [harness]  @ 255-263
+
+# Uses (outbound edges)
+  @use call tuning.derive  @ 17,25,32,33
+  @use call tuning.genDiamond  @ 32,33
+  @use call vm:setGridSize  @ 41
+  @use call tuning.stepToMidi  @ 63
+  @use call tuning.scalaPitch  @ 81
+  @use call vm:retune  @ 88,102,114,126,139,152,154,166,179,193,209,218,232,246,259
+  @use call ec:setSelection  @ 137
+  @use call cm:set  @ 190,208
+  @use call cm:getAt  @ 195,196,197,210
+
+# Fields (r read / w write incl. constructor keys)
+  @field r DIA  @ 197
+  @field w DIA  @ 190
+  @field w FIVES  @ 258
+  @field w MEAN  @ 38
+  @field w SEPTIMAL  @ 217,231,245
+  @field r cells  @ 56,74
+  @field w chan  @ 46
+  @field w col1  @ 137
+  @field w col2  @ 137
+  @field r cols  @ 51,73
+  @field w config  @ 38
+  @field w delay  @ 47
+  @field r detune  @ 75,92,93,106,117,129,141,142,153,155,169,170
+  @field r detune  @ 182,200
+  @field w detune  @ 47
+  @field w endppq  @ 46
+  @field r grid  @ 51,73
+  @field w harmonicLock  @ 194,209,219,233,247,260
+  @field w key  @ 193,209,218,232,246,259
+  @field r lane  @ 52
+  @field r midiChan  @ 52,74
+  @field w name  @ 18,26,85,98,111,122,134,147,161,175,187,205
+  @field w name  @ 215,229,241,255
+  @field w notes  @ 37
+  @field w part1  @ 138
+  @field w part2  @ 138
+  @field w periodPitch  @ 18,26
+  @field r pitch  @ 75,91,105,116,128,156,168,181
+  @field w pitch  @ 46
+  @field w pitches  @ 19,27
+  @field w ppq  @ 46
+  @field w project  @ 38
+  @field w row1  @ 137
+  @field w row2  @ 137
+  @field w run  @ 86,99,112,123,135,148,162,176,188,206,216,230
+  @field w run  @ 242,256
+  @field w scope  @ 88,102,114,126,139,152,154,166,179,193,209,218
+  @field w scope  @ 232,246,259
+  @field w seed  @ 37
+  @field w sonoritySize  @ 194,209,219,233,247,260
+  @field w stepNames  @ 21,28
+  @field w strength  @ 88,102,114,126,139,152,154,166,179,193,209,218
+  @field w strength  @ 232,246,259
+  @field w target  @ 193,218,232,246,259
+  @field w temper  @ 39
+  @field w tempers  @ 38
+  @field r type  @ 52,74
+  @field w vel  @ 46

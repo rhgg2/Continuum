@@ -475,6 +475,15 @@ asked to do nothing. Below 1 the note is deliberately left off its step and a
 second invocation halves the remainder again: the broken idempotence is the
 point, not a tolerance.
 
+With a target the verb solves rather than snaps. The scope's notes group into
+strands by step-class (`sonority.strands`), `tuning.shortlist` gives each strand
+the target's points its window holds, and `sonority.solve` returns the point each
+strand takes; `tuning.seat` puts that point in the register of every note that
+writes it, and strength blends the pair exactly as snap's is blended. Shortlists
+are built before anything moves, so a step the target leaves nowhere to go
+refuses the whole solve rather than half of it, and the verb answers with that
+step for its caller to name.
+
 Ctrl+T reaches the verb through the retune modal, whose fields are the slots
 the verb takes and whose OK is the one commit point — every retuning facility
 the tracker grows arrives as a field beside them. Selection is offered whether

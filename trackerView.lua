@@ -26,6 +26,7 @@
 local util       = require 'util'
 local timing     = require 'timing'
 local tuning     = require 'tuning'
+local sonority   = require 'sonority'
 local groupsCore = require 'groups'
 local generators = require 'generators'
 local perf       = require 'perf'
@@ -2051,33 +2052,81 @@ local function blend(e, strength, pitch, detune)
   return seat, cents - seat * 100
 end
 
--- Notation snap: every note in scope onto its own step of the active
--- temper. See docs/trackerView.md § Retune.
-local function snapToTemperScope(groups, strength)
-  local temper = ctx:activeTemper()
-  if not temper or strength <= 0 then return end
+-- The notes of a scope, whichever facility is about to move them.
+local function notesIn(groups)
+  local notes = {}
   for _, g in ipairs(groups) do
     for _, e in pairs(g.locs) do
-      if util.isNote(e) then
-        local gap = ctx:noteDeviation(e)
-        if gap ~= 0 then
-          local pitch, detune = blend(e, strength, tuning.snap(temper, e.pitch, e.detune))
-          edit.assign(e, { pitch = pitch, detune = detune })
-        end
+      if util.isNote(e) then util.add(notes, e) end
+    end
+  end
+  return notes
+end
+
+-- Notation snap: every note in scope onto its own step of the active
+-- temper. See docs/trackerView.md § Retune.
+local function snapToTemper(notes, notation, strength)
+  for _, e in ipairs(notes) do
+    if ctx:noteDeviation(e) ~= 0 then
+      local pitch, detune = blend(e, strength, tuning.snap(notation, e.pitch, e.detune))
+      edit.assign(e, { pitch = pitch, detune = detune })
+    end
+  end
+end
+
+-- The scope's strands, shortlisted against the target; or nil and the step with
+-- nowhere to go. One window serves a strand in every register, so notes[1] speaks for all.
+local function shortlisted(notes, notation, target, keyStep)
+  local strands = sonority.strands(notes, function(e)
+    return tuning.stepClass(notation, e.pitch, e.detune)
+  end)
+  for _, strand in ipairs(strands) do
+    local note = strand.notes[1]
+    strand.shortlist = tuning.shortlist(notation, target, keyStep, note)
+    if #strand.shortlist == 0 then
+      return nil, (tuning.midiToStep(notation, note.pitch, note.detune))
+    end
+  end
+  return strands
+end
+
+-- The adaptive solve: one point per strand, seated on every note that writes it, in its own register.
+-- see design/adaptive-tuning.md § What the solver takes
+local function solveToTarget(notes, notation, target, slots)
+  local strands, refused = shortlisted(notes, notation, target, slots.key)
+  if not strands then return refused end
+
+  local choice = sonority.solve(strands, slots.sonoritySize, slots.harmonicLock)
+  for index, strand in ipairs(strands) do
+    local cents = strand.shortlist[choice[index]].cents
+    for _, e in ipairs(strand.notes) do
+      local pitch, detune = blend(e, slots.strength, tuning.seat(notation, e, cents))
+      if pitch ~= e.pitch or detune ~= e.detune then
+        edit.assign(e, { pitch = pitch, detune = detune })
       end
     end
   end
-  tm:flush()
 end
 
 --shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, key=step, sonoritySize, harmonicLock }
 --contract: target and key are remembered at take tier; the rest is per invocation
 --contract: with no target the whole of it is the notation snap
+--contract: returns the step a strand's empty shortlist refused the solve at, else nil
 function tv:retune(slots)
   if slots.target then lib.localize('tempers', slots.target) end
   cm:set('take', 'retune.target', slots.target)
   cm:set('take', 'retune.key',    slots.key)
-  snapToTemperScope(slots.scope == 'selection' and eventsByCol() or allGroups(), slots.strength)
+
+  local notation = ctx:activeTemper()
+  if not notation or slots.strength <= 0 then return end
+  local notes  = notesIn(slots.scope == 'selection' and eventsByCol() or allGroups())
+  local target = slots.target and tuning.findTemper(slots.target, cm:get('tempers'))
+
+  local refused
+  if target then refused = solveToTarget(notes, notation, target, slots)
+  else           snapToTemper(notes, notation, slots.strength) end
+  tm:flush()
+  return refused
 end
 
 local insertRow, deleteRow, insertRowCol, deleteRowCol do

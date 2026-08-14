@@ -590,6 +590,12 @@ function tuning.isTarget(temper)
   return true
 end
 
+-- The gap from a seat to a point of the octave-reduced line, signed and reduced so a
+-- point below the seat reads as a descent, not an ascent; shortlist and seat both use it.
+local function gapTo(seat, cents)
+  return reduceCents(cents - seat + OCTAVE / 2, OCTAVE) - OCTAVE / 2
+end
+
 -- The only place the notation and the target meet. See design/adaptive-tuning.md
 -- § What the solver takes for why the line is reduced into the octave.
 --contract: candidates {cents, coords, strain} for the target's points inside the note's step window
@@ -604,9 +610,7 @@ function tuning.shortlist(notation, target, keyStep, note)
   local candidates = {}
   for _, token in ipairs(target.pitches) do
     local cents = reduceCents(keyCents + tuning.scalaPitch(token), OCTAVE)
-    -- The gap is signed and reduced into the half-octave either side, so a point
-    -- below the note reads as a descent rather than an ascent of nearly an octave.
-    local gap   = reduceCents(cents - seat + OCTAVE / 2, OCTAVE) - OCTAVE / 2
+    local gap   = gapTo(seat, cents)
     local half  = gap < 0 and below or above
     if math.abs(gap) <= half then
       util.add(candidates, { cents = cents, coords = tuning.coords(token),
@@ -619,6 +623,17 @@ function tuning.shortlist(notation, target, keyStep, note)
     return a.cents < b.cents
   end)
   return candidates
+end
+
+-- The shortlist's fold in reverse: a point the strand took, in the register of one
+-- of the notes that writes it, the note's own step seat being what the window was measured off.
+--contract: (pitch, detune) for `cents` placed in the octave nearest the note's seat
+function tuning.seat(notation, note, cents)
+  local midi, detune = tuning.snap(notation, note.pitch, note.detune)
+  local at    = midi * 100 + detune
+  local place = at + gapTo(at, cents)
+  local pitch = math.floor(place / 100 + 0.5)
+  return pitch, place - pitch * 100
 end
 
 ----- Display

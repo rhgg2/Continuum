@@ -1,7 +1,7 @@
 # Design — Adaptive tuning
 
 > opened: 2026-07-04 · status: in flight — plan/adaptive-tuning.md, at
-> phase 2 (the objective); the solver's boundary settled
+> phase 4 (the solve on a take); the solver's boundary settled
 
 **Solve a selection in one pass for a single detune per note that
 makes its sounding sonorities as harmonious as they can jointly be
@@ -421,7 +421,9 @@ step it was written on.**
    the window of the step it was written on (§ The window) — is
    `tuning.lua`'s work, and the only place the notation and the target
    meet. Strain is computed in the same pass, the window's half-widths
-   being at hand there and nowhere else.
+   being at hand there and nowhere else. Seating a chosen point back in
+   the register of a note that takes it is the same fold in reverse, so
+   it lives beside it.
 
 10. One window serves the whole strand. Its notes stand exact octaves
     apart on one step of the notation, so the window folds onto itself in
@@ -447,8 +449,8 @@ step it was written on.**
     limit 45, so against a 12-EDO notation that step-class has nowhere
     to go.
 
-15. The command refuses the solve and names the step, and offers the
-    nudge: the class's notes are respelled onto the step whose window
+15. The command refuses the solve whole, writing nothing and answering
+    with the step, and offers the nudge: the class's notes are respelled onto the step whose window
     holds the target's nearest point, and the solve run again. That is the
     solver editing the score rather than tuning it (§ The window), so it
     is offered rather than taken.
