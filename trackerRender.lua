@@ -809,43 +809,143 @@ modalHost:registerKind('takeProps', function(s, close)
   elseif cancelPressed then close(false) end
 end)
 
+-- The library's targets as picker rows: a temper every one of whose pitches is a ratio.
+-- Ineligible ones are filtered out rather than offered and refused. see design/adaptive-tuning.md § What a target is
+local function retuneTargetItems(current)
+  local library = cm:get('tempers', { mergeTiers = true })
+  local items   = {}
+  for _, item in ipairs(chrome.libPicker{ key = 'tempers', current = current }) do
+    if item.key == nil or tuning.isTarget(library[item.key]) then util.add(items, item) end
+  end
+  return items
+end
+
+-- A notation step, spelled as the grid spells it.
+local function stepLabel(notation, step)
+  local name = notation.stepNames and notation.stepNames[step]
+  return (name and name ~= '') and name or (step .. '-')
+end
+
+local function retuneKeyItems(notation, current)
+  local items = {}
+  for step = 1, #notation.cents do
+    util.add(items, { label = stepLabel(notation, step), key = step, current = step == current })
+  end
+  return items
+end
+
+-- The modal's left labels, measured together so the controls share one column,
+-- and the gap that column stands off the longest of them.
+local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Strength:' }
+local RETUNE_LABEL_GAP = 6
+
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
 -- here, not scopedAction's confirm, and OK is the single commit point.
 modalHost:registerKind('retune', function(s, close)
   -- Appearing frame: the opening chord's key is still IsKeyPressed=true — gate
   -- OK/Cancel below so it can't self-dismiss.
   local appearing = ImGui.IsWindowAppearing(ctx)
+  local notation  = tv:activeTemper()
+
+  -- One column: every control's frame starts past the widest label, so the pickers,
+  -- the stepper and the sliders line up however wide their own labels run.
+  local originX = ImGui.GetCursorPosX(ctx)
+  local columnX = 0
+  for _, text in ipairs(RETUNE_LABELS) do
+    local textW = ImGui.CalcTextSize(ctx, text)
+    if textW > columnX then columnX = textW end
+  end
+  columnX = columnX + RETUNE_LABEL_GAP + ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
+  local function labelled(text, draw)
+    ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, text)
+    ImGui.SameLine(ctx, columnX)
+    draw()
+  end
 
   for i, m in ipairs{ {'selection', 'Selection'}, {'all', 'Whole take'} } do
     if i > 1 then ImGui.SameLine(ctx) end
     if chrome.radio(m[2], s.scope == m[1]) then s.scope = m[1] end
   end
 
-  ImGui.SetNextItemWidth(ctx, 150)
-  local rvS, strength = ImGui.SliderDouble(ctx, 'Strength', s.strength, 0, 1, '%.2f')
-  if rvS then s.strength = strength end
+  -- No notation is no window to move inside, so the adaptive slots have nothing to
+  -- say and the modal stands as the snap's two fields alone.
+  if notation then
+    -- Key rides the target's row: it is the target's own reading of the notation,
+    -- and it is dead until one is chosen.
+    labelled('Target:', function()
+      chrome.drawPicker{
+        kind        = 'retuneTarget', width = 90,
+        buttonLabel = s.target or 'Off',
+        items       = retuneTargetItems(s.target),
+        onPick      = function(name) s.target = name end,
+      }
+      chrome.disabledIf(s.target == nil, function()
+        ImGui.SameLine(ctx); ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, 'Key:')
+        ImGui.SameLine(ctx)
+        chrome.drawPicker{
+          kind        = 'retuneKey', width = 50,
+          buttonLabel = stepLabel(notation, s.key),
+          items       = retuneKeyItems(notation, s.key),
+          onPick      = function(step) s.key = step end,
+        }
+      end)
+    end)
+    chrome.disabledIf(s.target == nil, function()
+      labelled('Sonority size:', function()
+        local rvN, size = chrome.numberStepper('retuneSonority', s.sonoritySize, { min = 2, max = 12 })
+        if rvN then s.sonoritySize = size end
+      end)
+      labelled('Harmonic lock:', function()
+        ImGui.SetNextItemWidth(ctx, 150)
+        local rvH, lock = ImGui.SliderDouble(ctx, '##harmonicLock', s.harmonicLock, 0, 2, '%.2f')
+        if rvH then s.harmonicLock = lock end
+      end)
+    end)
+  end
 
+  labelled('Strength:', function()
+    ImGui.SetNextItemWidth(ctx, 150)
+    local rvS, strength = ImGui.SliderDouble(ctx, '##strength', s.strength, 0, 1, '%.2f')
+    if rvS then s.strength = strength end
+  end)
+
+  -- A picker popup consumes its own Enter/Escape, invisible to IsKeyPressed (two input
+  -- streams) — gate the keys on the flag the pages fold, else one keystroke picks a row and commits the modal behind it.
+  local picking       = chrome.pickerIsActive()
+  local committing    = not appearing and not picking
+  local spacingX, padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing),
+                         ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  local buttonsW      = ImGui.CalcTextSize(ctx, 'OK') + ImGui.CalcTextSize(ctx, 'Cancel')
+                      + padX * 4 + spacingX
+  ImGui.SetCursorPosX(ctx, originX + (ImGui.GetContentRegionAvail(ctx) - buttonsW) / 2)
   local okPressed     = ImGui.Button(ctx, 'OK')
-                     or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                                         or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
+                     or (committing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                                      or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
-                     or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if     okPressed     then close(true, s.scope, s.strength)
+                     or (committing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
+  if okPressed then
+    close(true, { scope        = s.scope,        strength     = s.strength,
+                  target       = s.target,       key          = s.key,
+                  sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock })
   elseif cancelPressed then close(false) end
 end)
 
--- The undo block wraps the callback, not the command: the opener does nothing
--- undoable and the edit lands frames later.
+-- The undo block wraps the callback, not the command: the opener does nothing undoable
+-- and the edit lands frames later; target and key open on what the take carries, the rest on its default. see design/adaptive-tuning.md § The command's slots
 local function openRetuneModal()
+  local notation = tv:activeTemper()
+  local key      = cm:getAt('take', 'retune.key') or 1
   modalHost:open{
-    kind     = 'retune',
-    title    = 'Retune',
-    scope    = tv:ec():hasSelection() and 'selection' or 'all',
-    strength = 1,
-    callback = util.atomic('Retune', function(scope, strength)
-      tv:snapToTemper(scope, strength)
-    end),
+    kind         = 'retune',
+    title        = 'Retune',
+    scope        = tv:ec():hasSelection() and 'selection' or 'all',
+    strength     = 1,
+    target       = cm:getAt('take', 'retune.target'),
+    key          = notation and math.min(key, #notation.cents) or key,
+    sonoritySize = 5,
+    harmonicLock = 1,
+    callback     = util.atomic('Retune', function(slots) tv:retune(slots) end),
   }
 end
 

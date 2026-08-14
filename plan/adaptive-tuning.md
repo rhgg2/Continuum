@@ -33,10 +33,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-14 tuning: give the retune modal its target, key, size and lock (§ The command's slots)
 - 2026-08-14 tuning: group notes into strands by step-class and overlap (§ The strand)
 - 2026-08-14 tuning: build a strand's shortlist from the notation and the target (§ What the solver takes)
 - 2026-08-14 tuning: factorise a token into coords, and answer eligibility (§ What a target is 1-3)
-- 2026-08-14 tuning: author the diamond from the generators pane (§ What a target is 4)
 
 ## Now
 
@@ -44,14 +44,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. The retune modal takes four more fields: target, chosen from the
-   library's eligible tempers with "none" — which is snap — the default;
-   key, chosen from the notation's step names; sonority size; and harmonic
-   lock. The slots reach `tv` as one table. Target and key are declared cm
-   keys written at take tier on OK, so the modal reopens on them; sonority
-   size opens at 5 and harmonic lock at 1 every time.
-
-2. `tv:retune` builds the strands of the scope, hands them to
+1. `tv:retune` builds the strands of the scope, hands them to
    `sonority.solve` with the sonority size and the harmonic lock, and
    seats the chosen candidate on every note of a strand in its own
    register, blended by strength, through `edit.assign` in the one undo
@@ -60,6 +53,6 @@
    drives a written dominant seventh in a take against a diamond target
    and pins the otonal answer the pure module already fixes.
 
-3. The refusal offers a nudge: the notes of the offending class are
+2. The refusal offers a nudge: the notes of the offending class are
    respelled onto the step whose window holds the target's nearest point,
    and the solve run again.

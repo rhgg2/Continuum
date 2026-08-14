@@ -57,6 +57,11 @@ local declarations = {
   { 'noteLayout',       'colemak' },
   { 'temper',           '12EDO'    },
 
+  -- Retune's remembered slots, written at take tier as the command commits, so the
+  -- modal reopens on them. see design/adaptive-tuning.md § The command's slots
+  { 'retune.target',    nil },   -- library name of the target temper; absent is the snap
+  { 'retune.key',       nil },   -- notation step the target's 1/1 sits on
+
   { 'sampleBrowserRoot', nil },
   -- Project-tier breadcrumb so sampler save-migration survives a
   -- save that happens while Continuum is closed. See docs/sampleManager.md.

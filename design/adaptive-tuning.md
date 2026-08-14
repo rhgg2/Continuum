@@ -69,6 +69,14 @@ step it was written on.**
 8. Strength — how far toward the answer the notes actually move
    (§ Strength).
 
+9. Target and key persist per take (§ Where it sits). Sonority size and
+   harmonic lock open at 5 and 1 every time, being read off the passage
+   rather than off the take.
+
+10. Under no target the command is the snap, and the slots the adaptive
+    facility owns — key, sonority size, harmonic lock — are drawn
+    disabled rather than hidden, so the modal keeps one shape.
+
 ## What "in tune" means
 
 1. Pairwise-just tuning of intervals does not imply just tuning.
@@ -148,7 +156,9 @@ step it was written on.**
    divisions has none, so a temper holding one cannot be a target.
 
 3. Eligibility is therefore a predicate over the tokens, answered when
-   the target is chosen rather than when the solve runs.
+   the target is chosen rather than when the solve runs. The picker
+   offers the library's eligible tempers and no others, so a target the
+   objective cannot score is never chosen.
 
 4. No new mechanism authors a target. `tuning.genCPS`,
    `tuning.genHarmonics`, `tuning.genChord` and the rational case of
@@ -168,7 +178,9 @@ step it was written on.**
 8. A target's period has no force either, since the octave is
    quotiented out of the score.
 
-9. The key is stated as a step of the notation.
+9. The key is stated as a step of the notation, and held as that step's
+   index. A notation carrying fewer steps than the one the key was
+   chosen under clamps it rather than raising.
 
 10. Every temper holds the `1/1` on its first step, so the key's own
     step keeps a candidate at strain zero where it was written. The

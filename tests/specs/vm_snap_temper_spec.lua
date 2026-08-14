@@ -1,8 +1,8 @@
--- Notation snap: tv:snapToTemper(scope, strength) runs every note in scope
--- through tuning.snap and writes the pair back, strength being how far of the
--- way there it actually lands. The temper is a twelve-note quarter-comma
--- meantone MOS, so a step's seat carries a detune of its own and the window
--- is asymmetric (+38.0 / -58.6 either side of step 1).
+-- Retune: tv:retune(slots) runs every note in scope through tuning.snap and
+-- writes the pair back, strength being how far of the way there it actually
+-- lands, and remembers the target and key on the take. The temper is a
+-- twelve-note quarter-comma meantone MOS, so a step's seat carries a detune of
+-- its own and the window is asymmetric (+38.0 / -58.6 either side of step 1).
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -11,6 +11,13 @@ local MEAN = tuning.derive{
   name = 'MEAN', periodPitch = '2/1',
   pitches = { '0.0000', '76.0490', '193.1569', '310.2647', '386.3137', '503.4216',
               '579.4706', '696.5784', '772.6274', '889.7353', '1006.8431', '1082.8921' },
+  stepNames = {},
+}
+
+-- A target: every pitch a ratio, so its points carry coords to score.
+local DIA = tuning.derive{
+  name = 'DIA', periodPitch = '2/1',
+  pitches = { '1/1', '5/4', '3/2' },
   stepNames = {},
 }
 
@@ -45,10 +52,10 @@ local function seat(step, oct) return tuning.stepToMidi(MEAN, step, oct) end
 
 return {
   {
-    name = 'snapToTemper(all) seats an off-step note on its own step',
+    name = 'retune(all) seats an off-step note on its own step',
     run = function(harness)
       local h = mk(harness, { note(0, 76, 0) })       -- E5 written at 12EDO
-      h.vm:snapToTemper('all', 1)
+      h.vm:retune{ scope = 'all', strength = 1 }
       local m, d = seat(5, 5)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch of the meantone seat')
@@ -62,7 +69,7 @@ return {
     run = function(harness)
       -- Step 1 at octave 5 is (72, 0); its upper half-gap is 38.0 cents.
       local h = mk(harness, { note(0, 72, 40) })
-      h.vm:snapToTemper('all', 1)
+      h.vm:retune{ scope = 'all', strength = 1 }
       local m, d = seat(2, 5)
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'crossed to step 2')
@@ -74,7 +81,7 @@ return {
     name = 'a note inside the window keeps its step',
     run = function(harness)
       local h = mk(harness, { note(0, 72, 37) })
-      h.vm:snapToTemper('all', 1)
+      h.vm:retune{ scope = 'all', strength = 1 }
       local n = cell(h, 0)
       t.eq(n.pitch, 72, 'still step 1')
       near(n.detune, 0, 'seated back on step 1')
@@ -86,7 +93,7 @@ return {
     run = function(harness)
       local m, d = seat(5, 5)
       local h = mk(harness, { note(0, m, d) })
-      h.vm:snapToTemper('all', 1)
+      h.vm:retune{ scope = 'all', strength = 1 }
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch untouched')
       near(n.detune, d, 'detune untouched')
@@ -99,7 +106,7 @@ return {
       local h = mk(harness, { note(0, 76, 0), note(600, 76, 0) })
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
                          part1 = 'pitch', part2 = 'pitch' }
-      h.vm:snapToTemper('selection', 1)
+      h.vm:retune{ scope = 'selection', strength = 1 }
       local _, d = seat(5, 5)
       near(cell(h, 0).detune, d,  'note inside the selection snapped')
       t.eq(cell(h, 10).detune, 0, 'note outside it untouched')
@@ -112,9 +119,9 @@ return {
       -- 40 cents BELOW step 1 at octave 5: the window reaches only 38.0 above
       -- it, so a note at +40 would snap to step 2 instead (the case above).
       local h = mk(harness, { note(0, 72, -40) })
-      h.vm:snapToTemper('all', 0.5)
+      h.vm:retune{ scope = 'all', strength = 0.5 }
       near(cell(h, 0).detune, -20, 'half way to the step')
-      h.vm:snapToTemper('all', 0.5)
+      h.vm:retune{ scope = 'all', strength = 0.5 }
       near(cell(h, 0).detune, -10, 'half of what was left')
       t.eq(cell(h, 0).pitch, 72, 'still written as step 1')
     end,
@@ -126,7 +133,7 @@ return {
       -- (73, +40) snaps to step 3 of octave 5, seated at (74, -6.8431); the
       -- blend at 0.5 is 7366.5784 cents, which seats on 74.
       local h = mk(harness, { note(0, 73, 40) })
-      h.vm:snapToTemper('all', 0.5)
+      h.vm:retune{ scope = 'all', strength = 0.5 }
       local n = cell(h, 0)
       t.eq(n.pitch, 74, 'the written pitch moved a semitone')
       t.truthy(math.abs(n.detune + 33.4216) < 0.01,
@@ -139,10 +146,36 @@ return {
     run = function(harness)
       -- More detune than half a semitone, so an enharmonic re-seat would show.
       local h = mk(harness, { note(0, 72, 70) })
-      h.vm:snapToTemper('all', 0)
+      h.vm:retune{ scope = 'all', strength = 0 }
       local n = cell(h, 0)
       t.eq(n.pitch, 72, 'pitch untouched')
       near(n.detune, 70, 'detune untouched')
+    end,
+  },
+
+  {
+    name = 'retune remembers the target and the key on the take',
+    run = function(harness)
+      local h = mk(harness, { note(0, 76, 0) })
+      h.cm:set('global', 'tempers', { DIA = DIA })
+      h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', key = 3,
+                   sonoritySize = 5, harmonicLock = 1 }
+      t.eq(h.cm:getAt('take', 'retune.target'), 'DIA', 'the target is written at take tier')
+      t.eq(h.cm:getAt('take', 'retune.key'), 3, 'so is the key')
+      t.truthy((h.cm:getAt('project', 'tempers') or {}).DIA,
+               'the target is localized into the project library')
+      local _, d = seat(5, 5)
+      near(cell(h, 0).detune, d, 'and with no solver behind it the snap still runs')
+    end,
+  },
+
+  {
+    name = 'retune with no target forgets the one the take carried',
+    run = function(harness)
+      local h = mk(harness, { note(0, 76, 0) })
+      h.cm:set('take', 'retune.target', 'DIA')
+      h.vm:retune{ scope = 'all', strength = 1, key = 1, sonoritySize = 5, harmonicLock = 1 }
+      t.eq(h.cm:getAt('take', 'retune.target'), nil, 'none is remembered as none')
     end,
   },
 }

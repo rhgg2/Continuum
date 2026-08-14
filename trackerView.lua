@@ -2070,9 +2070,14 @@ local function snapToTemperScope(groups, strength)
   tm:flush()
 end
 
---contract: scope is 'selection' or 'all'; strength is 0..1, the fraction of the way each note moves
-function tv:snapToTemper(scope, strength)
-  snapToTemperScope(scope == 'selection' and eventsByCol() or allGroups(), strength)
+--shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, key=step, sonoritySize, harmonicLock }
+--contract: target and key are remembered at take tier; the rest is per invocation
+--contract: with no target the whole of it is the notation snap
+function tv:retune(slots)
+  if slots.target then lib.localize('tempers', slots.target) end
+  cm:set('take', 'retune.target', slots.target)
+  cm:set('take', 'retune.key',    slots.key)
+  snapToTemperScope(slots.scope == 'selection' and eventsByCol() or allGroups(), slots.strength)
 end
 
 local insertRow, deleteRow, insertRowCol, deleteRowCol do

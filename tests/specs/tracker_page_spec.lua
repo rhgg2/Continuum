@@ -1,5 +1,5 @@
 -- Pin-tests for trackerPage's Page interface (bind / unbind / focusState /
--- bind-from-cursor) and the retune modal's scope default and dispatch.
+-- bind-from-cursor) and the retune modal's slots, defaults and dispatch.
 -- render / handleInput are stubs wired in step 3 and verified in REAPER, not here.
 
 -- trackerPage requires ImGui at module scope; stub via package.preload before
@@ -232,21 +232,31 @@ return {
       t.eq(fakeModalHost.last.kind,  'retune', 'the retune modal opened')
       t.eq(fakeModalHost.last.scope, 'all',    'no selection opens on whole take')
       t.eq(fakeModalHost.last.strength, 1,     'the strength dial opens at full')
+      t.eq(fakeModalHost.last.target, nil,     'no target is the default, which is the snap')
+      t.eq(fakeModalHost.last.key, 1,          'the key opens on the first step of the notation')
+      t.eq(fakeModalHost.last.sonoritySize, 5, 'sonority size opens at 5')
+      t.eq(fakeModalHost.last.harmonicLock, 1, 'harmonic lock opens at 1')
 
       stack.tv:ec():setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
                                   part1 = 'pitch', part2 = 'pitch' }
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.scope, 'selection', 'a selection opens on Selection')
 
-      fakeModalHost.last.callback('selection', 1)
+      fakeModalHost.last.callback{ scope = 'selection', strength = 1 }
       local ns = notes()
       t.truthy(math.abs(ns[1].detune - seatDetune) < 1e-6, 'the selected note took the meantone seat')
       t.eq(ns[2].detune, 0, 'the note outside the selection is untouched')
 
       h.cmgr:invoke('retune')
-      fakeModalHost.last.callback('all', 1)
+      fakeModalHost.last.callback{ scope = 'all', strength = 1 }
       ns = notes()
       t.truthy(math.abs(ns[2].detune - seatDetune) < 1e-6, 'whole take snapped the rest')
+
+      h.cm:set('take', 'retune.target', 'DIA')
+      h.cm:set('take', 'retune.key', 20)          -- a step MEAN's twelve do not reach
+      h.cmgr:invoke('retune')
+      t.eq(fakeModalHost.last.target, 'DIA', 'the modal reopens on the target the take carries')
+      t.eq(fakeModalHost.last.key, 12, 'a key past the notation clamps into it')
     end,
   },
 

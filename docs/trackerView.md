@@ -453,7 +453,7 @@ each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 
 ## Retune
 
-`vm:snapToTemper(scope, strength)` puts every note in scope — `'selection'`
+`vm:retune(slots)` puts every note in scope — `slots.scope` is `'selection'`
 or `'all'` — on its own step of the active temper. Snap sets no target — it is
 the absence of one (design/adaptive-tuning.md § When an adaptive solve
 exists) — and with no active temper the verb does nothing, there being
@@ -475,13 +475,25 @@ asked to do nothing. Below 1 the note is deliberately left off its step and a
 second invocation halves the remainder again: the broken idempotence is the
 point, not a tolerance.
 
-Ctrl+T reaches the verb through the retune modal, whose Selection / Whole
-take radio is the scope argument, whose slider is the strength, and whose OK
-is the one commit point — every retuning facility the tracker grows arrives
-as a field beside them. Selection is offered whether or not there is one,
-`ec:region()` degenerating to the cursor cell, so it then snaps the note under
-the cursor. The slider is seeded at 1 on each open, like the scope radio;
-nothing remembers it between invocations.
+Ctrl+T reaches the verb through the retune modal, whose fields are the slots
+the verb takes and whose OK is the one commit point — every retuning facility
+the tracker grows arrives as a field beside them. Selection is offered whether
+or not there is one, `ec:region()` degenerating to the cursor cell, so it then
+snaps the note under the cursor. Target and key are seeded from the take tier
+and written back there as OK commits, so the modal reopens on the answers the
+take carries; a key past the notation's steps — the take having since changed
+temper — clamps into range rather than raising. The strength, the sonority
+size and the harmonic lock are seeded at their defaults on every open.
+
+The target picker offers the library's eligible tempers, `tuning.isTarget`
+filtering the rest out of the row list rather than letting one be picked and
+refused, and the slots that belong to the adaptive facility — key, sonority
+size, harmonic lock — draw disabled while the target is Off. A picker popup
+consumes its own Enter and Escape where `IsKeyPressed` cannot see it, so the
+modal gates OK and Cancel on `chrome.pickerIsActive()`: without it one Enter
+picks a row and commits the modal behind it. Only a take with a temper bound
+shows any of this — with no notation there is no window to move inside, and
+the modal stands as the scope radio and the strength slider alone.
 
 A note whose nearest step lies past MIDI 127 is a known exception.
 `tuning.stepToMidi` folds that overflow into detune rather than dropping
@@ -662,9 +674,9 @@ verb invoked from inside another wrapped verb (`unautomateParam` calling
 one.
 
 The retune modal keeps its label on the callback (`openRetuneModal` in
-`trackerRender.lua`) rather than on `vm:snapToTemper`: the callback is the
-only place holding the scope and strength the modal chose, so it is the only
-place the block can open.
+`trackerRender.lua`) rather than on `vm:retune`: the callback is the only
+place holding the slots the modal chose, so it is the only place the block
+can open.
 
 ## Conventions
 
