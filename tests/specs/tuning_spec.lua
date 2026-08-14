@@ -991,4 +991,61 @@ return {
            'where the step above, a class of its own, reads its own window')
     end,
   },
+
+  {
+    name = 'reach: two anchors arriving at one tuning are one candidate',
+    run = function()
+      local edo12   = tuning.presets['12EDO']
+      local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '6/5' } }
+      local anchors = { { cents = 0, coords = {} },
+                        { cents = tuning.scalaPitch('5/4'), coords = { [5] = 1 } } }
+
+      local onG = tuning.reach(edo12, moves, anchors, { pitch = 67 }, 0)
+      t.eq(#onG, 1, 'a 3/2 from the root and a 6/5 from the third reach the same fifth')
+      nearly(onG[1].cents, 701.9550)
+      t.deepEq(onG[1].coords, { [3] = 1 }, 'the third\'s 5 cancelling against the 6/5\'s')
+      nearly(onG[1].strain, 0.0391, 'measured from the step the note was written on')
+    end,
+  },
+
+  {
+    name = 'reach: a move outside the window is dropped, and an offset carries it in',
+    run = function()
+      local edo12   = tuning.presets['12EDO']
+      local moves   = tuning.moves{ pitches = { '1/1', '11/8' } }
+      local anchors = { { cents = 0, coords = {} } }
+
+      t.eq(#tuning.reach(edo12, moves, anchors, { pitch = 65 }, 0), 0,
+           '11/8 sounds 51.3c above F, 1.3c past the window\'s edge')
+
+      local shifted = tuning.reach(edo12, moves, anchors, { pitch = 65 }, -2)
+      t.eq(#shifted, 1, 'where an offset of -2c seats it inside')
+      nearly(shifted[1].cents, 551.3179, 'the tuning is the placement\'s own, unshifted')
+      nearly(shifted[1].strain, 0.9864, 'and the strain reads it where the offset puts it')
+      t.deepEq(shifted[1].coords, { [11] = 1 })
+    end,
+  },
+
+  {
+    name = 'reach: the minor third the move set lacks, reached from the fifth',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      local moves = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
+      local onC   = { { cents = 0, coords = {} } }
+
+      local fifth = tuning.reach(edo12, moves, onC, { pitch = 67 }, 0)
+      t.eq(#fifth, 1, 'the G of a C minor triad hangs off the C by a 3/2')
+      nearly(fifth[1].cents, 701.9550)
+
+      t.eq(#tuning.reach(edo12, moves, onC, { pitch = 63 }, 0), 0,
+           'where no move of the set is a 6/5, so the Eb hangs off nothing')
+
+      local onG    = { { cents = fifth[1].cents, coords = fifth[1].coords } }
+      local eFlat  = tuning.reach(edo12, moves, onG, { pitch = 63 }, 0)
+      t.eq(#eFlat, 1, 'the Eb arrives a 5/4 below the G')
+      nearly(eFlat[1].cents, 315.6413, 'and so a 6/5 above the C, by a move the set does not hold')
+      t.deepEq(eFlat[1].coords, { [3] = 1, [5] = -1 })
+      nearly(eFlat[1].strain, 0.3128)
+    end,
+  },
 }

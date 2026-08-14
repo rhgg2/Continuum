@@ -711,6 +711,55 @@ function tuning.shortlist(notation, target, keyStep, note, widen)
   return candidates
 end
 
+-- Exponents add along an edge of the placement, and a prime cancelling to zero leaves
+-- the coords rather than sitting at 0, so coordKey reads two paths to one tuning alike.
+local function addCoords(coords, move)
+  local sum = {}
+  for prime, exponent in pairs(coords) do sum[prime] = exponent end
+  for prime, exponent in pairs(move) do
+    local total = (sum[prime] or 0) + exponent
+    sum[prime] = total ~= 0 and total or nil
+  end
+  return sum
+end
+
+-- The shortlist under a move set: a candidate is one move from a strand already placed, and
+-- the offset seats the placement rather than riding along an edge (design/adaptive-ji.md § A placement is a tree, § Where a placement sits).
+--contract: candidates {cents, coords, strain} one move from an anchor {cents, coords}
+--contract: a candidate's coords are the anchor's plus the move's; its cents the placement's own
+--contract: kept where `cents + offset` lands inside the note's step window; strain reads it there
+--contract: deduped by coords, two anchors reaching one tuning being one candidate; nearest first
+function tuning.reach(notation, moves, anchors, note, offset)
+  local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
+  local midi, detune = tuning.stepToMidi(notation, step, octave)
+  local seat         = midi * 100 + detune
+  local below, above = tuning.stepWindow(notation, step)
+
+  local candidates, seen = {}, {}
+  for _, anchor in ipairs(anchors) do
+    for _, move in ipairs(moves) do
+      local cents  = reduceCents(anchor.cents + move.cents, OCTAVE)
+      local gap    = gapTo(seat, cents + offset)
+      local half   = gap < 0 and below or above
+      local strain = math.abs(gap) / half
+      if strain <= 1 + REACH_TOL then
+        local coords = addCoords(anchor.coords, move.coords)
+        local key    = coordKey(coords)
+        if not seen[key] then
+          seen[key] = true
+          util.add(candidates, { cents = cents, coords = coords, strain = strain })
+        end
+      end
+    end
+  end
+
+  table.sort(candidates, function(a, b)
+    if a.strain ~= b.strain then return a.strain < b.strain end
+    return a.cents < b.cents
+  end)
+  return candidates
+end
+
 -- The shortlist's fold in reverse: a point the strand took, in the register of one
 -- of the notes that writes it, the note's own step seat being what the window was measured off.
 --contract: (pitch, detune) for `cents` placed in the octave nearest the note's seat

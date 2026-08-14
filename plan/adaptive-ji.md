@@ -33,6 +33,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-15 tuning: reach the candidates one move from a placed strand (§ A placement is a tree)
 - 2026-08-15 tuning: read a ratio temper as a move set (§ Where a move set comes from)
 
 ## Now
@@ -40,18 +41,3 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- `tuning.reach(notation, moves, anchors, note, offset)` gives the
-  candidates one move reaches from the strands already placed in a
-  sonority (§ What makes the candidate set finite, § A placement is a
-  tree). For each anchor `{cents, coords}` and each move it takes the
-  tuning that move reaches, keeps it where `cents + offset` lands inside
-  the note's step window, sums the anchor's coords with the move's, and
-  returns `tuning.shortlist`'s `{cents, coords, strain}` shape deduped
-  by coords. It sits beside `shortlist`, the other place the notation
-  and the target meet. The offset is one figure for the whole passage,
-  taken now and swept in phase 3. Spec: two anchors reaching one tuning
-  collapsing to a single candidate; a move landing outside the window
-  dropped, and admitted again by an offset that carries it in; under a
-  move set holding `5/4` and `3/2` but not `6/5`, a C minor triad's E♭
-  reachable from G and not from C.
