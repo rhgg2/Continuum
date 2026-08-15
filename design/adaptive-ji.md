@@ -1,7 +1,7 @@
 # Design — Adaptive just intonation
 
 > opened: 2026-08-11 · status: in flight — plan/adaptive-ji.md, at
-> phase 1 (the move set), behind the command
+> phase 2 (the placement), behind the command
 > `design/adaptive-tuning.md` has built; the state counts of § What it
 > costs to solve await re-measurement
 
@@ -27,6 +27,10 @@ written on.**
 4. The exchange makes two facilities of one command
    (`design/adaptive-tuning.md` § Where it sits). One modal opens over
    both, with a pure function apiece behind it.
+
+5. The two functions stand side by side in the solver's module. The
+   strands, the walk, the score and the schedule of live strands serve
+   both, and only the enumeration at an onset differs.
 
 ## The command's slots
 
@@ -165,12 +169,12 @@ written on.**
    11 would displace them: `11/8` reads 3.46 and sounds a tritone as one
    move, where nothing on 3, 5 and 7 sounds one under 3.91.
 
-6. That measure is the objective's own. A sonority's score (§ Coords
+7. That measure is the objective's own. A sonority's score (§ Coords
    accumulate along it) is the Tenney height of its octave-free
    `lcm/gcd`, so one measure bounds what may be admitted and scores what
    results.
 
-7. Odd limit is the wrong bound here, though it is the right one for a
+8. Odd limit is the wrong bound here, though it is the right one for a
    scale. It does not add along a chain: two `5/4`s are odd limit 5
    apiece and `25/16` is odd limit 25, where the Tenney heights are
    2.32 apiece and 4.64 together, which is exactly `25/16`'s.
@@ -205,7 +209,12 @@ written on.**
    left where it was written, and neither has a diminished triad under
    any bound.
 
-8. The choice of root stays immaterial. Re-rooting a placement shifts
+8. The strand seated is the first born at the first onset. Its coords
+   are zero (§ Coords accumulate along it) and its cents the seat of
+   the step it was written on, so its strain reads the offset and
+   nothing else.
+
+9. The choice of root stays immaterial. Re-rooting a placement shifts
    every displacement by a constant, which the offset absorbs, so the
    pull reads a placement as blindly as the score does
    (§ Coords accumulate along it).
@@ -313,6 +322,15 @@ written on.**
     85,536, against the 200,000 placements at an onset the sibling
     allows (`design/adaptive-tuning.md` § Solving it).
 
+16. The budget cannot be read off the walk. A strand's candidates
+    depend on where the others went (§ What the solver loses), so there
+    is no product of shortlist sizes to take before the search begins.
+
+17. The count is taken as the entries are reached, and the search
+    refuses there. The upfront bound (the move set's size times the
+    sonority's) overestimates by an order of magnitude and would
+    refuse everything.
+
 ## What the solver loses
 
 1. The sibling's solver takes strands carrying shortlists and knows
@@ -339,6 +357,14 @@ written on.**
    (`design/adaptive-tuning.md` § First brick); here the move set and
    the coord arithmetic are inside the search, and there is nothing
    smaller to pin.
+
+6. Carriage replaces that purity. The solve hands the notation, the
+   move set and a candidate's cents to `tuning.lua`, and reads back the
+   coords and the strain it scored and pulled on already.
+
+7. The invariant given up is the sibling's own rather than the
+   module's. The sibling's solve reads no cents and knows no ratios,
+   and states that of itself.
 
 ## Drift
 
@@ -388,28 +414,25 @@ written on.**
 
 ## Open
 
-1. What the solver's module boundary becomes, and what can still be
-   specified and pinned on its own (§ What the solver loses).
-
-2. What the command does with a chord the move set misspells (§ When a
+1. What the command does with a chord the move set misspells (§ When a
    chord is misspelled). Refusing, seating it unmoved, and stiffening the
    pull for that chord alone are all available and none is obviously
    right.
 
-3. What the pull's scale becomes where it still has room
+2. What the pull's scale becomes where it still has room
    (§ What reachability spends). Defending a diminished triad's notated
    spelling takes about 1.85, the top of the sibling's useful travel,
    where its own account has the solve tending to a no-op
    (`design/adaptive-tuning.md` § Harmonic lock). Whether the dial is
    renormalised for this model or the objective reweighted is undecided.
 
-4. Whether the sibling's widening transfers. It scales the window of a
+3. Whether the sibling's widening transfers. It scales the window of a
    class with nothing in reach and runs the solve again
    (`design/adaptive-tuning.md` § What the solver takes); here there is
    no shortlist to find empty, so a refusal appears only inside the
    search.
 
-5. How a solve sees the take before it. The sibling's collar arrives as
+4. How a solve sees the take before it. The sibling's collar arrives as
    strands of one with their tuning already chosen
    (`design/adaptive-tuning.md` § Seams), but a take stores cents where
    the objective reads coords, and a dense reachable set puts no ratio
@@ -417,7 +440,7 @@ written on.**
    recover at all. Either a note carries its coords as metadata, or one
    solve spans the takes in sequence and carries the tree across.
 
-6. Whether the window should bind at all. Letting a strand drift past
+5. Whether the window should bind at all. Letting a strand drift past
    it, with the pull anchored to the step the note was written on rather
    than the one it would then recover, would collapse the refusal, the
    widening offer and the floor of § What reachability spends into a

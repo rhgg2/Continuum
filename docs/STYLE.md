@@ -4,85 +4,72 @@ The register the project's prose is written in.
 
 ## What this governs
 
-1. Prose written to be read: `docs/<file>.md`, `design/<doc>.md`, the
-   dated entries in `design/decisions.md`, and a plan's Queued lines.
+1. Prose written to be read: 
+   - `docs/<file>.md`;
+   - `design/<doc>.md`;
+   - `design/decisions.md`;
+   - a plan's Queued lines.
 
 2. Implementation briefs are excluded; they are compressed by design.
 
-3. For annotations and inline comments, see `docs/CONVENTIONS.md`
-   instead.
+3. For annotations and inline comments, see `docs/CONVENTIONS.md`.
 
 ## What a document is
 
-1. A document states the current model. It says nothing about how that
-   model was reached.
+1. A document states the current model.
 
-2. The document reads linearly. Each sentence follows logically from
-   everything that precedes it. External content is scoped to
-   cross-references to other project docs, and terms pulled in get a
-   brief gloss before use.
+2. It reads linearly. Each part follows logically from its
+   predecessor. We only cross-reference other project docs, and
+   imported terms are glossed before use.
 
-3. When any part of the document is superseded, it leaves no trace of
-   what came before. The document is not a historical record; the old
-   model is removed and the new one stands alone.
-
-4. The document does not relitigate paths not chosen. It is only
-   concerned with the path that will be taken.
-
-5. Thus, there are no headings that name refutations, or preambles
-   inventorying what was tried and discarded.
+3. Edits replace, rather than augment. We don't relitigate rejected
+   paths.
 
 ## The register
 
-1. The tone is analytic, dry, sparse, but always clear.
+1. The tone is analytic and sparse, but always clear.
 
-2. Every sentence and every clause in a sentence makes a claim. The
-   test is to delete it; if only the tone changed, it was ornament.
+2. Every sentence and clause makes a claim. If deleting it changes
+   only the tone, it was ornament.
 
-3. For a sentence or clause that earns its existence, it adopts the
-   phrasing that expresses it most vividly.
-
+3. Sentence or clauses that earn their place take the phrasing that
+   expresses them most vividly.
 
 ## Nomenclature
 
-1. Terms are assigned specific meanings terms; state those meanings
-   before using them; do not allow them to wander.
+1. Terms are assigned specific meanings, which are stated before use.
 
-2. One word names one thing. A word doing double duty is two words.
+2. Definitions need no preamble; they are stated flatly, and unpacked
+   only for a non-obvious WHY.
 
-3. Be parsimonious with imported vocabulary: an elementary formulation
-   that carries the idea will always be clearer.
+3. One word names one thing only.
 
-4. Bold marks a term where it is defined, and a document's opening
-   thesis. It marks nothing else. Italics carry emphasis.
+4. Imported vocabulary is used sparingly; an elementary formulation is
+   typically clearer.
 
-5. Definitions bear no preamble or preparation. They are stated
-   flatly, and unpacked only when there is a non-obvious WHY.
+5. Term definitions are bolded, as is a document's opening thesis. For
+   any other emphasis, use italics.
 
 ## Structure
 
-1. Each idea has one home. Cycling back to the same idea again
-   undercuts the clarity of the prose.
+1. The document is structured in sections, paragraphs, and sentences.
 
-2. The document is structured in sections, paragraphs, and sentences.
+2. Section headings do not name numbers. "The five slots" and "three
+   properties arrive together" are obligations to maintain.
 
-3. One concept per section. If a section weaves several threads
-   together, separate them out and rewrite.
+3. One concept per section. Each concept has one home.
 
 4. A section starts with its central claim. The support follows.
 
-5. Heading and lead sentences carry no enumerations. "The five slots"
-   and "three properties arrive together" are obligations to maintain.
+5. A section's paragraphs are a numbered list.
 
-6. A section's paragraphs are a numbered list.
+6. One idea per paragraph. An idea needing more than a couple of
+   sentences is two ideas.
 
-7. One idea per paragraph. If an idea needs more than a couple of
-   sentences to say, it is two ideas.
+7. A paragraph may contain a list, all of whose items are the same
+   kind of thing.
 
-8. A paragraph may contain a list. A list's items are all the same
-   kind of thing. 
+8. One claim per sentence.
 
-9. One claim per sentence.
-
-10. All citations are to `§ <section>` only. Hence, paragraph
-    renumbering is free.
+9. Citations are to `§ <section>` only, so that paragraphs may
+   renumber freely.
