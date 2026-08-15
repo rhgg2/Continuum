@@ -1,4 +1,4 @@
-@spec sonority_place_spec  src=tests/specs/sonority_place_spec.lua  loc=103  cases=4
+@spec sonority_place_spec  src=tests/specs/sonority_place_spec.lua  loc=193  cases=8
 @exercises sonority (sonority), tuning (tuning)
 @surface   sonority.strands, tuning.stepClass, tuning.moves, sonority.place, sonority.score
 
@@ -11,42 +11,61 @@
   minor third the move set holds no move for reached through the fifth. Pins the
   refusal an offset with nothing reachable returns, and the root seated where it
   was written (§ Where a placement sits).
+  
+  Pins the carry across onsets: what a chord may attach to is what sounds under it
+  or struck before it, so a comma pump drifts by the comma it pumps.
 
 # Helpers
-  @fn nearly(actual, expected, why)  @ 17-20
+  @fn nearly(actual, expected, why)  @ 21-24
       -- The placement's figures are worked past the doc's two places.
-  @fn chord(pitches)  @ 24-32
-      -- The chord as the command hands it over: a note per pitch, struck together and a
-      -- beat long, grouped into strands by the step-class the notation gives them.
-  @fn coordsOf(placement, strands)  @ 36-40
+  @fn passage(chords)  @ 28-39
+      -- The passage as the command hands it over: a note per pitch, each chord a beat long
+      -- unless it says otherwise, grouped into strands by the step-class the notation gives them.
+  @fn chord(pitches)  @ 41-43
+  @fn commaPump()  @ 47-53
+      -- I–vi–ii–V–I: the moves that spell it multiply to a syntonic comma, so the step it
+      -- opens on is not the tuning it closes on (design/adaptive-ji.md § Drift).
+  @fn heldUnderChange()  @ 56-60
+      -- A G sustained through a chord change, with C and E under it and then E♭ and A♭.
+  @fn coordsOf(placement, strands)  @ 64-68
       -- A placement's coords in strand order, which is ascending step-class: what the
       -- chord came out as, blind to where it sits.
 
 # Cases
-  @case 'a dominant seventh standing alone comes out 4:5:6:7'  [pure]  @ 44-57
-  @case 'the minor third no move reaches hangs off the fifth'  [pure]  @ 61-75
-  @case 'a move set of fifths alone places no minor triad'  [pure]  @ 79-84
-  @case 'the offset carries the placement, and the root reads it alone'  [pure]  @ 88-101
+  @case 'a dominant seventh standing alone comes out 4:5:6:7'  [pure]  @ 72-85
+  @case 'the minor third no move reaches hangs off the fifth'  [pure]  @ 89-103
+  @case 'a move set of fifths alone places no minor triad'  [pure]  @ 107-112
+  @case 'a note held under a chord change constrains what strikes against it'  [pure]  @ 116-134
+  @case 'a move set reaching nothing from what sounds under it refuses the passage'  [pure]  @ 138-143
+  @case 'a comma pump returns to its opening step at a different tuning'  [pure]  @ 147-159
+  @case 'chords releasing before the next strikes chain all the same'  [pure]  @ 163-174
+  @case 'the offset carries the placement, and the root reads it alone'  [pure]  @ 178-191
 
 # Uses (outbound edges)
-  @use call sonority.strands  @ 29
-  @use call tuning.stepClass  @ 30
-  @use call tuning.moves  @ 46,63,81,90
-  @use call sonority.place  @ 48,65,82,92
-  @use call sonority.score  @ 55
+  @use call sonority.strands  @ 36
+  @use call tuning.stepClass  @ 37
+  @use call tuning.moves  @ 74,91,109,118,140,149,165,180
+  @use call sonority.place  @ 76,93,110,121,131,141,150,169,182
+  @use call sonority.score  @ 83
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cents  @ 53,54,72,97
-  @field r coords  @ 38,70,73
-  @field r cost  @ 56,74,100
-  @field r detune  @ 30
-  @field w endppq  @ 27
-  @field w name  @ 44,61,79,88
-  @field r pitch  @ 30
-  @field w pitch  @ 27
-  @field w pitches  @ 46,63,81,90
-  @field w ppq  @ 27
-  @field r presets  @ 14
-  @field w run  @ 45,62,80,89
-  @field r strain  @ 98,99
-  @field r tunings  @ 38,53,54,70,72,73,97,98,99
+  @field r cents  @ 81,82,100,126,128,133,155,158,173,187
+  @field r coords  @ 66,98,101,124,127,132,156,172
+  @field r cost  @ 84,102,190
+  @field r detune  @ 37
+  @field w endppq  @ 33
+  @field r len  @ 33
+  @field w len  @ 57
+  @field w name  @ 72,89,107,116,138,147,163,178
+  @field r pitch  @ 37
+  @field w pitch  @ 32
+  @field r pitches  @ 31
+  @field w pitches  @ 42,50,57,58,59,74,91,109,118,140,149,165
+  @field w pitches  @ 180
+  @field r ppq  @ 32,33
+  @field w ppq  @ 32,42,50,57,58,59
+  @field r presets  @ 18
+  @field w run  @ 73,90,108,117,139,148,164,179
+  @field r strain  @ 188,189
+  @field r tunings  @ 66,81,82,98,100,101,124,126,127,128,132,133
+  @field r tunings  @ 155,156,158,172,173,187,188,189

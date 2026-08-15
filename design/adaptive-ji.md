@@ -78,18 +78,30 @@ written on.**
    (`design/adaptive-tuning.md` § The model). A note held through the
    chords behind it stays attachable for as long as it sounds.
 
-7. The tree's shape decides what can be spelled. Under a move set
-   holding `5/4` and `3/2` but not `6/5`, a C minor triad has no
-   placement in which E♭ hangs off C, since that edge would be a `6/5`;
-   it has one in which E♭ hangs off G, arriving a `5/4` below it and so
-   a `6/5` above the C.
+7. An onset can leave nothing of what preceded it. The whole onset is
+   absorbed before the sonority is taken, so `n` or more classes
+   striking together evict everything that is not still sounding
+   (`design/adaptive-tuning.md` § The model).
 
-8. A move the set does not hold is therefore still available between two
-   strands, provided a third stands between them in the tree.
+8. The sonority before such an onset stays attachable, and only there.
+   Without it the strands born there reach from nothing, and the passage
+   is a forest of chords each rooted where it was written.
 
-9. A step-class returning later is a second vertex. The strand that held
-   it has ended, so the new one attaches by its own move and its coords
-   follow that chain rather than the earlier strand's (§ Drift).
+9. Keeping it attachable at every onset costs what it does not buy
+   (§ What it costs to solve).
+
+10. The tree's shape decides what can be spelled. Under a move set
+    holding `5/4` and `3/2` but not `6/5`, a C minor triad has no
+    placement in which E♭ hangs off C, since that edge would be a `6/5`;
+    it has one in which E♭ hangs off G, arriving a `5/4` below it and so
+    a `6/5` above the C.
+
+11. A move the set does not hold is therefore still available between two
+    strands, provided a third stands between them in the tree.
+
+12. A step-class returning later is a second vertex. The strand that held
+    it has ended, so the new one attaches by its own move and its coords
+    follow that chain rather than the earlier strand's (§ Drift).
 
 ## Coords accumulate along it
 
@@ -242,6 +254,35 @@ written on.**
    strength ten times its top, and stops at 37¢ however hard it is
    pulled.
 
+## Where nothing is in reach
+
+1. A partial placement can be **stuck**: no strand the onset has yet to
+   place is reachable by any move from any strand already placed. The
+   search refuses that offset there.
+
+2. Refusing an offset refuses nothing else (§ Where a placement sits). A
+   ii–V–I whose chords are rolled rather than struck together is refused
+   at five of the sweep's eleven passes and placed at the other six.
+
+3. Where every pass refuses, the fallback is a **composite** edge: two
+   moves where the tree can carry one. It stands in for the vertex the
+   tree would have routed through had that vertex been placed.
+
+4. The objective is untouched by it. A composite arrives at the coords
+   the missing vertex would have given, and the score reads coords
+   (§ Coords accumulate along it).
+
+5. It fires at a stuck partial and nowhere else. Composing a nine-move
+   set gives thirty-seven moves, and offering all of them at every
+   attachment does not finish; offered where a partial has no extension
+   at all, they cost nothing until they are needed.
+
+6. This is what transfers of the sibling's widening
+   (`design/adaptive-tuning.md` § What the solver takes). There a class
+   with nothing in reach has its window scaled; here the reach deepens,
+   the window being a joint constraint the offset already answers for
+   (§ Where a placement sits).
+
 ## Where a move set comes from
 
 1. A temper whose pitches are ratios is a move set already, read as
@@ -293,54 +334,73 @@ written on.**
 7. Keying an entry by its coords collapses them at no cost. The entry
    already carries the coords that reached it.
 
-8. The offset does not fit inside the walk (§ Where a placement sits).
+8. The carry into an onset must still tell apart the strands that onset
+   evicted, since they are what the strands born there attach to
+   (§ A placement is a tree). The entries it produces need not, an
+   evicted strand having no future left to alter.
+
+9. The offset does not fit inside the walk (§ Where a placement sits).
    It is one figure for the whole passage, so no partial placement can
    be scored against it.
 
-9. The DP therefore runs once for each offset in a sweep.
+10. The DP therefore runs once for each offset in a sweep.
 
-10. The sweep resolves the placement rather than the offset. A sweep
+11. The sweep resolves the placement rather than the offset. A sweep
     at 10¢ chooses what a sweep at 0.25¢ chooses, and a sweep at 20¢
     does not.
 
-11. The winning placement's exact offset then follows from the mean of
+12. The winning placement's exact offset then follows from the mean of
     its displacements (§ Where a placement sits), so eleven passes over
     a range of 100¢ are enough.
 
-12. The counts that follow are floors. They count only the strands the
+13. The counts that follow are floors. They count only the strands the
     recency bound makes live, and they are stated in states where the
     budget is placements at an onset
     (`design/adaptive-tuning.md` § Solving it).
 
-13. Only a narrow range of complexity bounds is usable: between about
+14. Only a narrow range of complexity bounds is usable: between about
     2.8 and 3.3, admitting seven to nine moves. Below it a dominant
     seventh standing alone is spelled only by running a strand to 49¢ of
     a 50¢ window; in a ii–V–I the same chord solves inside 27¢. Above it
     the state count runs away, reaching 59,049 at 4.0.
 
-14. Inside that range the state count is thirteen to thirty-two times
+15. Inside that range the state count is thirteen to thirty-two times
     the sibling's. Measured against a 12-EDO notation over a ii–V–I and
     a comma pump, candidates average 2.4 a strand at the lower bound and
     3.1 at the upper, with maxima of five and six where the sibling's
     shortlists never exceed three.
 
-15. The absolute numbers stay small. Six candidates over a sonority of
+16. The absolute numbers stay small. Six candidates over a sonority of
     six is 7,776 states, where the sibling's own reckoning puts three
     candidates over a sonority of eight at 2,187
     (`design/adaptive-tuning.md` § Solving it).
 
-16. The sweep leaves them inside the budget. Eleven passes of 7,776 is
+17. The sweep leaves them inside the budget. Eleven passes of 7,776 is
     85,536, against the 200,000 placements at an onset the sibling
     allows (`design/adaptive-tuning.md` § Solving it).
 
-17. The budget cannot be read off the walk. A strand's candidates
+18. The budget cannot be read off the walk. A strand's candidates
     depend on where the others went (§ What the solver loses), so there
     is no product of shortlist sizes to take before the search begins.
 
-18. The count is taken as the entries are reached, and the search
+19. The count is taken as the entries are reached, and the search
     refuses there. The upfront bound (the move set's size times the
     sonority's) overestimates by an order of magnitude and would
     refuse everything.
+
+20. Counted that way, a ii–V–I of sevenths under nine moves reaches
+    1,937 entries at its third onset, against a budget of 200,000.
+
+21. Keeping the preceding sonority attachable at every onset rather than
+    only where nothing is carried (§ A placement is a tree) reaches
+    622,694 there, and arrives at the same placement. A strand's
+    candidates are its anchors times the moves, and the strands born
+    together multiply.
+
+22. Where nothing is carried the price is real. Five detached triads at
+    a sonority of three under nine moves reach 82,655 entries at the
+    fifth onset, where the sonority alone reaches twelve, a chain free
+    to wander leaving no placement to dominate the rest.
 
 ## What the solver loses
 
@@ -401,6 +461,12 @@ written on.**
    its scale is the sibling's
    (`design/adaptive-tuning.md` § Harmonic lock).
 
+6. A passage of detached chords drifts at all only because the sonority
+   before an onset stays attachable (§ A placement is a tree). At a
+   sonority of three with nothing sounding across the change, a comma
+   pump would otherwise re-root every chord and return to its opening
+   step unmoved.
+
 ## When a chord is misspelled
 
 1. A chord can be seated by moves that spell a different chord. Nothing
@@ -437,13 +503,7 @@ written on.**
    (`design/adaptive-tuning.md` § Harmonic lock). Whether the dial is
    renormalised for this model or the objective reweighted is undecided.
 
-3. Whether the sibling's widening transfers. It scales the window of a
-   class with nothing in reach and runs the solve again
-   (`design/adaptive-tuning.md` § What the solver takes); here there is
-   no shortlist to find empty, so a refusal appears only inside the
-   search.
-
-4. How a solve sees the take before it. The sibling's collar arrives as
+3. How a solve sees the take before it. The sibling's collar arrives as
    strands of one with their tuning already chosen
    (`design/adaptive-tuning.md` § Seams), but a take stores cents where
    the objective reads coords, and a dense reachable set puts no ratio
@@ -451,10 +511,19 @@ written on.**
    recover at all. Either a note carries its coords as metadata, or one
    solve spans the takes in sequence and carries the tree across.
 
-5. Whether the window should bind at all. Letting a strand drift past
+4. Whether the window should bind at all. Letting a strand drift past
    it, with the pull anchored to the step the note was written on rather
    than the one it would then recover, would collapse the refusal, the
    widening offer and the floor of § What reachability spends into a
    single trade. What it costs is idempotence by construction and a dial
    that means the same under every notation
    (`design/adaptive-tuning.md` § The window, § Harmonic lock).
+
+5. Whether a rolled chord should be one onset. The tree grows forward in
+   time, so a rolled chord's first note is its root and the rest hang
+   off it: a rolled ii–V–I places its V with a wolf fifth where the same
+   chord struck together gives 4:5:6. What is lost is the joint
+   enumeration rather than a move, so composite edges do not recover it
+   (§ Where nothing is in reach) and folding strikes inside a tolerance
+   into one onset would. That is the walk's business rather than the
+   placement's.

@@ -222,17 +222,22 @@ local function placementsAt(strands, born, strength)
   end
 end
 
--- Cost, then the choice vector, so an exact tie breaks deterministically rather than by
--- table order (design/adaptive-tuning.md § What the solver takes).
---contract: true iff `state` is the better of the two, the earlier candidate winning a tie
-local function outranks(state, best, count)
+-- Cost, then the strands one by one, so an exact tie breaks deterministically rather than
+-- by table order (design/adaptive-tuning.md § What the solver takes).
+--contract: true iff `state` is the better of the two, the lower rank winning a tie
+local function outranks(state, best, count, rankOf)
   if not best then return true end
   if state.cost ~= best.cost then return state.cost < best.cost end
   for index = 1, count do
-    local mine, theirs = state.choice[index], best.choice[index]
+    local mine, theirs = rankOf(state, index), rankOf(best, index)
     if mine ~= theirs then return mine < theirs end
   end
   return false
+end
+
+-- Ranks a strand by the candidate index the solve chose for it.
+local function byChoice(state, index)
+  return state.choice[index]
 end
 
 local function keyOf(choice, list)
@@ -261,7 +266,7 @@ function sonority.solve(strands, n, strength)
     local carried = {}
     for _, state in pairs(states) do
       local key = keyOf(state.choice, onset.held)
-      if outranks(state, carried[key], #strands) then carried[key] = state end
+      if outranks(state, carried[key], #strands, byChoice) then carried[key] = state end
     end
 
     -- Every member of this sonority is now assigned: born here, or live from
@@ -287,65 +292,112 @@ function sonority.solve(strands, n, strength)
 
   local best
   for _, state in pairs(states) do
-    if outranks(state, best, #strands) then best = state end
+    if outranks(state, best, #strands, byChoice) then best = state end
   end
   return best.choice
 end
 
 ----- The placement
 
--- What a strand may attach to: the strands placed so far, in strand order, so that
--- the candidates come back in one order however the placement was grown.
-local function anchorsOf(tunings, born)
+-- An entry ranks on the coords each strand reached, and a strand it has yet to place
+-- ranks before any it has, so two entries compare on the strands they have in common.
+local function byTuningKey(entry, index)
+  local chosen = entry.tunings[index]
+  return chosen and chosen.key or ''
+end
+
+-- The anchors themselves, in strand order, so that the candidates come back in one
+-- order however the placement was grown.
+local function anchorsOf(tunings, list)
   local anchors = {}
-  for _, index in ipairs(born) do
+  for _, index in ipairs(list) do
     local chosen = tunings[index]
     if chosen then util.add(anchors, { cents = chosen.cents, coords = chosen.coords }) end
   end
   return anchors
 end
 
--- Two partial placements agreeing on every strand's tuning are one, whichever order
--- placed them; position names the strand, so an unplaced one keys as false.
-local function placementKey(tunings, born)
+-- Two placements agreeing on the tuning of every strand listed are one, whichever order
+-- or history reached them; position names the strand, so an unplaced one keys as false.
+local function placementKey(tunings, list)
   local parts = {}
-  for k, index in ipairs(born) do
+  for k, index in ipairs(list) do
     parts[k] = tunings[index] and tunings[index].key or false
   end
   return util.key(table.unpack(parts))
 end
 
+-- An onset striking a sonority's worth of classes evicts everything not still sounding,
+-- so the sonority before it stays attachable there, and only there (design/adaptive-ji.md § A placement is a tree).
+--contract: sonorities, plan → per onset the attachable strands, and those the carry must tell apart
+local function attachable(sonorities, plan)
+  local memory = {}
+  for i, onset in ipairs(plan) do
+    local anchors, carry = util.clone(onset.live), util.clone(onset.held)
+    if i > 1 and #onset.held == 0 then
+      local live = {}
+      for _, index in ipairs(onset.live) do live[index] = true end
+      for _, index in ipairs(sonorities[i - 1].strands) do
+        if not live[index] then util.add(anchors, index); util.add(carry, index) end
+      end
+      table.sort(anchors)
+      table.sort(carry)
+    end
+    memory[i] = { anchors = anchors, carry = carry }
+  end
+  return memory
+end
+
+-- Counted as the entries are reached rather than read off the walk: a strand's candidates
+-- depend on where the others went, so there is no product of shortlists to take in advance.
+local function spend(search)
+  search.reached = search.reached + 1
+  assert(search.reached <= budget, string.format(
+    'sonority.place: onset %d reaches over the budget of %d entries', search.at, budget))
+end
+
 -- Grown outward from the root, taking any unplaced strand from any strand already placed:
 -- an order fixed in advance would lose the trees that reach a strand through a later one (design/adaptive-ji.md § What it costs to solve).
-local function placementsFrom(strands, born, notation, moves, offset, strength)
-  local root = tuning.origin(notation, strands[born[1]].notes[1], offset)
-  if not root then return {} end
+local function growFrom(search, entry, onset, memory)
+  local strands, frontier, first = search.strands, { entry }, 1
 
-  local frontier = { { tunings = { [born[1]] = root },
-                       pull    = strength * root.strain * root.strain } }
-  for _ = 2, #born do
-    local grown, seen = {}, {}
+  -- The passage's one root: the strand seated as written, at the only onset with
+  -- nothing to attach to (design/adaptive-ji.md § Where a placement sits).
+  if #memory.carry == 0 then
+    local index = onset.born[1]
+    local root  = tuning.origin(search.notation, strands[index].notes[1], search.offset)
+    if not root then return {} end
+    local tunings  = util.clone(entry.tunings)
+    tunings[index] = root
+    frontier = { { cost    = entry.cost + search.strength * root.strain * root.strain,
+                   tunings = tunings } }
+    first = 2
+  end
+
+  for _ = first, #onset.born do
+    local grown = {}
     for _, partial in ipairs(frontier) do
-      local anchors = anchorsOf(partial.tunings, born)
-      for _, index in ipairs(born) do
+      local anchors = anchorsOf(partial.tunings, memory.anchors)
+      for _, index in ipairs(onset.born) do
         if not partial.tunings[index] then
           -- One window serves a strand in every register, so notes[1] speaks for all.
-          local reached = tuning.reach(notation, moves, anchors, strands[index].notes[1], offset)
+          local reached = tuning.reach(search.notation, search.moves, anchors,
+                                       strands[index].notes[1], search.offset)
           for _, candidate in ipairs(reached) do
             local tunings  = util.clone(partial.tunings)
             tunings[index] = candidate
-            local key      = placementKey(tunings, born)
-            if not seen[key] then
-              seen[key] = true
-              util.add(grown, { tunings = tunings,
-                                pull    = partial.pull
-                                        + strength * candidate.strain * candidate.strain })
-            end
+            local grew = { cost    = partial.cost
+                                   + search.strength * candidate.strain * candidate.strain,
+                           tunings = tunings }
+            local key  = placementKey(tunings, memory.anchors)
+            spend(search)
+            if outranks(grew, grown[key], #strands, byTuningKey) then grown[key] = grew end
           end
         end
       end
     end
-    frontier = grown
+    frontier = {}
+    for _, grew in pairs(grown) do util.add(frontier, grew) end
   end
   return frontier
 end
@@ -353,27 +405,50 @@ end
 -- The candidate model of design/adaptive-ji.md: there is no shortlist to index, so
 -- the search carries the move set and reads the tunings off tuning.lua as it goes.
 --contract: strands, n, strength, notation, moves, offset → the cheapest Placement, or nil unplaced
---contract: the first strand is the root, seated as written; each other is a move from one placed
---contract: cost is sonority.cost's own: the box over the sonority, plus the pull each strand spends
---contract: one onset only — the carry across onsets is unbuilt
+--contract: the strand born first is the root, seated as written; each other moves from one placed
+--contract: cost is sonority.cost's own: the box over the walk, plus the pull each strand spends
+--contract: raises where an onset reaches more entries than the budget allows
 function sonority.place(strands, n, strength, notation, moves, offset)
   local sonorities = sonority.walk(strands, n)
-  assert(#sonorities == 1,
-    'sonority.place: one onset only, the carry across onsets being unbuilt')
+  local plan       = schedule(strands, sonorities)
+  local memory     = attachable(sonorities, plan)
+  local search     = { strands = strands, notation = notation, moves = moves,
+                       offset  = offset,  strength = strength }
 
-  local born = {}
-  for index = 1, #strands do born[index] = index end
+  local entries = { [util.key()] = { cost = 0, tunings = {} } }
+  for i, current in ipairs(sonorities) do
+    search.at, search.reached = i, 0
+
+    -- Two placements agreeing on everything still attachable are one from here on,
+    -- and what the onset evicted has no future left to alter.
+    local carried = {}
+    for _, entry in pairs(entries) do
+      local key = placementKey(entry.tunings, memory[i].carry)
+      if outranks(entry, carried[key], #strands, byTuningKey) then carried[key] = entry end
+    end
+
+    local reached = {}
+    for _, entry in pairs(carried) do
+      for _, placement in ipairs(growFrom(search, entry, plan[i], memory[i])) do
+        local coordSet = {}
+        for k, index in ipairs(current.strands) do
+          coordSet[k] = placement.tunings[index].coords
+        end
+        placement.cost = placement.cost + sonority.score(coordSet)
+
+        local key = placementKey(placement.tunings, plan[i].live)
+        if outranks(placement, reached[key], #strands, byTuningKey) then
+          reached[key] = placement
+        end
+      end
+    end
+    if not next(reached) then return nil end
+    entries = reached
+  end
 
   local best
-  for _, placement in ipairs(placementsFrom(strands, born, notation, moves, offset, strength)) do
-    local coordSet = {}
-    for k, index in ipairs(sonorities[1].strands) do
-      coordSet[k] = placement.tunings[index].coords
-    end
-    local cost = sonority.score(coordSet) + placement.pull
-    if not best or cost < best.cost then
-      best = { cost = cost, tunings = placement.tunings }
-    end
+  for _, entry in pairs(entries) do
+    if outranks(entry, best, #strands, byTuningKey) then best = entry end
   end
   return best
 end
