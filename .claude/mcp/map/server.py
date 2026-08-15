@@ -750,11 +750,11 @@ def map_query(
     scope: str = "prod",
     max_results: int = 60,
 ) -> str:
-    """Structured query over the project's .map semantic outlines — a generated
-    index of every declaration, annotation, field access and call edge in the
-    repo, each row carrying the .lua file:line to jump to.
+    """Structured query over the project's .map semantic outlines — every
+    declaration, annotation, field access and call edge in the repo, each
+    row carrying a .lua file:line to jump to.
 
-    What it answers, commonest question first, with the call that does it:
+    What it answers, commonest first:
 
       where is field .f read or written?  query='^f$', kind='fields'
       where is X declared (in module M)?  query='X' [, module='M']
@@ -765,47 +765,27 @@ def map_query(
       which specs exercise X?             query='X', kind='usedby', scope='all'
       trace signal S end to end?          query='S', kind='flow'
 
-    A bare `query` with no `kind` searches declarations and annotations, and
-    summarises the field names it matched, listing the sites outright for a
-    name that has few — kind='fields' for the access sites of the rest. Lua
-    declaration syntax in a query (`^function tm:foo`) reduces
-    to the bare name the map indexes.
+    A bare `query` with no `kind` also summarises the field names it
+    matched — kind='fields' for their sites.
 
     Args:
-      query: regex — case-insensitive, substring-matched, anchor with ^$ for
-             exact. NOT glob: plain text already substring-matches, so no
-             wrapping stars. What it matches depends on kind: the symbol name
-             for a declaration or spec kind, the body prose for an annotation,
-             the field name for fields/reads/writes, the subject named for
-             uses/usedby/flow. Omit it to return everything.
-      kind: any one kind, or 'decl' / 'ann' for a whole group.
-              decl   'fn' (local function) / 'api' (module method) / 'held'
-                     (literal in a table field) / 'handler' (literal given
-                     to a registrar) / 'state' (mutable local) / 'const' /
-                     'require' / 'construct' (table literal) / 'case' (a spec's
-                     test)
-              ann    'invariant' / 'contract' / 'shape' / 'emits' / 'deps'
-                     (the modules a file uses) / 'reaper' (the REAPER API
-                     functions a call site names); 'exercises' / 'surface' /
-                     'harness' on specs
-              index  'fields' / 'reads' / 'writes' (field access sites) |
-                     'uses' / 'usedby' (call edges, either direction) |
-                     'flow' (one signal from its emitter through the
-                     subscribers and forwards that carry it)
-            Omitted: decl + ann, and no index.
-      module: where the answer comes from — a regex matched whole
-              against .map stems: `trackerManager`, `tm_.*`,
-              `.*Manager`. For usedby, where the callers live; for
-              flow, which module's emitters root the trace. The
-              subject is always named by `query`.
-      scope: 'prod' (default) module maps only, 'spec' spec maps, 'all' both.
-             Specs outnumber modules four to one.
+      query: regex, case-insensitive, substring-matched, not glob; anchor
+        with ^$ for exact. Omit to return everything.
+      kind: one kind, or 'decl' / 'ann' for a group. Omitted: decl + ann.
+        decl   fn / api (module method) / state / const / require /
+          construct / held (literal in a table field) / handler (literal
+          given to a registrar) / case (a spec's test)
+        ann    invariant / contract / shape / emits / deps (modules used) /
+          reaper (REAPER API named); exercises / surface / harness on specs
+        index  fields / reads / writes; uses / usedby (call edges, either
+          direction); flow (a signal from emitter through subscribers and
+          forwards)
+      module: regex matched whole against .map stems (`tm_.*`, `.*Manager`).
+        For usedby, where the callers live; for flow, whose emitters root
+        the trace.
+      scope: 'prod' (default) modules, 'spec' specs, 'all' both (specs
+        outnumber modules 4:1).
       max_results: cap (default 60).
-
-    Returns:
-      Lines of `<source>.lua:<line>  @kind <head>` for structural entries,
-      `<source>.lua  @kind  <body>` for annotations. An answer with no matches
-      names the domain it searched rather than only reporting none.
     """
     # Annotation bodies are prose and may legitimately contain the word
     # 'function', so the declaration-syntax rewrite is confined to the kinds
