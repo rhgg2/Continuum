@@ -2,8 +2,7 @@
 
 > opened: 2026-08-11 · status: in flight — plan/adaptive-ji.md, at
 > phase 2 (the placement), behind the command
-> `design/adaptive-tuning.md` has built; the state counts of § What it
-> costs to solve await re-measurement
+> `design/adaptive-tuning.md` has built
 
 **Tune a selection so that the notes of each sonority are joined by pure
 intervals from a stated set, letting those intervals compose into
@@ -52,81 +51,88 @@ written on.**
    from a given note. It is larger than the move set, since a chain of
    two moves leaves the set they were drawn from.
 
-## A placement is a tree
+## A placement is connected
 
-1. A **placement** is a tree over the passage's strands, each edge
-   carrying the move that reaches its child from its parent. The
-   **root** is the vertex with no parent, and is the only strand no move
-   reaches.
+1. A **placement** assigns coords to every strand of the passage. It
+   fixes the strands' intervals and not their pitches; what seats it on
+   the pitch line is § Where a placement sits.
 
 2. A strand is the notes of a step-class that overlap in time, holding
    one tuning between them (`design/adaptive-tuning.md` § The strand),
    and a step-class is a step of the notation with every step an octave
    from it (`design/adaptive-tuning.md` § The model).
 
-3. The strand is the vertex because a vertex holds one tuning, and a
-   strand is exactly what must share one.
+3. The strand is the placement's unit because a strand is exactly what
+   must share one tuning.
 
-4. A doubled octave therefore costs no vertex, its notes sharing a
-   step-class and so a strand.
+4. A doubled octave therefore costs no strand, its notes sharing a
+   step-class.
 
-5. A strand's **candidates** are the tunings available to it. They are
-   not a property of the strand: every one of them is a tuning a move
-   reaches from another strand of the sonority.
-
-6. What a strand may attach to is the sonority current where it strikes
+5. Two strands are **neighbours** where they share a sonority
    (`design/adaptive-tuning.md` § The model). A note held through the
-   chords behind it stays attachable for as long as it sounds.
+   chords behind it neighbours whatever strikes against it for as long
+   as it sounds.
 
-7. An onset can leave nothing of what preceded it. The whole onset is
+6. An onset can leave nothing of what preceded it. The whole onset is
    absorbed before the sonority is taken, so `n` or more classes
    striking together evict everything that is not still sounding
    (`design/adaptive-tuning.md` § The model).
 
-8. The sonority before such an onset stays attachable, and only there.
-   Without it the strands born there reach from nothing, and the passage
-   is a forest of chords each rooted where it was written.
+7. Such an onset is a **hinge**: the strands born there take the
+   sonority before it as neighbours too. Without the hinge the passage
+   is a forest of chords, each seated where it was written.
 
-9. Keeping it attachable at every onset costs what it does not buy
-   (§ What it costs to solve).
+8. The hinge is the eviction onset's alone. Neighbouring every onset to
+   its predecessor costs what it does not buy (§ What it costs to
+   solve).
 
-10. The tree's shape decides what can be spelled. Under a move set
+9. A placement is **admissible** where the offset seats every strand
+   inside its window (§ Where a placement sits), and every strand is
+   joined to every other by a chain of neighbours whose coords differ
+   by a move the set holds.
+
+10. Joined, not derived: no strand is another's root, no move between
+    two strands has a direction, and a rolled chord whose notes sustain
+    admits the placements the struck chord admits.
+
+11. What the moves join decides what can be spelled. Under a move set
     holding `5/4` and `3/2` but not `6/5`, a C minor triad has no
-    placement in which E♭ hangs off C, since that edge would be a `6/5`;
-    it has one in which E♭ hangs off G, arriving a `5/4` below it and so
-    a `6/5` above the C.
+    admissible placement joining E♭ to C directly, since that pair
+    would differ by a `6/5`; it has one joining E♭ to G, seated a `5/4`
+    below it and so a `6/5` above the C.
 
-11. A move the set does not hold is therefore still available between two
-    strands, provided a third stands between them in the tree.
+12. A move the set does not hold is therefore still available between
+    two strands, provided a third stands between them.
 
-12. A step-class returning later is a second vertex. The strand that held
-    it has ended, so the new one attaches by its own move and its coords
-    follow that chain rather than the earlier strand's (§ Drift).
+13. A step-class returning later is a second strand. The one that held
+    it has ended, so the new one is joined by its own moves and its
+    coords owe nothing to the earlier strand's (§ Drift).
 
-## Coords accumulate along it
+## Coords accumulate along moves
 
 1. A strand's coords — the exponents of the odd primes in a ratio
-   (`design/adaptive-tuning.md` § What "in tune" means) — are its
-   parent's plus its move's, and the root's are zero. The tree fixes
-   them.
+   (`design/adaptive-tuning.md` § What "in tune" means) — differ from a
+   neighbour's by the moves that join them, each move adding its
+   exponents along the chain.
 
-2. It fixes them against its root rather than against the pitch line.
-   What seats them there is § Where a placement sits.
+2. They are fixed against the passage rather than against the pitch
+   line. What seats them there is § Where a placement sits.
 
 3. The score sums the span of those coords on each axis, each weighted
    by `log₂ p` (`design/adaptive-tuning.md` § What "in tune" means). A
-   span is unchanged by adding a constant to every coord, so the choice
-   of root does not enter it.
+   span is unchanged by adding a constant to every coord, so it reads
+   the intervals the placement fixes and nothing else.
 
 4. The objective is reusable without amendment.
 
-5. Two paths to the same strand would fix its coords twice. They agree
-   only where the moves around the loop multiply to unity. Where they
-   do not, the difference is a **comma**, and the two paths are two
-   pitches rather than one.
+5. Two chains joining the same pair of strands agree automatically,
+   both being read off coords the placement has already fixed. A second
+   chain certifies nothing new and costs nothing, so admissibility asks
+   for one chain and tolerates any number.
 
-6. A placement is a tree rather than a graph for that reason. A cycle is
-   either redundant or contradictory, and there is no third case.
+6. Where the moves around a loop multiply to a comma, the loop does not
+   close. The difference stands in the coords, the two ends are two
+   pitches, and at most one of the chains joins them.
 
 ## What composition reaches
 
@@ -158,9 +164,10 @@ written on.**
    nothing.
 
 2. Complexity bounds the move set, and that is what makes a strand's
-   candidates finite. Each candidate is one move from a strand of the
-   sonority (§ A placement is a tree), so their number is the move set's
-   size times the sonority's.
+   **candidates** — the tunings the search may offer it — finite. Each
+   candidate is one move from a placed neighbour (§ A strand may wait),
+   so their number is the move set's size times the neighbours the
+   strand holds.
 
 3. The window is the notation's, reaching half way to the adjacent step
    on either side (`design/adaptive-tuning.md` § The window). It bounds
@@ -182,7 +189,7 @@ written on.**
    move, where nothing on 3, 5 and 7 sounds one under 3.91.
 
 7. That measure is the objective's own. A sonority's score (§ Coords
-   accumulate along it) is the Tenney height of its octave-free
+   accumulate along moves) is the Tenney height of its octave-free
    `lcm/gcd`, so one measure bounds what may be admitted and scores what
    results.
 
@@ -226,14 +233,13 @@ written on.**
    any bound.
 
 9. The strand seated is the first born at the first onset. Its coords
-   are zero (§ Coords accumulate along it) and its cents the seat of
-   the step it was written on, so its strain reads the offset and
-   nothing else.
+   are zero and its cents the seat of the step it was written on, so
+   its strain reads the offset and nothing else.
 
-10. The choice of root stays immaterial. Re-rooting a placement shifts
-    every displacement by a constant, which the offset absorbs, so the
-    pull reads a placement as blindly as the score does
-    (§ Coords accumulate along it).
+10. That seat is a gauge rather than a claim. Seating any other strand
+    shifts every coord and every displacement by a constant, which the
+    span and the offset absorb (§ Coords accumulate along moves), so
+    nothing the model reads depends on the choice.
 
 ## What reachability spends
 
@@ -254,34 +260,60 @@ written on.**
    strength ten times its top, and stops at 37¢ however hard it is
    pulled.
 
-## Where nothing is in reach
+## A strand may wait
 
-1. A partial placement can be **stuck**: no strand the onset has yet to
-   place is reachable by any move from any strand already placed. The
-   search refuses that offset there.
+1. A strand's anchor can be born after it. A rolled chord's third can
+   strike before the fifth it must join, and admissibility is blind to
+   direction (§ A placement is connected), so a search placing every
+   strand at its own onset refuses placements the model admits.
 
-2. Refusing an offset refuses nothing else (§ Where a placement sits). A
-   ii–V–I whose chords are rolled rather than struck together is refused
-   at five of the sweep's eleven passes and placed at the other six.
+2. The search therefore lets a strand **wait**: born unplaced, its
+   coords chosen at a later onset, one move from a neighbour placed by
+   then. The note does not move; only the choice does.
 
-3. Where every pass refuses, the fallback is a **composite** edge: two
-   moves where the tree can carry one. It stands in for the vertex the
-   tree would have routed through had that vertex been placed.
+3. Waiting is a candidate rather than a fallback. A placement may join
+   a strand backward even where a forward candidate exists, so a strand
+   with an unplaced neighbour forks a waiting branch beside its
+   placements, and the objective judges the branches like any rivals.
 
-4. The objective is untouched by it. A composite arrives at the coords
-   the missing vertex would have given, and the score reads coords
-   (§ Coords accumulate along it).
+4. A sonority holding a waiting strand is scored when its last member
+   places. The box reads coords, the coords arrive late, and nothing
+   else about the objective moves.
 
-5. It fires at a stuck partial and nowhere else. Composing a nine-move
-   set gives thirty-seven moves, and offering all of them at every
-   attachment does not finish; offered where a partial has no extension
-   at all, they cost nothing until they are needed.
+5. Waiting is justified only by the unborn. A placed neighbour's
+   coords are fixed, and a waiting neighbour offers nothing its own
+   wait is not justified by, so justification runs through unplaced
+   neighbours to a strand still unborn. A strand that reaches none
+   places now or its branch is refused.
 
-6. This is what transfers of the sibling's widening
-   (`design/adaptive-tuning.md` § What the solver takes). There a class
-   with nothing in reach has its window scaled; here the reach deepens,
-   the window being a joint constraint the offset already answers for
+6. A waiting strand resolves only to coords no earlier onset offered.
+   Whatever an earlier onset could offer, the branch that placed there
+   already carries, so each placement is enumerated once however long
+   its strands waited.
+
+7. A strand waits only on neighbours it sounds with. A hinge
+   (§ A placement is connected) joins strands that never sound
+   together, and exists so a chord can join what preceded it: letting
+   the past wait across one multiplies the detached passage's entries
+   past the budget and buys no cheaper placement (§ What it costs to
+   solve).
+
+8. An offset can still refuse. A strand out of waits with nothing in
+   its window ends its entry, an onset ending every entry refuses the
+   offset there, and refusing an offset refuses nothing else
    (§ Where a placement sits).
+
+9. This is what transfers of the sibling's widening
+   (`design/adaptive-tuning.md` § What the solver takes). There a class
+   with nothing in reach has its window scaled; here it waits for the
+   neighbour that can reach it, the window being a joint constraint the
+   offset already answers for (§ Where a placement sits).
+
+10. A composed interval is admitted only where real strands carry it.
+    Every chain runs through neighbours that sound, so nothing enters
+    the reachable set past the complexity bound (§ What makes the
+    candidate set finite): a bare C–E♭ dyad under a move set without a
+    `6/5` is refused, not spelled through a phantom G (§ Open).
 
 ## Where a move set comes from
 
@@ -315,89 +347,95 @@ written on.**
 3. What an entry holds changes. There is no shortlist to index, so it
    carries a tuning together with the coords that reached it.
 
-4. An onset chooses tunings only for the strands born there; those the
-   state holds are already fixed. Each must attach by a move to a strand
-   already placed, whether from the state or from the same onset, so
-   the choices are not independent as the sibling's are.
+4. An onset chooses tunings for the strands born there and for those
+   done waiting (§ A strand may wait); those the state holds placed are
+   already fixed. Each joins a placed neighbour by a move, whether from
+   the state or from the same onset, so the choices are not independent
+   as the sibling's are.
 
-5. The search grows a placement outward from the root, taking any
-   unplaced strand from any strand already placed. Fixing the order in
-   advance would lose the trees that reach a strand through a later
-   one: a C minor triad's E♭ hangs off its fifth (§ A placement is a
-   tree), so an order that places the E♭ first has nothing to hang it
-   on.
+5. The search grows the placed set outward from the seed, taking any
+   unplaced strand from any placed neighbour, at its own onset or a
+   later one. An order fixed in advance would lose the placements that
+   join a strand through a later one: a C minor triad's E♭ joins its
+   fifth (§ A placement is connected), so an order placing the E♭ first
+   has nothing to join it to.
 
-6. The search enumerates assignments rather than trees. Two trees
-   reaching the same coords are one answer, and over a ii–V–I the trees
-   outnumber the assignments thirty-one to one.
+6. The search enumerates assignments rather than derivations. Two
+   orders of joining that reach the same coords are one answer, and
+   over a ii–V–I the derivations outnumber the assignments thirty-one
+   to one.
 
 7. Keying an entry by its coords collapses them at no cost. The entry
    already carries the coords that reached it.
 
 8. The carry into an onset must still tell apart the strands that onset
-   evicted, since they are what the strands born there attach to
-   (§ A placement is a tree). The entries it produces need not, an
-   evicted strand having no future left to alter.
+   evicted, since they are what the strands born there join
+   (§ A placement is connected).
 
-9. The offset does not fit inside the walk (§ Where a placement sits).
-   It is one figure for the whole passage, so no partial placement can
-   be scored against it.
+9. It must tell apart, too, what a waiting strand may still read: the
+   tunings of its neighbours, and the members of every sonority its
+   waiting leaves unscored (§ A strand may wait).
 
-10. The DP therefore runs once for each offset in a sweep.
+10. The entries an onset produces need not tell apart what nothing
+    waits on, an evicted strand with its boxes settled having no future
+    left to alter.
 
-11. The sweep resolves the placement rather than the offset. A sweep
+11. The offset does not fit inside the walk (§ Where a placement sits).
+    It is one figure for the whole passage, so no partial placement can
+    be scored against it.
+
+12. The DP therefore runs once for each offset in a sweep.
+
+13. The sweep resolves the placement rather than the offset. A sweep
     at 10¢ chooses what a sweep at 0.25¢ chooses, and a sweep at 20¢
     does not.
 
-12. The winning placement's exact offset then follows from the mean of
+14. The winning placement's exact offset then follows from the mean of
     its displacements (§ Where a placement sits), so eleven passes over
     a range of 100¢ are enough.
 
-13. The counts that follow are floors. They count only the strands the
+15. The counts that follow are floors. They count only the strands the
     recency bound makes live, and they are stated in states where the
     budget is placements at an onset
     (`design/adaptive-tuning.md` § Solving it).
 
-14. Only a narrow range of complexity bounds is usable: between about
+16. Only a narrow range of complexity bounds is usable: between about
     2.8 and 3.3, admitting seven to nine moves. Below it a dominant
     seventh standing alone is spelled only by running a strand to 49¢ of
     a 50¢ window; in a ii–V–I the same chord solves inside 27¢. Above it
     the state count runs away, reaching 59,049 at 4.0.
 
-15. Inside that range the state count is thirteen to thirty-two times
-    the sibling's. Measured against a 12-EDO notation over a ii–V–I and
-    a comma pump, candidates average 2.4 a strand at the lower bound and
-    3.1 at the upper, with maxima of five and six where the sibling's
-    shortlists never exceed three.
+17. Waiting costs nothing where it cannot pay. With it offered and
+    without, a struck ii–V–I of sevenths under nine moves reaches 1,937
+    entries at its third onset, and five detached triads reach 82,655
+    at their fifth.
 
-16. The absolute numbers stay small. Six candidates over a sonority of
-    six is 7,776 states, where the sibling's own reckoning puts three
-    candidates over a sonority of eight at 2,187
-    (`design/adaptive-tuning.md` § Solving it).
+18. What it buys is the rolled textures. A rolled triad, which placing
+    every strand at its own onset refuses, places at its struck coords
+    for two entries; a rolled ii–V–I of sevenths places at 165,281
+    against the budget of 200,000.
 
-17. The sweep leaves them inside the budget. Eleven passes of 7,776 is
-    85,536, against the 200,000 placements at an onset the sibling
-    allows (`design/adaptive-tuning.md` § Solving it).
+19. The chained progression pays the most. A comma pump under nine
+    moves reaches 203,994 entries at its last onset against 11,257
+    without waiting, the budget's edge at the top of the usable band;
+    under seven moves it reaches 26,844 against 2,090.
 
-18. The budget cannot be read off the walk. A strand's candidates
+20. The budget cannot be read off the walk. A strand's candidates
     depend on where the others went (§ What the solver loses), so there
     is no product of shortlist sizes to take before the search begins.
 
-19. The count is taken as the entries are reached, and the search
+21. The count is taken as the entries are reached, and the search
     refuses there. The upfront bound (the move set's size times the
     sonority's) overestimates by an order of magnitude and would
     refuse everything.
 
-20. Counted that way, a ii–V–I of sevenths under nine moves reaches
-    1,937 entries at its third onset, against a budget of 200,000.
+22. Hinging every onset to its predecessor rather than only where
+    nothing is carried (§ A placement is connected) reaches 622,694
+    entries where the ii–V–I's third onset reaches 1,937, and arrives
+    at the same placement. A strand's candidates are its neighbours
+    times the moves, and the strands born together multiply.
 
-21. Keeping the preceding sonority attachable at every onset rather than
-    only where nothing is carried (§ A placement is a tree) reaches
-    622,694 there, and arrives at the same placement. A strand's
-    candidates are its anchors times the moves, and the strands born
-    together multiply.
-
-22. Where nothing is carried the price is real. Five detached triads at
+23. Where nothing is carried the price is real. Five detached triads at
     a sonority of three under nine moves reach 82,655 entries at the
     fifth onset, where the sonority alone reaches twelve, a chain free
     to wander leaving no placement to dominate the rest.
@@ -461,17 +499,18 @@ written on.**
    its scale is the sibling's
    (`design/adaptive-tuning.md` § Harmonic lock).
 
-6. A passage of detached chords drifts at all only because the sonority
-   before an onset stays attachable (§ A placement is a tree). At a
-   sonority of three with nothing sounding across the change, a comma
-   pump would otherwise re-root every chord and return to its opening
+6. A passage of detached chords drifts at all only because the hinge
+   joins each chord to the one before (§ A placement is connected). At
+   a sonority of three with nothing sounding across the change, a comma
+   pump would otherwise re-seat every chord and return to its opening
    step unmoved.
 
 ## When a chord is misspelled
 
 1. A chord can be seated by moves that spell a different chord. Nothing
-   in the model reads the notated intervals: a tree is admissible when
-   every strand lands inside its window, however far its moves depart
+   in the model reads the notated intervals: a placement is admissible
+   wherever its strands land inside their windows and its moves join
+   them (§ A placement is connected), however far those moves depart
    from what was written.
 
 2. The objective prefers the respelling. A written diminished triad
@@ -492,9 +531,12 @@ written on.**
 ## Open
 
 1. What the command does with a chord the move set misspells (§ When a
-   chord is misspelled). Refusing, seating it unmoved, and stiffening the
-   pull for that chord alone are all available and none is obviously
-   right.
+   chord is misspelled) or cannot spell at all, a bare minor third
+   under a set without a `6/5` having no placement now that nothing is
+   spelled through a phantom (§ A strand may wait). Refusing with the
+   missing interval named, seating the chord unmoved, and stiffening
+   the pull for that chord alone are all available and none is
+   obviously right.
 
 2. What the pull's scale becomes where it still has room
    (§ What reachability spends). Defending a diminished triad's notated
@@ -509,7 +551,7 @@ written on.**
    the objective reads coords, and a dense reachable set puts no ratio
    at a pitch in particular; a take left in 12-EDO has no coords to
    recover at all. Either a note carries its coords as metadata, or one
-   solve spans the takes in sequence and carries the tree across.
+   solve spans the takes in sequence and carries the placement across.
 
 4. Whether the window should bind at all. Letting a strand drift past
    it, with the pull anchored to the step the note was written on rather
@@ -518,12 +560,3 @@ written on.**
    single trade. What it costs is idempotence by construction and a dial
    that means the same under every notation
    (`design/adaptive-tuning.md` § The window, § Harmonic lock).
-
-5. Whether a rolled chord should be one onset. The tree grows forward in
-   time, so a rolled chord's first note is its root and the rest hang
-   off it: a rolled ii–V–I places its V with a wolf fifth where the same
-   chord struck together gives 4:5:6. What is lost is the joint
-   enumeration rather than a move, so composite edges do not recover it
-   (§ Where nothing is in reach) and folding strikes inside a tolerance
-   into one onset would. That is the walk's business rather than the
-   placement's.

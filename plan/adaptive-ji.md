@@ -12,16 +12,16 @@
    their inversions, octave-free Tenney height and the complexity
    bound, and the candidates one move reaches from a placed strand.
    — landed 2026-08-15, two commits.
-2. **Phase 2 — The placement** (§ A placement is a tree, § Coords
-   accumulate along it, § What it costs to solve) — the search at a
-   fixed offset: entries carrying a tuning with the coords that reached
-   it, keyed by those coords, each strand born at an onset attaching by
-   a move to one already placed.  ← in flight
+2. **Phase 2 — The placement** (§ A placement is connected, § Coords
+   accumulate along moves, § A strand may wait, § What it costs to
+   solve) — the search at a fixed offset: entries carrying a tuning
+   with the coords that reached it, keyed by those coords, each strand
+   joining a placed neighbour by a move, at its own onset or waiting
+   for a later one.  ← in flight
 3. **Phase 3 — The offset** (§ Where a placement sits, § What
-   reachability spends, § Where nothing is in reach) — the window as a
-   joint constraint, eleven passes over 100¢, the winner's exact offset
-   from the mean of its displacements clamped to the admissible range,
-   and composite edges where every pass refuses.
+   reachability spends) — the window as a joint constraint, eleven
+   passes over 100¢, and the winner's exact offset from the mean of its
+   displacements clamped to the admissible range.
 4. **Phase 4 — The facility** (§ The command's slots, § Where it sits
    4) — the facility chosen on the retune modal with the key slot
    disabled, the placement branch beside `solveToTarget`, and each
@@ -32,8 +32,8 @@
 ## Landed  (newest first; prune below ~4)
 
 - 2026-08-15 sonority: carry the placement across onsets (§ What it costs to solve)
-- 2026-08-15 sonority: place one sonority's strands at a fixed offset (§ A placement is a tree)
-- 2026-08-15 tuning: reach the candidates one move from a placed strand (§ A placement is a tree)
+- 2026-08-15 sonority: place one sonority's strands at a fixed offset (§ A placement is connected)
+- 2026-08-15 tuning: reach the candidates one move from a placed strand (§ A placement is connected)
 - 2026-08-15 tuning: read a ratio temper as a move set (§ Where a move set comes from)
 
 ## Now
@@ -42,4 +42,7 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — the phase's items are all compiled.)
+- the waiting branch beside a strand's placements, justified only by the unborn (§ A strand may wait)
+- a waiting strand resolves only to coords no earlier onset offered (§ A strand may wait)
+- waiting confined to neighbours that sound together; hinges join backward only (§ A strand may wait)
+- score a sonority when its last member places; the carry keeps what waiting still reads (§ What it costs to solve)
