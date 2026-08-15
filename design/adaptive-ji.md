@@ -197,27 +197,31 @@ written on.**
    which bounds the span of the strands' displacements rather than any
    one of them.
 
-5. The offset is chosen to minimise the pull. Where the notation's
+5. An offset admitting no placement refuses nothing but itself. Some
+   strand's window holds nothing reachable there, and another offset
+   may place what it could not.
+
+6. The offset is chosen to minimise the pull. Where the notation's
    windows are equal it is the mean of the displacements, clamped to the
    admissible range.
 
-6. Against a 12-EDO notation a I–IV–V–I seats at +4¢ and a ii–V–I at
+7. Against a 12-EDO notation a I–IV–V–I seats at +4¢ and a ii–V–I at
    +32¢.
 
-7. Without an offset the model refuses chords it can otherwise spell. A
+8. Without an offset the model refuses chords it can otherwise spell. A
    dominant seventh under a complexity bound below 2.8 has no placement
    left where it was written, and neither has a diminished triad under
    any bound.
 
-8. The strand seated is the first born at the first onset. Its coords
+9. The strand seated is the first born at the first onset. Its coords
    are zero (§ Coords accumulate along it) and its cents the seat of
    the step it was written on, so its strain reads the offset and
    nothing else.
 
-9. The choice of root stays immaterial. Re-rooting a placement shifts
-   every displacement by a constant, which the offset absorbs, so the
-   pull reads a placement as blindly as the score does
-   (§ Coords accumulate along it).
+10. The choice of root stays immaterial. Re-rooting a placement shifts
+    every displacement by a constant, which the offset absorbs, so the
+    pull reads a placement as blindly as the score does
+    (§ Coords accumulate along it).
 
 ## What reachability spends
 
@@ -275,58 +279,65 @@ written on.**
    already placed, whether from the state or from the same onset, so
    the choices are not independent as the sibling's are.
 
-5. The search enumerates assignments rather than trees. Two trees
+5. The search grows a placement outward from the root, taking any
+   unplaced strand from any strand already placed. Fixing the order in
+   advance would lose the trees that reach a strand through a later
+   one: a C minor triad's E♭ hangs off its fifth (§ A placement is a
+   tree), so an order that places the E♭ first has nothing to hang it
+   on.
+
+6. The search enumerates assignments rather than trees. Two trees
    reaching the same coords are one answer, and over a ii–V–I the trees
    outnumber the assignments thirty-one to one.
 
-6. Keying an entry by its coords collapses them at no cost. The entry
+7. Keying an entry by its coords collapses them at no cost. The entry
    already carries the coords that reached it.
 
-7. The offset does not fit inside the walk (§ Where a placement sits).
+8. The offset does not fit inside the walk (§ Where a placement sits).
    It is one figure for the whole passage, so no partial placement can
    be scored against it.
 
-8. The DP therefore runs once for each offset in a sweep.
+9. The DP therefore runs once for each offset in a sweep.
 
-9. The sweep resolves the placement rather than the offset. A sweep at
-   10¢ chooses what a sweep at 0.25¢ chooses, and a sweep at 20¢ does
-   not.
+10. The sweep resolves the placement rather than the offset. A sweep
+    at 10¢ chooses what a sweep at 0.25¢ chooses, and a sweep at 20¢
+    does not.
 
-10. The winning placement's exact offset then follows from the mean of
+11. The winning placement's exact offset then follows from the mean of
     its displacements (§ Where a placement sits), so eleven passes over
     a range of 100¢ are enough.
 
-11. The counts that follow are floors. They count only the strands the
+12. The counts that follow are floors. They count only the strands the
     recency bound makes live, and they are stated in states where the
     budget is placements at an onset
     (`design/adaptive-tuning.md` § Solving it).
 
-12. Only a narrow range of complexity bounds is usable: between about
+13. Only a narrow range of complexity bounds is usable: between about
     2.8 and 3.3, admitting seven to nine moves. Below it a dominant
     seventh standing alone is spelled only by running a strand to 49¢ of
     a 50¢ window; in a ii–V–I the same chord solves inside 27¢. Above it
     the state count runs away, reaching 59,049 at 4.0.
 
-13. Inside that range the state count is thirteen to thirty-two times
+14. Inside that range the state count is thirteen to thirty-two times
     the sibling's. Measured against a 12-EDO notation over a ii–V–I and
     a comma pump, candidates average 2.4 a strand at the lower bound and
     3.1 at the upper, with maxima of five and six where the sibling's
     shortlists never exceed three.
 
-14. The absolute numbers stay small. Six candidates over a sonority of
+15. The absolute numbers stay small. Six candidates over a sonority of
     six is 7,776 states, where the sibling's own reckoning puts three
     candidates over a sonority of eight at 2,187
     (`design/adaptive-tuning.md` § Solving it).
 
-15. The sweep leaves them inside the budget. Eleven passes of 7,776 is
+16. The sweep leaves them inside the budget. Eleven passes of 7,776 is
     85,536, against the 200,000 placements at an onset the sibling
     allows (`design/adaptive-tuning.md` § Solving it).
 
-16. The budget cannot be read off the walk. A strand's candidates
+17. The budget cannot be read off the walk. A strand's candidates
     depend on where the others went (§ What the solver loses), so there
     is no product of shortlist sizes to take before the search begins.
 
-17. The count is taken as the entries are reached, and the search
+18. The count is taken as the entries are reached, and the search
     refuses there. The upfront bound (the move set's size times the
     sonority's) overestimates by an order of magnitude and would
     refuse everything.

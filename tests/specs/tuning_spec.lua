@@ -1048,4 +1048,44 @@ return {
       nearly(eFlat[1].strain, 0.3128)
     end,
   },
+
+  {
+    name = 'origin: the root sits on the step it was written on, its strain the offset',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      local root  = tuning.origin(edo12, { pitch = 64 }, 0)
+      t.truthy(root, 'a note unshifted is its own root')
+      nearly(root.cents, 400, 'the seat of the E, on the octave-reduced line a placement lives on')
+      t.deepEq(root.coords, {}, 'where the coords start')
+      nearly(root.strain, 0, 'and unshifted it strains nothing')
+
+      nearly(tuning.origin(edo12, { pitch = 64 }, 20).strain, 0.4,
+             'shifted, the offset over the half-window it lies in')
+      t.eq(tuning.origin(edo12, { pitch = 64 }, 60), nil,
+           'and past that window the root places nothing')
+
+      local qcm = meantone12()
+      nearly(tuning.origin(qcm, { pitch = 64 }, 0).cents, 386.3136, 'meantone seats its E lower')
+      nearly(tuning.origin(qcm, { pitch = 64 }, 20).strain,  0.3416, 'under a window reaching further up')
+      nearly(tuning.origin(qcm, { pitch = 64 }, -20).strain, 0.5260, 'than down')
+    end,
+  },
+
+  {
+    name = 'reach: a candidate carries the key it deduped on',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      local onG   = { { cents = tuning.scalaPitch('3/2'), coords = { [3] = 1 } } }
+      local onC   = { { cents = 0, coords = {} } }
+
+      local viaG = tuning.reach(edo12, tuning.moves{ pitches = { '1/1', '3/2', '5/4' } },
+                                onG, { pitch = 63 }, 0)[1]
+      local viaC = tuning.reach(edo12, tuning.moves{ pitches = { '1/1', '6/5' } },
+                                onC, { pitch = 63 }, 0)[1]
+      t.truthy(viaG.key ~= nil, 'the key is the candidate\'s own')
+      t.eq(viaG.key, viaC.key, 'and one tuning keys alike, whatever move reached it')
+      t.truthy(viaG.key ~= tuning.origin(edo12, { pitch = 63 }, 0).key,
+               'where the root, whose coords are empty, keys as itself')
+    end,
+  },
 }

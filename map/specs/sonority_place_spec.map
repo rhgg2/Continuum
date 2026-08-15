@@ -1,0 +1,52 @@
+@spec sonority_place_spec  src=tests/specs/sonority_place_spec.lua  loc=103  cases=4
+@exercises sonority (sonority), tuning (tuning)
+@surface   sonority.strands, tuning.stepClass, tuning.moves, sonority.place, sonority.score
+
+# Intent
+  Pins the placement of design/adaptive-ji.md § A placement is a tree: the search
+  at one fixed offset over a single sonority, where a strand's candidates are the
+  tunings one move reaches from a strand already placed.
+  
+  Pins what the tree's shape buys: a dominant seventh coming out 4:5:6:7, and a
+  minor third the move set holds no move for reached through the fifth. Pins the
+  refusal an offset with nothing reachable returns, and the root seated where it
+  was written (§ Where a placement sits).
+
+# Helpers
+  @fn nearly(actual, expected, why)  @ 17-20
+      -- The placement's figures are worked past the doc's two places.
+  @fn chord(pitches)  @ 24-32
+      -- The chord as the command hands it over: a note per pitch, struck together and a
+      -- beat long, grouped into strands by the step-class the notation gives them.
+  @fn coordsOf(placement, strands)  @ 36-40
+      -- A placement's coords in strand order, which is ascending step-class: what the
+      -- chord came out as, blind to where it sits.
+
+# Cases
+  @case 'a dominant seventh standing alone comes out 4:5:6:7'  [pure]  @ 44-57
+  @case 'the minor third no move reaches hangs off the fifth'  [pure]  @ 61-75
+  @case 'a move set of fifths alone places no minor triad'  [pure]  @ 79-84
+  @case 'the offset carries the placement, and the root reads it alone'  [pure]  @ 88-101
+
+# Uses (outbound edges)
+  @use call sonority.strands  @ 29
+  @use call tuning.stepClass  @ 30
+  @use call tuning.moves  @ 46,63,81,90
+  @use call sonority.place  @ 48,65,82,92
+  @use call sonority.score  @ 55
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cents  @ 53,54,72,97
+  @field r coords  @ 38,70,73
+  @field r cost  @ 56,74,100
+  @field r detune  @ 30
+  @field w endppq  @ 27
+  @field w name  @ 44,61,79,88
+  @field r pitch  @ 30
+  @field w pitch  @ 27
+  @field w pitches  @ 46,63,81,90
+  @field w ppq  @ 27
+  @field r presets  @ 14
+  @field w run  @ 45,62,80,89
+  @field r strain  @ 98,99
+  @field r tunings  @ 38,53,54,70,72,73,97,98,99

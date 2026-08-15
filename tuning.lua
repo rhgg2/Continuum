@@ -667,17 +667,23 @@ local function gapTo(seat, cents)
   return reduceCents(cents - seat + OCTAVE / 2, OCTAVE) - OCTAVE / 2
 end
 
+-- A note's own step: where it seats, and how far its window reaches either side.
+-- The shortlist, the reach and the root are all measured off it.
+local function seatOf(notation, note)
+  local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
+  local midi, detune = tuning.stepToMidi(notation, step, octave)
+  local below, above = tuning.stepWindow(notation, step)
+  return midi * 100 + detune, below, above
+end
+
 -- The only place the notation and the target meet. See design/adaptive-tuning.md
 -- § What the solver takes for why the line is reduced into the octave.
 --contract: candidates {cents, coords, strain} for the target's points inside the note's step window
 --contract: strain is the point's gap over the window half it lies in; nearest first
 --contract: widen: where the window holds nothing, the nearest points instead, at strain past 1
 function tuning.shortlist(notation, target, keyStep, note, widen)
-  local keyCents     = notation.rootCents + notation.cents[keyStep]
-  local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
-  local midi, detune = tuning.stepToMidi(notation, step, octave)
-  local seat         = midi * 100 + detune
-  local below, above = tuning.stepWindow(notation, step)
+  local keyCents           = notation.rootCents + notation.cents[keyStep]
+  local seat, below, above = seatOf(notation, note)
 
   local points = {}
   for _, token in ipairs(target.pitches) do
@@ -711,6 +717,19 @@ function tuning.shortlist(notation, target, keyStep, note, widen)
   return candidates
 end
 
+-- The placement's root: the strand seated on the step it was written on, so its strain
+-- reads the offset and nothing else (design/adaptive-ji.md § Where a placement sits).
+--contract: the root candidate {cents, coords, strain, key} for `note`, its coords empty
+--contract: cents is the note's own step seat, on the octave-reduced line a placement lives on
+--contract: nil where the offset alone carries the note past its step window
+function tuning.origin(notation, note, offset)
+  local seat, below, above = seatOf(notation, note)
+  local strain             = math.abs(offset) / (offset < 0 and below or above)
+  if strain > 1 + REACH_TOL then return nil end
+  return { cents = reduceCents(seat, OCTAVE), coords = {},
+           strain = strain, key = coordKey({}) }
+end
+
 -- Exponents add along an edge of the placement, and a prime cancelling to zero leaves
 -- the coords rather than sitting at 0, so coordKey reads two paths to one tuning alike.
 local function addCoords(coords, move)
@@ -729,11 +748,9 @@ end
 --contract: a candidate's coords are the anchor's plus the move's; its cents the placement's own
 --contract: kept where `cents + offset` lands inside the note's step window; strain reads it there
 --contract: deduped by coords, two anchors reaching one tuning being one candidate; nearest first
+--contract: each candidate carries the key it deduped on, so a caller may key on it unrecomputed
 function tuning.reach(notation, moves, anchors, note, offset)
-  local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
-  local midi, detune = tuning.stepToMidi(notation, step, octave)
-  local seat         = midi * 100 + detune
-  local below, above = tuning.stepWindow(notation, step)
+  local seat, below, above = seatOf(notation, note)
 
   local candidates, seen = {}, {}
   for _, anchor in ipairs(anchors) do
@@ -747,7 +764,7 @@ function tuning.reach(notation, moves, anchors, note, offset)
         local key    = coordKey(coords)
         if not seen[key] then
           seen[key] = true
-          util.add(candidates, { cents = cents, coords = coords, strain = strain })
+          util.add(candidates, { cents = cents, coords = coords, strain = strain, key = key })
         end
       end
     end

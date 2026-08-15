@@ -160,6 +160,7 @@ local specs = {
   'view_context_spec',
   'tuning_spec',
   'sonority_spec',
+  'sonority_place_spec',
   'parts_spec',
   'vm_tracker_mode_spec',
   'vm_temper_entry_spec',

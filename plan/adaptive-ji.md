@@ -30,6 +30,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-15 sonority: place one sonority's strands at a fixed offset (§ A placement is a tree)
 - 2026-08-15 tuning: reach the candidates one move from a placed strand (§ A placement is a tree)
 - 2026-08-15 tuning: read a ratio temper as a move set (§ Where a move set comes from)
 
@@ -38,15 +39,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. The search at a fixed offset over one sonority: `sonority.place`
-   beside `sonority.solve`, its entries carrying a tuning with the
-   coords that reached it, each strand born at the onset attaching by a
-   move to one already placed, and the first seated where it was
-   written. `tuning.lua` gains the root's seat, and `tuning.reach`
-   hands each candidate the coord key it deduped on. Spec: a dominant
-   seventh standing alone comes out 4:5:6:7, and a C minor triad hangs
-   its E♭ off the fifth under a move set holding no 6/5.
 
 2. The carry across onsets: the schedule of born, live and held strands
    drives the walk, an entry keys on the coords of everything live, and

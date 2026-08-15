@@ -1,11 +1,13 @@
 -- The objective an adaptive-tuning solve minimises, and the strands it is taken over.
--- See design/adaptive-tuning.md § What "in tune" means. @noindex
+-- See design/adaptive-tuning.md § What "in tune" means, and design/adaptive-ji.md § A placement is a tree. @noindex
 
---invariant: pure module: no state, no ratios, no cents — coords/strikes/releases/classes → indices
+--invariant: pure module: no state; ratios/cents are tuning.lua's, the placement carries them
 --shape: Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing
 --shape: Strand = { notes={ {ppq,pitch,endppq,..},.. }, class=<step-class>, shortlist={ Candidate,.. } }; the walk reads the strikes, the releases and the class
 --shape: Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, the last n struck and whatever else still sounds
 --shape: Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }
+--shape: Tuning = { cents, coords=Coords, strain, key=<the coords' identity> }; what a placement seats a strand at
+--shape: Placement = { cost, tunings={ [strandIndex]=Tuning,.. } }; one tuning per strand, at a stated offset
 
 local util    = require 'util'
 local tuning  = require 'tuning'
@@ -241,6 +243,7 @@ end
 
 -- The state carries the whole choice vector rather than a backpointer: two
 -- generations are alive at a time and the budget bounds them.
+--invariant: reads no cents and knows no ratios — coords/strikes/releases/classes → indices
 --contract: strands, n, strength → the index per strand minimising sonority.cost, exactly
 function sonority.solve(strands, n, strength)
   for index, strand in ipairs(strands) do
@@ -287,6 +290,92 @@ function sonority.solve(strands, n, strength)
     if outranks(state, best, #strands) then best = state end
   end
   return best.choice
+end
+
+----- The placement
+
+-- What a strand may attach to: the strands placed so far, in strand order, so that
+-- the candidates come back in one order however the placement was grown.
+local function anchorsOf(tunings, born)
+  local anchors = {}
+  for _, index in ipairs(born) do
+    local chosen = tunings[index]
+    if chosen then util.add(anchors, { cents = chosen.cents, coords = chosen.coords }) end
+  end
+  return anchors
+end
+
+-- Two partial placements agreeing on every strand's tuning are one, whichever order
+-- placed them; position names the strand, so an unplaced one keys as false.
+local function placementKey(tunings, born)
+  local parts = {}
+  for k, index in ipairs(born) do
+    parts[k] = tunings[index] and tunings[index].key or false
+  end
+  return util.key(table.unpack(parts))
+end
+
+-- Grown outward from the root, taking any unplaced strand from any strand already placed:
+-- an order fixed in advance would lose the trees that reach a strand through a later one (design/adaptive-ji.md § What it costs to solve).
+local function placementsFrom(strands, born, notation, moves, offset, strength)
+  local root = tuning.origin(notation, strands[born[1]].notes[1], offset)
+  if not root then return {} end
+
+  local frontier = { { tunings = { [born[1]] = root },
+                       pull    = strength * root.strain * root.strain } }
+  for _ = 2, #born do
+    local grown, seen = {}, {}
+    for _, partial in ipairs(frontier) do
+      local anchors = anchorsOf(partial.tunings, born)
+      for _, index in ipairs(born) do
+        if not partial.tunings[index] then
+          -- One window serves a strand in every register, so notes[1] speaks for all.
+          local reached = tuning.reach(notation, moves, anchors, strands[index].notes[1], offset)
+          for _, candidate in ipairs(reached) do
+            local tunings  = util.clone(partial.tunings)
+            tunings[index] = candidate
+            local key      = placementKey(tunings, born)
+            if not seen[key] then
+              seen[key] = true
+              util.add(grown, { tunings = tunings,
+                                pull    = partial.pull
+                                        + strength * candidate.strain * candidate.strain })
+            end
+          end
+        end
+      end
+    end
+    frontier = grown
+  end
+  return frontier
+end
+
+-- The candidate model of design/adaptive-ji.md: there is no shortlist to index, so
+-- the search carries the move set and reads the tunings off tuning.lua as it goes.
+--contract: strands, n, strength, notation, moves, offset → the cheapest Placement, or nil unplaced
+--contract: the first strand is the root, seated as written; each other is a move from one placed
+--contract: cost is sonority.cost's own: the box over the sonority, plus the pull each strand spends
+--contract: one onset only — the carry across onsets is unbuilt
+function sonority.place(strands, n, strength, notation, moves, offset)
+  local sonorities = sonority.walk(strands, n)
+  assert(#sonorities == 1,
+    'sonority.place: one onset only, the carry across onsets being unbuilt')
+
+  local born = {}
+  for index = 1, #strands do born[index] = index end
+
+  local best
+  for _, placement in ipairs(placementsFrom(strands, born, notation, moves, offset, strength)) do
+    local coordSet = {}
+    for k, index in ipairs(sonorities[1].strands) do
+      coordSet[k] = placement.tunings[index].coords
+    end
+    local cost = sonority.score(coordSet) + placement.pull
+    if not best or cost < best.cost then
+      best = { cost = cost, tunings = placement.tunings }
+    end
+  end
+  return best
 end
 
 return sonority

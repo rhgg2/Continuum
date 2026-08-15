@@ -1,6 +1,6 @@
-@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=1051  cases=66
+@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=1091  cases=68
 @exercises tuning (tuning)
-@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.nextMosSize, tuning.mosInfo, tuning.coords, tuning.isTarget, tuning.height, tuning.moves, tuning.stepClass, tuning.shortlist, tuning.reach
+@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.nextMosSize, tuning.mosInfo, tuning.coords, tuning.isTarget, tuning.height, tuning.moves, tuning.stepClass, tuning.shortlist, tuning.reach, tuning.origin
 
 # Intent
   Pins tuning.lua's pure display + derivation layer: the Option-B nameless
@@ -101,6 +101,8 @@
   @case 'reach: two anchors arriving at one tuning are one candidate'  [pure]  @ 996-1008
   @case 'reach: a move outside the window is dropped, and an offset carries it in'  [pure]  @ 1012-1026
   @case 'reach: the minor third the move set lacks, reached from the fifth'  [pure]  @ 1030-1049
+  @case 'origin: the root sits on the step it was written on, its strain the offset'  [pure]  @ 1053-1071
+  @case 'reach: a candidate carries the key it deduped on'  [pure]  @ 1075-1089
 
 # Uses (outbound edges)
   @use call tuning.derive  @ 11,27,36,43,58,66,158,176,209,213,221,250,264,304,309,319,341,354,372
@@ -108,7 +110,7 @@
   @use call tuning.genRank2  @ 42,690,700,709,769,771
   @use call tuning.stepToMidi  @ 77,328,329,360,397,404,453,454,482,483,497,856,857,868,869,959,981,982
   @use call tuning.midiToStep  @ 182,199,201,395,400,461,462,478,479,496,498
-  @use call tuning.scalaPitch  @ 232,233,234,235,236,237,238,240,241,242,243,681,1001
+  @use call tuning.scalaPitch  @ 232,233,234,235,236,237,238,240,241,242,243,681,1001,1078
   @use call tuning.unrooted  @ 292
   @use call tuning.removeStep  @ 304,309,319,370
   @use call tuning.sortSteps  @ 341,354,372
@@ -131,22 +133,26 @@
   @use call tuning.coords  @ 734,735,736,737,738,739,740,741,748,749,750,757,758,759,760,785
   @use call tuning.isTarget  @ 767,768,769,770,771,772
   @use call tuning.height  @ 779,780,781,782,783,784,785
-  @use call tuning.moves  @ 793,807,809,811,819,999,1015,1033
+  @use call tuning.moves  @ 793,807,809,811,819,999,1015,1033,1081,1083
   @use call tuning.stepClass  @ 849,850,851,852,853,858,862,864,870
   @use call tuning.shortlist  @ 880,886,890,902,910,921,924,937,944,945,960,971,972,988,990
-  @use call tuning.reach  @ 1003,1018,1021,1036,1040,1044
+  @use call tuning.reach  @ 1003,1018,1021,1036,1040,1044,1081,1083
+  @use call tuning.origin  @ 1056,1062,1064,1068,1069,1070,1087
 
 # Fields (r read / w write incl. constructor keys)
   @field r cellWidth  @ 87,92,135,148,160,181,197,211,214
   @field r cents  @ 253,254,255,511,549,560,561,796,797,799,826
   @field r cents  @ 828,831,882,887,892,904,906,908,912,926
-  @field r cents  @ 927,939,940,962,976,1005,1023,1038,1043,1046
+  @field r cents  @ 927,939,940,962,976,1005,1023,1038,1043,1046,1058
+  @field r cents  @ 1068
   @field w cents  @ 11,25,159,174,210,222,264,1000,1001,1016,1034,1043
-  @field r coords  @ 795,798,800,832,884,893,1006,1025,1043,1047
-  @field w coords  @ 1000,1001,1016,1034,1043
+  @field w cents  @ 1078,1079
+  @field r coords  @ 795,798,800,832,884,893,1006,1025,1043,1047,1059
+  @field w coords  @ 1000,1001,1016,1034,1043,1078,1079
   @field w detune  @ 910,960,988,990
   @field r height  @ 822,825,827,830
   @field r isMos  @ 724,727
+  @field r key  @ 1085,1086,1087
   @field r large  @ 725
   @field r moves  @ 839,840,841
   @field r name  @ 499,500,542
@@ -156,7 +162,7 @@
   @field w name  @ 428,444,470,490,507,518,530,539,554,567,576,592
   @field w name  @ 604,612,625,641,649,659,673,688,698,707,716,732
   @field w name  @ 746,755,765,777,791,805,817,837,846,876,898,918
-  @field w name  @ 933,952,968,996,1012,1030
+  @field w name  @ 933,952,968,996,1012,1030,1053,1075
   @field r octaveBase  @ 269,278,449,475
   @field r octaveStep  @ 89,93,123,134
   @field r octaveWidth  @ 88,161,180,185,196
@@ -167,14 +173,16 @@
   @field r periodPitch  @ 692,702
   @field w periodPitch  @ 33,43,58,66,250
   @field w pitch  @ 880,886,890,902,910,921,924,937,944,945,960,971
-  @field w pitch  @ 972,988,990,1003,1018,1021,1036,1040,1044
+  @field w pitch  @ 972,988,990,1003,1018,1021,1036,1040,1044,1056,1062,1064
+  @field w pitch  @ 1068,1069,1070,1082,1084,1087
   @field r pitches  @ 34,44,340,353,371,510,545,546,547,558,559,579
   @field r pitches  @ 580,585,586,619,631,635,652,654,662,666,667,668
   @field r pitches  @ 676,678,680,691,701,710,711
   @field w pitches  @ 33,44,58,66,251,772,793,807,809,811,819,839
-  @field w pitches  @ 840,987,999,1015,1033
+  @field w pitches  @ 840,987,999,1015,1033,1081,1083
   @field r presets  @ 86,91,100,101,109,113,122,276,394,403,413,492
   @field r presets  @ 492,509,770,848,878,900,920,935,970,998,1014,1032
+  @field r presets  @ 1055,1077
   @field r rootCents  @ 266,277,297,306,311,325,344,358,448,474
   @field r rootDetune  @ 280,323,375
   @field w rootDetune  @ 67,72,265,290,447,493
@@ -189,10 +197,10 @@
   @field w run  @ 429,445,471,491,508,519,531,540,555,568,577,593
   @field w run  @ 605,613,626,642,650,660,674,689,699,708,717,733
   @field w run  @ 747,756,766,778,792,806,818,838,847,877,899,919
-  @field w run  @ 934,953,969,997,1013,1031
+  @field w run  @ 934,953,969,997,1013,1031,1054,1076
   @field r small  @ 726
   @field r stepNames  @ 34
   @field w stepNames  @ 11,25,33,44,58,66,159,174,210,212,222,251
   @field w stepNames  @ 264
   @field r strain  @ 883,888,905,907,913,928,941,942,947
-  @field r strain  @ 947,963,977,1007,1024,1048
+  @field r strain  @ 947,963,977,1007,1024,1048,1060,1062,1069,1070
