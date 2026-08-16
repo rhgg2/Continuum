@@ -1,7 +1,7 @@
 # Design — Adaptive just intonation
 
 > opened: 2026-08-11 · status: in flight — plan/adaptive-ji.md, at
-> phase 2 (the placement), behind the command
+> phase 3 (the offset), behind the command
 > `design/adaptive-tuning.md` has built
 
 **Tune a selection so that the notes of each sonority are joined by pure

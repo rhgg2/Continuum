@@ -17,11 +17,12 @@
    solve) — the search at a fixed offset: entries carrying a tuning
    with the coords that reached it, keyed by those coords, each strand
    joining a placed neighbour by a move, at its own onset or waiting
-   for a later one.  ← in flight
+   for a later one.
+   — landed 2026-08-16, three commits.
 3. **Phase 3 — The offset** (§ Where a placement sits, § What
    reachability spends) — the window as a joint constraint, eleven
    passes over 100¢, and the winner's exact offset from the mean of its
-   displacements clamped to the admissible range.
+   displacements clamped to the admissible range.  ← in flight
 4. **Phase 4 — The facility** (§ The command's slots, § Where it sits
    4) — the facility chosen on the retune modal with the key slot
    disabled, the placement branch beside `solveToTarget`, and each
@@ -42,4 +43,37 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — the phase's items are all compiled.)
+1. **The names the pair needs.** A rename, no behaviour: the sibling's
+   `sonority.solve` becomes `sonority.solveToPoints`, and
+   `sonority.place` — the search at one fixed offset — becomes
+   `sonority.placeAt`. That frees `solveToMoves` for the facility the
+   next item adds, and puts the two facilities under one shape, as
+   § Where it sits has them. The call sites are trackerView.lua:2107
+   and the two specs; the suite is the check, and no spec case changes
+   but its verb.
+
+2. **The sweep.** `sonority.solveToMoves(strands, n, strength,
+   notation, moves)`, standing beside `solveToPoints` and differing
+   from it in the candidate model alone. It runs `placeAt` once at each
+   of eleven offsets spanning the root strand's own step window — 100¢
+   under a 12-EDO notation — keeps the cheapest placement together with
+   the offset that found it, and returns nil only where every offset
+   refuses. A budget raise inside a pass propagates out of the sweep
+   rather than skipping that offset. Spec: a chord with no placement
+   where it was written places under the sweep; a sweep at 10¢ returns
+   the placement a finer sweep returns; a move set that reaches nothing
+   at any offset returns nil.
+
+3. **The exact offset.** The winner's offset is then settled off its
+   own strands: the admissible range is the intersection of what each
+   strand's window allows, the offset is the mean of their
+   displacements clamped to that range, and the pull is re-read there,
+   so the cost returned is the cost at the offset returned. `seatOf` is
+   private to `tuning.lua`, so this needs a small tuning-side reading of
+   a placed strand's displacement and the window halves either side.
+   Where a notation's window halves differ the mean is an approximation
+   rather than the minimiser, which is what § Where a placement sits
+   already says; leave it there. Spec: a I–IV–V–I settles at +4¢ and a
+   ii–V–I at +32¢; a placement whose mean falls outside the range clamps
+   to the edge; the ii–V–I returns the same answer under a stiffer pull,
+   the floor being what the pull cannot spend.
