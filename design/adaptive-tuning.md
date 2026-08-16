@@ -165,7 +165,9 @@ step it was written on.**
    `tuning.genRank2` already emit ratio tokens, and the temper editor
    already drives all four (`temperEditor.lua:667-713`).
 
-5. The one generator still to write is the diamond (§ The diamond).
+5. Two generators bound a target by a measure of its intervals rather
+   than by a count: the diamond (§ The diamond) and the Tenney ball
+   (§ The Tenney ball).
 
 6. The role reads a temper's `pitches` and nothing more. Step names,
    octave numbering and cell width are the notation's business, and a
@@ -221,6 +223,46 @@ step it was written on.**
    size 6 is 100,000 placements — half the budget of § Solving it, and
    past it at 7. So a hundred is where authoring one stops, and the
    21-odd-limit diamond, at 95, is the largest that fits.
+
+## The Tenney ball
+
+1. A target may instead be bounded by **octave-free Tenney height** —
+   Σ |exponent| × log₂ p over the odd primes of a ratio — holding every
+   interval its **generating intervals** compose to within that bound.
+   `3/2` and `5/4` under a bound of 3.91 give eleven points: `1/1
+   16/15 9/8 6/5 5/4 4/3 3/2 8/5 5/3 16/9 15/8`.
+
+2. The bound is written as a ratio rather than as a figure, that ratio
+   being the most complex interval admitted. `15/8` states 3.91, and an
+   author reading it back hears a major seventh where the figure would
+   have shown a logarithm.
+
+3. Height is what a chain spends where odd limit is what a point costs.
+   Two `5/4`s make `25/16` at height 4.64, so a bound of `25/16` admits
+   it and a bound of `15/8` does not; odd limit reads `25/16` as 25
+   however many moves arrived there (`design/adaptive-ji.md` § What
+   makes the candidate set finite).
+
+4. A ball is closed under composition and a diamond is not, so the two
+   disagree at equal size: at thirteen points the 5-limit 15-diamond
+   holds `10/9` and `9/5`, and the ball at `25/16` holds `25/16` and
+   `32/25` in their place.
+
+5. The generators are intervals rather than odd numbers, so a ball may
+   sit on a sublattice. `3/2` alone gives the Pythagorean chain, eleven
+   points out to `243/128`; `9/8` with `5/4` gives eleven over the even
+   powers of 3. Neither is a diamond of any limit.
+
+6. Points grow gently with the bound — eleven at `15/8`, thirteen at
+   `25/16`, nineteen at `45/32`, twenty-seven at `125/64` — so the
+   hundred-point ceiling of § The diamond binds here too, and binds
+   late.
+
+7. The ball is what the springs solve asks of a target, that solve
+   joining two strands by one move and declining to invent an
+   intermediate (`design/adaptive-springs.md` § The candidates). The
+   target therefore states the reach, and widening it is how an author
+   buys a spelling the set does not already name.
 
 ## Choosing the target chooses the theory
 

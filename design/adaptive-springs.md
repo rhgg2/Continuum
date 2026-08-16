@@ -113,18 +113,48 @@ states the search may merge.**
    reach is a whole tone, which is what § Measured's figures were taken
    under; under a notation whose steps are finer it narrows with them.
 
-1. A join may compose two moves. An interval the set does not hold is
-   then still a spelling between two strands — a C minor triad under a
-   set holding `5/4` and `3/2` spells its E♭ a `5/4` below the G even
-   where the two never sound together — and the box prices the
-   composed reach, so a far-fetched spelling loses to a near one by
-   cost rather than by rule.
+1. A join is one move, and the reach is the move set's own. Members
+   that sound do the joining, so an interval the set does not name is
+   spelled wherever a third member carries it: a C minor triad under a
+   set holding `5/4` and `3/2` spells its E♭ a `5/4` below the G, the
+   fifth doing the work. What no chain of sounding members reaches
+   would have to be spelled through a phantom strand, which
+   `design/adaptive-ji.md` § A placement is connected refuses; an author
+   wanting that interval widens the target instead
+   (`design/adaptive-tuning.md` § The Tenney ball). The eleven-move set
+   § Measured takes its figures over is the ball of radius `15/8` over
+   `3/2` and `5/4`, and the same ball at `45/32` holds the two spellings
+   of the tritone, so the reach is stated where the target is authored.
 
-1. Nothing waits. A strand's variable stays free while the strand
-   sounds, so a rolled chord's early third is seated by the fifth that
-   arrives after it, and a strand that has stopped is data for its
-   successors. The rolled C minor lands within a quarter cent of the
-   lattice's answer.
+1. The displacement never waits, and the spelling may. A strand's
+   variable stays free while the strand sounds, so a rolled chord's
+   early third is seated by the fifth that arrives after it, and a
+   strand that has stopped is data for its successors. Coords are
+   another matter: a member joined against an incomplete sonority
+   claims an interval the chord has not yet stated, and the rolled C
+   minor's opening pair, spelled where it stands, takes its C a `5/4`
+   below the E♭ — 86¢ from where the C was written, which the
+   two-half-window reach admits.
+
+1. A member may therefore be left **unplaced**, taking its coords at a
+   later onset from a member it sounds with, which is
+   `design/adaptive-ji.md` § A strand may wait carried over. Waiting
+   runs while the member has an onset left to sound through and ends at
+   that onset, where it places or the state fails; a member the sonority
+   holds by recency has stopped, so it is joined to and does not itself
+   wait. What runs out of onsets with nothing to join to is a sonority
+   with nothing to say — a bare tritone under a 5-limit set — which
+   comes back with no spring and no box (§ Open 2).
+
+1. A sonority holding a waiting member is scored when its last member
+   places, so an arpeggio's opening pair is charged the interval the
+   finished chord states rather than one invented before it arrived.
+   Waiting is a candidate rather than a fallback, forked beside the
+   placements and judged by the running score; it resolves only to
+   coords no earlier sonority could have offered, so a spelling is
+   enumerated once however long it waited. The rolled C minor then lands
+   where the struck chord lands, within a quarter cent of the lattice's
+   answer.
 
 ## The solve
 
