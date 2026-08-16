@@ -10,23 +10,30 @@ anything outside the scratchpad?"
 
 Confinement is textual, over the command with quoted-heredoc bodies lifted out. The
 split matters because the typical spike command is `cd <spike> && cat > probe.lua
-<<'LUA'` around a body of Lua, and Lua is made of the very strings a shell scan must
-refuse: `..` is concat, `~=` is not-equals, `root..'/take.lua'` looks like an absolute
-path. A quoted-heredoc body cannot execute during the call and the file it lands in is
-named in the command proper, so the body is data and gets the data test: any absolute
-path in it whose first component is a real filesystem root (/Users, /etc, …) must sit
-under the scratchpad; fragments like '/take.lua' pass. Only *quoted* delimiters are
-lifted — an unquoted one expands inside the body, so those commands are scanned whole
-(and a Lua body then refuses, nudging toward the quoted form house style prefers).
+<<'LUA'` around a body of Lua, and Lua is made of the very strings a shell scan reads
+as reaching: `..` is concat, `~=` is not-equals, `root..'/take.lua'` looks like an
+absolute path. A quoted-heredoc body cannot execute during the call and the file it
+lands in is named in the command proper, so the body is data and gets the data test:
+any absolute path in it whose first component is a real filesystem root (/Users, /etc,
+…) must sit under the scratchpad; fragments like '/take.lua' pass. A `..` in a body is
+no less reaching than one in the command proper, so it resolves the same way. Only
+*quoted* delimiters are lifted — an unquoted one expands inside the body, so those
+commands are scanned whole (and a Lua body then refuses, nudging toward the quoted form
+house style prefers).
 
 The command proper carries the strict contract:
 
 - It opens with `cd` into the scratchpad, so relative paths and redirections resolve
-  inside the throwaway tree. Later `cd`s may be relative (still confined); a bare,
-  `..`, `~` or `$`-shaped target refuses.
-- Every absolute path sits under the scratchpad, contains no `..`, /dev/* excepted.
-- No route around the scan: `..`, `~`, sudo, pushd/popd, and the variables that name
-  outside places ($HOME and friends) each refuse the whole command.
+  inside the throwaway tree. Later `cd`s may be relative and may not climb, which keeps
+  that opening directory the shallowest the cwd can be; a bare, `..`, `~` or `$`-shaped
+  target refuses.
+- Every absolute path sits under the scratchpad, /dev/* excepted.
+- Every `..` resolves against that opening directory and must land under it. The scan
+  cannot tell a traversal from Lua's concat operator, so it judges both the same way,
+  by where they land: `'../../../?.lua'` climbs to a directory still inside the tree,
+  and `root..'/take.lua'` normalises to a harmless name below it.
+- No route around the scan: `~`, sudo, pushd/popd, and the variables that name outside
+  places ($HOME and friends) each refuse the whole command.
 
 Silence is the safe answer and costs one prompt. What stays promptable: commands with
 no cd anchor, anything referencing the main tree, unquoted heredocs.
@@ -46,7 +53,7 @@ ROOTS = (
 # scan below would see. Substring match, so an innocent filename can trip one — that
 # refuses, which is the harmless direction.
 FORBIDDEN = (
-    "..", "~", "sudo", "pushd", "popd",
+    "~", "sudo", "pushd", "popd",
     "$HOME", "${HOME", "$TMPDIR", "${TMPDIR", "$PWD", "${PWD",
     "$OLDPWD", "${OLDPWD", "$CLAUDE_PROJECT_DIR", "${CLAUDE_PROJECT_DIR",
 )
@@ -66,6 +73,10 @@ ABS_PATH = re.compile(r"(?<![\w.+%@)\]-])/[\w.+%@/-]+")
 # Every `cd` token and its first argument. Bare `cd` (empty capture) goes to $HOME,
 # so an empty argument refuses.
 CD = re.compile(r"(?<![\w./-])cd(?![\w./-])[ \t]*([^\s;&|)]*)")
+
+# Anything holding `..`, taken with the run of path characters around it so the whole
+# thing can be resolved as a path.
+DOTDOT = re.compile(r"[\w.+%@/-]*\.\.[\w.+%@/-]*")
 
 HEREDOC = re.compile(r"<<-?[ \t]*(?:'(\w+)'|\"(\w+)\")")
 
@@ -95,7 +106,7 @@ def split_heredocs(command):
 
 def proper_paths_confined(proper):
     return all(
-        (path.startswith("/dev/") or path.startswith(ROOTS)) and ".." not in path
+        path.startswith("/dev/") or path.startswith(ROOTS)
         for path in ABS_PATH.findall(proper)
     )
 
@@ -103,22 +114,36 @@ def proper_paths_confined(proper):
 def body_paths_confined(bodies):
     for path in ABS_PATH.findall(bodies):
         if path.startswith(ROOTS):
-            if ".." in path:
+            if not os.path.normpath(path).startswith(ROOTS):
                 return False
         elif path.lstrip("/").split("/")[0] in REAL_ROOTS:
             return False
     return True
 
 
-def cds_confined(proper):
+def dotdots_confined(text, anchor):
+    return all(
+        os.path.normpath(os.path.join(anchor, token)).startswith(ROOTS)
+        for token in DOTDOT.findall(text)
+    )
+
+
+def cd_anchor(proper):
+    """The directory relative paths resolve against, or None if the `cd`s aren't confined.
+
+    The first `cd` names it and must be absolute and inside the scratchpad. Later ones
+    may be relative but may not climb, so the cwd only ever goes deeper and the anchor
+    stays the shallowest it can be — which is what makes it the worst case to resolve a
+    `..` against.
+    """
     targets = [t.strip("'\"") for t in CD.findall(proper)]
     if not targets or not targets[0].startswith(ROOTS):
-        return False
+        return None
     for target in targets:
         relative = target and not target.startswith(("/", "-", "$", "~"))
         if not target.startswith(ROOTS) and not (relative and ".." not in target):
-            return False
-    return True
+            return None
+    return targets[0]
 
 
 def command_allowed(command):
@@ -130,10 +155,13 @@ def command_allowed(command):
         return False
     if any(marker in proper for marker in FORBIDDEN):
         return False
+    anchor = cd_anchor(proper)
     return (
-        proper_paths_confined(proper)
+        anchor is not None
+        and proper_paths_confined(proper)
         and body_paths_confined(bodies)
-        and cds_confined(proper)
+        and dotdots_confined(proper, anchor)
+        and dotdots_confined(bodies, anchor)
     )
 
 

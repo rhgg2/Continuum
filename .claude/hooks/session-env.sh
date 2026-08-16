@@ -39,7 +39,7 @@ if ln -sfn "$scratchpad" "$link" 2>/dev/null; then
 else
   scratch_path="$scratchpad"
 fi
-ctx="Scratchpad directory for this session — use it for all temporary files instead of /tmp: $scratch_path"
+ctx="Scratchpad directory for this session: $scratch_path"
 
 # A spike worktree, created eagerly rather than on request: the moment a
 # hypothesis is worth checking is the moment it feels obvious enough to skip,
@@ -53,13 +53,11 @@ git -C "$project" worktree prune 2>/dev/null
 if [ -d "$spike" ] || git -C "$project" worktree add --detach "$spike" HEAD >/dev/null 2>&1; then
   ctx="$ctx
 
-Spike worktree for this session, detached at HEAD — for testing a hypothesis empirically before writing it into a design doc: $scratch_path/spike
-It does not carry uncommitted changes from the main tree. REAPER and the .map/lint hooks do not work; \`lua tests/run.lua\` does, and a <filter> argument does a 
-match against <spec> :: <test>. Spike only, never implementation: the code is discarded with the scratchpad, and the artefact that survives is a paragraph in design/ or plan/. I don't need to review edits in this worktree so use whatever tools are most efficient for you."
-else
-  ctx="$ctx
-
-SPIKE WORKTREE UNAVAILABLE: git worktree add failed for $spike. Nothing is broken, but the surface for checking a hypothesis is missing this session — say so rather than letting an unchecked hypothesis read as a checked one."
+Spike worktree for this session, detached at HEAD: $scratch_path/spike. It does not carry uncommitted changes
+from the main tree. REAPER and the .map/lint hooks do not work; \`lua tests/run.lua\` does, and a <filter> argument
+does a  match against <spec> :: <test>. By default, the code is discarded with the scratchpad; if the spike has value
+beyond this session, suggest promotion to tests/spikes/ in the main tree.  I don't need to review edits in this
+worktree so use whatever tools are most efficient for you."
 fi
 
 jq -n --arg ctx "$ctx" \
