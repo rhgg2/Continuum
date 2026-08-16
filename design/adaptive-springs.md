@@ -1,8 +1,8 @@
 # Design — Adaptive just intonation by springs
 
-> opened: 2026-08-16 · status: proposed — replaces design/adaptive-ji.md,
-> whose lattice search it retires; figures from a spike of 2026-08-16,
-> the code discarded with it
+> opened: 2026-08-16 · status: in flight — plan/adaptive-springs.md;
+> replaces design/adaptive-ji.md, whose lattice search it retires;
+> figures from a spike of 2026-08-16, kept at `tests/spikes/springs/`
 
 **Tune a selection so that the notes of each sonority stand at pure
 intervals drawn from a stated set, holding the state in cents and the
@@ -115,7 +115,9 @@ states the search may merge.**
 
 The passages are the sibling documents' and the five-part take — 43
 notes, thirty strands over sixteen sonorities, under its own
-eleven-move 5-limit set.
+eleven-move 5-limit set. Mistuning and pull are both taken in
+half-windows; the figures are at stiffness 8 against pull strength 1,
+the pump's stiff springs at 40 and its soft at 2.
 
 1. The take. The lattice sweep answers in 63.3s, placing at one offset
    of eleven and carrying every note 40¢ flat; the springs answer in

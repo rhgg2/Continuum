@@ -1,8 +1,8 @@
 # Design — Adaptive just intonation
 
-> opened: 2026-08-11 · status: superseded 2026-08-16 —
-> design/adaptive-springs.md retires the lattice search; stopped at
-> phase 4 of plan/adaptive-ji.md, behind the command
+> opened: 2026-08-11 · status: superseded 2026-08-16 — plan/adaptive-ji.md
+> stopped at phase 4, behind the command; design/adaptive-springs.md
+> retires the lattice search
 > `design/adaptive-tuning.md` has built
 
 **Tune a selection so that the notes of each sonority are joined by pure
