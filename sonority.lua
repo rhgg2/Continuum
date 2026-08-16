@@ -7,7 +7,7 @@
 --shape: Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, the last n struck and whatever else still sounds
 --shape: Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }
 --shape: Tuning = { cents, coords=Coords, strain, key=<the coords' identity> }; what a placement seats a strand at
---shape: Placement = { cost, tunings={ [strandIndex]=Tuning,.. } }; one tuning per strand, at a stated offset
+--shape: Placement = { cost, tunings={ [strandIndex]=Tuning,.. }, offset }; one tuning per strand, at a stated offset
 
 local util    = require 'util'
 local tuning  = require 'tuning'
@@ -186,6 +186,9 @@ end
 -- Placements at an onset: the states carried in times the candidates born there,
 -- so the shortlists of everything live. Counted upfront to refuse, not begin.
 local budget = 200000
+
+-- The offsets a solve tries: the root strand's window, endpoints included, in ten steps.
+local passes = 11
 
 local function assertAffordable(strands, plan)
   for i, onset in ipairs(plan) do
@@ -528,7 +531,27 @@ function sonority.placeAt(strands, n, strength, notation, moves, offset)
   for _, entry in pairs(entries) do
     if outranks(entry, best, #strands, byTuningKey) then best = entry end
   end
-  return { cost = best.cost, tunings = best.tunings }
+  return { cost = best.cost, tunings = best.tunings, offset = offset }
+end
+
+-- One offset for the whole passage, run at each of eleven (design/adaptive-ji.md § What
+-- it costs to solve); outside the root's window costs nothing, tuning.origin refusing it.
+--contract: strands, n, strength, notation, moves → the cheapest placement over the sweep, or nil
+--contract: eleven passes span the root strand's window
+--contract: the winner carries the offset that found it
+--contract: an offset refusing refuses nothing but itself, so nil means every offset refused
+function sonority.solveToMoves(strands, n, strength, notation, moves)
+  local plan         = schedule(strands, sonority.walk(strands, n))
+  local root         = strands[plan[1].born[1]].notes[1]
+  local below, above = tuning.window(notation, root)
+
+  local best
+  for k = 0, passes - 1 do
+    local offset = -below + (below + above) * k / (passes - 1)
+    local placed = sonority.placeAt(strands, n, strength, notation, moves, offset)
+    if placed and outranks(placed, best, #strands, byTuningKey) then best = placed end
+  end
+  return best
 end
 
 return sonority

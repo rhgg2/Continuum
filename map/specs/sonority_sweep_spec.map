@@ -1,0 +1,57 @@
+@spec sonority_sweep_spec  src=tests/specs/sonority_sweep_spec.lua  loc=122  cases=3
+@exercises sonority (sonority), tuning (tuning)
+@surface   sonority.strands, tuning.stepClass, tuning.moves, sonority.placeAt, sonority.solveToMoves
+
+# Intent
+  Pins the sweep of design/adaptive-ji.md § What it costs to solve: sonority.placeAt run
+  once at each of eleven offsets spanning the root strand's own step window, the cheapest
+  placement kept together with the offset that found it.
+  
+  Pins what the sweep buys: a diminished triad that has no placement where it was
+  written placing 20¢ above it, as the 4:5:7 the move set reaches. Pins that a sweep
+  at 10¢ resolves the same placement a sweep at 0.5¢ does, differing only in the offset
+  it states it at. Pins the refusal, where no offset reaches anything at all.
+
+# Helpers
+  @fn nearly(actual, expected, why)  @ 18-21
+      -- The placement's figures are worked past the doc's two places.
+  @fn passage(chords)  @ 25-36
+      -- The passage as the command hands it over: a note per pitch, each chord a beat long
+      -- unless it says otherwise, grouped into strands by the step-class the notation gives them.
+  @fn chord(pitches)  @ 38-40
+  @fn prog(chords)  @ 43-49
+      -- A chord per beat, in the order given.
+  @fn coordsOf(placement, strands)  @ 53-57
+      -- A placement's coords in strand order, which is ascending step-class: what the
+      -- chord came out as, blind to where it sits.
+
+# Cases
+  @case 'a chord with no placement where it was written places under the sweep'  [pure]  @ 61-87
+  @case 'a sweep at 10¢ returns the placement a finer sweep returns'  [pure]  @ 91-110
+  @case 'a move set that reaches nothing at any offset returns nil'  [pure]  @ 114-120
+
+# Uses (outbound edges)
+  @use call sonority.strands  @ 33
+  @use call tuning.stepClass  @ 34
+  @use call tuning.moves  @ 63,93,116
+  @use call sonority.placeAt  @ 65,82,103
+  @use call sonority.solveToMoves  @ 68,95,118
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cents  @ 74,75,76
+  @field r coords  @ 55
+  @field r cost  @ 77,98,104,107
+  @field r detune  @ 34
+  @field w endppq  @ 30
+  @field r len  @ 30
+  @field w name  @ 61,91,114
+  @field r offset  @ 71,97,106
+  @field r pitch  @ 34
+  @field w pitch  @ 29
+  @field r pitches  @ 28
+  @field w pitches  @ 39,46,63,93,116
+  @field r ppq  @ 29,30
+  @field w ppq  @ 29,39,46
+  @field r presets  @ 15
+  @field w run  @ 62,92,115
+  @field r tunings  @ 55,74,75,76

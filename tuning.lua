@@ -717,6 +717,12 @@ function tuning.shortlist(notation, target, keyStep, note, widen)
   return candidates
 end
 
+--contract: notation, note → the half-widths of the window either side of the note's own step
+function tuning.window(notation, note)
+  local _, below, above = seatOf(notation, note)
+  return below, above
+end
+
 -- The placement's root: the strand seated on the step it was written on, so its strain
 -- reads the offset and nothing else (design/adaptive-ji.md § Where a placement sits).
 --contract: the root candidate {cents, coords, strain, key} for `note`, its coords empty

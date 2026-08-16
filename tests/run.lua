@@ -161,6 +161,7 @@ local specs = {
   'tuning_spec',
   'sonority_spec',
   'sonority_placeAt_spec',
+  'sonority_sweep_spec',
   'parts_spec',
   'vm_tracker_mode_spec',
   'vm_temper_entry_spec',

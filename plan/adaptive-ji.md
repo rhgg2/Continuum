@@ -32,10 +32,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 sonority: choose the offset by sweeping the root's window (§ What it costs to solve)
 - 2026-08-16 sonority: name the pair solveToPoints and placeAt (§ Where it sits)
 - 2026-08-16 sonority: let a strand wait for the neighbour that places it (§ A strand may wait)
 - 2026-08-15 sonority: carry the placement across onsets (§ What it costs to solve)
-- 2026-08-15 sonority: place one sonority's strands at a fixed offset (§ A placement is connected)
 
 ## Now
 
@@ -43,28 +43,21 @@
 
 ## Queued (current phase; one-liners)
 
-2. **The sweep.** `sonority.solveToMoves(strands, n, strength,
-   notation, moves)`, standing beside `solveToPoints` and differing
-   from it in the candidate model alone. It runs `placeAt` once at each
-   of eleven offsets spanning the root strand's own step window — 100¢
-   under a 12-EDO notation — keeps the cheapest placement together with
-   the offset that found it, and returns nil only where every offset
-   refuses. A budget raise inside a pass propagates out of the sweep
-   rather than skipping that offset. Spec: a chord with no placement
-   where it was written places under the sweep; a sweep at 10¢ returns
-   the placement a finer sweep returns; a move set that reaches nothing
-   at any offset returns nil.
-
 3. **The exact offset.** The winner's offset is then settled off its
    own strands: the admissible range is the intersection of what each
    strand's window allows, the offset is the mean of their
    displacements clamped to that range, and the pull is re-read there,
    so the cost returned is the cost at the offset returned. `seatOf` is
-   private to `tuning.lua`, so this needs a small tuning-side reading of
-   a placed strand's displacement and the window halves either side.
+   private to `tuning.lua`, and the sweep's `tuning.window` gives the
+   halves, so what this needs beside it is a reading of a placed
+   strand's displacement.
    Where a notation's window halves differ the mean is an approximation
    rather than the minimiser, which is what § Where a placement sits
    already says; leave it there. Spec: a I–IV–V–I settles at +4¢ and a
    ii–V–I at +32¢; a placement whose mean falls outside the range clamps
    to the edge; the ii–V–I returns the same answer under a stiffer pull,
-   the floor being what the pull cannot spend.
+   the floor being what the pull cannot spend. The figures § Where a
+   placement sits states do not reproduce over the fixtures measured for
+   the sweep — a I–IV–V–I settles there at +14.5¢ and a ii–V–I of
+   sevenths at −10.5¢ — so re-derive them against whatever voicings the
+   spec fixes.

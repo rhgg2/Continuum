@@ -386,11 +386,16 @@ written on.**
     It is one figure for the whole passage, so no partial placement can
     be scored against it.
 
-12. The DP therefore runs once for each offset in a sweep.
+12. The DP therefore runs once for each offset in a sweep. The sweep
+    spans the root strand's own window, an offset past it carrying the
+    root off the step it was written on (§ Where a placement sits).
 
-13. The sweep resolves the placement rather than the offset. A sweep
-    at 10¢ chooses what a sweep at 0.25¢ chooses, and a sweep at 20¢
-    does not.
+13. The sweep resolves the placement rather than the offset, where the
+    passage has room for one. A sweep at 10¢ chooses what a sweep at
+    0.25¢ chooses, and a sweep at 20¢ does not. A passage at the floor
+    of § What reachability spends has no room: a minor triad under
+    fifths alone places between +46.1¢ and +48.0¢ and nowhere else, and
+    a sweep at 10¢ steps over that band and refuses it.
 
 14. The winning placement's exact offset then follows from the mean of
     its displacements (§ Where a placement sits), so eleven passes over
