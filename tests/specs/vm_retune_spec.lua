@@ -10,11 +10,6 @@
 -- against the 7-limit diamond at odd limit 9 -- the chord the pull is calibrated
 -- on (design/adaptive-tuning.md § Harmonic lock) -- and a tritone against the
 -- 5-limit diamond at odd limit 15, the hole that refuses a solve.
---
--- With the facility on 'moves' the same target is read as intervals rather than
--- points: sonority.solveToMoves joins the strands to one another and states the
--- offset the whole passage rides. Those cases write a C major and a C minor triad
--- against 1/1, 5/4 and 3/2, the minor third being what no point of it reaches.
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -288,58 +283,6 @@ return {
       local withD = beside(62)
       near(withD[67], offset('3/2', 7), 'and beside D it leaves F# for G, taking 3/2')
       near(withD[62], offset('9/8', 2), 'the D standing on the point its own window holds')
-    end,
-  },
-
-  {
-    name = 'the facility decides how the same target is read',
-    run = function(harness)
-      local function retuned(facility)
-        local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
-                     '12EDO', { DIA = DIA })
-        h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', facility = facility,
-                     key = 1, sonoritySize = 5, harmonicLock = 1.5 }
-        return chordAt(h, 0)
-      end
-
-      local points = retuned('points')
-      near(points[60], 0,                 'read as points the key step keeps the 1/1')
-      near(points[64], offset('5/4', 4),  'the third on the target point')
-      near(points[67], offset('3/2', 7),  'and the fifth on its own')
-
-      -- Read as moves nothing is fixed to the pitch line: the three sit at the same
-      -- two intervals, and the offset that minimises the pull carries the C with them.
-      local moves = retuned('moves')
-      near(moves[60],  3.9104284233, 'the offset the placement settles at, on the C too')
-      near(moves[64], -9.7758577119, 'the third a 5/4 above it')
-      near(moves[67],  5.8654292886, 'the fifth a 3/2 above it')
-    end,
-  },
-
-  {
-    name = 'the moves facility spells a third the target holds no point for',
-    run = function(harness)
-      -- C minor against 1/1, 5/4 and 3/2: read as points the E flat has nothing in its
-      -- window; read as moves it joins the fifth a 5/4 below, standing a 6/5 above the
-      -- C the set cannot sound directly (design/adaptive-ji.md § A placement is connected).
-      local function retuned(facility)
-        local h = mk(harness, { note(0, 60, 0), note(0, 63, 0), note(0, 67, 0), note(0, 75, 0) },
-                     '12EDO', { DIA = DIA })
-        local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'DIA',
-                                     facility = facility, key = 1,
-                                     sonoritySize = 5, harmonicLock = 1.5 }
-        return chordAt(h, 0), refused
-      end
-
-      local stood, refused = retuned('points')
-      t.deepEq(refused, { 4 }, 'the points reading has nowhere to put the minor third')
-      t.eq(stood[63], 0, 'so nothing moved')
-
-      local placed = retuned('moves')
-      near(placed[60], -5.8654292886, 'the offset the placement settles at')
-      near(placed[63],  9.7758577119, 'the E flat a 6/5 above the C, reached through the fifth')
-      near(placed[67], -3.9104284233, 'the fifth a 3/2 above it')
-      near(placed[75],  9.7758577119, 'and the octave doubling seated in its own register')
     end,
   },
 }

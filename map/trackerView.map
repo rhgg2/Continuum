@@ -352,9 +352,10 @@
   @fn solveToTarget(notes, notation, target, slots, widen)  @ 2119-2127
       -- The adaptive solve: one point per strand, seated on every note that writes it, in its own register.
       -- see design/adaptive-tuning.md § What the solver takes
-  @fn solveToMoves(notes, notation, target, slots)  @ 2131-2141
-      -- The placement: the target read as moves between strands rather than as points; a strand's tuning
-      -- is one move from a neighbour's, one offset seats the passage, and a refusal states nothing yet. see design/adaptive-ji.md § The target becomes a move set
+  @fn solveToMoves(notes, notation, target, slots)  @ 2132-2141
+      -- The moves facility: the target read as moves between strands rather than as points. The
+      -- lattice solve behind it is retired, and the springs solve lands in its place
+      -- (design/adaptive-springs.md § Where it sits).
   @fn notDerived(e)  @ 2171
       -- Absorber pbs are tm-managed, tied to note seats — row ops shift
       -- only real events and leave derived pbs to tm's reconcile.
@@ -959,7 +960,7 @@
   @use call    pa:unfloatFx  @ cancelLearn:3726
   @use call    perf.start  @ rebuild:4064,4148,4186,4233,4244
   @use call    perf.stop  @ rebuild:4129,4184,4231,4239,4244
-  @use call    sonority.solveToMoves  @ solveToMoves:2133
+  @use call    sonority.solveToMoves  @ solveToMoves:2134
   @use call    sonority.solveToPoints  @ solveToTarget:2123
   @use call    sonority.strands  @ strandsOf:2080
   @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:1943
@@ -996,7 +997,7 @@
   @use call    tm:timeSigs  @ rebuild:3969
   @use call    tuning.findTemper  @ retune:2158 rebuild:4001
   @use call    tuning.midiToStep  @ editEvent:932 shortlisted:2105
-  @use call    tuning.moves  @ solveToMoves:2134
+  @use call    tuning.moves  @ solveToMoves:2135
   @use call    tuning.seat  @ seatStrand:2088
   @use call    tuning.shortlist  @ shortlisted:2103
   @use call    tuning.snap  @ pitchFromKey:799 snapToTemper:2071
@@ -1134,7 +1135,7 @@
   @call rowBounds  @ adjustPosition:1856
   @call scaleScope  @ scaleSelection:2039 scaleAll:2040
   @call scaledScalar  @ nudgeVel:2396 nudgeDelay:2406 nudgeValue:2413
-  @call seatStrand  @ solveToTarget:2125 solveToMoves:2138
+  @call seatStrand  @ solveToTarget:2125 solveToMoves:2139
   @call selectRegionAt  @ duplicateCascade:3261
   @call selectedTrackIdx  @ currentTrackIdx:176 currentSlotIdx:178 resolveSelectionTake:185 retargetTrackTier:203 gotoTrack:224 gotoTake:231 newParkedTake:249 duplicateBoundUnpooled:257
   @call sendBend  @ killAudition:654 auditionAdd:662 auditionRelease:673
@@ -1150,7 +1151,7 @@
   @call solveToTarget  @ retune:2163
   @call stepSample  @ tracker.inputSampleUp:3860 tracker.inputSampleDown:3861
   @call stopForPart  @ duplicate:3184
-  @call strandsOf  @ shortlisted:2098 solveToMoves:2132
+  @call strandsOf  @ shortlisted:2098 solveToMoves:2133
   @call streamIdOf  @ colInInstance:2260 cursorRect:3121 colsForAnchor:3132 selectionAsRect:3287 eachMemberEvent:3301 clearMoveGap:3346 streamRefAt:3365
   @call strikePitch  @ editEvent:920 chordStrike:1190
   @call takeHoist  @ hoistTouch:3654 listParams:3692
@@ -1278,7 +1279,7 @@
   @field r cells  @ interpolate:1482 interpolateValues:1491 adjustPosition:1873 deleteEvent:2884 shiftEvents:3005 rebuild:3989,4152
   @field r cells  @ rebuild:4164,4167
   @field w cells  @ rebuild:3989,4017
-  @field r cents  @ shortlisted:2110 solveToTarget:2125 solveToMoves:2138
+  @field r cents  @ shortlisted:2110 solveToTarget:2125 solveToMoves:2139
   @field r chan  @ relocate:93,98 killAudition:652,654 auditionRelease:671,673 findCol:745 strikePitch:830 chordStrike:1149
   @field r chan  @ chordStrike:1160,1163,1184,1186 chordBackspace:1204 chordNudgeVel:1216,1224 applyRegionWindow:1576 colInInstance:2259 planInstanceMoves:2296 colFor:2965 shiftEvents:3078
   @field r chan  @ colsForAnchor:3131 duplicateCascade:3250,3251,3253 eventsInRect:3311 clearRegionAt:3333 clearMoveGap:3344,3345 instanceAtCursor:3376 movePreview:3434,3442
@@ -1441,7 +1442,7 @@
   @field w growNote  @ tracker.growNote:3863
   @field r guid  @ gotoTrack:226 pickTrack:243
   @field w halveRPB  @ tracker.halveRPB:3906
-  @field r harmonicLock  @ solveToTarget:2123 solveToMoves:2133
+  @field r harmonicLock  @ solveToTarget:2123 solveToMoves:2134
   @field r hidden  @ notHidden:39 visibleAt:1348 moveLaneEvent:1363 addLaneEvent:1401 interpolateValues:1495 rebuild:4161
   @field w hidden  @ ghostOverlay:3500
   @field r hideExtraCol  @ 3781
@@ -1531,7 +1532,6 @@
   @field r octaveWidth  @ editEvent:948 octaveWidth:3202 rebuild:4003
   @field r offGrid  @ rebuild:3990,4153,4168
   @field w offGrid  @ rebuild:3990,4157
-  @field r offset  @ solveToMoves:2138
   @field r overflow  @ rebuild:3989,4152,4165
   @field w overflow  @ rebuild:3989,4152,4156
   @field r pa  @ 35
@@ -1630,7 +1630,7 @@
   @field w showDelay  @ rebuild:4014
   @field w shrinkNote  @ tracker.shrinkNote:3864
   @field w soloedChannels  @ 4262
-  @field r sonoritySize  @ solveToTarget:2123 solveToMoves:2133
+  @field r sonoritySize  @ solveToTarget:2123 solveToMoves:2134
   @field w srcHi  @ movePreview:3449
   @field w srcLo  @ movePreview:3449
   @field w srcMember  @ movePreview:3450
@@ -1670,7 +1670,7 @@
   @field r trackGuid  @ armLearn:3714,3715 showFx:3722 cancelLearn:3726 pollLearn:3746 automateParam:3757
   @field w trackGuid  @ armLearn:3714 pollLearn:3746
   @field w trackerMode  @ rebuild:4015
-  @field r tunings  @ solveToMoves:2138
+  @field r tunings  @ solveToMoves:2139
   @field r type  @ eventsByCol:410,425 streamIdOf:436,437,439 matchGridToCursor:510 findCol:745,746,747 entrySignAt:868 editEvent:881
   @field r type  @ chordStrike:1137,1172 moveLaneEvent:1359 addLaneEvent:1382,1392,1393 deleteLaneEvent:1409 setLaneTension:1419 cycleLaneShape:1448 interpolate:1460,1478 interpolateValues:1490
   @field r type  @ fxLaneOf:1550 recentreOnRegion:1562 fxColAtLane:1652 cursorNoteBefore:1685 noteOff:1710,1732,1733 adjustDuration:1769,1777 adjustPositionMulti:1802 adjustPosition:1848,1852

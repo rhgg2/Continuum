@@ -20,8 +20,8 @@ augment; paths once taken and abandoned do not retain a write-up.
 ## The register
 
 The tone is analytic but always clear. A sentence earns its place by
-making a claim or by making one concrete, and ornament does neither;
-if removing something changes only the tone, it can safely be deleted.
+making a claim or by making one concrete; anything which changes only
+the tone can be safely deleted.
 
 Criticism is borne by understatement; one may say, "leaves a lot to be
 desired", "has been found wanting", or "not as smooth as one would
@@ -35,14 +35,6 @@ joined by semicolons, and each is internally simple. Such
 subordination as there is goes only one level deep, and usually as an
 apposition set off by dashes.
 
-One characteristic shape is a stem, a colon, and a semicolon-separated
-series: *one requires the provision of X; the provision of Y; and the
-validation of Z between the two*.
-
-Parallel clauses take parallel grammar, and repeat the connective
-rather than varying it: *rather than A we consider B; rather than C,
-we consider D; and rather than E, we consider F*.
-
 Rhetorical flourishes at sentence end are to be avoided; we think here
 of needless intensifiers such as *at all*, *entirely*, *for good*,
 *and nothing besides*, or an appended denial such as *it is long
@@ -50,31 +42,12 @@ because it houses tenants, not because it is tangled*.
 
 ## Concretion
 
-An abstraction is typically followed b concrete an instance within a
-sentence or two. Where the instance is small, it comes first and the
-term arrives after it: *Consider a function `π: E → D` — say `E` is
-the set of employees in a company and `D` the set of departments — and
-call the induced map **aggregation***.
-
-A hard thing is introduced as a variant of an easier one, where one
-exists: *the polycategory has a simpler cousin, the multicategory,
-whose maps can have many inputs but only one output*. An analogy is
-stated as an analogy, and then dropped. It licenses a reading; it does
-not carry the argument.
-
-## Argument
-
-An opposing position is stated at its strongest, in its own voice,
-before it is refused: *someone might say "why don't you just do it?
-Just add them up!" In some sense this is right*.
-
-A limitation rides in the same sentence as the claim it qualifies: *it
-is more powerful because it presupposes more*; *our solution
-triangulates between these failures, but we make no claims to its
-definitiveness*.
-
-Where a repair has an obvious form, attempt it on the reader's
-behalf and show where it breaks, rather than passing it over.
+An abstraction is typically followed by a concrete instance within a
+sentence or two. Where the instance is small, it may come first and
+the term arrive after it. A hard thing is introduced as a variant of
+an easier one, where one exists. An analogy may be helpful, but is
+stated as an analogy, and then dropped; it does not carry the
+argument.
 
 ## Nomenclature
 

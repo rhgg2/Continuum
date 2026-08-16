@@ -2126,8 +2126,9 @@ local function solveToTarget(notes, notation, target, slots, widen)
   end
 end
 
--- The placement: the target read as moves between strands rather than as points; a strand's tuning
--- is one move from a neighbour's, one offset seats the passage, and a refusal states nothing yet. see design/adaptive-ji.md § The target becomes a move set
+-- The moves facility: the target read as moves between strands rather than as points. The
+-- lattice solve behind it is retired, and the springs solve lands in its place
+-- (design/adaptive-springs.md § Where it sits).
 local function solveToMoves(notes, notation, target, slots)
   local strands   = strandsOf(notes, notation)
   local placement = sonority.solveToMoves(strands, slots.sonoritySize, slots.harmonicLock,
@@ -2135,8 +2136,7 @@ local function solveToMoves(notes, notation, target, slots)
   if not placement then return end
 
   for index, strand in ipairs(strands) do
-    seatStrand(strand, notation, placement.tunings[index].cents + placement.offset,
-               slots.strength)
+    seatStrand(strand, notation, placement.tunings[index].cents, slots.strength)
   end
 end
 

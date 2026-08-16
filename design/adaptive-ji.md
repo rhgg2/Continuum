@@ -1,7 +1,8 @@
 # Design — Adaptive just intonation
 
-> opened: 2026-08-11 · status: in flight — plan/adaptive-ji.md, at
-> phase 3 (the offset), behind the command
+> opened: 2026-08-11 · status: superseded 2026-08-16 —
+> design/adaptive-springs.md retires the lattice search; stopped at
+> phase 4 of plan/adaptive-ji.md, behind the command
 > `design/adaptive-tuning.md` has built
 
 **Tune a selection so that the notes of each sonority are joined by pure
@@ -35,7 +36,8 @@ written on.**
 
 1. Every slot is the sibling's
    (`design/adaptive-tuning.md` § The command's slots). This facility
-   adds none and disables the key (§ Where a move set comes from).
+   adds one — complexity — and disables the key (§ Where a move set
+   comes from).
 
 2. The target slot holds the same object under either facility: a temper
    whose every token is a ratio. What differs is how those are read —
@@ -51,6 +53,27 @@ written on.**
    and this facility's at 1.5, the offset having halved what a strength
    buys (§ What the pull's scale becomes). The two are not one dial, so
    choosing the other facility re-seats the slider on its own figure.
+
+5. The added slot is complexity. It truncates the height-sorted move
+   set at the bound it states, opening at 3.91, the figure that spells
+   the minor third (§ What it costs to solve): the septimal diamond
+   holds nineteen moves whole and eleven under it, and eleven is what
+   a real take affords at a sonority of three.
+
+6. The picker states each ratio temper's bound beside it. What makes a
+   temper a target is facility-neutral — every token a ratio — so
+   nothing else tells apart a temper cheap as points and unaffordable
+   as moves; the bound is stated before the choice rather than
+   discovered after it.
+
+7. Sonority size re-seats as harmonic lock does, opening at five under
+   the sibling and three here. The width of a chord change is the
+   exponent of the cost (§ What it costs to solve), and the take that
+   answers at every offset of the sweep at three answers at one of
+   eleven at five, spending its minute mostly on the ten that reach
+   the budget. Three is not a cheaper five, however: it reads
+   five-part writing as the last three classes struck, so the setting
+   the take affords is also the thinner account of its harmony.
 
 ## The target becomes a move set
 
@@ -499,6 +522,91 @@ written on.**
     fifth onset, where the sonority alone reaches twelve, a chain free
     to wander leaving no placement to dominate the rest.
 
+27. Those figures are floors in a second sense: the passages they are
+    measured over are triads and sevenths, five chords at most. A take
+    of five-part writing — forty-three notes, thirty strands over
+    sixteen sonorities — states the shape: cost is linear in the
+    number of chord changes and exponential in the width of one.
+
+28. Width is the exponent. Under nine moves at a sonority of three,
+    the onset where five strands are born against four carried anchors
+    reaches 23,397 entries and carries 1,521 of them forward; the last
+    onset carries eighteen; an onset adding a single voice costs
+    nothing.
+
+29. The dials multiply rather than trade. Under nine moves at a
+    sonority of three the take places at all eleven offsets of the
+    sweep; at eleven moves and a sonority of five it places at one,
+    the other ten reaching the budget first. The workable region is a
+    diagonal, both dials moving together or neither.
+
+30. A bound the target already meets buys nothing. The take was
+    written against a diamond of eleven moves, every one under 3.91,
+    so the complexity slot would have truncated nothing there; what
+    the slot offers is a way out of a wider target rather than a
+    rescue of this one.
+
+31. The sweep's cost is its refusals'. The take places at its one
+    offset in 12.3 seconds inside the budget of 200,000; each of the
+    ten offsets refusing spends four to twelve seconds reaching the
+    budget first, and the sweep answers in 65.
+
+## The solve stays exact
+
+1. Cheaper searches were measured, and every one that reads quality
+   was refused. The prunes with obvious forms — thinning a window's
+   candidates, capping them, carrying only the best entries — break
+   the search in the same place: what each discards is not an answer
+   but an anchor. What survives is a fold of the entries the box
+   cannot tell apart, which discards nothing.
+
+2. A candidate is a waypoint before it is an endpoint. Two tunings a
+   comma apart in one window are one pitch to the ear and two
+   departures for the strands still unplaced, a move departing from
+   exact coords (§ Coords accumulate along moves), so thinning a
+   window by audibility removes the only path to somewhere a later
+   strand needed. Under nine moves at a sonority of three, a tolerance
+   of ten cents removes a tenth of the entries, none of the time and
+   nothing of the answer; twenty answers worse; thirty refuses offsets
+   that placed.
+
+3. Capping the candidates a strand may consider changes nothing
+   either. Capped at six the search runs as the uncapped search runs,
+   the lists being short already; the cost is the product over the
+   strands born together, which no one list's length carries.
+
+4. An entry is an anchor as a candidate is. Carrying the best entry
+   alone — a sonority of five, eleven moves — refuses every offset
+   inside three onsets, 153 entries into the sweep: the entry
+   discarded as second-best was the one the next onset's strands could
+   reach through.
+
+5. Nor can an onset read which entry is best. A sonority holding a
+   waiting strand is scored when its last member places (§ A strand
+   may wait), so an entry's cost omits every box still pending, and
+   ranking entries on it keeps exactly those that have deferred the
+   most scoring. Sixteen abreast, a beam places the take at 169.1
+   where the exact search places it at 106.2.
+
+6. A prune that reads no quality does hold. Two entries agreeing on
+   the strands still sounding at the next onset, and on the span each
+   prime reaches across the strands that are not, place alike from
+   there on: the box reads those spans and nothing else, so what tells
+   the two apart has no future left to alter. Keyed that way the
+   search reaches 69,944 entries where the full key reaches 429,009 at
+   the take's one offset, and 355,110 where it reaches 573,254 at a
+   sonority of three, returning the placement it returns anyway in
+   each case. The saving grows with the width that costs, which is the
+   direction that helps; it is measured rather than proved, however,
+   and a folded entry could still be the one a strand born beside it
+   needed to reach through.
+
+7. What remains are the prunes that read no quality: admissibility,
+   the fold above, and the budget, a bound on work that refuses the
+   offset where it binds (§ Where a placement sits). A bound read
+   against a finished answer would also stand (§ Open); a bound read
+   between rivals does not.
+
 ## What the solver loses
 
 1. The sibling's solver takes strands carrying shortlists and knows
@@ -638,3 +746,23 @@ written on.**
    single trade. What it costs is idempotence by construction and a dial
    that means the same under every notation
    (`design/adaptive-tuning.md` § The window, § Harmonic lock).
+
+3. Whether a refusal must cost what an answer costs. Ten of the
+   sweep's eleven offsets spend their seconds reaching the budget, and
+   a placement completed at an earlier offset bounds every later
+   partial from below, the pending terms all being nonnegative; a
+   later offset could then refuse at the incumbent's figure rather
+   than the budget's. The figure cannot be the incumbent's stated
+   cost, however: the winner is stated where its own strands settle
+   (§ Where a placement sits), and settling only lowers the pull, so a
+   partial standing above the incumbent may yet settle beneath it —
+   the take's own winner falls from 106.2 to 103.0 on settling. What
+   survives settling is the box alone, which bounds more weakly. This
+   cheapens the refusals that dominate the sweep and rescues nothing
+   (§ The solve stays exact).
+
+4. Whether the sweep can be probed rather than swept. The winner's
+   exact offset follows from its displacements (§ What it costs to
+   solve), which invites one pass and a settle in place of eleven; but
+   the take places at one offset with its neighbours refusing, so a
+   probe starting anywhere else finds nothing to settle.
