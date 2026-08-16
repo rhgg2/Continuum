@@ -602,7 +602,7 @@ return {
       for _, layout in ipairs(layouts) do
         for _, n in ipairs{ 2, 3, 4 } do
           for _, strength in ipairs{ 0, 1, 3 } do
-            local choice = sonority.solve(layout.strands, n, strength)
+            local choice = sonority.solveToPoints(layout.strands, n, strength)
             exactly(sonority.cost(layout.strands, n, strength, choice),
               bruteMinimum(layout.strands, n, strength),
               string.format('%s at n=%d, strength %d', layout.name, n, strength))
@@ -621,7 +621,7 @@ return {
       })
 
       for _, strength in ipairs{ 0.5, 1, 3 } do
-        t.eq(sonority.solve({ third }, 4, strength)[1], 2,
+        t.eq(sonority.solveToPoints({ third }, 4, strength)[1], 2,
           'alone, the pull takes the Pythagorean third at strength ' .. strength)
       end
 
@@ -633,7 +633,7 @@ return {
       nearly((sonority.cost(anchored, 4, 1, pure)        - sonority.cost(anchored, 4, 0, pure))
            - (sonority.cost(anchored, 4, 1, pythagorean) - sonority.cost(anchored, 4, 0, pythagorean)),
         0.0505, 'against the pull it costs at strength 1')
-      t.eq(sonority.solve(anchored, 4, 1)[3], 1, 'so in the chord it takes 5/4')
+      t.eq(sonority.solveToPoints(anchored, 4, 1)[3], 1, 'so in the chord it takes 5/4')
     end,
   },
 
@@ -642,16 +642,16 @@ return {
     run = function()
       local held = dorian{ { 0, 1920 } }
       for _, strength in ipairs{ 0, 1, 2 } do
-        t.eq(sonority.solve(held, 4, strength)[5], 1,
+        t.eq(sonority.solveToPoints(held, 4, strength)[5], 1,
           'the D held across the change takes 10/9 at strength ' .. strength)
       end
-      local heldChoice, heldWalk = sonority.solve(held, 4, 0), sonority.walk(held, 4)
+      local heldChoice, heldWalk = sonority.solveToPoints(held, 4, 0), sonority.walk(held, 4)
       nearly(scoreAt(held, heldChoice, heldWalk[1]), 3.907, 'the chord the D is chosen in')
       nearly(scoreAt(held, heldChoice, heldWalk[2]), 7.077, 'and the one that pays for it')
       nearly(sonority.cost(held, 4, 0, heldChoice), 10.9837, 'the passage held')
 
       local restruck   = dorian{ { 0, 960 }, { 960, 1920 } }
-      local freeChoice = sonority.solve(restruck, 4, 0)
+      local freeChoice = sonority.solveToPoints(restruck, 4, 0)
       local freeWalk   = sonority.walk(restruck, 4)
       t.eq(freeChoice[6], 2, 'a D struck again in the second chord takes 9/8')
       nearly(scoreAt(restruck, freeChoice, freeWalk[2]), 6.340, 'which is what the chord wants')
@@ -666,9 +666,9 @@ return {
   {
     name = 'behind a run of fixed classes the answer hangs on the hold',
     run = function()
-      t.eq(sonority.solve(underRun(3360), 5, 0.5)[1], 1,
+      t.eq(sonority.solveToPoints(underRun(3360), 5, 0.5)[1], 1,
         'the B♭ sounding under the run takes 16/9')
-      t.eq(sonority.solve(underRun(480), 5, 0.5)[1], 2,
+      t.eq(sonority.solveToPoints(underRun(480), 5, 0.5)[1], 2,
         'and released as the run begins takes 9/5, a syntonic comma away')
     end,
   },
@@ -678,11 +678,11 @@ return {
     run = function()
       local strands = seventh()
       for _, strength in ipairs{ 0, 0.5, 0.94 } do
-        t.eq(sonority.solve(strands, 5, strength)[4], 1,
+        t.eq(sonority.solveToPoints(strands, 5, strength)[4], 1,
           'the otonal 4:5:6:7 at strength ' .. strength)
       end
       for _, strength in ipairs{ 0.96, 1, 2 } do
-        t.eq(sonority.solve(strands, 5, strength)[4], 2,
+        t.eq(sonority.solveToPoints(strands, 5, strength)[4], 2,
           'and 16/9 above the crossing at strength ' .. strength)
       end
 
@@ -704,7 +704,7 @@ return {
     run = function()
       local strands = seventh()
       for _, strength in ipairs{ 0, 0.94, 0.96, 2, 6 } do
-        local choice = sonority.solve(strands, 5, strength)
+        local choice = sonority.solveToPoints(strands, 5, strength)
         t.eq(choice[2], 1, '5/4 rather than 9/7 at strength ' .. strength)
         t.truthy(choice[4] ~= 3, 'and 9/5 elected by no pull, at strength ' .. strength)
       end
@@ -722,7 +722,7 @@ return {
     run = function()
       local strands = resolving()
       for _, strength in ipairs{ 0, 0.5, 0.94, 2 } do
-        t.eq(sonority.solve(strands, 6, strength)[4], 2, '16/9 at strength ' .. strength)
+        t.eq(sonority.solveToPoints(strands, 6, strength)[4], 2, '16/9 at strength ' .. strength)
       end
 
       local walked = sonority.walk(strands, 6)
@@ -756,8 +756,8 @@ return {
               sonority.cost(alone,   5, 0, c7Pythagorean)
             - sonority.cost(alone,   5, 0, c7Septimal),
         'leaving exactly the trade the chord made alone')
-      t.eq(sonority.solve(strands, 5, 0.94)[4], 1, 'and the crossing where it was')
-      t.eq(sonority.solve(strands, 5, 0.96)[4], 2, 'on both sides of it')
+      t.eq(sonority.solveToPoints(strands, 5, 0.94)[4], 1, 'and the crossing where it was')
+      t.eq(sonority.solveToPoints(strands, 5, 0.96)[4], 2, 'on both sides of it')
     end,
   },
 
@@ -780,7 +780,7 @@ return {
         if sonority.cost(tied, 4, 1, choice) == best then minimisers = minimisers + 1 end
       end)
       t.eq(minimisers, 16, 'every reading of the four scores the same')
-      t.deepEq(sonority.solve(tied, 4, 1), { 1, 1, 1, 1, 1 },
+      t.deepEq(sonority.solveToPoints(tied, 4, 1), { 1, 1, 1, 1, 1 },
         'and the first candidate takes each of them')
     end,
   },
@@ -790,13 +790,13 @@ return {
     run = function()
       local strands = fixed(960, { { 0, 0, 60, just.C, 0 }, { 4, 0, 64, just.E, 0 } })
       strands[2].shortlist = {}
-      local ok, err = pcall(function() sonority.solve(strands, 4, 1) end)
+      local ok, err = pcall(function() sonority.solveToPoints(strands, 4, 1) end)
       t.falsy(ok, 'a strand with nowhere to go raises')
       t.truthy(tostring(err):find('strand 2', 1, true), 'naming it: ' .. tostring(err))
 
       local wide = {}
       for i = 1, 12 do wide[i] = placed(i - 1, { { 0, 72 - i, 960 } }, threeWays) end
-      local affordable, why = pcall(function() sonority.solve(wide, 12, 1) end)
+      local affordable, why = pcall(function() sonority.solveToPoints(wide, 12, 1) end)
       t.falsy(affordable, 'twelve strands of three candidates at n=12 raises')
       t.truthy(tostring(why):find('531441', 1, true), 'naming the count: ' .. tostring(why))
     end,

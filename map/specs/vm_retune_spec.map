@@ -12,7 +12,7 @@
   
   With a target it is the solve: the scope's notes grouped into strands by
   step-class, shortlisted from the notation and the target, and handed to
-  sonority.solve. Those cases write a dominant seventh under a 12-EDO notation
+  sonority.solveToPoints. Those cases write a dominant seventh under a 12-EDO notation
   against the 7-limit diamond at odd limit 9 -- the chord the pull is calibrated
   on (design/adaptive-tuning.md § Harmonic lock) -- and a tritone against the
   5-limit diamond at odd limit 15, the hole that refuses a solve.

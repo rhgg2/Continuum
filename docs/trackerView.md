@@ -460,7 +460,7 @@ point, not a tolerance.
 
 With a target the verb solves rather than snaps. The scope's notes group into
 strands by step-class (`sonority.strands`), `tuning.shortlist` gives each strand
-the target's points its window holds, and `sonority.solve` returns the point each
+the target's points its window holds, and `sonority.solveToPoints` returns the point each
 strand takes; `tuning.seat` puts that point in the register of every note that
 writes it, and strength blends the pair exactly as snap's is blended. Shortlists
 are built before anything moves, so a step the target leaves nowhere to go

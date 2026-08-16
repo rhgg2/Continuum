@@ -101,7 +101,7 @@ return {
     run = function()
       local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '7/4' } }
       local strands = chord{ 60, 64, 67, 70 }
-      local placed  = sonority.place(strands, 5, 1, edo12, moves, 0)
+      local placed  = sonority.placeAt(strands, 5, 1, edo12, moves, 0)
       t.truthy(placed, 'the chord places where it was written')
 
       t.deepEq(coordsOf(placed, strands), { {}, { [5] = 1 }, { [3] = 1 }, { [7] = 1 } },
@@ -118,7 +118,7 @@ return {
     run = function()
       local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
       local strands = chord{ 60, 63, 67 }
-      local placed  = sonority.place(strands, 5, 1, edo12, moves, 0)
+      local placed  = sonority.placeAt(strands, 5, 1, edo12, moves, 0)
       t.truthy(placed, 'the triad places, though no move of the set is a 6/5')
 
       -- The E♭ is the second strand and the G it hangs off the third, so an order
@@ -135,7 +135,7 @@ return {
     name = 'a move set of fifths alone places no minor triad',
     run = function()
       local moves = tuning.moves{ pitches = { '1/1', '3/2' } }
-      t.eq(sonority.place(chord{ 60, 63, 67 }, 5, 1, edo12, moves, 0), nil,
+      t.eq(sonority.placeAt(chord{ 60, 63, 67 }, 5, 1, edo12, moves, 0), nil,
         'nothing the set reaches lands in the E♭\'s window, from either of the others')
     end,
   },
@@ -146,7 +146,7 @@ return {
       local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
       -- A sonority of two, so the chord that has gone is out of reach and the G alone
       -- carries the placement into the second onset.
-      local placed  = sonority.place(heldUnderChange(), 2, 1, edo12, moves, 0)
+      local placed  = sonority.placeAt(heldUnderChange(), 2, 1, edo12, moves, 0)
       t.truthy(placed, 'the second chord places against the note held under it')
 
       t.deepEq(placed.tunings[2].coords, { [3] = 1, [5] = -1 },
@@ -156,7 +156,7 @@ return {
       nearly(placed.tunings[5].cents, 813.6863)
 
       -- The same three notes with nothing sounding under them go the other way about.
-      local alone = sonority.place(chord{ 63, 67, 68 }, 2, 1, edo12, moves, 0)
+      local alone = sonority.placeAt(chord{ 63, 67, 68 }, 2, 1, edo12, moves, 0)
       t.deepEq(alone.tunings[1].coords, {}, 'the chord standing alone roots on its E♭')
       nearly(alone.tunings[2].cents, 686.3137, 'and takes a G a 5/4 above it')
     end,
@@ -166,7 +166,7 @@ return {
     name = 'a move set reaching nothing from what sounds under it refuses the passage',
     run = function()
       local moves = tuning.moves{ pitches = { '1/1', '3/2' } }
-      t.eq(sonority.place(heldUnderChange(), 2, 1, edo12, moves, 0), nil,
+      t.eq(sonority.placeAt(heldUnderChange(), 2, 1, edo12, moves, 0), nil,
         'a fifth from the G lands nowhere in the E♭\'s window')
     end,
   },
@@ -175,7 +175,7 @@ return {
     name = 'a comma pump returns to its opening step at a different tuning',
     run = function()
       local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
-      local placed  = sonority.place(commaPump(), 5, 1, edo12, moves, 0)
+      local placed  = sonority.placeAt(commaPump(), 5, 1, edo12, moves, 0)
       t.truthy(placed, 'the progression places')
 
       -- The three C strands, in strike order: the opening chord's, the A minor's,
@@ -194,7 +194,7 @@ return {
       -- A sonority of three: each chord fills the recency window itself and nothing
       -- sounds across the change, so the sonority before an onset is all there is to
       -- attach to (design/adaptive-ji.md § A placement is connected).
-      local placed = sonority.place(commaPump(), 3, 1, edo12, moves, 0)
+      local placed = sonority.placeAt(commaPump(), 3, 1, edo12, moves, 0)
       t.truthy(placed, 'the progression places without a chord rooting itself')
 
       t.deepEq(placed.tunings[3].coords, { [3] = -4, [5] = 1 }, 'and drifts as it does at five')
@@ -207,7 +207,7 @@ return {
     run = function()
       local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '7/4' } }
       local strands = chord{ 60, 64, 67, 70 }
-      local placed  = sonority.place(strands, 5, 1, edo12, moves, 20)
+      local placed  = sonority.placeAt(strands, 5, 1, edo12, moves, 20)
       t.truthy(placed, 'the seventh places 20¢ above where it was written too')
 
       t.deepEq(coordsOf(placed, strands), { {}, { [5] = 1 }, { [3] = 1 }, { [7] = 1 } },
@@ -224,12 +224,12 @@ return {
     run = function()
       local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
       local strands = rolledMinor()
-      local placed  = sonority.place(strands, 5, 1, edo12, moves, 0)
+      local placed  = sonority.placeAt(strands, 5, 1, edo12, moves, 0)
       t.truthy(placed, 'the E♭ waits for the G rather than refusing at its own onset')
 
       local struck = chord{ 60, 63, 67 }
       t.deepEq(coordsOf(placed, strands),
-               coordsOf(sonority.place(struck, 5, 1, edo12, moves, 0), struck),
+               coordsOf(sonority.placeAt(struck, 5, 1, edo12, moves, 0), struck),
         'and the roll comes out at the coords the struck chord takes')
       nearly(placed.tunings[2].cents, 315.6413)
       nearly(placed.cost, recost(placed, strands, 5, 1),
@@ -245,12 +245,12 @@ return {
       -- stops. A sonority of three still holds all of them: recency is not sounding together.
       local gone  = passage{ { ppq = 0, pitches = { 60, 63 } },
                              { ppq = 960, pitches = { 67 } } }
-      t.eq(sonority.place(gone, 3, 1, edo12, moves, 0), nil,
+      t.eq(sonority.placeAt(gone, 3, 1, edo12, moves, 0), nil,
         'a strand waits only on what sounds with it')
 
       local held   = passage{ { ppq = 0,   pitches = { 60, 63 }, len = 1920 },
                               { ppq = 960, pitches = { 67 } } }
-      local placed = sonority.place(held, 3, 1, edo12, moves, 0)
+      local placed = sonority.placeAt(held, 3, 1, edo12, moves, 0)
       t.truthy(placed, 'the same three notes place where the pair is held under the G')
       t.deepEq(placed.tunings[2].coords, { [3] = 1, [5] = -1 },
         'the E♭ having waited for the G to take a 5/4 below it')

@@ -950,7 +950,7 @@
   @use call    pa:unfloatFx  @ cancelLearn:3699
   @use call    perf.start  @ rebuild:4037,4121,4159,4206,4217
   @use call    perf.stop  @ rebuild:4102,4157,4204,4212,4217
-  @use call    sonority.solve  @ solveToTarget:2107
+  @use call    sonority.solveToPoints  @ solveToTarget:2107
   @use call    sonority.strands  @ shortlisted:2080
   @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:1943
   @use call    timing.logPerRow  @ logPerRowFor:446

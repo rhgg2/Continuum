@@ -194,7 +194,7 @@ local function assertAffordable(strands, plan)
       placements = placements * #strands[index].shortlist
     end
     assert(placements <= budget, string.format(
-      'sonority.solve: onset %d needs %d placements, over the budget of %d',
+      'sonority.solveToPoints: onset %d needs %d placements, over the budget of %d',
       i, placements, budget))
   end
 end
@@ -250,10 +250,10 @@ end
 -- generations are alive at a time and the budget bounds them.
 --invariant: reads no cents and knows no ratios — coords/strikes/releases/classes → indices
 --contract: strands, n, strength → the index per strand minimising sonority.cost, exactly
-function sonority.solve(strands, n, strength)
+function sonority.solveToPoints(strands, n, strength)
   for index, strand in ipairs(strands) do
     assert(#strand.shortlist > 0,
-      'sonority.solve: strand ' .. index .. ' has an empty shortlist')
+      'sonority.solveToPoints: strand ' .. index .. ' has an empty shortlist')
   end
   local sonorities = sonority.walk(strands, n)
   local plan       = schedule(strands, sonorities)
@@ -353,7 +353,7 @@ end
 local function spend(search)
   search.reached = search.reached + 1
   assert(search.reached <= budget, string.format(
-    'sonority.place: onset %d reaches over the budget of %d entries', search.at, budget))
+    'sonority.placeAt: onset %d reaches over the budget of %d entries', search.at, budget))
 end
 
 -- A partial made an answer of its own, remembering for each strand it leaves waiting the coords
@@ -484,7 +484,7 @@ end
 --contract: a strand may wait, taking its coords at a later onset from a neighbour sounding with it
 --contract: cost is sonority.cost's own: the box over the walk, plus the pull each strand spends
 --contract: raises where an onset reaches more entries than the budget allows
-function sonority.place(strands, n, strength, notation, moves, offset)
+function sonority.placeAt(strands, n, strength, notation, moves, offset)
   local sonorities = sonority.walk(strands, n)
   local plan       = schedule(strands, sonorities)
   local memory     = attachable(sonorities, plan)

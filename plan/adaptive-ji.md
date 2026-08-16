@@ -32,25 +32,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 sonority: name the pair solveToPoints and placeAt (§ Where it sits)
 - 2026-08-16 sonority: let a strand wait for the neighbour that places it (§ A strand may wait)
 - 2026-08-15 sonority: carry the placement across onsets (§ What it costs to solve)
 - 2026-08-15 sonority: place one sonority's strands at a fixed offset (§ A placement is connected)
-- 2026-08-15 tuning: reach the candidates one move from a placed strand (§ A placement is connected)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The names the pair needs.** A rename, no behaviour: the sibling's
-   `sonority.solve` becomes `sonority.solveToPoints`, and
-   `sonority.place` — the search at one fixed offset — becomes
-   `sonority.placeAt`. That frees `solveToMoves` for the facility the
-   next item adds, and puts the two facilities under one shape, as
-   § Where it sits has them. The call sites are trackerView.lua:2107
-   and the two specs; the suite is the check, and no spec case changes
-   but its verb.
 
 2. **The sweep.** `sonority.solveToMoves(strands, n, strength,
    notation, moves)`, standing beside `solveToPoints` and differing

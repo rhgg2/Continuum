@@ -1,6 +1,6 @@
 @spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=804  cases=25
 @exercises sonority (sonority)
-@surface   sonority.score, sonority.cost, sonority.strands, sonority.walk, sonority.solve
+@surface   sonority.score, sonority.cost, sonority.strands, sonority.walk, sonority.solveToPoints
 
 # Intent
   Pins the box score of design/adaptive-tuning.md § What "in tune" means: the
@@ -116,7 +116,7 @@
   @use call sonority.cost  @ 216,542,543,551,552,562,568,588,589,590,591,593,594,606,631,633,634,651,658,659,689,690,691,692,693,694,714,715,754,755,756,757,780
   @use call sonority.strands  @ 422,443
   @use call sonority.walk  @ 457,476,494,498,510,526,648,655,728,746
-  @use call sonority.solve  @ 605,624,636,645,648,654,669,671,681,685,707,725,759,760,783,793,799
+  @use call sonority.solveToPoints  @ 605,624,636,645,648,654,669,671,681,685,707,725,759,760,783,793,799
 
 # Fields (r read / w write incl. constructor keys)
   @field r A  @ 165

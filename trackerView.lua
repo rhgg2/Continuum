@@ -2104,7 +2104,7 @@ local function solveToTarget(notes, notation, target, slots, widen)
   local strands, refused = shortlisted(notes, notation, target, slots.key, widen)
   if not strands then return refused end
 
-  local choice = sonority.solve(strands, slots.sonoritySize, slots.harmonicLock)
+  local choice = sonority.solveToPoints(strands, slots.sonoritySize, slots.harmonicLock)
   for index, strand in ipairs(strands) do
     local cents = strand.shortlist[choice[index]].cents
     for _, e in ipairs(strand.notes) do

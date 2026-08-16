@@ -103,12 +103,12 @@
       -- The pull is counted once per strand rather than once per note, so an octave
       -- doubling changes no answer: the box already charges it nothing.
       @contract  strands, n, strength, choice → box over the walk + strength × strain² per strand  @ 136
-  @api sonority.solve(strands, n, strength)  @ 253-298
+  @api sonority.solveToPoints(strands, n, strength)  @ 253-298
       -- The state carries the whole choice vector rather than a backpointer: two
       -- generations are alive at a time and the budget bounds them.
       @invariant  reads no cents and knows no ratios — coords/strikes/releases/classes → indices  @ 251
       @contract  strands, n, strength → the index per strand minimising sonority.cost, exactly  @ 252
-  @api sonority.place(strands, n, strength, notation, moves, offset)  @ 487-532
+  @api sonority.placeAt(strands, n, strength, notation, moves, offset)  @ 487-532
       -- The candidate model of design/adaptive-ji.md: there is no shortlist to index, so
       -- the search carries the move set and reads the tunings off tuning.lua as it goes.
 
@@ -116,95 +116,95 @@
   @use call    tuning.height  @ score:35
   @use call    tuning.origin  @ growFrom:384
   @use call    tuning.reach  @ growFrom:418
-  @use call    util.add  @ strands:48,63,67 strikesInOrder:82 walk:125,127 cost:142 schedule:177,179,180 placementsAt:213 anchorsOf:315 attachable:341 growFrom:395,402,424,444 settle:461 reading:475 place:513
+  @use call    util.add  @ strands:48,63,67 strikesInOrder:82 walk:125,127 cost:142 schedule:177,179,180 placementsAt:213 anchorsOf:315 attachable:341 growFrom:395,402,424,444 settle:461 reading:475 placeAt:513
   @use call    util.bucket  @ strands:49
-  @use call    util.clone  @ placementsAt:213 solve:278 attachable:336 offering:365,366 growFrom:386,430 place:512
-  @use call    util.key  @ keyOf:246 solve:262 placementKey:327 place:494
+  @use call    util.clone  @ placementsAt:213 solveToPoints:278 attachable:336 offering:365,366 growFrom:386,430 placeAt:512
+  @use call    util.key  @ keyOf:246 solveToPoints:262 placementKey:327 placeAt:494
   @use require tuning  @ <load>:13
   @use require util  @ <load>:12
 
 # Calls (intra-file)
   @call anchorsOf  @ growFrom:417
-  @call assertAffordable  @ solve:260
-  @call attachable  @ place:490
-  @call growFrom  @ place:511
-  @call keyOf  @ solve:268,287
+  @call assertAffordable  @ solveToPoints:260
+  @call attachable  @ placeAt:490
+  @call growFrom  @ placeAt:511
+  @call keyOf  @ solveToPoints:268,287
   @call offering  @ growFrom:424
-  @call outranks  @ solve:269,295 growFrom:438 place:506,518,529
-  @call placementKey  @ growFrom:436 place:504,516
-  @call placementsAt  @ solve:276
+  @call outranks  @ solveToPoints:269,295 growFrom:438 placeAt:506,518,529
+  @call placementKey  @ growFrom:436 placeAt:504,516
+  @call placementsAt  @ solveToPoints:276
   @call promote  @ walk:120
-  @call reading  @ place:505,517
-  @call schedule  @ solve:259 place:489
-  @call settle  @ place:514
-  @call sonority.score  @ cost:144 solve:286 settle:461
-  @call sonority.walk  @ cost:139 solve:258 place:488
+  @call reading  @ placeAt:505,517
+  @call schedule  @ solveToPoints:259 placeAt:489
+  @call settle  @ placeAt:514
+  @call sonority.score  @ cost:144 solveToPoints:286 settle:461
+  @call sonority.walk  @ cost:139 solveToPoints:258 placeAt:488
   @call sounding  @ walk:125 growFrom:402,415
   @call spend  @ growFrom:437
   @call strikesInOrder  @ walk:116
 
 # Bindings (by name)
-  @bind byChoice  @ solve:269,295
-  @bind byTuningKey  @ growFrom:438 place:506,518,529
+  @bind byChoice  @ solveToPoints:269,295
+  @bind byTuningKey  @ growFrom:438 placeAt:506,518,529
 
 # Fields (r read / w write incl. constructor keys)
   @field r anchors  @ growFrom:401,417,436
   @field w anchors  @ attachable:346
-  @field r at  @ spend:356 place:496
-  @field r born  @ schedule:177 solve:276,279 growFrom:383,393
+  @field r at  @ spend:356 placeAt:496
+  @field r born  @ schedule:177 solveToPoints:276,279 growFrom:383,393
   @field w born  @ schedule:175
-  @field r carry  @ growFrom:382 place:505
+  @field r carry  @ growFrom:382 placeAt:505
   @field w carry  @ attachable:346
   @field r cents  @ anchorsOf:315
   @field w cents  @ anchorsOf:315
-  @field r choice  @ byChoice:240 solve:268,278,279,297
-  @field w choice  @ placementsAt:213 solve:262,287
+  @field r choice  @ byChoice:240 solveToPoints:268,278,279,297
+  @field w choice  @ placementsAt:213 solveToPoints:262,287
   @field r class  @ promote:105,107
   @field w class  @ strands:66
-  @field r coords  @ cost:142 solve:283 anchorsOf:315 settle:459
+  @field r coords  @ cost:142 solveToPoints:283 anchorsOf:315 settle:459
   @field w coords  @ anchorsOf:315
-  @field r cost  @ outranks:230 solve:286 offering:371 growFrom:388,432 settle:453 place:514,531
-  @field w cost  @ cost:137 solve:262,287 offering:371 growFrom:388,432 place:494,531
+  @field r cost  @ outranks:230 solveToPoints:286 offering:371 growFrom:388,432 settle:453 placeAt:514,531
+  @field w cost  @ cost:137 solveToPoints:262,287 offering:371 growFrom:388,432 placeAt:494,531
   @field r endppq  @ strands:58,64,66 sounding:97
-  @field r held  @ schedule:180 solve:268 attachable:336,337
+  @field r held  @ schedule:180 solveToPoints:268 attachable:336,337
   @field w held  @ schedule:175
   @field r key  @ byTuningKey:306 placementKey:325 offering:367 growFrom:429
-  @field r live  @ schedule:179 assertAffordable:193 solve:287 attachable:336,339 growFrom:394 place:517
+  @field r live  @ schedule:179 assertAffordable:193 solveToPoints:287 attachable:336,339 growFrom:394 placeAt:517
   @field w live  @ schedule:175
   @field r moves  @ growFrom:418
-  @field w moves  @ place:491
+  @field w moves  @ placeAt:491
   @field r nextPpq  @ growFrom:414,415
-  @field w nextPpq  @ place:498
+  @field w nextPpq  @ placeAt:498
   @field r notation  @ growFrom:384,418
-  @field w notation  @ place:491
+  @field w notation  @ placeAt:491
   @field r notes  @ strands:63 strikesInOrder:81 sounding:96 schedule:164,165 growFrom:384,419
   @field w notes  @ strands:66
   @field r offered  @ offering:362,365 growFrom:389,427,435
-  @field w offered  @ offering:372 growFrom:389,435 place:494
+  @field w offered  @ offering:372 growFrom:389,435 placeAt:494
   @field r offset  @ growFrom:384,419
-  @field w offset  @ place:492
-  @field r pending  @ offering:372 growFrom:389,434 place:505,512,517
-  @field w pending  @ offering:372 growFrom:389,434 place:494,514
+  @field w offset  @ placeAt:492
+  @field r pending  @ offering:372 growFrom:389,434 placeAt:505,512,517
+  @field w pending  @ offering:372 growFrom:389,434 placeAt:494,514
   @field r pitch  @ strikesInOrder:82,87
   @field w pitch  @ strikesInOrder:82
-  @field w place  @ place:487
+  @field w placeAt  @ placeAt:487
   @field r ppq  @ strands:57,62 strikesInOrder:82,86 sounding:97 walk:118
-  @field r ppq  @ walk:119 schedule:160,164,166 growFrom:402 place:497,498
-  @field w ppq  @ strikesInOrder:82 walk:127 place:497
-  @field r pull  @ solve:286
+  @field r ppq  @ walk:119 schedule:160,164,166 growFrom:402 placeAt:497,498
+  @field w ppq  @ strikesInOrder:82 walk:127 placeAt:497
+  @field r pull  @ solveToPoints:286
   @field w pull  @ placementsAt:213
   @field r reached  @ spend:354,355
-  @field w reached  @ spend:354 place:496
+  @field w reached  @ spend:354 placeAt:496
   @field w score  @ score:21
-  @field r shortlist  @ cost:142,147 assertAffordable:194 placementsAt:210,218 solve:255,283
-  @field w solve  @ solve:253
+  @field r shortlist  @ cost:142,147 assertAffordable:194 placementsAt:210,218 solveToPoints:255,283
+  @field w solveToPoints  @ solveToPoints:253
   @field r strain  @ cost:147 placementsAt:210 growFrom:388,433
   @field r strand  @ strikesInOrder:88 walk:120
   @field w strand  @ strikesInOrder:82
-  @field r strands  @ cost:141 schedule:171 solve:282 attachable:340 growFrom:378 settle:456 reading:473
-  @field w strands  @ strands:44 walk:127 place:491
+  @field r strands  @ cost:141 schedule:171 solveToPoints:282 attachable:340 growFrom:378 settle:456 reading:473
+  @field w strands  @ strands:44 walk:127 placeAt:491
   @field r strength  @ growFrom:388,433
-  @field w strength  @ place:492
-  @field r tunings  @ byTuningKey:305 offering:364,371 growFrom:386,395,411,417,430 settle:457 place:504,516,531
-  @field w tunings  @ offering:371 growFrom:389,434 place:494,531
+  @field w strength  @ placeAt:492
+  @field r tunings  @ byTuningKey:305 offering:364,371 growFrom:386,395,411,417,430 settle:457 placeAt:504,516,531
+  @field w tunings  @ offering:371 growFrom:389,434 placeAt:494,531
   @field w walk  @ walk:115
