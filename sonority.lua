@@ -300,13 +300,13 @@ end
 -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
 -- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
 --shape: Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta
---contract: members, seat, spelling → { box=sonority.score(spelling), springs={ Spring,.. } }
---contract: springs one per pair in member order, i before j
+--contract: members, seat and spelling parallel per member → a Spring per pair, i before j
+--contract: springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen
 function sonority.springs(members, seat, spelling)
   local devs = {}
   for k, coords in ipairs(spelling) do
-    local pure = seat[members[1]] + tuning.cents(coords)
-    devs[k] = tuning.gapTo(seat[members[k]], pure)
+    local pure = seat[1] + tuning.cents(coords)
+    devs[k] = tuning.gapTo(seat[k], pure)
   end
 
   local springs = {}
@@ -315,21 +315,22 @@ function sonority.springs(members, seat, spelling)
       util.add(springs, { i = members[a], j = members[b], delta = devs[b] - devs[a] })
     end
   end
-  return { box = sonority.score(spelling), springs = springs }
+  return springs
 end
 
 -- The unit the stiffness is measured in: what a half-window holds in 12-EDO, kept a
 -- constant because a spring prices beating, which the notation's spacing does not scale.
 local PURE = 50
 
+-- The box is no part of this: a constant once the spellings are chosen, so it is charged
+-- where they are chosen rather than where the displacements are priced.
 --shape: Window = { below=<cents to the step below>, above=<cents to the step above> }
---contract: spellings (a sonority.springs result per sonority), displacement and window per strand
---contract: → box + stiffness × (mistuning/50)² per spring + strength × strain² per half-window
+--contract: spellings (a sonority.springs list per sonority), displacement and window per strand
+--contract: → stiffness × (mistuning/50)² per spring + strength × strain² per half-window
 function sonority.springCost(spellings, displacement, window, strength, stiffness)
   local total = 0
-  for _, spelled in ipairs(spellings) do
-    total = total + spelled.box
-    for _, spring in ipairs(spelled.springs) do
+  for _, springs in ipairs(spellings) do
+    for _, spring in ipairs(springs) do
       local mistuning = (displacement[spring.j] - displacement[spring.i] - spring.delta) / PURE
       total = total + stiffness * mistuning * mistuning
     end
@@ -354,8 +355,8 @@ local TOLERANCE, SWEEPS = 1e-4, 1000
 local function tiesOf(spellings, count)
   local ties = {}
   for index = 1, count do ties[index] = {} end
-  for _, spelled in ipairs(spellings) do
-    for _, spring in ipairs(spelled.springs) do
+  for _, springs in ipairs(spellings) do
+    for _, spring in ipairs(springs) do
       util.add(ties[spring.i], { other = spring.j, delta = -spring.delta })
       util.add(ties[spring.j], { other = spring.i, delta =  spring.delta })
     end
@@ -376,7 +377,6 @@ local function settle(ties, displacement, window, strength, stiffness)
                     -window.below, window.above)
 end
 
--- The box is a constant once the spellings are chosen, so only the springs are minimised.
 --invariant: convex in the displacements, so the sweep order buys speed and not the answer
 --contract: spellings, window, strength, stiffness → displacements minimising sonority.springCost
 --contract: each displacement inside its own strand's window

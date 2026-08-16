@@ -20,12 +20,12 @@
 --
 -- Pins the springs of design/adaptive-springs.md § The model: a spelling read
 -- off as the displacement gaps at which its pairs sound pure, nearest-octave,
--- with the box read from the spelling's coords.
+-- from seats given in member order.
 --
--- Pins the objective those springs stand in (§ The model): the box over the
--- sonorities, stiffness × mistuning² per spring and strength × displacement²
--- per strand, the mistuning in cents over fifty and the pull over the window
--- half the displacement lies in.
+-- Pins the objective those springs stand in (§ The model): stiffness ×
+-- mistuning² per spring and strength × displacement² per strand, the mistuning
+-- in cents over fifty and the pull over the window half the displacement lies
+-- in. The box is no part of it, being a constant in the displacements.
 --
 -- Pins the relaxation that minimises it (§ The model): the sweep's answer on a
 -- pair whose optimum is a closed form, a strand the springs press to its window
@@ -441,54 +441,51 @@ return {
   {
     name = 'springs: a spelled major triad, by hand',
     run = function()
-      local spelled = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+      local springs = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
         { {}, { [5] = 1 }, { [3] = 1 } })
 
-      near(spelled.box, 3.91, 'the box is the score of the spelling')
-      t.eq(#spelled.springs, 3, 'a spring per pair')
-      spring(spelled.springs[1], 1, 2, -13.69, 'the third pure 13.69 below its seat')
-      spring(spelled.springs[2], 1, 3, 1.955, 'the fifth pure 1.96 above its seat')
-      spring(spelled.springs[3], 2, 3, 15.64, 'third to fifth, the difference of the two')
+      t.eq(#springs, 3, 'a spring per pair')
+      spring(springs[1], 1, 2, -13.69, 'the third pure 13.69 below its seat')
+      spring(springs[2], 1, 3, 1.955, 'the fifth pure 1.96 above its seat')
+      spring(springs[3], 2, 3, 15.64, 'third to fifth, the difference of the two')
     end,
   },
 
   {
     name = 'springs: deviations reduce to the nearest octave, and name strands',
     run = function()
-      local spelled = sonority.springs({ 3, 5 }, { [3] = 1100, [5] = 0 },
-        { {}, { [3] = -1, [5] = -1 } })
+      -- The seats arrive in member order, whatever strands the members are: a sonority of
+      -- strands 3 and 5 seats them first and second, and only the springs name the strands.
+      local springs = sonority.springs({ 3, 5 }, { 1100, 0 }, { {}, { [3] = -1, [5] = -1 } })
 
-      near(spelled.box, 3.91, 'a 16/15 spans both axes')
-      t.eq(#spelled.springs, 1, 'one pair, one spring')
-      spring(spelled.springs[1], 3, 5, 11.73, 'pure just over the seam, not a descent of 1188')
+      t.eq(#springs, 1, 'one pair, one spring')
+      spring(springs[1], 3, 5, 11.73, 'pure just over the seam, not a descent of 1188')
     end,
   },
 
   {
     name = 'springs: a lone member holds no spring',
     run = function()
-      local spelled = sonority.springs({ 4 }, { [4] = 250 }, { {} })
-      t.eq(spelled.box, 0, 'one member spans nothing')
-      t.eq(#spelled.springs, 0, 'and ties nothing')
+      t.eq(#sonority.springs({ 4 }, { 250 }, { {} }), 0, 'one member ties nothing')
     end,
   },
 
   {
-    name = 'springs: the objective sums the box, the springs and the pull',
+    name = 'springs: the objective sums the springs and the pull',
     run = function()
-      -- A C major triad, then the fifth G–D: two sonorities sharing the strand on G.
+      -- A C major triad, then the fifth G–D: two sonorities sharing the strand on G. The box
+      -- the two spellings carry is charged by whoever chose them, not by the cost of a placement.
       local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } })
-      local fifth = sonority.springs({ 3, 4 }, { [3] = 700, [4] = 200 }, { {}, { [3] = 1 } })
+      local fifth = sonority.springs({ 3, 4 }, { 700, 200 }, { {}, { [3] = 1 } })
       local displacement = { -4, -12, 2, 6 }
 
       -- Each spring's mistuning is the gap the displacements realise less the gap the
       -- spelling states: -8 against -13.69, 6 against 1.96, 14 against 15.64, 4 against 1.96.
-      local box  = 3.9069 + 1.5850
       local mist = 8 * ((5.6863/50)^2 + (4.0450/50)^2 + (1.6413/50)^2 + (2.0450/50)^2)
       local pull = 1 * ((4/50)^2 + (12/50)^2 + (2/50)^2 + (6/50)^2)
 
       local cost = sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 8)
-      near(cost, box + mist + pull, 'the three terms summed')
+      near(cost, mist + pull, 'the two terms summed, and no box among them')
       near(cost - sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 0),
         mist, 'and the stiffness buys the springs alone')
     end,
@@ -501,12 +498,12 @@ return {
 
       -- The first strand stands where it was written and the others follow their springs
       -- from it, so every pair sounds the interval the spelling states, the third pair included.
-      local displacement = { 0, major.springs[1].delta, major.springs[2].delta }
+      local displacement = { 0, major[1].delta, major[2].delta }
       local pull = 0
       for _, cents in ipairs(displacement) do pull = pull + (cents / 50)^2 end
 
       local cost = sonority.springCost({ major }, displacement, evenWindows(3), 1, 8)
-      near(cost, major.box + pull, 'the box and the pull, and nothing from the springs')
+      near(cost, pull, 'the pull alone, and nothing from the springs')
       t.eq(cost, sonority.springCost({ major }, displacement, evenWindows(3), 1, 1e6),
         'a stiffness of a million charges a slack spring the same nothing')
     end,
@@ -531,7 +528,7 @@ return {
       -- One spring between even windows charges the pull the same either way, so the two
       -- part equally: each at stiffness × delta over strength plus twice the stiffness.
       local third = sonority.springs({ 1, 2 }, { 0, 400 }, { {}, { [5] = 1 } })
-      local hand  = -8 * third.springs[1].delta / (1 + 2 * 8)
+      local hand  = -8 * third[1].delta / (1 + 2 * 8)
 
       local displacement = sonority.relax({ third }, evenWindows(2), 1, 8)
       near(displacement[1],  hand, 'the root rises six and a half cents')
@@ -550,7 +547,7 @@ return {
       local displacement = sonority.relax({ harmonic }, window, 1, 40)
       near(displacement[1],  8, 'the root stands at its edge, not at its far half')
       near(displacement[2], -8, 'and the seventh at its own')
-      near(displacement[2] - displacement[1] - harmonic.springs[1].delta, 15.174,
+      near(displacement[2] - displacement[1] - harmonic[1].delta, 15.174,
         'the fifteen cents the windows refuse staying in the spring')
     end,
   },
@@ -560,22 +557,22 @@ return {
     run = function()
       -- C–E a 5/4, E–A a 4/3, C–A a 27/16: three sonorities whose spellings fail to close
       -- by a syntonic comma, so no displacement leaves all three springs slack.
-      local third  = sonority.springs({ 1, 2 }, { [1] = 0,   [2] = 400 }, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, { [2] = 400, [3] = 900 }, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, { [1] = 0,   [3] = 900 }, { {}, { [3] =  3 } })
+      local third  = sonority.springs({ 1, 2 }, { 0,   400 }, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, { 400, 900 }, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, { 0,   900 }, { {}, { [3] =  3 } })
       local loop, window = { third, fourth, sixth }, evenWindows(3)
 
       local displacement = sonority.relax(loop, window, 1, 8)
       local spread       = sonority.springCost(loop, displacement, window, 1, 8)
 
       -- Two springs go slack only by handing the whole comma to the third.
-      local borne = { 0, third.springs[1].delta,
-                      third.springs[1].delta + fourth.springs[1].delta }
+      local borne = { 0, third[1].delta,
+                      third[1].delta + fourth[1].delta }
       t.truthy(spread < sonority.springCost(loop, borne, window, 1, 8),
         'the spread comma costs less than one spring bearing it')
 
-      for _, spelled in ipairs(loop) do
-        local tie = spelled.springs[1]
+      for _, springs in ipairs(loop) do
+        local tie = springs[1]
         t.truthy(math.abs(displacement[tie.j] - displacement[tie.i] - tie.delta) < 8,
           'no spring left holding more than eight of the twenty-one cents')
       end

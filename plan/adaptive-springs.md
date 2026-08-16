@@ -18,6 +18,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: the springs alone, seated in member order (§ The model)
 - 2026-08-16 sonority: relax the displacements to the objective's optimum (§ The model)
 - 2026-08-16 sonority: the springs objective, in its two units (§ The model)
 - 2026-08-16 sonority: derive a spelling's springs and box (§ The model)
@@ -28,14 +29,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. `sonority.springs` returns its spring list alone, and takes its
-   seats in member order. The box leaves the record, being
-   `sonority.score(spelling)` and nothing besides, and the beam of item
-   3 will hold it; the seats join `members` and `spelling` as a third
-   member-parallel array, so a call keys one way and only the springs
-   it returns carry strand indices, as the passage-wide displacement
-   and window vectors do. Green-first, pinning `sonority_spec`'s two
-   hand-worked spellings and the objective case that reads `box`.
 2. `tuning.composed(moves)` — a move set closed under one
    composition: every move, plus every ordered pair's product, deduped
    by coords with the height read off the composed coords. A set
