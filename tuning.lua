@@ -717,6 +717,14 @@ function tuning.shortlist(notation, target, keyStep, note, widen)
   return candidates
 end
 
+-- How far a placed strand sits from the step it was written on, the offset aside; the offset
+-- that would seat it exactly is this negated (design/adaptive-ji.md § Where a placement sits).
+--contract: notation, note, cents → the signed gap from the note's own step seat to `cents`
+function tuning.displacement(notation, note, cents)
+  local seat = seatOf(notation, note)
+  return gapTo(seat, cents)
+end
+
 --contract: notation, note → the half-widths of the window either side of the note's own step
 function tuning.window(notation, note)
   local _, below, above = seatOf(notation, note)

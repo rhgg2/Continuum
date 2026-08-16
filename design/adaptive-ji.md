@@ -224,19 +224,26 @@ written on.**
    windows are equal it is the mean of the displacements, clamped to the
    admissible range.
 
-7. Against a 12-EDO notation a I–IV–V–I seats at +4¢ and a ii–V–I at
-   +32¢.
+7. The pull's strength does not enter the choice. It scales every
+   strand's pull alike, so the mean stands wherever the dial is set; what
+   a stiffer pull moves is which placement wins, and not where the winner
+   sits.
 
-8. Without an offset the model refuses chords it can otherwise spell. A
+8. Against a 12-EDO notation a I–IV–V–I seats at +14.7¢ and a ii–V–I of
+   sevenths at +5.5¢. A diminished triad standing alone seats at +18.8¢,
+   which is the edge of the admissible range rather than the mean of its
+   displacements: the mean is +17.1¢, and no placement survives there.
+
+9. Without an offset the model refuses chords it can otherwise spell. A
    dominant seventh under a complexity bound below 2.8 has no placement
    left where it was written, and neither has a diminished triad under
    any bound.
 
-9. The strand seated is the first born at the first onset. Its coords
-   are zero and its cents the seat of the step it was written on, so
-   its strain reads the offset and nothing else.
+10. The strand seated is the first born at the first onset. Its coords
+    are zero and its cents the seat of the step it was written on, so
+    its strain reads the offset and nothing else.
 
-10. That seat is a gauge rather than a claim. Seating any other strand
+11. That seat is a gauge rather than a claim. Seating any other strand
     shifts every coord and every displacement by a constant, which the
     span and the offset absorb (§ Coords accumulate along moves), so
     nothing the model reads depends on the choice.
@@ -399,54 +406,63 @@ written on.**
 
 14. The winning placement's exact offset then follows from the mean of
     its displacements (§ Where a placement sits), so eleven passes over
-    a range of 100¢ are enough.
+    a range of 100¢ are enough. The pull is re-read there and the box
+    reads coords alone, so the cost returned is the cost at the offset
+    returned.
 
-15. The counts that follow are floors. They count only the strands the
+15. Settling the winner alone is enough. Settling every pass's placement
+    and comparing the results there returns the same placement in every
+    passage measured, and where a different one comes back the two costs
+    agree to twelve figures: a diminished triad and an augmented triad
+    are symmetric under inversion, so a placement's mirror costs what the
+    placement costs.
+
+16. The counts that follow are floors. They count only the strands the
     recency bound makes live, and they are stated in states where the
     budget is placements at an onset
     (`design/adaptive-tuning.md` § Solving it).
 
-16. Only a narrow range of complexity bounds is usable: between about
+17. Only a narrow range of complexity bounds is usable: between about
     2.8 and 3.3, admitting seven to nine moves. Below it a dominant
     seventh standing alone is spelled only by running a strand to 49¢ of
     a 50¢ window; in a ii–V–I the same chord solves inside 27¢. Above it
     the state count runs away, reaching 59,049 at 4.0.
 
-17. Waiting costs nothing where nothing sounds into the change. With it
+18. Waiting costs nothing where nothing sounds into the change. With it
     offered and without, a struck ii–V–I of sevenths under nine moves
     reaches 1,937 entries at its third onset, five detached triads
     82,655 at their fifth, and a comma pump 11,257.
 
-18. What it buys is the rolled textures. A rolled triad, which placing
+19. What it buys is the rolled textures. A rolled triad, which placing
     every strand at its own onset refuses, places at its struck coords
     for two entries; a rolled ii–V–I of sevenths places at 3,929
     against the budget of 200,000.
 
-19. What sounds through the change pays. A comma pump whose chords are
+20. What sounds through the change pays. A comma pump whose chords are
     held into the next reaches 12,125 entries at its last onset against
     2,436 without waiting.
 
-20. Waiting on what a strand does not sound with buys nothing
+21. Waiting on what a strand does not sound with buys nothing
     (§ A strand may wait). Offered across recency and the hinge, the
     struck pump reaches 52,732 entries rather than 11,257 and returns
     the placement it returns anyway, as does every passage measured.
 
-21. The budget cannot be read off the walk. A strand's candidates
+22. The budget cannot be read off the walk. A strand's candidates
     depend on where the others went (§ What the solver loses), so there
     is no product of shortlist sizes to take before the search begins.
 
-22. The count is taken as the entries are reached, and the search
+23. The count is taken as the entries are reached, and the search
     refuses there. The upfront bound (the move set's size times the
     sonority's) overestimates by an order of magnitude and would
     refuse everything.
 
-23. Hinging every onset to its predecessor rather than only where
+24. Hinging every onset to its predecessor rather than only where
     nothing is carried (§ A placement is connected) reaches 622,694
     entries where the ii–V–I's third onset reaches 1,937, and arrives
     at the same placement. A strand's candidates are its neighbours
     times the moves, and the strands born together multiply.
 
-24. Where nothing is carried the price is real. Five detached triads at
+25. Where nothing is carried the price is real. Five detached triads at
     a sonority of three under nine moves reach 82,655 entries at the
     fifth onset, where the sonority alone reaches twelve, a chain free
     to wander leaving no placement to dominate the rest.

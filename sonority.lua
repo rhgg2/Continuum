@@ -534,11 +534,49 @@ function sonority.placeAt(strands, n, strength, notation, moves, offset)
   return { cost = best.cost, tunings = best.tunings, offset = offset }
 end
 
+-- The pull a placement spends: strength × strain² per strand. The box reads coords alone, so
+-- re-reading the pull re-reads the whole cost (design/adaptive-ji.md § Where a placement sits).
+local function pullOf(strands, tunings, strength)
+  local pull = 0
+  for index = 1, #strands do
+    local strain = tunings[index].strain
+    pull = pull + strength * strain * strain
+  end
+  return pull
+end
+
+-- The placement stated where its own strands put it, offset clamped into the intersection
+-- of their windows (design/adaptive-ji.md § Where a placement sits).
+--contract: placement, strands → the same placement at the offset minimising its pull
+--contract: the strains and the cost are re-read there, so the cost is the cost at the offset
+local function settleOffset(placement, strands, notation, strength)
+  local seats, low, high, total = {}, -math.huge, math.huge, 0
+  for index, strand in ipairs(strands) do
+    local note         = strand.notes[1]
+    local gap          = tuning.displacement(notation, note, placement.tunings[index].cents)
+    local below, above = tuning.window(notation, note)
+    seats[index], total = { gap = gap, below = below, above = above }, total + gap
+    low, high = math.max(low, -below - gap), math.min(high, above - gap)
+  end
+  local offset = util.clamp(-total / #strands, low, high)
+
+  local tunings = {}
+  for index, seat in ipairs(seats) do
+    local gap    = seat.gap + offset
+    local chosen = placement.tunings[index]
+    tunings[index] = { cents  = chosen.cents, coords = chosen.coords, key = chosen.key,
+                       strain = math.abs(gap) / (gap < 0 and seat.below or seat.above) }
+  end
+  return { cost    = placement.cost - pullOf(strands, placement.tunings, strength)
+                                    + pullOf(strands, tunings, strength),
+           tunings = tunings, offset = offset }
+end
+
 -- One offset for the whole passage, run at each of eleven (design/adaptive-ji.md § What
 -- it costs to solve); outside the root's window costs nothing, tuning.origin refusing it.
 --contract: strands, n, strength, notation, moves → the cheapest placement over the sweep, or nil
 --contract: eleven passes span the root strand's window
---contract: the winner carries the offset that found it
+--contract: the winner is stated at the offset its own strands settle on, its cost read there
 --contract: an offset refusing refuses nothing but itself, so nil means every offset refused
 function sonority.solveToMoves(strands, n, strength, notation, moves)
   local plan         = schedule(strands, sonority.walk(strands, n))
@@ -551,7 +589,7 @@ function sonority.solveToMoves(strands, n, strength, notation, moves)
     local placed = sonority.placeAt(strands, n, strength, notation, moves, offset)
     if placed and outranks(placed, best, #strands, byTuningKey) then best = placed end
   end
-  return best
+  return best and settleOffset(best, strands, notation, strength)
 end
 
 return sonority
