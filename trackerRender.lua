@@ -839,6 +839,10 @@ end
 local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Strength:' }
 local RETUNE_LABEL_GAP = 6
 
+-- Harmonic lock's figure per facility: the placement's offset halves what a strength
+-- buys, so its dial opens higher. see design/adaptive-ji.md § What the pull's scale becomes
+local RETUNE_LOCK = { points = 1, moves = 1.5 }
+
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
 -- here, not scopedAction's confirm, and OK is the single commit point.
 modalHost:registerKind('retune', function(s, close)
@@ -880,14 +884,25 @@ modalHost:registerKind('retune', function(s, close)
         onPick      = function(name) s.target = name end,
       }
       chrome.disabledIf(s.target == nil, function()
+        -- The facility is a choice of its own beside the target; switching re-seats
+        -- harmonic lock's slider. see design/adaptive-ji.md § The command's slots
+        for _, f in ipairs{ {'points', 'Points'}, {'moves', 'Moves'} } do
+          ImGui.SameLine(ctx)
+          if chrome.radio(f[2], s.facility == f[1]) and s.facility ~= f[1] then
+            s.facility, s.harmonicLock = f[1], RETUNE_LOCK[f[1]]
+          end
+        end
         ImGui.SameLine(ctx); ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, 'Key:')
         ImGui.SameLine(ctx)
-        chrome.drawPicker{
-          kind        = 'retuneKey', width = 50,
-          buttonLabel = stepLabel(notation, s.key),
-          items       = retuneKeyItems(notation, s.key),
-          onPick      = function(step) s.key = step end,
-        }
+        -- A move set has no place on the pitch line, so there is no key to sit it on.
+        chrome.disabledIf(s.facility == 'moves', function()
+          chrome.drawPicker{
+            kind        = 'retuneKey', width = 50,
+            buttonLabel = stepLabel(notation, s.key),
+            items       = retuneKeyItems(notation, s.key),
+            onPick      = function(step) s.key = step end,
+          }
+        end)
       end)
     end)
     chrome.disabledIf(s.target == nil, function()
@@ -927,7 +942,7 @@ modalHost:registerKind('retune', function(s, close)
   if okPressed then
     close(true, { scope        = s.scope,        strength     = s.strength,
                   target       = s.target,       key          = s.key,
-                  facility     = 'points',
+                  facility     = s.facility,
                   sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock })
   elseif cancelPressed then close(false) end
 end)
@@ -954,20 +969,22 @@ runRetune = util.atomic('Retune', function(slots, widen)
   if refused then offerWiden(slots, refused) end
 end)
 
--- Target and key open on what the take carries, the rest on its default.
--- see design/adaptive-tuning.md § The command's slots
+-- Target, facility and key open on what the take carries, the rest on its default.
+-- see design/adaptive-tuning.md § The command's slots, design/adaptive-ji.md § The command's slots
 local function openRetuneModal()
   local notation = tv:activeTemper()
   local key      = cm:getAt('take', 'retune.key') or 1
+  local facility = cm:getAt('take', 'retune.facility') or 'points'
   modalHost:open{
     kind         = 'retune',
     title        = 'Retune',
     scope        = tv:ec():hasSelection() and 'selection' or 'all',
     strength     = 1,
     target       = cm:getAt('take', 'retune.target'),
+    facility     = facility,
     key          = notation and math.min(key, #notation.cents) or key,
     sonoritySize = 5,
-    harmonicLock = 1,
+    harmonicLock = RETUNE_LOCK[facility],
     callback     = runRetune,
   }
 end

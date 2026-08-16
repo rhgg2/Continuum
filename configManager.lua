@@ -61,6 +61,7 @@ local declarations = {
   -- modal reopens on them. see design/adaptive-tuning.md § The command's slots
   { 'retune.target',    nil },   -- library name of the target temper; absent is the snap
   { 'retune.key',       nil },   -- notation step the target's 1/1 sits on
+  { 'retune.facility',  nil },   -- 'points' | 'moves': how that target is read
 
   { 'sampleBrowserRoot', nil },
   -- Project-tier breadcrumb so sampler save-migration survives a

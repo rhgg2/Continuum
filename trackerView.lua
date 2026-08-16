@@ -2141,15 +2141,16 @@ local function solveToMoves(notes, notation, target, slots)
 end
 
 --shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, facility='points'|'moves', key=step, sonoritySize, harmonicLock }
---contract: target and key are remembered at take tier; the rest is per invocation
+--contract: target, facility and key are remembered at take tier; the rest is per invocation
 --contract: with no target the whole of it is the notation snap
 --contract: the facility reads the target as points of the pitch line or as moves between strands
 --contract: returns the steps whose empty shortlists refused the solve, else nil
 --contract: widen stretches those windows to the nearest points instead, so none refuses
 function tv:retune(slots, widen)
   if slots.target then lib.localize('tempers', slots.target) end
-  cm:set('take', 'retune.target', slots.target)
-  cm:set('take', 'retune.key',    slots.key)
+  cm:set('take', 'retune.target',   slots.target)
+  cm:set('take', 'retune.key',      slots.key)
+  cm:set('take', 'retune.facility', slots.facility)
 
   local notation = ctx:activeTemper()
   if not notation or slots.strength <= 0 then return end

@@ -33,24 +33,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 tuning: choose the retune facility beside the target (§ The command's slots)
 - 2026-08-16 tuning: retune a scope by the moves the target holds (§ The target becomes a move set)
 - 2026-08-16 sonority: state the winner at the offset its strands settle on (§ Where a placement sits)
 - 2026-08-16 sonority: choose the offset by sweeping the root's window (§ What it costs to solve)
-- 2026-08-16 sonority: name the pair solveToPoints and placeAt (§ Where it sits)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-2. The facility on the modal: the choice drawn beside the target and
-   dead until one is chosen, the key picker disabled under the move set,
-   harmonic lock opening at the facility's own figure and re-seating
-   when the facility switches, and `retune.facility` written at take
-   tier beside the target and the key so the modal reopens on it.
-   `tv:retune`'s shape and contracts follow, and `docs/trackerView.md`
-   § Retune with them. Spec drives the modal in `tracker_page_spec`.
 
 3. The refusal the search can state: `sonority.placeAt` returns the
    onset that emptied, the strand it could not place there and the

@@ -266,6 +266,40 @@ return {
     end,
   },
 
+  -- The facility is a slot of its own, nothing recovering the reading from the
+  -- target object (design/adaptive-ji.md § The command's slots): it persists at
+  -- take tier as the target and the key do, and harmonic lock opens on its figure.
+  {
+    name = 'retune opens on the facility the take carries, harmonic lock on its figure',
+    run = function(harness)
+      local h = harness.mk{ config = { project = { tempers = { MEAN = MEAN }, temper = 'MEAN' } } }
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:seedMidi('tr1/t1', { notes = {
+        { ppq = 0, endppq = 60, chan = 0, pitch = 76, vel = 100 } } })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()
+      h.cmgr:push('tracker')
+
+      h.cmgr:invoke('retune')
+      t.eq(fakeModalHost.last.facility, 'points', 'a take carrying no facility opens on points')
+      t.eq(fakeModalHost.last.harmonicLock, 1, 'and harmonic lock on the points figure')
+
+      h.cm:set('take', 'retune.facility', 'moves')
+      h.cmgr:invoke('retune')
+      t.eq(fakeModalHost.last.facility, 'moves', 'the modal reopens on the facility the take carries')
+      t.eq(fakeModalHost.last.harmonicLock, 1.5, 'and harmonic lock on the placement figure')
+
+      -- No target is a snap, which reads no facility at all -- the answer still
+      -- rides back to the take, so the next open stands where this one did.
+      h.cm:set('take', 'retune.facility', nil)
+      fakeModalHost.last.callback{ scope = 'all', strength = 1, facility = 'moves' }
+      t.eq(h.cm:getAt('take', 'retune.facility'), 'moves', 'OK writes the facility back at take tier')
+    end,
+  },
+
   -- A refused solve is offered the widening rather than dropped
   -- (design/adaptive-tuning.md § What the solver takes).
   {
