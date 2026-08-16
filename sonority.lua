@@ -295,6 +295,29 @@ function sonority.solveToPoints(strands, n, strength)
   return best.choice
 end
 
+----- The springs
+
+-- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
+-- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
+--shape: Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta
+--contract: members, seat, spelling → { box=sonority.score(spelling), springs={ Spring,.. } }
+--contract: springs one per pair in member order, i before j
+function sonority.springs(members, seat, spelling)
+  local devs = {}
+  for k, coords in ipairs(spelling) do
+    local pure = seat[members[1]] + tuning.cents(coords)
+    devs[k] = tuning.gapTo(seat[members[k]], pure)
+  end
+
+  local springs = {}
+  for a = 1, #members do
+    for b = a + 1, #members do
+      util.add(springs, { i = members[a], j = members[b], delta = devs[b] - devs[a] })
+    end
+  end
+  return { box = sonority.score(spelling), springs = springs }
+end
+
 ----- The placement
 
 -- The moves facility's solve: the target read as intervals between strands rather than

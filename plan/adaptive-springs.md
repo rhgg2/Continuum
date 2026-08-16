@@ -16,22 +16,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-16 sonority: derive a spelling's springs and box (§ The model)
 
 ## Now
 
-(empty — run /plan-next to compile the top Queued item.)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 
-1. **The springs of a spelling.** In `sonority.lua`: from a sonority's
-   members, their seats, and a spelling — coords per member relative
-   to the first — derive a spring per pair the spelling holds, each
-   stating the displacement gap at which the pair sounds pure under
-   nearest-octave reduction, with the spelling's box read by
-   `sonority.score`; the spec pins a spelled major triad's springs and
-   box by hand. The derivation is `beamSpell`'s tail in
-   `tests/spikes/springs/springcore.lua`.
 2. **The springs objective.** The cost of a choice of spellings at
    given displacements: box summed over the walk, stiffness ×
    mistuning² per spring and strength × displacement² per strand,

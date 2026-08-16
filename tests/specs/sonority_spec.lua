@@ -17,6 +17,10 @@
 -- Pins the pull's scale on the calibration C7 (§ Harmonic lock): the crossing
 -- from the otonal seventh to the Pythagorean, and what resolving the chord to
 -- F–A–C does to that trade (§ The model).
+--
+-- Pins the springs of design/adaptive-springs.md § The model: a spelling read
+-- off as the displacement gaps at which its pairs sound pure, nearest-octave,
+-- with the box read from the spelling's coords.
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -25,6 +29,13 @@ local sonority = require('sonority')
 local function near(actual, expected, why)
   t.truthy(math.abs(actual - expected) < 0.005, string.format(
     '%s: expected %.2f, got %.4f', why or 'score', expected, actual))
+end
+
+-- A spring pinned whole: which strands it ties, and the gap at which they sound pure.
+local function spring(sp, i, j, delta, why)
+  t.eq(sp.i, i, why .. ': i')
+  t.eq(sp.j, j, why .. ': j')
+  near(sp.delta, delta, why)
 end
 
 -- The chords of § Choosing the target chooses the theory in the spellings that
@@ -408,6 +419,41 @@ return {
       near(sonority.score{ major[1], major[2], major[3], { [3] = 1 } }, 3.91, 'G doubled an octave up')
       near(sonority.score{ { [3] = 1 } }, 0, 'one pitch spans nothing')
       near(sonority.score{}, 0, 'and neither does none')
+    end,
+  },
+
+  {
+    name = 'springs: a spelled major triad, by hand',
+    run = function()
+      local spelled = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+        { {}, { [5] = 1 }, { [3] = 1 } })
+
+      near(spelled.box, 3.91, 'the box is the score of the spelling')
+      t.eq(#spelled.springs, 3, 'a spring per pair')
+      spring(spelled.springs[1], 1, 2, -13.69, 'the third pure 13.69 below its seat')
+      spring(spelled.springs[2], 1, 3, 1.955, 'the fifth pure 1.96 above its seat')
+      spring(spelled.springs[3], 2, 3, 15.64, 'third to fifth, the difference of the two')
+    end,
+  },
+
+  {
+    name = 'springs: deviations reduce to the nearest octave, and name strands',
+    run = function()
+      local spelled = sonority.springs({ 3, 5 }, { [3] = 1100, [5] = 0 },
+        { {}, { [3] = -1, [5] = -1 } })
+
+      near(spelled.box, 3.91, 'a 16/15 spans both axes')
+      t.eq(#spelled.springs, 1, 'one pair, one spring')
+      spring(spelled.springs[1], 3, 5, 11.73, 'pure just over the seam, not a descent of 1188')
+    end,
+  },
+
+  {
+    name = 'springs: a lone member holds no spring',
+    run = function()
+      local spelled = sonority.springs({ 4 }, { [4] = 250 }, { {} })
+      t.eq(spelled.box, 0, 'one member spans nothing')
+      t.eq(#spelled.springs, 0, 'and ties nothing')
     end,
   },
 

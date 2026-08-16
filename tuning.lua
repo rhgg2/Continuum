@@ -604,6 +604,17 @@ function tuning.height(coords)
   return total
 end
 
+-- Read signed where the height reads absolute, so a descent comes out negative;
+-- prime 2 is divided out of coords, so the figure is exact only up to the octave.
+--contract: coords → Σ exponent × 1200 log₂ p: the cents of the ratio they name, octave-free
+function tuning.cents(coords)
+  local total = 0
+  for prime, exponent in pairs(coords) do
+    total = total + exponent * 1200 * weight(prime)
+  end
+  return total
+end
+
 --contract: true when every pitch of `temper` is a ratio, so its points carry coords to score
 function tuning.isTarget(temper)
   for _, token in ipairs(temper.pitches) do
@@ -662,8 +673,9 @@ function tuning.moves(temper)
 end
 
 -- The gap from a seat to a point of the octave-reduced line, signed and reduced so a
--- point below the seat reads as a descent, not an ascent; shortlist and seat both use it.
-local function gapTo(seat, cents)
+-- point below the seat reads as a descent, not an ascent; sonority's springs read it too.
+--contract: cents - seat, reduced to the nearest octave
+function tuning.gapTo(seat, cents)
   return reduceCents(cents - seat + OCTAVE / 2, OCTAVE) - OCTAVE / 2
 end
 
@@ -688,7 +700,7 @@ function tuning.shortlist(notation, target, keyStep, note, widen)
   local points = {}
   for _, token in ipairs(target.pitches) do
     local cents = reduceCents(keyCents + tuning.scalaPitch(token), OCTAVE)
-    local gap   = gapTo(seat, cents)
+    local gap   = tuning.gapTo(seat, cents)
     local half  = gap < 0 and below or above
     util.add(points, { cents = cents, coords = tuning.coords(token),
                        strain = math.abs(gap) / half })
@@ -723,7 +735,7 @@ end
 function tuning.seat(notation, note, cents)
   local midi, detune = tuning.snap(notation, note.pitch, note.detune)
   local at    = midi * 100 + detune
-  local place = at + gapTo(at, cents)
+  local place = at + tuning.gapTo(at, cents)
   local pitch = math.floor(place / 100 + 0.5)
   return pitch, place - pitch * 100
 end
