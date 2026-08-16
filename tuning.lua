@@ -743,7 +743,7 @@ local function addCoords(coords, move)
 end
 
 -- The shortlist under a move set: a candidate is one move from a strand already placed, and
--- the offset seats the placement rather than riding along an edge (design/adaptive-ji.md § A placement is a tree, § Where a placement sits).
+-- the offset seats the placement rather than riding along an edge (design/adaptive-ji.md § A placement is connected, § Where a placement sits).
 --contract: candidates {cents, coords, strain} one move from an anchor {cents, coords}
 --contract: a candidate's coords are the anchor's plus the move's; its cents the placement's own
 --contract: kept where `cents + offset` lands inside the note's step window; strain reads it there

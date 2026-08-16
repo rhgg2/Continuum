@@ -1,14 +1,18 @@
--- Pins the placement of design/adaptive-ji.md § A placement is a tree: the search
+-- Pins the placement of design/adaptive-ji.md § A placement is connected: the search
 -- at one fixed offset over a single sonority, where a strand's candidates are the
 -- tunings one move reaches from a strand already placed.
 --
--- Pins what the tree's shape buys: a dominant seventh coming out 4:5:6:7, and a
+-- Pins what the joining buys: a dominant seventh coming out 4:5:6:7, and a
 -- minor third the move set holds no move for reached through the fifth. Pins the
 -- refusal an offset with nothing reachable returns, and the root seated where it
 -- was written (§ Where a placement sits).
 --
 -- Pins the carry across onsets: what a chord may attach to is what sounds under it
 -- or struck before it, so a comma pump drifts by the comma it pumps.
+--
+-- Pins what waiting buys and what bounds it (§ A strand may wait): a rolled minor triad
+-- placing at the coords the struck chord takes, and the same three notes refused where the
+-- strand that must wait has stopped sounding before its anchor strikes.
 
 local t        = require('support')
 local util     = require('util')
@@ -59,12 +63,36 @@ local function heldUnderChange()
                   { ppq = 960, pitches = { 63, 68 } } }
 end
 
+-- A rolled C minor triad: the C, then the E♭ no move of a 5-limit set reaches from it,
+-- then the G it must hang off, each sustaining to the end of the roll.
+local function rolledMinor()
+  return passage{ { ppq = 0,   pitches = { 60 }, len = 1440 },
+                  { ppq = 480, pitches = { 63 }, len = 960 },
+                  { ppq = 960, pitches = { 67 }, len = 480 } }
+end
+
 -- A placement's coords in strand order, which is ascending step-class: what the
 -- chord came out as, blind to where it sits.
 local function coordsOf(placement, strands)
   local coordSet = {}
   for index = 1, #strands do coordSet[index] = placement.tunings[index].coords end
   return coordSet
+end
+
+-- The cost read back off a placement's own tunings: the box over the walk, plus the pull
+-- each strand spends. A sonority a strand kept waiting is charged when it places, once.
+local function recost(placement, strands, n, strength)
+  local total = 0
+  for _, current in ipairs(sonority.walk(strands, n)) do
+    local coordSet = {}
+    for k, index in ipairs(current.strands) do coordSet[k] = placement.tunings[index].coords end
+    total = total + sonority.score(coordSet)
+  end
+  for index = 1, #strands do
+    local strain = placement.tunings[index].strain
+    total = total + strength * strain * strain
+  end
+  return total
 end
 
 return {
@@ -165,7 +193,7 @@ return {
       local moves = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
       -- A sonority of three: each chord fills the recency window itself and nothing
       -- sounds across the change, so the sonority before an onset is all there is to
-      -- attach to (design/adaptive-ji.md § A placement is a tree).
+      -- attach to (design/adaptive-ji.md § A placement is connected).
       local placed = sonority.place(commaPump(), 3, 1, edo12, moves, 0)
       t.truthy(placed, 'the progression places without a chord rooting itself')
 
@@ -188,6 +216,44 @@ return {
       nearly(placed.tunings[1].strain, 0.4, 'its strain the offset over the half-window')
       nearly(placed.tunings[3].strain, 0.4391, 'where the fifth reads the two together')
       nearly(placed.cost, 7.1329, 'a cheaper trade than the same tree unshifted')
+    end,
+  },
+
+  {
+    name = 'a rolled minor triad waits for the fifth it hangs off',
+    run = function()
+      local moves   = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
+      local strands = rolledMinor()
+      local placed  = sonority.place(strands, 5, 1, edo12, moves, 0)
+      t.truthy(placed, 'the E♭ waits for the G rather than refusing at its own onset')
+
+      local struck = chord{ 60, 63, 67 }
+      t.deepEq(coordsOf(placed, strands),
+               coordsOf(sonority.place(struck, 5, 1, edo12, moves, 0), struck),
+        'and the roll comes out at the coords the struck chord takes')
+      nearly(placed.tunings[2].cents, 315.6413)
+      nearly(placed.cost, recost(placed, strands, 5, 1),
+        'the sonorities its waiting left unscored charged once, and once only')
+    end,
+  },
+
+  {
+    name = 'a strand released before its anchor arrives has nothing to wait for',
+    run = function()
+      local moves = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
+      -- The E♭ has no move to the C, and the G that could carry it strikes as the pair
+      -- stops. A sonority of three still holds all of them: recency is not sounding together.
+      local gone  = passage{ { ppq = 0, pitches = { 60, 63 } },
+                             { ppq = 960, pitches = { 67 } } }
+      t.eq(sonority.place(gone, 3, 1, edo12, moves, 0), nil,
+        'a strand waits only on what sounds with it')
+
+      local held   = passage{ { ppq = 0,   pitches = { 60, 63 }, len = 1920 },
+                              { ppq = 960, pitches = { 67 } } }
+      local placed = sonority.place(held, 3, 1, edo12, moves, 0)
+      t.truthy(placed, 'the same three notes place where the pair is held under the G')
+      t.deepEq(placed.tunings[2].coords, { [3] = 1, [5] = -1 },
+        'the E♭ having waited for the G to take a 5/4 below it')
     end,
   },
 }

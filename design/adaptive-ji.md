@@ -273,43 +273,45 @@ written on.**
 
 3. Waiting is a candidate rather than a fallback. A placement may join
    a strand backward even where a forward candidate exists, so a strand
-   with an unplaced neighbour forks a waiting branch beside its
+   still sounding at the next onset forks a waiting branch beside its
    placements, and the objective judges the branches like any rivals.
 
 4. A sonority holding a waiting strand is scored when its last member
    places. The box reads coords, the coords arrive late, and nothing
    else about the objective moves.
 
-5. Waiting is justified only by the unborn. A placed neighbour's
-   coords are fixed, and a waiting neighbour offers nothing its own
-   wait is not justified by, so justification runs through unplaced
-   neighbours to a strand still unborn. A strand that reaches none
-   places now or its branch is refused.
+5. A strand waits only while it sounds. What places it is a neighbour,
+   the neighbour it takes coords from is one it sounds with, and once
+   it has stopped there is none left to come: a strand out of onsets to
+   sound through places now or its branch is refused.
 
-6. A waiting strand resolves only to coords no earlier onset offered.
+6. Recency joins but does not wait. A strand the sonority holds by
+   recency has stopped (`design/adaptive-tuning.md` § The model), so
+   the box scores it and a strand born now joins it, but it waits for
+   nothing and nothing waits for it.
+
+7. A hinge is no exception. It joins strands that never sound together
+   (§ A placement is connected), so nothing waits across one, and a
+   passage of detached chords keeps the entry count it has without
+   waiting at all (§ What it costs to solve).
+
+8. A waiting strand resolves only to coords no earlier onset offered.
    Whatever an earlier onset could offer, the branch that placed there
    already carries, so each placement is enumerated once however long
    its strands waited.
 
-7. A strand waits only on neighbours it sounds with. A hinge
-   (§ A placement is connected) joins strands that never sound
-   together, and exists so a chord can join what preceded it: letting
-   the past wait across one multiplies the detached passage's entries
-   past the budget and buys no cheaper placement (§ What it costs to
-   solve).
-
-8. An offset can still refuse. A strand out of waits with nothing in
+9. An offset can still refuse. A strand out of waits with nothing in
    its window ends its entry, an onset ending every entry refuses the
    offset there, and refusing an offset refuses nothing else
    (§ Where a placement sits).
 
-9. This is what transfers of the sibling's widening
-   (`design/adaptive-tuning.md` § What the solver takes). There a class
-   with nothing in reach has its window scaled; here it waits for the
-   neighbour that can reach it, the window being a joint constraint the
-   offset already answers for (§ Where a placement sits).
+10. This is what transfers of the sibling's widening
+    (`design/adaptive-tuning.md` § What the solver takes). There a class
+    with nothing in reach has its window scaled; here it waits for the
+    neighbour that can reach it, the window being a joint constraint the
+    offset already answers for (§ Where a placement sits).
 
-10. A composed interval is admitted only where real strands carry it.
+11. A composed interval is admitted only where real strands carry it.
     Every chain runs through neighbours that sound, so nothing enters
     the reachable set past the complexity bound (§ What makes the
     candidate set finite): a bare C–E♭ dyad under a move set without a
@@ -405,37 +407,41 @@ written on.**
     a 50¢ window; in a ii–V–I the same chord solves inside 27¢. Above it
     the state count runs away, reaching 59,049 at 4.0.
 
-17. Waiting costs nothing where it cannot pay. With it offered and
-    without, a struck ii–V–I of sevenths under nine moves reaches 1,937
-    entries at its third onset, and five detached triads reach 82,655
-    at their fifth.
+17. Waiting costs nothing where nothing sounds into the change. With it
+    offered and without, a struck ii–V–I of sevenths under nine moves
+    reaches 1,937 entries at its third onset, five detached triads
+    82,655 at their fifth, and a comma pump 11,257.
 
 18. What it buys is the rolled textures. A rolled triad, which placing
     every strand at its own onset refuses, places at its struck coords
-    for two entries; a rolled ii–V–I of sevenths places at 165,281
+    for two entries; a rolled ii–V–I of sevenths places at 3,929
     against the budget of 200,000.
 
-19. The chained progression pays the most. A comma pump under nine
-    moves reaches 203,994 entries at its last onset against 11,257
-    without waiting, the budget's edge at the top of the usable band;
-    under seven moves it reaches 26,844 against 2,090.
+19. What sounds through the change pays. A comma pump whose chords are
+    held into the next reaches 12,125 entries at its last onset against
+    2,436 without waiting.
 
-20. The budget cannot be read off the walk. A strand's candidates
+20. Waiting on what a strand does not sound with buys nothing
+    (§ A strand may wait). Offered across recency and the hinge, the
+    struck pump reaches 52,732 entries rather than 11,257 and returns
+    the placement it returns anyway, as does every passage measured.
+
+21. The budget cannot be read off the walk. A strand's candidates
     depend on where the others went (§ What the solver loses), so there
     is no product of shortlist sizes to take before the search begins.
 
-21. The count is taken as the entries are reached, and the search
+22. The count is taken as the entries are reached, and the search
     refuses there. The upfront bound (the move set's size times the
     sonority's) overestimates by an order of magnitude and would
     refuse everything.
 
-22. Hinging every onset to its predecessor rather than only where
+23. Hinging every onset to its predecessor rather than only where
     nothing is carried (§ A placement is connected) reaches 622,694
     entries where the ii–V–I's third onset reaches 1,937, and arrives
     at the same placement. A strand's candidates are its neighbours
     times the moves, and the strands born together multiply.
 
-23. Where nothing is carried the price is real. Five detached triads at
+24. Where nothing is carried the price is real. Five detached triads at
     a sonority of three under nine moves reach 82,655 entries at the
     fifth onset, where the sonority alone reaches twelve, a chain free
     to wander leaving no placement to dominate the rest.

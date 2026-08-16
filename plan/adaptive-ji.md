@@ -31,10 +31,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 sonority: let a strand wait for the neighbour that places it (§ A strand may wait)
 - 2026-08-15 sonority: carry the placement across onsets (§ What it costs to solve)
 - 2026-08-15 sonority: place one sonority's strands at a fixed offset (§ A placement is connected)
 - 2026-08-15 tuning: reach the candidates one move from a placed strand (§ A placement is connected)
-- 2026-08-15 tuning: read a ratio temper as a move set (§ Where a move set comes from)
 
 ## Now
 
@@ -42,7 +42,4 @@
 
 ## Queued (current phase; one-liners)
 
-- the waiting branch beside a strand's placements, justified only by the unborn (§ A strand may wait)
-- a waiting strand resolves only to coords no earlier onset offered (§ A strand may wait)
-- waiting confined to neighbours that sound together; hinges join backward only (§ A strand may wait)
-- score a sonority when its last member places; the carry keeps what waiting still reads (§ What it costs to solve)
+(empty — the phase's items are all compiled.)

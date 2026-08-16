@@ -181,7 +181,7 @@
       @contract  nil where the offset alone carries the note past its step window  @ 724
   @api tuning.reach(notation, moves, anchors, note, offset)  @ 752-778
       -- The shortlist under a move set: a candidate is one move from a strand already placed, and
-      -- the offset seats the placement rather than riding along an edge (design/adaptive-ji.md § A placement is a tree, § Where a placement sits).
+      -- the offset seats the placement rather than riding along an edge (design/adaptive-ji.md § A placement is connected, § Where a placement sits).
   @api tuning.seat(notation, note, cents)  @ 783-789
       -- The shortlist's fold in reverse: a point the strand took, in the register of one
       -- of the notes that writes it, the note's own step seat being what the window was measured off.
