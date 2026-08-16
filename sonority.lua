@@ -343,6 +343,60 @@ function sonority.springCost(spellings, displacement, window, strength, stiffnes
   return total
 end
 
+----- The relaxation
+
+-- A ten-thousandth of a cent is far under hearing and the sweeps converge geometrically,
+-- so the cap is a guard and not a schedule: an iterate that reaches it is already there.
+local TOLERANCE, SWEEPS = 1e-4, 1000
+
+-- Where each spring would stand its two strands, given the other: i a delta below j, j a
+-- delta above i. Gathered once, since every sweep reads them at every strand.
+local function tiesOf(spellings, count)
+  local ties = {}
+  for index = 1, count do ties[index] = {} end
+  for _, spelled in ipairs(spellings) do
+    for _, spring in ipairs(spelled.springs) do
+      util.add(ties[spring.i], { other = spring.j, delta = -spring.delta })
+      util.add(ties[spring.j], { other = spring.i, delta =  spring.delta })
+    end
+  end
+  return ties
+end
+
+-- One strand's optimum with the rest held: its springs' seats averaged against the pull,
+-- charged over the half-window the seats point it toward (design/adaptive-springs.md § The model).
+local function settle(ties, displacement, window, strength, stiffness)
+  local seats = 0
+  for _, tie in ipairs(ties) do seats = seats + displacement[tie.other] + tie.delta end
+  if seats == 0 then return 0 end
+
+  local half  = seats > 0 and window.above or window.below
+  local stiff = stiffness / (PURE * PURE)
+  return util.clamp(stiff * seats / (stiff * #ties + strength / (half * half)),
+                    -window.below, window.above)
+end
+
+-- The box is a constant once the spellings are chosen, so only the springs are minimised.
+--invariant: convex in the displacements, so the sweep order buys speed and not the answer
+--contract: spellings, window, strength, stiffness → displacements minimising sonority.springCost
+--contract: each displacement inside its own strand's window
+function sonority.relax(spellings, window, strength, stiffness)
+  local ties, displacement = tiesOf(spellings, #window), {}
+  for index = 1, #window do displacement[index] = 0 end
+
+  for _ = 1, SWEEPS do
+    local worst = 0
+    for index = 1, #window do
+      local settled = settle(ties[index], displacement, window[index], strength, stiffness)
+      local moved   = math.abs(settled - displacement[index])
+      if moved > worst then worst = moved end
+      displacement[index] = settled
+    end
+    if worst < TOLERANCE then break end
+  end
+  return displacement
+end
+
 ----- The placement
 
 -- The moves facility's solve: the target read as intervals between strands rather than

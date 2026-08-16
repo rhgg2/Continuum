@@ -26,6 +26,10 @@
 -- sonorities, stiffness × mistuning² per spring and strength × displacement²
 -- per strand, the mistuning in cents over fifty and the pull over the window
 -- half the displacement lies in.
+--
+-- Pins the relaxation that minimises it (§ The model): the sweep's answer on a
+-- pair whose optimum is a closed form, a strand the springs press to its window
+-- edge, and a comma loop whose residue no displacement can make slack.
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -518,6 +522,72 @@ return {
         'ten cents up a fifty-cent half is a fifth of the way to the edge')
       near(sonority.springCost({ lone }, { -10 }, narrow, 1, 8), 0.16,
         'the same ten down a twenty-five-cent half costs four times as much')
+    end,
+  },
+
+  {
+    name = 'relax: a pair settles where the hand solution puts it',
+    run = function()
+      -- One spring between even windows charges the pull the same either way, so the two
+      -- part equally: each at stiffness × delta over strength plus twice the stiffness.
+      local third = sonority.springs({ 1, 2 }, { 0, 400 }, { {}, { [5] = 1 } })
+      local hand  = -8 * third.springs[1].delta / (1 + 2 * 8)
+
+      local displacement = sonority.relax({ third }, evenWindows(2), 1, 8)
+      near(displacement[1],  hand, 'the root rises six and a half cents')
+      near(displacement[2], -hand, 'and the third falls as far to meet it')
+    end,
+  },
+
+  {
+    name = 'relax: the springs press a strand to its window edge',
+    run = function()
+      -- A 7/4 asks for thirty-one cents of stretch, and under stiff springs it outweighs
+      -- the pull; the window holds eight on the side each strand moves to.
+      local harmonic = sonority.springs({ 1, 2 }, { 0, 1000 }, { {}, { [7] = 1 } })
+      local window   = { { below = 50, above = 8 }, { below = 8, above = 50 } }
+
+      local displacement = sonority.relax({ harmonic }, window, 1, 40)
+      near(displacement[1],  8, 'the root stands at its edge, not at its far half')
+      near(displacement[2], -8, 'and the seventh at its own')
+      near(displacement[2] - displacement[1] - harmonic.springs[1].delta, 15.174,
+        'the fifteen cents the windows refuse staying in the spring')
+    end,
+  },
+
+  {
+    name = 'relax: a comma loop spreads its residue across the springs',
+    run = function()
+      -- C–E a 5/4, E–A a 4/3, C–A a 27/16: three sonorities whose spellings fail to close
+      -- by a syntonic comma, so no displacement leaves all three springs slack.
+      local third  = sonority.springs({ 1, 2 }, { [1] = 0,   [2] = 400 }, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, { [2] = 400, [3] = 900 }, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, { [1] = 0,   [3] = 900 }, { {}, { [3] =  3 } })
+      local loop, window = { third, fourth, sixth }, evenWindows(3)
+
+      local displacement = sonority.relax(loop, window, 1, 8)
+      local spread       = sonority.springCost(loop, displacement, window, 1, 8)
+
+      -- Two springs go slack only by handing the whole comma to the third.
+      local borne = { 0, third.springs[1].delta,
+                      third.springs[1].delta + fourth.springs[1].delta }
+      t.truthy(spread < sonority.springCost(loop, borne, window, 1, 8),
+        'the spread comma costs less than one spring bearing it')
+
+      for _, spelled in ipairs(loop) do
+        local tie = spelled.springs[1]
+        t.truthy(math.abs(displacement[tie.j] - displacement[tie.i] - tie.delta) < 8,
+          'no spring left holding more than eight of the twenty-one cents')
+      end
+
+      for index = 1, 3 do
+        for _, nudge in ipairs{ -0.5, 0.5 } do
+          local nudged = { displacement[1], displacement[2], displacement[3] }
+          nudged[index] = nudged[index] + nudge
+          t.truthy(spread < sonority.springCost(loop, nudged, window, 1, 8),
+            'and nothing half a cent away is cheaper')
+        end
+      end
     end,
   },
 

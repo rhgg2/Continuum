@@ -16,6 +16,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 sonority: relax the displacements to the objective's optimum (§ The model)
 - 2026-08-16 sonority: the springs objective, in its two units (§ The model)
 - 2026-08-16 sonority: derive a spelling's springs and box (§ The model)
 
@@ -25,9 +26,4 @@
 
 ## Queued (current phase; one-liners)
 
-3. **Projected relaxation.** Minimise the objective in the
-   displacements, each clamped to its strand's window: sweep the
-   closed-form coordinate update to a tolerance, as `SC.qpSolve` does;
-   the spec pins a hand-solvable pair, a strand pressed to its window
-   edge, and a comma loop whose residue spreads across the springs at
-   lower cost than leaving one spring to bear it.
+(empty — the phase's items are all compiled.)
