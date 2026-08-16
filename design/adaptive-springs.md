@@ -94,16 +94,30 @@ states the search may merge.**
    enumeration certifies at the widths where a full enumeration was
    affordable — 2,342 spellings at five members, 31,642 at six — and
    the full count reaches 532,244 at seven; the width that was the
-   lattice's exponent prices the beam nothing.
+   the lattice's exponent prices the beam nothing.
 
-2. A join may compose two moves. An interval the set does not hold is
+2. The score of a spelling is run up join by join rather than taken at
+   the end: each join pays the box's widening — a span over some prime
+   stretched by the member it admits — and the mistuning of the springs
+   the new member makes with those already placed. Both charges are
+   additive and neither is negative, so a partial spelling's score is a
+   floor under every spelling that completes it, and the beam ranks its
+   states by a figure no continuation can undercut.
+
+3. A join may seat a member two half-windows from where it was written,
+   and no further: the neighbouring step, past which some other strand
+   of the sonority is the nearer host for the pitch. In 12-EDO that
+   reach is a whole tone, which is what § Measured's figures were taken
+   under; under a notation whose steps are finer it narrows with them.
+
+4. A join may compose two moves. An interval the set does not hold is
    then still a spelling between two strands — a C minor triad under a
    set holding `5/4` and `3/2` spells its E♭ a `5/4` below the G even
    where the two never sound together — and the box prices the
    composed reach, so a far-fetched spelling loses to a near one by
    cost rather than by rule.
 
-3. Nothing waits. A strand's variable stays free while the strand
+5. Nothing waits. A strand's variable stays free while the strand
    sounds, so a rolled chord's early third is seated by the fifth that
    arrives after it, and a strand that has stopped is data for its
    successors. The rolled C minor lands within a quarter cent of the

@@ -18,10 +18,14 @@ and have all the relevant background for that.
 ## 2. Report back
 
 Bring to the chat a summary of what the item actually is. Write for a
-reader who knows the current state of the code, but hasn't read the
-design doc. Set out the points that need deciding before
-implementation, and any findings you have so far on these; we'll
-figure them out together.
+reader who has a high-level understanding of the project's
+architecture, but not the implementation details; thus, gloss variable
+names, shapes, and existing functions and work from the big picture
+down to the nuts and bolts.
+
+Set out the points that need deciding
+before implementation, and any findings you have so far on these;
+we'll figure them out together.
 
 Things we settle should be updated in the design doc. Read
 `docs/STYLE.md` just before doing this, so it's fresh in your mind.
