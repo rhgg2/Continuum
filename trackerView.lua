@@ -2074,12 +2074,28 @@ local function snapToTemper(notes, notation, strength)
   end
 end
 
+-- The scope's notes as strands: those of a step-class that overlap, whichever
+-- facility is about to place them.
+local function strandsOf(notes, notation)
+  return sonority.strands(notes, function(e)
+    return tuning.stepClass(notation, e.pitch, e.detune)
+  end)
+end
+
+-- A strand's tuning, seated on every note that writes it, in that note's own register.
+local function seatStrand(strand, notation, cents, strength)
+  for _, e in ipairs(strand.notes) do
+    local pitch, detune = blend(e, strength, tuning.seat(notation, e, cents))
+    if pitch ~= e.pitch or detune ~= e.detune then
+      edit.assign(e, { pitch = pitch, detune = detune })
+    end
+  end
+end
+
 -- The scope's strands, shortlisted against the target; or nil and the steps with nowhere
 -- to go, in notation order and named once however many strands wrote it.
 local function shortlisted(notes, notation, target, keyStep, widen)
-  local strands = sonority.strands(notes, function(e)
-    return tuning.stepClass(notation, e.pitch, e.detune)
-  end)
+  local strands = strandsOf(notes, notation)
   local nowhere = {}
   for _, strand in ipairs(strands) do
     -- One window serves a strand in every register, so notes[1] speaks for all.
@@ -2106,19 +2122,28 @@ local function solveToTarget(notes, notation, target, slots, widen)
 
   local choice = sonority.solveToPoints(strands, slots.sonoritySize, slots.harmonicLock)
   for index, strand in ipairs(strands) do
-    local cents = strand.shortlist[choice[index]].cents
-    for _, e in ipairs(strand.notes) do
-      local pitch, detune = blend(e, slots.strength, tuning.seat(notation, e, cents))
-      if pitch ~= e.pitch or detune ~= e.detune then
-        edit.assign(e, { pitch = pitch, detune = detune })
-      end
-    end
+    seatStrand(strand, notation, strand.shortlist[choice[index]].cents, slots.strength)
   end
 end
 
---shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, key=step, sonoritySize, harmonicLock }
+-- The placement: the target read as moves between strands rather than as points; a strand's tuning
+-- is one move from a neighbour's, one offset seats the passage, and a refusal states nothing yet. see design/adaptive-ji.md § The target becomes a move set
+local function solveToMoves(notes, notation, target, slots)
+  local strands   = strandsOf(notes, notation)
+  local placement = sonority.solveToMoves(strands, slots.sonoritySize, slots.harmonicLock,
+                                          notation, tuning.moves(target))
+  if not placement then return end
+
+  for index, strand in ipairs(strands) do
+    seatStrand(strand, notation, placement.tunings[index].cents + placement.offset,
+               slots.strength)
+  end
+end
+
+--shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, facility='points'|'moves', key=step, sonoritySize, harmonicLock }
 --contract: target and key are remembered at take tier; the rest is per invocation
 --contract: with no target the whole of it is the notation snap
+--contract: the facility reads the target as points of the pitch line or as moves between strands
 --contract: returns the steps whose empty shortlists refused the solve, else nil
 --contract: widen stretches those windows to the nearest points instead, so none refuses
 function tv:retune(slots, widen)
@@ -2132,8 +2157,9 @@ function tv:retune(slots, widen)
   local target = slots.target and tuning.findTemper(slots.target, cm:get('tempers'))
 
   local refused
-  if target then refused = solveToTarget(notes, notation, target, slots, widen)
-  else           snapToTemper(notes, notation, slots.strength) end
+  if not target                    then snapToTemper(notes, notation, slots.strength)
+  elseif slots.facility == 'moves' then solveToMoves(notes, notation, target, slots)
+  else refused = solveToTarget(notes, notation, target, slots, widen) end
   tm:flush()
   return refused
 end

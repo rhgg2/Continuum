@@ -927,6 +927,7 @@ modalHost:registerKind('retune', function(s, close)
   if okPressed then
     close(true, { scope        = s.scope,        strength     = s.strength,
                   target       = s.target,       key          = s.key,
+                  facility     = 'points',
                   sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock })
   elseif cancelPressed then close(false) end
 end)

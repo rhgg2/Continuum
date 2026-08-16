@@ -33,26 +33,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 tuning: retune a scope by the moves the target holds (§ The target becomes a move set)
 - 2026-08-16 sonority: state the winner at the offset its strands settle on (§ Where a placement sits)
 - 2026-08-16 sonority: choose the offset by sweeping the root's window (§ What it costs to solve)
 - 2026-08-16 sonority: name the pair solveToPoints and placeAt (§ Where it sits)
-- 2026-08-16 sonority: let a strand wait for the neighbour that places it (§ A strand may wait)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. The placement branch in `trackerView`: a `solveToMoves` beside
-   `solveToTarget` that groups the scope's strands by step class as
-   `shortlisted` does, reads the move set off the target with
-   `tuning.moves`, calls `sonority.solveToMoves` with the sonority size
-   and the harmonic lock, and seats every note of each strand at its
-   tuning's cents plus the placement's offset, through `tuning.seat` and
-   the existing blend. `tv:retune` branches on the facility the slots
-   carry, and a refused placement returns nothing until item 3. Spec
-   drives `tv:retune` in `vm_retune_spec`.
 
 2. The facility on the modal: the choice drawn beside the target and
    dead until one is chosen, the key picker disabled under the move set,
@@ -66,8 +56,11 @@
    onset that emptied, the strand it could not place there and the
    neighbour that strand would have joined, rather than a bare nil; and
    `sonority.solveToMoves` reports the furthest such refusal where every
-   offset refused. Spec is a bare tritone under a move set holding no
-   `7/5`, in `sonority_sweep_spec`.
+   offset refused. The budget `placeAt` raises on (`sonority.lua:356`)
+   becomes a refusal of the same shape, the design having the search
+   refuse there rather than raise (§ What it costs to solve). Spec is a
+   bare tritone under a move set holding no `7/5`, in
+   `sonority_sweep_spec`.
 
 4. The widening: `tuning.reach` and `tuning.origin` take a widen flag
    and admit the nearest candidates at strain past 1 where the window
