@@ -16,6 +16,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-16 sonority: the springs objective, in its two units (§ The model)
 - 2026-08-16 sonority: derive a spelling's springs and box (§ The model)
 
 ## Now
@@ -24,13 +25,6 @@
 
 ## Queued (current phase; one-liners)
 
-2. **The springs objective.** The cost of a choice of spellings at
-   given displacements: box summed over the walk, stiffness ×
-   mistuning² per spring and strength × displacement² per strand,
-   mistuning and displacement both in half-windows (the spike's
-   `SC.totalCost`); the spec prices a hand-built two-sonority case
-   term by term, and displacements realising every spelling leave the
-   springs slack.
 3. **Projected relaxation.** Minimise the objective in the
    displacements, each clamped to its strand's window: sweep the
    closed-form coordinate update to a tolerance, as `SC.qpSolve` does;

@@ -1,6 +1,6 @@
-@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=850  cases=28
+@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=914  cases=31
 @exercises sonority (sonority)
-@surface   sonority.score, sonority.cost, sonority.springs, sonority.strands, sonority.walk, sonority.solveToPoints
+@surface   sonority.score, sonority.cost, sonority.springs, sonority.springCost, sonority.strands, sonority.walk, sonority.solveToPoints
 
 # Intent
   Pins the box score of design/adaptive-tuning.md § What "in tune" means: the
@@ -26,160 +26,173 @@
   Pins the springs of design/adaptive-springs.md § The model: a spelling read
   off as the displacement gaps at which its pairs sound pure, nearest-octave,
   with the box read from the spelling's coords.
+  
+  Pins the objective those springs stand in (§ The model): the box over the
+  sonorities, stiffness × mistuning² per spring and strength × displacement²
+  per strand, the mistuning in cents over fifty and the pull over the window
+  half the displacement lies in.
 
 # Helpers
-  @fn near(actual, expected, why)  @ 29-32
+  @fn near(actual, expected, why)  @ 34-37
       -- The doc's figures are given to 2dp.
-  @fn spring(sp, i, j, delta, why)  @ 35-39
+  @fn spring(sp, i, j, delta, why)  @ 40-44
       -- A spring pinned whole: which strands it ties, and the gap at which they sound pure.
-  @fn gcd(a, b)  @ 78
-  @fn lcm(a, b)  @ 79
-  @fn tenneyOfSpan(odd)  @ 83-93
+  @fn evenWindows(count)  @ 47-51
+      -- Windows of a 12-EDO notation: fifty cents to the step either side of each strand.
+  @fn gcd(a, b)  @ 90
+  @fn lcm(a, b)  @ 91
+  @fn tenneyOfSpan(odd)  @ 95-105
       -- Tenney height of the set's lcm over its gcd, taken as rationals: the integers
       -- the coords reach the same number without ever forming.
-  @fn shifted(coordSet, prime, by)  @ 96-104
+  @fn shifted(coordSet, prime, by)  @ 108-116
       -- Every coord of the set moved by `by` on one axis, absent exponents included.
-  @fn event(ppq, pitch, endppq)  @ 107-109
+  @fn event(ppq, pitch, endppq)  @ 119-121
       -- A note as the command hands it over, which the grouping holds by reference.
-  @fn pitchClass(note)  @ 112
+  @fn pitchClass(note)  @ 124
       -- The pitch class, which is what a step-class comes to under an octave notation.
-  @fn strand(class, notes)  @ 117-123
+  @fn strand(class, notes)  @ 129-135
       -- A strand as the walk reads it: notes given as { ppq, pitch, endppq }, under
       -- the step-class they share. The shortlist is the solve's business rather than
       -- the walk's, so these carry none.
-  @fn struck(over, list)  @ 127-133
+  @fn struck(over, list)  @ 139-145
       -- Strands of one note each, given as { class, ppq, pitch }, every note `over`
       -- long so that it is released where the next strikes.
-  @fn placed(class, notes, candidates)  @ 137-141
+  @fn placed(class, notes, candidates)  @ 149-153
       -- A strand as the solver reads it: the walk's shape with a shortlist of
       -- candidates, each carrying the coords it would take and its strain.
-  @fn fixed(over, list)  @ 146-154
+  @fn fixed(over, list)  @ 158-166
       -- Strands of one note and one candidate, given as { class, ppq, pitch, coords,
       -- strain } and `over` long, with the choice that takes each strand's only
       -- candidate.
-  @fn strainOf(num, den, step)  @ 158-160
+  @fn strainOf(num, den, step)  @ 170-172
       -- The strain of a ratio written on a 12-EDO step: its distance from that step
       -- as a fraction of the 50¢ half-window.
-  @fn triads(cStrain, dStrain)  @ 171-178
+  @fn triads(cStrain, dStrain)  @ 183-190
       -- C major then D major, disjoint in class: at n=3 each onset stands alone, and
       -- at n=5 the second sonority holds two classes of the first as well.
-  @fn classesAt(strands, sonorityAt)  @ 180-184
-  @fn exactly(actual, expected, why)  @ 187-190
+  @fn classesAt(strands, sonorityAt)  @ 192-196
+  @fn exactly(actual, expected, why)  @ 199-202
       -- The DP is exact, so its answer is held to the enumeration's to the bit.
-  @fn nearly(actual, expected, why)  @ 193-196
+  @fn nearly(actual, expected, why)  @ 205-208
       -- The solve's own figures are worked further out than the doc's two places.
-  @fn scoreAt(strands, choice, sonorityAt)  @ 200-206
+  @fn scoreAt(strands, choice, sonorityAt)  @ 212-218
       -- What one sonority of the walk scores under a choice, so a passage can be read
       -- chord by chord rather than as its total.
-  @fn everyChoice(strands, fn)  @ 209-222
+  @fn everyChoice(strands, fn)  @ 221-234
       -- Every choice vector over the strands' shortlists, in odometer order.
-  @fn bruteMinimum(strands, n, strength)  @ 224-231
-  @fn laidOut(list)  @ 242-246
+  @fn bruteMinimum(strands, n, strength)  @ 236-243
+  @fn laidOut(list)  @ 254-258
       -- Strands given as { class, {{ppq,pitch,endppq},..} }, each taking threeWays.
-  @fn dorian(dSpans)  @ 291-302
-  @fn fromDiamond(class, ppq, pitch, step)  @ 319-325
+  @fn dorian(dSpans)  @ 303-314
+  @fn fromDiamond(class, ppq, pitch, step)  @ 331-337
       -- Each chord is released where the next strikes, a bar of 960 later.
-  @fn seventh()  @ 329-334
+  @fn seventh()  @ 341-346
       -- The written C7, every note taking what its own window holds. The seventh is
       -- strand 4, its candidates 7/4, 16/9 and 9/5 in that order.
-  @fn resolving()  @ 337-343
+  @fn resolving()  @ 349-355
       -- The same chord resolving to F–A–C a bar later.
-  @fn fromSparse(class, ppq, pitch, endppq)  @ 357-364
-  @fn underRun(endppq)  @ 369-376
+  @fn fromSparse(class, ppq, pitch, endppq)  @ 369-376
+  @fn underRun(endppq)  @ 381-388
       -- A B♭ struck first and released at `endppq`, under a run of five classes the
       -- target fixes: nothing the run transmits says how to read the B♭, so only its
       -- own release decides whether it stands in the sonorities behind it.
 
 # Cases
-  @case 'the 5-limit column of the theory table'  [pure]  @ 385-390
-  @case 'the score is the Tenney height of the sonority's octave-free lcm/gcd'  [pure]  @ 394-401
-  @case 'the score is blind to where the sonority sits'  [pure]  @ 405-411
-  @case 'a repeated member and an octave doubling cost nothing'  [pure]  @ 415-422
-  @case 'springs: a spelled major triad, by hand'  [pure]  @ 426-436
-  @case 'springs: deviations reduce to the nearest octave, and name strands'  [pure]  @ 440-448
-  @case 'springs: a lone member holds no spring'  [pure]  @ 452-457
-  @case 'strands: a class chains through its overlaps and splits where they stop'  [pure]  @ 461-478
-  @case 'strands: classes never share one, and the order does not follow the input'  [pure]  @ 482-495
-  @case 'a block chord and an arpeggio of it hand back the same set'  [pure]  @ 499-511
-  @case 'at n one above the arity consecutive sonorities still overlap'  [pure]  @ 515-529
-  @case 'a repeated note and an octave doubling each spend one entry'  [pure]  @ 533-548
-  @case 'a later strand of a class replaces the earlier one'  [pure]  @ 552-564
-  @case 'a class still sounding stands where the last n struck have dropped it'  [pure]  @ 568-581
-  @case 'the box is summed over the walk rather than over the onsets'  [pure]  @ 585-590
-  @case 'the pull is the strength times the square of a strand's strain'  [pure]  @ 594-599
-  @case 'the pull is counted once per strand however many notes write it'  [pure]  @ 603-616
-  @case 'the C7's two sevenths cross at a pull of 0.95'  [pure]  @ 620-642
-  @case 'the solve is the minimum exhaustive enumeration finds'  [pure]  @ 646-658
-  @case 'a shortlist of one is fixed and still contributes its coords'  [pure]  @ 662-683
-  @case 'a held strand bends the harmony to it'  [pure]  @ 687-709
-  @case 'behind a run of fixed classes the answer hangs on the hold'  [pure]  @ 713-719
-  @case 'the C7 sounding alone crosses at a pull of 0.95'  [pure]  @ 723-745
-  @case 'the rest of the chord stands still, and the third seventh is dominated'  [pure]  @ 749-763
-  @case 'resolving to F–A–C the seventh takes the Pythagorean under any pull'  [pure]  @ 767-785
-  @case 'at n one above the arity the resolution reads the seventh chord's bass alone'  [pure]  @ 789-807
-  @case 'an exact tie goes to the first candidate rather than to table order'  [pure]  @ 811-831
-  @case 'an empty shortlist and an unaffordable solve are both refused'  [pure]  @ 835-848
+  @case 'the 5-limit column of the theory table'  [pure]  @ 397-402
+  @case 'the score is the Tenney height of the sonority's octave-free lcm/gcd'  [pure]  @ 406-413
+  @case 'the score is blind to where the sonority sits'  [pure]  @ 417-423
+  @case 'a repeated member and an octave doubling cost nothing'  [pure]  @ 427-434
+  @case 'springs: a spelled major triad, by hand'  [pure]  @ 438-448
+  @case 'springs: deviations reduce to the nearest octave, and name strands'  [pure]  @ 452-460
+  @case 'springs: a lone member holds no spring'  [pure]  @ 464-469
+  @case 'springs: the objective sums the box, the springs and the pull'  [pure]  @ 473-490
+  @case 'springs: displacements realising the spelling leave every spring slack'  [pure]  @ 494-508
+  @case 'springs: the pull is charged over the window half it lies in'  [pure]  @ 512-521
+  @case 'strands: a class chains through its overlaps and splits where they stop'  [pure]  @ 525-542
+  @case 'strands: classes never share one, and the order does not follow the input'  [pure]  @ 546-559
+  @case 'a block chord and an arpeggio of it hand back the same set'  [pure]  @ 563-575
+  @case 'at n one above the arity consecutive sonorities still overlap'  [pure]  @ 579-593
+  @case 'a repeated note and an octave doubling each spend one entry'  [pure]  @ 597-612
+  @case 'a later strand of a class replaces the earlier one'  [pure]  @ 616-628
+  @case 'a class still sounding stands where the last n struck have dropped it'  [pure]  @ 632-645
+  @case 'the box is summed over the walk rather than over the onsets'  [pure]  @ 649-654
+  @case 'the pull is the strength times the square of a strand's strain'  [pure]  @ 658-663
+  @case 'the pull is counted once per strand however many notes write it'  [pure]  @ 667-680
+  @case 'the C7's two sevenths cross at a pull of 0.95'  [pure]  @ 684-706
+  @case 'the solve is the minimum exhaustive enumeration finds'  [pure]  @ 710-722
+  @case 'a shortlist of one is fixed and still contributes its coords'  [pure]  @ 726-747
+  @case 'a held strand bends the harmony to it'  [pure]  @ 751-773
+  @case 'behind a run of fixed classes the answer hangs on the hold'  [pure]  @ 777-783
+  @case 'the C7 sounding alone crosses at a pull of 0.95'  [pure]  @ 787-809
+  @case 'the rest of the chord stands still, and the third seventh is dominated'  [pure]  @ 813-827
+  @case 'resolving to F–A–C the seventh takes the Pythagorean under any pull'  [pure]  @ 831-849
+  @case 'at n one above the arity the resolution reads the seventh chord's bass alone'  [pure]  @ 853-871
+  @case 'an exact tie goes to the first candidate rather than to table order'  [pure]  @ 875-895
+  @case 'an empty shortlist and an unaffordable solve are both refused'  [pure]  @ 899-912
 
 # Uses (outbound edges)
-  @use call sonority.score  @ 205,388,398,399,408,409,410,418,419,420,421
-  @use call sonority.cost  @ 227,588,589,597,598,608,614,634,635,636,637,639,640,652,677,679,680,697,704,705,735,736,737,738,739,740,760,761,800,801,802,803,826
-  @use call sonority.springs  @ 428,442,454
-  @use call sonority.strands  @ 468,489
-  @use call sonority.walk  @ 503,522,540,544,556,572,694,701,774,792
-  @use call sonority.solveToPoints  @ 651,670,682,691,694,700,715,717,727,731,753,771,805,806,829,839,845
+  @use call sonority.score  @ 217,400,410,411,420,421,422,430,431,432,433
+  @use call sonority.cost  @ 239,652,653,661,662,672,678,698,699,700,701,703,704,716,741,743,744,761,768,769,799,800,801,802,803,804,824,825,864,865,866,867,890
+  @use call sonority.springs  @ 440,454,466,476,477,496,514
+  @use call sonority.springCost  @ 486,488,504,506,517,519
+  @use call sonority.strands  @ 532,553
+  @use call sonority.walk  @ 567,586,604,608,620,636,758,765,838,856
+  @use call sonority.solveToPoints  @ 715,734,746,755,758,764,779,781,791,795,817,835,869,870,893,903,909
 
 # Fields (r read / w write incl. constructor keys)
-  @field r A  @ 176
-  @field w A  @ 165,313
-  @field w Bb  @ 314
-  @field r C  @ 173,236,606,611,623,674,816,837
-  @field w C  @ 164,309
-  @field r D  @ 175
-  @field w D  @ 165
-  @field r E  @ 173,237,606,624,665,837
-  @field w E  @ 164,310
-  @field w F  @ 311
-  @field r Fsharp  @ 175
-  @field w Fsharp  @ 165
-  @field r G  @ 174,606,625,674
-  @field w G  @ 164,312
-  @field r box  @ 431,445,455
-  @field r class  @ 182,474,491,492,493,494,528,547,577
-  @field w class  @ 122
-  @field r coords  @ 203,388,398,399,407,417
-  @field w coords  @ 46,50,54,58,62,66,70,74,150,236,237,238
-  @field w coords  @ 287,288,322,360,611,628,629,665,666,816,819,820
-  @field r delta  @ 38
-  @field w endppq  @ 108,120
-  @field r i  @ 36
-  @field r j  @ 37
-  @field r name  @ 388,399,654
-  @field w name  @ 45,49,53,57,61,65,69,73,252,256,260,264
-  @field w name  @ 269,274,278,385,394,405,415,426,440,452,461,482
-  @field w name  @ 499,515,533,552,568,585,594,603,620,646,662,687
-  @field w name  @ 713,723,749,767,789,811,835
-  @field r notes  @ 470,471,472,473,476,477,491,492,493,494
-  @field w notes  @ 122
-  @field r odd  @ 397
-  @field w odd  @ 47,51,55,59,63,67,71,75
-  @field r pitch  @ 112
-  @field w pitch  @ 108,120
-  @field r ppq  @ 509
-  @field w ppq  @ 108,120
-  @field r pythagorean  @ 238,629
-  @field w pythagorean  @ 166
-  @field w run  @ 386,395,406,416,427,441,453,462,483,500,516,534
-  @field w run  @ 553,569,586,595,604,621,647,663,688,714,724,750
-  @field w run  @ 768,790,812,836
-  @field r score  @ 388
-  @field w score  @ 45,49,53,57,61,65,69,73
-  @field r septimal  @ 628
-  @field w septimal  @ 166
-  @field r shortlist  @ 203,217,475
-  @field w shortlist  @ 139,838
-  @field r springs  @ 432,433,434,435,446,447,456
-  @field w strain  @ 150,236,237,238,287,288,322,361,611,628,629,665
-  @field w strain  @ 666,816,819,820
-  @field r strands  @ 182,202,510,525,528,540,547,558,559,560,561,575
-  @field r strands  @ 577,579,651,652,653
-  @field w strands  @ 253,257,261,265,270,275,279
+  @field r A  @ 188
+  @field w A  @ 177,325
+  @field w Bb  @ 326
+  @field r C  @ 185,248,670,675,687,738,880,901
+  @field w C  @ 176,321
+  @field r D  @ 187
+  @field w D  @ 177
+  @field r E  @ 185,249,670,688,729,901
+  @field w E  @ 176,322
+  @field w F  @ 323
+  @field r Fsharp  @ 187
+  @field w Fsharp  @ 177
+  @field r G  @ 186,670,689,738
+  @field w G  @ 176,324
+  @field w above  @ 49,515
+  @field w below  @ 49,515
+  @field r box  @ 443,457,467,505
+  @field r class  @ 194,538,555,556,557,558,592,611,641
+  @field w class  @ 134
+  @field r coords  @ 215,400,410,411,419,429
+  @field w coords  @ 58,62,66,70,74,78,82,86,162,248,249,250
+  @field w coords  @ 299,300,334,372,675,692,693,729,730,880,883,884
+  @field r delta  @ 43,500
+  @field w endppq  @ 120,132
+  @field r i  @ 41
+  @field r j  @ 42
+  @field r name  @ 400,411,718
+  @field w name  @ 57,61,65,69,73,77,81,85,264,268,272,276
+  @field w name  @ 281,286,290,397,406,417,427,438,452,464,473,494
+  @field w name  @ 512,525,546,563,579,597,616,632,649,658,667,684
+  @field w name  @ 710,726,751,777,787,813,831,853,875,899
+  @field r notes  @ 534,535,536,537,540,541,555,556,557,558
+  @field w notes  @ 134
+  @field r odd  @ 409
+  @field w odd  @ 59,63,67,71,75,79,83,87
+  @field r pitch  @ 124
+  @field w pitch  @ 120,132
+  @field r ppq  @ 573
+  @field w ppq  @ 120,132
+  @field r pythagorean  @ 250,693
+  @field w pythagorean  @ 178
+  @field w run  @ 398,407,418,428,439,453,465,474,495,513,526,547
+  @field w run  @ 564,580,598,617,633,650,659,668,685,711,727,752
+  @field w run  @ 778,788,814,832,854,876,900
+  @field r score  @ 400
+  @field w score  @ 57,61,65,69,73,77,81,85
+  @field r septimal  @ 692
+  @field w septimal  @ 178
+  @field r shortlist  @ 215,229,539
+  @field w shortlist  @ 151,902
+  @field r springs  @ 444,445,446,447,458,459,468,500
+  @field w strain  @ 162,248,249,250,299,300,334,373,675,692,693,729
+  @field w strain  @ 730,880,883,884
+  @field r strands  @ 194,214,574,589,592,604,611,622,623,624,625,639
+  @field r strands  @ 641,643,715,716,717
+  @field w strands  @ 265,269,273,277,282,287,291

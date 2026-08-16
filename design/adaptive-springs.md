@@ -68,10 +68,23 @@ states the search may merge.**
    — and soft ones spread the comma into the intervals at under 2¢
    apiece, so the stiffness is a dial with an audible meaning.
 
-5. With the spellings chosen, the objective is a box-constrained
-   quadratic in the displacements, and projected relaxation finds its
-   optimum in milliseconds at every size measured. All of the model's
-   hardness is the choice of spellings.
+5. The two charges are taken in different units, since they price
+   different things. The pull asks whether a note is still the step it
+   was written on, which is a question the notation's own spacing
+   settles, so it is taken in half-windows, over the half the
+   displacement lies in; a note at its window's edge costs the
+   strength under any notation. Mistuning is beating between two
+   sounding pitches, and knows nothing of how the notation spaces its
+   steps, so it is taken in cents against a reference of 50 — what a
+   half-window holds in 12-EDO, kept so the stiffnesses measured below
+   keep their calibration.
+
+6. With the spellings chosen, the objective is convex and
+   box-constrained in the displacements — a quadratic where the
+   notation's steps are even, and two quadratics meeting at zero on a
+   strand whose window is lopsided — and projected relaxation finds
+   its optimum in milliseconds at every size measured. All of the
+   model's hardness is the choice of spellings.
 
 ## The candidates
 
@@ -115,9 +128,9 @@ states the search may merge.**
 
 The passages are the sibling documents' and the five-part take — 43
 notes, thirty strands over sixteen sonorities, under its own
-eleven-move 5-limit set. Mistuning and pull are both taken in
-half-windows; the figures are at stiffness 8 against pull strength 1,
-the pump's stiff springs at 40 and its soft at 2.
+eleven-move 5-limit set. All are notated in 12-EDO, where the two
+units of § The model coincide; the figures are at stiffness 8 against
+pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 
 1. The take. The lattice sweep answers in 63.3s, placing at one offset
    of eleven and carrying every note 40¢ flat; the springs answer in

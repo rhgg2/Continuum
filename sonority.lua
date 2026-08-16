@@ -318,6 +318,31 @@ function sonority.springs(members, seat, spelling)
   return { box = sonority.score(spelling), springs = springs }
 end
 
+-- The unit the stiffness is measured in: what a half-window holds in 12-EDO, kept a
+-- constant because a spring prices beating, which the notation's spacing does not scale.
+local PURE = 50
+
+--shape: Window = { below=<cents to the step below>, above=<cents to the step above> }
+--contract: spellings (a sonority.springs result per sonority), displacement and window per strand
+--contract: → box + stiffness × (mistuning/50)² per spring + strength × strain² per half-window
+function sonority.springCost(spellings, displacement, window, strength, stiffness)
+  local total = 0
+  for _, spelled in ipairs(spellings) do
+    total = total + spelled.box
+    for _, spring in ipairs(spelled.springs) do
+      local mistuning = (displacement[spring.j] - displacement[spring.i] - spring.delta) / PURE
+      total = total + stiffness * mistuning * mistuning
+    end
+  end
+
+  for index, cents in ipairs(displacement) do
+    local half   = cents < 0 and window[index].below or window[index].above
+    local strain = cents / half
+    total = total + strength * strain * strain
+  end
+  return total
+end
+
 ----- The placement
 
 -- The moves facility's solve: the target read as intervals between strands rather than

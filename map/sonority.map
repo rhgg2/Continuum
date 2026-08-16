@@ -1,4 +1,4 @@
-@module sonority  src=sonority.lua  loc=331  mode=namespace  self=sonority
+@module sonority  src=sonority.lua  loc=356  mode=namespace  self=sonority
 
 # Invariants & contracts
   @invariant  pure module: no state; ratios/cents are tuning.lua's, the placement carries them  @ 4
@@ -9,6 +9,7 @@
   @shape  Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, the last n struck and whatever else still sounds  @ 7
   @shape  Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }  @ 8
   @shape  Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta  @ 302
+  @shape  Window = { below=<cents to the step below>, above=<cents to the step above> }  @ 325
 
 # Imports
   @const util = 'util'  @ 10
@@ -17,6 +18,7 @@
 # Module-level constants
   @const sonority = {}  @ 12
   @const budget = 200000  @ 186
+  @const PURE = 50  @ 323
 
 # Private functions
   -- The box
@@ -78,12 +80,15 @@
       -- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
       @contract  members, seat, spelling → { box=sonority.score(spelling), springs={ Spring,.. } }  @ 303
       @contract  springs one per pair in member order, i before j  @ 304
+  @api sonority.springCost(spellings, displacement, window, strength, stiffness)  @ 328-344
+      @contract  spellings (a sonority.springs result per sonority), displacement and window per strand  @ 326
+      @contract  → box + stiffness × (mistuning/50)² per spring + strength × strain² per half-window  @ 327
   -- The placement
-  @api sonority.solveToMoves(strands, n, strength, notation, moves)  @ 327-329
+  @api sonority.solveToMoves(strands, n, strength, notation, moves)  @ 352-354
       -- The moves facility's solve: the target read as intervals between strands rather than
       -- as points. The lattice search that stood here is retired, and the springs solve lands
       -- in its place (design/adaptive-springs.md § Where it sits).
-      @contract  strands, n, strength, notation, moves → nil, until the springs solve lands  @ 326
+      @contract  strands, n, strength, notation, moves → nil, until the springs solve lands  @ 351
 
 # Uses (outbound edges)
   @use call    tuning.cents  @ springs:308
@@ -112,8 +117,11 @@
   @bind byChoice  @ solveToPoints:267,293
 
 # Fields (r read / w write incl. constructor keys)
+  @field r above  @ springCost:339
+  @field r below  @ springCost:339
   @field r born  @ schedule:175 solveToPoints:274,277
   @field w born  @ schedule:173
+  @field r box  @ springCost:331
   @field w box  @ springs:318
   @field r choice  @ byChoice:238 solveToPoints:266,276,277,295
   @field w choice  @ placementsAt:211 solveToPoints:260,285
@@ -122,11 +130,14 @@
   @field r coords  @ cost:140 solveToPoints:281
   @field r cost  @ outranks:228 solveToPoints:284
   @field w cost  @ cost:135 solveToPoints:260,285
+  @field r delta  @ springCost:333
   @field w delta  @ springs:315
   @field r endppq  @ strands:56,62,64 sounding:95
   @field r held  @ schedule:178 solveToPoints:266
   @field w held  @ schedule:173
+  @field r i  @ springCost:333
   @field w i  @ springs:315
+  @field r j  @ springCost:333
   @field w j  @ springs:315
   @field r live  @ schedule:177 assertAffordable:191 solveToPoints:285
   @field w live  @ schedule:173
@@ -141,8 +152,10 @@
   @field w pull  @ placementsAt:211
   @field w score  @ score:19
   @field r shortlist  @ cost:140,145 assertAffordable:192 placementsAt:208,216 solveToPoints:253,281
-  @field w solveToMoves  @ solveToMoves:327
+  @field w solveToMoves  @ solveToMoves:352
   @field w solveToPoints  @ solveToPoints:251
+  @field w springCost  @ springCost:328
+  @field r springs  @ springCost:332
   @field w springs  @ springs:305,318
   @field r strain  @ cost:145 placementsAt:208
   @field r strand  @ strikesInOrder:86 walk:118

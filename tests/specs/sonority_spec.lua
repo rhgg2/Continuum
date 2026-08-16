@@ -21,6 +21,11 @@
 -- Pins the springs of design/adaptive-springs.md § The model: a spelling read
 -- off as the displacement gaps at which its pairs sound pure, nearest-octave,
 -- with the box read from the spelling's coords.
+--
+-- Pins the objective those springs stand in (§ The model): the box over the
+-- sonorities, stiffness × mistuning² per spring and strength × displacement²
+-- per strand, the mistuning in cents over fifty and the pull over the window
+-- half the displacement lies in.
 
 local t        = require('support')
 local sonority = require('sonority')
@@ -36,6 +41,13 @@ local function spring(sp, i, j, delta, why)
   t.eq(sp.i, i, why .. ': i')
   t.eq(sp.j, j, why .. ': j')
   near(sp.delta, delta, why)
+end
+
+-- Windows of a 12-EDO notation: fifty cents to the step either side of each strand.
+local function evenWindows(count)
+  local window = {}
+  for index = 1, count do window[index] = { below = 50, above = 50 } end
+  return window
 end
 
 -- The chords of § Choosing the target chooses the theory in the spellings that
@@ -454,6 +466,58 @@ return {
       local spelled = sonority.springs({ 4 }, { [4] = 250 }, { {} })
       t.eq(spelled.box, 0, 'one member spans nothing')
       t.eq(#spelled.springs, 0, 'and ties nothing')
+    end,
+  },
+
+  {
+    name = 'springs: the objective sums the box, the springs and the pull',
+    run = function()
+      -- A C major triad, then the fifth G–D: two sonorities sharing the strand on G.
+      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } })
+      local fifth = sonority.springs({ 3, 4 }, { [3] = 700, [4] = 200 }, { {}, { [3] = 1 } })
+      local displacement = { -4, -12, 2, 6 }
+
+      -- Each spring's mistuning is the gap the displacements realise less the gap the
+      -- spelling states: -8 against -13.69, 6 against 1.96, 14 against 15.64, 4 against 1.96.
+      local box  = 3.9069 + 1.5850
+      local mist = 8 * ((5.6863/50)^2 + (4.0450/50)^2 + (1.6413/50)^2 + (2.0450/50)^2)
+      local pull = 1 * ((4/50)^2 + (12/50)^2 + (2/50)^2 + (6/50)^2)
+
+      local cost = sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 8)
+      near(cost, box + mist + pull, 'the three terms summed')
+      near(cost - sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 0),
+        mist, 'and the stiffness buys the springs alone')
+    end,
+  },
+
+  {
+    name = 'springs: displacements realising the spelling leave every spring slack',
+    run = function()
+      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } })
+
+      -- The first strand stands where it was written and the others follow their springs
+      -- from it, so every pair sounds the interval the spelling states, the third pair included.
+      local displacement = { 0, major.springs[1].delta, major.springs[2].delta }
+      local pull = 0
+      for _, cents in ipairs(displacement) do pull = pull + (cents / 50)^2 end
+
+      local cost = sonority.springCost({ major }, displacement, evenWindows(3), 1, 8)
+      near(cost, major.box + pull, 'the box and the pull, and nothing from the springs')
+      t.eq(cost, sonority.springCost({ major }, displacement, evenWindows(3), 1, 1e6),
+        'a stiffness of a million charges a slack spring the same nothing')
+    end,
+  },
+
+  {
+    name = 'springs: the pull is charged over the window half it lies in',
+    run = function()
+      local lone   = sonority.springs({ 1 }, { 0 }, { {} })
+      local narrow = { { below = 25, above = 50 } }
+
+      near(sonority.springCost({ lone }, {  10 }, narrow, 1, 8), 0.04,
+        'ten cents up a fifty-cent half is a fifth of the way to the edge')
+      near(sonority.springCost({ lone }, { -10 }, narrow, 1, 8), 0.16,
+        'the same ten down a twenty-five-cent half costs four times as much')
     end,
   },
 
