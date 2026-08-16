@@ -22,13 +22,14 @@
 3. **Phase 3 — The offset** (§ Where a placement sits, § What
    reachability spends) — the window as a joint constraint, eleven
    passes over 100¢, and the winner's exact offset from the mean of its
-   displacements clamped to the admissible range.  ← in flight
+   displacements clamped to the admissible range.
+   — landed 2026-08-16, three commits.
 4. **Phase 4 — The facility** (§ The command's slots, § Where it sits
-   4) — the facility chosen on the retune modal with the key slot
-   disabled, the placement branch beside `solveToTarget`, and each
-   strand seated as `(pitch, detune)` through the existing blend.
-   - gated on § Open 1: what the command does with a chord the move set
-     misspells.
+   4, § What reachability spends) — the facility chosen on the retune
+   modal with the key slot disabled, the placement branch beside
+   `solveToTarget`, each strand seated as `(pitch, detune)` through the
+   existing blend, and the refusal the search can raise with the
+   widening offered against it.  ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -43,4 +44,35 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 3 has nothing left to compile.)
+1. The placement branch in `trackerView`: a `solveToMoves` beside
+   `solveToTarget` that groups the scope's strands by step class as
+   `shortlisted` does, reads the move set off the target with
+   `tuning.moves`, calls `sonority.solveToMoves` with the sonority size
+   and the harmonic lock, and seats every note of each strand at its
+   tuning's cents plus the placement's offset, through `tuning.seat` and
+   the existing blend. `tv:retune` branches on the facility the slots
+   carry, and a refused placement returns nothing until item 3. Spec
+   drives `tv:retune` in `vm_retune_spec`.
+
+2. The facility on the modal: the choice drawn beside the target and
+   dead until one is chosen, the key picker disabled under the move set,
+   harmonic lock opening at the facility's own figure and re-seating
+   when the facility switches, and `retune.facility` written at take
+   tier beside the target and the key so the modal reopens on it.
+   `tv:retune`'s shape and contracts follow, and `docs/trackerView.md`
+   § Retune with them. Spec drives the modal in `tracker_page_spec`.
+
+3. The refusal the search can state: `sonority.placeAt` returns the
+   onset that emptied, the strand it could not place there and the
+   neighbour that strand would have joined, rather than a bare nil; and
+   `sonority.solveToMoves` reports the furthest such refusal where every
+   offset refused. Spec is a bare tritone under a move set holding no
+   `7/5`, in `sonority_sweep_spec`.
+
+4. The widening: `tuning.reach` and `tuning.origin` take a widen flag
+   and admit the nearest candidates at strain past 1 where the window
+   holds none, as `tuning.shortlist` does; `placeAt` and `solveToMoves`
+   carry it; `tv:retune`'s widen argument reaches the moves branch; and
+   the confirm the command offers names the onset and the interval the
+   refusal reported. Spec is the previous item's tritone, placing once
+   widened.

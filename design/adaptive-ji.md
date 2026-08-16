@@ -42,6 +42,16 @@ written on.**
    the sibling takes them as points on the pitch line, and this document
    as intervals from a unison (§ The target becomes a move set).
 
+3. Which facility runs is therefore a choice of its own, drawn beside
+   the target, since nothing recovers the reading from the object. It is
+   dead until a target is chosen, and it persists per take as the target
+   and the key do (`design/adaptive-tuning.md` § Where it sits).
+
+4. Harmonic lock opens at a different figure. The sibling's opens at 1
+   and this facility's at 1.5, the offset having halved what a strength
+   buys (§ What the pull's scale becomes). The two are not one dial, so
+   choosing the other facility re-seats the slider on its own figure.
+
 ## The target becomes a move set
 
 1. The target is a **move set**: a collection of **moves**, each an
@@ -263,9 +273,19 @@ written on.**
 
 4. What the floor consumes, the pull cannot use. A ii–V–I returns one
    answer across the dial's whole useful travel
-   (`design/adaptive-tuning.md` § Harmonic lock), first moves at a
-   strength ten times its top, and stops at 37¢ however hard it is
-   pulled.
+   (§ What the pull's scale becomes), first moves at a strength ten
+   times its top, and stops at 37¢ however hard it is pulled.
+
+5. Where nothing reaches, the command refuses as the sibling's does
+   (`design/adaptive-tuning.md` § What the solver takes), naming the
+   onset and the interval that had nowhere to go, and offering the same
+   widening.
+
+6. Little refuses. The one refusal over the passages measured is a bare
+   tritone standing alone, and it misses by 1.955¢: the nearest moves to
+   600¢ are `4/3` and `3/2`, each 101.955¢ away, against the 100¢ that
+   two 50¢ windows allow between them. Put a chord in front of it and it
+   places.
 
 ## A strand may wait
 
@@ -312,17 +332,20 @@ written on.**
    offset there, and refusing an offset refuses nothing else
    (§ Where a placement sits).
 
-10. This is what transfers of the sibling's widening
+10. Waiting answers what the sibling widens for
     (`design/adaptive-tuning.md` § What the solver takes). There a class
     with nothing in reach has its window scaled; here it waits for the
     neighbour that can reach it, the window being a joint constraint the
-    offset already answers for (§ Where a placement sits).
+    offset already answers for (§ Where a placement sits). What the
+    widening is left to answer is the passage no offset places
+    (§ What reachability spends).
 
 11. A composed interval is admitted only where real strands carry it.
     Every chain runs through neighbours that sound, so nothing enters
     the reachable set past the complexity bound (§ What makes the
-    candidate set finite): a bare C–E♭ dyad under a move set without a
-    `6/5` is refused, not spelled through a phantom G (§ Open).
+    candidate set finite): a bare tritone under a move set holding no
+    `7/5` is refused rather than spelled through a phantom strand a
+    `5/4` above it (§ What reachability spends).
 
 ## Where a move set comes from
 
@@ -422,47 +445,56 @@ written on.**
     budget is placements at an onset
     (`design/adaptive-tuning.md` § Solving it).
 
-17. Only a narrow range of complexity bounds is usable: between about
-    2.8 and 3.3, admitting seven to nine moves. Below it a dominant
-    seventh standing alone is spelled only by running a strand to 49¢ of
-    a 50¢ window; in a ii–V–I the same chord solves inside 27¢. Above it
-    the state count runs away, reaching 59,049 at 4.0.
+17. The bound must reach 3.91, which is where `6/5` sits: below it a
+    bare minor third is not spelled, a minor triad is spelled only
+    through its fifth (§ A placement is connected), and a minor cadence
+    takes a placement the notation did not write however hard it is
+    pulled (§ When a chord is misspelled). At the other end a bound of
+    2.81 spells a dominant seventh standing alone only by running a
+    strand to 49¢ of a 50¢ window, where in a ii–V–I the same chord
+    solves inside 27¢.
 
-18. Waiting costs nothing where nothing sounds into the change. With it
+18. Reaching 3.91 costs about twice the entries and no answer. A ii–V–I
+    of sevenths goes from 3,324 entries to 8,801 and five detached
+    triads from 13,199 to 45,217, each returning the placement the
+    smaller set returned; the budget binds above that, the five triads
+    passing it at 4.39.
+
+19. Waiting costs nothing where nothing sounds into the change. With it
     offered and without, a struck ii–V–I of sevenths under nine moves
     reaches 1,937 entries at its third onset, five detached triads
     82,655 at their fifth, and a comma pump 11,257.
 
-19. What it buys is the rolled textures. A rolled triad, which placing
+20. What it buys is the rolled textures. A rolled triad, which placing
     every strand at its own onset refuses, places at its struck coords
     for two entries; a rolled ii–V–I of sevenths places at 3,929
     against the budget of 200,000.
 
-20. What sounds through the change pays. A comma pump whose chords are
+21. What sounds through the change pays. A comma pump whose chords are
     held into the next reaches 12,125 entries at its last onset against
     2,436 without waiting.
 
-21. Waiting on what a strand does not sound with buys nothing
+22. Waiting on what a strand does not sound with buys nothing
     (§ A strand may wait). Offered across recency and the hinge, the
     struck pump reaches 52,732 entries rather than 11,257 and returns
     the placement it returns anyway, as does every passage measured.
 
-22. The budget cannot be read off the walk. A strand's candidates
+23. The budget cannot be read off the walk. A strand's candidates
     depend on where the others went (§ What the solver loses), so there
     is no product of shortlist sizes to take before the search begins.
 
-23. The count is taken as the entries are reached, and the search
+24. The count is taken as the entries are reached, and the search
     refuses there. The upfront bound (the move set's size times the
     sonority's) overestimates by an order of magnitude and would
     refuse everything.
 
-24. Hinging every onset to its predecessor rather than only where
+25. Hinging every onset to its predecessor rather than only where
     nothing is carried (§ A placement is connected) reaches 622,694
     entries where the ii–V–I's third onset reaches 1,937, and arrives
     at the same placement. A strand's candidates are its neighbours
     times the moves, and the strands born together multiply.
 
-25. Where nothing is carried the price is real. Five detached triads at
+26. Where nothing is carried the price is real. Five detached triads at
     a sonority of three under nine moves reach 82,655 entries at the
     fifth onset, where the sonority alone reaches twelve, a chain free
     to wander leaving no placement to dominate the rest.
@@ -523,8 +555,7 @@ written on.**
    allows.
 
 5. What the pull decides is where inside the window the trade lands, and
-   its scale is the sibling's
-   (`design/adaptive-tuning.md` § Harmonic lock).
+   its scale is § What the pull's scale becomes.
 
 6. A passage of detached chords drifts at all only because the hinge
    joins each chord to the one before (§ A placement is connected). At
@@ -545,34 +576,54 @@ written on.**
    stacking of two `6/5`s scores 7.81, so the compact reading wins
    wherever the windows admit it.
 
-3. What refuses it is the pull, and only above a strength of about
-   1.85. Below that a diminished triad standing alone takes the
-   respelling and runs a strand to the edge of its window, on a dial
-   whose useful travel the sibling puts at 0 to 2
-   (`design/adaptive-tuning.md` § Harmonic lock).
+3. What refuses a respelling is the pull, and each chord turns over at
+   its own strength. A i–iv–V–i in C minor takes its dominant as a minor
+   triad below 1.361, seating the leading tone 50¢ flat at the edge of
+   its window; a ii–V–i whose supertonic is half-diminished holds its
+   respelling to 1.447; and a diminished triad standing alone takes the
+   notated stacking only at 1.842.
 
-4. A move set reaching to 3.91 admits the notated reading without
-   making it preferred, and that is above the range that keeps the
-   state count in hand (§ What it costs to solve).
+4. A diminished seventh has no notated reading to defend. Four just
+   minor thirds overshoot the octave by 62¢, so the chord respells at
+   every strength, and what the objective chooses between are readings
+   none of which is the written one.
+
+5. The move set decides whether there is anything to turn over. A minor
+   cadence under a set holding no `6/5` respells however hard it is
+   pulled, no move of the set spelling the third it was written with
+   (§ What it costs to solve).
+
+## What the pull's scale becomes
+
+1. The dial is the sibling's renormalised. Harmonic lock opens at 1.5
+   here where it opens at 1 there, and its useful travel runs from 0 to
+   2 as before (`design/adaptive-tuning.md` § Harmonic lock).
+
+2. The offset is what doubles it. Chosen to minimise the pull
+   (§ Where a placement sits), it leaves the pull charging the spread of
+   a placement's displacements while the mean rides free, so a strength
+   buys about half the resistance the sibling's buys. The trade the
+   sibling fixes its scale on — a written C7 giving up the otonal
+   `4:5:6:7` for the Pythagorean `16/9` — turns over at 0.95 there and
+   at 1.819 here.
+
+3. The default sits between what defends the notation and what gives up
+   a septimal reading. Every notated quality measured but the diminished
+   triad's is defended by 1.447 (§ When a chord is misspelled), and a
+   blues keeps its septimal sevenths to 1.700, so 1.5 holds both.
+
+4. There is no no-op end. Once the notated placement has won the pull
+   has nothing left to take: its strands stand at pure intervals of one
+   another, every rival placement lies further from the notation, and a
+   I–IV–V–I still moves a note 12¢ at a strength of 128.
+
+5. The dial therefore reads how much respelling is permitted rather than
+   trading purity against fidelity. Its free end is ambiguous as the
+   sibling's is; its stiff end is the notated chords in pure intonation.
 
 ## Open
 
-1. What the command does with a chord the move set misspells (§ When a
-   chord is misspelled) or cannot spell at all, a bare minor third
-   under a set without a `6/5` having no placement now that nothing is
-   spelled through a phantom (§ A strand may wait). Refusing with the
-   missing interval named, seating the chord unmoved, and stiffening
-   the pull for that chord alone are all available and none is
-   obviously right.
-
-2. What the pull's scale becomes where it still has room
-   (§ What reachability spends). Defending a diminished triad's notated
-   spelling takes about 1.85, the top of the sibling's useful travel,
-   where its own account has the solve tending to a no-op
-   (`design/adaptive-tuning.md` § Harmonic lock). Whether the dial is
-   renormalised for this model or the objective reweighted is undecided.
-
-3. How a solve sees the take before it. The sibling's collar arrives as
+1. How a solve sees the take before it. The sibling's collar arrives as
    strands of one with their tuning already chosen
    (`design/adaptive-tuning.md` § Seams), but a take stores cents where
    the objective reads coords, and a dense reachable set puts no ratio
@@ -580,7 +631,7 @@ written on.**
    recover at all. Either a note carries its coords as metadata, or one
    solve spans the takes in sequence and carries the placement across.
 
-4. Whether the window should bind at all. Letting a strand drift past
+2. Whether the window should bind at all. Letting a strand drift past
    it, with the pull anchored to the step the note was written on rather
    than the one it would then recover, would collapse the refusal, the
    widening offer and the floor of § What reachability spends into a
