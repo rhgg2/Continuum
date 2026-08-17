@@ -20,25 +20,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: walk the onsets carrying capped partial answers (§ The solve)
 - 2026-08-17 sonority: derive the walk's terms from the notation (§ The solve)
 - 2026-08-17 sonority: relax from a warm start, with strands held (§ The solve)
 - 2026-08-17 tuning: the Tenney ball, as a target generator and a pane (§ The Tenney ball)
-- 2026-08-17 sonority: enumerate the spellings by a beam over joins (§ The candidates)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-3. Walk the onsets carrying capped partial answers. Each carried answer
-   is extended by every spelling of the onset and relaxed over the
-   strands the onset sounds; its cost is taken over the springs
-   accumulated so far plus the box each spelling charged; two answers
-   merge where the strands the future can still see agree on cents
-   rounded to half a cent, and the carried set is cut to its cap. The
-   spec pins the ii–V–I against what an exhaustive search over its
-   spelling lists returns.
 4. Charge a sonority holding a waiting member when its last member
    places, and enforce that a wait resolves only to coords no earlier
    sonority could have offered. The spec pins the rolled C minor landing

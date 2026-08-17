@@ -638,6 +638,84 @@ function sonority.onsets(strands, sonorities)
   return onsets
 end
 
+----- The search
+
+-- What the future reads of a past is its cents, and half a cent is under what tells two
+-- placements apart, so answers agreeing that closely on the strands ahead are one answer.
+local AUDIBLE = 0.5
+
+-- The strands a later onset names, which is all a continuation can read of an answer:
+-- what nothing ahead names is settled, however the answer arrived at it.
+local function visibleAhead(onsets)
+  local ahead, seen = {}, {}
+  for i = #onsets, 1, -1 do
+    ahead[i] = util.clone(seen)
+    for _, index in ipairs(onsets[i].members) do seen[index] = true end
+  end
+  return ahead
+end
+
+-- An answer under the whole of what a continuation can tell it by: its cents at the
+-- strands ahead, rounded to where two of them stop being two.
+local function answerKey(displacement, ahead)
+  local indices = util.keys(ahead)
+  table.sort(indices)
+
+  local parts = {}
+  for _, index in ipairs(indices) do
+    util.add(parts, index)
+    util.add(parts, util.round(displacement[index], AUDIBLE))
+  end
+  return util.key(table.unpack(parts))
+end
+
+-- One answer extended by one spelling: the springs it has accumulated and the box it has
+-- paid, the onset's own strands relaxed and the rest of the answer standing as data.
+local function extend(answer, spelling, onset, window, strength, stiffness)
+  local springs = util.clone(answer.springs)
+  util.add(springs, spelling.springs)
+
+  local displacement = sonority.relax(springs, window, strength, stiffness,
+                                      answer.displacement, onset.sounding)
+  local box = answer.box + spelling.box
+  return { choice = util.clone(answer.choice), springs = springs, box = box,
+           displacement = displacement,
+           cost = box + sonority.springCost(springs, displacement, window,
+                                            strength, stiffness) }
+end
+
+-- The cost is taken over every spring accumulated so far rather than the onset's own, so
+-- a spelling is priced against the past it is chosen behind (§ The solve).
+--shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost }
+--contract: onsets, a sonority.spellings list per onset, window per strand, strength, stiffness, cap
+--contract: → the cheapest Answer, every answer carried extended by every spelling of the onset
+--contract: the strands the onset sounds relax; the rest of an answer stands at the cents it carries
+--contract: answers agreeing to half a cent on strands ahead merge; the set is cut to cap
+function sonority.search(onsets, spellings, window, strength, stiffness, cap)
+  local ahead, start = visibleAhead(onsets), {}
+  for index = 1, #window do start[index] = 0 end
+  local answers = { { choice = {}, springs = {}, box = 0, displacement = start, cost = 0 } }
+
+  for i, onset in ipairs(onsets) do
+    local reached = {}
+    for _, answer in ipairs(answers) do
+      for choice, spelling in ipairs(spellings[i]) do
+        local state = extend(answer, spelling, onset, window, strength, stiffness)
+        state.choice[i] = choice
+
+        local key = answerKey(state.displacement, ahead[i])
+        if outranks(state, reached[key], i, byChoice) then reached[key] = state end
+      end
+    end
+
+    answers = {}
+    for _, state in pairs(reached) do util.add(answers, state) end
+    table.sort(answers, function(a, b) return outranks(a, b, i, byChoice) end)
+    for k = #answers, cap + 1, -1 do answers[k] = nil end
+  end
+  return answers[1]
+end
+
 ----- The placement
 
 -- The moves facility's solve: the target read as intervals between strands rather than

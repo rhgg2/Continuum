@@ -43,6 +43,10 @@
 -- Pins the terms the walk takes from the notation (§ The solve): the seat and the
 -- window a strand is written under, which onsets a member may wait through, and
 -- that everything a sonority reads of a member is indexed at its strand.
+--
+-- Pins the walk itself (§ The solve): an answer held against an exhaustive search
+-- over the same spelling lists, a cap of one taking the greedy road, and a strand
+-- that has stopped standing at the cents the walk left it.
 
 local t        = require('support')
 local tuning   = require('tuning')
@@ -81,9 +85,10 @@ local function nameless(cents)
   return tuning.derive{ name = 'scale', period = 1200, cents = cents, stepNames = {} }
 end
 
--- Targets read as moves: pure fifths and thirds, and the eleven-pitch set the figures of
--- design/adaptive-springs.md § Measured were taken over.
+-- Targets read as moves: pure fifths and thirds, the set a ii–V–I of sevenths is spelled
+-- under, and the eleven-pitch set the figures of § Measured were taken over.
 local fifthsAndThirds = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
+local withSevenths    = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '7/4', '9/8' } }
 local elevenPitches   = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '6/5', '7/4', '7/6',
                                                   '7/5', '9/8', '5/3', '8/7', '10/7' } }
 
@@ -422,6 +427,68 @@ local function underRun(endppq)
     fromSparse(0,  1440, 72, 1920), fromSparse(4, 1920, 76, 2400),
     fromSparse(5,  2400, 77, 2880),
   }
+end
+
+-- A chord to the bar, each released where the next strikes: the passage the walk of
+-- design/adaptive-springs.md § The solve is taken over.
+local function progression(bars)
+  local notes = {}
+  for beat, pitches in ipairs(bars) do
+    for _, pitch in ipairs(pitches) do
+      notes[#notes + 1] = event((beat - 1) * 960, pitch, beat * 960)
+    end
+  end
+  return sonority.strands(notes, pitchClass)
+end
+
+-- What the notation and the target hand the walk: an onset per sonority and a spelling
+-- list apiece, at the beam width and the stiffness the figures below are taken under.
+local function termsOf(strands, n, moves)
+  local seat, window = sonority.seats(strands, edo12)
+  local onsets, lists = sonority.onsets(strands, sonority.walk(strands, n)), {}
+  for i, onset in ipairs(onsets) do
+    lists[i] = sonority.spellings(onset.members, seat, window, {}, moves, 24, 8)
+  end
+  return onsets, lists, window
+end
+
+-- The winner settled by one joint relaxation, which is where the frozen past gives back
+-- what it held along the way; the walk's own cost stands above this until then.
+local function settledFrom(answer, window, strength, stiffness)
+  local _, free = allFree(#window)
+  local displacement = sonority.relax(answer.springs, window, strength, stiffness,
+                                      answer.displacement, free)
+  return answer.box + sonority.springCost(answer.springs, displacement, window,
+                                          strength, stiffness), displacement
+end
+
+-- Every combination of the spelling lists, each relaxed cold with every strand free: the
+-- search the walk is held against, in the odometer order everyChoice takes, so that an
+-- exact tie falls to the same combination the walk's own tie-break keeps.
+local function bruteSpelled(lists, window, strength, stiffness)
+  local start, free = allFree(#window)
+  local at, best = {}, nil
+  for i = 1, #lists do at[i] = 1 end
+  while true do
+    local springs, box = {}, 0
+    for i, list in ipairs(lists) do
+      springs[i] = list[at[i]].springs
+      box        = box + list[at[i]].box
+    end
+    local displacement = sonority.relax(springs, window, strength, stiffness, start, free)
+    local cost = box + sonority.springCost(springs, displacement, window, strength, stiffness)
+    if not best or cost < best.cost then
+      best = { cost = cost, displacement = displacement, choice = { table.unpack(at) } }
+    end
+
+    local i = #lists
+    while i >= 1 do
+      at[i] = at[i] + 1
+      if at[i] <= #lists[i] then break end
+      at[i] = 1; i = i - 1
+    end
+    if i < 1 then return best end
+  end
 end
 
 -- The readings the calibration is taken between, septimal seventh first.
@@ -864,6 +931,80 @@ return {
       t.deepEq(onsets[2].sounding, { 3, 1 }, 'though it no longer sounds there')
       t.deepEq(onsets[2].mayWait, { [1] = true }, 'so it is joined to rather than waiting')
       t.deepEq(onsets[3].mayWait, {}, 'and the last onset holds nobody who may')
+    end,
+  },
+
+  {
+    name = 'search: the walk returns what an exhaustive search over its spelling lists returns',
+    run = function()
+      -- A ii–V–I under pure fifths and thirds, spelled 2,304 ways over its three onsets:
+      -- the walk carries a capped set of partial answers through it and comes back with
+      -- the best of them, at 13.58 against the walk's own 13.77 (§ The solve).
+      local strands = progression{ { 62, 65, 69 }, { 55, 59, 62 }, { 60, 64, 67 } }
+      local onsets, lists, window = termsOf(strands, 5, fifthsAndThirds)
+
+      local answer = sonority.search(onsets, lists, window, 1, 8, 60)
+      local cost, displacement = settledFrom(answer, window, 1, 8)
+      local best = bruteSpelled(lists, window, 1, 8)
+
+      nearly(cost, best.cost, 'the walk settles where the enumeration settles')
+      t.deepEq(answer.choice, best.choice, 'having spelled every onset as it spells it')
+      for index = 1, #strands do
+        t.truthy(math.abs(displacement[index] - best.displacement[index]) < 0.01,
+          'strand ' .. index .. ' standing where the enumeration stands it')
+      end
+
+      t.truthy(answer.cost > cost,
+        'and the frozen past costing more than the joint relaxation that recovers it')
+    end,
+  },
+
+  {
+    name = 'search: carrying one answer takes the greedy road',
+    run = function()
+      -- The ii of a septimal ii–V–I is cheapest spelled a way the V then pays for: a walk
+      -- carrying one answer takes that road and comes back at 17.5998, and one carrying
+      -- sixty finds the way around it at 17.5338.
+      local strands = progression{ { 62, 65, 69, 72 }, { 55, 59, 62, 65 }, { 60, 64, 67, 71 } }
+      local onsets, lists, window = termsOf(strands, 5, withSevenths)
+
+      local greedy  = sonority.search(onsets, lists, window, 1, 8, 1)
+      local carried = sonority.search(onsets, lists, window, 1, 8, 60)
+
+      t.truthy(settledFrom(greedy, window, 1, 8) > settledFrom(carried, window, 1, 8),
+        'the road a cap of one takes costs more than the one sixty answers find')
+      t.eq(greedy.choice[1], carried.choice[1], 'the two spelling the ii alike')
+      t.truthy(greedy.choice[2] ~= carried.choice[2], 'and parting at the V')
+    end,
+  },
+
+  {
+    name = 'search: a strand that has stopped stands where the walk left it',
+    run = function()
+      -- The relaxation frees what the onset sounds, so a triad released as the next chord
+      -- strikes is data at the cents the first onset settled it to (§ The solve).
+      local strands = progression{ { 60, 64, 67 }, { 62, 65, 69 } }
+      local onsets, lists, window = termsOf(strands, 6, fifthsAndThirds)
+      t.eq(#onsets[2].members, 6, 'the second onset holding all six')
+      t.eq(#onsets[2].sounding, 3, 'and sounding the three that struck')
+
+      local answer = sonority.search(onsets, lists, window, 1, 8, 60)
+      t.eq(#answer.choice, 2, 'a spelling chosen at each onset')
+
+      local start, free = allFree(#window)
+      local first = sonority.relax({ lists[1][answer.choice[1]].springs }, window, 1, 8,
+                                   start, onsets[1].sounding)
+      for _, index in ipairs{ 1, 3, 5 } do
+        t.eq(answer.displacement[index], first[index],
+          'strand ' .. index .. ' standing exactly where the first onset put it')
+      end
+
+      -- And the hold is felt: freed over the springs the walk accumulated, all three move.
+      local loosened = sonority.relax(answer.springs, window, 1, 8, answer.displacement, free)
+      for _, index in ipairs{ 1, 3, 5 } do
+        t.truthy(math.abs(loosened[index] - answer.displacement[index]) > 1,
+          'and the second chord moving strand ' .. index .. ' once it is free to')
+      end
     end,
   },
 
