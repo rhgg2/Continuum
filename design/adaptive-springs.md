@@ -284,7 +284,12 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 1. The price of deferral. A waiter pays every sonority it held once it
    places, so waiting saves no charge in the end; what it moves is when
    the charge is read, and the walk ranks its answers on a running score
-   the outstanding charges sit outside. A strand held under changing
-   harmony, free to wait at each onset, therefore carries a debt the cap
-   cannot see until its last onset, and whether the answers that survive
-   to there hold it in tune along the way is unsettled.
+   the outstanding charges sit outside. An answer that owes therefore
+   looks cheaper than one that has paid, and the cap keeps it in
+   preference; the beam guards against exactly this by cutting within a
+   waiting set, and the walk has no such rule. It shows in the figures: a
+   rolled triad over three bars under pure fifths and thirds comes back
+   at 40.61 with the debts carried in the merge key against 38.98 with
+   the key blind to them, more answers abreast not being the same as the
+   right ones. Whether the walk wants the beam's rule, a floor on what an
+   outstanding debt will come to, or neither, is unsettled.
