@@ -24,11 +24,22 @@ pre-read or fix comments here. Pass it the file arguments `$ARGUMENTS`
 > >2 lines outside `tests/` (specs are exempt from the run cap;
 > section dividers are not WHY lines). Fix every violation it names,
 > then re-run until clean. Resolve each violation by trimming the
-> comment to its load-bearing content, or by moving a longer WHY to
+> comment to its load-bearing content, by splitting a multi-clause
+> annotation into one per line, or by moving a longer WHY to
 > `docs/<file>.md` with a one-line pointer at the site. NEVER resolve
 > a violation by reverting the comment to a prior state or deleting
 > the WHY wholesale — the content must survive in compliant form.
-> Touch only comments the script flags. Report the files you changed
-> and a one-line note per fix.
+> Touch only comments the script flags.
+>
+> You cannot count characters by eye, so don't draft a trim and hope.
+> Draft two or three candidates per over-length line and measure the
+> batch in one call, feeding `--measure` the candidate lines on stdin
+> (indentation included); it prints each against its cap, and you take
+> the longest that reads `ok`. Where the report names a clause count a
+> split is worth considering, but check each resulting line still
+> names its own subject — a clause like "onClose sweeps it" loses its
+> antecedent the moment it leaves the parent line.
+>
+> Report the files you changed and a one-line note per fix.
 
 When it returns, eyeball its summary; don't re-audit.

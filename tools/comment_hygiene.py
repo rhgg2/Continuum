@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Check Lua comment-hygiene rules — on the git diff (vs HEAD) by default,
-or on whole files named as arguments (cleanup mode).
+on whole files named as arguments (cleanup mode), or on candidate lines fed
+to `--measure` on stdin (drafting mode).
 
-Rules (docs/CONVENTIONS.md § Length discipline):
+Rules (docs/CONVENTIONS.md § Length discipline for annotations):
 - `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars.
 - `--shape:` is exempt from the 100-char rule but soft-capped at 400 chars
   per line — a single shape line that long is almost certainly either
@@ -20,6 +21,9 @@ A violation is only flagged when a participating line is in scope: the
 added/modified lines in diff mode, every line in cleanup mode. In diff mode
 pre-existing offences in untouched code are left alone.
 
+`--measure` reads candidate replacement lines on stdin and reports
+each against its cap. You can batch a bunch in one call.
+
 Exit code: 0 = clean, 1 = violations.
 """
 import re
@@ -36,6 +40,8 @@ HUNK_HEAD   = re.compile(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@')
 MAX_KIND_LEN  = 100
 MAX_SHAPE_LEN = 400
 MAX_RUN       = 2
+# Below this overage a trim is the likelier fix, so don't raise the split.
+MIN_SPLIT_OVERAGE = 15
 
 
 def diff_added_lines():
@@ -84,6 +90,25 @@ def why_runs(lines):
         yield (start, len(lines))
 
 
+def cap_for(line):
+    """The per-line cap this line answers to, or None where none applies."""
+    if KIND_CAPPED.match(line):
+        return MAX_KIND_LEN
+    if SHAPE.match(line):
+        return MAX_SHAPE_LEN
+    return None
+
+
+def split_hint(line, cap):
+    """Name a clause count when the line is over by more than a trim's worth."""
+    if len(line) - cap < MIN_SPLIT_OVERAGE:
+        return ''
+    clauses = [c for c in line.split(':', 1)[1].split(';') if c.strip()]
+    if len(clauses) < 2:
+        return ''
+    return f", {len(clauses)} clauses at ';'"
+
+
 def check_file(path, added):
     out = []
     try:
@@ -95,7 +120,9 @@ def check_file(path, added):
             line = lines[ln - 1]
             if KIND_CAPPED.match(line) and len(line) > MAX_KIND_LEN:
                 out.append((path, str(ln),
-                            f'KIND too long ({len(line)} > {MAX_KIND_LEN})',
+                            f'KIND too long ({len(line)} > {MAX_KIND_LEN}, '
+                            f'trim {len(line) - MAX_KIND_LEN})'
+                            + split_hint(line, MAX_KIND_LEN),
                             line.strip()))
             elif SHAPE.match(line) and len(line) > MAX_SHAPE_LEN:
                 out.append((path, str(ln),
@@ -129,8 +156,28 @@ def whole_file_lines(paths):
     return targets
 
 
+def measure(candidates):
+    """Report drafted lines against their caps — one call for a whole batch."""
+    over = False
+    for raw in candidates:
+        line = raw.rstrip('\n')
+        cap = cap_for(line)
+        if cap is None:
+            status, budget, delta = '  --', f'{len(line)}', ''
+        elif len(line) > cap:
+            over, status = True, 'OVER'
+            budget, delta = f'{len(line)}/{cap}', f'+{len(line) - cap}'
+        else:
+            status = 'ok'
+            budget, delta = f'{len(line)}/{cap}', ''
+        print(f'{status:<4} {budget:>8} {delta:<4} {line}')
+    return 1 if over else 0
+
+
 def main():
     paths = sys.argv[1:]
+    if paths and paths[0] == '--measure':
+        return measure(sys.stdin.readlines())
     targets = whole_file_lines(paths) if paths else diff_added_lines()
     violations = []
     for path, added in sorted(targets.items()):

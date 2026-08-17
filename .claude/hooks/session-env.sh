@@ -39,7 +39,9 @@ if ln -sfn "$scratchpad" "$link" 2>/dev/null; then
 else
   scratch_path="$scratchpad"
 fi
-ctx="Scratchpad directory for this session: $scratch_path"
+ctx="Scratchpad directory for this session: $scratch_path. Use instead of writing to /tmp.
+apply_patches works in the scratchpad, with the same atomicity but no approval gate -
+prefer it to sed or scripts to patch files."
 
 # A spike worktree, created eagerly rather than on request: the moment a
 # hypothesis is worth checking is the moment it feels obvious enough to skip,
@@ -54,10 +56,8 @@ if [ -d "$spike" ] || git -C "$project" worktree add --detach "$spike" HEAD >/de
   ctx="$ctx
 
 Spike worktree for this session, detached at HEAD: $scratch_path/spike. It does not carry uncommitted changes
-from the main tree. REAPER and the .map/lint hooks do not work; \`lua tests/run.lua\` does, and a <filter> argument
-does a  match against <spec> :: <test>. By default, the code is discarded with the scratchpad; if the spike has value
-beyond this session, suggest promotion to tests/spikes/ in the main tree.  I don't need to review edits in this
-worktree so use whatever tools are most efficient for you."
+from the main tree. REAPER and the .map/lint hooks do not work; \`lua tests/run.lua\` does. Code is discarded
+with the scratchpad; if the spike has value beyond this session, suggest promotion to tests/spikes/ in the main tree."
 fi
 
 jq -n --arg ctx "$ctx" \
