@@ -20,10 +20,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: relax from a warm start, with strands held (§ The solve)
 - 2026-08-17 tuning: the Tenney ball, as a target generator and a pane (§ The Tenney ball)
 - 2026-08-17 sonority: enumerate the spellings by a beam over joins (§ The candidates)
 - 2026-08-17 sonority: the springs alone, seated in member order (§ The model)
-- 2026-08-16 sonority: relax the displacements to the objective's optimum (§ The model)
 
 ## Now
 
@@ -31,12 +31,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. Give `sonority.relax` a warm start and a set of free strands: the
-   free ones sweep as they do now, and the rest stand as data at the
-   displacements they carry, pulling on their neighbours' springs
-   without moving. The spec pins that freeing every strand from zero
-   reproduces today's answer, and that a held strand stays where it was
-   put while its neighbours settle around it.
 2. Derive the walk's inputs from the notation: a seat and a window per
    strand, and per onset the members in the shape `sonority.spellings`
    takes, with `mayWait` true for a member that has a later onset to

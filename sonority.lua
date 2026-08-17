@@ -351,14 +351,14 @@ end
 local TOLERANCE, SWEEPS = 1e-4, 1000
 
 -- Where each spring would stand its two strands, given the other: i a delta below j, j a
--- delta above i. Gathered once, since every sweep reads them at every strand.
-local function tiesOf(spellings, count)
+-- delta above i. Gathered once for the strands that sweep, since a held strand never reads its own ties: it stands as a constant in its neighbours'.
+local function tiesOf(spellings, free)
   local ties = {}
-  for index = 1, count do ties[index] = {} end
+  for _, index in ipairs(free) do ties[index] = {} end
   for _, springs in ipairs(spellings) do
     for _, spring in ipairs(springs) do
-      util.add(ties[spring.i], { other = spring.j, delta = -spring.delta })
-      util.add(ties[spring.j], { other = spring.i, delta =  spring.delta })
+      if ties[spring.i] then util.add(ties[spring.i], { other = spring.j, delta = -spring.delta }) end
+      if ties[spring.j] then util.add(ties[spring.j], { other = spring.i, delta =  spring.delta }) end
     end
   end
   return ties
@@ -377,16 +377,17 @@ local function settle(ties, displacement, window, strength, stiffness)
                     -window.below, window.above)
 end
 
---invariant: convex in the displacements, so the sweep order buys speed and not the answer
---contract: spellings, window, strength, stiffness → displacements minimising sonority.springCost
---contract: each displacement inside its own strand's window
-function sonority.relax(spellings, window, strength, stiffness)
-  local ties, displacement = tiesOf(spellings, #window), {}
-  for index = 1, #window do displacement[index] = 0 end
+--invariant: convex in the displacements, so the sweep order and the start buy speed, not the answer
+--contract: spellings, window, strength, stiffness, start (per strand), free (strands that sweep)
+--contract: → displacements minimising sonority.springCost, the held strands standing at their start
+--contract: each swept displacement inside its own strand's window
+function sonority.relax(spellings, window, strength, stiffness, start, free)
+  local ties, displacement = tiesOf(spellings, free), {}
+  for index = 1, #window do displacement[index] = start[index] end
 
   for _ = 1, SWEEPS do
     local worst = 0
-    for index = 1, #window do
+    for _, index in ipairs(free) do
       local settled = settle(ties[index], displacement, window[index], strength, stiffness)
       local moved   = math.abs(settled - displacement[index])
       if moved > worst then worst = moved end

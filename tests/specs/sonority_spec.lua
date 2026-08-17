@@ -31,6 +31,10 @@
 -- pair whose optimum is a closed form, a strand the springs press to its window
 -- edge, and a comma loop whose residue no displacement can make slack.
 --
+-- Pins the terms the walk relaxes on (§ The solve): a warm start that buys the
+-- sweep its speed and not its answer, and a held strand standing as data at the
+-- displacement it carries while its neighbours settle around it.
+--
 -- Pins the beam that chooses the spellings (§ The candidates): a join admitted
 -- within two half-windows of the member's own seat, a member no move reaches
 -- standing alone, a full enumeration the beam of twelve is checked against, and
@@ -58,6 +62,13 @@ local function evenWindows(count)
   local window = {}
   for index = 1, count do window[index] = { below = 50, above = 50 } end
   return window
+end
+
+-- The relaxation's original terms: every strand free, and standing where it was written.
+local function allFree(count)
+  local start, free = {}, {}
+  for index = 1, count do start[index], free[index] = 0, index end
+  return start, free
 end
 
 -- Targets read as moves: pure fifths and thirds, and the eleven-pitch set the figures of
@@ -542,7 +553,7 @@ return {
       local third = sonority.springs({ 1, 2 }, { 0, 400 }, { {}, { [5] = 1 } })
       local hand  = -8 * third[1].delta / (1 + 2 * 8)
 
-      local displacement = sonority.relax({ third }, evenWindows(2), 1, 8)
+      local displacement = sonority.relax({ third }, evenWindows(2), 1, 8, allFree(2))
       near(displacement[1],  hand, 'the root rises six and a half cents')
       near(displacement[2], -hand, 'and the third falls as far to meet it')
     end,
@@ -556,7 +567,7 @@ return {
       local harmonic = sonority.springs({ 1, 2 }, { 0, 1000 }, { {}, { [7] = 1 } })
       local window   = { { below = 50, above = 8 }, { below = 8, above = 50 } }
 
-      local displacement = sonority.relax({ harmonic }, window, 1, 40)
+      local displacement = sonority.relax({ harmonic }, window, 1, 40, allFree(2))
       near(displacement[1],  8, 'the root stands at its edge, not at its far half')
       near(displacement[2], -8, 'and the seventh at its own')
       near(displacement[2] - displacement[1] - harmonic[1].delta, 15.174,
@@ -574,7 +585,7 @@ return {
       local sixth  = sonority.springs({ 1, 3 }, { 0,   900 }, { {}, { [3] =  3 } })
       local loop, window = { third, fourth, sixth }, evenWindows(3)
 
-      local displacement = sonority.relax(loop, window, 1, 8)
+      local displacement = sonority.relax(loop, window, 1, 8, allFree(3))
       local spread       = sonority.springCost(loop, displacement, window, 1, 8)
 
       -- Two springs go slack only by handing the whole comma to the third.
@@ -597,6 +608,55 @@ return {
             'and nothing half a cent away is cheaper')
         end
       end
+    end,
+  },
+
+  {
+    name = 'relax: a warm start settles where the cold one did',
+    run = function()
+      -- The objective is convex, so where the sweep begins buys it sweeps and not an answer:
+      -- the comma loop started well off its optimum comes back to the same three cents.
+      local third  = sonority.springs({ 1, 2 }, { 0,   400 }, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, { 400, 900 }, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, { 0,   900 }, { {}, { [3] =  3 } })
+      local loop, window = { third, fourth, sixth }, evenWindows(3)
+
+      local cold = sonority.relax(loop, window, 1, 8, allFree(3))
+      local warm = sonority.relax(loop, window, 1, 8, { 40, -30, 25 }, { 1, 2, 3 })
+
+      for index = 1, 3 do
+        near(warm[index], cold[index], 'strand ' .. index .. ' settles where it always did')
+      end
+    end,
+  },
+
+  {
+    name = 'relax: a held strand stands where it was put, and the rest settle around it',
+    run = function()
+      -- The walk frees the strands an onset sounds and reads the rest: here the root is data
+      -- at ten cents sharp, pulling on the springs of a triad whose sweep it takes no turn in.
+      local major  = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+                                      { {}, { [5] = 1 }, { [3] = 1 } })
+      local window = evenWindows(3)
+
+      local held = sonority.relax({ major }, window, 1, 8, { 10, 0, 0 }, { 2, 3 })
+      t.eq(held[1], 10, 'the held strand stands exactly where it was put')
+
+      -- The two that sweep sit at the optimum of what is left, the held one a constant in it.
+      local settled = sonority.springCost({ major }, held, window, 1, 8)
+      for _, index in ipairs{ 2, 3 } do
+        for _, nudge in ipairs{ -0.5, 0.5 } do
+          local nudged = { held[1], held[2], held[3] }
+          nudged[index] = nudged[index] + nudge
+          t.truthy(settled < sonority.springCost({ major }, nudged, window, 1, 8),
+            'nothing half a cent from strand ' .. index .. ' is cheaper')
+        end
+      end
+
+      -- And the hold is felt: from the same start, a root free to move would not stay sharp.
+      local free = sonority.relax({ major }, window, 1, 8, { 10, 0, 0 }, { 1, 2, 3 })
+      t.truthy(held[2] > free[2] and held[3] > free[3],
+        "the springs carrying the held strand's sharpness into the two that move")
     end,
   },
 
