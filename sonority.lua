@@ -425,11 +425,10 @@ local function rebase(coords, from, to)
   return shifted
 end
 
--- The neighbouring step and no further: past two half-windows some other member of the
--- sonority is the nearer host for the pitch, so the join is no longer this one's.
-local function inReach(deviation, window)
-  if deviation < 0 then return -deviation <= 2 * window.below end
-  return deviation <= 2 * window.above
+-- No note leaves the step it was notated on, and a spelling is placed as a whole, at one
+-- offset from the seats, so 'deviation' states which offsets remain open (design/adaptive-springs.md § The candidates).
+local function reachOf(deviation, window)
+  return -window.below - deviation, window.above - deviation
 end
 
 -- Coords in one order, so two tables holding the same exponents read alike.
@@ -465,9 +464,9 @@ end
 
 -- Keyed before it is built, so a candidate repeating a spelling costs its coords and its
 -- key alone; the state it would have extended is copied only where the spelling is new.
---shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, score }
+--shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, score, lo/hi=<the offsets left open> }
 --shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }
-local function admit(reached, seen, state, slot, placed, stiffness)
+local function admit(reached, seen, state, slot, placed, stiffness, lo, hi)
   local parts = util.clone(state.parts)
   parts[slot] = tokenOf(placed)
   local key = util.key(table.unpack(parts))
@@ -476,6 +475,7 @@ local function admit(reached, seen, state, slot, placed, stiffness)
 
   local component = state.components[placed.component] or {}
   local child = { at = util.clone(state.at), components = {}, parts = parts, key = key,
+                  lo = lo, hi = hi,
                   score = state.score + joinCost(state, component, placed, stiffness) }
   for index, slots in ipairs(state.components) do child.components[index] = util.clone(slots) end
   child.components[placed.component] = child.components[placed.component] or {}
@@ -494,12 +494,15 @@ end
 -- One round per member after the anchor, each joined by one move to a member already
 -- placed; the unison is no join, and a state that can place nobody dies where it stands.
 --invariant: every state ties every member; an untied member states nothing, so charges nothing
+--invariant: the reach is read against the spelling's own offset, not which member anchors
 local function beamOver(seat, window, moves, width, stiffness)
-  local anchor = { at = {}, components = {}, parts = {}, score = 0 }
+  local anchor = { at = {}, components = {}, parts = {}, score = 0,
+                   lo = -math.huge, hi = math.huge }
   for slot = 1, #seat do anchor.parts[slot] = '' end
   if #seat > 0 then
     local placed = { coords = {}, cents = seat[1], deviation = 0, component = 1 }
     anchor.at[1], anchor.components[1], anchor.parts[1] = placed, { 1 }, tokenOf(placed)
+    anchor.lo, anchor.hi = reachOf(0, window[1])
   end
   anchor.key = util.key(table.unpack(anchor.parts))
 
@@ -516,10 +519,13 @@ local function beamOver(seat, window, moves, width, stiffness)
                 if move.height > 0 then
                   local cents     = from.cents + move.cents
                   local deviation = tuning.gapTo(seat[slot], cents)
-                  if inReach(deviation, window[slot]) then
+                  local low, high = reachOf(deviation, window[slot])
+                  local lo, hi     = math.max(state.lo, low), math.min(state.hi, high)
+                  if lo <= hi then
                     admit(reached, seen, state, slot,
                           { coords = joinCoords(from.coords, move), cents = cents,
-                            deviation = deviation, component = from.component }, stiffness)
+                            deviation = deviation, component = from.component },
+                          stiffness, lo, hi)
                   end
                 end
               end
@@ -588,7 +594,7 @@ end
 -- waiting; a deferral is no rival to a spelling, so the cut runs within a set (§ The candidates).
 --shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }
 --contract: members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first
---contract: a join is one move, landing within two half-windows of the member's own seat
+--contract: a join is one move; one offset of the spelling seats every member inside its own window
 --contract: the width is a width per waiting set; math.huge enumerates the spellings whole
 --contract: a sonority some member no chain reaches has no spelling: the list comes back empty
 function sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)

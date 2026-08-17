@@ -803,6 +803,28 @@ return {
   },
 
   {
+    name = 'spellings: the offset is the spelling\'s, so which member anchors decides nothing',
+    run = function()
+      -- The beam anchors on the first member and joins the rest to it, but a spelling is free
+      -- to sit at one offset from the seats, so the frame the beam builds in is none of the
+      -- answer's business: what must hold is that every member lands inside its own window.
+      for _, seat in ipairs{ { 0, 400, 700 }, { 400, 0, 700 }, { 700, 400, 0 } } do
+        local list = sonority.spellings({ 1, 2, 3 }, seat, evenWindows(3), {},
+                                        fifthsAndThirds, 12, 8)
+        t.eq(#list, 4, 'the same spellings whichever member the walk names first')
+        near(list[1].box, 3.91, 'each of them reaching the same box')
+      end
+
+      -- And a chord no offset brings inside the windows is refused the same way round.
+      for _, seat in ipairs{ { 0, 300, 600 }, { 300, 0, 600 }, { 600, 300, 0 } } do
+        local list = sonority.spellings({ 1, 2, 3 }, seat, evenWindows(3), {},
+                                        fifthsAndThirds, 12, 8)
+        t.eq(#list, 0, 'and refused in every order where it is refused in one')
+      end
+    end,
+  },
+
+  {
     name = 'spellings: every spelling ties the whole sonority, silence pricing under any answer',
     run = function()
       -- A spring charges the gap between the interval the displacements realise and the one
@@ -830,17 +852,26 @@ return {
   },
 
   {
-    name = 'spellings: the reach is two half-windows of the member that joins',
+    name = 'spellings: the windows hold the stretch between them, or no spelling does',
     run = function()
-      local seat   = { 0, 400 }
-      local narrow = { { below = 50, above = 50 }, { below = 5, above = 5 } }
+      local seat = { 0, 400 }
 
+      -- A 5/4 sounds 13.69¢ under the step the major third is written on, which the pair
+      -- carries between them: the offset is the spelling's, so either window may spend it.
       local wide = sonority.spellings({ 1, 2 }, seat, evenWindows(2), {}, fifthsAndThirds, 12, 8)
-      t.eq(#wide[1].springs, 1, 'a 5/4 lands inside a whole tone of the step it is written on')
+      t.eq(#wide[1].springs, 1, 'a 5/4 seated inside both steps at one offset')
       spring(wide[1].springs[1], 1, 2, -13.69, 'the third pure below its seat')
 
-      local fine = sonority.spellings({ 1, 2 }, seat, narrow, {}, fifthsAndThirds, 12, 8)
-      t.eq(#fine, 0, 'and refused outside a notation whose steps are a tenth as wide')
+      -- Narrow the third's steps to a tenth of the root's and the root spends what the third
+      -- cannot, moving 8.69¢ of its own hundred so the third moves only five.
+      local narrow = { { below = 50, above = 50 }, { below = 5, above = 5 } }
+      local fine   = sonority.spellings({ 1, 2 }, seat, narrow, {}, fifthsAndThirds, 12, 8)
+      t.eq(#fine, 1, 'the wide step taking the share the fine one has no room for')
+
+      -- Narrow both and the pair has ten cents between them against a stretch of 13.69.
+      local finer = { { below = 5, above = 5 }, { below = 5, above = 5 } }
+      t.eq(#sonority.spellings({ 1, 2 }, seat, finer, {}, fifthsAndThirds, 12, 8), 0,
+           'and refused where no offset seats them both')
     end,
   },
 
@@ -848,7 +879,8 @@ return {
     name = 'spellings: a rolled minor defers rather than state what the chord has not',
     run = function()
       -- The E flat has struck and the C is still sounding: spelled where they stand, the C
-      -- takes an 8/5 above the E flat, 86¢ from where it was written (§ The candidates).
+      -- takes an 8/5 above the E flat, stretching the pair 86¢ from where it was written,
+      -- which the two windows hold between them (§ The candidates).
       local seat    = { 300, 0 }
       local spelled = sonority.spellings({ 1, 2 }, seat, evenWindows(2), {},
                                          fifthsAndThirds, 12, 8)
@@ -873,7 +905,7 @@ return {
                                       math.huge, 8)
       local beam = sonority.spellings(members, seat, evenWindows(5), {}, elevenPitches, 12, 8)
 
-      t.eq(#full, 2342, 'the spellings of a five-member sonority, enumerated whole')
+      t.eq(#full, 1018, 'the spellings of a five-member sonority, enumerated whole')
       t.eq(#beam, 12, 'against which a beam of twelve keeps its width')
       near(beam[1].box, full[1].box, 'and finds the same spelling')
       t.eq(#beam[1].springs, #full[1].springs, 'tie for tie')

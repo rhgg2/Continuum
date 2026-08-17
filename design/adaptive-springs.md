@@ -97,11 +97,10 @@ states the search may merge.**
 
 1. A sonority's spellings are enumerated by a beam over joins, scored
    by box plus the mistuning the spelling would carry at zero
-   displacement. A beam of twelve returned the spelling a full
-   enumeration certifies at the widths where a full enumeration was
-   affordable — 2,342 spellings at five members, 31,642 at six — and
-   the full count reaches 532,244 at seven; the width that was the
-   the lattice's exponent prices the beam nothing.
+   displacement. A beam of twelve returns the spelling a full
+   enumeration certifies wherever the enumeration is affordable — 1,018
+   spellings at five members, 7,950 at six, 73,085 at seven — so the
+   width that was the lattice's exponent prices the beam nothing.
 
 1. The score of a spelling is run up join by join rather than taken at
    the end: each join pays the box's widening — a span over some prime
@@ -111,11 +110,24 @@ states the search may merge.**
    floor under every spelling that completes it, and the beam ranks its
    states by a figure no continuation can undercut.
 
-1. A join may seat a member two half-windows from where it was written,
-   and no further: the neighbouring step, past which some other strand
-   of the sonority is the nearer host for the pitch. In 12-EDO that
-   reach is a whole tone, which is what § Measured's figures were taken
-   under; under a notation whose steps are finer it narrows with them.
+1. No note leaves the step it was written on: past its half-window some
+   other strand of the sonority is the nearer host for the pitch. A
+   spelling states intervals and not pitches, so it is placed as a
+   whole, at one **offset** — a single displacement of all its members
+   from their seats — and it is admitted where some offset seats every
+   member inside its own window. The beam anchors on a member
+   arbitrarily and carries the interval of offsets still open, narrowing
+   it at each join; which member anchored is then no part of the answer.
+   A pair may still differ from what was written by the two windows
+   between them — a hundred cents in 12-EDO, and less under a notation
+   whose steps are finer — so a whole tone under `3/2` and `5/4` alone
+   is refused, its nearest move stretching it by 186¢.
+
+1. The gate is the relaxation's own region, taken rigidly. The springs
+   move each strand inside its own window and no further (§ The model),
+   and a spelling is admitted where one rigid placement of it already
+   lies in that region; so what the beam enumerates and what the
+   objective is minimised over read the same bounds.
 
 1. A join is one move, and the reach is the move set's own. Members
    that sound do the joining, so an interval the set does not name is
@@ -137,8 +149,8 @@ states the search may merge.**
    another matter: a member joined against an incomplete sonority
    claims an interval the chord has not yet stated, and the rolled C
    minor's opening pair, spelled where it stands, takes its C a `5/4`
-   below the E♭ — 86¢ from where the C was written, which the
-   two-half-window reach admits.
+   below the E♭ — stretching the pair 86¢ from what was written, which
+   the two windows hold between them.
 
 1. A member may therefore be left **unplaced**, taking its coords at a
    later onset from a member it sounds with, which is
@@ -252,10 +264,14 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    over its spelling lists returns — 18.3248, over 13,824 choices —
    within 0.66¢ realised of the lattice's answer.
 
-1. A diminished triad. The lattice places it only 18.8¢ sharp of where
-   it was written, one strand at the edge of its window; the springs
-   seat it centred, three cents of stretch across the chord, at a
-   lower cost.
+1. A diminished triad, under a set holding `7/4` beside `3/2` and
+   `5/4`. The lattice places it only 18.8¢ sharp of where it was
+   written, one strand at the edge of its window; the springs seat it
+   centred, three cents of stretch across the chord, at a lower cost.
+   Under `3/2` and `5/4` alone the chord has no spelling: the tritone
+   stands 102¢ from the nearest single move, and the chain through the
+   minor third lands 173¢ from where the tritone was written, against
+   the hundred cents the windows hold between them.
 
 1. A dominant seventh and a C minor triad land within 0.6¢ of the
    lattice's placements; the comma pump within 0.7¢ under stiff
@@ -282,6 +298,14 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    the two disagree the springs arbitrate. This has no counterpart in
    the lattice's one-coord-per-strand account, and it has not been
    squeezed for anomalies.
+
+1. A thin target refuses ordinary chords. A sonority no chain of moves
+   seats inside the windows has no spelling, and the walk returns
+   nothing for a passage holding one: a diminished triad under `3/2`
+   and `5/4` alone is refused, where under a set holding `7/4` it is
+   spelled and seated. The springs' tolerance buys no relief, since the
+   windows are where that tolerance lives; what the author is told
+   instead is § Open's question.
 
 1. The pair a deferral loses. A waiter's charge is read off the spelling
    that places it, so a member of its sonority released before then states
