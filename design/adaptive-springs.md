@@ -185,6 +185,16 @@ states the search may merge.**
    with four free to wait returns twelve states that each defer two
    members or more, and no fully spelled state among them.
 
+1. The refusal falls where the wait resolves rather than where it is
+   taken. A completion leaves a placement of the sonority that held the
+   waiter, and that placement — each component read from its earliest
+   member, which is how the charge reads it — either stands in the
+   sonority's own list or does not. A rolled C minor under a set holding
+   `6/5` then spells its opening pair where the pair stands, reaching the
+   cents and the cost the road that waited reached; under `3/2` and `5/4`
+   alone nothing reaches the minor third, so the resolution states
+   something new and the wait stands.
+
 ## The solve
 
 1. The search walks the onsets carrying a set of partial answers, each
@@ -198,6 +208,18 @@ states the search may merge.**
    carried set is capped, and the caps measured — 20 to 200 answers
    abreast, rounding from 0.1¢ to 0.5¢, beams of 24 and 48 — move the
    take's cost by under one percent.
+
+1. The cut runs over two pools: the answers that owe nothing, ranked
+   among themselves, and the answers that owe, ranked among themselves,
+   each pool keeping the cap. A deferral moves charge out of the running
+   score rather than paying it, so an answer that owes looks cheaper than
+   the one that spelled the same thing where it stood, and a cut ranking
+   the two together fills with debtors — 76 of 136 answers three onsets
+   into a rolled seventh, and 37,872 of 64,977 by the fifth. The exact
+   rule is a pool per outstanding wait, as the beam's cut runs within a
+   waiting set; that grain returns what the two pools return on every
+   passage measured, and multiplies where the debts do not settle
+   (§ Open 3), so the walk takes the pair.
 
 1. A relaxation along the walk frees the strands the onset sounds —
    those born there, and those a note carries through it — and the rest
@@ -265,7 +287,14 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    that places it, so a member of its sonority released before then states
    no interval with it and the pair goes uncharged; a sonority holding a
    waiting member is scored over what still sounds when that member
-   arrives.
+   arrives. Two members of one sonority that wait and place at different
+   onsets lose their pair the same way: the first to place finds no placed
+   fellow to join, so it stands in a component of its own, though both are
+   placed by the end. A rolled dominant seventh under the eleven-move set
+   took that road, coming back 2.32 under the road that spelled as it
+   went, at a tuning the two agree on within 0.03¢; the refusal of
+   § The candidates removed it there, and does not close the stagger in
+   general.
 
 ## Open
 
@@ -281,15 +310,12 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    and a bound on what a wider beam could have found may be worth
    having before the search is trusted there.
 
-1. The price of deferral. A waiter pays every sonority it held once it
-   places, so waiting saves no charge in the end; what it moves is when
-   the charge is read, and the walk ranks its answers on a running score
-   the outstanding charges sit outside. An answer that owes therefore
-   looks cheaper than one that has paid, and the cap keeps it in
-   preference; the beam guards against exactly this by cutting within a
-   waiting set, and the walk has no such rule. It shows in the figures: a
-   rolled triad over three bars under pure fifths and thirds comes back
-   at 40.61 with the debts carried in the merge key against 38.98 with
-   the key blind to them, more answers abreast not being the same as the
-   right ones. Whether the walk wants the beam's rule, a floor on what an
-   outstanding debt will come to, or neither, is unsettled.
+1. How long a member may wait. A member waits while it sounds, so where
+   sustains cross the bar line several sonorities are owed at once and
+   the outstanding patterns multiply: an overlapping arpeggio of four
+   voices reaches 2, 6, 24, 120 and 720 of them over five onsets, which
+   is what puts a pool per pattern out of reach. The two pools of
+   § The solve hold that to a constant, at the price of ranking patterns
+   that owe different amounts against each other. A bound on the wait
+   itself would let the exact rule back in, and what the bound should be
+   is unsettled.

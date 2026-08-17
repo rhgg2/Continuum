@@ -20,20 +20,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: refuse a wait that resolves to what its sonority offered (§ The candidates, § The solve)
 - 2026-08-17 sonority: charge a sonority that held a waiter, when it places (§ The candidates)
 - 2026-08-17 sonority: walk the onsets carrying capped partial answers (§ The solve)
 - 2026-08-17 sonority: derive the walk's terms from the notation (§ The solve)
-- 2026-08-17 sonority: relax from a warm start, with strands held (§ The solve)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-4b. Refuse a wait that resolves to coords the sonority it waited in had
-   itself enumerated, so a spelling is enumerated once however long it
-   waited. The spec pins the rolled C minor under a set that spells its
-   opening pair, where the two roads cost alike.
 5. Fill `sonority.solveToMoves`: settle the winner by one joint
    relaxation over its accumulated springs with every strand free, and
    return a tuning in cents per strand, which `trackerView` already

@@ -1090,17 +1090,52 @@ return {
   },
 
   {
-    name = 'search: an answer that owes is not the answer that has paid',
+    name = 'search: the road that pays as it goes is the road the walk keeps',
     run = function()
-      -- A rolled dominant seventh under the eleven-move set, where the road that pays as it
-      -- goes stands at the cents of a road that has deferred the same sonority: a merge
-      -- blind to the debt takes the one that looks cheaper and returns 13.2165 (§ The solve).
+      -- A rolled dominant seventh under the eleven-move set. The road that staggered its
+      -- waits left the second sonority spelled as two singletons, charged for neither its
+      -- spring nor its box, and came back 2.32 under the road that spells as it goes, at a
+      -- tuning the two agree on within 0.03¢ (§ What it costs).
       local strands = rolled({ 60, 64, 67, 70 }, 240)
       local onsets, lists, window, seat = termsOf(strands, 5, elevenPitches)
       local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
 
-      nearly(answer.cost, 10.8945, 'the walk keeping the answer that has paid')
+      nearly(answer.cost, 13.2165, 'the walk keeping the road that has paid')
       t.eq(next(answer.held), nil, 'and nothing left owing at the end of the walk')
+      t.eq(#answer.springs[2], 1, 'the pair of the second sonority charged where it stands')
+    end,
+  },
+
+  {
+    name = 'search: a wait resolving to what its sonority offered is no second road',
+    run = function()
+      -- Under a set holding 6/5 the opening pair can be spelled where it stands, so a road
+      -- that defers it comes back with coords the second onset itself returned and is
+      -- refused; what the walk keeps spells each onset as it reaches it (§ The candidates).
+      local strands = rolled({ 60, 63, 67 }, 240)
+      local onsets, lists, window, seat = termsOf(strands, 5, elevenPitches)
+      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+
+      for i, choice in ipairs(answer.choice) do
+        t.eq(#lists[i][choice].waiting, 0, 'onset ' .. i .. ' spelling what it holds')
+      end
+      nearly(answer.cost, 7.8703, 'at the cost the road that waited reached')
+    end,
+  },
+
+  {
+    name = 'search: the cut runs over the answers that owe and the answers that have paid',
+    run = function()
+      -- A road that owes has moved charge out of its running score, so ranked against one
+      -- that has paid it takes the whole cut, and every resolution it has left is refused: a
+      -- pool apiece keeps a road the refusal cannot touch, at any cap (§ The solve).
+      local strands = rolled({ 60, 63, 67 }, 240)
+      local onsets, lists, window, seat = termsOf(strands, 5, elevenPitches)
+
+      local greedy = sonority.search(onsets, lists, seat, window, 1, 8, 1)
+      t.truthy(greedy, 'a walk carrying one answer apiece still answers a rolled chord')
+      t.truthy(greedy.cost >= sonority.search(onsets, lists, seat, window, 1, 8, 60).cost,
+        'and pays for the narrower cut rather than escaping it')
     end,
   },
 

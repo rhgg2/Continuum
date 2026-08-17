@@ -432,14 +432,19 @@ local function inReach(deviation, window)
   return deviation <= 2 * window.above
 end
 
+-- Coords in one order, so two tables holding the same exponents read alike.
+local function coordString(coords)
+  local primes = util.keys(coords)
+  table.sort(primes)
+  local exponents = {}
+  for k, prime in ipairs(primes) do exponents[k] = prime .. ':' .. coords[prime] end
+  return table.concat(exponents, ',')
+end
+
 -- What a state has made of a member: the coords it was spelled at, and the component it
 -- joined into, so a member no move reached reads apart from the same coords tied in.
 local function tokenOf(placed)
-  local primes = util.keys(placed.coords)
-  table.sort(primes)
-  local exponents = {}
-  for k, prime in ipairs(primes) do exponents[k] = prime .. ':' .. placed.coords[prime] end
-  return placed.component .. '@' .. table.concat(exponents, ',')
+  return placed.component .. '@' .. coordString(placed.coords)
 end
 
 -- What a join costs where it lands: the box its component widens by, and a spring against
@@ -692,6 +697,52 @@ local function visibleAhead(onsets)
   return ahead
 end
 
+-- What a sonority has been spelled as, however the spelling was reached: each component
+-- read from its earliest member, as chargeOf reads it, and the members still waiting.
+--invariant: two placements under one key charge alike, so a wait reaching one is no second road
+local function placementKey(members, placed, waiting)
+  local groups, components, parts = {}, {}, {}
+  for _, member in ipairs(members) do
+    local at = placed[member]
+    if at then
+      if not groups[at.component] then
+        groups[at.component] = {}
+        util.add(components, at.component)
+      end
+      util.add(groups[at.component], member)
+    end
+  end
+
+  for _, component in ipairs(components) do
+    local group = groups[component]
+    for _, member in ipairs(group) do
+      util.add(parts, member)
+      util.add(parts, coordString(rebase(placed[member].coords, placed[group[1]].coords, {})))
+    end
+    util.add(parts, '/')
+  end
+
+  local held = util.keys(waiting)
+  table.sort(held)
+  for _, member in ipairs(held) do util.add(parts, member) end
+  return util.key(table.unpack(parts))
+end
+
+-- What each onset's beam returned, read as placements: the spellings a wait may not come
+-- back with, taken from what the beam kept rather than what its moves could have reached.
+local function offeredBy(onsets, spellings)
+  local offered = {}
+  for i, list in ipairs(spellings) do
+    offered[i] = {}
+    for _, spelling in ipairs(list) do
+      local waiting = {}
+      for _, member in ipairs(spelling.waiting) do waiting[member] = true end
+      offered[i][placementKey(onsets[i].members, spelling.placed, waiting)] = true
+    end
+  end
+  return offered
+end
+
 -- An answer under the whole of what a continuation can tell it by: its cents at the strands
 -- ahead rounded to where two of them stop being two, and the deferrals it has yet to pay.
 local function answerKey(displacement, ahead, onsets, held)
@@ -722,6 +773,7 @@ end
 --invariant: a waiter reaching two components merges them, every member shifted into the one frame
 local function complete(entry, members, spelling)
   local placed, waiting, free = util.clone(entry.placed), util.clone(entry.waiting), entry.next
+  local landed = false
 
   for _, member in ipairs(members) do
     local landing = waiting[member] and spelling.placed[member]
@@ -734,6 +786,7 @@ local function complete(entry, members, spelling)
         end
       end
       waiting[member] = nil
+      landed = true
 
       if #hosts == 0 then
         placed[member] = { coords = {}, component = free }
@@ -760,7 +813,7 @@ local function complete(entry, members, spelling)
       end
     end
   end
-  return placed, waiting, free
+  return placed, waiting, free, landed
 end
 
 -- The entry a spelling that defers opens: what it placed, whom it left, and what it has
@@ -774,7 +827,8 @@ end
 
 -- One answer extended by one spelling: the springs and box it has paid, each sonority it
 -- still holds charged again for what this spelling places, the onset's own strands relaxed.
-local function extend(answer, spelling, onsets, at, seat, window, strength, stiffness)
+--contract: nil where a wait comes back with a placement its own sonority offered (§ The candidates)
+local function extend(answer, spelling, onsets, at, seat, window, strength, stiffness, offered)
   local springs, held = util.clone(answer.springs), {}
   local box = answer.box + spelling.box
   springs[at] = spelling.springs
@@ -783,7 +837,9 @@ local function extend(answer, spelling, onsets, at, seat, window, strength, stif
     local entry = answer.held[onset]
     if entry then
       local members = onsets[onset].members
-      local placed, waiting, free = complete(entry, members, spelling)
+      local placed, waiting, free, landed = complete(entry, members, spelling)
+      if landed and offered[onset][placementKey(members, placed, waiting)] then return nil end
+
       local charged, widened = chargeOf(members, seat, placed)
 
       springs[onset] = charged
@@ -812,8 +868,9 @@ end
 --contract: the strands the onset sounds relax; the rest of an answer stands at the cents it carries
 --contract: a sonority holding a waiter is charged in its own onset's slot, as its members place
 --contract: answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap
+--contract: the cut runs over two pools, the answers that owe and the answers that have paid
 function sonority.search(onsets, spellings, seat, window, strength, stiffness, cap)
-  local ahead, start = visibleAhead(onsets), {}
+  local ahead, start, offered = visibleAhead(onsets), {}, offeredBy(onsets, spellings)
   for index = 1, #window do start[index] = 0 end
   local answers = { { choice = {}, springs = {}, box = 0, displacement = start, cost = 0,
                       held = {} } }
@@ -822,18 +879,28 @@ function sonority.search(onsets, spellings, seat, window, strength, stiffness, c
     local reached = {}
     for _, answer in ipairs(answers) do
       for choice, spelling in ipairs(spellings[i]) do
-        local state = extend(answer, spelling, onsets, i, seat, window, strength, stiffness)
-        state.choice[i] = choice
+        local state = extend(answer, spelling, onsets, i, seat, window, strength, stiffness,
+                             offered)
+        if state then
+          state.choice[i] = choice
 
-        local key = answerKey(state.displacement, ahead[i], onsets, state.held)
-        if outranks(state, reached[key], i, byChoice) then reached[key] = state end
+          local key = answerKey(state.displacement, ahead[i], onsets, state.held)
+          if outranks(state, reached[key], i, byChoice) then reached[key] = state end
+        end
       end
     end
 
+    -- A deferral moves charge out of the running score rather than paying it, so a road that
+    -- owes is cut among the roads that owe, and never against one that has paid (§ The solve).
+    local paid, owing = {}, {}
+    for _, state in pairs(reached) do util.add(next(state.held) and owing or paid, state) end
+
     answers = {}
-    for _, state in pairs(reached) do util.add(answers, state) end
+    for _, pool in ipairs{ paid, owing } do
+      table.sort(pool, function(a, b) return outranks(a, b, i, byChoice) end)
+      for k = 1, math.min(cap, #pool) do util.add(answers, pool[k]) end
+    end
     table.sort(answers, function(a, b) return outranks(a, b, i, byChoice) end)
-    for k = #answers, cap + 1, -1 do answers[k] = nil end
   end
   return answers[1]
 end
