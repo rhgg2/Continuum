@@ -625,14 +625,23 @@ function util.prettyUnserialise(text)
   return value
 end
 
---contract: executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
+--contract: runs the named module's body afresh per call (compiled chunk cached), passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 util._stubs = {}
+-- Parsing is the expensive half and the module file does not change mid-session,
+-- so the compiled chunk is cached. Calling it still builds a fresh instance:
+-- a chunk's only upvalue is _ENV, so every local in the body is per-call.
+local chunkCache = {}
 function util.instantiate(name, deps)
   local stub = util._stubs[name]
   if stub then return stub(deps) end
-  local path = assert(package.searchpath(name, package.path),
-                      'util.instantiate: cannot find module ' .. name)
-  return assert(loadfile(path))(deps)
+  local chunk = chunkCache[name]
+  if not chunk then
+    local path = assert(package.searchpath(name, package.path),
+                        'util.instantiate: cannot find module ' .. name)
+    chunk = assert(loadfile(path))
+    chunkCache[name] = chunk
+  end
+  return chunk(deps)
 end
 
 return util

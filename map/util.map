@@ -1,7 +1,8 @@
-@module util  src=util.lua  loc=638  mode=namespace  self=util
+@module util  src=util.lua  loc=647  mode=namespace  self=util
 
 # Invariants & contracts
   @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.  @ 42
+  @contract  runs the named module's body afresh per call (compiled chunk cached), passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 628
 
 # Module-level constants
   @const util = {}  @ 5
@@ -10,6 +11,7 @@
   @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 322
   @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 341
   @const LUA_KEYWORDS = {}  @ 540
+  @const chunkCache = {}  @ 633
 
 # Private functions
   @fn print(...)  @ 15-17
@@ -88,8 +90,7 @@
       @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise  @ 614
   @api util.prettyUnserialise(text)  @ 620-626
       @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err  @ 619
-  @api util.instantiate(name, deps)  @ 630-636
-      @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 628
+  @api util.instantiate(name, deps)  @ 634-645
 
 # Calls (intra-file)
   @call bareKey  @ emitTable:597
@@ -130,7 +131,7 @@
   @field w REMOVE  @ 40
   @field r Undo_BeginBlock  @ atomic:71
   @field r Undo_EndBlock  @ atomic:73
-  @field r _stubs  @ instantiate:631
+  @field r _stubs  @ instantiate:635
   @field w _stubs  @ 629
   @field w add  @ add:59
   @field w assign  @ assign:46
@@ -151,14 +152,14 @@
   @field r huge  @ 43 serialise:385,386 unserialise:475,476 luaNumber:553,554 nonFiniteNote:560
   @field w insertSorted  @ insertSorted:176
   @field w installHooks  @ installHooks:226
-  @field w instantiate  @ instantiate:630
+  @field w instantiate  @ instantiate:634
   @field w isNote  @ isNote:245
   @field w key  @ key:121
   @field w keys  @ keys:137
   @field w lcm  @ lcm:310
   @field w nudgedScalar  @ nudgedScalar:284
   @field w oneOf  @ oneOf:289
-  @field r path  @ instantiate:633
+  @field r path  @ instantiate:639
   @field w pick  @ pick:99
   @field w picker  @ picker:82
   @field r ppq  @ seek:152 between:255,256

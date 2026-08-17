@@ -8,9 +8,10 @@
 -- (round-trip specs) sees the first's writes.
 local util = require('util')
 return function()
-  local path = assert(package.searchpath('midiManager', package.path))
+  local path  = assert(package.searchpath('midiManager', package.path))
+  local chunk = assert(loadfile(path))
   return function(take)
     local eventMeta = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') })
-    return assert(loadfile(path))({ take = take, eventMeta = eventMeta })
+    return chunk({ take = take, eventMeta = eventMeta })
   end
 end
