@@ -442,7 +442,7 @@ local function coordString(coords)
 end
 
 -- What a state has made of a member: the coords it was spelled at, and the component it
--- joined into, so a member no move reached reads apart from the same coords tied in.
+-- joined into, so a member in a component of its own reads apart from the same coords tied in.
 local function tokenOf(placed)
   return placed.component .. '@' .. coordString(placed.coords)
 end
@@ -491,8 +491,9 @@ local function byScore(a, b)
   return a.key < b.key
 end
 
--- One round per member after the anchor, each resolving one of them: by a move from a
--- member already placed, or alone where no move reaches it; the unison is no join.
+-- One round per member after the anchor, each joined by one move to a member already
+-- placed; the unison is no join, and a state that can place nobody dies where it stands.
+--invariant: every state ties every member; an untied member states nothing, so charges nothing
 local function beamOver(seat, window, moves, width, stiffness)
   local anchor = { at = {}, components = {}, parts = {}, score = 0 }
   for slot = 1, #seat do anchor.parts[slot] = '' end
@@ -508,7 +509,6 @@ local function beamOver(seat, window, moves, width, stiffness)
     for _, state in ipairs(beam) do
       for slot = 1, #seat do
         if not state.at[slot] then
-          local joined = false
           for host = 1, #seat do
             local from = state.at[host]
             if from then
@@ -517,7 +517,6 @@ local function beamOver(seat, window, moves, width, stiffness)
                   local cents     = from.cents + move.cents
                   local deviation = tuning.gapTo(seat[slot], cents)
                   if inReach(deviation, window[slot]) then
-                    joined = true
                     admit(reached, seen, state, slot,
                           { coords = joinCoords(from.coords, move), cents = cents,
                             deviation = deviation, component = from.component }, stiffness)
@@ -525,11 +524,6 @@ local function beamOver(seat, window, moves, width, stiffness)
                 end
               end
             end
-          end
-          if not joined then
-            admit(reached, seen, state, slot,
-                  { coords = {}, cents = seat[slot], deviation = 0,
-                    component = #state.components + 1 }, stiffness)
           end
         end
       end
@@ -596,7 +590,7 @@ end
 --contract: members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first
 --contract: a join is one move, landing within two half-windows of the member's own seat
 --contract: the width is a width per waiting set; math.huge enumerates the spellings whole
---contract: a member no move reaches stands alone — box scores a component, springs tie in one
+--contract: a sonority some member no chain reaches has no spelling: the list comes back empty
 function sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)
   local waiters = {}
   for position = 1, #members do
@@ -869,6 +863,7 @@ end
 --contract: a sonority holding a waiter is charged in its own onset's slot, as its members place
 --contract: answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap
 --contract: the cut runs over two pools, the answers that owe and the answers that have paid
+--contract: nil where an onset has no spelling — a sonority the target can't reach refuses it
 function sonority.search(onsets, spellings, seat, window, strength, stiffness, cap)
   local ahead, start, offered = visibleAhead(onsets), {}, offeredBy(onsets, spellings)
   for index = 1, #window do start[index] = 0 end

@@ -146,12 +146,12 @@ states the search may merge.**
    runs while the member has an onset left to sound through and ends at
    that onset, where it places or the state fails; a member the sonority
    holds by recency has stopped, so it is joined to and does not itself
-   wait. A member out of waits that joins nothing stands alone as a
-   **component** — a group of members the box scores and the springs tie
-   within, and across which neither charges — which the beam admits as a
-   third way to resolve a member rather than as a pass that follows it.
-   A bare tritone under a 5-limit set is then two components of one
-   member each, and comes back with no spring and no box (§ Open 2).
+   wait. A member out of waits that joins nothing **refuses** the
+   sonority that holds it. An unspelled member states no interval, so it
+   is charged none, and a spelling that left one untied would price
+   under every spelling that spoke for it; the price of saying nothing
+   has to be everything, or saying nothing wins. A bare tritone under a
+   5-limit set is then no spelling at all.
 
 1. A waiting member states no interval, so the sonority spelled around
    it is the sonority without it: the beam runs over the members that
@@ -298,11 +298,11 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 
 ## Open
 
-1. Refusal. The lattice refused a passage its moves could not reach;
-   here a sonority with no spelling falls back to components with no
-   spring and no box, so a bare tritone under a 5-limit set places
-   silently where it refused loudly. Whether silence is the right
-   account of "nothing pure to say here" is unsettled.
+1. Where a refusal goes. A sonority no chain of moves connects has no
+   spelling, and the walk comes back with nothing for a passage holding
+   one, as the lattice refused a passage its moves could not reach. What
+   the author is told is unsettled: a thin target refuses ordinary
+   chords, and nothing yet carries that back to them.
 
 1. Certification at width. The beam is checked against a full
    enumeration only where the enumeration was affordable; at seven

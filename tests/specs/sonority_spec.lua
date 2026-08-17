@@ -36,8 +36,8 @@
 -- displacement it carries while its neighbours settle around it.
 --
 -- Pins the beam that chooses the spellings (§ The candidates): a join admitted
--- within two half-windows of the member's own seat, a member no move reaches
--- standing alone, a full enumeration the beam of twelve is checked against, and
+-- within two half-windows of the member's own seat, a sonority no chain connects
+-- refused outright, a full enumeration the beam of twelve is checked against, and
 -- the cut running within a waiting set so a deferral crowds no spelling out.
 --
 -- Pins the terms the walk takes from the notation (§ The solve): the seat and the
@@ -780,24 +780,52 @@ return {
   },
 
   {
-    name = 'spellings: a bare tritone has nothing to say',
+    name = 'spellings: a sonority no chain connects is refused',
     run = function()
       -- The nearest moves to 600¢ are 4/3 and 3/2, each 101.955¢ from the seat, so neither
-      -- member reaches the other and the two stand in components of their own.
+      -- member reaches the other. An unspelled note costs everything, so the pair comes back
+      -- with no spelling rather than with a silent one.
       local list = sonority.spellings({ 1, 2 }, { 0, 600 }, evenWindows(2), {},
                                       fifthsAndThirds, 12, 8)
+      t.eq(#list, 0, 'no way to spell it')
 
-      t.eq(#list, 1, 'one way to spell it')
-      t.eq(#list[1].springs, 0, 'no pair the moves tie')
-      near(list[1].box, 0, 'and no box across a component of one')
+      -- Nor has a diminished triad one, under a set that cannot name a minor third.
+      local diminished = sonority.spellings({ 1, 2, 3 }, { 0, 300, 600 }, evenWindows(3), {},
+                                            fifthsAndThirds, 12, 8)
+      t.eq(#diminished, 0, 'and none for a chord the set is silent about throughout')
 
-      -- Put a G beside them and the C has something to say to it, the tritone still nothing:
-      -- the box scores a component and the springs tie inside one.
+      -- Put a G beside the tritone and the C reaches it, but nothing reaches the F sharp:
+      -- one stranded member refuses the sonority rather than being scored out of it.
       local withFifth = sonority.spellings({ 1, 2, 3 }, { 0, 600, 700 }, evenWindows(3), {},
-                                           fifthsAndThirds, 12, 8)[1]
-      t.eq(#withFifth.springs, 1, 'the fifth alone')
-      spring(withFifth.springs[1], 1, 3, 1.955, 'tying the C to the G and not to the tritone')
-      near(withFifth.box, 1.585, 'and the box of the pair that is a component')
+                                           fifthsAndThirds, 12, 8)
+      t.eq(#withFifth, 0, 'a member no chain reaches refusing the sonority that holds it')
+    end,
+  },
+
+  {
+    name = 'spellings: every spelling ties the whole sonority, silence pricing under any answer',
+    run = function()
+      -- A spring charges the gap between the interval the displacements realise and the one
+      -- the spelling states, so a pair that states nothing is charged nothing and saying less
+      -- is always cheaper. Nothing in the objective forbids that, so the beam must: a spelling
+      -- that left a member untied would price under every spelling that spoke for it.
+      local strands = progression{ { 62, 65, 69 }, { 55, 59, 62 }, { 60, 64, 67 } }
+      local seat, window = sonority.seats(strands, edo12)
+      local onsets = sonority.onsets(strands, sonority.walk(strands, 5))
+
+      for i, onset in ipairs(onsets) do
+        local list = sonority.spellings(onset.members, seat, window, {}, fifthsAndThirds, 400, 8)
+        t.truthy(#list > 0, 'onset ' .. i .. ' spelled at all')
+
+        for _, spelling in ipairs(list) do
+          local seen, count = {}, 0
+          for _, member in ipairs(onset.members) do
+            local component = spelling.placed[member].component
+            if not seen[component] then seen[component], count = true, count + 1 end
+          end
+          t.eq(count, 1, 'onset ' .. i .. ' spelled in one component throughout')
+        end
+      end
     end,
   },
 
@@ -812,8 +840,7 @@ return {
       spring(wide[1].springs[1], 1, 2, -13.69, 'the third pure below its seat')
 
       local fine = sonority.spellings({ 1, 2 }, seat, narrow, {}, fifthsAndThirds, 12, 8)
-      t.eq(#fine[1].springs, 0, 'and outside a notation whose steps are a tenth as wide')
-      near(fine[1].box, 0, 'where the third stands alone instead')
+      t.eq(#fine, 0, 'and refused outside a notation whose steps are a tenth as wide')
     end,
   },
 
@@ -958,9 +985,9 @@ return {
   {
     name = 'search: the walk returns what an exhaustive search over its spelling lists returns',
     run = function()
-      -- A ii–V–I under pure fifths and thirds, spelled 2,304 ways over its three onsets:
+      -- A ii–V–I under pure fifths and thirds, spelled 2,016 ways over its three onsets:
       -- the walk carries a capped set of partial answers through it and comes back with
-      -- the best of them, at 13.58 against the walk's own 13.77 (§ The solve).
+      -- the best of them, at 17.51 against the walk's own 17.74 (§ The solve).
       local strands = progression{ { 62, 65, 69 }, { 55, 59, 62 }, { 60, 64, 67 } }
       local onsets, lists, window, seat = termsOf(strands, 5, fifthsAndThirds)
 
@@ -983,9 +1010,9 @@ return {
   {
     name = 'search: carrying one answer takes the greedy road',
     run = function()
-      -- The ii of a septimal ii–V–I is cheapest spelled a way the V then pays for: a walk
-      -- carrying one answer takes that road and comes back at 17.5998, and one carrying
-      -- sixty finds the way around it at 17.5338.
+      -- The V of a septimal ii–V–I is cheapest spelled a way the I then pays for: a walk
+      -- carrying one answer takes that road and comes back at 18.6590, and one carrying
+      -- sixty finds the way around it at 18.3248.
       local strands = progression{ { 62, 65, 69, 72 }, { 55, 59, 62, 65 }, { 60, 64, 67, 71 } }
       local onsets, lists, window, seat = termsOf(strands, 5, withSevenths)
 
@@ -1020,11 +1047,14 @@ return {
           'strand ' .. index .. ' standing exactly where the first onset put it')
       end
 
-      -- And the hold is felt: freed over the springs the walk accumulated, all three move.
+      -- And the hold is felt, but barely: the second onset ties all six into one spelling, so
+      -- the walk has little left to give back and the joint relaxation moves the three by
+      -- between 0.06¢ and 0.47¢ — under the half cent the merge treats as no difference.
       local loosened = sonority.relax(answer.springs, window, 1, 8, answer.displacement, free)
       for _, index in ipairs{ 1, 3, 5 } do
-        t.truthy(math.abs(loosened[index] - answer.displacement[index]) > 1,
-          'and the second chord moving strand ' .. index .. ' once it is free to')
+        local moved = math.abs(loosened[index] - answer.displacement[index])
+        t.truthy(moved > 0, 'the second chord moving strand ' .. index .. ' once it is free to')
+        t.truthy(moved < 0.5, 'and by less than the merge would tell apart')
       end
     end,
   },
