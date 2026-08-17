@@ -142,19 +142,33 @@ states the search may merge.**
    runs while the member has an onset left to sound through and ends at
    that onset, where it places or the state fails; a member the sonority
    holds by recency has stopped, so it is joined to and does not itself
-   wait. What runs out of onsets with nothing to join to is a sonority
-   with nothing to say — a bare tritone under a 5-limit set — which
-   comes back with no spring and no box (§ Open 2).
+   wait. A member out of waits that joins nothing stands alone as a
+   **component** — a group of members the box scores and the springs tie
+   within, and across which neither charges — which the beam admits as a
+   third way to resolve a member rather than as a pass that follows it.
+   A bare tritone under a 5-limit set is then two components of one
+   member each, and comes back with no spring and no box (§ Open 2).
 
-1. A sonority holding a waiting member is scored when its last member
+1. A waiting member states no interval, so the sonority spelled around
+   it is the sonority without it: the beam runs over the members that
+   remain, the first of them anchoring, and enumerating a sonority's
+   spellings is running that beam once per set of members left waiting.
+   A sonority holding a waiting member is scored when its last member
    places, so an arpeggio's opening pair is charged the interval the
-   finished chord states rather than one invented before it arrived.
-   Waiting is a candidate rather than a fallback, forked beside the
-   placements and judged by the running score; it resolves only to
-   coords no earlier sonority could have offered, so a spelling is
-   enumerated once however long it waited. The rolled C minor then lands
-   where the struck chord lands, within a quarter cent of the lattice's
-   answer.
+   finished chord states rather than one invented before it arrived. The
+   rolled C minor then lands where the struck chord lands, within a
+   quarter cent of the lattice's answer.
+
+1. Waiting is a candidate rather than a fallback, forked beside the
+   placements; it resolves only to coords no earlier sonority could have
+   offered, so a spelling is enumerated once however long it waited. The
+   running score is a floor under a spelling's completions, and a
+   deferral moves charge out of the floor rather than paying it, so a
+   state that waits is no rival to one that spells: the cut runs within a
+   waiting set, and the width an author states is a width per set.
+   Ranked across the sets instead, a beam of twelve over five members
+   with four free to wait returns twelve states that each defer two
+   members or more, and no fully spelled state among them.
 
 ## The solve
 
@@ -248,3 +262,12 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    members and beyond its answer is uncontradicted rather than proved,
    and a bound on what a wider beam could have found may be worth
    having before the search is trusted there.
+
+1. The price of deferral. Each onset spells afresh, so a member that
+   waits saves the box at every onset it skips, and a strand held under
+   changing harmony, free to wait at each of them, would be spelled at
+   its last onset alone and float untethered until then. The answer the
+   model gives is that waiting resolves only to coords no earlier
+   sonority could have offered, which is a rule the walk enforces and a
+   sonority's own beam cannot see; whether it holds a long-held strand
+   in tune along the way is unsettled.

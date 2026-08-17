@@ -397,6 +397,206 @@ function sonority.relax(spellings, window, strength, stiffness)
   return displacement
 end
 
+----- The candidates
+
+-- A join's coords: the host's plus the move's, a cancelled prime dropped so two chains
+-- arriving at one spelling key alike (design/adaptive-springs.md § The candidates).
+local function joinCoords(coords, move)
+  local sum = {}
+  for prime, exponent in pairs(coords) do sum[prime] = exponent end
+  for prime, exponent in pairs(move.coords) do
+    local total = (sum[prime] or 0) + exponent
+    sum[prime] = total ~= 0 and total or nil
+  end
+  return sum
+end
+
+-- The neighbouring step and no further: past two half-windows some other member of the
+-- sonority is the nearer host for the pitch, so the join is no longer this one's.
+local function inReach(deviation, window)
+  if deviation < 0 then return -deviation <= 2 * window.below end
+  return deviation <= 2 * window.above
+end
+
+-- What a state has made of a member: the coords it was spelled at, and the component it
+-- joined into, so a member no move reached reads apart from the same coords tied in.
+local function tokenOf(placed)
+  local primes = util.keys(placed.coords)
+  table.sort(primes)
+  local exponents = {}
+  for k, prime in ipairs(primes) do exponents[k] = prime .. ':' .. placed.coords[prime] end
+  return placed.component .. '@' .. table.concat(exponents, ',')
+end
+
+-- What a join costs where it lands: the box its component widens by, and a spring against
+-- each member already there, both priced before any displacement moves (§ The candidates).
+local function joinCost(state, component, placed, stiffness)
+  local coordSet = {}
+  for _, slot in ipairs(component) do util.add(coordSet, state.at[slot].coords) end
+  local before = sonority.score(coordSet)
+  util.add(coordSet, placed.coords)
+
+  local cost = sonority.score(coordSet) - before
+  for _, slot in ipairs(component) do
+    local mistuning = (placed.deviation - state.at[slot].deviation) / PURE
+    cost = cost + stiffness * mistuning * mistuning
+  end
+  return cost
+end
+
+-- Keyed before it is built, so a candidate repeating a spelling costs its coords and its
+-- key alone; the state it would have extended is copied only where the spelling is new.
+--shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, score }
+--shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }
+local function admit(reached, seen, state, slot, placed, stiffness)
+  local parts = util.clone(state.parts)
+  parts[slot] = tokenOf(placed)
+  local key = util.key(table.unpack(parts))
+  if seen[key] then return end
+  seen[key] = true
+
+  local component = state.components[placed.component] or {}
+  local child = { at = util.clone(state.at), components = {}, parts = parts, key = key,
+                  score = state.score + joinCost(state, component, placed, stiffness) }
+  for index, slots in ipairs(state.components) do child.components[index] = util.clone(slots) end
+  child.components[placed.component] = child.components[placed.component] or {}
+  child.at[slot] = placed
+  util.add(child.components[placed.component], slot)
+  util.add(reached, child)
+end
+
+-- Score, then the spelling itself, so an exact tie breaks on the coords rather than on
+-- table order, as sonority.solveToPoints breaks its own.
+local function byScore(a, b)
+  if a.score ~= b.score then return a.score < b.score end
+  return a.key < b.key
+end
+
+-- One round per member after the anchor, each resolving one of them: by a move from a
+-- member already placed, or alone where no move reaches it; the unison is no join.
+local function beamOver(seat, window, moves, width, stiffness)
+  local anchor = { at = {}, components = {}, parts = {}, score = 0 }
+  for slot = 1, #seat do anchor.parts[slot] = '' end
+  if #seat > 0 then
+    local placed = { coords = {}, cents = seat[1], deviation = 0, component = 1 }
+    anchor.at[1], anchor.components[1], anchor.parts[1] = placed, { 1 }, tokenOf(placed)
+  end
+  anchor.key = util.key(table.unpack(anchor.parts))
+
+  local beam = { anchor }
+  for _ = 2, #seat do
+    local reached, seen = {}, {}
+    for _, state in ipairs(beam) do
+      for slot = 1, #seat do
+        if not state.at[slot] then
+          local joined = false
+          for host = 1, #seat do
+            local from = state.at[host]
+            if from then
+              for _, move in ipairs(moves) do
+                if move.height > 0 then
+                  local cents     = from.cents + move.cents
+                  local deviation = tuning.gapTo(seat[slot], cents)
+                  if inReach(deviation, window[slot]) then
+                    joined = true
+                    admit(reached, seen, state, slot,
+                          { coords = joinCoords(from.coords, move), cents = cents,
+                            deviation = deviation, component = from.component }, stiffness)
+                  end
+                end
+              end
+            end
+          end
+          if not joined then
+            admit(reached, seen, state, slot,
+                  { coords = {}, cents = seat[slot], deviation = 0,
+                    component = #state.components + 1 }, stiffness)
+          end
+        end
+      end
+    end
+
+    table.sort(reached, byScore)
+    beam = {}
+    for k = 1, math.min(width, #reached) do beam[k] = reached[k] end
+  end
+  return beam
+end
+
+-- The state read back as the sonority's own: the pairs of a component tied in member
+-- order, as sonority.springs ties them, and the box scored per component of more than one.
+local function spellingOf(state, members, present, waiting)
+  local springs = {}
+  for a = 1, #present do
+    for b = a + 1, #present do
+      if state.at[a].component == state.at[b].component then
+        util.add(springs, { i = members[present[a]], j = members[present[b]],
+                            delta = state.at[b].deviation - state.at[a].deviation })
+      end
+    end
+  end
+
+  local box = 0
+  for _, slots in ipairs(state.components) do
+    if #slots > 1 then
+      local coordSet = {}
+      for _, slot in ipairs(slots) do util.add(coordSet, state.at[slot].coords) end
+      box = box + sonority.score(coordSet)
+    end
+  end
+  return { box = box, springs = springs, waiting = util.clone(waiting) }
+end
+
+-- A waiting member states no interval, so the beam runs once per set of members left
+-- waiting; a deferral is no rival to a spelling, so the cut runs within a set (§ The candidates).
+--shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..} }
+--contract: members, seat, window, mayWait; moves, width, stiffness → Spellings, best first
+--contract: a join is one move, landing within two half-windows of the member's own seat
+--contract: the width is a width per waiting set; math.huge enumerates the spellings whole
+--contract: a member no move reaches stands alone — box scores a component, springs tie in one
+function sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)
+  local waiters = {}
+  for position = 1, #members do
+    if mayWait[position] then util.add(waiters, position) end
+  end
+
+  local found = {}
+  for choice = 0, (1 << #waiters) - 1 do
+    local waits = {}
+    for bit, position in ipairs(waiters) do
+      if (choice >> (bit - 1)) & 1 == 1 then waits[position] = true end
+    end
+
+    local present, seats, windows, waiting = {}, {}, {}, {}
+    for position = 1, #members do
+      if waits[position] then
+        util.add(waiting, members[position])
+      else
+        util.add(present, position)
+        util.add(seats,   seat[position])
+        util.add(windows, window[position])
+      end
+    end
+
+    for _, state in ipairs(beamOver(seats, windows, moves, width, stiffness)) do
+      util.add(found, { state = state, present = present, waiting = waiting,
+                        waitKey = util.key(table.unpack(waiting)) })
+    end
+  end
+
+  table.sort(found, function(a, b)
+    if a.state.score ~= b.state.score then return a.state.score < b.state.score end
+    if a.state.key   ~= b.state.key   then return a.state.key   < b.state.key   end
+    return a.waitKey < b.waitKey
+  end)
+
+  local spellings = {}
+  for k, entry in ipairs(found) do
+    spellings[k] = spellingOf(entry.state, members, entry.present, entry.waiting)
+  end
+  return spellings
+end
+
 ----- The placement
 
 -- The moves facility's solve: the target read as intervals between strands rather than

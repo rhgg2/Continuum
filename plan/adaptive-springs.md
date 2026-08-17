@@ -19,10 +19,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: enumerate the spellings by a beam over joins (§ The candidates)
 - 2026-08-17 sonority: the springs alone, seated in member order (§ The model)
 - 2026-08-16 sonority: relax the displacements to the objective's optimum (§ The model)
 - 2026-08-16 sonority: the springs objective, in its two units (§ The model)
-- 2026-08-16 sonority: derive a spelling's springs and box (§ The model)
 
 ## Now
 
@@ -30,26 +30,7 @@
 
 ## Queued (current phase; one-liners)
 
-3. `sonority.spellings` — the beam over joins, waiting included. Member
-   1 anchors at its seat with empty coords; each round joins one
-   unplaced member to a placed one by a move, admitting the join where
-   the pure position lands within two half-windows of the member's seat,
-   and forking a waiting state beside it for the members the caller says
-   may wait — the walk knowing which still have an onset to sound
-   through. The state carries the running box and mistuning of § The
-   candidates 2 as its score, and the round dedupes states by their
-   coords assignment, sorts, and cuts to a width the caller states, as
-   it states the stiffness. Returns box, springs and the members left
-   waiting per survivor, best first; where a member out of waits joins
-   nothing, greedy components stand in, the box charged only within a
-   component of more than one member and springs only inside a
-   component, so a bare tritone under a 5-limit set comes back with no
-   spring and no box (§ Open 2). A width of `math.huge` is a full
-   enumeration, which is how the spec certifies a beam of twelve at five
-   members. This is the design's one hot loop, so nothing per candidate
-   that allocates more than the state it keeps. Red-first in
-   `sonority_spec` on the rolled minor and on that tritone.
-5. `tuning.genTenney(generators, bound)` and its pane entry — a target
+4. `tuning.genTenney(generators, bound)` and its pane entry — a target
    generator holding every interval its stated generating intervals
    compose to within a bound, that bound written as the most complex
    ratio admitted: `3/2 5/4` under `15/8` gives the eleven points
