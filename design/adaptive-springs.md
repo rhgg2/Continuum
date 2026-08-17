@@ -66,7 +66,11 @@ states the search may merge.**
    Stiff springs buy the lattice's behaviour — the pump drifts,
    arriving a syntonic comma flat, within 0.7¢ of the lattice's figure
    — and soft ones spread the comma into the intervals at under 2¢
-   apiece, so the stiffness is a dial with an audible meaning.
+   apiece, so the stiffness is a dial with an audible meaning. It is a
+   dial of its own beside the pull rather than one riding the other:
+   the pull asks how far a note may stand from where it was written,
+   and the stiffness how impure an interval may become, so an author
+   owns drift against distribution.
 
 1. The two charges are taken in different units, since they price
    different things. The pull asks whether a note is still the step it
@@ -182,9 +186,11 @@ states the search may merge.**
    abreast, rounding from 0.1¢ to 0.5¢, beams of 24 and 48 — move the
    take's cost by under one percent.
 
-1. A relaxation along the walk frees only the strands born at the
-   onset it extends; the rest of an answer stands as data, at the
-   displacements it already carries. Freeing every strand at every
+1. A relaxation along the walk frees the strands the onset sounds —
+   those born there, and those a note carries through it — and the rest
+   of an answer stands as data, at the displacements it already
+   carries; a member the sonority holds by recency has stopped, so it
+   is read and not moved. Freeing every strand at every
    onset, once per carried answer, is where the walk's cost would go,
    and the attenuation § Measured finds running forward runs backward
    as well, so a new onset moves a settled past by little.
@@ -243,13 +249,6 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    squeezed for anomalies.
 
 ## Open
-
-1. Harmonic lock. The dial's meaning was fixed against placements pure
-   by construction; with purity graded there are two strengths — the
-   pull's and the springs' — and whether both surface, one rides the
-   other, or the stiffness stays a constant is unsettled. The comma
-   figures are the case for surfacing the stiffness: drift against
-   distribution is a choice an author might want to own.
 
 1. Refusal. The lattice refused a passage its moves could not reach;
    here a sonority with no spelling falls back to components with no
