@@ -779,7 +779,8 @@ end
 
 -- A note's own step: where it seats, and how far its window reaches either side.
 -- The shortlist, the reach and the root are all measured off it.
-local function seatOf(notation, note)
+--contract: notation, note → the cents of the note's own step, and its half-gaps below and above
+function tuning.seatWindow(notation, note)
   local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
   local midi, detune = tuning.stepToMidi(notation, step, octave)
   local below, above = tuning.stepWindow(notation, step)
@@ -793,7 +794,7 @@ end
 --contract: widen: where the window holds nothing, the nearest points instead, at strain past 1
 function tuning.shortlist(notation, target, keyStep, note, widen)
   local keyCents           = notation.rootCents + notation.cents[keyStep]
-  local seat, below, above = seatOf(notation, note)
+  local seat, below, above = tuning.seatWindow(notation, note)
 
   local points = {}
   for _, token in ipairs(target.pitches) do

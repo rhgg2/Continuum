@@ -20,7 +20,7 @@
 --
 -- Pins the springs of design/adaptive-springs.md § The model: a spelling read
 -- off as the displacement gaps at which its pairs sound pure, nearest-octave,
--- from seats given in member order.
+-- from the seats of the strands its members name.
 --
 -- Pins the objective those springs stand in (§ The model): stiffness ×
 -- mistuning² per spring and strength × displacement² per strand, the mistuning
@@ -39,6 +39,10 @@
 -- within two half-windows of the member's own seat, a member no move reaches
 -- standing alone, a full enumeration the beam of twelve is checked against, and
 -- the cut running within a waiting set so a deferral crowds no spelling out.
+--
+-- Pins the terms the walk takes from the notation (§ The solve): the seat and the
+-- window a strand is written under, which onsets a member may wait through, and
+-- that everything a sonority reads of a member is indexed at its strand.
 
 local t        = require('support')
 local tuning   = require('tuning')
@@ -69,6 +73,12 @@ local function allFree(count)
   local start, free = {}, {}
   for index = 1, count do start[index], free[index] = 0, index end
   return start, free
+end
+
+-- A notation of even steps, and one of uneven, whose steps stand at the cents given.
+local edo12 = tuning.presets['12EDO']
+local function nameless(cents)
+  return tuning.derive{ name = 'scale', period = 1200, cents = cents, stepNames = {} }
 end
 
 -- Targets read as moves: pure fifths and thirds, and the eleven-pitch set the figures of
@@ -477,9 +487,10 @@ return {
   {
     name = 'springs: deviations reduce to the nearest octave, and name strands',
     run = function()
-      -- The seats arrive in member order, whatever strands the members are: a sonority of
-      -- strands 3 and 5 seats them first and second, and only the springs name the strands.
-      local springs = sonority.springs({ 3, 5 }, { 1100, 0 }, { {}, { [3] = -1, [5] = -1 } })
+      -- A seat is read at the strand its member names, whatever position the member holds:
+      -- a sonority of strands 3 and 5 reads their two seats, and the spring names them again.
+      local springs = sonority.springs({ 3, 5 }, { [3] = 1100, [5] = 0 },
+                                       { {}, { [3] = -1, [5] = -1 } })
 
       t.eq(#springs, 1, 'one pair, one spring')
       spring(springs[1], 3, 5, 11.73, 'pure just over the seam, not a descent of 1188')
@@ -489,7 +500,7 @@ return {
   {
     name = 'springs: a lone member holds no spring',
     run = function()
-      t.eq(#sonority.springs({ 4 }, { 250 }, { {} }), 0, 'one member ties nothing')
+      t.eq(#sonority.springs({ 4 }, { [4] = 250 }, { {} }), 0, 'one member ties nothing')
     end,
   },
 
@@ -498,8 +509,9 @@ return {
     run = function()
       -- A C major triad, then the fifth G–D: two sonorities sharing the strand on G. The box
       -- the two spellings carry is charged by whoever chose them, not by the cost of a placement.
-      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } })
-      local fifth = sonority.springs({ 3, 4 }, { 700, 200 }, { {}, { [3] = 1 } })
+      local seat  = { 0, 400, 700, 200 }
+      local major = sonority.springs({ 1, 2, 3 }, seat, { {}, { [5] = 1 }, { [3] = 1 } })
+      local fifth = sonority.springs({ 3, 4 }, seat, { {}, { [3] = 1 } })
       local displacement = { -4, -12, 2, 6 }
 
       -- Each spring's mistuning is the gap the displacements realise less the gap the
@@ -580,9 +592,10 @@ return {
     run = function()
       -- C–E a 5/4, E–A a 4/3, C–A a 27/16: three sonorities whose spellings fail to close
       -- by a syntonic comma, so no displacement leaves all three springs slack.
-      local third  = sonority.springs({ 1, 2 }, { 0,   400 }, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, { 400, 900 }, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, { 0,   900 }, { {}, { [3] =  3 } })
+      local seat   = { 0, 400, 900 }
+      local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
       local loop, window = { third, fourth, sixth }, evenWindows(3)
 
       local displacement = sonority.relax(loop, window, 1, 8, allFree(3))
@@ -616,9 +629,10 @@ return {
     run = function()
       -- The objective is convex, so where the sweep begins buys it sweeps and not an answer:
       -- the comma loop started well off its optimum comes back to the same three cents.
-      local third  = sonority.springs({ 1, 2 }, { 0,   400 }, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, { 400, 900 }, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, { 0,   900 }, { {}, { [3] =  3 } })
+      local seat   = { 0, 400, 900 }
+      local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
       local loop, window = { third, fourth, sixth }, evenWindows(3)
 
       local cold = sonority.relax(loop, window, 1, 8, allFree(3))
@@ -772,6 +786,84 @@ return {
       near(spelled.box, best.box, 'and it is what the beam finds with nothing deferred')
       t.eq(#spelled.springs, 10, 'a spring per pair of the five')
       t.truthy(#list[1].waiting > 0, 'though a deferral leads the list')
+    end,
+  },
+
+  {
+    name = 'spellings: seats, windows and waits are read at the strand a member names',
+    run = function()
+      -- A sonority's members are strand indices, and everything it reads of them is
+      -- indexed the same way, so the decoy seated at strand 2 is never read.
+      local members, seat = { 3, 1 }, { 400, 600, 0 }
+      local best = sonority.spellings(members, seat, evenWindows(3), {}, fifthsAndThirds, 12, 8)[1]
+      local hand = sonority.springs(members, seat, { {}, { [5] = 1 } })
+
+      t.eq(#best.springs, 1, 'the pair the moves tie')
+      spring(best.springs[1], 3, 1, -13.69, 'the third pure below the seat of strand 1')
+      spring(best.springs[1], hand[1].i, hand[1].j, hand[1].delta, 'as the springs take it by hand')
+
+      local deferred = sonority.spellings(members, seat, evenWindows(3), { [1] = true },
+                                          fifthsAndThirds, 12, 8)
+      t.truthy(#deferred[1].waiting > 0, 'a member free to wait leads the list')
+      t.eq(deferred[1].waiting[1], 1, 'and it is the strand mayWait named, not the position')
+    end,
+  },
+
+  {
+    name = 'seats: the notation gives each strand its step and the reach either side',
+    run = function()
+      local strands    = struck(960, { { 0, 0, 60 }, { 4, 0, 64 }, { 7, 960, 79 } })
+      local seat, window = sonority.seats(strands, edo12)
+
+      t.deepEq(seat, { 6000, 6400, 7900 }, 'each strand seated where its first note is written')
+      t.deepEq(window, evenWindows(3), 'and 12-EDO reaching fifty cents to the step either side')
+
+      -- The same notes under a scale of uneven steps: a written step of their own, and a
+      -- reach that differs above and below it.
+      local uneven = nameless{ 0, 100, 350, 700 }
+      local seats, windows = sonority.seats(struck(960, { { 0, 0, 61 }, { 0, 0, 63 } }), uneven)
+
+      t.deepEq(seats, { 6100, 6350 }, 'the second written on the step at 350, not on the one at 300')
+      t.deepEq(windows[1], { below = 50, above = 125 }, 'half the gap to the step below and above')
+      t.deepEq(windows[2], { below = 125, above = 175 }, 'and the same of the step above it')
+    end,
+  },
+
+  {
+    name = 'onsets: a member waits while an onset it sounds through is still to come',
+    run = function()
+      -- A rolled C minor: the C sounds through the two onsets that follow it, and the
+      -- chord is complete at the third, where every member states its coords or fails.
+      local rolled = { strand(0, { {   0, 60, 1440 } }),
+                       strand(3, { { 480, 63, 1440 } }),
+                       strand(7, { { 960, 67, 1440 } }) }
+      local onsets = sonority.onsets(rolled, sonority.walk(rolled, 5))
+
+      t.eq(#onsets, 3, 'an onset apiece')
+      t.deepEq(onsets[1].members, { 1 }, 'the C alone to begin with')
+      t.deepEq(onsets[1].mayWait, { [1] = true }, 'free to wait, with two onsets left to sound through')
+      t.deepEq(onsets[2].members, { 2, 1 }, 'the E flat struck against it, most recent first')
+      t.deepEq(onsets[2].mayWait, { [1] = true, [2] = true }, 'both of them still to sound at the third')
+      t.deepEq(onsets[3].sounding, { 3, 2, 1 }, 'where all three sound')
+      t.deepEq(onsets[3].mayWait, {}, 'and none may wait, there being no onset after it')
+    end,
+  },
+
+  {
+    name = 'onsets: a member held by recency has stopped, so it is joined to and does not wait',
+    run = function()
+      local passage = { strand(0, { {    0, 60, 2880 } }),   -- held under the whole passage
+                        strand(4, { {    0, 64,  960 } }),   -- stopped where the D strikes
+                        strand(2, { {  960, 62, 1920 } }),
+                        strand(5, { { 1920, 65, 2880 } }) }
+      local onsets = sonority.onsets(passage, sonority.walk(passage, 5))
+
+      t.deepEq(onsets[1].members, { 1, 2 }, 'the C and the E, lowest last')
+      t.deepEq(onsets[1].mayWait, { [1] = true }, 'the E placing at the onset it is struck on')
+      t.deepEq(onsets[2].members, { 3, 1, 2 }, 'the E a member of the second still, by recency')
+      t.deepEq(onsets[2].sounding, { 3, 1 }, 'though it no longer sounds there')
+      t.deepEq(onsets[2].mayWait, { [1] = true }, 'so it is joined to rather than waiting')
+      t.deepEq(onsets[3].mayWait, {}, 'and the last onset holds nobody who may')
     end,
   },
 

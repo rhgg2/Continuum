@@ -300,13 +300,13 @@ end
 -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
 -- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
 --shape: Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta
---contract: members, seat and spelling parallel per member → a Spring per pair, i before j
+--contract: members, spelling per member; seat per strand → a Spring per pair, i before j
 --contract: springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen
 function sonority.springs(members, seat, spelling)
   local devs = {}
   for k, coords in ipairs(spelling) do
-    local pure = seat[1] + tuning.cents(coords)
-    devs[k] = tuning.gapTo(seat[k], pure)
+    local pure = seat[members[1]] + tuning.cents(coords)
+    devs[k] = tuning.gapTo(seat[members[k]], pure)
   end
 
   local springs = {}
@@ -551,14 +551,14 @@ end
 -- A waiting member states no interval, so the beam runs once per set of members left
 -- waiting; a deferral is no rival to a spelling, so the cut runs within a set (§ The candidates).
 --shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..} }
---contract: members, seat, window, mayWait; moves, width, stiffness → Spellings, best first
+--contract: members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first
 --contract: a join is one move, landing within two half-windows of the member's own seat
 --contract: the width is a width per waiting set; math.huge enumerates the spellings whole
 --contract: a member no move reaches stands alone — box scores a component, springs tie in one
 function sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)
   local waiters = {}
   for position = 1, #members do
-    if mayWait[position] then util.add(waiters, position) end
+    if mayWait[members[position]] then util.add(waiters, position) end
   end
 
   local found = {}
@@ -574,8 +574,8 @@ function sonority.spellings(members, seat, window, mayWait, moves, width, stiffn
         util.add(waiting, members[position])
       else
         util.add(present, position)
-        util.add(seats,   seat[position])
-        util.add(windows, window[position])
+        util.add(seats,   seat[members[position]])
+        util.add(windows, window[members[position]])
       end
     end
 
@@ -596,6 +596,46 @@ function sonority.spellings(members, seat, window, mayWait, moves, width, stiffn
     spellings[k] = spellingOf(entry.state, members, entry.present, entry.waiting)
   end
   return spellings
+end
+
+----- The terms
+
+-- One window serves a strand in every register, so notes[1] speaks for all of them; the
+-- seat keeps the register it was written in, which tuning.gapTo quotients out again.
+--contract: strands, notation → the cents of each strand's written step, and its window either side
+function sonority.seats(strands, notation)
+  local seat, window = {}, {}
+  for index, strand in ipairs(strands) do
+    local cents, below, above = tuning.seatWindow(notation, strand.notes[1])
+    seat[index]   = cents
+    window[index] = { below = below, above = above }
+  end
+  return seat, window
+end
+
+-- A member is free to wait while an onset it sounds through is still to come; at that onset
+-- it places or the state fails (design/adaptive-springs.md § The candidates).
+--shape: Onset = { ppq, members={strand,..}, sounding={strand,..}, mayWait={[strand]=true,..} }
+--contract: strands, sonorities → an Onset per sonority, its members the walk's own
+--contract: a member the sonority holds by recency has stopped: it neither sounds nor waits
+function sonority.onsets(strands, sonorities)
+  local onsets = {}
+  for i, current in ipairs(sonorities) do
+    local live = {}
+    for _, index in ipairs(current.strands) do
+      if sounding(strands[index], current.ppq) then util.add(live, index) end
+    end
+    onsets[i] = { ppq = current.ppq, members = current.strands, sounding = live, mayWait = {} }
+  end
+
+  local later = {}
+  for i = #onsets, 1, -1 do
+    for _, index in ipairs(onsets[i].members) do
+      if later[index] then onsets[i].mayWait[index] = true end
+    end
+    for _, index in ipairs(onsets[i].sounding) do later[index] = true end
+  end
+  return onsets
 end
 
 ----- The placement

@@ -1,4 +1,4 @@
-@module sonority  src=sonority.lua  loc=611  mode=namespace  self=sonority
+@module sonority  src=sonority.lua  loc=651  mode=namespace  self=sonority
 
 # Invariants & contracts
   @invariant  pure module: no state; ratios/cents are tuning.lua's, the placement carries them  @ 4
@@ -6,7 +6,7 @@
   @contract  spellings, window, strength, stiffness, start (per strand), free (strands that sweep)  @ 381
   @contract  → displacements minimising sonority.springCost, the held strands standing at their start  @ 382
   @contract  each swept displacement inside its own strand's window  @ 383
-  @contract  members, seat, window, mayWait; moves, width, stiffness → Spellings, best first  @ 554
+  @contract  members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first  @ 554
   @contract  a join is one move, landing within two half-windows of the member's own seat  @ 555
   @contract  the width is a width per waiting set; math.huge enumerates the spellings whole  @ 556
   @contract  a member no move reaches stands alone — box scores a component, springs tie in one  @ 557
@@ -21,6 +21,7 @@
   @shape  State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, score }  @ 450
   @shape  Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }  @ 451
   @shape  Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..} }  @ 553
+  @shape  Onset = { ppq, members={strand,..}, sounding={strand,..}, mayWait={[strand]=true,..} }  @ 618
 
 # Imports
   @const util = 'util'  @ 10
@@ -122,7 +123,7 @@
   @api sonority.springs(members, seat, spelling)  @ 305-319
       -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
       -- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
-      @contract  members, seat and spelling parallel per member → a Spring per pair, i before j  @ 303
+      @contract  members, spelling per member; seat per strand → a Spring per pair, i before j  @ 303
       @contract  springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen  @ 304
   @api sonority.springCost(spellings, displacement, window, strength, stiffness)  @ 330-345
       -- The box is no part of this: a constant once the spellings are chosen, so it is charged
@@ -133,18 +134,29 @@
   @api sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)  @ 558-599
       -- A waiting member states no interval, so the beam runs once per set of members left
       -- waiting; a deferral is no rival to a spelling, so the cut runs within a set (§ The candidates).
+  -- The terms
+  @api sonority.seats(strands, notation)  @ 606-614
+      -- One window serves a strand in every register, so notes[1] speaks for all of them; the
+      -- seat keeps the register it was written in, which tuning.gapTo quotients out again.
+      @contract  strands, notation → the cents of each strand's written step, and its window either side  @ 605
+  @api sonority.onsets(strands, sonorities)  @ 621-639
+      -- A member is free to wait while an onset it sounds through is still to come; at that onset
+      -- it places or the state fails (design/adaptive-springs.md § The candidates).
+      @contract  strands, sonorities → an Onset per sonority, its members the walk's own  @ 619
+      @contract  a member the sonority holds by recency has stopped: it neither sounds nor waits  @ 620
   -- The placement
-  @api sonority.solveToMoves(strands, n, strength, notation, moves)  @ 607-609
+  @api sonority.solveToMoves(strands, n, strength, notation, moves)  @ 647-649
       -- The moves facility's solve: the target read as intervals between strands rather than
       -- as points. The lattice search that stood here is retired, and the springs solve lands
       -- in its place (design/adaptive-springs.md § Where it sits).
-      @contract  strands, n, strength, notation, moves → nil, until the springs solve lands  @ 606
+      @contract  strands, n, strength, notation, moves → nil, until the springs solve lands  @ 646
 
 # Uses (outbound edges)
   @use call    tuning.cents  @ springs:308
   @use call    tuning.gapTo  @ springs:309 beamOver:500
   @use call    tuning.height  @ score:33
-  @use call    util.add  @ strands:46,61,65 strikesInOrder:80 walk:123,125 cost:140 schedule:175,177,178 placementsAt:211 springs:315 tiesOf:360,361 joinCost:436,438 admit:465,466 spellingOf:534,544 spellings:561,574,576,577,578,583
+  @use call    tuning.seatWindow  @ seats:609
+  @use call    util.add  @ strands:46,61,65 strikesInOrder:80 walk:123,125 cost:140 schedule:175,177,178 placementsAt:211 springs:315 tiesOf:360,361 joinCost:436,438 admit:465,466 spellingOf:534,544 spellings:561,574,576,577,578,583 onsets:626
   @use call    util.bucket  @ strands:47
   @use call    util.clamp  @ settle:376
   @use call    util.clone  @ placementsAt:211 solveToPoints:276 admit:453,460,462 spellingOf:548
@@ -168,7 +180,7 @@
   @call settle  @ relax:391
   @call sonority.score  @ cost:142 solveToPoints:284 joinCost:437,440 spellingOf:545
   @call sonority.walk  @ cost:137 solveToPoints:256
-  @call sounding  @ walk:123
+  @call sounding  @ walk:123 onsets:626
   @call spellingOf  @ spellings:596
   @call strikesInOrder  @ walk:114
   @call tiesOf  @ relax:385
@@ -180,9 +192,11 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r above  @ springCost:340 settle:374,377 inReach:419
+  @field w above  @ seats:611
   @field r at  @ joinCost:436,442 admit:460,464 beamOver:483,492,495 spellingOf:533,535,544
   @field w at  @ admit:460 beamOver:479
   @field r below  @ springCost:340 settle:374,377 inReach:418
+  @field w below  @ seats:611
   @field r born  @ schedule:175 solveToPoints:274,277
   @field w born  @ schedule:173
   @field w box  @ spellingOf:548
@@ -216,8 +230,13 @@
   @field w key  @ admit:460 beamOver:485
   @field r live  @ schedule:177 assertAffordable:191 solveToPoints:285
   @field w live  @ schedule:173
-  @field r notes  @ strands:61 strikesInOrder:79 sounding:94 schedule:162,163
+  @field r mayWait  @ onsets:634
+  @field w mayWait  @ onsets:628
+  @field r members  @ onsets:633
+  @field w members  @ onsets:628
+  @field r notes  @ strands:61 strikesInOrder:79 sounding:94 schedule:162,163 seats:609
   @field w notes  @ strands:64
+  @field w onsets  @ onsets:621
   @field r other  @ settle:371
   @field w other  @ tiesOf:360,361
   @field r parts  @ admit:453 beamOver:480,483,485
@@ -225,8 +244,8 @@
   @field r pitch  @ strikesInOrder:80,85
   @field w pitch  @ strikesInOrder:80
   @field r ppq  @ strands:55,60 strikesInOrder:80,84 sounding:95 walk:116
-  @field r ppq  @ walk:117 schedule:158,162,164
-  @field w ppq  @ strikesInOrder:80 walk:125
+  @field r ppq  @ walk:117 schedule:158,162,164 onsets:626,628
+  @field w ppq  @ strikesInOrder:80 walk:125 onsets:628
   @field r present  @ spellings:596
   @field w present  @ spellings:583
   @field r pull  @ solveToPoints:284
@@ -234,9 +253,12 @@
   @field w relax  @ relax:384
   @field r score  @ admit:461 byScore:472 spellings:589
   @field w score  @ score:19 admit:461 beamOver:479
+  @field w seats  @ seats:606
   @field r shortlist  @ cost:140,145 assertAffordable:192 placementsAt:208,216 solveToPoints:253,281
-  @field w solveToMoves  @ solveToMoves:607
+  @field w solveToMoves  @ solveToMoves:647
   @field w solveToPoints  @ solveToPoints:251
+  @field r sounding  @ onsets:636
+  @field w sounding  @ onsets:628
   @field w spellings  @ spellings:558
   @field w springCost  @ springCost:330
   @field w springs  @ springs:305 spellingOf:548
@@ -245,7 +267,7 @@
   @field r strain  @ cost:145 placementsAt:208
   @field r strand  @ strikesInOrder:86 walk:118
   @field w strand  @ strikesInOrder:80
-  @field r strands  @ cost:139 schedule:169 solveToPoints:280
+  @field r strands  @ cost:139 schedule:169 solveToPoints:280 onsets:625,628
   @field w strands  @ strands:42 walk:125
   @field r waitKey  @ spellings:591
   @field w waitKey  @ spellings:584

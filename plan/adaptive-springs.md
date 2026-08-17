@@ -20,10 +20,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: derive the walk's terms from the notation (§ The solve)
 - 2026-08-17 sonority: relax from a warm start, with strands held (§ The solve)
 - 2026-08-17 tuning: the Tenney ball, as a target generator and a pane (§ The Tenney ball)
 - 2026-08-17 sonority: enumerate the spellings by a beam over joins (§ The candidates)
-- 2026-08-17 sonority: the springs alone, seated in member order (§ The model)
 
 ## Now
 
@@ -31,11 +31,6 @@
 
 ## Queued (current phase; one-liners)
 
-2. Derive the walk's inputs from the notation: a seat and a window per
-   strand, and per onset the members in the shape `sonority.spellings`
-   takes, with `mayWait` true for a member that has a later onset to
-   sound through. A member the sonority holds by recency has stopped,
-   so it is joined to and does not itself wait.
 3. Walk the onsets carrying capped partial answers. Each carried answer
    is extended by every spelling of the onset and relaxed over the
    strands the onset sounds; its cost is taken over the springs
