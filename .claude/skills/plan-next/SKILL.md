@@ -4,27 +4,30 @@ description: Split in-flight phases, or compile impl brief for next queued item.
 disable-model-invocation: true
 ---
 
-1. This skill concerns the live plan, and the live implementation
-brief. The plan and the brief's existence arrive injected by hook. A
-plan over the 10k context cap should be read from the given file path.
+## 1. Orientation
 
-2. The plan file is a working buffer, and its sections are what the
-dispatch in §3 below reads:
+This skill concerns the live plan, and the live implementation brief.
+The plan and the brief's existence arrive injected by hook. A plan
+over the 10k context cap should be read from the given file path.
 
-- **Phases** is the plan's roadmap. One phase is a possibility.
-- **Queued** is the items of the in-flight phase that haven't been
-  compiled yet; compiling one takes it out of the section.
-- **Now** names the item being implemented in one line.
-- **Landed** prunes below ~4 entries — git and the design doc's dated
-  notes are the permanent record.
+The plan file is a working buffer, and its sections are what the
+dispatch reads:
 
-3. Dispatch. There are four possibilities:
+- Phases: the plan's roadmap. One phase is not unusual.
+- Queued: the uncompiled items of the in-flight phase. Compiling one
+  takes it out of the section.
+- Now: the item being implemented in one line.
+- Landed: prunes below ~4 entries.
 
-- **A brief exists.** The last planned item hasn't landed; say so and
+## 2. Dispatch
+
+There are four possibilities:
+
+- A brief exists. The last planned item hasn't landed; say so and
   stop, citing `/implement-next` to finish it or `/commit` to land.
-- **Queued is non-empty.** Compile its top entry into a brief:
+- Queued is non-empty. Compile its top entry into a brief:
   [compile.md](compile.md).
-- **Queued is empty and work remains unqueued.** Fill it from the next
+- Queued is empty and work remains unqueued. Fill it from the next
   unlanded phase: [fill.md](fill.md).
-- **Queued is empty and all phases are landed.** The work is
-  finished: say so, point at `/plan-close`, stop. 
+- Queued is empty and all phases are landed. The work is finished: say
+  so, point at `/plan-close`, stop.

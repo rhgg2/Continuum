@@ -51,8 +51,8 @@ prefer it to sed or scripts to patch files."
 # for the ends that hook never sees - a killed terminal, a crash - which leave
 # the admin data behind in .git/worktrees.
 spike="$scratchpad/spike"
-git -C "$project" worktree prune 2>/dev/null
-if [ -d "$spike" ] || git -C "$project" worktree add --detach "$spike" HEAD >/dev/null 2>&1; then
+git worktree prune 2>/dev/null
+if [ -d "$spike" ] || git worktree add --detach "$spike" HEAD >/dev/null 2>&1; then
   ctx="$ctx
 
 Spike worktree for this session, detached at HEAD: $scratch_path/spike. It does not carry uncommitted changes
