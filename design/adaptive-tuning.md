@@ -253,12 +253,20 @@ step it was written on.**
    points out to `243/128`; `9/8` with `5/4` gives eleven over the even
    powers of 3. Neither is a diamond of any limit.
 
-6. Points grow gently with the bound — eleven at `15/8`, thirteen at
+6. The points are the lattice the generators span, cut by the bound, rather than what a
+   walk out from the unison reaches without leaving it. Under `5/4 5/3
+   21/16` bounded at `7/5`, three fifths compose to `27/16` at height
+   4.76, and every path there passes through a point above the bound; so
+   the enumeration runs over a basis of the generators in echelon form,
+   taking each coefficient's range from the height its pivot column has
+   left to spend.
+
+7. Points grow gently with the bound — eleven at `15/8`, thirteen at
    `25/16`, nineteen at `45/32`, twenty-seven at `125/64` — so the
    hundred-point ceiling of § The diamond binds here too, and binds
    late.
 
-7. The ball is what the springs solve asks of a target, that solve
+8. The ball is what the springs solve asks of a target, that solve
    joining two strands by one move and declining to invent an
    intermediate (`design/adaptive-springs.md` § The candidates). The
    target therefore states the reach, and widening it is how an author

@@ -11,6 +11,12 @@ local function nameless(cents)
   return tuning.derive{ name = 'scale', period = 1200, cents = cents, stepNames = {} }
 end
 
+-- Token membership in a generated scale, for a point set too large to state entire.
+local function holds(gen, token)
+  for _, pitch in ipairs(gen.pitches) do if pitch == token then return true end end
+  return false
+end
+
 -- The two label parts joined, so a case that is about the whole label can
 -- assert it as one string.
 local function stepText(temper, step, octave)
@@ -685,6 +691,57 @@ return {
   },
 
   {
+    name = 'genTenney: the eleven points 3/2 and 5/4 compose to under 15/8',
+    run = function()
+      local ball = tuning.genTenney({ '3/2', '5/4' }, '15/8')
+      t.eq(table.concat(ball.pitches, ' '),
+           '1/1 16/15 9/8 6/5 5/4 4/3 3/2 8/5 5/3 16/9 15/8')
+      t.eq(ball.periodPitch, '2/1')
+      t.truthy(ball.periodAsStep)
+      t.eq(tuning.isTarget(ball), true, 'the ball is ratios throughout')
+    end,
+  },
+
+  {
+    name = 'genTenney: the bound is what a chain spends, so a wider one buys spellings',
+    run = function()
+      local at25 = tuning.genTenney({ '3/2', '5/4' }, '25/16')
+      t.eq(table.concat(at25.pitches, ' '),
+           '1/1 16/15 9/8 6/5 5/4 32/25 4/3 3/2 25/16 8/5 5/3 16/9 15/8')
+      t.truthy(not holds(at25, '10/9'), 'where the 15-diamond of equal size holds 10/9')
+
+      local at45 = tuning.genTenney({ '3/2', '5/4' }, '45/32')
+      t.eq(#at45.pitches, 19)
+      t.truthy(holds(at45, '45/32') and holds(at45, '64/45'), 'the tritone spellings')
+      t.eq(#tuning.genTenney({ '3/2', '5/4' }, '125/64').pitches, 27)
+    end,
+  },
+
+  {
+    name = 'genTenney: generators are intervals, so a ball may sit on a sublattice',
+    run = function()
+      local pyth = tuning.genTenney({ '3/2' }, '243/128')
+      t.eq(table.concat(pyth.pitches, ' '),
+           '1/1 256/243 9/8 32/27 81/64 4/3 3/2 128/81 27/16 16/9 243/128')
+
+      local even = tuning.genTenney({ '9/8', '5/4' }, '45/32')
+      t.eq(table.concat(even.pitches, ' '),
+           '1/1 10/9 9/8 5/4 32/25 45/32 64/45 25/16 8/5 16/9 9/5')
+      t.truthy(not holds(even, '3/2'), 'the even powers of 3 only, so no fifth')
+    end,
+  },
+
+  {
+    name = 'genTenney: a point composition reaches that a walk within the bound cannot',
+    run = function()
+      local ball = tuning.genTenney({ '5/4', '5/3', '21/16' }, '7/5')
+      t.eq(#ball.pitches, 25)
+      t.truthy(holds(ball, '27/16') and holds(ball, '32/27'),
+               'three fifths, every path to which leaves the ball and returns')
+    end,
+  },
+
+  {
     name = 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first',
     run = function()
       local s = tuning.genRank2('3/2', '2/1', 7, 5)
@@ -748,6 +805,19 @@ return {
       t.deepEq(tuning.coords('6/4'), { [3] = 1 }, 'genHarmonics states its points over its root')
       t.deepEq(tuning.coords('4/4'), {})
       t.deepEq(tuning.coords('3/3'), {}, 'a prime on both sides cancels rather than sitting at 0')
+    end,
+  },
+
+  {
+    name = 'ratio: coords spelled back as a token, reduced into the octave',
+    run = function()
+      t.eq(tuning.ratio({}), '1/1', 'no prime named is the unison')
+      t.eq(tuning.ratio({ [3] = 1, [5] = 1 }), '15/8')
+      t.eq(tuning.ratio({ [3] = -1 }), '4/3', 'a negative exponent seats the prime below')
+      for _, token in ipairs({ '1/1', '3/2', '16/15', '45/32', '64/45', '256/243' }) do
+        t.eq(tuning.ratio(tuning.coords(token)), token, token .. ' round-trips')
+      end
+      t.eq(tuning.ratio(tuning.coords('6/4')), '3/2', 'an unreduced token comes back reduced')
     end,
   },
 

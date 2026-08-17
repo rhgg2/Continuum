@@ -19,10 +19,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 tuning: the Tenney ball, as a target generator and a pane (§ The Tenney ball)
 - 2026-08-17 sonority: enumerate the spellings by a beam over joins (§ The candidates)
 - 2026-08-17 sonority: the springs alone, seated in member order (§ The model)
 - 2026-08-16 sonority: relax the displacements to the objective's optimum (§ The model)
-- 2026-08-16 sonority: the springs objective, in its two units (§ The model)
 
 ## Now
 
@@ -30,13 +30,4 @@
 
 ## Queued (current phase; one-liners)
 
-4. `tuning.genTenney(generators, bound)` and its pane entry — a target
-   generator holding every interval its stated generating intervals
-   compose to within a bound, that bound written as the most complex
-   ratio admitted: `3/2 5/4` under `15/8` gives the eleven points
-   § Measured takes its figures over, and `45/32` gives nineteen, the
-   tritone spellings among them. The entry sits beside the diamond's in
-   the temper editor under the diamond's cap on points, and coords come
-   back as octave-reduced tokens — the inverse of `tuning.coords`, which
-   the repo does not hold yet. Specs in `tuning_spec`; the design is
-   `design/adaptive-tuning.md` § The Tenney ball.
+(empty)

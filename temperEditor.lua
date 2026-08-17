@@ -37,6 +37,7 @@ local genState = {
   chord   = { members = '4:5:6:7', invert = false },
   cps     = { factors = '1 3 5 7', count = '2', equave = '2/1' },
   diamond = { odd = '15', prime = '5' },
+  tenney  = { generators = '3/2 5/4', bound = '15/8' },
   rank2   = { generator = '3/2', period = '2/1', size = '7', up = '5', snapMos = true },
 }
 
@@ -570,6 +571,7 @@ local GEN_KINDS = {
   { id = 'chord',   label = 'Chord',        desc = 'Generate scale from a chord' },
   { id = 'cps',     label = 'CPS',          desc = 'Generate combination product set' },
   { id = 'diamond', label = 'Diamond',      desc = 'Generate an odd-limit tonality diamond' },
+  { id = 'tenney',  label = 'Tenney ball',  desc = 'Generate the compositions of a set of intervals within a bound' },
   { id = 'rank2',   label = 'Rank-2 / MOS', desc = 'Stack a generator into a period' },
 }
 
@@ -662,9 +664,9 @@ local function drawCpsFields()
   if rvE then c.equave = e end
 end
 
--- The points that survive the prime filter are what a diamond costs, not the odd limit;
--- 100 admits Partch's 21-odd-limit diamond (95) but nears the solver's budget. see design/adaptive-tuning.md § The diamond
-local DIAMOND_MAX_POINTS = 100
+-- What a bounded generator costs is the points it emits, not the limit that admits them;
+-- 100 takes Partch's 21-odd-limit diamond (95) but nears the solver's budget. see design/adaptive-tuning.md § The diamond
+local GEN_MAX_POINTS = 100
 
 -- The odd limit carries a ceiling of its own, since the double loop runs before there
 -- are any points to count: at 199 the unfiltered build is 37ms, one dropped frame.
@@ -683,8 +685,8 @@ local function diamondGen(d)
     diamondMemo = { odd = odd, prime = prime, gen = tuning.genDiamond(odd, prime) }
   end
   local gen = diamondMemo.gen
-  if #gen.pitches > DIAMOND_MAX_POINTS then
-    return nil, #gen.pitches .. ' points: over ' .. DIAMOND_MAX_POINTS .. ', lower a limit'
+  if #gen.pitches > GEN_MAX_POINTS then
+    return nil, #gen.pitches .. ' points: over ' .. GEN_MAX_POINTS .. ', lower a limit'
   end
   return gen
 end
@@ -696,6 +698,41 @@ local function drawDiamondFields()
   local rvP, p = labeledInput('Prime limit', 56, d.prime)
   if rvP then d.prime = p end
   local gen = diamondGen(d)
+  if gen then
+    ImGui.SameLine(ctx, 0, 8)
+    ImGui.TextDisabled(ctx, #gen.pitches .. ' points')
+  end
+end
+
+-- Validate the generators and the bound, then build the ball, memoised on the pair as the
+-- diamond is (genTenney assumes valid tokens); readout and buildGen both ask every frame.
+local tenneyMemo = {}
+local function tenneyGen(t)
+  local generators = {}
+  for token in t.generators:gmatch('%S+') do
+    if not tuning.coords(token) then return nil, 'generators: ratios, e.g. 3/2 5/4' end
+    util.add(generators, token)
+  end
+  if #generators == 0 then return nil, 'need at least one generator' end
+  if not tuning.coords(t.bound) then return nil, 'bound: a ratio, e.g. 15/8' end
+  if tenneyMemo.generators ~= t.generators or tenneyMemo.bound ~= t.bound then
+    tenneyMemo = { generators = t.generators, bound = t.bound,
+                   gen = tuning.genTenney(generators, t.bound) }
+  end
+  local gen = tenneyMemo.gen
+  if #gen.pitches > GEN_MAX_POINTS then
+    return nil, #gen.pitches .. ' points: over ' .. GEN_MAX_POINTS .. ', lower the bound'
+  end
+  return gen
+end
+
+local function drawTenneyFields()
+  local t = genState.tenney
+  local rvG, g = labeledInput('Generators', 160, t.generators)
+  if rvG then t.generators = g end
+  local rvB, b = labeledInput('Bound', 80, t.bound)
+  if rvB then t.bound = b end
+  local gen = tenneyGen(t)
   if gen then
     ImGui.SameLine(ctx, 0, 8)
     ImGui.TextDisabled(ctx, #gen.pitches .. ' points')
@@ -780,6 +817,8 @@ local function buildGen()
     return tuning.genCPS(factors, k, g.cps.equave)
   elseif g.kind == 'diamond' then
     return diamondGen(g.diamond)
+  elseif g.kind == 'tenney' then
+    return tenneyGen(g.tenney)
   elseif g.kind == 'rank2' then
     local r = g.rank2
     if not tuning.scalaPitch(r.generator) then return nil, 'bad generator' end
@@ -807,6 +846,7 @@ local function drawGenerators()
   elseif genState.kind == 'subharm' then drawSeriesFields(genState.subharm, 'Lowest', 'Highest')
   elseif genState.kind == 'cps' then drawCpsFields()
   elseif genState.kind == 'diamond' then drawDiamondFields()
+  elseif genState.kind == 'tenney' then drawTenneyFields()
   elseif genState.kind == 'rank2' then drawRank2Fields()
   else drawChordFields() end
 

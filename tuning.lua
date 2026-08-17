@@ -383,6 +383,89 @@ function tuning.genDiamond(oddLimit, primeLimit)
   return { pitches = tokens, periodPitch = '2/1', periodAsStep = true }
 end
 
+-- The bound's own ratio is a point of the ball, and both sides of the comparison are sums
+-- of logarithms, so the rim needs slack.
+local HEIGHT_TOL = 1e-9
+
+-- Integer row echelon over the prime columns, by gcd elimination: swap-and-subtract leaves
+-- the rows spanning the lattice they started from, so the nonzero ones are a basis of it.
+--contract: reduces `rows` in place; returns the rank and each row's pivot column
+local function echelon(rows, width)
+  local pivots, at = {}, 1
+  for col = 1, width do
+    local found
+    for r = at, #rows do if rows[r][col] ~= 0 then found = r; break end end
+    if found then
+      rows[at], rows[found] = rows[found], rows[at]
+      for r = at + 1, #rows do
+        while rows[r][col] ~= 0 do
+          local q = rows[at][col] // rows[r][col]
+          for c = 1, width do rows[at][c] = rows[at][c] - q * rows[r][c] end
+          rows[at], rows[r] = rows[r], rows[at]
+        end
+      end
+      if rows[at][col] < 0 then
+        for c = 1, width do rows[at][c] = -rows[at][c] end
+      end
+      pivots[at] = col
+      at = at + 1
+    end
+  end
+  return at - 1, pivots
+end
+
+-- The generating intervals span a lattice over the odd primes; the bound cuts a ball from it,
+-- enumerated over an echelon basis of the generators. See design/adaptive-tuning.md § The Tenney ball.
+--contract: ratio tokens + a bound token → every composition within the bound, ascending
+--contract: assumes ratios throughout, the caller having validated them
+function tuning.genTenney(generators, bound)
+  local limit = tuning.height(tuning.coords(bound))
+
+  local generatorCoords, primes, seen = {}, {}, {}
+  for i, token in ipairs(generators) do
+    generatorCoords[i] = tuning.coords(token)
+    for prime in pairs(generatorCoords[i]) do
+      if not seen[prime] then seen[prime] = true; util.add(primes, prime) end
+    end
+  end
+  table.sort(primes)
+
+  local rows, weightOf = {}, {}
+  for c, prime in ipairs(primes) do weightOf[c] = math.log(prime, 2) end
+  for i, coords in ipairs(generatorCoords) do
+    rows[i] = {}
+    for c, prime in ipairs(primes) do rows[i][c] = coords[prime] or 0 end
+  end
+  local rank, pivots = echelon(rows, #primes)
+
+  local tokens = {}
+  local function place(row, spent, point)
+    if row > rank then
+      local coords = {}
+      for c, prime in ipairs(primes) do
+        if point[c] ~= 0 then coords[prime] = point[c] end
+      end
+      if tuning.height(coords) <= limit + HEIGHT_TOL then util.add(tokens, tuning.ratio(coords)) end
+      return
+    end
+    local col   = pivots[row]
+    local reach = (limit - spent + HEIGHT_TOL) / weightOf[col]
+    local pivot = rows[row][col]
+    for k = math.ceil((-reach - point[col]) / pivot), math.floor((reach - point[col]) / pivot) do
+      local moved = {}
+      for c = 1, #primes do moved[c] = point[c] + k * rows[row][c] end
+      place(row + 1, spent + math.abs(moved[col]) * weightOf[col], moved)
+    end
+  end
+
+  local origin = {}
+  for c = 1, #primes do origin[c] = 0 end
+  place(1, 0, origin)
+
+  table.sort(tokens, function(x, y) return tuning.scalaPitch(x) < tuning.scalaPitch(y) end)
+  return { pitches = tokens, periodPitch = '2/1', periodAsStep = true }
+end
+
 -- Reduce a cents value into [0, period).
 local function reduceCents(c, period)
   return c - period * math.floor(c / period)
@@ -583,6 +666,21 @@ function tuning.coords(token)
     if exponent == 0 then coords[prime] = nil end
   end
   return coords
+end
+
+-- The odd primes multiplied back out, then doubled or halved into the octave; coords carry no
+-- power of two, so this inverts tuning.coords up to that reduction.
+--contract: {[oddPrime]=exponent} → the octave-reduced ratio token they name
+function tuning.ratio(coords)
+  local num, den = 1, 1
+  for prime, exponent in pairs(coords) do
+    for _ = 1, math.abs(exponent) do
+      if exponent > 0 then num = num * prime else den = den * prime end
+    end
+  end
+  while num >= den * 2 do den = den * 2 end
+  while num < den do num = num * 2 end
+  return num .. '/' .. den
 end
 
 -- log₂ p, the ear's distance to a prime; memoised, the solve scoring in its inner loop.
