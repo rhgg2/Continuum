@@ -412,6 +412,19 @@ local function joinCoords(coords, move)
   return sum
 end
 
+-- Coords are differences, so reading a member in another frame is one vector shift: what
+-- stood at `from` stands at `to`, a cancelled prime dropped as joinCoords drops it.
+local function rebase(coords, from, to)
+  local shifted = {}
+  for prime, exponent in pairs(coords) do shifted[prime] = exponent end
+  for prime, exponent in pairs(from)   do shifted[prime] = (shifted[prime] or 0) - exponent end
+  for prime, exponent in pairs(to)     do shifted[prime] = (shifted[prime] or 0) + exponent end
+  for prime, exponent in pairs(shifted) do
+    if exponent == 0 then shifted[prime] = nil end
+  end
+  return shifted
+end
+
 -- The neighbouring step and no further: past two half-windows some other member of the
 -- sonority is the nearer host for the pitch, so the join is no longer this one's.
 local function inReach(deviation, window)
@@ -524,33 +537,57 @@ local function beamOver(seat, window, moves, width, stiffness)
   return beam
 end
 
--- The state read back as the sonority's own: the pairs of a component tied in member
--- order, as sonority.springs ties them, and the box scored per component of more than one.
-local function spellingOf(state, members, present, waiting)
-  local springs = {}
-  for a = 1, #present do
-    for b = a + 1, #present do
-      if state.at[a].component == state.at[b].component then
-        util.add(springs, { i = members[present[a]], j = members[present[b]],
-                            delta = state.at[b].deviation - state.at[a].deviation })
+-- What coords and seats state about a set of members: a spring per pair of a component,
+-- tied in member order as sonority.springs ties them, and the box a component carries.
+--contract: members, seat per strand, coords and component per placed member → springs, box
+--contract: a member the map lacks is one still waiting, which states nothing and is passed over
+local function chargeOf(members, seat, placed)
+  local groups, components = {}, {}
+  for _, member in ipairs(members) do
+    local at = placed[member]
+    if at then
+      if not groups[at.component] then
+        groups[at.component] = {}
+        util.add(components, at.component)
       end
+      util.add(groups[at.component], member)
     end
   end
 
-  local box = 0
-  for _, slots in ipairs(state.components) do
-    if #slots > 1 then
-      local coordSet = {}
-      for _, slot in ipairs(slots) do util.add(coordSet, state.at[slot].coords) end
-      box = box + sonority.score(coordSet)
+  local springs, box = {}, 0
+  for _, component in ipairs(components) do
+    local group, relative, deviation = groups[component], {}, {}
+    for k, member in ipairs(group) do
+      relative[k]  = rebase(placed[member].coords, placed[group[1]].coords, {})
+      deviation[k] = tuning.gapTo(seat[member], seat[group[1]] + tuning.cents(relative[k]))
     end
+
+    for a = 1, #group do
+      for b = a + 1, #group do
+        util.add(springs, { i = group[a], j = group[b], delta = deviation[b] - deviation[a] })
+      end
+    end
+    if #group > 1 then box = box + sonority.score(relative) end
   end
-  return { box = box, springs = springs, waiting = util.clone(waiting) }
+  return springs, box
+end
+
+-- The state read back as the sonority's own: its members' coords under the strands they
+-- name, and what those state charged as any set of placed members is charged.
+local function spellingOf(state, members, present, seat, waiting)
+  local placed = {}
+  for slot, position in ipairs(present) do
+    placed[members[position]] = { coords    = state.at[slot].coords,
+                                  component = state.at[slot].component }
+  end
+
+  local springs, box = chargeOf(members, seat, placed)
+  return { box = box, springs = springs, waiting = util.clone(waiting), placed = placed }
 end
 
 -- A waiting member states no interval, so the beam runs once per set of members left
 -- waiting; a deferral is no rival to a spelling, so the cut runs within a set (§ The candidates).
---shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..} }
+--shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }
 --contract: members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first
 --contract: a join is one move, landing within two half-windows of the member's own seat
 --contract: the width is a width per waiting set; math.huge enumerates the spellings whole
@@ -593,7 +630,7 @@ function sonority.spellings(members, seat, window, mayWait, moves, width, stiffn
 
   local spellings = {}
   for k, entry in ipairs(found) do
-    spellings[k] = spellingOf(entry.state, members, entry.present, entry.waiting)
+    spellings[k] = spellingOf(entry.state, members, entry.present, seat, entry.waiting)
   end
   return spellings
 end
@@ -655,9 +692,9 @@ local function visibleAhead(onsets)
   return ahead
 end
 
--- An answer under the whole of what a continuation can tell it by: its cents at the
--- strands ahead, rounded to where two of them stop being two.
-local function answerKey(displacement, ahead)
+-- An answer under the whole of what a continuation can tell it by: its cents at the strands
+-- ahead rounded to where two of them stop being two, and the deferrals it has yet to pay.
+local function answerKey(displacement, ahead, onsets, held)
   local indices = util.keys(ahead)
   table.sort(indices)
 
@@ -666,19 +703,101 @@ local function answerKey(displacement, ahead)
     util.add(parts, index)
     util.add(parts, util.round(displacement[index], AUDIBLE))
   end
+
+  local owed = util.keys(held)
+  table.sort(owed)
+  for _, onset in ipairs(owed) do
+    local entry = held[onset]
+    util.add(parts, onset)
+    for _, member in ipairs(onsets[onset].members) do
+      local at = entry.placed[member]
+      util.add(parts, at and tokenOf(at) or (entry.waiting[member] and '?' or ''))
+    end
+  end
   return util.key(table.unpack(parts))
 end
 
--- One answer extended by one spelling: the springs it has accumulated and the box it has
--- paid, the onset's own strands relaxed and the rest of the answer standing as data.
-local function extend(answer, spelling, onset, window, strength, stiffness)
-  local springs = util.clone(answer.springs)
-  util.add(springs, spelling.springs)
+-- What a spelling makes of a sonority still waiting: a waiter it places takes coords in the
+-- held sonority's frame through a member the two share, alone where they share none.
+--invariant: a waiter reaching two components merges them, every member shifted into the one frame
+local function complete(entry, members, spelling)
+  local placed, waiting, free = util.clone(entry.placed), util.clone(entry.waiting), entry.next
+
+  for _, member in ipairs(members) do
+    local landing = waiting[member] and spelling.placed[member]
+    if landing then
+      local hosts = {}
+      for _, other in ipairs(members) do
+        local host = spelling.placed[other]
+        if placed[other] and host and host.component == landing.component then
+          util.add(hosts, other)
+        end
+      end
+      waiting[member] = nil
+
+      if #hosts == 0 then
+        placed[member] = { coords = {}, component = free }
+        free = free + 1
+      else
+        local component = placed[hosts[1]].component
+        local coords    = rebase(landing.coords, spelling.placed[hosts[1]].coords,
+                                 placed[hosts[1]].coords)
+        placed[member] = { coords = coords, component = component }
+
+        for k = 2, #hosts do
+          local merging = placed[hosts[k]].component
+          if merging ~= component then
+            local through = rebase(landing.coords, spelling.placed[hosts[k]].coords,
+                                   placed[hosts[k]].coords)
+            for other, at in pairs(placed) do
+              if at.component == merging then
+                placed[other] = { coords = rebase(at.coords, through, coords),
+                                  component = component }
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  return placed, waiting, free
+end
+
+-- The entry a spelling that defers opens: what it placed, whom it left, and what it has
+-- been charged so far, with the first component id its waiters may stand alone under.
+local function heldBy(spelling)
+  local waiting, free = {}, 1
+  for _, member in ipairs(spelling.waiting) do waiting[member] = true end
+  for _, at in pairs(spelling.placed) do free = math.max(free, at.component + 1) end
+  return { placed = spelling.placed, waiting = waiting, box = spelling.box, next = free }
+end
+
+-- One answer extended by one spelling: the springs and box it has paid, each sonority it
+-- still holds charged again for what this spelling places, the onset's own strands relaxed.
+local function extend(answer, spelling, onsets, at, seat, window, strength, stiffness)
+  local springs, held = util.clone(answer.springs), {}
+  local box = answer.box + spelling.box
+  springs[at] = spelling.springs
+
+  for onset = 1, at - 1 do
+    local entry = answer.held[onset]
+    if entry then
+      local members = onsets[onset].members
+      local placed, waiting, free = complete(entry, members, spelling)
+      local charged, widened = chargeOf(members, seat, placed)
+
+      springs[onset] = charged
+      box = box - entry.box + widened
+      if next(waiting) then
+        held[onset] = { placed = placed, waiting = waiting, box = widened, next = free }
+      end
+    end
+  end
+  if #spelling.waiting > 0 then held[at] = heldBy(spelling) end
 
   local displacement = sonority.relax(springs, window, strength, stiffness,
-                                      answer.displacement, onset.sounding)
-  local box = answer.box + spelling.box
-  return { choice = util.clone(answer.choice), springs = springs, box = box,
+                                      answer.displacement, onsets[at].sounding)
+  return { choice = util.clone(answer.choice), springs = springs, box = box, held = held,
            displacement = displacement,
            cost = box + sonority.springCost(springs, displacement, window,
                                             strength, stiffness) }
@@ -686,24 +805,27 @@ end
 
 -- The cost is taken over every spring accumulated so far rather than the onset's own, so
 -- a spelling is priced against the past it is chosen behind (§ The solve).
---shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost }
---contract: onsets, a sonority.spellings list per onset, window per strand, strength, stiffness, cap
+--shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, held={ [onset]=Held } }
+--shape: Held = { placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far>, next=<free component> }
+--contract: onsets, a spelling list per onset, seat and window per strand, strength, stiffness, cap
 --contract: → the cheapest Answer, every answer carried extended by every spelling of the onset
 --contract: the strands the onset sounds relax; the rest of an answer stands at the cents it carries
---contract: answers agreeing to half a cent on strands ahead merge; the set is cut to cap
-function sonority.search(onsets, spellings, window, strength, stiffness, cap)
+--contract: a sonority holding a waiter is charged in its own onset's slot, as its members place
+--contract: answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap
+function sonority.search(onsets, spellings, seat, window, strength, stiffness, cap)
   local ahead, start = visibleAhead(onsets), {}
   for index = 1, #window do start[index] = 0 end
-  local answers = { { choice = {}, springs = {}, box = 0, displacement = start, cost = 0 } }
+  local answers = { { choice = {}, springs = {}, box = 0, displacement = start, cost = 0,
+                      held = {} } }
 
-  for i, onset in ipairs(onsets) do
+  for i = 1, #onsets do
     local reached = {}
     for _, answer in ipairs(answers) do
       for choice, spelling in ipairs(spellings[i]) do
-        local state = extend(answer, spelling, onset, window, strength, stiffness)
+        local state = extend(answer, spelling, onsets, i, seat, window, strength, stiffness)
         state.choice[i] = choice
 
-        local key = answerKey(state.displacement, ahead[i])
+        local key = answerKey(state.displacement, ahead[i], onsets, state.held)
         if outranks(state, reached[key], i, byChoice) then reached[key] = state end
       end
     end

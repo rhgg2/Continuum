@@ -157,15 +157,26 @@ states the search may merge.**
    it is the sonority without it: the beam runs over the members that
    remain, the first of them anchoring, and enumerating a sonority's
    spellings is running that beam once per set of members left waiting.
-   A sonority holding a waiting member is scored when its last member
-   places, so an arpeggio's opening pair is charged the interval the
-   finished chord states rather than one invented before it arrived. The
-   rolled C minor then lands where the struck chord lands, within a
-   quarter cent of the lattice's answer.
+
+1. A waiting member is charged where it places. Its spelling pays at its
+   own onset for what it states — the springs among the members present
+   and the box their components carry — and the waiter's own contribution
+   to that sonority, its springs against the members it was written with
+   and the box its coords widen, falls due at the onset it takes coords
+   and is read off the spelling that places it. Those coords arrive in the
+   later sonority's frame, and are carried into the earlier one through a
+   member the two share. An arpeggio's opening pair is then charged the
+   interval the finished chord states rather than one invented before it
+   arrived, and the rolled C minor lands where the struck chord lands,
+   within a quarter cent of the lattice's answer.
 
 1. Waiting is a candidate rather than a fallback, forked beside the
    placements; it resolves only to coords no earlier sonority could have
-   offered, so a spelling is enumerated once however long it waited. The
+   offered, so a spelling is enumerated once however long it waited. What
+   an earlier sonority offered is what its beam returned rather than what
+   its moves could have reached: the beam is capped, a spelling it cut is
+   carried by no branch, and refusing a wait against one would lose that
+   spelling. The
    running score is a floor under a spelling's completions, and a
    deferral moves charge out of the floor rather than paying it, so a
    state that waits is no rival to one that spells: the cut runs within a
@@ -180,7 +191,9 @@ states the search may merge.**
    a choice of spellings so far with the displacements the choice
    relaxes to; two answers merge where the strands the future can
    still see agree to half a cent, since what the future reads of a
-   past is its cents. This is the merge the lattice forbade. It is
+   past is its cents. A deferral is a debt rather than a saving, so two
+   answers agreeing in cents are one answer only where they owe the same
+   sonorities the same members. This is the merge the lattice forbade. It is
    also what turns the budget from a refusal into a stopwatch: the
    carried set is capped, and the caps measured — 20 to 200 answers
    abreast, rounding from 0.1¢ to 0.5¢, beams of 24 and 48 — move the
@@ -248,6 +261,12 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    the lattice's one-coord-per-strand account, and it has not been
    squeezed for anomalies.
 
+1. The pair a deferral loses. A waiter's charge is read off the spelling
+   that places it, so a member of its sonority released before then states
+   no interval with it and the pair goes uncharged; a sonority holding a
+   waiting member is scored over what still sounds when that member
+   arrives.
+
 ## Open
 
 1. Refusal. The lattice refused a passage its moves could not reach;
@@ -262,11 +281,10 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    and a bound on what a wider beam could have found may be worth
    having before the search is trusted there.
 
-1. The price of deferral. Each onset spells afresh, so a member that
-   waits saves the box at every onset it skips, and a strand held under
-   changing harmony, free to wait at each of them, would be spelled at
-   its last onset alone and float untethered until then. The answer the
-   model gives is that waiting resolves only to coords no earlier
-   sonority could have offered, which is a rule the walk enforces and a
-   sonority's own beam cannot see; whether it holds a long-held strand
-   in tune along the way is unsettled.
+1. The price of deferral. A waiter pays every sonority it held once it
+   places, so waiting saves no charge in the end; what it moves is when
+   the charge is read, and the walk ranks its answers on a running score
+   the outstanding charges sit outside. A strand held under changing
+   harmony, free to wait at each onset, therefore carries a debt the cap
+   cannot see until its last onset, and whether the answers that survive
+   to there hold it in tune along the way is unsettled.

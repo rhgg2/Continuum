@@ -20,20 +20,20 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-17 sonority: charge a sonority that held a waiter, when it places (§ The candidates)
 - 2026-08-17 sonority: walk the onsets carrying capped partial answers (§ The solve)
 - 2026-08-17 sonority: derive the walk's terms from the notation (§ The solve)
 - 2026-08-17 sonority: relax from a warm start, with strands held (§ The solve)
-- 2026-08-17 tuning: the Tenney ball, as a target generator and a pane (§ The Tenney ball)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-4. Charge a sonority holding a waiting member when its last member
-   places, and enforce that a wait resolves only to coords no earlier
-   sonority could have offered. The spec pins the rolled C minor landing
-   where the struck chord lands.
+4b. Refuse a wait that resolves to coords the sonority it waited in had
+   itself enumerated, so a spelling is enumerated once however long it
+   waited. The spec pins the rolled C minor under a set that spells its
+   opening pair, where the two roads cost alike.
 5. Fill `sonority.solveToMoves`: settle the winner by one joint
    relaxation over its accumulated springs with every strand free, and
    return a tuning in cents per strand, which `trackerView` already
