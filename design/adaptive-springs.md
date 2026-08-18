@@ -251,6 +251,14 @@ states the search may merge.**
 
 ## The solve
 
+The seconds this section states are taken over an eighty-eight-note
+take as the tracker holds it — sixty-six strands over thirty-eight
+onsets — and not over the five-part take § Measured states its tunings
+over. Its held notes leave the walk's cursor lagging, so a relaxation
+there reads sixty springs over five and a half open onsets where the
+five-part take reads seventeen over one and a half; timing the walk on
+the smaller passage measures a different problem.
+
 1. The search walks the onsets carrying a set of partial answers, each
    a choice of spellings so far with the displacements the choice
    relaxes to; two answers merge where the strands the future can
@@ -259,13 +267,15 @@ states the search may merge.**
    answers agreeing in cents are one answer only where they owe the same
    sonorities the same members. This is the merge the lattice forbade. It is
    also what turns the budget from a refusal into a stopwatch: the
-   carried set is capped, and the caps measured — 20 to 200 answers
-   abreast, rounding from 0.1¢ to 0.5¢, beams of 24 and 48 — move the
-   take's cost by under one percent. The walk takes twenty answers
-   abreast and a beam of twenty-four, the cheap end of that band; the
-   cost is linear in the cap, and an overlapping arpeggio of four
-   voices, whose debts do not settle, runs 12.7 seconds at sixty
-   answers where twenty returns the same tuning in 4.1.
+   carried set is capped, and the cap moves the answer little. Two
+   hundred answers abreast, rounding from 0.1¢ to 0.5¢, and beams of 24
+   and 48 move the take's cost by under one percent; every cap from
+   three abreast to sixty returns the same cents at a beam of
+   twenty-four, on every passage measured; and two abreast loses them,
+   the take costing 282.58 against 280.24. The walk therefore
+   takes four answers abreast — one over the lowest that holds — and a
+   beam of twenty-four; the cost is linear in the cap, the take
+   answering in 0.57 seconds where twenty abreast take 1.71.
 
 1. The cut runs over two pools: the answers that owe nothing, ranked
    among themselves, and the answers that owe, ranked among themselves,
@@ -346,9 +356,9 @@ eleven-move 5-limit set. All are notated in 12-EDO, where the two
 units of § The model coincide; the figures are at stiffness 8 against
 pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 
-1. The take. The lattice sweep answers in 63.3s, placing at one offset
-   of eleven and carrying every note 40¢ flat; the springs answer in
-   1.2 seconds at cost 102.96 against the lattice's 103.18,
+1. The five-part take. The lattice sweep answers in 63.3s, placing at
+   one offset of eleven and carrying every note 40¢ flat; the springs
+   answer in 0.19 seconds at cost 102.96 against the lattice's 103.18,
    with mean displacement 6.6¢, no note past 11.4¢, and no interval
    more than 0.54¢ from pure.
 
@@ -376,8 +386,8 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 ## What it costs
 
 1. Exactness. The lattice's intervals were pure by construction; the
-   springs' are pure to the stiffness — 0.54¢ at worst over the take
-   at the stiffness measured — and an author wanting more turns the
+   springs' are pure to the stiffness — 0.54¢ at worst over the
+   five-part take at the stiffness measured — and an author wanting more turns the
    dial up.
 
 1. The single offset. The lattice stated a passage at one
@@ -434,12 +444,16 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    and a bound on what a wider beam could have found may be worth
    having before the search is trusted there.
 
-1. Whether the cap can come down. The walk's cost is linear in the cap:
-   the take answers in 4.1 seconds at twenty answers abreast, 1.3 at
-   five and 0.9 at three, at the same cents under every one of them.
-   The band § The solve measures found the answer holding from three
-   upward on every passage it took, so twenty is a margin rather than a
-   figure some passage has asked for; what would settle it is a passage
-   where a lower cap loses the answer, or enough passages failing to
-   find one. The beam's width is not such a lever — at twelve the take
-   moves a strand 41¢, so the beam is doing work at twenty-four.
+1. Whether four answers abreast is margin enough. The cap came down
+   from twenty because every passage measured returns the same cents
+   from three abreast upward (§ The solve), which leaves one answer over
+   the lowest figure measured rather than a bound on what a wider cap
+   could have found. That margin is measured at the beam the walk takes
+   and does not survive a wider one: at forty-eight the five-part take
+   under a septimal set of eleven moves comes back at 103.78 at every
+   cap up to five, against the 102.96 twenty abreast returns, the
+   spellings the wider beam admits crowding the capped walk. The beam is
+   meanwhile doing work at twenty-four — at twelve the eighty-eight-note
+   take moves a strand 41¢ from where twenty-four places it — so what
+   would settle the cap is a passage that loses the answer at the width
+   the walk actually takes.

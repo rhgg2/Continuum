@@ -1072,9 +1072,9 @@ end
 
 ----- The placement
 
--- Beam width and walk breadth, at the cheap end of the band § The solve measures: the
--- answer holds from a cap of three upward on every passage measured, cost linear in both.
-local WIDTH, CAP = 24, 20
+-- Beam width and walk breadth (design/adaptive-springs.md § Open): the width is doing work,
+-- the cap one over the lowest that answers alike at this width on every passage measured.
+local WIDTH, CAP = 24, 4
 
 -- The moves facility's solve: intervals rather than points, spelled by the beam under a
 -- frozen past, settled by joint relaxation (design/adaptive-springs.md § The solve).

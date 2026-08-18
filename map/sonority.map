@@ -50,7 +50,7 @@
   @const TOLERANCE, SWEEPS = 1e-4, 1000  @ 362
   @const DEFERRED = '?'  @ 501
   @const AUDIBLE = 0.5  @ 720
-  @const WIDTH, CAP = 24, 20  @ 1077
+  @const WIDTH, CAP = 24, 4  @ 1077
 
 # Private functions
   -- The box
