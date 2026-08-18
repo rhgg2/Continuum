@@ -524,7 +524,7 @@ written on.**
 
 27. Those figures are floors in a second sense: the passages they are
     measured over are triads and sevenths, five chords at most. A take
-    of five-part writing — forty-three notes, thirty strands over
+    of five-part writing — sixty-six notes, forty strands over
     sixteen sonorities — states the shape: cost is linear in the
     number of chord changes and exponential in the width of one.
 

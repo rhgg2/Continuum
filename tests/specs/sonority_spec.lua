@@ -1186,6 +1186,33 @@ return {
   },
 
   {
+    name = 'search: a wait that lands tied to nothing refuses the road that took it',
+    run = function()
+      -- A released chord leaves its bass to the sonority that follows, so at arity two it is
+      -- the upper note that falls out and the bass that sustains into the next. The C waits
+      -- through that onset and lands beside a G its own sonority never held: the completion
+      -- ties it to nobody, so it states no interval there and is charged none, which is the
+      -- price the refusal puts at everything (§ The candidates).
+      local strands = sonority.strands({ event(0, 76, 480), event(0, 60, 960),
+                                         event(480, 67, 960) }, pitchClass)
+      local onsets, lists, window, seat = termsOf(strands, 2, fifthsAndThirds)
+      t.deepEq(onsets[2].members, { 3, 1 }, 'the released upper note gone by the second onset')
+
+      local deferring
+      for k, spelling in ipairs(lists[1]) do
+        if #spelling.waiting > 0 then deferring = k end
+      end
+      t.truthy(deferring, 'the first sonority offering a road that defers the pair')
+      t.eq(lists[1][deferring].box, 0, 'which states nothing and so carries no box at all')
+
+      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      t.truthy(answer.choice[1] ~= deferring, 'the walk refusing it rather than taking it free')
+      nearly(settledFrom(answer, window, 1, 8), 3.9592,
+        'and spelling the pair where it stands, at what that road costs')
+    end,
+  },
+
+  {
     name = 'search: the cut runs over the answers that owe and the answers that have paid',
     run = function()
       -- A road that owes has moved charge out of its running score, so ranked against one

@@ -769,10 +769,11 @@ local function answerKey(displacement, ahead, onsets, held)
 end
 
 -- What a spelling makes of a sonority still waiting: a waiter it places takes coords in the
--- held sonority's frame through a member the two share, alone where they share none.
+-- held sonority's frame through a member the two share, and nothing where they share none.
 --invariant: a waiter reaching two components merges them, every member shifted into the one frame
+--invariant: a waiter tied to no member states no interval there, so its completion fails
 local function complete(entry, members, spelling)
-  local placed, waiting, free = util.clone(entry.placed), util.clone(entry.waiting), entry.next
+  local placed, waiting = util.clone(entry.placed), util.clone(entry.waiting)
   local landed = false
 
   for _, member in ipairs(members) do
@@ -785,49 +786,46 @@ local function complete(entry, members, spelling)
           util.add(hosts, other)
         end
       end
+      if #hosts == 0 then return nil end
+
       waiting[member] = nil
       landed = true
 
-      if #hosts == 0 then
-        placed[member] = { coords = {}, component = free }
-        free = free + 1
-      else
-        local component = placed[hosts[1]].component
-        local coords    = rebase(landing.coords, spelling.placed[hosts[1]].coords,
-                                 placed[hosts[1]].coords)
-        placed[member] = { coords = coords, component = component }
+      local component = placed[hosts[1]].component
+      local coords    = rebase(landing.coords, spelling.placed[hosts[1]].coords,
+                               placed[hosts[1]].coords)
+      placed[member] = { coords = coords, component = component }
 
-        for k = 2, #hosts do
-          local merging = placed[hosts[k]].component
-          if merging ~= component then
-            local through = rebase(landing.coords, spelling.placed[hosts[k]].coords,
-                                   placed[hosts[k]].coords)
-            for other, at in pairs(placed) do
-              if at.component == merging then
-                placed[other] = { coords = rebase(at.coords, through, coords),
-                                  component = component }
-              end
+      for k = 2, #hosts do
+        local merging = placed[hosts[k]].component
+        if merging ~= component then
+          local through = rebase(landing.coords, spelling.placed[hosts[k]].coords,
+                                 placed[hosts[k]].coords)
+          for other, at in pairs(placed) do
+            if at.component == merging then
+              placed[other] = { coords = rebase(at.coords, through, coords),
+                                component = component }
             end
           end
         end
       end
     end
   end
-  return placed, waiting, free, landed
+  return placed, waiting, landed
 end
 
 -- The entry a spelling that defers opens: what it placed, whom it left, and what it has
--- been charged so far, with the first component id its waiters may stand alone under.
+-- been charged so far.
 local function heldBy(spelling)
-  local waiting, free = {}, 1
+  local waiting = {}
   for _, member in ipairs(spelling.waiting) do waiting[member] = true end
-  for _, at in pairs(spelling.placed) do free = math.max(free, at.component + 1) end
-  return { placed = spelling.placed, waiting = waiting, box = spelling.box, next = free }
+  return { placed = spelling.placed, waiting = waiting, box = spelling.box }
 end
 
 -- One answer extended by one spelling: the springs and box it has paid, each sonority it
 -- still holds charged again for what this spelling places, the onset's own strands relaxed.
 --contract: nil where a wait comes back with a placement its own sonority offered (§ The candidates)
+--contract: nil where a wait lands tied to no member of the sonority that deferred it
 local function extend(answer, spelling, onsets, at, seat, window, strength, stiffness, offered)
   local springs, held = util.clone(answer.springs), {}
   local box = answer.box + spelling.box
@@ -837,7 +835,8 @@ local function extend(answer, spelling, onsets, at, seat, window, strength, stif
     local entry = answer.held[onset]
     if entry then
       local members = onsets[onset].members
-      local placed, waiting, free, landed = complete(entry, members, spelling)
+      local placed, waiting, landed = complete(entry, members, spelling)
+      if not placed then return nil end
       if landed and offered[onset][placementKey(members, placed, waiting)] then return nil end
 
       local charged, widened = chargeOf(members, seat, placed)
@@ -845,7 +844,7 @@ local function extend(answer, spelling, onsets, at, seat, window, strength, stif
       springs[onset] = charged
       box = box - entry.box + widened
       if next(waiting) then
-        held[onset] = { placed = placed, waiting = waiting, box = widened, next = free }
+        held[onset] = { placed = placed, waiting = waiting, box = widened }
       end
     end
   end
@@ -862,7 +861,7 @@ end
 -- The cost is taken over every spring accumulated so far rather than the onset's own, so
 -- a spelling is priced against the past it is chosen behind (§ The solve).
 --shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, held={ [onset]=Held } }
---shape: Held = { placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far>, next=<free component> }
+--shape: Held = { placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }
 --contract: onsets, a spelling list per onset, seat and window per strand, strength, stiffness, cap
 --contract: → the cheapest Answer, every answer carried extended by every spelling of the onset
 --contract: the strands the onset sounds relax; the rest of an answer stands at the cents it carries

@@ -207,6 +207,17 @@ states the search may merge.**
    alone nothing reaches the minor third, so the resolution states
    something new and the wait stands.
 
+1. A completion tied to nothing refuses the road that took the deferral.
+   The waiter's coords arrive in the later sonority's frame and reach the
+   earlier one through a member the two share; where they share none
+   there is no frame to carry them back, and the waiter states no
+   interval at the onset it deferred. Two sonorities come to share
+   nothing once the walk has turned over between them — a released upper
+   note drops out of the sonorities that follow, while the bass that
+   sustained under it places in one of them. The price of saying nothing
+   is everything wherever it is said, so the road fails here as it fails
+   at the beam, and the pair is spelled where it stood.
+
 ## The solve
 
 1. The search walks the onsets carrying a set of partial answers, each
@@ -230,8 +241,9 @@ states the search may merge.**
    into a rolled seventh, and 37,872 of 64,977 by the fifth. The exact
    rule is a pool per outstanding wait, as the beam's cut runs within a
    waiting set; that grain returns what the two pools return on every
-   passage measured, and multiplies where the debts do not settle
-   (§ Open 3), so the walk takes the pair.
+   passage measured, and multiplies where the debts do not settle — an
+   overlapping arpeggio of four voices owes 2, 6, 24, 120 and 720
+   patterns over five onsets — so the walk takes the pair.
 
 1. A relaxation along the walk frees the strands the onset sounds —
    those born there, and those a note carries through it — and the rest
@@ -248,17 +260,17 @@ states the search may merge.**
 
 ## Measured
 
-The passages are the sibling documents' and the five-part take — 43
-notes, thirty strands over sixteen sonorities, under its own
+The passages are the sibling documents' and the five-part take — 66
+notes, forty strands over sixteen sonorities, under its own
 eleven-move 5-limit set. All are notated in 12-EDO, where the two
 units of § The model coincide; the figures are at stiffness 8 against
 pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 
 1. The take. The lattice sweep answers in 63.3s, placing at one offset
    of eleven and carrying every note 40¢ flat; the springs answer in
-   one to three seconds at cost 97.78 against the lattice's 103.18,
-   with mean displacement 5.7¢, no note past 22¢, and no interval more
-   than 1.69¢ from pure.
+   under three seconds at cost 102.96 against the lattice's 103.18,
+   with mean displacement 6.6¢, no note past 11.4¢, and no interval
+   more than 0.54¢ from pure.
 
 1. A ii–V–I of sevenths. The walk returns what an exhaustive search
    over its spelling lists returns — 18.3248, over 13,824 choices —
@@ -284,7 +296,7 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 ## What it costs
 
 1. Exactness. The lattice's intervals were pure by construction; the
-   springs' are pure to the stiffness — 1.69¢ at worst over the take
+   springs' are pure to the stiffness — 0.54¢ at worst over the take
    at the stiffness measured — and an author wanting more turns the
    dial up.
 
@@ -312,13 +324,12 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    no interval with it and the pair goes uncharged; a sonority holding a
    waiting member is scored over what still sounds when that member
    arrives. Two members of one sonority that wait and place at different
-   onsets lose their pair the same way: the first to place finds no placed
-   fellow to join, so it stands in a component of its own, though both are
-   placed by the end. A rolled dominant seventh under the eleven-move set
-   took that road, coming back 2.32 under the road that spelled as it
-   went, at a tuning the two agree on within 0.03¢; the refusal of
-   § The candidates removed it there, and does not close the stagger in
-   general.
+   onsets would lose their pair the same way, but the first to place finds
+   no placed fellow to join, and a completion tied to nothing refuses the
+   road that took it (§ The candidates). A rolled dominant seventh under
+   the eleven-move set took that road, coming back 2.32 under the road
+   that spelled as it went, at a tuning the two agree on within 0.03¢;
+   what stands in its place is the road that spelled the pair as it went.
 
 ## Open
 
@@ -333,13 +344,3 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    members and beyond its answer is uncontradicted rather than proved,
    and a bound on what a wider beam could have found may be worth
    having before the search is trusted there.
-
-1. How long a member may wait. A member waits while it sounds, so where
-   sustains cross the bar line several sonorities are owed at once and
-   the outstanding patterns multiply: an overlapping arpeggio of four
-   voices reaches 2, 6, 24, 120 and 720 of them over five onsets, which
-   is what puts a pool per pattern out of reach. The two pools of
-   § The solve hold that to a constant, at the price of ranking patterns
-   that owe different amounts against each other. A bound on the wait
-   itself would let the exact rule back in, and what the bound should be
-   is unsettled.
