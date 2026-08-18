@@ -484,13 +484,14 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     end
   end
 
-  -- Lasso rubber band: free rect anchored at the press and drag points, not
-  -- grid-snapped; clip widened to paneR so it can reach the dead space.
-  if lassoCand then
-    local lx0 = colX(math.max(lassoCand.colLo, sc))
-    local lx1 = math.min(colX(lassoCand.colHi), g.paneR)
-    local ly0 = rowYs(math.max(av:qnToRow(lassoCand.qnLo), sr))
-    local ly1 = rowYs(math.min(av:qnToRow(lassoCand.qnHi), sr + visRows))
+  -- Rubber band: the in-flight lasso, else the standing Shift+arrow rect. The
+  -- lasso's rect is free, not grid-snapped; clip widened to paneR for dead space.
+  local band = lassoCand or av:selectBand()
+  if band then
+    local lx0 = colX(math.max(band.colLo, sc))
+    local lx1 = math.min(colX(band.colHi), g.paneR)
+    local ly0 = rowYs(math.max(av:qnToRow(band.qnLo), sr))
+    local ly1 = rowYs(math.min(av:qnToRow(band.qnHi), sr + visRows))
     if lx1 > lx0 and ly1 > ly0 then
       ps.pushClip(rect(g.paneLeft, oy, g.paneR, oy + g.availH), false)
       ps.fill(rect(lx0, ly0, lx1, ly1), 'band.fill')

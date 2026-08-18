@@ -32,7 +32,7 @@ local ap = {}
 
 --contract: bind takes no take — arrange is project-wide; coord may call with nil or a take.
 function ap:bind() end
-function ap:unbind() end
+function ap:unbind() av:dropBand() end
 
 --contract: seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
 function ap:seedCursorFromReaper() av:seedCursor() end

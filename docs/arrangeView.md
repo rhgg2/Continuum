@@ -57,8 +57,9 @@ over the same set, for the mouse path and the duplicate commands.
 Cursor and selection are separate pointers, and that is deliberate. The
 cursor is the keyboard caret — drawn as a horizontal I-beam on the top
 edge of the cursor row; the selection is a set of highlighted takes.
-Cursor nav never changes the selection: the caret moves on its own, the
-selected takes keep their indicator.
+Plain cursor nav never changes the selection: the caret moves on its
+own, the selected takes keep their indicator. Shift+arrow is the
+exception, and builds the selection out of the caret's own travel.
 
 Selection is decoupled from action. An edit command resolves its
 targets through `actionTargets`: the whole selection if one is held,
@@ -76,6 +77,29 @@ one undo block. Nudge is all-or-nothing: it pre-checks the whole group
 against `am:moveTake`'s occupied-start rule and refuses the move if any
 member is blocked, then applies the moves in travel order so a
 contiguous block never collides with an unmoved member.
+
+### Keyboard selection
+
+Shift+arrow selects by the lasso's rule, with the rect drawn by keys
+rather than swept by the mouse. The first press of a run pins an anchor
+at the cursor cell; each press then moves the cursor and replaces the
+selection with the takes the anchor→cursor rect covers. Both end cells
+are covered whole, so a run grows a block; a press back towards the
+anchor drops the takes it uncovers.
+
+The rect paints as a rubber band — the same one the lasso draws — and
+it stands as long as the run does. What takes it down is cmgr's
+spring-loaded dispatch rather than a list of commands kept here: arming
+pushes a scope whose `keepAlive` holds just the four Shift+arrow
+commands, so the first command that isn't one of them bails the scope,
+and the band goes with it. The selection the band built stays behind.
+
+The mouse never reaches dispatch, so a click or a lasso drops the
+anchor itself and leaves the spent scope for the next command to pop; a
+cursor move drops it the same way, whether from an arrow key or the
+advance after a drop. Leaving the page takes the band down too, so the
+scope never outlives the page that armed it, and the next Shift+arrow
+re-anchors wherever the caret then sits.
 
 ### Lasso
 

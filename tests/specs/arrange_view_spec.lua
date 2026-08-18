@@ -39,6 +39,15 @@ local function takeAt(list, startQN)
   for _, take in ipairs(list) do if take.startQN == startQN then return take end end
 end
 
+-- Layout for the Shift+arrow cases: tr1 holds takes at rows 0, 1, 3 and 6, tr2 one at row 0.
+local shiftNavItems = {
+  { track = 'tr1', name = 'a', pos = 0 },
+  { track = 'tr1', name = 'b', pos = 1 },
+  { track = 'tr1', name = 'e', pos = 3 },
+  { track = 'tr1', name = 'c', pos = 6 },
+  { track = 'tr2', name = 'd', pos = 0 },
+}
+
 return {
   {
     name = 'cursor defaults to (0,0); setCursor clamps negatives and floors',
@@ -306,6 +315,123 @@ return {
       t.eq(cand.set[a.take], true, 'tr1 take in band selected')
       t.eq(cand.set[b.take], true, 'tr2 take in band selected')
       t.eq(cand.set[c.take], nil,  'take below the band not selected')
+    end,
+  },
+
+  {
+    name = 'Shift+arrow selects every take the anchor-to-cursor rect covers',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')   -- anchor row 0, cursor row 1 -> QN 0..2
+      local sel = av:selectionSet()
+      t.eq(sel[takeAt(av:tracksTakes(0), 0).take], true, 'take at row 0 selected')
+      t.eq(sel[takeAt(av:tracksTakes(0), 1).take], true, 'take at row 1 selected')
+      t.eq(sel[takeAt(av:tracksTakes(0), 3).take], nil,  'take past the rect untouched')
+      t.eq(sel[takeAt(av:tracksTakes(1), 0).take], nil,  'other column untouched')
+      t.eq(av:cursorRow(), 1, 'the caret moved with the selection')
+    end,
+  },
+
+  {
+    name = 'Shift+arrow sideways widens the rect into the next column',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      h.cmgr:invoke('arrangeSelectRight')
+      local sel = av:selectionSet()
+      t.eq(#util.keys(sel), 3, 'both tr1 takes plus the tr2 take')
+      t.eq(sel[takeAt(av:tracksTakes(1), 0).take], true, 'tr2 take swept in')
+    end,
+  },
+
+  {
+    name = 'Shift+arrow back toward the anchor drops what it uncovers',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      h.cmgr:invoke('arrangeSelectDown')   -- rows 0..2 -> QN 0..3
+      t.eq(#util.keys(av:selectionSet()), 2, 'two takes under the grown rect')
+      h.cmgr:invoke('arrangeSelectUp')
+      h.cmgr:invoke('arrangeSelectUp')     -- back to rows 0..0 -> QN 0..1
+      local sel = av:selectionSet()
+      t.eq(#util.keys(sel), 1, 'the rect shrank back to one row')
+      t.eq(sel[takeAt(av:tracksTakes(0), 0).take], true, 'the anchor row take is what is left')
+    end,
+  },
+
+  {
+    name = 'a plain cursor move ends the run, so the next Shift+arrow re-anchors',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')   -- rows 0..1 selected
+      h.cmgr:invoke('arrangeCursorDown')   -- cursor to row 2, anchor dropped
+      h.cmgr:invoke('arrangeSelectDown')   -- fresh anchor at row 2 -> QN 2..4
+      local sel = av:selectionSet()
+      t.eq(#util.keys(sel), 1, 'only the take under the new rect')
+      t.eq(sel[takeAt(av:tracksTakes(0), 3).take], true, 'the take at row 3')
+    end,
+  },
+
+  {
+    name = 'the band stands through a run and comes down on the next command',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      local band = av:selectBand()
+      t.eq(band.colLo, 0, 'band starts at the cursor column')
+      t.eq(band.colHi, 1, 'and covers that column whole')
+      t.eq(band.qnLo,  0, 'top edge at the anchor row')
+      t.eq(band.qnHi,  2, 'bottom edge past the cursor row')
+      h.cmgr:invoke('arrangeSelectDown')
+      t.eq(av:selectBand().qnHi, 3, 'a second Shift+arrow grows the same band')
+      h.cmgr:invoke('arrangeAdvanceBy2')   -- touches neither cursor nor selection
+      t.eq(av:selectBand(), nil, 'the band came down on the first other command')
+      t.eq(#util.keys(av:selectionSet()), 2, 'the selection it made outlives it')
+      h.cmgr:pop('arrange')   -- asserts if the band scope was left on the stack
+    end,
+  },
+
+  {
+    name = 'a click takes the band down without waiting for a command',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      av:setCursor(4, 0)                   -- the mouse path, not a command
+      t.eq(av:selectBand(), nil, 'the band went with the cursor')
+      h.cmgr:invoke('arrangeAdvanceBy2')
+      h.cmgr:pop('arrange')   -- that command's bail popped the scope left behind
+    end,
+  },
+
+  {
+    name = 'dropBand takes the band down and pops its scope',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      av:dropBand()
+      t.eq(av:selectBand(), nil, 'band down')
+      h.cmgr:pop('arrange')   -- asserts unless the scope went with it
     end,
   },
 

@@ -53,6 +53,7 @@
   @use call    ar:renderStatusBar  @ renderStatusBar:65
   @use call    ar:toolbarSegments  @ toolbarSegments:63
   @use call    av:cursorCol  @ arrange.currentTrackIdx:42
+  @use call    av:dropBand  @ unbind:35
   @use call    av:dropSlot  @ arrange.dropSlot:53
   @use call    av:hasPlacedTakes  @ arrange.hasPlacedTakes:54
   @use call    av:isParkedTake  @ arrange.isParkedTake:55

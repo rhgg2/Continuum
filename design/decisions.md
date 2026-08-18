@@ -12,6 +12,14 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-19** — Arrange's keyboard selection is the lasso's rule with the rect drawn by keys: a
+  Shift+arrow run pins an anchor at the cursor cell and selects the takes the anchor→cursor rect
+  covers, both end cells whole. Rejected: a walk that adds the take under each new cursor position,
+  which cannot deselect on reversal and leaves no rect to paint. The band that draws that rect comes
+  down through cmgr's spring-loaded scope — arming pushes a scope whose keepAlive holds the four
+  Shift+arrow commands, so the first command that isn't one of them bails it — rather than an
+  enumerated list of commands held in av, which would go stale as the arrange scope grows.
+
 - **2026-08-19** — tuning.findTemper is gone, and a temperament resolves by name through cm alone:
   cm:get('tempers', { mergeTiers = true, pick = name }). The function had drifted from its own
   documentation — docs/tuning.md said it resolved only within the user library, while its body fell

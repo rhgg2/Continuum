@@ -9,6 +9,7 @@
 --invariant: gridRows/gridCols set by the page each frame; followViewport runs on every cursor move.
 --invariant: av registers arrange-scope command bodies; page owns key bindings and createSlot.
 --invariant: selection is a per-session set of take handles; setFocus/focus are single-element.
+--invariant: a Shift+arrow band lasts until the first command that isn't a Shift+arrow.
 --invariant: paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.
 
 local util = require 'util'
@@ -27,6 +28,10 @@ local gridRows, gridCols   = 0, 0
 local maxCol      = nil
 local paletteSlot = nil
 local selection   = {}   -- ordered set of opaque take handles (the selection)
+-- The cell a Shift+arrow selection run started from, in cursor coordinates;
+-- nil between runs, since every other cursor move or selection drops it.
+local selAnchor   = nil  -- { row, col } | nil
+local bandArmed   = false   -- the band's spring-loaded scope is on the cmgr stack
 -- Play-head follow: suspended by a manual wheel-pan, re-armed on the next
 -- play-start or transport seek. lastPlayRow drives the seek-discontinuity test.
 local followSuspended = false
@@ -106,10 +111,63 @@ local function setSelection(handles)
     if handle then util.add(kept, handle) end
   end
   selection = kept
+  selAnchor = nil
 end
 
 local function selectionIndex(handle)
   for i, held in ipairs(selection) do if held == handle then return i end end
+end
+
+-- Takes whose span intersects a { colLo, colHi, qnLo, qnHi } rect, in the fractional-column
+-- × QN space both selection gestures sweep; a column counts if the rect overlaps its band.
+local function takesInRect(rect)
+  local takes, set = {}, {}
+  for trackIdx = math.max(0, math.floor(rect.colLo)), math.floor(rect.colHi) do
+    if trackIdx < rect.colHi and trackIdx + 1 > rect.colLo then
+      for _, take in ipairs(am:tracksTakes(trackIdx)) do
+        if take.startQN < rect.qnHi and take.startQN + take.lengthQN > rect.qnLo then
+          util.add(takes, take.take)
+          set[take.take] = true
+        end
+      end
+    end
+  end
+  return takes, set
+end
+
+-- The rect an anchor cell and the cursor cell span: both end cells covered
+-- whole, whichever way round the run went.
+local function rectFromAnchor(anchor)
+  local bpr = av:beatPerRow()
+  return { colLo = math.min(anchor.col, cursorCol),
+           colHi = math.max(anchor.col, cursorCol) + 1,
+           qnLo  =  math.min(anchor.row, cursorRow)      * bpr,
+           qnHi  = (math.max(anchor.row, cursorRow) + 1) * bpr }
+end
+
+-- While a band is up this spring-loaded scope rides the cmgr stack, so the first
+-- command that isn't a Shift+arrow bails it. See docs/arrangeView.md § Keyboard selection.
+local selectScope = cmgr:scope('arrangeSelect')
+selectScope.springLoaded = true
+selectScope.keepAlive    = { arrangeSelectUp   = true, arrangeSelectDown  = true,
+                             arrangeSelectLeft = true, arrangeSelectRight = true }
+
+-- Popped only where the scope is known to be on top — cmgr's bail and the page
+-- leaving; a click clears the anchor and lets the next command pop what is left.
+local function disarmBand()
+  selAnchor = nil
+  if bandArmed then bandArmed = false; cmgr:pop(selectScope) end
+end
+selectScope.onBail = disarmBand
+
+--invariant: Shift+arrow moves the cursor and selects the takes the anchor→cursor rect covers.
+--invariant: the anchor lasts only a Shift+arrow run; any other cursor move or selection drops it.
+local function selectBy(dRow, dCol)
+  local anchor = selAnchor or { row = cursorRow, col = cursorCol }
+  av:setCursor(cursorRow + dRow, cursorCol + dCol)   -- clamps, and drops the anchor
+  setSelection(takesInRect(rectFromAnchor(anchor)))
+  selAnchor = anchor   -- re-pinned last: setCursor and setSelection each dropped it
+  if not bandArmed then bandArmed = true; cmgr:push(selectScope) end
 end
 
 -- Wheel-pan moves the viewport without the caret; gridRows/gridCols 0
@@ -310,6 +368,7 @@ function av:setCursor(row, col)
   local c = math.max(0, math.floor(col))
   if maxCol then c = math.min(c, maxCol) end
   cursorCol = c
+  selAnchor = nil   -- a bare cursor move ends any Shift+arrow run
   followViewport()
 end
 
@@ -379,6 +438,12 @@ end
 function av:setSelection(handles) setSelection(handles) end
 function av:clearSelection()      setSelection {} end
 
+--contract: the standing Shift+arrow rect as {colLo,colHi,qnLo,qnHi}; nil when no band is up.
+function av:selectBand() return selAnchor and rectFromAnchor(selAnchor) or nil end
+
+--contract: takes the band down and pops its scope; the page calls this on unbind.
+function av:dropBand() disarmBand() end
+
 --contract: setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).
 function av:setPaletteSlot(idx)
   paletteSlot = idx and math.max(0, math.min(61, math.floor(idx))) or nil
@@ -391,6 +456,7 @@ function av:setBeatPerRow(v)
   local old = cm:get('arrangeBeatPerRow')
   if v == old then return end
   cursorRow = math.floor(cursorRow * old / v + 0.5)
+  if selAnchor then selAnchor.row = math.floor(selAnchor.row * old / v + 0.5) end
   cm:set('project', 'arrangeBeatPerRow', v)
   followViewport()
 end
@@ -524,21 +590,10 @@ end
 
 --contract: takes intersecting the free press/drag rect (colFrac x QN); returns bounds + handles.
 function av:lassoCandidate(press, mcol, mqn)
-  local colLo, colHi = math.min(press.mcol, mcol), math.max(press.mcol, mcol)
-  local qnLo,  qnHi  = math.min(press.qn,   mqn),  math.max(press.qn,   mqn)
-  local takes, set = {}, {}
-  for trackIdx = math.max(0, math.floor(colLo)), math.floor(colHi) do
-    if trackIdx < colHi and trackIdx + 1 > colLo then
-      for _, take in ipairs(am:tracksTakes(trackIdx)) do
-        if take.startQN < qnHi and take.startQN + take.lengthQN > qnLo then
-          util.add(takes, take.take)
-          set[take.take]    = true
-        end
-      end
-    end
-  end
-  return { colLo = colLo, colHi = colHi, qnLo = qnLo, qnHi = qnHi,
-           takes = takes, set = set }
+  local rect = { colLo = math.min(press.mcol, mcol), colHi = math.max(press.mcol, mcol),
+                 qnLo  = math.min(press.qn,   mqn),  qnHi  = math.max(press.qn,   mqn) }
+  rect.takes, rect.set = takesInRect(rect)
+  return rect
 end
 
 -- Commit a group drag: move all members by deltaQN (travel-ordered) or
@@ -626,6 +681,10 @@ arrange:registerAll {
   arrangePageDown     = function() moveCursorBy( PAGE_ROWS, 0) end,
   arrangeHome         = function() av:setCursor(0, cursorCol) end,
   arrangeEnd          = function() av:setCursor(av:qnToRow(am:projectEndQN()), cursorCol) end,
+  arrangeSelectUp     = function() selectBy(-1,  0) end,
+  arrangeSelectDown   = function() selectBy( 1,  0) end,
+  arrangeSelectLeft   = function() selectBy( 0, -1) end,
+  arrangeSelectRight  = function() selectBy( 0,  1) end,
   arrangeNudgeBack    = { function() nudgeSelected(-1) end, 'Nudge take back'    },
   arrangeNudgeForward = { function() nudgeSelected( 1) end, 'Nudge take forward' },
   arrangeShrinkTake   = { function() resizeSelected(-1) end, 'Shrink take' },
