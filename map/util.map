@@ -1,29 +1,29 @@
-@module util  src=util.lua  loc=647  mode=namespace  self=util
+@module util  src=util.lua  loc=655  mode=namespace  self=util
 
 # Invariants & contracts
   @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.  @ 42
-  @contract  runs the named module's body afresh per call (compiled chunk cached), passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 628
+  @contract  runs the named module's body afresh per call (compiled chunk cached), passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 636
 
 # Module-level constants
   @const util = {}  @ 5
       @invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE/OPEN sentinels  @ 3
       @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs  @ 4
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 322
-  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 341
-  @const LUA_KEYWORDS = {}  @ 540
-  @const chunkCache = {}  @ 633
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 330
+  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 349
+  @const LUA_KEYWORDS = {}  @ 548
+  @const chunkCache = {}  @ 641
 
 # Private functions
   @fn print(...)  @ 15-17
-  @fn escape_string(s)  @ 208-223
+  @fn escape_string(s)  @ 216-231
   -- Lua-literal disk format (human-editable; read by load(), never P_EXT)
-  @fn bareKey(k)  @ 546-548
-  @fn luaNumber(n)  @ 551-556
+  @fn bareKey(k)  @ 554-556
+  @fn luaNumber(n)  @ 559-564
       -- inf/nan are not bare Lua, but their arithmetic forms are and need no env.
-  @fn nonFiniteNote(v)  @ 559-563
+  @fn nonFiniteNote(v)  @ 567-571
       -- Inline note so a hand-editor recognises the arithmetic non-finite forms.
-  @fn emitTable(tbl, indent, seen)  @ 567-603
-  @fn prettyEmit(value, indent, seen)  @ 605-612
+  @fn emitTable(tbl, indent, seen)  @ 575-611
+  @fn prettyEmit(value, indent, seen)  @ 613-620
 
 # Public API (util.*)
   @api util.print(...)  @ 7-13
@@ -47,79 +47,82 @@
       -- in a guid, track-key, or stringified scalar. Never split back apart.
       -- Small arities unroll to a single concat (per-event on the load/rebuild key
       -- paths); tostring kept per arg so output is identical for any arg type.
-  @api util.keys(t)  @ 137-141
-  @api util.compact(t, n)  @ 144-148
+  @api util.keyFrom(parts)  @ 139-143
+      -- The same key from a list a caller has built its parts up in: unpacking a long one
+      -- onto the stack to pass it costs more than the join it is passed for.
+  @api util.keys(t)  @ 145-149
+  @api util.compact(t, n)  @ 152-156
       -- Sparse → dense; n is the pre-sparse length.
-  @api util.seek(items, mode, key, filter, keyFn)  @ 151-172
-      @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop  @ 150
-  @api util.insertSorted(list, item, less)  @ 176-184
+  @api util.seek(items, mode, key, filter, keyFn)  @ 159-180
+      @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop  @ 158
+  @api util.insertSorted(list, item, less)  @ 184-192
       -- Splice item into an already-sorted list at its lower bound (before any element not less than it),
       -- by the same less-than a table.sort(list, less) would use. O(log n) search plus the shift.
-  @api util.clone(src, exclude, deep)  @ 187-196
-      @contract  exclude applies only to the outermost table; deep recursion drops the exclude set  @ 186
-  @api util.deepClone(src)  @ 198
-  @api util.deepEq(a, b)  @ 200-206
-  @api util.installHooks(owner)  @ 226-243
-      @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks  @ 225
-  @api util.isNote(e)  @ 245
-  @api util.between(events, lo, hi, filter)  @ 248-259
-      @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap  @ 247
-  @api util.clamp(val,min,max)  @ 261-269
-  @api util.setDigit(val, d, pos, base, keepBelow)  @ 271-276
-  @api util.snapTo(v, dir, interval)  @ 279-282
-      @contract  advances at least one full interval; values already on a boundary do not no-op  @ 278
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 284-287
-  @api util.oneOf(choices, txt)  @ 289-294
-  @api util.round(n, to)  @ 296-302
-  @api util.gcd(a, b)  @ 304-308
-  @api util.lcm(a, b)  @ 310
-  @api util.hash(s)  @ 314-320
+  @api util.clone(src, exclude, deep)  @ 195-204
+      @contract  exclude applies only to the outermost table; deep recursion drops the exclude set  @ 194
+  @api util.deepClone(src)  @ 206
+  @api util.deepEq(a, b)  @ 208-214
+  @api util.installHooks(owner)  @ 234-251
+      @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks  @ 233
+  @api util.isNote(e)  @ 253
+  @api util.between(events, lo, hi, filter)  @ 256-267
+      @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap  @ 255
+  @api util.clamp(val,min,max)  @ 269-277
+  @api util.setDigit(val, d, pos, base, keepBelow)  @ 279-284
+  @api util.snapTo(v, dir, interval)  @ 287-290
+      @contract  advances at least one full interval; values already on a boundary do not no-op  @ 286
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 292-295
+  @api util.oneOf(choices, txt)  @ 297-302
+  @api util.round(n, to)  @ 304-310
+  @api util.gcd(a, b)  @ 312-316
+  @api util.lcm(a, b)  @ 318
+  @api util.hash(s)  @ 322-328
       -- FNV-1a 32-bit with the length folded into the basis. Fingerprints the
       -- projext-undo mirror manifests; collisions accepted (docs/pextStore.md § Mirror).
-  @api util.toBase36(n)  @ 324-333
-  @api util.fromBase36(txt)  @ 335-337
-  @api util.toBase62(n)  @ 343-352
-  @api util.fromBase62(txt)  @ 354-363
-  @api util.dotimes(n, v)  @ 366-374
-      @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v  @ 365
-  @api util.serialise(value, exclude, seen)  @ 377-417
-      @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)  @ 376
-  @api util.unserialise(input)  @ 420-535
-      @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string  @ 419
-  @api util.prettySerialise(value)  @ 615-617
-      @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise  @ 614
-  @api util.prettyUnserialise(text)  @ 620-626
-      @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err  @ 619
-  @api util.instantiate(name, deps)  @ 634-645
+  @api util.toBase36(n)  @ 332-341
+  @api util.fromBase36(txt)  @ 343-345
+  @api util.toBase62(n)  @ 351-360
+  @api util.fromBase62(txt)  @ 362-371
+  @api util.dotimes(n, v)  @ 374-382
+      @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v  @ 373
+  @api util.serialise(value, exclude, seen)  @ 385-425
+      @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)  @ 384
+  @api util.unserialise(input)  @ 428-543
+      @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string  @ 427
+  @api util.prettySerialise(value)  @ 623-625
+      @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise  @ 622
+  @api util.prettyUnserialise(text)  @ 628-634
+      @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err  @ 627
+  @api util.instantiate(name, deps)  @ 642-653
 
 # Calls (intra-file)
-  @call bareKey  @ emitTable:597
-  @call emitTable  @ prettyEmit:610
-  @call escape_string  @ serialise:393
-  @call luaNumber  @ prettyEmit:607
-  @call nonFiniteNote  @ emitTable:594,599
-  @call prettyEmit  @ emitTable:587,594,597,599 prettySerialise:616
+  @call bareKey  @ emitTable:605
+  @call emitTable  @ prettyEmit:618
+  @call escape_string  @ serialise:401
+  @call luaNumber  @ prettyEmit:615
+  @call nonFiniteNote  @ emitTable:602,607
+  @call prettyEmit  @ emitTable:595,602,605,607 prettySerialise:624
   @call print  @ print_r:37
-  @call util.add  @ print_r:26,30,32 picker:85 bucket:113 keys:139 compact:146 serialise:407 unserialise:445,454,465 emitTable:576
-  @call util.add  @ emitTable:594,599
+  @call util.add  @ print_r:26,30,32 picker:85 bucket:113 keys:147 compact:154 serialise:415 unserialise:453,462,473 emitTable:584
+  @call util.add  @ emitTable:602,607
   @call util.assign  @ picker:93 pick:105
-  @call util.clamp  @ nudgedScalar:286
-  @call util.clone  @ clone:192 deepClone:198
-  @call util.deepEq  @ deepEq:203
-  @call util.gcd  @ lcm:310
+  @call util.clamp  @ nudgedScalar:294
+  @call util.clone  @ clone:200 deepClone:206
+  @call util.deepEq  @ deepEq:211
+  @call util.gcd  @ lcm:318
   @call util.print  @ print:16
-  @call util.serialise  @ serialise:405,406
-  @call util.snapTo  @ nudgedScalar:285
+  @call util.serialise  @ serialise:413,414
+  @call util.snapTo  @ nudgedScalar:293
 
 # Unresolved receivers
-  @drop c:find  @ escape_string:212
-  @drop choices:gmatch  @ oneOf:290
-  @drop input:sub  @ unserialise:425,429,451
-  @drop k:match  @ bareKey:547
+  @drop c:find  @ escape_string:220
+  @drop choices:gmatch  @ oneOf:298
+  @drop input:sub  @ unserialise:433,437,459
+  @drop k:match  @ bareKey:555
   @drop keys:gmatch  @ picker:84 pick:101
-  @drop s:byte  @ hash:317
-  @drop s:gsub  @ escape_string:211
-  @drop source:subscribe  @ installHooks:240
+  @drop s:byte  @ hash:325
+  @drop s:gsub  @ escape_string:219
+  @drop source:subscribe  @ installHooks:248
 
 # REAPER API surface
   @reaper ShowConsoleMsg
@@ -131,48 +134,49 @@
   @field w REMOVE  @ 40
   @field r Undo_BeginBlock  @ atomic:71
   @field r Undo_EndBlock  @ atomic:73
-  @field r _stubs  @ instantiate:635
-  @field w _stubs  @ 629
+  @field r _stubs  @ instantiate:643
+  @field w _stubs  @ 637
   @field w add  @ add:59
   @field w assign  @ assign:46
   @field w atomic  @ atomic:68
-  @field w between  @ between:248
+  @field w between  @ between:256
   @field w bucket  @ bucket:110
-  @field w clamp  @ clamp:261
-  @field w clone  @ clone:187
-  @field w compact  @ compact:144
-  @field w deepClone  @ deepClone:198
-  @field w deepEq  @ deepEq:200
-  @field w dotimes  @ dotimes:366
-  @field r endppq  @ isNote:245
-  @field w fromBase36  @ fromBase36:335
-  @field w fromBase62  @ fromBase62:354
-  @field w gcd  @ gcd:304
-  @field w hash  @ hash:314
-  @field r huge  @ 43 serialise:385,386 unserialise:475,476 luaNumber:553,554 nonFiniteNote:560
-  @field w insertSorted  @ insertSorted:176
-  @field w installHooks  @ installHooks:226
-  @field w instantiate  @ instantiate:634
-  @field w isNote  @ isNote:245
+  @field w clamp  @ clamp:269
+  @field w clone  @ clone:195
+  @field w compact  @ compact:152
+  @field w deepClone  @ deepClone:206
+  @field w deepEq  @ deepEq:208
+  @field w dotimes  @ dotimes:374
+  @field r endppq  @ isNote:253
+  @field w fromBase36  @ fromBase36:343
+  @field w fromBase62  @ fromBase62:362
+  @field w gcd  @ gcd:312
+  @field w hash  @ hash:322
+  @field r huge  @ 43 serialise:393,394 unserialise:483,484 luaNumber:561,562 nonFiniteNote:568
+  @field w insertSorted  @ insertSorted:184
+  @field w installHooks  @ installHooks:234
+  @field w instantiate  @ instantiate:642
+  @field w isNote  @ isNote:253
   @field w key  @ key:121
-  @field w keys  @ keys:137
-  @field w lcm  @ lcm:310
-  @field w nudgedScalar  @ nudgedScalar:284
-  @field w oneOf  @ oneOf:289
-  @field r path  @ instantiate:639
+  @field w keyFrom  @ keyFrom:139
+  @field w keys  @ keys:145
+  @field w lcm  @ lcm:318
+  @field w nudgedScalar  @ nudgedScalar:292
+  @field w oneOf  @ oneOf:297
+  @field r path  @ instantiate:647
   @field w pick  @ pick:99
   @field w picker  @ picker:82
-  @field r ppq  @ seek:152 between:255,256
-  @field w prettySerialise  @ prettySerialise:615
-  @field w prettyUnserialise  @ prettyUnserialise:620
+  @field r ppq  @ seek:160 between:263,264
+  @field w prettySerialise  @ prettySerialise:623
+  @field w prettyUnserialise  @ prettyUnserialise:628
   @field w print  @ print:7
   @field w print_r  @ print_r:19
-  @field w round  @ round:296
-  @field w seek  @ seek:151
-  @field w serialise  @ serialise:377
-  @field w setDigit  @ setDigit:271
-  @field w snapTo  @ snapTo:279
-  @field w toBase36  @ toBase36:324
-  @field w toBase62  @ toBase62:343
+  @field w round  @ round:304
+  @field w seek  @ seek:159
+  @field w serialise  @ serialise:385
+  @field w setDigit  @ setDigit:279
+  @field w snapTo  @ snapTo:287
+  @field w toBase36  @ toBase36:332
+  @field w toBase62  @ toBase62:351
   @field r traceback  @ atomic:72
-  @field w unserialise  @ unserialise:420
+  @field w unserialise  @ unserialise:428

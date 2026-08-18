@@ -134,6 +134,14 @@ function util.key(...)
   return table.concat(parts, '\0')
 end
 
+-- The same key from a list a caller has built its parts up in: unpacking a long one
+-- onto the stack to pass it costs more than the join it is passed for.
+function util.keyFrom(parts)
+  local strings = {}
+  for k, part in ipairs(parts) do strings[k] = tostring(part) end
+  return table.concat(strings, '\0')
+end
+
 function util.keys(t)
   local out = {}
   for k in pairs(t) do util.add(out, k) end

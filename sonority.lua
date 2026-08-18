@@ -472,7 +472,7 @@ local DEFERRED = '?'
 local function admit(reached, seen, state, slot, placed, stiffness, lo, hi)
   local parts = util.clone(state.parts)
   parts[slot] = placed and tokenOf(placed) or DEFERRED
-  local key = util.key(table.unpack(parts))
+  local key = util.keyFrom(parts)
   if seen[key] then return end
   seen[key] = true
 
@@ -507,7 +507,7 @@ local function beamOver(seat, window, free, moves, width, stiffness)
   local start = { at = {}, components = {}, parts = {}, waits = 0, score = 0,
                   lo = -math.huge, hi = math.huge }
   for slot = 1, #seat do start.parts[slot] = '' end
-  start.key = util.key(table.unpack(start.parts))
+  start.key = util.keyFrom(start.parts)
 
   local beam = { start }
   for _ = 1, #seat do
@@ -681,12 +681,13 @@ end
 -- placements apart, so answers agreeing that closely on the strands ahead are one answer.
 local AUDIBLE = 0.5
 
--- The strands a later onset names, which is all a continuation can read of an answer:
--- what nothing ahead names is settled, however the answer arrived at it.
+-- The strands a later onset names, which is all a continuation can read of an answer, in
+-- strand order: what nothing ahead names is settled, however the answer arrived at it.
 local function visibleAhead(onsets)
   local ahead, seen = {}, {}
   for i = #onsets, 1, -1 do
-    ahead[i] = util.clone(seen)
+    ahead[i] = util.keys(seen)
+    table.sort(ahead[i])
     for _, index in ipairs(onsets[i].members) do seen[index] = true end
   end
   return ahead
@@ -720,7 +721,7 @@ local function placementKey(members, placed, waiting)
   local held = util.keys(waiting)
   table.sort(held)
   for _, member in ipairs(held) do util.add(parts, member) end
-  return util.key(table.unpack(parts))
+  return util.keyFrom(parts)
 end
 
 -- What each onset's beam returned, read as placements: the spellings a wait may not come
@@ -739,28 +740,22 @@ local function offeredBy(onsets, spellings)
 end
 
 -- An answer under the whole of what a continuation can tell it by: its cents at the strands
--- ahead rounded to where two of them stop being two, and the deferrals it has yet to pay.
+-- ahead in half-cents, and the deferrals it has yet to pay.
+--invariant: one strand list serves every answer of an onset, so its cents key by position
 local function answerKey(displacement, ahead, onsets, held)
-  local indices = util.keys(ahead)
-  table.sort(indices)
-
   local parts = {}
-  for _, index in ipairs(indices) do
-    util.add(parts, index)
-    util.add(parts, util.round(displacement[index], AUDIBLE))
+  for k, index in ipairs(ahead) do
+    parts[k] = util.round(displacement[index] / AUDIBLE)
   end
 
-  local owed = util.keys(held)
-  table.sort(owed)
-  for _, onset in ipairs(owed) do
-    local entry = held[onset]
-    util.add(parts, onset)
-    for _, member in ipairs(onsets[onset].members) do
+  for _, entry in ipairs(held) do
+    util.add(parts, entry.onset)
+    for _, member in ipairs(onsets[entry.onset].members) do
       local at = entry.placed[member]
       util.add(parts, at and tokenOf(at) or (entry.waiting[member] and '?' or ''))
     end
   end
-  return util.key(table.unpack(parts))
+  return util.keyFrom(parts)
 end
 
 -- What a spelling makes of a sonority still waiting: a waiter it places takes coords in the
@@ -809,12 +804,12 @@ local function complete(entry, members, spelling)
   return placed, waiting, landed
 end
 
--- The entry a spelling that defers opens: what it placed, whom it left, and what it has
--- been charged so far.
-local function heldBy(spelling)
+-- The entry a spelling that defers opens: which onset owes it, what it placed, whom it
+-- left, and what it has been charged so far.
+local function heldBy(spelling, at)
   local waiting = {}
   for _, member in ipairs(spelling.waiting) do waiting[member] = true end
-  return { placed = spelling.placed, waiting = waiting, box = spelling.box }
+  return { onset = at, placed = spelling.placed, waiting = waiting, box = spelling.box }
 end
 
 -- One answer extended by one spelling: the springs and box it has paid, each sonority it
@@ -826,24 +821,22 @@ local function extend(answer, spelling, onsets, at, seat, window, strength, stif
   local box = answer.box + spelling.box
   springs[at] = spelling.springs
 
-  for onset = 1, at - 1 do
-    local entry = answer.held[onset]
-    if entry then
-      local members = onsets[onset].members
-      local placed, waiting, landed = complete(entry, members, spelling)
-      if not placed then return nil end
-      if landed and offered[onset][placementKey(members, placed, waiting)] then return nil end
+  for _, entry in ipairs(answer.held) do
+    local onset   = entry.onset
+    local members = onsets[onset].members
+    local placed, waiting, landed = complete(entry, members, spelling)
+    if not placed then return nil end
+    if landed and offered[onset][placementKey(members, placed, waiting)] then return nil end
 
-      local charged, widened = chargeOf(members, seat, placed)
+    local charged, widened = chargeOf(members, seat, placed)
 
-      springs[onset] = charged
-      box = box - entry.box + widened
-      if next(waiting) then
-        held[onset] = { placed = placed, waiting = waiting, box = widened }
-      end
+    springs[onset] = charged
+    box = box - entry.box + widened
+    if next(waiting) then
+      util.add(held, { onset = onset, placed = placed, waiting = waiting, box = widened })
     end
   end
-  if #spelling.waiting > 0 then held[at] = heldBy(spelling) end
+  if #spelling.waiting > 0 then util.add(held, heldBy(spelling, at)) end
 
   local displacement = sonority.relax(springs, window, strength, stiffness,
                                       answer.displacement, onsets[at].sounding)
@@ -855,8 +848,9 @@ end
 
 -- The cost is taken over every spring accumulated so far rather than the onset's own, so
 -- a spelling is priced against the past it is chosen behind (§ The solve).
---shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, held={ [onset]=Held } }
---shape: Held = { placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }
+--shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, held={ Held,.. } }
+--shape: Held = { onset, placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }
+--invariant: an answer's debts stand in onset order, as the walk opens them and closes them in it
 --contract: onsets, a spelling list per onset, seat and window per strand, strength, stiffness, cap
 --contract: → the cheapest Answer, every answer carried extended by every spelling of the onset
 --contract: the strands the onset sounds relax; the rest of an answer stands at the cents it carries
@@ -888,7 +882,7 @@ function sonority.search(onsets, spellings, seat, window, strength, stiffness, c
     -- A deferral moves charge out of the running score rather than paying it, so a road that
     -- owes is cut among the roads that owe, and never against one that has paid (§ The solve).
     local paid, owing = {}, {}
-    for _, state in pairs(reached) do util.add(next(state.held) and owing or paid, state) end
+    for _, state in pairs(reached) do util.add(state.held[1] and owing or paid, state) end
 
     answers = {}
     for _, pool in ipairs{ paid, owing } do
