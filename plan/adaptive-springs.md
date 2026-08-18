@@ -16,20 +16,20 @@
 3. **Phase 3 — The walk** (§ The solve) — capped partial answers merged
    on visible cents, a sonority scored when its last member places; one
    joint relaxation settles the winner, filling `sonority.solveToMoves`,
-   and the stiffness surfaces as a dial beside harmonic lock ← in flight
+   and the stiffness surfaces as a dial beside harmonic lock
+   — landed 2026-08-18, six commits.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-18 trackerView: offer the springs' stiffness as a purity dial (§ The dials)
 - 2026-08-18 sonority: fill solveToMoves with the springs solve (§ The solve)
 - 2026-08-17 sonority: refuse a wait that resolves to what its sonority offered (§ The candidates, § The solve)
 - 2026-08-17 sonority: charge a sonority that held a waiter, when it places (§ The candidates)
-- 2026-08-17 sonority: walk the onsets carrying capped partial answers (§ The solve)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-6. Surface the stiffness as a slot beside harmonic lock, offered under
-   the moves facility alone and remembered as harmonic lock is; its
-   label and range settle when the brief is compiled.
+
+(empty)

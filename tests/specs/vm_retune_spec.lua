@@ -14,7 +14,8 @@
 -- With the facility on 'moves' the same target is read as intervals rather than
 -- points: sonority.solveToMoves spells the strands against one another and settles
 -- them by springs. Those cases write a C major and a C minor triad against 1/1, 5/4
--- and 3/2, the minor third being what no point of it reaches.
+-- and 3/2, the minor third being what no point of it reaches, and the purity slot
+-- is what the springs hold their intervals to.
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -304,7 +305,7 @@ return {
         local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
                      '12EDO', { DIA = DIA })
         h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', facility = facility,
-                     key = 1, sonoritySize = 5, harmonicLock = 1.5 }
+                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
         return chordAt(h, 0)
       end
 
@@ -317,9 +318,9 @@ return {
       -- own intervals, stretched by what the springs tolerate, and the pull settles where
       -- the chord as a whole sits (design/adaptive-springs.md § The model).
       local moves = retuned('moves')
-      settles(moves[60],  3.6804, 'the C carried off its seat by the pull')
-      settles(moves[64], -9.2008, 'the third a stretched 5/4 above it')
-      settles(moves[67],  5.5204, 'the fifth a narrowed 3/2 above that')
+      settles(moves[60],  3.7533, 'the C carried off its seat by the pull')
+      settles(moves[64], -9.3855, 'the third a stretched 5/4 above it')
+      settles(moves[67],  5.6302, 'the fifth a narrowed 3/2 above that')
     end,
   },
 
@@ -334,7 +335,7 @@ return {
                      '12EDO', { DIA = DIA })
         local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'DIA',
                                      facility = facility, key = 1,
-                                     sonoritySize = 5, harmonicLock = 1.5 }
+                                     sonoritySize = 5, harmonicLock = 1, purity = 8 }
         return chordAt(h, 0), refused
       end
 
@@ -343,10 +344,36 @@ return {
       t.eq(stood[63], 0, 'so nothing moved')
 
       local placed = retuned('moves')
-      settles(placed[60], -5.5204, 'the C, the chord mirroring the major triad')
-      settles(placed[63],  9.2008, 'the E flat a 6/5 above it, reached through the fifth')
-      settles(placed[67], -3.6804, 'the fifth a 3/2 above the C')
-      settles(placed[75],  9.2008, 'and the octave doubling seated in its own register')
+      settles(placed[60], -5.6314, 'the C, the chord mirroring the major triad')
+      settles(placed[63],  9.3842, 'the E flat a 6/5 above it, reached through the fifth')
+      settles(placed[67], -3.7546, 'the fifth a 3/2 above the C')
+      settles(placed[75],  9.3842, 'and the octave doubling seated in its own register')
+    end,
+  },
+
+  {
+    name = 'purity prices how nearly the spelled intervals sound pure',
+    run = function(harness)
+      -- The same triad under two purities: soft springs leave the third audibly wide,
+      -- and stiff ones close it by carrying the notes further from where they were
+      -- written (design/adaptive-springs.md § The dials).
+      local function retuned(purity)
+        local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
+                     '12EDO', { DIA = DIA })
+        h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', facility = 'moves',
+                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = purity }
+        return chordAt(h, 0)
+      end
+
+      local soft = retuned(2)
+      settles(soft[60],  3.3517, 'soft springs seat the C nearest where it was written')
+      settles(soft[64], -8.3794, 'the third standing 1.96 cents wide of a pure 5/4')
+      settles(soft[67],  5.0274, 'and the fifth 0.28 cents narrow of a pure 3/2')
+
+      local stiff = retuned(32)
+      settles(stiff[60],  3.8670, 'stiff springs carry the C further out')
+      settles(stiff[64], -9.6781, 'closing the third to 0.14 cents of pure')
+      settles(stiff[67],  5.8020, 'and the fifth to 0.02 of pure')
     end,
   },
 }

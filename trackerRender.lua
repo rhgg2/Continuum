@@ -836,12 +836,12 @@ end
 
 -- The modal's left labels, measured together so the controls share one column,
 -- and the gap that column stands off the longest of them.
-local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Strength:' }
+local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Purity:', 'Strength:' }
 local RETUNE_LABEL_GAP = 6
 
--- Harmonic lock's figure per facility: the placement's offset halves what a strength
--- buys, so its dial opens higher. see design/adaptive-ji.md § What the pull's scale becomes
-local RETUNE_LOCK = { points = 1, moves = 1.5 }
+-- The two dials' opening figures, which are what design/adaptive-springs.md § Measured
+-- takes its figures at. see design/adaptive-springs.md § The dials
+local RETUNE_LOCK, RETUNE_PURITY = 1, 8
 
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
 -- here, not scopedAction's confirm, and OK is the single commit point.
@@ -884,13 +884,11 @@ modalHost:registerKind('retune', function(s, close)
         onPick      = function(name) s.target = name end,
       }
       chrome.disabledIf(s.target == nil, function()
-        -- The facility is a choice of its own beside the target; switching re-seats
-        -- harmonic lock's slider. see design/adaptive-ji.md § The command's slots
+        -- The facility is a choice of its own beside the target.
+        -- see design/adaptive-ji.md § The command's slots
         for _, f in ipairs{ {'points', 'Points'}, {'moves', 'Moves'} } do
           ImGui.SameLine(ctx)
-          if chrome.radio(f[2], s.facility == f[1]) and s.facility ~= f[1] then
-            s.facility, s.harmonicLock = f[1], RETUNE_LOCK[f[1]]
-          end
+          if chrome.radio(f[2], s.facility == f[1]) then s.facility = f[1] end
         end
         ImGui.SameLine(ctx); ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, 'Key:')
         ImGui.SameLine(ctx)
@@ -914,6 +912,16 @@ modalHost:registerKind('retune', function(s, close)
         ImGui.SetNextItemWidth(ctx, 150)
         local rvH, lock = ImGui.SliderDouble(ctx, '##harmonicLock', s.harmonicLock, 0, 2, '%.2f')
         if rvH then s.harmonicLock = lock end
+      end)
+      -- Only the moves facility prices an interval against a spelling, and its slider is
+      -- logarithmic, a doubling halving the mistuning. see design/adaptive-springs.md § The dials
+      labelled('Purity:', function()
+        chrome.disabledIf(s.facility ~= 'moves', function()
+          ImGui.SetNextItemWidth(ctx, 150)
+          local rvP, purity = ImGui.SliderDouble(ctx, '##purity', s.purity, 0.5, 64, '%.2f',
+                                                 ImGui.SliderFlags_Logarithmic)
+          if rvP then s.purity = purity end
+        end)
       end)
     end)
   end
@@ -942,7 +950,7 @@ modalHost:registerKind('retune', function(s, close)
   if okPressed then
     close(true, { scope        = s.scope,        strength     = s.strength,
                   target       = s.target,       key          = s.key,
-                  facility     = s.facility,
+                  facility     = s.facility,     purity       = s.purity,
                   sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock })
   elseif cancelPressed then close(false) end
 end)
@@ -984,7 +992,8 @@ local function openRetuneModal()
     facility     = facility,
     key          = notation and math.min(key, #notation.cents) or key,
     sonoritySize = 5,
-    harmonicLock = RETUNE_LOCK[facility],
+    harmonicLock = RETUNE_LOCK,
+    purity       = RETUNE_PURITY,
     callback     = runRetune,
   }
 end

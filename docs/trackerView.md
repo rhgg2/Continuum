@@ -478,9 +478,10 @@ facility the command offers moves a note off the step it was written on.
 The target reads two ways, and the facility slot says which. `'points'` is the
 solve above; `'moves'` reads the same temper as intervals that may be sounded
 pure between one strand and another (design/adaptive-ji.md § The target becomes
-a move set), and `sonority.solveToMoves` answers with a tuning per strand and
-one offset the whole scope rides on. Every strand is then seated at its tuning
-plus that offset, blended by strength as the others are. The placement takes no
+a move set), and `sonority.solveToMoves` answers with the cents each strand
+settles at, its springs holding the spelled intervals as nearly pure as the
+purity slot asks (design/adaptive-springs.md § The dials). Every strand is then
+seated at those cents, blended by strength as the others are. The solve takes no
 key, a move set having no place on the pitch line, and it states no refusal its
 caller could name.
 
@@ -491,20 +492,21 @@ or not there is one, `ec:region()` degenerating to the cursor cell, so it then
 snaps the note under the cursor. Target, facility and key are seeded from the take
 tier and written back there as OK commits, so the modal reopens on the answers
 the take carries; a key past the notation's steps — the take having since
-changed temper — clamps into range rather than raising. The strength and the
-sonority size are seeded at their defaults on every open, and the harmonic lock
-at the figure its facility opens on: 1 for the points solve, and 1.5 for the
-placement, whose offset halves what a strength buys (design/adaptive-ji.md
-§ What the pull's scale becomes). The two are not one dial, so switching
-facility re-seats the slider on the other figure rather than carrying one across.
+changed temper — clamps into range rather than raising. The strength, the
+sonority size and the two dials are seeded at their defaults on every open:
+harmonic lock at 1 under either facility, and purity at 8, the figures
+design/adaptive-springs.md § Measured takes its figures at.
 
 The target picker offers the library's eligible tempers, `tuning.isTarget`
 filtering the rest out of the row list rather than letting one be picked and
 refused, and the slots the adaptive solves own — facility, key, sonority size,
-harmonic lock — draw disabled while the target is Off. The facility is a choice
-of its own beside the target, nothing in the object recovering which reading was
-meant, and under `'moves'` the key draws disabled again for want of a pitch line
-to name a place on. A picker popup
+harmonic lock, purity — draw disabled while the target is Off. The facility is a
+choice of its own beside the target, nothing in the object recovering which
+reading was meant, and it disables two more slots between them: under `'moves'`
+the key draws disabled for want of a pitch line to name a place on, and under
+`'points'` purity does, a point solve pricing no interval against a spelling.
+Purity's slider is logarithmic, so equal travel buys equal halving of the
+mistuning. A picker popup
 consumes its own Enter and Escape where `IsKeyPressed` cannot see it, so the
 modal gates OK and Cancel on `chrome.pickerIsActive()`: without it one Enter
 picks a row and commits the modal behind it. Only a take with a temper bound

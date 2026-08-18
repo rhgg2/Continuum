@@ -93,6 +93,27 @@ states the search may merge.**
    § The candidates, and in the running cost the walk carries. All of
    the model's hardness is the choice of spellings.
 
+## The dials
+
+1. The stiffness is authored as **purity** — how nearly a spelled
+   interval sounds pure — and it opens at 8, the figure § Measured takes
+   its figures at, over a logarithmic span from 0.5 to 64. Doubling it
+   halves the mistuning: a major triad's third stands 3.4¢ wide of a pure
+   `5/4` at 1, 0.5¢ at 8 and 0.1¢ at 32, so equal travel along the slider
+   buys equal halving. At zero the springs are slack and every note stands
+   where it was written, which is the snap the command already offers, so
+   the span stops short of it.
+
+1. Purity is the moves facility's alone. A points solve selects among a
+   target's points and prices no interval against a spelling, so there is
+   nothing there for the dial to hold.
+
+1. Harmonic lock opens at 1 under either facility. The lattice's
+   placement rode on a single offset, which halved what a strength bought
+   and opened that dial at 1.5 (`design/adaptive-ji.md`
+   § The command's slots); the springs carry no offset, and every figure
+   measured here is taken at a pull of 1.
+
 ## The candidates
 
 1. A sonority's spellings are enumerated by a beam over joins, scored
