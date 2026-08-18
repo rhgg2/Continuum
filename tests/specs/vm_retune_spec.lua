@@ -16,9 +16,13 @@
 -- them by springs. Those cases write a C major and a C minor triad against 1/1, 5/4
 -- and 3/2, the minor third being what no point of it reaches, and the purity slot
 -- is what the springs hold their intervals to.
+--
+-- Either facility reads a note's render clip rather than its authored ceiling, so an
+-- open tail sounds to the next onset in its lane rather than to the end of the take.
 
 local t      = require('support')
 local tuning = require('tuning')
+local util   = require('util')
 
 local MEAN = tuning.derive{
   name = 'MEAN', periodPitch = '2/1',
@@ -374,6 +378,36 @@ return {
       settles(stiff[60],  3.8670, 'stiff springs carry the C further out')
       settles(stiff[64], -9.6781, 'closing the third to 0.14 cents of pure')
       settles(stiff[67],  5.8020, 'and the fifth to 0.02 of pure')
+    end,
+  },
+
+  {
+    name = 'an open tail sounds to its clip, so a class returning is a second strand',
+    run = function(harness)
+      -- A note typed with no OFF carries util.OPEN as its authored ceiling, and tm clips
+      -- it to the next onset in its lane. Read literally the open C never stops, so it and
+      -- the C that follows are one strand holding one tuning; read as it sounds they are
+      -- two, each spelled against the chord it stands in.
+      local h = mk(harness, {}, '12EDO', { FIVES = FIVES })
+      local function add(ppq, endppq, pitch, lane)
+        h.tm:addEvent{ evType = 'note', ppq = ppq, endppq = endppq, endppqL = endppq,
+                       chan = 1, lane = lane, pitch = pitch, vel = 100, detune = 0, delay = 0 }
+      end
+      add(0,   util.OPEN, 60, 1)   -- clipped to 120, where the C returns
+      add(120, 180,       60, 1)
+      add(0,   60,        64, 2)   -- a major third over the first C
+      add(120, 180,       69, 2)   -- a major sixth over the second
+      h.tm:flush()
+
+      h.vm:retune{ scope = 'all', strength = 1, target = 'FIVES', facility = 'moves',
+                   key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
+
+      local first, second = chordAt(h, 0), chordAt(h, 2)
+      t.truthy(first[60] ~= second[60], 'the two C naturals are two strands, tuned apart')
+      settles(first[60],   6.6877, 'the first C under its third')
+      settles(second[60],  7.2438, 'and the second under its sixth')
+      settles(first[64],  -6.1626, 'the third a 5/4 over the C it sounds with')
+      settles(second[69], -7.7718, 'the sixth a 5/3 over the C it sounds with')
     end,
   },
 }

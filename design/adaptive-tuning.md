@@ -421,13 +421,25 @@ step it was written on.**
 4. A note released where the next is struck does not overlap it, the
    release being half-open as the sonority reads it (§ The model).
 
-5. A note held across a chord change therefore bends the harmony to it
+5. The release a strand reads is the one the note sounds to — its
+   render clip — rather than the authored ceiling the editor holds. A
+   note typed with no OFF carries no ceiling at all until one is
+   written, and the tracker clips it to the next onset in its lane.
+
+6. Reading the ceiling instead makes an open note sound for ever. The
+   step-class returning after it merges into its strand rather than
+   starting one, every later sonority holds it, and every later onset
+   lets it wait; the springs walk costs exponentially in what may wait
+   (`design/adaptive-springs.md` § The solve), so a two-bar take that
+   answers in a third of a second answers in minutes.
+
+7. A note held across a chord change therefore bends the harmony to it
    rather than the reverse. Under a 5-limit target, at `n` one above the
    arity, a D held from D–F–A into G–B♭–D keeps the 10/9 the first chord
    gives it. Restruck it would take the 9/8 the second chord prefers, so
    the hold costs that chord 0.737 of box.
 
-6. The strand is what earns the collapse to step-classes: an entry
+8. The strand is what earns the collapse to step-classes: an entry
    carries one tuning at a time only because every note that could write
    it agrees.
 

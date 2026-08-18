@@ -2074,20 +2074,26 @@ local function snapToTemper(notes, notation, strength)
   end
 end
 
--- The scope's notes as strands: those of a step-class that overlap, whichever
--- facility is about to place them.
+-- The scope's notes as strands: those of a step-class that overlap over their
+-- render clip, not the authored ceiling on endppq -- see design/adaptive-tuning.md § The strand.
+--shape: strandNote = { ppq, endppq=<the render clip>, pitch, detune, event=<what seatStrand writes> }
 local function strandsOf(notes, notation)
-  return sonority.strands(notes, function(e)
-    return tuning.stepClass(notation, e.pitch, e.detune)
+  local clipped = {}
+  for k, e in ipairs(notes) do
+    clipped[k] = { ppq = e.ppq, endppq = e.endppqC, pitch = e.pitch, detune = e.detune,
+                   event = e }
+  end
+  return sonority.strands(clipped, function(n)
+    return tuning.stepClass(notation, n.pitch, n.detune)
   end)
 end
 
 -- A strand's tuning, seated on every note that writes it, in that note's own register.
 local function seatStrand(strand, notation, cents, strength)
-  for _, e in ipairs(strand.notes) do
-    local pitch, detune = blend(e, strength, tuning.seat(notation, e, cents))
-    if pitch ~= e.pitch or detune ~= e.detune then
-      edit.assign(e, { pitch = pitch, detune = detune })
+  for _, n in ipairs(strand.notes) do
+    local pitch, detune = blend(n, strength, tuning.seat(notation, n, cents))
+    if pitch ~= n.pitch or detune ~= n.detune then
+      edit.assign(n.event, { pitch = pitch, detune = detune })
     end
   end
 end
