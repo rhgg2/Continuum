@@ -356,6 +356,45 @@ drifting onto one is worse than refusing to move. Editing operations
 enforce this, so the range — and the `cellWidth` octave budget derived
 from it — stays exact.
 
+## A temper read as moves
+
+**1** A temper whose every pitch is a ratio reads two ways, and
+`tuning.isTarget` passes it either way. As **points** it is a scale, its
+pitches sitting on the pitch line wherever a key puts its `1/1`; as a
+**move set** it is a collection of intervals that may be sounded between
+two notes, its `1/1` being wherever a move departs from rather than a
+pitch of its own. Nothing in the object says which reading was meant, so
+the retune command carries the choice as a slot of its own
+(docs/trackerView.md § Retune). Partch's diamond is a table of intervals
+from a `1/1`, and reading it as a move set is closer to what it is than
+reading it as a scale.
+
+**2** `tuning.moves` compiles the second reading: each pitch and its
+inversion, cents reduced into the octave, carrying the **coords** — the
+exponents of the odd primes — that name the interval. Coords fix a ratio
+up to the octave, so they identify a move outright and a temper's two
+spellings of one move collapse: a generator stating its points over a
+common root emits `9/6` where another emits `3/2`, and the set holds one
+move either way.
+
+**3** Complexity is **octave-free Tenney height**: the base-2 logarithm
+of the product of the odd parts of a ratio's two terms, which
+`tuning.height` sums off the coords as `Σ |exponent| × log₂ p`. Reading
+it off the coords rather than off the terms is what makes an unreduced
+token cost the interval it sounds — `9/6` read literally is 4.75, against
+the 1.58 the fifth sounds. An inversion reads what the move reads, `5/4`
+and `8/5` both at 2.32, so it sorts beside it; the set sorts simplest
+first, and its last move states the **complexity bound**, the most
+complex interval it holds.
+
+**4** Height is what a chain spends, where odd limit is what a point
+costs. Two `5/4`s are odd limit 5 apiece and `25/16` is odd limit 25,
+where the heights are 2.32 apiece and 4.64 together, which is exactly
+`25/16`'s. The same measure scores the result: a sonority's box is the
+Tenney height of its octave-free `lcm/gcd` (docs/sonority.md § The box),
+so one figure both bounds what a solve may join with and prices what it
+reaches.
+
 ## Display
 
 ```

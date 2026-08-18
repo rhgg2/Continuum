@@ -268,7 +268,7 @@ return {
   },
 
   -- The facility is a slot of its own, nothing recovering the reading from the
-  -- target object (design/adaptive-ji.md § The command's slots): it persists at
+  -- target object (docs/trackerView.md § Retune): it persists at
   -- take tier as the target and the key do, where the dials beside it do not
   -- (docs/sonority.md § The dials).
   {

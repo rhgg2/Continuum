@@ -41,8 +41,9 @@ step it was written on.**
 
 8. One command opens one modal, and every retuning facility the tracker
    offers is reached through it — this one, and the adaptive just
-   intonation of `design/adaptive-ji.md`. Scope and strength are common to
-   all of them; the remaining slots belong to the facility chosen.
+   intonation the moves facility offers (`docs/sonority.md`). Scope and
+   strength are common to all of them; the remaining slots belong to the
+   facility chosen.
 
 ## The command's slots
 
@@ -254,8 +255,8 @@ step it was written on.**
 3. Height is what a chain spends where odd limit is what a point costs.
    Two `5/4`s make `25/16` at height 4.64, so a bound of `25/16` admits
    it and a bound of `15/8` does not; odd limit reads `25/16` as 25
-   however many moves arrived there (`design/adaptive-ji.md` § What
-   makes the candidate set finite).
+   however many moves arrived there (`docs/tuning.md` § A temper read as
+   moves).
 
 4. A ball is closed under composition and a diamond is not, so the two
    disagree at equal size: at thirteen points the 5-limit 15-diamond

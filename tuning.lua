@@ -696,7 +696,7 @@ local function weight(prime)
 end
 
 -- Read off the coords, so an unreduced token costs the interval it sounds, not its terms.
--- See design/adaptive-ji.md § What makes the candidate set finite.
+-- See docs/tuning.md § A temper read as moves.
 --contract: coords → the octave-free Tenney height of the ratio they name: Σ |exponent| × log₂ p
 function tuning.height(coords)
   local total = 0
@@ -738,8 +738,8 @@ local function coordKey(coords)
   return util.key(table.unpack(parts))
 end
 
--- A move set read as intervals from its unison, per design/adaptive-ji.md § Where a move
--- set comes from; an inversion carries the same height, so it sorts beside the move it inverts.
+-- A move set read as intervals from its unison, per docs/tuning.md § A temper read as
+-- moves; an inversion carries the same height, so it sorts beside the move it inverts.
 --contract: a ratio temper read as intervals from its unison: {cents, coords, height} per move
 --contract: every pitch and its inversion, deduped by coords; cents octave-reduced
 --contract: simplest first by height, so the last move states the set's complexity bound

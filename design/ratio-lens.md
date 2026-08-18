@@ -2,9 +2,9 @@
 
 > opened: 2026-08-16 · status: working design; not started
 >
-> A sibling of `design/adaptive-ji.md`, which owns the solve this reads
-> without running. `docs/tuning.md` § Display holds the cell budget it
-> must live inside.
+> A sibling of the retune command's moves facility, whose solve this reads
+> without running (`docs/sonority.md`). `docs/tuning.md` § Display holds the
+> cell budget it must live inside.
 
 **A note is read as the interval it makes with an anchor note on the
 take: the nearest ratio in the two-step closure of a temper's moves,
@@ -25,12 +25,13 @@ than solved for.**
    note's deviation is measured from its own step rather than from the C
    below it.
 
-3. `design/adaptive-ji.md` computes the relation already. Its solver
-   assigns each strand coords — a vector of prime exponents naming a ratio
-   — and the intervals between those coords are the answer. The answer is
-   internal to a solve, however: it is reached by running the retune
-   command, and it becomes visible only by being committed as detune.
-   There is no way to look at the harmony one has.
+3. The retune command's moves facility computes the relation already
+   (`docs/sonority.md` § The candidates). It spells each sonority in coords
+   — a vector of prime exponents per member, naming a ratio — and the
+   intervals between those coords are the answer. The answer is internal to
+   a solve, however: it is reached by running the retune command, and it
+   becomes visible only by being committed as detune. There is no way to
+   look at the harmony one has.
 
 4. A third lens joins the two. It is a **reading** — a pure query taking
    a note and returning the interval that note makes with another, phrased
@@ -102,8 +103,9 @@ than solved for.**
 4. The set is therefore closed under one composition: every product of
    two moves joins the moves themselves, deduped by coords as before.
    This is the **two-step closure**, and its **depth** is the number of
-   moves a reading may compose. It is the reachable set of
-   `design/adaptive-ji.md` § The target becomes a move set, cut off at two.
+   moves a reading may compose. It is what a move set
+   (`docs/tuning.md` § A temper read as moves) reaches by composition, cut
+   off at two.
 
 5. Closing `{3/2, 5/4, 7/4}` gives 25 intervals, against which 12-EDO
    reads:

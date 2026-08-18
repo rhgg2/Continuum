@@ -884,7 +884,7 @@ modalHost:registerKind('retune', function(s, close)
       }
       chrome.disabledIf(s.target == nil, function()
         -- The facility is a choice of its own beside the target.
-        -- see design/adaptive-ji.md § The command's slots
+        -- see docs/trackerView.md § Retune
         for _, f in ipairs{ {'points', 'Points'}, {'moves', 'Moves'} } do
           ImGui.SameLine(ctx)
           if chrome.radio(f[2], s.facility == f[1]) then s.facility = f[1] end
@@ -977,7 +977,7 @@ runRetune = util.atomic('Retune', function(slots, widen)
 end)
 
 -- Target, facility and key open on what the take carries, the rest on its default.
--- see design/adaptive-tuning.md § The command's slots, design/adaptive-ji.md § The command's slots
+-- see docs/trackerView.md § Retune
 local function openRetuneModal()
   local notation = tv:activeTemper()
   local key      = cm:getAt('take', 'retune.key') or 1

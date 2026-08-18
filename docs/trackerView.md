@@ -477,13 +477,12 @@ facility the command offers moves a note off the step it was written on.
 
 The target reads two ways, and the facility slot says which. `'points'` is the
 solve above; `'moves'` reads the same temper as intervals that may be sounded
-pure between one strand and another (design/adaptive-ji.md § The target becomes
-a move set), and `sonority.solveToMoves` answers with the cents each strand
-settles at, its springs holding the spelled intervals as nearly pure as the
-purity slot asks (docs/sonority.md § The dials). Every strand is then
-seated at those cents, blended by strength as the others are. The solve takes no
-key, a move set having no place on the pitch line, and it states no refusal its
-caller could name.
+pure between one strand and another (docs/tuning.md § A temper read as moves),
+and `sonority.solveToMoves` answers with the cents each strand settles at, its
+springs holding the spelled intervals as nearly pure as the purity slot asks
+(docs/sonority.md § The dials). Every strand is then seated at those cents,
+blended by strength as the others are. The solve takes no key, a move set having
+no place on the pitch line, and it states no refusal its caller could name.
 
 Ctrl+T reaches the verb through the retune modal, whose fields are the slots
 the verb takes and whose OK is the one commit point — every retuning facility
