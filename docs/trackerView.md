@@ -480,7 +480,7 @@ solve above; `'moves'` reads the same temper as intervals that may be sounded
 pure between one strand and another (design/adaptive-ji.md § The target becomes
 a move set), and `sonority.solveToMoves` answers with the cents each strand
 settles at, its springs holding the spelled intervals as nearly pure as the
-purity slot asks (design/adaptive-springs.md § The dials). Every strand is then
+purity slot asks (docs/sonority.md § The dials). Every strand is then
 seated at those cents, blended by strength as the others are. The solve takes no
 key, a move set having no place on the pitch line, and it states no refusal its
 caller could name.
@@ -494,8 +494,8 @@ tier and written back there as OK commits, so the modal reopens on the answers
 the take carries; a key past the notation's steps — the take having since
 changed temper — clamps into range rather than raising. The strength, the
 sonority size and the two dials are seeded at their defaults on every open:
-harmonic lock at 1 under either facility, and purity at 8, the figures
-design/adaptive-springs.md § Measured takes its figures at.
+harmonic lock at 1 under either facility, and purity at 8
+(docs/sonority.md § The dials).
 
 The target picker offers the library's eligible tempers, `tuning.isTarget`
 filtering the rest out of the row list rather than letting one be picked and

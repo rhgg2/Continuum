@@ -1,5 +1,5 @@
 -- The objective an adaptive-tuning solve minimises, and the strands it is taken over.
--- See design/adaptive-tuning.md § What "in tune" means. @noindex
+-- See docs/sonority.md for the model. @noindex
 
 --invariant: pure module: no state; ratios/cents are tuning.lua's, the placement carries them
 --shape: Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing
@@ -72,7 +72,7 @@ end
 ----- The walk
 
 -- Every strike, in onset order, lowest last — so a released chord leaves its
--- bass to the sonority that follows (design/adaptive-tuning.md § The model).
+-- bass to the sonority that follows (§ The walk).
 local function strikesInOrder(strands)
   local strikes = {}
   for index, strand in ipairs(strands) do
@@ -151,7 +151,7 @@ end
 ----- The solve
 
 -- A strand is live from the onset it is chosen at to the last that reads it, both
--- known before enumeration (§ Solving it), and listed in strand order for keying.
+-- known before enumeration (design/adaptive-tuning.md § Solving it), and listed in strand order for keying.
 --contract: strands, sonorities → per onset the strands born there, live there, and held from before
 local function schedule(strands, sonorities)
   local onsetAt = {}
@@ -298,7 +298,7 @@ end
 ----- The springs
 
 -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
--- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
+-- is the difference of the nearest-octave gaps to each seat (§ The springs).
 --shape: Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta
 --contract: members, spelling per member; seat per strand → a Spring per pair, i before j
 --contract: springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen
@@ -401,7 +401,7 @@ function sonority.ties(springs, free, onsets, base)
 end
 
 -- One strand's optimum with the rest held: its springs' seats averaged against the pull,
--- charged over the half-window the seats point it toward (design/adaptive-springs.md § The model).
+-- charged over the half-window the seats point it toward (§ The springs).
 local function settle(ties, displacement, window, strength, stiffness)
   local count, seats = ties.count, ties.delta
   for k = 1, count do seats = seats + displacement[ties[k]] end
@@ -436,7 +436,7 @@ end
 ----- The candidates
 
 -- A join's coords: the host's plus the move's, a cancelled prime dropped so two chains
--- arriving at one spelling key alike (design/adaptive-springs.md § The candidates).
+-- arriving at one spelling key alike (§ The candidates).
 local function joinCoords(coords, move)
   local sum = {}
   for prime, exponent in pairs(coords) do sum[prime] = exponent end
@@ -461,7 +461,7 @@ local function rebase(coords, from, to)
 end
 
 -- No note leaves the step it was notated on, and a spelling is placed as a whole, at one
--- offset from the seats, so 'deviation' states which offsets remain open (design/adaptive-springs.md § The candidates).
+-- offset from the seats, so 'deviation' states which offsets remain open (§ The candidates).
 local function reachOf(deviation, window)
   return -window.below - deviation, window.above - deviation
 end
@@ -689,7 +689,7 @@ function sonority.seats(strands, notation)
 end
 
 -- A member is free to wait while an onset it sounds through is still to come; at that onset
--- it places or the state fails (design/adaptive-springs.md § The candidates).
+-- it places or the state fails (§ The candidates).
 --shape: Onset = { ppq, members={strand,..}, sounding={strand,..}, mayWait={[strand]=true,..} }
 --contract: strands, sonorities → an Onset per sonority, its members the walk's own
 --contract: a member the sonority holds by recency has stopped: it neither sounds nor waits
@@ -720,7 +720,7 @@ end
 local AUDIBLE = 0.5
 
 -- The strands a later onset names and the walk has already moved, in strand order: all a
--- continuation can read, since what nothing ahead names is settled and what nothing behind has sounded stands at zero alike (design/adaptive-springs.md § The solve).
+-- continuation can read, since what nothing ahead names is settled and what nothing behind has sounded stands at zero alike (§ The solve).
 local function visibleAhead(onsets)
   local named, later = {}, {}
   for i = #onsets, 1, -1 do
@@ -1072,12 +1072,12 @@ end
 
 ----- The placement
 
--- Beam width and walk breadth (design/adaptive-springs.md § Open): the width is doing work,
+-- Beam width and walk breadth (§ The solve): the width is doing work,
 -- the cap one over the lowest that answers alike at this width on every passage measured.
 local WIDTH, CAP = 24, 4
 
 -- The moves facility's solve: intervals rather than points, spelled by the beam under a
--- frozen past, settled by joint relaxation (design/adaptive-springs.md § The solve).
+-- frozen past, settled by joint relaxation (§ The solve).
 --contract: strands, n, strength, notation, moves, stiffness → the cents each strand settles at
 --contract: nil where an onset has no spelling — a sonority the target cannot reach refuses it
 function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)

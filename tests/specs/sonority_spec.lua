@@ -1,33 +1,34 @@
--- Pins the box score of design/adaptive-tuning.md § What "in tune" means: the
--- 5-limit column of § Choosing the target chooses the theory, its identity with
--- the Tenney height of the sonority's lcm/gcd, and the two invariances that let
--- the model hold no reference pitch.
+-- Pins the box score of docs/sonority.md § The box: the 5-limit column of
+-- design/adaptive-tuning.md § Choosing the target chooses the theory, its
+-- identity with the Tenney height of the sonority's lcm/gcd, and the two
+-- invariances that let the model hold no reference pitch.
 --
--- Pins the walk of § The model too: which strands are current at each onset,
+-- Pins the sonority walk too (§ The walk): which strands are current at each onset,
 -- distinctness by step-class, the bass as the class a released chord leaves
 -- behind it, and the class still sounding that the last n struck have dropped.
 --
 -- Pins the objective the solve minimises: the box summed over the walk's
--- sonorities, and the pull counted once per strand (§ Harmonic lock).
+-- sonorities, and the pull counted once per strand (§ The window and the pull).
 --
--- Pins the solve of § Solving it: that the DP returns the exact minimum of that
--- objective, held against exhaustive enumeration; that a strand held across a
--- chord change bends the harmony to it (§ The strand); and the two guards.
+-- Pins the solve of design/adaptive-tuning.md § Solving it: that the DP returns
+-- the exact minimum of that objective, held against exhaustive enumeration; that
+-- a strand held across a chord change bends the harmony to it (§ The strand); and
+-- the two guards.
 --
--- Pins the pull's scale on the calibration C7 (§ Harmonic lock): the crossing
+-- Pins the pull's scale on the calibration C7 (§ The dials): the crossing
 -- from the otonal seventh to the Pythagorean, and what resolving the chord to
--- F–A–C does to that trade (§ The model).
+-- F–A–C does to that trade (§ The walk).
 --
--- Pins the springs of design/adaptive-springs.md § The model: a spelling read
+-- Pins the springs themselves (§ The springs): a spelling read
 -- off as the displacement gaps at which its pairs sound pure, nearest-octave,
 -- from the seats of the strands its members name.
 --
--- Pins the objective those springs stand in (§ The model): stiffness ×
+-- Pins the objective those springs stand in (§ The springs): stiffness ×
 -- mistuning² per spring and strength × displacement² per strand, the mistuning
 -- in cents over fifty and the pull over the window half the displacement lies
 -- in. The box is no part of it, being a constant in the displacements.
 --
--- Pins the relaxation that minimises it (§ The model): the sweep's answer on a
+-- Pins the relaxation that minimises it (§ The springs): the sweep's answer on a
 -- pair whose optimum is a closed form, a strand the springs press to its window
 -- edge, and a comma loop whose residue no displacement can make slack.
 --
@@ -56,7 +57,7 @@
 -- cheaper.
 --
 -- Pins the placement the moves facility takes off all of it (§ The solve): the
--- five-part take of § Measured spelled, walked and settled in one call, a struck
+-- five-part take below spelled, walked and settled in one call, a struck
 -- triad standing at the target's own intervals, and a chord no chain of moves
 -- reaches coming back with nothing.
 
@@ -442,7 +443,7 @@ local function underRun(endppq)
 end
 
 -- A chord to the bar, each released where the next strikes: the passage the walk of
--- design/adaptive-springs.md § The solve is taken over.
+-- docs/sonority.md § The solve is taken over.
 local function progression(bars)
   local notes = {}
   for beat, pitches in ipairs(bars) do
@@ -454,7 +455,7 @@ local function progression(bars)
 end
 
 -- A chord rolled note by note, every note held to the end of the bar: the passage
--- design/adaptive-springs.md § The candidates takes its deferral over.
+-- docs/sonority.md § The candidates takes its deferral over.
 local function rolled(pitches, apart)
   local notes = {}
   for k, pitch in ipairs(pitches) do notes[k] = event((k - 1) * apart, pitch, 960) end
@@ -476,8 +477,8 @@ local function heldLines(lines, beat)
   return sonority.strands(notes, pitchClass)
 end
 
--- The five-part take design/adaptive-springs.md § Measured takes its figures over:
--- sixty-six notes, forty strands over sixteen sonorities.
+-- The five-part take the springs' figures are taken over: sixty-six notes, forty
+-- strands over sixteen sonorities.
 local take = heldLines({
   { 72, 72, 71, 72, 74, 74, 72, 71, 69, 69, 71, 72, 74, 72, 71, 72 },
   { 67, 65, 65, 67, 67, 65, 64, 62, 62, 64, 65, 67, 65, 65, 62, 64 },

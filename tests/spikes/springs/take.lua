@@ -1,10 +1,10 @@
--- The eighty-eight-note take design/adaptive-springs.md § The solve times the walk over, as
+-- The eighty-eight-note take docs/sonority.md § The solve times the walk over, as
 -- the tracker holds it: the note events of every column of slot 00, read off tv.grid.cols
 -- through the bridge, with the render clip as each note's end. Eighty-eight notes over
 -- sixteen columns, sixty-six strands, under the thirteen-pitch Diamond the take is retuned
 -- to.
 --
--- The five-part take § Measured states its tunings over is a different fixture, and timing
+-- The five-part take of tests/specs/sonority_spec.lua is a different fixture, and timing
 -- the walk on it measures a different problem: this take's held notes leave the walk's
 -- cursor lagging, so a relaxation here reads sixty springs over five and a half open onsets
 -- where the five-part take reads seventeen over one and a half.

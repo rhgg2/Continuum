@@ -270,7 +270,7 @@ return {
   -- The facility is a slot of its own, nothing recovering the reading from the
   -- target object (design/adaptive-ji.md § The command's slots): it persists at
   -- take tier as the target and the key do, where the dials beside it do not
-  -- (design/adaptive-springs.md § The dials).
+  -- (docs/sonority.md § The dials).
   {
     name = 'retune opens on the facility the take carries, its dials on their figures',
     run = function(harness)

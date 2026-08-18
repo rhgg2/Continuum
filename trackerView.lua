@@ -2133,7 +2133,7 @@ local function solveToTarget(notes, notation, target, slots, widen)
 end
 
 -- The moves facility: moves between strands rather than points, settled by springs whose
--- stiffness is purity (design/adaptive-springs.md § The dials); a chain none reaches places nothing.
+-- stiffness is purity (docs/sonority.md § The dials); a chain none reaches places nothing.
 local function solveToMoves(notes, notation, target, slots)
   local strands = strandsOf(notes, notation)
   local cents   = sonority.solveToMoves(strands, slots.sonoritySize, slots.harmonicLock,

@@ -356,7 +356,7 @@
       -- see design/adaptive-tuning.md § What the solver takes
   @fn solveToMoves(notes, notation, target, slots)  @ 2137-2146
       -- The moves facility: moves between strands rather than points, settled by springs whose
-      -- stiffness is purity (design/adaptive-springs.md § The dials); a chain none reaches places nothing.
+      -- stiffness is purity (docs/sonority.md § The dials); a chain none reaches places nothing.
   @fn notDerived(e)  @ 2177
       -- Absorber pbs are tm-managed, tied to note seats — row ops shift
       -- only real events and leave derived pbs to tm's reconcile.
@@ -996,7 +996,7 @@
   @use call    tm:setName  @ applyTakeProperties:534
   @use call    tm:tileLength  @ applyTakeProperties:540
   @use call    tm:timeSigs  @ rebuild:3975
-  @use call    tuning.findTemper  @ retune:2164 rebuild:4007
+  @use call    tuning.findTemper  @ retune:2164
   @use call    tuning.midiToStep  @ editEvent:932 shortlisted:2111
   @use call    tuning.moves  @ solveToMoves:2140
   @use call    tuning.seat  @ seatStrand:2094
@@ -1491,6 +1491,7 @@
   @field w mark  @ duplicateCascade:3271
   @field w matchGridToCursor  @ 3915
   @field w member  @ 72
+  @field w mergeTiers  @ rebuild:4007
   @field r midiChan  @ rowBounds:306 eventsByCol:417 findCol:745 strikePitch:830 editEvent:903,1031,1093 chordStrike:1141 moveLaneEvent:1368 addLaneEvent:1383 interpolate:1461
   @field r midiChan  @ interpolate:1462,1483 interpolateValues:1491 cursorRegionBefore:1533 fxLaneOf:1550 applyRegionWindow:1573 regionNoteOff:1616 regionAdjustDuration:1630 regionAdjustPosition:1641 fxColAtLane:1652 shiftFxLane:1666
   @field r midiChan  @ cursorNoteBefore:1686 applyNoteOff:1701 noteOff:1711,1722,1739,1740,1744 adjustDurationCore:1754 adjustPositionMulti:1805,1817 adjustPosition:1849 quantizeScope:1897
@@ -1562,6 +1563,7 @@
   @field w pb  @ 1247,1429,2952 rebuild:3967
   @field r pc  @ hideExtraCol:3626 rebuild:4073
   @field w pc  @ 2952 rebuild:3967
+  @field w pick  @ rebuild:4007
   @field r pitch  @ notePreds:287,288,289 killAudition:652 auditionRelease:670,671 notePAEvents:778 strikePitch:821 editEvent:932,936,959,1033
   @field r pitch  @ chordStrike:1148,1174 chordBackspace:1208 chordNudgeVel:1223,1224 blend:2049 snapToTemper:2071 strandsOf:2083,2087 seatStrand:2095 shortlisted:2111 nudgePitch:2389
   @field r pitch  @ nudgePitch:2394,2396 nudgeVel:2405

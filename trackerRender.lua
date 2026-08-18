@@ -839,8 +839,7 @@ end
 local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Purity:', 'Strength:' }
 local RETUNE_LABEL_GAP = 6
 
--- The two dials' opening figures, which are what design/adaptive-springs.md § Measured
--- takes its figures at. see design/adaptive-springs.md § The dials
+-- The two dials' opening figures. see docs/sonority.md § The dials
 local RETUNE_LOCK, RETUNE_PURITY = 1, 8
 
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
@@ -914,7 +913,7 @@ modalHost:registerKind('retune', function(s, close)
         if rvH then s.harmonicLock = lock end
       end)
       -- Only the moves facility prices an interval against a spelling, and its slider is
-      -- logarithmic, a doubling halving the mistuning. see design/adaptive-springs.md § The dials
+      -- logarithmic, a doubling halving the mistuning. see docs/sonority.md § The dials
       labelled('Purity:', function()
         chrome.disabledIf(s.facility ~= 'moves', function()
           ImGui.SetNextItemWidth(ctx, 150)

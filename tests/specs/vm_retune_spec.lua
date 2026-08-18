@@ -320,7 +320,7 @@ return {
 
       -- Read as moves nothing is fixed to the pitch line: the three stand at the target's
       -- own intervals, stretched by what the springs tolerate, and the pull settles where
-      -- the chord as a whole sits (design/adaptive-springs.md § The model).
+      -- the chord as a whole sits (docs/sonority.md § The springs).
       local moves = retuned('moves')
       settles(moves[60],  3.7533, 'the C carried off its seat by the pull')
       settles(moves[64], -9.3855, 'the third a stretched 5/4 above it')
@@ -333,7 +333,7 @@ return {
     run = function(harness)
       -- C minor against 1/1, 5/4 and 3/2: read as points the E flat has nothing in its
       -- window; read as moves it joins the fifth a 5/4 below, standing a 6/5 above the
-      -- C the set cannot sound directly (design/adaptive-springs.md § The candidates).
+      -- C the set cannot sound directly (docs/sonority.md § The candidates).
       local function retuned(facility)
         local h = mk(harness, { note(0, 60, 0), note(0, 63, 0), note(0, 67, 0), note(0, 75, 0) },
                      '12EDO', { DIA = DIA })
@@ -360,7 +360,7 @@ return {
     run = function(harness)
       -- The same triad under two purities: soft springs leave the third audibly wide,
       -- and stiff ones close it by carrying the notes further from where they were
-      -- written (design/adaptive-springs.md § The dials).
+      -- written (docs/sonority.md § The dials).
       local function retuned(purity)
         local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
                      '12EDO', { DIA = DIA })

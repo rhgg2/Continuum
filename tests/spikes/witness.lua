@@ -1,6 +1,6 @@
 -- Witnessed joins: a member joined by a chain of moves running through a member that
 -- co-sounds with the pair somewhere in the passage, not necessarily at this onset. Tried
--- as a replacement for the waiting machinery of design/adaptive-springs.md § The
+-- as a replacement for the waiting machinery of docs/sonority.md § The
 -- candidates — look-ahead as information rather than as deferred charge, so that the beam
 -- and the walk each rank over one pool instead of two.
 --

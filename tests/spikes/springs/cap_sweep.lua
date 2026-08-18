@@ -1,5 +1,5 @@
--- Sweeps the walk's cap over a set of passages, which is what design/adaptive-springs.md
--- § Open asks for: a passage that loses the answer at the cap the walk takes. Each row
+-- Sweeps the walk's cap over a set of passages, which is what docs/sonority.md
+-- § The solve leaves open: a passage that loses the answer at the cap the walk takes. Each row
 -- states its settled cost against the cheapest any cap found, so a cap that loses the
 -- answer shows as a positive difference; the checksum of the settled cents tells apart two
 -- placements that cost alike. Run from the repo root:

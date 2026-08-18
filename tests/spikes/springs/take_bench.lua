@@ -3,7 +3,7 @@
 -- same. Run from the repo root: lua tests/spikes/springs/take_bench.lua
 --
 -- 1.70s at the time of writing, where charging the whole passage's pull at every extension
--- cost 4.08 (design/adaptive-springs.md § The solve).
+-- cost 4.08 (docs/sonority.md § The solve).
 package.path = './?.lua;tests/spikes/springs/?.lua;' .. package.path
 
 local sonority = require('sonority')

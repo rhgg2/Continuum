@@ -58,7 +58,7 @@
   -- The walk
   @fn strikesInOrder(strands)  @ 76-89
       -- Every strike, in onset order, lowest last — so a released chord leaves its
-      -- bass to the sonority that follows (design/adaptive-tuning.md § The model).
+      -- bass to the sonority that follows (§ The walk).
   @fn sounding(strand, ppq)  @ 93-98
       -- Half-open, so a note released where the next is struck does not sound there,
       -- and a passage whose notes stop as the next begin reads as the last n struck.
@@ -69,7 +69,7 @@
   -- The solve
   @fn schedule(strands, sonorities)  @ 156-182
       -- A strand is live from the onset it is chosen at to the last that reads it, both
-      -- known before enumeration (§ Solving it), and listed in strand order for keying.
+      -- known before enumeration (design/adaptive-tuning.md § Solving it), and listed in strand order for keying.
       @contract  strands, sonorities → per onset the strands born there, live there, and held from before  @ 155
   @fn assertAffordable(strands, plan)  @ 188-198
   @fn placementsAt(strands, born, strength)  @ 202-221
@@ -86,17 +86,17 @@
   -- The relaxation
   @fn settle(ties, displacement, window, strength, stiffness)  @ 405-414
       -- One strand's optimum with the rest held: its springs' seats averaged against the pull,
-      -- charged over the half-window the seats point it toward (design/adaptive-springs.md § The model).
+      -- charged over the half-window the seats point it toward (§ The springs).
   -- The candidates
   @fn joinCoords(coords, move)  @ 440-448
       -- A join's coords: the host's plus the move's, a cancelled prime dropped so two chains
-      -- arriving at one spelling key alike (design/adaptive-springs.md § The candidates).
+      -- arriving at one spelling key alike (§ The candidates).
   @fn rebase(coords, from, to)  @ 452-461
       -- Coords are differences, so reading a member in another frame is one vector shift: what
       -- stood at `from` stands at `to`, a cancelled prime dropped as joinCoords drops it.
   @fn reachOf(deviation, window)  @ 465-467
       -- No note leaves the step it was notated on, and a spelling is placed as a whole, at one
-      -- offset from the seats, so 'deviation' states which offsets remain open (design/adaptive-springs.md § The candidates).
+      -- offset from the seats, so 'deviation' states which offsets remain open (§ The candidates).
   @fn coordString(coords)  @ 470-476
       -- Coords in one order, so two tables holding the same exponents read alike.
   @fn tokenOf(placed)  @ 480-482
@@ -126,7 +126,7 @@
   -- The search
   @fn visibleAhead(onsets)  @ 724-741
       -- The strands a later onset names and the walk has already moved, in strand order: all a
-      -- continuation can read, since what nothing ahead names is settled and what nothing behind has sounded stands at zero alike (design/adaptive-springs.md § The solve).
+      -- continuation can read, since what nothing ahead names is settled and what nothing behind has sounded stands at zero alike (§ The solve).
   @fn soundingRuns(onsets)  @ 746-756
       -- The same run read the other way: an onset's strands split into those a later onset sounds
       -- too, which the relaxation can still move, and those it sounded last, which have stopped.
@@ -197,7 +197,7 @@
       @contract  strands, n, strength → the index per strand minimising sonority.cost, exactly  @ 250
   @api sonority.springs(members, seat, spelling)  @ 305-319
       -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
-      -- is the difference of the nearest-octave gaps to each seat (design/adaptive-springs.md § The model).
+      -- is the difference of the nearest-octave gaps to each seat (§ The springs).
       @contract  members, spelling per member; seat per strand → a Spring per pair, i before j  @ 303
       @contract  springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen  @ 304
   @api sonority.springCost(spellings, displacement, stiffness, from, to)  @ 332-341
@@ -225,7 +225,7 @@
       @contract  strands, notation → the cents of each strand's written step, and its window either side  @ 680
   @api sonority.onsets(strands, sonorities)  @ 696-714
       -- A member is free to wait while an onset it sounds through is still to come; at that onset
-      -- it places or the state fails (design/adaptive-springs.md § The candidates).
+      -- it places or the state fails (§ The candidates).
       @contract  strands, sonorities → an Onset per sonority, its members the walk's own  @ 694
       @contract  a member the sonority holds by recency has stopped: it neither sounds nor waits  @ 695
   @api sonority.search(onsets, spellings, seat, window, strength, stiffness, cap)  @ 1028-1071
@@ -234,7 +234,7 @@
   -- The placement
   @api sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)  @ 1083-1102
       -- The moves facility's solve: intervals rather than points, spelled by the beam under a
-      -- frozen past, settled by joint relaxation (design/adaptive-springs.md § The solve).
+      -- frozen past, settled by joint relaxation (§ The solve).
       @contract  strands, n, strength, notation, moves, stiffness → the cents each strand settles at  @ 1081
       @contract  nil where an onset has no spelling — a sonority the target cannot reach refuses it  @ 1082
 
