@@ -302,6 +302,18 @@ states the search may merge.**
    in the list its onset reads rather than by its name, returns the
    take's cents unchanged in 4.2 seconds against 6.9.
 
+1. The same run read the other way closes a strand, and the pull is
+   charged over it on the same terms. A strand the walk has passed for
+   the last time cannot move, so its strain is taken once into the
+   carried sum, where before every extension retook the pull on every
+   strand of the passage. What the merge key reads shrinks with it: a
+   strand no onset has sounded yet stands at zero in every answer
+   alike, so the key is the strands the walk has moved that something
+   ahead still names, and not the whole future. The take comes back at
+   3.3 seconds against 4.2, and a passage eight times its length at
+   half what it cost — both terms the two changes drop grew with the
+   passage rather than with what was open at the cursor.
+
 1. The winner is settled by one joint relaxation over its springs, as
    the lattice settled its winner's offset; what the frozen past gave
    up along the way, that relaxation recovers.

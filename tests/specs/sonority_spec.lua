@@ -497,14 +497,22 @@ local function termsOf(strands, n, moves)
   return onsets, lists, window, seat
 end
 
+-- The whole of what a passage's displacements cost: every spring of it, and the pull on
+-- every strand, which is the objective the relaxation minimises.
+local function objectiveAt(springs, displacement, window, strength, stiffness)
+  local _, free = allFree(#window)
+  return sonority.springCost(springs, displacement, stiffness, 1, #springs)
+       + sonority.pullCost(displacement, window, strength, free)
+end
+
 -- The winner settled by one joint relaxation, which is where the frozen past gives back
 -- what it held along the way; the walk's own cost stands above this until then.
 local function settledFrom(answer, window, strength, stiffness)
   local _, free = allFree(#window)
   local displacement = sonority.relax(answer.springs, window, strength, stiffness,
                                       answer.displacement, free)
-  return answer.box + sonority.springCost(answer.springs, displacement, window,
-                                          strength, stiffness, 1), displacement
+  return answer.box + objectiveAt(answer.springs, displacement, window, strength, stiffness),
+         displacement
 end
 
 -- What a passage settles to under a target: the walk's answer, given back by the joint
@@ -528,7 +536,7 @@ local function bruteSpelled(lists, window, strength, stiffness)
       box        = box + list[at[i]].box
     end
     local displacement = sonority.relax(springs, window, strength, stiffness, start, free)
-    local cost = box + sonority.springCost(springs, displacement, window, strength, stiffness, 1)
+    local cost = box + objectiveAt(springs, displacement, window, strength, stiffness)
     if not best or cost < best.cost then
       best = { cost = cost, displacement = displacement, choice = { table.unpack(at) } }
     end
@@ -638,10 +646,12 @@ return {
       local mist = 8 * ((5.6863/50)^2 + (4.0450/50)^2 + (1.6413/50)^2 + (2.0450/50)^2)
       local pull = 1 * ((4/50)^2 + (12/50)^2 + (2/50)^2 + (6/50)^2)
 
-      local cost = sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 8, 1)
-      near(cost, mist + pull, 'the two terms summed, and no box among them')
-      near(cost - sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 0, 1),
-        mist, 'and the stiffness buys the springs alone')
+      near(objectiveAt({ major, fifth }, displacement, evenWindows(4), 1, 8), mist + pull,
+        'the two terms summed, and no box among them')
+      near(sonority.springCost({ major, fifth }, displacement, 8, 1, 2), mist,
+        'the springs charged at the stiffness')
+      near(sonority.pullCost(displacement, evenWindows(4), 1, { 1, 2, 3, 4 }), pull,
+        'and the pull over the window half each displacement lies in')
     end,
   },
 
@@ -656,9 +666,9 @@ return {
       local pull = 0
       for _, cents in ipairs(displacement) do pull = pull + (cents / 50)^2 end
 
-      local cost = sonority.springCost({ major }, displacement, evenWindows(3), 1, 8, 1)
+      local cost = objectiveAt({ major }, displacement, evenWindows(3), 1, 8)
       near(cost, pull, 'the pull alone, and nothing from the springs')
-      t.eq(cost, sonority.springCost({ major }, displacement, evenWindows(3), 1, 1e6, 1),
+      t.eq(cost, objectiveAt({ major }, displacement, evenWindows(3), 1, 1e6),
         'a stiffness of a million charges a slack spring the same nothing')
     end,
   },
@@ -666,12 +676,11 @@ return {
   {
     name = 'springs: the pull is charged over the window half it lies in',
     run = function()
-      local lone   = sonority.springs({ 1 }, { 0 }, { {} })
       local narrow = { { below = 25, above = 50 } }
 
-      near(sonority.springCost({ lone }, {  10 }, narrow, 1, 8, 1), 0.04,
+      near(sonority.pullCost({  10 }, narrow, 1, { 1 }), 0.04,
         'ten cents up a fifty-cent half is a fifth of the way to the edge')
-      near(sonority.springCost({ lone }, { -10 }, narrow, 1, 8, 1), 0.16,
+      near(sonority.pullCost({ -10 }, narrow, 1, { 1 }), 0.16,
         'the same ten down a twenty-five-cent half costs four times as much')
     end,
   },
@@ -718,12 +727,12 @@ return {
       local loop, window = { third, fourth, sixth }, evenWindows(3)
 
       local displacement = sonority.relax(loop, window, 1, 8, allFree(3))
-      local spread       = sonority.springCost(loop, displacement, window, 1, 8, 1)
+      local spread       = objectiveAt(loop, displacement, window, 1, 8)
 
       -- Two springs go slack only by handing the whole comma to the third.
       local borne = { 0, third[1].delta,
                       third[1].delta + fourth[1].delta }
-      t.truthy(spread < sonority.springCost(loop, borne, window, 1, 8, 1),
+      t.truthy(spread < objectiveAt(loop, borne, window, 1, 8),
         'the spread comma costs less than one spring bearing it')
 
       for _, springs in ipairs(loop) do
@@ -736,7 +745,7 @@ return {
         for _, nudge in ipairs{ -0.5, 0.5 } do
           local nudged = { displacement[1], displacement[2], displacement[3] }
           nudged[index] = nudged[index] + nudge
-          t.truthy(spread < sonority.springCost(loop, nudged, window, 1, 8, 1),
+          t.truthy(spread < objectiveAt(loop, nudged, window, 1, 8),
             'and nothing half a cent away is cheaper')
         end
       end
@@ -776,12 +785,12 @@ return {
       t.eq(held[1], 10, 'the held strand stands exactly where it was put')
 
       -- The two that sweep sit at the optimum of what is left, the held one a constant in it.
-      local settled = sonority.springCost({ major }, held, window, 1, 8, 1)
+      local settled = objectiveAt({ major }, held, window, 1, 8)
       for _, index in ipairs{ 2, 3 } do
         for _, nudge in ipairs{ -0.5, 0.5 } do
           local nudged = { held[1], held[2], held[3] }
           nudged[index] = nudged[index] + nudge
-          t.truthy(settled < sonority.springCost({ major }, nudged, window, 1, 8, 1),
+          t.truthy(settled < objectiveAt({ major }, nudged, window, 1, 8),
             'nothing half a cent from strand ' .. index .. ' is cheaper')
         end
       end

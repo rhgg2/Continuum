@@ -322,9 +322,14 @@ end
 -- constant because a spring prices beating, which the notation's spacing does not scale.
 local PURE = 50
 
+-- The objective's two halves, each charged over a range its caller states, so what has
+-- stopped moving is charged once and carried; the box, no part of either, is a constant charged where the spellings are chosen (§ The solve).
+
 -- What a run of sonorities' springs charge: each spring against the gap its two strands
 -- would sound pure at, the pair standing where the displacements put them.
-local function mistuningOver(spellings, displacement, stiffness, from, to)
+--contract: spellings (a sonority.springs list per sonority) and displacement per strand
+--contract: from, to → stiffness × (mistuning/50)² per spring of those onsets
+function sonority.springCost(spellings, displacement, stiffness, from, to)
   local total = 0
   for onset = from, to do
     for _, spring in ipairs(spellings[onset]) do
@@ -335,16 +340,14 @@ local function mistuningOver(spellings, displacement, stiffness, from, to)
   return total
 end
 
--- The box is no part of this: a constant once the spellings are chosen, so it is charged
--- where they are chosen rather than where the displacements are priced.
+-- What the pull charges: each strand's displacement over the half-window it lies in.
 --shape: Window = { below=<cents to the step below>, above=<cents to the step above> }
---contract: spellings (a sonority.springs list per sonority), displacement and window per strand
---contract: → stiffness × (mistuning/50)² per spring + strength × strain² per half-window
---contract: from: the onset to charge the springs from; every strand's strain is charged whole
-function sonority.springCost(spellings, displacement, window, strength, stiffness, from)
-  local total = mistuningOver(spellings, displacement, stiffness, from, #spellings)
-
-  for index, cents in ipairs(displacement) do
+--contract: displacement and window per strand, strands: the ones to charge
+--contract: → strength × strain² apiece
+function sonority.pullCost(displacement, window, strength, strands)
+  local total = 0
+  for _, index in ipairs(strands) do
+    local cents  = displacement[index]
     local half   = cents < 0 and window[index].below or window[index].above
     local strain = cents / half
     total = total + strength * strain * strain
@@ -359,16 +362,22 @@ end
 local TOLERANCE, SWEEPS = 1e-4, 1000
 
 -- Where each spring would stand its two strands, given the other: i a delta below j, j a
--- delta above i. Gathered once for the strands that sweep, since a held strand never reads its own ties: it stands as a constant in its neighbours'.
---shape: ties per strand = { other, delta, other, delta, .. }, a run rather than a table apiece
+-- delta above i, gathered once for the strands that sweep since a held strand reads only its neighbours' ties, pre-summed since they stand still while the sweeps run.
+--shape: ties per strand = { other, other, .. , count, delta=<the tie deltas summed> }
 local function tiesOf(spellings, free, from)
   local ties = {}
-  for _, index in ipairs(free) do ties[index] = {} end
+  for _, index in ipairs(free) do ties[index] = { count = 0, delta = 0 } end
   for onset = from, #spellings do
     for _, spring in ipairs(spellings[onset]) do
       local low, high = ties[spring.i], ties[spring.j]
-      if low  then low[#low + 1],   low[#low + 2]   = spring.j, -spring.delta end
-      if high then high[#high + 1], high[#high + 2] = spring.i,  spring.delta end
+      if low then
+        low.count, low.delta = low.count + 1, low.delta - spring.delta
+        low[low.count] = spring.j
+      end
+      if high then
+        high.count, high.delta = high.count + 1, high.delta + spring.delta
+        high[high.count] = spring.i
+      end
     end
   end
   return ties
@@ -377,24 +386,24 @@ end
 -- One strand's optimum with the rest held: its springs' seats averaged against the pull,
 -- charged over the half-window the seats point it toward (design/adaptive-springs.md § The model).
 local function settle(ties, displacement, window, strength, stiffness)
-  local seats = 0
-  for k = 1, #ties, 2 do seats = seats + displacement[ties[k]] + ties[k + 1] end
+  local count, seats = ties.count, ties.delta
+  for k = 1, count do seats = seats + displacement[ties[k]] end
   if seats == 0 then return 0 end
 
   local half  = seats > 0 and window.above or window.below
   local stiff = stiffness / (PURE * PURE)
-  return util.clamp(stiff * seats / (stiff * (#ties // 2) + strength / (half * half)),
+  return util.clamp(stiff * seats / (stiff * count + strength / (half * half)),
                     -window.below, window.above)
 end
 
 --invariant: convex in the displacements, so the sweep order and the start buy speed, not the answer
 --contract: spellings, window, strength, stiffness, start (per strand), free (strands that sweep)
---contract: → displacements minimising sonority.springCost, the held strands standing at their start
+--contract: → displacements minimising springCost + pullCost, held strands at their start
 --contract: each swept displacement inside its own strand's window
 --contract: from (the whole walk by default): the earliest onset a swept strand is named at
 function sonority.relax(spellings, window, strength, stiffness, start, free, from)
-  local ties, displacement = tiesOf(spellings, free, from or 1), {}
-  for index = 1, #window do displacement[index] = start[index] end
+  local ties = tiesOf(spellings, free, from or 1)
+  local displacement = table.move(start, 1, #window, 1, {})
 
   for _ = 1, SWEEPS do
     local worst = 0
@@ -692,16 +701,40 @@ end
 -- placements apart, so answers agreeing that closely on the strands ahead are one answer.
 local AUDIBLE = 0.5
 
--- The strands a later onset names, which is all a continuation can read of an answer, in
--- strand order: what nothing ahead names is settled, however the answer arrived at it.
+-- The strands a later onset names and the walk has already moved, in strand order: all a
+-- continuation can read, since what nothing ahead names is settled and what nothing behind has sounded stands at zero alike (design/adaptive-springs.md § The solve).
 local function visibleAhead(onsets)
-  local ahead, seen = {}, {}
+  local named, later = {}, {}
   for i = #onsets, 1, -1 do
-    ahead[i] = util.keys(seen)
+    later[i] = util.keys(named)
+    for _, index in ipairs(onsets[i].members) do named[index] = true end
+  end
+
+  local moved, ahead = {}, {}
+  for i = 1, #onsets do
+    for _, index in ipairs(onsets[i].sounding) do moved[index] = true end
+    ahead[i] = {}
+    for _, index in ipairs(later[i]) do
+      if moved[index] then util.add(ahead[i], index) end
+    end
     table.sort(ahead[i])
-    for _, index in ipairs(onsets[i].members) do seen[index] = true end
   end
   return ahead
+end
+
+-- The same run read the other way: an onset's strands split into those a later onset sounds
+-- too, which the relaxation can still move, and those it sounded last, which have stopped.
+--contract: onsets → per onset the strands it leaves moving and the strands it closes
+local function soundingRuns(onsets)
+  local later, moving, stopped = {}, {}, {}
+  for i = #onsets, 1, -1 do
+    moving[i], stopped[i] = {}, {}
+    for _, index in ipairs(onsets[i].sounding) do
+      util.add(later[index] and moving[i] or stopped[i], index)
+    end
+    for _, index in ipairs(onsets[i].sounding) do later[index] = true end
+  end
+  return moving, stopped
 end
 
 -- A strand sounds over one run of onsets, so once the walk is past every strand an onset
@@ -847,8 +880,8 @@ end
 --contract: nil where a wait comes back with a placement its own sonority offered (§ The candidates)
 --contract: nil where a wait lands tied to no member of the sonority that deferred it
 local function extend(answer, spelling, onsets, at, seat, window, strength, stiffness,
-                      offered, from, since)
-  local springs, held = util.clone(answer.springs), {}
+                      offered, from, since, moving, stopped)
+  local springs, held = table.move(answer.springs, 1, at - 1, 1, {}), {}
   local box = answer.box + spelling.box
   springs[at] = spelling.springs
 
@@ -872,19 +905,21 @@ local function extend(answer, spelling, onsets, at, seat, window, strength, stif
   local displacement = sonority.relax(springs, window, strength, stiffness,
                                       answer.displacement, onsets[at].sounding, from)
 
-  -- What the onsets closed since the last are charged is taken once, at displacements that
-  -- will not move again, and carried from there on (§ The solve).
+  -- What closed since the last extension is charged once, at displacements that will not move
+  -- again and carried: the onsets the cursor has passed, and this onset's strands sounded for the last time (§ The solve).
   local closed = answer.closed
-               + mistuningOver(springs, displacement, stiffness, since, from - 1)
-  return { choice = util.clone(answer.choice), springs = springs, box = box, held = held,
-           displacement = displacement, closed = closed,
-           cost = box + closed + sonority.springCost(springs, displacement, window,
-                                                     strength, stiffness, from) }
+               + sonority.springCost(springs, displacement, stiffness, since, from - 1)
+               + sonority.pullCost(displacement, window, strength, stopped)
+  return { choice = table.move(answer.choice, 1, at - 1, 1, {}), springs = springs,
+           box = box, held = held, displacement = displacement, closed = closed,
+           cost = box + closed
+                + sonority.springCost(springs, displacement, stiffness, from, at)
+                + sonority.pullCost(displacement, window, strength, moving) }
 end
 
 -- The cost is taken over every spring accumulated so far rather than the onset's own, so
 -- a spelling is priced against the past it is chosen behind (§ The solve).
---invariant: what the closed onsets charge is carried, which is that sum retaken a cursor later
+--invariant: what has closed is carried, which is what retaking it a cursor later would charge
 --shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, closed=<what the shut onsets charge>, held={ Held,.. } }
 --shape: Held = { onset, placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }
 --invariant: an answer's debts stand in onset order, as the walk opens them and closes them in it
@@ -898,6 +933,7 @@ end
 function sonority.search(onsets, spellings, seat, window, strength, stiffness, cap)
   local ahead, start, offered = visibleAhead(onsets), {}, offeredBy(onsets, spellings)
   local from = openFrom(onsets)
+  local moving, stopped = soundingRuns(onsets)
   for index = 1, #window do start[index] = 0 end
   local answers = { { choice = {}, springs = {}, box = 0, displacement = start, cost = 0,
                       closed = 0, held = {} } }
@@ -907,7 +943,8 @@ function sonority.search(onsets, spellings, seat, window, strength, stiffness, c
     for _, answer in ipairs(answers) do
       for choice, spelling in ipairs(spellings[i]) do
         local state = extend(answer, spelling, onsets, i, seat, window, strength, stiffness,
-                             offered, from[i], i > 1 and from[i - 1] or 1)
+                             offered, from[i], i > 1 and from[i - 1] or 1,
+                             moving[i], stopped[i])
         if state then
           state.choice[i] = choice
 
