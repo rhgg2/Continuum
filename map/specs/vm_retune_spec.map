@@ -1,4 +1,4 @@
-@spec vm_retune_spec  src=tests/specs/vm_retune_spec.lua  loc=413  cases=19
+@spec vm_retune_spec  src=tests/specs/vm_retune_spec.lua  loc=440  cases=20
 @exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), configManager (h.cm), trackerManager (h.tm)
 @surface   tuning.derive, tuning.genDiamond, vm:setGridSize, tuning.stepToMidi, tuning.scalaPitch, vm:retune, ec:setSelection, cm:set, cm:getAt, tm:addEvent, tm:flush
 @harness   mk{seed.notes}
@@ -63,7 +63,8 @@
   @case 'the facility decides how the same target is read'  [harness]  @ 306-328
   @case 'the moves facility spells a third the target holds no point for'  [harness]  @ 332-355
   @case 'purity prices how nearly the spelled intervals sound pure'  [harness]  @ 359-381
-  @case 'an open tail sounds to its clip, so a class returning is a second strand'  [harness]  @ 385-411
+  @case 'a strand pinned to its window edge keeps the step it was written on'  [harness]  @ 385-408
+  @case 'an open tail sounds to its clip, so a class returning is a second strand'  [harness]  @ 412-438
 
 # Uses (outbound edges)
   @use call tuning.derive  @ 27,35,42,43
@@ -71,65 +72,65 @@
   @use call vm:setGridSize  @ 51
   @use call tuning.stepToMidi  @ 79
   @use call tuning.scalaPitch  @ 97
-  @use call vm:retune  @ 104,118,130,142,155,168,170,182,195,209,225,234,248,262,275,291,311,340,367,402
+  @use call vm:retune  @ 104,118,130,142,155,168,170,182,195,209,225,234,248,262,275,291,311,340,367,396,402,429
   @use call ec:setSelection  @ 153
   @use call cm:set  @ 206,224
   @use call cm:getAt  @ 211,212,213,226
-  @use call tm:addEvent  @ 393
-  @use call tm:flush  @ 400
+  @use call tm:addEvent  @ 420
+  @use call tm:flush  @ 427
 
 # Fields (r read / w write incl. constructor keys)
   @field r DIA  @ 213
-  @field w DIA  @ 206,310,339,366
-  @field w FIVES  @ 274,290,391
+  @field w DIA  @ 206,310,339,366,392
+  @field w FIVES  @ 274,290,418
   @field w MEAN  @ 48
-  @field r OPEN  @ 396
+  @field r OPEN  @ 423
   @field w SEPTIMAL  @ 233,247,261
   @field r cells  @ 66,90
-  @field w chan  @ 56,394
+  @field w chan  @ 56,421
   @field w col1  @ 153
   @field w col2  @ 153
   @field r cols  @ 61,89
   @field w config  @ 48
-  @field w delay  @ 57,394
+  @field w delay  @ 57,421
   @field r detune  @ 91,108,109,122,133,145,157,158,169,171,185,186
   @field r detune  @ 198,216
-  @field w detune  @ 57,394
-  @field w endppq  @ 56,393
-  @field w endppqL  @ 393
-  @field w evType  @ 393
-  @field w facility  @ 210,235,249,263,276,286,311,341,367,402
+  @field w detune  @ 57,421
+  @field w endppq  @ 56,420
+  @field w endppqL  @ 420
+  @field w evType  @ 420
+  @field w facility  @ 210,235,249,263,276,286,311,341,367,393,429
   @field r grid  @ 61,89
-  @field w harmonicLock  @ 210,225,235,249,263,276,286,312,342,368,403
-  @field w key  @ 209,225,234,248,262,275,285,312,341,368,403
+  @field w harmonicLock  @ 210,225,235,249,263,276,286,312,342,368,394,430
+  @field w key  @ 209,225,234,248,262,275,285,312,341,368,394,430
   @field r lane  @ 62
-  @field w lane  @ 394
+  @field w lane  @ 421
   @field r midiChan  @ 62,90
   @field w name  @ 28,36,101,114,127,138,150,163,177,191,203,221
-  @field w name  @ 231,245,257,271,283,306,332,359,385
+  @field w name  @ 231,245,257,271,283,306,332,359,385,412
   @field w notes  @ 47
   @field w part1  @ 154
   @field w part2  @ 154
   @field w periodPitch  @ 28,36
   @field r pitch  @ 91,107,121,132,144,172,184,197
-  @field w pitch  @ 56,394
+  @field w pitch  @ 56,421
   @field w pitches  @ 29,37
-  @field w ppq  @ 56,393
+  @field w ppq  @ 56,420
   @field w project  @ 48
-  @field w purity  @ 312,342,368,403
+  @field w purity  @ 312,342,368,394,430
   @field w row1  @ 153
   @field w row2  @ 153
   @field w run  @ 102,115,128,139,151,164,178,192,204,222,232,246
-  @field w run  @ 258,272,284,307,333,360,386
+  @field w run  @ 258,272,284,307,333,360,386,413
   @field w scope  @ 104,118,130,142,155,168,170,182,195,209,225,234
-  @field w scope  @ 248,262,275,285,311,340,367,402
+  @field w scope  @ 248,262,275,285,311,340,367,393,429
   @field w seed  @ 47
-  @field w sonoritySize  @ 210,225,235,249,263,276,286,312,342,368,403
+  @field w sonoritySize  @ 210,225,235,249,263,276,286,312,342,368,394,430
   @field w stepNames  @ 31,38
   @field w strength  @ 104,118,130,142,155,168,170,182,195,209,225,234
-  @field w strength  @ 248,262,275,285,311,340,367,402
-  @field w target  @ 209,234,248,262,275,285,311,340,367,402
+  @field w strength  @ 248,262,275,285,311,340,367,393,429
+  @field w target  @ 209,234,248,262,275,285,311,340,367,393,429
   @field w temper  @ 49
   @field w tempers  @ 48
   @field r type  @ 62,90
-  @field w vel  @ 56,394
+  @field w vel  @ 56,421

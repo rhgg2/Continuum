@@ -989,11 +989,19 @@ return {
   {
     name = 'seats: the notation gives each strand its step and the reach either side',
     run = function()
+      -- A strand may come up to its window's edge but not stand on it: there it would be
+      -- equidistant from two steps and read as the other one, so each half stops a hair
+      -- inside (tuning.lua's FENCE).
+      local function inside(cents) return cents - 1e-4 end
+
       local strands    = struck(960, { { 0, 0, 60 }, { 4, 0, 64 }, { 7, 960, 79 } })
       local seat, window = sonority.seats(strands, edo12)
 
       t.deepEq(seat, { 6000, 6400, 7900 }, 'each strand seated where its first note is written')
-      t.deepEq(window, evenWindows(3), 'and 12-EDO reaching fifty cents to the step either side')
+      t.deepEq(window, { { below = inside(50), above = inside(50) },
+                         { below = inside(50), above = inside(50) },
+                         { below = inside(50), above = inside(50) } },
+               'and 12-EDO reaching fifty cents, less that hair, to the step either side')
 
       -- The same notes under a scale of uneven steps: a written step of their own, and a
       -- reach that differs above and below it.
@@ -1001,8 +1009,10 @@ return {
       local seats, windows = sonority.seats(struck(960, { { 0, 0, 61 }, { 0, 0, 63 } }), uneven)
 
       t.deepEq(seats, { 6100, 6350 }, 'the second written on the step at 350, not on the one at 300')
-      t.deepEq(windows[1], { below = 50, above = 125 }, 'half the gap to the step below and above')
-      t.deepEq(windows[2], { below = 125, above = 175 }, 'and the same of the step above it')
+      t.deepEq(windows[1], { below = inside(50), above = inside(125) },
+               'half the gap to the step below and above')
+      t.deepEq(windows[2], { below = inside(125), above = inside(175) },
+               'and the same of the step above it')
     end,
   },
 

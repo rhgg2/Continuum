@@ -558,6 +558,10 @@ local OCTAVE = 1200
 -- Slack on the reach a widened window takes, in half-windows.
 local REACH_TOL = 1e-9
 
+-- The hair a note keeps inside its window's edge, in cents -- on the edge it's equidistant
+-- from two steps, unreadable as its own -- see design/adaptive-tuning.md § The window.
+local FENCE = 1e-4
+
 ----- Coordinate conversions
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
@@ -780,11 +784,12 @@ end
 -- A note's own step: where it seats, and how far its window reaches either side.
 -- The shortlist, the reach and the root are all measured off it.
 --contract: notation, note → the cents of the note's own step, and its half-gaps below and above
+--contract: the halves stop a hair inside the edge, where the note's own step stops reading back
 function tuning.seatWindow(notation, note)
   local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
   local midi, detune = tuning.stepToMidi(notation, step, octave)
   local below, above = tuning.stepWindow(notation, step)
-  return midi * 100 + detune, below, above
+  return midi * 100 + detune, below - FENCE, above - FENCE
 end
 
 -- The only place the notation and the target meet. See design/adaptive-tuning.md

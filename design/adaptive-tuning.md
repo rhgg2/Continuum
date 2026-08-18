@@ -136,12 +136,26 @@ step it was written on.**
    current cents, which makes the operation idempotent at full strength
    (§ Strength).
 
-6. The window is spent before the solve, in building a strand's
+6. The edge itself is no place to stand. A note exactly a half-gap out is
+   equidistant from two steps, so the one it was written on is no longer
+   readable off its cents: `midiToStep` breaks the tie downward, and the
+   cell relabels as surely as if the note had moved further.
+   `tuning.seatWindow` therefore stops each half a hair inside the edge —
+   a ten-thousandth of a cent — and both facilities inherit it, the
+   springs' box and the shortlist's strain being measured off that window.
+
+7. Standing a strand there was reachable in ordinary use. Under a set
+   holding `5/4` and `3/2` alone, an E♭–E–G spells its minor third as a
+   stretched `5/4` and pins a strand to the edge to reach it; before the
+   hair, a second run read that strand on its neighbour's step, solved a
+   different chord, and left the two notes as one.
+
+8. The window is spent before the solve, in building a strand's
    shortlist (§ What the solver takes). `tuning.stepWindow` returns both
    halves; `ctx:noteDeviation` takes the one the note moved toward, which
    is what the grid's deviation tick normalises by.
 
-7. In 12-EDO the window never binds. Widening it to two and then four
+9. In 12-EDO the window never binds the points solve. Widening it to two and then four
    half-steps, at a pull strength in the usable band (§ Harmonic lock),
    left the answers where they were — the largest deviation went 11.8¢,
    10.5¢, 10.5¢, and no note passed a half-step in any run.

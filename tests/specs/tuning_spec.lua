@@ -943,6 +943,36 @@ return {
   },
 
   {
+    name = 'seatWindow: a note at either edge of its window still reads as its own step',
+    run = function()
+      -- The window is what the solves may move a note inside, and a note is read back
+      -- as the step nearest its cents, so the edge itself has to be excluded: standing
+      -- on it a note is equidistant from two steps and its own is no longer readable.
+      local edo12 = tuning.presets['12EDO']
+      local seat, below, above = tuning.seatWindow(edo12, { pitch = 64, detune = 0 })
+      nearly(seat, 6400, 'the seat of the step it was written on')
+
+      local function stepAt(cents)
+        local pitch = math.floor(cents / 100 + 0.5)
+        return (tuning.midiToStep(edo12, pitch, cents - pitch * 100))
+      end
+      local own = stepAt(seat)
+      t.eq(stepAt(seat - below), own, 'the bottom of the window reads as the step')
+      t.eq(stepAt(seat + above), own, 'and so does the top')
+
+      local mt = meantone12()
+      local mSeat, mBelow, mAbove = tuning.seatWindow(mt, { pitch = 72, detune = 0 })
+      local function mStepAt(cents)
+        local pitch = math.floor(cents / 100 + 0.5)
+        return (tuning.midiToStep(mt, pitch, cents - pitch * 100))
+      end
+      local mOwn = mStepAt(mSeat)
+      t.eq(mStepAt(mSeat - mBelow), mOwn, 'an unequal notation reads its lopsided window alike')
+      t.eq(mStepAt(mSeat + mAbove), mOwn, 'at both edges')
+    end,
+  },
+
+  {
     name = 'shortlist: the key step holds the unison, and the tonic does not move',
     run = function()
       local edo12, diamond = tuning.presets['12EDO'], tuning.genDiamond(9, 7)

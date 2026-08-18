@@ -382,6 +382,33 @@ return {
   },
 
   {
+    name = 'a strand pinned to its window edge keeps the step it was written on',
+    run = function(harness)
+      -- E flat, E and G against 1/1, 5/4 and 3/2. Nothing in the set reaches the minor
+      -- third, so the E-G is spelled as a 5/4 -- 86 cents of stretch, which pins the G to
+      -- the top of its window. A strand standing on the edge itself would be equidistant
+      -- from two steps, and would read as the other one when the command was run again.
+      local h = mk(harness, { note(0, 63, 0), note(0, 64, 0), note(0, 67, 0) },
+                   '12EDO', { DIA = DIA })
+      local slots = { scope = 'all', strength = 1, target = 'DIA', facility = 'moves',
+                      key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
+
+      h.vm:retune(slots)
+      local first = chordAt(h, 0)
+      settles(first[67],  50,      'the G pinned to the top of its window')
+      settles(first[64], -31.8618, 'the E a stretched 5/4 below it')
+      settles(first[63], -43.1239, 'and the E flat, which the set reaches from neither')
+
+      h.vm:retune(slots)
+      local second = chordAt(h, 0)
+      for pitch, detune in pairs(first) do
+        t.truthy(second[pitch], 'the note on ' .. pitch .. ' is still written on its own step')
+        settles(second[pitch], detune, 'and the second run leaves it where the first did')
+      end
+    end,
+  },
+
+  {
     name = 'an open tail sounds to its clip, so a class returning is a second strand',
     run = function(harness)
       -- A note typed with no OFF carries util.OPEN as its authored ceiling, and tm clips
