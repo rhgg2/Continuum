@@ -813,3 +813,22 @@ step it was written on.**
    refusal to name, what could not be spelled being the sonority rather
    than the strand; so what the author is told is unsettled.
 
+6. How a moves solve sees the take before it. The points solve's collar
+   is a strand of one with its tuning already chosen (§ Seams), and a
+   moves solve can pin a collar strand at the displacement the take
+   stores; what no take stores is the spelling that put it there
+   (`docs/sonority.md` § The model), so the collar is spelled afresh
+   against the sonority it joins and may not be spelled as it was
+   solved. Either a note carries its coords as metadata, or one solve
+   spans the takes in sequence and carries the spelling across.
+
+7. Whether the window should bind at all. Letting a strand drift past
+   it, with the pull anchored to the step the note was written on rather
+   than the one it would then recover, would collapse three refusals
+   into a single trade: the step a target leaves nowhere to go and the
+   widening offered against it (§ What the solver takes), and the
+   sonority no chain of moves seats inside the windows
+   (`docs/sonority.md` § The candidates). What it costs is idempotence by
+   construction and a dial that means the same under every notation
+   (§ The window, § Harmonic lock).
+

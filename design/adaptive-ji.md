@@ -731,23 +731,13 @@ written on.**
 
 ## Open
 
-1. How a solve sees the take before it. The sibling's collar arrives as
-   strands of one with their tuning already chosen
-   (`design/adaptive-tuning.md` § Seams), but a take stores cents where
-   the objective reads coords, and a dense reachable set puts no ratio
-   at a pitch in particular; a take left in 12-EDO has no coords to
-   recover at all. Either a note carries its coords as metadata, or one
-   solve spans the takes in sequence and carries the placement across.
+Two questions this section held left on 2026-08-19 for
+`design/adaptive-tuning.md` § Open, that being the live document of this
+group: how a solve sees the take before it, and whether the window should
+bind at all. The two below were dropped the same day, each being an
+economy of the offset sweep the springs model retired.
 
-2. Whether the window should bind at all. Letting a strand drift past
-   it, with the pull anchored to the step the note was written on rather
-   than the one it would then recover, would collapse the refusal, the
-   widening offer and the floor of § What reachability spends into a
-   single trade. What it costs is idempotence by construction and a dial
-   that means the same under every notation
-   (`design/adaptive-tuning.md` § The window, § Harmonic lock).
-
-3. Whether a refusal must cost what an answer costs. Ten of the
+1. Whether a refusal must cost what an answer costs. Ten of the
    sweep's eleven offsets spend their seconds reaching the budget, and
    a placement completed at an earlier offset bounds every later
    partial from below, the pending terms all being nonnegative; a
@@ -761,7 +751,7 @@ written on.**
    cheapens the refusals that dominate the sweep and rescues nothing
    (§ The solve stays exact).
 
-4. Whether the sweep can be probed rather than swept. The winner's
+2. Whether the sweep can be probed rather than swept. The winner's
    exact offset follows from its displacements (§ What it costs to
    solve), which invites one pass and a settle in place of eleven; but
    the take places at one offset with its neighbours refusing, so a
