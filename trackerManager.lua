@@ -3479,7 +3479,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
   local res = mm:resolution()
   local pbRangeCents = pbLim()   -- slide clamps its target to what pb can reach
-  local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+  local temper = cm:get('tempers', { mergeTiers = true, pick = cm:get('temper') })
   local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
     return tuning.transposeStep(temper, pitch, detune, n)
   end

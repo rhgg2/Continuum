@@ -94,6 +94,16 @@ walk is exactly what layering the tiers in order would have produced.
 than letting the most-specific tier's table win whole, it unions the
 tiers per subkey. Table-valued keys only.
 
+`cm:get(key, { pick = subkey })` indexes the resolved value before
+copying it, so only that entry crosses the boundary. The argument is the
+tier walk's, one level down: `findTemper(cm:get('temper'),
+cm:get('tempers'))` copied the whole temper catalogue — 393 keys, 35.8µs
+— to read one entry, where `cm:get('tempers', { mergeTiers = true, pick =
+name })` copies that entry alone, at 6.6µs. pick composes with the merge
+mode rather than replacing it, so the two rules above still decide what
+is indexed; and since Lua cannot tell an absent key from an explicit
+nil, a nil pick reads as no pick and hands back the whole table.
+
 `take` and `track` levels require a take context (see below). Without
 one they contribute nothing to the merge.
 

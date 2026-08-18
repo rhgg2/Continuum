@@ -742,7 +742,6 @@
   @use call    timing.isIdentity  @ currentSwing:1650
   @use call    timing.ppqToDelay  @ projectEvent:2232 makeTailRules:3867
   @use call    timing.resolveComposite  @ currentSwing:1651
-  @use call    tuning.findTemper  @ rebuildFx:3482
   @use call    tuning.stepsBetween  @ rebuildFx:3487
   @use call    tuning.transposeStep  @ rebuildFx:3484
   @use call    util.add  @ seedDirty:175 mergeSpans:274,280 mergeWindows:288 overlapping:294 clipToSpanSet:310 subtractSpanSet:320,324 closeAtWindowEnd:379 sumStreams:387,403,425,427,431 foldIntoWindow:447,450 negated:465 sliceCurve:485,487 chainCuts:516 foldChains:569,572,579 membersOf:639 channelStreams:652,659 producerCensus:731,737,744,749 freezeRefused:760 reconcilePCsForChan:863,872 forEachAttachedPA:955 rawIndexInsert:1006 loadIndex:1129 collisionKills:1160 addLowlevel:1199 assignLowlevel:1223 deleteLowlevel:1234 addParked:1442 assignParked:1446 deleteParked:1450 flushParked:1476 absorbReloadDirt:1580 thinSeats:1818 groupMembers:1840,1849 freezeRegion:1866,1920,1926,1954,1955,1962 setLength:2060,2062 rescaleLength:2104 tileLength:2135 pushNoteCol:2211 mmBatch:2268,2269,2270 seedRowsFor:2326,2328 exciseNotes:2366 rebuildInternals:2392,2395,2396,2430 rawSpanMap:2455 buildCcExistingInWindows:2519 fullRebuildChannelCCs:2586,2625 rebuildCCs:2646,2647 externalLanePacker:2720 realiseParked:2838 renderUnion:2880 rebuildRegionPark:2919,2931,2932,2934,2964,2995,2997,3062,3072,3078,3085,3111,3136,3159,3160,3188 mergeIndexed:3246,3248,3251 computeFxWindows:3354,3368 rebuildFx:3418,3442,3449,3455,3526,3527,3585,3586,3601,3614,3625,3658,3663,3677,3686,3698,3703,3768,3781,3783,3811 linearTails:3936,3970,3996 seatMatches:4097,4099 frontierTails:4119,4136,4137,4147,4152,4177,4193 rebuildTails:4218,4226,4252 rebuildPbs:4290,4327,4329,4368,4374,4385,4441,4447,4471,4478,4541,4576,4690,4719,4723,4813,4823 pcSeedSpans:4880,4892 rawCoverSpans:4902 rebuildPCs:4922,4935,4951,4957
@@ -1207,7 +1206,7 @@
   @field r markSwingStale  @ bindTake:5275
   @field r match  @ reconcileDerived:829
   @field w match  @ reconcilePCsForChan:881 rebuildFx:3827
-  @field w mergeTiers  @ derivationInputs:240 currentSwing:1647 readSwings:5120
+  @field w mergeTiers  @ derivationInputs:240 currentSwing:1647 rebuildFx:3482 readSwings:5120
   @field r mm  @ 54
   @field r mode  @ foldWhole:498 foldSub:532 rebuildFx:3579
   @field w mode  @ rebuildFx:3602,3606
@@ -1273,6 +1272,7 @@
   @field w pc  @ rebuildExtraColumns:2682 rebuildPCs:4965 rebuild:5091
   @field r pcs  @ rawIndexListFor:968 loadIndex:1137 stampSamples:4847 rebuildPCs:4960,4962
   @field w pcs  @ loadIndex:1125
+  @field w pick  @ rebuildFx:3482
   @field r pitch  @ rawThenLogical:110 noteColumnLess:119 parkSeed:183 rawSeed:188 channelStreams:652 fxKey:893 forEachAttachedPA:953 collisionKills:1157 snapshot:1189
   @field r pitch  @ assignNote:1298,1299 findParked:1461 freezeRegion:1943 externalLanePacker:2760 rebuildExternals:2805 rebuildRegionPark:3036,3052,3077
   @field r pitch  @ findNoteColumnForPitch:3263,3272,3280 rebuildPA:3293,3313 rebuildFx:3487,3616,3714,3718,3784,3791

@@ -12,6 +12,15 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-19** — cm:get takes an opts.pick naming a subkey, and indexes the resolved value before
+  copying, so only that entry crosses the boundary. The catalogue read — copy the whole of swings or
+  tempers, then index one name — stands in eight places, and on the rebuild path it cost 35.8µs a
+  lookup against the 6.6µs of a pick; clone traffic through a gated rebuild falls from 873 keys to
+  181. pick composes with the merge mode rather than forming a third resolution rule, so it indexes
+  whatever mergeTiers or the tier walk resolved. Lua cannot tell an absent key from an explicit nil,
+  so a nil pick reads as no pick and hands back the whole table; the edge is pinned by spec rather
+  than defended against, cm having no way to see the difference.
+
 - **2026-08-14** — A single-column clip records the parts its span covered, not the kind of column it
   came from. The enum of column kinds — `note`, `notevel`, `7bit`, `pb` — could express two of a note
   column's four parts, so a span ending in the delay part copied as pitch-only and lost the velocity

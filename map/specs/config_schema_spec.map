@@ -1,4 +1,4 @@
-@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=440  cases=28
+@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=517  cases=34
 @exercises configManager (h.cm)
 @surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe
 @harness   mk, r._state.takeExt, r._state.trackExt
@@ -37,14 +37,20 @@
   @case 'mergeTiers with no tier contributions returns the schema default'  [harness]  @ 387-397
   @case 'mergeTiers default + tier writes union per sub-key'  [harness]  @ 400-408
   @case 'mergeTiers: tier write on a default-named key wins'  [harness]  @ 411-421
-  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 425-438
+  @case 'pick selects one entry from a merged catalogue'  [harness]  @ 433-446
+  @case 'pick without mergeTiers indexes the resolved value'  [harness]  @ 449-461
+  @case 'pick on an absent sub-key returns nil'  [harness]  @ 464-469
+  @case 'pick on a non-table value returns nil'  [harness]  @ 472-477
+  @case 'pick returns a deep copy -- caller mutation does not leak'  [harness]  @ 480-487
+  @case 'pick = nil reads as no pick at all'  [harness]  @ 493-498
+  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 502-515
 
 # Uses (outbound edges)
-  @use call cm:get  @ 17,64,99,112,157,160,169,171,183,201,215,216,219,232,234,250,252,262,284,286,357,363,378,381,394,405,416
-  @use call cm:set  @ 26,38,180,218,261,430
+  @use call cm:get  @ 17,64,99,112,157,160,169,171,183,201,215,216,219,232,234,250,252,262,284,286,357,363,378,381,394,405,416,441,442,457,459,467,475,483,485,496
+  @use call cm:set  @ 26,38,180,218,261,507
   @use call cm:setContext  @ 34
-  @use call cm:remove  @ 51,110,231,233,251,431
-  @use call cm:assign  @ 60,432
+  @use call cm:remove  @ 51,110,231,233,251,508
+  @use call cm:assign  @ 60,509
   @use call cm:getAt  @ 71,81,287,288,289,303,305,315
   @use call cm2:setContext  @ 137,266
   @use call cm2:get  @ 138,139,267
@@ -52,44 +58,47 @@
   @use call cm2:getAt  @ 268
   @use call cm:clearTake  @ 285,324
   @use call cm:setTrack  @ 304,314,325
-  @use call cm:subscribe  @ 323,429
+  @use call cm:subscribe  @ 323,506
 
 # Fields (r read / w write incl. constructor keys)
   @field r _state  @ 133,143,300
-  @field r a  @ 358,364,379,382
-  @field w a  @ 38,352,374
-  @field r b  @ 359,365
-  @field w b  @ 352,353,375
+  @field r a  @ 358,364,379,382,497
+  @field w a  @ 38,352,374,437,453,482,495
+  @field r b  @ 359,365,445
+  @field w b  @ 352,353,375,437,438,454
   @field r c  @ 360,366
   @field w c  @ 353
   @field w config  @ 79,155,196,210,226,245,259,278,296,312,351,373
-  @field w config  @ 403,414
+  @field w config  @ 403,414,436,452,482,495
   @field w global  @ 211
-  @field r key  @ 327,329,434,437
+  @field r key  @ 327,329,511,514
   @field w legacyKey  @ 131
-  @field r level  @ 328,330,433,435,436
-  @field w mergeTiers  @ 363,378,381,394,405,416
+  @field r level  @ 328,330,510,512,513
+  @field w mergeTiers  @ 363,378,381,394,405,416,441,442,467,483,485,496
   @field w name  @ 14,23,31,48,56,68,76,96,103,126,152,166
   @field w name  @ 176,193,207,223,242,256,275,293,309,319,348,370
-  @field w name  @ 387,400,411,425
+  @field w name  @ 387,400,411,433,449,464,472,480,493,502
   @field w nonsense  @ 60
   @field r notes  @ 161,184
   @field w notes  @ 155,158,159,170,179,181,182
   @field r pbRange  @ 82
   @field w pbRange  @ 60,79,131,197,198,227,228,246,247,259,279,280
-  @field w pbRange  @ 281,296,301,312,432
+  @field w pbRange  @ 281,296,301,312,509
+  @field w pick  @ 441,442,457,459,467,475,483,485,496
   @field w polyAftertouch  @ 211,212
   @field r print  @ 36
   @field w print  @ 37,39
-  @field w project  @ 197,212,227,279,352,374,403,414
+  @field w project  @ 197,212,227,279,352,374,403,414,437,453,482,495
   @field w ps  @ 136,265
   @field w run  @ 15,24,32,49,57,69,77,97,104,127,153,167
   @field w run  @ 177,194,208,224,243,257,276,294,310,320,349,371
-  @field w run  @ 392,401,412,426
-  @field w swings  @ 352,353,374,375,403,414
-  @field r tag  @ 359,360,364,365,366,382,407,417
-  @field w tag  @ 352,353,374,375,379,380,403,414
-  @field w take  @ 79,155,198,228,246,259,281,312,353,375
+  @field w run  @ 392,401,412,434,450,465,473,481,494,503
+  @field w swings  @ 352,353,374,375,403,414,437,438,453,454,482,495
+  @field r tag  @ 359,360,364,365,366,382,407,417,443,444,457,485
+  @field r tag  @ 497
+  @field w tag  @ 352,353,374,375,379,380,403,414,437
+  @field w tag  @ 438,453,454,482,484,495
+  @field w take  @ 79,155,198,228,246,259,281,312,353,375,438,454
   @field r takeExt  @ 133,143
   @field w tempers  @ 155
   @field w track  @ 280,296

@@ -421,6 +421,83 @@ return {
     end,
   },
 
+  --------------------------------------------------------------------
+  -- pick: index before copying, so one entry crosses the boundary
+  --
+  -- The catalogue read shape (swings, tempers): the caller wants one
+  -- named entry, and copying the whole catalogue in order to index it
+  -- is what these pin away. pick composes with the merge mode rather
+  -- than replacing it -- it indexes whatever that mode resolved.
+  --------------------------------------------------------------------
+  {
+    name = 'pick selects one entry from a merged catalogue',
+    run = function(harness)
+      local h = harness.mk{
+        config = {
+          project = { swings = { a = { tag = 'p-a' }, b = { tag = 'p-b' } } },
+          take    = { swings = { b = { tag = 't-b' } } },
+        },
+      }
+      local a = h.cm:get('swings', { mergeTiers = true, pick = 'a' })
+      local b = h.cm:get('swings', { mergeTiers = true, pick = 'b' })
+      t.eq(a.tag, 'p-a', 'project-only entry surfaces through pick')
+      t.eq(b.tag, 't-b', 'more-specific tier wins under pick')
+      t.eq(a.b,   nil,   'pick returns the entry itself, not the catalogue')
+    end,
+  },
+  {
+    name = 'pick without mergeTiers indexes the resolved value',
+    run = function(harness)
+      local h = harness.mk{
+        config = {
+          project = { swings = { a = { tag = 'p-a' } } },
+          take    = { swings = { b = { tag = 't-b' } } },
+        },
+      }
+      t.eq(h.cm:get('swings', { pick = 'b' }).tag, 't-b',
+        'pick indexes the tier that won wholesale')
+      t.eq(h.cm:get('swings', { pick = 'a' }), nil,
+        'an entry the winning tier lacks is absent, as in a plain get')
+    end,
+  },
+  {
+    name = 'pick on an absent sub-key returns nil',
+    run = function(harness)
+      local h = harness.mk()
+      t.eq(h.cm:get('swings', { mergeTiers = true, pick = 'no-such-swing' }), nil,
+        'absent entry reads nil, not an empty table')
+    end,
+  },
+  {
+    name = 'pick on a non-table value returns nil',
+    run = function(harness)
+      local h = harness.mk()
+      t.eq(h.cm:get('pbRange', { pick = 'anything' }), nil,
+        'a scalar key has no sub-keys to pick')
+    end,
+  },
+  {
+    name = 'pick returns a deep copy -- caller mutation does not leak',
+    run = function(harness)
+      local h = harness.mk{ config = { project = { swings = { a = { tag = 'p-a' } } } } }
+      local picked = h.cm:get('swings', { mergeTiers = true, pick = 'a' })
+      picked.tag = 'mutated'
+      t.eq(h.cm:get('swings', { mergeTiers = true, pick = 'a' }).tag, 'p-a',
+        'mutating a picked entry does not reach cm')
+    end,
+  },
+  {
+    -- Lua cannot tell an absent key from an explicit nil, so a caller
+    -- whose name happens to be nil gets the whole catalogue rather than
+    -- nil. Pinned so the edge is known rather than discovered.
+    name = 'pick = nil reads as no pick at all',
+    run = function(harness)
+      local h = harness.mk{ config = { project = { swings = { a = { tag = 'p-a' } } } } }
+      local whole = h.cm:get('swings', { mergeTiers = true, pick = nil })
+      t.eq(whole.a.tag, 'p-a', 'a nil pick returns the catalogue, not one entry')
+    end,
+  },
+
   {
     name = 'cm fires changes with their level on the broadcast',
     run = function(harness)

@@ -4004,7 +4004,7 @@ function tv:rebuild(takeChanged)
     local noteDelayCfg = ds:get('noteDelay') or {}
     local colDisplay   = ds:get('columnDisplay') or {}
     local trackerMode  = cm:get('trackerMode')
-    local temper       = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+    local temper       = cm:get('tempers', { mergeTiers = true, pick = cm:get('temper') })
     local pitchWidth   = temper and temper.cellWidth   or 3
     local octaveWidth  = temper and temper.octaveWidth or 1
 

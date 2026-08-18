@@ -487,10 +487,16 @@ function cm:isDeclared(key) return declared[key] == true end
 
 --contract: deep-copy of resolved value (most-specific tier, else default); raises on unknown key
 --contract: opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
+--contract: opts.pick=<subkey> → indexes the resolved value before copying; nil when absent
+-- pick is orthogonal to the merge mode: it indexes whatever that mode resolved, so only the
+-- one entry crosses the boundary. A nil pick is indistinguishable from none (see the spec).
 function cm:get(key, opts)
   checkKey(key)
-  if opts and opts.mergeTiers then return copy(mergedKey(key)) end
-  return copy(resolveKey(key))
+  local value = (opts and opts.mergeTiers) and mergedKey(key) or resolveKey(key)
+  if opts and opts.pick ~= nil then
+    value = type(value) == 'table' and value[opts.pick] or nil
+  end
+  return copy(value)
 end
 
 --contract: reads single tier only (no merge, no defaults); key nil → whole-cache clone
