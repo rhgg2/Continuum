@@ -289,6 +289,19 @@ states the search may merge.**
    and the attenuation § Measured finds running forward runs backward
    as well, so a new onset moves a settled past by little.
 
+1. What the walk has closed, it charges once. A strand sounds over one
+   run of onsets, so once the walk is past every strand a sonority
+   named, neither that sonority's springs nor the strands they tie can
+   move again; the onsets before that cursor — the earliest onset at
+   which a strand still sounding was named — are closed, and an answer
+   carries what they charge as a running sum rather than retaking it at
+   every extension. The relaxation gathers its ties from the same
+   cursor, where before it read the whole past: the take's walk visits
+   12.4 million springs, of which 3.5 million can still move. Charging
+   the closed onsets once, and keying an answer by a strand's position
+   in the list its onset reads rather than by its name, returns the
+   take's cents unchanged in 4.2 seconds against 6.9.
+
 1. The winner is settled by one joint relaxation over its springs, as
    the lattice settled its winner's offset; what the frozen past gave
    up along the way, that relaxation recovers.
@@ -388,3 +401,13 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    members and beyond its answer is uncontradicted rather than proved,
    and a bound on what a wider beam could have found may be worth
    having before the search is trusted there.
+
+1. Whether the cap can come down. The walk's cost is linear in the cap:
+   the take answers in 4.1 seconds at twenty answers abreast, 1.3 at
+   five and 0.9 at three, at the same cents under every one of them.
+   The band § The solve measures found the answer holding from three
+   upward on every passage it took, so twenty is a margin rather than a
+   figure some passage has asked for; what would settle it is a passage
+   where a lower cap loses the answer, or enough passages failing to
+   find one. The beam's width is not such a lever — at twelve the take
+   moves a strand 41¢, so the beam is doing work at twenty-four.

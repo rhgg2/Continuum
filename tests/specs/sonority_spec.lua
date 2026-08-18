@@ -504,7 +504,7 @@ local function settledFrom(answer, window, strength, stiffness)
   local displacement = sonority.relax(answer.springs, window, strength, stiffness,
                                       answer.displacement, free)
   return answer.box + sonority.springCost(answer.springs, displacement, window,
-                                          strength, stiffness), displacement
+                                          strength, stiffness, 1), displacement
 end
 
 -- What a passage settles to under a target: the walk's answer, given back by the joint
@@ -528,7 +528,7 @@ local function bruteSpelled(lists, window, strength, stiffness)
       box        = box + list[at[i]].box
     end
     local displacement = sonority.relax(springs, window, strength, stiffness, start, free)
-    local cost = box + sonority.springCost(springs, displacement, window, strength, stiffness)
+    local cost = box + sonority.springCost(springs, displacement, window, strength, stiffness, 1)
     if not best or cost < best.cost then
       best = { cost = cost, displacement = displacement, choice = { table.unpack(at) } }
     end
@@ -638,9 +638,9 @@ return {
       local mist = 8 * ((5.6863/50)^2 + (4.0450/50)^2 + (1.6413/50)^2 + (2.0450/50)^2)
       local pull = 1 * ((4/50)^2 + (12/50)^2 + (2/50)^2 + (6/50)^2)
 
-      local cost = sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 8)
+      local cost = sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 8, 1)
       near(cost, mist + pull, 'the two terms summed, and no box among them')
-      near(cost - sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 0),
+      near(cost - sonority.springCost({ major, fifth }, displacement, evenWindows(4), 1, 0, 1),
         mist, 'and the stiffness buys the springs alone')
     end,
   },
@@ -656,9 +656,9 @@ return {
       local pull = 0
       for _, cents in ipairs(displacement) do pull = pull + (cents / 50)^2 end
 
-      local cost = sonority.springCost({ major }, displacement, evenWindows(3), 1, 8)
+      local cost = sonority.springCost({ major }, displacement, evenWindows(3), 1, 8, 1)
       near(cost, pull, 'the pull alone, and nothing from the springs')
-      t.eq(cost, sonority.springCost({ major }, displacement, evenWindows(3), 1, 1e6),
+      t.eq(cost, sonority.springCost({ major }, displacement, evenWindows(3), 1, 1e6, 1),
         'a stiffness of a million charges a slack spring the same nothing')
     end,
   },
@@ -669,9 +669,9 @@ return {
       local lone   = sonority.springs({ 1 }, { 0 }, { {} })
       local narrow = { { below = 25, above = 50 } }
 
-      near(sonority.springCost({ lone }, {  10 }, narrow, 1, 8), 0.04,
+      near(sonority.springCost({ lone }, {  10 }, narrow, 1, 8, 1), 0.04,
         'ten cents up a fifty-cent half is a fifth of the way to the edge')
-      near(sonority.springCost({ lone }, { -10 }, narrow, 1, 8), 0.16,
+      near(sonority.springCost({ lone }, { -10 }, narrow, 1, 8, 1), 0.16,
         'the same ten down a twenty-five-cent half costs four times as much')
     end,
   },
@@ -718,12 +718,12 @@ return {
       local loop, window = { third, fourth, sixth }, evenWindows(3)
 
       local displacement = sonority.relax(loop, window, 1, 8, allFree(3))
-      local spread       = sonority.springCost(loop, displacement, window, 1, 8)
+      local spread       = sonority.springCost(loop, displacement, window, 1, 8, 1)
 
       -- Two springs go slack only by handing the whole comma to the third.
       local borne = { 0, third[1].delta,
                       third[1].delta + fourth[1].delta }
-      t.truthy(spread < sonority.springCost(loop, borne, window, 1, 8),
+      t.truthy(spread < sonority.springCost(loop, borne, window, 1, 8, 1),
         'the spread comma costs less than one spring bearing it')
 
       for _, springs in ipairs(loop) do
@@ -736,7 +736,7 @@ return {
         for _, nudge in ipairs{ -0.5, 0.5 } do
           local nudged = { displacement[1], displacement[2], displacement[3] }
           nudged[index] = nudged[index] + nudge
-          t.truthy(spread < sonority.springCost(loop, nudged, window, 1, 8),
+          t.truthy(spread < sonority.springCost(loop, nudged, window, 1, 8, 1),
             'and nothing half a cent away is cheaper')
         end
       end
@@ -776,12 +776,12 @@ return {
       t.eq(held[1], 10, 'the held strand stands exactly where it was put')
 
       -- The two that sweep sit at the optimum of what is left, the held one a constant in it.
-      local settled = sonority.springCost({ major }, held, window, 1, 8)
+      local settled = sonority.springCost({ major }, held, window, 1, 8, 1)
       for _, index in ipairs{ 2, 3 } do
         for _, nudge in ipairs{ -0.5, 0.5 } do
           local nudged = { held[1], held[2], held[3] }
           nudged[index] = nudged[index] + nudge
-          t.truthy(settled < sonority.springCost({ major }, nudged, window, 1, 8),
+          t.truthy(settled < sonority.springCost({ major }, nudged, window, 1, 8, 1),
             'nothing half a cent from strand ' .. index .. ' is cheaper')
         end
       end
