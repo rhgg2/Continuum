@@ -231,7 +231,6 @@
   @use call    tuning.degreesToSpec  @ reseedEqual:610,611 drawEqualFields:632,638
   @use call    tuning.derive  @ temperWrite:94 openNewModal:476
   @use call    tuning.edoDegrees  @ drawEqualFields:631,637 buildGen:788
-  @use call    tuning.findTemper  @ temperFor:57
   @use call    tuning.genCPS  @ buildGen:817
   @use call    tuning.genChord  @ buildGen:834
   @use call    tuning.genDiamond  @ diamondGen:685
@@ -418,7 +417,7 @@
   @field w lo  @ 35,36 drawSeriesFields:644
   @field r members  @ drawChordFields:651 buildGen:832
   @field w members  @ 37 drawChordFields:652
-  @field w mergeTiers  @ modalHost:temperNew:516 modalHost:temperImport:554
+  @field w mergeTiers  @ temperFor:57 modalHost:temperNew:516 modalHost:temperImport:554
   @field w min  @ drawRank2Fields:763
   @field r modalHost  @ 14
   @field w modified  @ buildDescriptor:280
@@ -446,6 +445,7 @@
   @field w periodAsStep  @ setPeriodAsStep:134 generateInto:181
   @field r periodPitch  @ generateInto:180 drawHeader:364 drawStepTable:451
   @field w periodPitch  @ setPeriodPitch:128 generateInto:180 openNewModal:476
+  @field w pick  @ temperFor:57
   @field r pitches  @ cloneForEdit:106,108 setStepPitch:116 addStep:154,155 removeStep:160 generateInto:179 drawStepRow:394 drawStepTable:438 diamondGen:688,689 drawDiamondFields:703
   @field r pitches  @ tenneyGen:723,724 drawTenneyFields:738
   @field w pitches  @ cloneForEdit:106 generateInto:179 openNewModal:476

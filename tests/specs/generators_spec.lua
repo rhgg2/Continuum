@@ -408,7 +408,7 @@ return {
   {
     name = 'chord-stamp rebases the pattern chord onto each member; lane-1 note lands on the trigger',
     run = function()
-      local temper = tuning.findTemper('12EDO')
+      local temper = tuning.presets['12EDO']
       local ctx = {
         step = function(p, d, n) return tuning.transposeStep(temper, p, d, n) end,
         stepsBetween = function(a, b)
@@ -458,7 +458,7 @@ return {
   {
     name = 'chord-stamp fires a chord on every region member (all lanes are triggers)',
     run = function()
-      local temper = tuning.findTemper('12EDO')
+      local temper = tuning.presets['12EDO']
       local ctx = {
         step = function(p, d, n) return tuning.transposeStep(temper, p, d, n) end,
         stepsBetween = function(a, b)

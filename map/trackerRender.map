@@ -118,7 +118,7 @@
   @fn runRetune(slots, widen)  @ 974-977
   @fn openRetuneModal()  @ 981-998
       -- Target, facility and key open on what the take carries, the rest on its default.
-      -- see design/adaptive-tuning.md § The command's slots, design/adaptive-ji.md § The command's slots
+      -- see docs/trackerView.md § Retune
   @fn scopedAction(title, base)  @ 1003-1009
       -- Naming convention <base>Selection / <base>All is the contract. The undo
       -- label belongs on the tv verb, not here -- see docs/trackerView.md § Commands & wrappers.
@@ -365,7 +365,6 @@
   @use call    modalHost:openPrompt  @ openPrompt:741
   @use call    modalHost:registerKind  @ <load>:754,847,1552
   @use call    pe:launch  @ launchPattern:1106
-  @use call    tuning.findTemper  @ slideTemper:1075
   @use call    tuning.isTarget  @ retuneTargetItems:818
   @use call    tuning.stepsBetween  @ centsToSteps:1081
   @use call    tuning.transposeStep  @ stepsToCents:1084
@@ -760,6 +759,7 @@
   @field r points  @ patternSummary:1097
   @field w points  @ emptyBody:1091
   @field r poly  @ launchPattern:1106
+  @field r presets  @ slideTemper:1075
   @field w prevTake  @ tracker.prevTake:1599
   @field w prevTrack  @ tracker.prevTrack:1597
   @field r prm  @ navRows:336,337 selectParam:352 drawTreeItem:470,472,477,479 planIndexOfCursor:492

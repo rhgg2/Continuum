@@ -54,7 +54,7 @@ local function homeTier(name)
   return 'global'
 end
 
-local function temperFor(name) return tuning.findTemper(name, cm:get('tempers')) end
+local function temperFor(name) return cm:get('tempers', { mergeTiers = true, pick = name }) end
 
 -- The take's effective tuning as a library name. 12EDO is the neutral floor
 -- (swing's 'identity' analogue): nil so a drop-in keeps the prior selection.

@@ -450,13 +450,15 @@ range — see *Addressable range*.
 Mirrors the swing model in `docs/timing.md`:
 
 - `tuning.presets` is **seed-only** — never consulted at slot
-  resolution time. Its role is to populate the UI's "copy into
-  library" menu.
+  resolution time. It seeds cm's `tempers` default tier at declaration,
+  and populates the UI's "copy into library" menu.
 - The runtime library lives in `cfg.tempers` at project scope; slots
   in `cfg.temper` reference temperaments **by name only**.
-- `findTemper(name, userLib)` resolves only within the userLib. A
-  missing name or missing lib returns nil, and callers treat nil as
-  "no temperament" — a determinate answer, not a failure to answer.
+- `cm:get('tempers', { mergeTiers = true, pick = name })` resolves a
+  name against the union of the tiers, the presets floor among them by
+  way of the default tier. A missing name returns nil, and callers
+  treat nil as "no temperament" — a determinate answer, not a failure
+  to answer.
 
 ## Absorber reconciliation
 

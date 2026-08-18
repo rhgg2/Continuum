@@ -1072,7 +1072,7 @@ end
 
 -- stepInterval: stored value is signed cents (a host-relative pitch demand);
 -- shown/stepped as temper steps, anchored at the host. see design/archive/note-macros.md § UI
-local function slideTemper() return tv:activeTemper() or tuning.findTemper('12EDO') end
+local function slideTemper() return tv:activeTemper() or tuning.presets['12EDO'] end
 local function hostPitch(uuid)
   local n = tv:noteByUuid(uuid)
   return (n and n.pitch) or 60, (n and n.detune) or 0

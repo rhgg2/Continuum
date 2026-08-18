@@ -1,6 +1,6 @@
 @spec tm_trill_spec  src=tests/specs/tm_trill_spec.lua  loc=137  cases=3
 @exercises trackerManager (h.tm), midiManager (h.fm), tuning (tuning)
-@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tuning.findTemper, tuning.transposeStep
+@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tuning.transposeStep
 @harness   mk
 
 # Intent
@@ -29,7 +29,6 @@
   @use call tm:getChannel  @ 68,96
   @use call fm:dump  @ 70,75,77,80,95,127
   @use call tm:rebuild  @ 78
-  @use call tuning.findTemper  @ 121
   @use call tuning.transposeStep  @ 122
 
 # Fields (r read / w write incl. constructor keys)
@@ -61,6 +60,7 @@
   @field r ppq  @ 24,33,42,99
   @field r ppq  @ 129
   @field w ppq  @ 62,91,117
+  @field r presets  @ 121
   @field w project  @ 58,116
   @field w run  @ 55,89,115
   @field w shift  @ 11

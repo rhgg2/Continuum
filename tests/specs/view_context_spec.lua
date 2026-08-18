@@ -244,10 +244,11 @@ return {
     -- sides drifting together still fails.
     run = function()
       local ctx = mkCtx()
-      local row, cellRow, onGrid = ctx:placeRow(75, 1)
+      local _, row, cellRow, onGrid
+      row, cellRow, onGrid = ctx:placeRow(75, 1)
       t.eq(row, 1.25);      t.eq(cellRow, 1); t.eq(onGrid, false)
 
-      row, cellRow, onGrid = ctx:placeRow(60 + 0.49, 1)
+      _, cellRow, onGrid = ctx:placeRow(60 + 0.49, 1)
       t.eq(cellRow, 1);     t.eq(onGrid, true)
 
       row, cellRow, onGrid = ctx:placeRow(99999, 1)
@@ -595,9 +596,10 @@ return {
 
   {
     name = 'temper resolves via cfg.tempers, falls back to built-in presets, returns nil for unknown names',
-    -- findTemper looks in the user lib first then in tuning.presets. The
-    -- schema default '12EDO' is a built-in preset name, so it resolves
-    -- with no seeding required. Unknown names still resolve to nil.
+    -- The merged read unions cm's tempers tiers over the default tier,
+    -- which cm seeds from tuning.presets. The schema default '12EDO' is
+    -- a preset name, so it resolves with no seeding required. Unknown
+    -- names still resolve to nil.
     run = function(harness)
       local h = harness.mk()
       local def = h.vm:activeTemper()

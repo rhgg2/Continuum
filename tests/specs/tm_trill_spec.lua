@@ -118,7 +118,7 @@ return {
                       vel = 100, detune = 0, delay = 0, lane = 1, fx = trill2 })
       h.tm:flush()
 
-      local temper = tuning.findTemper('19EDO')
+      local temper = tuning.presets['19EDO']
       local _, altDetune = tuning.transposeStep(temper, 60, 0, 2)
       local R = cents2raw(altDetune)
 

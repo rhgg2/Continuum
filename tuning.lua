@@ -170,12 +170,6 @@ tuning.presets = {
   }),
 }
 
---contract: userLib first, then presets; nil when unknown to both; '12EDO' resolves via presets
-function tuning.findTemper(name, userLib)
-  if not name then return nil end
-  return (userLib and userLib[name]) or tuning.presets[name]
-end
-
 ----- Scala import
 
 -- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the

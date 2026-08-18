@@ -96,10 +96,10 @@ tiers per subkey. Table-valued keys only.
 
 `cm:get(key, { pick = subkey })` indexes the resolved value before
 copying it, so only that entry crosses the boundary. The argument is the
-tier walk's, one level down: `findTemper(cm:get('temper'),
-cm:get('tempers'))` copied the whole temper catalogue — 393 keys, 35.8µs
-— to read one entry, where `cm:get('tempers', { mergeTiers = true, pick =
-name })` copies that entry alone, at 6.6µs. pick composes with the merge
+tier walk's, one level down: the rebuild path copied the whole temper
+catalogue — 393 keys, 35.8µs — to read one name, where
+`cm:get('tempers', { mergeTiers = true, pick = name })` copies that
+entry alone, at 6.6µs. pick composes with the merge
 mode rather than replacing it, so the two rules above still decide what
 is indexed; and since Lua cannot tell an absent key from an explicit
 nil, a nil pick reads as no pick and hands back the whole table.

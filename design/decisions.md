@@ -12,6 +12,16 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-19** — tuning.findTemper is gone, and a temperament resolves by name through cm alone:
+  cm:get('tempers', { mergeTiers = true, pick = name }). The function had drifted from its own
+  documentation — docs/tuning.md said it resolved only within the user library, while its body fell
+  back to tuning.presets — and that fallback is now cm's default tier, which configManager seeds
+  from presets at declaration; so presets returns to the seed-only role the doc claimed for it. One
+  site still reads presets directly: the slide widget takes the 12EDO floor as its step basis when
+  no temperament is active, which under the default temper is the common case, and it draws each
+  frame, where a fresh deep copy would be the wrong trade. Callers now establish a non-nil name
+  themselves, a nil pick reading as no pick and handing back the whole catalogue.
+
 - **2026-08-19** — cm:get takes an opts.pick naming a subkey, and indexes the resolved value before
   copying, so only that entry crosses the boundary. The catalogue read — copy the whole of swings or
   tempers, then index one name — stands in eight places, and on the rebuild path it cost 35.8µs a

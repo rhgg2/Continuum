@@ -169,4 +169,4 @@ through `util.serialise` carries cents a `tostring` short of the recomputed
 ones, so a project copy equal in every authored field can read as different
 and stay. Declining is the safe direction — the cost is clutter, not a lost
 edit — and the close is not in tidy but in never persisting derived state at
-all, with `findTemper` deriving on read.
+all, deriving it at the read instead.

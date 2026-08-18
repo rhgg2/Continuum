@@ -1,6 +1,6 @@
 @spec generators_spec  src=tests/specs/generators_spec.lua  loc=653  cases=47
 @exercises generators (generators), tuning (tuning)
-@surface   generators.glyphOf, generators.labelOf, generators.fieldsFor, generators.parksNotes, generators.parkWindows, generators.continuousTargets, generators.chainDestType, generators.destOf, generators.retarget, generators.fieldRange, tuning.findTemper, tuning.transposeStep, tuning.stepsBetween, generators.thinCurve
+@surface   generators.glyphOf, generators.labelOf, generators.fieldsFor, generators.parksNotes, generators.parkWindows, generators.continuousTargets, generators.chainDestType, generators.destOf, generators.retarget, generators.fieldRange, tuning.transposeStep, tuning.stepsBetween, generators.thinCurve
 
 # Intent
   generators.lua: slide glide-in envelope.
@@ -77,7 +77,6 @@
   @use call generators.destOf  @ 238,239,240
   @use call generators.retarget  @ 259,268,270,288,290
   @use call generators.fieldRange  @ 278,281
-  @use call tuning.findTemper  @ 411,461
   @use call tuning.transposeStep  @ 413,463
   @use call tuning.stepsBetween  @ 415,465
   @use call generators.thinCurve  @ 566,568,570,578,589,596,604,612,622,631,639,648,649
@@ -150,6 +149,7 @@
   @field w ppq  @ 366,367,369,382,384,395,396,398,419,420,421,424
   @field w ppq  @ 445,446,449,469,470,473,474,488,491,556,630
   @field w ppq  @ 630
+  @field r presets  @ 411,461
   @field w quantity  @ 278,281
   @field w resolution  @ 15,148,167,314,507,527,540,553,556
   @field w run  @ 48,61,69,78,88,103,111,119,128,136,146,166

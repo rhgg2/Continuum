@@ -2161,7 +2161,7 @@ function tv:retune(slots, widen)
   local notation = ctx:activeTemper()
   if not notation or slots.strength <= 0 then return end
   local notes  = notesIn(slots.scope == 'selection' and eventsByCol() or allGroups())
-  local target = slots.target and tuning.findTemper(slots.target, cm:get('tempers'))
+  local target = slots.target and cm:get('tempers', { mergeTiers = true, pick = slots.target })
 
   local refused
   if not target                    then snapToTemper(notes, notation, slots.strength)
