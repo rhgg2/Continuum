@@ -43,6 +43,23 @@ ctx="Scratchpad directory for this session: $scratch_path. Use instead of writin
 apply_patches works in the scratchpad, with the same atomicity but no approval gate -
 prefer it to sed or scripts to patch files."
 
+# The pid of the claude process this session runs under, left where the test
+# server can find it. That server resolves the spike from
+# CLAUDE_CODE_SESSION_ID, which it read once when it was spawned and cannot
+# read again: `/clear` rolls the id and arrives back here for a fresh
+# scratchpad without restarting MCP servers, so the id they hold names a
+# session whose tree has since been swept. The pid does not roll, and is the
+# one key both ends can see. Nothing is written if no claude ancestor is
+# found, because a wrong pid would aim a probe at another session's tree, and
+# no spike is the better failure.
+pid=$$
+while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
+  case "$(ps -o comm= -p "$pid" 2>/dev/null)" in
+    *claude) printf '%s\n' "$pid" > "$root/$slug/$session_id/cli.pid"; break ;;
+  esac
+  pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+done
+
 # A spike worktree, created eagerly rather than on request: the moment a
 # hypothesis is worth checking is the moment it feels obvious enough to skip,
 # so the tree has to already be a fact about the session rather than a step to

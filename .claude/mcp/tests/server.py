@@ -132,18 +132,52 @@ def _write_baseline(started: float, n_pass: int, n_fail: int, failures: list[str
         pass
 
 
+def _ancestors() -> dict[int, int]:
+    """This process's ancestor pids, each mapped to its distance from us.
+
+    One `ps` walked in memory rather than a call per rung: the ladder is short,
+    but every probe climbs it.
+    """
+    try:
+        listing = subprocess.run(
+            ["ps", "-eo", "pid=,ppid="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    parent: dict[int, int] = {}
+    for line in listing.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0].isdigit() and fields[1].isdigit():
+            parent[int(fields[0])] = int(fields[1])
+    chain: dict[int, int] = {}
+    pid = os.getpid()
+    while pid > 1 and pid in parent and pid not in chain:
+        chain[pid] = len(chain)
+        pid = parent[pid]
+    return chain
+
+
 def _spike_root() -> Optional[Path]:
     """This session's spike worktree, or None if it hasn't got one.
 
+    Keyed on the pid of the owning claude process, which session-env.sh records
+    beside the scratchpad it makes. Not on CLAUDE_CODE_SESSION_ID: this process
+    read that at spawn and cannot read it again, and `/clear` rolls the session
+    id without restarting MCP servers, so the id we hold names a tree that was
+    swept when the session it belonged to ended.
+
     Read out of `git worktree list` rather than by rebuilding the scratchpad
-    layout session-env.sh builds: git already knows where every worktree is, so
-    the only thing this borrows from that layout is that the session id appears
-    in the path. Which matters because stale spikes from dead sessions stay
-    registered until something prunes them, so "the one spike" is not a
-    question with an answer.
+    layout session-env.sh builds: git already knows where every worktree is.
+    Which matters because stale spikes from dead sessions stay registered until
+    something prunes them, so "the one spike" is not a question with an answer.
+    A claude started from inside a claude puts two owning pids in the chain;
+    the nearer one is ours.
     """
-    session = os.environ.get("CLAUDE_CODE_SESSION_ID")
-    if not session:
+    chain = _ancestors()
+    if not chain:
         return None
     try:
         listing = subprocess.run(
@@ -155,11 +189,20 @@ def _spike_root() -> Optional[Path]:
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return None
+    found: list[tuple[int, Path]] = []
     for line in listing.splitlines():
         path = line.partition("worktree ")[2]
-        if path and f"/{session}/" in path:
-            return Path(path)
-    return None
+        if not path:
+            continue
+        spike = Path(path)
+        try:
+            # <session>/scratchpad/spike, so the marker sits two up.
+            owner = int(spike.parents[1].joinpath("cli.pid").read_text().strip())
+        except (OSError, ValueError, IndexError):
+            continue
+        if owner in chain:
+            found.append((chain[owner], spike))
+    return min(found)[1] if found else None
 
 
 def _source_dir(spike: Path) -> Path:
