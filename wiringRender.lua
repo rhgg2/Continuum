@@ -2174,11 +2174,11 @@ local function renderCanvas(w, h)
         end
       end
       wireDraft = {
-        type       = w.type,
+        type       = wire.type,
         cursorEnd  = wireEndHover.side,
         keptId     = keptId,
-        keptPort   = (w.type == 'audio')
-                       and (keptIsTo and w.toPort or w.fromPort) or nil,
+        keptPort   = (wire.type == 'audio')
+                       and (keptIsTo and wire.toPort or wire.fromPort) or nil,
         keptAnchor = wireEndHover.keptAnchor,
         forbidden  = keptIsTo
                        and wv:descendantsOf(keptId)
