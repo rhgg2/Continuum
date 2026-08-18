@@ -37,8 +37,9 @@
 --
 -- Pins the beam that chooses the spellings (§ The candidates): a join admitted
 -- within two half-windows of the member's own seat, a sonority no chain connects
--- refused outright, a full enumeration the beam of twelve is checked against, and
--- the cut running within a waiting set so a deferral crowds no spelling out.
+-- refused outright, a full enumeration the beam of twelve is checked against, one
+-- anchor to the set a spelling leaves waiting, and the cut running within a waiting
+-- count so a deferral crowds no spelling out.
 --
 -- Pins the terms the walk takes from the notation (§ The solve): the seat and the
 -- window a strand is written under, which onsets a member may wait through, and
@@ -946,23 +947,63 @@ return {
   },
 
   {
-    name = 'spellings: the cut runs within a waiting set, not across them',
+    name = 'spellings: the cut runs within a waiting count, not across them',
     run = function()
       -- A deferral pays nothing here and everything later, so ranked against the spellings
-      -- it outranks them all; the width is a width per set, and the spelling survives.
+      -- it outranks them all; the width is a width per count, and the spelling survives.
+      -- States of one count have placed equally many members, which is what makes the
+      -- scores the cut ranks commensurable.
       local members, seat = { 1, 2, 3, 4, 5 }, { 0, 400, 700, 1000, 200 }
       local free = { false, true, true, true, true }
       local list = sonority.spellings(members, seat, evenWindows(5), free, elevenPitches, 12, 8)
       local best = sonority.spellings(members, seat, evenWindows(5), {}, elevenPitches, 12, 8)[1]
 
-      local spelled
+      local spelled, held = nil, {}
       for _, entry in ipairs(list) do
-        if #entry.waiting == 0 and not spelled then spelled = entry end
+        local waits = #entry.waiting
+        held[waits] = (held[waits] or 0) + 1
+        if waits == 0 and not spelled then spelled = entry end
       end
       t.truthy(spelled, 'a fully spelled state survives four members free to wait')
       near(spelled.box, best.box, 'and it is what the beam finds with nothing deferred')
       t.eq(#spelled.springs, 10, 'a spring per pair of the five')
       t.truthy(#list[1].waiting > 0, 'though a deferral leads the list')
+
+      for waits = 0, 4 do
+        t.truthy((held[waits] or 0) <= 12, string.format(
+          'the states deferring %d members kept to the width, and %d stand',
+          waits, held[waits] or 0))
+      end
+    end,
+  },
+
+  {
+    name = 'spellings: a waiting set is spelled at one anchor, not at each member it leaves',
+    run = function()
+      -- Every move has its inversion, so a spelling stands at as many coords as it has
+      -- members to anchor on, all of them the same intervals read from a different member.
+      -- The first member to place anchors and those before it wait, so the enumeration
+      -- holds a waiting set once rather than once per gauge.
+      local seat, window = { 0, 400, 700 }, evenWindows(3)
+      local whole = sonority.spellings({ 1, 2, 3 }, seat, window, { true, true, true },
+                                       fifthsAndThirds, math.huge, 8)
+
+      local held = {}
+      for _, entry in ipairs(whole) do
+        held[#entry.waiting] = (held[#entry.waiting] or 0) + 1
+      end
+
+      local pairSpellings = 0
+      for _, members in ipairs{ { 1, 2 }, { 1, 3 }, { 2, 3 } } do
+        pairSpellings = pairSpellings
+          + #sonority.spellings(members, seat, window, {}, fifthsAndThirds, math.huge, 8)
+      end
+
+      t.eq(held[0], #sonority.spellings({ 1, 2, 3 }, seat, window, {}, fifthsAndThirds,
+                                        math.huge, 8), 'the triad, spelled whole')
+      t.eq(held[1], pairSpellings, 'each pair it leaves, spelled as that pair alone is')
+      t.eq(held[2], 3, 'each member placed alone, stating nothing with anybody')
+      t.eq(held[3], 1, 'and the one state that says nothing at all')
     end,
   },
 

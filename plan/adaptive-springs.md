@@ -18,13 +18,17 @@
    joint relaxation settles the winner, filling `sonority.solveToMoves`,
    and the stiffness surfaces as a dial beside harmonic lock
    — landed 2026-08-18, six commits.
+4. **Phase 4 — Waiting in the beam** (§ The candidates) — waiting decided
+   per member inside one beam rather than enumerated as a set outside it,
+   the cut running within a waiting count, and one anchor to a waiting
+   set — landed 2026-08-18, one commit.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-18 sonority: spell a sonority in one beam, waiting decided per member (§ The candidates)
 - 2026-08-18 trackerView: offer the springs' stiffness as a purity dial (§ The dials)
 - 2026-08-18 sonority: fill solveToMoves with the springs solve (§ The solve)
 - 2026-08-17 sonority: refuse a wait that resolves to what its sonority offered (§ The candidates, § The solve)
-- 2026-08-17 sonority: charge a sonority that held a waiter, when it places (§ The candidates)
 
 ## Now
 

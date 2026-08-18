@@ -462,25 +462,31 @@ local function joinCost(state, component, placed, stiffness)
   return cost
 end
 
+-- A slot the state has left waiting, keyed apart from the '' of one it has yet to decide.
+local DEFERRED = '?'
+
 -- Keyed before it is built, so a candidate repeating a spelling costs its coords and its
 -- key alone; the state it would have extended is copied only where the spelling is new.
---shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, score, lo/hi=<the offsets left open> }
+--shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score, lo/hi=<the offsets left open> }
 --shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }
 local function admit(reached, seen, state, slot, placed, stiffness, lo, hi)
   local parts = util.clone(state.parts)
-  parts[slot] = tokenOf(placed)
+  parts[slot] = placed and tokenOf(placed) or DEFERRED
   local key = util.key(table.unpack(parts))
   if seen[key] then return end
   seen[key] = true
 
-  local component = state.components[placed.component] or {}
   local child = { at = util.clone(state.at), components = {}, parts = parts, key = key,
-                  lo = lo, hi = hi,
-                  score = state.score + joinCost(state, component, placed, stiffness) }
+                  waits = state.waits + (placed and 0 or 1), lo = lo, hi = hi,
+                  score = state.score }
   for index, slots in ipairs(state.components) do child.components[index] = util.clone(slots) end
-  child.components[placed.component] = child.components[placed.component] or {}
-  child.at[slot] = placed
-  util.add(child.components[placed.component], slot)
+  if placed then
+    local component = state.components[placed.component] or {}
+    child.score = state.score + joinCost(state, component, placed, stiffness)
+    child.at[slot] = placed
+    child.components[placed.component] = child.components[placed.component] or {}
+    util.add(child.components[placed.component], slot)
+  end
   util.add(reached, child)
 end
 
@@ -491,45 +497,54 @@ local function byScore(a, b)
   return a.key < b.key
 end
 
--- One round per member after the anchor, each joined by one move to a member already
--- placed; the unison is no join, and a state that can place nobody dies where it stands.
---invariant: every state ties every member; an untied member states nothing, so charges nothing
+-- One round per member decides one slot: a move to a member already placed, or left waiting.
+-- Every road decides the same slots, so a differing order's duplicates collapse where they land.
+--invariant: a round decides one slot, so the states it cuts between have placed equally many
+--invariant: the first member to place anchors and those before it wait, so one anchor spells each
+--invariant: every state ties every member it places; an untied one states nothing, charges none
 --invariant: the reach is read against the spelling's own offset, not which member anchors
-local function beamOver(seat, window, moves, width, stiffness)
-  local anchor = { at = {}, components = {}, parts = {}, score = 0,
-                   lo = -math.huge, hi = math.huge }
-  for slot = 1, #seat do anchor.parts[slot] = '' end
-  if #seat > 0 then
-    local placed = { coords = {}, cents = seat[1], deviation = 0, component = 1 }
-    anchor.at[1], anchor.components[1], anchor.parts[1] = placed, { 1 }, tokenOf(placed)
-    anchor.lo, anchor.hi = reachOf(0, window[1])
-  end
-  anchor.key = util.key(table.unpack(anchor.parts))
+local function beamOver(seat, window, free, moves, width, stiffness)
+  local start = { at = {}, components = {}, parts = {}, waits = 0, score = 0,
+                  lo = -math.huge, hi = math.huge }
+  for slot = 1, #seat do start.parts[slot] = '' end
+  start.key = util.key(table.unpack(start.parts))
 
-  local beam = { anchor }
-  for _ = 2, #seat do
+  local beam = { start }
+  for _ = 1, #seat do
     local reached, seen = {}, {}
     for _, state in ipairs(beam) do
+      local anchored = next(state.at) ~= nil
       for slot = 1, #seat do
-        if not state.at[slot] then
-          for host = 1, #seat do
-            local from = state.at[host]
-            if from then
-              for _, move in ipairs(moves) do
-                if move.height > 0 then
-                  local cents     = from.cents + move.cents
-                  local deviation = tuning.gapTo(seat[slot], cents)
-                  local low, high = reachOf(deviation, window[slot])
-                  local lo, hi     = math.max(state.lo, low), math.min(state.hi, high)
-                  if lo <= hi then
-                    admit(reached, seen, state, slot,
-                          { coords = joinCoords(from.coords, move), cents = cents,
-                            deviation = deviation, component = from.component },
-                          stiffness, lo, hi)
+        if state.parts[slot] == '' then
+          if free[slot] then
+            admit(reached, seen, state, slot, nil, stiffness, state.lo, state.hi)
+          end
+          if anchored then
+            for host = 1, #seat do
+              local from = state.at[host]
+              if from then
+                for _, move in ipairs(moves) do
+                  if move.height > 0 then
+                    local cents     = from.cents + move.cents
+                    local deviation = tuning.gapTo(seat[slot], cents)
+                    local low, high = reachOf(deviation, window[slot])
+                    local lo, hi    = math.max(state.lo, low), math.min(state.hi, high)
+                    if lo <= hi then
+                      admit(reached, seen, state, slot,
+                            { coords = joinCoords(from.coords, move), cents = cents,
+                              deviation = deviation, component = from.component },
+                            stiffness, lo, hi)
+                    end
                   end
                 end
               end
             end
+          else
+            local low, high = reachOf(0, window[slot])
+            admit(reached, seen, state, slot,
+                  { coords = {}, cents = seat[slot], deviation = 0, component = 1 },
+                  stiffness, math.max(state.lo, low), math.min(state.hi, high))
+            break
           end
         end
       end
@@ -537,7 +552,11 @@ local function beamOver(seat, window, moves, width, stiffness)
 
     table.sort(reached, byScore)
     beam = {}
-    for k = 1, math.min(width, #reached) do beam[k] = reached[k] end
+    local kept = {}
+    for _, state in ipairs(reached) do
+      kept[state.waits] = (kept[state.waits] or 0) + 1
+      if kept[state.waits] <= width then util.add(beam, state) end
+    end
   end
   return beam
 end
@@ -578,64 +597,40 @@ local function chargeOf(members, seat, placed)
 end
 
 -- The state read back as the sonority's own: its members' coords under the strands they
--- name, and what those state charged as any set of placed members is charged.
-local function spellingOf(state, members, present, seat, waiting)
-  local placed = {}
-  for slot, position in ipairs(present) do
-    placed[members[position]] = { coords    = state.at[slot].coords,
-                                  component = state.at[slot].component }
+-- name, whom it left waiting, and what those state charged as any set of placed members is.
+local function spellingOf(state, members, seat)
+  local placed, waiting = {}, {}
+  for slot, member in ipairs(members) do
+    if state.at[slot] then
+      placed[member] = { coords    = state.at[slot].coords,
+                         component = state.at[slot].component }
+    else
+      util.add(waiting, member)
+    end
   end
 
   local springs, box = chargeOf(members, seat, placed)
-  return { box = box, springs = springs, waiting = util.clone(waiting), placed = placed }
+  return { box = box, springs = springs, waiting = waiting, placed = placed }
 end
 
--- A waiting member states no interval, so the beam runs once per set of members left
--- waiting; a deferral is no rival to a spelling, so the cut runs within a set (§ The candidates).
+-- A waiting member states no interval, so waiting is a choice the beam makes per member; a
+-- deferral is no rival to a spelling, so the cut runs within a waiting count (§ The candidates).
 --shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }
 --contract: members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first
 --contract: a join is one move; one offset of the spelling seats every member inside its own window
---contract: the width is a width per waiting set; math.huge enumerates the spellings whole
---contract: a sonority some member no chain reaches has no spelling: the list comes back empty
+--contract: the width is a width per waiting count; math.huge enumerates the spellings whole
+--contract: a sonority no chain reaches and no wait defers has no spelling: the list is empty
 function sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)
-  local waiters = {}
-  for position = 1, #members do
-    if mayWait[members[position]] then util.add(waiters, position) end
+  local seats, windows, free = {}, {}, {}
+  for slot, member in ipairs(members) do
+    seats[slot]   = seat[member]
+    windows[slot] = window[member]
+    free[slot]    = mayWait[member] or false
   end
-
-  local found = {}
-  for choice = 0, (1 << #waiters) - 1 do
-    local waits = {}
-    for bit, position in ipairs(waiters) do
-      if (choice >> (bit - 1)) & 1 == 1 then waits[position] = true end
-    end
-
-    local present, seats, windows, waiting = {}, {}, {}, {}
-    for position = 1, #members do
-      if waits[position] then
-        util.add(waiting, members[position])
-      else
-        util.add(present, position)
-        util.add(seats,   seat[members[position]])
-        util.add(windows, window[members[position]])
-      end
-    end
-
-    for _, state in ipairs(beamOver(seats, windows, moves, width, stiffness)) do
-      util.add(found, { state = state, present = present, waiting = waiting,
-                        waitKey = util.key(table.unpack(waiting)) })
-    end
-  end
-
-  table.sort(found, function(a, b)
-    if a.state.score ~= b.state.score then return a.state.score < b.state.score end
-    if a.state.key   ~= b.state.key   then return a.state.key   < b.state.key   end
-    return a.waitKey < b.waitKey
-  end)
 
   local spellings = {}
-  for k, entry in ipairs(found) do
-    spellings[k] = spellingOf(entry.state, members, entry.present, seat, entry.waiting)
+  for k, state in ipairs(beamOver(seats, windows, free, moves, width, stiffness)) do
+    spellings[k] = spellingOf(state, members, seat)
   end
   return spellings
 end

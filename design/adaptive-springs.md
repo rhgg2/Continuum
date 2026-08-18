@@ -187,9 +187,17 @@ states the search may merge.**
    5-limit set is then no spelling at all.
 
 1. A waiting member states no interval, so the sonority spelled around
-   it is the sonority without it: the beam runs over the members that
-   remain, the first of them anchoring, and enumerating a sonority's
-   spellings is running that beam once per set of members left waiting.
+   it is the sonority without it. Waiting is therefore a decision the
+   beam makes rather than a set it is handed: a round decides one member,
+   joining it by a move to a member already placed or leaving it waiting,
+   and one beam over those decisions enumerates a sonority's spellings.
+
+1. The first member to place anchors, and the members before it wait.
+   Every move has its inversion, so a spelling stands at as many coords
+   as the sonority has members to anchor on — the same intervals read
+   from a different member each time — and fixing the anchor at the first
+   member to place is what holds a set of waiters to one spelling rather
+   than one per member it leaves.
 
 1. A waiting member is charged where it places. Its spelling pays at its
    own onset for what it states — the springs among the members present
@@ -213,10 +221,12 @@ states the search may merge.**
    running score is a floor under a spelling's completions, and a
    deferral moves charge out of the floor rather than paying it, so a
    state that waits is no rival to one that spells: the cut runs within a
-   waiting set, and the width an author states is a width per set.
-   Ranked across the sets instead, a beam of twelve over five members
-   with four free to wait returns twelve states that each defer two
-   members or more, and no fully spelled state among them.
+   waiting count, and the width an author states is a width per count.
+   Two states of one count have placed equally many members, which is
+   what makes the scores the cut ranks commensurable. Ranked across the
+   counts instead, a beam of twelve over five members with four free to
+   wait returns twelve states that each defer two members or more, and no
+   fully spelled state among them.
 
 1. The refusal falls where the wait resolves rather than where it is
    taken. A completion leaves a placement of the sonority that held the
@@ -355,6 +365,15 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
    the eleven-move set took that road, coming back 2.32 under the road
    that spelled as it went, at a tuning the two agree on within 0.03¢;
    what stands in its place is the road that spelled the pair as it went.
+
+1. The grain of the cut. A width per waiting count is coarser than a
+   width per waiting set: two states sharing a count at a round may end
+   at different sets, so a spelling can be crowded out by a state that
+   goes on to defer more, where a beam of its own would have kept it.
+   Nothing measured loses by it, and at infinite width the two grains
+   enumerate the same spellings, which leaves the coarser cut
+   uncontradicted rather than proved — the footing § Open's certification
+   item puts the width itself on.
 
 ## Open
 
