@@ -1,7 +1,7 @@
 # Design — Adaptive just intonation
 
 > opened: 2026-08-11 · status: superseded 2026-08-16 — plan/adaptive-ji.md
-> stopped at phase 4, behind the command; design/adaptive-springs.md
+> stopped at phase 4, behind the command; design/archive/adaptive-springs.md
 > retires the lattice search
 > `design/adaptive-tuning.md` has built
 

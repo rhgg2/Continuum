@@ -1,6 +1,6 @@
 # Design — Adaptive tuning
 
-> opened: 2026-07-04 · status: parked — plan/adaptive-tuning.md, at
+> opened: 2026-07-04 · status: in flight — plan/adaptive-tuning.md, at
 > phase 5 (seams) with phases 1–4 landed; the solver's boundary settled
 
 **Solve a selection in one pass for a single detune per note that
@@ -282,7 +282,7 @@ step it was written on.**
 
 8. The ball is what the springs solve asks of a target, that solve
    joining two strands by one move and declining to invent an
-   intermediate (`design/adaptive-springs.md` § The candidates). The
+   intermediate (`design/archive/adaptive-springs.md` § The candidates). The
    target therefore states the reach, and widening it is how an author
    buys a spelling the set does not already name.
 
@@ -444,7 +444,7 @@ step it was written on.**
    step-class returning after it merges into its strand rather than
    starting one, every later sonority holds it, and every later onset
    lets it wait; the springs walk costs exponentially in what may wait
-   (`design/adaptive-springs.md` § The solve), so a two-bar take that
+   (`design/archive/adaptive-springs.md` § The solve), so a two-bar take that
    answers in a third of a second answers in minutes.
 
 7. A note held across a chord change therefore bends the harmony to it

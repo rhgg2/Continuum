@@ -1,8 +1,14 @@
 # Design — Adaptive just intonation by springs
 
-> opened: 2026-08-16 · status: in flight — plan/adaptive-springs.md;
-> replaces design/adaptive-ji.md, whose lattice search it retires;
-> figures from a spike of 2026-08-16, kept at `tests/spikes/springs/`
+> opened: 2026-08-16 · status: complete 2026-08-19 —
+> plan/archive/adaptive-springs.md; replaces design/adaptive-ji.md, whose
+> lattice search it retires; figures from a spike of 2026-08-16, kept at
+> `tests/spikes/springs/`
+>
+> The model as built is `docs/sonority.md`, with the retune command's own
+> surface in `docs/trackerView.md`; where this record and those files
+> differ, they are right. The one question it left open and still wanted
+> stands in `design/adaptive-tuning.md`.
 
 **Tune a selection so that the notes of each sonority stand at pure
 intervals drawn from a stated set, holding the state in cents and the

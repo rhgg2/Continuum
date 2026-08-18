@@ -1,7 +1,7 @@
 # Adaptive just intonation by springs — plan
 
-> source: `design/adaptive-springs.md` — synthesis compiled from there;
-> don't design here.
+> source: `design/archive/adaptive-springs.md` — synthesis compiled from
+> there; don't design here.
 
 ## Phases
 
