@@ -1,8 +1,8 @@
 # Design — Adaptive just intonation by springs
 
 > opened: 2026-08-16 · status: complete 2026-08-19 —
-> plan/archive/adaptive-springs.md; replaces design/adaptive-ji.md, whose
-> lattice search it retires; figures from a spike of 2026-08-16, kept at
+> plan/archive/adaptive-springs.md; replaces design/archive/adaptive-ji.md,
+> whose lattice search it retires; figures from a spike of 2026-08-16, kept at
 > `tests/spikes/springs/`
 >
 > The model as built is `docs/sonority.md`, with the retune command's own
@@ -40,8 +40,8 @@ states the search may merge.**
    (`design/adaptive-tuning.md` § The strand, § The model), the box
    the objective sums (§ What "in tune" means), and the reading of a
    ratio temper as moves. What is retired: the placement search, the
-   offset sweep and the waiting machinery — plan/adaptive-ji.md phases
-   2 and 3; phase 1's move set arrives here unchanged as what the
+   offset sweep and the waiting machinery — plan/archive/adaptive-ji.md
+   phases 2 and 3; phase 1's move set arrives here unchanged as what the
    candidates compose from.
 
 ## The model
@@ -116,7 +116,7 @@ states the search may merge.**
 
 1. Harmonic lock opens at 1 under either facility. The lattice's
    placement rode on a single offset, which halved what a strength bought
-   and opened that dial at 1.5 (`design/adaptive-ji.md`
+   and opened that dial at 1.5 (`design/archive/adaptive-ji.md`
    § The command's slots); the springs carry no offset, and every figure
    measured here is taken at a pull of 1.
 
@@ -162,8 +162,8 @@ states the search may merge.**
    set holding `5/4` and `3/2` spells its E♭ a `5/4` below the G, the
    fifth doing the work. What no chain of sounding members reaches
    would have to be spelled through a phantom strand, which
-   `design/adaptive-ji.md` § A placement is connected refuses; an author
-   wanting that interval widens the target instead
+   `design/archive/adaptive-ji.md` § A placement is connected refuses; an
+   author wanting that interval widens the target instead
    (`design/adaptive-tuning.md` § The Tenney ball). The eleven-move set
    § Measured takes its figures over is the ball of radius `15/8` over
    `3/2` and `5/4`, and the same ball at `45/32` holds the two spellings
@@ -181,7 +181,7 @@ states the search may merge.**
 
 1. A member may therefore be left **unplaced**, taking its coords at a
    later onset from a member it sounds with, which is
-   `design/adaptive-ji.md` § A strand may wait carried over. Waiting
+   `design/archive/adaptive-ji.md` § A strand may wait carried over. Waiting
    runs while the member has an onset left to sound through and ends at
    that onset, where it places or the state fails; a member the sonority
    holds by recency has stopped, so it is joined to and does not itself

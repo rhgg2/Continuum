@@ -1,11 +1,11 @@
 # Adaptive just intonation — plan
 
-> source: `design/adaptive-ji.md` — closed 2026-08-16, superseded by
-> `design/archive/adaptive-springs.md`, which retires the lattice search.
-> Phase 1's move set stays in the tree; phases 2 and 3 are removed
-> (`sonority`'s placement and sweep, `tuning.reach`/`origin`), and
-> phase 4 stopped at the facility choice, which stands with
-> `sonority.solveToMoves` stubbed for the springs solve to fill.
+> source: `design/archive/adaptive-ji.md` — closed 2026-08-16, superseded
+> by `design/archive/adaptive-springs.md`, which retires the lattice
+> search. Phase 1's move set stays in the tree; phases 2 and 3 are removed
+> (`sonority`'s placement and sweep, `tuning.reach`/`origin`), and phase 4
+> stopped at the facility choice, which stands, `sonority.solveToMoves`
+> having been stubbed there for the springs solve to fill.
 
 ## Phases
 

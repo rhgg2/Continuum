@@ -1,9 +1,15 @@
 # Design — Adaptive just intonation
 
-> opened: 2026-08-11 · status: superseded 2026-08-16 — plan/adaptive-ji.md
-> stopped at phase 4, behind the command; design/archive/adaptive-springs.md
-> retires the lattice search
-> `design/adaptive-tuning.md` has built
+> opened: 2026-08-11 · status: superseded 2026-08-16, closed 2026-08-19 —
+> plan/archive/adaptive-ji.md, stopped at phase 4 behind the command;
+> design/archive/adaptive-springs.md replaces it, retiring the lattice
+> search
+>
+> Of what it decided, the move set survives in `docs/tuning.md`, the solve
+> that replaced it in `docs/sonority.md`, and the command's surface in
+> `docs/trackerView.md`; where this record and those files differ, they
+> are right. The two questions it left open and still wanted stand in
+> `design/adaptive-tuning.md`.
 
 **Tune a selection so that the notes of each sonority are joined by pure
 intervals from a stated set, letting those intervals compose into
