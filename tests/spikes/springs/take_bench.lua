@@ -2,7 +2,7 @@
 -- prints the tuning's checksum so a change meant to cost less can be held to costing the
 -- same. Run from the repo root: lua tests/spikes/springs/take_bench.lua
 --
--- 3.07s at the time of writing, where charging the whole passage's pull at every extension
+-- 1.70s at the time of writing, where charging the whole passage's pull at every extension
 -- cost 4.08 (design/adaptive-springs.md § The solve).
 package.path = './?.lua;tests/spikes/springs/?.lua;' .. package.path
 

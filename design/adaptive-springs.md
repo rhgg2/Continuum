@@ -323,6 +323,17 @@ states the search may merge.**
    11 of the take's springs where it tied 60, and the take comes back
    in 3.1 seconds against 3.3.
 
+1. An extension that cannot survive the cut is refused before it is
+   relaxed. The spring and pull terms are sums of squares, so what an
+   answer had closed plus the boxes an extension carries is a floor
+   under any cost it can come back with, known before its ties are
+   gathered. The bar it is read against — the cost of the cap-th best
+   distinct key its pool holds — only falls as a round runs, and the
+   keys under it only improve, so a floor that clears the bar marks an
+   extension nothing can bring back under the cut. Two extensions in
+   three refuse this way, paying for no ties, no relaxation and no
+   key, and the take comes back in 1.7 seconds against 3.1.
+
 1. The winner is settled by one joint relaxation over its springs, as
    the lattice settled its winner's offset; what the frozen past gave
    up along the way, that relaxation recovers.

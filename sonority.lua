@@ -616,9 +616,12 @@ local function chargeOf(members, seat, placed)
   local springs, box = {}, 0
   for _, component in ipairs(components) do
     local group, relative, deviation = groups[component], {}, {}
-    for k, member in ipairs(group) do
-      relative[k]  = rebase(placed[member].coords, placed[group[1]].coords, {})
-      deviation[k] = tuning.gapTo(seat[member], seat[group[1]] + tuning.cents(relative[k]))
+    local first  = group[1]
+    local origin = placed[first].coords
+    relative[1], deviation[1] = {}, 0
+    for k = 2, #group do
+      relative[k]  = rebase(placed[group[k]].coords, origin, {})
+      deviation[k] = tuning.gapTo(seat[group[k]], seat[first] + tuning.cents(relative[k]))
     end
 
     for a = 1, #group do
@@ -771,6 +774,24 @@ local function openFrom(onsets)
   return from
 end
 
+-- The difference of two coords read straight to its string: what coordString would read
+-- of the rebase, fused so a key costs no intermediate table.
+local function diffString(coords, from)
+  if coords == from then return '' end
+  local diff = {}
+  for prime, exponent in pairs(coords) do diff[prime] = exponent end
+  for prime, exponent in pairs(from)   do diff[prime] = (diff[prime] or 0) - exponent end
+
+  local primes = {}
+  for prime, exponent in pairs(diff) do
+    if exponent ~= 0 then util.add(primes, prime) end
+  end
+  table.sort(primes)
+  local parts = {}
+  for k, prime in ipairs(primes) do parts[k] = prime .. ':' .. diff[prime] end
+  return table.concat(parts, ',')
+end
+
 -- What a sonority has been spelled as, however the spelling was reached: each component
 -- read from its earliest member, as chargeOf reads it, and the members still waiting.
 --invariant: two placements under one key charge alike, so a wait reaching one is no second road
@@ -788,10 +809,11 @@ local function placementKey(members, placed, waiting)
   end
 
   for _, component in ipairs(components) do
-    local group = groups[component]
+    local group  = groups[component]
+    local origin = placed[group[1]].coords
     for _, member in ipairs(group) do
       util.add(parts, member)
-      util.add(parts, coordString(rebase(placed[member].coords, placed[group[1]].coords, {})))
+      util.add(parts, diffString(placed[member].coords, origin))
     end
     util.add(parts, '/')
   end
@@ -841,8 +863,13 @@ end
 --invariant: a waiter reaching two components merges them, every member shifted into the one frame
 --invariant: a waiter tied to no member states no interval there, so its completion fails
 local function complete(entry, members, spelling)
+  local lands = false
+  for _, member in ipairs(members) do
+    if entry.waiting[member] and spelling.placed[member] then lands = true break end
+  end
+  if not lands then return entry.placed, entry.waiting, false end
+
   local placed, waiting = util.clone(entry.placed), util.clone(entry.waiting)
-  local landed = false
 
   for _, member in ipairs(members) do
     local landing = waiting[member] and spelling.placed[member]
@@ -857,7 +884,6 @@ local function complete(entry, members, spelling)
       if #hosts == 0 then return nil end
 
       waiting[member] = nil
-      landed = true
 
       local component = placed[hosts[1]].component
       local coords    = rebase(landing.coords, spelling.placed[hosts[1]].coords,
@@ -879,7 +905,7 @@ local function complete(entry, members, spelling)
       end
     end
   end
-  return placed, waiting, landed
+  return placed, waiting, true
 end
 
 -- The entry a spelling that defers opens: which onset owes it, what it placed, whom it
@@ -901,13 +927,42 @@ local function settledOnsets(answer, from, at)
   return settled
 end
 
+-- Where a pool's cut now sits: the cost of its cap-th best distinct key, held in a
+-- bounded sorted list, a listed key replaced where it improved (§ The solve).
+--invariant: a key's cost in reached only improves, so a stale bar is only ever too high
+local function cutBar(cap)
+  local keys, costs = {}, {}
+  local pool = { bar = math.huge }
+  function pool.saw(key, cost)
+    for k = 1, #keys do
+      if keys[k] == key then
+        if cost >= costs[k] then return end
+        table.remove(keys, k)
+        table.remove(costs, k)
+        break
+      end
+    end
+
+    local at = #costs + 1
+    for k = 1, #costs do
+      if cost < costs[k] then at = k break end
+    end
+    if at > cap then return end
+    table.insert(keys, at, key)
+    table.insert(costs, at, cost)
+    keys[cap + 1], costs[cap + 1] = nil, nil
+    if #costs == cap then pool.bar = costs[cap] end
+  end
+  return pool
+end
+
 -- One answer extended by one spelling: the springs and box it has paid, each sonority it
 -- still holds charged again for what this spelling places, the onset's own strands relaxed.
 --contract: carried: the Ties over what the answer has settled, which this spelling's start from
 --contract: nil where a wait comes back with a placement its own sonority offered (§ The candidates)
 --contract: nil where a wait lands tied to no member of the sonority that deferred it
 local function extend(answer, spelling, onsets, at, seat, window, strength, stiffness,
-                      offered, carried, from, since, moving, stopped)
+                      offered, carried, from, since, moving, stopped, bars)
   local springs, held = table.move(answer.springs, 1, at - 1, 1, {}), {}
   local box, written = answer.box + spelling.box, {}
   springs[at] = spelling.springs
@@ -917,18 +972,26 @@ local function extend(answer, spelling, onsets, at, seat, window, strength, stif
     local members = onsets[onset].members
     local placed, waiting, landed = complete(entry, members, spelling)
     if not placed then return nil end
-    if landed and offered[onset][placementKey(members, placed, waiting)] then return nil end
+    if landed then
+      if offered[onset][placementKey(members, placed, waiting)] then return nil end
 
-    local charged, widened = chargeOf(members, seat, placed)
+      local charged, widened = chargeOf(members, seat, placed)
 
-    springs[onset] = charged
-    if onset >= from then util.add(written, onset) end
-    box = box - entry.box + widened
-    if next(waiting) then
-      util.add(held, { onset = onset, placed = placed, waiting = waiting, box = widened })
+      springs[onset] = charged
+      box = box - entry.box + widened
+      if next(waiting) then
+        util.add(held, { onset = onset, placed = placed, waiting = waiting, box = widened })
+      end
+    else
+      util.add(held, entry)
     end
+    if onset >= from then util.add(written, onset) end
   end
   if #spelling.waiting > 0 then util.add(held, heldBy(spelling, at)) end
+
+  -- box + closed is a floor under the cost, sums of squares both; a floor over the
+  -- pool's bar can't survive the cut, so it's refused before ties or relaxation (§ The solve).
+  if box + answer.closed > bars[held[1] and 'owing' or 'paid'].bar then return nil end
 
   -- Only the onsets this spelling wrote are tied here — its own, and the deferrals it
   -- completed; the rest the answer tied before its spellings were tried.
@@ -972,18 +1035,22 @@ function sonority.search(onsets, spellings, seat, window, strength, stiffness, c
 
   for i = 1, #onsets do
     local reached = {}
+    local bars = { owing = cutBar(cap), paid = cutBar(cap) }
     for _, answer in ipairs(answers) do
       local carried = sonority.ties(answer.springs, onsets[i].sounding,
                                     settledOnsets(answer, from[i], i))
       for choice, spelling in ipairs(spellings[i]) do
         local state = extend(answer, spelling, onsets, i, seat, window, strength, stiffness,
                              offered, carried, from[i], i > 1 and from[i - 1] or 1,
-                             moving[i], stopped[i])
+                             moving[i], stopped[i], bars)
         if state then
           state.choice[i] = choice
 
           local key = answerKey(state.displacement, ahead[i], onsets, state.held)
-          if outranks(state, reached[key], i, byChoice) then reached[key] = state end
+          if outranks(state, reached[key], i, byChoice) then
+            reached[key] = state
+            bars[state.held[1] and 'owing' or 'paid'].saw(key, state.cost)
+          end
         end
       end
     end

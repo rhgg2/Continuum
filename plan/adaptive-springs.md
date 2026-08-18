@@ -25,6 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-18 sonority: refuse an extension that cannot survive the cut before it is relaxed (§ The solve)
 - 2026-08-18 sonority: tie an answer's settled onsets once, not once per spelling (§ The solve)
 - 2026-08-18 sonority: charge what has stopped once, and merge on what still moves (§ The solve)
 - 2026-08-18 sonority: charge the onsets the walk has closed once (§ The solve)
