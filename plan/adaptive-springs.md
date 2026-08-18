@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-18 sonority: tie an answer's settled onsets once, not once per spelling (§ The solve)
 - 2026-08-18 sonority: charge what has stopped once, and merge on what still moves (§ The solve)
 - 2026-08-18 sonority: charge the onsets the walk has closed once (§ The solve)
 - 2026-08-18 sonority: key an answer by position and join its parts from a list (§ The solve)
-- 2026-08-18 sonority: spell a sonority in one beam, waiting decided per member (§ The candidates)
 
 ## Now
 

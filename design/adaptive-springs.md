@@ -314,6 +314,15 @@ states the search may merge.**
    half what it cost — both terms the two changes drop grew with the
    passage rather than with what was open at the cursor.
 
+1. What every spelling of an onset would tie alike, the answer ties
+   once. The relaxation reads an answer's springs as ties per strand,
+   and the onsets behind the cursor stand still while the spellings at
+   it are tried, so the answer gathers those once and each spelling
+   starts from them, tying only what it wrote: its own sonority's
+   springs, and those of the deferrals it completed. A candidate ties
+   11 of the take's springs where it tied 60, and the take comes back
+   in 3.1 seconds against 3.3.
+
 1. The winner is settled by one joint relaxation over its springs, as
    the lattice settled its winner's offset; what the frozen past gave
    up along the way, that relaxation recovers.
