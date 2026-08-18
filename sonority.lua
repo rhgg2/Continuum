@@ -907,12 +907,33 @@ end
 
 ----- The placement
 
--- The moves facility's solve: the target read as intervals between strands rather than
--- as points. The lattice search that stood here is retired, and the springs solve lands
--- in its place (design/adaptive-springs.md § Where it sits).
---contract: strands, n, strength, notation, moves → nil, until the springs solve lands
-function sonority.solveToMoves(strands, n, strength, notation, moves)
-  return nil
+-- Beam width and walk breadth, at the cheap end of the band § The solve measures: the
+-- answer holds from a cap of three upward on every passage measured, cost linear in both.
+local WIDTH, CAP = 24, 20
+
+-- The moves facility's solve: intervals rather than points, spelled by the beam under a
+-- frozen past, settled by joint relaxation (design/adaptive-springs.md § The solve).
+--contract: strands, n, strength, notation, moves, stiffness → the cents each strand settles at
+--contract: nil where an onset has no spelling — a sonority the target cannot reach refuses it
+function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)
+  local seat, window = sonority.seats(strands, notation)
+  local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, n)), {}
+  for i, onset in ipairs(onsets) do
+    spellings[i] = sonority.spellings(onset.members, seat, window, onset.mayWait, moves,
+                                      WIDTH, stiffness)
+  end
+
+  local answer = sonority.search(onsets, spellings, seat, window, strength, stiffness, CAP)
+  if not answer then return nil end
+
+  local free = {}
+  for index = 1, #strands do free[index] = index end
+  local displacement = sonority.relax(answer.springs, window, strength, stiffness,
+                                      answer.displacement, free)
+
+  local cents = {}
+  for index = 1, #strands do cents[index] = seat[index] + displacement[index] end
+  return cents
 end
 
 return sonority

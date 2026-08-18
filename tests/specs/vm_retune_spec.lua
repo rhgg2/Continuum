@@ -10,6 +10,11 @@
 -- against the 7-limit diamond at odd limit 9 -- the chord the pull is calibrated
 -- on (design/adaptive-tuning.md § Harmonic lock) -- and a tritone against the
 -- 5-limit diamond at odd limit 15, the hole that refuses a solve.
+--
+-- With the facility on 'moves' the same target is read as intervals rather than
+-- points: sonority.solveToMoves spells the strands against one another and settles
+-- them by springs. Those cases write a C major and a C minor triad against 1/1, 5/4
+-- and 3/2, the minor third being what no point of it reaches.
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -57,6 +62,12 @@ local function cell(h, row) return lane1(h).cells[row] end
 
 local function near(a, b, msg)
   t.truthy(math.abs(a - b) < 1e-6, (msg or 'near') .. ': ' .. tostring(a) .. ' vs ' .. tostring(b))
+end
+
+-- The springs answer by relaxation rather than by construction, so their placements are
+-- pinned to the thousandth of a cent the sweep converges to.
+local function settles(a, b, msg)
+  t.truthy(math.abs(a - b) < 1e-3, (msg or 'settles') .. ': ' .. tostring(a) .. ' vs ' .. tostring(b))
 end
 
 -- Seat of (step, octave) under MEAN, as the spec's expectation frame.
@@ -283,6 +294,59 @@ return {
       local withD = beside(62)
       near(withD[67], offset('3/2', 7), 'and beside D it leaves F# for G, taking 3/2')
       near(withD[62], offset('9/8', 2), 'the D standing on the point its own window holds')
+    end,
+  },
+
+  {
+    name = 'the facility decides how the same target is read',
+    run = function(harness)
+      local function retuned(facility)
+        local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
+                     '12EDO', { DIA = DIA })
+        h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', facility = facility,
+                     key = 1, sonoritySize = 5, harmonicLock = 1.5 }
+        return chordAt(h, 0)
+      end
+
+      local points = retuned('points')
+      near(points[60], 0,                 'read as points the key step keeps the 1/1')
+      near(points[64], offset('5/4', 4),  'the third on the target point')
+      near(points[67], offset('3/2', 7),  'and the fifth on its own')
+
+      -- Read as moves nothing is fixed to the pitch line: the three stand at the target's
+      -- own intervals, stretched by what the springs tolerate, and the pull settles where
+      -- the chord as a whole sits (design/adaptive-springs.md § The model).
+      local moves = retuned('moves')
+      settles(moves[60],  3.6804, 'the C carried off its seat by the pull')
+      settles(moves[64], -9.2008, 'the third a stretched 5/4 above it')
+      settles(moves[67],  5.5204, 'the fifth a narrowed 3/2 above that')
+    end,
+  },
+
+  {
+    name = 'the moves facility spells a third the target holds no point for',
+    run = function(harness)
+      -- C minor against 1/1, 5/4 and 3/2: read as points the E flat has nothing in its
+      -- window; read as moves it joins the fifth a 5/4 below, standing a 6/5 above the
+      -- C the set cannot sound directly (design/adaptive-springs.md § The candidates).
+      local function retuned(facility)
+        local h = mk(harness, { note(0, 60, 0), note(0, 63, 0), note(0, 67, 0), note(0, 75, 0) },
+                     '12EDO', { DIA = DIA })
+        local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'DIA',
+                                     facility = facility, key = 1,
+                                     sonoritySize = 5, harmonicLock = 1.5 }
+        return chordAt(h, 0), refused
+      end
+
+      local stood, refused = retuned('points')
+      t.deepEq(refused, { 4 }, 'the points reading has nowhere to put the minor third')
+      t.eq(stood[63], 0, 'so nothing moved')
+
+      local placed = retuned('moves')
+      settles(placed[60], -5.5204, 'the C, the chord mirroring the major triad')
+      settles(placed[63],  9.2008, 'the E flat a 6/5 above it, reached through the fifth')
+      settles(placed[67], -3.6804, 'the fifth a 3/2 above the C')
+      settles(placed[75],  9.2008, 'and the octave doubling seated in its own register')
     end,
   },
 }

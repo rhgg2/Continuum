@@ -53,6 +53,11 @@
 -- lands and costing what spelling it at its own onset would have cost; and the
 -- debt in the merge key, without which the walk keeps the road that only looks
 -- cheaper.
+--
+-- Pins the placement the moves facility takes off all of it (§ The solve): the
+-- five-part take of § Measured spelled, walked and settled in one call, a struck
+-- triad standing at the target's own intervals, and a chord no chain of moves
+-- reaches coming back with nothing.
 
 local t        = require('support')
 local tuning   = require('tuning')
@@ -454,6 +459,31 @@ local function rolled(pitches, apart)
   for k, pitch in ipairs(pitches) do notes[k] = event((k - 1) * apart, pitch, 960) end
   return sonority.strands(notes, pitchClass)
 end
+
+-- Voice lines a beat apart, a repeated pitch held rather than struck again.
+local function heldLines(lines, beat)
+  local notes = {}
+  for _, line in ipairs(lines) do
+    local i = 1
+    while i <= #line do
+      local j = i
+      while j < #line and line[j + 1] == line[i] do j = j + 1 end
+      notes[#notes + 1] = event((i - 1) * beat, line[i], j * beat)
+      i = j + 1
+    end
+  end
+  return sonority.strands(notes, pitchClass)
+end
+
+-- The five-part take design/adaptive-springs.md § Measured takes its figures over:
+-- sixty-six notes, forty strands over sixteen sonorities.
+local take = heldLines({
+  { 72, 72, 71, 72, 74, 74, 72, 71, 69, 69, 71, 72, 74, 72, 71, 72 },
+  { 67, 65, 65, 67, 67, 65, 64, 62, 62, 64, 65, 67, 65, 65, 62, 64 },
+  { 64, 62, 62, 60, 59, 60, 57, 59, 57, 60, 60, 60, 57, 59, 55, 55 },
+  { 55, 53, 55, 52, 50, 53, 52, 50, 53, 52, 48, 48, 50, 50, 47, 48 },
+  { 48, 50, 43, 45, 43, 41, 45, 43, 45, 36, 41, 38, 36, 43, 43, 36 },
+}, 960)
 
 -- What the notation and the target hand the walk: an onset per sonority and a spelling
 -- list apiece, at the beam width and the stiffness the figures below are taken under.
@@ -1225,6 +1255,51 @@ return {
       t.truthy(greedy, 'a walk carrying one answer apiece still answers a rolled chord')
       t.truthy(greedy.cost >= sonority.search(onsets, lists, seat, window, 1, 8, 60).cost,
         'and pays for the narrower cut rather than escaping it')
+    end,
+  },
+
+  {
+    name = 'solveToMoves: the take settles where § Measured settles it',
+    run = function()
+      -- Everything the facility does, in one call: the seats and windows the notation
+      -- states, the spellings the beam chooses, the walk over them, and the joint
+      -- relaxation that settles the winner.
+      local cents = sonority.solveToMoves(take, 5, 1, edo12, elevenPitches, 8)
+      t.truthy(cents, 'the take is answered')
+
+      local seat, window = sonority.seats(take, edo12)
+      t.eq(#cents, #take, 'a tuning per strand, forty of them')
+
+      local total, worst = 0, 0
+      for index = 1, #take do
+        local moved = cents[index] - seat[index]
+        total, worst = total + math.abs(moved), math.max(worst, math.abs(moved))
+        t.truthy(moved > -window[index].below and moved < window[index].above,
+          'strand ' .. index .. ' keeping the step it was written on')
+      end
+      near(total / #take, 6.63, 'the mean displacement of § Measured')
+      t.truthy(worst < 11.4, 'and no note past 11.4 cents: ' .. string.format('%.2f', worst))
+    end,
+  },
+
+  {
+    name = "solveToMoves: a chord stands at the target's intervals, or is refused",
+    run = function()
+      -- A struck C major under pure fifths and thirds: the springs stretch the two
+      -- intervals by under a cent between them, and the pull seats the chord where the
+      -- three displacements together cost least.
+      local cents = sonority.solveToMoves(progression{ { 60, 64, 67 } }, 5, 1, edo12,
+                                          fifthsAndThirds, 8)
+      t.truthy(cents, 'the chord is answered')
+      near(cents[1] - 6000, 3.75, 'the C carried off its seat by the pull')
+      near(cents[2] - cents[1], 386.86, 'the third stretched from 386.31')
+      near(cents[3] - cents[1], 701.88, 'and the fifth narrowed from 701.96')
+
+      -- No chain of moves reaches the tritone, and the windows hold a hundred cents
+      -- between the pair, which the springs' tolerance does not extend (§ What it costs).
+      t.eq(sonority.solveToMoves(progression{ { 60, 63, 66 } }, 5, 1, edo12,
+                                 fifthsAndThirds, 8), nil,
+        'while a diminished triad under the same set is refused')
     end,
   },
 

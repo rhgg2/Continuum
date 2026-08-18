@@ -2126,17 +2126,20 @@ local function solveToTarget(notes, notation, target, slots, widen)
   end
 end
 
--- The moves facility: the target read as moves between strands rather than as points. The
--- lattice solve behind it is retired, and the springs solve lands in its place
--- (design/adaptive-springs.md § Where it sits).
+-- How impure an interval may become, a dial of its own beside the pull: fixed at the
+-- figure design/adaptive-springs.md § Measured uses, until harmonic lock's slot offers it.
+local STIFFNESS = 8
+
+-- The moves facility: moves between strands rather than points, settled by springs
+-- (design/adaptive-springs.md § The solve); a target no chain of moves seats places nothing.
 local function solveToMoves(notes, notation, target, slots)
-  local strands   = strandsOf(notes, notation)
-  local placement = sonority.solveToMoves(strands, slots.sonoritySize, slots.harmonicLock,
-                                          notation, tuning.moves(target))
-  if not placement then return end
+  local strands = strandsOf(notes, notation)
+  local cents   = sonority.solveToMoves(strands, slots.sonoritySize, slots.harmonicLock,
+                                        notation, tuning.moves(target), STIFFNESS)
+  if not cents then return end
 
   for index, strand in ipairs(strands) do
-    seatStrand(strand, notation, placement.tunings[index].cents, slots.strength)
+    seatStrand(strand, notation, cents[index], slots.strength)
   end
 end
 

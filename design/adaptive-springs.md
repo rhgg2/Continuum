@@ -230,7 +230,11 @@ states the search may merge.**
    also what turns the budget from a refusal into a stopwatch: the
    carried set is capped, and the caps measured — 20 to 200 answers
    abreast, rounding from 0.1¢ to 0.5¢, beams of 24 and 48 — move the
-   take's cost by under one percent.
+   take's cost by under one percent. The walk takes twenty answers
+   abreast and a beam of twenty-four, the cheap end of that band; the
+   cost is linear in the cap, and an overlapping arpeggio of four
+   voices, whose debts do not settle, runs 12.7 seconds at sixty
+   answers where twenty returns the same tuning in 4.1.
 
 1. The cut runs over two pools: the answers that owe nothing, ranked
    among themselves, and the answers that owe, ranked among themselves,
@@ -268,7 +272,7 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 
 1. The take. The lattice sweep answers in 63.3s, placing at one offset
    of eleven and carrying every note 40¢ flat; the springs answer in
-   under three seconds at cost 102.96 against the lattice's 103.18,
+   1.2 seconds at cost 102.96 against the lattice's 103.18,
    with mean displacement 6.6¢, no note past 11.4¢, and no interval
    more than 0.54¢ from pure.
 
