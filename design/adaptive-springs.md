@@ -432,11 +432,12 @@ pull strength 1, the pump's stiff springs at 40 and its soft at 2.
 
 ## Open
 
-1. Where a refusal goes. A sonority no chain of moves connects has no
-   spelling, and the walk comes back with nothing for a passage holding
-   one, as the lattice refused a passage its moves could not reach. What
-   the author is told is unsettled: a thin target refuses ordinary
-   chords, and nothing yet carries that back to them.
+Both items below were dropped on 2026-08-19: each figure is certified by
+measurement rather than by a bound, and neither is to be revisited
+unless a passage bites in practice. The third question this section
+held — where a refusal goes, a thin target refusing ordinary chords with
+nothing carrying that back to the author — moved to
+`design/adaptive-tuning.md` § Open on the same date.
 
 1. Certification at width. The beam is checked against a full
    enumeration only where the enumeration was affordable; at seven

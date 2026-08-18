@@ -803,3 +803,12 @@ step it was written on.**
    was enough to make the spike stable; whether a well — soft near the
    centre, stiff at the edge — buys anything is unmeasured.
 
+5. Where a refusal goes under the moves facility. A sonority no chain of
+   moves seats inside the windows has no spelling, and the solve comes
+   back with nothing for a passage holding one — a diminished triad under
+   `3/2` and `5/4` alone (`docs/sonority.md` § The candidates). The points
+   solve names the strands it refused and offers to widen their windows
+   (§ What the solver takes), where a moves answer has no per-strand
+   refusal to name, what could not be spelled being the sonority rather
+   than the strand; so what the author is told is unsettled.
+
