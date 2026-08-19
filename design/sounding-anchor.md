@@ -591,6 +591,33 @@ charged by whether its two members sound together.**
 1. Whether two strands of a sonority crossing is audible, or a curiosity
    of the model (§ What it costs).
 
+1. Whether the box should charge pairs rather than spans. A span box
+   charges a sonority what its coords span on each axis, so a pair sits
+   anywhere inside room another member has already opened; a wolf fifth
+   between two members costs nothing where a third member has widened
+   the 3-axis past it. Charging every pair the height of the interval it
+   states prices what the span lets through, and on the take of
+   `tests/spikes/springs/take2.lua` it takes the sounding pairs a comma
+   or more from a 5-limit interval from 72 to 41, the fifths and fourths
+   among them from 25 to 3. What it costs is melodic: a step-class
+   wanders twice as far across the take, a mean spread of 18.8¢ against
+   9.9¢. That freedom is the one § The ambient reference takes away, so
+   the two want judging together rather than one before the other.
+   `tests/spikes/springs/pairwise_box.lua` carries both boxes and the
+   dial figures each wants.
+
+1. What the stiff end of a rest between a class's own strands sounds
+   like. Tying consecutive strands of a step-class at a delta of
+   nothing, inside the search where it can still move a spelling, has a
+   limit worth knowing before § The ambient reference is built: at a
+   stiffness of eight every class collapses to one tuning across the
+   take, which is a fixed twelve-note scale, and the pairs a comma out
+   rise from 41 to 50. Applied after the spellings are chosen it splits
+   the difference instead — one class's spread falls from 26¢ to 17¢
+   while the chords' own springs go from 3.1¢ to 7.5¢ out, and no pair
+   leaves the count. An ambient rest is a different construction, yet
+   its stiff end is likely the same scale.
+
 1. Whether the command's surface should still offer the old anchor. The
    wall, the absolute reference and the unweighted springs are one
    instrument and this doc describes another; whether an author wants
