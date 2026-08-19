@@ -15,7 +15,7 @@
   @invariant  col events sort by logical ppq  @ 13
   @invariant  endppq carries no delay; delay shifts only the note-on  @ 14
   @invariant  16 channels always present; channels[i] non-nil for i in 1..16 after rebuild  @ 15
-  @invariant  noteEvent optional: muted, sample, sampleShadowed, <metadata...>  @ 20
+  @invariant  noteEvent optional: muted, sample, sampleShadowed, intentCents, <metadata...>  @ 20
   @invariant  pbEventCol optional: delay, shape, tension  @ 22
   @invariant  pbEventCol is the col projection; um cache holds raw cents in val  @ 23
   @invariant  paEventCol mixes into note column events  @ 25
@@ -94,7 +94,7 @@
   @shape  fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored  @ 28
   @shape  event in the logical frame, minus realisation (delayC/endppqC/realised/derived/frame/cents),  @ 29
   @shape  so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):  @ 30
-  @shape  note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [fx] }  @ 31
+  @shape  note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }  @ 31
   @shape  cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }  @ 32
   @shape  channels[chan].parked = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)  @ 33
   @shape  channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render cells  @ 34

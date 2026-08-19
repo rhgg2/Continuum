@@ -3,6 +3,11 @@
 -- the production wiring. The octave column edits the temper's period-
 -- cycle octave, keeping the scale step, and rejects octaves a note
 -- cannot sit on exactly. See docs/tuning.md for the coordinate model.
+--
+-- The same gestures settle what becomes of the intent a solve stamps on a
+-- note. A typed note and a transpose spend it, seating the note where it
+-- arrives; a move of whole 2/1 octaves carries it, drift and all
+-- (design/sounding-anchor.md § What the note remembers).
 
 local t       = require('support')
 local tuning  = require('tuning')
@@ -34,10 +39,10 @@ local NARROW = tuning.derive{
   stepNames = {},
 }
 
-local function mk(harness, temper)
+local function mk(harness, temper, notes)
   temper = temper or JI
   local h = harness.mk{
-    seed   = { notes = {} },
+    seed   = { notes = notes or {} },
     config = {
       take    = { currentOctave = 4 },
       project = { tempers = { [temper.name] = temper }, temper = temper.name },
@@ -51,6 +56,17 @@ local function lane1(h)
   for _, c in ipairs(h.vm.grid.cols) do
     if c.midiChan == 1 and c.type == 'note' and c.lane == 1 then return c end
   end
+end
+
+local function colIndex(h)
+  local col = lane1(h)
+  for i, c in ipairs(h.vm.grid.cols) do if c == col then return i end end
+end
+
+-- A note as a solve leaves one: where it sounds, and the step it was written on.
+local function stamped(pitch, detune, intentCents)
+  return { ppq = 0, endppq = 60, chan = 1, lane = 1, pitch = pitch, vel = 100,
+           detune = detune, delay = 0, intentCents = intentCents }
 end
 
 -- The pitch part spans two cursor stops (note letter, octave digit);
@@ -71,12 +87,19 @@ local function octaveShown(h, temper)
   return oct + (step >= temper.octaveStep and 1 or 0), note
 end
 
+-- Types a char into the last place of the octave field, on the seeded note's row.
+local function typeOctave(h, colIdx, char)
+  local col     = lane1(h)
+  local _, stop = pitchStops(col)
+  h.ec:setPos(0, colIdx, stop)
+  h.vm:editEvent(col, col.cells[0], stop, string.byte(char), false)
+end
+
 -- Places a note at the cursor and returns a typist for its octave stop.
 local function rootedNote(harness)
   local h   = mk(harness, ROOTED)
   local col = lane1(h)
-  local colIdx
-  for i, c in ipairs(h.vm.grid.cols) do if c == col then colIdx = i end end
+  local colIdx = colIndex(h)
   local letterStop, octStop = pitchStops(col)
 
   h.ec:setPos(0, colIdx, letterStop)
@@ -94,8 +117,7 @@ end
 local function narrowNote(harness)
   local h   = mk(harness, NARROW)
   local col = lane1(h)
-  local colIdx
-  for i, c in ipairs(h.vm.grid.cols) do if c == col then colIdx = i end end
+  local colIdx = colIndex(h)
   local nameStop, unitsStop = pitchStops(col)
 
   h.ec:setPos(0, colIdx, nameStop)
@@ -280,6 +302,122 @@ return {
       local after = col.cells[0]
       t.eq(after.pitch,  pitch0,  'pitch unchanged by the rejected octave')
       t.eq(after.detune, detune0, 'detune unchanged by the rejected octave')
+    end,
+  },
+
+  {
+    name = 'typing a note over one a solve stamped clears the intent',
+    run = function(harness)
+      -- Written a step below where it sounds, as a solve leaves a note it carried up.
+      local h = mk(harness, ROOTED, { stamped(60, 20, 5900) })
+      local col, colIdx = lane1(h), colIndex(h)
+      local letterStop  = (pitchStops(col))
+
+      h.ec:setPos(0, colIdx, letterStop)
+      h.vm:editEvent(col, col.cells[0], letterStop, string.byte('z'), false)
+
+      local typed = lane1(h).cells[0]
+      t.eq(typed.intentCents, nil, 'the typed note is written where it stands')
+      t.eq(h.vm:noteDeviation(typed), 0, 'so it sounds on its own step')
+    end,
+  },
+
+  {
+    name = 'a fine pitch nudge steps from the written step and spends the intent',
+    run = function(harness)
+      -- Written on the step below and sounding 80 cents above it, so its pitch alone
+      -- names a step it was not written on.
+      local h = mk(harness, ROOTED, { stamped(60, -20, 5900) })
+      local colIdx     = colIndex(h)
+      local letterStop = (pitchStops(lane1(h)))
+
+      h.ec:setPos(0, colIdx, letterStop)
+      h.cmgr:invoke('nudgeFineUp')
+
+      local moved = lane1(h).cells[0]
+      t.eq(moved.pitch,  60, 'a step up from the written step, not from the sounding one')
+      t.eq(moved.detune,  0, 'seated on the step it arrives at')
+      t.eq(moved.intentCents, nil, 'and the intent is spent in the arriving')
+    end,
+  },
+
+  {
+    name = 'a coarse pitch nudge carries the intent and the drift up the octave',
+    run = function(harness)
+      local h = mk(harness, ROOTED, { stamped(60, -20, 5900) })
+      local colIdx     = colIndex(h)
+      local letterStop = (pitchStops(lane1(h)))
+
+      h.ec:setPos(0, colIdx, letterStop)
+      h.cmgr:invoke('nudgeCoarseUp')
+
+      local moved = lane1(h).cells[0]
+      t.eq(moved.pitch,   72, 'an octave above where it sounded')
+      t.eq(moved.detune, -20, 'keeping the drift')
+      t.eq(moved.intentCents, 7100, 'and the step it was written on rides with it')
+    end,
+  },
+
+  {
+    name = 'the octave digit reads the step the note was written on',
+    run = function(harness)
+      -- Written B3 and sounding 80 cents above it, where its pitch alone reads as C4:
+      -- typing 5 asks for the B two octaves up, not the C one octave up.
+      local h = mk(harness, ROOTED, { stamped(69, -20, 6800) })
+      local colIdx = colIndex(h)
+
+      local name, octave = h.vm:noteLabel(lane1(h).cells[0])
+      t.eq(name,   'B', 'the cell names the written step')
+      t.eq(octave, '3', 'in the octave that step stands in')
+
+      typeOctave(h, colIdx, '5')
+
+      local moved = lane1(h).cells[0]
+      t.eq(moved.pitch,   93, 'two octaves up from where it sounded')
+      t.eq(moved.detune, -20, 'drift and all')
+      t.eq(moved.intentCents, 9200, 'the intent riding with it')
+      t.eq(select(2, h.vm:noteLabel(moved)), '5', 'so the cell reads the octave typed')
+    end,
+  },
+
+  {
+    name = 'an octave digit that moves a whole 2/1 carries the intent, and any other spends it',
+    run = function(harness)
+      -- A 300-cent period: one of them is no octave, four of them are one.
+      local function typed(char)
+        local h = mk(harness, NARROW, { stamped(63, 30, 6300) })
+        typeOctave(h, colIndex(h), char)
+        return lane1(h).cells[0]
+      end
+
+      local period = typed('1')   -- octave 20 -> 21
+      t.eq(period.pitch,  66, 'a period up, seated')
+      t.eq(period.detune,  0, 'on the step it arrives at')
+      t.eq(period.intentCents, nil, 'which spends the intent')
+
+      local octave = typed('4')   -- octave 20 -> 24
+      t.eq(octave.pitch,  75, 'four periods up is the octave, taken as it sounds')
+      t.eq(octave.detune, 30, 'keeping the drift')
+      t.eq(octave.intentCents, 7500, 'and carrying the intent')
+    end,
+  },
+
+  {
+    name = "the gesture's backspace restores an intent its octave digit spent",
+    run = function(harness)
+      local h = mk(harness, NARROW, { stamped(63, 30, 6300) })
+      local colIdx      = colIndex(h)
+      local _, unitsStop = pitchStops(lane1(h))
+
+      h.ec:setPos(0, colIdx, unitsStop)
+      t.truthy(h.vm:digitsStrike(string.byte('1')), 'the units digit is consumed')
+      t.eq(lane1(h).cells[0].intentCents, nil, 'the digit spent the intent')
+
+      t.truthy(h.vm:digitsBackspace(), 'backspace is consumed')
+      local back = lane1(h).cells[0]
+      t.eq(back.pitch,  63, 'the pitch came back')
+      t.eq(back.detune, 30, 'and the detune')
+      t.eq(back.intentCents, 6300, 'and the intent the digit spent')
     end,
   },
 

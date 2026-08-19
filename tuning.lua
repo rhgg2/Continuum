@@ -586,13 +586,18 @@ function tuning.midiToStep(temper, midi, detune)
   return stepAtCents(temper, midi * 100 + (detune or 0))
 end
 
---contract: wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-function tuning.stepToMidi(temper, step, octave)
+-- The absolute cents a step stands at, unclamped: a step past either end of MIDI range
+-- still has a place on the line, and the size of a move is measured before the clamp.
+local function stepCents(temper, step, octave)
   local steps, n = temper.cents, #temper.cents
   while step < 1 do step = step + n; octave = octave - 1 end
   while step > n do step = step - n; octave = octave + 1 end
+  return (octave - temper.octaveBase) * temper.period + steps[step] + temper.rootCents
+end
 
-  local cents  = (octave - temper.octaveBase) * temper.period + steps[step] + temper.rootCents
+-- A point of the cents line as MIDI. Overflow either end folds into the detune rather
+-- than being dropped, which is how a caller reads a move it has to refuse.
+local function placeCents(cents)
   local midi   = math.floor(cents / 100 + 0.5)
   local detune = cents - midi * 100
 
@@ -603,6 +608,12 @@ function tuning.stepToMidi(temper, step, octave)
   end
 
   return midi, detune
+end
+
+--contract: wraps out-of-range step by adjusting octave
+--contract: clamps midi to 0..127 by folding overflow into detune (never silently drops)
+function tuning.stepToMidi(temper, step, octave)
+  return placeCents(stepCents(temper, step, octave))
 end
 
 function tuning.snap(temper, midi, detune)
@@ -639,6 +650,28 @@ end
 function tuning.transposeStep(temper, midi, detune, n)
   local step, oct = tuning.midiToStep(temper, midi, detune)
   return tuning.stepToMidi(temper, step + n, oct)
+end
+
+-- A whole number of 2/1 octaves, whatever the notation repeats at: the pitch class is
+-- what a solve tuned, so a move by one leaves a note's tuning standing.
+local function isOctaves(cents)
+  local off = cents % OCTAVE
+  return math.min(off, OCTAVE - off) < 1e-6
+end
+
+-- A transpose steps from where a note was written rather than from where it sounds.
+-- see design/sounding-anchor.md § What the note remembers
+--contract: temper, note, n steps → the pitch, detune and intent cents of the note moved n steps
+--contract: a move of whole 2/1 octaves keeps the note's drift and carries its intent
+--contract: any other move seats the note on the step it lands on and spends the intent
+function tuning.transposeNote(temper, note, n)
+  local step, octave = tuning.noteStep(temper, note)
+  local from         = stepCents(temper, step, octave)
+  local to           = stepCents(temper, step + n, octave)
+  if not isOctaves(to - from) then return placeCents(to) end
+
+  local pitch, detune = placeCents(note.pitch * 100 + note.detune + (to - from))
+  return pitch, detune, note.intentCents and note.intentCents + (to - from)
 end
 
 --contract: signed count of whole temper steps from note a to note b, each snapped to nearest step

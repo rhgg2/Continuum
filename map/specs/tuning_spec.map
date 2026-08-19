@@ -1,6 +1,6 @@
-@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=1127  cases=70
+@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=1194  cases=73
 @exercises tuning (tuning)
-@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.genTenney, tuning.isTarget, tuning.nextMosSize, tuning.mosInfo, tuning.coords, tuning.ratio, tuning.height, tuning.moves, tuning.stepClass, tuning.noteStep, tuning.seatWindow, tuning.seat, tuning.shortlist
+@surface   tuning.derive, tuning.stepToParts, tuning.genRank2, tuning.stepToMidi, tuning.midiToStep, tuning.scalaPitch, tuning.unrooted, tuning.removeStep, tuning.sortSteps, tuning.midiName, tuning.stepWindow, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genDiamond, tuning.genTenney, tuning.isTarget, tuning.nextMosSize, tuning.mosInfo, tuning.coords, tuning.ratio, tuning.height, tuning.moves, tuning.stepClass, tuning.noteStep, tuning.seatWindow, tuning.seat, tuning.transposeNote, tuning.shortlist
 
 # Intent
   Pins tuning.lua's pure display + derivation layer: the Option-B nameless
@@ -102,26 +102,29 @@
   @case 'moves: a temper holding a pitch that is not a ratio is no move set'  [pure]  @ 912-917
   @case 'stepClass: an exact octave shares a class, and nothing else does'  [pure]  @ 921-947
   @case 'noteStep: an intent names the step a note has been moved off'  [pure]  @ 951-975
-  @case 'seatWindow: a note at either edge of its window still reads as its own step'  [pure]  @ 979-1005
-  @case 'shortlist: the key step holds the unison, and the tonic does not move'  [pure]  @ 1009-1027
-  @case 'shortlist: the rival spellings of a step, nearest first'  [pure]  @ 1031-1047
-  @case 'shortlist: the hole at the tritone is the target\'s, not the step\'s'  [pure]  @ 1051-1062
-  @case 'shortlist: widened, the hole reaches the nearest points either side'  [pure]  @ 1066-1081
-  @case 'shortlist: an unequal notation strains by the side the point lies on'  [pure]  @ 1085-1097
-  @case 'shortlist: one window serves the strand, in every register'  [pure]  @ 1101-1125
+  @case 'transposeNote: a transpose steps from the written step and seats on the one it lands on'  [pure]  @ 979-993
+  @case 'transposeNote: a whole 2/1 carries the intent and the drift'  [pure]  @ 997-1025
+  @case 'transposeNote: a move past the MIDI ceiling folds into detune'  [pure]  @ 1029-1042
+  @case 'seatWindow: a note at either edge of its window still reads as its own step'  [pure]  @ 1046-1072
+  @case 'shortlist: the key step holds the unison, and the tonic does not move'  [pure]  @ 1076-1094
+  @case 'shortlist: the rival spellings of a step, nearest first'  [pure]  @ 1098-1114
+  @case 'shortlist: the hole at the tritone is the target\'s, not the step\'s'  [pure]  @ 1118-1129
+  @case 'shortlist: widened, the hole reaches the nearest points either side'  [pure]  @ 1133-1148
+  @case 'shortlist: an unequal notation strains by the side the point lies on'  [pure]  @ 1152-1164
+  @case 'shortlist: one window serves the strand, in every register'  [pure]  @ 1168-1192
 
 # Uses (outbound edges)
   @use call tuning.derive  @ 11,33,42,49,69,77,169,187,220,224,232,261,275,315,320,330,352,365,383
   @use call tuning.stepToParts  @ 23,120,124,135
   @use call tuning.genRank2  @ 48,752,762,771,844,846
-  @use call tuning.stepToMidi  @ 88,339,340,371,408,415,464,465,493,494,508,931,932,943,944,1092,1114,1115
-  @use call tuning.midiToStep  @ 193,210,212,406,411,472,473,489,490,507,509,990,1000
+  @use call tuning.stepToMidi  @ 88,339,340,371,408,415,464,465,493,494,508,931,932,943,944,1159,1181,1182
+  @use call tuning.midiToStep  @ 193,210,212,406,411,472,473,489,490,507,509,1057,1067
   @use call tuning.scalaPitch  @ 243,244,245,246,247,248,249,251,252,253,254,692
   @use call tuning.unrooted  @ 303
   @use call tuning.removeStep  @ 315,320,330,381
   @use call tuning.sortSteps  @ 352,365,383
   @use call tuning.midiName  @ 395,396,397,398
-  @use call tuning.stepWindow  @ 425,428,432,444,448,1088
+  @use call tuning.stepWindow  @ 425,428,432,444,448,1155
   @use call tuning.parseScalaFile  @ 531
   @use call tuning.parseScalaPitches  @ 543
   @use call tuning.scalaToTemper  @ 552,567,580
@@ -133,7 +136,7 @@
   @use call tuning.parseChord  @ 638,654,655
   @use call tuning.genChord  @ 641,645
   @use call tuning.genCPS  @ 662,843
-  @use call tuning.genDiamond  @ 672,677,678,679,686,842,916,1011,1033,1054,1057,1068,1093,1103
+  @use call tuning.genDiamond  @ 672,677,678,679,686,842,916,1078,1100,1121,1124,1135,1160,1170
   @use call tuning.genTenney  @ 701,713,718,721,728,732,742
   @use call tuning.isTarget  @ 706,842,843,844,845,846,847
   @use call tuning.nextMosSize  @ 780,781,782,783,784
@@ -144,18 +147,19 @@
   @use call tuning.moves  @ 868,882,884,886,894
   @use call tuning.stepClass  @ 924,925,926,927,928,933,937,939,945,965
   @use call tuning.noteStep  @ 958,961
-  @use call tuning.seatWindow  @ 963,964,985,997
+  @use call tuning.seatWindow  @ 963,964,1052,1064
   @use call tuning.seat  @ 971,974
-  @use call tuning.shortlist  @ 1013,1019,1023,1035,1043,1054,1057,1070,1077,1078,1093,1104,1105,1121,1123
+  @use call tuning.transposeNote  @ 984,990,1000,1010,1015,1023,1035,1039
+  @use call tuning.shortlist  @ 1080,1086,1090,1102,1110,1121,1124,1137,1144,1145,1160,1171,1172,1188,1190
 
 # Fields (r read / w write incl. constructor keys)
   @field r cellWidth  @ 98,103,146,159,171,192,208,222,225
   @field r cents  @ 264,265,266,522,560,571,572,871,872,874,901
-  @field r cents  @ 903,906,1015,1020,1025,1037,1039,1041,1045,1059
-  @field r cents  @ 1060,1072,1073,1095,1109
+  @field r cents  @ 903,906,1082,1087,1092,1104,1106,1108,1112,1126
+  @field r cents  @ 1127,1139,1140,1162,1176
   @field w cents  @ 11,31,170,185,221,233,275
-  @field r coords  @ 870,873,875,907,1017,1026
-  @field w detune  @ 55,985,997,1043,1093,1121,1123
+  @field r coords  @ 870,873,875,907,1084,1093
+  @field w detune  @ 55,1052,1064,1110,1160,1188,1190
   @field r height  @ 897,900,902,905
   @field w intentCents  @ 55
   @field r isMos  @ 786,789
@@ -168,7 +172,8 @@
   @field w name  @ 439,455,481,501,518,529,541,550,565,578,587,603
   @field w name  @ 615,623,636,652,660,670,684,699,711,726,740,750
   @field w name  @ 760,769,778,794,808,817,830,840,852,866,880,892
-  @field w name  @ 912,921,951,979,1009,1031,1051,1066,1085,1101
+  @field w name  @ 912,921,951,979,997,1029,1046,1076,1098,1118,1133,1152
+  @field w name  @ 1168
   @field r octaveBase  @ 280,289,460,486
   @field r octaveStep  @ 100,104,134,145
   @field r octaveWidth  @ 99,172,191,196,207
@@ -178,16 +183,17 @@
   @field r periodPitch  @ 49,523,554,568,592,598,610,631,643,647,664,675
   @field r periodPitch  @ 704,754,764
   @field w periodPitch  @ 39,49,69,77,261
-  @field w pitch  @ 55,985,997,1013,1019,1023,1035,1043,1054,1057,1070,1077
-  @field w pitch  @ 1078,1093,1104,1105,1121,1123
+  @field w pitch  @ 55,1052,1064,1080,1086,1090,1102,1110,1121,1124,1137,1144
+  @field w pitch  @ 1145,1160,1171,1172,1188,1190
   @field r pitches  @ 16,40,50,351,364,382,521,556,557,558,569,570
   @field r pitches  @ 590,591,596,597,630,642,646,663,665,673,677,678
   @field r pitches  @ 679,687,689,691,702,714,719,721,729,733,743,753
   @field r pitches  @ 763,772,773
   @field w pitches  @ 39,50,69,77,262,847,868,882,884,886,894,914
-  @field w pitches  @ 915,1120
+  @field w pitches  @ 915,1187
   @field r presets  @ 97,102,111,112,120,124,133,287,405,414,424,503
-  @field r presets  @ 503,520,845,923,953,984,1011,1033,1053,1068,1103
+  @field r presets  @ 503,520,845,923,953,981,999,1033,1051,1078,1100,1120
+  @field r presets  @ 1135,1170
   @field r rootCents  @ 277,288,308,317,322,336,355,369,459,485
   @field r rootDetune  @ 291,334,386
   @field w rootDetune  @ 78,83,276,301,458,504
@@ -202,10 +208,11 @@
   @field w run  @ 440,456,482,502,519,530,542,551,566,579,588,604
   @field w run  @ 616,624,637,653,661,671,685,700,712,727,741,751
   @field w run  @ 761,770,779,795,809,818,831,841,853,867,881,893
-  @field w run  @ 913,922,952,980,1010,1032,1052,1067,1086,1102
+  @field w run  @ 913,922,952,980,998,1030,1047,1077,1099,1119,1134,1153
+  @field w run  @ 1169
   @field r small  @ 788
   @field r stepNames  @ 40
   @field w stepNames  @ 11,31,39,50,69,77,170,185,221,223,233,262
   @field w stepNames  @ 275
-  @field r strain  @ 1016,1021,1038,1040,1046,1061,1074,1075,1080
-  @field r strain  @ 1080,1096,1110
+  @field r strain  @ 1083,1088,1105,1107,1113,1128,1141,1142,1147
+  @field r strain  @ 1147,1163,1177

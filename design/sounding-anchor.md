@@ -202,6 +202,18 @@ charged by whether its two members sound together.**
    pitch class is what the solve tuned, so the intent rides up or down
    with the note and the drift is kept.
 
+1. That octave is measured in cents, from the step the note leaves to the
+   step it arrives at, rather than in periods of the notation. A period is
+   a 2/1 in most notations and the two readings agree there; where it is
+   not, four steps of a 300-cent period still make an octave and carry the
+   intent, and under thirteen equal divisions of 3/1 no whole number of
+   steps makes one, so every transpose there spends it.
+
+1. An octave move keeps a note's drift whether or not an intent stands
+   beside it. A note sounds off its step with no intent where the score's
+   notation has changed under it, and re-seating such a note on the way
+   past would be a snap the author did not ask for.
+
 1. The intent/realisation ladder gains a rung. Detune was intent and
    pitch bend its realisation (`trackerManager.lua:5`); now intent cents
    is the intent, detune realises it against a notation, and pb realises

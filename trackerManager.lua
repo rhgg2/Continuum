@@ -17,7 +17,7 @@
 --shape: channel = { chan, columns = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }
 --shape: column = { events=[evt,...], [cc=ccNum] }  -- events sorted by logical ppq
 --shape: noteEvent core = { ppq, endppq, pitch, vel, lane, detune, delay }
---invariant: noteEvent optional: muted, sample, sampleShadowed, <metadata...>
+--invariant: noteEvent optional: muted, sample, sampleShadowed, intentCents, <metadata...>
 --shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, ... }
 --invariant: pbEventCol optional: delay, shape, tension
 --invariant: pbEventCol is the col projection; um cache holds raw cents in val
@@ -28,7 +28,7 @@
 --shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
 --shape:   event in the logical frame, minus realisation (delayC/endppqC/realised/derived/frame/cents),
 --shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
---shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [fx] }
+--shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
 --shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
 --shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)
 --shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render cells

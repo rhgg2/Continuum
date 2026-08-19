@@ -976,6 +976,73 @@ return {
   },
 
   {
+    name = 'transposeNote: a transpose steps from the written step and seats on the one it lands on',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      -- Written C4 and sounding 80 cents above it: read off its pitch it is a C#4,
+      -- and a step up from there would be the D.
+      local pitch, detune, intent = tuning.transposeNote(edo12, noteAt(61, -20, 6000), 1)
+      t.eq(pitch, 61, 'a step up from the written C is the C sharp')
+      nearly(detune, 0, 'seated on the step it arrives at')
+      t.eq(intent, nil, 'and the intent is spent in the arriving')
+
+      -- With no intent to read, the pitch names the step stepped from, as it always did.
+      local soundPitch, soundDetune = tuning.transposeNote(edo12, noteAt(61, -20), 1)
+      t.eq(soundPitch, 62, 'from the step it sounds on, a step up is the D')
+      nearly(soundDetune, 0, 'seated there too')
+    end,
+  },
+
+  {
+    name = 'transposeNote: a whole 2/1 carries the intent and the drift',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      local pitch, detune, intent = tuning.transposeNote(edo12, noteAt(61, -20, 6000), 12)
+      t.eq(pitch, 73, 'the octave takes the note as it sounds')
+      nearly(detune, -20, 'drift and all')
+      nearly(intent, 7200, 'and the step it was written on rides up with it')
+
+      -- 12EDO written as six steps of a half-octave period: the octave is two periods,
+      -- so the octave the rule reads is not the period the notation repeats at.
+      local half    = half12()
+      local drifted = noteAt(60, 30, 6000)
+
+      local periodPitch, periodDetune, periodIntent = tuning.transposeNote(half, drifted, 6)
+      t.eq(periodPitch, 66, 'a period up is the tritone')
+      nearly(periodDetune, 0, 'seated on its step')
+      t.eq(periodIntent, nil, 'which spends the intent')
+
+      local octPitch, octDetune, octIntent = tuning.transposeNote(half, drifted, 12)
+      t.eq(octPitch, 72, 'two periods make the octave')
+      nearly(octDetune, 30, 'which keeps the drift')
+      nearly(octIntent, 7200, 'and carries the intent')
+
+      -- Thirteen equal divisions of 3/1: no whole number of steps makes a 2/1, so
+      -- every transpose under it spends the intent.
+      local bp = bp13()
+      t.eq(select(3, tuning.transposeNote(bp, noteAt(60, 20, 6000), 13)), nil,
+           'a period of the tritave is no octave')
+    end,
+  },
+
+  {
+    name = 'transposeNote: a move past the MIDI ceiling folds into detune',
+    run = function()
+      -- The fold is how a caller reads a rejected move: a seated note carries half a
+      -- step of detune at most, so anything past that came out of the clamp.
+      local edo12 = tuning.presets['12EDO']
+
+      local pitch, detune = tuning.transposeNote(edo12, noteAt(120, 0, 12000), 12)
+      t.eq(pitch, 127, 'the carried move clamps into the addressable range')
+      t.truthy(detune > 50, 'with the overflow standing in the detune: ' .. detune)
+
+      local seatPitch, seatDetune = tuning.transposeNote(edo12, noteAt(120, 0, 12000), 13)
+      t.eq(seatPitch, 127, 'and the seated move the same way')
+      t.truthy(seatDetune > 50, 'overflow: ' .. seatDetune)
+    end,
+  },
+
+  {
     name = 'seatWindow: a note at either edge of its window still reads as its own step',
     run = function()
       -- The window is what the solves may move a note inside, and a note is read back

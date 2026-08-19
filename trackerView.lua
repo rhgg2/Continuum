@@ -808,7 +808,9 @@ do
     local col, evt = target.col, target.evt
 
     if util.isNote(evt) then
-      local update = { pitch = pitch, detune = detune }
+      -- A typed note is written where it stands, so an intent the old one carried goes
+      -- with it. see design/sounding-anchor.md § What the note remembers
+      local update = { pitch = pitch, detune = detune, intentCents = util.REMOVE }
       if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
       edit.assign(evt, repinToRow(evt, update, target.ppq, target.rpb))
       return evt.vel
@@ -926,12 +928,12 @@ do
         -- The octave under the cursor, as displayed (octaveStep bump included),
         -- so both gestures act on the number the cell shows.
         local temper = ctx:activeTemper()
-        local step, bump, old
+        local old
         if temper then
-          local index
-          step, index = tuning.midiToStep(temper, evt.pitch, evt.detune)
-          bump = step >= temper.octaveStep and 1 or 0
-          old  = index + bump
+          -- The step the note was written on, so a note a solve has moved names the
+          -- octave it was written in. see design/sounding-anchor.md § What the note remembers
+          local step, index = tuning.noteStep(temper, evt)
+          old = index + (step >= temper.octaveStep and 1 or 0)
         else
           old = math.floor(evt.pitch / 12) - 1
         end
@@ -949,17 +951,18 @@ do
           oct = entrySign(old, 'pitch') * util.setDigit(math.abs(old), d, place, 10, keep)
         end
 
-        -- Octave column edits the period-cycle octave: keep the step,
-        -- re-derive, reject if it clamps out of MIDI range (|detune|>½ st).
-        local pitch, detune
+        -- Octave column moves the note by whole periods, so it keeps the step it was
+        -- written on; reject a move that clamps out of MIDI range (|detune|>½ st).
+        local pitch, detune, intent
         if temper then
-          pitch, detune = tuning.stepToMidi(temper, step, oct - bump)
+          pitch, detune, intent = tuning.transposeNote(temper, evt, (oct - old) * #temper.cents)
           if math.abs(detune) > 50 then return end
         else
           pitch, detune = (oct + 1) * 12 + evt.pitch % 12, evt.detune
           if pitch < 0 or pitch > 127 then return end
+          intent = evt.intentCents and evt.intentCents + (pitch - evt.pitch) * 100
         end
-        edit.assign(evt, { pitch = pitch, detune = detune })
+        edit.assign(evt, { pitch = pitch, detune = detune, intentCents = intent or util.REMOVE })
         return commit(pitch, evt.vel, detune)
 
       -- sample: 2 hex nibbles, 0..127.
@@ -1242,9 +1245,9 @@ do
   ----- Value entry (shift-held gesture: a left-to-right overwrite cursor over a field's places)
 
   -- Gesture-editable parts → the event fields each writes (pb rides on val; an
-  -- octave edit moves pitch and detune together).
+  -- octave edit moves pitch, detune and the intent beside them together).
   local DIGIT_FIELD = { sample = {'sample'}, vel = {'vel'}, delay = {'delay'},
-                        pb = {'val'}, val = {'val'}, pitch = {'pitch', 'detune'} }
+                        pb = {'val'}, val = {'val'}, pitch = {'pitch', 'detune', 'intentCents'} }
   local HEX_PART    = { sample = true, vel = true, val = true }   -- decimal: delay, pb, pitch
 
   --shape: digits = { colIdx, row, part, stop0, undo = { { existed, vals, stop }, ... } }
@@ -2387,17 +2390,21 @@ local nudge do
   local function nudgePitch(col, note, dir, coarse, audible, p)
     local delta  = dir * pitchStep(coarse) * p
     local temper = ctx:activeTemper()
-    local pitch, detune
+    local pitch, detune, intent
     if temper then
-      pitch, detune = tuning.transposeStep(temper, note.pitch, note.detune, delta)
+      pitch, detune, intent = tuning.transposeNote(temper, note, delta)
       -- A clamp-fold past the cents-0 anchor or MIDI ceiling leaves |detune|>50;
       -- a seated note never does. Reject -- keep notes in the addressable range.
       if math.abs(detune) > 50 then return end
     else
       pitch, detune = util.clamp(note.pitch + delta, 0, 127), note.detune
+      -- Twelve semitones is the octave with no notation to say otherwise, and the
+      -- clamp at either end can leave a move short of the one asked for.
+      local moved = (pitch - note.pitch) * 100
+      if moved % 1200 == 0 then intent = note.intentCents and note.intentCents + moved end
     end
     if pitch == note.pitch and detune == note.detune then return end
-    edit.assign(note, { pitch = pitch, detune = detune })
+    edit.assign(note, { pitch = pitch, detune = detune, intentCents = intent or util.REMOVE })
     if audible then audition(pitch, note.vel, col.midiChan, detune) end
   end
 
