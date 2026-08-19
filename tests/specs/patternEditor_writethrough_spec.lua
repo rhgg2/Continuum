@@ -62,7 +62,10 @@ local function notesBody()
     kind = 'notes', lengthPpq = 960, root = 60,
     specs = {
       { lane = 1, ppq = 0,   endppq = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
-      { lane = 1, ppq = 240, endppq = 480, pitch = 64, vel = 100, detune = 0, delay = 0 },
+      -- Written a semitone below where it sounds, which only a stamped intent can say:
+      -- the readback cannot re-derive it (design/sounding-anchor.md § What the note remembers).
+      { lane = 1, ppq = 240, endppq = 480, pitch = 64, vel = 100, detune = 0, delay = 0,
+        intentCents = 6300 },
     },
   }
 end
@@ -145,6 +148,7 @@ return {
       t.eq(spec.lane, 1,   'lane is fixed at 1')
       t.eq(spec.fx,   nil, 'no fx field leaks into the commit')
       t.eq(spec.chan, nil, 'no chan field leaks into the commit')
+      t.eq(spec.intentCents, 6300, 'the step the note was written on rides the round trip')
       t.eq(body.lengthPpq, 960, 'loop length rides the snapshot forward')
       t.eq(body.root,       60, 'root rides the snapshot forward')
     end,

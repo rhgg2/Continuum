@@ -118,7 +118,7 @@ local function materialiseNotes(specs)
                  ppq = s.ppq, endppq = s.endppq,
                  pitch = s.pitch, vel = s.vel,
                  lane = editPoly and (s.lane or 1) or 1, detune = s.detune or 0, delay = s.delay or 0,
-                 sample = s.sample }
+                 intentCents = s.intentCents, sample = s.sample }
   end
 end
 
@@ -180,7 +180,8 @@ local function readbackBody()
         local endppq = (e.endppq == nil or e.endppq == util.OPEN) and editBody.lengthPpq or e.endppq
         util.add(colSpecs, { lane = editPoly and laneIdx or 1, ppq = e.ppq, endppq = endppq,
                              pitch = e.pitch, vel = e.vel,
-                             detune = e.detune or 0, delay = e.delay or 0, sample = e.sample })
+                             detune = e.detune or 0, delay = e.delay or 0,
+                             intentCents = e.intentCents, sample = e.sample })
       end
     end
     -- A lane is monophonic, so within its own column a note's tail ends at the next onset: clip so an

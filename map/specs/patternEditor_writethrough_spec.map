@@ -1,4 +1,4 @@
-@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=296  cases=11
+@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=300  cases=11
 @harness   mk, reaper.GetMediaItemTake_Track
 
 # Intent
@@ -9,34 +9,34 @@
   @fn keyId(name)  @ 13-22
   @fn setKeys(keys, mods)  @ 37-40
   @fn loadPE(deps)  @ 46-52
-  @fn notesBody()  @ 60-68
-  @fn openNotesBody()  @ 71-79
+  @fn notesBody()  @ 60-71
+  @fn openNotesBody()  @ 74-82
       -- An OPEN first note followed by a finite one: readback must clip the open tail to the successor.
-  @fn polyNotesBody()  @ 83-91
+  @fn polyNotesBody()  @ 86-94
       -- Two overlapping notes on distinct lanes: a poly open keeps them apart; a mono open crushes them
       -- onto lane 1, where the readback clip serialises them as a monophonic run.
-  @fn curveBody()  @ 93-102
-  @fn ccCurveBody()  @ 105-114
+  @fn curveBody()  @ 96-105
+  @fn ccCurveBody()  @ 108-117
       -- cc-domain curve: points ride a fixed scratch cc verbatim (0..127), no normalisation.
-  @fn withEditor(harness, body, poly)  @ 118-124
+  @fn withEditor(harness, body, poly)  @ 121-127
       -- Open the editor on `body`, capturing each write-through commit; get() reads the latest.
       -- `poly` rides into pe:open: true authors overlapping lanes, absent/false pins everything to lane 1.
-  @fn pressDelete(pe)  @ 127-130
+  @fn pressDelete(pe)  @ 130-133
       -- Delete the event under the (default row-0) cursor via the real dispatch path.
-  @fn approx(a, b)  @ 132
+  @fn approx(a, b)  @ 135
 
 # Cases
-  @case 'a checkout edit writes through the commit callback, stripped to the whitelist'  [harness]  @ 136-150
-  @case 'readback clips an OPEN note to its successor onset, not the loop length'  [harness]  @ 154-165
-  @case 'a curve edit persists as normalised bipolar points, not raw thousandths'  [harness]  @ 169-184
-  @case 'a cc-domain curve persists its points verbatim, echoing the domain'  [harness]  @ 188-204
-  @case 'Enter commits: the edit stays in the store'  [harness]  @ 208-215
-  @case 'Esc cancels: the store is restored to the open snapshot'  [harness]  @ 219-228
-  @case 'close does not clobber the committed body via the unbind rebuild'  [harness]  @ 232-239
-  @case 'a poly open keeps each authored lane through readback'  [harness]  @ 243-256
-  @case 'the same body opened mono flattens every note onto lane 1'  [harness]  @ 260-269
-  @case 'the body rpb seeds the editor and rides readback'  [harness]  @ 275-284
-  @case 'a body with no rpb commits the default 4'  [harness]  @ 288-294
+  @case 'a checkout edit writes through the commit callback, stripped to the whitelist'  [harness]  @ 139-154
+  @case 'readback clips an OPEN note to its successor onset, not the loop length'  [harness]  @ 158-169
+  @case 'a curve edit persists as normalised bipolar points, not raw thousandths'  [harness]  @ 173-188
+  @case 'a cc-domain curve persists its points verbatim, echoing the domain'  [harness]  @ 192-208
+  @case 'Enter commits: the edit stays in the store'  [harness]  @ 212-219
+  @case 'Esc cancels: the store is restored to the open snapshot'  [harness]  @ 223-232
+  @case 'close does not clobber the committed body via the unbind rebuild'  [harness]  @ 236-243
+  @case 'a poly open keeps each authored lane through readback'  [harness]  @ 247-260
+  @case 'the same body opened mono flattens every note onto lane 1'  [harness]  @ 264-273
+  @case 'the body rpb seeds the editor and rides readback'  [harness]  @ 279-288
+  @case 'a body with no rpb commits the default 4'  [harness]  @ 292-298
 
 # Fields (r read / w write incl. constructor keys)
   @field w GetKeyMods  @ 29
@@ -48,59 +48,61 @@
   @field w IsMouseClicked  @ 32
   @field w IsMouseDown  @ 33
   @field w IsWindowHovered  @ 34
-  @field r Key_Enter  @ 212
-  @field r Key_Equal  @ 158,247,263
-  @field r Key_Escape  @ 225
-  @field r Key_Period  @ 128
-  @field r Mod_Ctrl  @ 158,247,263
-  @field r Mod_None  @ 128,212,225
+  @field r Key_Enter  @ 216
+  @field r Key_Equal  @ 162,251,267
+  @field r Key_Escape  @ 229
+  @field r Key_Period  @ 131
+  @field r Mod_Ctrl  @ 162,251,267
+  @field r Mod_None  @ 131,216,229
   @field w Mod_None  @ 23
-  @field r OPEN  @ 75
+  @field r OPEN  @ 78
   @field w __index  @ 24,42
-  @field r chan  @ 147
-  @field w chrome  @ 121
+  @field r chan  @ 150
+  @field w chrome  @ 124
   @field w ctx  @ 43
-  @field w delay  @ 64,65,75,76,87,88
-  @field w detune  @ 64,65,75,76,87,88
-  @field w display  @ 107
-  @field r domain  @ 194
-  @field w domain  @ 107
-  @field r endppq  @ 163,164
-  @field w endppq  @ 64,65,75,76,87,88
-  @field w facade  @ 121
+  @field w delay  @ 64,67,78,79,90,91
+  @field w detune  @ 64,67,78,79,90,91
+  @field w display  @ 110
+  @field r domain  @ 198
+  @field w domain  @ 110
+  @field r endppq  @ 167,168
+  @field w endppq  @ 64,67,78,79,90,91
+  @field w facade  @ 124
   @field w font  @ 43
   @field w fontSize  @ 43
-  @field r fx  @ 146
+  @field r fx  @ 149
   @field w get  @ 54
-  @field w gui  @ 121
-  @field w kind  @ 62,73,85,95,107
-  @field r lane  @ 145,253,268
-  @field w lane  @ 64,65,75,76,87,88
-  @field r lengthPpq  @ 148
-  @field w lengthPpq  @ 62,73,85,95,107
+  @field w gui  @ 124
+  @field r intentCents  @ 151
+  @field w intentCents  @ 68
+  @field w kind  @ 62,76,88,98,110
+  @field r lane  @ 148,257,272
+  @field w lane  @ 64,67,78,79,90,91
+  @field r lengthPpq  @ 152
+  @field w lengthPpq  @ 62,76,88,98,110
   @field r loaded  @ 49
-  @field w modalHost  @ 121
-  @field w name  @ 136,154,169,188,208,219,232,243,260,275,288
+  @field w modalHost  @ 124
+  @field w name  @ 139,158,173,192,212,223,236,247,264,279,292
   @field w open  @ 44
   @field w ownerTrack  @ 56
-  @field w pitch  @ 64,65,75,76,87,88
-  @field r points  @ 174,195
-  @field w points  @ 96,108
-  @field r ppq  @ 144
-  @field w ppq  @ 64,65,75,76,87,88,97,98,99,109,110,111
+  @field w pitch  @ 64,67,78,79,90,91
+  @field r points  @ 178,199
+  @field w points  @ 99,111
+  @field r ppq  @ 147
+  @field w ppq  @ 64,67,78,79,90,91,100,101,102,112,113,114
   @field r preload  @ 47
   @field r reaper  @ 26
   @field w registerKind  @ 44
-  @field r root  @ 149
-  @field w root  @ 62,73,85
-  @field r rpb  @ 282,293
-  @field w rpb  @ 278
-  @field w run  @ 137,155,170,189,209,220,233,244,261,276,289
-  @field w shape  @ 97,98,99,109,110,111
-  @field r specs  @ 142,143,161,214,223,227,238,250,266,283
-  @field w specs  @ 63,74,86
+  @field r root  @ 153
+  @field w root  @ 62,76,88
+  @field r rpb  @ 286,297
+  @field w rpb  @ 282
+  @field w run  @ 140,159,174,193,213,224,237,248,265,280,293
+  @field w shape  @ 100,101,102,112,113,114
+  @field r specs  @ 145,146,165,218,227,231,242,254,270,287
+  @field w specs  @ 63,77,89
   @field w ui  @ 43
   @field w uiFont  @ 43
-  @field r val  @ 178,179,180,199,200
-  @field w val  @ 97,98,99,109,110,111
-  @field w vel  @ 64,65,75,76,87,88
+  @field r val  @ 182,183,184,203,204
+  @field w val  @ 100,101,102,112,113,114
+  @field w vel  @ 64,67,78,79,90,91

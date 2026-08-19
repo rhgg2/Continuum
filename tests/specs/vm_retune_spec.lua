@@ -86,13 +86,20 @@ local function c7()
   return { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0), note(0, 70, 0) }
 end
 
--- The chord at a row, as detune by written pitch: every chan-1 note lane at once.
-local function chordAt(h, row)
+-- The chord at a row, as cells by the pitch they sound on: every chan-1 note lane at once.
+local function cellsAt(h, row)
   local byPitch = {}
   for _, c in ipairs(h.vm.grid.cols) do
     local e = c.type == 'note' and c.midiChan == 1 and c.cells[row]
-    if e then byPitch[e.pitch] = e.detune end
+    if e then byPitch[e.pitch] = e end
   end
+  return byPitch
+end
+
+-- The same chord as detune alone, which is what most of these cases read.
+local function chordAt(h, row)
+  local byPitch = {}
+  for pitch, e in pairs(cellsAt(h, row)) do byPitch[pitch] = e.detune end
   return byPitch
 end
 
@@ -146,6 +153,24 @@ return {
       local n = cell(h, 0)
       t.eq(n.pitch, m, 'pitch untouched')
       near(n.detune, d, 'detune untouched')
+    end,
+  },
+
+  {
+    name = 'the snap seats a note on the step its intent names, and spends the intent',
+    run = function(harness)
+      -- Written on step 1 at octave 5, which is (72, 0), and sounding a hundred cents above
+      -- it -- nearer step 2 than the step it was written on. Reasserting the page means
+      -- seating it where it was written rather than where it sounds, and the intent that
+      -- said so is spent in the doing (design/sounding-anchor.md § What the note remembers).
+      local h = mk(harness, { note(0, 73, 0, 7200), note(0, 60, 0, 6000) })
+      h.vm:retune{ scope = 'all', strength = 1 }
+
+      local cells = cellsAt(h, 0)
+      t.truthy(cells[72], 'seated on the step it was written on, not the one it sounds nearest')
+      near(cells[72].detune, 0, 'and exactly on it')
+      t.eq(cells[72].intentCents, nil, 'the intent is spent')
+      t.eq(cells[60].intentCents, nil, 'and one standing on its written step gives its up too')
     end,
   },
 
@@ -319,6 +344,29 @@ return {
       local withD = beside(62)
       near(withD[67], offset('3/2', 7), 'and beside D it leaves F# for G, taking 3/2')
       near(withD[62], offset('9/8', 2), 'the D standing on the point its own window holds')
+    end,
+  },
+
+  {
+    name = 'a widened solve stamps the step it carried a note off, and answers alike again',
+    run = function(harness)
+      -- The diamond holds no point inside the C sharp's window, so widened it takes the 10/9
+      -- above the C -- 82 cents up, which is inside the D's own window. Read off its pitch the
+      -- note is a D and takes the 9/8 the D holds; read off the intent the solve stamped it is
+      -- the C sharp it was written as, and the second run answers as the first did.
+      local h = mk(harness, { note(0, 60, 0), note(0, 61, 0), note(0, 67, 0) },
+                   '12EDO', { SEPTIMAL = SEPTIMAL })
+      local slots = { scope = 'all', strength = 1, target = 'SEPTIMAL', key = 1,
+                      facility = 'points', sonoritySize = 5, harmonicLock = 0.5 }
+
+      h.vm:retune(slots, true)
+      local cells = cellsAt(h, 0)
+      near(cells[62].detune, offset('10/9', 2), 'the C sharp takes the 10/9, inside the D above it')
+      t.eq(cells[62].intentCents, 6100, 'and carries the step it was written on')
+      t.eq(cells[60].intentCents, 6000, 'the C stamped too, though it never left its step')
+
+      h.vm:retune(slots, true)
+      near(chordAt(h, 0)[62], offset('10/9', 2), 'the second run leaves it where the first did')
     end,
   },
 

@@ -175,6 +175,14 @@ charged by whether its two members sound together.**
    the notation that indexed it. Cents re-read correctly when the active
    temper changes, which is what `(pitch, detune)` does today.
 
+1. What a solve stamps is the seat it measured from, taken under the
+   notation in force rather than carried over from the intent the note
+   arrived with. The two differ only where the temper has changed since the
+   last stamp — a C sharp stamped at 6100 under 12-EDO stands nearest the
+   quarter-comma meantone step at 6076.05, and a solve under that notation
+   restamps it there — so the field always names a step of the notation that
+   wrote it.
+
 1. The field is sparse, and the paths that write it are few. A solve sets
    it on every note it seats, whether or not that note leaves its step, so
    a cell's name never turns on how far the solve happened to move it;

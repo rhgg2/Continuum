@@ -55,7 +55,7 @@ local function toParkedSpec(evt)
   elseif evt.evType == 'pb' then
     return util.pick(evt, "evType chan ppq val shape")
   end
-  return util.pick(evt, "evType chan lane ppq endppq pitch vel detune sample delay fx")
+  return util.pick(evt, "evType chan lane ppq endppq pitch vel detune intentCents sample delay fx")
 end
 
 -- Same view->stash normalisation for an assign update: the time verbs ride an rpb rebase the
@@ -2063,13 +2063,14 @@ local function notesIn(groups)
   return notes
 end
 
--- Notation snap: every note in scope onto its own step of the active
--- temper. See docs/trackerView.md § Retune.
+-- Notation snap: every note in scope onto the step it was written on, spending the intent.
+-- see docs/trackerView.md § Retune, design/sounding-anchor.md § What the note remembers
 local function snapToTemper(notes, notation, strength)
   for _, e in ipairs(notes) do
-    if ctx:noteDeviation(e) ~= 0 then
-      local pitch, detune = blend(e, strength, tuning.snap(notation, e.pitch, e.detune))
-      edit.assign(e, { pitch = pitch, detune = detune })
+    if ctx:noteDeviation(e) ~= 0 or e.intentCents then
+      local step, octave  = tuning.noteStep(notation, e)
+      local pitch, detune = blend(e, strength, tuning.stepToMidi(notation, step, octave))
+      edit.assign(e, { pitch = pitch, detune = detune, intentCents = util.REMOVE })
     end
   end
 end
@@ -2086,12 +2087,14 @@ local function strandsOf(notes, notation)
   return sonority.strands(clipped, function(n) return tuning.stepClass(notation, n) end)
 end
 
--- A strand's tuning, seated on every note that writes it, in that note's own register.
+-- A strand's tuning, seated on every note that writes it, in that note's own register, each
+-- stamped with the step it was written on. see design/sounding-anchor.md § What the note remembers
 local function seatStrand(strand, notation, cents, strength)
   for _, n in ipairs(strand.notes) do
+    local intent        = tuning.seatWindow(notation, n)
     local pitch, detune = blend(n, strength, tuning.seat(notation, n, cents))
-    if pitch ~= n.pitch or detune ~= n.detune then
-      edit.assign(n.event, { pitch = pitch, detune = detune })
+    if pitch ~= n.pitch or detune ~= n.detune or intent ~= n.intentCents then
+      edit.assign(n.event, { pitch = pitch, detune = detune, intentCents = intent })
     end
   end
 end

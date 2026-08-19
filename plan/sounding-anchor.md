@@ -28,6 +28,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-19 tracker: stamp the step a note was written on, spend it on a snap (§ What the note remembers)
 - 2026-08-19 tracker: name a cell from the intent its note carries (§ What the note remembers)
 - 2026-08-19 tracker: replace the deviation tick with a cents readout (§ What the cell says)
 - 2026-08-19 tuning: read a note's step from the intent it carries (§ What the note remembers)
@@ -38,17 +39,12 @@
 
 ## Queued (current phase; one-liners)
 
-3. **The stamp** — `seatStrand` writes `intentCents` beside `(pitch, detune)`
-   on every note either facility seats, taking each note's own written seat
-   before the move so that a second solve reads what the first did. The field
-   joins `toParkedSpec`'s pick and `patternEditor`'s two body picks, which
-   would otherwise drop it. `vm_retune_spec` pins the idempotence.
-4. **Clearing** — typing a note over an old one clears the field, and so does
-   the notation snap. A transpose reads it for the step it steps from, seats
-   the note on the step it arrives at and then clears it; a move of a whole
-   number of 2/1 octaves is the exception, carrying the intent with the note.
-   `nudgePitch` and the octave digit in `editEvent` both move this way, and
-   `DIGIT_FIELD.pitch` gains the field so the gesture's backspace restores it.
+4. **Clearing** — typing a note over an old one clears the field. A transpose
+   reads it for the step it steps from, seats the note on the step it arrives
+   at and then clears it; a move of a whole number of 2/1 octaves is the
+   exception, carrying the intent with the note. `nudgePitch` and the octave
+   digit in `editEvent` both move this way, and `DIGIT_FIELD.pitch` gains the
+   field so the gesture's backspace restores it.
 5. **Derived notes** — `membersOf`'s pick carries `intentCents` into the
    generator note stream, `stepOp` and `stepsBetween` step from a host's
    written step rather than from where it sounds, and the specs `rebuildFx`
