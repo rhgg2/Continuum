@@ -96,9 +96,12 @@ local function renderNote(evt, col, row)
   local pitchWidth  = tv:cellWidth()
   local octaveWidth = tv:octaveWidth()
   local blank       = string.rep('·', pitchWidth)  -- pitchWidth dots = empty pitch field
+  -- The readout draws small across this column and the separator after the
+  -- pitch field, so the cell text carries it as one blank.
+  local readoutGap  = (col and col.showCents) and ' ' or ''
 
   if not evt then
-    local s = blank .. (showSample and ' ··' or '') .. ' ··'
+    local s = blank .. readoutGap .. (showSample and ' ··' or '') .. ' ··'
     if showDelay then s = s .. ' ···' end
     return s
   end
@@ -121,13 +124,14 @@ local function renderNote(evt, col, row)
   local noteTxt   = isPA and blank or label
   local velTxt    = evt.vel and string.format('%02X', evt.vel) or '··'
   local sampleTxt = showSample and (' ' .. (isPA and '··' or string.format('%02X', evt.sample or 0))) or ''
-  local text      = noteTxt .. sampleTxt .. ' ' .. velTxt
+  local text      = noteTxt .. readoutGap .. sampleTxt .. ' ' .. velTxt
 
-  -- Sample digits at pitchWidth+2, +3 (after note label + trailing space).
-  -- Shadowed, octave-tint and negative-delay overrides occupy disjoint ranges.
+  -- Sample digits after the note label, the readout's blank and a trailing
+  -- space. Shadowed, octave-tint and negative-delay overrides occupy disjoint ranges.
   local overrides
   if showSample and evt.sampleShadowed then
-    overrides = { [pitchWidth + 2] = 'shadowed', [pitchWidth + 3] = 'shadowed' }
+    local at  = pitchWidth + #readoutGap + 2
+    overrides = { [at] = 'shadowed', [at + 1] = 'shadowed' }
   end
 
   -- A negative octave carries its sign as a tint; the octave is right-aligned
@@ -199,16 +203,14 @@ local function renderCell(evt, col, row)
 end
 
 -- Offset of the gap before the 3 delay digits in a note cell (* marker slot).
--- Layout: pitch(W) + optional sample(3) + ' ' + vel(2); W = active pitchWidth.
+-- Layout: pitch(W, active pitchWidth) + optional readout(1) + optional sample(3) + ' ' + vel(2).
 local function delayMarkerOffset(col, pitchWidth)
-  return pitchWidth + (col.trackerMode and 3 or 0) + 1 + 2
+  return pitchWidth + (col.showCents and 1 or 0) + (col.trackerMode and 3 or 0) + 1 + 2
 end
 
--- The fx badge sits in the pre-vel separator slot -- one column inboard of
--- the delay-marker slot, so the two markers never collide.
-local function fxMarkerOffset(col, pitchWidth)
-  return pitchWidth + (col.trackerMode and 3 or 0)
-end
+-- Three digits across the two columns the readout draws in, so smaller than
+-- the delay marker's 14. see design/sounding-anchor.md § What the cell says
+local READOUT_SIZE = 11
 
 ----- Drawing
 
@@ -771,33 +773,17 @@ local function drawTracker()
         if divergent and col.showDelay then
           draw:smallGlyph(col.x + delayMarkerOffset(col, pitchWidth)-0.1, y-0.3, '*', 14, textCol)
         end
+        -- A note carrying fx wears a rule over its name, in the slot the
+        -- deviation tick drew one. see design/sounding-anchor.md § What the cell says
         if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted and not previewGhost then
-          draw:smallGlyph(col.x + fxMarkerOffset(col, pitchWidth)-0.1, y-0.3, '*', 14, textCol)
+          draw:hLine(col.x, col.x + pitchWidth - 1, y, textCol, 2 / cellH)
         end
-      end
-    end
-  end
-
-  if tv:activeTemper() then
-    for _, col in ipairs(grid.cols) do
-      if col.x and col.type == 'note' and col.cells then
-        local fieldLeft  = gridOriginX + col.x * cellW
-        local fieldRight = fieldLeft + pitchWidth * cellW
-        local fieldMid   = (fieldLeft + fieldRight) / 2
-        local halfW      = (fieldRight - fieldLeft) / 2 - 1
-        for y = 0, viewRows - 1 do
-          local row = scrollRow + y
-          if row >= numRows then break end
-          local evt = col.cells[row]
-          if evt and evt.pitch and not overlay.hidden[evt] then
-            local gap, half = tv:noteDeviation(evt)
-            if gap ~= 0 and half > 0 then
-              local yTop = gridOriginY + y * cellH + 1
-              local offset = util.clamp(gap / half, -1, 1) * halfW
-              screenPainter.line(fieldLeft, yTop, fieldRight, yTop, 'accent', 1)
-              local tickX = fieldMid + offset
-              screenPainter.line(tickX, yTop - 1, tickX, yTop + 2, 'accent', 1)
-            end
+        if col.showCents and evt and evt.evType ~= 'pa' and not previewGhost then
+          local gap = tv:noteDeviation(evt)
+          if gap and gap ~= 0 then
+            draw:textCentredSmall(col.x + pitchWidth, col.x + pitchWidth + 1, y,
+                                  string.format('%d', math.floor(math.abs(gap) + 0.5)),
+                                  READOUT_SIZE, (gap < 0 and not muted) and 'negative' or textCol)
           end
         end
       end

@@ -360,23 +360,17 @@ return {
   },
 
   {
-    name = 'noteDeviation returns the half of the window the note moved into',
+    name = 'noteDeviation reports cents alone, with no window half beside them',
     run = function()
-      -- QCM12's unison has 38.02c of room upward and 58.55c downward, so the
-      -- half the deviation carries depends on which way the note bent.
+      -- QCM12's unison has 38.02c of room upward and 58.55c downward, and the
+      -- cell reports the same 20c either way: the halves are the points solve's
+      -- now -- see design/sounding-anchor.md § What the cell says.
       local ctx = mkCtx{ temper = meantone12() }
       local gap, half = ctx:noteDeviation({ pitch = 60, detune = 20 })
       t.eq(gap, 20)
-      t.truthy(math.abs(half - 38.0244) < 1e-6, 'sharp ⇒ the half toward C#, got ' .. tostring(half))
-
-      gap, half = ctx:noteDeviation({ pitch = 60, detune = -20 })
-      t.eq(gap, -20)
-      t.truthy(math.abs(half - 58.554) < 1e-6, 'flat ⇒ the wider half toward B, got ' .. tostring(half))
-
-      local equal = mkCtx{ temper = tuning.presets['12EDO'] }
-      t.eq(select(2, equal:noteDeviation({ pitch = 60, detune = 20 })), 50)
-      t.eq(select(2, equal:noteDeviation({ pitch = 60, detune = -20 })), 50,
-           'an equal scale keeps both halves the same, so nothing moves there')
+      t.eq(half, nil, 'nothing normalises the gap by a window now')
+      t.eq((ctx:noteDeviation({ pitch = 60, detune = -20 })), -20,
+           'and the wider half below reads its cents alike')
     end,
   },
 

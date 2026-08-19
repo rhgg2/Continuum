@@ -251,7 +251,9 @@ return {
     end,
   },
 
-  -- Note col stop/selgroup shape depends on noteDelay config.
+  -- Note col stop/selgroup shape depends on noteDelay config. These notes sit on
+  -- their step, so the deviation readout takes no column; the case below it pins
+  -- what a note off its step costs.
   {
     name = 'note col without delay has the compact stop layout',
     run = function(harness)
@@ -263,6 +265,7 @@ return {
       local col = h.vm.grid.cols[1]
       t.eq(col.type, 'note')
       t.falsy(col.showDelay, 'showDelay off by default')
+      t.falsy(col.showCents, 'nothing stands off its step, so no readout column')
       t.deepEq(col.stopPos, { 0, 2, 4, 5 })
       t.deepEq(col.partAt,  { 'pitch', 'pitch', 'vel', 'vel' })
       t.eq(col.width, 6)
@@ -284,6 +287,25 @@ return {
       t.deepEq(col.stopPos, { 0, 2, 4, 5, 7, 8, 9 })
       t.deepEq(col.partAt,  { 'pitch', 'pitch', 'vel', 'vel', 'delay', 'delay', 'delay' })
       t.eq(col.width, 10)
+    end,
+  },
+
+  {
+    -- The readout takes the separator after the pitch field and one column
+    -- beside it, so every stop past the pitch sits one to the right.
+    -- see design/sounding-anchor.md § What the cell says
+    name = 'a note off its step widens its column by the readout',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 20 } },
+        },
+      }
+      local col = h.vm.grid.cols[1]
+      t.truthy(col.showCents, 'the column has a deviation to report')
+      t.deepEq(col.stopPos, { 0, 2, 5, 6 })
+      t.deepEq(col.partAt,  { 'pitch', 'pitch', 'vel', 'vel' })
+      t.eq(col.width, 7)
     end,
   },
 

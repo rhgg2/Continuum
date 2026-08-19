@@ -1,4 +1,4 @@
-@spec view_context_spec  src=tests/specs/view_context_spec.lua  loc=622  cases=37
+@spec view_context_spec  src=tests/specs/view_context_spec.lua  loc=616  cases=37
 @exercises tuning (tuning), trackerView (h.vm), configManager (h.cm)
 @surface   tuning.genRank2, tuning.derive, tuning.stepToMidi, vm:activeTemper, cm:set
 @harness   mk{seed.ccs}
@@ -51,75 +51,74 @@
   @case 'noteLabel reports a negative octave alongside its magnitude'  [pure]  @ 326-333
   @case 'noteDeviation signed gap: positive detune yields positive gap (sharp)'  [pure]  @ 337-344
   @case 'noteDeviation: sub-epsilon detune offset reads on-temper (gap clamped)'  [pure]  @ 348-359
-  @case 'noteDeviation returns the half of the window the note moved into'  [pure]  @ 363-380
-  @case 'rowBeatInfo at row 0 under 4/4 reports (bar, beat) = (true, true)'  [pure]  @ 386-391
-  @case 'rowBeatInfo at beat boundary: only beat flag set'  [pure]  @ 395-401
-  @case 'rowBeatInfo at bar boundary: both flags set'  [pure]  @ 405-410
-  @case 'rowBeatInfo at non-boundary row: both flags clear'  [pure]  @ 414-419
-  @case 'rowBeatInfo respects mid-take time-sig change'  [pure]  @ 423-438
-  @case 'barBeatSub at row 0 returns (1, 1, 1, ts)'  [pure]  @ 442-447
-  @case 'barBeatSub mid-bar: (bar, beat, sub) walks the row index'  [pure]  @ 451-456
-  @case 'barBeatSub crosses a time-sig change and resumes counting'  [pure]  @ 460-477
-  @case 'ghosts: linear pair populates interior rows with proportional vals'  [harness]  @ 493-513
-  @case 'ghosts: entries carry fromEvt and toEvt references'  [harness]  @ 517-536
-  @case 'ghosts: step shape produces no ghosts'  [harness]  @ 540-555
-  @case 'ghosts: single event yields no ghosts'  [harness]  @ 559-573
-  @case 'ghosts: non-linear shape routes through tm:interpolate'  [harness]  @ 577-594
-  @case 'temper resolves via cfg.tempers, falls back to built-in presets, returns nil for unknown names'  [harness]  @ 598-620
+  @case 'noteDeviation reports cents alone, with no window half beside them'  [pure]  @ 363-374
+  @case 'rowBeatInfo at row 0 under 4/4 reports (bar, beat) = (true, true)'  [pure]  @ 380-385
+  @case 'rowBeatInfo at beat boundary: only beat flag set'  [pure]  @ 389-395
+  @case 'rowBeatInfo at bar boundary: both flags set'  [pure]  @ 399-404
+  @case 'rowBeatInfo at non-boundary row: both flags clear'  [pure]  @ 408-413
+  @case 'rowBeatInfo respects mid-take time-sig change'  [pure]  @ 417-432
+  @case 'barBeatSub at row 0 returns (1, 1, 1, ts)'  [pure]  @ 436-441
+  @case 'barBeatSub mid-bar: (bar, beat, sub) walks the row index'  [pure]  @ 445-450
+  @case 'barBeatSub crosses a time-sig change and resumes counting'  [pure]  @ 454-471
+  @case 'ghosts: linear pair populates interior rows with proportional vals'  [harness]  @ 487-507
+  @case 'ghosts: entries carry fromEvt and toEvt references'  [harness]  @ 511-530
+  @case 'ghosts: step shape produces no ghosts'  [harness]  @ 534-549
+  @case 'ghosts: single event yields no ghosts'  [harness]  @ 553-567
+  @case 'ghosts: non-linear shape routes through tm:interpolate'  [harness]  @ 571-588
+  @case 'temper resolves via cfg.tempers, falls back to built-in presets, returns nil for unknown names'  [harness]  @ 592-614
 
 # Uses (outbound edges)
   @use call tuning.genRank2  @ 22
   @use call tuning.derive  @ 23
   @use call tuning.stepToMidi  @ 353
-  @use call vm:activeTemper  @ 605,610,615,619
-  @use call cm:set  @ 609,614,617,618
+  @use call vm:activeTemper  @ 599,604,609,613
+  @use call cm:set  @ 603,608,611,612
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cc  @ 505,529,551,569,591
-  @field w cc  @ 498,499,522,523,545,546,564,584,585
-  @field w ccs  @ 497,521,544,563,583
-  @field w chan  @ 498,499,522,523,545,546,564,584,585
-  @field r cols  @ 504,528,550,568,590
-  @field r denom  @ 446
-  @field w denom  @ 34,428,429,466,467
-  @field w detune  @ 340,342,355,357,368,372,377,378
-  @field w evType  @ 498,499,522,523,545,546,564,584,585
-  @field r fromEvt  @ 532,533
-  @field r ghosts  @ 508,509,510,511,512,531,552,570,593
-  @field r grid  @ 504,528,550,568,590
+  @field r cc  @ 499,523,545,563,585
+  @field w cc  @ 492,493,516,517,539,540,558,578,579
+  @field w ccs  @ 491,515,538,557,577
+  @field w chan  @ 492,493,516,517,539,540,558,578,579
+  @field r cols  @ 498,522,544,562,584
+  @field r denom  @ 440
+  @field w denom  @ 34,422,423,460,461
+  @field w detune  @ 340,342,355,357,369,372
+  @field w evType  @ 492,493,516,517,539,540,558,578,579
+  @field r fromEvt  @ 526,527
+  @field r ghosts  @ 502,503,504,505,506,525,546,564,587
+  @field r grid  @ 498,522,544,562,584
   @field w length  @ 30,51
-  @field w myCustom  @ 617
-  @field r name  @ 607,612,619
+  @field w myCustom  @ 611
+  @field r name  @ 601,606,613
   @field w name  @ 23,81,92,104,117,134,147,161,180,191,206,223
   @field w name  @ 242,260,277,286,293,301,309,318,326,337,348,363
-  @field w name  @ 386,395,405,414,423,442,451,460,493,517,540,559
-  @field w name  @ 577,598
-  @field r num  @ 446,473
-  @field w num  @ 34,428,429,466,467
+  @field w name  @ 380,389,399,408,417,436,445,454,487,511,534,553
+  @field w name  @ 571,592
+  @field r num  @ 440,467
+  @field w num  @ 34,422,423,460,461
   @field w numRows  @ 31,52
   @field r periodPitch  @ 23
   @field w periodPitch  @ 23
-  @field w pitch  @ 303,304,312,321,329,340,342,355,357,368,372,377
-  @field w pitch  @ 378
+  @field w pitch  @ 303,304,312,321,329,340,342,355,357,369,372
   @field r pitches  @ 24
   @field w pitches  @ 24
-  @field r ppq  @ 532,534
-  @field w ppq  @ 34,428,429,466,467,498,499,522,523,545,546,564
-  @field w ppq  @ 584,585
+  @field r ppq  @ 526,528
+  @field w ppq  @ 34,422,423,460,461,492,493,516,517,539,540,558
+  @field w ppq  @ 578,579
   @field w ppqPerRow  @ 33,54
-  @field r presets  @ 295,311,320,328,339,352,376,617
+  @field r presets  @ 295,311,320,328,339,352,611
   @field w rowPerBeat  @ 32,53
   @field w run  @ 82,93,105,118,135,148,165,181,195,209,224,245
-  @field w run  @ 263,278,287,294,302,310,319,327,338,349,364,387
-  @field w run  @ 396,406,415,424,443,452,461,494,518,541,560,580
-  @field w run  @ 603
-  @field w seed  @ 496,520,543,562,582
-  @field w shape  @ 498,522,545,564,584
+  @field w run  @ 263,278,287,294,302,310,319,327,338,349,364,381
+  @field w run  @ 390,400,409,418,437,446,455,488,512,535,554,574
+  @field w run  @ 597
+  @field w seed  @ 490,514,537,556,576
+  @field w shape  @ 492,516,539,558,578
   @field w stepNames  @ 24
-  @field w temper  @ 35,296,311,320,328,339,354,367,376
-  @field w tension  @ 584
-  @field w timeSigs  @ 34,427,465
-  @field r toEvt  @ 534,535
-  @field r type  @ 505,529,551,569,591
-  @field r val  @ 509,533,535,593
-  @field w val  @ 498,499,522,523,545,546,564,584,585
+  @field w temper  @ 35,296,311,320,328,339,354,368
+  @field w tension  @ 578
+  @field w timeSigs  @ 34,421,459
+  @field r toEvt  @ 528,529
+  @field r type  @ 499,523,545,563,585
+  @field r val  @ 503,527,529,587
+  @field w val  @ 492,493,516,517,539,540,558,578,579

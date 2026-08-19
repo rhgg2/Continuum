@@ -154,8 +154,9 @@ step it was written on.**
 
 8. The window is spent before the solve, in building a strand's
    shortlist (§ What the solver takes). `tuning.stepWindow` returns both
-   halves; `ctx:noteDeviation` takes the one the note moved toward, which
-   is what the grid's deviation tick normalises by.
+   halves, and the shortlist is their only reader now: the grid reports a
+   note's gap in cents rather than as a fraction of its window
+   (`design/sounding-anchor.md` § What the cell says).
 
 9. In 12-EDO the window never binds the points solve. Widening it to two and then four
    half-steps, at a pull strength in the usable band (§ Harmonic lock),

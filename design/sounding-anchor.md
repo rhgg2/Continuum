@@ -137,10 +137,11 @@ charged by whether its two members sound together.**
    window again.
 
 1. `tuning.seatWindow` is unchanged, and the half-gaps it returns are the
-   points solve's and the grid's now. They are still what the deviation
-   tick normalises by and still what a points shortlist measures its
-   strain against; the moves solve stops reading them, and stops knowing
-   how a notation spaces its steps.
+   points solve's alone now. They are still what a points shortlist
+   measures its strain against; the moves solve stops reading them and
+   stops knowing how a notation spaces its steps, and the grid stops
+   reading them too, reporting a note's gap in cents (§ What the cell
+   says).
 
 1. The refusal collapses into a trade. A sonority no chain of moves
    places inside the windows is now spelled and priced, and an author who
@@ -179,8 +180,10 @@ charged by whether its two members sound together.**
    a cell's name never turns on how far the solve happened to move it;
    both facilities set it, a widened points shortlist being as free to
    place a note past its window's edge as a chain of moves is. The
-   notation snap clears it, snapping to the temper being an instruction to
-   reassert the page, and typing a note over an old one clears it.
+   notation snap reads it and then clears it, seating a note on the step
+   its intent names rather than on the step nearest what it sounds, which
+   is what reasserting the page means; typing a note over an old one
+   clears it.
 
 1. A transpose reads the intent and then discards it. It steps from the
    step the note was written on rather than from where it sounds — a note
@@ -197,9 +200,9 @@ charged by whether its two members sound together.**
    detune against a channel.
 
 1. Two functions in the view derive a note's step, and both read the
-   intent where it is present: `ctx:noteLabel` names the cell, and
-   `ctx:noteDeviation` measures the gap the grid's tick draws
-   (`viewContext.lua:29`, `viewContext.lua:36`). Three in the solve do the
+   intent where it is present: `ctx:noteLabel` names the cell
+   (`viewContext.lua:29`), and `ctx:noteDeviation` measures the gap the
+   cell reports (`viewContext.lua:36`, § What the cell says). Three in the solve do the
    same: `strandsOf` groups notes into strands by step-class,
    `sonority.seats` reads each strand's seat and window, and `shortlisted`
    names a step the target left nowhere to go, that step being the one whose
@@ -214,6 +217,40 @@ charged by whether its two members sound together.**
    halves a ten-thousandth of a cent inside the edge, a strand pinned to
    the edge read back on its neighbour's step, solved a different chord,
    and left two notes as one (`design/adaptive-tuning.md` § The window).
+
+## What the cell says
+
+1. The cell reports a note's gap in cents. Its name is the step the intent
+   names (§ What the note remembers), and beside the name stands a
+   **deviation readout** — the signed cents from that step, drawn small in
+   two columns against the note. A note standing on its step draws none, and a
+   column whose notes all stand on theirs takes no width for the readout.
+
+1. The tick the readout replaces measured the gap as a fraction of the
+   step's own room: it normalised by the half-window and clamped the
+   result to the edge of the cell, so a note a half-window out and a note
+   twice that drew the same tick (`gridPane.lua:793`). That reading held
+   while the wall did. With no bound on how far a note may stand from its
+   step, an indicator that saturates says least where the note has gone
+   furthest.
+
+1. The sign is a tint rather than a glyph, in `colour.tracker.negative`,
+   which is what a negative octave and a negative delay already do
+   (`docs/tuning.md` § Display). Three digits then fit where two and a
+   sign would, and the readout reads a note that has drifted past a
+   hundred cents.
+
+1. The readout takes no cursor stop. It is a reading of `(pitch, detune,
+   intentCents)` rather than a field of its own — nothing types a
+   deviation today, detune arriving from a step's cents or from a retune —
+   so the cursor steps from the note to the field beyond it as it does
+   now, and the clipboard's lanes are unchanged.
+
+1. The rule the tick drew across the pitch field becomes the mark of a
+   note carrying fx, which the cell drew as a star in the separator the
+   readout now occupies (`gridPane.lua:775`). A rule over the note says
+   what the star said, and says it over the note rather than in the margin
+   beside it.
 
 ## What the beam loses
 
@@ -417,12 +454,12 @@ charged by whether its two members sound together.**
 
 ## What it costs
 
-1. A note's name and its sound come apart. The cell keeps the step the
-   note was written on, the view reading the intent; what the grid no
-   longer tells is how far the note has gone, its deviation tick
-   normalising the gap by the half-window and clamping the result to the
-   edge of the cell (`gridPane.lua:796`). A note a half-window out and a
-   note twice that draw the same tick.
+1. A note's name and its sound come apart, and the cell reports the gap
+   between them in cents (§ What the cell says). What it stops reporting
+   is how far through the step's own room the note has gone: a tick on a
+   ruler was read at a glance as a fraction of a window, where a figure in
+   cents is read against a notation whose step spacing the reader has to
+   know. The note column pays a column for the reading.
 
 1. A lock means the same in cents under every notation, which tells
    against a fine one. Fifty cents reaches a note's own cell edge in
@@ -479,6 +516,12 @@ charged by whether its two members sound together.**
    note would read back as, or the ambient may carry a piece far from the
    page within a few chord changes; the figure decides how much a note's
    name and its sound come apart in ordinary use.
+
+1. Whether a deviation should be typeable. Nothing authors a detune
+   numerically today, so a writable readout would be a new gesture rather
+   than a convenience on an old one, and what it writes is an intent by
+   hand — the name held and the sound bent. How far notes drift decides
+   whether an author wants to type these figures.
 
 1. Whether two strands of a sonority crossing is audible, or a curiosity
    of the model (§ What it costs).

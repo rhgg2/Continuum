@@ -5,10 +5,11 @@
 
 ## Phases
 
-1. **Phase 1 — The intent** (§ What the note remembers) — a note stores the
-   cents of the step it was written on; the view and the solve read it where
-   it is present, and the sites that write a detune set it, clear it or move
-   it.  ← in flight
+1. **Phase 1 — The intent** (§ What the note remembers, § What the cell says)
+   — a note stores the cents of the step it was written on; the view and the
+   solve read it where it is present, the cell reports the gap in cents where
+   a tick once drew it, and the sites that write a detune set it, clear it or
+   move it.  ← in flight
 2. **Phase 2 — Wall and ruler** (§ Both wall and ruler, § What the beam
    loses) — the pull's strain becomes cents over fifty, `settle` collapses to
    a weighted mean with no clamp and no branch, and the beam's reach gate
@@ -27,6 +28,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-19 tracker: replace the deviation tick with a cents readout (§ What the cell says)
 - 2026-08-19 tuning: read a note's step from the intent it carries (§ What the note remembers)
 
 ## Now

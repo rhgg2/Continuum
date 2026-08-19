@@ -445,6 +445,14 @@ can equally narrow a sub-octave scale by numbering the octaves it spans
 closer to zero. The budget is exact only because edits keep notes in
 range — see *Addressable range*.
 
+**7** Beside the label the cell draws a **deviation readout** — the cents a
+note stands off its step, in small glyphs across the two columns after the
+pitch field (`ctx:noteDeviation`, `design/sounding-anchor.md` § What the cell
+says). The sign is a tint rather than a glyph, as the negative octave's is, so
+three digits fit in the two columns and a note that has drifted past a hundred
+cents still reads. A note on its step draws nothing there, and a column whose
+notes all sit on their steps takes no width for the readout.
+
 ## Slot registry
 
 Mirrors the swing model in `docs/timing.md`:

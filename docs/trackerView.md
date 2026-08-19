@@ -24,8 +24,8 @@ Two responsibilities:
   written into / read out of the column tree.
 - **Temperament lenses.** `noteLabel(evt)` spells `(pitch, detune)` as the
   parts of a cell label under the bound temperament; `noteDeviation(evt)`
-  reports how far off its step the note sits, and the half of that step's
-  window lying on the side the note moved. Both are nil if no temperament
+  reports in cents how far off its step the note sits, which the cell draws
+  as a readout beside the name. Both are nil if no temperament
   is active. (Pure coordinate queries — see `docs/tuning.md` for the
   underlying model.)
 

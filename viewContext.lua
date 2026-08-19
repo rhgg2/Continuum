@@ -32,7 +32,9 @@ function ctx:noteLabel(evt)
   return tuning.stepToParts(temper, step, oct)
 end
 
---contract: (gap, half) in cents off the note's step; half is the gap-side window half, nil unbound
+-- The cell reports this in cents and normalises it by nothing -- see
+-- design/sounding-anchor.md § What the cell says.
+--contract: signed cents off the note's step, or nil with no temper bound
 function ctx:noteDeviation(evt)
   if not (temper and evt and evt.pitch) then return end
   local detune    = evt.detune or 0
@@ -40,11 +42,9 @@ function ctx:noteDeviation(evt)
   local tm_, td_  = tuning.stepToMidi(temper, step, oct)
   local gap       = (evt.pitch * 100 + detune) - (tm_ * 100 + td_)
   -- A snapped note's gap is serialisation float dust, not a bend; clear it
-  -- or the deviation tick (drawn iff gap ~= 0) paints every note off-temper.
+  -- or the readout (drawn iff gap ~= 0) paints every note off-temper.
   if math.abs(gap) < ON_TEMPER_EPS then gap = 0 end
-
-  local halfDown, halfUp = tuning.stepWindow(temper, step)
-  return gap, gap >= 0 and halfUp or halfDown
+  return gap
 end
 
 ----- Timing

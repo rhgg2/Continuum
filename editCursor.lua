@@ -837,6 +837,10 @@ do
     fx     = { width = 1, stops = {0}       },   -- one kind glyph (param stops later)
   }
 
+  -- Drawn rather than addressed, the readout takes no stop: it is the column
+  -- after the pitch field plus the separator beside it. see design/sounding-anchor.md § What the cell says
+  local READOUT = 1
+
   -- One char of separator between adjacent parts in the rendered cell.
   local function partsFor(type, showDelay, trackerMode)
     if type == 'note' then
@@ -855,6 +859,7 @@ do
   end
 
   --contract: derives col parts from type/showDelay/trackerMode; pitchWidth,octaveWidth size pitch
+  --contract: col.showCents widens the pitch field's advance by the readout, addressing no stop
   --invariant: ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
   --invariant: pitchWidth >= 1 (name) + octaveWidth, so the name stop never collides with the octave
   function ec:decorateCol(col, pitchWidth, octaveWidth)
@@ -882,6 +887,7 @@ do
         util.add(partStart, first)
       end
       x = x + p.width + 1   -- +1 inter-part separator
+      if name == 'pitch' and col.showCents then x = x + READOUT end
     end
     col.stopPos   = stopPos
     col.partAt    = partAt

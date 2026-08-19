@@ -31,8 +31,10 @@
   @api ctx:activeTemper()  @ 22
   @api ctx:noteLabel(evt)  @ 29-33
       @contract  (note, octaveLabel, negative) for the note's step, or nil with no temper bound  @ 28
-  @api ctx:noteDeviation(evt)  @ 36-48
-      @contract  (gap, half) in cents off the note's step; half is the gap-side window half, nil unbound  @ 35
+  @api ctx:noteDeviation(evt)  @ 38-48
+      -- The cell reports this in cents and normalises it by nothing -- see
+      -- design/sounding-anchor.md § What the cell says.
+      @contract  signed cents off the note's step, or nil with no temper bound  @ 37
   @api ctx:ppqToRow(ppqI, chan)  @ 53-57
       @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).  @ 52
   @api ctx:rowToPPQ(row, chan)  @ 60-64
@@ -49,10 +51,9 @@
   @api ctx:barBeatSub(row)  @ 111-127
 
 # Uses (outbound edges)
-  @use call    tuning.midiToStep  @ noteLabel:31 noteDeviation:39
-  @use call    tuning.stepToMidi  @ noteDeviation:40
+  @use call    tuning.midiToStep  @ noteLabel:31 noteDeviation:41
+  @use call    tuning.stepToMidi  @ noteDeviation:42
   @use call    tuning.stepToParts  @ noteLabel:32
-  @use call    tuning.stepWindow  @ noteDeviation:46
   @use call    util.round  @ snapRow:66 placeRow:87
   @use require tuning  @ <load>:8
   @use require util  @ <load>:7
@@ -65,12 +66,12 @@
   @call tsRow  @ rowBeatInfo:107 barBeatSub:116,118,124
 
 # Fields (r read / w write incl. constructor keys)
-  @field r detune  @ noteLabel:31 noteDeviation:38
+  @field r detune  @ noteLabel:31 noteDeviation:40
   @field r huge  @ barBeatSub:116
   @field r length  @ 12
   @field r num  @ rowBeatInfo:108 barBeatSub:114
   @field r numRows  @ 13
-  @field r pitch  @ noteLabel:30,31 noteDeviation:37,39,41
+  @field r pitch  @ noteLabel:30,31 noteDeviation:39,41,43
   @field r ppq  @ timeSigAt:96 tsRow:102
   @field r ppqPerRow  @ 15
   @field r rowPerBeat  @ 14

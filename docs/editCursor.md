@@ -53,6 +53,13 @@ name before one stop per octave char, so a temper whose period sits well
 under an octave (`docs/tuning.md` § Display) still gets one cursor stop
 per digit of it.
 
+A column showing cents (`col.showCents`, set where a temper is bound and some
+note in the column stands off its step) adds a
+column after the pitch field for the deviation readout, which the cell draws
+across it and the separator beside it. The readout addresses no stop, so the
+parts, their internal offsets and the clipboard's lanes are untouched and only
+the absolute positions of later parts move.
+
 ## moveHook
 
 Every position-changing path ends with `clampPos()` followed by

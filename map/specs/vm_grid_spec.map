@@ -1,4 +1,4 @@
-@spec vm_grid_spec  src=tests/specs/vm_grid_spec.lua  loc=514  cases=21
+@spec vm_grid_spec  src=tests/specs/vm_grid_spec.lua  loc=536  cases=22
 @exercises trackerManager (h.tm), dataStore (h.ds), trackerView (h.vm), editCursor (h.ec), timing (timing), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, ds:assign, tm:rebuild, vm:setGridSize, ec:selectChannel, ec:col, vm:rowBeatInfo, vm:addExtraCol, timing.resolveFactors, timing.applyFactors, ec:setPos, vm:editEvent, fm:dump, timing.logPerRow
 @harness   mk{seed.notes, seed.ccs, seed.resolution, seed.length}
@@ -22,116 +22,119 @@
   @case 'grid.lane1Col indexes the lane-1 note column for each channel'  [harness]  @ 187-203
   @case 'addExtraCol on a channel with no notes preserves the implicit note column'  [harness]  @ 210-236
   @case 'empty take: 16 implicit lane-1 note cols, lane1Col covers all chans'  [harness]  @ 242-251
-  @case 'note col without delay has the compact stop layout'  [harness]  @ 256-269
-  @case 'note col with delay extends stops and widens'  [harness]  @ 273-287
-  @case 'extreme swing: a note authored under the current swing lands on its row, no off-grid flag'  [harness]  @ 296-323
-  @case 'Phase 6: ppqL-stamped notes stay on-grid through a swing change'  [harness]  @ 332-359
-  @case 'fresh PB authored under swing lands on-grid (no off-grid flag, regardless of period position)'  [harness]  @ 365-393
-  @case 'fresh PB carries ppqL + frame after authoring'  [harness]  @ 399-428
-  @case 'fractional ppqPerRow: an on-grid onset a tick below its row boundary snaps up, not down'  [harness]  @ 434-452
-  @case 'a chain\'s derived lanes claim no note columns'  [harness]  @ 458-468
-  @case 'authoring the lanes is what gives the derived voices columns'  [harness]  @ 472-482
-  @case 'a pb chain claims no pb column'  [harness]  @ 486-497
-  @case 'a cc chain claims no cc column, and the authored ones stand'  [harness]  @ 501-512
+  @case 'note col without delay has the compact stop layout'  [harness]  @ 258-272
+  @case 'note col with delay extends stops and widens'  [harness]  @ 276-290
+  @case 'a note off its step widens its column by the readout'  [harness]  @ 297-309
+  @case 'extreme swing: a note authored under the current swing lands on its row, no off-grid flag'  [harness]  @ 318-345
+  @case 'Phase 6: ppqL-stamped notes stay on-grid through a swing change'  [harness]  @ 354-381
+  @case 'fresh PB authored under swing lands on-grid (no off-grid flag, regardless of period position)'  [harness]  @ 387-415
+  @case 'fresh PB carries ppqL + frame after authoring'  [harness]  @ 421-450
+  @case 'fractional ppqPerRow: an on-grid onset a tick below its row boundary snaps up, not down'  [harness]  @ 456-474
+  @case 'a chain\'s derived lanes claim no note columns'  [harness]  @ 480-490
+  @case 'authoring the lanes is what gives the derived voices columns'  [harness]  @ 494-504
+  @case 'a pb chain claims no pb column'  [harness]  @ 508-519
+  @case 'a cc chain claims no cc column, and the authored ones stand'  [harness]  @ 523-534
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 16,490
-  @use call tm:flush  @ 18,492
-  @use call ds:assign  @ 19,353,493,507
-  @use call tm:rebuild  @ 20,494,508
-  @use call vm:setGridSize  @ 74,213,378,412,461,475,489,506
+  @use call tm:addEvent  @ 16,512
+  @use call tm:flush  @ 18,514
+  @use call ds:assign  @ 19,375,515,529
+  @use call tm:rebuild  @ 20,516,530
+  @use call vm:setGridSize  @ 74,213,400,434,483,497,511,528
   @use call ec:selectChannel  @ 76,78,214
   @use call ec:col  @ 77,79
   @use call vm:rowBeatInfo  @ 91
   @use call vm:addExtraCol  @ 231
-  @use call timing.resolveFactors  @ 302
-  @use call timing.applyFactors  @ 304
-  @use call ec:setPos  @ 387,418
-  @use call vm:editEvent  @ 388,419
-  @use call fm:dump  @ 422
-  @use call timing.logPerRow  @ 436
+  @use call timing.resolveFactors  @ 324
+  @use call timing.applyFactors  @ 326
+  @use call ec:setPos  @ 409,440
+  @use call vm:editEvent  @ 410,441
+  @use call fm:dump  @ 444
+  @use call timing.logPerRow  @ 458
 
 # Fields (r read / w write incl. constructor keys)
-  @field w atom  @ 299,300,334,367,401
-  @field w c58  @ 349,373,407
+  @field w atom  @ 321,322,356,389,423
+  @field w c58  @ 371,395,429
   @field r cc  @ 30,115
-  @field w cc  @ 107,108,109,128,171,504
-  @field r ccs  @ 422
-  @field w ccs  @ 106,127,169,370,404,504
-  @field r cells  @ 321,356,391,449,450
+  @field w cc  @ 107,108,109,128,171,526
+  @field r ccs  @ 444
+  @field w ccs  @ 106,127,169,392,426,526
+  @field r cells  @ 343,378,413,471,472
   @field w chan  @ 16,19,48,69,70,107,108,109,126,128,129,130
-  @field w chan  @ 131,151,152,170,171,172,173,192,193,260,277,312
-  @field w chan  @ 339,341,343,345,370,404,444,490,493,504,507
-  @field r col  @ 466,467,480,481
+  @field w chan  @ 131,151,152,170,171,172,173,192,193,262,280,301
+  @field w chan  @ 334,361,363,365,367,392,426,466,512,515,526,529
+  @field r col  @ 488,489,502,503
   @field w col  @ 37
-  @field r cols  @ 29,36,52,114,136,157,177,218,245,263,281,320
-  @field r cols  @ 354,381,388,390,415,419,448
-  @field w config  @ 315,348,372,406,446
-  @field w currentOctave  @ 374,408
-  @field w data  @ 279,318,376,410,474
-  @field w delay  @ 17,491
+  @field r cols  @ 29,36,52,114,136,157,177,218,245,265,284,304
+  @field r cols  @ 342,376,403,410,412,437,441,470
+  @field w config  @ 337,370,394,428,468
+  @field w currentOctave  @ 396,430
+  @field w data  @ 282,340,398,432,496
+  @field w delay  @ 17,513
   @field w depth  @ 25,26
   @field w dest  @ 26
-  @field w detune  @ 17,491
+  @field w detune  @ 17,301,513
   @field w endppq  @ 10,11,12,16,19,48,69,70,126,151,152,192
-  @field w endppq  @ 193,260,277,311,338,340,342,344,443,490,493,507
-  @field w endppqL  @ 338,340,342,344
-  @field r evType  @ 423
+  @field w endppq  @ 193,262,280,301,333,360,362,364,366,465,512,515
+  @field w endppq  @ 529
+  @field w endppqL  @ 360,362,364,366
+  @field r evType  @ 445
   @field w evType  @ 16,107,108,109,128,129,130,131,170,171,172,173
-  @field w evType  @ 370,404,490,504
-  @field r events  @ 59,467,480,481
-  @field w extraColumns  @ 474
-  @field w factors  @ 298,334,367,401
-  @field w fx  @ 19,493,507
-  @field w global  @ 318,353,376,410
+  @field w evType  @ 392,426,512,526
+  @field r events  @ 59,489,502,503
+  @field w extraColumns  @ 496
+  @field w factors  @ 320,356,389,423
+  @field w fx  @ 19,515,529
+  @field w global  @ 340,375,398,432
   @field r grid  @ 29,36,52,114,136,157,177,197,198,218,245,247
-  @field r grid  @ 263,281,320,354,381,388,390,415,419,448
+  @field r grid  @ 265,284,304,342,376,403,410,412,437,441,470
   @field w idx  @ 37
   @field w kind  @ 9,25,26
-  @field r lane  @ 58,158,179,201,202,249,466
-  @field w lane  @ 10,11,12,17,491
+  @field r lane  @ 58,158,179,201,202,249,488
+  @field w lane  @ 10,11,12,17,513
   @field r lane1Col  @ 197,198,247
-  @field w length  @ 442
-  @field r midiChan  @ 30,37,53,137,158,201,202,219,249,382,416
-  @field w name  @ 44,64,88,102,122,145,165,187,210,242,256,273
-  @field w name  @ 296,332,365,399,434,458,472,486,501
-  @field w noteDelay  @ 279
-  @field w notes  @ 48,68,126,150,191,260,277,310,337,443,474
-  @field r offGrid  @ 322,357,392,451
+  @field w length  @ 464
+  @field r midiChan  @ 30,37,53,137,158,201,202,219,249,404,438
+  @field w name  @ 44,64,88,102,122,145,165,187,210,242,258,276
+  @field w name  @ 297,318,354,387,421,456,480,494,508,523
+  @field w noteDelay  @ 282
+  @field w notes  @ 48,68,126,150,191,262,280,301,332,359,465,496
+  @field r offGrid  @ 344,379,414,473
   @field w onset  @ 25
-  @field r partAt  @ 267,285
+  @field r partAt  @ 270,288,307
   @field w pattern  @ 9
-  @field w period  @ 25,26,299,300,334,367,401
+  @field w period  @ 25,26,321,322,356,389,423
   @field w pitch  @ 10,11,12,16,48,69,70,126,151,152,192,193
-  @field w pitch  @ 260,277,312,339,341,343,345,444,490
-  @field r ppq  @ 423
+  @field w pitch  @ 262,280,301,334,361,363,365,367,466,512
+  @field r ppq  @ 445
   @field w ppq  @ 10,11,12,16,48,69,70,107,108,109,126,128
-  @field w ppq  @ 129,130,131,151,152,170,171,172,173,192,193,260
-  @field w ppq  @ 277,311,338,340,342,344,370,404,443,490,504
-  @field r ppqL  @ 427
-  @field w ppqL  @ 338,340,342,344
-  @field w project  @ 316,349,373,407
-  @field w resolution  @ 442
-  @field w rowPerBeat  @ 350,374,408,446
-  @field r rpb  @ 426
-  @field w rpb  @ 339,341,343,345
-  @field w run  @ 45,65,89,103,123,146,166,188,211,243,257,274
-  @field w run  @ 297,333,366,400,435,459,473,487,502
-  @field w seed  @ 47,67,105,125,149,168,190,259,276,309,336,369
-  @field w seed  @ 403,441,504
-  @field w shift  @ 299,300,334,367,401
-  @field r showDelay  @ 265,283
+  @field w ppq  @ 129,130,131,151,152,170,171,172,173,192,193,262
+  @field w ppq  @ 280,301,333,360,362,364,366,392,426,465,512,526
+  @field r ppqL  @ 449
+  @field w ppqL  @ 360,362,364,366
+  @field w project  @ 338,371,395,429
+  @field w resolution  @ 464
+  @field w rowPerBeat  @ 372,396,430,468
+  @field r rpb  @ 448
+  @field w rpb  @ 361,363,365,367
+  @field w run  @ 45,65,89,103,123,146,166,188,211,243,259,277
+  @field w run  @ 298,319,355,388,422,457,481,495,509,524
+  @field w seed  @ 47,67,105,125,149,168,190,261,279,300,331,358
+  @field w seed  @ 391,425,463,526
+  @field w shift  @ 321,322,356,389,423
+  @field r showCents  @ 268,305
+  @field r showDelay  @ 267,286
   @field w specs  @ 9
-  @field w startppq  @ 19,493,507
-  @field r stopPos  @ 266,284
-  @field w swing  @ 318,376,410
-  @field w swings  @ 316,349,373,407
-  @field w take  @ 350,374,408,446
+  @field w startppq  @ 19,515,529
+  @field r stopPos  @ 269,287,306
+  @field w swing  @ 340,398,432
+  @field w swings  @ 338,371,395,429
+  @field w take  @ 372,396,430,468
   @field r type  @ 30,37,53,115,137,158,178,179,201,202,220,221
-  @field r type  @ 249,264,282,382,416
-  @field w uuid  @ 19,493,507
-  @field w val  @ 107,108,109,128,129,130,131,170,171,172,173,370
-  @field w val  @ 404,504
+  @field r type  @ 249,266,285,404,438
+  @field w uuid  @ 19,515,529
+  @field w val  @ 107,108,109,128,129,130,131,170,171,172,173,392
+  @field w val  @ 426,526
   @field w vel  @ 10,11,12,17,48,69,70,126,151,152,192,193
-  @field w vel  @ 260,277,312,339,341,343,345,444,490
-  @field r width  @ 268,286
+  @field w vel  @ 262,280,301,334,361,363,365,367,466,512
+  @field r width  @ 271,289,308

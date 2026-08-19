@@ -152,15 +152,18 @@ than solved for.**
 1. `cellWidth` is exact. It is derived as the widest step label plus the
    octave field, sized from the octave numbers at the two ends of the
    addressable range (`docs/tuning.md` § Display), and the pitch cell
-   holds a step name and an octave. Nowhere does the tracker put a number
-   on pitch: `noteDeviation` is drawn as a tick on a ruler
-   (`gridPane.lua:793-799`), and the two per-cell glyphs — delay
-   divergence and fx presence — are stars at fixed offsets.
+   holds a step name and an octave. What the cell puts beside the name is
+   two columns of small glyphs holding the note's deviation in cents
+   (`design/sounding-anchor.md` § What the cell says); what it marks the
+   note with is an overline for fx, and a star for a delay that could not
+   be realised.
 
 2. A ratio and its residual do not fit that budget. `5/4+14` is six
    characters against three for `C-4`, and the octave field is spoken for.
-   The reading needs room the pitch cell has not got; where it goes is
-   § Open.
+   The residual has a place already, the deviation readout being that
+   figure in the scale's frame (§ The deviation belongs to the label); the
+   ratio is what needs room the pitch cell has not got, and where it goes
+   is § Open.
 
 3. What does fit is a tint. Colour costs no columns, and the repo
    already carries distinctions that way: a negative octave renders as its

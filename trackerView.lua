@@ -4006,6 +4006,16 @@ function tv:rebuild(takeChanged)
     local pitchWidth   = temper and temper.cellWidth   or 3
     local octaveWidth  = temper and temper.octaveWidth or 1
 
+    -- The readout earns its column only where some note stands off its step;
+    -- a lane on the temper pays no width for it. see design/sounding-anchor.md § What the cell says
+    local function anyOffStep(events)
+      for _, e in ipairs(events) do
+        local gap = util.isNote(e) and ctx:noteDeviation(e)
+        if gap and gap ~= 0 then return true end
+      end
+      return false
+    end
+
     local function addGridCol(chan, type, key, events)
       local showDelay = type == 'note' and (noteDelayCfg[chan] or {})[key] or false
 
@@ -4016,6 +4026,7 @@ function tv:rebuild(takeChanged)
         label       = LABELS[type] or '',
         events      = events or {},
         showDelay   = showDelay,
+        showCents   = type == 'note' and temper ~= nil and anyOffStep(events or {}) or nil,
         trackerMode = type == 'note' and trackerMode or nil,
         midiChan    = chan,
         cells       = {},
@@ -4064,6 +4075,20 @@ function tv:rebuild(takeChanged)
       end
       return byLane
     end
+
+    -- The projection is built before the columns, a note column's own width
+    -- reading it to ask whether its notes stand off their steps.
+    local numRows = math.max(1, math.ceil(length / ppqPerRow))
+    grid.numRows  = numRows
+
+    ctx = util.instantiate('viewContext', {
+      length     = length,
+      numRows    = numRows,
+      rowPerBeat = rpb,
+      ppqPerRow  = ppqPerRow,
+      timeSigs   = timeSigs,
+      temper     = temper,
+    })
 
     perf.start('cols')
     for chan, channel in tm:channels() do
@@ -4131,18 +4156,6 @@ function tv:rebuild(takeChanged)
       end
     end
     perf.stop('cols')
-
-    local numRows = math.max(1, math.ceil(length / ppqPerRow))
-    grid.numRows  = numRows
-
-    ctx = util.instantiate('viewContext', {
-      length     = length,
-      numRows    = numRows,
-      rowPerBeat = rpb,
-      ppqPerRow  = ppqPerRow,
-      timeSigs   = timeSigs,
-      temper     = temper,
-    })
 
     -- Carried cells hold only while the projection epoch does; any change drops every entry.
     local epochSig = projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, cm:get('temper'))

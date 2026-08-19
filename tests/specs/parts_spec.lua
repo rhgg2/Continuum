@@ -9,12 +9,13 @@
 local t = require('support')
 local util = require('util')
 
--- decorateCol only reads col.type, col.showDelay and col.trackerMode.
--- We don't need a full harness — a minimal shell is enough.
-local function mkCol(type, showDelay, trackerMode)
+-- decorateCol only reads col.type, col.showDelay, col.trackerMode and
+-- col.showCents. We don't need a full harness — a minimal shell is enough.
+local function mkCol(type, showDelay, trackerMode, showCents)
   return { type = type,
            showDelay   = showDelay   or false,
-           trackerMode = trackerMode or false }
+           trackerMode = trackerMode or false,
+           showCents   = showCents   or false }
 end
 
 -- Decorate a col through ec; ec needs deps but only `grid` is touched by
@@ -160,6 +161,35 @@ return {
         {'pitch','pitch','sample','sample','vel','vel',
          'delay','delay','delay'}, 'partAt')
       t.deepEq(c.partStart, {1,1,3,3,5,5,7,7,7}, 'partStart')
+    end,
+  },
+
+  ----- The deviation readout
+  -- Under a bound temper a note column carries a cents readout, drawn small
+  -- across the separator after the pitch field and one column beside it. It
+  -- takes no cursor stop, nothing typing a deviation, so the parts and their
+  -- internal stops are untouched and only the absolute positions move.
+  -- see design/sounding-anchor.md § What the cell says
+
+  {
+    name = 'note showing cents: one wider, vel shifted right, parts unchanged',
+    run = function()
+      local c = decorate(mkCol('note', false, false, true))
+      t.deepEq(c.parts,   {'pitch', 'vel'}, 'the readout is drawn, not addressed')
+      t.deepEq(c.stopPos, {0, 2, 5, 6},     'vel moves right by the column the readout takes')
+      t.eq    (c.width,   7,                'width')
+      t.deepEq(c.partAt,  {'pitch','pitch','vel','vel'}, 'partAt')
+    end,
+  },
+
+  {
+    name = 'note showing cents in tracker mode: the readout sits against the pitch',
+    run = function()
+      local c = decorate(mkCol('note', true, true, true))
+      t.deepEq(c.parts,   {'pitch', 'sample', 'vel', 'delay'}, 'parts')
+      t.deepEq(c.stopPos, {0, 2, 5, 6, 8, 9, 11, 12, 13},
+               'sample, vel and delay each shift by the one column')
+      t.eq    (c.width,   14,                                  'width')
     end,
   },
 }
