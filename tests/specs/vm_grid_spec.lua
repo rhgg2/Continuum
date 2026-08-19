@@ -310,6 +310,28 @@ return {
   },
 
   {
+    -- A note written C-4 and sounding a semitone sharp stands exactly on C#4's
+    -- step, so only the intent it carries puts a reading in the cell -- and the
+    -- field has to survive from the take to the cell for it to.
+    -- see design/sounding-anchor.md § What the note remembers
+    name = 'a note off the step it was written on reports its drift in the cell',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 61, vel = 100,
+                      detune = 0, intentCents = 6000 } },
+        },
+      }
+      local col = h.vm.grid.cols[1]
+      local evt = col.cells[0]
+      local note, octave = h.vm:noteLabel(evt)
+      t.eq(note .. octave, 'C-4', 'the cell keeps the name the note was written under')
+      t.eq(h.vm:noteDeviation(evt), 100, 'and reports the drift beside it')
+      t.truthy(col.showCents, 'so the column pays for the readout')
+    end,
+  },
+
+  {
     -- Spec (design/archive/swing.md): displayRow(e) = round(ppqToRow_c(e.ppq))
     -- under current swing; on-grid iff rowToPPQ_c reproduces e.ppq exactly.
     -- With float ppqPerRow (unrounded) the round-trip is bit-exact even

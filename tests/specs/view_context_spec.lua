@@ -374,6 +374,30 @@ return {
     end,
   },
 
+  {
+    -- Written C-4 and seated 80c sharp, so the sound is nearer C#4 and only the
+    -- intent holds the name -- see design/sounding-anchor.md § What the note remembers.
+    name = 'noteLabel names the step the intent carries, not the one its sound snaps to',
+    run = function()
+      local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
+      local note, octave = ctx:noteLabel({ pitch = 61, detune = -20, intentCents = 6000 })
+      t.eq(note .. octave, 'C-4')
+    end,
+  },
+
+  {
+    -- 12EDO's half-window is fifty cents, and the gap the cell reports is no
+    -- longer bounded by it -- see design/sounding-anchor.md § Both wall and ruler.
+    name = 'noteDeviation measures from the intent, past the half-window that once bound it',
+    run = function()
+      local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
+      t.eq(ctx:noteDeviation({ pitch = 61, detune = -20, intentCents = 6000 }), 80,
+           'the gap from the step the note was written on')
+      t.eq(ctx:noteDeviation({ pitch = 59, detune = 20, intentCents = 6000 }), -80,
+           'and the same drift flat reads negative')
+    end,
+  },
+
   ---------- TIME SIGNATURE / METERING
 
   {

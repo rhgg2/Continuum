@@ -28,6 +28,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-19 tracker: name a cell from the intent its note carries (§ What the note remembers)
 - 2026-08-19 tracker: replace the deviation tick with a cents readout (§ What the cell says)
 - 2026-08-19 tuning: read a note's step from the intent it carries (§ What the note remembers)
 
@@ -37,9 +38,6 @@
 
 ## Queued (current phase; one-liners)
 
-2. **The view** — `ctx:noteLabel` names the cell from the intent where a note
-   carries one, and `ctx:noteDeviation` measures the tick's gap from it, that
-   gap now being free to exceed the window half it returns beside it.
 3. **The stamp** — `seatStrand` writes `intentCents` beside `(pitch, detune)`
    on every note either facility seats, taking each note's own written seat
    before the move so that a second solve reads what the first did. The field

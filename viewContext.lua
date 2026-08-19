@@ -25,20 +25,21 @@ function ctx:activeTemper() return temper end
 -- see docs/viewContext.md § ON_TEMPER_EPS
 local ON_TEMPER_EPS = 1e-6
 
---contract: (note, octaveLabel, negative) for the note's step, or nil with no temper bound
+-- Both lenses take the step from the intent a note carries, so a note the solve
+-- moved keeps its written name -- see design/sounding-anchor.md § What the note remembers.
+--contract: (note, octaveLabel, negative) for the note's written step, or nil with no temper bound
 function ctx:noteLabel(evt)
   if not (temper and evt and evt.pitch) then return end
-  local step, oct = tuning.midiToStep(temper, evt.pitch, evt.detune or 0)
-  return tuning.stepToParts(temper, step, oct)
+  return tuning.stepToParts(temper, tuning.noteStep(temper, evt))
 end
 
--- The cell reports this in cents and normalises it by nothing -- see
--- design/sounding-anchor.md § What the cell says.
---contract: signed cents off the note's step, or nil with no temper bound
+-- The cell reports this in cents and normalises it by nothing, so the gap is
+-- free to exceed the step's own room -- see design/sounding-anchor.md § What the cell says.
+--contract: signed cents from the note's written step, or nil with no temper bound
 function ctx:noteDeviation(evt)
   if not (temper and evt and evt.pitch) then return end
   local detune    = evt.detune or 0
-  local step, oct = tuning.midiToStep(temper, evt.pitch, detune)
+  local step, oct = tuning.noteStep(temper, evt)
   local tm_, td_  = tuning.stepToMidi(temper, step, oct)
   local gap       = (evt.pitch * 100 + detune) - (tm_ * 100 + td_)
   -- A snapped note's gap is serialisation float dust, not a bend; clear it
