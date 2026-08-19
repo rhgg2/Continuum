@@ -61,6 +61,14 @@ local function nearly(got, want, why)
   t.truthy(math.abs(got - want) < 5e-4, (why or 'nearly') .. ': got ' .. got)
 end
 
+-- The same meantone rooted so that middle C is its second step: the unison and the
+-- middle C a fallback would reach then walk different steps.
+local function meantoneOffC()
+  local mt = meantone12()
+  mt.rootPitch, mt.rootStep, mt.rootOctave = 60, 2, 4
+  return tuning.derive(mt)
+end
+
 -- 12EDO written as six equal steps of a half-octave period: a step index that
 -- recurs inside the octave, on a step a tritone from the one it repeats.
 local function half12()
@@ -1039,6 +1047,73 @@ return {
       local seatPitch, seatDetune = tuning.transposeNote(edo12, noteAt(120, 0, 12000), 13)
       t.eq(seatPitch, 127, 'and the seated move the same way')
       t.truthy(seatDetune > 50, 'overflow: ' .. seatDetune)
+    end,
+  },
+
+  {
+    name = 'stepLadder: a demand reads as steps of the notation and the cents no step reaches',
+    run = function()
+      local edo19, c4 = tuning.presets['19EDO'], noteAt(60, 0)
+
+      local steps, residual = tuning.stepLadder(edo19, c4, 200)
+      t.eq(steps, 3, 'a 200c demand is three steps of 19EDO')
+      nearly(residual, 10.5263, 'and ten cents over')
+      nearly(tuning.ladderCents(edo19, c4, steps, residual), 200, 'the pair recomposing to what was stored')
+
+      -- What an arrow press on the step row writes: the count moves and the residual rides.
+      local nudged = tuning.ladderCents(edo19, c4, steps + 1, residual)
+      nearly(nudged, 263.1579, 'a step up carries the residual with it')
+      local reSteps, reResidual = tuning.stepLadder(edo19, c4, nudged)
+      t.eq(reSteps, 4, 'reading back as the step it moved to')
+      nearly(reResidual, 10.5263, 'holding the residual it was nudged with')
+    end,
+  },
+
+  {
+    name = 'stepLadder: the count walks from the step the host was written on',
+    run = function()
+      local mt      = meantone12()
+      local drifted = noteAt(60, 40, 6000)   -- written C4, sounding 40 cents sharp
+
+      nearly(tuning.ladderCents(mt, drifted, 2, 0), 193.1568,
+             'two steps above the written C is meantone\'s whole tone')
+      nearly(tuning.ladderCents(mt, noteAt(60, 40), 2, 0), 234.2160,
+             'where a note carrying no intent walks from the step it sounds nearest')
+
+      local steps, residual = tuning.stepLadder(mt, drifted, 200)
+      t.eq(steps, 2, 'so a 200c demand is that whole tone')
+      nearly(residual, 6.8432, 'and seven cents over it')
+    end,
+  },
+
+  {
+    name = 'stepLadder: a host with no note of its own anchors on the notation\'s unison',
+    run = function()
+      local mt = meantoneOffC()
+
+      nearly(tuning.ladderCents(mt, nil, 1, 0), 76.0488,
+             'one step above the unison is the chromatic semitone')
+      nearly(tuning.ladderCents(mt, noteAt(60, 0), 1, 0), 117.1080,
+             'where middle C, a step up the scale, carries the diatonic one')
+
+      local steps, residual = tuning.stepLadder(mt, nil, 200)
+      t.eq(steps, 2, 'so the unison walks the steps a note written there would')
+      nearly(residual, 6.8432)
+    end,
+  },
+
+  {
+    name = 'stepLadder: a residual past the half-gap reads as the step above',
+    run = function()
+      local mt, c4 = meantone12(), noteAt(60, 0)
+
+      local steps, residual = tuning.stepLadder(mt, c4, 134)
+      t.eq(steps, 1, 'inside the half-gap the count stands')
+      nearly(residual, 57.9512)
+
+      local nextStep, gap = tuning.stepLadder(mt, c4, 136)
+      t.eq(nextStep, 2, 'two cents on, the nearer step is the one above')
+      nearly(gap, -57.1568, 'and the residual turns negative under it')
     end,
   },
 

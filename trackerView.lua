@@ -2671,8 +2671,8 @@ function tv:fxHostForEdit()
   return self:fxHostAtCursor()
 end
 
--- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
--- convert a slide's cents demand to/from temper steps.
+-- The host note behind a uuid; the stepInterval editor anchors its step ladder on the
+-- step that note was written on, and on the notation's unison where a region returns none.
 function tv:noteByUuid(uuid) return tm:byUuid(uuid) or parkedByUuid(uuid) end
 
 -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild

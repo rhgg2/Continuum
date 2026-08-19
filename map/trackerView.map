@@ -695,8 +695,8 @@
       -- The fx host the editor opens on: a selection always mints a fresh region; else the
       -- read-only caret host (v1). 2nd return = freshly minted (modal takes no snapshot).
   @api tv:noteByUuid(uuid)  @ 2676
-      -- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
-      -- convert a slide's cents demand to/from temper steps.
+      -- The host note behind a uuid; the stepInterval editor anchors its step ladder on the
+      -- step that note was written on, and on the notation's unison where a region returns none.
   @api tv:setNoteFx(uuid, fxOrRemove)  @ 2680-2708
       -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
       -- re-derives its fxNotes. uuid, not the event, is the durable handle.

@@ -154,6 +154,15 @@ which draws a `? kind` heading with no field rows rather than faulting.
 `stripFocus` gates `handleFxChainKeys` and highlights the cursor's row up to the
 value column (the tree's selection fill, replacing the old ▸ marker).
 
+**An interval takes two rows.** The `Interval` field's stored value is a cents
+demand -- a trill's alternation, a fixed slide's target -- read as a step ladder
+against the step the host note was written on, or against the notation's unison
+where the host is a region and has no pitch of its own: the first row counts whole
+steps, the second holds the cents no count reaches. Both rows write the one value,
+so nudging the step row carries the residual with it rather than quantising it
+away, and nudging the cents row past half a step re-reads as the step above with a
+negative residual. Ctrl steps a period on the one row and ten cents on the other.
+
 **One axis navigates, the other edits.** `stripCursor = {stage, param}` (param 0
 = header) still keys the caret, but the whole chain flattens to a single column
 (`chainRows`): **Up/Down** walk header → fields → the next stage's header as one

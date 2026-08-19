@@ -648,12 +648,6 @@ function tuning.stepWindow(temper, step)
   return (steps[step] - below) / 2, (above - steps[step]) / 2
 end
 
---contract: moves by n scale steps under temper, carrying the octave; n may be negative
-function tuning.transposeStep(temper, midi, detune, n)
-  local step, oct = tuning.midiToStep(temper, midi, detune)
-  return tuning.stepToMidi(temper, step + n, oct)
-end
-
 -- A whole number of 2/1 octaves, whatever the notation repeats at: the pitch class is
 -- what a solve tuned, so a move by one leaves a note's tuning standing.
 local function isOctaves(cents)
@@ -676,11 +670,27 @@ function tuning.transposeNote(temper, note, n)
   return pitch, detune, note.intentCents and note.intentCents + (to - from)
 end
 
---contract: signed count of whole temper steps from note a to note b, each snapped to nearest step
-function tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)
-  local aStep, aOct = tuning.midiToStep(temper, aMidi, aDetune)
-  local bStep, bOct = tuning.midiToStep(temper, bMidi, bDetune)
-  return (bOct - aOct) * #temper.cents + (bStep - aStep)
+-- The ladder's anchor: the step the host note was written on, or the notation's unison
+-- where a chain's host is a region and has no pitch of its own.
+local function ladderAnchor(temper, note)
+  if note then return tuning.noteStep(temper, note) end
+  return stepAtCents(temper, temper.rootCents)
+end
+
+-- A cents demand read as the notation walks it, which is how one is typed -- see
+-- design/sounding-anchor.md § The notation is not a derivation input
+--contract: (temper, note|nil, cents) → the whole steps from the anchor, and the signed cents over
+function tuning.stepLadder(temper, note, cents)
+  local step, octave = ladderAnchor(temper, note)
+  local target       = stepCents(temper, step, octave) + cents
+  local at, atOctave = stepAtCents(temper, target)
+  return (atOctave - octave) * #temper.cents + (at - step), target - stepCents(temper, at, atOctave)
+end
+
+--contract: (temper, note|nil, steps, residual) → the cents demand that ladder names
+function tuning.ladderCents(temper, note, steps, residual)
+  local step, octave = ladderAnchor(temper, note)
+  return stepCents(temper, step + steps, octave) - stepCents(temper, step, octave) + residual
 end
 
 ----- Targets

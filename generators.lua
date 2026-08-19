@@ -362,7 +362,7 @@ generators.kinds = {
     defaults = { period = { 1, 4 }, cents = 200 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-      -- cents demand, edited as host-relative temper steps -- a slide's field and the same widget
+      -- cents demand, edited as a step ladder from the host's written step -- a slide's field
       { field = 'cents',  label = 'Interval', widget = 'stepInterval' },
     },
   },
@@ -404,7 +404,7 @@ generators.kinds = {
     fields = {
       { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
       { field = 'target', label = 'To',       widget = 'choice', options = SLIDE_TARGETS },
-      -- cents demand, edited as host-relative temper steps; shown only for a fixed slide.
+      -- cents demand, edited as a step ladder from the host's written step; fixed slide only.
       { field = 'cents',  label = 'Interval', widget = 'stepInterval',
         when = function(e) return e.target == 'fixed' end },
     },

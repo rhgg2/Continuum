@@ -323,10 +323,11 @@ charged by whether its two members sound together.**
 
 1. Steps stay in the input as a ladder. **A step ladder** is a step count
    and a signed cents residual, decomposed against an anchor and stored as
-   absolute cents: the count says which degree, and the residual holds what
-   the notation cannot express. A re-temper re-reads the same stored cents,
-   two hundred typed as two steps of 12-EDO reading as three steps and ten
-   cents over in 19-EDO, so the reading rebases where the sound does not.
+   the one cents demand they sum to: the count says which degree, and the
+   residual holds what the notation cannot express. A re-temper re-reads the
+   same stored cents, two hundred typed as two steps of 12-EDO reading as
+   three steps and ten cents over in 19-EDO, so the reading rebases where the
+   sound does not.
 
 1. In an unequal notation a step count is well defined against an anchor and
    not as an interval — two degrees above the fifth step of a Scala scale

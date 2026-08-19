@@ -1070,20 +1070,9 @@ local function choiceLabels(fd)
   local out = {}; for i, o in ipairs(fd.options) do out[i] = o.l end; return out
 end
 
--- stepInterval: stored value is signed cents (a host-relative pitch demand);
--- shown/stepped as temper steps, anchored at the host. see design/archive/note-macros.md § UI
+-- stepInterval: stored value is signed cents, drawn as a step ladder over two
+-- rows. see docs/trackerRender.md § An interval takes two rows
 local function slideTemper() return tv:activeTemper() or tuning.presets['12EDO'] end
-local function hostPitch(uuid)
-  local n = tv:noteByUuid(uuid)
-  return (n and n.pitch) or 60, (n and n.detune) or 0
-end
-local function centsToSteps(temper, midi, detune, cents)
-  return tuning.stepsBetween(temper, midi, detune, 0, midi * 100 + detune + (cents or 0))
-end
-local function stepsToCents(temper, midi, detune, n)
-  local tMidi, tDetune = tuning.transposeStep(temper, midi, detune, n)
-  return (tMidi - midi) * 100 + (tDetune - detune)
-end
 
 -- The strip's pattern-body fields (ostinato): a summary label + launch into the checkout editor,
 -- which writes the edited body back through setFxField. see design/fx-patterns.md § P3.5
@@ -1128,11 +1117,16 @@ local function adjustRow(uuid, rw, right, mods)
     tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
-    local midi, detune = hostPitch(uuid)
-    local steps = centsToSteps(temper, midi, detune, value)
-    local delta = (mods & ImGui.Mod_Ctrl) ~= 0 and #temper.cents or 1
-    tv:setFxField(uuid, rw.index, fd.field,
-                  stepsToCents(temper, midi, detune, steps + (right and 1 or -1) * delta))
+    local note   = tv:noteByUuid(uuid)
+    local dir    = right and 1 or -1
+    local coarse = (mods & ImGui.Mod_Ctrl) ~= 0
+    if rw.part == 'residual' then   -- the stored cents direct: past the half-gap the count follows
+      tv:setFxField(uuid, rw.index, fd.field, (value or 0) + dir * (coarse and 10 or 1))
+    else
+      local steps, residual = tuning.stepLadder(temper, note, value or 0)
+      tv:setFxField(uuid, rw.index, fd.field,
+                    tuning.ladderCents(temper, note, steps + dir * (coarse and #temper.cents or 1), residual))
+    end
   elseif fd.widget == 'pattern' then   -- no scalar to nudge; arrowing opens the editor
     launchPattern(uuid, rw.index, fd, rw.entry)
   else
@@ -1143,11 +1137,12 @@ local function adjustRow(uuid, rw, right, mods)
   end
 end
 
--- Value control for one fx field (dropdown / temper-step / number stepper); id keys ImGui per
--- field. width is the value column; stepper shrinks for -/+ buttons, choice dropdowns self-size.
-local function fxFieldWidget(host, index, fd, entry, width)
+-- Value control for one strip row (dropdown / step ladder / number stepper); id keys ImGui per
+-- row. width is the value column; stepper shrinks for -/+ buttons, choice dropdowns self-size.
+local function fxFieldWidget(host, row, width)
+  local fd, entry, index = row.fd, row.entry, row.index
   local value   = entry[fd.field]
-  local id      = 'fx_' .. index .. '_' .. fd.field
+  local id      = 'fx_' .. index .. '_' .. fd.field .. '_' .. row.part
   -- numberStepper's width sizes its input box only; its -/+ buttons add 2×(innerSpacing + frameH).
   local stepBoxW = width - 2 * (ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing) + ImGui.GetFrameHeight(ctx))
   if fd.widget == 'dest' then
@@ -1162,11 +1157,16 @@ local function fxFieldWidget(host, index, fd, entry, width)
     if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v) end
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
-    local midi, detune = hostPitch(host)
-    local per = #temper.cents
-    local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
-                    { width = stepBoxW, min = -2 * per, max = 2 * per })
-    if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)) end
+    local note   = tv:noteByUuid(host)
+    local steps, residual = tuning.stepLadder(temper, note, value or 0)
+    if row.part == 'residual' then
+      local rv, r = chrome.numberStepper(id, residual, { width = stepBoxW, format = '%+.0f' })
+      if rv then tv:setFxField(host, index, fd.field, tuning.ladderCents(temper, note, steps, r)) end
+    else
+      local per   = #temper.cents
+      local rv, n = chrome.numberStepper(id, steps, { width = stepBoxW, min = -2 * per, max = 2 * per })
+      if rv then tv:setFxField(host, index, fd.field, tuning.ladderCents(temper, note, n, residual)) end
+    end
   elseif fd.widget == 'pattern' then
     if ImGui.Button(ctx, patternSummary(value) .. '##' .. id, width) then launchPattern(host, index, fd, entry) end
   else
@@ -1201,13 +1201,17 @@ local stripPlan do
   end
 
   -- Columns: one per stage, holding its currently-visible fields (adding is the header picker).
+  -- A step ladder is two rows over one field: the count, then the cents no count reaches.
   local function stripColumns(fx)
     local cols = {}
     for i, entry in ipairs(fx) do
       local fields = {}
       for _, fd in ipairs(generators.fieldsFor(entry)) do
         if not fd.when or fd.when(entry) then
-          util.add(fields, { fd = fd, entry = entry, index = i })
+          util.add(fields, { fd = fd, entry = entry, index = i, label = fd.label, part = 'steps' })
+          if fd.widget == 'stepInterval' then
+            util.add(fields, { fd = fd, entry = entry, index = i, label = 'Cents', part = 'residual' })
+          end
         end
       end
       util.add(cols, { index = i, kind = entry.kind, bypass = entry.bypass,
@@ -1463,10 +1467,10 @@ local stripPlan do
       rowHighlight(onStage and cur.param == k and stripFocus)
       local labelX, rowW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
       ImGui.AlignTextToFramePadding(ctx)
-      withDim(col.bypass, function() ImGui.Text(ctx, f.fd.label) end)
+      withDim(col.bypass, function() ImGui.Text(ctx, f.label) end)
       clickToCursor(host, col.index, k)
       ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, labelX + rowW - VALUE_W)
-      fxFieldWidget(host, col.index, f.fd, f.entry, VALUE_W)   -- edits apply live; a value edit never grabs strip focus
+      fxFieldWidget(host, f, VALUE_W)   -- edits apply live; a value edit never grabs strip focus
       ImGui.Unindent(ctx, FIELD_INDENT)
     end
   end
