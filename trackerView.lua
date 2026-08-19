@@ -2350,10 +2350,12 @@ end
 ----- Nudge
 
 local nudge do
+  -- Coarse is one period of the temper. Not octaveStep, which is where the octave
+  -- *label* turns over and so stands a step past the period under a named twelve.
   local function pitchStep(coarse)
     if not coarse then return 1 end
     local t = ctx:activeTemper()
-    return t and t.octaveStep or 12
+    return t and #t.cents or 12
   end
 
   -- Coarse snap interval per column type. nil = no coarse (pc).

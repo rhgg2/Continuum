@@ -284,6 +284,24 @@ return {
   },
 
   {
+    name = 'a coarse pitch nudge moves by one period of the temper',
+    run = function(harness)
+      -- octaveStep is a label boundary -- the first step whose name reads as the
+      -- next octave's C -- which stands one past the period under a named twelve.
+      -- What a coarse nudge wants is the period itself.
+      local h, colIdx = rootedNote(harness)
+      local letterStop = (pitchStops(lane1(h)))
+      h.ec:setPos(0, colIdx, letterStop)
+      t.eq(lane1(h).cells[0].pitch, 60, 'C4 under this root')
+
+      h.cmgr:invoke('nudgeCoarseUp')
+      local note = lane1(h).cells[0]
+      t.eq(note.pitch,  72, 'a coarse nudge is the octave this twelve divides')
+      t.eq(note.detune,  0, 'and lands on the step')
+    end,
+  },
+
+  {
     name = 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)',
     run = function(harness)
       local h = mk(harness)
