@@ -6,11 +6,12 @@
 
 --invariant: pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
---shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
+--shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq,[intentCents]},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote -- no notation among them
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
---shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
+--shape: result = { notes = { {ppq,endppq,pitch,vel,detune,[intentCents]}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
+--invariant: a derived note's intent is its source's moved by the cents it stands off, else absent
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, glyph, defaults, fields }
 --shape: field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', signed?, frac? }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
@@ -44,6 +45,12 @@ local function displaced(note, cents)
   return tuning.placeCents(note.pitch * 100 + (note.detune or 0) + cents)
 end
 
+-- The name that rides with it: the source's intent moved by the cents this note stands off it.
+-- A source carrying none derives none, and the note reads as it sounds; see design/sounding-anchor.md § What the note remembers
+local function inherited(src, cents)
+  return src.intentCents and src.intentCents + cents
+end
+
 --contract: retrig tiles the host window with evenly-spaced same-pitch fxNotes; every hit is derived
 --contract: velocity ramps params.ramp per tile from the host vel, clamped 1..127; detune inherited verbatim
 local function retrig(stream, host, params, ctx)
@@ -61,6 +68,7 @@ local function retrig(stream, host, params, ctx)
       pitch   = h.pitch,
       vel     = math.max(1, math.min(127, h.vel + i * ramp)),
       detune  = h.detune or 0,
+      intentCents = h.intentCents,
     })
     i = i + 1
   end
@@ -73,8 +81,11 @@ local function trill(stream, host, params, ctx)
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = stream.notes[1]
   if not h then return { notes = {}, delta = {} } end   -- empty membership (bare region)
-  -- The alternation note: a cents demand off what the host sounds, whatever the notation names it.
-  local altPitch, altDetune = displaced(h, params.cents or 0)
+  -- The alternation note: a cents demand off what the host sounds, whatever the notation names it,
+  -- and named from the host's own step moved by that demand.
+  local cents = params.cents or 0
+  local altPitch, altDetune = displaced(h, cents)
+  local altIntent           = inherited(h, cents)
   local notes = {}
   local i = 0
   while startL + i * step < endL do
@@ -85,6 +96,7 @@ local function trill(stream, host, params, ctx)
       pitch   = odd and altPitch  or h.pitch,
       vel     = h.vel,
       detune  = odd and altDetune or (h.detune or 0),
+      intentCents = odd and altIntent or h.intentCents,
     })
     i = i + 1
   end
@@ -132,6 +144,7 @@ local function arp(stream, host, params, ctx)
       util.add(notes, {
         ppq = at, endppq = math.min(at + step, endL),
         pitch = src.pitch, vel = src.vel, detune = src.detune or 0,
+        intentCents = src.intentCents,
       })
     end
     i = i + 1
@@ -155,8 +168,8 @@ local function ostinato(stream, host, params, ctx)
       if onset >= startL and onset < endL then
         local endppq = math.min(base + spec.endppq, endL)
         for _, voice in ipairs(playingAt(stream.notes, onset)) do
-          util.add(notes, { ppq = onset, endppq = endppq,
-                                pitch = voice.pitch, vel = spec.vel, detune = voice.detune or 0 })
+          util.add(notes, { ppq = onset, endppq = endppq, pitch = voice.pitch, vel = spec.vel,
+                                detune = voice.detune or 0, intentCents = voice.intentCents })
         end
       end
     end
@@ -167,6 +180,7 @@ end
 
 --contract: chord-stamp stamps a poly pattern on each region member; lane-1 is the pattern's root
 --contract: every voice moves by the cents root -> trigger; voice keeps trigger vel/window
+--contract: a voice is named from the trigger's step moved by its own interval from the root
 --contract: no lane-1 note in the pattern -> inert (empty result)
 -- Voices carry their authored detune (intent); on one channel only lane 1's detune realises via pb, so a
 -- microtonal chord sounds faithfully only in 12-ET -- the hand-authored-chord limit. see docs/tuning.md
@@ -183,8 +197,11 @@ local function chordStamp(stream, host, params, ctx)
     local offset = interval(ref, trig)         -- root -> trigger, in cents
     for _, spec in ipairs(specs) do
       local pitch, detune = displaced(spec, offset)
+      -- The voice sounds where the root's interval to the trigger puts it, and is named from
+      -- the trigger's own step moved by the voice's interval from the root.
       util.add(notes, { ppq = trig.ppq, endppq = trig.endppq,
-                        pitch = pitch, detune = detune, vel = trig.vel })
+                        pitch = pitch, detune = detune, vel = trig.vel,
+                        intentCents = inherited(trig, interval(ref, spec)) })
     end
   end
   return { notes = notes, delta = {} }
@@ -311,7 +328,7 @@ local function velPattern(stream, host, params, ctx)
     local pct = pattern[(step - 1) % #pattern + 1]
     util.add(notes, { ppq = note.ppq, endppq = note.endppq, pitch = note.pitch,
                       vel = util.clamp(util.round(note.vel * pct / 100), 1, 127),
-                      detune = note.detune or 0 })
+                      detune = note.detune or 0, intentCents = note.intentCents })
   end
   return { notes = notes, delta = {} }
 end

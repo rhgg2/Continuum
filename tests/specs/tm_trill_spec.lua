@@ -156,4 +156,53 @@ return {
     end,
   },
 
+  ----- The intent rides the derivation onto the take
+
+  {
+    name = 'each derived note carries a written step of its own, the alternation a tone above',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 60, delay = 0, lane = 1, intentCents = 6000,
+                      fx = trill2 })
+      h.tm:flush()
+
+      local host = h.tm:getChannel(1).parked[1]
+      t.eq(host.intentCents, 6000, 'fixture check: the parked host keeps the step it was written on')
+      local fns = fxNotesOf(h.fm:dump(), host.uuid)
+      t.deepEq({ fns[1].intentCents, fns[2].intentCents, fns[3].intentCents, fns[4].intentCents },
+        { 6000, 6200, 6000, 6200 },
+        'the take holds one name per tile: the host\'s step, then the one 200 cents above it')
+    end,
+  },
+
+  {
+    name = 'renaming the host with no change to its pitch renames the notes it derives',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 60, delay = 0, lane = 1, intentCents = 6000,
+                      fx = trill2 })
+      h.tm:flush()
+
+      local sounded = {}
+      for i, n in ipairs(fxNotesOf(h.fm:dump(), h.tm:getChannel(1).parked[1].uuid)) do
+        sounded[i] = { n.pitch, n.detune }
+      end
+
+      -- Only the intent moves, so the take sounds exactly as it did and nothing but the
+      -- name can tell the reconcile that the notes standing there are stale.
+      h.tm:assignParked(h.tm:getChannel(1).parked[1], { intentCents = 6100 })
+      h.tm:flush()
+
+      local fns = fxNotesOf(h.fm:dump(), h.tm:getChannel(1).parked[1].uuid)
+      t.deepEq({ fns[1].intentCents, fns[2].intentCents, fns[3].intentCents, fns[4].intentCents },
+        { 6100, 6300, 6100, 6300 },
+        'the derived notes follow the host onto the step it now names')
+      for i, n in ipairs(fns) do
+        t.deepEq({ n.pitch, n.detune }, sounded[i], 'tile ' .. i .. ' goes on sounding where it did')
+      end
+    end,
+  },
+
 }

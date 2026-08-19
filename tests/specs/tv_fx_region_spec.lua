@@ -7,6 +7,10 @@ local generators = require('generators')
 
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete -> replace (parks)
+-- A whole-tone trill, and a microtonal one whose alternation lands 30 cents off the step
+-- it places on -- an off-step ghost over a lane whose own note stands on its step.
+local trill200 = { { kind = 'trill', period = { 1, 4 }, cents = 200 } }
+local trill130 = { { kind = 'trill', period = { 1, 4 }, cents = 130 } }
 
 -- ∿ A V: three stages, one short of the default 240-ppq window's four rows
 -- Three voices stamped on each trigger: a chain that emits polyphony, so its derived
@@ -1150,6 +1154,53 @@ return {
       t.eq(ghosts[noteColIdx(h, 1, 2)], nil, 'lane 2 takes none -- the allocator put them all on lane 1')
       local _, fxIdx = fxColFor(h, 1)
       t.eq(ghosts[fxIdx], nil, 'note columns only')
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: a derived note is named from the step its own intent stands on',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      -- Written C, sounding 60 cents sharp: far enough off that the step it sounds
+      -- nearest is not the step it was written on.
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 60, delay = 0, lane = 1, intentCents = 6000,
+                     fx = trill200 }
+      h.tm:flush()
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)   -- on the host's own cell: its chain is what ghosts
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
+      t.truthy(ghosts and ghosts[idx], 'fixture check: the lane column carries the ghosts')
+      t.eq((h.vm:noteLabel(ghosts[idx][0])), 'C-', 'the host tile keeps the name the host was written under')
+      t.eq((h.vm:noteLabel(ghosts[idx][1])), 'D-', 'and the alternation names the step a tone above it')
+      t.eq(h.vm:noteDeviation(ghosts[idx][1]), 60,
+        'the gap it reports is the drift it inherited, not a rounding to the step it sounds nearest')
+    end,
+  },
+
+  {
+    name = 'a lane pops the readout column open for an off-step ghost, and closes it after',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1, fx = trill130 }
+      h.tm:flush()
+      local idx = noteColIdx(h, 1)
+      local col = h.vm.grid.cols[idx]
+      t.falsy(col.showCents, 'fixture check: the lane\'s own note stands on its step, so it reserves nothing')
+      local narrow = col.width
+
+      h.ec:setPos(0, idx, 1)
+      h.vm:reserveGhostReadout()
+      t.truthy(col.showCents, 'the alternation stands 30 cents off its step, so the readout needs a column')
+      t.eq(col.width, narrow + 1, 'which the lane takes for as long as the ghosts are on show')
+
+      h.ec:setPos(20, idx, 1)   -- below the host: no chain under the caret, no ghosts
+      h.vm:reserveGhostReadout()
+      t.falsy(col.showCents, 'and gives back when the caret leaves the chain')
+      t.eq(col.width, narrow, 'the lane standing as wide as its own notes ask')
     end,
   },
 

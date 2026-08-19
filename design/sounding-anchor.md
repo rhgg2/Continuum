@@ -232,6 +232,22 @@ charged by whether its two members sound together.**
    and a derived note's intent is its host's moved by that same offset
    (§ The notation is not a derivation input).
 
+1. A derived note carries an intent of its own rather than its host's. It is
+   the host's moved by the cents that note stands off it, so a whole-tone trill
+   on a note written C names C, D, C, D across its tiles rather than four C's. A
+   chord stamp reads one step out from that: a voice's intent is the trigger's
+   plus that voice's own interval from the pattern root, so a triad stamped on a
+   note written D names D, F♯ and A wherever a solve has since put the trigger.
+   The intent a voice carries in the pattern says nothing here — taken from
+   there, the trigger's drift would rename the root while the voices above it
+   stood still.
+
+1. What a chain makes of its host is not the solve's to price. The solve reads
+   the score's own notes, the host among them; a derivation's output is
+   realisation, and it stands outside that reading. An author who wants a
+   trill's alternation spelled by a solve freezes the chain first, which makes
+   those notes the score's own.
+
 1. The solve is therefore idempotent: a second run reads the same seats,
    groups the same strands, and returns the same cents. That property was
    lost once already, and cheaply — before `tuning.seatWindow` stopped its
@@ -266,6 +282,14 @@ charged by whether its two members sound together.**
    deviation today, detune arriving from a step's cents or from a retune —
    so the cursor steps from the note to the field beyond it as it does
    now, and the clipboard's lanes are unchanged.
+
+1. A ghost draws the readout as a cell does, and its column pops open to make
+   room. A lane whose own notes all stand on their steps reserves no width for
+   the readout, while the derived notes displayed over it are the caret's
+   business rather than the lane's: the width is taken while a chain's off-step
+   ghosts are on show, and given back when the caret leaves them. The readout
+   addresses no stop, so nothing the cursor holds moves as that width comes and
+   goes.
 
 1. The rule the tick drew across the pitch field becomes the mark of a
    note carrying fx, which the cell drew as a star in the separator the

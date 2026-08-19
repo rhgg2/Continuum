@@ -169,6 +169,33 @@ return {
     end,
   },
 
+  {
+    name = 'a trill\'s tiles each name a step of their own -- the host\'s, and the demand above it',
+    run = function()
+      local ctx = { resolution = 240 }
+      -- Written C, sounding 60 cents sharp of it, where a solve left it.
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 60, vel = 100, detune = 60, intentCents = 6000 },
+      } }
+      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, cents = 200 }, ctx)
+      local n = out.notes
+      t.deepEq({ n[1].intentCents, n[2].intentCents, n[3].intentCents, n[4].intentCents },
+        { 6000, 6200, 6000, 6200 },
+        'the even tiles keep the host\'s written step; the odd ones stand a whole tone above it')
+    end,
+  },
+
+  {
+    name = 'a trill off a host with no intent derives none -- the field stays sparse',
+    run = function()
+      local ctx = { resolution = 240 }
+      local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = 0 } } }
+      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, cents = 200 }, ctx)
+      t.eq(out.notes[1].intentCents, nil, 'nothing to inherit, so nothing stored')
+      t.eq(out.notes[2].intentCents, nil, 'and the alternation reads as it sounds')
+    end,
+  },
+
   ----- park predicate + windows: the single source for "what 4.5 parks over"
 
   {
@@ -478,6 +505,43 @@ return {
       } }
       local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, {})
       t.eq(#out.notes, 0, 'no lane-1 reference -> nothing stamped')
+    end,
+  },
+
+  {
+    name = 'chord-stamp voices name the trigger\'s step plus their own interval from the root',
+    run = function()
+      local chord = { kind = 'notes', specs = {
+        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 80, detune = 0 },
+        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 80, detune = -14 },
+        { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 80, detune = 2 },
+      } }
+      -- Written D, sounding 40 cents sharp of it.
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 62, vel = 90, detune = 40, ppq = 0, endppq = 240, intentCents = 6200 },
+      } }
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, {})
+      t.deepEq({ out.notes[1].intentCents, out.notes[2].intentCents, out.notes[3].intentCents },
+        { 6200, 6586, 6902 },
+        'each voice stands its own authored interval above the step the trigger was written on')
+    end,
+  },
+
+  ----- The intent a derivation carries: a derived note's name is its source's, moved
+
+  {
+    name = 'the kinds that copy a pitch copy the intent standing beside it',
+    run = function()
+      local ctx  = { resolution = 240 }
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 60, vel = 100, detune = 60, ppq = 0, endppq = 240, intentCents = 6000 },
+      } }
+      t.eq(expand('retrig', host, { kind = 'retrig', period = { 1, 2 } }, ctx).notes[1].intentCents,
+        6000, 'a retrig tile is the host note struck again')
+      t.eq(expand('arp', host, { kind = 'arp', period = { 1, 2 }, dir = 'up' }, ctx).notes[1].intentCents,
+        6000, 'an arp plays the voices it found, names and all')
+      t.eq(expand('velPattern', host, { kind = 'velPattern', pattern = { 50 } }, ctx).notes[1].intentCents,
+        6000, 'a velocity pass rewrites one field and carries the rest')
     end,
   },
 

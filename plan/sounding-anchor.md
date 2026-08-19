@@ -28,10 +28,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-20 tracker: carry a note's intent into the notes it derives (§ What the note remembers, § What the cell says)
 - 2026-08-19 tracker: store a generator's pitch demand in cents, not steps (§ The notation is not a derivation input)
 - 2026-08-19 tracker: spend or carry a note's intent when a gesture moves it (§ What the note remembers)
 - 2026-08-19 tracker: stamp the step a note was written on, spend it on a snap (§ What the note remembers)
-- 2026-08-19 tracker: name a cell from the intent its note carries (§ What the note remembers)
 
 ## Now
 
@@ -39,11 +39,6 @@
 
 ## Queued (current phase; one-liners)
 
-5b. **Derived notes carry their host's intent** — `membersOf`'s pick carries
-   `intentCents` into the generator note stream, the bodies forward it (a
-   copy verbatim, an offset moved by the cents it moved), and the specs
-   `rebuildFx` builds carry an intent of their own, `fxKey` included. A cell
-   over a derived note then names the step its host was written on.
 5c. **Steps and cents in the input** — the `stepInterval` widget becomes a
    step count and a signed cents residual over one stored cents value,
    anchored at the host's written step or at the notation's unison where

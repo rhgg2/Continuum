@@ -3471,6 +3471,39 @@ end
 --contract: per-frame overlay for the chain the caret addresses: notes to ghost, cells to suppress
 --contract: the gate is fxHostAtCursor -- a cell that runs no chain of its own answers nil
 --contract: the window is the viewport's rows, resolved on the producer's own channel
+-- The readout column a chain's off-step ghosts need, taken from a lane that reserves none of its own
+-- and given back after; nothing the cursor holds moves as it comes and goes. see design/sounding-anchor.md § What the cell says
+do
+  local popped = {}   -- the columns this widened, so it gives back exactly those
+
+  --contract: opens the readout in every lane drawing an off-step ghost, closes the ones it opened
+  --invariant: runs before the frame's column layout, which reads the widths it writes
+  function tv:reserveGhostReadout()
+    local wanted = {}
+    local fx = tm:fxRealisation(tv:fxHostAtCursor())
+    for _, n in ipairs(fx and fx.notes or {}) do
+      local col = colFor(n)
+      if col and (ctx:noteDeviation(n) or 0) ~= 0 then wanted[col] = true end
+    end
+    local pitchWidth, octaveWidth = tv:cellWidth(), tv:octaveWidth()
+    for col in pairs(wanted) do
+      if not col.showCents then
+        col.showCents = true
+        ec:decorateCol(col, pitchWidth, octaveWidth)
+        popped[col] = true
+      end
+    end
+    -- A column the last grid rebuild replaced is in neither set by now, so it drops out here.
+    for col in pairs(popped) do
+      if not wanted[col] then
+        col.showCents = nil
+        ec:decorateCol(col, pitchWidth, octaveWidth)
+        popped[col] = nil
+      end
+    end
+  end
+end
+
 --contract: notes[colIndex][row] = tm's record by reference; note columns only; first onset wins
 --contract: values[colIndex][row] = { val }; the producer's claimed targets only
 --contract: hidden[cell] = true for every plain original this chain parked; a host cell never hides

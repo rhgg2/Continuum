@@ -365,6 +365,9 @@ local function computeLayout(budgetW, budgetH)
   viewRows = math.max(1, math.floor(usableH / cellH) - HEADER - laneRows)
   tv:setGridSize(viewCols, viewRows)
 
+  -- A lane drawing an off-step ghost widens for the readout, so this stands ahead of the
+  -- layout that reads the widths. see design/sounding-anchor.md § What the cell says
+  tv:reserveGhostReadout()
   chanLeft, chanWidth, totalWidth = layoutColumns(grid.cols, scrollCol)
 end
 
@@ -778,12 +781,16 @@ local function drawTracker()
         if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted and not previewGhost then
           draw:hLine(col.x, col.x + pitchWidth - 1, y, textCol, 2 / cellH)
         end
-        if col.showCents and evt and evt.evType ~= 'pa' and not previewGhost then
-          local gap = tv:noteDeviation(evt)
+        -- The readout stands over a ghost as it does over a cell, the lane having taken the
+        -- width for it. see design/sounding-anchor.md § What the cell says
+        local measured = not previewGhost and (evt or noteGhost) or nil
+        if col.showCents and measured and measured.evType ~= 'pa' then
+          local gap = tv:noteDeviation(measured)
           if gap and gap ~= 0 then
+            local negative = noteGhost and 'ghostNegative' or 'negative'
             draw:textCentredSmall(col.x + pitchWidth, col.x + pitchWidth + 1, y,
                                   string.format('%d', math.floor(math.abs(gap) + 0.5)),
-                                  READOUT_SIZE, (gap < 0 and not muted) and 'negative' or textCol)
+                                  READOUT_SIZE, (gap < 0 and not muted) and negative or textCol)
           end
         end
       end

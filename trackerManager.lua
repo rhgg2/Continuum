@@ -634,7 +634,7 @@ end
 local function membersOf(chan, startL, endL)
   local out = {}
   eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
-    util.add(out, util.pick(evt, "pitch vel detune", { ppq = lo, endppq = hi }))
+    util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi }))
   end)
   return out
 end
@@ -884,11 +884,11 @@ end
 
 ----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
 
--- Identity is geometry: (host, ppq, endppqL, pitch, vel, detune, sample); stale endppqL still
--- matches (tail-walk-owned realised end stays out). Fields are integer at source (blob codec read).
+-- Identity is geometry and the name it carries: (host, ppq, endppqL, pitch, vel, detune, sample,
+-- intentCents); stale endppqL still matches (tail-walk-owned end stays out). A rename with no pitch move leaves every other field the same, so keying the intent is what lets the reconcile see it.
 local function fxKey(spec)
   return util.key(spec.derived, spec.ppq, spec.endppqL or 0,
-                  spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0)
+                  spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0, spec.intentCents)
 end
 
 -- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
@@ -1709,7 +1709,7 @@ local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint 
 
 -- Rebuild output, built by the fx pass behind the dirtyChans gate: a clean channel keeps its lists,
 -- a channel that ran gets them replaced, keyed by producer: the overlay draws one chain's own.
---shape: fxNotesByProducer[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived }, ... }
+--shape: fxNotesByProducer[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents] }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
 local fxNotesByProducer = {}
 
@@ -3607,6 +3607,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         util.add(regionNotes or predicted, {
           evType = 'note', chan = chan, lane = producer.lane, derived = producer.id,
           pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
+          intentCents = hit.intentCents,
           delay = producer.delay or 0, sample = producer.sample,
           ppqL = hit.ppq, endppqL = hit.endppq,
           ppq    = tm:fromLogical(chan, hit.ppq,    producer.delayPpq),
@@ -3775,6 +3776,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
                           pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
+                          intentCents = spec.intentCents,
                           delay = spec.delay, derived = spec.derived })
     end
     -- One sort per rebuild against many windowed reads; lane then pitch break onset collisions stably.
