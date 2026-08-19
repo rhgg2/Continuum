@@ -558,14 +558,12 @@ local FENCE = 1e-4
 
 ----- Coordinate conversions
 
---contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
---contract: returned octave is period-index + temper.octaveBase (at the default root, C-1 → -1)
-function tuning.midiToStep(temper, midi, detune)
-  detune = detune or 0
-  local cents  = midi * 100 + detune - temper.rootCents
+-- The step nearest a point of the absolute cents line, and the period it falls in.
+local function stepAtCents(temper, cents)
+  local rooted = cents - temper.rootCents
   local period = temper.period
-  local octave = math.floor(cents / period)
-  local res    = cents - octave * period
+  local octave = math.floor(rooted / period)
+  local res    = rooted - octave * period
   local steps  = temper.cents
 
   local best, bestDist = 1, math.abs(res - steps[1])
@@ -579,6 +577,13 @@ function tuning.midiToStep(temper, midi, detune)
   end
 
   return best, octave + temper.octaveBase
+end
+
+--contract: detune optional (defaults 0)
+--contract: snaps to nearest scale point, the period boundary rounding up to next octave's step 1
+--contract: returned octave is period-index + temper.octaveBase (at the default root, C-1 → -1)
+function tuning.midiToStep(temper, midi, detune)
+  return stepAtCents(temper, midi * 100 + (detune or 0))
 end
 
 --contract: wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
@@ -604,11 +609,20 @@ function tuning.snap(temper, midi, detune)
   return tuning.stepToMidi(temper, tuning.midiToStep(temper, midi, detune))
 end
 
+-- Where a note was written, which is not always where it sounds -- see
+-- design/sounding-anchor.md § What the note remembers.
+--contract: notation, note → the step and octave the note was written on
+--contract: the step note.intentCents stands on, or the one its pitch snaps to where it carries none
+function tuning.noteStep(notation, note)
+  if note.intentCents then return stepAtCents(notation, note.intentCents) end
+  return tuning.midiToStep(notation, note.pitch, note.detune)
+end
+
 -- The step a note is written on, taken modulo the octave the score quotients
 -- out. See design/adaptive-tuning.md § The model.
 --contract: the note's written seat reduced into the octave; an octave apart answers alike
-function tuning.stepClass(temper, midi, detune)
-  local seatMidi, seatDetune = tuning.snap(temper, midi, detune)
+function tuning.stepClass(temper, note)
+  local seatMidi, seatDetune = tuning.stepToMidi(temper, tuning.noteStep(temper, note))
   return util.round(reduceCents(seatMidi * 100 + seatDetune, OCTAVE), 1e-6)
 end
 
@@ -780,7 +794,7 @@ end
 --contract: notation, note → the cents of the note's own step, and its half-gaps below and above
 --contract: the halves stop a hair inside the edge, where the note's own step stops reading back
 function tuning.seatWindow(notation, note)
-  local step, octave = tuning.midiToStep(notation, note.pitch, note.detune)
+  local step, octave = tuning.noteStep(notation, note)
   local midi, detune = tuning.stepToMidi(notation, step, octave)
   local below, above = tuning.stepWindow(notation, step)
   return midi * 100 + detune, below - FENCE, above - FENCE
@@ -831,8 +845,7 @@ end
 -- of the notes that writes it, the note's own step seat being what the window was measured off.
 --contract: (pitch, detune) for `cents` placed in the octave nearest the note's seat
 function tuning.seat(notation, note, cents)
-  local midi, detune = tuning.snap(notation, note.pitch, note.detune)
-  local at    = midi * 100 + detune
+  local at    = tuning.seatWindow(notation, note)
   local place = at + tuning.gapTo(at, cents)
   local pitch = math.floor(place / 100 + 0.5)
   return pitch, place - pitch * 100

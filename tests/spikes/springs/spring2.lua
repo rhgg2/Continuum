@@ -27,7 +27,7 @@ local function passage(chords)
       util.add(notes, { ppq = chord.ppq, pitch = pitch, endppq = chord.ppq + (chord.len or 960) })
     end
   end
-  return sonority.strands(notes, function(e) return tuning.stepClass(edo12, e.pitch, e.detune) end)
+  return sonority.strands(notes, function(e) return tuning.stepClass(edo12, e) end)
 end
 local function chord(p) return passage{ { ppq = 0, pitches = p } } end
 local function prog(chords)
@@ -46,7 +46,7 @@ local function voiceLines(lines, beat)
       i = j + 1
     end
   end
-  return sonority.strands(notes, function(e) return tuning.stepClass(edo12, e.pitch, e.detune) end)
+  return sonority.strands(notes, function(e) return tuning.stepClass(edo12, e) end)
 end
 
 ----- per-sonority spelling beam

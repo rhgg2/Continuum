@@ -25,7 +25,7 @@ local function passage(chords)
     end
   end
   return sonority.strands(notes, function(e)
-    return tuning.stepClass(edo12, e.pitch, e.detune)
+    return tuning.stepClass(edo12, e)
   end)
 end
 
@@ -50,7 +50,7 @@ local function voiceLines(lines, beat)
     end
   end
   return sonority.strands(notes, function(e)
-    return tuning.stepClass(edo12, e.pitch, e.detune)
+    return tuning.stepClass(edo12, e)
   end)
 end
 

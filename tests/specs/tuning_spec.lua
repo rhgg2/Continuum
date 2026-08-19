@@ -50,6 +50,11 @@ local function meantone12()
                         pitches = s.pitches, stepNames = {} }
 end
 
+-- A note as the step readers take one: where it sounds, and where it was written.
+local function noteAt(pitch, detune, intentCents)
+  return { pitch = pitch, detune = detune, intentCents = intentCents }
+end
+
 -- A candidate's cents and strain are irrational in general, so a case that names
 -- one names it to four places.
 local function nearly(got, want, why)
@@ -916,29 +921,57 @@ return {
     name = 'stepClass: an exact octave shares a class, and nothing else does',
     run = function()
       local edo12 = tuning.presets['12EDO']
-      local onC   = tuning.stepClass(edo12, 60, 0)
-      t.eq(tuning.stepClass(edo12, 72, 0), onC, 'the octave above answers alike')
-      t.eq(tuning.stepClass(edo12,  0, 0), onC, 'and so does C-1, five octaves below')
-      t.eq(tuning.stepClass(edo12, 60, 30), onC, 'a note inside its window is written on the step')
-      t.truthy(tuning.stepClass(edo12, 61, 0) ~= onC, 'the semitone next door is another class')
+      local onC   = tuning.stepClass(edo12, noteAt(60, 0))
+      t.eq(tuning.stepClass(edo12, noteAt(72, 0)), onC, 'the octave above answers alike')
+      t.eq(tuning.stepClass(edo12, noteAt( 0, 0)), onC, 'and so does C-1, five octaves below')
+      t.eq(tuning.stepClass(edo12, noteAt(60, 30)), onC, 'a note inside its window is written on the step')
+      t.truthy(tuning.stepClass(edo12, noteAt(61, 0)) ~= onC, 'the semitone next door is another class')
 
       local mt = meantone12()
       local lowMidi,  lowDetune  = tuning.stepToMidi(mt, 5, 1)
       local highMidi, highDetune = tuning.stepToMidi(mt, 5, 7)
-      t.eq(tuning.stepClass(mt, highMidi, highDetune), tuning.stepClass(mt, lowMidi, lowDetune),
+      t.eq(tuning.stepClass(mt, noteAt(highMidi, highDetune)), tuning.stepClass(mt, noteAt(lowMidi, lowDetune)),
            'an unequal scale repeats its steps exactly, six octaves apart')
 
       local half = half12()
-      t.eq(tuning.stepClass(half, 72, 0), tuning.stepClass(half, 60, 0),
+      t.eq(tuning.stepClass(half, noteAt(72, 0)), tuning.stepClass(half, noteAt(60, 0)),
            'a period dividing the octave still puts the octave in the class')
-      t.truthy(tuning.stepClass(half, 66, 0) ~= tuning.stepClass(half, 60, 0),
+      t.truthy(tuning.stepClass(half, noteAt(66, 0)) ~= tuning.stepClass(half, noteAt(60, 0)),
            'where the same step index a period up is a tritone away')
 
       local bp = bp13()
       local rootMidi,  rootDetune  = tuning.stepToMidi(bp, 1, 4)
       local shortMidi, shortDetune = tuning.stepToMidi(bp, 9, 4)
-      t.truthy(tuning.stepClass(bp, shortMidi, shortDetune) ~= tuning.stepClass(bp, rootMidi, rootDetune),
+      t.truthy(tuning.stepClass(bp, noteAt(shortMidi, shortDetune)) ~= tuning.stepClass(bp, noteAt(rootMidi, rootDetune)),
            'the step 29.6c shy of the octave is a class of its own')
+    end,
+  },
+
+  {
+    name = 'noteStep: an intent names the step a note has been moved off',
+    run = function()
+      local edo12 = tuning.presets['12EDO']
+      -- Written C4 and sounding 80 cents above it, where its pitch alone reads as C#4.
+      local drifted = noteAt(61, -20, 6000)
+      local sounds  = noteAt(61, -20)
+
+      local step, octave = tuning.noteStep(edo12, drifted)
+      t.eq(step, 1, 'the step the intent stands on')
+      t.eq(octave, 4, 'in the octave it stands in')
+      t.eq((tuning.noteStep(edo12, sounds)), 2, 'where with none to read the pitch names the step')
+
+      nearly(tuning.seatWindow(edo12, drifted), 6000, 'the seat is the step it was written on')
+      nearly(tuning.seatWindow(edo12, sounds), 6100, 'and the step it sounds on, with no intent')
+      t.eq(tuning.stepClass(edo12, drifted), tuning.stepClass(edo12, noteAt(60, 0)),
+           'the class is C, whatever the pitch says')
+
+      -- Both seats hold the same classes, so only a point near the tritone tells them
+      -- apart: a class is placed in the octave nearest its anchor, and the two anchors
+      -- stand a semitone apart.
+      local pitch, detune = tuning.seat(edo12, drifted, 600)
+      t.eq(pitch, 54, 'the tritone is placed below the written seat, at F#3')
+      nearly(detune, 0, 'on the step itself')
+      t.eq((tuning.seat(edo12, sounds, 600)), 66, 'and above the sounding one, at F#4')
     end,
   },
 

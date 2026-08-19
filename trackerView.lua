@@ -2076,16 +2076,14 @@ end
 
 -- The scope's notes as strands: those of a step-class that overlap over their
 -- render clip, not the authored ceiling on endppq -- see design/adaptive-tuning.md § The strand.
---shape: strandNote = { ppq, endppq=<the render clip>, pitch, detune, event=<what seatStrand writes> }
+--shape: strandNote = { ppq, endppq=<the render clip>, pitch, detune, intentCents, event=<what seatStrand writes> }
 local function strandsOf(notes, notation)
   local clipped = {}
   for k, e in ipairs(notes) do
     clipped[k] = { ppq = e.ppq, endppq = e.endppqC, pitch = e.pitch, detune = e.detune,
-                   event = e }
+                   intentCents = e.intentCents, event = e }
   end
-  return sonority.strands(clipped, function(n)
-    return tuning.stepClass(notation, n.pitch, n.detune)
-  end)
+  return sonority.strands(clipped, function(n) return tuning.stepClass(notation, n) end)
 end
 
 -- A strand's tuning, seated on every note that writes it, in that note's own register.
@@ -2108,7 +2106,7 @@ local function shortlisted(notes, notation, target, keyStep, widen)
     local note = strand.notes[1]
     strand.shortlist = tuning.shortlist(notation, target, keyStep, note, widen)
     if #strand.shortlist == 0 then
-      nowhere[(tuning.midiToStep(notation, note.pitch, note.detune))] = true
+      nowhere[(tuning.noteStep(notation, note))] = true
     end
   end
 

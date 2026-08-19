@@ -89,7 +89,7 @@ for k, note in ipairs(notes) do
 end
 
 local strands = sonority.strands(clipped, function(note)
-  return tuning.stepClass(notation, note.pitch, note.detune)
+  return tuning.stepClass(notation, note)
 end)
 
 return { strands = strands, notation = notation, target = target, notes = notes }

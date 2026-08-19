@@ -27,7 +27,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-19 tuning: read a note's step from the intent it carries (§ What the note remembers)
 
 ## Now
 
@@ -35,14 +35,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The seam** — `tuning.noteStep(notation, note)` gives a note's written
-   step and octave, reading `note.intentCents` where the note carries one and
-   falling back to `(pitch, detune)` as today. `seatWindow`, `seat` and
-   `stepClass` take a note and route through it, and `strandsOf` carries the
-   field onto the notes it clips, so `sonority.seats` seats and the strands
-   group on the written step. Spec in `tuning_spec` for a note whose intent
-   stands 80¢ from where it sounds; `tests/spikes/springs/take.lua` follows
-   `stepClass`'s signature.
 2. **The view** — `ctx:noteLabel` names the cell from the intent where a note
    carries one, and `ctx:noteDeviation` measures the tick's gap from it, that
    gap now being free to exceed the window half it returns beside it.

@@ -117,7 +117,7 @@ local TAKE_NOTES = {
 }
 local TAKE_MOVES = { '16/15','9/8','6/5','5/4','4/3','3/2','8/5','5/3','16/9','15/8','2/1' }
 local function takeStrands()
-  return sonority.strands(TAKE_NOTES, function(e) return tuning.stepClass(edo12, e.pitch, e.detune) end)
+  return sonority.strands(TAKE_NOTES, function(e) return tuning.stepClass(edo12, e) end)
 end
 
 local runs = {}

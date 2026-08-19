@@ -19,6 +19,9 @@
 --
 -- Either facility reads a note's render clip rather than its authored ceiling, so an
 -- open tail sounds to the next onset in its lane rather than to the end of the take.
+--
+-- A note carrying an intent is stranded and seated on the step that intent names rather
+-- than on the step its pitch reads as (design/sounding-anchor.md § What the note remembers).
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -52,9 +55,9 @@ local function mk(harness, notes, temper, tempers)
   return h
 end
 
-local function note(ppq, pitch, detune)
+local function note(ppq, pitch, detune, intentCents)
   return { ppq = ppq, endppq = ppq + 60, chan = 1, pitch = pitch, vel = 100,
-           detune = detune, delay = 0 }
+           detune = detune, delay = 0, intentCents = intentCents }
 end
 
 local function lane1(h)
@@ -264,6 +267,23 @@ return {
       local chord = chordAt(h, 0)
       near(chord[70], offset('7/4', 10), 'the seventh still takes 7/4')
       near(chord[82], offset('7/4', 10), 'and its octave takes it an octave up')
+    end,
+  },
+
+  {
+    name = 'a note moved off its step strands with the class its intent names',
+    run = function(harness)
+      local notes = c7()
+      -- The seventh's octave, sounding 80 cents above the Bb it was written on: read off
+      -- its pitch it is a B of its own, and strands and shortlists as one.
+      notes[5] = note(0, 83, -20, 8200)
+      local h = mk(harness, notes, '12EDO', { SEPTIMAL = SEPTIMAL })
+      h.vm:retune{ scope = 'all', strength = 1, target = 'SEPTIMAL', key = 1,
+                   facility = 'points', sonoritySize = 5, harmonicLock = 0.5 }
+      local chord = chordAt(h, 0)
+      t.truthy(chord[82], 'the drifted octave is seated in the register it was written in')
+      near(chord[70], offset('7/4', 10), 'the seventh takes 7/4')
+      near(chord[82], offset('7/4', 10), 'and the octave of it takes 7/4 too')
     end,
   },
 

@@ -199,11 +199,12 @@ charged by whether its two members sound together.**
 1. Two functions in the view derive a note's step, and both read the
    intent where it is present: `ctx:noteLabel` names the cell, and
    `ctx:noteDeviation` measures the gap the grid's tick draws
-   (`viewContext.lua:29`, `viewContext.lua:36`). Two in the solve do the
-   same: `strandsOf` groups notes into strands by step-class, and
-   `sonority.seats` reads each strand's seat and window
-   (`trackerView.lua:2087`, `sonority.lua:684`). Two in the generators do
-   the same: `stepOp` transposes a trill's alternation from its host, and
+   (`viewContext.lua:29`, `viewContext.lua:36`). Three in the solve do the
+   same: `strandsOf` groups notes into strands by step-class,
+   `sonority.seats` reads each strand's seat and window, and `shortlisted`
+   names a step the target left nowhere to go, that step being the one whose
+   window refused it (`trackerView.lua:2087`, `sonority.lua:684`,
+   `trackerView.lua:2111`). Two in the generators do the same: `stepOp` transposes a trill's alternation from its host, and
    `stepsBetween` rebases a chord stamp on its trigger
    (`trackerManager.lua:3483`, `trackerManager.lua:3486`).
 
