@@ -1,0 +1,70 @@
+# Sounding anchor — plan
+
+> source: `design/sounding-anchor.md` — synthesis compiled from there;
+> don't design here.
+
+## Phases
+
+1. **Phase 1 — The intent** (§ What the note remembers) — a note stores the
+   cents of the step it was written on; the view and the solve read it where
+   it is present, and the sites that write a detune set it, clear it or move
+   it.  ← in flight
+2. **Phase 2 — Wall and ruler** (§ Both wall and ruler, § What the beam
+   loses) — the pull's strain becomes cents over fifty, `settle` collapses to
+   a weighted mean with no clamp and no branch, and the beam's reach gate
+   goes; the moves solve stops reading a window.
+3. **Phase 3 — Presence** (§ Presence, § Springs price beating) — a presence
+   per member per onset, `RECENT` where the sonority holds a class by recency
+   alone, weighting every spring in `springCost`, `ties`, `joinCost` and
+   `settle`; the box keeps its full weight.
+4. **Phase 4 — The ambient reference** (§ The ambient reference, § Fixed at
+   birth) — a strand's rest is the presence-weighted mean of the sonority it
+   was born into, read once off `answer.displacement`, charged by the pull
+   and carried in the merge key.
+5. **Phase 5 — The dials remeasured** (§ The dials, § Open) — the beam's
+   width and the walk's cap re-swept with the gate gone, harmonic lock's
+   opening value and useful span, and a value for `RECENT`.
+
+## Landed  (newest first; prune below ~4)
+
+(nothing yet)
+
+## Now
+
+(empty — run /plan-next to compile the next brief.)
+
+## Queued (current phase; one-liners)
+
+1. **The seam** — `tuning.noteStep(notation, note)` gives a note's written
+   step and octave, reading `note.intentCents` where the note carries one and
+   falling back to `(pitch, detune)` as today. `seatWindow`, `seat` and
+   `stepClass` take a note and route through it, and `strandsOf` carries the
+   field onto the notes it clips, so `sonority.seats` seats and the strands
+   group on the written step. Spec in `tuning_spec` for a note whose intent
+   stands 80¢ from where it sounds; `tests/spikes/springs/take.lua` follows
+   `stepClass`'s signature.
+2. **The view** — `ctx:noteLabel` names the cell from the intent where a note
+   carries one, and `ctx:noteDeviation` measures the tick's gap from it, that
+   gap now being free to exceed the window half it returns beside it.
+3. **The stamp** — `seatStrand` writes `intentCents` beside `(pitch, detune)`
+   on every note either facility seats, taking each note's own written seat
+   before the move so that a second solve reads what the first did. The field
+   joins `toParkedSpec`'s pick and `patternEditor`'s two body picks, which
+   would otherwise drop it. `vm_retune_spec` pins the idempotence.
+4. **Clearing** — typing a note over an old one clears the field, and so does
+   the notation snap. A transpose reads it for the step it steps from, seats
+   the note on the step it arrives at and then clears it; a move of a whole
+   number of 2/1 octaves is the exception, carrying the intent with the note.
+   `nudgePitch` and the octave digit in `editEvent` both move this way, and
+   `DIGIT_FIELD.pitch` gains the field so the gesture's backspace restores it.
+5. **Derived notes** — `membersOf`'s pick carries `intentCents` into the
+   generator note stream, `stepOp` and `stepsBetween` step from a host's
+   written step rather than from where it sounds, and the specs `rebuildFx`
+   builds carry an intent of their own, `fxKey` included. A trill or a chord
+   stamp over a drifted host then spells from the step the host was written
+   on.
+6. **Docs** — `docs/tuning.md` gains the intent rung, intent cents being
+   realised as detune against a notation where detune is realised as pb
+   against a channel; the ladder line at `trackerManager.lua:5` follows it,
+   and `design/decisions.md` records the retirement of the rule that a step is
+   never stored.

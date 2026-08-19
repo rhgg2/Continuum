@@ -1,6 +1,7 @@
 # Sounding anchor — a note is tuned against what sounds, not against the page
 
-> opened: 2026-08-19 · status: working design; not started
+> opened: 2026-08-19 · status: in flight — plan/sounding-anchor.md, at
+> phase 1 (the intent)
 
 **The moves solve stops anchoring a note to the step it was written on:
 the pull prices drift rather than the window forbidding it, a strand
@@ -152,7 +153,7 @@ charged by whether its two members sound together.**
 ## What the note remembers
 
 1. A note gains an **intent cents** — the absolute cents of the step it
-   was written on, stored beside its pitch and detune. Where the field is
+   was written on, stored as `intentCents` beside its pitch and detune. Where the field is
    present it is the origin a solve measures displacement from and the
    step the view names the cell from, and `(pitch, detune)` then says only
    where the note sounds. A note no solve has touched carries none, and
@@ -173,14 +174,22 @@ charged by whether its two members sound together.**
    the notation that indexed it. Cents re-read correctly when the active
    temper changes, which is what `(pitch, detune)` does today.
 
-1. The field is sparse, and the paths that write it are few. A moves
-   solve sets it on every note it seats, whether or not that note leaves
-   its step, so a cell's name never turns on how far the solve happened to
-   move it; the notation snap clears it, snapping to the temper being an
-   instruction to reassert the page; typing a note over an old one clears
-   it. A transpose moves it with the note, and reads the
-   intent rather than the sounding pitch, or a note written C and
-   sounding 80¢ sharp would transpose from C♯.
+1. The field is sparse, and the paths that write it are few. A solve sets
+   it on every note it seats, whether or not that note leaves its step, so
+   a cell's name never turns on how far the solve happened to move it;
+   both facilities set it, a widened points shortlist being as free to
+   place a note past its window's edge as a chain of moves is. The
+   notation snap clears it, snapping to the temper being an instruction to
+   reassert the page, and typing a note over an old one clears it.
+
+1. A transpose reads the intent and then discards it. It steps from the
+   step the note was written on rather than from where it sounds — a note
+   written C and sounding 80¢ sharp would otherwise transpose from C♯ —
+   and seats the note on the step it arrives at, the cents a solve found
+   for one chord saying nothing about the chord the note is transposed
+   into. A move of a whole number of 2/1 octaves is the exception: the
+   pitch class is what the solve tuned, so the intent rides up or down
+   with the note and the drift is kept.
 
 1. The intent/realisation ladder gains a rung. Detune was intent and
    pitch bend its realisation (`trackerManager.lua:5`); now intent cents
@@ -193,7 +202,10 @@ charged by whether its two members sound together.**
    (`viewContext.lua:29`, `viewContext.lua:36`). Two in the solve do the
    same: `strandsOf` groups notes into strands by step-class, and
    `sonority.seats` reads each strand's seat and window
-   (`trackerView.lua:2087`, `sonority.lua:684`).
+   (`trackerView.lua:2087`, `sonority.lua:684`). Two in the generators do
+   the same: `stepOp` transposes a trill's alternation from its host, and
+   `stepsBetween` rebases a chord stamp on its trigger
+   (`trackerManager.lua:3483`, `trackerManager.lua:3486`).
 
 1. The solve is therefore idempotent: a second run reads the same seats,
    groups the same strands, and returns the same cents. That property was
@@ -435,7 +447,8 @@ charged by whether its two members sound together.**
 
 1. A dozen sites write a note's detune, and each must be taught what to
    do with the intent beside it. Most copy it or clear it; the transpose
-   moves it, and reads it rather than the sounding pitch.
+   reads it for the step it steps from and then clears it, and the
+   generators' step arithmetic reads it to spell a derived note.
 
 1. Nothing bounds the drift of a long piece but its first onset. A
    passage returning to its opening chord may return to it flat, and no
