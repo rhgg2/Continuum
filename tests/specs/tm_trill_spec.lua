@@ -1,17 +1,18 @@
 -- Note macros, v1: trill (structural, second kind). Trill alternates the host
--- pitch with a note `step` scale-steps away, resolved through the temper to
+-- pitch with a note `cents` away from what it sounds, the remainder landing as
 -- per-fxNote detune -- which the absorber pass realises once the 4.9 gather
--- unions derived lane-1 fxNotes. G4 runs microtonally (19EDO) under swing+delay:
+-- unions derived lane-1 fxNotes. G4 runs microtonally under swing+delay:
 -- the frame/rounding AND detune/absorber round-trip tripwire.
 
 local t      = require('support')
 local util   = require('util')
-local tuning = require('tuning')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
--- whole-tone trill: two scale steps, 1/4-QN period.
-local trill2 = { { kind = 'trill', period = { 1, 4 }, step = 2 } }
+-- whole-tone trill: 200 cents, 1/4-QN period.
+local trill2 = { { kind = 'trill', period = { 1, 4 }, cents = 200 } }
+-- microtonal trill: 130 cents, so the alternation lands a pitch up with 30 cents of detune.
+local trillMicro = { { kind = 'trill', period = { 1, 4 }, cents = 130 } }
 
 -- Matches tm's centsToRaw at the default pbRange (2 semitones = 200 cents).
 local function cents2raw(c) return util.clamp(util.round(c * 8192 / 200), -8192, 8191) end
@@ -51,16 +52,16 @@ return {
   ----- G4 -- round-trip stability (FIRST: frame + detune/absorber rounding tripwire)
 
   {
-    name = 'G4: flush -> rebuild -> flush byte-identical (trill, 19EDO, swing + delay)',
+    name = 'G4: flush -> rebuild -> flush byte-identical (trill, microtonal, swing + delay)',
     run = function(harness)
       local h = harness.mk{
         config = {
-          project = { swings = { ['c58'] = classic58 }, temper = '19EDO' },
+          project = { swings = { ['c58'] = classic58 } },
         },
         data = { swing = { global = 'c58' } },
       }
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
-                      vel = 100, detune = 0, delay = 500, lane = 1, fx = trill2 })
+                      vel = 100, detune = 0, delay = 500, lane = 1, fx = trillMicro })
       h.tm:flush()
 
       -- Expansion + microtonal detune + absorbers must actually have happened --
@@ -99,12 +100,12 @@ return {
       t.deepEq({ fns[1].ppq, fns[2].ppq, fns[3].ppq, fns[4].ppq }, { 0, 60, 120, 180 },
         'fxNote onsets tile the window from its start')
       t.deepEq({ fns[1].pitch, fns[2].pitch, fns[3].pitch, fns[4].pitch }, { 60, 62, 60, 62 },
-        'even tiles carry the host pitch; odd tiles step +2 semitones')
+        'even tiles carry the host pitch; odd tiles stand 200 cents above it')
       for _, fn in ipairs(fns) do
         t.eq(fn.vel, 100, 'trill carries host velocity (no ramp)')
-        t.eq(fn.detune or 0, 0, '12EDO: a +2-step trill has no detune')
+        t.eq(fn.detune or 0, 0, 'a whole-semitone demand needs no detune')
       end
-      t.eq(#pbsByPpq(dump), 0, '12EDO trill seats no absorbers')
+      t.eq(#pbsByPpq(dump), 0, 'a trill with no detune seats no absorbers')
     end,
   },
 
@@ -113,14 +114,12 @@ return {
   {
     name = 'a microtonal trill seats absorbers at the alternation fxNote seats',
     run = function(harness)
-      local h = harness.mk{ config = { project = { temper = '19EDO' } } }
+      local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
-                      vel = 100, detune = 0, delay = 0, lane = 1, fx = trill2 })
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = trillMicro })
       h.tm:flush()
 
-      local temper = tuning.presets['19EDO']
-      local _, altDetune = tuning.transposeStep(temper, 60, 0, 2)
-      local R = cents2raw(altDetune)
+      local R = cents2raw(30)   -- 130 cents places as pitch 61 carrying 30 cents
 
       -- Realised lane-1: host@0(d=0) alt@60(d=alt) host@120(d=0) alt@180(d=alt).
       -- Anchor at 0 (pb-active channel), then one absorber per detune transition.
@@ -131,6 +130,29 @@ return {
       t.deepEq({ pbs[1].val, pbs[2].val, pbs[3].val, pbs[4].val }, { 0, R, 0, R },
         'alternation seats carry the stepped detune; return seats re-centre')
       for _, pb in ipairs(pbs) do t.eq(pb.derived, 'absorber', 'every seat is a fake absorber') end
+    end,
+  },
+
+  ----- The notation is not a derivation input -- a lens change renames, never re-sounds
+
+  {
+    name = 'a temper change leaves the trill it renames sounding as it was',
+    run = function(harness)
+      local h = harness.mk()   -- 12EDO floor
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = trill2 })
+      h.tm:flush()
+
+      local host = h.tm:getChannel(1).parked[1]
+      local fns  = fxNotesOf(h.fm:dump(), host.uuid)
+      t.deepEq({ fns[2].pitch, fns[2].detune or 0 }, { 62, 0 },
+        'the alternation stands 200 cents above the host')
+
+      -- Two steps of 19EDO is 126.3 cents, so a step-resolved trill would move here.
+      local before = fullView(h.fm:dump())
+      h.cm:set('project', 'temper', '19EDO')
+      h.tm:flush()
+      t.deepEq(fullView(h.fm:dump()), before, 'the notation moved and the derived notes did not')
     end,
   },
 

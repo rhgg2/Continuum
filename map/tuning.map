@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=906  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=908  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4
@@ -6,10 +6,10 @@
   @invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here  @ 6
   @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via stepToParts  @ 7
   @invariant  an octave is period-index + octaveBase; default root makes it MIDI-relative (C4 → 4)  @ 8
-  @contract  a ratio temper read as intervals from its unison: {cents, coords, height} per move  @ 784
-  @contract  every pitch and its inversion, deduped by coords; cents octave-reduced  @ 785
-  @contract  simplest first by height, so the last move states the set's complexity bound  @ 786
-  @contract  raises where a pitch is not a ratio, isTarget being what a move set must pass  @ 787
+  @contract  a ratio temper read as intervals from its unison: {cents, coords, height} per move  @ 786
+  @contract  every pitch and its inversion, deduped by coords; cents octave-reduced  @ 787
+  @contract  simplest first by height, so the last move states the set's complexity bound  @ 788
+  @contract  raises where a pitch is not a ratio, isTarget being what a move set must pass  @ 789
 
 # Shapes
   @shape  Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, rootPitch=int?, rootDetune=cents?, rootStep=int?, rootOctave=int?, cents=number[derived], period=cents[derived], rootCents=cents[derived], octaveBase=int[derived], octaveStep=int, octaveWidth=int, cellWidth=int}  @ 9
@@ -24,8 +24,9 @@
   @const OCTAVE = 1200  @ 550
   @const REACH_TOL = 1e-9  @ 553
   @const FENCE = 1e-4  @ 557
-  @const weights = {}  @ 732
-  @const MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', '...  @ 891
+  @const placeCents = tuning.placeCents  @ 613
+  @const weights = {}  @ 734
+  @const MIDI_NAMES = { 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', '...  @ 893
 
 # Private functions
   -- Temperament presets
@@ -71,18 +72,15 @@
   @fn stepCents(temper, step, octave)  @ 591-596
       -- The absolute cents a step stands at, unclamped: a step past either end of MIDI range
       -- still has a place on the line, and the size of a move is measured before the clamp.
-  @fn placeCents(cents)  @ 600-611
-      -- A point of the cents line as MIDI. Overflow either end folds into the detune rather
-      -- than being dropped, which is how a caller reads a move it has to refuse.
-  @fn isOctaves(cents)  @ 657-660
+  @fn isOctaves(cents)  @ 659-662
       -- A whole number of 2/1 octaves, whatever the notation repeats at: the pitch class is
       -- what a solve tuned, so a move by one leaves a note's tuning standing.
   -- Targets
-  @fn addOddFactors(n, coords, sign)  @ 688-699
+  @fn addOddFactors(n, coords, sign)  @ 690-701
       -- The odd primes of `n` accumulated into `coords` at `sign`. Twos are divided
       -- out first; whatever survives trial division past sqrt(n) is itself a prime.
-  @fn weight(prime)  @ 733-737
-  @fn coordKey(coords)  @ 771-780
+  @fn weight(prime)  @ 735-739
+  @fn coordKey(coords)  @ 773-782
       -- Coords fix a ratio up to the octave, so they identify a move outright: same coords,
       -- same reduced cents. Sorted, so a temper's two spellings of one move key alike.
 
@@ -148,121 +146,124 @@
       @contract  detune optional (defaults 0)  @ 582
       @contract  snaps to nearest scale point, the period boundary rounding up to next octave's step 1  @ 583
       @contract  returned octave is period-index + temper.octaveBase (at the default root, C-1 → -1)  @ 584
-  @api tuning.stepToMidi(temper, step, octave)  @ 615-617
-      @contract  wraps out-of-range step by adjusting octave  @ 613
-      @contract  clamps midi to 0..127 by folding overflow into detune (never silently drops)  @ 614
-  @api tuning.snap(temper, midi, detune)  @ 619-621
-  @api tuning.noteStep(notation, note)  @ 627-630
+  @api tuning.placeCents(cents)  @ 601-612
+      -- A point of the cents line as MIDI. Overflow either end folds into the detune rather
+      -- than being dropped, which is how a caller reads a move it has to refuse.
+      @contract  cents → (pitch, detune); the split is MIDI arithmetic, with no notation in it  @ 600
+  @api tuning.stepToMidi(temper, step, octave)  @ 617-619
+      @contract  wraps out-of-range step by adjusting octave  @ 615
+      @contract  clamps midi to 0..127 by folding overflow into detune (never silently drops)  @ 616
+  @api tuning.snap(temper, midi, detune)  @ 621-623
+  @api tuning.noteStep(notation, note)  @ 629-632
       -- Where a note was written, which is not always where it sounds -- see
       -- design/sounding-anchor.md § What the note remembers.
-      @contract  notation, note → the step and octave the note was written on  @ 625
-      @contract  the step note.intentCents stands on, or the one its pitch snaps to where it carries none  @ 626
-  @api tuning.stepClass(temper, note)  @ 635-638
+      @contract  notation, note → the step and octave the note was written on  @ 627
+      @contract  the step note.intentCents stands on, or the one its pitch snaps to where it carries none  @ 628
+  @api tuning.stepClass(temper, note)  @ 637-640
       -- The step a note is written on, taken modulo the octave the score quotients
       -- out. See design/adaptive-tuning.md § The model.
-      @contract  the note's written seat reduced into the octave; an octave apart answers alike  @ 634
-  @api tuning.stepWindow(temper, step)  @ 641-647
-      @contract  half-gaps in cents to steps below/above `step`; both positive, wraps the period  @ 640
-  @api tuning.transposeStep(temper, midi, detune, n)  @ 650-653
-      @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 649
-  @api tuning.transposeNote(temper, note, n)  @ 667-675
+      @contract  the note's written seat reduced into the octave; an octave apart answers alike  @ 636
+  @api tuning.stepWindow(temper, step)  @ 643-649
+      @contract  half-gaps in cents to steps below/above `step`; both positive, wraps the period  @ 642
+  @api tuning.transposeStep(temper, midi, detune, n)  @ 652-655
+      @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 651
+  @api tuning.transposeNote(temper, note, n)  @ 669-677
       -- A transpose steps from where a note was written rather than from where it sounds.
       -- see design/sounding-anchor.md § What the note remembers
-      @contract  temper, note, n steps → the pitch, detune and intent cents of the note moved n steps  @ 664
-      @contract  a move of whole 2/1 octaves keeps the note's drift and carries its intent  @ 665
-      @contract  any other move seats the note on the step it lands on and spends the intent  @ 666
-  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 678-682
-      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 677
-  @api tuning.coords(token)  @ 704-714
+      @contract  temper, note, n steps → the pitch, detune and intent cents of the note moved n steps  @ 666
+      @contract  a move of whole 2/1 octaves keeps the note's drift and carries its intent  @ 667
+      @contract  any other move seats the note on the step it lands on and spends the intent  @ 668
+  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 680-684
+      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 679
+  @api tuning.coords(token)  @ 706-716
       -- Numerator and denominator are factorised apart and their exponents subtracted,
       -- so 6/4 and 3/2 read alike and a prime on both sides cancels rather than sitting at zero.
-      @contract  ratio token -> {[oddPrime]=exponent}, prime 2 divided out; nil for cents or n\m  @ 703
-  @api tuning.ratio(coords)  @ 719-729
+      @contract  ratio token -> {[oddPrime]=exponent}, prime 2 divided out; nil for cents or n\m  @ 705
+  @api tuning.ratio(coords)  @ 721-731
       -- The odd primes multiplied back out, then doubled or halved into the octave; coords carry no
       -- power of two, so this inverts tuning.coords up to that reduction.
-      @contract  {[oddPrime]=exponent} → the octave-reduced ratio token they name  @ 718
-  @api tuning.height(coords)  @ 742-748
+      @contract  {[oddPrime]=exponent} → the octave-reduced ratio token they name  @ 720
+  @api tuning.height(coords)  @ 744-750
       -- Read off the coords, so an unreduced token costs the interval it sounds, not its terms.
       -- See docs/tuning.md § A temper read as moves.
-      @contract  coords → the octave-free Tenney height of the ratio they name: Σ |exponent| × log₂ p  @ 741
-  @api tuning.cents(coords)  @ 753-759
+      @contract  coords → the octave-free Tenney height of the ratio they name: Σ |exponent| × log₂ p  @ 743
+  @api tuning.cents(coords)  @ 755-761
       -- Read signed where the height reads absolute, so a descent comes out negative;
       -- prime 2 is divided out of coords, so the figure is exact only up to the octave.
-      @contract  coords → Σ exponent × 1200 log₂ p: the cents of the ratio they name, octave-free  @ 752
-  @api tuning.isTarget(temper)  @ 762-767
-      @contract  true when every pitch of `temper` is a ratio, so its points carry coords to score  @ 761
-  @api tuning.moves(temper)  @ 788-816
+      @contract  coords → Σ exponent × 1200 log₂ p: the cents of the ratio they name, octave-free  @ 754
+  @api tuning.isTarget(temper)  @ 764-769
+      @contract  true when every pitch of `temper` is a ratio, so its points carry coords to score  @ 763
+  @api tuning.moves(temper)  @ 790-818
       -- A move set read as intervals from its unison, per docs/tuning.md § A temper read as
       -- moves; an inversion carries the same height, so it sorts beside the move it inverts.
-  @api tuning.gapTo(seat, cents)  @ 821-823
+  @api tuning.gapTo(seat, cents)  @ 823-825
       -- The gap from a seat to a point of the octave-reduced line, signed and reduced so a
       -- point below the seat reads as a descent, not an ascent; sonority's springs read it too.
-      @contract  cents - seat, reduced to the nearest octave  @ 820
-  @api tuning.seatWindow(notation, note)  @ 829-834
+      @contract  cents - seat, reduced to the nearest octave  @ 822
+  @api tuning.seatWindow(notation, note)  @ 831-836
       -- A note's own step: where it seats, and how far its window reaches either side.
       -- The shortlist, the reach and the root are all measured off it.
-      @contract  notation, note → the cents of the note's own step, and its half-gaps below and above  @ 827
-      @contract  the halves stop a hair inside the edge, where the note's own step stops reading back  @ 828
-  @api tuning.shortlist(notation, target, keyStep, note, widen)  @ 841-875
+      @contract  notation, note → the cents of the note's own step, and its half-gaps below and above  @ 829
+      @contract  the halves stop a hair inside the edge, where the note's own step stops reading back  @ 830
+  @api tuning.shortlist(notation, target, keyStep, note, widen)  @ 843-877
       -- The only place the notation and the target meet. See design/adaptive-tuning.md
       -- § What the solver takes for why the line is reduced into the octave.
-      @contract  candidates {cents, coords, strain} for the target's points inside the note's step window  @ 838
-      @contract  strain is the point's gap over the window half it lies in; nearest first  @ 839
-      @contract  widen: where the window holds nothing, the nearest points instead, at strain past 1  @ 840
-  @api tuning.seat(notation, note, cents)  @ 880-885
+      @contract  candidates {cents, coords, strain} for the target's points inside the note's step window  @ 840
+      @contract  strain is the point's gap over the window half it lies in; nearest first  @ 841
+      @contract  widen: where the window holds nothing, the nearest points instead, at strain past 1  @ 842
+  @api tuning.seat(notation, note, cents)  @ 882-887
       -- The shortlist's fold in reverse: a point the strand took, in the register of one
       -- of the notes that writes it, the note's own step seat being what the window was measured off.
-      @contract  (pitch, detune) for `cents` placed in the octave nearest the note's seat  @ 879
+      @contract  (pitch, detune) for `cents` placed in the octave nearest the note's seat  @ 881
   -- Display
-  @api tuning.midiName(pitch)  @ 894-896
-      @contract  MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')  @ 893
-  @api tuning.stepToParts(temper, step, octave)  @ 899-904
-      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 898
+  @api tuning.midiName(pitch)  @ 896-898
+      @contract  MIDI number → untempered twelve-name spelling (0 → 'C-1', 60 → 'C4')  @ 895
+  @api tuning.stepToParts(temper, step, octave)  @ 901-906
+      @contract  (note, octaveLabel=|octave|, negative); name or degree+'-'; octave+1 at octaveStep  @ 900
 
 # Uses (outbound edges)
-  @use call    util.add  @ parseScalaPitches:181 parseScalaFile:191,198 scalaToTemper:216 edoDegrees:235,240,245 degreesToSpec:254 genHarmonics:272 genSubharmonics:279 parseChord:290 combinations:313 genCPS:331 genDiamond:372 genTenney:422,442 stepSpectrum:495,503 genRank2:524 coordKey:776,777 moves:798 shortlist:850,867
+  @use call    util.add  @ parseScalaPitches:181 parseScalaFile:191,198 scalaToTemper:216 edoDegrees:235,240,245 degreesToSpec:254 genHarmonics:272 genSubharmonics:279 parseChord:290 combinations:313 genCPS:331 genDiamond:372 genTenney:422,442 stepSpectrum:495,503 genRank2:524 coordKey:778,779 moves:800 shortlist:852,869
   @use call    util.deepClone  @ unrooted:135
-  @use call    util.key  @ coordKey:779
-  @use call    util.keys  @ coordKey:772
-  @use call    util.round  @ stepClass:637
+  @use call    util.key  @ coordKey:781
+  @use call    util.keys  @ coordKey:774
+  @use call    util.round  @ stepClass:639
   @use require util  @ <load>:10
 
 # Calls (intra-file)
-  @call addOddFactors  @ coords:708,709
-  @call asRatio  @ genRank2:514,515 coords:705
+  @call addOddFactors  @ coords:710,711
+  @call asRatio  @ genRank2:514,515 coords:707
   @call combinations  @ genCPS:328
   @call computeCellWidth  @ derive:96
   @call computeOctaveStep  @ derive:92
   @call computeRootCents  @ derive:93
-  @call coordKey  @ moves:795
+  @call coordKey  @ moves:797
   @call echelon  @ genTenney:433
   @call edo  @ <load>:152,155,159,164
   @call gcd  @ genCPS:340 genDiamond:368 stackRatio:487
-  @call isOctaves  @ transposeNote:671
+  @call isOctaves  @ transposeNote:673
   @call octaveFieldWidth  @ computeCellWidth:57 derive:95
-  @call octaveLabel  @ octaveFieldWidth:38 stepToParts:903
-  @call placeCents  @ stepToMidi:616 transposeNote:671,673
+  @call octaveLabel  @ octaveFieldWidth:38 stepToParts:905
   @call primeFactorsBelow  @ genDiamond:368
-  @call reduceCents  @ stepSpectrum:495 genRank2:521 stepClass:637 moves:798 gapTo:822 shortlist:847
+  @call reduceCents  @ stepSpectrum:495 genRank2:521 stepClass:639 moves:800 gapTo:824 shortlist:849
   @call restateOnUnison  @ removeStep:128
   @call stackRatio  @ genRank2:520
-  @call stepAtCents  @ midiToStep:586 noteStep:628
-  @call stepCents  @ stepToMidi:616 transposeNote:669,670
+  @call stepAtCents  @ midiToStep:586 noteStep:630
+  @call stepCents  @ stepToMidi:618 transposeNote:671,672
   @call stepSpectrum  @ mosInfo:534 nextMosSize:544
-  @call tuning.coords  @ genTenney:416,420 isTarget:764 moves:804 shortlist:850
+  @call tuning.coords  @ genTenney:416,420 isTarget:766 moves:806 shortlist:852
   @call tuning.derive  @ unrooted:137 edo:143 scalaToTemper:217
-  @call tuning.gapTo  @ shortlist:848 seat:882
-  @call tuning.height  @ genTenney:416,442 moves:800
-  @call tuning.isTarget  @ moves:789
-  @call tuning.midiToStep  @ snap:620 noteStep:629 transposeStep:651 stepsBetween:679,680
-  @call tuning.noteStep  @ stepClass:636 transposeNote:668 seatWindow:830
+  @call tuning.gapTo  @ shortlist:850 seat:884
+  @call tuning.height  @ genTenney:416,442 moves:802
+  @call tuning.isTarget  @ moves:791
+  @call tuning.midiToStep  @ snap:622 noteStep:631 transposeStep:653 stepsBetween:681,682
+  @call tuning.noteStep  @ stepClass:638 transposeNote:670 seatWindow:832
   @call tuning.ratio  @ genTenney:442
   @call tuning.scalaPitch  @ scalaPitch:69 derive:85,89 sortSteps:112 scalaToTemper:209,214 genCPS:344 genDiamond:376 genTenney:459 genRank2:516 mosInfo:534 nextMosSize:541
-  @call tuning.scalaPitch  @ moves:807,808 shortlist:847
-  @call tuning.seatWindow  @ shortlist:843 seat:881
-  @call tuning.stepToMidi  @ snap:620 stepClass:636 transposeStep:652 seatWindow:831
-  @call tuning.stepWindow  @ seatWindow:832
-  @call weight  @ height:745 cents:756
+  @call tuning.scalaPitch  @ moves:809,810 shortlist:849
+  @call tuning.seatWindow  @ shortlist:845 seat:883
+  @call tuning.stepToMidi  @ snap:622 stepClass:638 transposeStep:654 seatWindow:833
+  @call tuning.stepWindow  @ seatWindow:834
+  @call weight  @ height:747 cents:758
 
 # Unresolved receivers
   @drop equave:match  @ genCPS:324,325
@@ -271,23 +272,23 @@
   @drop s:sub  @ parseScalaPitches:181
   @drop spec:gmatch  @ edoDegrees:232 parseChord:287
   @drop token:find  @ scalaPitch:74
-  @drop token:match  @ scalaPitch:62,64,65,75,77 asRatio:469,471 coords:705
+  @drop token:match  @ scalaPitch:62,64,65,75,77 asRatio:469,471 coords:707
 
 # Fields (r read / w write incl. constructor keys)
   @field r c  @ sortSteps:115
   @field w c  @ sortSteps:112
   @field w cellWidth  @ derive:96
-  @field r cents  @ computeRootCents:45 computeCellWidth:50 derive:91 stepSpectrum:501,505 genRank2:526 stepAtCents:567 stepCents:592 stepWindow:642
-  @field r cents  @ stepWindow:642 stepsBetween:681 moves:813 shortlist:842,872
-  @field w cents  @ derive:86 stepSpectrum:503 genRank2:524 cents:753 moves:798 shortlist:850
-  @field w coords  @ coords:704 moves:799 shortlist:850
+  @field r cents  @ computeRootCents:45 computeCellWidth:50 derive:91 stepSpectrum:501,505 genRank2:526 stepAtCents:567 stepCents:592 stepWindow:644
+  @field r cents  @ stepWindow:644 stepsBetween:683 moves:815 shortlist:844,874
+  @field w cents  @ derive:86 stepSpectrum:503 genRank2:524 cents:755 moves:800 shortlist:852
+  @field w coords  @ coords:706 moves:801 shortlist:852
   @field r count  @ stepSpectrum:502 mosInfo:536
   @field w count  @ stepSpectrum:502,503
   @field w degreesToSpec  @ degreesToSpec:251
   @field w derive  @ derive:82
-  @field r detune  @ noteStep:629 transposeNote:673
+  @field r detune  @ noteStep:631 transposeNote:675
   @field w edoDegrees  @ edoDegrees:230
-  @field w gapTo  @ gapTo:821
+  @field w gapTo  @ gapTo:823
   @field w genCPS  @ genCPS:322
   @field w genChord  @ genChord:298
   @field w genDiamond  @ genDiamond:363
@@ -296,42 +297,44 @@
   @field w genRank2  @ genRank2:511
   @field w genSubharmonics  @ genSubharmonics:277
   @field w genTenney  @ genTenney:415
-  @field r height  @ moves:812
-  @field w height  @ height:742 moves:800
-  @field r huge  @ shortlist:858
-  @field r intentCents  @ noteStep:628 transposeNote:674
+  @field r height  @ moves:814
+  @field w height  @ height:744 moves:802
+  @field r huge  @ shortlist:860
+  @field r intentCents  @ noteStep:630 transposeNote:676
   @field w isMos  @ mosInfo:535,536
-  @field w isTarget  @ isTarget:762
+  @field w isTarget  @ isTarget:764
   @field w large  @ mosInfo:536
-  @field w midiName  @ midiName:894
+  @field w midiName  @ midiName:896
   @field w midiToStep  @ midiToStep:585
   @field w mosInfo  @ mosInfo:533
-  @field w moves  @ moves:788
+  @field w moves  @ moves:790
   @field w name  @ edo:144 scalaToTemper:218
   @field w nextMosSize  @ nextMosSize:540
   @field r nm  @ sortSteps:118
   @field w nm  @ sortSteps:112
-  @field w noteStep  @ noteStep:627
+  @field w noteStep  @ noteStep:629
   @field r octaveBase  @ octaveFieldWidth:36,37 stepAtCents:579 stepCents:595
   @field w octaveBase  @ derive:94
-  @field r octaveStep  @ stepToParts:900
+  @field r octaveStep  @ stepToParts:902
   @field w octaveStep  @ derive:92
   @field w octaveWidth  @ derive:95
   @field w parseChord  @ parseChord:285
   @field w parseScalaFile  @ parseScalaFile:188
   @field w parseScalaPitches  @ parseScalaPitches:177
-  @field r period  @ octaveFieldWidth:35 derive:89 stepAtCents:564 stepCents:595 stepWindow:643
+  @field r period  @ octaveFieldWidth:35 derive:89 stepAtCents:564 stepCents:595 stepWindow:645
   @field w period  @ derive:89
   @field w periodAsStep  @ scalaToTemper:222 genEqual:265 genHarmonics:273 genSubharmonics:280 genChord:304 genCPS:345 genDiamond:377 genTenney:460 genRank2:529
   @field r periodPitch  @ derive:88,89
   @field w periodPitch  @ edo:145 scalaToTemper:219 genEqual:265 genHarmonics:273 genSubharmonics:280 genChord:304 genCPS:345 genDiamond:377 genTenney:460 genRank2:529
-  @field r pitch  @ noteStep:629 transposeNote:673
-  @field r pitches  @ derive:83,85 sortSteps:111,117 removeStep:126 isTarget:763 moves:803 shortlist:846
+  @field r pitch  @ noteStep:631 transposeNote:675
+  @field r pitches  @ derive:83,85 sortSteps:111,117 removeStep:126 isTarget:765 moves:805 shortlist:848
   @field w pitches  @ edo:146 scalaToTemper:220 genEqual:265 genHarmonics:273 genSubharmonics:280 genChord:304 genCPS:345 genDiamond:377 genTenney:460 genRank2:529
+  @field r placeCents  @ 613
+  @field w placeCents  @ placeCents:601
   @field w presets  @ 151
-  @field w ratio  @ ratio:719
+  @field w ratio  @ ratio:721
   @field w removeStep  @ removeStep:125
-  @field r rootCents  @ octaveFieldWidth:36,37 restateOnUnison:103,105 stepAtCents:563 stepCents:595 shortlist:842
+  @field r rootCents  @ octaveFieldWidth:36,37 restateOnUnison:103,105 stepAtCents:563 stepCents:595 shortlist:844
   @field w rootCents  @ derive:93
   @field r rootDetune  @ computeRootCents:44 unrooted:136
   @field w rootDetune  @ restateOnUnison:105
@@ -345,25 +348,25 @@
   @field w rooted  @ sortSteps:113
   @field w scalaPitch  @ scalaPitch:61
   @field w scalaToTemper  @ scalaToTemper:206
-  @field w seat  @ seat:880
-  @field w seatWindow  @ seatWindow:829
-  @field w shortlist  @ shortlist:841
+  @field w seat  @ seat:882
+  @field w seatWindow  @ seatWindow:831
+  @field w shortlist  @ shortlist:843
   @field w small  @ mosInfo:536
-  @field w snap  @ snap:619
+  @field w snap  @ snap:621
   @field w sortSteps  @ sortSteps:109
-  @field w stepClass  @ stepClass:635
-  @field r stepNames  @ computeCellWidth:50 derive:92 sortSteps:112,118 removeStep:127 stepToParts:901
+  @field w stepClass  @ stepClass:637
+  @field r stepNames  @ computeCellWidth:50 derive:92 sortSteps:112,118 removeStep:127 stepToParts:903
   @field w stepNames  @ edo:147 scalaToTemper:221
-  @field w stepToMidi  @ stepToMidi:615
-  @field w stepToParts  @ stepToParts:899
-  @field w stepWindow  @ stepWindow:641
-  @field w stepsBetween  @ stepsBetween:678
-  @field r strain  @ shortlist:860,867,871
-  @field w strain  @ shortlist:851
+  @field w stepToMidi  @ stepToMidi:617
+  @field w stepToParts  @ stepToParts:901
+  @field w stepWindow  @ stepWindow:643
+  @field w stepsBetween  @ stepsBetween:680
+  @field r strain  @ shortlist:862,869,873
+  @field w strain  @ shortlist:853
   @field r tok  @ sortSteps:117
   @field w tok  @ sortSteps:112
   @field r token  @ genRank2:528
   @field w token  @ genRank2:524
-  @field w transposeNote  @ transposeNote:667
-  @field w transposeStep  @ transposeStep:650
+  @field w transposeNote  @ transposeNote:669
+  @field w transposeStep  @ transposeStep:652
   @field w unrooted  @ unrooted:134

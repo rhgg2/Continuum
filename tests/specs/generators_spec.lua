@@ -3,7 +3,6 @@
 local t = require('support')
 local util = require('util')
 local generators = require('generators')
-local tuning = require('tuning')
 
 -- Kinds run alone here, so the chain state equals the original: stream == host (the chain head).
 local function expand(kind, hostRec, params, ctx)
@@ -139,36 +138,34 @@ return {
     end,
   },
 
-  ----- trill: window tiling + temper-resolved alternation
+  ----- trill: window tiling + a cents alternation
 
   {
-    name = 'trill tiles the window from its start, alternating host pitch with the stepped note',
+    name = 'trill tiles the window from its start, alternating host pitch with the cents demand',
     run = function()
-      local seen
-      local ctx = { resolution = 240,
-                    step = function(p, d, n) seen = { p, d, n }; return p + n, (d or 0) + 7 end }
+      local ctx = { resolution = 240 }
       local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = 0 } } }
-      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
+      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, cents = 200 }, ctx)
       t.eq(#out.delta, 0, 'structural: no continuous delta')
-      t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
       t.eq(#out.notes, 4, '1/4-QN period over a 1-QN window: 4 fxNotes (all hits derived)')
       local n = out.notes
       t.deepEq({ n[1].ppq, n[2].ppq, n[3].ppq, n[4].ppq }, { 0, 60, 120, 180 }, 'tiled onsets from the window start')
       t.deepEq({ n[1].endppq, n[2].endppq, n[3].endppq, n[4].endppq }, { 60, 120, 180, 240 }, 'tails clip to next / window end')
-      t.deepEq({ n[1].pitch, n[2].pitch, n[3].pitch, n[4].pitch }, { 60, 62, 60, 62 }, 'even tiles carry the host pitch; odd tiles step')
-      t.deepEq({ n[1].detune, n[2].detune, n[3].detune, n[4].detune }, { 0, 7, 0, 7 }, 'host detune on even; stepped detune on odd')
+      t.deepEq({ n[1].pitch, n[2].pitch, n[3].pitch, n[4].pitch }, { 60, 62, 60, 62 }, 'even tiles carry the host pitch; odd tiles the demand')
+      t.deepEq({ n[1].detune, n[2].detune, n[3].detune, n[4].detune }, { 0, 0, 0, 0 }, 'a whole-semitone demand places with no detune')
       t.eq(n[2].vel, 100, 'host velocity carried (no ramp)')
     end,
   },
 
   {
-    name = 'trill carries host detune verbatim on the return (even) tiles',
+    name = 'trill measures its demand from what the host sounds, detune and all',
     run = function()
-      local ctx = { resolution = 240, step = function(p, d, n) return p + n, 99 end }
+      local ctx = { resolution = 240 }
       local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 80, detune = 12 } } }
-      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
+      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, cents = 130 }, ctx)
       t.eq(out.notes[1].detune, 12, 'even tile inherits the host detune')
-      t.eq(out.notes[2].detune, 99, 'odd tile takes the stepped detune')
+      t.eq(out.notes[2].pitch, 61, 'the odd tile places 6142 cents on the nearest pitch')
+      t.eq(out.notes[2].detune, 42, 'and carries the remainder as detune')
     end,
   },
 
@@ -403,18 +400,12 @@ return {
     end,
   },
 
-  ----- chord-stamp: stamp a poly note pattern onto every member, rebased by temper steps
+  ----- chord-stamp: stamp a poly note pattern onto every member, rebased by cents
 
   {
     name = 'chord-stamp rebases the pattern chord onto each member; lane-1 note lands on the trigger',
     run = function()
-      local temper = tuning.presets['12EDO']
-      local ctx = {
-        step = function(p, d, n) return tuning.transposeStep(temper, p, d, n) end,
-        stepsBetween = function(a, b)
-          return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
-        end,
-      }
+      local ctx = {}
       local chord = { kind = 'notes', specs = {
         { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100 },   -- root C
         { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 100 },   -- E
@@ -433,38 +424,33 @@ return {
   },
 
   {
-    name = 'chord-stamp transposes by whole temper steps through ctx, not by raw pitch',
+    name = 'chord-stamp moves every voice by the cents from its root to the trigger',
     run = function()
-      -- Toy step-space: input steps are 2 semitones apart, output moves 3 semitones per step and tags
-      -- detune with the step count -- so a raw pitch-diff transposition gives visibly different numbers.
-      local ctx = {
-        stepsBetween = function(a, b) return (b.pitch - a.pitch) // 2 end,
-        step = function(p, d, n) return p + 3 * n, (d or 0) + n end,
-      }
+      -- A chord typed with its thirds and fifths bent off equal temperament, so a move that
+      -- respelled it through a notation would show as an altered interval.
       local chord = { kind = 'notes', specs = {
-        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 80 },
-        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 80 },
+        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 80, detune = 0 },
+        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 80, detune = -14 },
+        { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 80, detune = 2 },
       } }
+      -- The trigger sounds 40 cents sharp of D, where a solve left it.
       local host = { window = { 0, 240 }, notes = {
-        { pitch = 64, vel = 100, detune = 0, ppq = 0, endppq = 240 },
+        { pitch = 62, vel = 90, detune = 40, ppq = 0, endppq = 240 },
       } }
-      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, ctx)
-      t.eq(out.notes[1].pitch, 66, 'root moved by ctx.step(stepsBetween=2) = +6 semitones, not the raw +4')
-      t.eq(out.notes[1].detune, 2, 'the move routed through ctx.step -- detune tags the step count')
-      t.eq(out.notes[2].pitch, 70, 'the upper voice moves by the same step count')
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, {})
+      local function cents(n) return n.pitch * 100 + n.detune end
+      t.eq(cents(out.notes[1]), 6240, 'the root lands where the trigger sounds, drift included')
+      t.eq(cents(out.notes[2]) - cents(out.notes[1]), 386, 'the bent third is preserved exactly')
+      t.eq(cents(out.notes[3]) - cents(out.notes[1]), 702, 'and the bent fifth')
+      t.eq(out.notes[2].pitch, 66, 'each voice places on its nearest pitch')
+      t.eq(out.notes[2].detune, 26, 'with the remainder as detune')
     end,
   },
 
   {
     name = 'chord-stamp fires a chord on every region member (all lanes are triggers)',
     run = function()
-      local temper = tuning.presets['12EDO']
-      local ctx = {
-        step = function(p, d, n) return tuning.transposeStep(temper, p, d, n) end,
-        stepsBetween = function(a, b)
-          return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
-        end,
-      }
+      local ctx = {}
       local chord = { kind = 'notes', specs = {
         { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100 },
         { lane = 2, ppq = 0, endppq = 240, pitch = 67, vel = 100 },   -- a fifth above the root
@@ -490,8 +476,7 @@ return {
       local host = { window = { 0, 240 }, notes = {
         { pitch = 62, vel = 90, detune = 0, ppq = 0, endppq = 240 },
       } }
-      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord },
-        { step = function() end, stepsBetween = function() return 0 end })
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, {})
       t.eq(#out.notes, 0, 'no lane-1 reference -> nothing stamped')
     end,
   },

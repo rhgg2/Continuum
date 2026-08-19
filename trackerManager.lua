@@ -39,7 +39,6 @@
 
 local util    = require 'util'
 local timing  = require 'timing'
-local tuning  = require 'tuning'
 local voicing = require 'voicing'
 
 -- Past this many distinct seeds, whole-channel re-derive beats per-seed bookkeeping; the dirt
@@ -238,8 +237,7 @@ end
 local function derivationInputs()
   return {
     trackerMode  = cm:get('trackerMode'),      swings       = cm:get('swings', { mergeTiers = true }),
-    pbRange      = cm:get('pbRange'),          temper       = cm:get('temper'),
-    overlapOffset= cm:get('overlapOffset'),
+    pbRange      = cm:get('pbRange'),          overlapOffset= cm:get('overlapOffset'),
     swing        = ds:get('swing'),            fxRegions    = ds:get('fxRegions'),
     extraColumns = ds:get('extraColumns'),     fxParked     = ds:get('fxParked'),
     prevWindows  = ds:get('prevWindows'),
@@ -3479,13 +3477,6 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
   local res = mm:resolution()
   local pbRangeCents = pbLim()   -- slide clamps its target to what pb can reach
-  local temper = cm:get('tempers', { mergeTiers = true, pick = cm:get('temper') })
-  local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
-    return tuning.transposeStep(temper, pitch, detune, n)
-  end
-  local function stepsBetween(a, b)              -- chord-stamp: whole temper steps between two notes
-    return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
-  end
   -- Strict next same-lane note (slide's only consumer): lane occupancy is column union parked, and
   -- the subject is the producer's lane, so a region (no lane) resolves nil. see docs/trackerManager.md § Span-covered fx scans
   local function nextSameLaneNote(host)
@@ -3506,8 +3497,10 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     end
     return found
   end
-  local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
-                    stepsBetween = stepsBetween, nextSameLaneNote = nextSameLaneNote }
+  -- No notation in here: a generator's pitch demands are cents, so the temper is read by the gestures
+  -- that author them and never by this pass. see design/sounding-anchor.md § The notation is not a derivation input
+  local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
+                    nextSameLaneNote = nextSameLaneNote }
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
   -- rebuild and bucketed by channel. see docs/generators.md § Hosts and membership
   local fxRegionsByChan = {}
@@ -5198,7 +5191,9 @@ do
       end
       prevSwings = util.deepClone(curSwings)
     elseif not tvOnlyKeys[key] then
-      dirtyChan()   -- any other derivation config (temper/pbRange/ccInterp/overlapOffset) re-derives all chans
+      -- temper reaches no derivation, but tv's context snapshot rides tm's rebuild signal, so a
+      -- notation change comes through here to refresh the lens rather than to re-derive anything.
+      dirtyChan()   -- any other derivation config (pbRange/ccInterp/overlapOffset) re-derives all chans
     end
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)

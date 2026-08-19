@@ -28,10 +28,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-19 tracker: store a generator's pitch demand in cents, not steps (§ The notation is not a derivation input)
 - 2026-08-19 tracker: spend or carry a note's intent when a gesture moves it (§ What the note remembers)
 - 2026-08-19 tracker: stamp the step a note was written on, spend it on a snap (§ What the note remembers)
 - 2026-08-19 tracker: name a cell from the intent its note carries (§ What the note remembers)
-- 2026-08-19 tracker: replace the deviation tick with a cents readout (§ What the cell says)
 
 ## Now
 
@@ -39,12 +39,16 @@
 
 ## Queued (current phase; one-liners)
 
-5. **Derived notes** — `membersOf`'s pick carries `intentCents` into the
-   generator note stream, `stepOp` and `stepsBetween` step from a host's
-   written step rather than from where it sounds, and the specs `rebuildFx`
-   builds carry an intent of their own, `fxKey` included. A trill or a chord
-   stamp over a drifted host then spells from the step the host was written
-   on.
+5b. **Derived notes carry their host's intent** — `membersOf`'s pick carries
+   `intentCents` into the generator note stream, the bodies forward it (a
+   copy verbatim, an offset moved by the cents it moved), and the specs
+   `rebuildFx` builds carry an intent of their own, `fxKey` included. A cell
+   over a derived note then names the step its host was written on.
+5c. **Steps and cents in the input** — the `stepInterval` widget becomes a
+   step count and a signed cents residual over one stored cents value,
+   anchored at the host's written step or at the notation's unison where
+   there is no host note; a trill's interval joins a slide's on it, and the
+   residual stops being quantised away on the next arrow press.
 6. **Docs** — `docs/tuning.md` gains the intent rung, intent cents being
    realised as detune against a notation where detune is realised as pb
    against a channel; the ladder line at `trackerManager.lua:5` follows it,

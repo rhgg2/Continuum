@@ -8,7 +8,7 @@
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
 --shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
---invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote, step(p,d,n), stepsBetween(a,b)
+--invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote -- no notation among them
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, glyph, defaults, fields }
@@ -20,13 +20,28 @@
 -- A pattern field descriptor may carry poly=true (per-kind, not per-body) to let a note editor author
 -- overlapping lanes; absent/false pins every spec to lane 1. chordStamp sets it (a chord's voices).
 
-local util = require 'util'
+local util   = require 'util'
+local tuning = require 'tuning'
 
 local generators = {}
 
 local function periodTicks(period, resolution)
   local qn = type(period) == 'table' and period[1] / period[2] or period
   return qn * resolution
+end
+
+----- Note arithmetic
+
+-- Cents between two notes' realised pitches. The microtonal offset already rides
+-- in detune, so this is pure note arithmetic -- no temper needed.
+local function interval(a, b)
+  return (b.pitch - a.pitch) * 100 + ((b.detune or 0) - (a.detune or 0))
+end
+
+-- The inverse: a note displaced by cents, placed back on (pitch, detune). A pitch demand is
+-- cents here and never notation steps. see design/sounding-anchor.md § The notation is not a derivation input
+local function displaced(note, cents)
+  return tuning.placeCents(note.pitch * 100 + (note.detune or 0) + cents)
 end
 
 --contract: retrig tiles the host window with evenly-spaced same-pitch fxNotes; every hit is derived
@@ -52,14 +67,14 @@ local function retrig(stream, host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
---contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); every hit derived
+--contract: trill alternates host pitch with a note `cents` off what it sounds; every hit derived
 local function trill(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = stream.notes[1]
   if not h then return { notes = {}, delta = {} } end   -- empty membership (bare region)
-  -- The alternation note: `step` scale steps from the host, resolved through the temper.
-  local altPitch, altDetune = ctx.step(h.pitch, h.detune or 0, params.step or 0)
+  -- The alternation note: a cents demand off what the host sounds, whatever the notation names it.
+  local altPitch, altDetune = displaced(h, params.cents or 0)
   local notes = {}
   local i = 0
   while startL + i * step < endL do
@@ -151,9 +166,9 @@ local function ostinato(stream, host, params, ctx)
 end
 
 --contract: chord-stamp stamps a poly pattern on each region member; lane-1 is the pattern's root
---contract: rebase whole temper steps via ctx.stepsBetween+ctx.step; voice keeps trigger vel/window
+--contract: every voice moves by the cents root -> trigger; voice keeps trigger vel/window
 --contract: no lane-1 note in the pattern -> inert (empty result)
--- Voices carry true temper-step detune (intent); on one channel only lane 1's detune realises via pb, so a
+-- Voices carry their authored detune (intent); on one channel only lane 1's detune realises via pb, so a
 -- microtonal chord sounds faithfully only in 12-ET -- the hand-authored-chord limit. see docs/tuning.md
 local function chordStamp(stream, host, params, ctx)
   local specs = params.pattern and params.pattern.specs
@@ -165,9 +180,9 @@ local function chordStamp(stream, host, params, ctx)
   if not ref then return { notes = {}, delta = {} } end
   local notes = {}
   for _, trig in ipairs(stream.notes) do
-    local steps = ctx.stepsBetween(ref, trig)  -- root -> trigger, in whole temper steps
+    local offset = interval(ref, trig)         -- root -> trigger, in cents
     for _, spec in ipairs(specs) do
-      local pitch, detune = ctx.step(spec.pitch, spec.detune or 0, steps)
+      local pitch, detune = displaced(spec, offset)
       util.add(notes, { ppq = trig.ppq, endppq = trig.endppq,
                         pitch = pitch, detune = detune, vel = trig.vel })
     end
@@ -198,12 +213,6 @@ local function sine(stream, host, params, ctx)
   end
   util.add(delta, { ppq = endL, val = 0, shape = 'slow' })
   return { notes = {}, delta = delta }
-end
-
--- Cents between two notes' realised pitches. The microtonal offset already rides
--- in detune, so this is pure note arithmetic -- no temper needed.
-local function interval(a, b)
-  return (b.pitch - a.pitch) * 100 + ((b.detune or 0) - (a.detune or 0))
 end
 
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN (tm closes the window)
@@ -333,10 +342,11 @@ generators.kinds = {
   },
   trill = {
     expand = trill, mode = 'replace', dest = 'note', label = 'Trill', glyph = 'T',
-    defaults = { period = { 1, 4 }, step = 2 },
+    defaults = { period = { 1, 4 }, cents = 200 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-      { field = 'step',   label = 'Step',   widget = 'int', base = 1, coarse = 12, min = -24, max = 24 },  -- signed scale steps
+      -- cents demand, edited as host-relative temper steps -- a slide's field and the same widget
+      { field = 'cents',  label = 'Interval', widget = 'stepInterval' },
     },
   },
   arp = {

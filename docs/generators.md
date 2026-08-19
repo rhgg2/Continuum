@@ -226,15 +226,24 @@ output feeds the later passes.
 
 **1** ctx is the evaluation environment a kind's body composes against, and
 it binds what the generator cannot compute for itself — only that. Pure
-arithmetic stays in the module. The moment a body must resolve a scale step,
-find a neighbour or honour a config bound, it reaches into ctx, and the bound
-set stays short enough to state in one `--invariant:`.
+arithmetic stays in the module. The moment a body must find a neighbour or
+honour a config bound, it reaches into ctx, and the bound set stays short
+enough to state in one `--invariant:`.
 
-**2** `interval` is the instructive non-example. It looks temper-bound and is
+**2** **A notation is read by a gesture and never by a derivation.** A pitch
+demand is stored in cents, so a trill's alternation and a chord stamp's rebase
+are offsets from what their host sounds, and ctx binds no temper at all. The
+notation is the ladder such a demand is typed on, which the fx strip walks at
+authoring time; a step count stored in a param would instead sound different
+under a lens change, which renames a take's notes and leaves them where they
+are (`design/sounding-anchor.md` § The notation is not a derivation input).
+
+**3** `interval` is the instructive non-example. It looks temper-bound and is
 pure note arithmetic — the microtonal offset already rides in detune — so it
-lives as a module helper rather than a ctx op.
+lives as a module helper rather than a ctx op, beside `displaced`, which is
+the same arithmetic run backwards.
 
-**3** The direction this serves is for the kind *set* to become config: a
+**4** The direction this serves is for the kind *set* to become config: a
 kind as data rather than a function. When a body is nothing but arithmetic
 and named ctx operations it is already data. **Build no interpreter** — the
 move costs almost nothing as long as new kinds are shaped as composition and

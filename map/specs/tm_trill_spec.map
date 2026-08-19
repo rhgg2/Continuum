@@ -1,74 +1,73 @@
-@spec tm_trill_spec  src=tests/specs/tm_trill_spec.lua  loc=137  cases=3
-@exercises trackerManager (h.tm), midiManager (h.fm), tuning (tuning)
-@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tuning.transposeStep
+@spec tm_trill_spec  src=tests/specs/tm_trill_spec.lua  loc=159  cases=4
+@exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm)
+@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, cm:set
 @harness   mk
 
 # Intent
   Note macros, v1: trill (structural, second kind). Trill alternates the host
-  pitch with a note `step` scale-steps away, resolved through the temper to
+  pitch with a note `cents` away from what it sounds, the remainder landing as
   per-fxNote detune -- which the absorber pass realises once the 4.9 gather
-  unions derived lane-1 fxNotes. G4 runs microtonally (19EDO) under swing+delay:
+  unions derived lane-1 fxNotes. G4 runs microtonally under swing+delay:
   the frame/rounding AND detune/absorber round-trip tripwire.
 
 # Helpers
-  @fn cents2raw(c)  @ 17
+  @fn cents2raw(c)  @ 18
       -- Matches tm's centsToRaw at the default pbRange (2 semitones = 200 cents).
-  @fn fxNotesOf(dump, hostUuid)  @ 19-26
-  @fn pbsByPpq(dump)  @ 28-35
-  @fn fullView(dump)  @ 38-47
+  @fn fxNotesOf(dump, hostUuid)  @ 20-27
+  @fn pbsByPpq(dump)  @ 29-36
+  @fn fullView(dump)  @ 39-48
       -- Stable, order-independent view of notes + pbs for byte-identical assertions.
 
 # Cases
-  @case 'G4: flush -> rebuild -> flush byte-identical (trill, 19EDO, swing + delay)'  [harness]  @ 54-82
-  @case 'trill alternates host pitch with the stepped note; the host parks, all hits derived'  [harness]  @ 88-108
-  @case 'a microtonal trill seats absorbers at the alternation fxNote seats'  [harness]  @ 114-134
+  @case 'G4: flush -> rebuild -> flush byte-identical (trill, microtonal, swing + delay)'  [harness]  @ 55-83
+  @case 'trill alternates host pitch with the stepped note; the host parks, all hits derived'  [harness]  @ 89-109
+  @case 'a microtonal trill seats absorbers at the alternation fxNote seats'  [harness]  @ 115-133
+  @case 'a temper change leaves the trill it renames sounding as it was'  [harness]  @ 139-156
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 62,91,117
-  @use call tm:flush  @ 64,79,93,119
-  @use call tm:getChannel  @ 68,96
-  @use call fm:dump  @ 70,75,77,80,95,127
-  @use call tm:rebuild  @ 78
-  @use call tuning.transposeStep  @ 122
+  @use call tm:addEvent  @ 63,92,118,142
+  @use call tm:flush  @ 65,80,94,120,144,154
+  @use call tm:getChannel  @ 69,97,146
+  @use call fm:dump  @ 71,76,78,81,96,126,147,152,155
+  @use call tm:rebuild  @ 79
+  @use call cm:set  @ 153
 
 # Fields (r read / w write incl. constructor keys)
-  @field w atom  @ 11
-  @field r ccs  @ 30
-  @field w chan  @ 62,91,117
-  @field w config  @ 57,116
-  @field w data  @ 60
-  @field w delay  @ 63,92,118
-  @field r derived  @ 22,133
-  @field r detune  @ 73,105
-  @field w detune  @ 63,92,118
-  @field w endppq  @ 62,91,117
-  @field r evType  @ 31
-  @field w evType  @ 62,91,117
-  @field w factors  @ 11
-  @field w fx  @ 63,92,118
-  @field w global  @ 60
-  @field w kind  @ 14
-  @field w lane  @ 63,92,118
-  @field w name  @ 54,88,114
-  @field r notes  @ 21,40
-  @field w notes  @ 46
-  @field r parked  @ 68,96
-  @field w pbs  @ 46
-  @field w period  @ 11,14
-  @field r pitch  @ 43,97,101
-  @field w pitch  @ 62,91,117
-  @field r ppq  @ 24,33,42,99
-  @field r ppq  @ 129
-  @field w ppq  @ 62,91,117
-  @field r presets  @ 121
-  @field w project  @ 58,116
-  @field w run  @ 55,89,115
-  @field w shift  @ 11
-  @field w step  @ 14
-  @field w swing  @ 60
-  @field w swings  @ 58
-  @field w temper  @ 58,116
-  @field r uuid  @ 44,70,98
-  @field r val  @ 131
-  @field r vel  @ 104
-  @field w vel  @ 63,92,118
+  @field w atom  @ 10
+  @field r ccs  @ 31
+  @field w cents  @ 13,15
+  @field w chan  @ 63,92,118,142
+  @field w config  @ 58
+  @field w data  @ 61
+  @field w delay  @ 64,93,119,143
+  @field r derived  @ 23,132
+  @field r detune  @ 74,106,148
+  @field w detune  @ 64,93,119,143
+  @field w endppq  @ 63,92,118,142
+  @field r evType  @ 32
+  @field w evType  @ 63,92,118,142
+  @field w factors  @ 10
+  @field w fx  @ 64,93,119,143
+  @field w global  @ 61
+  @field w kind  @ 13,15
+  @field w lane  @ 64,93,119,143
+  @field w name  @ 55,89,115,139
+  @field r notes  @ 22,41
+  @field w notes  @ 47
+  @field r parked  @ 69,97,146
+  @field w pbs  @ 47
+  @field w period  @ 10,13,15
+  @field r pitch  @ 44,98,102,148
+  @field w pitch  @ 63,92,118,142
+  @field r ppq  @ 25,34,43,100
+  @field r ppq  @ 128
+  @field w ppq  @ 63,92,118,142
+  @field w project  @ 59
+  @field w run  @ 56,90,116,140
+  @field w shift  @ 10
+  @field w swing  @ 61
+  @field w swings  @ 59
+  @field r uuid  @ 45,71,99,147
+  @field r val  @ 130
+  @field r vel  @ 105
+  @field w vel  @ 64,93,119,143

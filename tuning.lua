@@ -597,7 +597,8 @@ end
 
 -- A point of the cents line as MIDI. Overflow either end folds into the detune rather
 -- than being dropped, which is how a caller reads a move it has to refuse.
-local function placeCents(cents)
+--contract: cents → (pitch, detune); the split is MIDI arithmetic, with no notation in it
+function tuning.placeCents(cents)
   local midi   = math.floor(cents / 100 + 0.5)
   local detune = cents - midi * 100
 
@@ -609,6 +610,7 @@ local function placeCents(cents)
 
   return midi, detune
 end
+local placeCents = tuning.placeCents
 
 --contract: wraps out-of-range step by adjusting octave
 --contract: clamps midi to 0..127 by folding overflow into detune (never silently drops)

@@ -1991,7 +1991,7 @@ return {
       -- parked window. The chain is on the note's own fx, so it parks with no take round-trip.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 },
                              { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:flush()
       local function allPbs()
@@ -2053,7 +2053,7 @@ return {
       t.eq(#baseline.parked, 2, 'both authored cc parked in the baseline')
 
       -- Add trill: the host now self-parks as a note; the sine cc window must persist.
-      h.vm:addFxStage(uuid, { kind = 'trill', period = { 1, 4 }, step = 2 })
+      h.vm:addFxStage(uuid, { kind = 'trill', period = { 1, 4 }, cents = 200 })
       t.eq(#h.tm:getChannel(1).parked, 1, 'the host self-parks once a note-replace kind joins the chain')
       t.eq(#stashOfType(h, 'cc'), 2, 'the authored cc stay parked under the persisting sine window')
 
@@ -2261,7 +2261,7 @@ return {
       -- window, so one freeze must convert both arms of the chain.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 },
                              { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:flush()
       h.tm:rebuild()   -- settle: the host is off-take when the window set is recomputed
@@ -2375,7 +2375,7 @@ return {
       -- index names it until the tail-walk commit, so the census has to be told about the park.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 },
                              { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:flush()
       h.tm:rebuild()   -- settle: the host is off-take when the window set is recomputed
@@ -2397,7 +2397,7 @@ return {
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 },
                              { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:flush()
       h.tm:rebuild()
@@ -2525,7 +2525,7 @@ return {
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 } } })
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 } } })
       h.tm:flush()
       h.tm:rebuild()   -- settle: the trill parks its own host
       local uuid = h.tm:getChannel(1).parked[1].uuid

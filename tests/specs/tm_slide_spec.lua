@@ -186,7 +186,7 @@ return {
       -- see docs/oddities.md § A slide into a parked successor arrives late
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 },
                              { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
       h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
                       detune = 0, delay = 0, lane = 1 })

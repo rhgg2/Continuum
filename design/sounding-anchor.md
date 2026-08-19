@@ -227,9 +227,10 @@ charged by whether its two members sound together.**
    `sonority.seats` reads each strand's seat and window, and `shortlisted`
    names a step the target left nowhere to go, that step being the one whose
    window refused it (`trackerView.lua:2087`, `sonority.lua:684`,
-   `trackerView.lua:2111`). Two in the generators do the same: `stepOp` transposes a trill's alternation from its host, and
-   `stepsBetween` rebases a chord stamp on its trigger
-   (`trackerManager.lua:3483`, `trackerManager.lua:3486`).
+   `trackerView.lua:2111`). The generators derive none: a trill's alternation
+   and a chord stamp's rebase are cents offsets from what their host sounds,
+   and a derived note's intent is its host's moved by that same offset
+   (§ The notation is not a derivation input).
 
 1. The solve is therefore idempotent: a second run reads the same seats,
    groups the same strands, and returns the same cents. That property was
@@ -271,6 +272,50 @@ charged by whether its two members sound together.**
    readout now occupies (`gridPane.lua:775`). A rule over the note says
    what the star said, and says it over the note rather than in the margin
    beside it.
+
+## The notation is not a derivation input
+
+1. **A notation is read by a gesture and never by a derivation.** Two
+   generators break that rule today: a trill stores its alternation as a
+   count of scale steps, a chord stamp rebases its pattern by whole steps,
+   and both resolve through the active temper on every rebuild
+   (`trackerManager.lua:3482`). So a temper change re-sounds derived notes no
+   author touched — 12-EDO to 31-EDO takes a trill's whole tone to
+   seventy-seven cents — while the authored notes it renames stand where they
+   were.
+
+1. What a generator stores is cents. A trill's step count becomes a cents
+   demand, and a chord stamp's rebase becomes the cents from its pattern's
+   root to the trigger it fires on — `interval`, the module's own helper,
+   which `docs/generators.md` § The ctx discipline holds up as the operation
+   that looks temper-bound and is not. `ctx` then binds a resolution, the pb
+   ceiling and a neighbour lookup, none of them a notation, and `temper`
+   leaves `derivationInputs`, so a lens change no longer rewrites the take.
+
+1. A slide's fixed target has stored cents from the start — "a cents demand
+   stored temper-agnostically, authored as host-relative temper steps"
+   (`design/archive/note-macros.md`) — so the pattern is the house's own, and
+   the two readings have sat in one descriptor table since.
+
+1. Steps stay in the input as a ladder. **A step ladder** is a step count
+   and a signed cents residual, decomposed against an anchor and stored as
+   absolute cents: the count says which degree, and the residual holds what
+   the notation cannot express. A re-temper re-reads the same stored cents,
+   two hundred typed as two steps of 12-EDO reading as three steps and ten
+   cents over in 19-EDO, so the reading rebases where the sound does not.
+
+1. In an unequal notation a step count is well defined against an anchor and
+   not as an interval — two degrees above the fifth step of a Scala scale
+   need not span what two degrees above its first span — so the ladder is
+   entry alone.
+
+1. The anchor is the host's written step, or the notation's unison where
+   there is no host note. An fx region carries a chain with no note of its
+   own — a chain's host resolves to a note, a parked cell or a region
+   (`trackerView.lua:2640`) — and today's widget falls back to middle C,
+   which the region stands in no relation to. A region has no pitch, so its
+   notation's unison is the one anchor it has, and the residual reaches
+   whatever no count can.
 
 ## What the beam loses
 
@@ -560,3 +605,14 @@ charged by whether its two members sound together.**
    built, and an ambient reference sharpens it: a take's first onset
    asserts the page, so a passage spanning two takes has two anchors
    where the music has one.
+
+1. Whether a notational demand should be nameable. "The degree above
+   whatever the host is" is an intent of a different kind from an interval,
+   and would be a mode on the field the way a slide's target chooses `Next`
+   or `Fixed` (§ The notation is not a derivation input); nothing asks for it
+   yet.
+
+1. Where a score follows the page. The retune command re-seats notes onto a
+   target notation, so it is the gesture at which the page moves the score,
+   and re-reading a step-typed interval there would carry a trill through a
+   notation change; a lens change no longer does.
