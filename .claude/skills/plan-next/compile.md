@@ -1,32 +1,28 @@
 # Compile the top queued item
 
 The goal is to write an implementation brief for the top queued item.
-This should be one landable change, spec included, fitting ≤150k
+This should be one committable change, tests included, fitting ≤150k
 context. Sometimes, we'll implement the item in the same session; see
 step 3 below.
 
 ## 1. Gather context
 
-Study the relevant parts of the design doc named in the `> source:`
-line, and the relevant code (maps first). Use the scratchpad and spike
-worktree to probe design questions that will need settling before a
-brief can be written.
+Study the design doc named in the `> source:` line, and the relevant
+code (maps first). Use the scratchpad and spike worktree to probe
+design questions that need settling before a brief can be written.
 
-**Done when** you know what the task is and what needs to be settled,
-and have all the relevant background for that.
+**Done when** you know what the task is and what needs to be settled.
 
 ## 2. Report back
 
-Bring to the chat a summary of what the item actually is. Write for a
+Bring to chat a summary of what the item actually is. Write for a
 reader who has a high-level understanding of the project's
 architecture, but not the implementation details; thus, gloss variable
 names, shapes, and existing functions and work from the big picture
 down to the nuts and bolts.
 
-Set out the points that need deciding
-before implementation, and any findings you have so far on these;
-we'll figure them out together.
-
+Set out the points that need deciding before implementation, and any
+findings you have so far on these, so we can figure them out together.
 Things we settle should be updated in the design doc. Read
 `docs/STYLE.md` just before doing this, so it's fresh in your mind.
 
@@ -34,12 +30,11 @@ Things we settle should be updated in the design doc. Read
 
 ## 3. The fork
 
-Now you have a clear idea of the road ahead, continue to study the
-code until you understand the problem well enough to be able to
-implement it. 
+With a clear idea of the road ahead, continue to study the code until
+you understand the problem well enough to be able to implement it.
 
-Here is a fork. You can either write an implementation brief, or just
-implement. To expand on that:
+Now comes a fork. You can either write an implementation brief, or
+just implement. To exand on that:
 
 By the time you understand the problem fully, and particularly if you
 run any spikes, you may well have in effect done the implementation
@@ -49,31 +44,22 @@ implementation. Reasons to do so:
 - the change has a trivial production surface, and you are confident
   about the specs;
 - you would essentially write the whole code in your brief anyway;
-- the kernel you would attach is nearly all target code, so handing it
-  over would be a copy rather than a derivation (see below).
+- the kernel you would attach is nearly all target code (see below).
 
 Reasons not to do so:
 
 - the change is complex and liable to need tweaks;
-- the kernel you would attach holds real source code, which is the
-  case the diff handover was built for;
+- the kernel you would attach holds real source code;
 - a fresh pair of eyes would help verify the code.
 
-(Note that fresh eyes can't help verify the framing of the design,
-which is inherited wholly from your brief; if that's a concern, go
-back to §2.)
+Context budget is also relevant. If you chewed through a lot studying
+the problem, then it makes sense to hand a fresh 150k to an
+implementer; while if the study was quick and simple, there is little
+reason to stand on ceremony.
 
-Context budget may also settle it. The study is the expensive part, so
-with most of the window free the direct branch costs little; with most
-of it spent, the brief earns its ceremony, by handing a fresh 150k to
-an implementer who need not re-derive any of this.
-
-Give your opinion on which branch to take and why, and we'll agree it
-together.
-
-**Done when** you understand the implementation fully, and we have
-decided the fork. If you write the brief, continue to 4; if not, skip
-to 5.
+**Done when** you know how to implement; you've given your steer on
+the fork; and we've settled this together. If you write the brief,
+continue to §4; if not, skip to §5.
 
 ## 4. Write the brief
 
@@ -91,7 +77,7 @@ nothing else, so it should be self-contained. Start with a header:
 
 Add:
 - what and why, briefly;
-- the decisions already settled;
+- decisions already settled;
 - target shapes (data structures, fields) copied in;
 - file anchors with tight line ranges;
 - specs: red-first when the item fixes observable behaviour, naming
@@ -101,10 +87,10 @@ Add:
   
 If compiling the brief built a working kernel in the spike tree, you
 may choose to pass it on: `git -C <spike> diff HEAD > plan/IMPL.diff`.
-This is a way of ensuring correctness; the implementer writes the
-production code without reading the diff, then compares against your
-spike. When you hand over a diff, note it in the brief and classify
-the diff hunks into:
+This helps ensure correctness; the implementer writes the production
+code without reading the diff, then compares against the spike. When
+you hand over a diff, note it in the brief and classify the diff hunks
+into:
 
 - **source** code: partial implementation of production code, or of
 test code which is the subject of the brief itself.

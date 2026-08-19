@@ -1,3 +1,4 @@
+
 ---
 name: architecture-review
 description: Review a subsystem's architecture
@@ -36,8 +37,8 @@ as a parameter versus ambiently; and if extraction yields a small
 interface or one nearly as wide as the body. For anything that looks
 like a pass-through, ask the deletion test: would deleting it
 concentrate complexity, or only move it? Concentrating is the signal.
-Ask for `file:line` evidence, and ask each agent to say where the code is well-factored —
-you want a read, not a complaint list.
+Ask for `file:line` evidence, and ask each agent to say where the code
+is well-factored — you want a read, not a complaint list.
 
 Give each agent one sharp question aimed at what its cluster
 specifically risks, and hand over what step 2 settled, so nobody spends

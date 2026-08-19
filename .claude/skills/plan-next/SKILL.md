@@ -10,24 +10,23 @@ This skill concerns the live plan, and the live implementation brief.
 The plan and the brief's existence arrive injected by hook. A plan
 over the 10k context cap should be read from the given file path.
 
-The plan file is a working buffer, and its sections are what the
-dispatch reads:
+The plan file is a working buffer, structured thusly:
 
-- Phases: the plan's roadmap. One phase is not unusual.
-- Queued: the uncompiled items of the in-flight phase. Compiling one
-  takes it out of the section.
-- Now: the item being implemented in one line.
-- Landed: prunes below ~4 entries.
+- Phases: The plan's roadmap. One phase is not unusual.
+- Queued: The uncompiled items of the in-flight phase. 
+          Compiling one takes it out of the section.
+- Now:    The item being implemented in one line.
+- Landed: Most recent commits, pruned to 4 entries.
 
 ## 2. Dispatch
 
 There are four possibilities:
 
-- A brief exists. The last planned item hasn't landed; say so and
-  stop, citing `/implement-next` to finish it or `/commit` to land.
-- Queued is non-empty. Compile its top entry into a brief:
-  [compile.md](compile.md).
-- Queued is empty and work remains unqueued. Fill it from the next
-  unlanded phase: [fill.md](fill.md).
-- Queued is empty and all phases are landed. The work is finished: say
-  so, point at `/plan-close`, stop.
+1. A brief exists: stop, noting that the planned item hasn't landed,
+   and pointing at `/implement-next`.
+1. Queued is non-empty: compile its top entry into a brief via
+   [compile.md](compile.md).
+1. Queued is empty, and there are uncompleted phases: refill Queued
+   via [fill.md](fill.md).
+1. Queued is empty and all phases are landed: stop, noting that the
+   work is finished, and pointing at `/plan-close`.
