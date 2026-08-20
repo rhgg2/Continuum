@@ -358,13 +358,31 @@ charged by whether its two members sound together.**
    argument nowhere depends on the gate, and the cut within a waiting
    count is untouched.
 
-1. What the gate was doing to the breadth is not known. It refuses a join
-   before the join is scored, so removing it widens the set each round
-   sorts, by a factor that depends on the size of the move set and on how
-   tightly the notation's windows bound it. A beam of twenty-four and a
-   walk of four abreast were settled by measurement taken with the gate
-   active (`docs/sonority.md` § The solve), so both figures are open
-   again.
+1. The gate was holding a second rule the model never stated. A spelling
+   states intervals, so nothing in it forbids two members taking the same
+   one; a gate placing every member inside its own window forbade that as a
+   side effect, two seats a hundred cents apart having no offset that sits
+   both within fifty cents of one pitch. Without the gate such a spelling is
+   admissible, and on E♭–E–G it wins — the E♭ settling at 6336.4 and the E at
+   6340.4, four cents apart on one MIDI pitch. So the model states it
+   directly, as **distinctness**: a member takes a spelling no member of its
+   component already holds, and a sonority states as many pitches as it has
+   members.
+
+1. Distinctness forbids nothing an author could want. `promote` keeps one
+   strand per step-class in a sonority (`sonority.lua:102`), so two members
+   never share a seat, and a spelling stating a unison between two of them is
+   one where two notes of a chord sound as one note.
+
+1. What the gate was doing to the breadth is now measured. It refused a join
+   before the join was scored, so removing it widens the set each round
+   sorts: the eighty-eight-note take of `tests/spikes/springs/take.lua` costs
+   1.8 seconds against 0.57, for the same tuning to the last digit, and a
+   five-member sonority over eleven pitches enumerates about a million
+   spellings where the gate left 1018. A beam of twenty-four and a walk of
+   four abreast were settled by measurement taken with the gate active
+   (`docs/sonority.md` § The solve), so both figures are open again, and the
+   width is the only bound the breadth has left (§ Open).
 
 ## Presence
 
@@ -605,10 +623,13 @@ charged by whether its two members sound together.**
 1. Where harmonic lock now opens, and how far it usefully travels
    (§ The dials).
 
-1. What the beam costs without its gate, and whether a width of
-   twenty-four and a cap of four still answer as the passages measured
-   say they answer. `tests/spikes/springs/cap_sweep.lua` sweeps the
-   second of those.
+1. Where the beam's width should sit, and whether a cap of four still
+   answers as the passages measured say it answers. The width was swept
+   over the take with the gate gone — 0.34s at four, 0.94 at twelve, 1.82
+   at twenty-four and 2.43 at thirty-two, where twelve and twenty-four
+   differ by 0.086¢ across sixty-six strands — so what is open is what an
+   author buys past twelve. `tests/spikes/springs/cap_sweep.lua` sweeps
+   the cap.
 
 1. How far notes actually drift. The pull alone may bound the excursion
    tightly enough that a stored intent rarely differs from the step its

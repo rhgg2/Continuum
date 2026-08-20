@@ -2,8 +2,8 @@
 -- prints the tuning's checksum so a change meant to cost less can be held to costing the
 -- same. Run from the repo root: lua tests/spikes/springs/take_bench.lua
 --
--- 1.70s at the time of writing, where charging the whole passage's pull at every extension
--- cost 4.08 (docs/sonority.md § The solve).
+-- 1.8s at the time of writing, where the beam's reach gate held it to 0.57 and charging the
+-- whole passage's pull at every extension cost 4.08 (docs/sonority.md § The solve).
 package.path = './?.lua;tests/spikes/springs/?.lua;' .. package.path
 
 local sonority = require('sonority')
@@ -14,7 +14,7 @@ local cents = sonority.solveToMoves(take.strands, 5, 1, take.notation, take.targ
 local took  = os.clock() - at
 
 if not cents then
-  print(string.format('%.2fs  refused — a sonority no chain of moves reaches', took))
+  print(string.format('%.2fs  refused — the target states no move', took))
   return
 end
 

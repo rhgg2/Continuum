@@ -126,10 +126,10 @@ local passages = {
 -- read off the module's own figures.
 local function solveAt(passage, width, cap)
   local strands = passage.strands
-  local seat, window = sonority.seats(strands, passage.notation or edo12)
+  local seat = sonority.seats(strands, passage.notation or edo12)
   local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, ARITY)), {}
   for i, onset in ipairs(onsets) do
-    spellings[i] = sonority.spellings(onset.members, seat, window, onset.mayWait,
+    spellings[i] = sonority.spellings(onset.members, seat, onset.mayWait,
                                       passage.moves, width, STIFFNESS)
   end
 

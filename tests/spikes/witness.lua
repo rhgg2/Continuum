@@ -147,8 +147,15 @@ local NAMES = { [0] = 'C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb'
 
 -- Named in full where the widening is small enough to read, and counted where it is not,
 -- which is itself the finding: a set of any richness admits composites by the dozen.
+-- The reach above is this spike's own, the solve having stopped reading a window, so the
+-- windows come from the notation directly.
 local function report(label, strands, moves, listed)
-  local seat, window = sonority.seats(strands, edo12)
+  local seat, window = {}, {}
+  for index, strand in ipairs(strands) do
+    local cents, below, above = tuning.seatWindow(edo12, strand.notes[1])
+    seat[index], window[index] = cents, { below = below, above = above }
+  end
+
   local onsets  = sonority.onsets(strands, sonority.walk(strands, 5))
   local witness = witnessesOf(onsets, seat, window, moves)
 

@@ -454,12 +454,6 @@ local function rebase(coords, from, to)
   return shifted
 end
 
--- No note leaves the step it was notated on, and a spelling is placed as a whole, at one
--- offset from the seats, so 'deviation' states which offsets remain open (§ The candidates).
-local function reachOf(deviation, window)
-  return -window.below - deviation, window.above - deviation
-end
-
 -- Coords in one order, so two tables holding the same exponents read alike.
 local function coordString(coords)
   local primes = util.keys(coords)
@@ -475,15 +469,14 @@ local function tokenOf(placed)
   return placed.component .. '@' .. coordString(placed.coords)
 end
 
--- What a join costs where it lands: the box its component widens by, and a spring against
--- each member already there, both priced before any displacement moves (§ The candidates).
-local function joinCost(state, component, placed, stiffness)
+-- What a join costs where it lands: what it widens its component's box by over the box that
+-- component came in carrying, and a spring against each member already there (§ The candidates).
+local function joinCost(state, component, placed, stiffness, carried)
   local coordSet = {}
   for _, slot in ipairs(component) do util.add(coordSet, state.at[slot].coords) end
-  local before = sonority.score(coordSet)
   util.add(coordSet, placed.coords)
 
-  local cost = sonority.score(coordSet) - before
+  local cost = sonority.score(coordSet) - carried
   for _, slot in ipairs(component) do
     local mistuning = (placed.deviation - state.at[slot].deviation) / PURE
     cost = cost + stiffness * mistuning * mistuning
@@ -494,29 +487,49 @@ end
 -- A slot the state has left waiting, keyed apart from the '' of one it has yet to decide.
 local DEFERRED = '?'
 
--- Keyed before it is built, so a candidate repeating a spelling costs its coords and its
--- key alone; the state it would have extended is copied only where the spelling is new.
---shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score, lo/hi=<the offsets left open> }
+-- Scored and keyed before it is built, so a candidate repeating a spelling costs its coords
+-- and its key alone, and a round builds only the states its cut goes on to keep.
+--shape: Candidate = { from=State, slot, placed=Placed|nil, parts, key, score, waits }
+--shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score }
 --shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }
-local function admit(reached, seen, state, slot, placed, stiffness, lo, hi)
+--invariant: no two members take one spelling, so a sonority states as many pitches as members
+local function propose(reached, seen, state, slot, placed, stiffness, carried)
+  local token = placed and tokenOf(placed) or DEFERRED
   local parts = util.clone(state.parts)
-  parts[slot] = placed and tokenOf(placed) or DEFERRED
-  local key = util.keyFrom(parts)
+  parts[slot] = token
+  if placed then
+    for other = 1, #parts do
+      if other ~= slot and parts[other] == token then return end
+    end
+  end
+
+  -- The parts are strings already, so the key is joined as util.keyFrom would join it,
+  -- without the tostring pass it makes: this is the round's hottest line.
+  local key = table.concat(parts, '\0')
   if seen[key] then return end
   seen[key] = true
 
-  local child = { at = util.clone(state.at), components = {}, parts = parts, key = key,
-                  waits = state.waits + (placed and 0 or 1), lo = lo, hi = hi,
-                  score = state.score }
+  local score = state.score
+  if placed then
+    score = score + joinCost(state, state.components[placed.component] or {}, placed,
+                             stiffness, carried)
+  end
+  util.add(reached, { from = state, slot = slot, placed = placed, parts = parts, key = key,
+                      score = score, waits = state.waits + (placed and 0 or 1) })
+end
+
+-- The state a candidate names, built once the cut has kept it.
+local function materialise(candidate)
+  local state, placed = candidate.from, candidate.placed
+  local child = { at = util.clone(state.at), components = {}, parts = candidate.parts,
+                  key = candidate.key, waits = candidate.waits, score = candidate.score }
   for index, slots in ipairs(state.components) do child.components[index] = util.clone(slots) end
   if placed then
-    local component = state.components[placed.component] or {}
-    child.score = state.score + joinCost(state, component, placed, stiffness)
-    child.at[slot] = placed
+    child.at[candidate.slot] = placed
     child.components[placed.component] = child.components[placed.component] or {}
-    util.add(child.components[placed.component], slot)
+    util.add(child.components[placed.component], candidate.slot)
   end
-  util.add(reached, child)
+  return child
 end
 
 -- Score, then the spelling itself, so an exact tie breaks on the coords rather than on
@@ -531,22 +544,30 @@ end
 --invariant: a round decides one slot, so the states it cuts between have placed equally many
 --invariant: the first member to place anchors and those before it wait, so one anchor spells each
 --invariant: every state ties every member it places; an untied one states nothing, charges none
---invariant: the reach is read against the spelling's own offset, not which member anchors
-local function beamOver(seat, window, free, moves, width, stiffness)
-  local start = { at = {}, components = {}, parts = {}, waits = 0, score = 0,
-                  lo = -math.huge, hi = math.huge }
+local function beamOver(seat, free, moves, width, stiffness)
+  local start = { at = {}, components = {}, parts = {}, waits = 0, score = 0 }
   for slot = 1, #seat do start.parts[slot] = '' end
-  start.key = util.keyFrom(start.parts)
+  start.key = table.concat(start.parts, '\0')
 
   local beam = { start }
   for _ = 1, #seat do
     local reached, seen = {}, {}
     for _, state in ipairs(beam) do
       local anchored = next(state.at) ~= nil
+
+      -- The box a component stands at is the state's own, so every move joining it this
+      -- round is priced against one reading of it rather than against a reading apiece.
+      local carried = {}
+      for index, slots in ipairs(state.components) do
+        local coordSet = {}
+        for _, held in ipairs(slots) do util.add(coordSet, state.at[held].coords) end
+        carried[index] = sonority.score(coordSet)
+      end
+
       for slot = 1, #seat do
         if state.parts[slot] == '' then
           if free[slot] then
-            admit(reached, seen, state, slot, nil, stiffness, state.lo, state.hi)
+            propose(reached, seen, state, slot, nil, stiffness)
           end
           if anchored then
             for host = 1, #seat do
@@ -554,25 +575,20 @@ local function beamOver(seat, window, free, moves, width, stiffness)
               if from then
                 for _, move in ipairs(moves) do
                   if move.height > 0 then
-                    local cents     = from.cents + move.cents
-                    local deviation = tuning.gapTo(seat[slot], cents)
-                    local low, high = reachOf(deviation, window[slot])
-                    local lo, hi    = math.max(state.lo, low), math.min(state.hi, high)
-                    if lo <= hi then
-                      admit(reached, seen, state, slot,
+                    local cents = from.cents + move.cents
+                    propose(reached, seen, state, slot,
                             { coords = joinCoords(from.coords, move), cents = cents,
-                              deviation = deviation, component = from.component },
-                            stiffness, lo, hi)
-                    end
+                              deviation = tuning.gapTo(seat[slot], cents),
+                              component = from.component },
+                            stiffness, carried[from.component])
                   end
                 end
               end
             end
           else
-            local low, high = reachOf(0, window[slot])
-            admit(reached, seen, state, slot,
-                  { coords = {}, cents = seat[slot], deviation = 0, component = 1 },
-                  stiffness, math.max(state.lo, low), math.min(state.hi, high))
+            propose(reached, seen, state, slot,
+                    { coords = {}, cents = seat[slot], deviation = 0, component = 1 },
+                    stiffness, 0)
             break
           end
         end
@@ -582,9 +598,9 @@ local function beamOver(seat, window, free, moves, width, stiffness)
     table.sort(reached, byScore)
     beam = {}
     local kept = {}
-    for _, state in ipairs(reached) do
-      kept[state.waits] = (kept[state.waits] or 0) + 1
-      if kept[state.waits] <= width then util.add(beam, state) end
+    for _, candidate in ipairs(reached) do
+      kept[candidate.waits] = (kept[candidate.waits] or 0) + 1
+      if kept[candidate.waits] <= width then util.add(beam, materialise(candidate)) end
     end
   end
   return beam
@@ -648,20 +664,19 @@ end
 -- A waiting member states no interval, so waiting is a choice the beam makes per member; a
 -- deferral is no rival to a spelling, so the cut runs within a waiting count (§ The candidates).
 --shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }
---contract: members; seat/window/mayWait per strand; moves, width, stiffness → Spellings, best first
---contract: a join is one move; one offset of the spelling seats every member inside its own window
+--contract: members; seat/mayWait per strand; moves, width, stiffness → Spellings, best first
+--contract: a join is one move; a spelling states intervals, and stands at any offset from the seats
 --contract: the width is a width per waiting count; math.huge enumerates the spellings whole
---contract: a sonority no chain reaches and no wait defers has no spelling: the list is empty
-function sonority.spellings(members, seat, window, mayWait, moves, width, stiffness)
-  local seats, windows, free = {}, {}, {}
+--contract: a target stating no move spells nothing: the list is empty
+function sonority.spellings(members, seat, mayWait, moves, width, stiffness)
+  local seats, free = {}, {}
   for slot, member in ipairs(members) do
-    seats[slot]   = seat[member]
-    windows[slot] = window[member]
-    free[slot]    = mayWait[member] or false
+    seats[slot] = seat[member]
+    free[slot]  = mayWait[member] or false
   end
 
   local spellings = {}
-  for k, state in ipairs(beamOver(seats, windows, free, moves, width, stiffness)) do
+  for k, state in ipairs(beamOver(seats, free, moves, width, stiffness)) do
     spellings[k] = spellingOf(state, members, seat)
   end
   return spellings
@@ -669,18 +684,15 @@ end
 
 ----- The terms
 
--- One window serves a strand in every register, so notes[1] speaks for all of them; the
+-- One seat serves a strand in every register, so notes[1] speaks for all of them; the
 -- seat keeps the register it was written in, which tuning.gapTo quotients out again.
---shape: Window = { below=<cents to the step below>, above=<cents to the step above> }
---contract: strands, notation → the cents of each strand's written step, and its window either side
+--contract: strands, notation → the cents of each strand's written step
 function sonority.seats(strands, notation)
-  local seat, window = {}, {}
+  local seat = {}
   for index, strand in ipairs(strands) do
-    local cents, below, above = tuning.seatWindow(notation, strand.notes[1])
-    seat[index]   = cents
-    window[index] = { below = below, above = above }
+    seat[index] = tuning.seatWindow(notation, strand.notes[1])
   end
-  return seat, window
+  return seat
 end
 
 -- A member is free to wait while an onset it sounds through is still to come; at that onset
@@ -1019,7 +1031,7 @@ end
 --contract: a sonority holding a waiter is charged in its own onset's slot, as its members place
 --contract: answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap
 --contract: the cut runs over two pools, the answers that owe and the answers that have paid
---contract: nil where an onset has no spelling — a sonority the target can't reach refuses it
+--contract: nil where an onset has no spelling — which is a target stating no move
 function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
   local ahead, start, offered = visibleAhead(onsets), {}, offeredBy(onsets, spellings)
   local from = openFrom(onsets)
@@ -1074,12 +1086,12 @@ local WIDTH, CAP = 24, 4
 -- The moves facility's solve: intervals rather than points, spelled by the beam under a
 -- frozen past, settled by joint relaxation (§ The solve).
 --contract: strands, n, strength, notation, moves, stiffness → the cents each strand settles at
---contract: nil where an onset has no spelling — a sonority the target cannot reach refuses it
+--contract: nil where an onset has no spelling — which is a target stating no move
 function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)
-  local seat, window = sonority.seats(strands, notation)
+  local seat = sonority.seats(strands, notation)
   local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, n)), {}
   for i, onset in ipairs(onsets) do
-    spellings[i] = sonority.spellings(onset.members, seat, window, onset.mayWait, moves,
+    spellings[i] = sonority.spellings(onset.members, seat, onset.mayWait, moves,
                                       WIDTH, stiffness)
   end
 
