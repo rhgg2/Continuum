@@ -32,7 +32,8 @@ Two critical concepts in the tracker stack:
 - **Time** — two frames (logical / realisation), connected by swing.
   Delay is a per-note offset on the raw note-on, not a frame of its
   own. See `docs/timing.md`.
-- **Pitch** — detune is intent (per-note metadata); pb is realisation
+- **Pitch** — three rungs: intent cents is what a note means (the step
+  it was written on), detune is where it sounds, pb is realisation
   (channel-wide stream). The view layer never touches pb directly.
   See `docs/tuning.md`.
 

@@ -107,9 +107,9 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    either side, and is asymmetric under an unequal scale: in a
    twelve-note quarter-comma meantone MOS, C may move +38.0¢ toward C♯
    and −58.6¢ toward B. Inside it the note keeps its step,
-   `tuning.midiToStep` recovering that step from `(pitch, detune)` by
-   snapping to the nearest, so nothing has to be stashed beside the
-   note to hold what was written.
+   `tuning.noteStep` reading that step from the intent the note carries,
+   or recovering it by snapping `(pitch, detune)` to the nearest where it
+   carries none (`docs/tuning.md` § The written step).
 
 1. The edge itself is no place to stand. A note exactly a half-gap out
    is equidistant from two steps, the tie breaks downward, and the cell

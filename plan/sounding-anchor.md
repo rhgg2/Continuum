@@ -35,12 +35,10 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+**Docs** — the intent rung in `docs/tuning.md`, the ladder line at
+`trackerManager.lua:5` and the retirement in `design/decisions.md`;
+implemented directly, without a brief. (design § What the note remembers)
 
 ## Queued (current phase; one-liners)
 
-6. **Docs** — `docs/tuning.md` gains the intent rung, intent cents being
-   realised as detune against a notation where detune is realised as pb
-   against a channel; the ladder line at `trackerManager.lua:5` follows it,
-   and `design/decisions.md` records the retirement of the rule that a step is
-   never stored.
+(empty — the phase's items are all landed or in flight.)

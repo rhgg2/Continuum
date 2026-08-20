@@ -245,9 +245,9 @@ design/interval-dirt.md § Phase 4 and § Phase 4.5.
 
 ## Pitchbend: tm's role in the tuning model
 
-See `docs/tuning.md` for the cross-cutting model — detune as intent,
-pb as realisation, the absorber invariant, and the
-orthogonality rule. tm is where the model is implemented. The
+See `docs/tuning.md` for the cross-cutting model — the ladder from a
+note's intent cents through detune to pb, the absorber invariant, and
+the orthogonality rule. tm is where the model is implemented. The
 tm-specific facts:
 
 - **Cents inside, raw at the boundary.** Inside `um`, `pb.val` is

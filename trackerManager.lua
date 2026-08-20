@@ -2,7 +2,8 @@
 
 --invariant: mm holds raw + a ppqL sidecar; columns and the park stash are logical-only (evt.ppq)
 --invariant: rebuild reconciles raw ↔ ppqL each pass (docs/timing.md)
---invariant: detune is intent (per-note); pb is realisation (channel-wide stream)
+--invariant: intentCents is a note's intent -- the cents of the step it was written on
+--invariant: pitch+detune realise the intent; pb realises detune (channel-wide stream)
 --invariant: only lane-1 notes drive detune realisation
 --invariant: pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
 --invariant: cents window = cm:get('pbRange') * 100 per side

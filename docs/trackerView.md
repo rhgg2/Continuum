@@ -471,9 +471,12 @@ The caller names them in a confirm and re-enters the verb with `widen` set if th
 offer is taken. Each refusing window then stretches by the smallest factor that
 reaches a point of the target, which reaches the pair either side of it wherever
 the target is closed under inversion, and the solve picks between them on the
-sonorities they stand in. A point outside a window relabels the cell it is
-written in, which is why the widening is offered rather than taken: no other
-facility the command offers moves a note off the step it was written on.
+sonorities they stand in. A point outside a window moves a note further from
+its step than the notation's own spacing allows, which is why the widening is
+offered rather than taken: no other facility the command offers does. The cell
+keeps the name the note's intent carries and reports the gap in cents
+(docs/tuning.md § The written step), so what widening spends is the note's
+sound rather than its label.
 
 The target reads two ways, and the facility slot says which. `'points'` is the
 solve above; `'moves'` reads the same temper as intervals that may be sounded

@@ -12,6 +12,15 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-20** — A note may store the step it was written on: `intentCents`, that step's absolute
+  cents, stamped by a solve on every note it seats and read wherever a step is derived. This retires
+  a rule stated twice and never hedged — that a step is never stored, being recoverable from
+  `(pitch, detune)` by snapping — which held only while the solve's window kept a note inside its
+  own step; a solve free to place a note past that window leaves the derivation naming a different
+  step. Cents rather than a step index, an index being bound to the notation that indexed it where
+  cents re-read across a temper change. The argument is `design/sounding-anchor.md` § What the note
+  remembers, and the model `docs/tuning.md` § The written step.
+
 - **2026-08-19** — Arrange's keyboard selection is the lasso's rule with the rect drawn by keys: a
   Shift+arrow run pins an anchor at the cursor cell and selects the takes the anchor→cursor rect
   covers, both end cells whole. Rejected: a walk that adds the take under each new cursor position,

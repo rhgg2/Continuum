@@ -951,8 +951,8 @@ do
           oct = entrySign(old, 'pitch') * util.setDigit(math.abs(old), d, place, 10, keep)
         end
 
-        -- Octave column moves the note by whole periods, so it keeps the step it was
-        -- written on; reject a move that clamps out of MIDI range (|detune|>½ st).
+        -- Octave column keeps the step and, where the period is a 2/1, the drift beside
+        -- it; reject a move that clamps out of MIDI range (|detune|>½ st).
         local pitch, detune, intent
         if temper then
           pitch, detune, intent = tuning.transposeNote(temper, evt, (oct - old) * #temper.cents)

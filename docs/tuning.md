@@ -20,18 +20,65 @@ to the other's question.
 **2** The first answer **names** the pitch. The MIDI view names it
 `(pitch, detune-in-cents)`; the scale view names it `(step, octave)`
 under a temperament. `tuning.lua` converts between the two namings, and
-holds no take state while doing it.
+holds no take state while doing it. A note may also carry its scale
+naming rather than have it derived — see *The written step*.
 
-**3** The second answer says how the pitch is **delivered**. Detune is
-the musician's intent, carried as per-note metadata. The channel-wide
-pitchbend stream is the realisation — what REAPER stores, and what the
-synth actually does. tm reconciles the two.
+**3** The second answer says how the pitch is **delivered**, and it is a
+ladder of three rungs. A note's intent cents names the step it was
+written on; `(pitch, detune)` is where the note sounds; the channel-wide
+pitchbend stream is what REAPER stores and what the synth actually does.
+Each rung realises the one above it, and tm reconciles the lower two.
 
 **4** These are orthogonal, and the orthogonality is load-bearing rather
 than decorative. The temperament chosen for display does not change a
 byte on the wire; a pb edit does not reach back and revise what the
 musician meant. Where a system allows the second sort of thing, its
 intents are not intents at all but a kind of residue.
+
+## The written step
+
+1. A note may carry an **intent cents** — the absolute cents of the step
+   it was written on, held in `intentCents` beside its pitch and detune,
+   and persisted as per-note metadata as detune is. Where it stands it is the
+   step the cell is named from and the origin a solve measures
+   displacement from, and `(pitch, detune)` then says only where the note
+   sounds.
+
+1. The field is sparse. A note no solve has touched carries none, and its
+   step is recovered from `(pitch, detune)` by snapping to the nearest,
+   which is how every note read before there was an intent to read.
+   `tuning.noteStep` is where the two cases meet, and every step
+   derivation outside `tuning.lua` goes through it.
+
+1. It holds cents rather than a step index, because an index is bound to
+   the notation that indexed it, where cents re-read correctly across a
+   temper change as `(pitch, detune)` does. What a solve stamps is a step
+   of the notation in force when it runs: a C♯ stamped at 6100 under
+   12-EDO stands nearest the quarter-comma meantone step at 6076.05, and a
+   solve under that notation restamps it there.
+
+1. Each rung of the ladder is free to differ from the one above it, and
+   the difference is reported or absorbed rather than erased. A solve
+   moves a note off the step its intent names, and the cell draws that gap
+   in cents beside the note's name (§ Display); a detune jump moves raw pb
+   off the logical line the musician drew, and a fake pb takes the step
+   onto itself (§ The fake-pb absorber).
+
+1. The paths that write the field are few:
+
+   - a solve stamps every note it seats, whether or not that note leaves
+     its step, so a cell's name never turns on how far the solve happened
+     to move it;
+   - the notation snap reads the intent and then clears it, drawing the
+     note onto the step the intent names, or partway there under a blended
+     strength, which is what reasserting the page means;
+   - typing a note over an old one clears it;
+   - a transpose steps from the written step and then spends the intent,
+     except under a move of whole 2/1 octaves, where the pitch class is
+     what a solve tuned and the intent rides with the note;
+   - a derived note takes its host's intent moved by the cents it stands
+     off the host, so a whole-tone trill on a note written C names C, D,
+     C, D across its tiles.
 
 ## Intent vs realisation
 
@@ -625,3 +672,6 @@ replace path (generator curves reusing the same seats):
   every cents/name edit.
 - **Detune is cents** throughout (never raw 14-bit). Conversion to
   raw pb happens only inside tm's flush boundary.
+- **A note's step comes from `tuning.noteStep`** — the intent it
+  carries, or the snap from `(pitch, detune)` where it carries none.
+  Callers outside the module read `noteStep`, never `midiToStep`.
