@@ -1,7 +1,7 @@
 # Sounding anchor — a note is tuned against what sounds, not against the page
 
 > opened: 2026-08-19 · status: in flight — plan/sounding-anchor.md, at
-> phase 2 (wall and ruler)
+> phase 3 (presence)
 
 **The moves solve stops anchoring a note to the step it was written on:
 the pull prices drift rather than the window forbidding it, a strand
