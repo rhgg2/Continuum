@@ -50,14 +50,19 @@ docs/<file>.md § <section>`). The docs hold the current WHY, but don't
 describe the API surface or repeat annotations in the code.
 
 Ongoing work larger than a couple of commits has a design doc in
-`design/` and a plan in `plan/`: the design doc holds the intent and
-the decisions, the plan holds the machinery — phases, what landed,
-what's next.
+`design/` and a plan in `plan/`: the design doc holds the model being
+proposed, without justifications; the plan holds the machinery —
+phases, what landed, what's next.
 
-Docs, design docs and the decisions log share a stated register:
-`docs/STYLE.md` — the tone it is pitched at, how a section is ordered,
-and what counts as ornament rather than claim. Worth reading before
-writing any of the three.
+`docs/` is the only permanent layer, and the others drain into it as
+work progresses. Citations point the same way: `design/` and
+`decisions.md` may cite `docs/`, `docs/` cites only `docs/`, and a
+pointer from `docs/` into `design/` says the substance is in the wrong
+file. `design/archive/` is inert — nothing cites into it, nothing new
+joins it.
+
+Docs, design docs and the decisions log share the register of
+`docs/STYLE.md`; give it a read before writing any of the three.
 
 ## Navigating the code
 

@@ -387,7 +387,7 @@ return {
 
   {
     -- 12EDO's half-window is fifty cents, and the gap the cell reports is no
-    -- longer bounded by it -- see design/sounding-anchor.md § Both wall and ruler.
+    -- longer bounded by it -- see design/sounding-anchor.md § The pull in cents.
     name = 'noteDeviation measures from the intent, past the half-window that once bound it',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }

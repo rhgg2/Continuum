@@ -21,7 +21,7 @@ appear in their design docs.
   scaling with the notation's step spacing. The window stays the points shortlist's and the
   notation's. What it costs: a note may leave the step it was written on, which `intentCents`
   records, and two members of a sonority could take one spelling, which the model now forbids
-  directly as distinctness. The argument is `design/sounding-anchor.md` § Both wall and ruler and
+  directly as distinctness. The argument is `design/sounding-anchor.md` § The pull in cents and
   § What the beam loses, the model `docs/sonority.md` § The pull.
 
 - **2026-08-20** — A note may store the step it was written on: `intentCents`, that step's absolute
