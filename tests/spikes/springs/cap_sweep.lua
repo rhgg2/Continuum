@@ -129,7 +129,7 @@ local function solveAt(passage, width, cap)
   local seat = sonority.seats(strands, passage.notation or edo12)
   local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, ARITY)), {}
   for i, onset in ipairs(onsets) do
-    spellings[i] = sonority.spellings(onset.members, seat, onset.mayWait,
+    spellings[i] = sonority.spellings(onset.members, seat, onset.presence, onset.mayWait,
                                       passage.moves, width, STIFFNESS)
   end
 

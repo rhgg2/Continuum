@@ -10,146 +10,32 @@ charged by whether its two members sound together.**
 
 ## Where it sits
 
-1. The adaptive solve offers a target under two readings, and this doc
-   changes one of them. Under the moves facility a target is read as
-   intervals that may be sounded pure between one strand and another,
-   and `sonority.solveToMoves` returns the cents each strand settles at;
-   under the points facility each strand selects one point of the target
-   (`docs/sonority.md`). The points solve is unchanged: its window still
-   binds, its shortlist having no other bound, and `tuning.seatWindow`
-   goes on returning the same two half-gaps. What changes is who reads
-   them, the moves solve stopping and the half-gaps becoming the points
-   solve's and the grid's (§ Both wall and ruler). The points solve does
-   read an intent where a moves solve has left one (§ What the note
-   remembers), the intent being a field on a note rather than on a
-   facility.
+1. This doc changes where the moves solve anchors a strand. The rest of
+   the solve is unchanged, and `docs/sonority.md` describes it and
+   supplies this doc's vocabulary.
 
-1. What the moves solve is built from stands unchanged. The strand, the
-   walk, the box, the spelling and the beam that enumerates spellings,
-   the two-pool cut and the running sum over closed onsets are all as
-   `docs/sonority.md` describes them. What changes is where a strand is
-   anchored while those machineries run.
+## The pull in cents
 
-1. The vocabulary is `docs/sonority.md`'s throughout — strand, sonority,
-   seat, window, displacement, spring, box, pull, strain — and this doc
-   defines only the terms it adds.
+1. The pull's strain is the displacement divided by fifty cents, the
+   width of a half-window in 12-EDO. The springs' strain uses the same
+   fifty, so purity and lock are measured in one unit.
 
-1. Two questions `design/adaptive-tuning.md` § Open used to ask are
-   settled here, for the moves solve alone, and have left that doc.
-   Whether the window should bind at all: it should neither bind nor
-   measure. What an author is told when a sonority no chain of moves can
-   place is refused: with no window to place it inside, that refusal does
-   not arise.
+1. The pull measures cents because a notation's step spacing has nothing
+   to do with how far a note has drifted from the music around it. Scale
+   the pull to the step spacing instead, and the same drift costs more
+   under a fine notation: a lock of 1 charges 6.7 times as much in
+   31-EDO as in 12-EDO.
 
-## The anchor today
+1. `settle` is a weighted mean. A strand settles at `stiffness × seats /
+   (stiffness × weight + strength)`; the fifty cancels, since both
+   charges divide by it.
 
-1. The moves solve anchors every strand to the page twice over.
-   `sonority.pullCost` charges a strand for standing away from the cents
-   of the step its note was written on, and that seat never moves
-   (`sonority.lua:347`); `settle` clamps every displacement into the
-   strand's own window (`sonority.lua:412`), while the beam refuses a
-   spelling that no single offset places inside every member's window
-   (`sonority.lua:566`). The reference is thus the page rather than the
-   music, and the window is a bound rather than a price.
-
-1. A sonority the target cannot place inside those windows has no
-   spelling, and `sonority.solveToMoves` returns nothing for the whole
-   passage. A diminished triad under a set holding `3/2` and `5/4` alone
-   is refused this way, where under a set holding `7/4` it is spelled and
-   seated (`docs/sonority.md` § What it gives up). The refusal falls on
-   the passage rather than on the chord that caused it.
-
-1. An author's control over drift runs out at that wall. Purity trades
-   drift against distribution smoothly — stiff springs let a comma pump
-   arrive a syntonic comma flat, soft ones spread the comma across the
-   intervals at under 2¢ apiece — but only as far as the point where a
-   displacement meets its clamp, and where that point lies is set by the
-   notation's step spacing rather than by anything the music is doing.
-
-1. A passage that has already moved as a body keeps paying for having
-   moved. The pull is charged against the written seat whatever the
-   strands around a note have done, so it resists the second comma as
-   hard as the first.
-
-1. A spring is charged alike whether both its members sound or one of
-   them has stopped. `chargeOf` springs every pair of a sonority's placed
-   members (`sonority.lua:603`), and a sonority holds both the classes
-   still sounding and the last `n` distinct classes struck
-   (`docs/sonority.md` § The walk); yet what a spring prices is beating,
-   and beating wants two sounding pitches. The set of strands that do
-   sound is already computed, and is spent only on deciding which of them
-   the relaxation may move (`sonority.lua:701`, `sonority.lua:999`).
-
-1. Behind all of this stands one constraint. A note's step is derived and
-   never stored: `tuning.midiToStep` recovers it from `(pitch, detune)`
-   by snapping to the nearest step, and `tuning.seat` normalises a solved
-   answer so that detune never exceeds a half-semitone and the MIDI pitch
-   absorbs the rest (`tuning.lua:833`). A note that leaves its window
-   therefore reads back as a different step, and the window's bound is
-   what keeps that derivation honest.
-
-## Both wall and ruler
-
-1. The window does two jobs, and both of them end. As a **wall** it
-   bounds where a strand may stand, in `settle`'s clamp and in the beam's
-   reach; as a **ruler** it is the unit the pull's strain is taken in, a
-   displacement being divided by the half-window on the side it points
-   toward, so that a strength means one thing under any notation.
-
-1. The wall goes first. `settle` returns its optimum unclamped and the
-   beam stops gating a join on reach (§ What the beam loses); a strand at
-   its window's edge still pays the strength and a strand at twice that
-   pays four times it, so the quadratic runs on past the edge rather than
-   stopping there.
-
-1. The ruler is the wall priced rather than enforced, so it goes too.
-   Where a displacement starts to cost is set by the half-window it is
-   divided by, and a note whose notational neighbours sit close meets its
-   resistance early where one under a coarse notation meets it late —
-   which is § The anchor today's objection to the clamp, answered by a
-   slope in place of a stop. In the quarter-comma meantone MOS a C
-   reaching +38.0¢ and −58.6¢ pays 2.4 times as much to drift ten cents
-   sharp as ten cents flat; under the ruler a lock of 1 in 31-EDO charges
-   6.7 times what the same lock charges in 12-EDO for the same drift.
-
-1. The justification the ruler had is one this doc retires. The pull was
-   taken in half-windows because it asked whether a note was still the
-   step it was written on, which the notation's own spacing settles,
-   where mistuning was taken in cents because beating knows nothing of
-   that spacing (`docs/sonority.md` § The springs). Under an ambient
-   reference the pull asks how far a note stands from the body of music
-   it arrived in, and no notation settles that either.
-
-1. So the pull joins the springs, its strain being `displacement − rest`
-   over fifty — what a half-window holds in 12-EDO, held constant so that
-   a strength means one thing under any notation. The arithmetic asks for
-   the move as well: a ruler branching on the sign of the displacement
-   while the strain is measured from a rest is discontinuous at zero, a
-   strand whose rest is +30¢ paying `(30/below)²` an instant below it and
-   `(30/above)²` an instant above.
-
-1. `settle` collapses to a weighted mean. Both charges carry the same
-   fifty, which divides out, and a strand settles at `(stiffness × seats
-   + strength × rest) / (stiffness × count + strength)` — what its
-   springs ask of it against where the music was, weighted by the two
-   dials. The half, the branch that chose it and the clamp leave
-   `sonority.lua:405` together, and no term of the objective reads a
-   window again.
-
-1. `tuning.seatWindow` is unchanged, and the half-gaps it returns are the
-   points solve's alone now. They are still what a points shortlist
-   measures its strain against; the moves solve stops reading them and
-   stops knowing how a notation spaces its steps, and the grid stops
-   reading them too, reporting a note's gap in cents (§ What the cell
+1. Only the points solve reads the half-gaps from `tuning.seatWindow`
+   now. The grid reports a note's gap in cents instead (§ What the cell
    says).
 
-1. The refusal collapses into a trade. A sonority no chain of moves
-   places inside the windows is now spelled and priced, and an author who
-   dislikes where it lands turns the pull up rather than being told the
-   passage cannot be solved.
-
-1. A note may now leave the step it was written on. That is what this
-   change costs, and § What the note remembers is where it is paid for.
+1. If no chain of moves places a sonority, the solve prices it instead
+   of refusing it. An author who dislikes the result turns the pull up.
 
 ## What the note remembers
 
@@ -436,11 +322,24 @@ charged by whether its two members sound together.**
    beam ranking by one objective while the search minimises another would
    return spellings the search does not want.
 
-1. The box keeps its full weight. What the box measures is root fusion —
-   how nearly a sonority's notes share a virtual fundamental — and the
-   recency tail is in the sonority precisely so that a chord change is
-   scored against the chord before it. A silent member beats with
-   nothing, yet it is still part of the harmony an ear is holding.
+1. The box keeps its full weight, and has no pair to weight in any case.
+   `sonority.score` reads a component's coords as a set — the span on each
+   axis its members name, weighted by that axis's height — and returns one
+   figure per component, so a product of two presences has nowhere to land.
+   The most such a shape could take is a scalar over the whole component,
+   which is a different quantity from a spring's weight.
+
+1. A full weight is what the box's job asks for. What the box measures is
+   root fusion — how nearly a sonority's notes share a virtual fundamental —
+   and the recency tail is in the sonority so that a chord change is scored
+   against the chord before it: a spring couples the tuning across that
+   change, where the box couples the spelling, being charged over the
+   component with the recency members standing in it. A detached line, whose
+   every note stops before the next strikes, has the box alone relating note
+   two's coords to note one's, its springs all standing at `RECENT` squared,
+   and presence at zero decouples the sonorities (§ Presence). A silent
+   member beats with nothing, yet it is still part of the harmony an ear is
+   holding.
 
 ## The ambient reference
 
@@ -448,7 +347,7 @@ charged by whether its two members sound together.**
    was sitting when its note arrived — the mean displacement of the other
    members of the sonority it joins, each weighted by its presence — and
    `sonority.pullCost` charges the strain of `displacement − rest`, that
-   gap over fifty (§ Both wall and ruler), rather than the strain of the
+   gap over fifty (§ The pull in cents), rather than the strain of the
    displacement alone. A strand does not speak for where it should itself
    stand, so a mean over no other member is zero.
 
@@ -531,7 +430,7 @@ charged by whether its two members sound together.**
    nearly a spelled interval sounds pure, and it keeps the unit it is
    taken in — cents against a reference of fifty, held constant so that a
    stiffness means one thing under any notation. What has changed is that
-   the pull is taken there too (§ Both wall and ruler), so the two charges
+   the pull is taken there too (§ The pull in cents), so the two charges
    are commensurable and the dials are the weights a strand settles under.
 
 1. Harmonic lock's opening value goes back into play. The lattice this
@@ -657,7 +556,11 @@ charged by whether its two members sound together.**
    among them from 25 to 3. What it costs is melodic: a step-class
    wanders twice as far across the take, a mean spread of 18.8¢ against
    9.9¢. That freedom is the one § The ambient reference takes away, so
-   the two want judging together rather than one before the other.
+   the two want judging together rather than one before the other. A
+   pairwise box has a spring's shape, so presence would have a handle there
+   the moment one landed, and the choice carries a second question with it:
+   whether such a box prices beating, and takes the same product weight, or
+   prices relation, and keeps its full one (§ Springs price beating).
    `tests/spikes/springs/pairwise_box.lua` carries both boxes and the
    dial figures each wants.
 

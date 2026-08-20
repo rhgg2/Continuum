@@ -98,7 +98,7 @@ local function solve(lock, purity, cap)
   local seat = sonority.seats(strands, take.notation)
   local onsets, lists = sonority.onsets(strands, sonority.walk(strands, ARITY)), {}
   for i, onset in ipairs(onsets) do
-    lists[i] = sonority.spellings(onset.members, seat, onset.mayWait, take.target,
+    lists[i] = sonority.spellings(onset.members, seat, onset.presence, onset.mayWait, take.target,
                                   WIDTH, purity)
   end
   local answer = sonority.search(onsets, lists, seat, lock, purity, cap)

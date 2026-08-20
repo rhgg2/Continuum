@@ -80,6 +80,10 @@ local function spring(sp, i, j, delta, why)
   near(sp.delta, delta, why)
 end
 
+-- Every member of a sonority sounding, which is what a struck chord carries.
+local allSounding = {}
+for index = 1, 16 do allSounding[index] = 1 end
+
 -- The relaxation's original terms: every strand free, and standing where it was written.
 local function allFree(count)
   local start, free = {}, {}
@@ -494,7 +498,8 @@ local function termsOf(strands, n, moves)
   local seat = sonority.seats(strands, edo12)
   local onsets, lists = sonority.onsets(strands, sonority.walk(strands, n)), {}
   for i, onset in ipairs(onsets) do
-    lists[i] = sonority.spellings(onset.members, seat, onset.mayWait, moves, 24, 8)
+    lists[i] = sonority.spellings(onset.members, seat, onset.presence, onset.mayWait,
+                                  moves, 24, 8)
   end
   return onsets, lists, seat
 end
@@ -604,7 +609,7 @@ return {
   {
     name = 'springs: a spelled major triad, by hand',
     run = function()
-      local springs = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+      local springs = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, allSounding,
         { {}, { [5] = 1 }, { [3] = 1 } })
 
       t.eq(#springs, 3, 'a spring per pair')
@@ -619,7 +624,7 @@ return {
     run = function()
       -- A seat is read at the strand its member names, whatever position the member holds:
       -- a sonority of strands 3 and 5 reads their two seats, and the spring names them again.
-      local springs = sonority.springs({ 3, 5 }, { [3] = 1100, [5] = 0 },
+      local springs = sonority.springs({ 3, 5 }, { [3] = 1100, [5] = 0 }, allSounding,
                                        { {}, { [3] = -1, [5] = -1 } })
 
       t.eq(#springs, 1, 'one pair, one spring')
@@ -630,7 +635,25 @@ return {
   {
     name = 'springs: a lone member holds no spring',
     run = function()
-      t.eq(#sonority.springs({ 4 }, { [4] = 250 }, { {} }), 0, 'one member ties nothing')
+      t.eq(#sonority.springs({ 4 }, { [4] = 250 }, allSounding, { {} }), 0,
+        'one member ties nothing')
+    end,
+  },
+
+  {
+    name = 'springs: a spring\'s weight is its two members\' presence, multiplied',
+    run = function()
+      -- The same triad with its third and fifth held by recency: each spring the root
+      -- stands in weighs a half, and the pair neither member of which sounds a quarter.
+      local springs = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, { 1, 0.5, 0.5 },
+                                       { {}, { [5] = 1 }, { [3] = 1 } })
+
+      spring(springs[1], 1, 2, -13.69, 'the third pure 13.69 below its seat')
+      t.eq(springs[1].weight, 0.5, 'a member sounding against one held by recency, at a half')
+      spring(springs[2], 1, 3, 1.955, 'the fifth pure 1.96 above its seat')
+      t.eq(springs[2].weight, 0.5, 'and the root against the fifth alike')
+      spring(springs[3], 2, 3, 15.64, 'third to fifth, the difference of the two')
+      t.eq(springs[3].weight, 0.25, 'the pair neither of which sounds, at a quarter')
     end,
   },
 
@@ -640,8 +663,9 @@ return {
       -- A C major triad, then the fifth G–D: two sonorities sharing the strand on G. The box
       -- the two spellings carry is charged by whoever chose them, not by the cost of a placement.
       local seat  = { 0, 400, 700, 200 }
-      local major = sonority.springs({ 1, 2, 3 }, seat, { {}, { [5] = 1 }, { [3] = 1 } })
-      local fifth = sonority.springs({ 3, 4 }, seat, { {}, { [3] = 1 } })
+      local major = sonority.springs({ 1, 2, 3 }, seat, allSounding,
+                                     { {}, { [5] = 1 }, { [3] = 1 } })
+      local fifth = sonority.springs({ 3, 4 }, seat, allSounding, { {}, { [3] = 1 } })
       local displacement = { -4, -12, 2, 6 }
 
       -- Each spring's mistuning is the gap the displacements realise less the gap the
@@ -659,9 +683,31 @@ return {
   },
 
   {
+    name = 'springs: a spring half present charges half',
+    run = function()
+      -- A spring prices beating, which wants two sounding pitches, so a spring one of whose
+      -- members the sonority holds by recency charges half of what a struck pair charges.
+      local seat, spelled = { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } }
+      local sounding = sonority.springs({ 1, 2, 3 }, seat, allSounding, spelled)
+      local halved   = sonority.springs({ 1, 2, 3 }, seat, { 1, 1, 0.5 }, spelled)
+      local displacement = { -4, -12, 2 }
+
+      -- Mistunings of 5.6863, 4.0450 and 1.6413, the last two of them the fifth's, which
+      -- is the member held by recency: those two springs give up half their charge.
+      local full = sonority.springCost({ sounding }, displacement, 8, 1, 1)
+      local given = 8 * 0.5 * ((4.0450 / 50)^2 + (1.6413 / 50)^2)
+
+      nearly(sonority.springCost({ halved }, displacement, 8, 1, 1), full - given,
+        'the two springs the half-present fifth stands in, charging half apiece')
+      nearly(full, 0.1644, 'against what the three charge where every member sounds')
+    end,
+  },
+
+  {
     name = 'springs: displacements realising the spelling leave every spring slack',
     run = function()
-      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } })
+      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, allSounding,
+                                     { {}, { [5] = 1 }, { [3] = 1 } })
 
       -- The first strand stands where it was written and the others follow their springs
       -- from it, so every pair sounds the interval the spelling states, the third pair included.
@@ -691,7 +737,7 @@ return {
     run = function()
       -- One spring, and a pull that charges either strand alike, so the two part it
       -- equally: each at stiffness × delta over strength plus twice the stiffness.
-      local third = sonority.springs({ 1, 2 }, { 0, 400 }, { {}, { [5] = 1 } })
+      local third = sonority.springs({ 1, 2 }, { 0, 400 }, allSounding, { {}, { [5] = 1 } })
       local hand  = -8 * third[1].delta / (1 + 2 * 8)
 
       local start, free  = allFree(2)
@@ -702,12 +748,54 @@ return {
   },
 
   {
+    name = 'relax: a strand settles nearer the neighbour that sounds',
+    run = function()
+      -- The triad with its fifth held by recency, so the two springs the fifth stands in
+      -- weigh a half: a strand settles at the mean its weights take, not the mean its
+      -- count takes, and the weights divide out of the denominator alongside the count.
+      local seat, spelled = { 0, 400, 700 }, { {}, { [5] = 1 }, { [3] = 1 } }
+      local springs = sonority.springs({ 1, 2, 3 }, seat, { 1, 1, 0.5 }, spelled)
+
+      -- The root alone sweeping, its two neighbours held at twenty flat and five sharp.
+      local root = { 1 }
+      local hand = 8 * (1 * (-20 + 13.6863) + 0.5 * (5 - 1.9550)) / (8 * 1.5 + 1)
+      nearly(hand, -2.9484, 'the hand solution, the sounding neighbour counting double')
+      nearly(sonority.relax(sonority.ties({ springs }, root), 1, 8, { 0, -20, 5 }, root)[1],
+             hand, 'which is where the sweep leaves it')
+
+      -- Every strand free, against what the same spelling settles at with all three sounding.
+      local start, free = allFree(3)
+      local unweighted  = sonority.relax(
+        sonority.ties({ sonority.springs({ 1, 2, 3 }, seat, allSounding, spelled) }, free),
+        1, 8, start, free)
+      local weighted = sonority.relax(sonority.ties({ springs }, free), 1, 8, start, free)
+
+      nearly(weighted[1],  3.8106, 'the root')
+      nearly(weighted[2], -9.2240, 'the third')
+      nearly(weighted[3],  5.4146, 'and the fifth, a fifth of a cent short of 5.6301')
+      nearly(unweighted[3], 5.6301, 'which is where it goes when it sounds')
+      t.truthy(weighted[3] < unweighted[3],
+        'the half-present fifth drawn less far than it is drawn at full weight')
+
+      -- And the answer is the objective's own: the weighted springs settle where they cost
+      -- least under themselves, which the unweighted answer does not better.
+      local function costOf(displacement)
+        return sonority.springCost({ springs }, displacement, 8, 1, 1)
+             + sonority.pullCost(displacement, 1, free)
+      end
+      nearly(costOf(weighted), 0.0547, 'the weighted answer under the weighted objective')
+      t.truthy(costOf(weighted) < costOf(unweighted), string.format(
+        'against the unweighted answer at %.6f', costOf(unweighted)))
+    end,
+  },
+
+  {
     name = 'relax: no wall stops stiff springs stretching a pair',
     run = function()
       -- A 7/4 asks for thirty-one cents of stretch and stiff springs outweigh the pull, so
       -- the pair goes fifteen cents apiece: nothing bounds a displacement, and the closed
       -- form above holds at any stiffness.
-      local harmonic = sonority.springs({ 1, 2 }, { 0, 1000 }, { {}, { [7] = 1 } })
+      local harmonic = sonority.springs({ 1, 2 }, { 0, 1000 }, allSounding, { {}, { [7] = 1 } })
       local hand     = -40 * harmonic[1].delta / (1 + 2 * 40)
 
       local start, free  = allFree(2)
@@ -726,9 +814,9 @@ return {
       -- C–E a 5/4, E–A a 4/3, C–A a 27/16: three sonorities whose spellings fail to close
       -- by a syntonic comma, so no displacement leaves all three springs slack.
       local seat   = { 0, 400, 900 }
-      local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
+      local third  = sonority.springs({ 1, 2 }, seat, allSounding, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, seat, allSounding, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, seat, allSounding, { {}, { [3] =  3 } })
       local loop = { third, fourth, sixth }
 
       local start, free  = allFree(3)
@@ -764,9 +852,9 @@ return {
       -- The objective is convex, so where the sweep begins buys it sweeps and not an answer:
       -- the comma loop started well off its optimum comes back to the same three cents.
       local seat   = { 0, 400, 900 }
-      local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
+      local third  = sonority.springs({ 1, 2 }, seat, allSounding, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, seat, allSounding, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, seat, allSounding, { {}, { [3] =  3 } })
       local loop = { third, fourth, sixth }
 
       local start, free = allFree(3)
@@ -786,9 +874,9 @@ return {
       -- The walk ties the onsets an answer has settled once, and starts the ties of each
       -- spelling tried at the cursor from that set, rather than tying every onset at each of them.
       local seat   = { 0, 400, 900 }
-      local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
+      local third  = sonority.springs({ 1, 2 }, seat, allSounding, { {}, { [5] =  1 } })
+      local fourth = sonority.springs({ 2, 3 }, seat, allSounding, { {}, { [3] = -1 } })
+      local sixth  = sonority.springs({ 1, 3 }, seat, allSounding, { {}, { [3] =  3 } })
       local loop = { third, fourth, sixth }
       local start, free  = allFree(3)
 
@@ -808,7 +896,7 @@ return {
     run = function()
       -- The walk frees the strands an onset sounds and reads the rest: here the root is data
       -- at ten cents sharp, pulling on the springs of a triad whose sweep it takes no turn in.
-      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, allSounding,
                                      { {}, { [5] = 1 }, { [3] = 1 } })
 
       local sweeping = { 2, 3 }
@@ -838,9 +926,9 @@ return {
   {
     name = 'spellings: a major triad comes back spelled as the theory table has it',
     run = function()
-      local best = sonority.spellings({ 1, 2, 3 }, { 0, 400, 700 }, {},
+      local best = sonority.spellings({ 1, 2, 3 }, { 0, 400, 700 }, allSounding, {},
                                       fifthsAndThirds, 12, 8)[1]
-      local hand = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+      local hand = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, allSounding,
                                     { {}, { [5] = 1 }, { [3] = 1 } })
 
       near(best.box, 3.91, 'the box of a 5-limit major triad')
@@ -858,13 +946,14 @@ return {
       -- The nearest moves to 600¢ are 4/3 and 3/2, each 101.955¢ from the seat, so the pair
       -- states an interval neither of its steps can name. A spelling states intervals and
       -- stands at any offset from the seats, so what was refused is now spelled and priced.
-      local list = sonority.spellings({ 1, 2 }, { 0, 600 }, {}, fifthsAndThirds, 12, 8)
+      local list = sonority.spellings({ 1, 2 }, { 0, 600 }, allSounding, {},
+                                      fifthsAndThirds, 12, 8)
       t.eq(#list, 4, 'the tritone spelled at the intervals the target does name')
       near(list[1].box, 1.585, 'the cheapest of them a 4/3')
       spring(list[1].springs[1], 1, 2, -101.96, 'a hundred cents under where it was written')
 
       -- Nor is a diminished triad refused for the minor third the set is silent about.
-      local diminished = sonority.spellings({ 1, 2, 3 }, { 0, 300, 600 }, {},
+      local diminished = sonority.spellings({ 1, 2, 3 }, { 0, 300, 600 }, allSounding, {},
                                             fifthsAndThirds, 12, 8)
       t.eq(#diminished, 12, 'the chord the set says nothing about, spelled at the width')
       near(diminished[1].box, 3.9069, 'the box of a major triad, which is what it states')
@@ -874,7 +963,7 @@ return {
 
       -- Put a G beside the tritone and the C reaches it, while nothing reaches the F sharp
       -- purely: the stranded member is priced into the sonority rather than refusing it.
-      local withFifth = sonority.spellings({ 1, 2, 3 }, { 0, 600, 700 }, {},
+      local withFifth = sonority.spellings({ 1, 2, 3 }, { 0, 600, 700 }, allSounding, {},
                                            fifthsAndThirds, 12, 8)
       t.eq(#withFifth, 12, 'a member no chain reaches spelled beside the two that meet')
       near(withFifth[1].box, 3.1699, 'the three carrying a fifth and a fourth between them')
@@ -892,7 +981,7 @@ return {
       -- spelling wins: the two settle four cents apart, on one MIDI pitch. So a member takes
       -- a spelling no member of its component already holds, and the chord states three
       -- pitches because it has three members.
-      local whole = sonority.spellings({ 1, 2, 3 }, { 300, 400, 700 }, {},
+      local whole = sonority.spellings({ 1, 2, 3 }, { 300, 400, 700 }, allSounding, {},
                                        fifthsAndThirds, math.huge, 8)
       t.eq(#whole, 36, 'the spellings of the three, enumerated whole')
 
@@ -916,14 +1005,16 @@ return {
       -- none of the answer's business. Enumerated whole, since a beam of twelve would report
       -- its own width rather than what the target reaches.
       for _, seat in ipairs{ { 0, 400, 700 }, { 400, 0, 700 }, { 700, 400, 0 } } do
-        local list = sonority.spellings({ 1, 2, 3 }, seat, {}, fifthsAndThirds, math.huge, 8)
+        local list = sonority.spellings({ 1, 2, 3 }, seat, allSounding, {},
+                                        fifthsAndThirds, math.huge, 8)
         t.eq(#list, 36, 'the same spellings whichever member the walk names first')
         near(list[1].box, 3.9069, 'each of them reaching the same box')
       end
 
       -- And the chord no chain of moves places purely is spelled the same way round.
       for _, seat in ipairs{ { 0, 300, 600 }, { 300, 0, 600 }, { 600, 300, 0 } } do
-        local list = sonority.spellings({ 1, 2, 3 }, seat, {}, fifthsAndThirds, math.huge, 8)
+        local list = sonority.spellings({ 1, 2, 3 }, seat, allSounding, {},
+                                        fifthsAndThirds, math.huge, 8)
         t.eq(#list, 36, 'and spelled in every order where it is spelled in one')
         near(list[1].box, 3.9069, 'at the box a major triad carries')
       end
@@ -942,7 +1033,8 @@ return {
       local onsets  = sonority.onsets(strands, sonority.walk(strands, 5))
 
       for i, onset in ipairs(onsets) do
-        local list = sonority.spellings(onset.members, seat, {}, fifthsAndThirds, 400, 8)
+        local list = sonority.spellings(onset.members, seat, onset.presence, {},
+                                        fifthsAndThirds, 400, 8)
         t.truthy(#list > 0, 'onset ' .. i .. ' spelled at all')
 
         for _, spelling in ipairs(list) do
@@ -958,19 +1050,54 @@ return {
   },
 
   {
+    name = 'spellings: the beam ranks a join under the same weight',
+    run = function()
+      -- joinCost weights a spring by the presence of the two members it ties, so a spelling
+      -- stating a wide interval to a member held by recency is affordable where the same
+      -- spelling is not affordable to a member that sounds (§ Springs price beating).
+      local seat = { 0, 300, 700 }
+
+      -- Where in a list the spelling stands that places the upper two members at these coords.
+      local function rankOf(list, third, fifth)
+        for k, spelling in ipairs(list) do
+          if util.deepEq(spelling.placed[2].coords, third)
+             and util.deepEq(spelling.placed[3].coords, fifth) then return k end
+        end
+      end
+
+      local sounding = sonority.spellings({ 1, 2, 3 }, seat, allSounding, {},
+                                          withSevenths, 6, 8)
+      local halved   = sonority.spellings({ 1, 2, 3 }, seat, { 1, 0.5, 1 }, {},
+                                          withSevenths, 6, 8)
+
+      t.eq(rankOf(sounding, { [5] = 1 }, { [3] = 1 }), 5,
+        'the minor third spelled as a pure major third stands fifth where all three sound')
+      t.eq(rankOf(halved, { [5] = 1 }, { [3] = 1 }), 3,
+        'and third where the member it states that interval to is held by recency')
+
+      spring(halved[3].springs[1], 1, 2, 86.31, 'an interval 86 cents from the seats')
+      t.eq(halved[3].springs[1].weight, 0.5, 'which a half-weighted spring can afford')
+
+      t.eq(rankOf(sounding, { [3] = 1, [5] = -1 }, { [3] = 1 }), 1, 'the spelling that leads')
+      t.eq(rankOf(halved, { [3] = 1, [5] = -1 }, { [3] = 1 }), 1,
+        'leading under either weight: the weight reorders the beam, it does not rewrite it')
+    end,
+  },
+
+  {
     name = 'spellings: a rolled minor defers rather than state what the chord has not',
     run = function()
       -- The E flat has struck and the C is still sounding: spelled where they stand, the C
       -- takes an 8/5 above the E flat, stretching the pair 86¢ from where it was written,
       -- which is the cheapest of the four intervals the target names (§ The candidates).
       local seat    = { 300, 0 }
-      local spelled = sonority.spellings({ 1, 2 }, seat, {}, fifthsAndThirds, 12, 8)
+      local spelled = sonority.spellings({ 1, 2 }, seat, allSounding, {}, fifthsAndThirds, 12, 8)
       t.eq(#spelled, 4, 'the intervals a pair of members can state')
       near(spelled[1].box, 2.3219, 'the cheapest of them an 8/5')
       t.eq(#spelled[1].springs, 1, 'which the pair sounds')
       spring(spelled[1].springs[1], 1, 2, -86.31, 'the C far below where it was written')
 
-      local deferred = sonority.spellings({ 1, 2 }, seat, { false, true },
+      local deferred = sonority.spellings({ 1, 2 }, seat, allSounding, { false, true },
                                           fifthsAndThirds, 12, 8)
       t.eq(#deferred, 5, 'the waiting state stands beside the spelled pairs')
       t.eq(#deferred[1].waiting, 1, 'and leads them, having paid nothing yet')
@@ -983,8 +1110,9 @@ return {
     name = 'spellings: a width of infinity is the enumeration the beam is checked against',
     run = function()
       local members, seat = { 1, 2, 3, 4 }, { 0, 400, 700, 1000 }
-      local full = sonority.spellings(members, seat, {}, fifthsAndThirds, math.huge, 8)
-      local beam = sonority.spellings(members, seat, {}, fifthsAndThirds, 12, 8)
+      local full = sonority.spellings(members, seat, allSounding, {},
+                                      fifthsAndThirds, math.huge, 8)
+      local beam = sonority.spellings(members, seat, allSounding, {}, fifthsAndThirds, 12, 8)
       local hand = { { 1, 2, -84.36 }, { 1, 3, 1.96 }, { 1, 4, 17.60 },
                      { 2, 3, 86.31 }, { 2, 4, 101.96 }, { 3, 4, 15.64 } }
 
@@ -1010,8 +1138,8 @@ return {
       -- scores the cut ranks commensurable.
       local members, seat = { 1, 2, 3, 4, 5 }, { 0, 400, 700, 1000, 200 }
       local free = { false, true, true, true, true }
-      local list = sonority.spellings(members, seat, free, elevenPitches, 12, 8)
-      local best = sonority.spellings(members, seat, {}, elevenPitches, 12, 8)[1]
+      local list = sonority.spellings(members, seat, allSounding, free, elevenPitches, 12, 8)
+      local best = sonority.spellings(members, seat, allSounding, {}, elevenPitches, 12, 8)[1]
 
       local spelled, held = nil, {}
       for _, entry in ipairs(list) do
@@ -1040,7 +1168,7 @@ return {
       -- The first member to place anchors and those before it wait, so the enumeration
       -- holds a waiting set once rather than once per gauge.
       local seat  = { 0, 400, 700 }
-      local whole = sonority.spellings({ 1, 2, 3 }, seat, { true, true, true },
+      local whole = sonority.spellings({ 1, 2, 3 }, seat, allSounding, { true, true, true },
                                        fifthsAndThirds, math.huge, 8)
 
       local held = {}
@@ -1051,10 +1179,10 @@ return {
       local pairSpellings = 0
       for _, members in ipairs{ { 1, 2 }, { 1, 3 }, { 2, 3 } } do
         pairSpellings = pairSpellings
-          + #sonority.spellings(members, seat, {}, fifthsAndThirds, math.huge, 8)
+          + #sonority.spellings(members, seat, allSounding, {}, fifthsAndThirds, math.huge, 8)
       end
 
-      t.eq(held[0], #sonority.spellings({ 1, 2, 3 }, seat, {}, fifthsAndThirds,
+      t.eq(held[0], #sonority.spellings({ 1, 2, 3 }, seat, allSounding, {}, fifthsAndThirds,
                                         math.huge, 8), 'the triad, spelled whole')
       t.eq(held[1], pairSpellings, 'each pair it leaves, spelled as that pair alone is')
       t.eq(held[2], 3, 'each member placed alone, stating nothing with anybody')
@@ -1068,14 +1196,14 @@ return {
       -- A sonority's members are strand indices, and everything it reads of them is
       -- indexed the same way, so the decoy seated at strand 2 is never read.
       local members, seat = { 3, 1 }, { 400, 600, 0 }
-      local best = sonority.spellings(members, seat, {}, fifthsAndThirds, 12, 8)[1]
-      local hand = sonority.springs(members, seat, { {}, { [5] = 1 } })
+      local best = sonority.spellings(members, seat, allSounding, {}, fifthsAndThirds, 12, 8)[1]
+      local hand = sonority.springs(members, seat, allSounding, { {}, { [5] = 1 } })
 
       t.eq(#best.springs, 1, 'the pair the moves tie')
       spring(best.springs[1], 3, 1, -13.69, 'the third pure below the seat of strand 1')
       spring(best.springs[1], hand[1].i, hand[1].j, hand[1].delta, 'as the springs take it by hand')
 
-      local deferred = sonority.spellings(members, seat, { [1] = true },
+      local deferred = sonority.spellings(members, seat, allSounding, { [1] = true },
                                           fifthsAndThirds, 12, 8)
       t.truthy(#deferred[1].waiting > 0, 'a member free to wait leads the list')
       t.eq(deferred[1].waiting[1], 1, 'and it is the strand mayWait named, not the position')
@@ -1131,6 +1259,8 @@ return {
       t.deepEq(onsets[2].members, { 3, 1, 2 }, 'the E a member of the second still, by recency')
       t.deepEq(onsets[2].sounding, { 3, 1 }, 'though it no longer sounds there')
       t.deepEq(onsets[2].mayWait, { [1] = true }, 'so it is joined to rather than waiting')
+      t.deepEq(onsets[2].presence, { 1, 1, 1 },
+        'and counts for a presence apiece, RECENT opening at what a sounding member counts')
       t.deepEq(onsets[3].mayWait, {}, 'and the last onset holds nobody who may')
     end,
   },
@@ -1245,7 +1375,8 @@ return {
       local onsets, _, seat = termsOf(strands, 5, elevenPitches)
       local spelled = {}
       for i, onset in ipairs(onsets) do
-        spelled[i] = sonority.spellings(onset.members, seat, {}, elevenPitches, 24, 8)
+        spelled[i] = sonority.spellings(onset.members, seat, onset.presence, {},
+                                        elevenPitches, 24, 8)
       end
       local spelt, standing = settledFrom(
         sonority.search(onsets, spelled, seat, 1, 8, 60), #seat, 1, 8)

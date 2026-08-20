@@ -1,35 +1,35 @@
-@module sonority  src=sonority.lua  loc=1111  mode=namespace  self=sonority
+@module sonority  src=sonority.lua  loc=1125  mode=namespace  self=sonority
 
 # Invariants & contracts
   @invariant  pure module: no state; ratios/cents are tuning.lua's, the placement carries them  @ 4
-  @contract  members; seat/mayWait per strand; moves, width, stiffness → Spellings, best first  @ 667
-  @contract  a join is one move; a spelling states intervals, and stands at any offset from the seats  @ 668
-  @contract  the width is a width per waiting count; math.huge enumerates the spellings whole  @ 669
-  @contract  a target stating no move spells nothing: the list is empty  @ 670
-  @invariant  what has closed is carried, which is what retaking it a cursor later would charge  @ 1024
-  @invariant  an answer's debts stand in onset order, as the walk opens them and closes them in it  @ 1027
-  @contract  onsets, a spelling list per onset, seat per strand, strength, stiffness, cap  @ 1028
-  @contract  → the cheapest Answer, every answer carried extended by every spelling of the onset  @ 1029
-  @contract  the strands the onset sounds relax; the rest of an answer stands at the cents it carries  @ 1030
-  @contract  a sonority holding a waiter is charged in its own onset's slot, as its members place  @ 1031
-  @contract  answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap  @ 1032
-  @contract  the cut runs over two pools, the answers that owe and the answers that have paid  @ 1033
-  @contract  nil where an onset has no spelling — which is a target stating no move  @ 1034
+  @contract  members; seat/presence/mayWait per strand; moves/width/stiffness → Spellings, best first  @ 673
+  @contract  a join is one move; a spelling states intervals, and stands at any offset from the seats  @ 674
+  @contract  the width is a width per waiting count; math.huge enumerates the spellings whole  @ 675
+  @contract  a target stating no move spells nothing: the list is empty  @ 676
+  @invariant  what has closed is carried, which is what retaking it a cursor later would charge  @ 1038
+  @invariant  an answer's debts stand in onset order, as the walk opens them and closes them in it  @ 1041
+  @contract  onsets, a spelling list per onset, seat per strand, strength, stiffness, cap  @ 1042
+  @contract  → the cheapest Answer, every answer carried extended by every spelling of the onset  @ 1043
+  @contract  the strands the onset sounds relax; the rest of an answer stands at the cents it carries  @ 1044
+  @contract  a sonority holding a waiter is charged in its own onset's slot, as its members place  @ 1045
+  @contract  answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap  @ 1046
+  @contract  the cut runs over two pools, the answers that owe and the answers that have paid  @ 1047
+  @contract  nil where an onset has no spelling — which is a target stating no move  @ 1048
 
 # Shapes
   @shape  Coords = {[oddPrime]=exponent}; prime 2 is absent, so the score reads harmony not spacing  @ 5
   @shape  Strand = { notes={ {ppq,pitch,endppq,..},.. }, class=<step-class>, shortlist={ Candidate,.. } }; the walk reads the strikes, the releases and the class  @ 6
   @shape  Sonority = { ppq, strands={ strandIndex,.. } }; most recently struck first, the last n struck and whatever else still sounds  @ 7
   @shape  Candidate = { coords=Coords, strain=<distance from the written step, in half-windows> }  @ 8
-  @shape  Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta  @ 302
-  @shape  Ties = { [strand] = { other, other, .., count, delta=<the tie deltas summed> } }  @ 364
-  @shape  Candidate = { from=State, slot, placed=Placed|nil, parts, key, score, waits }  @ 492
-  @shape  State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score }  @ 493
-  @shape  Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }  @ 494
-  @shape  Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }  @ 666
-  @shape  Onset = { ppq, members={strand,..}, sounding={strand,..}, mayWait={[strand]=true,..} }  @ 700
-  @shape  Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, closed=<what the shut onsets charge>, held={ Held,.. } }  @ 1025
-  @shape  Held = { onset, placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }  @ 1026
+  @shape  Spring = { i=<strand>, j=<strand>, delta=<cents>, weight=<its two members' presence, multiplied> }; the pair is pure where d[j] - d[i] = delta  @ 302
+  @shape  Ties = { [strand] = { other, other, .., weights={ weight, .. }, count, delta=<the weighted tie deltas summed>, weight=<the weights summed> } }  @ 365
+  @shape  Candidate = { from=State, slot, placed=Placed|nil, parts, key, score, waits }  @ 496
+  @shape  State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score }  @ 497
+  @shape  Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, presence, component }  @ 498
+  @shape  Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }  @ 672
+  @shape  Onset = { ppq, members={strand,..}, sounding={strand,..}, presence={[strand]=<1 or RECENT>}, mayWait={[strand]=true,..} }  @ 711
+  @shape  Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, closed=<what the shut onsets charge>, held={ Held,.. } }  @ 1039
+  @shape  Held = { onset, placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }  @ 1040
 
 # Imports
   @const util = 'util'  @ 10
@@ -38,11 +38,12 @@
 # Module-level constants
   @const sonority = {}  @ 12
   @const budget = 200000  @ 186
-  @const PURE = 50  @ 323
-  @const TOLERANCE, SWEEPS = 1e-4, 1000  @ 360
-  @const DEFERRED = '?'  @ 488
-  @const AUDIBLE = 0.5  @ 727
-  @const WIDTH, CAP = 24, 4  @ 1084
+  @const PURE = 50  @ 324
+  @const TOLERANCE, SWEEPS = 1e-4, 1000  @ 361
+  @const DEFERRED = '?'  @ 492
+  @const RECENT = 1  @ 707
+  @const AUDIBLE = 0.5  @ 741
+  @const WIDTH, CAP = 24, 4  @ 1098
 
 # Private functions
   -- The box
@@ -76,96 +77,96 @@
   @fn keyOf(choice, list)  @ 241-245
   -- The springs
   -- The relaxation
-  @fn settle(ties, displacement, strength, stiffness)  @ 403-409
+  @fn settle(ties, displacement, strength, stiffness)  @ 407-413
       -- One strand's optimum with the rest held: what its springs ask of it against the page, the
       -- two dials weighting them and the fifty both are charged over dividing out.
   -- The candidates
-  @fn joinCoords(coords, move)  @ 434-442
+  @fn joinCoords(coords, move)  @ 438-446
       -- A join's coords: the host's plus the move's, a cancelled prime dropped so two chains
       -- arriving at one spelling key alike (§ The candidates).
-  @fn rebase(coords, from, to)  @ 446-455
+  @fn rebase(coords, from, to)  @ 450-459
       -- Coords are differences, so reading a member in another frame is one vector shift: what
       -- stood at `from` stands at `to`, a cancelled prime dropped as joinCoords drops it.
-  @fn coordString(coords)  @ 458-464
+  @fn coordString(coords)  @ 462-468
       -- Coords in one order, so two tables holding the same exponents read alike.
-  @fn tokenOf(placed)  @ 468-470
+  @fn tokenOf(placed)  @ 472-474
       -- What a state has made of a member: the coords it was spelled at, and the component it
       -- joined into, so a member in a component of its own reads apart from the same coords tied in.
-  @fn joinCost(state, component, placed, stiffness, carried)  @ 474-485
+  @fn joinCost(state, component, placed, stiffness, carried)  @ 478-489
       -- What a join costs where it lands: what it widens its component's box by over the box that
       -- component came in carrying, and a spring against each member already there (§ The candidates).
-  @fn propose(reached, seen, state, slot, placed, stiffness, carried)  @ 496-519
+  @fn propose(reached, seen, state, slot, placed, stiffness, carried)  @ 500-523
       -- Scored and keyed before it is built, so a candidate repeating a spelling costs its coords
       -- and its key alone, and a round builds only the states its cut goes on to keep.
-      @invariant  no two members take one spelling, so a sonority states as many pitches as members  @ 495
-  @fn materialise(candidate)  @ 522-533
+      @invariant  no two members take one spelling, so a sonority states as many pitches as members  @ 499
+  @fn materialise(candidate)  @ 526-537
       -- The state a candidate names, built once the cut has kept it.
-  @fn byScore(a, b)  @ 537-540
+  @fn byScore(a, b)  @ 541-544
       -- Score, then the spelling itself, so an exact tie breaks on the coords rather than on
       -- table order, as sonority.solveToPoints breaks its own.
-  @fn beamOver(seat, free, moves, width, stiffness)  @ 547-607
+  @fn beamOver(seat, free, presence, moves, width, stiffness)  @ 551-612
       -- One round per member decides one slot: a move to a member already placed, or left waiting.
       -- Every road decides the same slots, so a differing order's duplicates collapse where they land.
-      @invariant  a round decides one slot, so the states it cuts between have placed equally many  @ 544
-      @invariant  the first member to place anchors and those before it wait, so one anchor spells each  @ 545
-      @invariant  every state ties every member it places; an untied one states nothing, charges none  @ 546
-  @fn chargeOf(members, seat, placed)  @ 613-645
+      @invariant  a round decides one slot, so the states it cuts between have placed equally many  @ 548
+      @invariant  the first member to place anchors and those before it wait, so one anchor spells each  @ 549
+      @invariant  every state ties every member it places; an untied one states nothing, charges none  @ 550
+  @fn chargeOf(members, seat, presence, placed)  @ 618-651
       -- What coords and seats state about a set of members: a spring per pair of a component,
       -- tied in member order as sonority.springs ties them, and the box a component carries.
-      @contract  members, seat per strand, coords and component per placed member → springs, box  @ 611
-      @contract  a member the map lacks is one still waiting, which states nothing and is passed over  @ 612
-  @fn spellingOf(state, members, seat)  @ 649-662
+      @contract  members, seat/presence per strand, coords/component per placed member → springs, box  @ 616
+      @contract  a member the map lacks is one still waiting, which states nothing and is passed over  @ 617
+  @fn spellingOf(state, members, seat, presence)  @ 655-668
       -- The state read back as the sonority's own: its members' coords under the strands they
       -- name, whom it left waiting, and what those state charged as any set of placed members is.
   -- The terms
   -- The search
-  @fn visibleAhead(onsets)  @ 731-748
+  @fn visibleAhead(onsets)  @ 745-762
       -- The strands a later onset names and the walk has already moved, in strand order: all a
       -- continuation can read, since what nothing ahead names is settled and what nothing behind has sounded stands at zero alike (§ The solve).
-  @fn soundingRuns(onsets)  @ 753-763
+  @fn soundingRuns(onsets)  @ 767-777
       -- The same run read the other way: an onset's strands split into those a later onset sounds
       -- too, which the relaxation can still move, and those it sounded last, which have stopped.
-      @contract  onsets → per onset the strands it leaves moving and the strands it closes  @ 752
-  @fn openFrom(onsets)  @ 769-782
+      @contract  onsets → per onset the strands it leaves moving and the strands it closes  @ 766
+  @fn openFrom(onsets)  @ 783-796
       -- A strand sounds over one run of onsets, so once the walk is past every strand an onset
       -- named, nothing it charges can move again: the onsets before the cursor are closed.
-      @invariant  the cursor only advances, so a closed onset stays closed for the rest of the walk  @ 767
-      @contract  onsets → per onset the earliest onset a strand sounding there is named at  @ 768
-  @fn diffString(coords, from)  @ 786-800
+      @invariant  the cursor only advances, so a closed onset stays closed for the rest of the walk  @ 781
+      @contract  onsets → per onset the earliest onset a strand sounding there is named at  @ 782
+  @fn diffString(coords, from)  @ 800-814
       -- The difference of two coords read straight to its string: what coordString would read
       -- of the rebase, fused so a key costs no intermediate table.
-  @fn placementKey(members, placed, waiting)  @ 805-832
+  @fn placementKey(members, placed, waiting)  @ 819-846
       -- What a sonority has been spelled as, however the spelling was reached: each component
       -- read from its earliest member, as chargeOf reads it, and the members still waiting.
-      @invariant  two placements under one key charge alike, so a wait reaching one is no second road  @ 804
-  @fn offeredBy(onsets, spellings)  @ 836-847
+      @invariant  two placements under one key charge alike, so a wait reaching one is no second road  @ 818
+  @fn offeredBy(onsets, spellings)  @ 850-861
       -- What each onset's beam returned, read as placements: the spellings a wait may not come
       -- back with, taken from what the beam kept rather than what its moves could have reached.
-  @fn answerKey(displacement, ahead, onsets, held)  @ 852-866
+  @fn answerKey(displacement, ahead, onsets, held)  @ 866-880
       -- An answer under the whole of what a continuation can tell it by: its cents at the strands
       -- ahead in half-cents, and the deferrals it has yet to pay.
-      @invariant  one strand list serves every answer of an onset, so its cents key by position  @ 851
-  @fn complete(entry, members, spelling)  @ 872-916
+      @invariant  one strand list serves every answer of an onset, so its cents key by position  @ 865
+  @fn complete(entry, members, spelling)  @ 886-930
       -- What a spelling makes of a sonority still waiting: a waiter it places takes coords in the
       -- held sonority's frame through a member the two share, and nothing where they share none.
-      @invariant  a waiter reaching two components merges them, every member shifted into the one frame  @ 870
-      @invariant  a waiter tied to no member states no interval there, so its completion fails  @ 871
-  @fn heldBy(spelling, at)  @ 920-924
+      @invariant  a waiter reaching two components merges them, every member shifted into the one frame  @ 884
+      @invariant  a waiter tied to no member states no interval there, so its completion fails  @ 885
+  @fn heldBy(spelling, at)  @ 934-938
       -- The entry a spelling that defers opens: which onset owes it, what it placed, whom it
       -- left, and what it has been charged so far.
-  @fn settledOnsets(answer, from, at)  @ 928-935
+  @fn settledOnsets(answer, from, at)  @ 942-949
       -- The onsets behind the cursor an answer has settled: the open ones, less any a deferral
       -- still rewrites, so what every spelling of the next onset reads alike is tied once.
-  @fn cutBar(cap)  @ 940-964
+  @fn cutBar(cap)  @ 954-978
       -- Where a pool's cut now sits: the cost of its cap-th best distinct key, held in a
       -- bounded sorted list, a listed key replaced where it improved (§ The solve).
-      @invariant  a key's cost in reached only improves, so a stale bar is only ever too high  @ 939
-  @fn extend(answer, spelling, onsets, at, seat, strength, stiffness, offered, carried, from, since, moving, stopped, bars)  @ 971-1020
+      @invariant  a key's cost in reached only improves, so a stale bar is only ever too high  @ 953
+  @fn extend(answer, spelling, onsets, at, seat, strength, stiffness, offered, carried, from, since, moving, stopped, bars)  @ 985-1034
       -- One answer extended by one spelling: the springs and box it has paid, each sonority it
       -- still holds charged again for what this spelling places, the onset's own strands relaxed.
-      @contract  carried: the Ties over what the answer has settled, which this spelling's start from  @ 968
-      @contract  nil where a wait comes back with a placement its own sonority offered (§ The candidates)  @ 969
-      @contract  nil where a wait lands tied to no member of the sonority that deferred it  @ 970
+      @contract  carried: the Ties over what the answer has settled, which this spelling's start from  @ 982
+      @contract  nil where a wait comes back with a placement its own sonority offered (§ The candidates)  @ 983
+      @contract  nil where a wait lands tied to no member of the sonority that deferred it  @ 984
 
 # Public API (sonority.*)
   @api sonority.score(coordSet)  @ 19-34
@@ -190,213 +191,220 @@
       -- generations are alive at a time and the budget bounds them.
       @invariant  reads no cents and knows no ratios — coords/strikes/releases/classes → indices  @ 249
       @contract  strands, n, strength → the index per strand minimising sonority.cost, exactly  @ 250
-  @api sonority.springs(members, seat, spelling)  @ 305-319
+  @api sonority.springs(members, seat, presence, spelling)  @ 305-320
       -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
       -- is the difference of the nearest-octave gaps to each seat (§ The springs).
-      @contract  members, spelling per member; seat per strand → a Spring per pair, i before j  @ 303
+      @contract  members, spelling per member; seat/presence per strand → a Spring per pair, i before j  @ 303
       @contract  springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen  @ 304
-  @api sonority.springCost(spellings, displacement, stiffness, from, to)  @ 332-341
+  @api sonority.springCost(spellings, displacement, stiffness, from, to)  @ 333-342
       -- What a run of sonorities' springs charge: each spring against the gap its two strands
       -- would sound pure at, the pair standing where the displacements put them.
-      @contract  spellings (a sonority.springs list per sonority) and displacement per strand  @ 330
-      @contract  from, to → stiffness × (mistuning/50)² per spring of those onsets  @ 331
-  @api sonority.pullCost(displacement, strength, strands)  @ 347-354
+      @contract  spellings (a sonority.springs list per sonority) and displacement per strand  @ 331
+      @contract  from, to → weight × stiffness × (mistuning/50)² per spring of those onsets  @ 332
+  @api sonority.pullCost(displacement, strength, strands)  @ 348-355
       -- What the pull charges: each strand's displacement over the fifty the springs are charged
-      -- over, a notation's own spacing measuring nothing here (§ Both wall and ruler).
-      @contract  displacement per strand, strands: the ones to charge  @ 345
-      @contract  → strength × strain² apiece  @ 346
-  @api sonority.ties(springs, free, onsets, base)  @ 368-399
+      -- over, a notation's own spacing measuring nothing here (§ The pull in cents).
+      @contract  displacement per strand, strands: the ones to charge  @ 346
+      @contract  → strength × strain² apiece  @ 347
+  @api sonority.ties(springs, free, onsets, base)  @ 369-403
       -- Where each spring would stand its two strands, given the other: i a delta below j, j a
       -- delta above i, gathered for the strands that sweep since a held strand reads only its neighbours' ties, pre-summed since they stand still while the sweeps run.
-      @contract  springs per onset, the strands that sweep, the onsets to tie (all of them by default)  @ 365
-      @contract  base: a Ties to start from, carried whole, over onsets this call does not tie again  @ 366
-      @contract  → a Ties: the base's, and what those onsets' springs tie on top of it  @ 367
-  @api sonority.relax(ties, strength, stiffness, start, free)  @ 414-428
-      @invariant  convex in the displacements, so the sweep order and the start buy speed, not the answer  @ 411
-      @contract  ties, strength, stiffness, start (per strand), free (strands that sweep)  @ 412
-      @contract  → displacements minimising springCost + pullCost, held strands at their start  @ 413
-  @api sonority.spellings(members, seat, mayWait, moves, width, stiffness)  @ 671-683
+      @contract  springs per onset, the strands that sweep, the onsets to tie (all of them by default)  @ 366
+      @contract  base: a Ties to start from, carried whole, over onsets this call does not tie again  @ 367
+      @contract  → a Ties: the base's, and what those onsets' springs tie on top of it  @ 368
+  @api sonority.relax(ties, strength, stiffness, start, free)  @ 418-432
+      @invariant  convex in the displacements, so the sweep order and the start buy speed, not the answer  @ 415
+      @contract  ties, strength, stiffness, start (per strand), free (strands that sweep)  @ 416
+      @contract  → displacements minimising springCost + pullCost, held strands at their start  @ 417
+  @api sonority.spellings(members, seat, presence, mayWait, moves, width, stiffness)  @ 677-690
       -- A waiting member states no interval, so waiting is a choice the beam makes per member; a
       -- deferral is no rival to a spelling, so the cut runs within a waiting count (§ The candidates).
-  @api sonority.seats(strands, notation)  @ 690-696
+  @api sonority.seats(strands, notation)  @ 697-703
       -- One seat serves a strand in every register, so notes[1] speaks for all of them; the
       -- seat keeps the register it was written in, which tuning.gapTo quotients out again.
-      @contract  strands, notation → the cents of each strand's written step  @ 689
-  @api sonority.onsets(strands, sonorities)  @ 703-721
+      @contract  strands, notation → the cents of each strand's written step  @ 696
+  @api sonority.onsets(strands, sonorities)  @ 714-735
       -- A member is free to wait while an onset it sounds through is still to come; at that onset
       -- it places or the state fails (§ The candidates).
-      @contract  strands, sonorities → an Onset per sonority, its members the walk's own  @ 701
-      @contract  a member the sonority holds by recency has stopped: it neither sounds nor waits  @ 702
-  @api sonority.search(onsets, spellings, seat, strength, stiffness, cap)  @ 1035-1078
+      @contract  strands, sonorities → an Onset per sonority, its members the walk's own  @ 712
+      @contract  a member the sonority holds by recency has stopped: it neither sounds nor waits  @ 713
+  @api sonority.search(onsets, spellings, seat, strength, stiffness, cap)  @ 1049-1092
       -- The cost is taken over every spring accumulated so far rather than the onset's own, so
       -- a spelling is priced against the past it is chosen behind (§ The solve).
   -- The placement
-  @api sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)  @ 1090-1109
+  @api sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)  @ 1104-1123
       -- The moves facility's solve: intervals rather than points, spelled by the beam under a
       -- frozen past, settled by joint relaxation (§ The solve).
-      @contract  strands, n, strength, notation, moves, stiffness → the cents each strand settles at  @ 1088
-      @contract  nil where an onset has no spelling — which is a target stating no move  @ 1089
+      @contract  strands, n, strength, notation, moves, stiffness → the cents each strand settles at  @ 1102
+      @contract  nil where an onset has no spelling — which is a target stating no move  @ 1103
 
 # Uses (outbound edges)
-  @use call    tuning.cents  @ springs:308 chargeOf:634
-  @use call    tuning.gapTo  @ springs:309 beamOver:581 chargeOf:634
+  @use call    tuning.cents  @ springs:308 chargeOf:639
+  @use call    tuning.gapTo  @ springs:309 beamOver:585 chargeOf:639
   @use call    tuning.height  @ score:33
-  @use call    tuning.seatWindow  @ seats:693
-  @use call    util.add  @ strands:46,61,65 strikesInOrder:80 walk:123,125 cost:140 schedule:175,177,178 placementsAt:211 springs:315 joinCost:476,477 propose:517 materialise:530 beamOver:563,603 chargeOf:620,622,639 spellingOf:656 onsets:708 visibleAhead:743 soundingRuns:758 diffString:794 placementKey:812,814,822,823,825,830 answerKey:859,862 complete:888 settledOnsets:932 extend:990,993,995,997,1005 search:1068,1073
+  @use call    tuning.seatWindow  @ seats:700
+  @use call    util.add  @ strands:46,61,65 strikesInOrder:80 walk:123,125 cost:140 schedule:175,177,178 placementsAt:211 springs:315 joinCost:480,481 propose:521 materialise:534 beamOver:567,608 chargeOf:625,627,644 spellingOf:662 onsets:720 visibleAhead:757 soundingRuns:772 diffString:808 placementKey:826,828,836,837,839,844 answerKey:873,876 complete:902 settledOnsets:946 extend:1004,1007,1009,1011,1019 search:1082,1087
   @use call    util.bucket  @ strands:47
-  @use call    util.clone  @ placementsAt:211 solveToPoints:276 propose:498 materialise:524,526 complete:879
+  @use call    util.clone  @ placementsAt:211 solveToPoints:276 propose:502 materialise:528,530 complete:893
   @use call    util.key  @ keyOf:244 solveToPoints:260
-  @use call    util.keyFrom  @ placementKey:831 answerKey:865
-  @use call    util.keys  @ coordString:459 visibleAhead:734 placementKey:828
-  @use call    util.round  @ answerKey:855
+  @use call    util.keyFrom  @ placementKey:845 answerKey:879
+  @use call    util.keys  @ coordString:463 visibleAhead:748 placementKey:842
+  @use call    util.round  @ answerKey:869
   @use require tuning  @ <load>:11
   @use require util  @ <load>:10
 
 # Calls (intra-file)
-  @call answerKey  @ search:1056
+  @call answerKey  @ search:1070
   @call assertAffordable  @ solveToPoints:258
-  @call beamOver  @ spellings:679
-  @call chargeOf  @ spellingOf:660 extend:985
-  @call complete  @ extend:980
-  @call coordString  @ tokenOf:469
-  @call cutBar  @ search:1045
-  @call diffString  @ placementKey:823
-  @call extend  @ search:1050
-  @call heldBy  @ extend:997
-  @call joinCoords  @ beamOver:580
-  @call joinCost  @ propose:514
+  @call beamOver  @ spellings:686
+  @call chargeOf  @ spellingOf:666 extend:999
+  @call complete  @ extend:994
+  @call coordString  @ tokenOf:473
+  @call cutBar  @ search:1059
+  @call diffString  @ placementKey:837
+  @call extend  @ search:1064
+  @call heldBy  @ extend:1011
+  @call joinCoords  @ beamOver:584
+  @call joinCost  @ propose:518
   @call keyOf  @ solveToPoints:266,285
-  @call materialise  @ beamOver:603
-  @call offeredBy  @ search:1036
-  @call openFrom  @ search:1037
-  @call outranks  @ solveToPoints:267,293 search:1057,1072,1075
-  @call placementKey  @ offeredBy:843 extend:983
+  @call materialise  @ beamOver:608
+  @call offeredBy  @ search:1050
+  @call openFrom  @ search:1051
+  @call outranks  @ solveToPoints:267,293 search:1071,1086,1089
+  @call placementKey  @ offeredBy:857 extend:997
   @call placementsAt  @ solveToPoints:274
   @call promote  @ walk:118
-  @call propose  @ beamOver:570,579,589
-  @call rebase  @ chargeOf:633 complete:896,903,907
+  @call propose  @ beamOver:574,583,593
+  @call rebase  @ chargeOf:638 complete:910,917,921
   @call schedule  @ solveToPoints:257
-  @call settle  @ relax:420
-  @call settledOnsets  @ search:1048
-  @call sonority.onsets  @ solveToMoves:1092
-  @call sonority.pullCost  @ extend:1014,1019
-  @call sonority.relax  @ extend:1007 solveToMoves:1103
-  @call sonority.score  @ cost:142 solveToPoints:284 joinCost:479 beamOver:564 chargeOf:642
-  @call sonority.search  @ solveToMoves:1098
-  @call sonority.seats  @ solveToMoves:1091
-  @call sonority.spellings  @ solveToMoves:1094
-  @call sonority.springCost  @ extend:1013,1018
-  @call sonority.ties  @ extend:1007 search:1047 solveToMoves:1103
-  @call sonority.walk  @ cost:137 solveToPoints:256 solveToMoves:1092
-  @call sounding  @ walk:123 onsets:708
-  @call soundingRuns  @ search:1038
-  @call spellingOf  @ spellings:680
+  @call settle  @ relax:424
+  @call settledOnsets  @ search:1062
+  @call sonority.onsets  @ solveToMoves:1106
+  @call sonority.pullCost  @ extend:1028,1033
+  @call sonority.relax  @ extend:1021 solveToMoves:1117
+  @call sonority.score  @ cost:142 solveToPoints:284 joinCost:483 beamOver:568 chargeOf:648
+  @call sonority.search  @ solveToMoves:1112
+  @call sonority.seats  @ solveToMoves:1105
+  @call sonority.spellings  @ solveToMoves:1108
+  @call sonority.springCost  @ extend:1027,1032
+  @call sonority.ties  @ extend:1021 search:1061 solveToMoves:1117
+  @call sonority.walk  @ cost:137 solveToPoints:256 solveToMoves:1106
+  @call sounding  @ walk:123 onsets:719
+  @call soundingRuns  @ search:1052
+  @call spellingOf  @ spellings:687
   @call strikesInOrder  @ walk:114
-  @call tokenOf  @ propose:497 answerKey:862
-  @call visibleAhead  @ search:1036
+  @call tokenOf  @ propose:501 answerKey:876
+  @call visibleAhead  @ search:1050
 
 # Bindings (by name)
-  @bind byChoice  @ solveToPoints:267,293 search:1057,1072,1075
-  @bind byScore  @ beamOver:598
+  @bind byChoice  @ solveToPoints:267,293 search:1071,1086,1089
+  @bind byScore  @ beamOver:603
 
 # Fields (r read / w write incl. constructor keys)
-  @field r at  @ joinCost:476,481 materialise:524,528 beamOver:556,563,574 spellingOf:652,653,654
-  @field w at  @ materialise:524 beamOver:548
-  @field r bar  @ extend:1001
-  @field w bar  @ cutBar:942,961
+  @field r at  @ joinCost:480,485,486 materialise:528,532 beamOver:560,567,578 spellingOf:658,659,660
+  @field w at  @ materialise:528 beamOver:552
+  @field r bar  @ extend:1015
+  @field w bar  @ cutBar:956,975
   @field r born  @ schedule:175 solveToPoints:274,277
   @field w born  @ schedule:173
-  @field r box  @ heldBy:923 extend:974,988
-  @field w box  @ spellingOf:661 heldBy:923 extend:990,1016 search:1040
-  @field r cents  @ beamOver:578
-  @field w cents  @ beamOver:580,590
-  @field r choice  @ byChoice:238 solveToPoints:266,276,277,295 extend:1015 search:1054
-  @field w choice  @ placementsAt:211 solveToPoints:260,285 extend:1015 search:1040
+  @field r box  @ heldBy:937 extend:988,1002
+  @field w box  @ spellingOf:667 heldBy:937 extend:1004,1030 search:1054
+  @field r cents  @ beamOver:582
+  @field w cents  @ beamOver:584,594
+  @field r choice  @ byChoice:238 solveToPoints:266,276,277,295 extend:1029 search:1068
+  @field w choice  @ placementsAt:211 solveToPoints:260,285 extend:1029 search:1054
   @field r class  @ promote:103,105
   @field w class  @ strands:64
-  @field r closed  @ extend:1001,1012
-  @field w closed  @ extend:1016 search:1041
-  @field r component  @ tokenOf:469 propose:514 materialise:529,530 beamOver:582,583 chargeOf:618,619,620,622 spellingOf:654
-  @field r component  @ placementKey:810,811,812,814 complete:887,895,901,906
-  @field w component  @ beamOver:582,590 spellingOf:654 complete:898,908
-  @field r components  @ propose:514 materialise:526,529,530 beamOver:561
-  @field w components  @ materialise:524 beamOver:548
-  @field r coords  @ cost:140 solveToPoints:281 joinCoords:437 tokenOf:469 joinCost:476,477 beamOver:563,580 chargeOf:630,633 spellingOf:653 placementKey:820
-  @field r coords  @ placementKey:823 complete:896,897,903,904,907
-  @field w coords  @ beamOver:580,590 spellingOf:653 complete:898,907
-  @field r cost  @ outranks:228 solveToPoints:284 search:1059
-  @field w cost  @ cost:135 solveToPoints:260,285 extend:1017 search:1040
-  @field r count  @ ties:373,374,389,390,393,394 settle:404
-  @field w count  @ ties:377
-  @field r delta  @ springCost:336 ties:374,389,393 settle:404
-  @field w delta  @ springs:315 ties:374,377,389,393 chargeOf:639
-  @field r deviation  @ joinCost:481
-  @field w deviation  @ beamOver:581,590
-  @field r displacement  @ extend:1008 search:1056 solveToMoves:1104
-  @field w displacement  @ extend:1016 search:1040
+  @field r closed  @ extend:1015,1026
+  @field w closed  @ extend:1030 search:1055
+  @field r component  @ tokenOf:473 propose:518 materialise:533,534 beamOver:586,587 chargeOf:623,624,625,627 spellingOf:660
+  @field r component  @ placementKey:824,825,826,828 complete:901,909,915,920
+  @field w component  @ beamOver:586,595 spellingOf:660 complete:912,922
+  @field r components  @ propose:518 materialise:530,533,534 beamOver:565
+  @field w components  @ materialise:528 beamOver:552
+  @field r coords  @ cost:140 solveToPoints:281 joinCoords:441 tokenOf:473 joinCost:480,481 beamOver:567,584 chargeOf:635,638 spellingOf:659 placementKey:834
+  @field r coords  @ placementKey:837 complete:910,911,917,918,921
+  @field w coords  @ beamOver:584,594 spellingOf:659 complete:912,921
+  @field r cost  @ outranks:228 solveToPoints:284 search:1073
+  @field w cost  @ cost:135 solveToPoints:260,285 extend:1031 search:1054
+  @field r count  @ ties:374,375,376,391,393,396,398
+  @field r count  @ settle:408
+  @field w count  @ ties:379
+  @field r delta  @ springCost:337 ties:376,392,397 settle:408
+  @field w delta  @ springs:315 ties:379,392,397 chargeOf:644
+  @field r deviation  @ joinCost:485
+  @field w deviation  @ beamOver:585,594
+  @field r displacement  @ extend:1022 search:1070 solveToMoves:1118
+  @field w displacement  @ extend:1030 search:1054
   @field r endppq  @ strands:56,62,64 sounding:95
-  @field r from  @ materialise:523
-  @field w from  @ propose:517
-  @field r height  @ beamOver:577
-  @field r held  @ schedule:178 solveToPoints:266 settledOnsets:930 extend:977 search:1056,1059,1068
-  @field w held  @ schedule:173 extend:1016 search:1041
-  @field r huge  @ cutBar:942
-  @field r i  @ springCost:336 ties:387,394
-  @field w i  @ springs:315 chargeOf:639
-  @field r j  @ springCost:336 ties:387,390
-  @field w j  @ springs:315 chargeOf:639
-  @field r key  @ materialise:525 byScore:539
-  @field w key  @ propose:517 materialise:525 beamOver:550
+  @field r from  @ materialise:527
+  @field w from  @ propose:521
+  @field r height  @ beamOver:581
+  @field r held  @ schedule:178 solveToPoints:266 settledOnsets:944 extend:991 search:1070,1073,1082
+  @field w held  @ schedule:173 extend:1030 search:1055
+  @field r huge  @ cutBar:956
+  @field r i  @ springCost:337 ties:389,398
+  @field w i  @ springs:315 chargeOf:644
+  @field r j  @ springCost:337 ties:389,393
+  @field w j  @ springs:315 chargeOf:644
+  @field r key  @ materialise:529 byScore:543
+  @field w key  @ propose:521 materialise:529 beamOver:554
   @field r live  @ schedule:177 assertAffordable:191 solveToPoints:285
   @field w live  @ schedule:173
-  @field r mayWait  @ onsets:716 solveToMoves:1094
-  @field w mayWait  @ onsets:710
-  @field r members  @ onsets:715 visibleAhead:735 openFrom:772 offeredBy:843 answerKey:860 extend:979 solveToMoves:1094
-  @field w members  @ onsets:710
-  @field r notes  @ strands:61 strikesInOrder:79 sounding:94 schedule:162,163 seats:693
+  @field r mayWait  @ onsets:730 solveToMoves:1108
+  @field w mayWait  @ onsets:724
+  @field r members  @ onsets:729 visibleAhead:749 openFrom:786 offeredBy:857 answerKey:874 extend:993 solveToMoves:1108
+  @field w members  @ onsets:723
+  @field r notes  @ strands:61 strikesInOrder:79 sounding:94 schedule:162,163 seats:700
   @field w notes  @ strands:64
-  @field r onset  @ answerKey:859,860 settledOnsets:930 extend:978
-  @field w onset  @ heldBy:923 extend:990
-  @field w onsets  @ onsets:703
-  @field w owing  @ search:1045
-  @field w paid  @ search:1045
-  @field r parts  @ propose:498 materialise:524 beamOver:549,550,568
-  @field w parts  @ propose:517 materialise:524 beamOver:548
+  @field r onset  @ answerKey:873,874 settledOnsets:944 extend:992
+  @field w onset  @ heldBy:937 extend:1004
+  @field w onsets  @ onsets:714
+  @field w owing  @ search:1059
+  @field w paid  @ search:1059
+  @field r parts  @ propose:502 materialise:528 beamOver:553,554,572
+  @field w parts  @ propose:521 materialise:528 beamOver:552
   @field r pitch  @ strikesInOrder:80,85
   @field w pitch  @ strikesInOrder:80
-  @field r placed  @ materialise:523 offeredBy:843 answerKey:861 complete:875,877,879,882,886,896,903 heldBy:923
-  @field w placed  @ propose:517 spellingOf:661 heldBy:923 extend:990
+  @field r placed  @ materialise:527 offeredBy:857 answerKey:875 complete:889,891,893,896,900,910,917 heldBy:937
+  @field w placed  @ propose:521 spellingOf:667 heldBy:937 extend:1004
   @field r ppq  @ strands:55,60 strikesInOrder:80,84 sounding:95 walk:116
-  @field r ppq  @ walk:117 schedule:158,162,164 onsets:708,710
-  @field w ppq  @ strikesInOrder:80 walk:125 onsets:710
+  @field r ppq  @ walk:117 schedule:158,162,164 onsets:719,723
+  @field w ppq  @ strikesInOrder:80 walk:125 onsets:723
+  @field r presence  @ joinCost:486 extend:999 solveToMoves:1108
+  @field w presence  @ beamOver:586,595 onsets:724
   @field r pull  @ solveToPoints:284
   @field w pull  @ placementsAt:211
-  @field w pullCost  @ pullCost:347
-  @field w relax  @ relax:414
-  @field w saw  @ cutBar:943
-  @field r score  @ propose:512 materialise:525 byScore:538
-  @field w score  @ score:19 propose:518 materialise:525 beamOver:548
-  @field w search  @ search:1035
-  @field w seats  @ seats:690
+  @field w pullCost  @ pullCost:348
+  @field w relax  @ relax:418
+  @field w saw  @ cutBar:957
+  @field r score  @ propose:516 materialise:529 byScore:542
+  @field w score  @ score:19 propose:522 materialise:529 beamOver:552
+  @field w search  @ search:1049
+  @field w seats  @ seats:697
   @field r shortlist  @ cost:140,145 assertAffordable:192 placementsAt:208,216 solveToPoints:253,281
-  @field r slot  @ materialise:528,530
-  @field w slot  @ propose:517
-  @field w solveToMoves  @ solveToMoves:1090
+  @field r slot  @ materialise:532,534
+  @field w slot  @ propose:521
+  @field w solveToMoves  @ solveToMoves:1104
   @field w solveToPoints  @ solveToPoints:251
-  @field r sounding  @ onsets:718 visibleAhead:740 soundingRuns:757,760 openFrom:776 extend:1006 search:1047
-  @field w sounding  @ onsets:710
-  @field w spellings  @ spellings:671
-  @field w springCost  @ springCost:332
-  @field r springs  @ extend:973,975 search:1047 solveToMoves:1103
-  @field w springs  @ springs:305 spellingOf:661 extend:1015 search:1040
+  @field r sounding  @ onsets:732 visibleAhead:754 soundingRuns:771,774 openFrom:790 extend:1020 search:1061
+  @field w sounding  @ onsets:723
+  @field w spellings  @ spellings:677
+  @field w springCost  @ springCost:333
+  @field r springs  @ extend:987,989 search:1061 solveToMoves:1117
+  @field w springs  @ springs:305 spellingOf:667 extend:1029 search:1054
   @field r strain  @ cost:145 placementsAt:208
   @field r strand  @ strikesInOrder:86 walk:118
   @field w strand  @ strikesInOrder:80
-  @field r strands  @ cost:139 schedule:169 solveToPoints:280 onsets:707,710
+  @field r strands  @ cost:139 schedule:169 solveToPoints:280 onsets:718,723
   @field w strands  @ strands:42 walk:125
-  @field w ties  @ ties:368
-  @field r waiting  @ offeredBy:842 answerKey:862 complete:875,877,879 heldBy:922 extend:997
-  @field w waiting  @ spellingOf:661 heldBy:923 extend:990
-  @field r waits  @ propose:518 materialise:525 beamOver:602,603
-  @field w waits  @ propose:518 materialise:525 beamOver:548
+  @field w ties  @ ties:369
+  @field r waiting  @ offeredBy:856 answerKey:876 complete:889,891,893 heldBy:936 extend:1011
+  @field w waiting  @ spellingOf:667 heldBy:937 extend:1004
+  @field r waits  @ propose:522 materialise:529 beamOver:607,608
+  @field w waits  @ propose:522 materialise:529 beamOver:552
   @field w walk  @ walk:113
+  @field r weight  @ springCost:338 ties:376,391,392,393,396,397,398 settle:412
+  @field w weight  @ springs:316 ties:376,379,391,396 chargeOf:645
+  @field r weights  @ ties:375,393,398 settle:409
+  @field w weights  @ ties:375,379

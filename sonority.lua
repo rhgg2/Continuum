@@ -299,10 +299,10 @@ end
 
 -- Each member's pure position is the first's seat plus its coords' cents; a spring's delta
 -- is the difference of the nearest-octave gaps to each seat (§ The springs).
---shape: Spring = { i=<strand>, j=<strand>, delta=<cents> }; the pair is pure where d[j] - d[i] = delta
---contract: members, spelling per member; seat per strand → a Spring per pair, i before j
+--shape: Spring = { i=<strand>, j=<strand>, delta=<cents>, weight=<its two members' presence, multiplied> }; the pair is pure where d[j] - d[i] = delta
+--contract: members, spelling per member; seat/presence per strand → a Spring per pair, i before j
 --contract: springs alone: a spelling's box is sonority.score(spelling), charged where it is chosen
-function sonority.springs(members, seat, spelling)
+function sonority.springs(members, seat, presence, spelling)
   local devs = {}
   for k, coords in ipairs(spelling) do
     local pure = seat[members[1]] + tuning.cents(coords)
@@ -312,7 +312,8 @@ function sonority.springs(members, seat, spelling)
   local springs = {}
   for a = 1, #members do
     for b = a + 1, #members do
-      util.add(springs, { i = members[a], j = members[b], delta = devs[b] - devs[a] })
+      util.add(springs, { i = members[a], j = members[b], delta = devs[b] - devs[a],
+                          weight = presence[members[a]] * presence[members[b]] })
     end
   end
   return springs
@@ -328,20 +329,20 @@ local PURE = 50
 -- What a run of sonorities' springs charge: each spring against the gap its two strands
 -- would sound pure at, the pair standing where the displacements put them.
 --contract: spellings (a sonority.springs list per sonority) and displacement per strand
---contract: from, to → stiffness × (mistuning/50)² per spring of those onsets
+--contract: from, to → weight × stiffness × (mistuning/50)² per spring of those onsets
 function sonority.springCost(spellings, displacement, stiffness, from, to)
   local total = 0
   for onset = from, to do
     for _, spring in ipairs(spellings[onset]) do
       local mistuning = (displacement[spring.j] - displacement[spring.i] - spring.delta) / PURE
-      total = total + stiffness * mistuning * mistuning
+      total = total + spring.weight * stiffness * mistuning * mistuning
     end
   end
   return total
 end
 
 -- What the pull charges: each strand's displacement over the fifty the springs are charged
--- over, a notation's own spacing measuring nothing here (§ Both wall and ruler).
+-- over, a notation's own spacing measuring nothing here (§ The pull in cents).
 --contract: displacement per strand, strands: the ones to charge
 --contract: → strength × strain² apiece
 function sonority.pullCost(displacement, strength, strands)
@@ -361,7 +362,7 @@ local TOLERANCE, SWEEPS = 1e-4, 1000
 
 -- Where each spring would stand its two strands, given the other: i a delta below j, j a
 -- delta above i, gathered for the strands that sweep since a held strand reads only its neighbours' ties, pre-summed since they stand still while the sweeps run.
---shape: Ties = { [strand] = { other, other, .., count, delta=<the tie deltas summed> } }
+--shape: Ties = { [strand] = { other, other, .., weights={ weight, .. }, count, delta=<the weighted tie deltas summed>, weight=<the weights summed> } }
 --contract: springs per onset, the strands that sweep, the onsets to tie (all of them by default)
 --contract: base: a Ties to start from, carried whole, over onsets this call does not tie again
 --contract: → a Ties: the base's, and what those onsets' springs tie on top of it
@@ -371,10 +372,11 @@ function sonority.ties(springs, free, onsets, base)
     local carried = base and base[index]
     if carried then
       local tie = table.move(carried, 1, carried.count, 1, {})
-      tie.count, tie.delta = carried.count, carried.delta
+      tie.weights = table.move(carried.weights, 1, carried.count, 1, {})
+      tie.count, tie.delta, tie.weight = carried.count, carried.delta, carried.weight
       ties[index] = tie
     else
-      ties[index] = { count = 0, delta = 0 }
+      ties[index] = { weights = {}, count = 0, delta = 0, weight = 0 }
     end
   end
 
@@ -386,12 +388,14 @@ function sonority.ties(springs, free, onsets, base)
     for _, spring in ipairs(springs[onset]) do
       local low, high = ties[spring.i], ties[spring.j]
       if low then
-        low.count, low.delta = low.count + 1, low.delta - spring.delta
-        low[low.count] = spring.j
+        low.count, low.weight = low.count + 1, low.weight + spring.weight
+        low.delta = low.delta - spring.weight * spring.delta
+        low[low.count], low.weights[low.count] = spring.j, spring.weight
       end
       if high then
-        high.count, high.delta = high.count + 1, high.delta + spring.delta
-        high[high.count] = spring.i
+        high.count, high.weight = high.count + 1, high.weight + spring.weight
+        high.delta = high.delta + spring.weight * spring.delta
+        high[high.count], high.weights[high.count] = spring.i, spring.weight
       end
     end
   end
@@ -402,10 +406,10 @@ end
 -- two dials weighting them and the fifty both are charged over dividing out.
 local function settle(ties, displacement, strength, stiffness)
   local count, seats = ties.count, ties.delta
-  for k = 1, count do seats = seats + displacement[ties[k]] end
+  for k = 1, count do seats = seats + ties.weights[k] * displacement[ties[k]] end
   if seats == 0 then return 0 end -- a strand no spring ties, whose two terms are 0/0
 
-  return stiffness * seats / (stiffness * count + strength)
+  return stiffness * seats / (stiffness * ties.weight + strength)
 end
 
 --invariant: convex in the displacements, so the sweep order and the start buy speed, not the answer
@@ -479,7 +483,7 @@ local function joinCost(state, component, placed, stiffness, carried)
   local cost = sonority.score(coordSet) - carried
   for _, slot in ipairs(component) do
     local mistuning = (placed.deviation - state.at[slot].deviation) / PURE
-    cost = cost + stiffness * mistuning * mistuning
+    cost = cost + placed.presence * state.at[slot].presence * stiffness * mistuning * mistuning
   end
   return cost
 end
@@ -491,7 +495,7 @@ local DEFERRED = '?'
 -- and its key alone, and a round builds only the states its cut goes on to keep.
 --shape: Candidate = { from=State, slot, placed=Placed|nil, parts, key, score, waits }
 --shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score }
---shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, component }
+--shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, presence, component }
 --invariant: no two members take one spelling, so a sonority states as many pitches as members
 local function propose(reached, seen, state, slot, placed, stiffness, carried)
   local token = placed and tokenOf(placed) or DEFERRED
@@ -544,7 +548,7 @@ end
 --invariant: a round decides one slot, so the states it cuts between have placed equally many
 --invariant: the first member to place anchors and those before it wait, so one anchor spells each
 --invariant: every state ties every member it places; an untied one states nothing, charges none
-local function beamOver(seat, free, moves, width, stiffness)
+local function beamOver(seat, free, presence, moves, width, stiffness)
   local start = { at = {}, components = {}, parts = {}, waits = 0, score = 0 }
   for slot = 1, #seat do start.parts[slot] = '' end
   start.key = table.concat(start.parts, '\0')
@@ -579,7 +583,7 @@ local function beamOver(seat, free, moves, width, stiffness)
                     propose(reached, seen, state, slot,
                             { coords = joinCoords(from.coords, move), cents = cents,
                               deviation = tuning.gapTo(seat[slot], cents),
-                              component = from.component },
+                              presence = presence[slot], component = from.component },
                             stiffness, carried[from.component])
                   end
                 end
@@ -587,7 +591,8 @@ local function beamOver(seat, free, moves, width, stiffness)
             end
           else
             propose(reached, seen, state, slot,
-                    { coords = {}, cents = seat[slot], deviation = 0, component = 1 },
+                    { coords = {}, cents = seat[slot], deviation = 0,
+                      presence = presence[slot], component = 1 },
                     stiffness, 0)
             break
           end
@@ -608,9 +613,9 @@ end
 
 -- What coords and seats state about a set of members: a spring per pair of a component,
 -- tied in member order as sonority.springs ties them, and the box a component carries.
---contract: members, seat per strand, coords and component per placed member → springs, box
+--contract: members, seat/presence per strand, coords/component per placed member → springs, box
 --contract: a member the map lacks is one still waiting, which states nothing and is passed over
-local function chargeOf(members, seat, placed)
+local function chargeOf(members, seat, presence, placed)
   local groups, components = {}, {}
   for _, member in ipairs(members) do
     local at = placed[member]
@@ -636,7 +641,8 @@ local function chargeOf(members, seat, placed)
 
     for a = 1, #group do
       for b = a + 1, #group do
-        util.add(springs, { i = group[a], j = group[b], delta = deviation[b] - deviation[a] })
+        util.add(springs, { i = group[a], j = group[b], delta = deviation[b] - deviation[a],
+                            weight = presence[group[a]] * presence[group[b]] })
       end
     end
     if #group > 1 then box = box + sonority.score(relative) end
@@ -646,7 +652,7 @@ end
 
 -- The state read back as the sonority's own: its members' coords under the strands they
 -- name, whom it left waiting, and what those state charged as any set of placed members is.
-local function spellingOf(state, members, seat)
+local function spellingOf(state, members, seat, presence)
   local placed, waiting = {}, {}
   for slot, member in ipairs(members) do
     if state.at[slot] then
@@ -657,27 +663,28 @@ local function spellingOf(state, members, seat)
     end
   end
 
-  local springs, box = chargeOf(members, seat, placed)
+  local springs, box = chargeOf(members, seat, presence, placed)
   return { box = box, springs = springs, waiting = waiting, placed = placed }
 end
 
 -- A waiting member states no interval, so waiting is a choice the beam makes per member; a
 -- deferral is no rival to a spelling, so the cut runs within a waiting count (§ The candidates).
 --shape: Spelling = { box=<what its components carry>, springs={Spring,..}, waiting={member,..}, placed={ [strand]={ coords=Coords, component } } }
---contract: members; seat/mayWait per strand; moves, width, stiffness → Spellings, best first
+--contract: members; seat/presence/mayWait per strand; moves/width/stiffness → Spellings, best first
 --contract: a join is one move; a spelling states intervals, and stands at any offset from the seats
 --contract: the width is a width per waiting count; math.huge enumerates the spellings whole
 --contract: a target stating no move spells nothing: the list is empty
-function sonority.spellings(members, seat, mayWait, moves, width, stiffness)
-  local seats, free = {}, {}
+function sonority.spellings(members, seat, presence, mayWait, moves, width, stiffness)
+  local seats, free, presences = {}, {}, {}
   for slot, member in ipairs(members) do
-    seats[slot] = seat[member]
-    free[slot]  = mayWait[member] or false
+    seats[slot]     = seat[member]
+    free[slot]      = mayWait[member] or false
+    presences[slot] = presence[member]
   end
 
   local spellings = {}
-  for k, state in ipairs(beamOver(seats, free, moves, width, stiffness)) do
-    spellings[k] = spellingOf(state, members, seat)
+  for k, state in ipairs(beamOver(seats, free, presences, moves, width, stiffness)) do
+    spellings[k] = spellingOf(state, members, seat, presence)
   end
   return spellings
 end
@@ -695,19 +702,26 @@ function sonority.seats(strands, notation)
   return seat
 end
 
+-- What a member held by recency counts for beside one that sounds: a spring prices beating,
+-- and beating wants two sounding pitches (§ Presence).
+local RECENT = 1
+
 -- A member is free to wait while an onset it sounds through is still to come; at that onset
 -- it places or the state fails (§ The candidates).
---shape: Onset = { ppq, members={strand,..}, sounding={strand,..}, mayWait={[strand]=true,..} }
+--shape: Onset = { ppq, members={strand,..}, sounding={strand,..}, presence={[strand]=<1 or RECENT>}, mayWait={[strand]=true,..} }
 --contract: strands, sonorities → an Onset per sonority, its members the walk's own
 --contract: a member the sonority holds by recency has stopped: it neither sounds nor waits
 function sonority.onsets(strands, sonorities)
   local onsets = {}
   for i, current in ipairs(sonorities) do
-    local live = {}
+    local live, presence = {}, {}
     for _, index in ipairs(current.strands) do
-      if sounding(strands[index], current.ppq) then util.add(live, index) end
+      local sounds = sounding(strands[index], current.ppq)
+      if sounds then util.add(live, index) end
+      presence[index] = sounds and 1 or RECENT
     end
-    onsets[i] = { ppq = current.ppq, members = current.strands, sounding = live, mayWait = {} }
+    onsets[i] = { ppq = current.ppq, members = current.strands, sounding = live,
+                  presence = presence, mayWait = {} }
   end
 
   local later = {}
@@ -982,7 +996,7 @@ local function extend(answer, spelling, onsets, at, seat, strength, stiffness,
     if landed then
       if offered[onset][placementKey(members, placed, waiting)] then return nil end
 
-      local charged, widened = chargeOf(members, seat, placed)
+      local charged, widened = chargeOf(members, seat, onsets[onset].presence, placed)
 
       springs[onset] = charged
       box = box - entry.box + widened
@@ -1091,8 +1105,8 @@ function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)
   local seat = sonority.seats(strands, notation)
   local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, n)), {}
   for i, onset in ipairs(onsets) do
-    spellings[i] = sonority.spellings(onset.members, seat, onset.mayWait, moves,
-                                      WIDTH, stiffness)
+    spellings[i] = sonority.spellings(onset.members, seat, onset.presence, onset.mayWait,
+                                      moves, WIDTH, stiffness)
   end
 
   local answer = sonority.search(onsets, spellings, seat, strength, stiffness, CAP)
