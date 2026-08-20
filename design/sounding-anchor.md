@@ -526,6 +526,15 @@ charged by whether its two members sound together.**
    change of unit moves the dial again under every notation but 12-EDO,
    so the opening value and the useful span are both unsettled.
 
+1. A lock of zero now leaves a passage unmoored. The pull is the only term
+   that reads where the page is — the springs read differences and the box
+   reads coords — so at a strength of nothing the objective is flat under a
+   translation of every displacement, and the sweep stops wherever it has
+   drifted from the start it opened at. The five-part take settles 41¢ flat
+   under it, its worst note 82¢ off, which is a figure of the sweep order
+   rather than of the music. The clamp bounded that at the window before, so
+   the dial's floor is unsettled along with its opening value.
+
 1. The moves figures in the record lapse. A major triad's third stands
    3.4¢ wide of a pure `5/4` at purity 1 and 0.5¢ at 8; the five-part
    take's worst mistuning is 0.54¢. Each was taken under a wall, an

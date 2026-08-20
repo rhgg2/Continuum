@@ -101,16 +101,16 @@ local function solve(lock, purity, cap)
     lists[i] = sonority.spellings(onset.members, seat, window, onset.mayWait, take.target,
                                   WIDTH, purity)
   end
-  local answer = sonority.search(onsets, lists, seat, window, lock, purity, cap)
+  local answer = sonority.search(onsets, lists, seat, lock, purity, cap)
   if not answer then return nil end
 
   local free = {}
   for i = 1, #strands do free[i] = i end
-  local displacement = sonority.relax(sonority.ties(answer.springs, free), window, lock,
+  local displacement = sonority.relax(sonority.ties(answer.springs, free), lock,
                                       purity, answer.displacement, free)
   local cost = answer.box
              + sonority.springCost(answer.springs, displacement, purity, 1, #answer.springs)
-             + sonority.pullCost(displacement, window, lock, free)
+             + sonority.pullCost(displacement, lock, free)
   return { displacement = displacement, seat = seat, springs = answer.springs, cost = cost }
 end
 

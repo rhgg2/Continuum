@@ -24,13 +24,13 @@
 -- from the seats of the strands its members name.
 --
 -- Pins the objective those springs stand in (§ The springs): stiffness ×
--- mistuning² per spring and strength × displacement² per strand, the mistuning
--- in cents over fifty and the pull over the window half the displacement lies
--- in. The box is no part of it, being a constant in the displacements.
+-- mistuning² per spring and strength × displacement² per strand, both taken in
+-- cents over fifty, so that a notation states the seats and measures nothing.
+-- The box is no part of it, being a constant in the displacements.
 --
 -- Pins the relaxation that minimises it (§ The springs): the sweep's answer on a
--- pair whose optimum is a closed form, a strand the springs press to its window
--- edge, and a comma loop whose residue no displacement can make slack.
+-- pair whose optimum is a closed form, under soft springs and stiff, and a comma
+-- loop whose residue no displacement can make slack.
 --
 -- Pins the terms the walk relaxes on (§ The solve): a warm start that buys the
 -- sweep its speed and not its answer, and a held strand standing as data at the
@@ -57,9 +57,10 @@
 -- cheaper.
 --
 -- Pins the placement the moves facility takes off all of it (§ The solve): the
--- five-part take below spelled, walked and settled in one call, a struck
--- triad standing at the target's own intervals, and a chord no chain of moves
--- reaches coming back with nothing.
+-- five-part take below spelled, walked and settled in one call with its
+-- displacements summing to nothing, a struck triad standing at the target's own
+-- intervals, a notation of finer steps settling that triad where 12-EDO settles
+-- it, and a chord no chain of moves reaches coming back with nothing.
 
 local t        = require('support')
 local tuning   = require('tuning')
@@ -97,6 +98,12 @@ local edo12 = tuning.presets['12EDO']
 local function nameless(cents)
   return tuning.derive{ name = 'scale', period = 1200, cents = cents, stepNames = {} }
 end
+
+-- Steps of fifty cents: a note written on a 12-EDO step seats where 12-EDO seats it, with
+-- half the room either side of it.
+local halfSteps = {}
+for step = 0, 23 do halfSteps[step + 1] = step * 50 end
+local edo24 = nameless(halfSteps)
 
 -- Targets read as moves: pure fifths and thirds, the set a ii–V–I of sevenths is spelled
 -- under, and the eleven-pitch set the figures of § Measured were taken over.
@@ -495,39 +502,39 @@ local function termsOf(strands, n, moves)
   for i, onset in ipairs(onsets) do
     lists[i] = sonority.spellings(onset.members, seat, window, onset.mayWait, moves, 24, 8)
   end
-  return onsets, lists, window, seat
+  return onsets, lists, seat, window
 end
 
 -- The whole of what a passage's displacements cost: every spring of it, and the pull on
 -- every strand, which is the objective the relaxation minimises.
-local function objectiveAt(springs, displacement, window, strength, stiffness)
-  local _, free = allFree(#window)
+local function objectiveAt(springs, displacement, count, strength, stiffness)
+  local _, free = allFree(count)
   return sonority.springCost(springs, displacement, stiffness, 1, #springs)
-       + sonority.pullCost(displacement, window, strength, free)
+       + sonority.pullCost(displacement, strength, free)
 end
 
 -- The winner settled by one joint relaxation, which is where the frozen past gives back
 -- what it held along the way; the walk's own cost stands above this until then.
-local function settledFrom(answer, window, strength, stiffness)
-  local _, free = allFree(#window)
-  local displacement = sonority.relax(sonority.ties(answer.springs, free), window, strength,
+local function settledFrom(answer, count, strength, stiffness)
+  local _, free = allFree(count)
+  local displacement = sonority.relax(sonority.ties(answer.springs, free), strength,
                                       stiffness, answer.displacement, free)
-  return answer.box + objectiveAt(answer.springs, displacement, window, strength, stiffness),
+  return answer.box + objectiveAt(answer.springs, displacement, count, strength, stiffness),
          displacement
 end
 
 -- What a passage settles to under a target: the walk's answer, given back by the joint
 -- relaxation, at the cap and the arity the figures below are taken under.
 local function settledUnder(strands, moves)
-  local onsets, lists, window, seat = termsOf(strands, 5, moves)
-  return settledFrom(sonority.search(onsets, lists, seat, window, 1, 8, 60), window, 1, 8)
+  local onsets, lists, seat = termsOf(strands, 5, moves)
+  return settledFrom(sonority.search(onsets, lists, seat, 1, 8, 60), #seat, 1, 8)
 end
 
 -- Every combination of the spelling lists, each relaxed cold with every strand free: the
 -- search the walk is held against, in the odometer order everyChoice takes, so that an
 -- exact tie falls to the same combination the walk's own tie-break keeps.
-local function bruteSpelled(lists, window, strength, stiffness)
-  local start, free = allFree(#window)
+local function bruteSpelled(lists, count, strength, stiffness)
+  local start, free = allFree(count)
   local at, best = {}, nil
   for i = 1, #lists do at[i] = 1 end
   while true do
@@ -536,9 +543,9 @@ local function bruteSpelled(lists, window, strength, stiffness)
       springs[i] = list[at[i]].springs
       box        = box + list[at[i]].box
     end
-    local displacement = sonority.relax(sonority.ties(springs, free), window, strength,
+    local displacement = sonority.relax(sonority.ties(springs, free), strength,
                                         stiffness, start, free)
-    local cost = box + objectiveAt(springs, displacement, window, strength, stiffness)
+    local cost = box + objectiveAt(springs, displacement, count, strength, stiffness)
     if not best or cost < best.cost then
       best = { cost = cost, displacement = displacement, choice = { table.unpack(at) } }
     end
@@ -648,12 +655,12 @@ return {
       local mist = 8 * ((5.6863/50)^2 + (4.0450/50)^2 + (1.6413/50)^2 + (2.0450/50)^2)
       local pull = 1 * ((4/50)^2 + (12/50)^2 + (2/50)^2 + (6/50)^2)
 
-      near(objectiveAt({ major, fifth }, displacement, evenWindows(4), 1, 8), mist + pull,
+      near(objectiveAt({ major, fifth }, displacement, 4, 1, 8), mist + pull,
         'the two terms summed, and no box among them')
       near(sonority.springCost({ major, fifth }, displacement, 8, 1, 2), mist,
         'the springs charged at the stiffness')
-      near(sonority.pullCost(displacement, evenWindows(4), 1, { 1, 2, 3, 4 }), pull,
-        'and the pull over the window half each displacement lies in')
+      near(sonority.pullCost(displacement, 1, { 1, 2, 3, 4 }), pull,
+        'and the pull over the same fifty the springs are charged over')
     end,
   },
 
@@ -668,56 +675,54 @@ return {
       local pull = 0
       for _, cents in ipairs(displacement) do pull = pull + (cents / 50)^2 end
 
-      local cost = objectiveAt({ major }, displacement, evenWindows(3), 1, 8)
+      local cost = objectiveAt({ major }, displacement, 3, 1, 8)
       near(cost, pull, 'the pull alone, and nothing from the springs')
-      t.eq(cost, objectiveAt({ major }, displacement, evenWindows(3), 1, 1e6),
+      t.eq(cost, objectiveAt({ major }, displacement, 3, 1, 1e6),
         'a stiffness of a million charges a slack spring the same nothing')
     end,
   },
 
   {
-    name = 'springs: the pull is charged over the window half it lies in',
+    name = 'springs: the pull is charged in cents, whichever way it points',
     run = function()
-      local narrow = { { below = 25, above = 50 } }
-
-      near(sonority.pullCost({  10 }, narrow, 1, { 1 }), 0.04,
-        'ten cents up a fifty-cent half is a fifth of the way to the edge')
-      near(sonority.pullCost({ -10 }, narrow, 1, { 1 }), 0.16,
-        'the same ten down a twenty-five-cent half costs four times as much')
+      near(sonority.pullCost({  10 }, 1, { 1 }), 0.04,
+        'ten cents is a fifth of the fifty the strain is taken over')
+      near(sonority.pullCost({ -10 }, 1, { 1 }), 0.04,
+        'and ten cents down costs what ten cents up costs')
     end,
   },
 
   {
     name = 'relax: a pair settles where the hand solution puts it',
     run = function()
-      -- One spring between even windows charges the pull the same either way, so the two
-      -- part equally: each at stiffness × delta over strength plus twice the stiffness.
+      -- One spring, and a pull that charges either strand alike, so the two part it
+      -- equally: each at stiffness × delta over strength plus twice the stiffness.
       local third = sonority.springs({ 1, 2 }, { 0, 400 }, { {}, { [5] = 1 } })
       local hand  = -8 * third[1].delta / (1 + 2 * 8)
 
       local start, free  = allFree(2)
-      local displacement = sonority.relax(sonority.ties({ third }, free), evenWindows(2), 1, 8,
-                                          start, free)
+      local displacement = sonority.relax(sonority.ties({ third }, free), 1, 8, start, free)
       near(displacement[1],  hand, 'the root rises six and a half cents')
       near(displacement[2], -hand, 'and the third falls as far to meet it')
     end,
   },
 
   {
-    name = 'relax: the springs press a strand to its window edge',
+    name = 'relax: no wall stops stiff springs stretching a pair',
     run = function()
-      -- A 7/4 asks for thirty-one cents of stretch, and under stiff springs it outweighs
-      -- the pull; the window holds eight on the side each strand moves to.
+      -- A 7/4 asks for thirty-one cents of stretch and stiff springs outweigh the pull, so
+      -- the pair goes fifteen cents apiece: nothing bounds a displacement, and the closed
+      -- form above holds at any stiffness.
       local harmonic = sonority.springs({ 1, 2 }, { 0, 1000 }, { {}, { [7] = 1 } })
-      local window   = { { below = 50, above = 8 }, { below = 8, above = 50 } }
+      local hand     = -40 * harmonic[1].delta / (1 + 2 * 40)
 
       local start, free  = allFree(2)
-      local displacement = sonority.relax(sonority.ties({ harmonic }, free), window, 1, 40,
-                                          start, free)
-      near(displacement[1],  8, 'the root stands at its edge, not at its far half')
-      near(displacement[2], -8, 'and the seventh at its own')
-      near(displacement[2] - displacement[1] - harmonic[1].delta, 15.174,
-        'the fifteen cents the windows refuse staying in the spring')
+      local displacement = sonority.relax(sonority.ties({ harmonic }, free), 1, 40, start, free)
+      near(displacement[1],  hand, 'the root fifteen cents up, past where a fine step sits')
+      near(displacement[2], -hand, 'and the seventh as far down')
+      near(displacement[2] - displacement[1] - harmonic[1].delta,
+           -harmonic[1].delta / (1 + 2 * 40),
+        "the spring keeping the strength's share of the stretch, one part in eighty-one")
     end,
   },
 
@@ -730,16 +735,16 @@ return {
       local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
       local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
       local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
-      local loop, window = { third, fourth, sixth }, evenWindows(3)
+      local loop = { third, fourth, sixth }
 
       local start, free  = allFree(3)
-      local displacement = sonority.relax(sonority.ties(loop, free), window, 1, 8, start, free)
-      local spread       = objectiveAt(loop, displacement, window, 1, 8)
+      local displacement = sonority.relax(sonority.ties(loop, free), 1, 8, start, free)
+      local spread       = objectiveAt(loop, displacement, 3, 1, 8)
 
       -- Two springs go slack only by handing the whole comma to the third.
       local borne = { 0, third[1].delta,
                       third[1].delta + fourth[1].delta }
-      t.truthy(spread < objectiveAt(loop, borne, window, 1, 8),
+      t.truthy(spread < objectiveAt(loop, borne, 3, 1, 8),
         'the spread comma costs less than one spring bearing it')
 
       for _, springs in ipairs(loop) do
@@ -752,7 +757,7 @@ return {
         for _, nudge in ipairs{ -0.5, 0.5 } do
           local nudged = { displacement[1], displacement[2], displacement[3] }
           nudged[index] = nudged[index] + nudge
-          t.truthy(spread < objectiveAt(loop, nudged, window, 1, 8),
+          t.truthy(spread < objectiveAt(loop, nudged, 3, 1, 8),
             'and nothing half a cent away is cheaper')
         end
       end
@@ -768,12 +773,12 @@ return {
       local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
       local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
       local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
-      local loop, window = { third, fourth, sixth }, evenWindows(3)
+      local loop = { third, fourth, sixth }
 
       local start, free = allFree(3)
       local ties = sonority.ties(loop, free)
-      local cold = sonority.relax(ties, window, 1, 8, start, free)
-      local warm = sonority.relax(ties, window, 1, 8, { 40, -30, 25 }, { 1, 2, 3 })
+      local cold = sonority.relax(ties, 1, 8, start, free)
+      local warm = sonority.relax(ties, 1, 8, { 40, -30, 25 }, { 1, 2, 3 })
 
       for index = 1, 3 do
         near(warm[index], cold[index], 'strand ' .. index .. ' settles where it always did')
@@ -790,13 +795,13 @@ return {
       local third  = sonority.springs({ 1, 2 }, seat, { {}, { [5] =  1 } })
       local fourth = sonority.springs({ 2, 3 }, seat, { {}, { [3] = -1 } })
       local sixth  = sonority.springs({ 1, 3 }, seat, { {}, { [3] =  3 } })
-      local loop, window = { third, fourth, sixth }, evenWindows(3)
+      local loop = { third, fourth, sixth }
       local start, free  = allFree(3)
 
       local settled = sonority.ties(loop, free, { 1, 2 })
-      local whole = sonority.relax(sonority.ties(loop, free), window, 1, 8, start, free)
+      local whole = sonority.relax(sonority.ties(loop, free), 1, 8, start, free)
       local stood = sonority.relax(sonority.ties(loop, free, { 3 }, settled),
-                                   window, 1, 8, start, free)
+                                   1, 8, start, free)
 
       for index = 1, 3 do
         t.eq(stood[index], whole[index], 'strand ' .. index .. ' settling to the same cents')
@@ -809,29 +814,28 @@ return {
     run = function()
       -- The walk frees the strands an onset sounds and reads the rest: here the root is data
       -- at ten cents sharp, pulling on the springs of a triad whose sweep it takes no turn in.
-      local major  = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
-                                      { {}, { [5] = 1 }, { [3] = 1 } })
-      local window = evenWindows(3)
+      local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 },
+                                     { {}, { [5] = 1 }, { [3] = 1 } })
 
       local sweeping = { 2, 3 }
-      local held = sonority.relax(sonority.ties({ major }, sweeping), window, 1, 8,
+      local held = sonority.relax(sonority.ties({ major }, sweeping), 1, 8,
                                   { 10, 0, 0 }, sweeping)
       t.eq(held[1], 10, 'the held strand stands exactly where it was put')
 
       -- The two that sweep sit at the optimum of what is left, the held one a constant in it.
-      local settled = objectiveAt({ major }, held, window, 1, 8)
+      local settled = objectiveAt({ major }, held, 3, 1, 8)
       for _, index in ipairs{ 2, 3 } do
         for _, nudge in ipairs{ -0.5, 0.5 } do
           local nudged = { held[1], held[2], held[3] }
           nudged[index] = nudged[index] + nudge
-          t.truthy(settled < objectiveAt({ major }, nudged, window, 1, 8),
+          t.truthy(settled < objectiveAt({ major }, nudged, 3, 1, 8),
             'nothing half a cent from strand ' .. index .. ' is cheaper')
         end
       end
 
       -- And the hold is felt: from the same start, a root free to move would not stay sharp.
       local all  = { 1, 2, 3 }
-      local free = sonority.relax(sonority.ties({ major }, all), window, 1, 8, { 10, 0, 0 }, all)
+      local free = sonority.relax(sonority.ties({ major }, all), 1, 8, { 10, 0, 0 }, all)
       t.truthy(held[2] > free[2] and held[3] > free[3],
         "the springs carrying the held strand's sharpness into the two that move")
     end,
@@ -1146,11 +1150,11 @@ return {
       -- the walk carries a capped set of partial answers through it and comes back with
       -- the best of them, at 17.51 against the walk's own 17.74 (§ The solve).
       local strands = progression{ { 62, 65, 69 }, { 55, 59, 62 }, { 60, 64, 67 } }
-      local onsets, lists, window, seat = termsOf(strands, 5, fifthsAndThirds)
+      local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
 
-      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
-      local cost, displacement = settledFrom(answer, window, 1, 8)
-      local best = bruteSpelled(lists, window, 1, 8)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local cost, displacement = settledFrom(answer, #seat, 1, 8)
+      local best = bruteSpelled(lists, #seat, 1, 8)
 
       nearly(cost, best.cost, 'the walk settles where the enumeration settles')
       t.deepEq(answer.choice, best.choice, 'having spelled every onset as it spells it')
@@ -1171,12 +1175,12 @@ return {
       -- carrying one answer takes that road and comes back at 18.6590, and one carrying
       -- sixty finds the way around it at 18.3248.
       local strands = progression{ { 62, 65, 69, 72 }, { 55, 59, 62, 65 }, { 60, 64, 67, 71 } }
-      local onsets, lists, window, seat = termsOf(strands, 5, withSevenths)
+      local onsets, lists, seat = termsOf(strands, 5, withSevenths)
 
-      local greedy  = sonority.search(onsets, lists, seat, window, 1, 8, 1)
-      local carried = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      local greedy  = sonority.search(onsets, lists, seat, 1, 8, 1)
+      local carried = sonority.search(onsets, lists, seat, 1, 8, 60)
 
-      t.truthy(settledFrom(greedy, window, 1, 8) > settledFrom(carried, window, 1, 8),
+      t.truthy(settledFrom(greedy, #seat, 1, 8) > settledFrom(carried, #seat, 1, 8),
         'the road a cap of one takes costs more than the one sixty answers find')
       t.eq(greedy.choice[1], carried.choice[1], 'the two spelling the ii alike')
       t.truthy(greedy.choice[2] ~= carried.choice[2], 'and parting at the V')
@@ -1189,17 +1193,17 @@ return {
       -- The relaxation frees what the onset sounds, so a triad released as the next chord
       -- strikes is data at the cents the first onset settled it to (§ The solve).
       local strands = progression{ { 60, 64, 67 }, { 62, 65, 69 } }
-      local onsets, lists, window, seat = termsOf(strands, 6, fifthsAndThirds)
+      local onsets, lists, seat = termsOf(strands, 6, fifthsAndThirds)
       t.eq(#onsets[2].members, 6, 'the second onset holding all six')
       t.eq(#onsets[2].sounding, 3, 'and sounding the three that struck')
 
-      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
       t.eq(#answer.choice, 2, 'a spelling chosen at each onset')
 
-      local start, free = allFree(#window)
+      local start, free = allFree(#seat)
       local opening  = { lists[1][answer.choice[1]].springs }
       local sounding = onsets[1].sounding
-      local first = sonority.relax(sonority.ties(opening, sounding), window, 1, 8,
+      local first = sonority.relax(sonority.ties(opening, sounding), 1, 8,
                                    start, sounding)
       for _, index in ipairs{ 1, 3, 5 } do
         t.eq(answer.displacement[index], first[index],
@@ -1209,7 +1213,7 @@ return {
       -- And the hold is felt, but barely: the second onset ties all six into one spelling, so
       -- the walk has little left to give back and the joint relaxation moves the three by
       -- between 0.06¢ and 0.47¢ — under the half cent the merge treats as no difference.
-      local loosened = sonority.relax(sonority.ties(answer.springs, free), window, 1, 8,
+      local loosened = sonority.relax(sonority.ties(answer.springs, free), 1, 8,
                                       answer.displacement, free)
       for _, index in ipairs{ 1, 3, 5 } do
         local moved = math.abs(loosened[index] - answer.displacement[index])
@@ -1246,13 +1250,13 @@ return {
       local strands = rolled({ 60, 63, 67 }, 240)
       local waited, deferred = settledUnder(strands, elevenPitches)
 
-      local onsets, _, window, seat = termsOf(strands, 5, elevenPitches)
+      local onsets, _, seat, window = termsOf(strands, 5, elevenPitches)
       local spelled = {}
       for i, onset in ipairs(onsets) do
         spelled[i] = sonority.spellings(onset.members, seat, window, {}, elevenPitches, 24, 8)
       end
       local spelt, standing = settledFrom(
-        sonority.search(onsets, spelled, seat, window, 1, 8, 60), window, 1, 8)
+        sonority.search(onsets, spelled, seat, 1, 8, 60), #seat, 1, 8)
 
       nearly(waited, 7.8703, 'the road that waits')
       nearly(spelt, 7.8703, 'and the road that spells the pair where it stands')
@@ -1269,8 +1273,8 @@ return {
       -- The charge falls due where the sonority stands, not where the waiter lands: the
       -- pair the second onset held is a spring in the second onset's slot.
       local strands = rolled({ 60, 63, 67 }, 240)
-      local onsets, lists, window, seat = termsOf(strands, 5, fifthsAndThirds)
-      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
 
       t.eq(#answer.springs[1], 0, 'the lone C states nothing')
       t.eq(#answer.springs[2], 1, 'the pair the second sonority held')
@@ -1287,8 +1291,8 @@ return {
       -- spring nor its box, and came back 2.32 under the road that spells as it goes, at a
       -- tuning the two agree on within 0.03¢ (§ What it costs).
       local strands = rolled({ 60, 64, 67, 70 }, 240)
-      local onsets, lists, window, seat = termsOf(strands, 5, elevenPitches)
-      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      local onsets, lists, seat = termsOf(strands, 5, elevenPitches)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
 
       nearly(answer.cost, 13.2165, 'the walk keeping the road that has paid')
       t.eq(next(answer.held), nil, 'and nothing left owing at the end of the walk')
@@ -1303,8 +1307,8 @@ return {
       -- that defers it comes back with coords the second onset itself returned and is
       -- refused; what the walk keeps spells each onset as it reaches it (§ The candidates).
       local strands = rolled({ 60, 63, 67 }, 240)
-      local onsets, lists, window, seat = termsOf(strands, 5, elevenPitches)
-      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      local onsets, lists, seat = termsOf(strands, 5, elevenPitches)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
 
       for i, choice in ipairs(answer.choice) do
         t.eq(#lists[i][choice].waiting, 0, 'onset ' .. i .. ' spelling what it holds')
@@ -1323,7 +1327,7 @@ return {
       -- price the refusal puts at everything (§ The candidates).
       local strands = sonority.strands({ event(0, 76, 480), event(0, 60, 960),
                                          event(480, 67, 960) }, pitchClass)
-      local onsets, lists, window, seat = termsOf(strands, 2, fifthsAndThirds)
+      local onsets, lists, seat = termsOf(strands, 2, fifthsAndThirds)
       t.deepEq(onsets[2].members, { 3, 1 }, 'the released upper note gone by the second onset')
 
       local deferring
@@ -1333,9 +1337,9 @@ return {
       t.truthy(deferring, 'the first sonority offering a road that defers the pair')
       t.eq(lists[1][deferring].box, 0, 'which states nothing and so carries no box at all')
 
-      local answer = sonority.search(onsets, lists, seat, window, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
       t.truthy(answer.choice[1] ~= deferring, 'the walk refusing it rather than taking it free')
-      nearly(settledFrom(answer, window, 1, 8), 3.9592,
+      nearly(settledFrom(answer, #seat, 1, 8), 3.9592,
         'and spelling the pair where it stands, at what that road costs')
     end,
   },
@@ -1347,11 +1351,11 @@ return {
       -- that has paid it takes the whole cut, and every resolution it has left is refused: a
       -- pool apiece keeps a road the refusal cannot touch, at any cap (§ The solve).
       local strands = rolled({ 60, 63, 67 }, 240)
-      local onsets, lists, window, seat = termsOf(strands, 5, elevenPitches)
+      local onsets, lists, seat = termsOf(strands, 5, elevenPitches)
 
-      local greedy = sonority.search(onsets, lists, seat, window, 1, 8, 1)
+      local greedy = sonority.search(onsets, lists, seat, 1, 8, 1)
       t.truthy(greedy, 'a walk carrying one answer apiece still answers a rolled chord')
-      t.truthy(greedy.cost >= sonority.search(onsets, lists, seat, window, 1, 8, 60).cost,
+      t.truthy(greedy.cost >= sonority.search(onsets, lists, seat, 1, 8, 60).cost,
         'and pays for the narrower cut rather than escaping it')
     end,
   },
@@ -1359,24 +1363,28 @@ return {
   {
     name = 'solveToMoves: the take settles where § Measured settles it',
     run = function()
-      -- Everything the facility does, in one call: the seats and windows the notation
-      -- states, the spellings the beam chooses, the walk over them, and the joint
-      -- relaxation that settles the winner.
+      -- Everything the facility does, in one call: the seats the notation states, the
+      -- spellings the beam chooses, the walk over them, and the joint relaxation that
+      -- settles the winner.
       local cents = sonority.solveToMoves(take, 5, 1, edo12, elevenPitches, 8)
       t.truthy(cents, 'the take is answered')
 
-      local seat, window = sonority.seats(take, edo12)
+      local seat = sonority.seats(take, edo12)
       t.eq(#cents, #take, 'a tuning per strand, forty of them')
 
-      local total, worst = 0, 0
+      -- The pull charges a cent either way alike, so a passage whose strands are all free
+      -- to move settles with its body where it was written: shift every displacement by
+      -- the same amount and the springs are unmoved while the pull rises.
+      local total, worst, signed = 0, 0, 0
       for index = 1, #take do
         local moved = cents[index] - seat[index]
         total, worst = total + math.abs(moved), math.max(worst, math.abs(moved))
-        t.truthy(moved > -window[index].below and moved < window[index].above,
-          'strand ' .. index .. ' keeping the step it was written on')
+        signed = signed + moved
       end
       near(total / #take, 6.63, 'the mean displacement of § Measured')
       t.truthy(worst < 11.4, 'and no note past 11.4 cents: ' .. string.format('%.2f', worst))
+      t.truthy(math.abs(signed) < 0.1, 'the forty displacements summing to nothing: '
+        .. string.format('%.4f', signed))
     end,
   },
 
@@ -1398,6 +1406,25 @@ return {
       t.eq(sonority.solveToMoves(progression{ { 60, 63, 66 } }, 5, 1, edo12,
                                  fifthsAndThirds, 8), nil,
         'while a diminished triad under the same set is refused')
+    end,
+  },
+
+  {
+    name = 'solveToMoves: a notation of finer steps settles the chord the same',
+    run = function()
+      -- The two notations seat these three notes alike and space their neighbours at fifty
+      -- cents against a hundred. A pull taken in half-windows charged the finer notation
+      -- four times over for the same drift, and settled the chord elsewhere; taken in
+      -- cents, the notation states the seats and measures nothing.
+      local chord  = progression{ { 60, 64, 67 } }
+      local coarse = sonority.solveToMoves(chord, 5, 1, edo12, fifthsAndThirds, 8)
+      local fine   = sonority.solveToMoves(chord, 5, 1, edo24, fifthsAndThirds, 8)
+
+      t.truthy(fine, 'the chord is answered under the finer notation')
+      for index = 1, 3 do
+        t.eq(fine[index], coarse[index],
+          'strand ' .. index .. ' settling where the coarser notation settles it')
+      end
     end,
   },
 

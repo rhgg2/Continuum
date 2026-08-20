@@ -15,7 +15,9 @@
 -- points: sonority.solveToMoves spells the strands against one another and settles
 -- them by springs. Those cases write a C major and a C minor triad against 1/1, 5/4
 -- and 3/2, the minor third being what no point of it reaches, and the purity slot
--- is what the springs hold their intervals to.
+-- is what the springs hold their intervals to. Nothing bounds where a strand lands,
+-- so a chord asking for 86 cents of stretch carries one of its notes past the step
+-- above it, and the intent it stores is what strands it as written on the next run.
 --
 -- Either facility reads a note's render clip rather than its authored ceiling, so an
 -- open tail sounds to the next onset in its lane rather than to the end of the take.
@@ -450,28 +452,31 @@ return {
   },
 
   {
-    name = 'a strand pinned to its window edge keeps the step it was written on',
+    name = 'a strand carried past its step reads as its neighbour, and the intent names it back',
     run = function(harness)
       -- E flat, E and G against 1/1, 5/4 and 3/2. Nothing in the set reaches the minor
-      -- third, so the E-G is spelled as a 5/4 -- 86 cents of stretch, which pins the G to
-      -- the top of its window. A strand standing on the edge itself would be equidistant
-      -- from two steps, and would read as the other one when the command was run again.
+      -- third, so the E-G is spelled as a 5/4 -- 86 cents of stretch, and no window stops
+      -- the pair taking it: the G goes 59 cents up, which is past the step above it, and
+      -- the seat it reads back as is an A flat sounding flat. What holds the answer still
+      -- is the intent it stores (design/sounding-anchor.md § What the note remembers).
       local h = mk(harness, { note(0, 63, 0), note(0, 64, 0), note(0, 67, 0) },
                    '12EDO', { DIA = DIA })
       local slots = { scope = 'all', strength = 1, target = 'DIA', facility = 'moves',
                       key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
 
       h.vm:retune(slots)
-      local first = chordAt(h, 0)
-      settles(first[67],  50,      'the G pinned to the top of its window')
-      settles(first[64], -31.8618, 'the E a stretched 5/4 below it')
-      settles(first[63], -43.1239, 'and the E flat, which the set reaches from neither')
+      local first = cellsAt(h, 0)
+      t.eq(first[67], nil, 'nothing left on the step the G was written on')
+      settles(first[68].detune, -41.0058, 'the G reading as the A flat it has gone past')
+      t.eq(first[68].intentCents, 6700, 'and carrying the step it was written on')
+      settles(first[64].detune, -23.8670, 'the E a stretched 5/4 below where it sounds')
+      settles(first[63].detune, -35.1291, 'and the E flat, which the set reaches from neither')
 
       h.vm:retune(slots)
-      local second = chordAt(h, 0)
-      for pitch, detune in pairs(first) do
-        t.truthy(second[pitch], 'the note on ' .. pitch .. ' is still written on its own step')
-        settles(second[pitch], detune, 'and the second run leaves it where the first did')
+      local second = cellsAt(h, 0)
+      for pitch, e in pairs(first) do
+        t.truthy(second[pitch], 'the note on ' .. pitch .. ' stranding as its intent names it')
+        settles(second[pitch].detune, e.detune, 'and the second run leaving it where the first did')
       end
     end,
   },

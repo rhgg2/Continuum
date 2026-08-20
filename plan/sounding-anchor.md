@@ -28,10 +28,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-20 sonority: charge the pull in cents and settle unclamped (§ Both wall and ruler)
 - 2026-08-20 docs: intentCents (§ What the note remembers)
 - 2026-08-20 tracker: read an interval as steps and the cents no step reaches (§ The notation is not a derivation input)
 - 2026-08-20 tracker: carry a note's intent into the notes it derives (§ What the note remembers, § What the cell says)
-- 2026-08-19 tracker: store a generator's pitch demand in cents, not steps (§ The notation is not a derivation input)
 
 ## Now
 
@@ -39,23 +39,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The pull in cents** — `sonority.pullCost` drops its `window` argument
-   and takes a strand's strain as its displacement over `PURE`, the fifty the
-   springs are already charged over. `settle` loses the branch that picked a
-   half-window and the clamp that bounded its answer, returning `stiffness ×
-   seats / (stiffness × count + strength)` once the fifties divide out of both
-   terms; `sonority.relax` takes its strand count off `start`,
-   `sonority.search` takes its own off `seat`, and `extend` threads no window
-   through. A half-window in 12-EDO is fifty cents less a hair, so the spec's
-   figures stand and most of the churn is calls shedding an argument. Two
-   cases state the model this replaces: 'relax: the springs press a strand to
-   its window edge' is the red, re-authored to the optimum the sweep now
-   reaches, and 'springs: the pull is charged over the window half it lies in'
-   becomes an uneven notation charging what an even one charges for the same
-   displacement. `tests/spikes/springs/cap_sweep.lua` and `pairwise_box.lua`
-   call `relax`, `pullCost` and `search` directly, and follow the signatures.
-   Worth knowing what a harmonic lock of zero does now, since nothing then
-   pins a passage's absolute offset but the start the sweep opens from.
 2. **The reach gate** — `reachOf` goes, with the `lo` and `hi` a beam state
    carries, the two offsets `admit` takes and the window `beamOver` reads;
    `sonority.spellings` sheds it in turn, and `sonority.seats` returns the
@@ -73,7 +56,9 @@
    enumerates five members over eleven pitches with nothing pruning it —
    check what that now costs and cut the case down if it has grown out of
    hand. `take_bench.lua` says what the frontier costs the solve;
-   `cap_sweep.lua` and `pairwise_box.lua` follow the two signatures.
+   `cap_sweep.lua` and `pairwise_box.lua` follow the two signatures. The three
+   moves cases of `tests/specs/vm_retune_spec.lua` stand on the spellings the
+   beam chooses, so their figures may move with the frontier too.
 3. **Docs** — `docs/sonority.md` § The window and the pull becomes the pull
    alone, the window staying there as the points facility's and the
    notation's; § The springs takes the new unit and the unclamped sweep,

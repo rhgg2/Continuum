@@ -133,19 +133,19 @@ local function solveAt(passage, width, cap)
                                       passage.moves, width, STIFFNESS)
   end
 
-  local answer = sonority.search(onsets, spellings, seat, window, STRENGTH, STIFFNESS, cap)
+  local answer = sonority.search(onsets, spellings, seat, STRENGTH, STIFFNESS, cap)
   if not answer then return nil end
 
   local free = {}
   for index = 1, #strands do free[index] = index end
-  local displacement = sonority.relax(sonority.ties(answer.springs, free), window, STRENGTH,
+  local displacement = sonority.relax(sonority.ties(answer.springs, free), STRENGTH,
                                       STIFFNESS, answer.displacement, free)
 
   local checksum = 0
   for index = 1, #strands do checksum = checksum + seat[index] + displacement[index] end
   return answer.box
        + sonority.springCost(answer.springs, displacement, STIFFNESS, 1, #answer.springs)
-       + sonority.pullCost(displacement, window, STRENGTH, free), checksum
+       + sonority.pullCost(displacement, STRENGTH, free), checksum
 end
 
 for _, width in ipairs(WIDTHS) do
