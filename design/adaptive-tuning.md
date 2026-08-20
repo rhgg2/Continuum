@@ -125,26 +125,30 @@ step it was written on.**
    quarter-comma meantone MOS, C may move +38.0¢ toward C♯ and −58.6¢
    toward B.
 
-3. Inside it a note keeps its step. `tuning.midiToStep` recovers the
-   scale step from `(pitch, detune)` by snapping to the nearest step
-   (`tuning.lua:400-408`), so the tracker cell keeps the name it was
-   written under. Move a note further and the cell relabels itself —
-   the solver editing the score rather than tuning it.
+3. Inside it a note keeps its step. `tuning.noteStep` recovers the
+   scale step from `(pitch, detune)` by snapping to the nearest
+   (`tuning.lua:629`), so the tracker cell keeps the name it was
+   written under; move a note further and the snap names a different
+   step.
 
-4. The written pitch therefore stays recoverable, and nothing has to be
-   stashed beside the note to hold it.
+4. That recovery is the points solve's alone. A note may carry the step
+   it was written on instead — `intentCents`, which a solve stamps and
+   `tuning.noteStep` reads before it snaps anything (`docs/tuning.md`
+   § The written step) — and the moves solve, which places notes past
+   their windows, rests on it (`design/sounding-anchor.md` § What the
+   note remembers).
 
-5. The pull is toward that recovered step rather than the note's
-   current cents, which makes the operation idempotent at full strength
-   (§ Strength).
+5. The pull is toward the step the note was written on rather than the
+   note's current cents, which makes the operation idempotent at full
+   strength (§ Strength).
 
 6. The edge itself is no place to stand. A note exactly a half-gap out is
    equidistant from two steps, so the one it was written on is no longer
    readable off its cents: `midiToStep` breaks the tie downward, and the
    cell relabels as surely as if the note had moved further.
    `tuning.seatWindow` therefore stops each half a hair inside the edge —
-   a ten-thousandth of a cent — and both facilities inherit it, the
-   springs' box and the shortlist's strain being measured off that window.
+   a ten-thousandth of a cent — and the shortlist's strain is measured
+   off those halves.
 
 7. Standing a strand there was reachable in ordinary use. Under a set
    holding `5/4` and `3/2` alone, an E♭–E–G spells its minor third as a
@@ -806,16 +810,7 @@ step it was written on.**
    was enough to make the spike stable; whether a well — soft near the
    centre, stiff at the edge — buys anything is unmeasured.
 
-5. Where a refusal goes under the moves facility. A sonority no chain of
-   moves seats inside the windows has no spelling, and the solve comes
-   back with nothing for a passage holding one — a diminished triad under
-   `3/2` and `5/4` alone (`docs/sonority.md` § The candidates). The points
-   solve names the strands it refused and offers to widen their windows
-   (§ What the solver takes), where a moves answer has no per-strand
-   refusal to name, what could not be spelled being the sonority rather
-   than the strand; so what the author is told is unsettled.
-
-6. How a moves solve sees the take before it. The points solve's collar
+5. How a moves solve sees the take before it. The points solve's collar
    is a strand of one with its tuning already chosen (§ Seams), and a
    moves solve can pin a collar strand at the displacement the take
    stores; what no take stores is the spelling that put it there
@@ -823,14 +818,4 @@ step it was written on.**
    against the sonority it joins and may not be spelled as it was
    solved. Either a note carries its coords as metadata, or one solve
    spans the takes in sequence and carries the spelling across.
-
-7. Whether the window should bind at all. Letting a strand drift past
-   it, with the pull anchored to the step the note was written on rather
-   than the one it would then recover, would collapse three refusals
-   into a single trade: the step a target leaves nowhere to go and the
-   widening offered against it (§ What the solver takes), and the
-   sonority no chain of moves seats inside the windows
-   (`docs/sonority.md` § The candidates). What it costs is idempotence by
-   construction and a dial that means the same under every notation
-   (§ The window, § Harmonic lock).
 

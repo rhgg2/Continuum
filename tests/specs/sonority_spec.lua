@@ -8,7 +8,7 @@
 -- behind it, and the class still sounding that the last n struck have dropped.
 --
 -- Pins the objective the solve minimises: the box summed over the walk's
--- sonorities, and the pull counted once per strand (§ The window and the pull).
+-- sonorities, and the pull counted once per strand (§ The pull).
 --
 -- Pins the solve of design/adaptive-tuning.md § Solving it: that the DP returns
 -- the exact minimum of that objective, held against exhaustive enumeration; that

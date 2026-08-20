@@ -34,12 +34,12 @@ charged by whether its two members sound together.**
    seat, window, displacement, spring, box, pull, strain — and this doc
    defines only the terms it adds.
 
-1. Two questions in `design/adaptive-tuning.md` § Open are settled here,
-   for the moves solve alone. Item 7 asks whether the window should bind
-   at all, and the answer is that it should neither bind nor measure.
-   Item 5 asks what an author is told when a sonority no chain of moves
-   can place is refused; with no window to place it inside, that refusal
-   does not arise.
+1. Two questions `design/adaptive-tuning.md` § Open used to ask are
+   settled here, for the moves solve alone, and have left that doc.
+   Whether the window should bind at all: it should neither bind nor
+   measure. What an author is told when a sonority no chain of moves can
+   place is refused: with no window to place it inside, that refusal does
+   not arise.
 
 ## The anchor today
 
@@ -378,7 +378,7 @@ charged by whether its two members sound together.**
    before the join was scored, so removing it widens the set each round
    sorts: the eighty-eight-note take of `tests/spikes/springs/take.lua` costs
    1.8 seconds against 0.57, for the same tuning to the last digit, and a
-   five-member sonority over eleven pitches enumerates about a million
+   five-member sonority over eleven pitches enumerates 1,403,400
    spellings where the gate left 1018. A beam of twenty-four and a walk of
    four abreast were settled by measurement taken with the gate active
    (`docs/sonority.md` § The solve), so both figures are open again, and the
@@ -683,7 +683,7 @@ charged by whether its two members sound together.**
    wherever the notation's steps are not a hundred cents apart.
 
 1. What a moves solve does at a take boundary.
-   `design/adaptive-tuning.md` § Open item 6 asks this of the model as
+   `design/adaptive-tuning.md` § Open item 5 asks this of the model as
    built, and an ambient reference sharpens it: a take's first onset
    asserts the page, so a passage spanning two takes has two anchors
    where the music has one.

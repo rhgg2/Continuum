@@ -28,10 +28,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-20 docs: retire the window from the moves solve, as wall and as ruler (§ Both wall and ruler, § What the beam loses)
 - 2026-08-20 sonority: drop the beam's reach gate, and state distinctness (§ What the beam loses)
 - 2026-08-20 sonority: charge the pull in cents and settle unclamped (§ Both wall and ruler)
 - 2026-08-20 docs: intentCents (§ What the note remembers)
-- 2026-08-20 tracker: read an interval as steps and the cents no step reaches (§ The notation is not a derivation input)
 
 ## Now
 
@@ -39,12 +39,4 @@
 
 ## Queued (current phase; one-liners)
 
-3. **Docs** — `docs/sonority.md` § The window and the pull becomes the pull
-   alone, the window staying there as the points facility's and the
-   notation's; § The springs takes the new unit and the unclamped sweep,
-   § The candidates loses the reach and takes the distinctness rule, and
-   § What it gives up loses the passage refused for a chord it cannot seat.
-   Its 0.54¢ gives way to the mean of 6.63¢ and worst under 11.4¢ the take
-   settles at, the reach gate having left those figures where it found them. `design/adaptive-tuning.md` § Open items 5 and 7 are
-   settled for the moves facility and say so, and `design/decisions.md`
-   records the window retiring from the moves solve as wall and as ruler.
+(empty — the phase's items are all landed or in flight.)

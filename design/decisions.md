@@ -12,6 +12,18 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-20** — The moves solve stops reading a note's window, as wall and as ruler. As wall it
+  bounded where a strand could stand: `settle` returns its optimum unclamped now, and the beam
+  admits a join without asking whether one offset seats every member inside its own window, so a
+  chord no chain of moves seats is spelled and priced rather than refusing the passage holding it.
+  As ruler it was the unit the pull's strain was taken in, and that strain is now cents over fifty,
+  the unit the springs are charged over, so a lock means the same under every notation rather than
+  scaling with the notation's step spacing. The window stays the points shortlist's and the
+  notation's. What it costs: a note may leave the step it was written on, which `intentCents`
+  records, and two members of a sonority could take one spelling, which the model now forbids
+  directly as distinctness. The argument is `design/sounding-anchor.md` § Both wall and ruler and
+  § What the beam loses, the model `docs/sonority.md` § The pull.
+
 - **2026-08-20** — A note may store the step it was written on: `intentCents`, that step's absolute
   cents, stamped by a solve on every note it seats and read wherever a step is derived. This retires
   a rule stated twice and never hedged — that a step is never stored, being recoverable from
