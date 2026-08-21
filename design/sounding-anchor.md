@@ -292,7 +292,8 @@ charged by whether its two members sound together.**
    sonorities stop being coupled to one another, and the passage falls
    apart into independent solves — the collapse a sonority size at the
    arity itself already produces (`docs/sonority.md` § The walk). The
-   useful value therefore stands well clear of zero.
+   useful value therefore stands well clear of zero, and it stands at a
+   half, which is argued rather than measured (§ Open).
 
 1. Presence is defined once and spent twice: it weights a spring
    (§ Springs price beating), and it weights the mean a strand rests at
@@ -510,14 +511,22 @@ charged by whether its two members sound together.**
 
 ## Open
 
-1. What `RECENT` is. The value wants the treatment the other two dials
-   had: a passage where it decides between two answers an ear can tell
-   apart, and the figure at which the decision turns over. One candidate
-   is the D held from D–F–A into G–B♭–D, which keeps the `10/9` the first
-   chord gives it because it sounds through the change
-   (`docs/sonority.md` § The strand); released exactly as the second
-   chord strikes it becomes a recency member, and the value at which it
-   stops dragging `10/9` into that chord is the figure wanted.
+1. What `RECENT` is. The value stands at a half by the argument of
+   § Presence, and no passage measured so far decides between that and
+   one. The five-part take of `tests/specs/sonority_spec.lua` spells
+   identically under both, though twenty-six of its onset memberships
+   are held by recency; only the settled cents move — a mean
+   displacement of 6.63¢ from the seat at one against 6.57 at a half.
+
+1. A measurement wants a strained recency spring. A released strand
+   keeps the tuning its own chord gave it, so presence decides only how
+   hard it drags the chord that follows, and a spelling already stating
+   a near-pure interval leaves that spring slack. The D held from D–F–A
+   into G–B♭–D (`docs/sonority.md` § The strand) and released as the
+   second chord strikes moves that chord's G by five hundredths of a
+   cent, the spelling standing at a pure fifth under either value. What
+   would decide is a chord that cannot state a pure interval to the
+   pitch held into it.
 
 1. Where harmonic lock now opens, and how far it usefully travels
    (§ The dials).

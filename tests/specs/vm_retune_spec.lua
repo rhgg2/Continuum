@@ -504,10 +504,10 @@ return {
 
       local first, second = chordAt(h, 0), chordAt(h, 2)
       t.truthy(first[60] ~= second[60], 'the two C naturals are two strands, tuned apart')
-      settles(first[60],   6.6877, 'the first C under its third')
-      settles(second[60],  7.2438, 'and the second under its sixth')
-      settles(first[64],  -6.1626, 'the third a 5/4 over the C it sounds with')
-      settles(second[69], -7.7718, 'the sixth a 5/3 over the C it sounds with')
+      settles(first[60],   6.6745, 'the first C under its third')
+      settles(second[60],  7.1987, 'and the second under its sixth')
+      settles(first[64],  -6.1774, 'the third a 5/4 over the C it sounds with')
+      settles(second[69], -7.6977, 'the sixth a 5/3 over the C it sounds with')
     end,
   },
 }

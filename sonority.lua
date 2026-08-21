@@ -704,7 +704,7 @@ end
 
 -- What a member held by recency counts for beside one that sounds: a spring prices beating,
 -- and beating wants two sounding pitches (§ Presence).
-local RECENT = 1
+local RECENT = 0.5
 
 -- A member is free to wait while an onset it sounds through is still to come; at that onset
 -- it places or the state fails (§ The candidates).

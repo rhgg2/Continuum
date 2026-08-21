@@ -41,7 +41,7 @@
   @const PURE = 50  @ 324
   @const TOLERANCE, SWEEPS = 1e-4, 1000  @ 361
   @const DEFERRED = '?'  @ 492
-  @const RECENT = 1  @ 707
+  @const RECENT = 0.5  @ 707
   @const AUDIBLE = 0.5  @ 741
   @const WIDTH, CAP = 24, 4  @ 1098
 

@@ -1259,8 +1259,8 @@ return {
       t.deepEq(onsets[2].members, { 3, 1, 2 }, 'the E a member of the second still, by recency')
       t.deepEq(onsets[2].sounding, { 3, 1 }, 'though it no longer sounds there')
       t.deepEq(onsets[2].mayWait, { [1] = true }, 'so it is joined to rather than waiting')
-      t.deepEq(onsets[2].presence, { 1, 1, 1 },
-        'and counts for a presence apiece, RECENT opening at what a sounding member counts')
+      t.deepEq(onsets[2].presence, { 1, 0.5, 1 },
+        'and counts for half of what a member that sounds counts')
       t.deepEq(onsets[3].mayWait, {}, 'and the last onset holds nobody who may')
     end,
   },
@@ -1504,7 +1504,7 @@ return {
         total, worst = total + math.abs(moved), math.max(worst, math.abs(moved))
         signed = signed + moved
       end
-      near(total / #take, 6.63, 'the mean displacement of § Measured')
+      near(total / #take, 6.57, 'the mean displacement of § Measured')
       t.truthy(worst < 11.4, 'and no note past 11.4 cents: ' .. string.format('%.2f', worst))
       t.truthy(math.abs(signed) < 0.1, 'the forty displacements summing to nothing: '
         .. string.format('%.4f', signed))
