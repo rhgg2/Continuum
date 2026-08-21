@@ -79,6 +79,24 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    target fixes outright, behind which the answer moves by a syntonic
    comma about one time in seven.
 
+1. A member's **presence** at an onset is what it contributes to that
+   onset's sonority: full where its strand sounds there, and a half
+   where recency alone holds it, the class having stopped without yet
+   being displaced. Presence is a constant rather than a dial: an
+   author owns drift against distribution (§ The dials), and how much
+   a released note still counts is a property of hearing. The moves
+   facility spends it on the springs, which price beating between two
+   sounding pitches (§ The springs).
+
+1. The half is argued from its endpoints. At a presence of one a class
+   held by recency counts for as much as one that sounds; at zero it
+   counts for nothing, the sonorities decouple, and the passage falls
+   apart into independent solves, which is the collapse `n` at the
+   arity itself produces. The useful value stands well clear of zero,
+   and no passage measured tells a half from one — the five-part take
+   spells identically under both, though twenty-six of its onset
+   memberships are held by recency.
+
 ## The box
 
 1. Each pitch of a sonority is a rational number, and its **coords**
@@ -101,6 +119,18 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    model holds no reference pitch. A small box is a sonority whose
    notes share a strong virtual fundamental, so the score measures root
    fusion.
+
+1. Presence does not weight the box (§ The walk). `sonority.score`
+   reads a component's coords as a set and returns one figure for the
+   whole component, so a product of two members' presence has nowhere
+   to land, and a member the sonority holds by recency stands in the
+   span at full weight.
+
+1. Full weight is what the measure asks for. The recency tail is in
+   the sonority so that a chord change is scored against the chord
+   before it: the springs couple the tuning across that change, where
+   the box couples the spelling. A member that has stopped beats with
+   nothing, and is still part of the harmony an ear is holding.
 
 ## The pull
 
@@ -159,6 +189,14 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    pure position — so the pair sounds pure where `d[j] − d[i]` is that
    delta.
 
+1. A spring's **weight** is the product of its two members' presence
+   (§ The walk), and `sonority.springCost` charges the spring that
+   fraction of what it charges a pair that sounds. Where one member
+   has stopped the pair is charged a half, and where neither sounds a
+   quarter, the falloff running once for each silence: a spring prices
+   beating, and a pair neither of whose members sounds is the faintest
+   thing a sonority states.
+
 1. A placement whose spellings agree leaves every spring slack; one
    whose spellings cannot agree, as a comma pump's loop cannot, spreads
    the residue across its springs rather than holding the two ends
@@ -181,11 +219,12 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    displacements, with no bound on them and no branch in it, so
    `sonority.relax` sweeps strand by strand to the optimum: each strand
    settles at the weighted mean of what its springs ask of it and the
-   seat it was written on, the two dials weighting them and the fifty
-   both charges are taken over dividing out. The sweep order and the
-   start buy speed rather than the answer, and `sonority.ties` pre-sums
-   what each strand's springs ask of it, since the strands a sweep
-   holds still stand still while it runs.
+   seat it was written on — each ask weighted by its spring's weight,
+   the two dials weighting the two terms, and the fifty both charges
+   are taken over dividing out. The sweep order and the start buy
+   speed rather than the answer, and `sonority.ties` pre-sums the asks
+   and the weights they carry, since the strands a sweep holds still
+   stand still while it runs.
 
 ## The candidates
 
@@ -201,7 +240,10 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. The score of a spelling is run up join by join rather than taken at
    the end: each join pays the box its component widens by, and a
    spring against each member already placed, both priced at zero
-   displacement. Both charges are additive and neither is negative, so
+   displacement and the springs weighted as the relaxation weights
+   them (§ The springs). A beam ranking by one objective while the
+   search minimises another would return spellings the search does not
+   want. Both charges are additive and neither is negative, so
    a partial spelling's score is a floor under every spelling that
    completes it, and the beam ranks its states by a figure no
    continuation can undercut.
@@ -398,7 +440,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    pull pricing the drift rather than a bound stopping it, so a note's
    name and its sound come apart and the cell reports the gap in cents
    (`docs/tuning.md` § The written step). Over the five-part take at
-   purity 8 and a lock of 1, a strand stands 6.63¢ from its seat on
+   purity 8 and a lock of 1, a strand stands 6.57¢ from its seat on
    average and none stands past 11.4¢.
 
 1. The order two strands were written in. Past its own half-window some
@@ -407,7 +449,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    cross; what that sounds like is not known.
 
 1. Exactness. A spelled interval is pure to the stiffness rather than
-   by construction, 0.54¢ at worst over the five-part take at purity 8,
+   by construction, 0.63¢ at worst over the five-part take at purity 8,
    and an author wanting more turns the dial up.
 
 1. A statement about the passage. The moves solve places no passage at

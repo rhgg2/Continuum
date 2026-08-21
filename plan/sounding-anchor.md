@@ -29,10 +29,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-21 docs: give sonority presence, and a spring its weight (§ Presence, § Springs price beating)
 - 2026-08-21 sonority: count a member held by recency for half (§ Presence, § Open)
 - 2026-08-20 sonority: give a member a presence and a spring a weight (§ Presence, § Springs price beating)
 - 2026-08-20 docs: retire the window from the moves solve, as wall and as ruler (§ The pull in cents, § What the beam loses)
-- 2026-08-20 sonority: drop the beam's reach gate, and state distinctness (§ What the beam loses)
 
 ## Now
 
@@ -40,8 +40,4 @@
 
 ## Queued (current phase; one-liners)
 
-3. **Docs** — `docs/sonority.md` § The walk defines presence where it
-   defines a sonority, § The springs gives a spring its weight and states
-   the relaxation's mean as weighted, and § The candidates says the beam
-   ranks a join under the same weight; where the doc quotes a figure item 2
-   re-took, the new figure stands.
+(empty)

@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-21** — A member of a sonority carries a presence — full where its strand sounds, a half
+  where recency alone holds it — and a spring's weight is the product of its two members', so a pair
+  falls off once for each silence. Chosen over charging every member alike, which let a released
+  note drag the chord after it as hard as one still sounding, and over a third dial, since an author
+  owns drift against distribution while how much a released note still counts is a property of
+  hearing. The half is argued from its endpoints rather than measured: at one a recency member
+  counts for as much as one sounding, and at zero the sonorities decouple. The box keeps its full
+  weight, reading a component's coords as a set with no pair to weight. The argument is
+  `design/sounding-anchor.md` § Presence and § Springs price beating, the model `docs/sonority.md` §
+  The walk.
+
 - **2026-08-20** — The moves solve stops reading a note's window, as wall and as ruler. As wall it
   bounded where a strand could stand: `settle` returns its optimum unclamped now, and the beam
   admits a join without asking whether one offset seats every member inside its own window, so a
