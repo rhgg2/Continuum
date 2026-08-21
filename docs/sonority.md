@@ -8,15 +8,17 @@ cents, which are `tuning.lua`'s.
 
 The retune command offers one target under two readings, and the
 facility slot says which (`docs/trackerView.md` § Retune). Under
-`'points'` each strand selects one point of the target and
-`sonority.solveToPoints` returns the point per strand; under `'moves'`
-the target is read as intervals that may be sounded pure between one
+`'points'` each strand selects one point of the target, and
+`sonority.solveToPoints` returns the point per strand. Under `'moves'`
+the target is read as intervals that may sound pure between one
 strand and another, and `sonority.solveToMoves` returns the cents each
-strand settles at. The strand, the walk, the box and the pull are
-shared, each facility charging the pull in a unit of its own (§ The
-pull); § The springs onward is the moves facility alone. The
-points solve's own machinery — shortlists, the DP over them, and the
-widening a refused strand is offered — is `design/adaptive-tuning.md`.
+strand settles at.
+
+The strand, the walk, the box and the pull are shared between the two
+facilities, each charging the pull in a unit of its own (§ The pull);
+§ The springs onward belongs to the moves facility alone. The points
+solve's own machinery — shortlists, the DP over them, and the widening
+offered to a refused strand — is `design/adaptive-tuning.md`.
 
 ## The strand
 
@@ -226,8 +228,8 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 
 1. The sweep order and the start buy
    speed rather than the answer, and `sonority.ties` pre-sums the asks
-   and the weights they carry, since the strands a sweep holds still
-   stand still while it runs.
+   and the weights they carry, since the strands a sweep holds stay
+   fixed while it runs.
 
 ## The candidates
 
@@ -342,10 +344,11 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. `sonority.search` walks the onsets carrying a set of partial
    **answers**, each a choice of spellings so far with the
    displacements that choice relaxes to. Two answers merge where the
-   strands the future can still see agree to half a cent, since what
-   the future reads of a past is its cents; a deferral is a debt rather
-   than a saving, so two answers agreeing in cents are one answer only
-   where they owe the same sonorities the same members.
+   strands a later onset can still reach agree to half a cent, since a
+   later onset needs nothing of a past strand but its cents; a
+   deferral is a debt rather than a saving, so two answers agreeing in
+   cents are one answer only where they owe the same sonorities the
+   same members.
 
 1. The carried set is capped, and the cut runs over two pools — the
    answers that owe nothing and the answers that owe, each keeping the
@@ -406,9 +409,9 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    sweeps for one.
 
 1. The winner is settled by one joint relaxation over its springs,
-   which recovers what the frozen past gave up along the way;
-   `sonority.solveToMoves` then seats each strand at its own seat plus
-   the displacement that relaxation returns.
+   which recovers the precision lost by freezing the closed strands
+   along the way; `sonority.solveToMoves` then seats each strand at
+   its own seat plus the displacement that relaxation returns.
 
 ## The dials
 

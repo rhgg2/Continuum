@@ -30,27 +30,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-21 sonority: relax against a rest, not zero (§ The ambient reference)
 - 2026-08-21 docs: give sonority presence, and a spring its weight (§ Presence, § Springs price beating)
 - 2026-08-21 sonority: count a member held by recency for half (§ Presence, § Open)
 - 2026-08-20 sonority: give a member a presence and a spring a weight (§ Presence, § Springs price beating)
-- 2026-08-20 docs: retire the window from the moves solve, as wall and as ruler (§ The pull in cents, § What the beam loses)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. The relaxation charges a strand against a rest rather than against
-   zero. `sonority.pullCost` charges the strain of `displacement − rest`
-   over fifty, and `settle` returns `(stiffness × seats + strength ×
-   rest) / (stiffness × weight + strength)`, a strand no spring ties
-   settling at its rest. `sonority.relax` takes a rest per strand beside
-   the start it sweeps from and hands it to `settle`; every caller states
-   one, `sonority.search` a table of zeros, so the solve settles where it
-   settles today. Red-first on a rest of a few cents: an untied strand
-   settles there, and a tied one at the weighted mean of its springs'
-   asks and it.
 
 1. A strand's rest is the sonority it was born into. `extend` reads a
    rest for each strand the onset first names — the presence-weighted

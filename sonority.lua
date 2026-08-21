@@ -341,14 +341,14 @@ function sonority.springCost(spellings, displacement, stiffness, from, to)
   return total
 end
 
--- What the pull charges: each strand's displacement over the fifty the springs are charged
--- over, a notation's own spacing measuring nothing here (§ The pull in cents).
---contract: displacement per strand, strands: the ones to charge
---contract: → strength × strain² apiece
-function sonority.pullCost(displacement, strength, strands)
+-- What the pull charges: each strand's displacement from its rest, over the fifty the springs
+-- are charged over, a notation's own spacing measuring nothing here (§ The pull in cents; § The ambient reference).
+--contract: displacement per strand, rest per strand, strands: the ones to charge
+--contract: → strength × strain² apiece, strain = (displacement − rest) / 50
+function sonority.pullCost(displacement, rest, strength, strands)
   local total = 0
   for _, index in ipairs(strands) do
-    local strain = displacement[index] / PURE
+    local strain = (displacement[index] - rest[index]) / PURE
     total = total + strength * strain * strain
   end
   return total
@@ -402,26 +402,26 @@ function sonority.ties(springs, free, onsets, base)
   return ties
 end
 
--- One strand's optimum with the rest held: what its springs ask of it against the page, the
--- two dials weighting them and the fifty both are charged over dividing out.
-local function settle(ties, displacement, strength, stiffness)
+-- One strand's optimum with its neighbours held: what its springs ask of it against its
+-- rest, the two dials weighting them and the fifty both are charged over dividing out.
+local function settle(ties, displacement, strength, stiffness, rest)
   local count, seats = ties.count, ties.delta
   for k = 1, count do seats = seats + ties.weights[k] * displacement[ties[k]] end
-  if seats == 0 then return 0 end -- a strand no spring ties, whose two terms are 0/0
+  if count == 0 then return rest end -- a strand no spring ties, settling at its rest
 
-  return stiffness * seats / (stiffness * ties.weight + strength)
+  return (stiffness * seats + strength * rest) / (stiffness * ties.weight + strength)
 end
 
 --invariant: convex in the displacements, so the sweep order and the start buy speed, not the answer
---contract: ties, strength, stiffness, start (per strand), free (strands that sweep)
+--contract: ties, strength, stiffness, start and rest (per strand), free (strands that sweep)
 --contract: → displacements minimising springCost + pullCost, held strands at their start
-function sonority.relax(ties, strength, stiffness, start, free)
+function sonority.relax(ties, strength, stiffness, start, rest, free)
   local displacement = table.move(start, 1, #start, 1, {})
 
   for _ = 1, SWEEPS do
     local worst = 0
     for _, index in ipairs(free) do
-      local settled = settle(ties[index], displacement, strength, stiffness)
+      local settled = settle(ties[index], displacement, strength, stiffness, rest[index])
       local moved   = math.abs(settled - displacement[index])
       if moved > worst then worst = moved end
       displacement[index] = settled
@@ -982,7 +982,7 @@ end
 --contract: carried: the Ties over what the answer has settled, which this spelling's start from
 --contract: nil where a wait comes back with a placement its own sonority offered (§ The candidates)
 --contract: nil where a wait lands tied to no member of the sonority that deferred it
-local function extend(answer, spelling, onsets, at, seat, strength, stiffness,
+local function extend(answer, spelling, onsets, at, seat, strength, stiffness, rest,
                       offered, carried, from, since, moving, stopped, bars)
   local springs, held = table.move(answer.springs, 1, at - 1, 1, {}), {}
   local box, written = answer.box + spelling.box, {}
@@ -1019,18 +1019,18 @@ local function extend(answer, spelling, onsets, at, seat, strength, stiffness,
   util.add(written, at)
   local sweeping = onsets[at].sounding
   local displacement = sonority.relax(sonority.ties(springs, sweeping, written, carried),
-                                      strength, stiffness, answer.displacement, sweeping)
+                                      strength, stiffness, answer.displacement, rest, sweeping)
 
   -- What closed since the last extension is charged once, at displacements that will not move
   -- again and carried: the onsets the cursor has passed, and this onset's strands sounded for the last time (§ The solve).
   local closed = answer.closed
                + sonority.springCost(springs, displacement, stiffness, since, from - 1)
-               + sonority.pullCost(displacement, strength, stopped)
+               + sonority.pullCost(displacement, rest, strength, stopped)
   return { choice = table.move(answer.choice, 1, at - 1, 1, {}), springs = springs,
            box = box, held = held, displacement = displacement, closed = closed,
            cost = box + closed
                 + sonority.springCost(springs, displacement, stiffness, from, at)
-                + sonority.pullCost(displacement, strength, moving) }
+                + sonority.pullCost(displacement, rest, strength, moving) }
 end
 
 -- The cost is taken over every spring accumulated so far rather than the onset's own, so
@@ -1047,10 +1047,10 @@ end
 --contract: the cut runs over two pools, the answers that owe and the answers that have paid
 --contract: nil where an onset has no spelling — which is a target stating no move
 function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
-  local ahead, start, offered = visibleAhead(onsets), {}, offeredBy(onsets, spellings)
+  local ahead, start, rest, offered = visibleAhead(onsets), {}, {}, offeredBy(onsets, spellings)
   local from = openFrom(onsets)
   local moving, stopped = soundingRuns(onsets)
-  for index = 1, #seat do start[index] = 0 end
+  for index = 1, #seat do start[index], rest[index] = 0, 0 end
   local answers = { { choice = {}, springs = {}, box = 0, displacement = start, cost = 0,
                       closed = 0, held = {} } }
 
@@ -1061,7 +1061,7 @@ function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
       local carried = sonority.ties(answer.springs, onsets[i].sounding,
                                     settledOnsets(answer, from[i], i))
       for choice, spelling in ipairs(spellings[i]) do
-        local state = extend(answer, spelling, onsets, i, seat, strength, stiffness,
+        local state = extend(answer, spelling, onsets, i, seat, strength, stiffness, rest,
                              offered, carried, from[i], i > 1 and from[i - 1] or 1,
                              moving[i], stopped[i], bars)
         if state then
@@ -1112,10 +1112,10 @@ function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)
   local answer = sonority.search(onsets, spellings, seat, strength, stiffness, CAP)
   if not answer then return nil end
 
-  local free = {}
-  for index = 1, #strands do free[index] = index end
+  local free, rest = {}, {}
+  for index = 1, #strands do free[index], rest[index] = index, 0 end
   local displacement = sonority.relax(sonority.ties(answer.springs, free), strength,
-                                      stiffness, answer.displacement, free)
+                                      stiffness, answer.displacement, rest, free)
 
   local cents = {}
   for index = 1, #strands do cents[index] = seat[index] + displacement[index] end

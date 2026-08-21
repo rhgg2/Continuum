@@ -77,9 +77,9 @@
   @fn keyOf(choice, list)  @ 241-245
   -- The springs
   -- The relaxation
-  @fn settle(ties, displacement, strength, stiffness)  @ 407-413
-      -- One strand's optimum with the rest held: what its springs ask of it against the page, the
-      -- two dials weighting them and the fifty both are charged over dividing out.
+  @fn settle(ties, displacement, strength, stiffness, rest)  @ 407-413
+      -- One strand's optimum with its neighbours held: what its springs ask of it against its
+      -- rest, the two dials weighting them and the fifty both are charged over dividing out.
   -- The candidates
   @fn joinCoords(coords, move)  @ 438-446
       -- A join's coords: the host's plus the move's, a cancelled prime dropped so two chains
@@ -161,7 +161,7 @@
       -- Where a pool's cut now sits: the cost of its cap-th best distinct key, held in a
       -- bounded sorted list, a listed key replaced where it improved (§ The solve).
       @invariant  a key's cost in reached only improves, so a stale bar is only ever too high  @ 953
-  @fn extend(answer, spelling, onsets, at, seat, strength, stiffness, offered, carried, from, since, moving, stopped, bars)  @ 985-1034
+  @fn extend(answer, spelling, onsets, at, seat, strength, stiffness, rest, offered, carried, from, since, moving, stopped, bars)  @ 985-1034
       -- One answer extended by one spelling: the springs and box it has paid, each sonority it
       -- still holds charged again for what this spelling places, the onset's own strands relaxed.
       @contract  carried: the Ties over what the answer has settled, which this spelling's start from  @ 982
@@ -201,20 +201,20 @@
       -- would sound pure at, the pair standing where the displacements put them.
       @contract  spellings (a sonority.springs list per sonority) and displacement per strand  @ 331
       @contract  from, to → weight × stiffness × (mistuning/50)² per spring of those onsets  @ 332
-  @api sonority.pullCost(displacement, strength, strands)  @ 348-355
-      -- What the pull charges: each strand's displacement over the fifty the springs are charged
-      -- over, a notation's own spacing measuring nothing here (§ The pull in cents).
-      @contract  displacement per strand, strands: the ones to charge  @ 346
-      @contract  → strength × strain² apiece  @ 347
+  @api sonority.pullCost(displacement, rest, strength, strands)  @ 348-355
+      -- What the pull charges: each strand's displacement from its rest, over the fifty the springs
+      -- are charged over, a notation's own spacing measuring nothing here (§ The pull in cents; § The ambient reference).
+      @contract  displacement per strand, rest per strand, strands: the ones to charge  @ 346
+      @contract  → strength × strain² apiece, strain = (displacement − rest) / 50  @ 347
   @api sonority.ties(springs, free, onsets, base)  @ 369-403
       -- Where each spring would stand its two strands, given the other: i a delta below j, j a
       -- delta above i, gathered for the strands that sweep since a held strand reads only its neighbours' ties, pre-summed since they stand still while the sweeps run.
       @contract  springs per onset, the strands that sweep, the onsets to tie (all of them by default)  @ 366
       @contract  base: a Ties to start from, carried whole, over onsets this call does not tie again  @ 367
       @contract  → a Ties: the base's, and what those onsets' springs tie on top of it  @ 368
-  @api sonority.relax(ties, strength, stiffness, start, free)  @ 418-432
+  @api sonority.relax(ties, strength, stiffness, start, rest, free)  @ 418-432
       @invariant  convex in the displacements, so the sweep order and the start buy speed, not the answer  @ 415
-      @contract  ties, strength, stiffness, start (per strand), free (strands that sweep)  @ 416
+      @contract  ties, strength, stiffness, start and rest (per strand), free (strands that sweep)  @ 416
       @contract  → displacements minimising springCost + pullCost, held strands at their start  @ 417
   @api sonority.spellings(members, seat, presence, mayWait, moves, width, stiffness)  @ 677-690
       -- A waiting member states no interval, so waiting is a choice the beam makes per member; a
