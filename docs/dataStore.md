@@ -4,8 +4,7 @@ Per-key **document-data** storage — the second face over `pextStore`,
 beside `configManager`. Where cm holds user-facing *settings* (schema,
 five-tier merge, defaults), ds holds the project's structural *content*:
 mirror groups, sampler/arrange slot palettes, CV bindings, the swing map,
-per-take display columns, mix state. See `design/archive/persistence.md` for why
-the two were split.
+per-take display columns, mix state.
 
 ## Document data is not config
 
@@ -48,8 +47,8 @@ exception: one disk file (`continuum-data.lua`), since its lone resident
 ## Signals
 
 ds fires one signal, `dataChanged`, with a flat `{ scope, name }` payload —
-one fire per changed key, never a blanket reload. This is deliberate (see
-`design/archive/persistence.md` § Decisions): cm's `configChanged{}` reload exists
+one fire per changed key, never a blanket reload. This is deliberate: cm's
+`configChanged{}` reload exists
 only because `pollUndo` couldn't name the moved key; the per-key baseline
 removes that limitation, so importing a reload variant would re-inflict the
 wound. An undo tick adds `invalidate = true` to each rewound key's fire, so

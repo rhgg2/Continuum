@@ -8,7 +8,7 @@ Structural **document data** — keys that live at one scope as content
 rather than settings — moved out to `dataStore`; cm now holds only
 user-facing config, and the foreign-handle bypass reads/writes
 (`readTakeKey`/`writeTrackKey` &c.) moved to `ds:getAt`/`ds:assignAt`. See
-`docs/dataStore.md` and `design/archive/persistence.md`.
+`docs/dataStore.md`.
 
 ## Schema
 

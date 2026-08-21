@@ -6,8 +6,8 @@ and from REAPER's persistence backends, owns the bound take/track
 context, and runs the watcher that catches undo/redo.
 
 It exists to be written **once** and shared by two faces: `configManager`
-(schema, tier merge) today, and `dataStore` (per-key document storage)
-next. See `design/archive/persistence.md` for the split and its motivation.
+(schema, tier merge) and `dataStore` (per-key document storage) — see
+`docs/dataStore.md § Document data is not config` for what separates them.
 
 ## Why a shared engine
 
@@ -56,7 +56,7 @@ The engine picks the serialisation format by backend, not by caller: the
 global disk file (`continuum-config.lua`, in REAPER's resource dir) is the
 human-editable Lua-literal format, read by `load()`; every P_EXT / projext
 blob is the compact wire format. The two never interoperate, so neither
-constrains the other — see `design/archive/persistence.md` § Disk format.
+constrains the other.
 
 A global file the sandboxed `load()` can't parse reads as `nil` and **locks
 writes** (`globalLocked`): the engine prints the parse error and refuses to
@@ -67,9 +67,9 @@ clears the moment the file reads clean (or empty) again.
 
 REAPER undo rewinds take/track P_EXT and the scratch track's chunk, but
 projext does not reverse natively. Everything at project scope therefore
-used to survive undo — eventMeta's tags being the motivating casualty
-(design/archive/projext-undo.md). The engine closes the gap once, at the
-`writeRaw` altitude, so every face inherits it without knowing.
+used to survive undo — eventMeta's tags being the motivating casualty. The
+engine closes the gap once, at the `writeRaw` altitude, so every face
+inherits it without knowing.
 
 **Policy is per key, not per scope.** Faces declare undoable slots at
 construction (`declareUndoable`: exact names or prefixes — eventMeta's
@@ -119,5 +119,14 @@ state-count gate, so an undo landing between a poll and a same-frame
 rebind is swallowed for one tick; the root comparison still differs
 afterwards, so it resyncs at the next state-count change.
 
-Undo-point bundling and undo-storage weight are design decisions, not
-engine mechanics — see design/archive/projext-undo.md § Implications.
+**Undo-point bundling.** A projext write mints no undo point of its own; a
+mirrored slot reverts when an undo *crosses* it, bundled into whatever undo
+point formed next. For metadata riding a MIDI edit that is exactly right. A
+*pure* project-scope edit with no take write — a pattern-library commit, a
+project-tier config change — would rewind silently as a passenger on an
+unrelated undo, so those wrap in `util.atomic` to mint their own point.
+
+**Undo storage weight.** Each undo point captures the scratch track's chunk,
+mirror included: tens of KB for a typical pool, ~1MB for a saturated ~12k-slot
+one, which eats REAPER's undo-storage budget and can evict history depth. The
+honest cost of chunk-based mirroring, recorded so it's recognised if it bites.

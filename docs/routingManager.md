@@ -103,8 +103,8 @@ per-record-kind native-key set. The two kinds store differently:
 - **Track-meta** rides the track's own `P_EXT` blob — it reverses with
   native undo for free, so source/master node decoration (`pos`, …) needs
   nothing more.
-- **Fx-meta** (and bus-meta) has no per-fx channel (see
-  `design/fx-metadata-spike.md`), so each is one blob keyed by guid. They are
+- **Fx-meta** (and bus-meta) has no per-fx channel (`docs/wiring.md §
+  Decoration`), so each is one blob keyed by guid. They are
   `dataStore` keys at **project** scope (`fxMeta`, `busMeta`), which makes them
   undoable document data: pextStore mirrors every undoable project slot onto the
   scratch track's `P_EXT`, and its per-frame poll copies a rewound slot back into
@@ -113,12 +113,6 @@ per-record-kind native-key set. The two kinds store differently:
 Writes patch-merge (a partial write never wipes a sibling; `util.REMOVE`
 clears a field), and an all-native write touches no store at all — the
 reconcile hot path stays clean.
-
-rm held a private version of that mirror until 2026-07-13 (its own projext
-blobs, a scratch-chunk mirror, and a `pollUndo` heartbeat on `wp:tick`). The
-mechanism was right but the altitude was wrong: eventMeta and the config tiers
-needed the same thing, so it moved into pextStore and rm became an ordinary
-ds face. See `design/archive/projext-undo.md`.
 
 ## Mute
 

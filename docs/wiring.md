@@ -337,8 +337,10 @@ recompiles). Position is orthogonal to routing, so a pos-only move
 changes no routing, skips reconcile entirely, and never touches
 `read ∘ compile = id`. A read-derived node with no stored position — an
 adopted foreign track, a never-placed source — defaults to `(0,0)` and
-stacks at the origin until auto-layout lands. (See
-`design/fx-metadata-spike.md` for why positions can't live on the FX.)
+stacks at the origin until auto-layout lands. Decoration can't ride the
+FX it decorates: `TrackFX_*NamedConfigParm` exposes a fixed key set and
+rejects an arbitrary `ext.*` write, so a central GUID-keyed store is the
+only durable home.
 
 ## Compile lifecycle
 
@@ -361,24 +363,3 @@ Three facts shape every stage and don't recur as questions inside it:
   ledger. The live recompile rewrites adopted routing into canonical
   form in the same breath. Sources are referenced by GUID; deletion of a
   referenced source surfaces as a design-time error, never silent.
-
-## History
-
-This model landed in stages. The committed two-map redesign — **REAPER
-as the only store**, the `read`/`compile` algebra, free adoption,
-quarantine, and capacity-by-min-cut — is recorded with its per-step
-status in `design/archive/wiring-implicit-graph.md`; the earlier staged
-compile plan is in `design/archive/wiring.md`.
-
-Three designs it replaced, worth knowing so they aren't reinvented:
-
-- the **two-store reconcile** — a `wiringGraph` cm blob (intent) kept in
-  sync with REAPER (realisation) by a per-track `P_EXT` ownership marker
-  and an `ownedSubsequence` splice. Collapsed once `read` was shown to
-  recover the whole graph from routing: one store, no desync bug-class,
-  no ownership bookkeeping.
-- the **lowered two-graph model** (`DAG.lower`) — removed once the
-  equivalence-class calculus was shown to run directly on the user graph
-  with CUs hosted inertly inside a consumer's class.
-- the **gmem-ring MIDI merge** — removed once it was clear a single JSFX
-  can read every converging MIDI bus at `@block`.

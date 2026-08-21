@@ -5,15 +5,15 @@ page edits through wm, wm gates writes through `DAG.validate`; on every
 change wm reconciles the derived REAPER topology against the live
 project. **REAPER routing is the store** — `wm:read` reconstructs the
 graph from it on load, so there is no persisted graph blob (see *Read is
-the store*). For the graph model and the anchor decisions (reconcile
-authority, live compile, foreign adoption) see `docs/wiring.md` and the
-implicit-graph design `design/wiring-implicit-graph.md`.
+the store*). For the graph model see `docs/wiring.md` — § One graph, one
+store for reconcile authority, § Compile lifecycle for live compile and
+free adoption.
 
 ## Read is the store
 
 There is no persisted user-graph blob. REAPER routing *is* the graph;
 `wm:read` reconstructs `{ nodes, edges }` from it (channel/pin maps,
-MIDI buses, CU collapse — see `design/wiring-implicit-graph.md`), and
+MIDI buses, CU collapse — see `docs/wiring.md § What read recovers`), and
 `wm:load`/`ensureLoaded` source the in-memory graph from that read.
 Node identity follows: an fx node is keyed by its rm `fxId`, a source
 by its track guid, so the id survives a reload (the read re-derives it,
@@ -235,8 +235,9 @@ parent's `liveMidi` identity-mapped, and splits by bus: **bus 0** aggregates
 into the parent node (`child→sid`, `midi.ins=1`), which re-emits it with its
 own take — the native folder merge; **buses ≥1** stay distinct, so a parent
 (or ancestor) fx meets each child's bus-*n* producer as a **direct** edge.
-Membership is positional (`stampParents`), an
-input to read, never authored here. See `design/archive/wiring-folders.md`.
+Membership is positional (`stampParents`), an input to read, never
+authored here; the compile-side inverse is `docs/DAG.md § Folder
+parents`.
 
 **When a source emits bus 0** (`bus0Consumed`): a source or folder parent
 puts its node on bus 0 when there is *something to emit* — a midi take
@@ -357,7 +358,7 @@ undo because per-track P_EXT does.
   Why the trackKey and not the guid: target computes the trackKey from the
   graph *before any track exists*, so the guid — a realisation artefact — can't
   be the join key; the source-set composite trackKey is the one identity both
-  sides compute independently. See `design/wiring-implicit-graph.md`.
+  sides compute independently.
 - **Scratch** is rm-owned and carries no trackKey; its guid rides each scratch
   op as `op.trackId`, and every caller reads it via `rm:scratchId()`.
 - **Master** is absent; resolvers special-case it to `rm:masterId()`.

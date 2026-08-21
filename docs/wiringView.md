@@ -63,9 +63,7 @@ A **folder parent** — a source that sums its children (`audio.ins>=1`, minted
 by `readGraph`'s folderSinks branch) — is *bodied* like any other node
 (`category`/`fromKind` `'folder'`): it needs a rect for its incoming child
 wires to land on. `sourceCategory` is the single discriminant, consumed by
-both `nodeView.category` and `wireView.fromKind`. The folder-bar display
-(`design/archive/wiring-folders.md` § Folder display) will later project the
-`'folder'` category onto bar geometry; until then it draws as a plain rect.
+both `nodeView.category` and `wireView.fromKind`.
 
 ## wireView fromKind/fromLabel
 

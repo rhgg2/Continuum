@@ -11,9 +11,6 @@ as it sits in an fx list. A **chain** is the ordered list of stages on one
 host. A **host** is the region or note the chain hangs on, and its **window**
 is the span that chain owns.
 
-The decisions behind all of this, and the readings dismantled on the way,
-are `design/archive/note-macros-v2.md`.
-
 ## Hosts and membership
 
 **1** A host is a **channel × ppq span carrying an fx list** — not a set of
@@ -113,8 +110,7 @@ overwrites the folded stream.
 cannot coherently rewrite a continuous source's **rate**, because those
 breakpoints are placed by accumulated phase and resampling them loses
 coherence. Hence the line: value and discrete timing are chain stages, while
-rate, period and phase stay params inside the source. Moving one without
-resampling anything is `design/pipe-dreams.md` § Param modulation.
+rate, period and phase stay params inside the source.
 
 **8** A **bypassed** stage stays in the chain with its params intact and
 contributes nothing — the A/B gesture, which otherwise costs you the stage.
@@ -236,7 +232,7 @@ are offsets from what their host sounds, and ctx binds no temper at all. The
 notation is the ladder such a demand is typed on, which the fx strip walks at
 authoring time; a step count stored in a param would instead sound different
 under a lens change, which renames a take's notes and leaves them where they
-are (`design/sounding-anchor.md` § The notation is not a derivation input).
+are.
 
 **3** `interval` is the instructive non-example. It looks temper-bound and is
 pure note arithmetic — the microtonal offset already rides in detune — so it
@@ -247,9 +243,7 @@ the same arithmetic run backwards.
 kind as data rather than a function. When a body is nothing but arithmetic
 and named ctx operations it is already data. **Build no interpreter** — the
 move costs almost nothing as long as new kinds are shaped as composition and
-ctx accretes as named ops, and the same discipline is the contract surface a
-user-authored kind would be written against (`design/pipe-dreams.md`
-§ Scripted kinds).
+ctx accretes as named ops.
 
 ## Offline continuous realisation
 

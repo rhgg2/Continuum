@@ -494,8 +494,8 @@ range — see *Addressable range*.
 
 **7** Beside the label the cell draws a **deviation readout** — the cents a
 note stands off its step, in small glyphs across the two columns after the
-pitch field (`ctx:noteDeviation`, `design/sounding-anchor.md` § What the cell
-says). The sign is a tint rather than a glyph, as the negative octave's is, so
+pitch field (`ctx:noteDeviation`). The sign is a tint rather than a glyph, as
+the negative octave's is, so
 three digits fit in the two columns and a note that has drifted past a hundred
 cents still reads. A note on its step draws nothing there, and a column whose
 notes all sit on their steps takes no width for the readout.
@@ -545,7 +545,7 @@ rebuilt at the end-of-rebuild `reload()`.
 
 ### Seat-span-scoped onset walk
 
-**1** Under interval dirt (`design/archive/interval-dirt-v2.md` § 3) the
+**1** Under interval dirt (`docs/trackerManager.md § Derivation dirt`) the
 detune-onset walk is scoped to disjoint seat spans rather than the whole
 channel. Each span seeds its running `prev` from the detune carried in
 from just before it (`lane1DetuneAt` at `span[1] - 1`), so a jump
@@ -654,9 +654,9 @@ marker + cents sidecar.
 
 **8** The create/remove transition — park authored in, sweep seats out —
 is diffed by tm's `fxRegions` observer, not carried as a standing
-record. See `docs/generators.md` § Route-by-window. Origin and the
-replace path (generator curves reusing the same seats):
-`design/archive/pb-interpolation.md`.
+record. See `docs/generators.md` § Route-by-window; the replace path
+(generator curves reusing the same seats) is § Offline continuous
+realisation there.
 
 ## Conventions
 
