@@ -20,13 +20,16 @@ pre-read or fix comments here. Pass it the file arguments `$ARGUMENTS`
 > Run `tools/comment_hygiene.py <paths>` from the repo root (omit
 > `<paths>` for diff mode). It flags
 > `--invariant:`/`--contract:`/`--emits:`/`--reaper:` lines >100
-> chars, `--shape:` lines >400 chars, and contiguous WHY-comment runs
-> >2 lines outside `tests/` (specs are exempt from the run cap;
-> section dividers are not WHY lines). Fix every violation it names,
+> chars, `--shape:` lines >400 chars, comments citing a `design/` doc
+> other than the live plan's, and
+> contiguous WHY-comment runs >2 lines outside `tests/` (specs are
+> exempt from the run cap; section dividers are not WHY lines). Fix
+> every violation it names,
 > then re-run until clean. Resolve each violation by trimming the
 > comment to its load-bearing content, by splitting a multi-clause
 > annotation into one per line, or by moving a longer WHY to
-> `docs/<file>.md` with a one-line pointer at the site. NEVER resolve
+> `docs/<file>.md` with a one-line pointer at the site. A pointer
+> names `docs/`, never `design/`. NEVER resolve
 > a violation by reverting the comment to a prior state or deleting
 > the WHY wholesale — the content must survive in compliant form.
 > Touch only comments the script flags.

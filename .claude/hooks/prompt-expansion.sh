@@ -112,6 +112,29 @@ emitPlanLinkage() {
   printf '%s' "$problems"
 }
 
+# `docs/` is the permanent layer and cites only itself; `design/` is working
+# state that gets deleted, so a pointer from one into the other is a dangling
+# reference waiting to happen. Scoped to the lines a commit adds — the tree
+# carries pre-existing violations, and those are a migration rather than this
+# commit's business.
+emitDocsCitations() {
+  local problems
+  problems=$(git diff --no-color -U0 HEAD -- 'docs/*.md' | awk '
+    /^\+\+\+ b\// { file = substr($0, 7); next }
+    /^\+\+\+/     { file = "";            next }
+    /^@@/         { if (match($0, /\+[0-9]+/)) line = substr($0, RSTART + 1, RLENGTH - 1); next }
+    /^\+/         { if (file != "" && index($0, "design/"))
+                      printf "  %s:%d  %s\n", file, line, substr($0, 2)
+                    line++ }
+  ')
+  [[ -n $problems ]] || return
+  echo
+  echo "Documentation layering, checked by hook. \`docs/\` cites only \`docs/\` — a"
+  echo "pointer into \`design/\` means the substance is in the wrong file:"
+  echo
+  printf '%s' "$problems"
+}
+
 emitTreeState() {
   echo "Working-tree state, injected by hook — it is current, so don't re-run these:"
   echo
@@ -130,7 +153,7 @@ emitContext() {
     implement-next) emitBrief ;;
     plan-new)       emitPlanShelf; emitPlanLinkage ;;
     plan-close)     emitLivePlan; emitBriefState; echo; emitPlanShelf; emitPlanLinkage ;;
-    commit)         emitTreeState ;;
+    commit)         emitTreeState; emitDocsCitations ;;
   esac
 }
 

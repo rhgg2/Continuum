@@ -23,8 +23,9 @@ down to the nuts and bolts.
 
 Set out the points that need deciding before implementation, and any
 findings you have so far on these, so we can figure them out together.
-Things we settle should be updated in the design doc. Read
-`docs/STYLE.md` just before doing this, so it's fresh in your mind.
+Things we settle update the design doc where they change the model;
+`/commit` records the decision itself. Read `docs/STYLE.md` just
+before doing this, so it's fresh in your mind.
 
 **Done when** I give you the nod to go to the brief writing stage.
 

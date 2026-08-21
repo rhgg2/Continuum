@@ -8,8 +8,8 @@ Create a new implementation plan for the design doc passed as an
 argument; with no argument, stop and confirm which design doc was
 intended.
 
-The design doc holds the model and the decisions; the plan only the
-implementation machinery.
+The design doc holds the model, `design/decisions.md` the decisions;
+the plan only the implementation machinery.
 
 ## 1. Gather background
 

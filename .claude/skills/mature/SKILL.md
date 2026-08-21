@@ -52,6 +52,6 @@ and any new definitions or vocab.
 Read `docs/STYLE.md` for the register, and then rebuild the doc to the
 agreed form. When this supercedes part of the document, delete it.
 When an open question is settled, delete the question and rewrite the
-section it bears upon.
+section it bears upon; `/commit` records the decision itself.
 
 Stage the rebuild as one `apply_patches` call. 

@@ -9,9 +9,10 @@ This skill writes a new design doc to `design/<slug>.md`.
 ## 1. Research the idea
 
 The invocation names the subject and its source material. Search
-`design/`, `design/archive/`, `design/pipe-dreams.md` and
+`docs/`, `design/`, `design/archive/`, `design/pipe-dreams.md` and
 `design/decisions.md` for related material. If the subject already has
-a live doc: stop and point to `/mature`.
+a live doc: stop and point to `/mature`. Where `docs/` already states
+part of the model, the new doc covers only the departure from it.
 
 Now research how this idea sits with today's codebase. Read code (maps
 first), specs and docs, or settle questions empirically in the spike
@@ -21,6 +22,12 @@ worktree.
 and to today's codebase.
 
 ## 2. Scope the design doc and distil the abstract
+
+The doc will state the intended model ahistorically, with no record of
+design decisions made along the way or commentary on strengths and
+weaknesses of different approaches. Where the doc evolves an existing
+model, it only needs to state what is new, without comparing or
+weighing against what exists.
 
 We now settle the fundamentals:
 
@@ -42,7 +49,7 @@ We now settle in chat the skeleton of the design doc: the ordered list
 of sections it will contain, and for each:
 
 - its heading;
-- its **thesis** — one sentence saying what that section claims;
+- its **thesis** — one sentence saying what that section does;
 - its **definienda** — the terms to which it assigns precise meaning.
 
 Note that:
@@ -60,8 +67,7 @@ Note that:
 
 First read `docs/STYLE.md` for the register.
 
-The doc states the intended model ahistorically; so a path considered
-and discarded gets no write-up. The skeleton becomes markdown thusly:
+The skeleton becomes markdown thusly:
 
 ```markdown
 # <title> — <the distinguishing phrase>

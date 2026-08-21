@@ -46,8 +46,8 @@ with the size of the gap:
   
 - Tactical: if the brief needs a decision it didn't settle, but the
   design intent is clear enough to settle it locally, then propose the
-  settlement. On approval write it back as an update to the design
-  doc and carry on.
+  settlement. On approval update the design doc where the model
+  changed, and carry on; `/commit` records the decision itself.
 
 - Design: the code contradicts the design doc's model, or the item
   dissolves or splits on contact. Stop implementing and say what

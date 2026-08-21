@@ -28,15 +28,9 @@ Assemble a commit bookkeeping JSON manifest for the bookkeeping
 script.
 
 - **Decision log** (`decision` key). Any design decision needs
-  recording. If the live task has a design doc, update it there by
-  hand; replace, don't augment, so only the current state is visible.
-  
-  If there is no design doc, write the decision as plain prose and
-  place in the manifest's `decision` key; the script dates it, wraps
-  it, and prepends it to `design/decisions.md`. 
-  
-  Either way it is prose to be read cold later, so read
-  `docs/STYLE.md` for the register. If a commit makes no design
+  recording. Write it in the manifest's `decision` key; the script
+  dates it, wraps it, and prepends it to `design/decisions.md`. Read
+  `docs/STYLE.md` first for the register. If a commit makes no design
   decision, omit the key.
   
 - **Plan** (`land` key). If `plan/CURRENT` exists and this commit
