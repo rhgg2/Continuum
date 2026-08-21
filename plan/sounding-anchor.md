@@ -36,10 +36,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 design: settle the box on spans, not pairs (§ What the box charges)
 - 2026-08-21 sonority: give the ambient a dial, opening at a quarter (§ Open)
 - 2026-08-21 sonority: key an answer by its open strands' rests (§ Fixed at birth)
 - 2026-08-21 sonority: rest a strand where the sonority before it stood (§ The ambient reference)
-- 2026-08-21 sonority: relax against a rest, not zero (§ The ambient reference)
 
 ## Now
 
@@ -47,12 +47,6 @@
 
 ## Queued (current phase; one-liners)
 
-2. **Land the box's verdict** — the spike is revived and carries the record
-   (uncommitted); what remains is the doc side. Design § Open's item asking
-   whether the box should charge pairs rather than spans becomes a settled
-   section: the wolf count barely separates the boxes, the drift separates
-   them plainly, and the weighted widest-pair box was listened to and
-   rejected. § The dials' lapsed-figures paragraph stands.
 3. **The beam's width and the walk's cap re-swept** with the reach gate gone
    — `tests/spikes/springs/cap_sweep.lua` sweeps the pair; what an author
    buys past a beam of twelve is what is open.

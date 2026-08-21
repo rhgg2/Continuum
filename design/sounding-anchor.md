@@ -1,7 +1,7 @@
 # Sounding anchor — a note is tuned against what sounds, not against the page
 
 > opened: 2026-08-19 · status: in flight — plan/sounding-anchor.md, at
-> phase 5 (the box judged)
+> phase 6 (the dials remeasured)
 
 **The moves solve stops anchoring a note to the step it was written on:
 the pull prices drift rather than the window forbidding it, a strand
@@ -287,6 +287,41 @@ charged by whether its two members sound together.**
 
 > Landed 2026-08-21; the model is `docs/sonority.md` § The solve.
 
+## What the box charges
+
+1. **The box charges what a sonority's coords span on each axis, and not
+   what its pairs state.** A span leaves a pair free anywhere inside room
+   another member has opened, so a wolf fifth between two members costs
+   nothing where a third has widened the 3-axis past it; charging every pair
+   the height of the interval it states prices what a span lets through. The
+   gain does not reach the count, and the loss reaches the drift.
+
+1. The count barely separates the two. Of the 440 sounding pairs on the take
+   of `tests/spikes/springs/take2.lua`, 37 stand a comma or more from any
+   5-limit interval under the span box and 39 under every pair-height norm
+   from L1 to L∞; the pairwise readings trade fifths for thirds, 6 to 3
+   against 24 to 28. A five per cent change of harmonic lock moves the total
+   by three, so nothing there stands outside the noise.
+
+1. The norm's shape makes no difference. Summing the pair heights and taking
+   the worst reach the same count, and q=1 and q=2 return the same spellings
+   and the same displacements to the last figure, differing only in the box's
+   scale, which the dials absorb.
+
+1. Drift separates them, and drift is what an ear hears. A step-class wanders
+   26.7¢ across the take under the span box, with the passage's centre inside
+   −23¢…+6¢; under the widest pair it wanders 42.5¢ and the centre reaches
+   −44¢, and under the sum 60.6¢ and −64¢. Charging pairs loosens what holds
+   a spelling together.
+
+1. Weighting each pair by the product of its two members' presence improves
+   every pairwise box without saving the family. The widest pair goes from 39
+   to 34, its wolf fifths from 3 to none, which leads the family on the count;
+   it went into the tree and was rejected by ear. A maximum reads the worst
+   pair alone, so a spelling may walk its members as far apart as that pair
+   already reaches, and a member held by recency is spelled remotely at a
+   quarter of the price. The top line sounds sharp and the rest follows it.
+   Presence therefore stays out of the box (`docs/sonority.md` § The box).
 
 ## The dials
 
@@ -439,25 +474,6 @@ charged by whether its two members sound together.**
 1. Whether two strands of a sonority crossing is audible, or a curiosity
    of the model (§ What it costs).
 
-1. Whether the box should charge pairs rather than spans. A span box
-   charges a sonority what its coords span on each axis, so a pair sits
-   anywhere inside room another member has already opened; a wolf fifth
-   between two members costs nothing where a third member has widened
-   the 3-axis past it. Charging every pair the height of the interval it
-   states prices what the span lets through, and on the take of
-   `tests/spikes/springs/take2.lua` it takes the sounding pairs a comma
-   or more from a 5-limit interval from 72 to 41, the fifths and fourths
-   among them from 25 to 3. What it costs is melodic: a step-class
-   wanders twice as far across the take, a mean spread of 18.8¢ against
-   9.9¢. An ambient rest takes that freedom away (`docs/sonority.md`
-   § The solve), so the box is judged against the model holding it. A
-   pairwise box has a spring's shape, so presence would have a handle there
-   the moment one landed, and the choice carries a second question with it:
-   whether such a box prices beating, and takes the same product weight, or
-   prices relation, and keeps its full one (`docs/sonority.md` § The springs).
-   `tests/spikes/springs/pairwise_box.lua` carries both boxes and the
-   dial figures each wants.
-
 1. What the stiff end of a rest between a class's own strands sounds
    like. Tying consecutive strands of a step-class at a delta of
    nothing, inside the search where it can still move a spelling, has a
@@ -467,8 +483,10 @@ charged by whether its two members sound together.**
    rise from 41 to 50. Applied after the spellings are chosen it splits
    the difference instead — one class's spread falls from 26¢ to 17¢
    while the chords' own springs go from 3.1¢ to 7.5¢ out, and no pair
-   leaves the count. An ambient rest is a different construction, yet
-   its stiff end is likely the same scale.
+   leaves the count. Those figures predate the ambient rest and the
+   take's baseline has moved under them (§ What the box charges), so they
+   give the shape of the effect and not its size. An ambient rest is a
+   different construction, yet its stiff end is likely the same scale.
 
 1. Whether the command's surface should still offer the old anchor. The
    wall, the absolute reference and the unweighted springs are one
