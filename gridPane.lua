@@ -1137,7 +1137,7 @@ function gridPane:handleKeys(kr)
         local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
         if fresh or (repeated and entry.key == lastEditKey) then
           if shiftHeld or spreadHeld then
-            -- Shift gestures are fresh-only: chord strike on a note col (+Ctrl spreads
+            -- Shift gestures are fresh-only: chord strike on a note col (+Alt spreads
             -- channels), else the value place-walk. Each declines off its context.
             local noteChar = cmgr:noteChars(entry.char) ~= nil
             local hexChar  = entry.char >= string.byte('a') and entry.char <= string.byte('f')

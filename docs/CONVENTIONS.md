@@ -9,12 +9,12 @@ Four layers carry information about a module:
 3. `.map` files — derived semantic outline produced by
    `tools/map_extract.py`. One per `.lua`. Read first; the source
    second.
-4. `docs/<file>.md` — prose. WHY only: the model behind the design,
-   incidents the shape encodes, cross-cutting invariants worth a
-   paragraph rather than a single line.
+4. `docs/<file>.md` — ahistorical prose. The model behind the design,
+   and non-local rationale as to WHY the code has to be as it is.
 
 The doc layer doesn't restate the API surface. Signatures, contracts,
-shapes, and signals belong in source + `.map`.
+shapes, and signals belong in source + `.map`. It also does not state
+design history.
 
 ## Shape of a file doc
 

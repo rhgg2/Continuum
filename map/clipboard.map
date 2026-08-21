@@ -179,7 +179,6 @@
   @field w fxRegions  @ collect:200,239
   @field r getCtx  @ 57
   @field r grid  @ 53
-  @field w idx  @ 24
   @field r isNote  @ emitSustainPA:270 pasteMulti:494
   @field r key  @ pasteMulti:443,446
   @field w key  @ collect:218,221
@@ -217,7 +216,6 @@
   @field r type  @ pasteMulti:512,515
   @field w type  @ 26 collect:212 pasteMulti:444,446,448
   @field w uuid  @ 24
-  @field w uuidIdx  @ 24
   @field r val  @ carrier:100 emitSustainPA:273
   @field w val  @ 34,40,41 destCarrier:260 emitSustainPA:273 pasteLanes:355
   @field r vel  @ isNoteOn:79
