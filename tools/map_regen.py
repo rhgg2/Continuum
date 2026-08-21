@@ -16,7 +16,7 @@ post-edit hooks drive this rather than map_extract directly.
   map_regen.py --write   write the maps whose content has changed
   ... --write --stale-only
                          the same, skipping sources no newer than their map:
-                         what the post-edit hooks run, ~25ms against 1.6s
+                         what the post-edit hooks run, ~45ms against 7s
 
 Reviewing what a --write did takes `git diff --text -- map/`. .gitattributes
 carries `map/*.map -diff`, so a plain diff renders each changed map as
@@ -99,9 +99,10 @@ def main() -> int:
     written = 0
 
     for dest, src in sorted(sources.items()):
-        # mtime, not content: skipping the parse is the entire point. A source
-        # whose edit left its map identical stays mtime-stale and re-renders
-        # each run -- ~5ms, and it clears as soon as an edit does change it.
+        # mtime, not content: skipping the parse is the entire point. An edit
+        # that leaves the map byte-identical still leaves its source newer, so
+        # a --write marks the map current below rather than re-rendering it
+        # unchanged on every run thereafter.
         if (args.stale_only and dest in on_disk
                 and src.stat().st_mtime <= dest.stat().st_mtime):
             continue
@@ -113,6 +114,8 @@ def main() -> int:
             continue
         current = dest.read_text() if dest in on_disk else None
         if fresh == current:
+            if args.write:
+                dest.touch()   # the render proved it current; say so in mtime
             continue
         if args.write:
             dest.parent.mkdir(parents=True, exist_ok=True)

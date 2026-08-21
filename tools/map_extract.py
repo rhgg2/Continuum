@@ -197,6 +197,11 @@ DECL_LIST_CONT = re.compile(r"^\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*(,?)"
 SHADOW_DECL_RE = re.compile(r"^\s*local\s+(?:function\s+)?([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)")
 # `row = row` in an export table: the key is a field, the value the reference.
 BIND_KEY_LHS   = re.compile(r"\s*=(?!=)")
+# Bare-name mentions of module-private helpers. One scan per line finds every
+# candidate; the character after the name sorts it into call, sugar or bind.
+HELPER_NAME_RE = re.compile(r"(?<![.:\w])[A-Za-z_]\w*")
+CALL_TAIL      = re.compile(r"\s*[({]")
+SUGAR_TAIL     = re.compile(r"\s*['\"]")
 
 ATTACH_GAP = 3   # max line gap from annotation to following structural element
 
@@ -983,41 +988,43 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
             if mod:
                 add('forward', f'{source}:{sig}', line, m.start())
 
-    # A module-private helper is called with no receiver at all, so the
-    # qualified pass above cannot see it. Masked code, not the `--`-stripped
-    # raw lines: a helper name inside a string literal is not a call site.
-    for name in sorted({b.name for b in cm.private_fns}):
-        # The lookbehind rather than `\b`, which matches after `.` and `:`:
-        # `tm:rawIndexFor(` would otherwise satisfy the bare pattern too and
-        # emit a second edge keyed `rawIndexFor` for a site already keyed
-        # `tm:rawIndexFor`, collapsing the private-fn/method distinction.
-        rx = re.compile(rf"(?<![.:\w]){re.escape(name)}\s*[({{]")
-        for i, code in enumerate(code_lines):
-            for m in rx.finditer(code):
-                if (not FN_DECL_PREFIX.fullmatch(code[:m.start()])
-                        and not shadowed(name, i + 1)):
-                    add_call(name, i + 1, m.start())
-
-    # A helper reached by reference rather than called: bound into a command or
-    # export table, or handed over as a callback. 81 helpers have no call site
-    # at all, and for those this is the only index that names an entry point.
-    # The lookahead drops call sites, `f{...}` among them now that the call
-    # passes see it; `f"..."` sugar would land in no index at all, and the
-    # corpus has none. See design/map-navigation.md § Intra-file call edges.
+    # A module-private helper is mentioned with no receiver at all, so the
+    # qualified pass above cannot see it either way it is reached: called, or
+    # named without being called -- bound into a command or export table, or
+    # handed over as a callback. 81 helpers have no call site at all, and for
+    # those the bind index is the only thing that names an entry point.
+    #
+    # One scan per line rather than one per helper per line: the corpus has
+    # names x lines in the millions, and the two reaches are one question about
+    # what follows the name. `(` or `{` is a call; `'` or `"` is `f"..."` sugar,
+    # which lands in no index at all and which the corpus has none of; anything
+    # else is a bind. The lookbehind in HELPER_NAME_RE rather than `\b`, which
+    # matches after `.` and `:`: `tm:rawIndexFor(` would otherwise satisfy a
+    # bare-name pattern too and emit a second edge keyed `rawIndexFor` for a
+    # site already keyed `tm:rawIndexFor`, collapsing the private-fn/method
+    # distinction. Masked code, not the `--`-stripped raw lines: a helper name
+    # inside a string literal is neither reach.
+    # See design/map-navigation.md § Intra-file call edges.
+    helpers = {b.name for b in cm.private_fns}
     decl_ends = decl_list_ends(code_lines)
     bind_seen: set[tuple[str, int]] = set()
-    for name in sorted({b.name for b in cm.private_fns}):
-        rx = re.compile(r"(?<![.:\w])" + re.escape(name) + r"\b(?!\s*[({'\"])")
-        for i, code in enumerate(code_lines):
-            for m in rx.finditer(code):
-                if m.start() < decl_ends[i] or shadowed(name, i + 1):
+    for i, code in enumerate(code_lines):
+        line = i + 1
+        for m in HELPER_NAME_RE.finditer(code):
+            name = m.group()
+            if name not in helpers or shadowed(name, line):
+                continue
+            tail = code[m.end():]
+            if CALL_TAIL.match(tail):
+                if not FN_DECL_PREFIX.fullmatch(code[:m.start()]):
+                    add_call(name, line, m.start())
+            elif not SUGAR_TAIL.match(tail):
+                if m.start() < decl_ends[i] or BIND_KEY_LHS.match(tail):
                     continue
-                if BIND_KEY_LHS.match(code[m.end():]):
-                    continue
-                key = (name, i + 1)
+                key = (name, line)
                 if key not in bind_seen:
                     bind_seen.add(key)
-                    cm.binds.append((name, caller_at(i + 1, m.start(), load=False), i + 1))
+                    cm.binds.append((name, caller_at(line, m.start(), load=False), line))
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
     cm.calls.sort(key=lambda c: (c[0], c[2]))
