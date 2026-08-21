@@ -1,16 +1,8 @@
 # Decision log
 
-Decisions with no design doc to belong to: a convention adopted in
-passing, a trade-off taken outside any planned work. Anything settled
-inside a live programme or plan is written in that work's
-`design/<doc>.md` instead, and not repeated here — writing it in both
-places is what used to make this file ambiguous.
-
-One dated entry each: what was chosen, over what, and why — one or two
-lines. Newest first. `/commit` prompts for one at commit time.
-
-Entries below 2026-07-27 predate that split, so some of them also
-appear in their design docs.
+A list of all design decisions that bear on active work. One dated
+entry each: what was chosen, over what, and why. Three or four lines,
+not eight or ten.
 
 - **2026-08-20** — The moves solve stops reading a note's window, as wall and as ruler. As wall it
   bounded where a strand could stand: `settle` returns its optimum unclamped now, and the beam
@@ -79,12 +71,12 @@ appear in their design docs.
   the verb's other callers bare; the callback keeps the label only where it hands the verb slots
   reachable nowhere else, as the retune modal does.
 
-- **2026-08-08** — `docs/` carries the WHY of live code, and a design doc archives as the record of
-  what was decided rather than as the reference the code cites. `generators.lua` had no doc at all
-  while forty of its comments reached into `design/archive/note-macros-v2.md` for the operating model, which
-  left a shelf-bound doc doing a live doc's job. Rejected: leaving the citations pointed at the
-  archive, which the repo already does a hundred times over — tolerable for a settled mechanism,
-  wrong for the model a live module is written against.
+- **2026-08-08** — `docs/` carries the WHY of live code, and is what the code cites; a design doc is
+  never a live reference. `generators.lua` had no doc at all while forty of its comments reached into
+  `design/archive/note-macros-v2.md` for the operating model, which left a shelf-bound doc doing a
+  live doc's job. Rejected: leaving the citations pointed at the archive, which the repo already does
+  a hundred times over — tolerable for a settled mechanism, wrong for the model a live module is
+  written against.
 
 - **2026-08-06** — `map_query` gains `kind='decl'` and `kind='ann'`, and every
   specific kind is glossed in the schema. Which of nine declaration kinds a
