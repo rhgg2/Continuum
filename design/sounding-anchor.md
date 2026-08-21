@@ -1,7 +1,7 @@
 # Sounding anchor — a note is tuned against what sounds, not against the page
 
 > opened: 2026-08-19 · status: in flight — plan/sounding-anchor.md, at
-> phase 3 (presence)
+> phase 4 (the ambient reference)
 
 **The moves solve stops anchoring a note to the step it was written on:
 the pull prices drift rather than the window forbidding it, a strand
@@ -272,75 +272,11 @@ charged by whether its two members sound together.**
 
 ## Presence
 
-1. A strand's **presence** at an onset is what it contributes to that
-   onset's sonority: full where the strand sounds there, and a constant
-   `RECENT` below one where the sonority holds it by recency alone. A
-   sonority is the last `n` distinct step-classes struck together with
-   every class still sounding (`docs/sonority.md` § The walk), so the
-   second case is a class that has stopped and has not yet been displaced
-   from the recency list.
-
-1. Presence is an argued constant rather than a dial. Two dials already
-   ride the solve, and a third would divide an author's attention without
-   buying a decision they are equipped to make; what an author owns is
-   drift against distribution, where how much a released note still counts
-   is a property of hearing rather than a taste.
-
-1. `RECENT`'s endpoints are known even where its value is not. At one it
-   is the model as built, a recency member counting for as much as a
-   sounding one. At zero the recency members contribute nothing, the
-   sonorities stop being coupled to one another, and the passage falls
-   apart into independent solves — the collapse a sonority size at the
-   arity itself already produces (`docs/sonority.md` § The walk). The
-   useful value therefore stands well clear of zero, and it stands at a
-   half, which is argued rather than measured (§ Open).
-
-1. Presence is defined once and spent twice: it weights a spring
-   (§ Springs price beating), and it weights the mean a strand rests at
-   (§ The ambient reference).
+> Landed 2026-08-21; the model is `docs/sonority.md` § The walk.
 
 ## Springs price beating
 
-1. A spring's weight is the product of its two members' presence. Where
-   both sound, the spring is charged as it is charged now; where one has
-   stopped, `RECENT` of that; where both have stopped, `RECENT` squared,
-   which is the weakest constraint the model states.
-
-1. A pair neither of whose members sounds is the faintest thing a
-   sonority states, a spring pricing beating and neither pitch being there
-   to beat. The product is what gives such a pair its standing, falling
-   off once for each silence.
-
-1. The arithmetic stays where it is. `sonority.springCost` multiplies
-   each spring's charge by its weight; `sonority.ties` accumulates the
-   weights where it now counts springs, and carries a weight beside each
-   neighbour it lists; `settle` is unchanged in form, its optimum
-   becoming the weighted mean of what a strand's springs ask of it, since
-   a count of springs was only ever a sum of unit weights.
-
-1. `joinCost` carries the weight too (`sonority.lua:486`). It prices a
-   join's springs at zero displacement in order to rank spellings, and a
-   beam ranking by one objective while the search minimises another would
-   return spellings the search does not want.
-
-1. The box keeps its full weight, and has no pair to weight in any case.
-   `sonority.score` reads a component's coords as a set — the span on each
-   axis its members name, weighted by that axis's height — and returns one
-   figure per component, so a product of two presences has nowhere to land.
-   The most such a shape could take is a scalar over the whole component,
-   which is a different quantity from a spring's weight.
-
-1. A full weight is what the box's job asks for. What the box measures is
-   root fusion — how nearly a sonority's notes share a virtual fundamental —
-   and the recency tail is in the sonority so that a chord change is scored
-   against the chord before it: a spring couples the tuning across that
-   change, where the box couples the spelling, being charged over the
-   component with the recency members standing in it. A detached line, whose
-   every note stops before the next strikes, has the box alone relating note
-   two's coords to note one's, its springs all standing at `RECENT` squared,
-   and presence at zero decouples the sonorities (§ Presence). A silent
-   member beats with nothing, yet it is still part of the harmony an ear is
-   holding.
+> Landed 2026-08-21; the model is `docs/sonority.md` § The springs.
 
 ## The ambient reference
 
@@ -512,7 +448,7 @@ charged by whether its two members sound together.**
 ## Open
 
 1. What `RECENT` is. The value stands at a half by the argument of
-   § Presence, and no passage measured so far decides between that and
+   `docs/sonority.md` § The walk, and no passage measured so far decides between that and
    one. The five-part take of `tests/specs/sonority_spec.lua` spells
    identically under both, though twenty-six of its onset memberships
    are held by recency; only the settled cents move — a mean
@@ -569,7 +505,7 @@ charged by whether its two members sound together.**
    pairwise box has a spring's shape, so presence would have a handle there
    the moment one landed, and the choice carries a second question with it:
    whether such a box prices beating, and takes the same product weight, or
-   prices relation, and keeps its full one (§ Springs price beating).
+   prices relation, and keeps its full one (`docs/sonority.md` § The springs).
    `tests/spikes/springs/pairwise_box.lua` carries both boxes and the
    dial figures each wants.
 

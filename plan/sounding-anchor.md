@@ -18,11 +18,12 @@
 3. **Phase 3 — Presence** (§ Presence, § Springs price beating) — a presence
    per member per onset, `RECENT` where the sonority holds a class by recency
    alone, weighting every spring in `springCost`, `ties`, `joinCost` and
-   `settle`; the box keeps its full weight.  ← in flight
+   `settle`; the box keeps its full weight. — landed 2026-08-21, three
+   commits.
 4. **Phase 4 — The ambient reference** (§ The ambient reference, § Fixed at
    birth) — a strand's rest is the presence-weighted mean of the sonority it
    was born into, read once off `answer.displacement`, charged by the pull
-   and carried in the merge key.
+   and carried in the merge key.  ← in flight
 5. **Phase 5 — The dials remeasured** (§ The dials, § Open) — the beam's
    width and the walk's cap re-swept with the gate gone, harmonic lock's
    opening value and useful span, and a value for `RECENT`.
@@ -40,4 +41,35 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+1. The relaxation charges a strand against a rest rather than against
+   zero. `sonority.pullCost` charges the strain of `displacement − rest`
+   over fifty, and `settle` returns `(stiffness × seats + strength ×
+   rest) / (stiffness × weight + strength)`, a strand no spring ties
+   settling at its rest. `sonority.relax` takes a rest per strand beside
+   the start it sweeps from and hands it to `settle`; every caller states
+   one, `sonority.search` a table of zeros, so the solve settles where it
+   settles today. Red-first on a rest of a few cents: an untied strand
+   settles there, and a tied one at the weighted mean of its springs'
+   asks and it.
+
+1. A strand's rest is the sonority it was born into. `extend` reads a
+   rest for each strand the onset first names — the presence-weighted
+   mean of the other members' displacements, taken off
+   `answer.displacement` before the onset relaxes, and zero where the
+   onset names no other member — and carries the rests on the answer,
+   never rewriting one. `sonority.search` seeds an answer with none and
+   threads them into `relax` and both `pullCost` calls. Every strand born
+   at the first onset rests at zero, the members beside it standing
+   there. The beam is untouched: `joinCost` ranks by box and springs, and
+   the pull is no part of either. Red-first: a strand entering after the
+   passage has drifted rests at that drift, and a detached line carries
+   its drift forward note by note rather than settling back to its seat.
+   The five-part take's settled cents move, so its spec expectations and
+   the figures `docs/sonority.md` § What it gives up quotes are re-taken.
+
+1. The rest joins the merge key. `answerKey` keys a rest beside the cents
+   it already keys over the strands ahead, so two answers agreeing in
+   cents but differing in what their rests will cost when those strands
+   close survive as two. Red-first through `sonority.search`, on a
+   passage where the answer the merge would drop is the one the walk
+   should return; finding that passage is the work of the commit.
