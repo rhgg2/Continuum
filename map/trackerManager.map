@@ -159,7 +159,7 @@
   @fn sortByPPQ(tbl)  @ 98-100
   @fn rawThenLogical(a, b)  @ 104-111
       -- Total order for the raw working set: raw tick, then logical seat (ppqL, falling back to raw
-      -- pre-seating), authored-before-generated, lane, then pitch. See design/decisions.md § 2026-07-18.
+      -- pre-seating), authored-before-generated, lane, then pitch. See docs/trackerManager.md § Update manager.
   @fn noteColumnLess(a, b)  @ 115-120
       -- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
       -- then pitch, so an equal-onset seat holds across rebuilds.
@@ -485,7 +485,7 @@
       -- splice it in ppq-order. Mirror of the walk's per-event body, driven by spliceChannelCCs' row scan.
   @fn buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)  @ 2500-2523
       -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
-      -- Seeks the maintained um index (current mid-pipeline), not mm. See design/decisions.md § 2026-07-21.
+      -- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § Rebuild: CC walk.
   @fn ccColumnFor(chan, evType, ccNum)  @ 2526-2530
       -- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
   @fn removeCellFor(col, row, uuid)  @ 2534-2545
@@ -493,7 +493,7 @@
       -- then uuid-match within the row cluster, so a co-row tenant's cell stands.
   @fn spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)  @ 2549-2572
       -- Interval-dirt cc path: each cc-family seed excises its own cell and re-clones its survivor --
-      -- O(seeds), no channel scan. see design/decisions.md § 2026-07-20
+      -- O(seeds), no channel scan. see docs/trackerManager.md § Interval materialisation
   @fn fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExisting)  @ 2576-2630
       -- Wholesale / stale-swing path: re-derive a channel's whole cc/at/pc stream from mm. Verbatim from the
       -- pre-splice CC walk; interval dirt takes spliceChannelCCs. see docs/trackerManager.md § Rebuild: CC walk

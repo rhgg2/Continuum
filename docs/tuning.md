@@ -540,8 +540,11 @@ From the final realised lane-1 sequence it:
 - Projects the pb column from the final set, with `val=cents` (the
   authored value tv displays) and `hidden` for every derived seat.
 
-Reads pbs directly from mm; the um cache (`chans`, `byUuid`) is
-rebuilt at the end-of-rebuild `reload()`.
+Reads pbs from um's raw index, which the pipeline's own commits keep
+current mid-rebuild where mm's set is a commit behind. The gate on
+rewriting a seat compares the wire (`pb.raw ~= newRaw`) and so is
+byte-exact; reframing it to cents would be lossy for a foreign or
+sub-cent pb, raw carrying some forty times the resolution of cents.
 
 ### Seat-span-scoped onset walk
 
@@ -566,6 +569,15 @@ to the onset just before it.
 **4** The clobber leaves no trace. Both writes produce a well-formed
 `{cents, ppqL, shape}` record, and only which of them landed second
 tells them apart.
+
+**5** A seed reaches past its own span wherever a stream holds forward.
+Authored pb and cc bases and lane-1 detune all hold beyond a window
+edge, so a seed on a hold source forces live every pb window ending
+after it, and that cascades: a live lane-1 note-emitter re-detunes the
+stream from its window start, which can wake a window further right,
+which may emit lane-1 notes of its own. The alternative was to force pb
+edits wholesale, which would have gutted the gate for ordinary lane-1
+editing.
 
 ### Authoring onto a hidden seat
 

@@ -100,7 +100,7 @@ local function sortByPPQ(tbl)
 end
 
 -- Total order for the raw working set: raw tick, then logical seat (ppqL, falling back to raw
--- pre-seating), authored-before-generated, lane, then pitch. See design/decisions.md § 2026-07-18.
+-- pre-seating), authored-before-generated, lane, then pitch. See docs/trackerManager.md § Update manager.
 local function rawThenLogical(a, b)
   if a.ppq ~= b.ppq then return a.ppq < b.ppq end
   local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
@@ -2496,7 +2496,7 @@ local function spliceCcCell(live, ccWrites)
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
--- Seeks the maintained um index (current mid-pipeline), not mm. See design/decisions.md § 2026-07-21.
+-- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § Rebuild: CC walk.
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
@@ -2545,7 +2545,7 @@ local function removeCellFor(col, row, uuid)
 end
 
 -- Interval-dirt cc path: each cc-family seed excises its own cell and re-clones its survivor --
--- O(seeds), no channel scan. see design/decisions.md § 2026-07-20
+-- O(seeds), no channel scan. see docs/trackerManager.md § Interval materialisation
 local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
   local seen, touched = {}, {}
   for _, s in ipairs(seedList) do
@@ -3403,7 +3403,7 @@ end
 -- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
 local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
-  -- directly); the writers seat in order and nothing since reorders. see design/decisions.md § 2026-07-19
+  -- directly); the writers seat in order and nothing since reorders. see docs § Rebuild: logical projection
 
   -- fxWindow's keys are exactly the non-pa fx cells (computeFxWindows emitted them, on-take + restored);
   -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads producers instead of rescanning columns.
@@ -4104,7 +4104,7 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   }
 
   -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
-  -- index tick cluster answers; byUuid resolve is note-scoped -- see design/decisions.md § 2026-07-18.
+  -- index tick cluster answers; byUuid resolve is note-scoped -- see docs § What the walk visits, and what it emits.
   local anchors = {}
   for _, rec in ipairs(extras) do if rec.derived and not keptDerived[rec] then disturbed[rec] = true end end
   for _, seed in ipairs(dirt) do
@@ -4115,7 +4115,7 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   end
 
   -- Phase 1 -- settle onsets, same-pitch-local (a nudge only collides same-pitch successors). Each
-  -- pitch's cascade chain gathers on the pristine index, then settles by position. See design/decisions.md § 2026-07-18.
+  -- pitch's cascade chain gathers on the pristine index, then settles by position. See docs § What the walk visits.
   local byPitch, chains = {}, {}
   for e in pairs(disturbed) do util.bucket(byPitch, e.pitch, e) end
   for _, seeds in pairs(byPitch) do

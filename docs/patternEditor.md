@@ -26,6 +26,16 @@ loop length), and the checkout is discarded on close, so the extension never
 escapes the mini take. The curve pane caps its span at the endL anchor, so the
 extra row shows only in the grid.
 
+## Linear by default
+
+A fresh curve body is seeded with two zero anchors of linear shape
+spanning the loop, and `tv:enterValue` inherits the previous visible
+breakpoint's shape, as the curve pane's mouse insert does. So a
+pattern-editor curve interpolates without a config key saying it should:
+seeding needs no per-context default, and grid entry and mouse insert
+agree by construction. The main tracker seeds nothing and keeps REAPER's
+step.
+
 ## Write-through commit
 
 Edits persist by write-through, not a discrete save. The mini `tm` fires

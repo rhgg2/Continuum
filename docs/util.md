@@ -100,7 +100,12 @@ restrict to note-ons, particular channels, etc. without a pre-pass.
 
 - **`clone` is shallow; `deepClone` is recursive.** `clone(src, exclude)`
   drops keys present in the `exclude` set — used by mm accessors to strip
-  `idx`/`uuidIdx` internals before returning copies.
+  the `loc` slot before returning copies.
+- **`picker` compiles a key list once**, where `pick` re-parses its key
+  string per call. Both spellings stay: a cold site reads better with a
+  space-separated string, and a hot one pays milliseconds a rebuild in
+  `gmatch` for that reading. The closure owns the compiled list, so util
+  keeps no module-level mutable state.
 - **`snapTo` moves at least one interval.** A value already on a boundary
   advances by a full step — callers never get a no-op snap.
 - **`nudgedScalar` is the canonical "arrow key" combinator.** Integer

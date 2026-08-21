@@ -243,6 +243,18 @@ same way: `metaDirty`/`metaDeleted` reset only at the outermost entry, so nested
 modifies accumulate into them and the flush runs once at the unwind — safe
 because nothing reads project ext-state mid-modify.
 
+**Nesting without a gesture.** `mm:batch(fn)` holds the nest open across the
+caller's own modifies: it takes no lock, writes nothing, and fires no `reload`
+when it unwinds. tm's rebuild pipeline stages through many separate commits,
+and an outer `mm:modify` around them would announce a mutation that never
+happened — a modify fires `reload` on every unwind whether or not its `fn`
+wrote, so every rebuild and every keystroke edit would drive another rebuild.
+Gating that fire on `dirty` is not available either: a metadata-only gesture
+sets no `dirty` and still needs its reload. What the nest buys is one reindex
+and one `flushTake` for the whole pipeline instead of one per stage. An error
+inside `fn` propagates rather than printing, since a half-staged pipeline is
+not a gesture to salvage.
+
 **Stable slots.** A `loc` is a slot id, not a position: minted from a free list
 on add, handed back to it on delete, and carried unchanged for as long as the
 event lives. Ppq order lives beside the events instead, in `noteOrder` /
@@ -530,8 +542,15 @@ Firing rules:
   The verbs splice those arrays, so slot order and ppq order coincide only just
   after `rebuild`: a moved or added event walks in its ppq place while keeping
   whatever slot it already held.
-- **Accessors return shallow clones** with `idx`/`uuidIdx` stripped
-  (`INTERNALS`). Mutating the returned table has no effect — write via
+- **An add seats behind its equals.** A new event goes after everything already
+  at its ppq, and the order arrays are spliced to keep it there. Where a ppq
+  move lands among its new equals is unspecified: `MIDI_Sort` is stable, so
+  coincident order is prior order rather than a property of the last gesture.
+- **Accessors return shallow clones** with `loc` stripped (`cloneOut`), so a
+  slot never leaves mm by an ordinary read; tm's raw fast-path clones strip it
+  too, and no tm-side event carries one. Sealing the two doors an event leaves
+  by is what saves a strip-guard at each consumer downstream.
+  Mutating the returned table has no effect — write via
   `assign*`. Never interleave iterators with mutations; collect first —
   `ordered`'s epoch check raises if you don't.
 

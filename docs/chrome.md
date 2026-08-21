@@ -12,6 +12,10 @@ Colours are looked up by name via `cm:get('colour.<name>')`. An entry can be an 
 
 The resolved U32 values are cached on the chrome instance and flushed on `configChanged`.
 
+## Screen-space drawing
+
+`chrome.screenPainter()` is the reach for drawlist work in screen space: an identity-transform painter over the current window's draw list, so a caller names its colours as every other painter does. Raw `GetWindowDrawList` and `DrawList_Add*` take integers where chrome takes names, and code written against them leaves the palette behind. The draw list is captured when the painter is built, so build one per draw function and call it in the window it paints.
+
 ## Toolbar layout
 
 `makeToolbar()` returns a callable that renders a row of `toolbarSegment` tables.

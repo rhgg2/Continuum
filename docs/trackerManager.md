@@ -60,6 +60,13 @@ way — staging reaches the index through its doors (`rawIndexInsert`,
 `loadIndex`) and never the reverse — so the type→list mapping
 (`rawIndexListFor`) stays inside the index.
 
+Maintenance through those doors is identity-based: `rawIndexRemove` finds its
+entry by object identity, so a caller hands the verbs mm's canonical record and
+never a projection of one. A projected column cell carries the same uuid and is
+a different table, so removing one strands the raw entry — invisible to a
+uuid-holed read of mm, and exposed the moment a splice reads the index.
+`deleteLowlevel` resolves through `byUuid` before removing, for that reason.
+
 The index is the primary structure and the stager is one of its clients,
 which is the opposite of how the name reads. `rawIndex[chan]` holds every
 event on the channel, one `rawThenLogical`-sorted list per type; the whole
@@ -69,6 +76,15 @@ lives inside um because um is what keeps it true, not because staging owns
 it. `rawIndexFor(chan)` is the single read door: it covers all six lists,
 and the typed `rawNotes`/`rawPbs` spellings that used to sit beside it are
 gone.
+
+`rawThenLogical` is a total order, not a two-key sort: raw tick, then logical
+seat, then authored before generated, then lane, then pitch. The tail is
+load-bearing rather than decorative. Records can share a tick and a pitch — a
+nudge lands a derived note on an authored one — and `(ppq, ppqL)` alone leaves
+them in Lua's unstable sort order, which is exactly the order the frontier walk
+reconstructs settlement from (§ What the walk visits, and what it emits). The
+one preference the tail states is meaningful: authored settles before
+generated.
 
 Staging proper: all mutations — from tv and from tm's own rebuild-time
 housekeeping — funnel through `tm:addEvent` / `tm:assignEvent` /
@@ -242,6 +258,15 @@ mm note in the raw frame and resolves carried and freshly-cloned events alike, w
 results back through the `colEvt` seat stamp. A carried event whose mm note did not change is
 already correct. Closure belongs to the tail walk, computed against that same index — see
 § What the walk visits, and what it emits.
+
+The cc family splices seed by seed rather than row by row (`spliceChannelCCs`):
+each cc/at/pc seed excises the cell it carries — an exact-row seek matched on
+uuid — and re-clones its survivor from `mm:byUuid`, so neither O(channel) pass
+remains. A fresh add has no uuid when its seed is born, mm stamping one at
+commit, so the seed holds the snapshotted record itself and reads the uuid off
+it late. Resolution goes through `byUuid` rather than a positional query
+because the rebuild runs inside `mm:modify` before the reindex, where a binary
+search cannot see a fresh add or a move.
 
 ## Pitchbend: tm's role in the tuning model
 
@@ -564,14 +589,17 @@ runs it, with a pointer to its detail where one exists.
   per-chan touched set the function still returns has no consumer.
 - **Fx expansion** (`rebuildFx`). Receives the settled windows as a
   parameter — the window pass is its own earlier stage, not a phase of
-  this one. Every producer runs — on-take fx notes (augment hosts), parked
+  this one. Every producer the gate does not keep runs (§ The producer gate)
+  — on-take fx notes (augment hosts), parked
   note hosts (window = the realised parked extent), and fx regions; the
   derived fxNotes reconcile
   against the partition's set (`reconcileFx`), and continuous streams seat
   offline — cc-augment sums per target into markerless cc seats, pb defers
   to the absorber pass. The note add/del leaves `rebuildFx` as data
   (`fxOut.noteOps`); the tail walk seeds its own batch with it and commits
-  atomically. `fxOut.noteLive` (the predicted set) feeds the tail walk and
+  atomically. A table crossing a stage boundary can be read by whoever holds
+  it, where a batch closure shared along the pipeline hands on commit authority
+  over upvalue arrays no reader can consult. `fxOut.noteLive` (the predicted set) feeds the tail walk and
   PC synthesis. See `docs/generators.md` § Offline continuous realisation.
 - **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
   predicted fxNotes walk together: clamp same-pitch onset collisions
@@ -849,6 +877,27 @@ OPEN tail uncut. Pinned in `tm_tail_gating_spec`.
 Past the cap the dirt collapses to the whole channel, so `rebuildInternals`' excise-skip and its
 fresh column build agree with the tail walk.
 
+### The producer gate
+
+Under seed dirt a producer whose window no seed touches does not run. Its
+derived specs come back verbatim from the last pass (`keptFor`), and
+`reconcileFx` self-matches them by `fxKey`, so a kept producer writes nothing
+to mm and re-derives nothing.
+
+Keeping is decided against the emit scope, not by the kind of chain. A
+continuous producer is keepable when no target's emit scope intersects its
+window: emission clips to that scope, so a kept window and a fresh emission can
+never claim the same seat. A kept pb window still records its geometry, tagged
+`kept`, because pb seats are markerless downstream — a window absent from the
+record would leave its seats reading as authored pbs.
+
+The verdict reaches the tail walk, which is where the gate pays. A kept spec
+was settled and clipped last pass and is identity-kept in mm, so it rides as a
+bound anchor only and does not count toward the frontier threshold (§ What the
+walk visits, and what it emits). Without that, a channel dense in parked hosts
+re-clips every kept derived note on any edit, and a one-note change falls off
+the frontier onto the linear walk.
+
 ### The note-lane shed
 
 tv's cell carry keys on a column's `events` **table identity**: the same
@@ -978,6 +1027,14 @@ It also inverted the bearing rule, because it synthesised from
 its own onset, which the next `stampSamples` then found and stamped
 back as 0, instead of the sample actually prevailing there.
 
+Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
+each seed onset to `[onset, next onset)` — the interval over which one note's
+PC prevails — and the existing set, the records and the pc-column splice all
+filter on them. A span carries both frames, since a projected column cell tests
+logical where an mm record tests raw. Fresh derived output ungates the channel:
+an fx-born onset has no verb seed to name it, so a pass holding any unkept
+`noteLive` spec synthesises wholesale.
+
 Group membership is by **realised** ppq, not logical — same-channel
 simultaneity is a MIDI-realisation constraint (one PC stream per
 channel at any moment), so the leftmost-wins rule fires only when
@@ -1029,6 +1086,11 @@ pushes a note's raw onset clean past a PA at its own logical seat, and
 the tail walk's same-pitch nudge does the same for a tick. A raw-frame
 test calls those PAs detached, and um then declines to move or cull them
 with their host — orphaning them in `mm`.
+
+Reading um's index rather than mm also widens what counts as attached: the
+index carries staged adds, so a PA added this gesture and not yet flushed
+follows its host's resize or delete. A staged PA is attached, and scanning mm's
+committed set alone would not see it.
 
 `forEachAttachedPA` gathers its matches into a list before invoking `fn` on each, rather than
 calling `fn` inline mid-walk. `fn` is `deleteLowlevel` or `assignLowlevel`, and both remove from
@@ -1374,6 +1436,14 @@ indistinguishable, so it's absorbed the same way (docs/generators.md
 § Route-by-window). The window test is half-open, since the re-centre seat folds
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
+`ccExisting` covers only the seed-touched prior cc windows, edge-inclusive
+(`windowSeeded`). A clean window appears in neither the existing set nor the
+predicted one — emission clips to the emit scope — and the reconcile deletes
+from `existing` alone, so a clean window's seats are never visited and never
+rewritten. Edge inclusion is load-bearing: deleting a window's bounding onset
+seeds exactly its end edge, and admitting `row <= end` keeps that window's
+prior seats in `existing` to be matched rather than duplicated.
+
 Derived events are handled separately: absorber pbs by the absorber pass
 (against the post-walk lane-1 layout); synthesised PCs by PC synthesis.
 Pb column projection is deferred to the absorber pass so it sees the
@@ -1473,6 +1543,13 @@ collide, and only onto its same-pitch predecessor — so a nudge marks its
 own note disturbed and the cascade carries forward under its own power.
 That is what keeps the walk from fencing a chain: the walk never has to
 know in advance how far a cascade will run.
+
+Settlement runs against a pristine index. Each pitch's cascade chain is
+gathered first and settled by position afterwards: probing an index the pass is
+mutating unsorts the list the probe binary-searches, and the search cycles.
+Seed resolution is scoped to a note on this channel for a neighbouring reason —
+`tm:byUuid` answers pbs and ccs too, and a seed resolving to one buckets on a
+nil pitch.
 
 The set of notes to re-bound is seed-driven, not span-tested. A note is
 bound if it is disturbed, or if it is the nearest same-lane or same-pitch

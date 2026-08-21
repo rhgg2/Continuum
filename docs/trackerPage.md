@@ -245,10 +245,13 @@ Strictly ordered, one pass per frame:
    the dispatch pass because `IsKeyPressed` and the character queue
    don't share auto-repeat timing; without the gate, a held command
    key leaks a character into the edit path.
-3. **Shift-digit half-step.** `Shift + 0..9` writes the digit to the
-   MSB of the current stop with the half-value filling the LSB. It's
-   a dedicated edit path rather than a character-queue entry because
-   it needs the modifier state.
+3. **Shift-held gestures.** Shift plus a note key strikes a chord
+   (Shift+Alt spreading it across channels); Shift plus a digit runs the
+   value-entry overwrite cursor. Both are fresh-press only, each declines
+   off its own context, and shift release commits. They are a dedicated
+   edit path rather than character-queue entries because they need the
+   modifier state. See `docs/trackerView.md` § Value entry and § Chord
+   entry.
 
 **Why KEY stream, not char queue, for `editKeys`.**
 `ImGui.Key_*` is physical and `IsKeyPressed(repeat)` fires on ImGui's

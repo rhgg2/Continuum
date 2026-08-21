@@ -5,7 +5,7 @@
 
 # Intent
   Signed-decimal grid entry: '-' is an in-place sign flip; empty cells inherit
-  sign from the ghost or prior breakpoint. See design/decisions.md § 2026-07-10.
+  sign from the ghost or prior breakpoint. See docs/trackerView.md § Value entry.
 
 # Helpers
   @fn pbCol(h)  @ 8-12

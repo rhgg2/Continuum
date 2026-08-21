@@ -338,6 +338,77 @@ logical duration is preserved exactly.
 After any edit, `commit` calls `tm:flush`, advances by `advanceBy`,
 and optionally auditions the new pitch.
 
+### Value entry
+
+**1** Shift held turns typed digits into an overwrite cursor over one
+field's places. The gesture pins a column, a row and a part on its first
+keystroke: each digit overwrites the place under the sub-caret and leaves
+the places below it standing (`util.setDigit`'s `keepBelow`), the sub-caret
+steps one place right, and the row stays put while shift is down. Releasing
+shift restores the column the gesture began in and advances one row, so a
+value edit costs the caret nothing.
+
+**2** Backspace restores the place the last digit overwrote and steps the
+sub-caret back onto it to be retyped. Each keystroke records a snapshot of
+the fields it is about to write, rather than a stack of values: a part may
+write more than one field — an octave moves `pitch`, `detune` and
+`intentCents` together — and a digit that created the event has to be undone
+by deleting it.
+
+**3** Which digits a part takes follows its display: `sample`, `vel` and
+`val` are hex, `delay`, `pb` and the octave decimal. The pitch part's first
+stop is the note name and belongs to chord entry, so the gesture declines
+there.
+
+**4** The decimal parts also take `a`–`j` as a range extender: the letter
+enters digit `0`–`9` at the caret's place and carries `+1` into the place to
+its left, clamped to the field's cap. The carry is additive rather than a
+literal set, so tens-`b` takes 350 to 410 and not to 110. Full scale falls
+out of a carry that overflows the top place.
+
+**5** `-` flips a signed field in place and does not advance. On a zero cell
+there is nothing to flip, so it arms a transient `-0` held in the view
+(`pendingFlip`) rather than in the event: the wire cannot carry a signed
+zero — pb serialises `-0` as `0` — so a persisted one would die at the next
+flush, taking the sign the user typed with it. The flip acts and renders
+only while the cursor stays on the cell that armed it. An empty pb cell
+inherits its entry sign from the ghost it displays, else from the previous
+visible breakpoint, so a negative run costs one `-` and its digits; an
+explicit zero inherits nothing, since it displays unsigned.
+
+**6** Key clashes with commands resolve by the command declining in a
+value-part context — Shift+8 for the octave, plain `1` for a note-off
+pattern — rather than by rebinding either side.
+
+### Chord entry
+
+**1** Shift plus a note key arms a chord gesture: the row and channel pin
+until shift releases, and each further strike places another note at that
+row. A struck pitch already sounding at the pinned row is adopted into the
+gesture rather than duplicated — MIDI allows one voice per `(chan, pitch,
+ppq)`, and the voicing pass would eat a duplicate unpredictably — and
+re-striking a pitch the gesture holds toggles it off, freeing its lane for
+reuse. Backspace drops the last note struck.
+
+**2** Plain Shift stacks the gesture's notes on lanes of the home channel.
+Shift+Alt spreads instead, each strike walking up to the lowest channel the
+gesture does not already hold. The choice is per strike rather than a mode
+armed at entry or a config toggle: per-strike subsumes both and allows a
+mixed chord. The toggle is pitch-keyed, so a unison doubled across two
+channels is foreclosed.
+
+**3** Velocity is not typed during the gesture. The upper note row *is* the
+digit row — `2 3 5 6 7 9 0` are black keys — so digits stay strikeable, and
+the last note struck takes its velocity from an arrow nudge
+(`chordNudgeVel`) on the keys that otherwise step sample and velocity. Those
+commands decline while a gesture is live, which is also why a chord cannot
+*start* on a key whose Shift binding is a command: a command wins at
+dispatch, and declines only once there is a gesture to decline for.
+
+**4** The gesture is a host parameter rather than a global: gridPane takes
+`chordEntry` from its host and the pattern editor passes false, a pattern
+body being single-channel.
+
 ### Backings and parked cells
 
 **1** A parked event is the visible, editable surface of an fx replace, and it
@@ -409,8 +480,13 @@ into `fxRegions` storage itself — clipboard stays column-shaped, fx
 regions don't. Entries carry clip-top-relative rows and a `chanDelta`
 off the rectangle's left edge, same as multi-mode cells; the whole
 window rides even when it spills past the copy band, since a region's
-identity is its window, not the rectangle that caught it (see decision
-2026-07-11). Paste stacks — regions overlap by design, so unlike cell
+identity is its window, not the rectangle that caught it. Capture is by
+onset: a region starting inside the rectangle rides whole, exactly as a
+note's tail copies past the band, and one starting above and merely passing
+through is skipped. Overlap capture would make fx unlike every other
+column, and clipping to the band is meaningless for a chain. The
+delete-caret still takes the region under the cursor
+(`cursorRegionBefore`), not the onset rule. Paste stacks — regions overlap by design, so unlike cell
 paste there's no destination wipe.
 
 ## Quantize

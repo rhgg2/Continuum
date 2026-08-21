@@ -112,6 +112,14 @@ from the rect, it never rescans the take for gained members. That
 grid↔stream translation is trackerView's, reached through the bridge
 like every other region verb.
 
+Every region-mutating verb commits its own flush (`groupBridge.commit()`),
+not only the ones that create. gm stages and never flushes, and
+`tm:requestRebuild()`'s deferred flag is inert until some flush consumes
+it, so a delete, a paint or a resize that skipped the commit would leave
+the rebuild — and with it tv's region cell tags — stale until the next
+command happened to flush. An edit inside a region still tagged plain
+misroutes to a note that propagates to nothing.
+
 ## Clipboard: single vs multi
 
 The mode is decided at copy by the resolved selection: one column

@@ -90,6 +90,10 @@ lookup; the walk touches five slots. Tiers can never hold `util.REMOVE`
 "present in the tier" and "wins the merge" mean the same thing, and the
 walk is exactly what layering the tiers in order would have produced.
 
+Resolution tests presence, not truth (`value ~= nil`). A tier holding
+`false` would otherwise lose to a truthy default, and every boolean key
+would be un-disableable. `config_schema_spec` pins it.
+
 `cm:get(key, { mergeTiers = true })` is the other resolution rule: rather
 than letting the most-specific tier's table win whole, it unions the
 tiers per subkey. Table-valued keys only.
