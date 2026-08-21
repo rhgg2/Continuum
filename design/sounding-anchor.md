@@ -1,7 +1,7 @@
 # Sounding anchor — a note is tuned against what sounds, not against the page
 
 > opened: 2026-08-19 · status: in flight — plan/sounding-anchor.md, at
-> phase 4 (the ambient reference)
+> phase 5 (the box judged)
 
 **The moves solve stops anchoring a note to the step it was written on:
 the pull prices drift rather than the window forbidding it, a strand
@@ -280,82 +280,12 @@ charged by whether its two members sound together.**
 
 ## The ambient reference
 
-1. A strand no longer rests at its seat. Its **rest** is where the music
-   was sitting when its note arrived — the presence-weighted mean
-   displacement of the members of the sonority before the one it is born
-   into — and `sonority.pullCost` charges the strain of `displacement −
-   rest`, that gap over fifty (§ The pull in cents), rather than the
-   strain of the displacement alone.
-
-1. The reference is the preceding sonority rather than the one the
-   strand joins. A block chord change leaves every member of its own
-   sonority new, and a member nothing has placed yet stands at zero,
-   which says only where the page is; read off the sonority before, a
-   chord entering on the drift a passage has reached rests on that drift,
-   however many voices move at once. Every strand born at one onset
-   therefore shares one rest, and the ambient is a figure per onset.
-
-1. The mean runs over that sonority's members alike, the sounding and
-   the merely recent. A melodic line sounds one note at a time, so a mean
-   over sounding members alone would leave each note of it resting at its
-   own seat, and a solo passage would snap back to the page a note at a
-   time; over the recency members too, each note rests at the mean of the
-   last `n` classes struck, and the line carries its own drift forward.
-
-1. Presence tells where the textures mix. It divides out where every
-   contributor carries the same one, which is what a detached line is:
-   each note has stopped before the next strikes, so every contributor is
-   a recency member and `RECENT` appears in no figure. Under a held bass,
-   or where one note of a line laps over the next, a sounding member
-   speaks louder than a released one about where the music currently is.
-
-1. Every strand born at the first onset rests at its own seat. There is
-   no sonority before it to read. That onset is the only place the page
-   is asserted, and everything after it is relative to what came before.
-
-1. A silence returns nothing to the page. The recency list is positional
-   rather than temporal (`sonority.lua:102`), so the last `n` classes
-   struck stand in the sonority however long the gap before the next note,
-   and a passage may drift as far from the notation as its harmony takes
-   it.
-
-1. The pull no longer says where a sonority sits. That is inherited from
-   the sonority before it and traces back to the first onset; what the
-   pull says now is how far one note may stand from the body of music it
-   arrived in.
+> Landed 2026-08-21; the model is `docs/sonority.md` § The pull and
+> § The solve.
 
 ## Fixed at birth
 
-1. A rest is read once, when its strand is born, and never moves again.
-
-1. It has to be frozen data, or the objective loses its unique minimum.
-   The springs constrain only differences of displacements, and a pull
-   charged against a mean of those same displacements is unchanged when
-   every strand moves together, so the whole passage could slide by any
-   amount at no cost. The relaxation is a sweep of coordinate descent,
-   whose answer along such a direction depends on where it started, and
-   the invariant that the sweep order and the start buy speed rather than
-   the answer would no longer hold (`sonority.lua:416`).
-
-1. Freezing is what the search already affords. A rest is read off
-   `answer.displacement` — the displacements the answer carried into the
-   onset, before that onset's relaxation runs — so a member still
-   sounding, and thus still free to move within the onset, contributes
-   its entry value rather than a live one.
-
-1. One rest per strand matches how the pull is already charged. Each
-   strand's pull enters an answer's running total exactly once, at the
-   onset where it sounds for the last time (`sonority.lua:1007`), so a
-   rest per onset would have no slot to be charged in.
-
-1. The rest joins the merge key. Two answers agreeing in cents on every
-   strand a later onset names, and owing the same sonorities the same
-   members, are one answer today (`docs/sonority.md` § The solve); with
-   rests in play they are one answer only where the rests agree too,
-   since a strand's rest decides what its pull will cost when it closes.
-   The key grows by a figure per open strand, so more answers survive as
-   distinct, and the cap's slots go to answers differing in what they owe
-   rather than in what they sound like.
+> Landed 2026-08-21; the model is `docs/sonority.md` § The solve.
 
 
 ## The dials
@@ -427,7 +357,8 @@ charged by whether its two members sound together.**
    notation's fineness. Scaling the pull to the steps is what the ruler
    did, and an author under a fine notation turns the lock up instead.
 
-1. The merge key grows by a rest per open strand (§ Fixed at birth), so
+1. The merge key grows by a rest per open strand (`docs/sonority.md`
+   § The solve), so
    the walk's cap is spent on answers that differ in a way it could
    previously merge away.
 
@@ -525,8 +456,8 @@ charged by whether its two members sound together.**
    or more from a 5-limit interval from 72 to 41, the fifths and fourths
    among them from 25 to 3. What it costs is melodic: a step-class
    wanders twice as far across the take, a mean spread of 18.8¢ against
-   9.9¢. That freedom is the one § The ambient reference takes away, so
-   the two want judging together rather than one before the other. A
+   9.9¢. An ambient rest takes that freedom away (`docs/sonority.md`
+   § The solve), so the box is judged against the model holding it. A
    pairwise box has a spring's shape, so presence would have a handle there
    the moment one landed, and the choice carries a second question with it:
    whether such a box prices beating, and takes the same product weight, or
@@ -537,7 +468,7 @@ charged by whether its two members sound together.**
 1. What the stiff end of a rest between a class's own strands sounds
    like. Tying consecutive strands of a step-class at a delta of
    nothing, inside the search where it can still move a spelling, has a
-   limit worth knowing before § The ambient reference is built: at a
+   limit worth knowing: at a
    stiffness of eight every class collapses to one tuning across the
    take, which is a fixed twelve-note scale, and the pairs a comma out
    rise from 41 to 50. Applied after the spellings are chosen it splits

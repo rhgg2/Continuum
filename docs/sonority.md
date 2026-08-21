@@ -426,15 +426,14 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    extension nothing can bring back under the cut. Two extensions in
    three refuse this way, paying for no ties, no relaxation and no key.
 
-1. The walk takes four answers abreast and a beam of twenty-four. Every
-   passage measured returns the same cents from three abreast upward at
-   that beam, where two abreast loses them, and an eighty-eight-note
-   take answers in 1.7 seconds. The two figures are not independent: at
-   a beam of forty-eight the five-part take needs more than four
-   abreast, the spellings the wider beam admits crowding the capped
-   walk. A passage that loses the answer at the beam the walk actually
-   takes would settle the cap, and `tests/spikes/springs/cap_sweep.lua`
-   sweeps for one.
+1. The walk takes six answers abreast and a beam of twenty-four. The two
+   figures are not independent: the five-part take wants five abreast at
+   that beam and eight at a beam of forty-eight, the spellings a wider
+   beam admits crowding the capped walk. A cap of four lost that take's
+   answer once a rest could drift, so the cap stands one over what the
+   take asks for. An eighty-eight-note take answers in 1.8 seconds at
+   that pair and is still improving at twenty abreast under either beam,
+   and `tests/spikes/springs/cap_sweep.lua` sweeps the two together.
 
 1. The winner is settled by one joint relaxation over its springs,
    which recovers the precision lost by freezing the closed strands

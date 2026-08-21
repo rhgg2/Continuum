@@ -23,8 +23,12 @@
 4. **Phase 4 — The ambient reference** (§ The ambient reference, § Fixed at
    birth) — a strand's rest is the presence-weighted mean of the sonority it
    was born into, read once off `answer.displacement`, charged by the pull
-   and carried in the merge key.  ← in flight
-5. **Phase 5 — The dials remeasured** (§ The dials, § Open) — the beam's
+   and carried in the merge key. — landed 2026-08-21, three commits.
+5. **Phase 5 — The box judged** (§ Open) — the pairwise box measured against
+   the span box again, now that an ambient rest holds a step-class near what
+   the music has reached; the wandering it cost was the count against it, and
+   the dials it moves are phase 6's to settle.  ← in flight
+6. **Phase 6 — The dials remeasured** (§ The dials, § Open) — the beam's
    width and the walk's cap re-swept with the gate gone, harmonic lock's
    opening value and useful span, and a value for `RECENT`.
 
@@ -40,4 +44,12 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+1. **Revive the pairwise box spike and re-measure under the ambient rest** —
+   `tests/spikes/springs/pairwise_box.lua` calls `pullCost`, `ties` and
+   `relax` at their pre-rest signatures, so its own `solve` wants the
+   answer's rests threaded through before it runs; then both boxes on
+   `take2` at matched dials, for the wandering a step-class does, the
+   sounding pairs a comma or more out by family, the C7 crossing and the
+   purity cliff. The spike's header carries the new record.
 

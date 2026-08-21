@@ -1416,7 +1416,7 @@ return {
       -- the road carrying it is judged. Two roads meet at the fourth onset agreeing in cents
       -- at the one strand a later onset names, their rests for it standing at 31.13¢ and
       -- -76.68¢; keyed on the cents alone they are one road, and the one dropped is the one
-      -- that ends cheapest (§ Fixed at birth).
+      -- that ends cheapest (docs/sonority.md § The solve).
       local strands = heldLines({ { 57, 57, 57, 57, 59 },
                                   { 60, 65, 60, 60, 62 },
                                   { 71, 65, 65, 60, 60 } }, 960)
