@@ -134,7 +134,7 @@ local function solveAt(passage, width, cap)
                                       passage.moves, width, STIFFNESS)
   end
 
-  local answer = sonority.search(onsets, spellings, seat, STRENGTH, STIFFNESS, cap)
+  local answer = sonority.search(onsets, spellings, seat, STRENGTH, STIFFNESS, cap, 1)
   if not answer then return nil end
 
   local free = {}

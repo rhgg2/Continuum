@@ -36,15 +36,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-21 sonority: give the ambient a dial, opening at a quarter (§ Open)
 - 2026-08-21 sonority: key an answer by its open strands' rests (§ Fixed at birth)
 - 2026-08-21 sonority: rest a strand where the sonority before it stood (§ The ambient reference)
 - 2026-08-21 sonority: relax against a rest, not zero (§ The ambient reference)
-- 2026-08-21 docs: give sonority presence, and a spring its weight (§ Presence, § Springs price beating)
 
 ## Now
 
-**The ambient dial** — brief in `plan/IMPL.md`. (design § Open, the item
-asking whether the ambient wants a dial of its own)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 

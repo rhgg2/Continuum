@@ -557,8 +557,9 @@ The target reads two ways, and the facility slot says which. `'points'` is the
 solve above; `'moves'` reads the same temper as intervals that may be sounded
 pure between one strand and another (docs/tuning.md § A temper read as moves),
 and `sonority.solveToMoves` answers with the cents each strand settles at, its
-springs holding the spelled intervals as nearly pure as the purity slot asks
-(docs/sonority.md § The dials). Every strand is then seated at those cents,
+springs holding the spelled intervals as nearly pure as the purity slot asks and
+its rests inheriting the share the ambient slot names (docs/sonority.md
+§ The dials). Every strand is then seated at those cents,
 blended by strength as the others are. The solve takes no key, a move set having
 no place on the pitch line, and it states no refusal its caller could name.
 
@@ -570,20 +571,21 @@ snaps the note under the cursor. Target, facility and key are seeded from the ta
 tier and written back there as OK commits, so the modal reopens on the answers
 the take carries; a key past the notation's steps — the take having since
 changed temper — clamps into range rather than raising. The strength, the
-sonority size and the two dials are seeded at their defaults on every open:
-harmonic lock at 1 under either facility, and purity at 8
+sonority size and the three dials are seeded at their defaults on every open:
+harmonic lock at 1 under either facility, purity at 8 and the ambient at 0.25
 (docs/sonority.md § The dials).
 
 The target picker offers the library's eligible tempers, `tuning.isTarget`
 filtering the rest out of the row list rather than letting one be picked and
 refused, and the slots the adaptive solves own — facility, key, sonority size,
-harmonic lock, purity — draw disabled while the target is Off. The facility is a
-choice of its own beside the target, nothing in the object recovering which
-reading was meant, and it disables two more slots between them: under `'moves'`
-the key draws disabled for want of a pitch line to name a place on, and under
-`'points'` purity does, a point solve pricing no interval against a spelling.
-Purity's slider is logarithmic, so equal travel buys equal halving of the
-mistuning. A picker popup
+harmonic lock, purity, ambient — draw disabled while the target is Off. The
+facility is a choice of its own beside the target, nothing in the object
+recovering which reading was meant, and it disables three more slots between
+them: under `'moves'` the key draws disabled for want of a pitch line to name a
+place on, and under `'points'` purity and the ambient do, a point solve pricing
+no interval against a spelling and resting a strand on its own step. Purity's
+slider is logarithmic, so equal travel buys equal halving of the mistuning; the
+ambient's is linear, a share being a share. A picker popup
 consumes its own Enter and Escape where `IsKeyPressed` cannot see it, so the
 modal gates OK and Cancel on `chrome.pickerIsActive()`: without it one Enter
 picks a row and commits the modal behind it. Only a take with a temper bound

@@ -836,11 +836,12 @@ end
 
 -- The modal's left labels, measured together so the controls share one column,
 -- and the gap that column stands off the longest of them.
-local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Purity:', 'Strength:' }
+local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Purity:', 'Ambient:',
+                           'Strength:' }
 local RETUNE_LABEL_GAP = 6
 
--- The two dials' opening figures. see docs/sonority.md § The dials
-local RETUNE_LOCK, RETUNE_PURITY = 1, 8
+-- The three dials' opening figures. see docs/sonority.md § The dials
+local RETUNE_LOCK, RETUNE_PURITY, RETUNE_AMBIENT = 1, 8, 0.25
 
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
 -- here, not scopedAction's confirm, and OK is the single commit point.
@@ -922,6 +923,15 @@ modalHost:registerKind('retune', function(s, close)
           if rvP then s.purity = purity end
         end)
       end)
+      -- Only the moves facility has an ambient to share, a points solve resting a strand
+      -- on its own step (docs/sonority.md § The dials).
+      labelled('Ambient:', function()
+        chrome.disabledIf(s.facility ~= 'moves', function()
+          ImGui.SetNextItemWidth(ctx, 150)
+          local rvA, ambient = ImGui.SliderDouble(ctx, '##ambient', s.ambient, 0, 1, '%.2f')
+          if rvA then s.ambient = ambient end
+        end)
+      end)
     end)
   end
 
@@ -950,7 +960,8 @@ modalHost:registerKind('retune', function(s, close)
     close(true, { scope        = s.scope,        strength     = s.strength,
                   target       = s.target,       key          = s.key,
                   facility     = s.facility,     purity       = s.purity,
-                  sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock })
+                  sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock,
+                  ambient      = s.ambient })
   elseif cancelPressed then close(false) end
 end)
 
@@ -993,6 +1004,7 @@ local function openRetuneModal()
     sonoritySize = 5,
     harmonicLock = RETUNE_LOCK,
     purity       = RETUNE_PURITY,
+    ambient      = RETUNE_AMBIENT,
     callback     = runRetune,
   }
 end

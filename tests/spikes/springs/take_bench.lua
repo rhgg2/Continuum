@@ -10,7 +10,7 @@ local sonority = require('sonority')
 local take     = require('take')
 
 local at    = os.clock()
-local cents = sonority.solveToMoves(take.strands, 5, 1, take.notation, take.target, 8)
+local cents = sonority.solveToMoves(take.strands, 5, 1, take.notation, take.target, 8, 1)
 local took  = os.clock() - at
 
 if not cents then

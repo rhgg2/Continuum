@@ -4,6 +4,22 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-21** — A strand inherits a share of the sonority it was born into rather than the whole
+  of it, and the share is an author's dial: `ambient`, opening at 0.25, travelling 0 to 1 linearly,
+  and the moves facility's alone as purity is -- a points solve rests a strand on its own step, so
+  there is no ambient there to share. Chosen over full inheritance, which was listened to and
+  sounded out of tune: drift compounds, each chord adding its own displacement to where the last one
+  stood, so a line climbing the lattice takes the passage off the page after it. Over take2's two
+  hundred and fifty-eight notes at a lock of 1 and a purity of 32, the first quarter of the
+  inheritance takes the wolf pairs from 66 to 42 and the wolf fifths among them from 25 to 11 and
+  costs nothing in how far a class wanders, where the last quarter buys five wolves back for fifteen
+  cents of wandering and twelve of drift; 0.25 and 0.5 stand inside the noise of each other on every
+  count taken, and the quarter is chosen for the two fewer wolves. No default inside `sonority`,
+  every caller passing the share, so a spec pinning the ambient's own mechanism passes 1 and the
+  figures already in the suite stand. The share stops one level short of `extend`: `search` computes
+  a rest once per answer beside `carried` rather than once per answer and spelling. The model is
+  `docs/sonority.md` § The dials.
+
 - **2026-08-21** — The box keeps charging what a sonority's coords span on each axis, rather than
   what its pairs state. Every pair-height norm from L1 to L-infinity, weighted by presence or not,
   moves the wolf count on take2's two hundred and fifty-eight notes by three or four pairs, which is

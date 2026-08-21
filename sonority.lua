@@ -792,21 +792,21 @@ local function bornIn(onsets)
   return born
 end
 
--- Where the music stood as a strand's note arrived: the sonority before the one it is born
--- into, its members weighted by presence, off the cents the answer carried in.
+-- A share of where the music stood as a strand's note arrived: the sonority before the one
+-- it is born into, its members weighted by presence, off the cents the answer carried in.
 --invariant: a member of the onset before has settled there, so nothing unplaced is read
---contract: answer, onsets, the onset, the strands born there → its rests, one added per birth
-local function restsAt(answer, onsets, at, born)
+--contract: answer, onsets, the onset, the strands born there, the share → its rests, one per birth
+local function restsAt(answer, onsets, at, born, share)
   if not born[1] then return answer.rest end
 
   local ambient = 0
-  if at > 1 then
+  if at > 1 and share > 0 then
     local before, total, weight = onsets[at - 1], 0, 0
     for _, index in ipairs(before.members) do
       total  = total + before.presence[index] * answer.displacement[index]
       weight = weight + before.presence[index]
     end
-    ambient = total / weight
+    ambient = share * total / weight
   end
 
   local rest = util.clone(answer.rest)
@@ -1025,9 +1025,8 @@ end
 --contract: carried: the Ties over what the answer has settled, which this spelling's start from
 --contract: nil where a wait comes back with a placement its own sonority offered (§ The candidates)
 --contract: nil where a wait lands tied to no member of the sonority that deferred it
-local function extend(answer, spelling, onsets, at, seat, strength, stiffness, born,
+local function extend(answer, spelling, onsets, at, seat, strength, stiffness, rest,
                       offered, carried, from, since, moving, stopped, bars)
-  local rest = restsAt(answer, onsets, at, born)
   local springs, held = table.move(answer.springs, 1, at - 1, 1, {}), {}
   local box, written = answer.box + spelling.box, {}
   springs[at] = spelling.springs
@@ -1083,16 +1082,16 @@ end
 --shape: Answer = { choice={ spelling per onset }, springs={ Spring list per onset }, box, displacement, cost, closed=<what the shut onsets charge>, held={ Held,.. }, rest={ [strand]=<cents> } }
 --shape: Held = { onset, placed={ [strand]={ coords=Coords, component } }, waiting={ [strand]=true }, box=<charged so far> }
 --invariant: an answer's debts stand in onset order, as the walk opens them and closes them in it
---contract: onsets, a spelling list per onset, seat per strand, strength, stiffness, cap
+--contract: onsets, a spelling list per onset, seat per strand, strength, stiffness, cap, ambient
 --contract: → the cheapest Answer, every answer carried extended by every spelling of the onset
 --contract: the strands the onset sounds relax; the rest of an answer stands at the cents it carries
---contract: a strand born at an onset rests where the sonority before it stood, and stays put
+--contract: a strand born at an onset rests on its share of where the sonority before it stood
 --contract: a sonority holding a waiter is charged in its own onset's slot, as its members place
 --contract: answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap
 --contract: answers resting apart at an open strand are two, a rest deciding what its pull costs
 --contract: the cut runs over two pools, the answers that owe and the answers that have paid
 --contract: nil where an onset has no spelling — which is a target stating no move
-function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
+function sonority.search(onsets, spellings, seat, strength, stiffness, cap, ambient)
   local ahead, start, offered = visibleAhead(onsets), {}, offeredBy(onsets, spellings)
   local from, born = openFrom(onsets), bornIn(onsets)
   local moving, stopped = soundingRuns(onsets)
@@ -1106,8 +1105,9 @@ function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
     for _, answer in ipairs(answers) do
       local carried = sonority.ties(answer.springs, onsets[i].sounding,
                                     settledOnsets(answer, from[i], i))
+      local rest    = restsAt(answer, onsets, i, born[i], ambient)
       for choice, spelling in ipairs(spellings[i]) do
-        local state = extend(answer, spelling, onsets, i, seat, strength, stiffness, born[i],
+        local state = extend(answer, spelling, onsets, i, seat, strength, stiffness, rest,
                              offered, carried, from[i], i > 1 and from[i - 1] or 1,
                              moving[i], stopped[i], bars)
         if state then
@@ -1146,9 +1146,9 @@ local WIDTH, CAP = 24, 6
 
 -- The moves facility's solve: intervals rather than points, spelled by the beam under a
 -- frozen past, settled by joint relaxation (§ The solve).
---contract: strands, n, strength, notation, moves, stiffness → the cents each strand settles at
+--contract: strands, n, strength, notation, moves, stiffness, ambient → cents settled per strand
 --contract: nil where an onset has no spelling — which is a target stating no move
-function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)
+function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness, ambient)
   local seat = sonority.seats(strands, notation)
   local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, n)), {}
   for i, onset in ipairs(onsets) do
@@ -1156,7 +1156,7 @@ function sonority.solveToMoves(strands, n, strength, notation, moves, stiffness)
                                       moves, WIDTH, stiffness)
   end
 
-  local answer = sonority.search(onsets, spellings, seat, strength, stiffness, CAP)
+  local answer = sonority.search(onsets, spellings, seat, strength, stiffness, CAP, ambient)
   if not answer then return nil end
 
   local free = {}

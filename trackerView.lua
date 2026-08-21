@@ -2135,12 +2135,13 @@ local function solveToTarget(notes, notation, target, slots, widen)
   end
 end
 
--- The moves facility: moves between strands rather than points, settled by springs whose
--- stiffness is purity (docs/sonority.md § The dials); a chain none reaches places nothing.
+-- The moves facility: moves between strands rather than points, springs holding purity and
+-- rests the ambient share (docs/sonority.md § The dials); a chain none reaches places nothing.
 local function solveToMoves(notes, notation, target, slots)
   local strands = strandsOf(notes, notation)
   local cents   = sonority.solveToMoves(strands, slots.sonoritySize, slots.harmonicLock,
-                                        notation, tuning.moves(target), slots.purity)
+                                        notation, tuning.moves(target), slots.purity,
+                                        slots.ambient)
   if not cents then return end
 
   for index, strand in ipairs(strands) do
@@ -2148,11 +2149,12 @@ local function solveToMoves(notes, notation, target, slots)
   end
 end
 
---shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, facility='points'|'moves', key=step, sonoritySize, harmonicLock, purity }
+--shape: retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, facility='points'|'moves', key=step, sonoritySize, harmonicLock, purity, ambient=0..1 }
 --contract: target, facility and key are remembered at take tier; the rest is per invocation
 --contract: with no target the whole of it is the notation snap
 --contract: the facility reads the target as points of the pitch line or as moves between strands
 --contract: purity is the moves facility's alone: how nearly a spelled interval sounds pure
+--contract: ambient is the moves facility's alone: the share of its sonority a strand rests on
 --contract: returns the steps whose empty shortlists refused the solve, else nil
 --contract: widen stretches those windows to the nearest points instead, so none refuses
 function tv:retune(slots, widen)

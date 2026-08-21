@@ -96,6 +96,7 @@
   @field w MEAN  @ 53
   @field r OPEN  @ 496
   @field w SEPTIMAL  @ 263,277,291,307,360
+  @field w ambient  @ 382,412,438,465,503
   @field r cells  @ 71,95
   @field w chan  @ 61,494
   @field w col1  @ 183
@@ -141,7 +142,7 @@
   @field w scope  @ 116,130,142,154,169,185,198,200,212,225,239,255
   @field w scope  @ 264,278,292,308,322,332,361,381,410,437,464,502
   @field w seed  @ 52
-  @field w sonoritySize  @ 240,255,265,279,293,309,323,333,362,382,412,438
+  @field w sonoritySize  @ 240,255,265,279,293,309,323,333,362,382,411,438
   @field w sonoritySize  @ 465,503
   @field w stepNames  @ 36,43
   @field w strength  @ 116,130,142,154,169,185,198,200,212,225,239,255

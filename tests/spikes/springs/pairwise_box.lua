@@ -125,7 +125,7 @@ local function solve(lock, purity, cap)
     lists[i] = sonority.spellings(onset.members, seat, onset.presence, onset.mayWait, take.target,
                                   WIDTH, purity)
   end
-  local answer = sonority.search(onsets, lists, seat, lock, purity, cap)
+  local answer = sonority.search(onsets, lists, seat, lock, purity, cap, 1)
   if not answer then return nil end
 
   local free = {}

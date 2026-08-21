@@ -424,13 +424,6 @@ charged by whether its two members sound together.**
    abreast under both beams, and where it settles is unmeasured.
    `tests/spikes/springs/cap_sweep.lua` sweeps the pair.
 
-1. Whether the ambient wants a dial of its own. A strand's rest is the
-   whole of the ambient today; scaling it — the wall at nothing, full
-   inheritance at one — would give a passage's drift a time constant
-   rather than leaving it bounded by the first onset alone. It is one
-   multiply where the ambient is read and a scalar threaded from the
-   retune slots, so what is open is whether an author wants the control.
-
 1. How far notes actually drift. The pull alone may bound the excursion
    tightly enough that a stored intent rarely differs from the step its
    note would read back as, or the ambient may carry a piece far from the

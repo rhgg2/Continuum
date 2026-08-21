@@ -379,7 +379,7 @@ return {
         local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
                      '12EDO', { DIA = DIA })
         h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', facility = facility,
-                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
+                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8, ambient = 1 }
         return chordAt(h, 0)
       end
 
@@ -408,8 +408,8 @@ return {
         local h = mk(harness, { note(0, 60, 0), note(0, 63, 0), note(0, 67, 0), note(0, 75, 0) },
                      '12EDO', { DIA = DIA })
         local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'DIA',
-                                     facility = facility, key = 1,
-                                     sonoritySize = 5, harmonicLock = 1, purity = 8 }
+                                     facility = facility, key = 1, sonoritySize = 5,
+                                     harmonicLock = 1, purity = 8, ambient = 1 }
         return chordAt(h, 0), refused
       end
 
@@ -435,7 +435,7 @@ return {
         local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
                      '12EDO', { DIA = DIA })
         h.vm:retune{ scope = 'all', strength = 1, target = 'DIA', facility = 'moves',
-                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = purity }
+                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = purity, ambient = 1 }
         return chordAt(h, 0)
       end
 
@@ -462,7 +462,7 @@ return {
       local h = mk(harness, { note(0, 63, 0), note(0, 64, 0), note(0, 67, 0) },
                    '12EDO', { DIA = DIA })
       local slots = { scope = 'all', strength = 1, target = 'DIA', facility = 'moves',
-                      key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
+                      key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8, ambient = 1 }
 
       h.vm:retune(slots)
       local first = cellsAt(h, 0)
@@ -500,7 +500,7 @@ return {
       h.tm:flush()
 
       h.vm:retune{ scope = 'all', strength = 1, target = 'FIVES', facility = 'moves',
-                   key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8 }
+                   key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8, ambient = 1 }
 
       local first, second = chordAt(h, 0), chordAt(h, 2)
       t.truthy(first[60] ~= second[60], 'the two C naturals are two strands, tuned apart')

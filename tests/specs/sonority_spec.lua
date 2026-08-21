@@ -106,7 +106,7 @@ for step = 0, 23 do halfSteps[step + 1] = step * 50 end
 local edo24 = nameless(halfSteps)
 
 -- Targets read as moves: pure fifths and thirds, the set a ii–V–I of sevenths is spelled
--- under, and the eleven-pitch set the figures of § Measured were taken over.
+-- under, and the eleven-pitch set the figures of § What it gives up were taken over.
 local fifthsAndThirds = tuning.moves{ pitches = { '1/1', '3/2', '5/4' } }
 local withSevenths    = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '7/4', '9/8' } }
 local elevenPitches   = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '6/5', '7/4', '7/6',
@@ -529,7 +529,7 @@ end
 -- relaxation, at the cap and the arity the figures below are taken under.
 local function settledUnder(strands, moves)
   local onsets, lists, seat = termsOf(strands, 5, moves)
-  return settledFrom(sonority.search(onsets, lists, seat, 1, 8, 60), #seat, 1, 8)
+  return settledFrom(sonority.search(onsets, lists, seat, 1, 8, 60, 1), #seat, 1, 8)
 end
 
 -- Every combination of the spelling lists, each walked as a road of its own and then given
@@ -542,7 +542,7 @@ local function bruteSpelled(lists, count, strength, stiffness, onsets, seat)
   while true do
     local only = {}
     for i, list in ipairs(lists) do only[i] = { list[at[i]] } end
-    local walked = sonority.search(onsets, only, seat, strength, stiffness, 1)
+    local walked = sonority.search(onsets, only, seat, strength, stiffness, 1, 1)
     if walked then
       local cost, displacement = settledFrom(walked, count, strength, stiffness)
       if not best or cost < best.cost then
@@ -1301,7 +1301,7 @@ return {
       local strands = progression{ { 62, 65, 69 }, { 55, 59, 62 }, { 60, 64, 67 } }
       local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
 
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
       local cost, displacement = settledFrom(answer, #seat, 1, 8)
       local best = bruteSpelled(lists, #seat, 1, 8, onsets, seat)
 
@@ -1326,8 +1326,8 @@ return {
       local strands = progression{ { 62, 65, 69, 72 }, { 55, 59, 62, 65 }, { 60, 64, 67, 71 } }
       local onsets, lists, seat = termsOf(strands, 5, withSevenths)
 
-      local greedy  = sonority.search(onsets, lists, seat, 1, 8, 1)
-      local carried = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local greedy  = sonority.search(onsets, lists, seat, 1, 8, 1, 1)
+      local carried = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
 
       t.truthy(settledFrom(greedy, #seat, 1, 8) > settledFrom(carried, #seat, 1, 8),
         'the road a cap of one takes costs more than the one sixty answers find')
@@ -1346,7 +1346,7 @@ return {
       t.eq(#onsets[2].members, 6, 'the second onset holding all six')
       t.eq(#onsets[2].sounding, 3, 'and sounding the three that struck')
 
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
       t.eq(#answer.choice, 2, 'a spelling chosen at each onset')
 
       local start, free, rest = allFree(#seat)
@@ -1380,7 +1380,7 @@ return {
       -- sonority before it, a chord enters on the drift the passage has reached.
       local strands = progression{ { 60, 64, 67 }, { 62, 65, 69 }, { 64, 67, 71 }, { 65, 69, 72 } }
       local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
 
       for _, index in ipairs(onsets[1].members) do
         t.eq(answer.rest[index], 0, 'strand ' .. index .. ' born where the page is asserted')
@@ -1409,6 +1409,28 @@ return {
   },
 
   {
+    name = 'search: the ambient dial hands a chord entering a share of the drift',
+    run = function()
+      -- The same four chords at the share the dial opens on: the sonority before still says
+      -- where the passage stands, and a strand born after it rests on a quarter of that
+      -- rather than the whole of it, which is the dial's entire observable effect.
+      local strands = progression{ { 60, 64, 67 }, { 62, 65, 69 }, { 64, 67, 71 }, { 65, 69, 72 } }
+      local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 0.25)
+
+      local before, entering = {}, 0
+      for _, index in ipairs(onsets[2].members) do before[index] = true end
+      for _, index in ipairs(onsets[3].members) do
+        if not before[index] then
+          entering = entering + 1
+          nearly(answer.rest[index], 2.4663, 'strand ' .. index .. ' entering on a quarter of it')
+        end
+      end
+      t.eq(entering, 3, 'the whole chord new, and the three of it sharing one rest')
+    end,
+  },
+
+  {
     name = 'search: two roads resting apart are two answers',
     run = function()
       -- An A held under two lines moving over it, read at an arity of three: with a window
@@ -1425,10 +1447,10 @@ return {
       -- That road walked on lists of its own, which prices it whatever the merge makes of it.
       local road = {}
       for i, choice in ipairs{ 2, 14, 9, 7, 1 } do road[i] = { lists[i][choice] } end
-      nearly(settledFrom(sonority.search(onsets, road, seat, 1, 8, 60), #seat, 1, 8), 45.3402,
+      nearly(settledFrom(sonority.search(onsets, road, seat, 1, 8, 60, 1), #seat, 1, 8), 45.3402,
         'the road that ends cheapest')
 
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
       nearly(settledFrom(answer, #seat, 1, 8), 45.3402,
         'which the walk keeps, rather than the 46.2459 of the road that looks cheaper first')
       t.deepEq(answer.choice, { 2, 14, 9, 7, 1 }, 'spelling every onset as that road spells it')
@@ -1469,7 +1491,7 @@ return {
                                         elevenPitches, 24, 8)
       end
       local spelt, standing = settledFrom(
-        sonority.search(onsets, spelled, seat, 1, 8, 60), #seat, 1, 8)
+        sonority.search(onsets, spelled, seat, 1, 8, 60, 1), #seat, 1, 8)
 
       nearly(waited, 7.8703, 'the road that waits')
       nearly(spelt, 7.8703, 'and the road that spells the pair where it stands')
@@ -1487,7 +1509,7 @@ return {
       -- pair the second onset held is a spring in the second onset's slot.
       local strands = rolled({ 60, 63, 67 }, 240)
       local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
 
       t.eq(#answer.springs[1], 0, 'the lone C states nothing')
       t.eq(#answer.springs[2], 1, 'the pair the second sonority held')
@@ -1505,7 +1527,7 @@ return {
       -- tuning the two agree on within 0.03¢ (§ What it costs).
       local strands = rolled({ 60, 64, 67, 70 }, 240)
       local onsets, lists, seat = termsOf(strands, 5, elevenPitches)
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
 
       nearly(answer.cost, 13.2165, 'the walk keeping the road that has paid')
       t.eq(next(answer.held), nil, 'and nothing left owing at the end of the walk')
@@ -1521,7 +1543,7 @@ return {
       -- refused; what the walk keeps spells each onset as it reaches it (§ The candidates).
       local strands = rolled({ 60, 63, 67 }, 240)
       local onsets, lists, seat = termsOf(strands, 5, elevenPitches)
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
 
       for i, choice in ipairs(answer.choice) do
         t.eq(#lists[i][choice].waiting, 0, 'onset ' .. i .. ' spelling what it holds')
@@ -1550,7 +1572,7 @@ return {
       t.truthy(deferring, 'the first sonority offering a road that defers the pair')
       t.eq(lists[1][deferring].box, 0, 'which states nothing and so carries no box at all')
 
-      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60, 1)
       t.truthy(answer.choice[1] ~= deferring, 'the walk refusing it rather than taking it free')
       nearly(settledFrom(answer, #seat, 1, 8), 3.9592,
         'and spelling the pair where it stands, at what that road costs')
@@ -1566,37 +1588,37 @@ return {
       local strands = rolled({ 60, 63, 67 }, 240)
       local onsets, lists, seat = termsOf(strands, 5, elevenPitches)
 
-      local greedy = sonority.search(onsets, lists, seat, 1, 8, 1)
+      local greedy = sonority.search(onsets, lists, seat, 1, 8, 1, 1)
       t.truthy(greedy, 'a walk carrying one answer apiece still answers a rolled chord')
-      t.truthy(greedy.cost >= sonority.search(onsets, lists, seat, 1, 8, 60).cost,
+      t.truthy(greedy.cost >= sonority.search(onsets, lists, seat, 1, 8, 60, 1).cost,
         'and pays for the narrower cut rather than escaping it')
     end,
   },
 
   {
-    name = 'solveToMoves: the take settles where § Measured settles it',
+    name = 'solveToMoves: the take settles where § What it gives up settles it',
     run = function()
       -- Everything the facility does, in one call: the seats the notation states, the
       -- spellings the beam chooses, the walk over them, and the joint relaxation that
       -- settles the winner.
-      local cents = sonority.solveToMoves(take, 5, 1, edo12, elevenPitches, 8)
+      local cents = sonority.solveToMoves(take, 5, 1, edo12, elevenPitches, 8, 0.25)
       t.truthy(cents, 'the take is answered')
 
       local seat = sonority.seats(take, edo12)
       t.eq(#cents, #take, 'a tuning per strand, forty of them')
 
-      -- A strand rests where the sonority before it stood, so nothing holds the body of a
-      -- passage at the page: only the first onset asserts it, and the forty displacements
-      -- carry the drift of what came between rather than summing to nothing.
+      -- A strand rests on the share of the sonority before it the dial opens at, so nothing
+      -- holds the body of a passage at the page: only the first onset asserts it, and the
+      -- forty displacements carry a quarter of the drift of what came between.
       local total, worst, signed = 0, 0, 0
       for index = 1, #take do
         local moved = cents[index] - seat[index]
         total, worst = total + math.abs(moved), math.max(worst, math.abs(moved))
         signed = signed + moved
       end
-      near(total / #take, 6.99, 'the mean displacement of § Measured')
-      t.truthy(worst < 11.92, 'and no note past 11.92 cents: ' .. string.format('%.2f', worst))
-      nearly(signed, -24.8787, 'the forty of them standing flat of where they were written')
+      nearly(total / #take, 6.6250, 'the mean displacement of § What it gives up, 6.62 cents')
+      t.truthy(worst < 10.98, 'and no note past 10.98 cents: ' .. string.format('%.2f', worst))
+      nearly(signed, 8.2562, 'the forty of them standing eight cents sharp between them')
     end,
   },
 
@@ -1607,7 +1629,7 @@ return {
       -- intervals by under a cent between them, and the pull seats the chord where the
       -- three displacements together cost least.
       local cents = sonority.solveToMoves(progression{ { 60, 64, 67 } }, 5, 1, edo12,
-                                          fifthsAndThirds, 8)
+                                          fifthsAndThirds, 8, 0.25)
       t.truthy(cents, 'the chord is answered')
       near(cents[1] - 6000, 3.75, 'the C carried off its seat by the pull')
       near(cents[2] - cents[1], 386.86, 'the third stretched from 386.31')
@@ -1617,7 +1639,7 @@ return {
       -- the set can name and priced for the stretch rather than refusing the passage that
       -- holds it: the C settles sixty cents flat, and reads back on the B below it.
       local diminished = sonority.solveToMoves(progression{ { 60, 63, 66 } }, 5, 1, edo12,
-                                               fifthsAndThirds, 8)
+                                               fifthsAndThirds, 8, 0.25)
       t.truthy(diminished, 'while a diminished triad under the same set is answered')
       nearly(diminished[1], 5939.7534, 'the C carried past the step below it')
       nearly(diminished[2], 6322.6145, 'the E flat above it')
@@ -1637,8 +1659,8 @@ return {
       -- four times over for the same drift, and settled the chord elsewhere; taken in
       -- cents, the notation states the seats and measures nothing.
       local chord  = progression{ { 60, 64, 67 } }
-      local coarse = sonority.solveToMoves(chord, 5, 1, edo12, fifthsAndThirds, 8)
-      local fine   = sonority.solveToMoves(chord, 5, 1, edo24, fifthsAndThirds, 8)
+      local coarse = sonority.solveToMoves(chord, 5, 1, edo12, fifthsAndThirds, 8, 0.25)
+      local fine   = sonority.solveToMoves(chord, 5, 1, edo24, fifthsAndThirds, 8, 0.25)
 
       t.truthy(fine, 'the chord is answered under the finer notation')
       for index = 1, 3 do

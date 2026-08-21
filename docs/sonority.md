@@ -387,11 +387,12 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    little.
 
 1. A strand's rest is fixed where it is born. The walk reads it off the
-   sonority before the one that first names the strand — the
-   presence-weighted mean of that sonority's displacements, as the
-   answer carried them into the onset — so a chord entering enters on
-   the drift the passage has reached, however many of its voices are
-   new, and every strand born at one onset shares one rest.
+   sonority before the one that first names the strand — the ambient
+   share of the presence-weighted mean of that sonority's displacements,
+   as the answer carried them into the onset (§ The dials) — so a chord
+   entering enters on its share of the drift the passage has reached,
+   however many of its voices are new, and every strand born at one
+   onset shares one rest.
 
 1. A rest has to be frozen data. The springs constrain differences of
    displacements alone, so a pull charged against a live mean of those
@@ -460,21 +461,41 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    written, which is the snap the command already offers, so the span
    stops short of it.
 
-1. Purity is the moves facility's alone: a points solve selects among a
-   target's points and prices no interval against a spelling, so there
-   is nothing there for the dial to hold. The two are dials of their
-   own rather than one riding the other — the pull prices how far a note
-   may stand from where it was written, and the stiffness how impure an
-   interval may become — so an author owns drift against distribution.
+1. **Ambient** is the share of the sonority it was born into that a
+   strand takes as its rest, and it opens at 0.25 over a linear span
+   from 0 to 1. At 1 the drift compounds: each chord inherits where the
+   last one stood and adds its own displacement, so a passage walks away
+   from the page and a line climbing the lattice takes everything with
+   it. At 0 every strand rests where it was written and the springs are
+   all that couples one sonority to the next.
+
+1. The knee is at a quarter. Over the 258-note take of
+   `tests/spikes/springs/take2.lua` at a lock of 1 and a purity of 32,
+   the first quarter of the inheritance takes the wolf pairs from 66 to
+   42 and the wolf fifths among them from 25 to 11, and costs nothing in
+   how far a pitch class wanders; the last quarter buys five wolves for
+   fifteen cents of wandering and twelve of drift. A quarter and a half
+   stand inside the noise of each other on every count taken, and the
+   quarter is chosen for the two fewer wolves.
+
+1. Purity and ambient are the moves facility's alone: a points solve
+   selects among a target's points and prices no interval against a
+   spelling, and it rests a strand on the step its note was written on
+   (§ The pull), so there is nothing there for either dial to hold.
+   Harmonic lock and purity are dials of their own rather than one
+   riding the other — the pull prices how far a note may stand from
+   where it was written, and the stiffness how impure an interval may
+   become — so an author owns drift against distribution.
 
 ## What it gives up
 
 1. The step a note was written on. Nothing walls a note inside it, the
    pull pricing the drift rather than a bound stopping it, so a note's
    name and its sound come apart and the cell reports the gap in cents
-   (`docs/tuning.md` § The written step). Over the five-part take at
-   purity 8 and a lock of 1, a strand stands 6.99¢ from its seat on
-   average and none stands past 11.92¢.
+   (`docs/tuning.md` § The written step). Over the five-part take at the
+   dials' openings — a lock of 1, purity 8 and a quarter of the ambient —
+   a strand stands 6.62¢ from its seat on average and none stands past
+   10.98¢.
 
 1. The order two strands were written in. Past its own half-window some
    other strand is the nearer host for a pitch, and nothing holds two
@@ -483,19 +504,20 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 
 1. Exactness. A spelled interval is pure to the stiffness rather than
    by construction, and two strands resting apart are drawn apart
-   against the spring that ties them: over the five-part take at purity
-   8, the worst pair of sounding members stands 0.74¢ wide of what its
-   spelling states. An author wanting more turns the dial up.
+   against the spring that ties them: over the five-part take at the
+   dials' openings, the worst pair of sounding members stands 0.61¢ wide
+   of what its spelling states. An author wanting more turns the dial up.
 
 1. A statement about the passage. The moves solve places no passage at
    a single displacement, so "the passage sits 14.7¢ sharp" is not a
    thing the model says; it holds instead a pull per strand
    toward where the music stood when its own note arrived.
 
-1. A bound on the drift of a long piece. The first onset asserts the
-   page and every rest after it is inherited, so a passage returning to
-   its opening chord may return to it flat, and no term in the objective
-   objects.
+1. A bound on the drift of a long piece, at an ambient of 1. The first
+   onset asserts the page and every rest after it is inherited whole, so
+   a passage returning to its opening chord may return to it flat, and
+   no term in the objective objects. Below 1 the inheritance decays and
+   the drift has a time constant instead (§ The dials).
 
 1. One account of a carried strand. A strand present at two onsets is
    spelled at both, and the box charges each onset's spelling; where
