@@ -1047,7 +1047,7 @@ end
 -- below, captures the same table the helper installs methods on.
 local tr = {}
 
--- The grid + lane render core (design/fx-patterns.md § P1). inputAllowed
+-- The grid + lane render core. inputAllowed
 -- folds focusState.acceptCmds so note-entry self-suppresses under modal/picker/palette/strip focus.
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = true,
@@ -1075,7 +1075,7 @@ end
 local function slideTemper() return tv:activeTemper() or tuning.presets['12EDO'] end
 
 -- The strip's pattern-body fields (ostinato): a summary label + launch into the checkout editor,
--- which writes the edited body back through setFxField. see design/fx-patterns.md § P3.5
+-- which writes the edited body back through setFxField.
 local function emptyBody(kind)
   if kind == 'curve' then return { kind = 'curve', points = {} } end
   return { kind = 'notes', specs = {} }

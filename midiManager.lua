@@ -83,7 +83,7 @@ local sidecarCount = 0    -- for perf.count('texts') alone; a sparse table has n
 -- holds a reference to it. rebuild regroups -- the one place all three are replaced.
 local sidecarTexts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
-local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
+local loadedBlob            -- converged-rebind gate; see docs/midiManager.md § Converged load
 local wire                  -- last flush's midiBlob wire state; nil = nothing built yet
 --invariant: wireDirt[stream][slot] is that slot's state before the nest's first touch of it
 local wireDirt = { note = {}, cc = {} }
@@ -393,7 +393,7 @@ end
 ----- Per-channel index
 
 -- Backs notesRaw(chan) / ccsRaw(chan). tm's gated stages re-derive one channel and would otherwise
--- walk every event to find it. see design/archive/incremental-rebuild.md § The traversal floor
+-- walk every event to find it.
 local function bucketOrder(slots, chan)
   local order = slots[chan]
   if not order then order = {}; slots[chan] = order end
@@ -660,7 +660,7 @@ function mm:load(newTake)
     local buckets = {}
     for _, n in ipairs(notes) do util.bucket(buckets, noteKey(n), n) end
     -- Colliding notes and sidecars pair off in parse order: arbitrary but
-    -- deterministic (design/same-pitch-enforcement.md Phase 3).
+    -- deterministic.
     for _, ns in ipairs(parsedNoteSidecars) do
       local unbound
       for _, note in ipairs(buckets[noteKey(ns)] or {}) do
@@ -993,8 +993,7 @@ end
 
 ----- Dirty channels (rebuild dirt spine)
 
--- Seeds the reload payload so tm gates derivation per channel.
--- See design/archive/dirty-channels.md § Scheme.
+-- Seeds the reload payload so tm gates derivation per channel. see docs/trackerManager.md § Derivation dirt: the gated spine
 local dirtyChans = {}
 local function markChan(chan) if chan then dirtyChans[chan] = true end end
 
@@ -1070,7 +1069,7 @@ end
 --contract: holds the nest open across the caller's modifies; takes no lock, writes nothing
 --contract: not a gesture -- fires no reload, and an error propagates rather than printing
 -- A caller staging through many separate modifies (tm's rebuild pipeline) would otherwise reindex and
--- reproject the take once per stage. see design/archive/incremental-rebuild.md § 5
+-- reproject the take once per stage.
 function mm:batch(fn)
   enterNest()
   local ok, err = pcall(fn)

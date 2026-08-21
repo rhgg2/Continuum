@@ -126,7 +126,7 @@
   @fn projectEntry(spec, compileNodes, scratchGuid)  @ 953-1011
       -- pinMaps nest inline on each fx entry; an unmaterialised entry (id=nil) carries
       -- them too, and the applier resolves its guid through the freshly-stamped graph.
-  -- read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
+  -- read : wiringSnapshot -> userGraph
   @fn readGraph(snap, busMeta)  @ 1034-1428
       @invariant  folder parent reads as a source summing children; child midi takes wire into the parent  @ 1033
   @fn stampDecoration(g, tracks, busMeta)  @ 1434-1455

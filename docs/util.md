@@ -62,6 +62,14 @@ Not JSON, not Lua syntax:
 Parse failures at callsites are caught and treated as empty tables; the
 serialise side is strict.
 
+Two formats coexist because the two paths want different things. P_EXT and
+projext are the machine's hot path: `serialise` is compact and costs no
+`load()` per write, and nothing hand-edits it. The disk files
+(`continuum-config.lua`, `continuum-data.lua`) are the human's cold path:
+`prettySerialise` writes a Lua table literal that `load()` reads, so
+comments, whitespace and trailing commas come free. Neither form ever sits
+in the other's store, so neither constrains the other.
+
 ## Callback installation
 
 `util.installHooks(owner)` is the shared signal-keyed listener protocol. It

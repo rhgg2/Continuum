@@ -1,22 +1,22 @@
-@module keyDispatch  src=keyDispatch.lua  loc=86  mode=namespace  self=keyDispatch
+@module keyDispatch  src=keyDispatch.lua  loc=85  mode=namespace  self=keyDispatch
 
 # Invariants & contracts
-  @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds  @ 44
-  @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit  @ 45
-  @contract  first-hit wins; false declines, releases the key, and lets the page char queue see it  @ 46
-  @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()  @ 47
+  @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds  @ 43
+  @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit  @ 44
+  @contract  first-hit wins; false declines, releases the key, and lets the page char queue see it  @ 45
+  @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()  @ 46
 
 # Shapes
-  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord  @ 43
+  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord  @ 42
 
 # Imports
-  @const ImGui = 'imgui'  @ 9
+  @const ImGui = 'imgui'  @ 8
 
 # Module-level constants
-  @const keyDispatch = {}  @ 11
+  @const keyDispatch = {}  @ 10
 
 # Private functions
-  @fn isDigitMods(mods)  @ 22-24
+  @fn isDigitMods(mods)  @ 21-23
       -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
       -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
       -- (so the normal keychain walk proceeds). The prefix is NOT finished here
@@ -26,47 +26,47 @@
       -- chord open while typing a count is a natural reach, and any Ctrl-N or
       -- Super-N command binding is overridden for the duration of prefix mode.
       -- Shift/Alt still disqualify (Shift-digit emits a different char).
-  @fn handlePrefixCapture(cmgr, ctx)  @ 26-41
+  @fn handlePrefixCapture(cmgr, ctx)  @ 25-40
 
 # Public API (keyDispatch.*)
-  @api keyDispatch.dispatchKeys(state, cmgr, ctx)  @ 48-84
+  @api keyDispatch.dispatchKeys(state, cmgr, ctx)  @ 47-83
 
 # Uses (outbound edges)
-  @use call    ImGui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:57
-  @use call    ImGui.IsKeyDown  @ dispatchKeys:64
-  @use call    ImGui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:67
-  @use require imgui  @ <load>:9
+  @use call    ImGui.GetKeyMods  @ handlePrefixCapture:27 dispatchKeys:56
+  @use call    ImGui.IsKeyDown  @ dispatchKeys:63
+  @use call    ImGui.IsKeyPressed  @ handlePrefixCapture:29,33,36 dispatchKeys:66
+  @use require imgui  @ <load>:8
 
 # Calls (intra-file)
-  @call handlePrefixCapture  @ dispatchKeys:52
-  @call isDigitMods  @ handlePrefixCapture:30,34
+  @call handlePrefixCapture  @ dispatchKeys:51
+  @call isDigitMods  @ handlePrefixCapture:29,33
 
 # Unresolved receivers
-  @drop cmgr:appendPrefix  @ handlePrefixCapture:31,35
-  @drop cmgr:cancelPrefix  @ handlePrefixCapture:38
-  @drop cmgr:finishPrefix  @ dispatchKeys:71
-  @drop cmgr:invoke  @ dispatchKeys:73
-  @drop cmgr:isPrefixActive  @ handlePrefixCapture:27 dispatchKeys:70
-  @drop cmgr:keySpec  @ dispatchKeys:62
-  @drop cmgr:keychain  @ dispatchKeys:58
-  @drop cmgr:rootKeymap  @ dispatchKeys:58
+  @drop cmgr:appendPrefix  @ handlePrefixCapture:30,34
+  @drop cmgr:cancelPrefix  @ handlePrefixCapture:37
+  @drop cmgr:finishPrefix  @ dispatchKeys:70
+  @drop cmgr:invoke  @ dispatchKeys:72
+  @drop cmgr:isPrefixActive  @ handlePrefixCapture:26 dispatchKeys:69
+  @drop cmgr:keySpec  @ dispatchKeys:61
+  @drop cmgr:keychain  @ dispatchKeys:57
+  @drop cmgr:rootKeymap  @ dispatchKeys:57
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ImGui_GetBuiltinPath  @ 5
-  @field r Key_0  @ handlePrefixCapture:30
-  @field r Key_Escape  @ handlePrefixCapture:37
-  @field r Key_Slash  @ handlePrefixCapture:34
-  @field r Mod_Ctrl  @ isDigitMods:23
-  @field r Mod_Super  @ isDigitMods:23
-  @field r acceptCmds  @ dispatchKeys:49
-  @field w commandHeld  @ dispatchKeys:50,54,76,83
-  @field w consumed  @ dispatchKeys:50,54,76,83
-  @field w dispatchKeys  @ dispatchKeys:48
-  @field r pageSuppressed  @ dispatchKeys:58
-  @field r path  @ 8
-  @field w path  @ 8
-  @field r suppressKbd  @ dispatchKeys:49
+  @field r ImGui_GetBuiltinPath  @ 4
+  @field r Key_0  @ handlePrefixCapture:29
+  @field r Key_Escape  @ handlePrefixCapture:36
+  @field r Key_Slash  @ handlePrefixCapture:33
+  @field r Mod_Ctrl  @ isDigitMods:22
+  @field r Mod_Super  @ isDigitMods:22
+  @field r acceptCmds  @ dispatchKeys:48
+  @field w commandHeld  @ dispatchKeys:49,53,75,82
+  @field w consumed  @ dispatchKeys:49,53,75,82
+  @field w dispatchKeys  @ dispatchKeys:47
+  @field r pageSuppressed  @ dispatchKeys:57
+  @field r path  @ 7
+  @field w path  @ 7
+  @field r suppressKbd  @ dispatchKeys:48

@@ -1025,7 +1025,7 @@ function wm:targetState()
   return out
 end
 
------ read : wiringSnapshot -> userGraph (design/wiring-implicit-graph.md § Plan)
+----- read : wiringSnapshot -> userGraph
 
 -- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
 -- component classification (bus-aware + feedback quarantine). Node ids are rm ids. Pure.
@@ -1353,7 +1353,7 @@ local function readGraph(snap, busMeta)
   -- their emitted forward edges keep the component connected and feedbackSeeds tags it.
   for _, k in ipairs(cyclicOrder) do walkTrack(k, snap[k], true) end
   -- Floating islands live on scratch: walk it as a pure fx bin (no source rule), recovering
-  -- its fx + intra edges. design/wiring-implicit-graph.md § floating islands (option 3).
+  -- its fx + intra edges.
   if snap[SCRATCH_KEY] then walkTrack(SCRATCH_KEY, snap[SCRATCH_KEY]) end
   walkTrack(MASTER_KEY, snap[MASTER_KEY] or { trackKind = 'master', fx = {} })
 

@@ -38,9 +38,8 @@ local function arrange() return facade.get('arrange') end
 
 local function notHidden(evt) return not evt.hidden end
 
--- Leaf-edit facade: routes an event to 'member' (gm), 'parked' (tm fx off-take), or
--- 'plain' (tm) by position; colFor reads its self-describing column, kindAt the region
--- tag. Fallback, move, see design/group-aware-editing.md § Kind-keyed facade.
+-- Leaf-edit facade: colFor reads an event's self-describing column, kindAt the region tag, and the pair
+-- route it to 'member' (gm), 'parked' (tm fx off-take) or 'plain' (tm). see docs/trackerView.md § Backings and parked cells
 local colFor, kindAt   -- data-derived column + cell-kind helpers, defined below
 local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
 
@@ -2624,7 +2623,7 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
 end
 
 -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
--- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/archive/fx-freeze.md § Eligibility gates.
+-- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block.
 local function freezeRegionAtCursor()
   local uuid = tv:fxHostAtCursor()
   if uuid and tm:freezeEligible(uuid) then tv:freezeRegion(uuid) end
@@ -3612,7 +3611,7 @@ function tv:addExtraCol(type, cc)
   end
   ds:assign('extraColumns', extras)
   -- A cc column at a carrier's code relocates it on the ensuing rebuild; re-run
-  -- pa so the add-bank src follows the move. see design/archive/note-macros.md § Delta-code allocation
+  -- pa so the add-bank src follows the move.
   if type == 'cc' then pa:apply() end
 end
 
@@ -3975,7 +3974,7 @@ local rebuilding = false
 local lastEpochSig   -- projection-epoch signature carried from the last rebuild; guards the cell cache
 
 -- The (ppq,chan)->row projection is a pure function of viewContext's constructor inputs, so a
--- column's built cells stay valid iff these hold. see design/archive/dirty-channels.md § Phase B
+-- column's built cells stay valid iff these hold.
 local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)  -- luacheck: ignore 431
   local parts = { length, numRows, rpb, ppqPerRow, temperKey }
   for _, ts in ipairs(timeSigs) do
@@ -4032,7 +4031,7 @@ function tv:rebuild(takeChanged)
     local ppqPerRow = (resolution * 4 / denom) / rpb
 
     -- Snapshot each outgoing column's built cells keyed by its events table; B1 keeps a clean channel's
-    -- events table identical across rebuilds, so the hit below reuses cells. see design/archive/dirty-channels.md § Phase B
+    -- events table identical across rebuilds, so the hit below reuses cells. see docs/trackerManager.md § Derivation dirt: the gated spine
     local prevBuilt = {}
     for _, col in ipairs(grid.cols) do
       prevBuilt[col.events] = { cells = col.cells, overflow = col.overflow,

@@ -1,19 +1,5 @@
--- gridPane — the tracker grid's render + input core (see docs/trackerPage.md
--- for the model). Lifted out of trackerRender (P1, design/fx-patterns.md);
--- the host page wires tv + shared services and an inputAllowed() gate, and
--- keeps the toolbar, param palette, fx strip, commands and orchestration.
---
--- Three coordinate systems appear here; names declare which one is meant:
---   cell coords — integer grid cells, 0-indexed at the grid origin; headers
---     at negative y, the row-number gutter at negative x. Inclusive spans
---     are xLo..xHi / yLo..yHi. The visible grid is viewCols x viewRows.
---   screen px — cellW/cellH is the pixel size of one cell; gridOriginX/Y
---     places cell (0,0) on screen. Printer/painter and screenPainter only.
---   char stops — glyph offsets inside one column's cell text (col.stopPos).
---
--- A draw() frame: computeLayout, drawLaneStrip, computeLayout again (lane
--- drags may rebuild grid.cols), drawTracker. Mouse input inverts the same
--- transform the draw pass used (gridPainter.fromScreen).
+-- gridPane — the tracker grid's render + input core, lifted out of trackerRender; the host page wires tv +
+-- shared services and an inputAllowed() gate, and keeps the toolbar, palette, fx strip and commands. see docs/trackerPage.md
 
 --invariant: grid render + input only; tracker state lives in tv/ec, never cached here
 --invariant: col.x == nil is the visibility predicate; per-column draws must gate on it

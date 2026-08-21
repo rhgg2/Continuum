@@ -164,8 +164,8 @@ end
 
 ----- classify
 
--- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
--- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
+-- Post-hoc component classifier over read's domain (docs/wiring.md § Quarantine): validate's
+-- successor on the graphs REAPER allows, not just authorable ones.
 --contract: groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
 --shape: component = { nodes=id[] (sorted), reason=nil|'feedback'|'busAware' }
 function DAG.classify(userGraph, feedbackSeeds)
@@ -1377,7 +1377,7 @@ local function allocateOnce(tracks, nodes)
   end
 
   ----- midi register file (family-wide): the folder pipe makes a parent-send-connected set ONE bus domain.
-  -- Bus 0 = merged take aggregate; distinct crossings allocate family-unique. See design/archive/wiring-folders.md § Bus domains.
+  -- Bus 0 = merged take aggregate; distinct crossings allocate family-unique.
 
   -- A foldered child names its parent via parentFeed.sink (a folder conduit, never master).
   local parentOf = {}
@@ -1684,7 +1684,7 @@ local function allocateOnce(tracks, nodes)
   return out, meta
 end
 
------ capacity bisection — design/wiring-implicit-graph.md § Capacity
+----- capacity bisection
 
 -- Over-cap classes are bisected along their topo chain at the min-crossing gap (lowest-slot tie-break).
 -- Resource-triggered / bandwidth objective; distinct from split-at-node. see docs/DAG.md § Capacity bisection.
@@ -1773,7 +1773,7 @@ local function convertCrossing(spec, cross, nodes, trackOfFx)
 end
 
 -- Like bisect, but the down segment leaves the family: its folder feed and pipe crossings
--- go explicit; the pipe-keeping child retains piped crossings. See design/archive/wiring-folders.md § Bus domains.
+-- go explicit; the pipe-keeping child retains piped crossings.
 local function bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)
   local up, down, downKey, downSet = bisect(trackKey, spec, g)
   if isFolderFeed(down) then toExplicitFeed(down) end

@@ -42,7 +42,7 @@ local declarations = {
   { 'newTakeBeats',      4    },
   { 'laneStrip.rows',      4    },
   -- Freeze-to-group thinning: the vertical error the thinner may absorb, in the dest's own
-  -- unit (generators.destProfile). see design/archive/fx-freeze.md § Freeze to group
+  -- unit (generators.destProfile).
   { 'freezeThin.cents',  3     },
   { 'freezeThin.steps',  1     },
   -- boolean
@@ -403,7 +403,7 @@ local cm = {}
 fire = util.installHooks(cm)
 
 -- Project-tier config rides the projext-undo mirror like any document data;
--- global stays disk, outside undo (design/archive/projext-undo.md § Policy).
+-- global stays disk, outside undo.
 ps:declareUndoable{ slots = { 'config' } }
 
 -- cm's persisted tiers as one watcher group: fires once per undo tick that rewinds

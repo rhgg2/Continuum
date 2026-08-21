@@ -1,5 +1,5 @@
 -- paramAutomation.lua
--- Simple automation applier (design/cv.md § simple layer); bindings at ds take scope, realised via JSFX + bus sends + plinks.
+-- Simple automation applier; bindings at ds take scope, realised via JSFX + bus sends + plinks.
 
 --invariant: automation bus is 126 — 127 is wiring's parking bus, wiring allocates 0..125
 --invariant: authored (chan,lane) codes are track-unique across takes; bus codes project-unique

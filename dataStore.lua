@@ -117,7 +117,7 @@ end)
 ----- Watcher
 
 -- Project keys ride the projext-undo mirror as document data, except runtime
--- bookkeeping (guardedTrack would desync from live flags) — design/archive/projext-undo.md § Policy.
+-- bookkeeping (guardedTrack would desync from live flags).
 local PROJECT_PLAIN = { guardedTrack = true }
 
 local function projectUndoable(name)

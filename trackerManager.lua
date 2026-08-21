@@ -111,7 +111,7 @@ local function rawThenLogical(a, b)
 end
 
 -- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
--- then pitch, so an equal-onset seat holds across rebuilds. see design/archive/logical-column-order.md
+-- then pitch, so an equal-onset seat holds across rebuilds.
 local function noteColumnLess(a, b)
   if a.ppq ~= b.ppq then return a.ppq < b.ppq end
   local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
@@ -122,7 +122,7 @@ end
 local function sortNoteColumn(tbl) table.sort(tbl, noteColumnLess) end
 
 -- A writer that knows an onset splices its cell at the seat, keeping the lane ordered without a blunt
--- whole-column re-sort downstream. see design/interval-dirt.md § Phase 5.5
+-- whole-column re-sort downstream.
 local function insertNoteCell(events, cell)
   util.insertSorted(events, cell, noteColumnLess)
 end
@@ -151,7 +151,7 @@ local function setCell(cell, field, value)
 end
 
 -- A lane is disordered only when a raw->logical flip crossed two onsets; a cheap scan lets the flip
--- skip re-sorting the common already-ordered lane. see design/interval-dirt.md § Phase 5.5
+-- skip re-sorting the common already-ordered lane.
 local function isSorted(events)
   for i = 2, #events do
     if noteColumnLess(events[i], events[i - 1]) then return false end
@@ -160,14 +160,14 @@ local function isSorted(events)
 end
 
 -- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
--- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/archive/dirty-channels.md § Scheme
+-- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see docs/trackerManager.md § Derivation dirt: the gated spine
 local function dirtyChan(chan)
   if chan then dirtyChans[chan] = true; return end
   for i = 1, 16 do dirtyChans[i] = true end
 end
 
 -- Mid-pass seed append: the region/park reconcile's per-member dirt, after the flush already set the
--- channel. No-op once wholesale; collapses past the cap. see design/interval-dirt.md § phase 5
+-- channel. No-op once wholesale; collapses past the cap.
 local function seedDirty(chan, seed)
   local dirt = dirtyChans[chan]
   if dirt == true then return end
@@ -188,9 +188,8 @@ local function rawSeed(evt, verb)
            lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL }
 end
 
--- A region edit's real dirt is its members, discovered later by the park reconcile; here we seed one
--- trigger point per changed region so its channel's park scan runs and its fx producer wakes. Diff by
--- uuid against the last rebuild's set (create/remove/move/fx-change). see design/interval-dirt.md § phase 5
+-- A region edit's real dirt is its members, found later by the park reconcile; here we seed one trigger
+-- point per region the uuid diff changed (create/remove/move/fx-change), waking its park scan and fx producer.
 local function seedRegionEdit(newRegions)
   if not derivedInputs then dirtyChan(); return end
   local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
@@ -217,7 +216,7 @@ local function seedRegionEdit(newRegions)
 end
 
 -- An external/undo fxParked change (not tm's own flush -- that stash write is converged output): seed
--- each added member (newly parked) and removed member (restored). see design/interval-dirt.md § phase 5
+-- each added member (newly parked) and removed member (restored).
 local function seedParkedEdit(newParked)
   if not derivedInputs then dirtyChan(); return end
   local function key(m)
@@ -231,10 +230,8 @@ local function seedParkedEdit(newParked)
   for k, m in pairs(old) do if not new[k] then seedDirty(m.chan, parkSeed(m, 'restore')) end end
 end
 
--- Everything the pipeline derives from beyond the take itself. A dormant tracker hears nothing when
--- this changes: an undo rewinds take-scoped ds/cm storage while ps watches only the bound take's
--- slots, and the caches simply refill at the next setContext. So the rebind diffs it instead.
--- see design/archive/incremental-rebuild.md § The take-hash gate
+-- Everything the pipeline derives from beyond the take itself. Nothing signals when it changes under a
+-- dormant tracker, so the rebind diffs it instead. see docs/trackerManager.md § Dormant guard
 local function derivationInputs()
   return {
     trackerMode  = cm:get('trackerMode'),      swings       = cm:get('swings', { mergeTiers = true }),
@@ -658,7 +655,7 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
     util.add(ats, { ppq = evt.ppq, val = evt.val })
   end
   -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
-  -- column's order; bases pre-sorted, slices preserve order). see design/archive/deferred-reindex.md § Phase A
+  -- column's order; bases pre-sorted, slices preserve order).
   sortByPPQ(pas)
   local ccs = {}
   for cc, base in pairs(ccBases) do ccs[cc] = sliceCurve(base, startL, endL) end
@@ -929,11 +926,11 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
   end
 
   -- The pipeline's raw working set, read in place by the walk and its raw consumers
-  -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
+  -- (filtered at use); entries are live um records.
   function rawIndexFor(chan) return rawIndex[chan] end
 
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
-  -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
+  -- instead of rescanning columns.
   function fxHostsFor(chan) return fxHosts[chan] end
 
   -- Resolve a uuid to its live column cell via the seat stamp (byUuid.colEvt), so the fx-window cache
@@ -975,7 +972,7 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
     end
   end
   -- fx-host membership rides the index turnover: set on insert of a .fx note, cleared on removal, so
-  -- computeFxWindows never rescans columns to find hosts. see design/interval-dirt.md § Phase 5.5
+  -- computeFxWindows never rescans columns to find hosts.
   local function setFxHost(evt)
     if evt.evType ~= 'note' or not evt.uuid then return end
     if evt.fx then
@@ -1704,7 +1701,7 @@ function tm:requestRebuild() rebuildRequested = true end
 local computeFxWindows
 
 -- Rebuild output, not a cache: buildFreezeMaps replaces them wholesale each rebuild from the settled
--- census; absence = not a producer. see design/archive/fx-freeze.md § Eligibility gates
+-- census; absence = not a producer.
 local freezeEligibleByUuid = {}
 local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
 
@@ -1724,7 +1721,7 @@ local fxTargetsByProducer = {}
 local fxParkedByProducer = {}
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
--- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
+-- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
 local function buildFreezeMaps(census, windows)
   local producerChans, lanesByUuid = {}, {}
   for _, p in ipairs(census) do producerChans[p.chan] = true end
@@ -1798,7 +1795,7 @@ local function buildFxRealisation(census)
 end
 
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
--- which points get authored at all, rather than cutting a curve back. see design/archive/fx-freeze.md § Freeze to group
+-- which points get authored at all, rather than cutting a curve back.
 local function thinSeats(chan, windows)
   local index = rawIndexFor(chan)
   for _, w in ipairs(windows) do
@@ -1810,7 +1807,7 @@ local function thinSeats(chan, windows)
       local points   = {}
       for _, e in ipairs((isPb and index.pbs or index.ccs[w.cc]) or {}) do
         -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
-        -- and not freeze's to delete. groupMembers' `hidden` is this partition. see design/archive/fx-freeze.md § Freeze to group
+        -- and not freeze's to delete. groupMembers' `hidden` is this partition.
         if not e.derived and e.ppq >= startRaw and e.ppq < endRaw then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
@@ -1830,7 +1827,7 @@ local function thinSeats(chan, windows)
 end
 
 -- The material a caller mints a stock group from, gathered once the closing rebuild has settled it:
--- live column events, logical frame, no raw sidecar. see design/archive/fx-freeze.md § Freeze to group
+-- live column events, logical frame, no raw sidecar.
 local function groupMembers(frozen, windows, promotedUuids)
   local members = {}
   for _, uuid in ipairs(promotedUuids) do
@@ -1853,7 +1850,7 @@ local function groupMembers(frozen, windows, promotedUuids)
 end
 
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
--- windows all convert to authored form in one flush. see design/archive/fx-freeze.md § Atomicity
+-- windows all convert to authored form in one flush.
 local function freezeRegion(uuid, toGroup)
   -- Settle first: the census reads committed state, so a staged producer would be invisible to it
   -- and then committed by our own flush. see docs/trackerManager.md § Park window census
@@ -1936,7 +1933,7 @@ local function freezeRegion(uuid, toGroup)
   -- seeding it here is what carries its parked PAs along through hostDropped below.
   if hostSpec and destroysHost then droppedHosts[uuid] = true end
   -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
-  -- behind. Host resolution is hostParked's, over live render cells. see design/archive/fx-freeze.md § Freeze to raw
+  -- behind. Host resolution is hostParked's, over live render cells.
   local function hostDropped(pa)
     for _, cell in ipairs(channels[pa.chan].parked or {}) do
       if cell.pitch == pa.pitch and pa.ppq >= cell.ppq and pa.ppq < cell.endppqC then
@@ -2420,7 +2417,7 @@ local function rebuildInternals()
       if reswungPpq ~= note.ppq then reseats.assign(note, { ppq = reswungPpq }) end
       note.ppq = reswungPpq
     end
-    -- Columns are logical-born: every seat projects at ingestion. see design/rebuild-pipeline.md § The frame law
+    -- Columns are logical-born: every seat projects at ingestion.
     projectEvent(note, note.chan)
     if dirtyChans[note.chan] ~= true and not staleSwing[note.chan] then
       shedLane(note.chan, note.lane)
@@ -2432,7 +2429,7 @@ local function rebuildInternals()
     stampColEvt(note)
   end
   -- Raw and logical onset order diverge under swing or an authored swap; re-sort just the appended
-  -- lanes that landed disordered. see design/interval-dirt.md § Phase 5.5
+  -- lanes that landed disordered.
   for col in pairs(builtCols) do
     if not isSorted(col.events) then sortNoteColumn(col.events) end
   end
@@ -2499,7 +2496,7 @@ local function spliceCcCell(live, ccWrites)
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
--- Seeks the maintained um index (current mid-pipeline), not mm. See design/archive/interval-dirt-v2.md § 1, design/decisions.md § 2026-07-21.
+-- Seeks the maintained um index (current mid-pipeline), not mm. See design/decisions.md § 2026-07-21.
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
@@ -3231,7 +3228,7 @@ end
 ----- Raw working set
 
 -- The pass's raw note view is um's index, read in place (entries are live um records, colEvt
--- their seat stamp), filtered at use to authored, logically seated notes. see design/interval-dirt.md § Phase 4.5
+-- their seat stamp), filtered at use to authored, logically seated notes.
 local function walkable(note) return not note.derived and note.ppqL ~= nil end
 
 -- One-pass merge of the pre-sorted index list (filtered) with a small sorted extras list;
@@ -3515,7 +3512,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
                   pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
 
   -- reconcileFx's sink: ops cross to the tail walk as inspectable data, not staged batch state --
-  -- the walk seats them in its own batch. see design/archive/rebuild-commit-cadence.md § D4
+  -- the walk seats them in its own batch.
   local noteOps = fxOut.noteOps
   local noteOpsSink = { del = function(e)    util.add(noteOps.dels, e)    end,
                         add = function(spec) util.add(noteOps.adds, spec) end }
@@ -3630,7 +3627,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     local seeded, emitScope = {}, {}
     if gated then dirtyRows = seedRowsFor(dirt) end
     -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
-    -- noteExisting walk to the first keep. see design/archive/interval-dirt-v2.md § 5
+    -- noteExisting walk to the first keep.
     local function keptFor()
       if not keptById then
         keptById = {}
@@ -3653,7 +3650,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
           util.add(predicted, kept); keptFx[kept] = true
         end
         -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
-        -- vanished window would read them as authored pbs. see design/interval-dirt.md § commit 4
+        -- vanished window would read them as authored pbs.
         if generators.continuousTargets(producer.fx).pb then
           util.add(fxOut.pbChains[chan], { window = { producer.window[1], producer.window[2] }, kept = true })
         end
@@ -3663,7 +3660,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     end
 
     -- Producer enumeration precedes every run: the continuous-gate scopes below classify each
-    -- producer against the full set, so the set must exist first. see design/interval-dirt.md § phase 5
+    -- producer against the full set, so the set must exist first.
     local producers = {}
 
     -- Note producers. Only augment hosts (continuous kinds) remain on-take -- a discrete-replace
@@ -3703,7 +3700,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- reconcile clip to it. Clean windows never enter ccExisting, so their seats keep untouched.
     if gated then
       -- Hold-stream reach: authored pb/cc breakpoints and lane-1 detune hold forward past window
-      -- edges, invisible to window-local seeds. see design/interval-dirt.md § Implementation plan, commit 4
+      -- edges, invisible to window-local seeds.
       local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
       for _, s in ipairs(dirt) do
         if s.pitch == nil or s.lane == 1 then
@@ -3792,7 +3789,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     fxNotesByProducer[chan] = byProducer
 
     -- cc emission: fold (foldChains) into markerless seats, clipped to the emit scope; half-open --
-    -- the closing value belongs to the kept side. see design/interval-dirt.md § Implementation plan, commit 3
+    -- the closing value belongs to the kept side.
     for cc, recs in pairs(ccChains) do
       local base = ccBases[cc] or {}
       if #base == 0 then
@@ -3830,7 +3827,6 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
   for chan = 1, 16 do
     -- Frozen: derived notes/CCs stand untouched in mm; leave noteLive empty so tails/pbs/pcs skip too.
-    -- see design/archive/dirty-channels.md § Phase A
     if dirtyChans[chan] then expandChannel(chan) end
   end
   return fxOut
@@ -3941,7 +3937,7 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   end
 
   -- Onset settlement: only a disturbed note collides, onto its same-pitch predecessor; a landed nudge
-  -- marks itself disturbed so the cascade carries forward. see design/interval-dirt.md § Phase 4
+  -- marks itself disturbed so the cascade carries forward.
   local anyNudge, lastByPitch = false, {}
   withDeferredSort(function()
     for _, e in ipairs(notes) do
@@ -4097,7 +4093,7 @@ local function seatMatches(indexList, extras, seed)
 end
 
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
--- shared settle/bound rules -- no whole-channel traversal. see design/interval-dirt.md § Phase 4.75
+-- shared settle/bound rules -- no whole-channel traversal.
 local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, takeLen, res,
                              clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
@@ -4199,7 +4195,7 @@ local function rebuildTails(noteLive, noteOps)
   local res = mm:resolution()
   local clampWrites = mmBatch()
   -- The walk's own batch, seeded from fx expansion's existence ops -- a fresh spec is unrealised during the walk, so the
-  -- clip mutates it in place, reaching mm once already clipped. see design/archive/rebuild-commit-cadence.md § D4
+  -- clip mutates it in place, reaching mm once already clipped.
   local tailWrites = mmBatch()
   for _, e in ipairs(noteOps.dels) do tailWrites.del(e) end
   for _, spec in ipairs(noteOps.adds) do tailWrites.add(spec) end
@@ -4268,7 +4264,7 @@ local DUAL_POINT_TICK = 1
 local function rebuildPbs(fxOut, extraColumns)
   local noteLive, pbChains, pbBase, pbScope = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase, fxOut.pbScope
   -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
-  -- .notes only, so the head snapshot is current for this. see design/rebuild-pipeline.md § The pre-phase
+  -- .notes only, so the head snapshot is current for this.
   local extras = extraColumns or {}
 
   perf.start('gather')
@@ -4295,7 +4291,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Lane-1 detune queries over the note index union liveLane1, by binary seek -- the whole-channel
-  -- view is gone; each query hits the index and the derived stream direct. see design/archive/interval-dirt-v2.md § 3
+  -- view is gone; each query hits the index and the derived stream direct.
   local function lane1DetuneAt(chan, ppq)
     local notes = rawIndexFor(chan).notes
     local i = firstAfter(notes, ppq) - 1        -- last index at or before ppq
@@ -4357,7 +4353,7 @@ local function rebuildPbs(fxOut, extraColumns)
   local function replaceWindows(chan)
     local lim = pbLim()
     -- Gate split: live ranges (inside the pb emit scope) fold to bps; kept ranges are recognition-
-    -- only -- their seats stand on wire. see design/interval-dirt.md § Implementation plan, commit 4
+    -- only -- their seats stand on wire.
     local emitSpans = pbScope[chan]   -- nil = ungated: every range is live
     local liveRecs = {}
     for _, rec in ipairs(pbChains[chan]) do
@@ -4423,7 +4419,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
-  -- Extents come by seek, ahead of the gather. see design/archive/interval-dirt-v2.md § 3
+  -- Extents come by seek, ahead of the gather.
   local function seatScope(chan, dirt, replaceWins, derivedLane1)
     if dirt == true then return nil end
     local spans = {}
@@ -4476,7 +4472,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Replace windows + seat spans per dirty chan, computed ahead of the gather. Fresh (non-kept)
-  -- derived lane-1 output ungates the channel (seatSpans nil). see design/archive/interval-dirt-closing.md § 1
+  -- derived lane-1 output ungates the channel (seatSpans nil).
   local winsByChan, seatSpansByChan = {}, {}
   for chan = 1, 16 do
     local dirt = dirtyChans[chan]
@@ -4500,7 +4496,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone still
-  -- names its source; origShape is held because the pass rewrites shape. see design/archive/interval-dirt-v2.md § 3
+  -- names its source; origShape is held because the pass rewrites shape.
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then
@@ -4520,7 +4516,7 @@ local function rebuildPbs(fxOut, extraColumns)
   local gridStep = ccGridStep()
 
   -- Seat the lane-1 detune stream, match absorbers, and stage the consolidated assign feeding the
-  -- projection below. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
+  -- projection below. Clean chans skip it wholesale -- I8: rebuild is a fixpoint.
   local function deriveChan(chan, pbs, replaceWins, seatSpans)
     perf.start('seats')
     local replaceWinAt, inSeatWindow, inKeptRange =
@@ -4546,7 +4542,7 @@ local function rebuildPbs(fxOut, extraColumns)
       return inKeptRange(ppq)
     end
     -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
-    -- generates no seat here; those kept-boundary seats carry from the prior column. see design/archive/interval-dirt-v2.md § 3
+    -- generates no seat here; those kept-boundary seats carry from the prior column.
     local fenced = {}   -- raw ppq -> true: carried (identity refresh via pbEntryByRaw), not projected fresh
     for i = #pbs, 1, -1 do
       if fencedPb(pbs[i].ppq) then fenced[pbs[i].ppq] = true; table.remove(pbs, i) end
@@ -4563,7 +4559,7 @@ local function rebuildPbs(fxOut, extraColumns)
     end
 
     -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
-    -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs. see design/archive/interval-dirt-v2.md § 3
+    -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs.
     local realPbs, pbEntryByRaw = {}, {}
     for _, entry in ipairs(rawIndexFor(chan).pbs) do
       pbEntryByRaw[entry.ppq] = entry
@@ -4809,7 +4805,7 @@ local function rebuildPbs(fxOut, extraColumns)
         util.add(pbColEvents, pb)
       end
       -- Carry the whole out-of-scope remainder verbatim -- re-deriving from the wire would quantise through
-      -- centsToRaw. Each refreshes uuid/realised since a carried event predates its committed uuid. see design/archive/interval-dirt-v2.md § 3
+      -- centsToRaw. Each refreshes uuid/realised since a carried event predates its committed uuid.
       for _, evt in ipairs(priorPbCol and priorPbCol.events or {}) do
         local carry = evt.ppqRaw and (not inSpans(seatSpans, evt.ppqRaw) or fenced[evt.ppqRaw])
         local entry = carry and pbEntryByRaw[evt.ppqRaw]
@@ -4834,7 +4830,7 @@ end
 ----- Rebuild sample stamp
 
 -- The bearing rule: under trackerMode every note bears a sample, stamped once from the onset PC;
--- inheritance freezes at stamp time. Gated on dirtyChans (seed|true, see :68). See design/archive/interval-dirt-closing.md § 2
+-- inheritance freezes at stamp time. Gated on dirtyChans (seed|true, see :68).
 local function stampSamples()
   if not cm:get('trackerMode') then return end
   local stampWrites = mmBatch()
@@ -4865,7 +4861,7 @@ end
 ----- Rebuild PCs
 
 -- Seed closure for PC synthesis: each seed onset's [onset, next onset) span, both frames.
--- nil = wholesale (also forced by fresh derived output). see design/archive/interval-dirt-closing.md § 2
+-- nil = wholesale (also forced by fresh derived output).
 local function pcSeedSpans(chan, dirt, noteLive)
   if dirt == true then return nil end
   for _, w in ipairs(noteLive) do
@@ -4899,8 +4895,8 @@ local function rawCoverSpans(spans)
   return mergeSpans(raw)
 end
 
--- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans;
--- see design/archive/interval-dirt-closing.md § 2 for the filter chain and out-of-span guarantee.
+-- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records,
+-- writes and the column splice all clip to them, so out-of-span PCs stand.
 local function rebuildPCs(noteLive)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
@@ -5035,7 +5031,7 @@ local function rebuildPipeline(didReload)
   perf.stop('prevWindows')
 
   -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
-  -- the previous rebuild's note lanes. Sibling maps, one site. see design/archive/fx-freeze.md § Freeze to group
+  -- the previous rebuild's note lanes. Sibling maps, one site.
   perf.start('freezeMaps'); buildFreezeMaps(settledCensus, settledWindows); perf.stop('freezeMaps')
   buildFxTargets(settledWindows)
   buildFxRealisation(settledCensus)   -- last: it gathers what the passes above each keyed by producer
@@ -5072,7 +5068,7 @@ function tm:rebuild(takeChanged)
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
   -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
-  -- gated stage below skips clean chans so the carried columns stand. see design/archive/dirty-channels.md § Phase B
+  -- gated stage below skips clean chans so the carried columns stand.
   local prevChannels = channels
   channels = {}
   shedLanes = {}   -- per-pass memo: a lane shed on the last pass must shed again on this one
@@ -5175,7 +5171,6 @@ do
   mm:subscribe('reload', function(info)
     mmReloaded = (info and info.wholesale) or false
     -- Own pipeline commits are converged output, not dirt (I8).
-    -- see design/archive/dirty-channels.md § Scheme item 1
     if not rebuilding and info and info.chans then
       absorbReloadDirt(info.chans)
     end
@@ -5205,7 +5200,7 @@ do
   -- arrive as dataChanged. swing diffs its map; the rest force a full rebuild.
   ds:subscribe('dataChanged', function(change)
     -- Pipeline's own ds:assigns during rebuild (fxParked/extraColumns) are converged
-    -- output, not edits; re-entering marks all 16 dirty and breaks B1. see design/archive/dirty-channels.md § Phase B
+    -- output, not edits; re-entering marks all 16 dirty and breaks B1.
     if rebuilding then return end
     if bindingTake or not cm:boundTake() then return end
     if change.name == 'swing' then

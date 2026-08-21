@@ -138,7 +138,7 @@
       -- rows. see docs/trackerRender.md § An interval takes two rows
   @fn emptyBody(kind)  @ 1079-1082
       -- The strip's pattern-body fields (ostinato): a summary label + launch into the checkout editor,
-      -- which writes the edited body back through setFxField. see design/fx-patterns.md § P3.5
+      -- which writes the edited body back through setFxField.
   @fn patternSummary(body)  @ 1084-1088
   @fn launchPattern(host, index, fd, entry)  @ 1090-1096
   @fn destLabel(dest)  @ 1100

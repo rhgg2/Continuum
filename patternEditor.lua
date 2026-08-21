@@ -68,7 +68,7 @@ local gridPane = util.instantiate('gridPane', {
 ----- Editing surface -- bind the pattern-editing subset of the tracker keymap
 
 -- tv already registered the tracker command bodies against this cmgr; unbound commands are
--- inert, so only the editing subset below is live. see design/fx-patterns.md § Editing surface
+-- inert, so only the editing subset below is live.
 local EDIT_COMMANDS = {
   'cursorUp', 'cursorDown', 'cursorLeft', 'cursorRight', 'colLeft', 'colRight',
   'channelLeft', 'channelRight', 'goTop', 'goBottom', 'pageUp', 'pageDown',
@@ -107,10 +107,8 @@ end
 
 ----- Materialise the stored body onto the bound checkout take
 
--- Specs are park-shaped (logical-only). Route through the authoring add -- the same
--- tm:addEvent tv's edit.add reaches -- so materialised notes are editable exactly like
--- typed ones: addEvent takes logical ppq, stamps ppqL/endppqL, files a uuid. rpb rides
--- like an authored note (tv stamps currentRpb); flush commits. see design/fx-patterns.md § Editing surface
+-- Specs are park-shaped (logical-only). Route through the authoring add -- the same tm:addEvent tv's edit.add
+-- reaches -- so materialised notes are editable exactly like typed ones: logical ppq in, ppqL/endppqL and a uuid stamped, rpb like an authored note (tv stamps currentRpb), flush commits.
 local function materialiseNotes(specs)
   local rpb = cm:get('rowPerBeat')
   for _, s in ipairs(specs or {}) do
@@ -150,10 +148,8 @@ end
 
 ----- Write-through commit -- persist checkout edits back to the shared store
 
--- Read channel 1 back through tm and rebuild the whitelisted body: notes drop fx/chan and fix
--- lane 1, a curve normalises the pb column's cents to bipolar. lengthPpq/root ride the open
--- snapshot (no bound command edits them); rpb reads live, so a toolbar change persists with the
--- body rather than dying with the checkout take. The field pick IS the whitelist. see design/fx-patterns.md § checkout model
+-- Read channel 1 back through tm and rebuild the whitelisted body -- the field pick IS the whitelist: notes drop fx/chan and fix lane 1, a curve normalises the pb column's cents to bipolar.
+-- lengthPpq/root ride the open snapshot (no bound command edits them); rpb reads live, so a toolbar change persists with the body rather than dying with the checkout take.
 local function readbackBody()
   local cols = (tm:getChannel(1) or {}).columns or {}
   if editBody.kind == 'curve' then
@@ -253,7 +249,7 @@ function pe:open(body, commit, poly)
     -- pe:draw renders its own full-size curve editor; suppress gridPane's auto lane strip so the
     -- global-tier `laneStrip.visible` toggle can't gate the curve pane. see docs/patternEditor.md
     cm:set('take', 'laneStrip.visible', false)
-    -- Substrate column per domain, display flags, then body. see design/fx-patterns.md § Curve signature
+    -- Substrate column per domain, display flags, then body.
     local col
     if body.domain == 'cc' then
       col = { notes = 0, ccs = { [CURVE_CC] = true } }
@@ -327,8 +323,8 @@ local function maxLane(body)
   return m
 end
 
--- Load offers only bodies this editor can materialise: matching kind, curve domain, and (mono) single-lane.
--- See design/fx-patterns.md § P4 -- polish for the poly-Load gate rationale.
+-- Load offers only bodies this editor can materialise: matching kind, curve domain, and (mono) single-lane,
+-- so lanes 2..N are never silently crushed onto lane 1.
 local function shelfMatches(body)
   if body.kind ~= editBody.kind then return false end
   if editBody.kind == 'curve' then return (body.domain or 'normalized') == editBody.domain end

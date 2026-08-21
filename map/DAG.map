@@ -107,7 +107,7 @@
       · midi register file (family-wide): the folder pipe makes a parent-send-connected set ONE bus domain.
       · per-track midi post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice.
       · bracket post-pass — see docs/DAG.md § allocate
-  -- capacity bisection — design/wiring-implicit-graph.md § Capacity
+  -- capacity bisection
   @fn bisect(trackKey, spec, g)  @ 1696-1742
       -- Cut spec at gap g: fxOrder[1..g] keeps identity; [g+1..] becomes an emergent newTrack.
       -- Conns crossing the cut become a forward send; master feed / mainSend follow their producer.
@@ -121,7 +121,7 @@
       -- Bus-0 merges (consumer = parent source node) cannot be reproduced as explicit sends; reaching one here asserts.
   @fn bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)  @ 1777-1789
       -- Like bisect, but the down segment leaves the family: its folder feed and pipe crossings
-      -- go explicit; the pipe-keeping child retains piped crossings. See design/archive/wiring-folders.md § Bus domains.
+      -- go explicit; the pipe-keeping child retains piped crossings.
   @fn evictMember(spec, nodes, trackOfFx)  @ 1793-1801
       -- Pull a leaf member out of its family without splitting: folder feed and crossings go
       -- explicit. Used when members are too short to bisect internally.
@@ -137,8 +137,8 @@
   @api DAG.validate(userGraph)  @ 62-163
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil  @ 61
   @api DAG.classify(userGraph, feedbackSeeds)  @ 171-216
-      -- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
-      -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
+      -- Post-hoc component classifier over read's domain (docs/wiring.md § Quarantine): validate's
+      -- successor on the graphs REAPER allows, not just authorable ones.
       @contract  groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones  @ 169
   @api DAG.targetTracks(ctx)  @ 922-932
       -- Realisation pass: turns the structural ctx into per-track specs (fxOrder,

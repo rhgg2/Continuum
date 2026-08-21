@@ -28,6 +28,9 @@ rm works in two spaces:
   cells. All grid drawing goes through the `printer` helper, which folds
   the pixel conversion into one place.
 
+Inside one column's cell text a third set of offsets applies: char stops,
+`col.stopPos`, which the cursor indexes (trackerView.md § Cursor & selection).
+
 `gridX`/`gridY` are the per-cell pixel size; `gridOriginX`/`gridOriginY`
 is the per-frame pixel anchor of cell `(0, 0)`. The grid *data* starts
 at `(0, 0)`; header rows sit at negative y (`-HEADER = -3`), the
@@ -39,12 +42,17 @@ Visible columns are laid out afresh each frame, starting from
 would overflow `gridWidth`. Everywhere downstream, `col.x == nil`
 is the visibility predicate.
 
-`computeLayout()` runs once per frame between `drawToolbar` and the
-draw routines. It establishes char metrics, viewport dimensions, and
+`computeLayout()` establishes char metrics, viewport dimensions, and
 calls `layoutColumns`, leaving `chanX/chanW/chanOrder/totalWidth` as
 factory locals shared by `drawLaneStrip` and `drawTracker`. `gridHeight`
 already accounts for the lane strip's `laneStrip.rows`, so the tracker
-sees the row count it actually gets to fill.
+sees the row count it actually gets to fill. It runs twice per frame,
+once before the lane strip and again after it, because a lane drag can
+rebuild `grid.cols` under the layout the first pass computed.
+
+Mouse input inverts the same transform the draw pass used
+(`gridPainter.fromScreen`), so a click resolves against the geometry the
+frame actually painted.
 
 ## Paint order
 

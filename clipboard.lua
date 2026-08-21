@@ -240,9 +240,8 @@ local function collect()
   return clip
 end
 
--- One footprint cell per destination row, fed to aliases() so a paste covering
--- >=2 instances of one group is refused in global mode (decision 5). Mirrors the
--- shiftEvents gate; see design/group-aware-editing.md § Injectivity predicate.
+-- One footprint cell per destination row, fed to aliases() so a paste covering >=2 instances of one
+-- group is refused in global mode. Mirrors the shiftEvents gate; see docs/groupManager.md § Block-shift injectivity.
 local function refusePaste(chan, evType, lane, cc, startRow, numRows)
   local ctx, cells = getCtx(), {}
   for r = startRow, startRow + numRows - 1 do

@@ -1,5 +1,5 @@
 -- Every page scope's keymap in one place — cross-page coherence auditable here;
--- the fx-pattern mini cmgr binds a filtered tracker subset (design/fx-patterns.md P1).
+-- the fx-pattern mini cmgr binds a filtered tracker subset.
 
 --shape: { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }
 

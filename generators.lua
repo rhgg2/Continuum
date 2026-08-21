@@ -1,6 +1,5 @@
--- Note-macro generators: pure expansions of per-note `fx` intent into derived realisation. They never
--- touch swing, raw pb or REAPER -- the seam rounds ppq -> raw, cents -> pb. see design/archive/note-macros.md
--- See docs/generators.md for the model.
+-- Note-macro generators: pure expansions of per-note `fx` intent into derived realisation. They never touch
+-- swing, raw pb or REAPER -- the seam rounds ppq -> raw, cents -> pb. See docs/generators.md for the model.
 
 -- @noindex
 
@@ -15,8 +14,8 @@
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, glyph, defaults, fields }
 --shape: field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', signed?, frac? }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
--- The copy shelf (design/fx-patterns.md § P4): named copies of pattern-param bodies, Save/Load
--- only. Params store bodies inline (§ P3.5); nothing references the shelf by name.
+-- The copy shelf (docs/patternEditor.md § The copy shelf): named copies of pattern-param bodies,
+-- Save/Load only. Params store bodies inline; nothing references the shelf by name.
 --shape: fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, rpb=rowsPerBeat, root?=midiPitch, specs?={ {lane,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }
 -- A pattern field descriptor may carry poly=true (per-kind, not per-body) to let a note editor author
 -- overlapping lanes; absent/false pins every spec to lane 1. chordStamp sets it (a chord's voices).
@@ -561,7 +560,7 @@ function generators.parksNotes(region)
 end
 
 -- Continuous targets a chain touches: set keyed 'pb' | <cc number>, empty for a pure-note
--- chain -- phase 5's per-target scopes key off it. see design/interval-dirt.md § phase 5
+-- chain -- phase 5's per-target scopes key off it.
 function generators.continuousTargets(fx)
   local targets = {}
   for _, params in ipairs(fx or {}) do
@@ -611,7 +610,7 @@ end
 ----- Curve thinning (freeze to group)
 
 -- A shape governs the segment to its *right*, so a point is safe to lose only if it and its
--- predecessor both ride linearly; a missing shape counts as non-linear. see design/archive/fx-freeze.md § Freeze to group
+-- predecessor both ride linearly; a missing shape counts as non-linear.
 local function ridesLinear(p) return p.shape == 'linear' end
 
 -- Douglas-Peucker, measuring vertical deviation rather than perpendicular distance: perpendicular

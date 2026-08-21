@@ -1,6 +1,5 @@
--- Modal-hosted key dispatch: prefix capture + the keychain walk. Extracted from
--- coordinator so the fx-pattern mini tracker modal can drive the same walk
--- against its own cmgr. see design/fx-patterns.md § Input routing
+-- Modal-hosted key dispatch: prefix capture + the keychain walk. Extracted from coordinator so the
+-- fx-pattern mini tracker modal can drive the same walk against its own cmgr.
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
