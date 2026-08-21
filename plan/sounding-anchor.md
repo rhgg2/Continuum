@@ -25,12 +25,14 @@
    was born into, read once off `answer.displacement`, charged by the pull
    and carried in the merge key. — landed 2026-08-21, three commits.
 5. **Phase 5 — The box judged** (§ Open) — the pairwise box measured against
-   the span box again, now that an ambient rest holds a step-class near what
-   the music has reached; the wandering it cost was the count against it, and
-   the dials it moves are phase 6's to settle.  ← in flight
-6. **Phase 6 — The dials remeasured** (§ The dials, § Open) — the beam's
-   width and the walk's cap re-swept with the gate gone, harmonic lock's
-   opening value and useful span, and a value for `RECENT`.
+   the span box again, and the span box keeps the objective. Charging pairs
+   barely moves the wolf count and loosens what holds a spelling together, so
+   a passage drifts further under every pairwise reading; the widest-pair box
+   was listened to and rejected. — answered 2026-08-21, no production change.
+6. **Phase 6 — The dials remeasured** (§ The dials, § Open) — the ambient's
+   share, the beam's width and the walk's cap re-swept with the gate gone,
+   harmonic lock's opening value and useful span, and a value for `RECENT`.
+   ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -41,15 +43,20 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+**The ambient dial** — brief in `plan/IMPL.md`. (design § Open, the item
+asking whether the ambient wants a dial of its own)
 
 ## Queued (current phase; one-liners)
 
-1. **Revive the pairwise box spike and re-measure under the ambient rest** —
-   `tests/spikes/springs/pairwise_box.lua` calls `pullCost`, `ties` and
-   `relax` at their pre-rest signatures, so its own `solve` wants the
-   answer's rests threaded through before it runs; then both boxes on
-   `take2` at matched dials, for the wandering a step-class does, the
-   sounding pairs a comma or more out by family, the C7 crossing and the
-   purity cliff. The spike's header carries the new record.
+2. **Land the box's verdict** — the spike is revived and carries the record
+   (uncommitted); what remains is the doc side. Design § Open's item asking
+   whether the box should charge pairs rather than spans becomes a settled
+   section: the wolf count barely separates the boxes, the drift separates
+   them plainly, and the weighted widest-pair box was listened to and
+   rejected. § The dials' lapsed-figures paragraph stands.
+3. **The beam's width and the walk's cap re-swept** with the reach gate gone
+   — `tests/spikes/springs/cap_sweep.lua` sweeps the pair; what an author
+   buys past a beam of twelve is what is open.
+4. **Harmonic lock's opening value and useful span**, and a value for
+   `RECENT` (§ The dials, § Open).
 

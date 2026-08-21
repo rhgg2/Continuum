@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-21** — The box keeps charging what a sonority's coords span on each axis, rather than
+  what its pairs state. Every pair-height norm from L1 to L-infinity, weighted by presence or not,
+  moves the wolf count on take2's two hundred and fifty-eight notes by three or four pairs, which is
+  inside what a five per cent change of harmonic lock moves it; and each of them loosens what holds
+  a spelling together, a step-class wandering 27c under the span box, 42c under the widest pair and
+  61c under the sum, with the passage's centre walking after it. The weighted widest-pair box led
+  the family on the count, went into the tree, and was rejected by ear: the top line pulls sharp and
+  drags the rest with it.
+
 - **2026-08-21** — A rest joins the walk's merge key, one figure per open strand -- those an onset
   leaves sounding -- rather than one per strand something later still names. Two answers agreeing in
   cents can owe quite different pulls, the strands that fixed a rest having closed and left the key
