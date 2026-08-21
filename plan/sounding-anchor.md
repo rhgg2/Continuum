@@ -30,31 +30,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-21 sonority: rest a strand where the sonority before it stood (§ The ambient reference)
 - 2026-08-21 sonority: relax against a rest, not zero (§ The ambient reference)
 - 2026-08-21 docs: give sonority presence, and a spring its weight (§ Presence, § Springs price beating)
 - 2026-08-21 sonority: count a member held by recency for half (§ Presence, § Open)
-- 2026-08-20 sonority: give a member a presence and a spring a weight (§ Presence, § Springs price beating)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. A strand's rest is the sonority it was born into. `extend` reads a
-   rest for each strand the onset first names — the presence-weighted
-   mean of the other members' displacements, taken off
-   `answer.displacement` before the onset relaxes, and zero where the
-   onset names no other member — and carries the rests on the answer,
-   never rewriting one. `sonority.search` seeds an answer with none and
-   threads them into `relax` and both `pullCost` calls. Every strand born
-   at the first onset rests at zero, the members beside it standing
-   there. The beam is untouched: `joinCost` ranks by box and springs, and
-   the pull is no part of either. Red-first: a strand entering after the
-   passage has drifted rests at that drift, and a detached line carries
-   its drift forward note by note rather than settling back to its seat.
-   The five-part take's settled cents move, so its spec expectations and
-   the figures `docs/sonority.md` § What it gives up quotes are re-taken.
 
 1. The rest joins the merge key. `answerKey` keys a rest beside the cents
    it already keys over the strands ahead, so two answers agreeing in

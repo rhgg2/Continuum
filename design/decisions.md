@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-21** — A strand's rest is the presence-weighted mean of the sonority before the one it
+  is born into, read off the displacements its answer carried into that onset and frozen there.
+  Chosen over the sonority it joins, which returns a block chord change to the page: where every
+  voice moves at once, no member of a strand's own sonority has been placed yet, and an unplaced
+  member stands at zero, which states only where the page is. Frozen rather than live, since a pull
+  charged against a live mean of the same displacements leaves a whole passage free to slide at no
+  cost. The walk's cap moves from four to six with it: at four the five-part take took a road whose
+  comma ran off into drift, standing 23.2 cents from its seat at worst where five abreast and upward
+  stand 11.9. The argument is design/sounding-anchor.md § The ambient reference and § Fixed at
+  birth, the model docs/sonority.md § The pull and § The solve.
+
 - **2026-08-21** — A member of a sonority carries a presence — full where its strand sounds, a half
   where recency alone holds it — and a spring's weight is the product of its two members', so a pair
   falls off once for each silence. Chosen over charging every member alike, which let a released

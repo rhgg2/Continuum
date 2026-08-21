@@ -281,35 +281,37 @@ charged by whether its two members sound together.**
 ## The ambient reference
 
 1. A strand no longer rests at its seat. Its **rest** is where the music
-   was sitting when its note arrived — the mean displacement of the other
-   members of the sonority it joins, each weighted by its presence — and
-   `sonority.pullCost` charges the strain of `displacement − rest`, that
-   gap over fifty (§ The pull in cents), rather than the strain of the
-   displacement alone. A strand does not speak for where it should itself
-   stand, so a mean over no other member is zero.
+   was sitting when its note arrived — the presence-weighted mean
+   displacement of the members of the sonority before the one it is born
+   into — and `sonority.pullCost` charges the strain of `displacement −
+   rest`, that gap over fifty (§ The pull in cents), rather than the
+   strain of the displacement alone.
 
-1. The mean runs over the other members alike, the sounding and the
-   merely recent. A melodic line sounds one note at a time, so a mean over
-   sounding members alone would leave each note of it resting at its own
-   seat, and a solo passage would snap back to the page a note at a time;
-   taken over the recency members too, each note rests at the running mean
-   of the last `n` classes struck, and the line carries its own drift
-   forward.
+1. The reference is the preceding sonority rather than the one the
+   strand joins. A block chord change leaves every member of its own
+   sonority new, and a member nothing has placed yet stands at zero,
+   which says only where the page is; read off the sonority before, a
+   chord entering on the drift a passage has reached rests on that drift,
+   however many voices move at once. Every strand born at one onset
+   therefore shares one rest, and the ambient is a figure per onset.
 
-1. Presence divides out where every contributor carries the same one,
-   which is what a detached line is: each note has stopped before the next
-   strikes, so every contributor is a recency member. Note two of a solo
-   rests exactly where note one stands, note three at the mean of one and
-   two, and `RECENT` appears in neither figure. The weight tells where the
-   textures mix — under a held bass, or where one note of a line laps over
-   the next — and a sounding neighbour then speaks louder than a released
-   one about where the music currently is.
+1. The mean runs over that sonority's members alike, the sounding and
+   the merely recent. A melodic line sounds one note at a time, so a mean
+   over sounding members alone would leave each note of it resting at its
+   own seat, and a solo passage would snap back to the page a note at a
+   time; over the recency members too, each note rests at the mean of the
+   last `n` classes struck, and the line carries its own drift forward.
 
-1. Every strand born at the first onset rests at its own seat. The other
-   members it could read are the strands struck beside it, which stand at
-   zero until that onset relaxes, and a strand alone there has no others
-   to read. That onset is the only place the page is asserted, and
-   everything after it is relative to what came before.
+1. Presence tells where the textures mix. It divides out where every
+   contributor carries the same one, which is what a detached line is:
+   each note has stopped before the next strikes, so every contributor is
+   a recency member and `RECENT` appears in no figure. Under a held bass,
+   or where one note of a line laps over the next, a sounding member
+   speaks louder than a released one about where the music currently is.
+
+1. Every strand born at the first onset rests at its own seat. There is
+   no sonority before it to read. That onset is the only place the page
+   is asserted, and everything after it is relative to what came before.
 
 1. A silence returns nothing to the page. The recency list is positional
    rather than temporal (`sonority.lua:102`), so the last `n` classes
@@ -355,11 +357,6 @@ charged by whether its two members sound together.**
    distinct, and the cap's slots go to answers differing in what they owe
    rather than in what they sound like.
 
-1. Where a later onset's members decide a rest, that rest is keyed
-   already. `visibleAhead` collects the strands a later onset names,
-   reading `members` rather than the sounding subset
-   (`sonority.lua:728`), so a strand feeding a future rest by recency is
-   one the key already carries.
 
 ## The dials
 
@@ -369,6 +366,14 @@ charged by whether its two members sound together.**
    stiffness means one thing under any notation. What has changed is that
    the pull is taken there too (§ The pull in cents), so the two charges
    are commensurable and the dials are the weights a strand settles under.
+
+1. Purity now holds a spelling together against the ambient as well.
+   Rests differ between strands born at different onsets, so the pull
+   draws two tied strands apart where under the wall it moved the whole
+   system alike, and a spring stretches under it. What that asks of the
+   dial is small: over the five-part take at a lock of 1 and a purity of
+   8, the worst mistuning between two sounding members is 0.74¢, against
+   0.63¢ under the wall.
 
 1. Harmonic lock's opening value goes back into play. The lattice this
    model replaced carried a single offset chosen to minimise the pull,
@@ -467,13 +472,33 @@ charged by whether its two members sound together.**
 1. Where harmonic lock now opens, and how far it usefully travels
    (§ The dials).
 
-1. Where the beam's width should sit, and whether a cap of four still
-   answers as the passages measured say it answers. The width was swept
-   over the take with the gate gone — 0.34s at four, 0.94 at twelve, 1.82
-   at twenty-four and 2.43 at thirty-two, where twelve and twenty-four
-   differ by 0.086¢ across sixty-six strands — so what is open is what an
-   author buys past twelve. `tests/spikes/springs/cap_sweep.lua` sweeps
-   the cap.
+1. A strand deciding a rest may be merged away before it decides it.
+   `visibleAhead` keys the strands a later onset names, and a member of
+   one sonority may drop out of the next, having left the recency window;
+   where that next onset births a strand, the dropped member has decided
+   its rest and the key no longer holds it. The rest joining the key does
+   not repair this, being read an onset after the merge that drops it.
+
+1. Where the beam's width should sit. It was swept over the take with
+   the gate gone — 0.34s at four, 0.94 at twelve, 1.82 at twenty-four and
+   2.43 at thirty-two, where twelve and twenty-four differ by 0.086¢
+   across sixty-six strands — so what is open is what an author buys past
+   twelve.
+
+1. What the walk's breadth costs at that width. A cap of four lost the
+   five-part take's answer once a rest could drift, so the cap stands at
+   six, one over the five that take wants at a beam of twenty-four; at a
+   beam of forty-eight it wants eight, the two dials not being
+   independent. The eighty-eight-note take is still improving at twenty
+   abreast under both beams, and where it settles is unmeasured.
+   `tests/spikes/springs/cap_sweep.lua` sweeps the pair.
+
+1. Whether the ambient wants a dial of its own. A strand's rest is the
+   whole of the ambient today; scaling it — the wall at nothing, full
+   inheritance at one — would give a passage's drift a time constant
+   rather than leaving it bounded by the first onset alone. It is one
+   multiply where the ambient is read and a scalar threaded from the
+   retune slots, so what is open is whether an author wants the control.
 
 1. How far notes actually drift. The pull alone may bound the excursion
    tightly enough that a stored intent rarely differs from the step its

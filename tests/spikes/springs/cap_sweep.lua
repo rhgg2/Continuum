@@ -5,9 +5,10 @@
 -- placements that cost alike. Run from the repo root:
 --   lua tests/spikes/springs/cap_sweep.lua
 --
--- At the beam the walk takes, every passage here answers alike from three abreast upward.
--- At a beam of 48 the five-part take wants more than four, the spellings the wider beam
--- admits crowding the capped walk, so the two dials are not independent.
+-- At the beam the walk takes, every passage here answers alike from three abreast upward
+-- but the five-part take over the septimal eleven, which wants five; at a beam of 48 that
+-- take wants eight, the spellings the wider beam admits crowding the capped walk, so the
+-- two dials are not independent. The eighty-eight-note take improves at twenty under both.
 package.path = './?.lua;tests/spikes/springs/?.lua;' .. package.path
 
 local sonority = require('sonority')
@@ -15,7 +16,7 @@ local tuning   = require('tuning')
 local realTake = require('take')
 
 local STRENGTH, STIFFNESS, ARITY = 1, 8, 5
-local CAPS, WIDTHS = { 2, 3, 4, 5, 20 }, { 24, 48 }
+local CAPS, WIDTHS = { 2, 3, 4, 5, 6, 8, 20 }, { 24, 48 }
 
 local edo12 = tuning.presets['12EDO']
 local withSevenths = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '7/4', '9/8' } }
@@ -139,13 +140,13 @@ local function solveAt(passage, width, cap)
   local free = {}
   for index = 1, #strands do free[index] = index end
   local displacement = sonority.relax(sonority.ties(answer.springs, free), STRENGTH,
-                                      STIFFNESS, answer.displacement, free)
+                                      STIFFNESS, answer.displacement, answer.rest, free)
 
   local checksum = 0
   for index = 1, #strands do checksum = checksum + seat[index] + displacement[index] end
   return answer.box
        + sonority.springCost(answer.springs, displacement, STIFFNESS, 1, #answer.springs)
-       + sonority.pullCost(displacement, STRENGTH, free), checksum
+       + sonority.pullCost(displacement, answer.rest, STRENGTH, free), checksum
 end
 
 for _, width in ipairs(WIDTHS) do

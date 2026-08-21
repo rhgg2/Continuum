@@ -1,4 +1,4 @@
-@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=1978  cases=69
+@spec sonority_spec  src=tests/specs/sonority_spec.lua  loc=2013  cases=70
 @exercises tuning (tuning), sonority (sonority)
 @surface   tuning.derive, tuning.moves, sonority.score, sonority.cost, sonority.strands, sonority.seats, sonority.onsets, sonority.walk, sonority.spellings, sonority.springCost, sonority.pullCost, sonority.relax, sonority.ties, sonority.search, sonority.springs, sonority.solveToMoves, sonority.solveToPoints
 
@@ -52,8 +52,9 @@
   sonority reads of a member is indexed at its strand.
   
   Pins the walk itself (§ The solve): an answer held against an exhaustive search
-  over the same spelling lists, a cap of one taking the greedy road, and a strand
-  that has stopped standing at the cents the walk left it.
+  over the same spelling lists, a cap of one taking the greedy road, a strand
+  that has stopped standing at the cents the walk left it, and a chord whose
+  members are all new entering on the drift the sonority before it reached.
   
   Pins the deferral the walk carries (§ The candidates): a rolled chord charged
   for the pair it held where that pair places, landing where the struck chord
@@ -68,94 +69,95 @@
   it, and a chord no chain of moves reaches spelled and priced rather than refused.
 
 # Helpers
-  @fn near(actual, expected, why)  @ 71-74
+  @fn near(actual, expected, why)  @ 72-75
       -- The doc's figures are given to 2dp.
-  @fn spring(sp, i, j, delta, why)  @ 77-81
+  @fn spring(sp, i, j, delta, why)  @ 78-82
       -- A spring pinned whole: which strands it ties, and the gap at which they sound pure.
-  @fn allFree(count)  @ 88-92
+  @fn allFree(count)  @ 89-93
       -- The relaxation's original terms: every strand free, and standing where it was written.
-  @fn nameless(cents)  @ 96-98
-  @fn gcd(a, b)  @ 150
-  @fn lcm(a, b)  @ 151
-  @fn tenneyOfSpan(odd)  @ 155-165
+  @fn nameless(cents)  @ 97-99
+  @fn gcd(a, b)  @ 151
+  @fn lcm(a, b)  @ 152
+  @fn tenneyOfSpan(odd)  @ 156-166
       -- Tenney height of the set's lcm over its gcd, taken as rationals: the integers
       -- the coords reach the same number without ever forming.
-  @fn shifted(coordSet, prime, by)  @ 168-176
+  @fn shifted(coordSet, prime, by)  @ 169-177
       -- Every coord of the set moved by `by` on one axis, absent exponents included.
-  @fn event(ppq, pitch, endppq)  @ 179-181
+  @fn event(ppq, pitch, endppq)  @ 180-182
       -- A note as the command hands it over, which the grouping holds by reference.
-  @fn pitchClass(note)  @ 184
+  @fn pitchClass(note)  @ 185
       -- The pitch class, which is what a step-class comes to under an octave notation.
-  @fn strand(class, notes)  @ 189-195
+  @fn strand(class, notes)  @ 190-196
       -- A strand as the walk reads it: notes given as { ppq, pitch, endppq }, under
       -- the step-class they share. The shortlist is the solve's business rather than
       -- the walk's, so these carry none.
-  @fn struck(over, list)  @ 199-205
+  @fn struck(over, list)  @ 200-206
       -- Strands of one note each, given as { class, ppq, pitch }, every note `over`
       -- long so that it is released where the next strikes.
-  @fn placed(class, notes, candidates)  @ 209-213
+  @fn placed(class, notes, candidates)  @ 210-214
       -- A strand as the solver reads it: the walk's shape with a shortlist of
       -- candidates, each carrying the coords it would take and its strain.
-  @fn fixed(over, list)  @ 218-226
+  @fn fixed(over, list)  @ 219-227
       -- Strands of one note and one candidate, given as { class, ppq, pitch, coords,
       -- strain } and `over` long, with the choice that takes each strand's only
       -- candidate.
-  @fn strainOf(num, den, step)  @ 230-232
+  @fn strainOf(num, den, step)  @ 231-233
       -- The strain of a ratio written on a 12-EDO step: its distance from that step
       -- as a fraction of the 50¢ half-window.
-  @fn triads(cStrain, dStrain)  @ 243-250
+  @fn triads(cStrain, dStrain)  @ 244-251
       -- C major then D major, disjoint in class: at n=3 each onset stands alone, and
       -- at n=5 the second sonority holds two classes of the first as well.
-  @fn classesAt(strands, sonorityAt)  @ 252-256
-  @fn exactly(actual, expected, why)  @ 259-262
+  @fn classesAt(strands, sonorityAt)  @ 253-257
+  @fn exactly(actual, expected, why)  @ 260-263
       -- The DP is exact, so its answer is held to the enumeration's to the bit.
-  @fn nearly(actual, expected, why)  @ 265-268
+  @fn nearly(actual, expected, why)  @ 266-269
       -- The solve's own figures are worked further out than the doc's two places.
-  @fn scoreAt(strands, choice, sonorityAt)  @ 272-278
+  @fn scoreAt(strands, choice, sonorityAt)  @ 273-279
       -- What one sonority of the walk scores under a choice, so a passage can be read
       -- chord by chord rather than as its total.
-  @fn everyChoice(strands, fn)  @ 281-294
+  @fn everyChoice(strands, fn)  @ 282-295
       -- Every choice vector over the strands' shortlists, in odometer order.
-  @fn bruteMinimum(strands, n, strength)  @ 296-303
-  @fn laidOut(list)  @ 314-318
+  @fn bruteMinimum(strands, n, strength)  @ 297-304
+  @fn laidOut(list)  @ 315-319
       -- Strands given as { class, {{ppq,pitch,endppq},..} }, each taking threeWays.
-  @fn dorian(dSpans)  @ 363-374
-  @fn fromDiamond(class, ppq, pitch, step)  @ 391-397
+  @fn dorian(dSpans)  @ 364-375
+  @fn fromDiamond(class, ppq, pitch, step)  @ 392-398
       -- Each chord is released where the next strikes, a bar of 960 later.
-  @fn seventh()  @ 401-406
+  @fn seventh()  @ 402-407
       -- The written C7, every note taking what its own window holds. The seventh is
       -- strand 4, its candidates 7/4, 16/9 and 9/5 in that order.
-  @fn resolving()  @ 409-415
+  @fn resolving()  @ 410-416
       -- The same chord resolving to F–A–C a bar later.
-  @fn fromSparse(class, ppq, pitch, endppq)  @ 429-436
-  @fn underRun(endppq)  @ 441-448
+  @fn fromSparse(class, ppq, pitch, endppq)  @ 430-437
+  @fn underRun(endppq)  @ 442-449
       -- A B♭ struck first and released at `endppq`, under a run of five classes the
       -- target fixes: nothing the run transmits says how to read the B♭, so only its
       -- own release decides whether it stands in the sonorities behind it.
-  @fn progression(bars)  @ 452-460
+  @fn progression(bars)  @ 453-461
       -- A chord to the bar, each released where the next strikes: the passage the walk of
       -- docs/sonority.md § The solve is taken over.
-  @fn rolled(pitches, apart)  @ 464-468
+  @fn rolled(pitches, apart)  @ 465-469
       -- A chord rolled note by note, every note held to the end of the bar: the passage
       -- docs/sonority.md § The candidates takes its deferral over.
-  @fn heldLines(lines, beat)  @ 471-483
+  @fn heldLines(lines, beat)  @ 472-484
       -- Voice lines a beat apart, a repeated pitch held rather than struck again.
-  @fn termsOf(strands, n, moves)  @ 497-505
+  @fn termsOf(strands, n, moves)  @ 498-506
       -- What the notation and the target hand the walk: an onset per sonority and a spelling
       -- list apiece, at the beam width and the stiffness the figures below are taken under.
-  @fn objectiveAt(springs, displacement, count, strength, stiffness)  @ 509-513
+  @fn objectiveAt(springs, displacement, count, strength, stiffness, rest)  @ 510-514
       -- The whole of what a passage's displacements cost: every spring of it, and the pull on
       -- every strand, which is the objective the relaxation minimises.
-  @fn settledFrom(answer, count, strength, stiffness)  @ 517-523
+  @fn settledFrom(answer, count, strength, stiffness)  @ 518-525
       -- The winner settled by one joint relaxation, which is where the frozen past gives back
       -- what it held along the way; the walk's own cost stands above this until then.
-  @fn settledUnder(strands, moves)  @ 527-530
+  @fn settledUnder(strands, moves)  @ 529-532
       -- What a passage settles to under a target: the walk's answer, given back by the joint
       -- relaxation, at the cap and the arity the figures below are taken under.
-  @fn bruteSpelled(lists, count, strength, stiffness)  @ 535-560
-      -- Every combination of the spelling lists, each relaxed cold with every strand free: the
-      -- search the walk is held against, in the odometer order everyChoice takes, so that an
-      -- exact tie falls to the same combination the walk's own tie-break keeps.
+  @fn bruteSpelled(lists, count, strength, stiffness, onsets, seat)  @ 538-560
+      -- Every combination of the spelling lists, each walked as a road of its own and then given
+      -- back: the search the walk is held against, in the odometer order everyChoice takes, so
+      -- that an exact tie falls to the same combination the walk's own tie-break keeps. A rest is
+      -- read along a road, so a combination is priced by walking it rather than relaxed cold.
 
 # Cases
   @case 'the 5-limit column of the theory table'  [pure]  @ 569-574
@@ -196,141 +198,144 @@
   @case 'search: the walk returns what an exhaustive search over its spelling lists returns'  [pure]  @ 1295-1316
   @case 'search: carrying one answer takes the greedy road'  [pure]  @ 1320-1335
   @case 'search: a strand that has stopped stands where the walk left it'  [pure]  @ 1339-1371
-  @case 'search: a rolled chord lands where the struck chord lands'  [pure]  @ 1375-1389
-  @case 'search: a deferral moves the charge rather than dodging it'  [pure]  @ 1393-1416
-  @case 'search: a held sonority is charged in its own onset's slot'  [pure]  @ 1420-1432
-  @case 'search: the road that pays as it goes is the road the walk keeps'  [pure]  @ 1436-1449
-  @case 'search: a wait resolving to what its sonority offered is no second road'  [pure]  @ 1453-1466
-  @case 'search: a wait that lands tied to nothing refuses the road that took it'  [pure]  @ 1470-1493
-  @case 'search: the cut runs over the answers that owe and the answers that have paid'  [pure]  @ 1497-1509
-  @case 'solveToMoves: the take settles where § Measured settles it'  [pure]  @ 1513-1537
-  @case 'solveToMoves: a chord stands at the target's intervals, and is priced where it cannot'  [pure]  @ 1541-1566
-  @case 'solveToMoves: a notation of finer steps settles the chord the same'  [pure]  @ 1570-1585
-  @case 'strands: a class chains through its overlaps and splits where they stop'  [pure]  @ 1589-1606
-  @case 'strands: classes never share one, and the order does not follow the input'  [pure]  @ 1610-1623
-  @case 'a block chord and an arpeggio of it hand back the same set'  [pure]  @ 1627-1639
-  @case 'at n one above the arity consecutive sonorities still overlap'  [pure]  @ 1643-1657
-  @case 'a repeated note and an octave doubling each spend one entry'  [pure]  @ 1661-1676
-  @case 'a later strand of a class replaces the earlier one'  [pure]  @ 1680-1692
-  @case 'a class still sounding stands where the last n struck have dropped it'  [pure]  @ 1696-1709
-  @case 'the box is summed over the walk rather than over the onsets'  [pure]  @ 1713-1718
-  @case 'the pull is the strength times the square of a strand's strain'  [pure]  @ 1722-1727
-  @case 'the pull is counted once per strand however many notes write it'  [pure]  @ 1731-1744
-  @case 'the C7's two sevenths cross at a pull of 0.95'  [pure]  @ 1748-1770
-  @case 'the solve is the minimum exhaustive enumeration finds'  [pure]  @ 1774-1786
-  @case 'a shortlist of one is fixed and still contributes its coords'  [pure]  @ 1790-1811
-  @case 'a held strand bends the harmony to it'  [pure]  @ 1815-1837
-  @case 'behind a run of fixed classes the answer hangs on the hold'  [pure]  @ 1841-1847
-  @case 'the C7 sounding alone crosses at a pull of 0.95'  [pure]  @ 1851-1873
-  @case 'the rest of the chord stands still, and the third seventh is dominated'  [pure]  @ 1877-1891
-  @case 'resolving to F–A–C the seventh takes the Pythagorean under any pull'  [pure]  @ 1895-1913
-  @case 'at n one above the arity the resolution reads the seventh chord's bass alone'  [pure]  @ 1917-1935
-  @case 'an exact tie goes to the first candidate rather than to table order'  [pure]  @ 1939-1959
-  @case 'an empty shortlist and an unaffordable solve are both refused'  [pure]  @ 1963-1976
+  @case 'search: a chord entering rests where the sonority before it stood'  [pure]  @ 1375-1407
+  @case 'search: a rolled chord lands where the struck chord lands'  [pure]  @ 1411-1425
+  @case 'search: a deferral moves the charge rather than dodging it'  [pure]  @ 1429-1452
+  @case 'search: a held sonority is charged in its own onset's slot'  [pure]  @ 1456-1468
+  @case 'search: the road that pays as it goes is the road the walk keeps'  [pure]  @ 1472-1485
+  @case 'search: a wait resolving to what its sonority offered is no second road'  [pure]  @ 1489-1502
+  @case 'search: a wait that lands tied to nothing refuses the road that took it'  [pure]  @ 1506-1529
+  @case 'search: the cut runs over the answers that owe and the answers that have paid'  [pure]  @ 1533-1545
+  @case 'solveToMoves: the take settles where § Measured settles it'  [pure]  @ 1549-1572
+  @case 'solveToMoves: a chord stands at the target's intervals, and is priced where it cannot'  [pure]  @ 1576-1601
+  @case 'solveToMoves: a notation of finer steps settles the chord the same'  [pure]  @ 1605-1620
+  @case 'strands: a class chains through its overlaps and splits where they stop'  [pure]  @ 1624-1641
+  @case 'strands: classes never share one, and the order does not follow the input'  [pure]  @ 1645-1658
+  @case 'a block chord and an arpeggio of it hand back the same set'  [pure]  @ 1662-1674
+  @case 'at n one above the arity consecutive sonorities still overlap'  [pure]  @ 1678-1692
+  @case 'a repeated note and an octave doubling each spend one entry'  [pure]  @ 1696-1711
+  @case 'a later strand of a class replaces the earlier one'  [pure]  @ 1715-1727
+  @case 'a class still sounding stands where the last n struck have dropped it'  [pure]  @ 1731-1744
+  @case 'the box is summed over the walk rather than over the onsets'  [pure]  @ 1748-1753
+  @case 'the pull is the strength times the square of a strand's strain'  [pure]  @ 1757-1762
+  @case 'the pull is counted once per strand however many notes write it'  [pure]  @ 1766-1779
+  @case 'the C7's two sevenths cross at a pull of 0.95'  [pure]  @ 1783-1805
+  @case 'the solve is the minimum exhaustive enumeration finds'  [pure]  @ 1809-1821
+  @case 'a shortlist of one is fixed and still contributes its coords'  [pure]  @ 1825-1846
+  @case 'a held strand bends the harmony to it'  [pure]  @ 1850-1872
+  @case 'behind a run of fixed classes the answer hangs on the hold'  [pure]  @ 1876-1882
+  @case 'the C7 sounding alone crosses at a pull of 0.95'  [pure]  @ 1886-1908
+  @case 'the rest of the chord stands still, and the third seventh is dominated'  [pure]  @ 1912-1926
+  @case 'resolving to F–A–C the seventh takes the Pythagorean under any pull'  [pure]  @ 1930-1948
+  @case 'at n one above the arity the resolution reads the seventh chord's bass alone'  [pure]  @ 1952-1970
+  @case 'an exact tie goes to the first candidate rather than to table order'  [pure]  @ 1974-1994
+  @case 'an empty shortlist and an unaffordable solve are both refused'  [pure]  @ 1998-2011
 
 # Uses (outbound edges)
-  @use call tuning.derive  @ 97
-  @use call tuning.moves  @ 108,109,110
-  @use call sonority.score  @ 277,572,582,583,592,593,594,602,603,604,605
-  @use call sonority.cost  @ 299,1716,1717,1725,1726,1736,1742,1762,1763,1764,1765,1767,1768,1780,1805,1807,1808,1825,1832,1833,1863,1864,1865,1866,1867,1868,1888,1889,1928,1929,1930,1931,1954
-  @use call sonority.strands  @ 459,467,482,1477,1596,1617
-  @use call sonority.seats  @ 498,1058,1243,1249,1521
-  @use call sonority.onsets  @ 499,1059,1262,1281
-  @use call sonority.walk  @ 499,1059,1262,1281,1631,1650,1668,1672,1684,1700,1822,1829,1902,1920
-  @use call sonority.spellings  @ 501,955,975,982,992,1010,1034,1042,1062,1094,1096,1120,1126,1139,1141,1167,1168,1197,1208,1211,1225,1232,1404
-  @use call sonority.springCost  @ 511,678,697,700,809
-  @use call sonority.pullCost  @ 512,680,728,730,810
-  @use call sonority.relax  @ 519,545,744,755,768,771,789,794,797,828,849,888,889,910,911,929,946,1354,1364
-  @use call sonority.ties  @ 519,545,744,755,768,771,789,795,797,828,849,887,909,910,911,929,946,1354,1364
-  @use call sonority.search  @ 529,1303,1328,1329,1348,1408,1426,1444,1460,1489,1505,1507
+  @use call tuning.derive  @ 98
+  @use call tuning.moves  @ 109,110,111
+  @use call sonority.score  @ 278,572,582,583,592,593,594,602,603,604,605
+  @use call sonority.cost  @ 300,1751,1752,1760,1761,1771,1777,1797,1798,1799,1800,1802,1803,1815,1840,1842,1843,1860,1867,1868,1898,1899,1900,1901,1902,1903,1923,1924,1963,1964,1965,1966,1989
+  @use call sonority.strands  @ 460,468,483,1513,1631,1652
+  @use call sonority.seats  @ 499,1058,1243,1249,1557
+  @use call sonority.onsets  @ 500,1059,1262,1281
+  @use call sonority.walk  @ 500,1059,1262,1281,1666,1685,1703,1707,1719,1735,1857,1864,1937,1955
+  @use call sonority.spellings  @ 502,955,975,982,992,1010,1034,1042,1062,1094,1096,1120,1126,1139,1141,1167,1168,1197,1208,1211,1225,1232,1440
+  @use call sonority.springCost  @ 512,678,697,700,809
+  @use call sonority.pullCost  @ 513,680,728,730,810
+  @use call sonority.relax  @ 520,744,755,768,771,789,794,797,828,849,888,889,910,911,929,946,1354,1364
+  @use call sonority.ties  @ 520,744,755,768,771,789,795,797,828,849,887,909,910,911,929,946,1354,1364
+  @use call sonority.search  @ 531,544,1303,1328,1329,1348,1382,1444,1462,1480,1496,1525,1541,1543
   @use call sonority.springs  @ 612,627,638,648,666,668,691,692,709,740,765,783,795,824,843,844,845,881,882,883,903,904,905,925,957,1226
-  @use call sonority.solveToMoves  @ 1518,1546,1556,1577,1578
-  @use call sonority.solveToPoints  @ 1779,1798,1810,1819,1822,1828,1843,1845,1855,1859,1881,1899,1933,1934,1957,1967,1973
+  @use call sonority.solveToMoves  @ 1554,1581,1591,1612,1613
+  @use call sonority.solveToPoints  @ 1814,1833,1845,1854,1857,1863,1878,1880,1890,1894,1916,1934,1968,1969,1992,2002,2008
 
 # Fields (r read / w write incl. constructor keys)
-  @field r A  @ 248
-  @field w A  @ 237,385
-  @field w Bb  @ 386
-  @field r C  @ 245,308,1734,1739,1751,1802,1944,1965
-  @field w C  @ 236,381
-  @field r D  @ 247
-  @field w D  @ 237
-  @field r E  @ 245,309,1734,1752,1793,1965
-  @field w E  @ 236,382
-  @field w F  @ 383
-  @field r Fsharp  @ 247
-  @field w Fsharp  @ 237
-  @field r G  @ 246,1734,1753,1802
-  @field w G  @ 236,384
-  @field r box  @ 521,543,960,978,985,995,1037,1045,1122,1147,1148
-  @field r box  @ 1177,1487
-  @field w cents  @ 97
-  @field r choice  @ 1308,1333,1334,1349,1352,1462,1490
-  @field w choice  @ 549
-  @field r class  @ 254,1602,1619,1620,1621,1622,1656,1675,1705
-  @field w class  @ 194
+  @field r A  @ 249
+  @field w A  @ 238,386
+  @field w Bb  @ 387
+  @field r C  @ 246,309,1769,1774,1786,1837,1979,2000
+  @field w C  @ 237,382
+  @field r D  @ 248
+  @field w D  @ 238
+  @field r E  @ 246,310,1769,1787,1828,2000
+  @field w E  @ 237,383
+  @field w F  @ 384
+  @field r Fsharp  @ 248
+  @field w Fsharp  @ 238
+  @field r G  @ 247,1769,1788,1837
+  @field w G  @ 237,385
+  @field r box  @ 522,960,978,985,995,1037,1045,1122,1147,1148,1177
+  @field r box  @ 1177,1523
+  @field w cents  @ 98
+  @field r choice  @ 1308,1333,1334,1349,1352,1498,1526
+  @field w choice  @ 548
+  @field r class  @ 255,1637,1654,1655,1656,1657,1691,1710,1740
+  @field w class  @ 195
   @field r component  @ 1018,1069
-  @field r coords  @ 275,572,582,583,591,601,1018,1089,1090
-  @field w coords  @ 118,122,126,130,134,138,142,146,222,308,309,310
-  @field w coords  @ 359,360,394,432,1739,1756,1757,1793,1794,1944,1947,1948
-  @field r cost  @ 548,1307,1314,1446,1465,1507
-  @field w cost  @ 549
-  @field r delta  @ 80,714,741,825,831,832,853,854,860,964
+  @field r coords  @ 276,572,582,583,591,601,1018,1089,1090
+  @field w coords  @ 119,123,127,131,135,139,143,147,223,309,310,311
+  @field w coords  @ 360,361,395,433,1774,1791,1792,1828,1829,1979,1982,1983
+  @field r cost  @ 547,1307,1314,1482,1501,1543
+  @field w cost  @ 548
+  @field r delta  @ 81,714,741,825,831,832,853,854,860,964
   @field r delta  @ 1230
-  @field r displacement  @ 520,1310,1357,1365,1367
-  @field w displacement  @ 549
-  @field w endppq  @ 180,192
-  @field r held  @ 1447
+  @field r displacement  @ 521,1310,1357,1365,1367,1392
+  @field w displacement  @ 548
+  @field w endppq  @ 181,193
+  @field r held  @ 1483
   @field r huge  @ 1011,1035,1043,1140,1198,1208,1212
-  @field r i  @ 78,860,964,1230
-  @field r j  @ 79,860,964,1230
-  @field r mayWait  @ 501,1266,1268,1270,1284,1287,1290
-  @field r members  @ 501,1062,1068,1265,1267,1283,1285,1345,1404,1480
-  @field r name  @ 572,583,1782
-  @field w name  @ 97,117,121,125,129,133,137,141,145,324,328,332
-  @field w name  @ 336,341,346,350,569,578,589,599,610,623,636,644
+  @field r i  @ 79,860,964,1230
+  @field r j  @ 80,860,964,1230
+  @field r mayWait  @ 502,1266,1268,1270,1284,1287,1290
+  @field r members  @ 502,1062,1068,1265,1267,1283,1285,1345,1384,1391,1399,1400
+  @field r members  @ 1440,1516
+  @field r name  @ 572,583,1817
+  @field w name  @ 98,118,122,126,130,134,138,142,146,325,329,333
+  @field w name  @ 337,342,347,351,569,578,589,599,610,623,636,644
   @field w name  @ 661,686,707,726,736,751,761,777,819,838,876,898
   @field w name  @ 921,953,970,1003,1027,1051,1079,1114,1136,1159,1190,1220
-  @field w name  @ 1240,1255,1275,1295,1320,1339,1375,1393,1420,1436,1453,1470
-  @field w name  @ 1497,1513,1541,1570,1589,1610,1627,1643,1661,1680,1696,1713
-  @field w name  @ 1722,1731,1748,1774,1790,1815,1841,1851,1877,1895,1917,1939
-  @field w name  @ 1963
-  @field r notes  @ 1598,1599,1600,1601,1604,1605,1619,1620,1621,1622
-  @field w notes  @ 194
+  @field w name  @ 1240,1255,1275,1295,1320,1339,1375,1411,1429,1456,1472,1489
+  @field w name  @ 1506,1533,1549,1576,1605,1624,1645,1662,1678,1696,1715,1731
+  @field w name  @ 1748,1757,1766,1783,1809,1825,1850,1876,1886,1912,1930,1952
+  @field w name  @ 1974,1998
+  @field r notes  @ 1633,1634,1635,1636,1639,1640,1654,1655,1656,1657
+  @field w notes  @ 195
   @field r odd  @ 581
-  @field w odd  @ 119,123,127,131,135,139,143,147
-  @field w period  @ 97
-  @field r pitch  @ 184
-  @field w pitch  @ 180,192
-  @field w pitches  @ 108,109,110
+  @field w odd  @ 120,124,128,132,136,140,144,148
+  @field w period  @ 98
+  @field r pitch  @ 185
+  @field w pitch  @ 181,193
+  @field w pitches  @ 109,110,111
   @field r placed  @ 1017,1069,1089,1090
-  @field r ppq  @ 1637
-  @field w ppq  @ 180,192
-  @field r presence  @ 501,1062,1288,1404
-  @field r presets  @ 95
-  @field r pythagorean  @ 310,1757
-  @field w pythagorean  @ 238
+  @field r ppq  @ 1672
+  @field w ppq  @ 181,193
+  @field r presence  @ 502,1062,1288,1392,1393,1440
+  @field r presets  @ 96
+  @field r pythagorean  @ 311,1792
+  @field w pythagorean  @ 239
+  @field r rest  @ 521,523,1385,1403
   @field w run  @ 570,579,590,600,611,624,637,645,662,687,708,727
   @field w run  @ 737,752,762,778,820,839,877,899,922,954,971,1004
   @field w run  @ 1028,1052,1080,1115,1137,1160,1191,1221,1241,1256,1276,1296
-  @field w run  @ 1321,1340,1376,1394,1421,1437,1454,1471,1498,1514,1542,1571
-  @field w run  @ 1590,1611,1628,1644,1662,1681,1697,1714,1723,1732,1749,1775
-  @field w run  @ 1791,1816,1842,1852,1878,1896,1918,1940,1964
+  @field w run  @ 1321,1340,1376,1412,1430,1457,1473,1490,1507,1534,1550,1577
+  @field w run  @ 1606,1625,1646,1663,1679,1697,1716,1732,1749,1758,1767,1784
+  @field w run  @ 1810,1826,1851,1877,1887,1913,1931,1953,1975,1999
   @field r score  @ 572
-  @field w score  @ 117,121,125,129,133,137,141,145
-  @field r septimal  @ 1756
-  @field w septimal  @ 238
-  @field r shortlist  @ 275,289,1603
-  @field w shortlist  @ 211,1966
+  @field w score  @ 118,122,126,130,134,138,142,146
+  @field r septimal  @ 1791
+  @field w septimal  @ 239
+  @field r shortlist  @ 276,290,1638
+  @field w shortlist  @ 212,2001
   @field r sounding  @ 1269,1286,1346,1353
-  @field r springs  @ 519,521,542,962,964,979,986,987,988,996,997,998
-  @field r springs  @ 1104,1105,1123,1124,1131,1149,1150,1152,1153,1178,1228
-  @field r springs  @ 1229,1230,1352,1364,1428,1429,1430,1431,1448
-  @field w stepNames  @ 97
-  @field w strain  @ 222,308,309,310,359,360,394,433,1739,1756,1757,1793
-  @field w strain  @ 1794,1944,1947,1948
-  @field r strands  @ 254,274,1638,1653,1656,1668,1675,1686,1687,1688,1689,1703
-  @field r strands  @ 1705,1707,1779,1780,1781
-  @field w strands  @ 325,329,333,337,342,347,351
-  @field r waiting  @ 961,1129,1130,1172,1179,1202,1234,1235,1463,1484
+  @field r springs  @ 520,522,962,964,979,986,987,988,996,997,998,1104
+  @field r springs  @ 1105,1123,1124,1131,1149,1150,1152,1153,1178,1228,1229
+  @field r springs  @ 1230,1352,1364,1464,1465,1466,1467,1484
+  @field w stepNames  @ 98
+  @field w strain  @ 223,309,310,311,360,361,395,434,1774,1791,1792,1828
+  @field w strain  @ 1829,1979,1982,1983
+  @field r strands  @ 255,275,1673,1688,1691,1703,1710,1721,1722,1723,1724,1738
+  @field r strands  @ 1740,1742,1814,1815,1816
+  @field w strands  @ 326,330,334,338,343,348,352
+  @field r waiting  @ 961,1129,1130,1172,1179,1202,1234,1235,1499,1520
   @field r weight  @ 652,654,656,1105

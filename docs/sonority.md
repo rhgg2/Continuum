@@ -137,12 +137,18 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 
 ## The pull
 
-1. The **pull** charges a strand for standing away from the step it was
-   written on, quadratically in the **strain** — the displacement taken
-   in the unit its facility measures. It is counted once per strand
+1. The **pull** charges a strand for standing away from its **rest**,
+   quadratically in the **strain** — that gap taken in the unit its
+   facility measures. It is counted once per strand
    rather than once per note, so an octave doubling doesn't change the answer:
    the box already charges a doubling nothing, and
    counted per note the pull would charge it twice.
+
+1. The two facilities rest a strand in different places. A points solve
+   rests it on the step its note was written on, a shortlist offering it
+   nothing else to stand near; a moves solve rests it where the music
+   stood when its note arrived (§ The solve), so the page is asserted at
+   the first onset and nowhere after it.
 
 1. A note's **window** reaches half way to the notation's adjacent step
    either side, and is asymmetric under an unequal scale: in a
@@ -170,10 +176,13 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    times what it charges a 12-EDO strand under the points facility,
    where under the moves facility it charges the two alike.
 
-1. The pull kills comma drift, each note being held near where it was
-   written, and it stops the solve collapsing a sonority into a drone,
-   the box being globally minimised at zero by putting every note on
-   one pitch. Its strength is harmonic lock (§ The dials).
+1. The pull stops the solve collapsing a sonority into a drone, the box
+   being globally minimised at zero by putting every note on one pitch.
+   Under the points facility it also kills comma drift, each note held
+   near the step it was written on; under moves it prices a note against
+   the body of music it arrived in, and what a passage does over its
+   length is unbounded (§ What it gives up). Its strength is harmonic
+   lock (§ The dials).
 
 ## The springs
 
@@ -221,8 +230,8 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 1. With the spellings chosen the objective is a convex quadratic in the
    displacements, with no bound on them and no branch in it, so
    `sonority.relax` sweeps strand by strand to the optimum: each strand
-   settles at the weighted mean of what its springs ask of it and the
-   seat it was written on — each ask weighted by its spring's weight,
+   settles at the weighted mean of what its springs ask of it and its
+   own rest — each ask weighted by its spring's weight,
    the two dials weighting the two terms, and the fifty both charges
    are taken over dividing out.
 
@@ -372,6 +381,19 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    runs backward as well, so a new onset moves a settled past by
    little.
 
+1. A strand's rest is fixed where it is born. The walk reads it off the
+   sonority before the one that first names the strand — the
+   presence-weighted mean of that sonority's displacements, as the
+   answer carried them into the onset — so a chord entering enters on
+   the drift the passage has reached, however many of its voices are
+   new, and every strand born at one onset shares one rest.
+
+1. A rest has to be frozen data. The springs constrain differences of
+   displacements alone, so a pull charged against a live mean of those
+   same displacements would leave a whole passage free to slide at no
+   cost; the relaxation sweeps coordinate by coordinate, and its answer
+   along such a direction would depend on where the sweep started.
+
 1. The walk charges what it has closed once. A strand sounds over one
    run of onsets, so once the walk is past every strand a sonority
    named, neither that sonority's springs nor the strands they tie can
@@ -446,8 +468,8 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    pull pricing the drift rather than a bound stopping it, so a note's
    name and its sound come apart and the cell reports the gap in cents
    (`docs/tuning.md` § The written step). Over the five-part take at
-   purity 8 and a lock of 1, a strand stands 6.57¢ from its seat on
-   average and none stands past 11.4¢.
+   purity 8 and a lock of 1, a strand stands 6.99¢ from its seat on
+   average and none stands past 11.92¢.
 
 1. The order two strands were written in. Past its own half-window some
    other strand is the nearer host for a pitch, and nothing holds two
@@ -455,13 +477,20 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    cross; how that sounds is not known.
 
 1. Exactness. A spelled interval is pure to the stiffness rather than
-   by construction, 0.63¢ at worst over the five-part take at purity 8,
-   and an author wanting more turns the dial up.
+   by construction, and two strands resting apart are drawn apart
+   against the spring that ties them: over the five-part take at purity
+   8, the worst pair of sounding members stands 0.74¢ wide of what its
+   spelling states. An author wanting more turns the dial up.
 
 1. A statement about the passage. The moves solve places no passage at
    a single displacement, so "the passage sits 14.7¢ sharp" is not a
    thing the model says; it holds instead a pull per strand
-   toward the step its own note was written on.
+   toward where the music stood when its own note arrived.
+
+1. A bound on the drift of a long piece. The first onset asserts the
+   page and every rest after it is inherited, so a passage returning to
+   its opening chord may return to it flat, and no term in the objective
+   objects.
 
 1. One account of a carried strand. A strand present at two onsets is
    spelled at both, and the box charges each onset's spelling; where
