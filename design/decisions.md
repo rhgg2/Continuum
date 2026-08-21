@@ -54,15 +54,6 @@ not eight or ten.
   frame, where a fresh deep copy would be the wrong trade. Callers now establish a non-nil name
   themselves, a nil pick reading as no pick and handing back the whole catalogue.
 
-- **2026-08-19** — cm:get takes an opts.pick naming a subkey, and indexes the resolved value before
-  copying, so only that entry crosses the boundary. The catalogue read — copy the whole of swings or
-  tempers, then index one name — stands in eight places, and on the rebuild path it cost 35.8µs a
-  lookup against the 6.6µs of a pick; clone traffic through a gated rebuild falls from 873 keys to
-  181. pick composes with the merge mode rather than forming a third resolution rule, so it indexes
-  whatever mergeTiers or the tier walk resolved. Lua cannot tell an absent key from an explicit nil,
-  so a nil pick reads as no pick and hands back the whole table; the edge is pinned by spec rather
-  than defended against, cm having no way to see the difference.
-
 - **2026-08-14** — A single-column clip records the parts its span covered, not the kind of column it
   came from. The enum of column kinds — `note`, `notevel`, `7bit`, `pb` — could express two of a note
   column's four parts, so a span ending in the delay part copied as pitch-only and lost the velocity
@@ -72,15 +63,6 @@ not eight or ten.
   since a span can only exclude what it could address. Rejected: matching the span's endpoints
   against `(pitch, vel)`, which needs a new member per part pair and leaves the hidden-part case
   undecided.
-
-- **2026-08-12** — The undo label sits on the view verb that makes the edit, not on the command that
-  starts it. `registerAll`'s tuple form wraps the command's body, so a body that only opens a modal
-  closes its block before the edit arrives in the callback — which is how quantize's whole-take
-  scope, and the removal of a populated automation column, came to land unlabelled. Labelling the
-  verb covers every entry point into it, patternEditor's own registration of `hideExtraCol`
-  included. Rejected: labelling each confirm callback, which fixes one command at a time and leaves
-  the verb's other callers bare; the callback keeps the label only where it hands the verb slots
-  reachable nowhere else, as the retune modal does.
 
 - **2026-08-08** — `docs/` carries the WHY of live code, and is what the code cites; a design doc is
   never a live reference. `generators.lua` had no doc at all while forty of its comments reached into
@@ -270,33 +252,11 @@ not eight or ten.
   reassign, whose vacated slot lands in another channel's dirt) moves onto the seed path via
   `moved`.
 
-- **2026-07-27** — The trackerMode PC synthesis hook at flush time is
-  deleted; rebuild step 4.5 is the single synthesis site. Every
-  channel the hook dirtied was already dirty by the time the rebuild
-  ran (low-level verbs seed, mm:modify's reload folds them in), so it
-  only repeated the sweep with less information — no seed spans, no
-  noteLive records, no shadow marking. It also inverted the bearing
-  rule: synthesising from `n.sample or 0` parked a placeholder-zero PC
-  at an unstamped note's own onset, which the next stampSamples found
-  and stamped back as 0 instead of the sample actually prevailing
-  there. That value change is the suite's one expectation edit
-  (tm_pc_synthesis_spec), and it retires the stale-loc bug class whose
-  victim was the flush-time reconcile itself.
-
 - **2026-07-26** — um's raw index and stager split into two do-blocks
   inside trackerManager.lua rather than a new eventIndex.lua: index
   entries are live records the rebuild mutates in place, so a module
   boundary would publish that sharing contract rather than close it.
   Revisit extraction once the mutation contract is sound.
-
-- **2026-07-26** — Field writes on a rawIndex entry go through
-  `setRaw`, which flags the containing list when the value moves a
-  sort key so `withDeferredSort` re-trues it — inserts and in-place
-  moves restored at one door. Retires the caller-remembered
-  `resortRawNotes` repair (the 2026-07-18 entry below records what it
-  replaces): keeping both would leave two ways to be correct, and the
-  mediated write is the mechanism `setCell` already is for column
-  cells.
 
 - **2026-07-26** — forEachAttachedPA and reconcilePcs read the
   per-channel rawIndex lists rather than scanning byUuid. The widening
@@ -304,36 +264,6 @@ not eight or ten.
   realised events, so a PA added and not yet flushed now follows its
   host's resize and delete — a staged PA is attached, and the old
   blindness was an artefact of scanning the wrong table.
-
-- **2026-07-26** — A note lane's `events` table changes identity iff
-  its contents changed. tv's cell carry keys on that identity, so
-  every mutator of a seated lane owns its shed: membership writes call
-  `shedLane`, in-place field writes go through `setCell`, which sheds
-  only when the value actually moves. Rejected an explicit
-  `col.version` stamp — the more honest protocol, but it moves the
-  tm/tv boundary to fix one path while the cc path is already precise
-  under the identity one.
-
-- **2026-07-26** — voicing gained resolveSorted as a sibling entry
-  point rather than a presorted flag on resolveGroup: a flag lets any
-  caller assert its way past the ordering the nudge cascade depends
-  on, where a second door names the guarantee in its own contract, at
-  one seam.
-
-- **2026-07-26** — midiBlob's wire key widened to ppq*1e9 + rank*1e8 +
-  slot*2 rather than guarding the old 5e4 slot cap: a guard buys
-  nothing, because the full-regeneration fallback composes the same
-  colliding key. Written as integer literals — 1e9 is a float in Lua
-  5.4, and a float key forfeits exactness above 2^53 where an int64
-  one runs to 9.2e18, so it is the ppq's integer *typing* that carries
-  the headroom, not the magnitude.
-
-- **2026-07-25** — mm's reindex gate (needsSort/needsCompact,
-  2026-07-14) retires: loc is now a stable slot id, so the verbs
-  splice the ppq order arrays directly and only load reindexes. One
-  splice serving both add and move pins a moved event behind its new
-  equals, and a splice under a live walk asserts on an order epoch
-  rather than silently skipping a neighbour.
 
 - **2026-07-25** — mm's equal-ppq order specifies the add only: a new
   event seats behind everything already at its ppq, while a ppq move's
@@ -343,13 +273,6 @@ not eight or ten.
   move would have cost array surgery that stable-slots Phase 1's
   splice gives away free.
 
-- **2026-07-25** — MIDI_Sort after MIDI_SetAllEvts is a playback
-  repair, not an ordering one -- serialise already emits canonical
-  order -- so it now runs only when the transport is not stopped. This
-  gives up an unstated backstop against a mis-ordering serialiser,
-  pinned by spec instead, and takes ~8.6ms off every stopped-transport
-  edit on a dense take.
-
 - **2026-07-25** — An fx stage's dest is a per-entry param, not kind
   metadata: every read goes through generators.destOf, and the
   registry dest is only its seed plus the note-vs-continuous marker.
@@ -357,37 +280,12 @@ not eight or ten.
   whose polarity derives from the controller's default rest and never
   from an fx.rest override.
 
-- **2026-07-25** — A parked cell's identity key leads with `evType`
-  and discriminates on `pitch`, over keying on `lane`: one flat
-  `fxParked` holding every type made the old `(chan, cc, ppq)` key
-  ambiguous across types — a pb authored at a parked note's onset
-  resolved to the note, so edits rewrote the note and the first delete
-  ate it. Lane is display-only, and mm dedupes PAs on chan+pitch, so
-  two parked PAs differing only by lane could not survive a restore to
-  the take.
-
-- **2026-07-25** — A destructive action on a shared picker row arms on
-  the first click and fires only on the second, where a
-  non-destructive pick (Save's overwrite) confirms nothing: a pick is
-  an explicit choice from a visible list, whereas the row button sits
-  beside the thing you click to load and a delete has no undo path
-  back.
-
 - **2026-07-24** — Library tiers: reversed the earlier 'kill seeding /
   Factory as a live read-only resolution tier' model. Factory is now a
   seed source only — the library seeds from the shipped catalogue when
   empty at startup, and a 'reload factory' button (confirm per
   divergent copy) re-imports on demand. Resolution is project ->
   library; realisation still floors on schema defaults via mergeTiers.
-
-- **2026-07-23** — Placement fixpoint closed one pass later than its
-  disproof: continuous (cc/pb) park membership now reads
-  post-settlement windows via a settleWindows thunk rebuildRegionPark
-  calls between its note/PA and cc/pb passes; note membership stays on
-  the head set (exact by construction). One settlement step suffices
-  because cc/pb parks move no note onset. Supersedes the 'closed
-  without landing' note in design/archive/rebuild-pipeline.md's
-  closure header.
 
 - **2026-07-23** — rebuild-pipeline.md closed to archive with two
   negative results recorded rather than landed: the deferred
@@ -705,14 +603,6 @@ not eight or ten.
   O(N) passes are all forced from upstream. The walk's body narrows to
   the dirt; the walk's cost does not.
 
-- **2026-07-17** — `voicing` keeps the separation *verdict* and gives
-  up the traversal (`nudgeOnsets` → `separateOnset`). *Chosen over*
-  passing a seed predicate into `nudgeOnsets`: which predecessor
-  counts as settled and how far a cascade runs are facts about
-  interval dirt, which only the caller has — and tm's walk and mm's
-  backstop now genuinely want different traversals over the same
-  verdict.
-
 - **2026-07-17** — W542 ("empty if branch") ignored repo-wide. All
   four hits are an enumerated case whose action is deliberately
   nothing — `divert` in DAG's connection triage, the
@@ -739,25 +629,6 @@ not eight or ten.
   idiom is equally valid in prod, so the split had no principle behind
   it) and over a `util.first` helper, which would have been production
   shape authored for a spec's convenience.
-
-- **2026-07-17** — The flush's descending `flushAssigns` sort stays,
-  demoted from load-bearing to defensive. `assignNote`'s eviction
-  guard (same day) made *either* commit order leave `collisionIdx`
-  correct, so the sort no longer rescues a peer's slot from an
-  occupier; what it still buys is one fewer transient same-seat
-  collision, and every pending key costs the backstop a full
-  note-array walk at the unwind — measured at ~65µs on glasswork
-  against a ~17.7ms flush. *Chosen over* removing it: one comparison
-  that spares a scan is worth keeping, and the comment was what had
-  gone wrong, not the code. The backstop's own `steady state finds
-  none` contract was left alone because a probe showed it already true
-  — on the flush path mm's commit drives reload→rebuild from inside
-  `flush()`, so the tail walk separates first and the backstop finds
-  nothing; disabling either layer still separates, so the two are
-  redundant rather than jointly required. The reported premise that
-  the walk never runs on that path was wrong, and
-  `docs/trackerManager.md`'s "a rebuild always follows a flush" was
-  right.
 
 - **2026-07-17** — Not every luacheck shadow is a defect. A
   *protective* shadow stays where a pure function must not reach its
@@ -823,51 +694,6 @@ not eight or ten.
   but a live dependency on another module's key width, and now a local
   one.
 
-- **2026-07-17** — `resizeNote` both *decides* and *performs* PA
-  translation in the logical frame; the two raw-frame computations
-  that outlived the ownership move go. Its gate asked whether the raw
-  delta held at both endpoints — true under swing only when the note's
-  logical length is an exact multiple of the swing period, since only
-  then do both endpoints keep their phase. At any other length a
-  whole-note move read as a resize and culled the PAs it should have
-  carried (pinned red first). *Chosen over* a raw gate with an `OPEN`
-  special case: comparing logical **lengths** lets `math.huge` handle
-  itself, as huge minus either seat is huge. The carry moved for a
-  sharper reason — it now realises the moved seat via `fromLogical`
-  instead of adding the host's raw delta, because on a settled channel
-  `rebuildCCs` reads a raw/seat disagreement as an external edit and
-  restamps `ppqL` from the raw, so the fabricated realisation
-  overwrote the intent the carry existed to preserve.
-
-- **2026-07-17** — tm separates same-pitch collisions at exactly one
-  site, the tail walk; the reseat's and flush scan's nudges go.
-  *Chosen over* keeping them as cheap insurance: the walk and mm's
-  backstop each separate independently — proven by disabling each in
-  turn, where only killing *both* lands two voices on one raw — so the
-  nudges were the third and fourth layers on one collision. The flush
-  scan's *kills* stay: `nudgeOnsets` separates but never kills, so a
-  duplicate reaching the walk is one nothing below will collapse.
-  Corollary for the pins: with two sufficient layers no single-layer
-  break can go red, so the specs assert the surviving voice and name
-  no layer at all.
-
-- **2026-07-17** — um owns a PA by its *logical* seat, not the host's
-  raw window. A PA carries its own `ppqL` and the CC walk reswings it
-  from that seat, so it was never slaved to its host's realisation —
-  but `forEachAttachedPA` tested `cc.ppq` against `[host.ppq,
-  host.endppq)`, so any realisation-only shift of the host detached
-  it: a forward delay pushed a note's raw onset past a PA it still
-  owned, and um then declined to move or cull it, orphaning it in mm
-  (pinned red first). *Chosen over* teaching each nudge site to carry
-  its PAs: attachment is an intent relation, so the frame was the
-  defect and the sites were symptoms — fixing it closed the tail
-  walk's nudge and the reseat nudge at once, both of which write raw
-  `ppq` only and so now cannot detach anything. `resizeNote` follows
-  the seat into the logical frame, which *removes* its `cullEnd`
-  param: that existed only to smuggle the logical `OPEN` sentinel into
-  a raw test, and `OPEN` is `math.huge`, so an open tail needs no
-  case.
-
 - **2026-07-17** — um records carry `realised`; the `token` vocabulary
   is retired everywhere. Pivoting mm to uuid made most `.token` reads
   redundant — a clone already carried `uuid` — but not all: three
@@ -898,40 +724,6 @@ not eight or ten.
   `origTok` capture. It also costs one invariant that came free: a ppq
   move no longer re-keys, so `idxReconcile` must check `ppq`
   explicitly to keep `chans` ppq-sorted.
-
-- **2026-07-17** — identity is not persistence: every event mm mints
-  now carries a uuid, and a cc with no metadata is `plain` — its uuid
-  is in-memory only, re-minted each load, no `}RDM` sidecar, no
-  eventMeta bucket. Previously the two were one decision (a cc got a
-  uuid exactly when it got a sidecar), which left markerless pb seats
-  with no handle at all and forced content-keyed tokens to serve as
-  addressing. *Rejected:* stamping uuids universally with sidecars to
-  match — route-by-window exists precisely so a resynthesised absorber
-  seat stays plain native MIDI, and a sidecar per seat on a dense pb
-  stream is the cost that design avoids. The invariant round-trips by
-  construction rather than bookkeeping: load derives `plain` from what
-  bound no sidecar, and `plain` is structural, so it can never ride a
-  metadata blob and contradict the take. First step of retiring tokens
-  from addressing (uuid verbs, then callers, then tokens go private to
-  mm's collision detector).
-
-- **2026-07-17** — materialisation takes raw seeds, no closure:
-  `noteClosure` and `intervals.close` are deleted, and `exciseNotes`
-  excises the merged seed points directly. The drafted rule —
-  materialise the union of the consuming stages' closures — rested on
-  those stages reading the fresh clones, and they don't: every raw
-  consumer reads `buildRawScratch`, built whole-channel from mm, which
-  resolves carried and freshly-cloned events alike by uuid and writes
-  back through a `colEvt` backref, so a carried event whose mm note is
-  unchanged is already correct. The closure was materialising ~90% of
-  the channel and changing no output (suite identical at 2043 either
-  side). `close` went rather than staying dead for phase 4: its
-  contract (events logical in `.ppq`) is the opposite of the walk's
-  scratch frame. Closure is the tail walk's, against its own raw-order
-  scratch. (The entry originally gave a second reason — that
-  `opts.key` served groupings the same-pitch commute would remove.
-  There is no commute; the groupings stay. The frame mismatch carries
-  the decision alone.)
 
 - **2026-07-17** — same-pitch stays in tm entire, applied where tm
   projects intent into raw, beside swing and delay (design only; phase
@@ -1157,27 +949,6 @@ not eight or ten.
   local reached from outside its block fails silently, as a nil:
   cross-boundary state needs a function, not a shared name.
 
-- **2026-07-14** — mm's reindex is gated on `needsSort` /
-  `needsCompact`, which describe the *arrays* (an add or a ppq move
-  unsorts; a delete holes), not the write — so an assign touching
-  neither skips `rebuild` outright. Chosen over the filed
-  hole-vs-order split, which buys only the 0.6ms sort or the 0.2ms
-  compact because either fixup moves every `loc` and drags the 2.3ms
-  index loop with it. Consequence, and the price: a new mm mutator
-  that unsorts or holes an array **must set a flag** — on the skipped
-  path the verbs' incremental index maintenance is load-bearing, not
-  laundered by a from-scratch rebuild behind it.
-
-- **2026-07-14** — mm indexes events by channel
-  (`chanIdx[kind][chan].byLoc`), and the reindex reconstructs it from
-  scratch every flush. That laundering costs +0.9ms against a −2.4ms
-  `reload` win; keying by event instead of `loc` would let the reindex
-  skip it, but the collision backstop and load dedup kill events
-  *outside* `mm:delete`, so they would have to maintain the index
-  themselves. Rejected on gap 2's ruling: no correctness surgery on
-  the backstop, whose failure mode is silent take corruption, to buy a
-  millisecond.
-
 - **2026-07-14** — eventMeta stores fields in entry buckets (`e.<b> =
   {[uuid]=fields}`, `b = uuid//256`), not per-uuid slots. Chosen over
   batching the projext-undo mirror's manifest/root writes (the pinned
@@ -1185,15 +956,6 @@ not eight or ten.
   mirror manifests scale with slot count — a 384-entry flush cost
   585ms on a 14k-event take, now 15ms. Kills the keyset cache
   outright; old projects' metadata is hosed, accepted pre-beta.
-
-- **2026-07-14** — `pendingLen`: during `tm:setLength`'s shrink,
-  `tm:length()` reports the end tm is *about* to create, not mm's
-  current one. Chosen over threading a `takeLen` override through
-  `rebuild` → tails/fx/park (four sites that all just call
-  `tm:length()`). The shrink must flush before `mm:setLength` moves
-  the EOT (`setEot` cannot sit behind a live note-off), so that
-  flush's rebuild would otherwise regrow OPEN tails to the old end and
-  deadlock it.
 
 - **2026-07-13** — Specs get maps. `tests/specs/*_spec.lua` →
   `map/specs/*.map` (`@spec` header, intent/helpers/cases, same `@use`
@@ -1203,16 +965,6 @@ not eight or ten.
   surface. Receiver→module aliasing rides a hardcoded
   `HARNESS_MEMBERS` mirror of `harness.mk`'s return table — update it
   when mk grows a member.
-
-- **2026-07-13** — Pools never span tracks. REAPER undo on a
-  cross-track MIDI pool obeys a one-era law: only the first script run
-  after create/load mints working points; later runs silently lose all
-  but their first gesture until save+reload (in Continuum, P_EXT
-  traffic turned this into lumped undo). Every per-gesture workaround
-  was falsified live, so the rule is structural: `dropInstance`
-  unparks the scratch keeper by moving it back to the grid (mirroring
-  park-by-move), never cloning. Reported upstream (REAPER 7.77).
-  Ledger: docs/arrangeManager.md § Pools never span tracks.
 
 - **2026-07-12** — Every region-mutating ec verb flushes via
   `groupBridge.commit()`, not just the creation verbs.
@@ -1371,15 +1123,3 @@ not eight or ten.
   without anyone intending it: its terminal point had always been emitted
   at `endppq`, where the cc filter -- half-open already -- dropped it.
 
-- **2026-08-07** — An fx hands its target back at `endppq - 1`, closing
-  on the stream the stage inherited; rejected leaving the close to the
-  generator. `sine` and `slide` anchor zero at the window end and carried
-  contract lines promising it, but `lfo` closes on whatever phase the
-  window ends on, so a curve LFO bent the channel past its own region for
-  good — action at a distance that a per-generator promise cannot rule
-  out. One expression covers both fold modes, replace and augment. The
-  handback owns the last tick, so a stage's material folds into
-  `[startppq, endppq - 1)`: letting the close displace that tick instead
-  flattened any curve whose geometry lived in its closing control point.
-  Costs two ticks of a curve's geometry, inaudible at the working
-  resolution.

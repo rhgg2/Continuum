@@ -13,9 +13,9 @@ Rules (docs/CONVENTIONS.md § Length discipline for annotations):
   annotations) cap at 2 lines. Section dividers (`-----`, `----- Name`,
   `---------- PUBLIC`) are structure, not WHY, so they neither count toward
   a run nor join two runs into one.
-- A comment citing `design/`, other than the live plan's design doc: a pointer
-  names `docs/`, the layer that persists. The live doc is exempt because its
-  model has nowhere else to be yet; /plan-next repoints those as a phase lands.
+- A comment citing `design/`, other than a live plan's design doc: a pointer
+  names `docs/`, the layer that persists. Those are exempt because their model
+  has nowhere else to be yet; /plan-next repoints them as a phase lands.
 - Specs are exempt from the run cap: a spec's header and per-case preambles
   ARE its documentation (map/specs/*.map is derived from them). The KIND
   length caps still apply there.
@@ -77,15 +77,23 @@ def is_spec(path):
     return 'tests' in Path(path).parts
 
 
-def live_design_doc():
-    """The live plan's design doc, or None — the one `design/` a comment may cite."""
+def live_design_docs():
+    """The live plans' design docs — the `design/` paths a comment may cite.
+    `plan/CURRENT` names a plan per line, and each plan names its own source."""
+    docs = set()
     try:
-        current = Path('plan/CURRENT').read_text().split()
-        plan = Path('plan') / current[0]
-        match = re.search(r'^> source:.*`(design/[^`]*)`', plan.read_text(), re.M)
-    except (FileNotFoundError, IndexError):
-        return None
-    return match.group(1) if match else None
+        names = Path('plan/CURRENT').read_text().split()
+    except FileNotFoundError:
+        return docs
+    for name in names:
+        try:
+            plan = (Path('plan') / name).read_text()
+        except FileNotFoundError:
+            continue
+        match = re.search(r'^> source:.*`(design/[^`]*)`', plan, re.M)
+        if match:
+            docs.add(match.group(1))
+    return docs
 
 
 def why_runs(lines):
@@ -124,7 +132,7 @@ def split_hint(line, cap):
     return f", {len(clauses)} clauses at ';'"
 
 
-def check_file(path, added, live_doc):
+def check_file(path, added, live_docs):
     out = []
     try:
         lines = Path(path).read_text().splitlines()
@@ -144,7 +152,7 @@ def check_file(path, added, live_doc):
                             f'shape line too long ({len(line)} > {MAX_SHAPE_LEN}) '
                             f'— split prose to docs/<file>.md or factor sub-shapes',
                             line.strip()[:120] + '...'))
-            if DESIGN_REF.match(line) and not (live_doc and live_doc in line):
+            if DESIGN_REF.match(line) and not any(d in line for d in live_docs):
                 out.append((path, str(ln),
                             'comment cites design/ — a pointer names docs/',
                             line.strip()))
@@ -198,10 +206,10 @@ def main():
     if paths and paths[0] == '--measure':
         return measure(sys.stdin.readlines())
     targets = whole_file_lines(paths) if paths else diff_added_lines()
-    live_doc = live_design_doc()
+    live_docs = live_design_docs()
     violations = []
     for path, added in sorted(targets.items()):
-        violations.extend(check_file(path, added, live_doc))
+        violations.extend(check_file(path, added, live_docs))
     if not violations:
         print('clean')
         return 0
