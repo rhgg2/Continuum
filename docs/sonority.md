@@ -354,10 +354,15 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    **answers**, each a choice of spellings so far with the
    displacements that choice relaxes to. Two answers merge where the
    strands a later onset can still reach agree to half a cent, since a
-   later onset needs nothing of a past strand but its cents; a
+   later onset needs nothing of a past strand but its cents.
+
+1. What an answer owes joins the key beside what it sounds like. A
    deferral is a debt rather than a saving, so two answers agreeing in
    cents are one answer only where they owe the same sonorities the
-   same members.
+   same members; a rest decides what a strand's pull costs when it
+   closes, so they are one answer only where the strands still open
+   rest alike. A strand that fixed a rest may have closed and left the
+   key by then, and the cents no longer hold what the rest holds.
 
 1. The carried set is capped, and the cut runs over two pools — the
    answers that owe nothing and the answers that owe, each keeping the
@@ -402,7 +407,8 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    every extension. The pull is charged over a closed strand on the
    same terms, and the merge key shrinks with it — a strand no onset
    has sounded yet stands at zero in every answer alike, so the key is
-   the strands the walk has moved that something ahead still names.
+   the strands the walk has moved that something ahead still names,
+   and the rests of those it has yet to close.
 
 1. The answer ties once what every spelling of an onset would tie
    alike. The onsets behind the cursor stand still while the spellings

@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-21** — A rest joins the walk's merge key, one figure per open strand -- those an onset
+  leaves sounding -- rather than one per strand something later still names. Two answers agreeing in
+  cents can owe quite different pulls, the strands that fixed a rest having closed and left the key
+  by then: three voices at an arity of three settle at 45.34 with the rest keyed, where the merge
+  returned 46.25 at every cap from four to sixty. Keyed over every visible strand instead, the key
+  splits answers over a difference nothing can charge, and the cap spends its slots on
+  near-duplicates: the five-part take then loses its answer at a cap of six and wants twelve to
+  recover it, doubling the eighty-eight-note take's search. Over the open strands alone both takes
+  are unchanged, and the dials stand. The argument is design/sounding-anchor.md § Fixed at birth,
+  the model docs/sonority.md § The solve.
+
 - **2026-08-21** — A strand's rest is the presence-weighted mean of the sonority before the one it
   is born into, read off the displacements its answer carried into that onset and frozen there.
   Chosen over the sonority it joins, which returns a block chord change to the page: where every

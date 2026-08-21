@@ -898,13 +898,18 @@ local function offeredBy(onsets, spellings)
   return offered
 end
 
--- An answer under the whole of what a continuation can tell it by: its cents at the strands
--- ahead in half-cents, and the deferrals it has yet to pay.
+-- An answer keyed by what a continuation can tell it by: cents at the strands ahead, rests
+-- its open strands owe, and the deferrals it has yet to pay.
 --invariant: one strand list serves every answer of an onset, so its cents key by position
-local function answerKey(displacement, ahead, onsets, held)
+--invariant: an open strand sounds, so it was born and carries a rest
+local function answerKey(displacement, rest, ahead, open, onsets, held)
   local parts = {}
-  for k, index in ipairs(ahead) do
-    parts[k] = util.round(displacement[index] / AUDIBLE)
+  for _, index in ipairs(ahead) do
+    util.add(parts, util.round(displacement[index] / AUDIBLE))
+  end
+
+  for _, index in ipairs(open) do
+    util.add(parts, util.round(rest[index] / AUDIBLE))
   end
 
   for _, entry in ipairs(held) do
@@ -1084,6 +1089,7 @@ end
 --contract: a strand born at an onset rests where the sonority before it stood, and stays put
 --contract: a sonority holding a waiter is charged in its own onset's slot, as its members place
 --contract: answers agreeing to half a cent ahead and owing the same merge; the set is cut to cap
+--contract: answers resting apart at an open strand are two, a rest deciding what its pull costs
 --contract: the cut runs over two pools, the answers that owe and the answers that have paid
 --contract: nil where an onset has no spelling — which is a target stating no move
 function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
@@ -1107,7 +1113,8 @@ function sonority.search(onsets, spellings, seat, strength, stiffness, cap)
         if state then
           state.choice[i] = choice
 
-          local key = answerKey(state.displacement, ahead[i], onsets, state.held)
+          local key = answerKey(state.displacement, state.rest, ahead[i], moving[i], onsets,
+                                state.held)
           if outranks(state, reached[key], i, byChoice) then
             reached[key] = state
             bars[state.held[1] and 'owing' or 'paid'].saw(key, state.cost)

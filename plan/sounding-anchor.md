@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-21 sonority: key an answer by its open strands' rests (§ Fixed at birth)
 - 2026-08-21 sonority: rest a strand where the sonority before it stood (§ The ambient reference)
 - 2026-08-21 sonority: relax against a rest, not zero (§ The ambient reference)
 - 2026-08-21 docs: give sonority presence, and a spring its weight (§ Presence, § Springs price beating)
-- 2026-08-21 sonority: count a member held by recency for half (§ Presence, § Open)
 
 ## Now
 
@@ -41,9 +41,3 @@
 
 ## Queued (current phase; one-liners)
 
-1. The rest joins the merge key. `answerKey` keys a rest beside the cents
-   it already keys over the strands ahead, so two answers agreeing in
-   cents but differing in what their rests will cost when those strands
-   close survive as two. Red-first through `sonority.search`, on a
-   passage where the answer the merge would drop is the one the walk
-   should return; finding that passage is the work of the commit.

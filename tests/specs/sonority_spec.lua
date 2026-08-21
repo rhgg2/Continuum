@@ -48,8 +48,9 @@
 --
 -- Pins the walk itself (§ The solve): an answer held against an exhaustive search
 -- over the same spelling lists, a cap of one taking the greedy road, a strand
--- that has stopped standing at the cents the walk left it, and a chord whose
--- members are all new entering on the drift the sonority before it reached.
+-- that has stopped standing at the cents the walk left it, a chord whose
+-- members are all new entering on the drift the sonority before it reached, and
+-- two roads resting apart kept apart by the key.
 --
 -- Pins the deferral the walk carries (§ The candidates): a rolled chord charged
 -- for the pair it held where that pair places, landing where the struck chord
@@ -1404,6 +1405,33 @@ return {
         end
       end
       t.eq(entering, 3, 'the whole chord new, and the three of it sharing one rest')
+    end,
+  },
+
+  {
+    name = 'search: two roads resting apart are two answers',
+    run = function()
+      -- An A held under two lines moving over it, read at an arity of three: with a window
+      -- that tight, the strands that fixed a rest have dropped out of the key by the time
+      -- the road carrying it is judged. Two roads meet at the fourth onset agreeing in cents
+      -- at the one strand a later onset names, their rests for it standing at 31.13¢ and
+      -- -76.68¢; keyed on the cents alone they are one road, and the one dropped is the one
+      -- that ends cheapest (§ Fixed at birth).
+      local strands = heldLines({ { 57, 57, 57, 57, 59 },
+                                  { 60, 65, 60, 60, 62 },
+                                  { 71, 65, 65, 60, 60 } }, 960)
+      local onsets, lists, seat = termsOf(strands, 3, fifthsAndThirds)
+
+      -- That road walked on lists of its own, which prices it whatever the merge makes of it.
+      local road = {}
+      for i, choice in ipairs{ 2, 14, 9, 7, 1 } do road[i] = { lists[i][choice] } end
+      nearly(settledFrom(sonority.search(onsets, road, seat, 1, 8, 60), #seat, 1, 8), 45.3402,
+        'the road that ends cheapest')
+
+      local answer = sonority.search(onsets, lists, seat, 1, 8, 60)
+      nearly(settledFrom(answer, #seat, 1, 8), 45.3402,
+        'which the walk keeps, rather than the 46.2459 of the road that looks cheaper first')
+      t.deepEq(answer.choice, { 2, 14, 9, 7, 1 }, 'spelling every onset as that road spells it')
     end,
   },
 
