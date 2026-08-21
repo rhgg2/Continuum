@@ -1,6 +1,6 @@
 # arrangeManager
 
-Project-wide model for the arrange page (`design/arrange.md`). Owns no
+Project-wide model for the arrange page. Owns no
 state of its own — every read walks REAPER's track/item lists directly,
 every write goes through cm. The per-track **slot palette** lives in cm
 at the track tier under `arrangeSlots`.
@@ -317,5 +317,5 @@ lengthQN?)`.
 
 Folded from sequenceManager: `am:takesUsing`, `am:reswingAll`.
 
-Still ahead (per `design/arrange.md`, phases 5–7): `duplicateTake`,
-`moveTake`, `resizeTake`, `trimStart`, `trimEnd`, `deleteTake`.
+Take mutation: `am:duplicateTake`, `am:moveTake`, `am:resizeTake`,
+`am:deleteTake`.

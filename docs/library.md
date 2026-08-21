@@ -12,11 +12,10 @@ library (`cm:getAt('global', key)`). Resolution is project over library;
 `mergeTiers` floors realisation on the schema defaults beneath both.
 
 The factory catalogue (`cm:defaultFor`) is a **seed source, not a resolution
-tier** — see `design/decisions.md` § 2026-07-24 for why this replaced an
-earlier live-factory-tier model. `seedIfEmpty` stocks an empty library tier
-from it once, at startup; `reloadFactory` (via `reloadPlan`) re-imports it on
-demand, so a fresh project never resolves against factory directly and a
-stale library copy only picks up factory changes when asked.
+tier**. `seedIfEmpty` stocks an empty library tier from it once, at startup;
+`reloadFactory` (via `reloadPlan`) re-imports it on demand, so a fresh project
+never resolves against factory directly and a stale library copy only picks up
+factory changes when asked.
 
 ## Editing invariant
 

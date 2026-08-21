@@ -438,8 +438,7 @@ each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 
 `vm:retune(slots)` puts every note in scope — `slots.scope` is `'selection'`
 or `'all'` — on its own step of the active temper. Snap sets no target — it is
-the absence of one (design/adaptive-tuning.md § When an adaptive solve
-exists) — and with no active temper the verb does nothing, there being
+the absence of one — and with no active temper the verb does nothing, there being
 nothing to snap to. A note already seated is skipped:
 `ctx:noteDeviation`'s `gap` clears sub-1e-6 serialisation dust before
 returning, so `gap ~= 0` reads "off its step" with no second epsilon

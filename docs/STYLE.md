@@ -7,6 +7,9 @@ written to be read:
 - `design/decisions.md`;
 - a plan's Queued lines.
 
+Where a document disagrees with this style guide, the style guide
+always has authority; there are no exceptions.
+
 Implementation briefs are excluded; they are compressed by design. For
 annotations and inline comments, see `docs/CONVENTIONS.md`.
 
@@ -34,7 +37,7 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
    tone should be deleted. 
    
 1. Inanimate objects or abstract concepts are never actors: they are
-   not the subject of action verbs, nor do they take a possessive.
+   not personified or anthropomorphised. 
 
 ## Structure
 
@@ -76,9 +79,8 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
 
 1. Avoid sentences closing by restating itself on *rather than*: *the
    reference is the page rather than the music*.
-   
-1. Prefer plain constructions to elevated ones. If it sounds like the
-   King James Bible, rewrite. So, *the box measures root fusion*
-   rather than *what the box measures is root fusion*, *a spring links
-   two sounding pitches* rather than *a spring wants two sounding
-   pitches*.
+
+1. Prefer plain constructions to elevated ones. Avoid cleft
+   constructions and Latinate absolutes. If it sounds like the King
+   James Bible, rewrite. So, *the box measures root fusion* rather
+   than *what the box measures is root fusion*.

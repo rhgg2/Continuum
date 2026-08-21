@@ -1,9 +1,10 @@
 # sonority
 
-The objective an adaptive-tuning solve minimises, the strands it is
-taken over, and the two searches that minimise it. Pure module — no
-state, and no vocabulary of its own for ratios or cents, which are
-`tuning.lua`'s.
+**The objective an adaptive-tuning solve minimises, the strands it is
+taken over, and the two searches that minimise it.**
+
+Pure module — no state, and no vocabulary of its own for ratios or
+cents, which are `tuning.lua`'s.
 
 The retune command offers one target under two readings, and the
 facility slot says which (`docs/trackerView.md` § Retune). Under
@@ -24,7 +25,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    reduced into the octave. The notes of a step-class that overlap in
    time are a **strand**, and they hold one tuning between them: two
    notes of a class sounding at once at different tunings beat,
-   whatever the harmony wants of them.
+   regardless of the harmony.
 
 1. A note that overlaps nothing else in its class starts a strand of
    its own, which retunes freely — one step takes one tuning under the
@@ -42,7 +43,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. A note held across a chord change bends the harmony to it rather
    than the reverse. Under a 5-limit target a D held from D–F–A into
    G–B♭–D keeps the `10/9` the first chord gives it, where restruck it
-   would take the `9/8` the second prefers, so the hold costs that
+   would take the `9/8` the second gives, so the hold costs that
    chord 0.737 of box.
 
 ## The walk
@@ -68,18 +69,18 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    when spread out in time, and exceed it strictly: at the arity itself
    each sonority displaces its predecessor whole, and the passage falls
    apart into independent solves. A compromise across a chord change
-   wants `n` to reach the classes the two chords hold between them, six
+   requires `n` to reach the classes the two chords hold between them, six
    where a C7 resolves to F–A–C.
 
 1. The sonority forgets only what has fallen silent, so a note held
    through the chords behind it drops out of the last `n` struck while
    it still sounds. The coupling usually survives that, each note being
    tuned against its predecessors and so, at one remove, against the
-   note still held; what breaks the chain is a run of classes the
-   target fixes outright, behind which the answer moves by a syntonic
-   comma about one time in seven.
+   note still held; a run of classes the target fixes outright breaks
+   the chain, and behind it the answer moves by a syntonic comma about
+   one time in seven.
 
-1. A member's **presence** at an onset is what it contributes to that
+1. A member's **presence** at an onset is its contribution to that
    onset's sonority: full where its strand sounds there, and a half
    where recency alone holds it, the class having stopped without yet
    being displaced. Presence is a constant rather than a dial: an
@@ -106,7 +107,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    scores 5.91 close, 6.91 in first inversion and 4.91 open, where the
    same triad without prime 2 scores 3.91 in every voicing.
 
-1. A sonority's **box** is what its coords span on each axis, the
+1. A sonority's **box** is the span its coords take on each axis, the
    highest exponent less the lowest, and `sonority.score` sums those
    spans weighted by `log₂ p` — the ear's distance to a prime growing
    with its logarithm rather than its size. That figure is the Tenney
@@ -126,7 +127,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    to land, and a member the sonority holds by recency stands in the
    span at full weight.
 
-1. Full weight is what the measure asks for. The recency tail is in
+1. Full weight is deliberate. The recency tail is in
    the sonority so that a chord change is scored against the chord
    before it: the springs couple the tuning across that change, where
    the box couples the spelling. A member that has stopped beats with
@@ -137,8 +138,8 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. The **pull** charges a strand for standing away from the step it was
    written on, quadratically in the **strain** — the displacement taken
    in the unit its facility measures. It is counted once per strand
-   rather than once per note, which is what makes an octave doubling
-   change no answer: the box already charges a doubling nothing, and
+   rather than once per note, so an octave doubling doesn't change the answer:
+   the box already charges a doubling nothing, and
    counted per note the pull would charge it twice.
 
 1. A note's **window** reaches half way to the notation's adjacent step
@@ -155,14 +156,14 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    is equidistant from two steps, the tie breaks downward, and a cell
    with no intent to read relabels as surely as if the note had moved
    further, so `tuning.seatWindow` stops each half a hair inside the
-   edge — a ten-thousandth of a cent. The shortlist's strain is what
-   reads those halves; the moves solve reads the seat alone.
+   edge — a ten-thousandth of a cent. The shortlist's strain reads
+   those halves; the moves solve reads the seat alone.
 
 1. The two facilities take the strain in units of their own. A points
    solve takes it in half-windows, its shortlist having no other bound,
    so a strand pays for the fraction of its own room it has spent; a
    moves solve takes it in cents over fifty, the fifty the springs are
-   charged over (§ The springs), and asks the notation nothing. For ten
+   charged over (§ The springs), and charges the notation nothing. For ten
    cents of drift a lock of 1 therefore charges a 31-EDO strand 6.7
    times what it charges a 12-EDO strand under the points facility,
    where under the moves facility it charges the two alike.
@@ -208,8 +209,8 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    prices it: it is charged where the spelling is chosen (§ The
    candidates, § The solve).
 
-1. Mistuning is beating between two sounding pitches, and knows nothing
-   of how the notation spaces its steps, so it is taken in cents
+1. Mistuning is beating between two sounding pitches, independent of
+   how the notation spaces its steps, so it is taken in cents
    against a reference of 50 — what a half-window holds in 12-EDO, held
    constant so that a stiffness means one thing under any notation. The
    pull is taken there too (§ The pull), so the two charges are
@@ -221,7 +222,9 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    settles at the weighted mean of what its springs ask of it and the
    seat it was written on — each ask weighted by its spring's weight,
    the two dials weighting the two terms, and the fifty both charges
-   are taken over dividing out. The sweep order and the start buy
+   are taken over dividing out.
+
+1. The sweep order and the start buy
    speed rather than the answer, and `sonority.ties` pre-sums the asks
    and the weights they carry, since the strands a sweep holds still
    stand still while it runs.
@@ -242,8 +245,8 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    spring against each member already placed, both priced at zero
    displacement and the springs weighted as the relaxation weights
    them (§ The springs). A beam ranking by one objective while the
-   search minimises another would return spellings the search does not
-   want. Both charges are additive and neither is negative, so
+   search minimises another would return spellings that do not minimise
+   the search's objective. Both charges are additive and neither is negative, so
    a partial spelling's score is a floor under every spelling that
    completes it, and the beam ranks its states by a figure no
    continuation can undercut.
@@ -272,7 +275,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    a spelling then stands is the relaxation's business rather than the
    beam's.
 
-1. What two members may not take is one spelling. Nothing in the
+1. Two members may not take one spelling. Nothing in the
    objective forbids it, and on E♭–E–G such a spelling wins, the two
    settling four cents apart on one MIDI pitch; so the model states
    **distinctness** directly — a member takes a spelling no member of
@@ -307,7 +310,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. The first member to place anchors, and the members before it wait.
    Every move has its inversion, so a spelling stands at as many coords
    as the sonority has members to anchor on, and fixing the anchor at
-   the first member to place is what holds a set of waiters to one
+   the first member to place holds a set of waiters to one
    spelling rather than one per member it leaves.
 
 1. A waiting member is charged where it places: its springs against the
@@ -323,13 +326,13 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 
 1. Waiting is a candidate rather than a fallback, forked beside the
    placements, and it resolves only to coords no earlier sonority could
-   have offered — what an earlier sonority offered being what its beam
-   returned rather than what its moves could have reached. A deferral
+   have offered: an earlier sonority offered what its beam
+   returned, not what its moves could have reached. A deferral
    moves charge out of the running score rather than paying it, so a
    state that waits is no rival to one that spells: the cut runs within
    a waiting count, and the width an author states is a width per
    count. Two states of one count have placed equally many members,
-   which is what makes the scores the cut ranks commensurable; ranked
+   so the scores the cut ranks are commensurable; ranked
    across the counts instead, a beam of twelve over five members with
    four free to wait returns twelve states that each defer two members
    or more, and no fully spelled state among them.
@@ -360,13 +363,13 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    those born there, and those a note carries through it — and the rest
    of an answer stands as data, at the displacements it already
    carries. Freeing every strand at every onset, once per carried
-   answer, is where the walk's cost would go, and it buys little:
+   answer, would add cost to the walk for little return:
    holding one strand 10¢ off its optimum moves later strands by
    amounts halving every three to four onsets, and that attenuation
    runs backward as well, so a new onset moves a settled past by
    little.
 
-1. What the walk has closed, it charges once. A strand sounds over one
+1. The walk charges what it has closed once. A strand sounds over one
    run of onsets, so once the walk is past every strand a sonority
    named, neither that sonority's springs nor the strands they tie can
    move again: the onsets before that cursor are closed, and an answer
@@ -376,8 +379,8 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    has sounded yet stands at zero in every answer alike, so the key is
    the strands the walk has moved that something ahead still names.
 
-1. What every spelling of an onset would tie alike, the answer ties
-   once. The onsets behind the cursor stand still while the spellings
+1. The answer ties once what every spelling of an onset would tie
+   alike. The onsets behind the cursor stand still while the spellings
    at it are tried, so an answer gathers those ties once and each
    spelling starts from them, tying only what it wrote: its own
    sonority's springs, and those of the deferrals it completed.
@@ -396,11 +399,11 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
    passage measured returns the same cents from three abreast upward at
    that beam, where two abreast loses them, and an eighty-eight-note
    take answers in 1.7 seconds. The two figures are not independent: at
-   a beam of forty-eight the five-part take wants more than four
+   a beam of forty-eight the five-part take needs more than four
    abreast, the spellings the wider beam admits crowding the capped
-   walk. What would settle the cap is a passage that loses the answer
-   at the beam the walk actually takes, which
-   `tests/spikes/springs/cap_sweep.lua` sweeps for.
+   walk. A passage that loses the answer at the beam the walk actually
+   takes would settle the cap, and `tests/spikes/springs/cap_sweep.lua`
+   sweeps for one.
 
 1. The winner is settled by one joint relaxation over its springs,
    which recovers what the frozen past gave up along the way;
@@ -430,7 +433,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. Purity is the moves facility's alone: a points solve selects among a
    target's points and prices no interval against a spelling, so there
    is nothing there for the dial to hold. The two are dials of their
-   own rather than one riding the other — the pull asks how far a note
+   own rather than one riding the other — the pull prices how far a note
    may stand from where it was written, and the stiffness how impure an
    interval may become — so an author owns drift against distribution.
 
@@ -446,7 +449,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 1. The order two strands were written in. Past its own half-window some
    other strand is the nearer host for a pitch, and nothing holds two
    strands of a sonority in the order their steps stand in, so they may
-   cross; what that sounds like is not known.
+   cross; how that sounds is not known.
 
 1. Exactness. A spelled interval is pure to the stiffness rather than
    by construction, 0.63¢ at worst over the five-part take at purity 8,
@@ -454,7 +457,7 @@ widening a refused strand is offered — is `design/adaptive-tuning.md`.
 
 1. A statement about the passage. The moves solve places no passage at
    a single displacement, so "the passage sits 14.7¢ sharp" is not a
-   thing the model says; what it holds instead is a pull per strand
+   thing the model says; it holds instead a pull per strand
    toward the step its own note was written on.
 
 1. One account of a carried strand. A strand present at two onsets is

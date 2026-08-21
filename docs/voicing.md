@@ -26,13 +26,10 @@ blind keep-the-longest this policy replaced.
 
 ## Why one module
 
-The policy used to exist twice with different fidelity: tm's flush
-pre-clip scan had the full verdicts, while mm's load-dedup killed
-blindly — it ran before the metadata join and couldn't see intent. The
-blind copy ate voices on external collapse (Ctrl-Z or a foreign script
-moving two authored notes onto one raw). Hoisting the verdicts into one
-pure module lets mm and tm consume the same policy
-(`design/archive/same-pitch-enforcement.md`).
+mm and tm consume the same policy from this one pure module. mm's load-dedup
+runs before the metadata join, so it cannot see intent: judging on its own it
+would eat voices on external collapse (Ctrl-Z, or a foreign script moving two
+authored notes onto one raw).
 
 Verdicts, not traversals. `separateOnset` judges one collision and says
 nothing about which notes to ask or in what order; tm's tail walk asks

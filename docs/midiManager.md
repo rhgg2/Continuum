@@ -268,8 +268,7 @@ the same `orderInsert`/`orderRemove` — so `notesRaw(chan)` is a plain `ordered
 walk over it rather than a whole-take walk filtered on membership. That widens
 what counts as maintenance: a ppq move re-seats the event inside its own
 channel too, which is why the `mm:assign` bracket covers both moves and why
-`resolveCollisions`' nudge splices the bucket alongside the global array. See
-design/stable-slots.md.
+`resolveCollisions`' nudge splices the bucket alongside the global array.
 
 **Collect first, then mutate.** A splice under a live iterator drops a
 neighbour out of the walk silently, and that is the one failure mode worth a

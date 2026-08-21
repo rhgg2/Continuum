@@ -3,7 +3,7 @@
 What an FX slot's MIDI input/output dialog actually does, and how the
 state is encoded in the RPP file. Reverse-engineered against
 REAPER 7.61 (macOS-arm64) — there is no documented API surface for
-either reading or writing this setting. Test RPPs live in `design/`.
+either reading or writing this setting.
 
 ## Model
 
@@ -46,9 +46,8 @@ the GUI nor the ReaScript API exposes it.
 ## RPP encoding
 
 The routing lives inside each FX's `<VST ...>` block in the `FXCHAIN`,
-in two places that REAPER keeps in sync. Ground-truth captures live
-in `design/midi-routing-fixtures.md`; the spike that produced them is
-`tests/spike_midi_routing.lua`.
+in two places that REAPER keeps in sync. `tests/spikes/spike_midi_routing.lua`
+is the spike that captured them.
 
 **Routing record** — the **last 4 bytes of the FX block's concatenated
 decoded stream** (all base64 content lines joined, then decoded):

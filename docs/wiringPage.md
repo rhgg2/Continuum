@@ -177,9 +177,7 @@ every input tap into every output tap, each crossing scaled by the product of it
 two gains. The renderer draws the bar, combs its taps, and owns every buss
 gesture; it never sees the realisation (spliced sends below 2×2, an fx-less
 summing track at matrix — `docs/wiringManager.md § Busses`, `docs/DAG.md § bus
-splice`). To the renderer a buss is just a node whose body is a bar. The model's
-rationale and rejected alternatives are archived in
-`design/archive/wiring-busses-v2.md`.
+splice`). To the renderer a buss is just a node whose body is a bar.
 
 `wv:busViews()` yields one `busView {id, pos, orient, ext?, matrix?}` per buss;
 `busSegments` turns each into a **rail** (`bar` + per-tap `segs`) shared by the

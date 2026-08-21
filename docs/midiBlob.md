@@ -75,9 +75,8 @@ so the fix had to be a wider key rather than a guard — falling back to full
 regeneration rescues nothing when `buildWire` composes the same colliding key.
 And among events at one ppq the wire order is
 now slot order, which after free-list reuse need not match the model's array
-order — deliberately, per `design/stable-slots.md` § Equal-ppq order. Which of
-two coincident events REAPER receives first is nothing to REAPER; the model side
-still obeys the add-after-equals rule.
+order — deliberately. Which of two coincident events REAPER receives first is
+nothing to REAPER; the model side still obeys the add-after-equals rule.
 
 ## Splicing a held wire
 

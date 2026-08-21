@@ -217,12 +217,12 @@ event's current position is recovered live from `byUuid`. Membership (`seedCover
 logical row -- the snapshot `ppqL`, plus a survivor's live `ppqL` recovered from `byUuid` -- so a
 move dirties both rows, an add covers its onset row, and a delete (uuid gone from `byUuid`) covers
 only the death row. Position goes stale as things move and uuid dangles as things die; each consumer
-reads whichever the seed still answers. See design/interval-dirt.md § The model, inverted for the
-shape and § Phase 4.75 for the seek walk the snapshot feeds.
+reads whichever the seed still answers; the seek walk the snapshot feeds is § What the walk
+visits, and what it emits.
 
 A chan reassign counts as a move too: the vacated slot lands in the *old* channel's dirt, which no
 other seed for this pass would otherwise reach, so `assignLowlevel` snapshots it exactly like an
-onset shift (see design/decisions.md § 2026-07-28).
+onset shift.
 
 ### Interval materialisation
 
@@ -241,7 +241,7 @@ column event expecting a fresh clone — every raw consumer reads um's raw index
 mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its
 results back through the `colEvt` seat stamp. A carried event whose mm note did not change is
 already correct. Closure belongs to the tail walk, computed against that same index — see
-design/interval-dirt.md § Phase 4 and § Phase 4.5.
+§ What the walk visits, and what it emits.
 
 ## Pitchbend: tm's role in the tuning model
 
@@ -671,11 +671,10 @@ replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, n
 
 An fx note-host's window is `[onset, windowEnd)`, where `windowEnd` is the authored (or take-end)
 ceiling clipped to the host's strict-next same-lane onset — the span a vibrato or tension producer
-seats across. `computeFxWindows` once rebuilt this for every note-column event of every fx-active
-channel, twice per rebuild, with no dirt gate (`design/archive/interval-dirt-v2.md` § 2). It now caches each
-host's `windowEnd` per uuid (`fxHostWin`) and recomputes one only when the dirt reaches it: the
-host's own uuid seeded (its move or length mutation), or a seed ppq fell inside the host's cached
-span (a neighbour onset that becomes the new clip). Everything else rides the cached end.
+seats across. `computeFxWindows` caches each host's `windowEnd` per uuid (`fxHostWin`) and
+recomputes one only when the dirt reaches it: the host's own uuid seeded (its move or length
+mutation), or a seed ppq fell inside the host's cached span (a neighbour onset that becomes the
+new clip). Everything else rides the cached end.
 
 The reseek is walk-free. `byUuid[uuid].colEvt` (the seat stamp, § Incremental index reconciliation)
 back-links a host uuid to its live column cell, so a dirty host reclips by seeking its own lane
@@ -741,8 +740,6 @@ windows can move mid-pass is already dirty when the cc scan runs.
 The over-approximation arm needs no such care: restores narrow windows,
 so at worst the settled set carries a member the layout no longer covers,
 and the prior-set partition — ungated — restores it at the next rebuild.
-(The question was posed by `design/archive/rebuild-pipeline.md` § The
-placement fixpoint.)
 
 ### Park window census
 
@@ -832,9 +829,8 @@ column is logical by invariant, and the re-projection that would corrupt
 `delayC` (recomputing `evt.ppq - baseline` from an already-logical `ppq`)
 has no stage left to run in.
 
-Interval dirt (design/archive/interval-dirt.md, closed with its v2 successor 2026-07-23) narrowed
-the freeze below channel grain: a channel whose only dirt is note-column edits carries its
-CC/park/pb state forward like a clean channel and splices just the closed spans —
+Interval dirt narrows the freeze below channel grain: a channel whose only dirt is note-column
+edits carries its CC/park/pb state forward like a clean channel and splices just the closed spans —
 `rebuildInternals` excises and re-clones the note span (§ Interval materialisation), `rebuildCCs`
 splices the seed-touched windows, `rebuildPbs` gathers span-bounded. Wholesale dirt
 (`dirtyChans[chan] == true`) still replaces the whole channel.
@@ -850,10 +846,8 @@ stages no mm op, so it leaves no seed to be rediscovered from. A shrink that als
 killed one event on a channel demoted that channel to the kill's seed and left the
 OPEN tail uncut. Pinned in `tm_tail_gating_spec`.
 
-Past the cap the dirt collapses to the whole channel, so the fresh-channel alloc
-(`trackerManager.lua:3275`) and excise-skip agree with the tail walk; commit 5
-(design/archive/interval-dirt.md) moves the cap to the walk's degenerate threshold instead of
-pinning it here.
+Past the cap the dirt collapses to the whole channel, so `rebuildInternals`' excise-skip and its
+fresh column build agree with the tail walk.
 
 ### The note-lane shed
 
@@ -1320,9 +1314,7 @@ the *old* end and deadlock the shrink.
 length (tail clip, fx windows, parked realisation) sees the take tm is
 about to create rather than the one it still has. All 16 channels are
 marked dirty, because any of them may hold a spanning OPEN tail and a
-clean channel's frame would otherwise carry forward unclipped — this is
-also the explicit all-16 take-length dirty source that
-`design/archive/dirty-channels.md` asked for.
+clean channel's frame would otherwise carry forward unclipped.
 
 ### rescaleLength(newPpq)
 
@@ -1437,8 +1429,7 @@ inferable from what is displayed. The rule that decides the boundary:
 clip what the view can't draw; don't clip what it can. Same-pitch is
 therefore realisation, exactly like swing — true on the wire, absent from
 the screen, and no cue, because a cue earns its place only where the cause
-is invisible. See design/interval-dirt.md § Same-pitch is a projection
-artefact.
+is invisible.
 
 Collision (current raw `<=` prev same-pitch raw, raw-order with ppqL
 tie-break): the successor is nudged to `prev.ppq + 1`
@@ -1472,9 +1463,10 @@ disturbed if a seed names it, if it is derived, or if a nudge moved it. A
 seed names by uuid where it still answers one — a survivor, recovered
 live from `byUuid` — and by logical seat otherwise: an add, whose uuid
 lands only at commit, and a delete, whose uuid is already gone. Derived
-notes seed unconditionally because `rebuildFx` regenerates `noteLive`
-wholesale, so a tile's raw is this pass's news whatever the dirt says —
-`design/interval-dirt.md` § phase 5 narrows that.
+notes seed only where their producer re-ran: `rebuildFx` regenerates those
+tiles, so their raw is this pass's news whatever the dirt says. A kept
+producer's specs come back verbatim, settled and clipped last pass, so they
+ride as bound anchors only and don't count toward the frontier threshold.
 
 Separation narrows on the same judgement. Only a disturbed note can
 collide, and only onto its same-pitch predecessor — so a nudge marks its
@@ -1491,7 +1483,7 @@ shield standing between a seed and an open note behind it is itself that
 seed's nearest same-lane predecessor and holds the clip, and a deleted
 neighbour that can no longer be asked for its onset is reached because its
 death position is a seed and the note it bounded is that seed's
-predecessor. See design/interval-dirt.md § Span-staleness.
+predecessor.
 
 Successors come from one backward pass carrying, per lane and per pitch,
 the note last seen and that note's strict next — a neighbour sharing the
@@ -1503,10 +1495,7 @@ are few enough to scan, and only for the notes the sweep bounds.
 The walk **emits**. A nudged lane-1 onset moved every absorber seat
 between it and the next lane-1 onset, so the walk seeds that interval
 into `dirtyChans[chan]` and `rebuildPbs` consumes it later in the same
-pass. This replaced a `dirtyChan(chan)` widen carrying the same fact on
-the same trigger: being the coarse mechanism it would have written `true`
-over the very set the emission builds. See `design/interval-dirt.md`
-§ The widen and the emission are the same fact.
+pass.
 
 Two walks share these rules; a seed-count threshold picks between them.
 The **linear walk** is authoritative for dense and wholesale dirt: one
@@ -1517,11 +1506,7 @@ seed count). The **frontier probe walk** takes the common sparse-seed
 channel: it seeks to each seed by name and probes a bounded few rows for
 its lane and pitch neighbours, with no whole-channel traversal and no
 `mergeIndexed` — the sorted index and the small extras list stay separate
-probe sources. Both drove identical results under a scratch-copy shadow-
-compare (gated on `_G.CONTINUUM_SHADOW_FRONTIER`) until the frontier went
-live 2026-07-18; that shadow, the earlier span-based sweep it replaced,
-and `intervals.lua` are all retired now. See `design/interval-dirt.md`
-§ Phase 4.75 and § Retirement of intervals.
+probe sources.
 
 ## Rebuild: logical projection
 
