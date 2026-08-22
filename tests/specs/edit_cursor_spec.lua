@@ -824,6 +824,33 @@ return {
     end,
   },
 
+  {
+    name = 'selectAll spans every row and every column',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq=0, endppq=60, chan=1, pitch=60, vel=100 },
+          { ppq=0, endppq=60, chan=2, pitch=60, vel=100 },
+          { ppq=0, endppq=60, chan=3, pitch=60, vel=100 },
+        }},
+      }
+      h.vm:setGridSize(80, 40)
+      h.cmgr:invoke('goBottom'); local lastRow = h.ec:row()
+      h.cmgr:invoke('goRight');  local lastCol = h.ec:col()
+
+      h.ec:setPos(2, 2, 1)
+      h.cmgr:invoke('selectAll')
+
+      local r1, r2, c1, c2, p1, p2 = h.ec:region()
+      t.eq(r1, 0,        'top row')
+      t.eq(r2, lastRow,  'bottom row')
+      t.eq(c1, 1,        'first col')
+      t.eq(c2, lastCol,  'last col')
+      t.eq(p1, '*',      'whole-col part sentinel at the left edge')
+      t.eq(p2, '*',      'whole-col part sentinel at the right edge')
+    end,
+  },
+
   -- 6. ec:eachSelectedCol — iterator pins. Seeds three chans so the grid
   -- has multiple note cols; tests no-sel / 1×1 / multi-col behaviour.
   {

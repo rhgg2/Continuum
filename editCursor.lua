@@ -170,6 +170,14 @@ local function cycleVBlock()
   selUpdate()
 end
 
+--contract: whole grid — both axes to their all-of-axis scope; anchor parks at the caret
+local function selectAll()
+  if (grid.numRows or 0) == 0 or #grid.cols == 0 then return end
+  selAnchor = { row = cursorRow, col = cursorCol, stop = cursorStop }
+  hBlockScope, vBlockScope = 3, 3
+  selUpdate()
+end
+
 --contract: swaps anchor↔cursor on scope-unlocked axes; no-op without a selection
 --invariant: swapEnds: vBlock<1 swaps row; hBlock<2 swaps col+stop
 local function swapEnds()
@@ -489,7 +497,7 @@ local REGION_KEEPALIVE = {
   pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
   colLeft=true, colRight=true, channelLeft=true, channelRight=true,
   selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
-  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+  selectAll=true, cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
   regionArm=true,   -- re-pressing \ re-arms at the caret without a bail
 }
 
@@ -815,6 +823,7 @@ function ec:registerCommands(scope)
     colLeft       = function(p) moveCol(-p) end,
     channelRight  = function(p) moveChannel( p) end,
     channelLeft   = function(p) moveChannel(-p) end,
+    selectAll     = function() selectAll() end,
     cycleBlock    = function() cycleHBlock() end,
     cycleVBlock   = function() cycleVBlock() end,
     swapBlockEnds = function() swapEnds() end,

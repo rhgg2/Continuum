@@ -53,6 +53,7 @@ pageBindings.tracker = {
   cycleVBlock            = { {ImGui.Key_O,           ImGui.Mod_Super} },
   swapBlockEnds          = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} },
   selectClear            = { {ImGui.Key_G, ImGui.Mod_Super} },
+  selectAll              = { {ImGui.Key_A, ImGui.Mod_Ctrl} },
   cut                    = { {ImGui.Key_W, ImGui.Mod_Super}, {ImGui.Key_X, ImGui.Mod_Ctrl} },
   copy                   = { {ImGui.Key_W, ImGui.Mod_Ctrl},  {ImGui.Key_C, ImGui.Mod_Ctrl} },
   paste                  = { {ImGui.Key_Y, ImGui.Mod_Super}, {ImGui.Key_V, ImGui.Mod_Ctrl} },

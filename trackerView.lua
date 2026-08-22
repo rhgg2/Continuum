@@ -4446,7 +4446,7 @@ local GROUP_PASSTHROUGH = {
   pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
   colLeft=true, colRight=true, channelLeft=true, channelRight=true,
   selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
-  cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+  selectAll=true, cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
 }
 for i = 0, 9 do GROUP_PASSTHROUGH['advBy' .. i] = true end
 

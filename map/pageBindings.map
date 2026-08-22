@@ -1,4 +1,4 @@
-@module pageBindings  src=pageBindings.lua  loc=186  mode=chunk
+@module pageBindings  src=pageBindings.lua  loc=187  mode=chunk
 
 # Shapes
   @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }  @ 4
@@ -9,7 +9,7 @@
 
 # Private state
   @state pageBindings = {}  @ 13
-  @state arrange = {  @ 135
+  @state arrange = {  @ 136
 
 # Private functions
   -- tracker (command bodies in trackerRender + trackerView)
@@ -17,17 +17,17 @@
   -- sample (command bodies + slot-clamp invariant in sampleRender)
   -- wiring
   -- arrange (command bodies in arrangeRender + arrangeView)
-  @fn placeKey(slotIdx)  @ 172-176
+  @fn placeKey(slotIdx)  @ 173-177
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Uses (outbound edges)
-  @use call    util.toBase62  @ <load>:179
+  @use call    util.toBase62  @ <load>:180
   @use require imgui  @ <load>:10
   @use require util  @ <load>:11
 
 # Calls (intra-file)
-  @call placeKey  @ <load>:179
+  @call placeKey  @ <load>:180
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -35,196 +35,197 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 6
-  @field r Key_0  @ 66,100,182 placeKey:173
+  @field r Key_0  @ 67,101,183 placeKey:174
   @field r Key_1  @ 34
-  @field r Key_8  @ 82
-  @field r Key_9  @ 65
-  @field r Key_A  @ placeKey:174,175
-  @field r Key_B  @ 20,32,159
-  @field r Key_Backslash  @ 78,79
-  @field r Key_Backspace  @ 72,156
-  @field r Key_C  @ 57
-  @field r Key_Comma  @ 26,85,119
-  @field r Key_D  @ 59,76,157
-  @field r Key_Delete  @ 60,153
-  @field r Key_DownArrow  @ 19,25,36,38,41,49,116,137,145,150,152
-  @field r Key_E  @ 94,95,160
-  @field r Key_End  @ 27,143
-  @field r Key_Enter  @ 73,74,106,120,148,155,158
-  @field r Key_Equal  @ 61,63,67,69,108,165
-  @field r Key_Escape  @ 106,127,163
-  @field r Key_F  @ 21,33,162
-  @field r Key_F6  @ 86,161
-  @field r Key_F7  @ 87
-  @field r Key_G  @ 55,107,164
+  @field r Key_8  @ 83
+  @field r Key_9  @ 66
+  @field r Key_A  @ 56 placeKey:175,176
+  @field r Key_B  @ 20,32,160
+  @field r Key_Backslash  @ 79,80
+  @field r Key_Backspace  @ 73,157
+  @field r Key_C  @ 58
+  @field r Key_Comma  @ 26,86,120
+  @field r Key_D  @ 60,77,158
+  @field r Key_Delete  @ 61,154
+  @field r Key_DownArrow  @ 19,25,36,38,41,49,117,138,146,151,153
+  @field r Key_E  @ 95,96,161
+  @field r Key_End  @ 27,144
+  @field r Key_Enter  @ 74,75,107,121,149,156,159
+  @field r Key_Equal  @ 62,64,68,70,109,166
+  @field r Key_Escape  @ 107,128,164
+  @field r Key_F  @ 21,33,163
+  @field r Key_F6  @ 87,162
+  @field r Key_F7  @ 88
+  @field r Key_G  @ 55,108,165
   @field r Key_GraveAccent  @ 54
-  @field r Key_Home  @ 26,142
+  @field r Key_Home  @ 26,143
   @field r Key_I  @ 47
-  @field r Key_K  @ 90,91
-  @field r Key_KeypadEnter  @ 106,120
-  @field r Key_LeftArrow  @ 20,22,39,45,50,138,146
-  @field r Key_LeftBracket  @ 80
-  @field r Key_M  @ 75
-  @field r Key_Minus  @ 62,64,68,70,109,166
-  @field r Key_N  @ 19,126
+  @field r Key_K  @ 91,92
+  @field r Key_KeypadEnter  @ 107,121
+  @field r Key_LeftArrow  @ 20,22,39,45,50,139,147
+  @field r Key_LeftBracket  @ 81
+  @field r Key_M  @ 76
+  @field r Key_Minus  @ 63,65,69,71,110,167
+  @field r Key_N  @ 19,127
   @field r Key_O  @ 53
   @field r Key_P  @ 18
-  @field r Key_PageDown  @ 29,141
-  @field r Key_PageUp  @ 28,140
-  @field r Key_Period  @ 27,46,84,118,154
-  @field r Key_R  @ 96
-  @field r Key_RightArrow  @ 21,23,40,43,44,51,117,139,147
-  @field r Key_RightBracket  @ 81
-  @field r Key_S  @ 89
-  @field r Key_Slash  @ 83
+  @field r Key_PageDown  @ 29,142
+  @field r Key_PageUp  @ 28,141
+  @field r Key_Period  @ 27,46,85,119,155
+  @field r Key_R  @ 97
+  @field r Key_RightArrow  @ 21,23,40,43,44,51,118,140,148
+  @field r Key_RightBracket  @ 82
+  @field r Key_S  @ 90
+  @field r Key_Slash  @ 84
   @field r Key_Space  @ 52
-  @field r Key_T  @ 88,92
+  @field r Key_T  @ 89,93
   @field r Key_Tab  @ 30,31
-  @field r Key_UpArrow  @ 18,24,35,37,42,48,115,136,144,149,151
-  @field r Key_V  @ 58,77
-  @field r Key_W  @ 56,57
-  @field r Key_X  @ 56,93
-  @field r Key_Y  @ 58
-  @field r Key_Z  @ 71,167
+  @field r Key_UpArrow  @ 18,24,35,37,42,48,116,137,145,150,152
+  @field r Key_V  @ 59,78
+  @field r Key_W  @ 57,58
+  @field r Key_X  @ 57,94
+  @field r Key_Y  @ 59
+  @field r Key_Z  @ 72,168
   @field r Mod_Alt  @ 22,23,24,25
   @field r Mod_Ctrl  @ 26,27,32,33,41,42,43,44,45,47,54,56
-  @field r Mod_Ctrl  @ 57,58,59,61,62,76,77,90,91,92,94
-  @field r Mod_Ctrl  @ 95,100,115,116,117,157,159,160,164,182
-  @field r Mod_Shift  @ 26,27,30,35,36,44,48,49,50,51,63,64
-  @field r Mod_Shift  @ 65,66,69,70,74,76,77,78,82,84,85,91
-  @field r Mod_Shift  @ 95,118,119,144,145,146,147,151,152,158 placeKey:175
+  @field r Mod_Ctrl  @ 57,58,59,60,62,63,77,78,91,92,93
+  @field r Mod_Ctrl  @ 95,96,101,116,117,118,158,160,161,165,183
+  @field r Mod_Shift  @ 26,27,30,35,36,44,48,49,50,51,64,65
+  @field r Mod_Shift  @ 66,67,70,71,75,77,78,79,83,85,86,92
+  @field r Mod_Shift  @ 96,119,120,145,146,147,148,152,153,159 placeKey:176
   @field r Mod_Super  @ 18,19,20,21,35,36,37,38,39,40,52,53
-  @field r Mod_Super  @ 55,56,58,67,68,69,70,71,72,73,74,75
-  @field r Mod_Super  @ 88,89,93,96,107,148,149,150,151,152,156,158
-  @field r Mod_Super  @ 162,165,166,167
+  @field r Mod_Super  @ 55,57,59,68,69,70,71,72,73,74,75,76
+  @field r Mod_Super  @ 89,90,94,97,108,149,150,151,152,153,157,159
+  @field r Mod_Super  @ 163,166,167,168
   @field w addNoteLane  @ 43
   @field w addTypedCol  @ 44
-  @field w arrange  @ 184
-  @field w arrangeClearLoop  @ 163
-  @field w arrangeClearSelection  @ 164
-  @field w arrangeCursorDown  @ 137
-  @field w arrangeCursorLeft  @ 138
-  @field w arrangeCursorRight  @ 139
-  @field w arrangeCursorUp  @ 136
-  @field w arrangeDeleteAdvance  @ 154
-  @field w arrangeDeleteTake  @ 153
-  @field w arrangeDive  @ 155
-  @field w arrangeDuplicateBelow  @ 157
-  @field w arrangeDuplicateUnpooledBelow  @ 158
-  @field w arrangeEnd  @ 143
-  @field w arrangeGrowTake  @ 152
-  @field w arrangeHome  @ 142
-  @field w arrangeNudgeBack  @ 149
-  @field w arrangeNudgeForward  @ 150
-  @field w arrangePageDown  @ 141
-  @field w arrangePageUp  @ 140
-  @field w arrangePlayFromCursor  @ 161
-  @field w arrangeSelectDown  @ 145
-  @field w arrangeSelectLeft  @ 146
-  @field w arrangeSelectRight  @ 147
-  @field w arrangeSelectUp  @ 144
-  @field w arrangeSetBeatPerRow  @ 167
-  @field w arrangeSetLoopEnd  @ 160
-  @field w arrangeSetLoopStart  @ 159
-  @field w arrangeShrinkTake  @ 151
-  @field w arrangeTakeProperties  @ 156
-  @field w arrangeZoomIn  @ 165
-  @field w arrangeZoomOut  @ 166
-  @field w browserAssign  @ 117
-  @field w browserPreview  @ 116
-  @field w browserUp  @ 115
+  @field w arrange  @ 185
+  @field w arrangeClearLoop  @ 164
+  @field w arrangeClearSelection  @ 165
+  @field w arrangeCursorDown  @ 138
+  @field w arrangeCursorLeft  @ 139
+  @field w arrangeCursorRight  @ 140
+  @field w arrangeCursorUp  @ 137
+  @field w arrangeDeleteAdvance  @ 155
+  @field w arrangeDeleteTake  @ 154
+  @field w arrangeDive  @ 156
+  @field w arrangeDuplicateBelow  @ 158
+  @field w arrangeDuplicateUnpooledBelow  @ 159
+  @field w arrangeEnd  @ 144
+  @field w arrangeGrowTake  @ 153
+  @field w arrangeHome  @ 143
+  @field w arrangeNudgeBack  @ 150
+  @field w arrangeNudgeForward  @ 151
+  @field w arrangePageDown  @ 142
+  @field w arrangePageUp  @ 141
+  @field w arrangePlayFromCursor  @ 162
+  @field w arrangeSelectDown  @ 146
+  @field w arrangeSelectLeft  @ 147
+  @field w arrangeSelectRight  @ 148
+  @field w arrangeSelectUp  @ 145
+  @field w arrangeSetBeatPerRow  @ 168
+  @field w arrangeSetLoopEnd  @ 161
+  @field w arrangeSetLoopStart  @ 160
+  @field w arrangeShrinkTake  @ 152
+  @field w arrangeTakeProperties  @ 157
+  @field w arrangeZoomIn  @ 166
+  @field w arrangeZoomOut  @ 167
+  @field w browserAssign  @ 118
+  @field w browserPreview  @ 117
+  @field w browserUp  @ 116
   @field w channelLeft  @ 32
   @field w channelRight  @ 33
   @field w colLeft  @ 30
   @field w colRight  @ 31
-  @field w copy  @ 57
-  @field w createSlot  @ 148
+  @field w copy  @ 58
+  @field w createSlot  @ 149
   @field w cursorDown  @ 19
   @field w cursorLeft  @ 20
   @field w cursorRight  @ 21
   @field w cursorUp  @ 18
-  @field w cut  @ 56
+  @field w cut  @ 57
   @field w cycleBlock  @ 52
   @field w cycleVBlock  @ 53
-  @field w decRPB  @ 70
+  @field w decRPB  @ 71
   @field w delete  @ 46
   @field w deleteRowCol  @ 42
-  @field w deleteSel  @ 60
-  @field w doubleRPB  @ 67
-  @field w duplicateDown  @ 59
-  @field w duplicateUnpooledBelow  @ 74
-  @field w editNoteFx  @ 93
+  @field w deleteSel  @ 61
+  @field w doubleRPB  @ 68
+  @field w duplicateDown  @ 60
+  @field w duplicateUnpooledBelow  @ 75
+  @field w editNoteFx  @ 94
   @field w eventShiftLeft  @ 39
   @field w eventShiftRight  @ 40
-  @field w focusParamPalette  @ 96
-  @field w freezeFxGroup  @ 95
-  @field w freezeFxRegion  @ 94
+  @field w focusParamPalette  @ 97
+  @field w freezeFxGroup  @ 96
+  @field w freezeFxRegion  @ 95
   @field w goBottom  @ 27
   @field w goTop  @ 26
-  @field w groupDuplicate  @ 76
-  @field w groupInstNext  @ 81
-  @field w groupInstPrev  @ 80
-  @field w groupLocalToggle  @ 78
-  @field w groupPaste  @ 77
+  @field w groupDuplicate  @ 77
+  @field w groupInstNext  @ 82
+  @field w groupInstPrev  @ 81
+  @field w groupLocalToggle  @ 79
+  @field w groupPaste  @ 78
   @field w growNote  @ 36
-  @field w halveRPB  @ 68
+  @field w halveRPB  @ 69
   @field w hideExtraCol  @ 45
-  @field w incRPB  @ 69
-  @field w inputOctaveDown  @ 83
-  @field w inputOctaveUp  @ 82
-  @field w inputSampleDown  @ 85
-  @field w inputSampleUp  @ 84
+  @field w incRPB  @ 70
+  @field w inputOctaveDown  @ 84
+  @field w inputOctaveUp  @ 83
+  @field w inputSampleDown  @ 86
+  @field w inputSampleUp  @ 85
   @field w insertRowCol  @ 41
   @field w interpolate  @ 47
-  @field w matchGridToCursor  @ 75
-  @field w newTakeBelow  @ 73
+  @field w matchGridToCursor  @ 76
+  @field w newTakeBelow  @ 74
   @field w nextTake  @ 25
   @field w nextTrack  @ 23
   @field w noteOff  @ 34
   @field w nudgeBack  @ 37
-  @field w nudgeCoarseDown  @ 62
-  @field w nudgeCoarseUp  @ 61
-  @field w nudgeFineDown  @ 64
-  @field w nudgeFineUp  @ 63
+  @field w nudgeCoarseDown  @ 63
+  @field w nudgeCoarseUp  @ 62
+  @field w nudgeFineDown  @ 65
+  @field w nudgeFineUp  @ 64
   @field w nudgeForward  @ 38
-  @field w openSwingPicker  @ 89
-  @field w openTemperPicker  @ 88
+  @field w openSwingPicker  @ 90
+  @field w openTemperPicker  @ 89
   @field w pageDown  @ 29
   @field w pageUp  @ 28
-  @field w paste  @ 58
+  @field w paste  @ 59
   @field r path  @ 9
   @field w path  @ 9
-  @field w playFromCursor  @ 87
-  @field w playFromTop  @ 86
+  @field w playFromCursor  @ 88
+  @field w playFromTop  @ 87
   @field w prevTake  @ 24
   @field w prevTrack  @ 22
-  @field w quantize  @ 90
-  @field w quantizeKeepRealised  @ 91
-  @field w region  @ 105
-  @field w regionArm  @ 79
-  @field w regionBail  @ 107
-  @field w regionExit  @ 106
-  @field w regionPaintExtend  @ 108
-  @field w regionPaintShrink  @ 109
-  @field w retune  @ 92
-  @field w sample  @ 114
-  @field w scaleDouble  @ 66
-  @field w scaleHalf  @ 65
+  @field w quantize  @ 91
+  @field w quantizeKeepRealised  @ 92
+  @field w region  @ 106
+  @field w regionArm  @ 80
+  @field w regionBail  @ 108
+  @field w regionExit  @ 107
+  @field w regionPaintExtend  @ 109
+  @field w regionPaintShrink  @ 110
+  @field w retune  @ 93
+  @field w sample  @ 115
+  @field w scaleDouble  @ 67
+  @field w scaleHalf  @ 66
+  @field w selectAll  @ 56
   @field w selectClear  @ 55
   @field w selectDown  @ 49
   @field w selectLeft  @ 50
   @field w selectRight  @ 51
   @field w selectUp  @ 48
-  @field w setRPB  @ 71
+  @field w setRPB  @ 72
   @field w shrinkNote  @ 35
-  @field w slotNext  @ 118
-  @field w slotPrev  @ 119
-  @field w slotRename  @ 120
+  @field w slotNext  @ 119
+  @field w slotPrev  @ 120
+  @field w slotRename  @ 121
   @field w swapBlockEnds  @ 54
-  @field w takeProperties  @ 72
-  @field w toggleFollowPlay  @ 162
-  @field r tracker  @ 100
+  @field w takeProperties  @ 73
+  @field w toggleFollowPlay  @ 163
+  @field r tracker  @ 101
   @field w tracker  @ 17
-  @field w wiring  @ 125
-  @field w wiringAddFx  @ 126
-  @field w wiringClearSelection  @ 127
+  @field w wiring  @ 126
+  @field w wiringAddFx  @ 127
+  @field w wiringClearSelection  @ 128

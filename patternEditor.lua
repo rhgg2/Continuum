@@ -75,7 +75,7 @@ local EDIT_COMMANDS = {
   'noteOff', 'inputOctaveUp', 'inputOctaveDown', 'inputSampleUp', 'inputSampleDown',
   'shrinkNote', 'growNote', 'nudgeBack', 'nudgeForward', 'eventShiftLeft', 'eventShiftRight',
   'delete', 'deleteSel', 'interpolate',
-  'selectUp', 'selectDown', 'selectLeft', 'selectRight', 'selectClear',
+  'selectUp', 'selectDown', 'selectLeft', 'selectRight', 'selectClear', 'selectAll',
   'cut', 'copy', 'paste', 'duplicateDown',
   'nudgeCoarseUp', 'nudgeCoarseDown', 'nudgeFineUp', 'nudgeFineDown',
   'scaleHalf', 'scaleDouble', 'doubleRPB', 'halveRPB', 'incRPB', 'decRPB',

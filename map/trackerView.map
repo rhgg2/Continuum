@@ -1629,6 +1629,7 @@
   @field w scaleDouble  @ tracker.scaleDouble:3926
   @field w scaleHalf  @ tracker.scaleHalf:3918
   @field r scope  @ retune:2168
+  @field w selectAll  @ 4449
   @field w selectClear  @ 4424,4448,4460
   @field w selectDown  @ 4448
   @field w selectLeft  @ 4448

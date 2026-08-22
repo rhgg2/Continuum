@@ -685,6 +685,7 @@ help:registerPage('tracker', {
     { cmd = 'selectLeft', label = 'Select left' },
     { cmd = 'selectRight', label = 'Select right' },
     { cmd = 'selectClear', label = 'Clear selection' },
+    { cmd = 'selectAll', label = 'Select all' },
     { cmd = 'cycleBlock', label = 'Cycle selection H' },
     { cmd = 'cycleVBlock', label = 'Cycle selection V' },
     { cmd = 'swapBlockEnds', label = 'Swap block ends' },
