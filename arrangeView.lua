@@ -352,6 +352,19 @@ end
 
 local function clearLoop() am:clearLoopRange() end
 
+-- Targets like the take verbs do, so a held selection brackets the block it covers.
+-- see design/song-growth.md § Loop to item
+local function loopToTargets()
+  local takes = actionTargets()
+  if #takes == 0 then return end
+  local loQN, hiQN = math.huge, -math.huge
+  for _, take in ipairs(takes) do
+    loQN = math.min(loQN, take.startQN)
+    hiQN = math.max(hiQN, take.startQN + take.lengthQN)
+  end
+  am:loopTo(loQN, hiQN)
+end
+
 ----------- PUBLIC
 
 ----- View state — cursor, scroll, focus, density
@@ -702,6 +715,7 @@ arrange:registerAll {
   arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },
   arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },
+  arrangeLoopToItem             = loopToTargets,
   arrangePlayFromCursor         = { playFromCursor,                 'Play from cursor' },
   arrangeClearLoop              = { clearLoop,                      'Clear loop range' },
   arrangeZoomIn                 = { function() av:setBeatPerRow(av:beatPerRow() / 2) end, 'Zoom in (halve beats/row)'  },

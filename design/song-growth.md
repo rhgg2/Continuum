@@ -111,34 +111,44 @@ acts from it.**
 
 ## Loop to item
 
-**Loop to item** is a toggle — cm at the global tier, beside
-`arrangeFollowPlay` — that brackets the current instance whenever the
-tracker binds a take.
+**Loop to item** brackets a placement with the transport loop — the
+instance the tracker is in on the tracker page, the takes the arrange
+page's verbs act on.
 
-1. It sets the transport loop to the instance's rendered span, turns
-   REAPER's repeat on, and moves the edit cursor and the play head to
-   the span's start. A loop range with repeat off plays through and
-   keeps going, so without the repeat the toggle would set a range that
-   never loops. The transport stays where it is when the play head is
-   already inside the span.
+1. It sets the loop to the placement's rendered span, turns REAPER's
+   repeat on, and moves the edit cursor and the play head to the span's
+   start. A loop range with repeat off plays through and keeps going,
+   so without the repeat the loop would never come round. The transport
+   stays where it is when the play head is already inside the span.
 
-1. Moving the transport is what separates it from the dive. Diving
-   changes what the tracker edits and leaves playback alone; loop to
-   item is a transport command, and the placement it brackets is the
-   one you hear next.
+1. Moving the transport separates it from the dive. Diving changes what
+   the tracker edits and leaves playback alone; loop to item is a
+   transport command, and the placement it brackets is the one you hear
+   next.
 
-1. It writes when a gesture moves the current instance — a dive, a slot
-   change, `again` — and not per frame. Play-head entry moves the
-   instance and writes nothing, since bracketing there would pull the
-   transport back to the start of a placement already sounding. A loop
-   set by hand — the arrange page's Ctrl+B / Ctrl+E, or a drag in
-   REAPER — survives until the next such gesture, in the discipline
-   `av:followPlay` already keeps, where a manual scroll suspends the
-   follow until the next play or seek.
+1. It comes in two forms. The verb presses in either page scope,
+   brackets once, and does nothing where there is no placement to
+   bracket. The toggle — cm at the global tier, beside
+   `arrangeFollowPlay` — repeats the act on the tracker page as the
+   current instance moves.
 
-1. Turning it on brackets the current instance at once; a toggle whose
-   first effect waited for the next gesture would read as inert.
-   Turning it off leaves the loop where it stands.
+1. On the arrange page the verb follows the page's targeting rule: the
+   selection where one is held, else the take under the grid cursor.
+   Several takes bracket from the first start to the last end, so a
+   block loops in one press.
+
+1. The toggle writes when a gesture moves the current instance — a
+   dive, a slot change, `again` — and not per frame. Play-head entry
+   moves the instance and writes nothing, since bracketing there would
+   pull the transport back to the start of a placement already
+   sounding. A loop set by hand — the arrange page's Cmd+B / Cmd+E, or
+   a drag in REAPER — survives until the next such gesture, in the
+   discipline `av:followPlay` already keeps, where a manual scroll
+   suspends the follow until the next play or seek.
+
+1. Turning the toggle on brackets the current instance at once; a
+   toggle whose first effect waited for the next gesture would read as
+   inert. Turning it off leaves the loop where it stands.
 
 ## What the grid draws
 

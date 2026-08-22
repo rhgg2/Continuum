@@ -619,6 +619,49 @@ return {
     end,
   },
 
+  -- Loop to item (design/song-growth.md § Loop to item): the verb brackets the
+  -- take under the grid cursor.
+  {
+    name = 'loop to item brackets the take under the arrange cursor',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, len = 4 },
+        { track = 'tr1', name = 'b', pos = 8, len = 4 },
+      })
+      h.cmgr:push('arrange')
+      av:setCursor(9, 0)
+      h.cmgr:invoke('arrangeLoopToItem')
+      t.deepEq({ am:loopRangeQN() }, { 8, 12 }, 'the loop brackets the take under the cursor')
+      t.eq(h.reaper.GetSetRepeat(-1), 1, 'repeat on, so the range loops')
+      t.eq(am:editCursorQN(), 8, 'the edit cursor moved to the span start')
+
+      av:setCursor(5, 0)                 -- a row in the gap between the two takes
+      h.cmgr:invoke('arrangeLoopToItem')
+      t.deepEq({ am:loopRangeQN() }, { 8, 12 }, 'a gap gives the verb nothing to bracket')
+    end,
+  },
+
+  {
+    name = 'loop to item takes the selection over the cursor, and spans a block',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0,  len = 4 },
+        { track = 'tr1', name = 'b', pos = 8,  len = 4 },
+        { track = 'tr1', name = 'c', pos = 16, len = 4 },
+      })
+      h.cmgr:push('arrange')
+      local takes = av:tracksTakes(0)
+      av:setSelection{ takeAt(takes, 8).take }
+      av:setCursor(0, 0)                 -- caret on a, selection held on b
+      h.cmgr:invoke('arrangeLoopToItem')
+      t.deepEq({ am:loopRangeQN() }, { 8, 12 }, 'the held selection wins over the cursor take')
+
+      av:setSelection{ takeAt(takes, 8).take, takeAt(takes, 16).take }
+      h.cmgr:invoke('arrangeLoopToItem')
+      t.deepEq({ am:loopRangeQN() }, { 8, 20 }, 'a block brackets from its first start to its last end')
+    end,
+  },
+
   {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)

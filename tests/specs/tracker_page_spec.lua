@@ -459,6 +459,34 @@ return {
     end,
   },
 
+  {
+    name = 'the loop-to-item verb brackets the current instance, toggle or no toggle',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      t.falsy(fakeArrange.calls.loopTo, 'the toggle is off, so binding left the transport alone')
+
+      h.cmgr:invoke('loopToItemNow')
+      t.deepEq(fakeArrange.calls.loopTo, { 0, 4 }, 'the verb brackets the current instance')
+      t.falsy(h.cm:get('trackerLoopToItem'), 'and leaves the toggle where it was')
+
+      fakeArrange.calls.loopTo = nil
+      fakeArrange.takeByKey['0:0'] = 'parked'      -- bound, but on no placement
+      tp:bindFromSelection()
+      h.cmgr:invoke('loopToItemNow')
+      t.falsy(fakeArrange.calls.loopTo, 'a parked slot gives the verb nothing to bracket')
+    end,
+  },
+
   -- The retune modal (design/adaptive-tuning.md § Where it sits): scope is a
   -- field on the modal, and OK calls the verb the radio names.
   {

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — Loop to item comes as a pressed verb as well as a toggle, on Cmd+L in both page
+  scopes, with the toggle moving to Ctrl+L: the verb is the more frequent gesture, so it takes the
+  prime key. On the arrange page the verb targets through the page's rule for its take verbs — the
+  selection where one is held, else the take under the cursor — rather than the cursor alone. A
+  selected block then loops in one press, and the page keeps one targeting rule across all its
+  verbs.
+
 - **2026-08-22** — The loop-to-item toggle brackets the current instance as it comes on, rather than
   waiting for the next gesture that moves the instance: a toggle whose first effect waited would
   read as inert. Bracketing a span the play head already sits inside sets the range and leaves the

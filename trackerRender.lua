@@ -651,7 +651,8 @@ help:registerPage('tracker', {
     { cmd = 'inputSampleDown', label = 'Sample -' },
   }},
   { anchor = 'toolbar.loopToItem', place = 'pin', title = 'Loop', items = {
-    { cmd = 'toggleLoopToItem', label = 'Loop to item' },
+    { cmd = 'loopToItemNow', label = 'Loop to item' },
+    { cmd = 'toggleLoopToItem', label = 'Loop to item on each move' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Movement', items = {
     { cmd = 'cursorUp', label = 'Up' },
@@ -1642,6 +1643,7 @@ tracker:registerAll{
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
   toggleLoopToItem = function() tv:setLoopToItem(not tv:loopsToItem()) end,
+  loopToItemNow    = function() tv:bracketCurrentInstance() end,
 
   editNoteFx        = editFx,
   focusParamPalette = focusParams,
