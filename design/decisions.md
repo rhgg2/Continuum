@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The loop-to-item toggle brackets the current instance as it comes on, rather than
+  waiting for the next gesture that moves the instance: a toggle whose first effect waited would
+  read as inert. Bracketing a span the play head already sits inside sets the range and leaves the
+  transport alone, so arming while the placement sounds does not restart it.
+
 - **2026-08-22** — Loop to item brackets when a gesture moves the tracker's current instance — a
   dive, a slot change — and not when the tracker binds a take. A slot's take handle is its first
   instance's, so it does not change between instances of one slot, and a bind-triggered bracket

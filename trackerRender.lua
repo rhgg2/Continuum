@@ -185,6 +185,13 @@ local toolbarSegments = {
     render  = function() drawSampleDropdown() end,
   },
   {
+    id = 'loopToItem', heading = 'Loop',
+    render = function()
+      local changed, on = chrome.checkbox('##loopToItem', tv:loopsToItem())
+      if changed then tv:setLoopToItem(on) end
+    end,
+  },
+  {
     id = 'graph', heading = 'Graph',
     render = function()
       local cv, newVis = chrome.checkbox('##', cm:get('laneStrip.visible'))
@@ -642,6 +649,9 @@ help:registerPage('tracker', {
   { anchor = 'toolbar.sample', place = 'pin', title = 'Sample', items = {
     { cmd = 'inputSampleUp', label = 'Sample +' },
     { cmd = 'inputSampleDown', label = 'Sample -' },
+  }},
+  { anchor = 'toolbar.loopToItem', place = 'pin', title = 'Loop', items = {
+    { cmd = 'toggleLoopToItem', label = 'Loop to item' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Movement', items = {
     { cmd = 'cursorUp', label = 'Up' },
@@ -1630,6 +1640,8 @@ tracker:registerAll{
 
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
+
+  toggleLoopToItem = function() tv:setLoopToItem(not tv:loopsToItem()) end,
 
   editNoteFx        = editFx,
   focusParamPalette = focusParams,

@@ -552,10 +552,12 @@ function am:setLoopRangeQN(loQN, hiQN)
 end
 
 -- Repeat has to go on: a loop range with repeat off plays straight through.
---contract: (loQN, hiQN) — loop the span, repeat on, cursor at start; playback follows if rolling
+--contract: (loQN, hiQN) — loop span, repeat on; cursor at start unless play head is inside it
 function am:loopTo(loQN, hiQN)
   self:setLoopRangeQN(loQN, hiQN)
   reaper.GetSetRepeat(1)
+  local playQN = self:playPositionQN()
+  if playQN and playQN >= loQN and playQN < hiQN then return end   -- already sounding: don't pull it back
   self:setEditCursorQN(loQN)
 end
 

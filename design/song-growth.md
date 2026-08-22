@@ -119,7 +119,8 @@ tracker binds a take.
    REAPER's repeat on, and moves the edit cursor and the play head to
    the span's start. A loop range with repeat off plays through and
    keeps going, so without the repeat the toggle would set a range that
-   never loops.
+   never loops. The transport stays where it is when the play head is
+   already inside the span.
 
 1. Moving the transport is what separates it from the dive. Diving
    changes what the tracker edits and leaves playback alone; loop to
@@ -134,6 +135,10 @@ tracker binds a take.
    REAPER — survives until the next such gesture, in the discipline
    `av:followPlay` already keeps, where a manual scroll suspends the
    follow until the next play or seek.
+
+1. Turning it on brackets the current instance at once; a toggle whose
+   first effect waited for the next gesture would read as inert.
+   Turning it off leaves the loop where it stands.
 
 ## What the grid draws
 

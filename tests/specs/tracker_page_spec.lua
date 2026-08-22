@@ -433,6 +433,32 @@ return {
     end,
   },
 
+  {
+    name = 'the toggle command brackets the current instance as it comes on',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+
+      h.cmgr:invoke('toggleLoopToItem')
+      t.truthy(h.cm:get('trackerLoopToItem'), 'the command turned the toggle on')
+      t.deepEq(fakeArrange.calls.loopTo, { 0, 4 }, 'coming on brackets the current instance at once')
+
+      fakeArrange.calls.loopTo = nil
+      h.cmgr:invoke('toggleLoopToItem')
+      t.falsy(h.cm:get('trackerLoopToItem'), 'invoking again turned it off')
+      t.falsy(fakeArrange.calls.loopTo, 'going off leaves the loop where it was')
+    end,
+  },
+
   -- The retune modal (design/adaptive-tuning.md § Where it sits): scope is a
   -- field on the modal, and OK calls the verb the radio names.
   {

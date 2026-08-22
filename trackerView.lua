@@ -233,6 +233,19 @@ function tv:currentInstance()
   return currentInstanceTake and arrange().findTake(currentInstanceTake) or nil
 end
 
+-- see design/song-growth.md § Loop to item
+local function bracketCurrentInstance()
+  local inst = tv:currentInstance()
+  if inst then arrange().loopTo(inst.startQN, inst.startQN + inst.lengthQN) end
+end
+
+--contract: the loop-to-item toggle; coming on brackets the current instance at once
+function tv:loopsToItem() return cm:get('trackerLoopToItem') end
+function tv:setLoopToItem(on)
+  cm:set('global', 'trackerLoopToItem', not not on)
+  if on then bracketCurrentInstance() end
+end
+
 --contract: name the placement — the dive, and later again/vary; read at the next resolve
 function tv:nameInstance(take) namedInstance = take end
 
@@ -268,9 +281,7 @@ function tv:resolveCurrentInstance()
   end
   namedInstance, seekBack, playInstanceTake = nil, nil, entered
 
-  -- see design/song-growth.md § Loop to item
-  local moved = gesture and cm:get('trackerLoopToItem') and self:currentInstance()
-  if moved then arrange().loopTo(moved.startQN, moved.startQN + moved.lengthQN) end
+  if gesture and self:loopsToItem() then bracketCurrentInstance() end
 end
 
 --contract: step ±1 over all tracks (may land on an empty one); restores its last slot

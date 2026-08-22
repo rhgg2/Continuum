@@ -88,6 +88,7 @@ pageBindings.tracker = {
   inputSampleDown        = { {ImGui.Key_Comma,  ImGui.Mod_Shift} },  -- '<'
   playFromTop            = { ImGui.Key_F6 },
   playFromCursor         = { ImGui.Key_F7 },
+  toggleLoopToItem       = { {ImGui.Key_L, ImGui.Mod_Super} },
   openTemperPicker       = { {ImGui.Key_T, ImGui.Mod_Super} },
   openSwingPicker        = { {ImGui.Key_S, ImGui.Mod_Super} },
   quantize               = { {ImGui.Key_K, ImGui.Mod_Ctrl} },

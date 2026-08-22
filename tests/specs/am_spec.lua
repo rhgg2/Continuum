@@ -858,6 +858,19 @@ return {
   },
 
   {
+    name = 'loopTo leaves the cursor alone when the play head is inside the span',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      am:setEditCursorQN(1)
+      h.reaper:setPlay(true, 5)
+      am:loopTo(4, 8)
+      t.deepEq({ am:loopRangeQN() }, { 4, 8 }, 'the span is still bracketed')
+      t.eq(h.reaper.GetSetRepeat(-1), 1, 'repeat on, so the range loops')
+      t.eq(am:editCursorQN(), 1, 'a placement already sounding is not pulled back to its start')
+    end,
+  },
+
+  {
     name = 'clearLoopRange removes the project loop range',
     run = function(harness)
       local h, am = mkAm(harness)

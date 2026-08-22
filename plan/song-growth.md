@@ -22,6 +22,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 tracker: surface loop to item as a toggle command and checkbox (§ Loop to item)
 - 2026-08-22 tracker: loop to item brackets the instance a gesture moves to (§ Loop to item)
 - 2026-08-22 tracker: remember which instance of the bound slot we are in (§ The tracker remembers its instance)
 
@@ -30,10 +31,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- The toggle surface: `toggleLoopToItem` in the tracker command scope, its key
-  binding, help entry and a toolbar checkbox — arrange's `followPlay` segment
-  and `toggleFollowPlay` as the model.
 - Loop to item, once: a command calling `loopTo` on the span under the caret —
   the tracker's current instance, the take at the arrange cursor — in both page
   scopes, with their bindings and help entries.
