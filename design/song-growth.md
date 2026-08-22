@@ -84,6 +84,13 @@ playhead through the grid's own metric, `(playQN − instanceStartQN)`
 over `ppqPerRow`, and swung notes sound around it, since swing
 displaces a note from the metric grid rather than moving the grid.
 
+The caret dims where the play head is inside another instance of the
+bound slot. The row is still the row being heard, since the instances of
+a slot share one take; the mute says the placement sounding is not the
+placement bound. Entry carries the current instance to whatever the play
+head walks into, so the two part company only where a dive or a slot
+change has pinned the tracker elsewhere.
+
 With no current instance there is no caret, and that is the reading the
 refusals want: an unlit grid says the tracker is not inside a
 placement, so `again` and `vary` will decline.

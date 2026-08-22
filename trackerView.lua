@@ -3294,6 +3294,25 @@ function tv:barBeatSub(row) return ctx:barBeatSub(row) end
 function tv:ppqToRow(ppq, chan) return ctx:ppqToRow(ppq, chan) end
 function tv:rowToPPQ(row, chan) return ctx:rowToPPQ(row, chan) end
 function tv:logPerRow()         return logPerRowFor(currentRpb()) end
+
+-- The play head as a row of the grid on screen. Lives here, not with the
+-- current instance above, because ctx is a grid of its own.
+--contract: (row, elsewhere) for the play head; nil when stopped or in no instance of the slot
+--contract: fractional row; elsewhere is true when the head sounds a sibling instance
+-- see docs/trackerPage.md § The play row
+function tv:playRow()
+  local playQN = arrange().playPositionQN()
+  local inst   = playQN and self:currentInstance()
+  if not inst then return end
+  local function rowIn(startQN) return (playQN - startQN) * resolution / ctx:ppqPerRow() end
+  if playQN >= inst.startQN and playQN < inst.startQN + inst.lengthQN then
+    return rowIn(inst.startQN)
+  end
+  -- Siblings share one take, so a row of the instance being heard is a row of
+  -- the grid on screen; the dim says it is not the instance bound.
+  local other, contains = arrange().seekInstance(inst.take, playQN, false)
+  if contains then return rowIn(other.startQN), true end
+end
 function tv:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end
 function tv:timeSig()
   local ts = timeSigs[1] or { num = 4, denom = 4 }

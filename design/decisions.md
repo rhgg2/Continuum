@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The tracker's play row is a fractional row, so the caret slides rather than
+  steps. It dims where the play head is inside a sibling instance of the bound slot: the row is
+  still the row being heard, since the instances of a slot share one take, and the mute says the
+  placement sounding is not the placement bound. The case is the loop-to-item workflow — a loop
+  rolling inside one instance while a dive pins the tracker to another, where entry never fires
+  again and the caret would otherwise draw nothing.
+
 - **2026-08-22** — The cut is drawn as a line across a grid that continues below it, rather than by
   stopping the grid at the rendered span: the rows below come back into play as soon as the
   neighbour moves away. The play row is a one-pixel yellow line across the whole grid pane, the cut

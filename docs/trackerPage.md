@@ -65,8 +65,9 @@ frame actually painted.
 5. Cells, char by char.
 6. Off-grid projection bars — only under an active temperament, only for
    notes with a non-zero `(intent − displayed)` gap.
-7. Selection highlight.
-8. Cursor (single-cell box + re-painted cursor char).
+7. Play row caret, over the cells and across the gutter with them.
+8. Selection highlight.
+9. Cursor (single-cell box + re-painted cursor char).
 
 Tails sit above the row backgrounds but below cells, so cell characters
 paint over the tail pixels at the note head and foot.
@@ -507,6 +508,27 @@ the start of a placement already sounding. A loop set by hand survives
 until the next such gesture, the discipline `av:followPlay` keeps when a
 manual scroll suspends the follow. Turning the toggle on brackets the
 current instance at once; turning it off leaves the loop where it stands.
+
+### The play row
+
+A caret marks the row the play head occupies inside the current
+instance. `tv:playRow` returns a fractional row, so the caret slides
+rather than steps, and nil where the transport is stopped or the head is
+inside no instance of the bound slot.
+
+The caret marks metric position rather than any channel's onset. Swing
+resolves per channel, so one realised instant inverts to a different
+logical ppq per column and there is no single sounding row to point at.
+The row therefore comes from the grid's own metric — the offset from the
+instance's start, through the take's resolution, over `ctx:ppqPerRow` —
+and swung notes sound around it.
+
+A second return dims the caret. Where the head is inside a sibling
+instance of the same slot the row is still the row being heard, since
+the instances of a slot share one take; the mute says the placement
+sounding is not the placement bound. Play-head entry carries the current
+instance to whatever the head walks into, so the two part company only
+where a dive or a slot change has pinned the tracker elsewhere.
 
 ### Slot recovery and the per-track memory
 

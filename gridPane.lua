@@ -788,6 +788,16 @@ local function drawTracker()
     drawLocalScrim(draw, localHole, totalWidth, math.min(viewRows, math.max(numRows - scrollRow, 0)))
   end
 
+  -- Play row: painted over the cells so a wash or glyph can't hide it, and
+  -- across the gutter with them. See docs/trackerPage.md § The play row.
+  local playRow, elsewhere = tv:playRow()
+  if playRow then
+    local y = playRow - scrollRow
+    if y >= 0 and y < viewRows then
+      draw:hLine(-GUTTER, totalWidth - 1, y, elsewhere and 'playRowOther' or 'playRow')
+    end
+  end
+
   if ec:hasSelection() then
     local rowLo, rowHi, colLoIdx, colHiIdx = ec:region()
     if colHiIdx >= scrollCol and colLoIdx <= lastVisCol then

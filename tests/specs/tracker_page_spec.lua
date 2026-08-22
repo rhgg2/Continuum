@@ -387,6 +387,68 @@ return {
     end,
   },
 
+  -- The play row: a caret on the row the play head occupies, dimmed where the
+  -- head is sounding a sibling instance. At 240 ppq and four rows to the beat,
+  -- a row is a quarter of a QN.
+  {
+    name = 'the play row is the head\'s offset into the current instance, in rows',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      tp:bindFromSelection()
+      t.falsy(stack.tv:playRow(), 'a stopped transport lights no row')
+
+      fakeArrange.playQN = 1.5                     -- an eighth of the way into i0
+      tp:bindFromSelection()
+      local row, elsewhere = stack.tv:playRow()
+      t.eq(row, 6, 'six rows into the instance the head is inside')
+      t.falsy(elsewhere, 'which is the instance the tracker is in')
+
+      fakeArrange.playQN = 20                      -- past every instance of the slot
+      tp:bindFromSelection()
+      t.falsy(stack.tv:playRow(), 'a head in no instance of the slot lights no row')
+    end,
+  },
+
+  {
+    name = 'the play row dims where the head is sounding a sibling instance',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      fakeArrange.playQN = 1.5                     -- the head sounds i0
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'i8')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i8', 'the dive pinned the tracker to i8')
+
+      local row, elsewhere = stack.tv:playRow()
+      t.eq(row, 6, 'the row the head occupies in the instance it is inside')
+      t.truthy(elsewhere, 'dimmed: the placement sounding is not the placement bound')
+    end,
+  },
+
   -- Loop to item (docs/trackerPage.md § Loop to item): a gesture that moves the
   -- current instance brackets it; the play head entering one does not.
   {
