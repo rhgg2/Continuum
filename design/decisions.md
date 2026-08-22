@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Bare cursor nav in arrange clears the selection, reversing the earlier split
+  where caret and selection moved independently. An edit after an arrow key should act where the
+  caret is, not on a block left standing off-screen. The clear sits in the nav commands rather than
+  in setCursor: an edit's own caret move — nudge following its take, the advance after a drop, the
+  duplicate landing on its copy — keeps the selection.
+
 - **2026-08-22** — The tracker's play row is a fractional row, so the caret slides rather than
   steps. It dims where the play head is inside a sibling instance of the bound slot: the row is
   still the row being heard, since the instances of a slot share one take, and the mute says the

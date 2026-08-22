@@ -198,6 +198,16 @@ local function moveCursorBy(dRow, dCol)
   av:setCursor(cursorRow + dRow, cursorCol + dCol)
 end
 
+--invariant: bare cursor nav clears the selection; an edit's own cursor move keeps it.
+local function navCursorTo(row, col)
+  av:setCursor(row, col)
+  setSelection {}
+end
+
+local function navCursorBy(dRow, dCol)
+  navCursorTo(cursorRow + dRow, cursorCol + dCol)
+end
+
 -- MIDI slots on a track — for the tracker's pickers/nav via the arrange facade.
 local function midiSlots(trackIdx)
   local out = {}
@@ -690,14 +700,14 @@ end
 local arrange = cmgr:scope('arrange')
 
 arrange:registerAll {
-  arrangeCursorUp     = function() moveCursorBy(-1, 0) end,
-  arrangeCursorDown   = function() moveCursorBy( 1, 0) end,
-  arrangeCursorLeft   = function() moveCursorBy( 0, -1) end,
-  arrangeCursorRight  = function() moveCursorBy( 0,  1) end,
-  arrangePageUp       = function() moveCursorBy(-PAGE_ROWS, 0) end,
-  arrangePageDown     = function() moveCursorBy( PAGE_ROWS, 0) end,
-  arrangeHome         = function() av:setCursor(0, cursorCol) end,
-  arrangeEnd          = function() av:setCursor(av:qnToRow(am:projectEndQN()), cursorCol) end,
+  arrangeCursorUp     = function() navCursorBy(-1, 0) end,
+  arrangeCursorDown   = function() navCursorBy( 1, 0) end,
+  arrangeCursorLeft   = function() navCursorBy( 0, -1) end,
+  arrangeCursorRight  = function() navCursorBy( 0,  1) end,
+  arrangePageUp       = function() navCursorBy(-PAGE_ROWS, 0) end,
+  arrangePageDown     = function() navCursorBy( PAGE_ROWS, 0) end,
+  arrangeHome         = function() navCursorTo(0, cursorCol) end,
+  arrangeEnd          = function() navCursorTo(av:qnToRow(am:projectEndQN()), cursorCol) end,
   arrangeSelectUp     = function() selectBy(-1,  0) end,
   arrangeSelectDown   = function() selectBy( 1,  0) end,
   arrangeSelectLeft   = function() selectBy( 0, -1) end,

@@ -385,6 +385,49 @@ return {
   },
 
   {
+    name = 'a bare cursor move clears the selection',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')   -- rows 0..1 selected
+      t.eq(#util.keys(av:selectionSet()), 2, 'two takes selected by the run')
+      h.cmgr:invoke('arrangeCursorDown')
+      t.eq(#util.keys(av:selectionSet()), 0, 'the arrow key took the selection with it')
+    end,
+  },
+
+  {
+    name = 'Home clears the selection like any other bare nav',
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      h.cmgr:invoke('arrangeHome')
+      t.eq(av:cursorRow(), 0, 'Home parked the caret at the top')
+      t.eq(#util.keys(av:selectionSet()), 0, 'and cleared the selection')
+    end,
+  },
+
+  {
+    name = "an edit's own cursor advance keeps the selection",
+    run = function(harness)
+      local h, av = mkArrange(harness, shiftNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(6, 0)
+      local take = takeAt(av:tracksTakes(0), 6).take
+      av:setFocus(take)
+      h.cmgr:invoke('arrangeNudgeForward')   -- take and caret both step a row
+      t.eq(av:cursorRow(), 7, 'the caret followed the nudged take')
+      t.eq(av:isSelected(take), true, 'which stays selected, ready for the next nudge')
+    end,
+  },
+
+  {
     name = 'the band stands through a run and comes down on the next command',
     run = function(harness)
       local h, av = mkArrange(harness, shiftNavItems)

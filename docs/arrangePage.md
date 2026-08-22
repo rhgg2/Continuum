@@ -227,17 +227,3 @@ instances share a hue because they share `slotIdx`. Orphan takes
 (slot not in the cm dictionary) get a neutral grey. The label inside a
 rectangle is `<slot key> <take name>`, mono font, clipped at the
 rectangle edge.
-
-## What's deferred
-
-Shipped: the model, the page skeleton, the right-side palette (slot
-list / rename / delete / Ctrl-Enter creation), the base62 placement
-scope, the hand-drawn grid, the take-edit commands, the tracker dive
-hotkey, mouse drag (move / resize / Alt-duplicate), and the
-cursor / focus split.
-
-Still ahead: a *selection* — a set of focused takes, gathered by a
-drag-rectangle in empty space or by shift-extending the cursor, that
-the edit commands act on as a group. The single-take focus above is
-the degenerate case; widening the stored handle to a list is the next
-slice.

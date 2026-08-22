@@ -54,12 +54,20 @@ positions means takes moved or resized under the selection still
 resolve correctly. `setFocus`/`focus` are single-element conveniences
 over the same set, for the mouse path and the duplicate commands.
 
-Cursor and selection are separate pointers, and that is deliberate. The
+Cursor and selection are separate pointers, but the caret leads. The
 cursor is the keyboard caret — drawn as a horizontal I-beam on the top
 edge of the cursor row; the selection is a set of highlighted takes.
-Plain cursor nav never changes the selection: the caret moves on its
-own, the selected takes keep their indicator. Shift+arrow is the
-exception, and builds the selection out of the caret's own travel.
+Bare cursor nav — arrows, page, Home, End — clears the selection, so an
+edit after an arrow key always acts where the caret is rather than on a
+block left standing somewhere off-screen. Shift+arrow is the exception,
+and builds the selection out of the caret's own travel.
+
+The caret also moves as part of an edit: nudge and shrink follow the
+take, a drop advances past what it placed, duplicate lands on the copy.
+Those moves keep the selection, and go through `moveCursorBy` rather
+than the `navCursorTo` the nav commands use. They are consequences of
+an edit, not navigation, and clearing there would undo the focus the
+duplicate commands have just set.
 
 Selection is decoupled from action. An edit command resolves its
 targets through `actionTargets`: the whole selection if one is held,
@@ -92,7 +100,9 @@ it stands as long as the run does. What takes it down is cmgr's
 spring-loaded dispatch rather than a list of commands kept here: arming
 pushes a scope whose `keepAlive` holds just the four Shift+arrow
 commands, so the first command that isn't one of them bails the scope,
-and the band goes with it. The selection the band built stays behind.
+and the band goes with it. The selection the band built stays behind —
+unless what bailed the scope was a bare cursor move, which clears the
+selection as well as the band.
 
 The mouse never reaches dispatch, so a click or a lasso drops the
 anchor itself and leaves the spent scope for the next command to pop; a

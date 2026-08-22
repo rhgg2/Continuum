@@ -1,6 +1,6 @@
-@spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=677  cases=38
+@spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=720  cases=41
 @exercises configManager (h.cm), arrangeView (av), commandManager (h.cmgr), arrangeManager (am2)
-@surface   cm:set, av:cursorRow, av:cursorCol, av:setCursor, av:setGridSize, av:scroll, av:scrollBy, av:setMaxCol, av:beatPerRow, av:setBeatPerRow, cm:get, av:rowToQN, av:paletteSlot, av:setPaletteSlot, av:focus, av:setFocus, cmgr:push, cmgr:invoke, am2:tracksTakes, av:tracksTakes, av:lassoCandidate, av:selectionSet, av:selectBand, cmgr:pop, av:dropBand, av:setSelection, av:addToSelection, av:toggleSelected, av:isSelected, av:dragCandidate, av:commitDrag, am:loopRangeQN, am:editCursorQN, av:qnToRow
+@surface   cm:set, av:cursorRow, av:cursorCol, av:setCursor, av:setGridSize, av:scroll, av:scrollBy, av:setMaxCol, av:beatPerRow, av:setBeatPerRow, cm:get, av:rowToQN, av:paletteSlot, av:setPaletteSlot, av:focus, av:setFocus, cmgr:push, cmgr:invoke, am2:tracksTakes, av:tracksTakes, av:lassoCandidate, av:selectionSet, av:isSelected, av:selectBand, cmgr:pop, av:dropBand, av:setSelection, av:addToSelection, av:toggleSelected, av:dragCandidate, av:commitDrag, am:loopRangeQN, am:editCursorQN, av:qnToRow
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.GetSetRepeat
 
 # Intent
@@ -37,109 +37,112 @@
   @case 'Shift+arrow sideways widens the rect into the next column'  [harness]  @ 339-350
   @case 'Shift+arrow back toward the anchor drops what it uncovers'  [harness]  @ 354-368
   @case 'a plain cursor move ends the run, so the next Shift+arrow re-anchors'  [harness]  @ 372-384
-  @case 'the band stands through a run and comes down on the next command'  [harness]  @ 388-406
-  @case 'a click takes the band down without waiting for a command'  [harness]  @ 410-421
-  @case 'dropBand takes the band down and pops its scope'  [harness]  @ 425-435
-  @case 'a multi-selection deletes every selected take in one pass'  [harness]  @ 439-453
-  @case 'nudge refuses entirely when any selected take is blocked'  [harness]  @ 457-474
-  @case 'nudge slides a contiguous selected block without self-collision'  [harness]  @ 478-493
-  @case 'a single-target command no-ops on a multi-selection'  [harness]  @ 497-510
-  @case 'arrangeClearSelection empties the selection'  [harness]  @ 514-525
-  @case 'addToSelection unions handles without duplicating a present one'  [harness]  @ 529-543
-  @case 'toggleSelected adds an absent handle and removes a present one'  [harness]  @ 547-560
-  @case 'group drag slides the whole selection by one delta'  [harness]  @ 564-580
-  @case 'group drag refuses when a member would hit an outside take'  [harness]  @ 584-597
-  @case 'group drag with Alt duplicates the block and reselects the copies'  [harness]  @ 601-619
-  @case 'loop to item brackets the take under the arrange cursor'  [harness]  @ 625-641
-  @case 'loop to item takes the selection over the cursor, and spans a block'  [harness]  @ 645-662
-  @case 'qnToRow / rowToQN are inverses through beatPerRow'  [harness]  @ 666-675
+  @case 'a bare cursor move clears the selection'  [harness]  @ 388-398
+  @case 'Home clears the selection like any other bare nav'  [harness]  @ 402-412
+  @case 'an edit's own cursor advance keeps the selection'  [harness]  @ 416-427
+  @case 'the band stands through a run and comes down on the next command'  [harness]  @ 431-449
+  @case 'a click takes the band down without waiting for a command'  [harness]  @ 453-464
+  @case 'dropBand takes the band down and pops its scope'  [harness]  @ 468-478
+  @case 'a multi-selection deletes every selected take in one pass'  [harness]  @ 482-496
+  @case 'nudge refuses entirely when any selected take is blocked'  [harness]  @ 500-517
+  @case 'nudge slides a contiguous selected block without self-collision'  [harness]  @ 521-536
+  @case 'a single-target command no-ops on a multi-selection'  [harness]  @ 540-553
+  @case 'arrangeClearSelection empties the selection'  [harness]  @ 557-568
+  @case 'addToSelection unions handles without duplicating a present one'  [harness]  @ 572-586
+  @case 'toggleSelected adds an absent handle and removes a present one'  [harness]  @ 590-603
+  @case 'group drag slides the whole selection by one delta'  [harness]  @ 607-623
+  @case 'group drag refuses when a member would hit an outside take'  [harness]  @ 627-640
+  @case 'group drag with Alt duplicates the block and reselects the copies'  [harness]  @ 644-662
+  @case 'loop to item brackets the take under the arrange cursor'  [harness]  @ 668-684
+  @case 'loop to item takes the selection over the cursor, and spans a block'  [harness]  @ 688-705
+  @case 'qnToRow / rowToQN are inverses through beatPerRow'  [harness]  @ 709-718
 
 # Uses (outbound edges)
   @use call cm:set  @ 19,242,262,282
-  @use call av:cursorRow  @ 56,58,60,134,197,198,200,201,334
+  @use call av:cursorRow  @ 56,58,60,134,197,198,200,201,334,410,425
   @use call av:cursorCol  @ 56,58,60,135
-  @use call av:setCursor  @ 57,59,79,90,91,102,105,116,148,195,250,270,293,327,344,359,377,393,415,417,430,632,638,655
-  @use call av:setGridSize  @ 68,78,89,101,115,119,130,143,158,170,172,249,269,292,309,326,343,358,376,392,414,429,446,465,485,504,520,570,591,607
+  @use call av:setCursor  @ 57,59,79,90,91,102,105,116,148,195,250,270,293,327,344,359,377,393,407,421,436,458,460,473,675,681,698
+  @use call av:setGridSize  @ 68,78,89,101,115,119,130,143,158,170,172,249,269,292,309,326,343,358,376,392,406,420,435,457,472,489,508,528,547,563,613,634,650
   @use call av:scroll  @ 69,80,92,103,106,117,120,132,145,149,161,173
   @use call av:scrollBy  @ 131,144,147,160,171,271
   @use call av:setMaxCol  @ 159
   @use call av:beatPerRow  @ 182,184,187,203
-  @use call av:setBeatPerRow  @ 183,186,196,199,202,669,672
+  @use call av:setBeatPerRow  @ 183,186,196,199,202,712,715
   @use call cm:get  @ 185
-  @use call av:rowToQN  @ 198,201,671,674
+  @use call av:rowToQN  @ 198,201,714,717
   @use call av:paletteSlot  @ 211,213,215,217,219,221
   @use call av:setPaletteSlot  @ 212,214,216,218,220
   @use call av:focus  @ 229,232,234,254
-  @use call av:setFocus  @ 231,233,291
-  @use call cmgr:push  @ 248,268,289,325,342,357,375,391,413,428,445,464,484,503,519,631,652
-  @use call cmgr:invoke  @ 251,272,294,328,345,346,360,361,363,364,378,379,380,394,400,402,416,419,431,449,468,488,507,523,633,639,656,660
+  @use call av:setFocus  @ 231,233,291,423
+  @use call cmgr:push  @ 248,268,289,325,342,357,375,391,405,419,434,456,471,488,507,527,546,562,674,695
+  @use call cmgr:invoke  @ 251,272,294,328,345,346,360,361,363,364,378,379,380,394,396,408,409,424,437,443,445,459,462,474,492,511,531,550,566,676,682,699,703
   @use call am2:tracksTakes  @ 253,274
-  @use call av:tracksTakes  @ 290,310,311,312,330,331,332,333,349,367,383,447,466,486,505,521,536,553,571,592,608,653
+  @use call av:tracksTakes  @ 290,310,311,312,330,331,332,333,349,367,383,422,490,509,529,548,564,579,596,614,635,651,696
   @use call av:lassoCandidate  @ 313
-  @use call av:selectionSet  @ 329,347,362,365,381,404,452,522,524,539,617
-  @use call av:selectBand  @ 395,401,403,418,433
-  @use call cmgr:pop  @ 405,420,434
-  @use call av:dropBand  @ 432
-  @use call av:setSelection  @ 448,467,487,506,521,537,554,572,593,609,654,659
-  @use call av:addToSelection  @ 538
-  @use call av:toggleSelected  @ 555,557
-  @use call av:isSelected  @ 556,558,559
-  @use call av:dragCandidate  @ 574,595,611
-  @use call av:commitDrag  @ 576,613
-  @use call am:loopRangeQN  @ 634,640,657,661
-  @use call am:editCursorQN  @ 636
-  @use call av:qnToRow  @ 670,673
+  @use call av:selectionSet  @ 329,347,362,365,381,395,397,411,447,495,565,567,582,660
+  @use call av:isSelected  @ 426,599,601,602
+  @use call av:selectBand  @ 438,444,446,461,476
+  @use call cmgr:pop  @ 448,463,477
+  @use call av:dropBand  @ 475
+  @use call av:setSelection  @ 491,510,530,549,564,580,597,615,636,652,697,702
+  @use call av:addToSelection  @ 581
+  @use call av:toggleSelected  @ 598,600
+  @use call av:dragCandidate  @ 617,638,654
+  @use call av:commitDrag  @ 619,656
+  @use call am:loopRangeQN  @ 677,683,700,704
+  @use call am:editCursorQN  @ 679
+  @use call av:qnToRow  @ 713,716
 
 # Fields (r read / w write incl. constructor keys)
   @field w am  @ 11,34,247,267,288
   @field w cm  @ 9,11,33,34,246,247,252,266,267,273,287,288
-  @field w cm  @ 295,450,469,489,508,577,614
+  @field w cm  @ 295,493,512,532,551,620,657
   @field w cmgr  @ 11,34,247,267,288
-  @field r colHi  @ 397
-  @field r colLo  @ 396
-  @field w ds  @ 9,33,246,252,266,273,287,295,450,469,489,508
-  @field w ds  @ 577,614
-  @field w duplicate  @ 610
-  @field r fits  @ 575,596,612
-  @field w group  @ 573,594,610
+  @field r colHi  @ 440
+  @field r colLo  @ 439
+  @field w ds  @ 9,33,246,252,266,273,287,295,493,512,532,551
+  @field w ds  @ 620,657
+  @field w duplicate  @ 653
+  @field r fits  @ 618,639,655
+  @field w group  @ 616,637,653
   @field w isMidi  @ 29,244,264,284,285
   @field r len  @ 29
-  @field w len  @ 29,244,264,284,285,305,306,307,628,629,648,649
-  @field w len  @ 650
+  @field w len  @ 29,244,264,284,285,305,306,307,671,672,691,692
+  @field w len  @ 693
   @field w mcol  @ 313
-  @field w mode  @ 573,594,610
+  @field w mode  @ 616,637,653
   @field r name  @ 28,30
   @field w name  @ 44,45,46,47,48,53,65,75,86,98,112,127
   @field w name  @ 140,155,167,179,192,208,226,239,259,279,302,305
-  @field w name  @ 306,307,322,339,354,372,388,410,425,439,442,443
-  @field w name  @ 457,460,461,462,478,481,482,497,500,501,514,517
-  @field w name  @ 529,532,533,534,547,550,551,564,567,568,584,587
-  @field w name  @ 588,589,601,604,605,625,628,629,645,648,649,650
-  @field w name  @ 666
+  @field w name  @ 306,307,322,339,354,372,388,402,416,431,453,468
+  @field w name  @ 482,485,486,500,503,504,505,521,524,525,540,543
+  @field w name  @ 544,557,560,572,575,576,577,590,593,594,607,610
+  @field w name  @ 611,627,630,631,632,644,647,648,668,671,672,688
+  @field w name  @ 691,692,693,709
   @field w poolGuid  @ 30,244,264,284,285
   @field r pos  @ 29
   @field w pos  @ 29,44,45,46,47,48,244,264,284,285,305,306
-  @field w pos  @ 307,442,443,460,461,462,481,482,500,501,517,532
-  @field w pos  @ 533,534,550,551,567,568,587,588,589,604,605,628
-  @field w pos  @ 629,648,649,650
-  @field w qn  @ 313,573,594,610
-  @field r qnHi  @ 399,401
-  @field r qnLo  @ 398
+  @field w pos  @ 307,485,486,503,504,505,524,525,543,544,560,575
+  @field w pos  @ 576,577,593,594,610,611,630,631,632,647,648,671
+  @field w pos  @ 672,691,692,693
+  @field w qn  @ 313,616,637,653
+  @field r qnHi  @ 442,444
+  @field r qnLo  @ 441
   @field w run  @ 54,66,76,87,99,113,128,141,156,168,180,193
-  @field w run  @ 209,227,240,260,280,303,323,340,355,373,389,411
-  @field w run  @ 426,440,458,479,498,515,530,548,565,585,602,626
-  @field w run  @ 646,667
+  @field w run  @ 209,227,240,260,280,303,323,340,355,373,389,403
+  @field w run  @ 417,432,454,469,483,501,522,541,558,573,591,608
+  @field w run  @ 628,645,669,689,710
   @field r set  @ 315,316,317
   @field r startQN  @ 39,253,297
-  @field r take  @ 291,315,316,317,330,331,332,333,349,367,383,448
-  @field r take  @ 448,467,487,506,521,537,538,542
-  @field r take  @ 554,555,556,557,558,559,572,593,609
-  @field r take  @ 654,659
-  @field w take  @ 28,244,264,284,285,573,594,610
+  @field r take  @ 291,315,316,317,330,331,332,333,349,367,383,422
+  @field r take  @ 491,510,530,549,564,580,581
+  @field r take  @ 585,597,598,599,600,601,602,615,636,652
+  @field r take  @ 652,697,702
+  @field w take  @ 28,244,264,284,285,616,637,653
   @field r takes  @ 314
-  @field w tm  @ 33,246,252,266,273,287,295,450,469,489,508,577
-  @field w tm  @ 614
+  @field w tm  @ 33,246,252,266,273,287,295,493,512,532,551,620
+  @field w tm  @ 657
   @field r track  @ 22,23,24,28,30
-  @field w track  @ 44,45,46,47,48,305,306,307,442,443,460,461
-  @field w track  @ 462,481,482,500,501,517,532,533,534,550,551,567
-  @field w track  @ 568,587,588,589,604,605,628,629,648,649,650
+  @field w track  @ 44,45,46,47,48,305,306,307,485,486,503,504
+  @field w track  @ 505,524,525,543,544,560,575,576,577,593,594,610
+  @field w track  @ 611,630,631,632,647,648,671,672,691,692,693
