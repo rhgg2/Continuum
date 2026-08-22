@@ -1,6 +1,6 @@
 # Song growth — the tracker grows the arrangement behind you
 
-> opened: 2026-08-16 · status: working design; not started
+> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 1
 
 **The tracker learns which placement it is inside, from the playhead,
 and gains the two verbs that grow the arrangement from there.**

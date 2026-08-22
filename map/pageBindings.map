@@ -53,8 +53,8 @@
   @field r Key_Enter  @ 76,77,109,123,151,158,161
   @field r Key_Equal  @ 64,66,70,72,111,168
   @field r Key_Escape  @ 109,130,166
-  @field r Key_F  @ 21,35,165
-  @field r Key_F6  @ 89,164
+  @field r Key_F  @ 21,35,164
+  @field r Key_F6  @ 89,165
   @field r Key_F7  @ 90
   @field r Key_G  @ 57,110,167
   @field r Key_GraveAccent  @ 56
@@ -89,14 +89,14 @@
   @field r Mod_Alt  @ 22,23,24,25
   @field r Mod_Ctrl  @ 26,27,34,35,43,44,45,46,47,49,56,58
   @field r Mod_Ctrl  @ 59,60,61,62,64,65,79,80,93,94,95
-  @field r Mod_Ctrl  @ 97,98,103,118,119,120,160,162,163,167,185
+  @field r Mod_Ctrl  @ 97,98,103,118,119,120,160,167,185
   @field r Mod_Shift  @ 26,27,30,32,37,38,46,50,51,52,53,66
   @field r Mod_Shift  @ 67,68,69,72,73,77,79,80,81,85,87,88
   @field r Mod_Shift  @ 94,98,121,122,147,148,149,150,154,155,161 placeKey:178
   @field r Mod_Super  @ 18,19,20,21,28,29,30,31,37,38,39,40
   @field r Mod_Super  @ 41,42,54,55,57,59,61,70,71,72,73,74
   @field r Mod_Super  @ 75,76,77,78,91,92,96,99,110,151,152,153
-  @field r Mod_Super  @ 154,155,159,161,165,168,169,170
+  @field r Mod_Super  @ 154,155,159,161,162,163,164,168,169,170
   @field w addNoteLane  @ 45
   @field w addTypedCol  @ 46
   @field w arrange  @ 187
@@ -118,7 +118,7 @@
   @field w arrangeNudgeForward  @ 153
   @field w arrangePageDown  @ 144
   @field w arrangePageUp  @ 143
-  @field w arrangePlayFromCursor  @ 164
+  @field w arrangePlayFromCursor  @ 165
   @field w arrangeSelectDown  @ 148
   @field w arrangeSelectLeft  @ 149
   @field w arrangeSelectRight  @ 150
@@ -225,7 +225,7 @@
   @field w slotRename  @ 123
   @field w swapBlockEnds  @ 56
   @field w takeProperties  @ 75
-  @field w toggleFollowPlay  @ 165
+  @field w toggleFollowPlay  @ 164
   @field r tracker  @ 103
   @field w tracker  @ 17
   @field w wiring  @ 128
