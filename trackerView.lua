@@ -218,6 +218,55 @@ end
 --contract: pin a slot on the current track
 function tv:selectSlot(slotIdx) cm:set('track', 'trackerSlot', slotIdx) end
 
+----- The current instance — which placement of the bound slot we are in.
+-- see design/song-growth.md § The tracker remembers its instance
+
+-- Held as a take handle, not a shape: a rebuild restates startQN and lengthQN,
+-- so the shape is re-read on each access.
+local currentInstanceTake
+local namedInstance       -- a command knew the placement; outranks the rest, one-shot
+local seekBack            -- prevTake travels backwards; cleared on resolve
+local playInstanceTake    -- where the play head was last resolve, for entry detection
+
+--contract: shape of the instance the tracker is in; nil if none, or its item is gone
+function tv:currentInstance()
+  return currentInstanceTake and arrange().findTake(currentInstanceTake) or nil
+end
+
+--contract: name the placement — the dive, and later again/vary; read at the next resolve
+function tv:nameInstance(take) namedInstance = take end
+
+--contract: per frame — a named instance beats play-head entry beats a slot-change seek, else sticky
+function tv:resolveCurrentInstance()
+  local bound      = tm:currentTake()
+  local boundShape = bound and arrange().findTake(bound)
+  if not boundShape then
+    currentInstanceTake, namedInstance, seekBack, playInstanceTake = nil, nil, nil, nil
+    return
+  end
+
+  -- Entry, not occupancy: a play head parked inside an instance must not
+  -- overwrite the placement a dive named on the very next frame.
+  local playQN, entered = arrange().playPositionQN(), nil
+  if playQN then
+    local inst, contains = arrange().seekInstance(bound, playQN, false)
+    if contains then entered = inst.take end
+  end
+
+  local cur = currentInstanceTake and arrange().findTake(currentInstanceTake)
+  if namedInstance then
+    currentInstanceTake = namedInstance
+  elseif entered and entered ~= playInstanceTake then
+    currentInstanceTake = entered
+  elseif not (cur and cur.trackIdx == boundShape.trackIdx
+                  and cur.slotIdx  == boundShape.slotIdx) then
+    local refQN = cur and cur.startQN or arrange().editCursorQN()
+    local inst  = arrange().seekInstance(bound, refQN, seekBack)
+    currentInstanceTake = inst and inst.take or nil
+  end
+  namedInstance, seekBack, playInstanceTake = nil, nil, entered
+end
+
 --contract: step ±1 over all tracks (may land on an empty one); restores its last slot
 function tv:gotoTrack(dir)
   local cur    = selectedTrackIdx()
@@ -234,7 +283,10 @@ function tv:gotoTake(dir)
   local pos
   for i, slot in ipairs(slots) do if slot.idx == cur then pos = i end end
   local target = pos and slots[pos + dir]
-  if target then self:selectSlot(target.idx) end
+  if target then
+    seekBack = dir < 0            -- the seek for the new slot follows the way we stepped
+    self:selectSlot(target.idx)
+  end
 end
 
 function tv:pickTrack(trackIdx)
@@ -3947,7 +3999,10 @@ tracker:registerAll{
   end, 'Nudge' },
   eventShiftLeft          = { function() shiftEvents(-1) end,     'Move event left'  },
   eventShiftRight         = { function() shiftEvents( 1) end,     'Move event right' },
-  playFromTop             = function() tm:playFrom(0) end,
+  playFromTop             = function()
+    local inst = tv:currentInstance()
+    if inst then arrange().playFromQN(inst.startQN) end
+  end,
   playFromCursor          = function()
     local col = grid.cols[ec:col()]
     tm:playFrom(ctx:rowToPPQ(ec:row(), col and col.midiChan))

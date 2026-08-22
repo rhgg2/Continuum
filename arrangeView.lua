@@ -281,7 +281,7 @@ local function diveSelected()
   if not tr then return end
   local cur     = takeAtCursor()
   local slotIdx = cur and cur.kind == 'midi' and cur.slotIdx or nil
-  tracker().diveTo(tr.guid, slotIdx)
+  tracker().diveTo(tr.guid, slotIdx, slotIdx and cur.take or nil)
   cmgr:invoke('switchPage', 'tracker')
 end
 
@@ -498,6 +498,9 @@ function av:dropSlot(trackIdx, slotIdx, qnPos) return am:dropInstance(trackIdx, 
 function av:hasPlacedTakes()   return am:hasPlacedTakes() end
 function av:editCursorQN()        return am:editCursorQN() end
 function av:playPositionQN()      return am:playPositionQN() end
+function av:playFromQN(qn)        return am:playFromQN(qn) end
+function av:findTake(take)        return am:findTake(take) end
+function av:seekInstance(take, qn, back) return am:seekInstance(take, qn, back) end
 function av:loopRangeQN()         return am:loopRangeQN() end
 function av:takesUsing(name)      return am:takesUsing(name) end
 function av:reswingAll(name)      return am:reswingAll(name) end
@@ -642,12 +645,12 @@ end
 
 --contract: mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.
 function av:createSlot(trackIdx, qnPos, lengthQN, name)
-  local slotIdx = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
+  local slotIdx, take = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if slotIdx then
     self:setPaletteSlot(slotIdx)
     self:setCursor(self:qnToRow(qnPos), trackIdx)
     local tr = am:projectTracks()[trackIdx + 1]
-    if tr then tracker().diveTo(tr.guid, slotIdx) end
+    if tr then tracker().diveTo(tr.guid, slotIdx, take) end
     cmgr:invoke('switchPage', 'tracker')
   end
   return slotIdx

@@ -102,6 +102,7 @@ function tp:bindFromSelection()
     local h = takeHash()
     if h and h ~= lastHash then tm:reloadFromReaper() end
   end
+  tv:resolveCurrentInstance()
 end
 
 -- Raw stack for the reaper bridge (diagnostics only). See docs/bridge.md § The eval environment.
@@ -110,7 +111,10 @@ facade.publishDebug('tracker', { mm = mm, tm = tm, gm = gm, ccm = ccm, pa = pa, 
 -- Dive is the one cross-page entry: arrange sets the tracker's selection; the
 -- pickers/Alt-arrows go straight to tv. bindFromSelection binds next frame.
 facade.publish('tracker', {
-  diveTo = function(guid, slotIdx) tv:selectTrack(guid, slotIdx) end,
+  diveTo = function(guid, slotIdx, take)
+    tv:selectTrack(guid, slotIdx)
+    if take then tv:nameInstance(take) end
+  end,
 
   -- Continuum quit re-enables anticipative FX on the guarded track (docs/midiManager.md).
   restorePerfFlags = function() tm:restoreGuarded() end,

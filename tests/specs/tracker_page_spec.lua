@@ -77,10 +77,44 @@ local function resetArrange()
     fakeArrange.calls.mint = { trackIdx = trackIdx, name = name, beats = beats, src = src }
     return 7                                       -- the new parked slot
   end
+
+  -- The placement world tv resolves its current instance against: one record per
+  -- instance, and a seek modelling am:seekInstance's contract (am_spec pins the real one).
+  fakeArrange.instances = {}     -- { take, trackIdx, slotIdx, startQN, lengthQN }
+  fakeArrange.playQN    = nil
+  fakeArrange.cursorQN  = 0
+  fakeArrange.findTake = function(take)
+    for _, inst in ipairs(fakeArrange.instances) do
+      if inst.take == take then return inst end
+    end
+  end
+  fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
+  fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
+  fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
+  fakeArrange.seekInstance = function(take, qn, back)
+    local from = fakeArrange.findTake(take); if not from then return end
+    local ahead, behind
+    for _, inst in ipairs(fakeArrange.instances) do
+      if inst.trackIdx == from.trackIdx and inst.slotIdx == from.slotIdx then
+        if qn >= inst.startQN and qn < inst.startQN + inst.lengthQN then return inst, true end
+        if inst.startQN > qn then
+          if not ahead  or inst.startQN < ahead.startQN  then ahead  = inst end
+        else
+          if not behind or inst.startQN > behind.startQN then behind = inst end
+        end
+      end
+    end
+    local first, second = ahead, behind
+    if back then first, second = behind, ahead end
+    local found = first or second
+    if found then return found, false end
+  end
 end
 local fakeWiring = { samplerReachable = function() return false end }
-local fakeFacade = {
-  publish = function() end,
+local fakeFacade                        -- named inside its own publish, so declared first
+fakeFacade = {
+  published = {},
+  publish = function(name, tbl) fakeFacade.published[name] = tbl end,
   publishDebug = function() end,
   get = function(name)
     if name == 'arrange' then return fakeArrange end
@@ -88,6 +122,15 @@ local fakeFacade = {
     return {}
   end,
 }
+
+-- A bind re-keys cm's track tier off the take's own item, so a take named in
+-- fakeArrange needs one in the fake project too.
+local function seedItems(h, takes)
+  for i, take in ipairs(takes) do
+    h.reaper:addItem('tr1', { take = take, isMidi = true,
+                              pos = i - 1, len = 1, poolGuid = '{p' .. i .. '}' })
+  end
+end
 
 local function newTrackerPage(cm, ds, cmgr, chrome, gui)
   fakeModalHost:reset()
@@ -203,6 +246,143 @@ return {
       t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'nextTake stepped to the next slot')
       h.cmgr:invoke('prevTake')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 0, 'prevTake stepped back')
+    end,
+  },
+
+  -- The current instance: which placement of the bound slot the tracker is in.
+  -- see design/song-growth.md § The tracker remembers its instance.
+  -- Each instance take needs a real item, or binding it unbinds cm's track tier.
+  {
+    name = 'F6 plays from the instance dived into, not the placement the bind resolved',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'          -- the bind resolves the first instance
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'i8')
+      tp:bindFromSelection()
+      h.cmgr:invoke('playFromTop')
+      t.eq(fakeArrange.calls.playFrom, 8, 'F6 played from the dived-into instance')
+    end,
+  },
+
+  {
+    name = 'a dive outranks a play head already sitting in another instance',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      fakeArrange.playQN = 1                       -- the play head sits inside i0
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i0', 'entering i0 made it current')
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'i8')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i8', 'the dive named i8 over the sounding i0')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i8', 'a stationary play head does not reclaim it')
+    end,
+  },
+
+  {
+    name = 'the play head entering an instance makes it current; leaving one writes nothing',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i0', 'the seed seek from the edit cursor found i0')
+      fakeArrange.playQN = 9
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i8', 'the play head entered i8')
+      fakeArrange.playQN = 20                      -- off the end, into no instance
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'i8', 'leaving leaves the tracker where it was')
+    end,
+  },
+
+  {
+    name = 'a slot change seeks from the outgoing instance, backwards for prevTake',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'a0', 'a8', 'a16', 'b4', 'b12' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.slotsByIdx[0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'a0'
+      fakeArrange.takeByKey['0:1'] = 'b4'
+      fakeArrange.instances = {
+        { take = 'a0',  trackIdx = 0, slotIdx = 0, startQN = 0,  lengthQN = 4 },
+        { take = 'a8',  trackIdx = 0, slotIdx = 0, startQN = 8,  lengthQN = 4 },
+        { take = 'a16', trackIdx = 0, slotIdx = 0, startQN = 16, lengthQN = 4 },
+        { take = 'b4',  trackIdx = 0, slotIdx = 1, startQN = 4,  lengthQN = 4 },
+        { take = 'b12', trackIdx = 0, slotIdx = 1, startQN = 12, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'a8')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a8', 'dived into the later instance of slot 0')
+
+      h.cmgr:invoke('nextTake')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'b12',
+           'forwards from QN 8 passes b4, which ends there, and reaches b12')
+
+      h.cmgr:invoke('prevTake')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a8',
+           'prevTake seeks backwards from QN 12, passing over a16 ahead of it')
+    end,
+  },
+
+  {
+    name = 'a slot with no live instance leaves the tracker nowhere, and F6 silent',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'parked' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'parked'       -- bound, but on no placement
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      t.falsy(stack.tv:currentInstance(), 'a parked slot puts the tracker in no instance')
+      h.cmgr:invoke('playFromTop')
+      t.falsy(fakeArrange.calls.playFrom, 'F6 has nowhere to play from')
     end,
   },
 

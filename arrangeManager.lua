@@ -490,6 +490,31 @@ function am:findTake(reaperTake)
   end
 end
 
+-- The instance every song-growth verb acts from. see design/song-growth.md § The tracker remembers its instance
+--contract: instance of take's slot containing qn; else first `back`-wards, else first the other way
+--contract: second return true iff the instance contains qn; nil when the slot has no live instance
+function am:seekInstance(take, qn, back)
+  local id = takeIdOf(take)
+  if not id then return end
+  local col = colOfTrack(am:ownerTrack(take))
+  if not col then return end
+  local ahead, behind
+  for _, tk in ipairs(am:tracksTakes(col)) do
+    if takeIdOf(tk.take) == id then
+      if qn >= tk.startQN and qn < tk.startQN + tk.lengthQN then return tk, true end
+      if tk.startQN > qn then
+        if not ahead  or tk.startQN < ahead.startQN  then ahead  = tk end
+      else
+        if not behind or tk.startQN > behind.startQN then behind = tk end
+      end
+    end
+  end
+  local first, second = ahead, behind
+  if back then first, second = behind, ahead end
+  local found = first or second
+  if found then return found, false end
+end
+
 --contract: (col, qn) — selected item, else edit-cursor QN + selected track; col=0 if neither
 function am:initialCursor()
   local item = reaper.GetSelectedMediaItem(0, 0)

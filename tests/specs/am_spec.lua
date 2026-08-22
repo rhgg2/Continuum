@@ -872,6 +872,116 @@ return {
     end,
   },
 
+  --------------------------------------------------------------------
+  -- Seeking an instance of a slot
+  --------------------------------------------------------------------
+  {
+    name = 'seekInstance takes the instance whose rendered span holds qn',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local bound = am:tracksTakes(0)[1].take
+      local inst, contains = am:seekInstance(bound, 5, false)
+      t.eq(inst.startQN, 4, 'the second instance holds qn 5')
+      t.eq(contains, true, 'and reports containment')
+      t.eq(inst.lengthQN, 4, 'rendered span comes with it')
+      t.eq(inst.naturalLenQN, 4, 'natural span comes with it')
+    end,
+  },
+
+  {
+    name = 'seekInstance spans are half-open — the end belongs to the next',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local bound = am:tracksTakes(0)[1].take
+      t.eq(am:seekInstance(bound, 4, false).startQN, 4, 'the boundary belongs to the later instance')
+    end,
+  },
+
+  {
+    name = 'seekInstance from a gap travels forwards by default, backwards when asked',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 12, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local bound = am:tracksTakes(0)[1].take
+      local fwd, fwdContains = am:seekInstance(bound, 6, false)
+      t.eq(fwd.startQN, 12, 'forwards reaches the later instance')
+      t.eq(fwdContains, false, 'which does not contain qn')
+      t.eq(am:seekInstance(bound, 6, true).startQN, 0, 'backwards reaches the earlier one')
+    end,
+  },
+
+  {
+    name = 'seekInstance falls back to the other direction when its own is empty',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local bound = am:tracksTakes(0)[1].take
+      t.eq(am:seekInstance(bound, 20, false).startQN, 4, 'nothing ahead, so the last one behind')
+      t.eq(am:seekInstance(bound, -5, true).startQN, 0, 'nothing behind, so the first one ahead')
+    end,
+  },
+
+  {
+    name = 'seekInstance ignores instances of other slots',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4,  len = 4, srcLen = 4, poolGuid = '{p2}' },
+                    { kind = 'midi', pos = 12, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local bound = am:tracksTakes(0)[1].take
+      local inst, contains = am:seekInstance(bound, 5, false)
+      t.eq(inst.startQN, 12, 'the other slot is not a candidate, so the seek passes over it')
+      t.eq(contains, false, 'sitting inside another slot is not containment')
+    end,
+  },
+
+  {
+    name = 'seekInstance matches on the rendered span, not the source span',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  len = 8, srcLen = 8, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4,  len = 4, srcLen = 4, poolGuid = '{p2}' },
+                    { kind = 'midi', pos = 12, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local bound = am:tracksTakes(0)[1].take
+      t.eq(am:tracksTakes(0)[1].lengthQN, 4, 'the bound instance is cut by its neighbour')
+      t.eq(select(2, am:seekInstance(bound, 6, false)), false,
+           'qn past the cut is outside it, though the source still runs')
+    end,
+  },
+
+  {
+    name = 'seekInstance is nil for a slot whose only take is parked',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local slot   = am:mintParkedTake(0, 'fresh', 4)
+      local parked = am:takeForSlot(0, slot)
+      t.falsy(am:seekInstance(parked, 2, false), 'a parked slot has no instance to reach')
+      t.truthy(am:seekInstance(am:tracksTakes(0)[1].take, 2, false), 'its live neighbour still does')
+    end,
+  },
+
   {
     name = 'projectEndQN is 0 for a project with no items',
     run = function(harness)

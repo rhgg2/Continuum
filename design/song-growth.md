@@ -25,7 +25,9 @@ could have been that item without a single edit coming out differently.
 An inert handle costs nothing while the tracker is a take editor, and
 is the whole difficulty as soon as the tracker is asked to grow a song,
 since a growth verb needs a place to grow from and the handle names an
-item rather than a position.
+item rather than a position. The answer was in hand and discarded:
+`diveSelected` holds the instance the arrange cursor sat on, and passes
+on the slot alone.
 
 ## Both take-creating commands park
 
@@ -62,52 +64,78 @@ take past its neighbour stores intent that takes effect when the
 neighbour moves away; and a tracker that appends takes one after
 another will meet cut instances often.
 
-## The playhead names the instance
+## The tracker remembers its instance
 
-The rule the rest of this rests on: **the sounding instance is the one
-whose rendered span contains the playhead**, and it is the instance
-every verb here acts from.
+**The tracker holds one instance of the bound slot, and every verb here
+acts from it.**
 
-It is well-defined rather than conventional. A pool never spans tracks
-— `docs/arrangeManager.md` § Pools never span tracks records the undo
-defect that made this structural — so every instance of a slot sits on
-one track; and `relayoutTrack` caps each item's `D_LENGTH` at the gap
-to its neighbour, so items on a track never overlap. At most one
-instance of the bound slot can contain the playhead.
-`am:playPositionQN` already returns the position, and nil when the
-transport is stopped.
+1. The instance is session state on the tracker page, not a position
+   read afresh each frame. A remembered instance is stable: it survives
+   an edit, a rebind and a page switch, where an answer recomputed from
+   the play head or the edit cursor would move under the verbs between
+   one frame and the next.
 
-Where the rule has no answer the verbs refuse rather than improvise. A
-stopped transport, a playhead over some other slot's take, a playhead
-past the last item: in each of them the tracker is editing something
-that is not sounding, and "after the sounding instance" would have to
-be invented. A take minted and never placed has no instance to sound at
-all, which is no gap: a take is listened to, and so placed, before it
-is worth repeating.
+1. Three gestures write it. A command that knows the placement names
+   one — the dive hands over the instance the arrange cursor sat on,
+   and `again` and `vary` name the instance they create. The play head
+   entering an instance of the bound slot makes that instance current.
+   A slot change that names nothing seeks one.
+
+1. Leaving an instance writes nothing. The state is sticky, so playback
+   running into a gap, over another slot's take, or off the end of the
+   song leaves the tracker where it was.
+
+1. The seek runs from a reference position — the outgoing instance's
+   start, or REAPER's edit cursor when there is no outgoing instance.
+   It takes the instance containing that position, else the first
+   instance in the direction of travel, else the first in the other
+   direction. `prevTake` travels backwards and every other gesture
+   forwards, matching the grid, where time runs down the page.
+
+1. At most one instance can contain a position. A pool never spans
+   tracks — `docs/arrangeManager.md` § Pools never span tracks records
+   the undo defect that made this structural — so every instance of a
+   slot sits on one track, and `relayoutTrack` caps each item's
+   `D_LENGTH` at the gap to its neighbour, so items on a track never
+   overlap.
+
+1. The instance is nil only where the slot has no live one, its single
+   take parked on scratch. `again` and `vary` refuse, and the grid
+   draws no caret.
+
+1. F6 is the first thing this repairs. `playFromTop` seeks to the start
+   of the bound take, which is whichever instance `takeForSlot`
+   resolved; with instances at bar 0 and bar 8, diving into the second
+   and pressing F6 plays from the first. It plays from the current
+   instance instead.
 
 ## Loop to item
 
 **Loop to item** is a toggle — cm at the global tier, beside
-`arrangeFollowPlay` — that sets the transport loop to the sounding
-instance's rendered span whenever the tracker binds a take. Its purpose
-is the rule above: with the loop bracketing a placement, the playhead
-is inside that placement by construction, and the verbs always have an
-instance to act from.
+`arrangeFollowPlay` — that brackets the current instance whenever the
+tracker binds a take.
 
-It writes when the tracker binds a take, and not per frame. A loop set
-by hand — the arrange page's Ctrl+B / Ctrl+E, or a drag in REAPER —
-survives until the next bind, which is to say the next dive or `again`,
-in the discipline `av:followPlay` already keeps, where a manual scroll
-suspends the follow until the next play or seek.
+1. It sets the transport loop to the instance's rendered span, turns
+   REAPER's repeat on, and moves the edit cursor and the play head to
+   the span's start. A loop range with repeat off plays through and
+   keeps going, so without the repeat the toggle would set a range that
+   never loops.
 
-It turns REAPER's repeat on when it sets the range, since a loop range
-with repeat off plays through and keeps going; without that the toggle
-would set a range that never loops.
+1. Moving the transport is what separates it from the dive. Diving
+   changes what the tracker edits and leaves playback alone; loop to
+   item is a transport command, and the placement it brackets is the
+   one you hear next.
+
+1. It writes on bind, and not per frame. A loop set by hand — the
+   arrange page's Ctrl+B / Ctrl+E, or a drag in REAPER — survives until
+   the next bind, which is to say the next dive or `again`, in the
+   discipline `av:followPlay` already keeps, where a manual scroll
+   suspends the follow until the next play or seek.
 
 ## What the grid draws
 
 The grid gains two marks. The **play row** is a caret on the row the
-playhead occupies within the sounding instance; the cut is drawn as a
+playhead occupies within the current instance; the cut is drawn as a
 line across the grid where the rendered span ends, when it ends before
 the source does. Between them they say where you are and how much of
 what you see is heard. The caret never passes the line, since below it
@@ -124,18 +152,18 @@ playhead through the grid's own metric, `(playQN − instanceStartQN)`
 over `ppqPerRow`, and swung notes sound around it, since swing
 displaces a note from the metric grid rather than moving the grid.
 
-With no sounding instance there is no caret, and that is the reading
-the refusals want: an unlit grid says the transport is not inside what
-you are editing, so `again` and `vary` will decline.
+With no current instance there is no caret, and that is the reading the
+refusals want: an unlit grid says the tracker is not inside a
+placement, so `again` and `vary` will decline.
 
 ## again
 
 **again** appends a pooled instance of the bound slot immediately after
-the sounding one, binds the tracker to it, and with loop to item on
+the current one, binds the tracker to it, and with loop to item on
 moves the loop onto it — so the transport keeps rolling and the repeat
 is what you hear next.
 
-The append point is the sounding instance's rendered end, and `again`
+The append point is the current instance's rendered end, and `again`
 refuses unless the free span from there is at least the take's natural
 length. Appending into a shorter gap would give a repeat truncated by
 its neighbour, which is a different sound from the one being repeated;
@@ -150,7 +178,7 @@ than as four sources that happen to agree. The verb is one
 
 ## vary
 
-**vary** replaces the sounding instance with an instance of a fresh
+**vary** replaces the current instance with an instance of a fresh
 slot that has its own pool — a **variant slot**, carrying a copy of the
 source's events and of the source's pool metadata. Edits then reach
 that placement alone, and the original slot keeps its other instances.
@@ -165,7 +193,7 @@ there, so the verb would fork a source nothing else shares, and the
 take is already yours to edit where it stands.
 
 It is built from verbs that already exist, and gathers everything
-before it mutates anything. Read the sounding instance's track, start
+before it mutates anything. Read the current instance's track, start
 QN and natural length; mint the variant through
 `am:mintParkedTake(trackIdx, name, len, srcTake)`, which gives the
 fresh pool its own copy of the event metadata; delete the instance,
@@ -215,3 +243,8 @@ song. It reaches well into the rebuild pipeline, and it belongs in
   that continues is one reading; stopping the grid at the rendered span
   is another, and that one loses the rows a later move would bring back
   into play.
+- **The caret while stopped.** The caret maps the play head, so a
+  stopped transport leaves the grid unlit even where the tracker knows
+  its instance. Marking where playback would start is the other
+  reading, and it puts a second mark on a grid that already carries the
+  tracker's own cursor row.

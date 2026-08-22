@@ -4,3 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The tracker remembers which instance of the bound
+  slot it is in, over resolving one from the play head each frame,
+  rather than a play-head rule that refuses whenever the transport is
+  stopped. A remembered instance survives an edit and a rebind. A
+  directional seek supplies the instance on a slot change — forwards,
+  or backwards for prevTake — so stepping through slots walks the song
+  instead of oscillating around a point.
+
