@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — Loop to item brackets when a gesture moves the tracker's current instance — a
+  dive, a slot change — and not when the tracker binds a take. A slot's take handle is its first
+  instance's, so it does not change between instances of one slot, and a bind-triggered bracket
+  would miss every move within a slot. Play-head entry is excluded too, since bracketing there would
+  pull the transport back to the start of a placement already sounding. The toggle is a cm key the
+  tracker reads directly, with no arrangeView accessor, because nothing on the arrange side reads
+  it.
+
 - **2026-08-22** — The tracker remembers which instance of the bound
   slot it is in, over resolving one from the play head each frame,
   rather than a play-head rule that refuses whenever the transport is

@@ -512,6 +512,7 @@ function av:midiSlots(trackIdx) return midiSlots(trackIdx) end
 
 function av:setEditCursorQN(qn)    am:setEditCursorQN(qn) end
 function av:setLoopRangeQN(lo, hi) am:setLoopRangeQN(lo, hi) end
+function av:loopTo(loQN, hiQN)     am:loopTo(loQN, hiQN) end
 function av:clearLoopRange()       am:clearLoopRange() end
 
 ----- Grid mouse — hit-test, in-flight drag geometry, commit

@@ -126,11 +126,14 @@ tracker binds a take.
    item is a transport command, and the placement it brackets is the
    one you hear next.
 
-1. It writes on bind, and not per frame. A loop set by hand — the
-   arrange page's Ctrl+B / Ctrl+E, or a drag in REAPER — survives until
-   the next bind, which is to say the next dive or `again`, in the
-   discipline `av:followPlay` already keeps, where a manual scroll
-   suspends the follow until the next play or seek.
+1. It writes when a gesture moves the current instance — a dive, a slot
+   change, `again` — and not per frame. Play-head entry moves the
+   instance and writes nothing, since bracketing there would pull the
+   transport back to the start of a placement already sounding. A loop
+   set by hand — the arrange page's Ctrl+B / Ctrl+E, or a drag in
+   REAPER — survives until the next such gesture, in the discipline
+   `av:followPlay` already keeps, where a manual scroll suspends the
+   follow until the next play or seek.
 
 ## What the grid draws
 

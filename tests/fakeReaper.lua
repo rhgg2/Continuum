@@ -23,6 +23,7 @@ function M.new()
     trackForItem = {},
     playState    = 0,
     playTime     = 0,
+    repeatOn     = 0,
     loopStart    = 0,
     loopEnd      = 0,
     calls        = {},
@@ -890,6 +891,13 @@ function M.new()
   function r.SetEditCurPos(time)
     state.cursorTime = time
     state.calls[#state.calls + 1] = { fn = 'SetEditCurPos', time = time }
+  end
+
+  -- -1 queries, 0 clears, 1 sets, >1 toggles; returns the new value.
+  function r.GetSetRepeat(val)
+    if val == 0 or val == 1 then state.repeatOn = val
+    elseif val > 1          then state.repeatOn = 1 - state.repeatOn end
+    return state.repeatOn
   end
 
   function r.GetPlayState()           return state.playState end

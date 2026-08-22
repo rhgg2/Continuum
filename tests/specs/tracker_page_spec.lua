@@ -91,6 +91,7 @@ local function resetArrange()
   fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
+  fakeArrange.loopTo         = function(lo, hi) fakeArrange.calls.loopTo = { lo, hi } end
   fakeArrange.seekInstance = function(take, qn, back)
     local from = fakeArrange.findTake(take); if not from then return end
     local ahead, behind
@@ -383,6 +384,52 @@ return {
       t.falsy(stack.tv:currentInstance(), 'a parked slot puts the tracker in no instance')
       h.cmgr:invoke('playFromTop')
       t.falsy(fakeArrange.calls.playFrom, 'F6 has nowhere to play from')
+    end,
+  },
+
+  -- Loop to item (design/song-growth.md § Loop to item): a gesture that moves the
+  -- current instance brackets it; the play head entering one does not.
+  {
+    name = 'with loop to item on, a dive brackets the instance dived into',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      tp:bindFromSelection()
+      t.falsy(fakeArrange.calls.loopTo, 'the toggle is off, so the transport is left alone')
+
+      h.cm:set('global', 'trackerLoopToItem', true)
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'i8')
+      tp:bindFromSelection()
+      t.deepEq(fakeArrange.calls.loopTo, { 8, 12 }, 'the loop brackets the dived-into span')
+    end,
+  },
+
+  {
+    name = 'the play head entering an instance leaves the loop where it was',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cm:set('global', 'trackerLoopToItem', true)
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      tp:bindFromSelection()
+      t.deepEq(fakeArrange.calls.loopTo, { 0, 4 }, 'the seeded instance was bracketed')
+      fakeArrange.calls.loopTo = nil
+      fakeArrange.playQN = 9
+      tp:bindFromSelection()
+      t.falsy(fakeArrange.calls.loopTo, 'playing into i8 does not move the loop onto it')
     end,
   },
 

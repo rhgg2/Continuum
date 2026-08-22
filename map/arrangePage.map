@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=73  mode=chunk  self=ap
+@module arrangePage  src=arrangePage.lua  loc=74  mode=chunk  self=ap
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta
 
 # Imports
@@ -34,9 +34,10 @@
   @held arrange.playPositionQN()  @ 59
   @held arrange.editCursorQN()  @ 60
   @held arrange.playFromQN(qn)  @ 61
-  @held arrange.reswingAll(name)  @ 62
-  @held arrange.takesUsing(name)  @ 63
-  @held arrange.tempersInUse()  @ 64
+  @held arrange.loopTo(loQN, hiQN)  @ 62
+  @held arrange.reswingAll(name)  @ 63
+  @held arrange.takesUsing(name)  @ 64
+  @held arrange.tempersInUse()  @ 65
 
 # Public API (ap:*)
   -- Page lifecycle — arrange is project-wide, so bind takes no take
@@ -47,16 +48,16 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.  @ 37
   -- Arrange service surface — av passthroughs
   -- Page interface — render delegates to the renderer
-  @api ap:toolbarSegments()  @ 68
-  @api ap:renderBody(_, w, h, dispatch)  @ 69
-  @api ap:renderStatusBar(ctx)  @ 70
-  @api ap:focusState()  @ 71
+  @api ap:toolbarSegments()  @ 69
+  @api ap:renderBody(_, w, h, dispatch)  @ 70
+  @api ap:renderStatusBar(ctx)  @ 71
+  @api ap:focusState()  @ 72
 
 # Uses (outbound edges)
-  @use call    ar:focusState  @ focusState:71
-  @use call    ar:renderBody  @ renderBody:69
-  @use call    ar:renderStatusBar  @ renderStatusBar:70
-  @use call    ar:toolbarSegments  @ toolbarSegments:68
+  @use call    ar:focusState  @ focusState:72
+  @use call    ar:renderBody  @ renderBody:70
+  @use call    ar:renderStatusBar  @ renderStatusBar:71
+  @use call    ar:toolbarSegments  @ toolbarSegments:69
   @use call    av:cursorCol  @ arrange.currentTrackIdx:42
   @use call    av:dropBand  @ unbind:35
   @use call    av:dropSlot  @ arrange.dropSlot:53
@@ -65,6 +66,7 @@
   @use call    av:hasPlacedTakes  @ arrange.hasPlacedTakes:54
   @use call    av:isParkedTake  @ arrange.isParkedTake:55
   @use call    av:keyForSlot  @ arrange.keyForSlot:48
+  @use call    av:loopTo  @ arrange.loopTo:62
   @use call    av:midiSlots  @ arrange.midiSlots:44
   @use call    av:mintParkedTake  @ arrange.mintParkedTake:51
   @use call    av:nextFreeSlot  @ arrange.nextFreeSlot:49
@@ -72,12 +74,12 @@
   @use call    av:playFromQN  @ arrange.playFromQN:61
   @use call    av:playPositionQN  @ arrange.playPositionQN:59
   @use call    av:projectTracks  @ arrange.tracks:43
-  @use call    av:reswingAll  @ arrange.reswingAll:62
+  @use call    av:reswingAll  @ arrange.reswingAll:63
   @use call    av:seedCursor  @ seedCursorFromReaper:38
   @use call    av:seekInstance  @ arrange.seekInstance:58
   @use call    av:takeForSlot  @ arrange.takeForSlot:45
-  @use call    av:takesUsing  @ arrange.takesUsing:63
-  @use call    av:tempersInUse  @ arrange.tempersInUse:64
+  @use call    av:takesUsing  @ arrange.takesUsing:64
+  @use call    av:tempersInUse  @ arrange.tempersInUse:65
   @use call    av:trackHandle  @ arrange.trackHandle:47
   @use call    av:trackIdxForGuid  @ arrange.trackIdxForGuid:46
   @use call    facade.publish  @ <load>:41
@@ -116,6 +118,7 @@
   @field w hasPlacedTakes  @ arrange.hasPlacedTakes:54
   @field w isParkedTake  @ arrange.isParkedTake:55
   @field w keyForSlot  @ arrange.keyForSlot:48
+  @field w loopTo  @ arrange.loopTo:62
   @field w midiSlots  @ arrange.midiSlots:44
   @field w mintParkedTake  @ arrange.mintParkedTake:50
   @field r modalHost  @ 19
@@ -124,11 +127,11 @@
   @field w ownerTrack  @ arrange.ownerTrack:56
   @field w playFromQN  @ arrange.playFromQN:61
   @field w playPositionQN  @ arrange.playPositionQN:59
-  @field w reswingAll  @ arrange.reswingAll:62
+  @field w reswingAll  @ arrange.reswingAll:63
   @field w seekInstance  @ arrange.seekInstance:58
   @field w takeForSlot  @ arrange.takeForSlot:45
-  @field w takesUsing  @ arrange.takesUsing:63
-  @field w tempersInUse  @ arrange.tempersInUse:64
+  @field w takesUsing  @ arrange.takesUsing:64
+  @field w tempersInUse  @ arrange.tempersInUse:65
   @field w trackHandle  @ arrange.trackHandle:47
   @field w trackIdxForGuid  @ arrange.trackIdxForGuid:46
   @field w tracks  @ arrange.tracks:43

@@ -22,6 +22,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 tracker: loop to item brackets the instance a gesture moves to (§ Loop to item)
 - 2026-08-22 tracker: remember which instance of the bound slot we are in (§ The tracker remembers its instance)
 
 ## Now
@@ -30,11 +31,9 @@
 
 ## Queued (current phase; one-liners)
 
-- Loop to item: cm `loopToItem` at the global tier, default false;
-  `av:loopToItem`/`av:setLoopToItem` through the facade; `tp:bind` brackets the
-  current instance's rendered span via `am:setLoopRangeQN`, turns REAPER repeat
-  on, and moves the edit cursor and play head to its start. No current instance
-  leaves the transport untouched. Needs `GetSetRepeat` in fakeReaper.
 - The toggle surface: `toggleLoopToItem` in the tracker command scope, its key
   binding, help entry and a toolbar checkbox — arrange's `followPlay` segment
   and `toggleFollowPlay` as the model.
+- Loop to item, once: a command calling `loopTo` on the span under the caret —
+  the tracker's current instance, the take at the arrange cursor — in both page
+  scopes, with their bindings and help entries.

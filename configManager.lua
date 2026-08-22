@@ -51,6 +51,7 @@ local declarations = {
   { 'previewInPlace',   false },
   { 'advanceOnLoad',    true  },
   { 'arrangeFollowPlay', false },
+  { 'trackerLoopToItem', false },
   { 'laneStrip.visible',   true },
 
   -- string choice

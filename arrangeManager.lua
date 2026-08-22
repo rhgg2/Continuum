@@ -551,6 +551,14 @@ function am:setLoopRangeQN(loQN, hiQN)
     reaper.TimeMap2_QNToTime(0, loQN), reaper.TimeMap2_QNToTime(0, hiQN), false)
 end
 
+-- Repeat has to go on: a loop range with repeat off plays straight through.
+--contract: (loQN, hiQN) — loop the span, repeat on, cursor at start; playback follows if rolling
+function am:loopTo(loQN, hiQN)
+  self:setLoopRangeQN(loQN, hiQN)
+  reaper.GetSetRepeat(1)
+  self:setEditCursorQN(loQN)
+end
+
 function am:clearLoopRange()
   reaper.GetSet_LoopTimeRange(true, true, 0, 0, false)
 end

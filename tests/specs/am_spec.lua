@@ -846,6 +846,18 @@ return {
   },
 
   {
+    name = 'loopTo brackets a span: loop range, repeat on, cursor at its start',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      am:loopTo(4, 8)
+      t.deepEq({ am:loopRangeQN() }, { 4, 8 }, 'loop range is the span')
+      t.eq(h.reaper.GetSetRepeat(-1), 1, 'repeat on, so the range loops')
+      t.eq(am:editCursorQN(), 4, 'edit cursor at the span start')
+      t.eq(h.reaper._state.playState, 0, 'a stopped transport stays stopped')
+    end,
+  },
+
+  {
     name = 'clearLoopRange removes the project loop range',
     run = function(harness)
       local h, am = mkAm(harness)

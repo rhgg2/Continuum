@@ -237,6 +237,7 @@ end
 function tv:nameInstance(take) namedInstance = take end
 
 --contract: per frame — a named instance beats play-head entry beats a slot-change seek, else sticky
+--contract: gesture writes bracket the instance when loop to item is on; entry, stickiness do not
 function tv:resolveCurrentInstance()
   local bound      = tm:currentTake()
   local boundShape = bound and arrange().findTake(bound)
@@ -254,17 +255,22 @@ function tv:resolveCurrentInstance()
   end
 
   local cur = currentInstanceTake and arrange().findTake(currentInstanceTake)
+  local gesture = false
   if namedInstance then
-    currentInstanceTake = namedInstance
+    currentInstanceTake, gesture = namedInstance, true
   elseif entered and entered ~= playInstanceTake then
     currentInstanceTake = entered
   elseif not (cur and cur.trackIdx == boundShape.trackIdx
                   and cur.slotIdx  == boundShape.slotIdx) then
     local refQN = cur and cur.startQN or arrange().editCursorQN()
     local inst  = arrange().seekInstance(bound, refQN, seekBack)
-    currentInstanceTake = inst and inst.take or nil
+    currentInstanceTake, gesture = inst and inst.take or nil, true
   end
   namedInstance, seekBack, playInstanceTake = nil, nil, entered
+
+  -- see design/song-growth.md § Loop to item
+  local moved = gesture and cm:get('trackerLoopToItem') and self:currentInstance()
+  if moved then arrange().loopTo(moved.startQN, moved.startQN + moved.lengthQN) end
 end
 
 --contract: step ±1 over all tracks (may land on an empty one); restores its last slot

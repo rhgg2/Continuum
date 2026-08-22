@@ -59,6 +59,7 @@ facade.publish('arrange', {
   playPositionQN  = function()     return av:playPositionQN() end,
   editCursorQN    = function()     return av:editCursorQN()   end,
   playFromQN      = function(qn)   av:playFromQN(qn) end,
+  loopTo          = function(loQN, hiQN) av:loopTo(loQN, hiQN) end,
   reswingAll             = function(name) av:reswingAll(name) end,
   takesUsing             = function(name) return av:takesUsing(name) end,
   tempersInUse           = function()     return av:tempersInUse()  end,
