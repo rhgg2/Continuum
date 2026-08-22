@@ -1,7 +1,7 @@
 # Sounding anchor — plan
 
-> source: `design/sounding-anchor.md` — synthesis compiled from there;
-> don't design here.
+> source: `docs/sonority.md`, `docs/tuning.md`, `docs/generators.md` and
+> `docs/trackerView.md`, which carry the model this built.
 
 ## Phases
 
@@ -32,7 +32,7 @@
 6. **Phase 6 — The dials remeasured** (§ The dials, § Open) — the
    ambient's share, the beam's width and the walk's cap re-swept with
    the gate gone, harmonic lock and purity's opening value and useful
-   span, and a value for `RECENT`. ← in flight
+   span, and a value for `RECENT`. — landed 2026-08-22, three commits.
 
 ## Landed  (newest first; prune below ~4)
 
