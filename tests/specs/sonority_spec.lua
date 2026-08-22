@@ -1671,6 +1671,22 @@ return {
   },
 
   {
+    name = 'solveToMoves: the beam reaches the septimal seventh an arpeggio names',
+    run = function()
+      -- Four voices entering a beat apart and each held to the end, under the eleven-pitch
+      -- set: at the beam of § The solve they state 4:5:6:7, where a beam of eight spells the
+      -- seventh 16/9 and the chord Pythagorean. This passage sets the beam's floor.
+      local cents = sonority.solveToMoves(rolled({ 60, 64, 67, 70 }, 240), 5, 1, edo12,
+                                          elevenPitches, 8, 0.25)
+      t.truthy(cents, 'the arpeggio is answered')
+      nearly(cents[2] - cents[1], 386.5012, 'the third a fifth of a cent wide of 5/4')
+      nearly(cents[3] - cents[1], 701.8944, 'the fifth six hundredths narrow of 3/2')
+      nearly(cents[4] - cents[1], 969.6944,
+        'and the seventh, which a narrower beam loses, 0.87 wide of 7/4')
+    end,
+  },
+
+  {
     name = 'strands: a class chains through its overlaps and splits where they stop',
     run = function()
       local held  = event(0,   60, 480)

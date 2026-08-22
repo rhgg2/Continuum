@@ -266,9 +266,10 @@ charged by whether its two members sound together.**
    1.8 seconds against 0.57, for the same tuning to the last digit, and a
    five-member sonority over eleven pitches enumerates 1,403,400
    spellings where the gate left 1018. A beam of twenty-four and a walk of
-   four abreast were settled by measurement taken with the gate active
-   (`docs/sonority.md` § The solve), so both figures are open again, and the
-   width is the only bound the breadth has left (§ Open).
+   four abreast were settled by measurement taken with the gate active, so
+   both were swept again without it: the beam settles at twelve, where every
+   passage measured stops improving, and the walk at six abreast
+   (`docs/sonority.md` § The solve).
 
 ## Presence
 
@@ -403,9 +404,9 @@ charged by whether its two members sound together.**
    § The candidates), and nothing here holds two strands of a sonority in
    their written order. What that sounds like is not known.
 
-1. The measured record lapses (§ The dials), and with it the two figures
-   the search was tuned to — a beam of twenty-four and four answers
-   abreast — which were settled with the reach gate active.
+1. The measured record lapses (§ The dials). The two figures the search
+   was tuned to have been taken again — a beam of twelve and six answers
+   abreast — and the rest of the record stands unmeasured.
 
 1. A dozen sites write a note's detune, and each must be taught what to
    do with the intent beside it. Most copy it or clear it; the transpose
@@ -444,20 +445,6 @@ charged by whether its two members sound together.**
    where that next onset births a strand, the dropped member has decided
    its rest and the key no longer holds it. The rest joining the key does
    not repair this, being read an onset after the merge that drops it.
-
-1. Where the beam's width should sit. It was swept over the take with
-   the gate gone — 0.34s at four, 0.94 at twelve, 1.82 at twenty-four and
-   2.43 at thirty-two, where twelve and twenty-four differ by 0.086¢
-   across sixty-six strands — so what is open is what an author buys past
-   twelve.
-
-1. What the walk's breadth costs at that width. A cap of four lost the
-   five-part take's answer once a rest could drift, so the cap stands at
-   six, one over the five that take wants at a beam of twenty-four; at a
-   beam of forty-eight it wants eight, the two dials not being
-   independent. The eighty-eight-note take is still improving at twenty
-   abreast under both beams, and where it settles is unmeasured.
-   `tests/spikes/springs/cap_sweep.lua` sweeps the pair.
 
 1. How far notes actually drift. The pull alone may bound the excursion
    tightly enough that a stored intent rarely differs from the step its

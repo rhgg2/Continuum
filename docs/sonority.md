@@ -427,14 +427,23 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    extension nothing can bring back under the cut. Two extensions in
    three refuse this way, paying for no ties, no relaxation and no key.
 
-1. The walk takes six answers abreast and a beam of twenty-four. The two
-   figures are not independent: the five-part take wants five abreast at
-   that beam and eight at a beam of forty-eight, the spellings a wider
-   beam admits crowding the capped walk. A cap of four lost that take's
-   answer once a rest could drift, so the cap stands one over what the
-   take asks for. An eighty-eight-note take answers in 1.8 seconds at
-   that pair and is still improving at twenty abreast under either beam,
-   and `tests/spikes/springs/cap_sweep.lua` sweeps the two together.
+1. The walk takes six answers abreast and a beam of twelve. Every
+   passage measured settles there: an overlapping arpeggio of four
+   voices needs the twelfth spelling to reach the septimal seventh its
+   set names, an eighty-eight-note take needs five answers abreast, and
+   nothing measured needs more of either. That take answers in 1.1
+   seconds at the pair, and `tests/spikes/springs/cap_sweep.lua` sweeps
+   the two together at the ambient share the modal opens on.
+
+1. Widening either dial past that pair costs more than it returns. The
+   cuts rank partial states, so the candidates a wider search admits can
+   crowd out the road that would have won, and neither dial improves an
+   answer monotonically: on the eighty-eight-note take a beam of
+   twenty-four is 0.02 per cent cheaper for twice the time, and a beam
+   of forty-eight is under two per cent cheaper with a step-class
+   wandering 117 cents where twelve holds it to 40. No term of the
+   objective charges that wander, so the reach a wider beam buys is
+   spent on it.
 
 1. The winner is settled by one joint relaxation over its springs,
    which recovers the precision lost by freezing the closed strands

@@ -1140,9 +1140,9 @@ end
 
 ----- The placement
 
--- Beam width and walk breadth (§ The solve): the width is doing work, and the cap one over
--- the five the five-part take wants at it, an eighty-eight-note passage wanting more still.
-local WIDTH, CAP = 24, 6
+-- Beam width and walk breadth (§ The solve): twelve is where every passage measured stops
+-- improving, and the cap one over the five the widest of them wants at that beam.
+local WIDTH, CAP = 12, 6
 
 -- The moves facility's solve: intervals rather than points, spelled by the beam under a
 -- frozen past, settled by joint relaxation (§ The solve).

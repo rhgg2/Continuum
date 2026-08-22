@@ -29,17 +29,17 @@
    barely moves the wolf count and loosens what holds a spelling together, so
    a passage drifts further under every pairwise reading; the widest-pair box
    was listened to and rejected. — answered 2026-08-21, no production change.
-6. **Phase 6 — The dials remeasured** (§ The dials, § Open) — the ambient's
-   share, the beam's width and the walk's cap re-swept with the gate gone,
-   harmonic lock's opening value and useful span, and a value for `RECENT`.
-   ← in flight
+6. **Phase 6 — The dials remeasured** (§ The dials, § Open) — the
+   ambient's share, the beam's width and the walk's cap re-swept with
+   the gate gone, harmonic lock and purity's opening value and useful
+   span, and a value for `RECENT`. ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 sonority: narrow the beam to twelve, the cap staying at six (§ The dials, § Open)
 - 2026-08-22 design: settle the box on spans, not pairs (§ What the box charges)
 - 2026-08-21 sonority: give the ambient a dial, opening at a quarter (§ Open)
 - 2026-08-21 sonority: key an answer by its open strands' rests (§ Fixed at birth)
-- 2026-08-21 sonority: rest a strand where the sonority before it stood (§ The ambient reference)
 
 ## Now
 
@@ -47,9 +47,6 @@
 
 ## Queued (current phase; one-liners)
 
-3. **The beam's width and the walk's cap re-swept** with the reach gate gone
-   — `tests/spikes/springs/cap_sweep.lua` sweeps the pair; what an author
-   buys past a beam of twelve is what is open.
-4. **Harmonic lock's opening value and useful span**, and a value for
-   `RECENT` (§ The dials, § Open).
+4. **Harmonic lock and purity's opening value and useful span**, and a
+   value for `RECENT` (§ The dials, § Open).
 

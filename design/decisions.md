@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The beam narrows to twelve and the walk keeps six answers abreast. Every passage
+  measured settles at that pair: an overlapping arpeggio needs the twelfth spelling to reach the
+  septimal seventh its set names, and an eighty-eight-note take needs the fifth answer. Widening
+  either dial past it buys drift and not fidelity, a beam of forty-eight standing under two per cent
+  cheaper with a step-class wandering 117 cents where twelve holds it to 40. The figures the old
+  pair was settled by were taken at a full ambient share, which is not the instrument the retune
+  modal opens on; the sweep now runs at the dials an author gets.
+
 - **2026-08-21** — A strand inherits a share of the sonority it was born into rather than the whole
   of it, and the share is an author's dial: `ambient`, opening at 0.25, travelling 0 to 1 linearly,
   and the moves facility's alone as purity is -- a points solve rests a strand on its own step, so
