@@ -817,5 +817,26 @@ step it was written on.**
    (`docs/sonority.md` § The model), so the collar is spelled afresh
    against the sonority it joins and may not be spelled as it was
    solved. Either a note carries its coords as metadata, or one solve
-   spans the takes in sequence and carries the spelling across.
+   spans the takes in sequence and carries the spelling across. The
+   ambient rest sharpens it: a take's first onset asserts the page and
+   every later strand rests on the drift the passage has reached
+   (`docs/sonority.md` § The solve), so a passage spanning two takes has
+   two anchors where the music has one.
+
+6. Whether the command should go on offering both anchors. The points
+   facility holds a note near the step it was written on and the moves
+   facility prices it against the music it arrived in, so one command
+   offers two instruments (§ Where it sits). Harmonic lock sharpens the
+   question: one dial serves both, charging cents from a rest under
+   moves and half-windows from a seat under points (`docs/sonority.md`
+   § The pull), so the same number means two things wherever the
+   notation's steps are not a hundred cents apart.
+
+7. Where a score follows the page. A retune re-seats notes onto a
+   target notation, so it is the gesture at which the page moves the
+   score. A generator's pitch demand is stored in cents and a lens
+   change no longer re-reads it (`docs/generators.md` § The ctx
+   discipline); re-reading a demand at a retune, as the ladder it was
+   typed on, would instead carry a trill's whole tone through a
+   notation change. Whether it should is undecided.
 

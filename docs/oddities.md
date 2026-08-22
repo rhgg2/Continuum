@@ -150,3 +150,21 @@ ones, so a project copy equal in every authored field can read as
 different and stay. Declining is the safe direction — the cost is
 clutter, not a lost edit — and the close is not in tidy but in never
 persisting derived state at all, deriving it at the read instead.
+
+### A strand's rest may be merged away before it is charged
+
+> **accepted** · sonority · 2026-08-22, against the wider merge key
+
+`sonority.search` merges two answers that agree in cents on the strands
+a later onset still names, together with the rests of the strands still
+open (`docs/sonority.md` § The solve). A member of one sonority may drop
+out of the next, having left the recency window, and where that next
+onset births a strand the dropped member has already decided the new
+strand's rest. The key no longer holds it, so two answers differing in
+what that strand will be charged merge as one. The rest joining the key
+does not repair this, being read an onset after the merge that drops it.
+
+The close is a key over every strand a later onset can see rather than
+over the open ones, and that key was measured and refused: it splits
+answers over a difference nothing can charge, and the five-part take
+then loses its answer at a cap of six and wants twelve to recover it.

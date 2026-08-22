@@ -141,3 +141,66 @@ about what comes out of the synth.
 **The obligation now:** the four authored fields stay the truth. A hertz
 figure is derived at the pane and never persisted, so nothing downstream
 has to learn what a reference frequency is.
+
+## Typing a deviation — the readout as an entry form
+
+> Read `docs/tuning.md` § Display for the readout this would make
+> writable, and § The written step for the intent it would author.
+
+The cell draws the cents a note stands off its step, and nothing types
+that figure. A writable readout would author an intent directly — the
+name held where it is and the sound bent away from it — which is a
+gesture the editor does not offer today, a detune arriving from a step's
+cents or from a solve.
+
+How far notes actually drift decides whether an author wants it. Over
+the five-part take at the dials' openings a strand stands 6.74¢ from its
+seat on average and none stands past 11.15¢ (`docs/sonority.md` § What
+it gives up), so the figures are small and the readout is mostly
+confirmation.
+
+**The obligation now:** the readout stays a reading of `(pitch, detune,
+intentCents)` and takes no cursor stop, so nothing the cursor or the
+clipboard holds has to move when one is offered.
+
+## A class tied to one tuning — a fixed scale over a passage
+
+> Read `docs/sonority.md` § The pull for the rest a strand relaxes
+> against, and § The solve for where that rest is fixed.
+
+A strand rests where the music stood when its note arrived, and
+consecutive strands of one step-class rest independently of each other.
+A spring between a class's own strands at a delta of nothing would hold
+the class to one tuning across a passage, and its stiff end is a fixed
+twelve-note scale.
+
+Both ends of that were measured. Inside the search, at a stiffness of
+eight every class does collapse to one tuning, and the pairs standing a
+comma or more from a 5-limit interval rise from 41 to 50. Applied after
+the spellings are chosen it splits the difference instead: one class's
+spread falls from 26¢ to 17¢ while the chords' own springs go from 3.1¢
+to 7.5¢ out, and no pair leaves the count. Those figures predate the
+ambient rest, so they give the shape of the effect and not its size.
+
+**The obligation now:** a strand's rest stays one frozen figure per
+strand, which is what a class-wide tie would replace.
+
+## A notational demand — the degree above whatever the host is
+
+> Read `docs/generators.md` § The ctx discipline for why a derivation
+> reads no notation, and `docs/trackerRender.md` for the two rows an
+> interval takes.
+
+A generator stores a cents demand, and the notation is the ladder the fx
+strip walks when one is typed. "The degree above whatever the host is"
+is a demand of another kind: a rule the notation answers rather than an
+interval.
+
+Re-reading such a rule on every rebuild is what the model forbids, a
+temper change then re-sounding derived notes no author touched. So the
+mode would resolve where the field is written, as a slide's target
+chooses `Next` or `Fixed`, and what it stores is cents after all.
+Nothing asks for it yet.
+
+**The obligation now:** the interval field's stored value stays cents,
+and the step ladder stays a reading of it.
