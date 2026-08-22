@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The beam holds at twenty-four, and the narrowing to twelve is withdrawn. That
+  sweep was taken at a purity of 8, and the width answers to that dial: a stiffer spring separates
+  spellings further down the beam's ranking, so the eighty-eight-note take takes all it gains by a
+  beam of twelve at a purity of 8, by sixteen at 16, and only by twenty-four at 32 and at 64. The
+  cap stands at six under every purity measured, and past a beam of twenty-four the reach is spent
+  on drift. The sweeper now runs purity as an axis rather than fixing it, and where the dial should
+  open is left to the item that settles the rest of them.
+
 - **2026-08-22** — The beam narrows to twelve and the walk keeps six answers abreast. Every passage
   measured settles at that pair: an overlapping arpeggio needs the twelfth spelling to reach the
   septimal seventh its set names, and an eighty-eight-note take needs the fifth answer. Widening

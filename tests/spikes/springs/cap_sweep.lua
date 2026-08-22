@@ -1,15 +1,16 @@
--- Sweeps the beam's width against the walk's cap over a set of passages, which is the pair
--- docs/sonority.md § The solve settles. Each row states what the pair settles at, the widest
--- wander of any step-class across the passage and how flat the passage sits, so a pair
--- buying a cheaper answer by letting the music drift shows as a lower cost beside a wider
--- spread. Run from the repo root, and allow ten minutes:
+-- Sweeps the beam's width against the walk's cap over a set of passages, at one purity after
+-- another, which is what docs/sonority.md § The solve settles. Each row states what the dials
+-- settle at, the widest wander of any step-class across the passage and how flat the passage
+-- sits, so a setting buying a cheaper answer by letting the music drift shows as a lower cost
+-- beside a wider spread. Run from the repo root, and allow a quarter of an hour:
 --   lua tests/spikes/springs/cap_sweep.lua
 --
--- Every passage here settles at a beam of twelve and five answers abreast, the overlapping
--- arpeggio and the eighty-eight-note take being the two that ask for that much: the arpeggio
--- reaches the septimal seventh its set names only at twelve, and the take wants the fifth
--- answer. Past that pair the dials pay in drift -- at a beam of forty-eight the take is under
--- two per cent cheaper with a step-class wandering 117 cents where twelve holds it to 40.
+-- Purity is swept because the width answers to it: the eighty-eight-note take takes all it
+-- gains by a beam of twelve at a purity of 8 and only by twenty-four at 32, a stiffer spring
+-- separating spellings further down the beam's ranking. Five answers abreast is what any
+-- passage here asks for at any purity. Past that pair the dials pay in drift -- at a purity
+-- of 64 a beam of forty-eight is 0.6 per cent cheaper with a step-class wandering 111 cents
+-- where twenty-four holds it to 41.
 package.path = './?.lua;tests/spikes/springs/?.lua;' .. package.path
 
 local sonority = require('sonority')
@@ -19,8 +20,9 @@ local bigTake  = require('take2')
 
 -- The dials the retune modal opens on, ambient included: a sweep taken at a full ambient
 -- share measures an instrument no author starts from, and drifts further at every width.
-local STRENGTH, STIFFNESS, ARITY, AMBIENT = 1, 8, 5, 0.25
-local CAPS, WIDTHS = { 2, 3, 4, 6, 8, 12, 20 }, { 4, 8, 12, 16, 24, 48 }
+local STRENGTH, ARITY, AMBIENT = 1, 5, 0.25
+local CAPS, WIDTHS = { 3, 4, 6, 8 }, { 8, 12, 16, 24, 48 }
+local PURITIES = { 8, 16, 32, 64 }
 
 local edo12 = tuning.presets['12EDO']
 local withSevenths = tuning.moves{ pitches = { '1/1', '3/2', '5/4', '7/4', '9/8' } }
@@ -129,27 +131,27 @@ local passages = {
 
 ----- The sweep
 
--- What sonority.solveToMoves does, with the beam width and the cap handed in rather than
--- read off the module's own figures.
-local function solveAt(passage, width, cap)
+-- What sonority.solveToMoves does, with the beam width, the cap and the purity handed in
+-- rather than read off the module's own figures and the modal's.
+local function solveAt(passage, width, cap, stiffness)
   local strands = passage.strands
   local seat = sonority.seats(strands, passage.notation or edo12)
   local onsets, spellings = sonority.onsets(strands, sonority.walk(strands, ARITY)), {}
   for i, onset in ipairs(onsets) do
     spellings[i] = sonority.spellings(onset.members, seat, onset.presence, onset.mayWait,
-                                      passage.moves, width, STIFFNESS)
+                                      passage.moves, width, stiffness)
   end
 
-  local answer = sonority.search(onsets, spellings, seat, STRENGTH, STIFFNESS, cap, AMBIENT)
+  local answer = sonority.search(onsets, spellings, seat, STRENGTH, stiffness, cap, AMBIENT)
   if not answer then return nil end
 
   local free = {}
   for index = 1, #strands do free[index] = index end
   local displacement = sonority.relax(sonority.ties(answer.springs, free), STRENGTH,
-                                      STIFFNESS, answer.displacement, answer.rest, free)
+                                      stiffness, answer.displacement, answer.rest, free)
 
   return answer.box
-       + sonority.springCost(answer.springs, displacement, STIFFNESS, 1, #answer.springs)
+       + sonority.springCost(answer.springs, displacement, stiffness, 1, #answer.springs)
        + sonority.pullCost(displacement, answer.rest, STRENGTH, free), displacement
 end
 
@@ -171,28 +173,31 @@ local function drift(passage, displacement)
 end
 
 for _, passage in ipairs(passages) do
-  local rows, cheapest = {}, math.huge
-  for _, width in ipairs(WIDTHS) do
-    for _, cap in ipairs(CAPS) do
-      local at = os.clock()
-      local cost, displacement = solveAt(passage, width, cap)
-      rows[#rows + 1] = { width = width, cap = cap, took = os.clock() - at, cost = cost,
-                          displacement = displacement }
-      if cost and cost < cheapest then cheapest = cost end
+  for _, stiffness in ipairs(PURITIES) do
+    local rows, cheapest = {}, math.huge
+    for _, width in ipairs(WIDTHS) do
+      for _, cap in ipairs(CAPS) do
+        local at = os.clock()
+        local cost, displacement = solveAt(passage, width, cap, stiffness)
+        rows[#rows + 1] = { width = width, cap = cap, took = os.clock() - at, cost = cost,
+                            displacement = displacement }
+        if cost and cost < cheapest then cheapest = cost end
+      end
     end
-  end
 
-  print(string.format('%s  (%d strands)', passage.name, #passage.strands))
-  print('   beam  cap     time         cost      dcost   spread   flat')
-  for _, row in ipairs(rows) do
-    if row.cost then
-      local spread, flat = drift(passage, row.displacement)
-      print(string.format('  %5d %4d %7.2fs %12.4f %+9.4f %8.2f %6.2f',
-                          row.width, row.cap, row.took, row.cost, row.cost - cheapest,
-                          spread, flat))
-    else
-      print(string.format('  %5d %4d %7.2fs   refused', row.width, row.cap, row.took))
+    print(string.format('%s  (%d strands, purity %d)', passage.name, #passage.strands,
+                        stiffness))
+    print('   beam  cap     time         cost      dcost   spread   flat')
+    for _, row in ipairs(rows) do
+      if row.cost then
+        local spread, flat = drift(passage, row.displacement)
+        print(string.format('  %5d %4d %7.2fs %12.4f %+9.4f %8.2f %6.2f',
+                            row.width, row.cap, row.took, row.cost, row.cost - cheapest,
+                            spread, flat))
+      else
+        print(string.format('  %5d %4d %7.2fs   refused', row.width, row.cap, row.took))
+      end
     end
+    print()
   end
-  print()
 end

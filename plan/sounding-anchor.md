@@ -36,10 +36,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 sonority: put the beam back at twenty-four, where purity puts it (§ The dials, § Open)
 - 2026-08-22 sonority: narrow the beam to twelve, the cap staying at six (§ The dials, § Open)
 - 2026-08-22 design: settle the box on spans, not pairs (§ What the box charges)
 - 2026-08-21 sonority: give the ambient a dial, opening at a quarter (§ Open)
-- 2026-08-21 sonority: key an answer by its open strands' rests (§ Fixed at birth)
 
 ## Now
 

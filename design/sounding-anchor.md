@@ -267,9 +267,9 @@ charged by whether its two members sound together.**
    five-member sonority over eleven pitches enumerates 1,403,400
    spellings where the gate left 1018. A beam of twenty-four and a walk of
    four abreast were settled by measurement taken with the gate active, so
-   both were swept again without it: the beam settles at twelve, where every
-   passage measured stops improving, and the walk at six abreast
-   (`docs/sonority.md` § The solve).
+   both were swept again without it: the beam holds at twenty-four, which is
+   what the eighty-eight-note take needs once purity is 16 or more, and the
+   walk goes to six abreast (`docs/sonority.md` § The solve).
 
 ## Presence
 
@@ -405,8 +405,8 @@ charged by whether its two members sound together.**
    their written order. What that sounds like is not known.
 
 1. The measured record lapses (§ The dials). The two figures the search
-   was tuned to have been taken again — a beam of twelve and six answers
-   abreast — and the rest of the record stands unmeasured.
+   was tuned to have been taken again — a beam of twenty-four and six
+   answers abreast — and the rest of the record stands unmeasured.
 
 1. A dozen sites write a note's detune, and each must be taught what to
    do with the intent beside it. Most copy it or clear it; the transpose
@@ -438,6 +438,11 @@ charged by whether its two members sound together.**
 
 1. Where harmonic lock now opens, and how far it usefully travels
    (§ The dials).
+
+1. Where purity opens. It has stood at 8 since the springs were
+   unweighted, and a passage holds together better at 32; the beam's
+   width answers to the dial (`docs/sonority.md` § The solve), so the two
+   settle together.
 
 1. A strand deciding a rest may be merged away before it decides it.
    `visibleAhead` keys the strands a later onset names, and a member of
