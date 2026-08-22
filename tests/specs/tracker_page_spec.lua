@@ -126,9 +126,9 @@ fakeFacade = {
 
 -- A bind re-keys cm's track tier off the take's own item, so a take named in
 -- fakeArrange needs one in the fake project too.
-local function seedItems(h, takes)
+local function seedItems(h, takes, srcLen)
   for i, take in ipairs(takes) do
-    h.reaper:addItem('tr1', { take = take, isMidi = true,
+    h.reaper:addItem('tr1', { take = take, isMidi = true, srcLen = srcLen,
                               pos = i - 1, len = 1, poolGuid = '{p' .. i .. '}' })
   end
 end
@@ -446,6 +446,34 @@ return {
       local row, elsewhere = stack.tv:playRow()
       t.eq(row, 6, 'the row the head occupies in the instance it is inside')
       t.truthy(elsewhere, 'dimmed: the placement sounding is not the placement bound')
+    end,
+  },
+
+  -- The cut: a sixteen-beat source with a neighbour eight beats below renders
+  -- half of itself, so the grid's second half is drawn but never heard. Four
+  -- rows to the beat puts the line at row 32 of 64.
+  {
+    name = 'the cut row is where the rendered span stops short of the source',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' }, 16)
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 8 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 8 },
+      }
+      tp:bindFromSelection()
+      t.eq(stack.tv.grid.numRows, 64, 'the grid draws the whole source')
+      t.eq(stack.tv:cutRow(), 32, 'the neighbour cuts the render at eight beats')
+
+      fakeArrange.instances[1].lengthQN = 16          -- the neighbour moved away
+      t.falsy(stack.tv:cutRow(), 'a fully rendered span cuts nothing')
     end,
   },
 

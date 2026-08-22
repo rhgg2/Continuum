@@ -262,6 +262,12 @@ local function printer(x0, y0)
     p.segment(xLo, ly, xHi + 1, ly, colour)
   end
 
+  -- Dashed rule: half a cell on, half off, so the dashes fall in with the
+  -- character grid. The cut line.
+  function pt:dottedHLine(xLo, xHi, y, colour, thick)
+    for x = xLo, xHi do p.segment(x, y, x + 0.5, y, colour, thick) end
+  end
+
   function pt:box(xLo, xHi, yLo, yHi, colour)
     p.fill({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, colour)
   end
@@ -786,6 +792,16 @@ local function drawTracker()
   -- Scrim spans only populated rows; blank space past the take's end stays clear.
   if isLocal then
     drawLocalScrim(draw, localHole, totalWidth, math.min(viewRows, math.max(numRows - scrollRow, 0)))
+  end
+
+  -- The cut: below it the rows are drawn but never heard. Two pixels across the
+  -- whole pane, the gutter with the columns. See docs/trackerPage.md § The cut.
+  local cutRow = tv:cutRow()
+  if cutRow then
+    local y = cutRow - scrollRow
+    if y >= 0 and y < viewRows then
+      draw:dottedHLine(-GUTTER, totalWidth - 1, y, 'cutRow', 2)
+    end
   end
 
   -- Play row: painted over the cells so a wash or glyph can't hide it, and

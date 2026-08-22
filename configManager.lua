@@ -154,6 +154,7 @@ local declarations = {
   { 'colour.tracker.cursorText',  'alt.zone8'  },
   { 'colour.tracker.playRow',      {'yellow', 0.9}  },  -- play-head caret inside the current instance
   { 'colour.tracker.playRowOther', {'yellow', 0.4}  },  -- dimmed: the head sounds a sibling instance
+  { 'colour.tracker.cutRow',      'colour.tracker.inactive' },  -- the rendered span ends here; the rows below are drawn, not heard
   { 'colour.tracker.rowBarStart', {'base.zone6', 0.4} },
   { 'colour.tracker.selection',   {'base.zone10', 0.5} },
   { 'colour.tracker.localScrim',  {'base.zone1',  0.25} },  -- local-mode wash over instances the caret isn't inside

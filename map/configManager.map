@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=581  mode=chunk  self=cm
+@module configManager  src=configManager.lua  loc=582  mode=chunk  self=cm
 @deps ps
 
 # Invariants & contracts
@@ -8,11 +8,11 @@
   @invariant  transient tier never persists (saver is a no-op) and resets to {} on every refreshCache  @ 6
   @invariant  declarations is ordered array-of-pairs; nil-default keys coexist with non-nil defaults  @ 7
   @invariant  track/take tiers require REAPER context; without it loaders return {}, savers error  @ 8
-  @contract  caches lazy: first getter triggers refreshCache; setContext/setTrack refresh eagerly  @ 324
-  @contract  no take context drops track too (track derived from take in setContext)  @ 325
-  @contract  deep-copy of resolved value (most-specific tier, else default); raises on unknown key  @ 492
-  @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only  @ 493
-  @contract  opts.pick=<subkey> → indexes the resolved value before copying; nil when absent  @ 494
+  @contract  caches lazy: first getter triggers refreshCache; setContext/setTrack refresh eagerly  @ 325
+  @contract  no take context drops track too (track derived from take in setContext)  @ 326
+  @contract  deep-copy of resolved value (most-specific tier, else default); raises on unknown key  @ 493
+  @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only  @ 494
+  @contract  opts.pick=<subkey> → indexes the resolved value before copying; nil when absent  @ 495
 
 # Shapes
   @shape  configChangedPayload.targeted = { key = string, level = string }   -- set / remove  @ 9
@@ -26,17 +26,17 @@
 # Private state
   @state ps = assert(deps and deps.ps, 'configManager requires a pextSt...  @ 16
   @state declarations = {  @ 30
-  @state ACCENTS = { 'yellow', 'orange', 'magenta', 'violet', 'blue', 'cyan'...  @ 269
-  @state MIRROR = { synced = 'cyan', overridden = 'yellow', conflicted = 'r...  @ 276
-  @state COLOUR_NS = { global = true, tracker = true, sampler = true,  @ 286
-  @state declared, defaults = {}, {}  @ 313
-  @state fire  @ 330   -- installed below, once cm exists
-  @state cache = {  @ 332
-  @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 340
-  @state levelSet = {}  @ 342
-  @state loaders = {  @ 359
-  @state savers = {  @ 367
-  @state cm = {}  @ 406
+  @state ACCENTS = { 'yellow', 'orange', 'magenta', 'violet', 'blue', 'cyan'...  @ 270
+  @state MIRROR = { synced = 'cyan', overridden = 'yellow', conflicted = 'r...  @ 277
+  @state COLOUR_NS = { global = true, tracker = true, sampler = true,  @ 287
+  @state declared, defaults = {}, {}  @ 314
+  @state fire  @ 331   -- installed below, once cm exists
+  @state cache = {  @ 333
+  @state levels = { 'global', 'project', 'track', 'take', 'transient' }  @ 341
+  @state levelSet = {}  @ 343
+  @state loaders = {  @ 360
+  @state savers = {  @ 368
+  @state cm = {}  @ 407
 
 # Private functions
   @fn print(...)  @ 18-20
@@ -45,143 +45,143 @@
       · tracker
       · arrange
       · sampler (waveform strip in the sample browser)
-  @fn expandRef(ref)  @ 288-291
-  @fn copy(v)  @ 319-322
+  @fn expandRef(ref)  @ 289-292
+  @fn copy(v)  @ 320-323
   -- PRIVATE DATA
   -- STORAGE BACKENDS
-  @fn pruneUnknown(tbl)  @ 348-353
+  @fn pruneUnknown(tbl)  @ 349-354
       -- Tolerant on load: stale keys from a rename shouldn't error.
-  @fn asTable(v)  @ 355
+  @fn asTable(v)  @ 356
   -- CACHE MANAGEMENT
-  @fn refreshCache()  @ 382-386
-  @fn ensureCache()  @ 388-390
-  @fn checkLevel(level)  @ 392-396
-  @fn checkKey(key)  @ 398-402
+  @fn refreshCache()  @ 383-387
+  @fn ensureCache()  @ 389-391
+  @fn checkLevel(level)  @ 393-397
+  @fn checkKey(key)  @ 399-403
   -- PUBLIC INTERFACE
   -- Reading
-  @fn resolveKey(key)  @ 460-470
+  @fn resolveKey(key)  @ 461-471
       -- Walks the 5 tiers rather than building the whole merged table: a read touches 5 slots, not 164.
       -- see docs/configManager.md § Levels & merge
-      @contract  resolves one key: most-specific tier holding it wins, else the schema default  @ 457
-  @fn mergedKey(key)  @ 474-487
+      @contract  resolves one key: most-specific tier holding it wins, else the schema default  @ 458
+  @fn mergedKey(key)  @ 475-488
       -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
       -- Non-table contributions are skipped, so the result is always a table.
 
 # Functions held in tables
-  @held loaders.global()  @ 360
-  @held loaders.project()  @ 361
-  @held loaders.track()  @ 362
-  @held loaders.take()  @ 363
-  @held loaders.transient()  @ 364
-  @held savers.global(tbl)  @ 368
-  @held savers.project(tbl)  @ 369
-  @held savers.track(tbl)  @ 370-373
-  @held savers.take(tbl)  @ 376
-  @held savers.transient()  @ 377
+  @held loaders.global()  @ 361
+  @held loaders.project()  @ 362
+  @held loaders.track()  @ 363
+  @held loaders.take()  @ 364
+  @held loaders.transient()  @ 365
+  @held savers.global(tbl)  @ 369
+  @held savers.project(tbl)  @ 370
+  @held savers.track(tbl)  @ 371-374
+  @held savers.take(tbl)  @ 377
+  @held savers.transient()  @ 378
 
 # Public API (cm:*)
-  @api cm:setContext(newTake)  @ 425-430
-      @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack  @ 423
-      @contract  refreshes all persisted caches (transient resets to {}) and fires configChanged {}  @ 424
-  @api cm:clearTake()  @ 432-437
-  @api cm:boundTake()  @ 440
-      @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)  @ 439
-  @api cm:boundTrack()  @ 443
-      @contract  bound track pointer; nil when context is cleared (track tier resolves off empty)  @ 442
-  @api cm:setTrack(newTrack)  @ 445-450
-  @api cm:pollUndo()  @ 453
-      @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged  @ 452
-  @api cm:isDeclared(key)  @ 490
-      @contract  non-raising existence test against the schema; true iff key is declared  @ 489
-  @api cm:get(key, opts)  @ 497-504
+  @api cm:setContext(newTake)  @ 426-431
+      @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack  @ 424
+      @contract  refreshes all persisted caches (transient resets to {}) and fires configChanged {}  @ 425
+  @api cm:clearTake()  @ 433-438
+  @api cm:boundTake()  @ 441
+      @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)  @ 440
+  @api cm:boundTrack()  @ 444
+      @contract  bound track pointer; nil when context is cleared (track tier resolves off empty)  @ 443
+  @api cm:setTrack(newTrack)  @ 446-451
+  @api cm:pollUndo()  @ 454
+      @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged  @ 453
+  @api cm:isDeclared(key)  @ 491
+      @contract  non-raising existence test against the schema; true iff key is declared  @ 490
+  @api cm:get(key, opts)  @ 498-505
       -- pick is orthogonal to the merge mode: it indexes whatever that mode resolved, so only the
       -- one entry crosses the boundary. A nil pick is indistinguishable from none (see the spec).
-  @api cm:getAt(level, key)  @ 507-516
-      @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone  @ 506
-  @api cm:valueFor(handle, scope, key)  @ 519-526
-      @contract  single-tier value for a foreign take/track handle (ps:getAt); no merge or defaults  @ 518
-  @api cm:defaultFor(key)  @ 529-532
-      @contract  deep-copy of the schema default for key (no tiers, no merge); raises on unknown key  @ 528
+  @api cm:getAt(level, key)  @ 508-517
+      @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone  @ 507
+  @api cm:valueFor(handle, scope, key)  @ 520-527
+      @contract  single-tier value for a foreign take/track handle (ps:getAt); no merge or defaults  @ 519
+  @api cm:defaultFor(key)  @ 530-533
+      @contract  deep-copy of the schema default for key (no tiers, no merge); raises on unknown key  @ 529
   -- Writing
-  @api cm:set(level, key, value)  @ 537-547
-      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 536
-  @api cm:remove(level, key)  @ 550-561
-      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 549
-  @api cm:assign(level, updates)  @ 564-578
-      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 563
+  @api cm:set(level, key, value)  @ 538-548
+      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 537
+  @api cm:remove(level, key)  @ 551-562
+      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 550
+  @api cm:assign(level, updates)  @ 565-579
+      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 564
 
 # Signals emitted (via util.installHooks)
-  @emits configChanged   -- configChangedPayload.bulk   @ 420 setContext:429 clearTake:436 setTrack:449 set:546 remove:559 assign:577
+  @emits configChanged   -- configChangedPayload.bulk   @ 421 setContext:430 clearTake:437 setTrack:450 set:547 remove:560 assign:578
 
 # Uses (outbound edges)
-  @use call    ps:assign  @ savers.global:368 savers.project:369 savers.track:372 savers.take:376
-  @use call    ps:boundTake  @ savers.take:376 boundTake:440
-  @use call    ps:boundTrack  @ savers.track:371 boundTrack:443
-  @use call    ps:clearTake  @ clearTake:433
-  @use call    ps:declareUndoable  @ <load>:411
-  @use call    ps:get  @ loaders.global:360 loaders.project:361 loaders.track:362 loaders.take:363
-  @use call    ps:getAt  @ valueFor:524
-  @use call    ps:pollUndo  @ pollUndo:453
-  @use call    ps:setTake  @ setContext:426
-  @use call    ps:setTrack  @ setTrack:446
-  @use call    ps:watch  @ <load>:415
-  @use call    util.add  @ <load>:271,272,280,281
-  @use call    util.deepClone  @ <load>:94 copy:320 getAt:515
-  @use call    util.installHooks  @ <load>:407
+  @use call    ps:assign  @ savers.global:369 savers.project:370 savers.track:373 savers.take:377
+  @use call    ps:boundTake  @ savers.take:377 boundTake:441
+  @use call    ps:boundTrack  @ savers.track:372 boundTrack:444
+  @use call    ps:clearTake  @ clearTake:434
+  @use call    ps:declareUndoable  @ <load>:412
+  @use call    ps:get  @ loaders.global:361 loaders.project:362 loaders.track:363 loaders.take:364
+  @use call    ps:getAt  @ valueFor:525
+  @use call    ps:pollUndo  @ pollUndo:454
+  @use call    ps:setTake  @ setContext:427
+  @use call    ps:setTrack  @ setTrack:447
+  @use call    ps:watch  @ <load>:416
+  @use call    util.add  @ <load>:272,273,281,282
+  @use call    util.deepClone  @ <load>:94 copy:321 getAt:516
+  @use call    util.installHooks  @ <load>:408
   @use call    util.print  @ print:19
   @use require tuning  @ <load>:13
   @use require util  @ <load>:12
 
 # Calls (intra-file)
-  @call asTable  @ loaders.global:360 loaders.project:361 loaders.track:362 loaders.take:363
-  @call checkKey  @ get:498 getAt:512 valueFor:523 defaultFor:530 set:539 remove:552 assign:567
-  @call checkLevel  @ getAt:508 set:538 remove:551 assign:566
-  @call copy  @ get:503 getAt:513 valueFor:525 defaultFor:531 set:543 assign:573
-  @call ensureCache  @ resolveKey:461 mergedKey:475 getAt:509 set:540 remove:553 assign:568
-  @call expandRef  @ <load>:298,300
+  @call asTable  @ loaders.global:361 loaders.project:362 loaders.track:363 loaders.take:364
+  @call checkKey  @ get:499 getAt:513 valueFor:524 defaultFor:531 set:540 remove:553 assign:568
+  @call checkLevel  @ getAt:509 set:539 remove:552 assign:567
+  @call copy  @ get:504 getAt:514 valueFor:526 defaultFor:532 set:544 assign:574
+  @call ensureCache  @ resolveKey:462 mergedKey:476 getAt:510 set:541 remove:554 assign:569
+  @call expandRef  @ <load>:299,301
   @call hex  @ <load>:102,103,104,105,106,107,108,109,110,111,112,113
   @call hex  @ <load>:114,115,116,117,118,119,120,121,122,123,126,127
   @call hex  @ <load>:128,129,130,131,132,133,134
-  @call mergedKey  @ get:499
-  @call print  @ savers.track:371
-  @call pruneUnknown  @ loaders.global:360 loaders.project:361 loaders.track:362 loaders.take:363
-  @call refreshCache  @ ensureCache:389 setContext:427
-  @call resolveKey  @ get:499
+  @call mergedKey  @ get:500
+  @call print  @ savers.track:372
+  @call pruneUnknown  @ loaders.global:361 loaders.project:362 loaders.track:363 loaders.take:364
+  @call refreshCache  @ ensureCache:390 setContext:428
+  @call resolveKey  @ get:500
 
 # Unresolved receivers
-  @drop key:match  @ <load>:294
-  @drop loaders.track  @ setTrack:447
-  @drop ref:match  @ expandRef:289 <load>:305
+  @drop key:match  @ <load>:295
+  @drop loaders.track  @ setTrack:448
+  @drop ref:match  @ expandRef:290 <load>:306
   @drop s:gsub  @ hex:23
   @drop s:sub  @ hex:24,25,26
 
 # Fields (r read / w write incl. constructor keys)
-  @field r REMOVE  @ assign:572
-  @field w arrange  @ 287
+  @field r REMOVE  @ assign:573
+  @field w arrange  @ 288
   @field w atom  @ 86,87,88,89
-  @field w chrome  @ 287
-  @field w conflicted  @ 276
+  @field w chrome  @ 288
+  @field w conflicted  @ 277
   @field w factors  @ 86,87,88,89
-  @field r global  @ ensureCache:389
-  @field w global  @ 81,286,333 loaders.global:360 savers.global:368
-  @field w key  @ set:546 remove:559
-  @field w level  @ set:546 remove:559 assign:577
-  @field r mergeTiers  @ get:499
-  @field w overridden  @ 276
+  @field r global  @ ensureCache:390
+  @field w global  @ 81,287,334 loaders.global:361 savers.global:369
+  @field w key  @ set:547 remove:560
+  @field w level  @ set:547 remove:560 assign:578
+  @field r mergeTiers  @ get:500
+  @field w overridden  @ 277
   @field w period  @ 86,87,88,89
-  @field r pick  @ get:500,501
+  @field r pick  @ get:501,502
   @field r presets  @ 94
-  @field w project  @ 334 loaders.project:361 savers.project:369
+  @field w project  @ 335 loaders.project:362 savers.project:370
   @field r ps  @ 16
-  @field w sampler  @ 286
-  @field r scope  @ 418
-  @field w scope  @ 415,416
+  @field w sampler  @ 287
+  @field r scope  @ 419
+  @field w scope  @ 416,417
   @field w shift  @ 86,87,88,89
-  @field w slot  @ 415,416
-  @field w slots  @ 411
-  @field w synced  @ 276
-  @field w take  @ 336 loaders.take:363 savers.take:376 clearTake:434
-  @field w track  @ 335 loaders.track:362 savers.track:370 setTrack:447
-  @field w tracker  @ 286
-  @field w transient  @ 337 loaders.transient:364 savers.transient:377
-  @field w wiring  @ 287
+  @field w slot  @ 416,417
+  @field w slots  @ 412
+  @field w synced  @ 277
+  @field w take  @ 337 loaders.take:364 savers.take:377 clearTake:435
+  @field w track  @ 336 loaders.track:363 savers.track:371 setTrack:448
+  @field w tracker  @ 287
+  @field w transient  @ 338 loaders.transient:365 savers.transient:378
+  @field w wiring  @ 288

@@ -23,23 +23,13 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 tracker: draw the cut where the rendered span stops short (§ What the grid draws)
 - 2026-08-22 tracker: draw the play row, dimmed for a sibling instance (§ What the grid draws)
 - 2026-08-22 tracker, arrange: loop to item as a pressed verb (§ Loop to item)
 - 2026-08-22 tracker: surface loop to item as a toggle command and checkbox (§ Loop to item)
-- 2026-08-22 tracker: loop to item brackets the instance a gesture moves to (§ Loop to item)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The cut.** `tv:cutRow()` gives the row where the current instance's
-   rendered span ends, when it ends before the source does — the
-   rendered `lengthQN` through the same QN → row conversion, nil when
-   the row falls at or past `grid.numRows` and nil with no current
-   instance. `drawTracker` paints a one-pixel grey dotted line there,
-   spanning the grid columns only, so the gutter and the lane strip stay
-   clear. Spec: a cut instance's row against a neighbour eight beats
-   below a sixteen-beat source, and no row where the neighbour is far
-   enough away.

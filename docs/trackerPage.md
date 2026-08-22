@@ -65,9 +65,10 @@ frame actually painted.
 5. Cells, char by char.
 6. Off-grid projection bars — only under an active temperament, only for
    notes with a non-zero `(intent − displayed)` gap.
-7. Play row caret, over the cells and across the gutter with them.
-8. Selection highlight.
-9. Cursor (single-cell box + re-painted cursor char).
+7. Cut line, across the pane.
+8. Play row caret, over the cells and across the gutter with them.
+9. Selection highlight.
+10. Cursor (single-cell box + re-painted cursor char).
 
 Tails sit above the row backgrounds but below cells, so cell characters
 paint over the tail pixels at the note head and foot.
@@ -529,6 +530,24 @@ the instances of a slot share one take; the mute says the placement
 sounding is not the placement bound. Play-head entry carries the current
 instance to whatever the head walks into, so the two part company only
 where a dive or a slot change has pinned the tracker elsewhere.
+
+### The cut
+
+A dotted line marks where the current instance's rendered span ends,
+where the source span runs on past it. The rows below the line are drawn
+but never heard: the item stops there, so the song never reaches them.
+
+`tv:cutRow` takes the instance's rendered `lengthQN` through the metric
+the caret uses, and returns nil where the row falls at or past
+`grid.numRows`. The grid's row count is the source span in rows, so that
+one test is the whole condition — a row inside the grid is a render the
+source outruns.
+
+The line spans the pane, the gutter with the columns, and the grid
+carries on below it. Those rows come back into play as soon as the
+neighbour moves away, which keeps the mark a boundary and not an edge.
+See `docs/arrangeManager.md` § Rendered span and source span for where
+the two extents come from.
 
 ### Slot recovery and the per-track memory
 

@@ -3313,6 +3313,15 @@ function tv:playRow()
   local other, contains = arrange().seekInstance(inst.take, playQN, false)
   if contains then return rowIn(other.startQN), true end
 end
+
+--contract: the row where the rendered span ends; nil unless the source outruns it
+-- see docs/trackerPage.md § The cut
+function tv:cutRow()
+  local inst = self:currentInstance()
+  if not inst then return end
+  local row = inst.lengthQN * resolution / ctx:ppqPerRow()
+  if row < grid.numRows then return row end
+end
 function tv:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end
 function tv:timeSig()
   local ts = timeSigs[1] or { num = 4, denom = 4 }
