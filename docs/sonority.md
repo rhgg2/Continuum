@@ -42,6 +42,16 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    returning after it merges into its strand, every later sonority
    holds it, and every later onset lets it wait (§ The candidates).
 
+1. The solve reads the score's own notes. A chain's output is
+   realisation, so a trill's alternation is neither a strand nor a
+   member of a sonority, and an author who wants those notes spelled
+   freezes the chain first, which makes them the score's own.
+
+1. The solve is idempotent. A note carries the step it was written on
+   (`docs/tuning.md` § The written step), so a second run reads the same
+   seats, groups the same strands and returns the same cents however far
+   the first run moved the note from its step.
+
 1. A note held across a chord change bends the harmony to it rather
    than the reverse. Under a 5-limit target a D held from D–F–A into
    G–B♭–D keeps the `10/9` the first chord gives it, where restruck it

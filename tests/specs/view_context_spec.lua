@@ -364,7 +364,7 @@ return {
     run = function()
       -- QCM12's unison has 38.02c of room upward and 58.55c downward, and the
       -- cell reports the same 20c either way: the halves are the points solve's
-      -- now -- see design/sounding-anchor.md § What the cell says.
+      -- now -- see docs/tuning.md § Display.
       local ctx = mkCtx{ temper = meantone12() }
       local gap, half = ctx:noteDeviation({ pitch = 60, detune = 20 })
       t.eq(gap, 20)
@@ -376,7 +376,7 @@ return {
 
   {
     -- Written C-4 and seated 80c sharp, so the sound is nearer C#4 and only the
-    -- intent holds the name -- see design/sounding-anchor.md § What the note remembers.
+    -- intent holds the name -- see docs/tuning.md § The written step.
     name = 'noteLabel names the step the intent carries, not the one its sound snaps to',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }
@@ -387,7 +387,7 @@ return {
 
   {
     -- 12EDO's half-window is fifty cents, and the gap the cell reports is no
-    -- longer bounded by it -- see design/sounding-anchor.md § The pull in cents.
+    -- longer bounded by it -- see docs/sonority.md § The pull.
     name = 'noteDeviation measures from the intent, past the half-window that once bound it',
     run = function()
       local ctx = mkCtx{ temper = tuning.presets['12EDO'] }

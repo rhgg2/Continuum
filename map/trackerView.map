@@ -343,13 +343,13 @@
       -- The notes of a scope, whichever facility is about to move them.
   @fn snapToTemper(notes, notation, strength)  @ 2070-2078
       -- Notation snap: every note in scope onto the step it was written on, spending the intent.
-      -- see docs/trackerView.md § Retune, design/sounding-anchor.md § What the note remembers
+      -- see docs/trackerView.md § Retune, docs/tuning.md § The written step
   @fn strandsOf(notes, notation)  @ 2083-2090
       -- The scope's notes as strands: those of a step-class that overlap over their
       -- render clip, not the authored ceiling on endppq -- see design/adaptive-tuning.md § The strand.
   @fn seatStrand(strand, notation, cents, strength)  @ 2094-2102
       -- A strand's tuning, seated on every note that writes it, in that note's own register, each
-      -- stamped with the step it was written on. see design/sounding-anchor.md § What the note remembers
+      -- stamped with the step it was written on. see docs/tuning.md § The written step
   @fn shortlisted(notes, notation, target, keyStep, widen)  @ 2106-2124
       -- The scope's strands, shortlisted against the target; or nil and the steps with nowhere
       -- to go, in notation order and named once however many strands wrote it.

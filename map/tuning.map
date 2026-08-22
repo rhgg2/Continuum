@@ -159,7 +159,7 @@
   @api tuning.snap(temper, midi, detune)  @ 621-623
   @api tuning.noteStep(notation, note)  @ 629-632
       -- Where a note was written, which is not always where it sounds -- see
-      -- design/sounding-anchor.md § What the note remembers.
+      -- docs/tuning.md § The written step.
       @contract  notation, note → the step and octave the note was written on  @ 627
       @contract  the step note.intentCents stands on, or the one its pitch snaps to where it carries none  @ 628
   @api tuning.stepClass(temper, note)  @ 637-640
@@ -170,13 +170,13 @@
       @contract  half-gaps in cents to steps below/above `step`; both positive, wraps the period  @ 642
   @api tuning.transposeNote(temper, note, n)  @ 663-671
       -- A transpose steps from where a note was written rather than from where it sounds.
-      -- see design/sounding-anchor.md § What the note remembers
+      -- see docs/tuning.md § The written step
       @contract  temper, note, n steps → the pitch, detune and intent cents of the note moved n steps  @ 660
       @contract  a move of whole 2/1 octaves keeps the note's drift and carries its intent  @ 661
       @contract  any other move seats the note on the step it lands on and spends the intent  @ 662
   @api tuning.stepLadder(temper, note, cents)  @ 683-688
       -- A cents demand read as the notation walks it, which is how one is typed -- see
-      -- design/sounding-anchor.md § The notation is not a derivation input
+      -- docs/trackerRender.md § FX chain
       @contract  (temper, note|nil, cents) → the whole steps from the anchor, and the signed cents over  @ 682
   @api tuning.ladderCents(temper, note, steps, residual)  @ 691-694
       @contract  (temper, note|nil, steps, residual) → the cents demand that ladder names  @ 690

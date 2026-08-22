@@ -44,10 +44,10 @@
       -- in detune, so this is pure note arithmetic -- no temper needed.
   @fn displaced(note, cents)  @ 43-45
       -- The inverse: a note displaced by cents, placed back on (pitch, detune). A pitch demand is
-      -- cents here and never notation steps. see design/sounding-anchor.md § The notation is not a derivation input
+      -- cents here and never notation steps. see docs/generators.md § The ctx discipline
   @fn inherited(src, cents)  @ 49-51
       -- The name that rides with it: the source's intent moved by the cents this note stands off it.
-      -- A source carrying none derives none, and the note reads as it sounds; see design/sounding-anchor.md § What the note remembers
+      -- A source carrying none derives none, and the note reads as it sounds; see docs/tuning.md § The written step
   @fn retrig(stream, host, params, ctx)  @ 55-75
       @contract  retrig tiles the host window with evenly-spaced same-pitch fxNotes; every hit is derived  @ 53
       @contract  velocity ramps params.ramp per tile from the host vel, clamped 1..127; detune inherited verbatim  @ 54

@@ -13,7 +13,7 @@
   The same gestures settle what becomes of the intent a solve stamps on a
   note. A typed note and a transpose spend it, seating the note where it
   arrives; a move of whole 2/1 octaves carries it, drift and all
-  (design/sounding-anchor.md § What the note remembers).
+  (docs/tuning.md § The written step).
 
 # Helpers
   @fn mk(harness, temper, notes)  @ 42-53

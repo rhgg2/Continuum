@@ -46,7 +46,7 @@
   @const DEFERRED = '?'  @ 512
   @const RECENT = 0.5  @ 779
   @const AUDIBLE = 0.5  @ 813
-  @const WIDTH, CAP = 12, 6  @ 1217
+  @const WIDTH, CAP = 24, 6  @ 1217
 
 # Private functions
   -- The box

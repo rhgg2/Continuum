@@ -63,7 +63,7 @@ local function notesBody()
     specs = {
       { lane = 1, ppq = 0,   endppq = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
       -- Written a semitone below where it sounds, which only a stamped intent can say:
-      -- the readback cannot re-derive it (design/sounding-anchor.md § What the note remembers).
+      -- the readback cannot re-derive it (docs/tuning.md § The written step).
       { lane = 1, ppq = 240, endppq = 480, pitch = 64, vel = 100, detune = 0, delay = 0,
         intentCents = 6300 },
     },

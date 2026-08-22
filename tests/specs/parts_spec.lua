@@ -169,7 +169,7 @@ return {
   -- across the separator after the pitch field and one column beside it. It
   -- takes no cursor stop, nothing typing a deviation, so the parts and their
   -- internal stops are untouched and only the absolute positions move.
-  -- see design/sounding-anchor.md § What the cell says
+  -- see docs/tuning.md § Display
 
   {
     name = 'note showing cents: one wider, vel shifted right, parts unchanged',

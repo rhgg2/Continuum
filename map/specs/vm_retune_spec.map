@@ -29,7 +29,7 @@
   open tail sounds to the next onset in its lane rather than to the end of the take.
   
   A note carrying an intent is stranded and seated on the step that intent names rather
-  than on the step its pitch reads as (design/sounding-anchor.md § What the note remembers).
+  than on the step its pitch reads as (docs/tuning.md § The written step).
 
 # Helpers
   @fn mk(harness, notes, temper, tempers)  @ 50-58

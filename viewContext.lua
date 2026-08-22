@@ -26,7 +26,7 @@ function ctx:activeTemper() return temper end
 local ON_TEMPER_EPS = 1e-6
 
 -- Both lenses take the step from the intent a note carries, so a note the solve
--- moved keeps its written name -- see design/sounding-anchor.md § What the note remembers.
+-- moved keeps its written name -- see docs/tuning.md § The written step.
 --contract: (note, octaveLabel, negative) for the note's written step, or nil with no temper bound
 function ctx:noteLabel(evt)
   if not (temper and evt and evt.pitch) then return end
@@ -34,7 +34,7 @@ function ctx:noteLabel(evt)
 end
 
 -- The cell reports this in cents and normalises it by nothing, so the gap is
--- free to exceed the step's own room -- see design/sounding-anchor.md § What the cell says.
+-- free to exceed the step's own room -- see docs/tuning.md § Display.
 --contract: signed cents from the note's written step, or nil with no temper bound
 function ctx:noteDeviation(evt)
   if not (temper and evt and evt.pitch) then return end

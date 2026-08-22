@@ -154,7 +154,7 @@ than solved for.**
    addressable range (`docs/tuning.md` § Display), and the pitch cell
    holds a step name and an octave. What the cell puts beside the name is
    two columns of small glyphs holding the note's deviation in cents
-   (`design/sounding-anchor.md` § What the cell says); what it marks the
+   (`docs/tuning.md` § Display); what it marks the
    note with is an overline for fx, and a star for a delay that could not
    be realised.
 

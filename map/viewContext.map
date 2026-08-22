@@ -31,11 +31,11 @@
   @api ctx:activeTemper()  @ 22
   @api ctx:noteLabel(evt)  @ 31-34
       -- Both lenses take the step from the intent a note carries, so a note the solve
-      -- moved keeps its written name -- see design/sounding-anchor.md § What the note remembers.
+      -- moved keeps its written name -- see docs/tuning.md § The written step.
       @contract  (note, octaveLabel, negative) for the note's written step, or nil with no temper bound  @ 30
   @api ctx:noteDeviation(evt)  @ 39-49
       -- The cell reports this in cents and normalises it by nothing, so the gap is
-      -- free to exceed the step's own room -- see design/sounding-anchor.md § What the cell says.
+      -- free to exceed the step's own room -- see docs/tuning.md § Display.
       @contract  signed cents from the note's written step, or nil with no temper bound  @ 38
   @api ctx:ppqToRow(ppqI, chan)  @ 54-58
       @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).  @ 53

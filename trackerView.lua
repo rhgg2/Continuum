@@ -808,7 +808,7 @@ do
 
     if util.isNote(evt) then
       -- A typed note is written where it stands, so an intent the old one carried goes
-      -- with it. see design/sounding-anchor.md § What the note remembers
+      -- with it. see docs/tuning.md § The written step
       local update = { pitch = pitch, detune = detune, intentCents = util.REMOVE }
       if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
       edit.assign(evt, repinToRow(evt, update, target.ppq, target.rpb))
@@ -930,7 +930,7 @@ do
         local old
         if temper then
           -- The step the note was written on, so a note a solve has moved names the
-          -- octave it was written in. see design/sounding-anchor.md § What the note remembers
+          -- octave it was written in. see docs/tuning.md § The written step
           local step, index = tuning.noteStep(temper, evt)
           old = index + (step >= temper.octaveStep and 1 or 0)
         else
@@ -2066,7 +2066,7 @@ local function notesIn(groups)
 end
 
 -- Notation snap: every note in scope onto the step it was written on, spending the intent.
--- see docs/trackerView.md § Retune, design/sounding-anchor.md § What the note remembers
+-- see docs/trackerView.md § Retune, docs/tuning.md § The written step
 local function snapToTemper(notes, notation, strength)
   for _, e in ipairs(notes) do
     if ctx:noteDeviation(e) ~= 0 or e.intentCents then
@@ -2090,7 +2090,7 @@ local function strandsOf(notes, notation)
 end
 
 -- A strand's tuning, seated on every note that writes it, in that note's own register, each
--- stamped with the step it was written on. see design/sounding-anchor.md § What the note remembers
+-- stamped with the step it was written on. see docs/tuning.md § The written step
 local function seatStrand(strand, notation, cents, strength)
   for _, n in ipairs(strand.notes) do
     local intent        = tuning.seatWindow(notation, n)
@@ -3473,7 +3473,7 @@ end
 --contract: the gate is fxHostAtCursor -- a cell that runs no chain of its own answers nil
 --contract: the window is the viewport's rows, resolved on the producer's own channel
 -- The readout column a chain's off-step ghosts need, taken from a lane that reserves none of its own
--- and given back after; nothing the cursor holds moves as it comes and goes. see design/sounding-anchor.md § What the cell says
+-- and given back after; nothing the cursor holds moves as it comes and goes. see docs/trackerView.md § Ghost sampling
 do
   local popped = {}   -- the columns this widened, so it gives back exactly those
 
@@ -4053,7 +4053,7 @@ function tv:rebuild(takeChanged)
     local octaveWidth  = temper and temper.octaveWidth or 1
 
     -- The readout earns its column only where some note stands off its step;
-    -- a lane on the temper pays no width for it. see design/sounding-anchor.md § What the cell says
+    -- a lane on the temper pays no width for it. see docs/tuning.md § Display
     local function anyOffStep(events)
       for _, e in ipairs(events) do
         local gap = util.isNote(e) and ctx:noteDeviation(e)

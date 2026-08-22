@@ -62,8 +62,7 @@ not eight or ten.
   splits answers over a difference nothing can charge, and the cap spends its slots on
   near-duplicates: the five-part take then loses its answer at a cap of six and wants twelve to
   recover it, doubling the eighty-eight-note take's search. Over the open strands alone both takes
-  are unchanged, and the dials stand. The argument is design/sounding-anchor.md § Fixed at birth,
-  the model docs/sonority.md § The solve.
+  are unchanged, and the dials stand. The model is `docs/sonority.md` § The solve.
 
 - **2026-08-21** — A strand's rest is the presence-weighted mean of the sonority before the one it
   is born into, read off the displacements its answer carried into that onset and frozen there.
@@ -73,8 +72,7 @@ not eight or ten.
   charged against a live mean of the same displacements leaves a whole passage free to slide at no
   cost. The walk's cap moves from four to six with it: at four the five-part take took a road whose
   comma ran off into drift, standing 23.2 cents from its seat at worst where five abreast and upward
-  stand 11.9. The argument is design/sounding-anchor.md § The ambient reference and § Fixed at
-  birth, the model docs/sonority.md § The pull and § The solve.
+  stand 11.9. The model is `docs/sonority.md` § The pull and § The solve.
 
 - **2026-08-21** — A member of a sonority carries a presence — full where its strand sounds, a half
   where recency alone holds it — and a spring's weight is the product of its two members', so a pair
@@ -83,9 +81,8 @@ not eight or ten.
   owns drift against distribution while how much a released note still counts is a property of
   hearing. The half is argued from its endpoints rather than measured: at one a recency member
   counts for as much as one sounding, and at zero the sonorities decouple. The box keeps its full
-  weight, reading a component's coords as a set with no pair to weight. The argument is
-  `design/sounding-anchor.md` § Presence and § Springs price beating, the model `docs/sonority.md` §
-  The walk.
+  weight, reading a component's coords as a set with no pair to weight. The model is
+  `docs/sonority.md` § The walk.
 
 - **2026-08-20** — The moves solve stops reading a note's window, as wall and as ruler. As wall it
   bounded where a strand could stand: `settle` returns its optimum unclamped now, and the beam
@@ -96,8 +93,7 @@ not eight or ten.
   scaling with the notation's step spacing. The window stays the points shortlist's and the
   notation's. What it costs: a note may leave the step it was written on, which `intentCents`
   records, and two members of a sonority could take one spelling, which the model now forbids
-  directly as distinctness. The argument is `design/sounding-anchor.md` § The pull in cents and
-  § What the beam loses, the model `docs/sonority.md` § The pull.
+  directly as distinctness. The model is `docs/sonority.md` § The pull and § The candidates.
 
 - **2026-08-20** — A note may store the step it was written on: `intentCents`, that step's absolute
   cents, stamped by a solve on every note it seats and read wherever a step is derived. This retires
@@ -105,6 +101,5 @@ not eight or ten.
   `(pitch, detune)` by snapping — which held only while the solve's window kept a note inside its
   own step; a solve free to place a note past that window leaves the derivation naming a different
   step. Cents rather than a step index, an index being bound to the notation that indexed it where
-  cents re-read across a temper change. The argument is `design/sounding-anchor.md` § What the note
-  remembers, and the model `docs/tuning.md` § The written step.
+  cents re-read across a temper change. The model is `docs/tuning.md` § The written step.
 

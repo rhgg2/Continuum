@@ -23,7 +23,7 @@
 -- open tail sounds to the next onset in its lane rather than to the end of the take.
 --
 -- A note carrying an intent is stranded and seated on the step that intent names rather
--- than on the step its pitch reads as (design/sounding-anchor.md § What the note remembers).
+-- than on the step its pitch reads as (docs/tuning.md § The written step).
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -164,7 +164,7 @@ return {
       -- Written on step 1 at octave 5, which is (72, 0), and sounding a hundred cents above
       -- it -- nearer step 2 than the step it was written on. Reasserting the page means
       -- seating it where it was written rather than where it sounds, and the intent that
-      -- said so is spent in the doing (design/sounding-anchor.md § What the note remembers).
+      -- said so is spent in the doing (docs/tuning.md § The written step).
       local h = mk(harness, { note(0, 73, 0, 7200), note(0, 60, 0, 6000) })
       h.vm:retune{ scope = 'all', strength = 1 }
 
@@ -458,7 +458,7 @@ return {
       -- third, so the E-G is spelled as a 5/4 -- 86 cents of stretch, and no window stops
       -- the pair taking it: the G goes 59 cents up, which is past the step above it, and
       -- the seat it reads back as is an A flat sounding flat. What holds the answer still
-      -- is the intent it stores (design/sounding-anchor.md § What the note remembers).
+      -- is the intent it stores (docs/tuning.md § The written step).
       local h = mk(harness, { note(0, 63, 0), note(0, 64, 0), note(0, 67, 0) },
                    '12EDO', { DIA = DIA })
       local slots = { scope = 'all', strength = 1, target = 'DIA', facility = 'moves',

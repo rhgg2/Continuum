@@ -1,4 +1,4 @@
--- Whether the box should charge pairs rather than spans (design/sounding-anchor.md phase 5).
+-- Whether the box should charge pairs rather than spans (docs/sonority.md § The box).
 -- Run from the repo root:
 --   lua tests/spikes/springs/pairwise_box.lua
 --

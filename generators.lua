@@ -39,13 +39,13 @@ local function interval(a, b)
 end
 
 -- The inverse: a note displaced by cents, placed back on (pitch, detune). A pitch demand is
--- cents here and never notation steps. see design/sounding-anchor.md § The notation is not a derivation input
+-- cents here and never notation steps. see docs/generators.md § The ctx discipline
 local function displaced(note, cents)
   return tuning.placeCents(note.pitch * 100 + (note.detune or 0) + cents)
 end
 
 -- The name that rides with it: the source's intent moved by the cents this note stands off it.
--- A source carrying none derives none, and the note reads as it sounds; see design/sounding-anchor.md § What the note remembers
+-- A source carrying none derives none, and the note reads as it sounds; see docs/tuning.md § The written step
 local function inherited(src, cents)
   return src.intentCents and src.intentCents + cents
 end

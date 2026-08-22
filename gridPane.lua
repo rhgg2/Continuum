@@ -195,7 +195,7 @@ local function delayMarkerOffset(col, pitchWidth)
 end
 
 -- Three digits across the two columns the readout draws in, so smaller than
--- the delay marker's 14. see design/sounding-anchor.md § What the cell says
+-- the delay marker's 14. see docs/tuning.md § Display
 local READOUT_SIZE = 11
 
 ----- Drawing
@@ -352,7 +352,7 @@ local function computeLayout(budgetW, budgetH)
   tv:setGridSize(viewCols, viewRows)
 
   -- A lane drawing an off-step ghost widens for the readout, so this stands ahead of the
-  -- layout that reads the widths. see design/sounding-anchor.md § What the cell says
+  -- layout that reads the widths. see docs/trackerView.md § Ghost sampling
   tv:reserveGhostReadout()
   chanLeft, chanWidth, totalWidth = layoutColumns(grid.cols, scrollCol)
 end
@@ -762,13 +762,13 @@ local function drawTracker()
         if divergent and col.showDelay then
           draw:smallGlyph(col.x + delayMarkerOffset(col, pitchWidth)-0.1, y-0.3, '*', 14, textCol)
         end
-        -- A note carrying fx wears a rule over its name, in the slot the
-        -- deviation tick drew one. see design/sounding-anchor.md § What the cell says
+        -- A note carrying fx wears a rule over its name, the deviation readout
+        -- standing in the columns beyond it.
         if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted and not previewGhost then
           draw:hLine(col.x, col.x + pitchWidth - 1, y, textCol, 2 / cellH)
         end
         -- The readout stands over a ghost as it does over a cell, the lane having taken the
-        -- width for it. see design/sounding-anchor.md § What the cell says
+        -- width for it. see docs/trackerView.md § Ghost sampling
         local measured = not previewGhost and (evt or noteGhost) or nil
         if col.showCents and measured and measured.evType ~= 'pa' then
           local gap = tv:noteDeviation(measured)

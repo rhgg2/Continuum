@@ -1,8 +1,7 @@
 # Design — Adaptive tuning
 
 > opened: 2026-07-04 · status: parked — plan/adaptive-tuning.md, at phase
-> 5 (seams) with phases 1–4 landed, behind design/sounding-anchor.md; the
-> solver's boundary settled
+> 5 (seams) with phases 1–4 landed; the solver's boundary settled
 
 **Solve a selection in one pass for a single detune per note that
 makes its sounding sonorities as harmonious as they can jointly be
@@ -135,8 +134,7 @@ step it was written on.**
    it was written on instead — `intentCents`, which a solve stamps and
    `tuning.noteStep` reads before it snaps anything (`docs/tuning.md`
    § The written step) — and the moves solve, which places notes past
-   their windows, rests on it (`design/sounding-anchor.md` § What the
-   note remembers).
+   their windows, rests on it.
 
 5. The pull is toward the step the note was written on rather than the
    note's current cents, which makes the operation idempotent at full
@@ -160,7 +158,7 @@ step it was written on.**
    shortlist (§ What the solver takes). `tuning.stepWindow` returns both
    halves, and the shortlist is their only reader now: the grid reports a
    note's gap in cents rather than as a fraction of its window
-   (`design/sounding-anchor.md` § What the cell says).
+   (`docs/tuning.md` § Display).
 
 9. In 12-EDO the window never binds the points solve. Widening it to two and then four
    half-steps, at a pull strength in the usable band (§ Harmonic lock),

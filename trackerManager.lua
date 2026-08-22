@@ -3496,7 +3496,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     return found
   end
   -- No notation in here: a generator's pitch demands are cents, so the temper is read by the gestures
-  -- that author them and never by this pass. see design/sounding-anchor.md § The notation is not a derivation input
+  -- that author them and never by this pass. see docs/generators.md § The ctx discipline
   local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
                     nextSameLaneNote = nextSameLaneNote }
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each

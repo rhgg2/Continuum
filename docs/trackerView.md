@@ -150,6 +150,14 @@ visible, and tm already grows a channel's columns for a note written above the
 count. What that costs is `docs/oddities.md` § A chain's claim on a column the
 channel lacks shows nothing.
 
+**14** A lane's width follows the ghosts too. A note off its step draws a
+deviation readout (`docs/tuning.md` § Display), and a lane whose own notes all
+stand on their steps reserves no width for one, so `tv:reserveGhostReadout`
+opens that width in every lane drawing an off-step ghost and closes the ones it
+opened. It runs ahead of the frame's column layout, which reads the widths it
+writes. The readout addresses no stop, so nothing the caret or a selection
+holds moves as the width comes and goes.
+
 ## Grid shape (vm's output to rm)
 
 ```

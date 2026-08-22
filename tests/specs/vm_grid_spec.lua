@@ -293,7 +293,7 @@ return {
   {
     -- The readout takes the separator after the pitch field and one column
     -- beside it, so every stop past the pitch sits one to the right.
-    -- see design/sounding-anchor.md § What the cell says
+    -- see docs/tuning.md § Display
     name = 'a note off its step widens its column by the readout',
     run = function(harness)
       local h = harness.mk{
@@ -313,7 +313,7 @@ return {
     -- A note written C-4 and sounding a semitone sharp stands exactly on C#4's
     -- step, so only the intent it carries puts a reading in the cell -- and the
     -- field has to survive from the take to the cell for it to.
-    -- see design/sounding-anchor.md § What the note remembers
+    -- see docs/tuning.md § The written step
     name = 'a note off the step it was written on reports its drift in the cell',
     run = function(harness)
       local h = harness.mk{

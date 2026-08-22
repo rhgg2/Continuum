@@ -838,7 +838,7 @@ do
   }
 
   -- Drawn rather than addressed, the readout takes no stop: it is the column
-  -- after the pitch field plus the separator beside it. see design/sounding-anchor.md § What the cell says
+  -- after the pitch field plus the separator beside it. see docs/tuning.md § Display
   local READOUT = 1
 
   -- One char of separator between adjacent parts in the rendered cell.

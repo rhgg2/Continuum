@@ -623,7 +623,7 @@ function tuning.snap(temper, midi, detune)
 end
 
 -- Where a note was written, which is not always where it sounds -- see
--- design/sounding-anchor.md § What the note remembers.
+-- docs/tuning.md § The written step.
 --contract: notation, note → the step and octave the note was written on
 --contract: the step note.intentCents stands on, or the one its pitch snaps to where it carries none
 function tuning.noteStep(notation, note)
@@ -656,7 +656,7 @@ local function isOctaves(cents)
 end
 
 -- A transpose steps from where a note was written rather than from where it sounds.
--- see design/sounding-anchor.md § What the note remembers
+-- see docs/tuning.md § The written step
 --contract: temper, note, n steps → the pitch, detune and intent cents of the note moved n steps
 --contract: a move of whole 2/1 octaves keeps the note's drift and carries its intent
 --contract: any other move seats the note on the step it lands on and spends the intent
@@ -678,7 +678,7 @@ local function ladderAnchor(temper, note)
 end
 
 -- A cents demand read as the notation walks it, which is how one is typed -- see
--- design/sounding-anchor.md § The notation is not a derivation input
+-- docs/trackerRender.md § FX chain
 --contract: (temper, note|nil, cents) → the whole steps from the anchor, and the signed cents over
 function tuning.stepLadder(temper, note, cents)
   local step, octave = ladderAnchor(temper, note)
