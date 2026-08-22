@@ -449,6 +449,65 @@ track; if a MIDI take sits under the cursor it pins that slot, otherwise it
 restores the track's last-viewed slot. Arrange's own edit cursor is left
 untouched.
 
+### The current instance
+
+The tracker holds one instance of the bound slot (`docs/arrangeManager.md`
+§ Instances of a slot), and the verbs that act on a placement act on that
+one. It is session state in `tv`, held as a take handle and re-read
+through the arrange facade on each access, since a rebuild restates the
+start and the length. A remembered instance survives an edit, a rebind
+and a page switch, where an answer recomputed from the play head or the
+edit cursor would move under the verbs between one frame and the next.
+
+`tv:resolveCurrentInstance` runs once a frame and ranks three writers. A
+command that knows the placement names one through `tv:nameInstance` —
+the dive hands over the instance the arrange cursor sat on — and that
+outranks the rest. Failing that, the play head *entering* an instance of
+the bound slot makes that instance current; entry rather than occupancy,
+so a play head parked inside an instance cannot overwrite what a dive
+named on the next frame. A slot change that names nothing seeks one from
+the outgoing instance's start, or from REAPER's edit cursor when there is
+no outgoing instance; `gotoTake(-1)` seeks backwards and every other
+gesture forwards, matching the grid, where time runs down the page.
+
+Leaving an instance writes nothing. Playback running into a gap, over
+another slot's take, or off the end of the song leaves the tracker where
+it was. The instance is nil only where the slot has no live one, its
+single take parked on scratch.
+
+`playFromTop` (F6) is the first consumer: it plays from the current
+instance's start, where it used to play from whichever instance
+`takeForSlot` resolved — with instances at bar 0 and bar 8, diving into
+the second and pressing F6 played the first.
+
+### Loop to item
+
+**Loop to item** brackets a placement with the transport loop: the
+current instance on the tracker page, the takes the verbs target on the
+arrange page (`docs/arrangeView.md` § Loop to item). Moving the transport
+separates it from the dive — diving changes what the tracker edits and
+leaves playback alone, while the placement loop to item brackets is the
+one you hear next.
+
+`tv:bracketCurrentInstance` sets the loop to the current instance's
+rendered span through `am:loopTo` (`docs/arrangeManager.md` § Transport),
+so the repeat goes on and the transport moves to the start unless the
+play head is already inside the span. With no current instance it writes
+nothing.
+
+The verb comes in two forms. `loopToItemNow` (Cmd+L) brackets once;
+`toggleLoopToItem` (Ctrl+L) flips `trackerLoopToItem`, a global-tier cm
+key beside `arrangeFollowPlay`, and repeats the act as the current
+instance moves. The toolbar carries the toggle as a checkbox.
+
+The toggle writes when a gesture moves the current instance — a dive, a
+slot change — and not per frame. Play-head entry moves the instance and
+writes nothing, since bracketing there would pull the transport back to
+the start of a placement already sounding. A loop set by hand survives
+until the next such gesture, the discipline `av:followPlay` keeps when a
+manual scroll suspends the follow. Turning the toggle on brackets the
+current instance at once; turning it off leaves the loop where it stands.
+
 ### Slot recovery and the per-track memory
 
 A stored slot can vanish (deleted under us). `resolveSelectionTake`

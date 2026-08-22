@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The cut is drawn as a line across a grid that continues below it, rather than by
+  stopping the grid at the rendered span: the rows below come back into play as soon as the
+  neighbour moves away. The play row is a one-pixel yellow line across the whole grid pane, the cut
+  a grey dotted line across the columns alone, and a stopped transport draws no play row, since the
+  mark maps the play head and the cursor row already says where the tracker is.
+
 - **2026-08-22** — Loop to item comes as a pressed verb as well as a toggle, on Cmd+L in both page
   scopes, with the toggle moving to Ctrl+L: the verb is the more frequent gesture, so it takes the
   prime key. On the arrange page the verb targets through the page's rule for its take verbs — the

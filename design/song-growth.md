@@ -1,6 +1,6 @@
 # Song growth — the tracker grows the arrangement behind you
 
-> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 1
+> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 2
 
 **The tracker learns which placement it is inside, from the playhead,
 and gains the two verbs that grow the arrangement from there.**
@@ -49,106 +49,20 @@ it from nowhere.
 
 ## Rendered span and source span
 
-A take has two extents, and they are routinely different. The **source
-span** is the MIDI source's length, and the tracker derives its row
-count from it — `grid.numRows = ceil(length / ppqPerRow)` over
-`mm:length`, which reads `GetMediaSourceLength`. The **rendered span**
-is the item's `D_LENGTH`, which arrange derives as `min(natural,
-gap-to-next, source)` on every relayout, where the **natural length**
-is the extent a take asks for and keeps across a move.
-
-A take whose neighbour starts before its source would end is therefore
-**cut**: the tracker draws rows the song never reaches. The natural
-length makes this ordinary rather than exceptional, since growing a
-take past its neighbour stores intent that takes effect when the
-neighbour moves away; and a tracker that appends takes one after
-another will meet cut instances often.
+Landed; the model is `docs/arrangeManager.md` § Rendered span and source
+span.
 
 ## The tracker remembers its instance
 
-**The tracker holds one instance of the bound slot, and every verb here
-acts from it.**
-
-1. The instance is session state on the tracker page, not a position
-   read afresh each frame. A remembered instance is stable: it survives
-   an edit, a rebind and a page switch, where an answer recomputed from
-   the play head or the edit cursor would move under the verbs between
-   one frame and the next.
-
-1. Three gestures write it. A command that knows the placement names
-   one — the dive hands over the instance the arrange cursor sat on,
-   and `again` and `vary` name the instance they create. The play head
-   entering an instance of the bound slot makes that instance current.
-   A slot change that names nothing seeks one.
-
-1. Leaving an instance writes nothing. The state is sticky, so playback
-   running into a gap, over another slot's take, or off the end of the
-   song leaves the tracker where it was.
-
-1. The seek runs from a reference position — the outgoing instance's
-   start, or REAPER's edit cursor when there is no outgoing instance.
-   It takes the instance containing that position, else the first
-   instance in the direction of travel, else the first in the other
-   direction. `prevTake` travels backwards and every other gesture
-   forwards, matching the grid, where time runs down the page.
-
-1. At most one instance can contain a position. A pool never spans
-   tracks — `docs/arrangeManager.md` § Pools never span tracks records
-   the undo defect that made this structural — so every instance of a
-   slot sits on one track, and `relayoutTrack` caps each item's
-   `D_LENGTH` at the gap to its neighbour, so items on a track never
-   overlap.
-
-1. The instance is nil only where the slot has no live one, its single
-   take parked on scratch. `again` and `vary` refuse, and the grid
-   draws no caret.
-
-1. F6 is the first thing this repairs. `playFromTop` seeks to the start
-   of the bound take, which is whichever instance `takeForSlot`
-   resolved; with instances at bar 0 and bar 8, diving into the second
-   and pressing F6 plays from the first. It plays from the current
-   instance instead.
+Landed; the model is `docs/trackerPage.md` § The current instance, and
+the seek `docs/arrangeManager.md` § Instances of a slot. `again` and
+`vary` name the instance they create, and refuse where there is none.
 
 ## Loop to item
 
-**Loop to item** brackets a placement with the transport loop — the
-instance the tracker is in on the tracker page, the takes the arrange
-page's verbs act on.
-
-1. It sets the loop to the placement's rendered span, turns REAPER's
-   repeat on, and moves the edit cursor and the play head to the span's
-   start. A loop range with repeat off plays through and keeps going,
-   so without the repeat the loop would never come round. The transport
-   stays where it is when the play head is already inside the span.
-
-1. Moving the transport separates it from the dive. Diving changes what
-   the tracker edits and leaves playback alone; loop to item is a
-   transport command, and the placement it brackets is the one you hear
-   next.
-
-1. It comes in two forms. The verb presses in either page scope,
-   brackets once, and does nothing where there is no placement to
-   bracket. The toggle — cm at the global tier, beside
-   `arrangeFollowPlay` — repeats the act on the tracker page as the
-   current instance moves.
-
-1. On the arrange page the verb follows the page's targeting rule: the
-   selection where one is held, else the take under the grid cursor.
-   Several takes bracket from the first start to the last end, so a
-   block loops in one press.
-
-1. The toggle writes when a gesture moves the current instance — a
-   dive, a slot change, `again` — and not per frame. Play-head entry
-   moves the instance and writes nothing, since bracketing there would
-   pull the transport back to the start of a placement already
-   sounding. A loop set by hand — the arrange page's Cmd+B / Cmd+E, or
-   a drag in REAPER — survives until the next such gesture, in the
-   discipline `av:followPlay` already keeps, where a manual scroll
-   suspends the follow until the next play or seek.
-
-1. Turning the toggle on brackets the current instance at once; a
-   toggle whose first effect waited for the next gesture would read as
-   inert. Turning it off leaves the loop where it stands.
+Landed; the model is `docs/trackerPage.md` § Loop to item and
+`docs/arrangeView.md` § Loop to item. `again` moves the loop with the
+instance it appends.
 
 ## What the grid draws
 
@@ -257,12 +171,3 @@ song. It reaches well into the rebuild pipeline, and it belongs in
   than declared; it costs an equality test at every bind and the
   repooling machinery, and it surprises anyone who wanted a distinct
   slot holding identical content.
-- **Whether the cut is a line or an end.** Drawing a line across a grid
-  that continues is one reading; stopping the grid at the rendered span
-  is another, and that one loses the rows a later move would bring back
-  into play.
-- **The caret while stopped.** The caret maps the play head, so a
-  stopped transport leaves the grid unlit even where the tracker knows
-  its instance. Marking where playback would start is the other
-  reading, and it puts a second mark on a grid that already carries the
-  tracker's own cursor row.

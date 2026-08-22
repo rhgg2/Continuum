@@ -115,7 +115,7 @@
   @fn clearLoop()  @ 353
   @fn loopToTargets()  @ 357-366
       -- Targets like the take verbs do, so a held selection brackets the block it covers.
-      -- see design/song-growth.md § Loop to item
+      -- see docs/arrangeView.md § Loop to item
   -- View state — cursor, scroll, focus, density
   -- Project data — proxied from am so the page holds no am reference
   -- Transport — gutter mouse drives the REAPER edit cursor / loop range

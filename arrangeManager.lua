@@ -490,7 +490,7 @@ function am:findTake(reaperTake)
   end
 end
 
--- The instance every song-growth verb acts from. see design/song-growth.md § The tracker remembers its instance
+-- The instance every song-growth verb acts from. see docs/arrangeManager.md § Instances of a slot
 --contract: instance of take's slot containing qn; else first `back`-wards, else first the other way
 --contract: second return true iff the instance contains qn; nil when the slot has no live instance
 function am:seekInstance(take, qn, back)

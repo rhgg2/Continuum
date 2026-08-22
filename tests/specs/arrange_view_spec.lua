@@ -619,7 +619,7 @@ return {
     end,
   },
 
-  -- Loop to item (design/song-growth.md § Loop to item): the verb brackets the
+  -- Loop to item (docs/arrangeView.md § Loop to item): the verb brackets the
   -- take under the grid cursor.
   {
     name = 'loop to item brackets the take under the arrange cursor',

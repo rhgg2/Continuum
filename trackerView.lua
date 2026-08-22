@@ -219,7 +219,7 @@ end
 function tv:selectSlot(slotIdx) cm:set('track', 'trackerSlot', slotIdx) end
 
 ----- The current instance — which placement of the bound slot we are in.
--- see design/song-growth.md § The tracker remembers its instance
+-- see docs/trackerPage.md § The current instance
 
 -- Held as a take handle, not a shape: a rebuild restates startQN and lengthQN,
 -- so the shape is re-read on each access.
@@ -234,7 +234,7 @@ function tv:currentInstance()
 end
 
 --contract: sets the transport loop to the current instance's rendered span; no instance, no write
--- see design/song-growth.md § Loop to item
+-- see docs/trackerPage.md § Loop to item
 function tv:bracketCurrentInstance()
   local inst = self:currentInstance()
   if inst then arrange().loopTo(inst.startQN, inst.startQN + inst.lengthQN) end

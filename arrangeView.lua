@@ -353,7 +353,7 @@ end
 local function clearLoop() am:clearLoopRange() end
 
 -- Targets like the take verbs do, so a held selection brackets the block it covers.
--- see design/song-growth.md § Loop to item
+-- see docs/arrangeView.md § Loop to item
 local function loopToTargets()
   local takes = actionTargets()
   if #takes == 0 then return end

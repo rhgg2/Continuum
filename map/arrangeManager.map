@@ -124,7 +124,7 @@
   @api am:findTake(reaperTake)  @ 484-491
       @contract  cached take-shape wrapping reaperTake on any project column; nil if not found  @ 483
   @api am:seekInstance(take, qn, back)  @ 496-516
-      -- The instance every song-growth verb acts from. see design/song-growth.md § The tracker remembers its instance
+      -- The instance every song-growth verb acts from. see docs/arrangeManager.md § Instances of a slot
       @contract  instance of take's slot containing qn; else first `back`-wards, else first the other way  @ 494
       @contract  second return true iff the instance contains qn; nil when the slot has no live instance  @ 495
   @api am:initialCursor()  @ 519-528

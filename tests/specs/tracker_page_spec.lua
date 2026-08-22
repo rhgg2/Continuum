@@ -251,7 +251,7 @@ return {
   },
 
   -- The current instance: which placement of the bound slot the tracker is in.
-  -- see design/song-growth.md § The tracker remembers its instance.
+  -- see docs/trackerPage.md § The current instance.
   -- Each instance take needs a real item, or binding it unbinds cm's track tier.
   {
     name = 'F6 plays from the instance dived into, not the placement the bind resolved',
@@ -387,7 +387,7 @@ return {
     end,
   },
 
-  -- Loop to item (design/song-growth.md § Loop to item): a gesture that moves the
+  -- Loop to item (docs/trackerPage.md § Loop to item): a gesture that moves the
   -- current instance brackets it; the play head entering one does not.
   {
     name = 'with loop to item on, a dive brackets the instance dived into',

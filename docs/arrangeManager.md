@@ -273,6 +273,50 @@ A stored natural that is **≥ the source length** is demoted to
 would freeze the take at today's source length; demoting to OPEN lets
 future source growth widen the cap automatically.
 
+## Rendered span and source span
+
+A take has two extents, and they are routinely different. The **source
+span** is the MIDI source's length, which the tracker derives its row
+count from; the **rendered span** is the item's `D_LENGTH`, derived
+above as `min(natural, gap-to-next, source)`.
+
+A take whose neighbour starts before its source would end is **cut**:
+the tracker draws rows the song never reaches. Natural length makes the
+cut ordinary rather than exceptional, since growing a take past its
+neighbour stores intent that takes effect when the neighbour moves
+away, and takes appended one after another meet it often.
+
+## Instances of a slot
+
+A slot is the palette entry; an **instance** is one placement of it, an
+item at a start QN with a rendered span. Dropping one slot four times
+gives four instances of a single pooled source, and a MIDI edit reaches
+all four.
+
+`am:seekInstance(take, qn, back)` resolves a position to one instance of
+the take's slot: the instance containing `qn`, else the nearest one the
+way `back` points, else the nearest the other way. Its second return
+says whether the containing case held. It gives nil only where the slot
+has no live instance, its take parked on scratch.
+
+At most one instance can contain a position. A pool never spans tracks
+(§ Pools never span tracks), so every instance of a slot sits on one
+track, and relayout caps each item at the gap to its neighbour, so items
+on a track never overlap.
+
+## Transport
+
+`am` is where the stack meets REAPER's transport, all of it in QN: the
+edit cursor (`am:editCursorQN`, `am:setEditCursorQN`), the loop range
+(`am:loopRangeQN`, `am:setLoopRangeQN`, `am:clearLoopRange`), the play
+head (`am:playPositionQN`, nil when the transport is stopped), and
+`am:playFromQN`, which seeks and starts playback if it is stopped.
+
+`am:loopTo(loQN, hiQN)` sets the loop range, turns REAPER's repeat on
+and moves the edit cursor to `loQN`; a play head already inside the span
+is left where it is. The repeat has to go on, since a loop range with
+repeat off plays straight through and the loop never comes round.
+
 ## State: one build, served until invalidated
 
 Every render read — `projectTracks`, `tracksTakes`, `visibleTakes`,

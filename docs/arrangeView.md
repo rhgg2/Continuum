@@ -165,6 +165,15 @@ duration and the next take, and demotes any natural ≥ source back to
 grow-past-neighbour stores intent that takes effect when the neighbour
 moves away.
 
+## Loop to item
+
+`arrangeLoopToItem` brackets what the page's verbs act on — the
+selection where one is held, else the take under the grid cursor — from
+the first start to the last end, so a block loops in one press. It goes
+through `am:loopTo` (`docs/arrangeManager.md` § Transport), which turns
+the repeat on and moves the transport to the start unless the play head
+is already inside the span.
+
 ## Bottom-edge rule in takeAtCursor
 
 A cursor sitting exactly on a take's end-edge row contributes zero

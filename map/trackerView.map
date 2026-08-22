@@ -618,7 +618,7 @@
   @api tv:currentInstance()  @ 232-234
       @contract  shape of the instance the tracker is in; nil if none, or its item is gone  @ 231
   @api tv:bracketCurrentInstance()  @ 238-241
-      -- see design/song-growth.md § Loop to item
+      -- see docs/trackerPage.md § Loop to item
       @contract  sets the transport loop to the current instance's rendered span; no instance, no write  @ 236
   @api tv:loopsToItem()  @ 244
       @contract  the loop-to-item toggle; coming on brackets the current instance at once  @ 243
