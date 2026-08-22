@@ -473,14 +473,34 @@ local function tokenOf(placed)
   return placed.component .. '@' .. coordString(placed.coords)
 end
 
+-- log₂ p as tuning.height reads it, memoised here as tuning memoises its own: the join's
+-- box is priced axis by axis in the beam's hottest path.
+local axisWeight = {}
+local function weightOf(prime)
+  local w = axisWeight[prime]
+  if not w then w = tuning.height{ [prime] = 1 }; axisWeight[prime] = w end
+  return w
+end
+
 -- What a join costs where it lands: what it widens its component's box by over the box that
 -- component came in carrying, and a spring against each member already there (§ The candidates).
-local function joinCost(state, component, placed, stiffness, carried)
-  local coordSet = {}
-  for _, slot in ipairs(component) do util.add(coordSet, state.at[slot].coords) end
-  util.add(coordSet, placed.coords)
-
-  local cost = sonority.score(coordSet) - carried
+-- The widening is read off the component's spans: an axis the join does not name it widens
+-- to hold a zero, priced once in the spans' zeroDelta, so only its own axes are visited.
+local function joinCost(state, component, placed, stiffness, spans)
+  local cost = 0
+  if #component > 0 then
+    cost = spans.zeroDelta
+    for prime, exponent in pairs(placed.coords) do
+      local lo = spans.low[prime]
+      if lo == nil then
+        cost = cost + weightOf(prime) * (exponent >= 0 and exponent or -exponent)
+      else
+        local hi, span0 = spans.high[prime], spans.span0[prime]
+        local span = (exponent > hi and exponent or hi) - (exponent < lo and exponent or lo)
+        if span ~= span0 then cost = cost + weightOf(prime) * (span - span0) end
+      end
+    end
+  end
   for _, slot in ipairs(component) do
     local mistuning = (placed.deviation - state.at[slot].deviation) / PURE
     cost = cost + placed.presence * state.at[slot].presence * stiffness * mistuning * mistuning
@@ -491,41 +511,50 @@ end
 -- A slot the state has left waiting, keyed apart from the '' of one it has yet to decide.
 local DEFERRED = '?'
 
--- Scored and keyed before it is built, so a candidate repeating a spelling costs its coords
--- and its key alone, and a round builds only the states its cut goes on to keep.
---shape: Candidate = { from=State, slot, placed=Placed|nil, parts, key, score, waits }
+-- Score, then the spelling itself, so an exact tie breaks on the coords rather than on
+-- table order, as sonority.solveToPoints breaks its own.
+local function byScore(a, b)
+  if a.score ~= b.score then return a.score < b.score end
+  return a.key < b.key
+end
+
+-- Scored once its key is new, so a candidate repeating a spelling costs nothing past the
+-- key, and only a candidate its cut keeps is built: joining widens and never narrows, so a
+-- state already scoring past a full bucket's worst is refused before it is priced.
+--shape: Candidate = { from=State, slot, placed=Placed|nil, token, key, score, waits }
 --shape: State = { at={ [slot]=Placed }, components={ {slot,..},.. }, parts, key, waits, score }
 --shape: Placed = { coords=Coords, cents=<the pure position>, deviation=<from the seat>, presence, component }
 --invariant: no two members take one spelling, so a sonority states as many pitches as members
-local function propose(reached, seen, state, slot, placed, stiffness, carried)
-  local token = placed and tokenOf(placed) or DEFERRED
-  local parts = util.clone(state.parts)
-  parts[slot] = token
-  if placed then
-    for other = 1, #parts do
-      if other ~= slot and parts[other] == token then return end
-    end
-  end
-
-  -- The parts are strings already, so the key is joined as util.keyFrom would join it,
-  -- without the tostring pass it makes: this is the round's hottest line.
-  local key = table.concat(parts, '\0')
-  if seen[key] then return end
-  seen[key] = true
+local function admit(best, width, state, slot, placed, token, key, stiffness, spans)
+  local waits  = state.waits + (placed and 0 or 1)
+  local bucket = best[waits]
+  if not bucket then bucket = {}; best[waits] = bucket end
+  if #bucket >= width and state.score > bucket[#bucket].score then return end
 
   local score = state.score
   if placed then
     score = score + joinCost(state, state.components[placed.component] or {}, placed,
-                             stiffness, carried)
+                             stiffness, spans)
   end
-  util.add(reached, { from = state, slot = slot, placed = placed, parts = parts, key = key,
-                      score = score, waits = state.waits + (placed and 0 or 1) })
+  local candidate = { from = state, slot = slot, placed = placed, token = token, key = key,
+                      score = score, waits = waits }
+
+  local lo, hi = 1, #bucket + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if byScore(candidate, bucket[mid]) then hi = mid else lo = mid + 1 end
+  end
+  if lo > width then return end
+  table.insert(bucket, lo, candidate)
+  bucket[width + 1] = nil
 end
 
 -- The state a candidate names, built once the cut has kept it.
 local function materialise(candidate)
   local state, placed = candidate.from, candidate.placed
-  local child = { at = util.clone(state.at), components = {}, parts = candidate.parts,
+  local parts = util.clone(state.parts)
+  parts[candidate.slot] = candidate.token
+  local child = { at = util.clone(state.at), components = {}, parts = parts,
                   key = candidate.key, waits = candidate.waits, score = candidate.score }
   for index, slots in ipairs(state.components) do child.components[index] = util.clone(slots) end
   if placed then
@@ -534,13 +563,6 @@ local function materialise(candidate)
     util.add(child.components[placed.component], candidate.slot)
   end
   return child
-end
-
--- Score, then the spelling itself, so an exact tie breaks on the coords rather than on
--- table order, as sonority.solveToPoints breaks its own.
-local function byScore(a, b)
-  if a.score ~= b.score then return a.score < b.score end
-  return a.key < b.key
 end
 
 -- One round per member decides one slot: a move to a member already placed, or left waiting.
@@ -554,59 +576,109 @@ local function beamOver(seat, free, presence, moves, width, stiffness)
   start.key = table.concat(start.parts, '\0')
 
   local beam = { start }
+  local joins = {} -- [coords][move] = { coords=<the join's>, str=<their coordString> }
   for _ = 1, #seat do
-    local reached, seen = {}, {}
+    local best, seen = {}, {}
     for _, state in ipairs(beam) do
       local anchored = next(state.at) ~= nil
 
+      -- What this state's parts already hold, so no proposal repeats a spelling; coords
+      -- are never mutated, so a join met before is read back rather than rebuilt.
+      local used = {}
+      for _, token in ipairs(state.parts) do used[token] = true end
+
       -- The box a component stands at is the state's own, so every move joining it this
-      -- round is priced against one reading of it rather than against a reading apiece.
+      -- round is priced against one reading of it: its spans per axis, and what a member
+      -- naming none of them would widen it by (zeroDelta).
       local carried = {}
       for index, slots in ipairs(state.components) do
-        local coordSet = {}
-        for _, held in ipairs(slots) do util.add(coordSet, state.at[held].coords) end
-        carried[index] = sonority.score(coordSet)
+        local axes = {}
+        for _, held in ipairs(slots) do
+          for prime in pairs(state.at[held].coords) do axes[prime] = true end
+        end
+        local low, high, span0, zeroDelta = {}, {}, {}, 0
+        for prime in pairs(axes) do
+          local lo, hi = math.huge, -math.huge
+          for _, held in ipairs(slots) do
+            local exponent = state.at[held].coords[prime] or 0
+            if exponent < lo then lo = exponent end
+            if exponent > hi then hi = exponent end
+          end
+          local widest = (hi > 0 and hi or 0) - (lo < 0 and lo or 0)
+          low[prime], high[prime], span0[prime] = lo, hi, widest
+          zeroDelta = zeroDelta + weightOf(prime) * (widest - (hi - lo))
+        end
+        carried[index] = { low = low, high = high, span0 = span0, zeroDelta = zeroDelta }
       end
 
       for slot = 1, #seat do
         if state.parts[slot] == '' then
+          -- The key is the parts joined as util.keyFrom would join them; only this slot's
+          -- part varies over the proposals, so the rest is concatenated once.
+          local prefix = slot > 1     and table.concat(state.parts, '\0', 1, slot - 1) .. '\0' or ''
+          local suffix = slot < #seat and '\0' .. table.concat(state.parts, '\0', slot + 1) or ''
+
           if free[slot] then
-            propose(reached, seen, state, slot, nil, stiffness)
+            local key = prefix .. DEFERRED .. suffix
+            if not seen[key] then
+              seen[key] = true
+              admit(best, width, state, slot, nil, DEFERRED, key, stiffness)
+            end
           end
           if anchored then
             for host = 1, #seat do
               local from = state.at[host]
               if from then
+                local memo = joins[from.coords]
+                if not memo then memo = {}; joins[from.coords] = memo end
                 for _, move in ipairs(moves) do
                   if move.height > 0 then
-                    local cents = from.cents + move.cents
-                    propose(reached, seen, state, slot,
-                            { coords = joinCoords(from.coords, move), cents = cents,
-                              deviation = tuning.gapTo(seat[slot], cents),
-                              presence = presence[slot], component = from.component },
-                            stiffness, carried[from.component])
+                    local join = memo[move]
+                    if not join then
+                      local sum = joinCoords(from.coords, move)
+                      join = { coords = sum, str = coordString(sum) }
+                      memo[move] = join
+                    end
+                    local token = from.component .. '@' .. join.str
+                    if not used[token] then
+                      local key = prefix .. token .. suffix
+                      if not seen[key] then
+                        seen[key] = true
+                        local cents = from.cents + move.cents
+                        admit(best, width, state, slot,
+                              { coords = join.coords, cents = cents,
+                                deviation = tuning.gapTo(seat[slot], cents),
+                                presence = presence[slot], component = from.component },
+                              token, key, stiffness, carried[from.component])
+                      end
+                    end
                   end
                 end
               end
             end
           else
-            propose(reached, seen, state, slot,
+            local token = '1@'
+            local key = prefix .. token .. suffix
+            if not seen[key] then
+              seen[key] = true
+              admit(best, width, state, slot,
                     { coords = {}, cents = seat[slot], deviation = 0,
                       presence = presence[slot], component = 1 },
-                    stiffness, 0)
+                    token, key, stiffness)
+            end
             break
           end
         end
       end
     end
 
-    table.sort(reached, byScore)
-    beam = {}
-    local kept = {}
-    for _, candidate in ipairs(reached) do
-      kept[candidate.waits] = (kept[candidate.waits] or 0) + 1
-      if kept[candidate.waits] <= width then util.add(beam, materialise(candidate)) end
+    local survivors = {}
+    for _, bucket in pairs(best) do
+      table.move(bucket, 1, #bucket, #survivors + 1, survivors)
     end
+    table.sort(survivors, byScore)
+    beam = {}
+    for _, candidate in ipairs(survivors) do util.add(beam, materialise(candidate)) end
   end
   return beam
 end
