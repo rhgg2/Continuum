@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=908  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=917  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -16,10 +16,10 @@
   @invariant  moveHook fires after every position change (paired with clampPos)  @ 14
   @invariant  sel.part1/part2 are part names, or '*' sentinel under hBlock=2/3  @ 16
   @invariant  clip.single.parts = the parts the span covered, in column order  @ 19
-  @contract  derives col parts from type/showDelay/trackerMode; pitchWidth,octaveWidth size pitch  @ 870
-  @contract  col.showCents widens the pitch field's advance by the readout, addressing no stop  @ 871
-  @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}  @ 872
-  @invariant  pitchWidth >= 1 (name) + octaveWidth, so the name stop never collides with the octave  @ 873
+  @contract  derives col parts from type/showDelay/trackerMode; pitchWidth,octaveWidth size pitch  @ 879
+  @contract  col.showCents widens the pitch field's advance by the readout, addressing no stop  @ 880
+  @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}  @ 881
+  @invariant  pitchWidth >= 1 (name) + octaveWidth, so the name stop never collides with the octave  @ 882
 
 # Shapes
   @shape  selection = { row1, row2, col1, col2, part1, part2 }  -- inclusive both axes  @ 15
@@ -150,8 +150,11 @@
       -- on different channels would be a non-linear column remap, out of scope
       -- for this verb. The border feedback is the rendering layer's.
   -- Commands
+  @fn lastFilledCol()  @ 807-812
+      -- goRight targets the last column holding events; an all-empty grid
+      -- falls back to the right edge.
   -- Decoration
-  @fn partsFor(type, showDelay, trackerMode)  @ 854-868
+  @fn partsFor(type, showDelay, trackerMode)  @ 863-877
       -- One char of separator between adjacent parts in the rendered cell.
 
 # Functions held in tables
@@ -206,8 +209,8 @@
   @api ec:regionExit()  @ 747
       -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
       -- regionBail (Super-G) also clears the selection.
-  @api ec:registerCommands(scope)  @ 805-833
-  @api ec:decorateCol(col, pitchWidth, octaveWidth)  @ 874-905
+  @api ec:registerCommands(scope)  @ 814-842
+  @api ec:decorateCol(col, pitchWidth, octaveWidth)  @ 883-914
 
 # Uses (outbound edges)
   @use call    cm:get  @ selUpdate:102 advance:467
@@ -222,7 +225,7 @@
   @use call    groupBridge.instanceAt  @ regionArm:739 hopInstance:785
   @use call    groupBridge.paintStream  @ paintCell:725
   @use call    groupBridge.selectionAsRect  @ newFromSelection:540
-  @use call    util.add  @ blockKeys:639 hopInstance:789 partsFor:857,858,859 decorateCol:880,894,895,896
+  @use call    util.add  @ blockKeys:639 hopInstance:789 partsFor:866,867,868 decorateCol:889,903,904,905
   @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:457,458,459 moveBy:590 moveByChan:607
   @use require util  @ <load>:25
 
@@ -234,42 +237,43 @@
   @call currentEntry  @ sealMove:513 duplicate:565 moveBy:585 moveByChan:600 moveByLane:679 shiftSideways:713
   @call cursorIndex  @ dropInstance:573
   @call cursorPart  @ selStart:89 selUpdate:123 cursorPart:377 region:386
-  @call cycleHBlock  @ registerCommands:827
-  @call cycleVBlock  @ registerCommands:828
+  @call cycleHBlock  @ registerCommands:836
+  @call cycleVBlock  @ registerCommands:837
   @call ec:regionExit  @ regionScope.regionExit:768
   @call ec:setPos  @ extendTo:449
   @call enterArmed  @ regionArm:736,742
   @call exitMode  @ regionExit:747 regionScope.regionBail:769
   @call firstStopForPart  @ regionStart:393 setSelection:421
   @call gmgr  @ orderedInstances:320 sealMove:522 newFromSelection:542 stampAt:554 duplicate:566 dropInstance:574 resizeBy:719 hopInstance:784
-  @call hopInstance  @ registerCommands:830,831
+  @call hopInstance  @ registerCommands:839,840
   @call isSticky  @ cycleHBlock:144 cycleVBlock:160 moveRow:200,205 moveStop:211,235 moveUnit:240,244,258 moveCol:266,273 moveChannel:299
   @call isSticky  @ isSticky:379
   @call laneWalkable  @ shiftSideways:714
+  @call lastFilledCol  @ registerCommands:823
   @call moveBy  @ redirect.nudgeBack:760 redirect.nudgeForward:761
   @call moveByChan  @ shiftSideways:714
   @call moveByLane  @ shiftSideways:714
-  @call moveChannel  @ moveByChan:612 registerCommands:824,825
-  @call moveCol  @ registerCommands:813,814,822,823
-  @call moveRow  @ advance:467 registerCommands:807,808,809,810,811,812,817,818
-  @call moveStop  @ moveUnit:248,249,253,254 moveCol:267,274 registerCommands:815,816,819,820
+  @call moveChannel  @ moveByChan:612 registerCommands:833,834
+  @call moveCol  @ registerCommands:822,823,831,832
+  @call moveRow  @ advance:467 registerCommands:816,817,818,819,820,821,826,827
+  @call moveStop  @ moveUnit:248,249,253,254 moveCol:267,274 registerCommands:824,825,828,829
   @call moveUnit  @ moveCol:263 moveChannel:287
   @call newFromSelection  @ regionArm:735
   @call noteLanesIn  @ topLaneIn:629 blockFits:646
   @call orderedInstances  @ currentEntry:338 dropInstance:573,575
   @call paintCell  @ regionScope.regionPaintExtend:770 regionScope.regionPaintShrink:771
   @call partAt  @ cursorPart:70 selUpdate:123
-  @call partsFor  @ decorateCol:875
+  @call partsFor  @ decorateCol:884
   @call resizeBy  @ redirect.growNote:762 redirect.shrinkNote:763
   @call sealMove  @ exitMode:527 newInstance:559 duplicate:564 regionArm:733
-  @call selClear  @ moveRow:202 moveStop:213 moveUnit:240 reset:371 selClear:443 newFromSelection:545 regionScope.regionBail:769 registerCommands:821
+  @call selClear  @ moveRow:202 moveStop:213 moveUnit:240 reset:371 selClear:443 newFromSelection:545 regionScope.regionBail:769 registerCommands:830
   @call selStart  @ moveRow:201 moveStop:212 extendTo:448
   @call selUpdate  @ cycleHBlock:154 cycleVBlock:170 selectAll:178 swapEnds:193 moveRow:205 moveStop:235 moveUnit:258 extendTo:450 selectSpan:474
-  @call selectAll  @ registerCommands:826
+  @call selectAll  @ registerCommands:835
   @call selectSpan  @ selectChannel:479 selectColumn:484
   @call shiftSideways  @ redirect.eventShiftLeft:764 redirect.eventShiftRight:765
   @call stampAt  @ newInstance:559 duplicate:568
-  @call swapEnds  @ registerCommands:829
+  @call swapEnds  @ registerCommands:838
   @call topLaneIn  @ moveByLane:698
 
 # Bindings (by name)
@@ -281,7 +285,7 @@
 # Unresolved receivers
   @drop gm:eachInstance  @ orderedInstances:321 hopInstance:788
   @drop regionScope:registerAll  @ <load>:767
-  @drop scope:registerAll  @ registerCommands:806
+  @drop scope:registerAll  @ registerCommands:815
   @drop sid:match  @ blockKeys:638 laneWalkable:657
 
 # Fields (r read / w write incl. constructor keys)
@@ -293,8 +297,8 @@
   @field w chanDelta  @ moveByChan:611 moveByLane:703
   @field r chanFirstCol  @ selUpdate:116 moveChannel:285 selectChannel:478 noteLanesIn:619
   @field r chanLastCol  @ selUpdate:116 moveChannel:285 noteLanesIn:619
-  @field w channelLeft  @ 498 registerCommands:825
-  @field w channelRight  @ 498 registerCommands:824
+  @field w channelLeft  @ 498 registerCommands:834
+  @field w channelRight  @ 498 registerCommands:833
   @field r clearAt  @ stampAt:553
   @field r clearMoveGap  @ sealMove:519
   @field r cm  @ 32
@@ -305,19 +309,19 @@
   @field w col1  @ selStart:90 selUpdate:133 setSelection:419
   @field r col2  @ region:384 eachSelectedCol:409 setSelection:419 selectionStopSpan:435
   @field w col2  @ selStart:90 selUpdate:133 setSelection:419
-  @field w colLeft  @ 498 registerCommands:823
-  @field w colRight  @ 498 registerCommands:822
+  @field w colLeft  @ 498 registerCommands:832
+  @field w colRight  @ 498 registerCommands:831
   @field r cols  @ clampPos:58,59,60 partAt:66 firstStopForPart:74 selUpdate:115,119,127 selectAll:175 moveStop:222,223,229
   @field r cols  @ moveCol:266,268,272,273,275 moveChannel:284,295,302 eachSelectedCol:398,410 selectionStopSpan:427 selectColumn:483
-  @field r cols  @ noteLanesIn:621 caretToBlock:668 registerCommands:814
+  @field r cols  @ noteLanesIn:621 caretToBlock:668 lastFilledCol:808,809,811
   @field r commit  @ sealMove:523 newFromSelection:546 stampAt:556 dropInstance:579 resizeBy:720 paintCell:727
-  @field w cursorDown  @ 496 registerCommands:807
-  @field w cursorLeft  @ 496 registerCommands:816
-  @field w cursorRight  @ 496 registerCommands:815
-  @field w cursorUp  @ 496 registerCommands:808
-  @field w cycleBlock  @ 500 registerCommands:827
-  @field w cycleVBlock  @ 500 registerCommands:828
-  @field w delay  @ 843
+  @field w cursorDown  @ 496 registerCommands:816
+  @field w cursorLeft  @ 496 registerCommands:825
+  @field w cursorRight  @ 496 registerCommands:824
+  @field w cursorUp  @ 496 registerCommands:817
+  @field w cycleBlock  @ 500 registerCommands:836
+  @field w cycleVBlock  @ 500 registerCommands:837
+  @field w delay  @ 852
   @field w delete  @ 759
   @field w deleteSel  @ 759
   @field w duplicateDown  @ 758
@@ -325,20 +329,21 @@
   @field w endDelta  @ redirect.growNote:762 redirect.shrinkNote:763
   @field w eventShiftLeft  @ redirect.eventShiftLeft:764
   @field w eventShiftRight  @ redirect.eventShiftRight:765
-  @field w fx  @ 846
+  @field r events  @ lastFilledCol:809
+  @field w fx  @ 855
   @field r gm  @ gmgr:315
-  @field w goBottom  @ 497 registerCommands:812
-  @field w goLeft  @ 497 registerCommands:813
-  @field w goRight  @ 497 registerCommands:814
-  @field w goTop  @ 497 registerCommands:811
+  @field w goBottom  @ 497 registerCommands:821
+  @field w goLeft  @ 497 registerCommands:822
+  @field w goRight  @ 497 registerCommands:823
+  @field w goTop  @ 497 registerCommands:820
   @field r grid  @ 31
   @field r groupBridge  @ 37
   @field w groupDuplicate  @ 758
   @field r groupId  @ orderedInstances:323 cursorIndex:332 currentEntry:339 sealMove:520,522 stampAt:553,554
   @field r groupId  @ duplicate:566 dropInstance:574,577 resizeBy:719 paintCell:725 regionArm:741 hopInstance:789
   @field w groupId  @ newFromSelection:544 dropInstance:577 regionArm:741
-  @field w groupInstNext  @ registerCommands:831
-  @field w groupInstPrev  @ registerCommands:830
+  @field w groupInstNext  @ registerCommands:840
+  @field w groupInstPrev  @ registerCommands:839
   @field w groupPaste  @ 757
   @field w growNote  @ redirect.growNote:762
   @field r instId  @ orderedInstances:324 cursorIndex:333 currentEntry:340 sealMove:522 dropInstance:574,577 resizeBy:719 paintCell:725 regionArm:741
@@ -356,22 +361,22 @@
   @field r moveHook  @ 36
   @field w nudgeBack  @ redirect.nudgeBack:760
   @field w nudgeForward  @ redirect.nudgeForward:761
-  @field r numRows  @ clampPos:54 selUpdate:98 cycleVBlock:159 selectAll:175 shiftSelection:456 moveBy:590 registerCommands:812
+  @field r numRows  @ clampPos:54 selUpdate:98 cycleVBlock:159 selectAll:175 shiftSelection:456 moveBy:590 registerCommands:821
   @field w onBail  @ 755
-  @field w pageDown  @ 497 registerCommands:809
-  @field w pageUp  @ 497 registerCommands:810
+  @field w pageDown  @ 497 registerCommands:818
+  @field w pageUp  @ 497 registerCommands:819
   @field r part1  @ region:384 regionStart:393 setSelection:420,421 selectionStopSpan:432
   @field w part1  @ selStart:90 selUpdate:133 setSelection:420
   @field r part2  @ region:384 setSelection:420 selectionStopSpan:437
   @field w part2  @ selStart:90 selUpdate:133 setSelection:420
   @field r partAt  @ partAt:67 firstStopForPart:76 selectionStopSpan:431,436,437
-  @field w partAt  @ decorateCol:902
+  @field w partAt  @ decorateCol:911
   @field r partStart  @ selUpdate:128
-  @field w partStart  @ decorateCol:903
+  @field w partStart  @ decorateCol:912
   @field r parts  @ moveCol:266,273
-  @field w parts  @ decorateCol:876
+  @field w parts  @ decorateCol:885
   @field w paste  @ 757
-  @field w pb  @ 844
+  @field w pb  @ 853
   @field r ppq  @ sealMove:516 duplicate:568 moveBy:588 hopInstance:791,798,799
   @field w ppq  @ sealMove:516 duplicate:568
   @field r rect  @ moveByChan:603 moveByLane:681 shiftSideways:714
@@ -388,28 +393,28 @@
   @field r row2  @ region:384 setSelection:419 shiftSelection:458
   @field w row2  @ selStart:90 selUpdate:133 setSelection:419 shiftSelection:458
   @field r rowPerBar  @ 34
-  @field w sample  @ 841
-  @field w selectAll  @ 500 registerCommands:826
-  @field w selectClear  @ 499 registerCommands:821
-  @field w selectDown  @ 499 registerCommands:817
-  @field w selectLeft  @ 499 registerCommands:820
-  @field w selectRight  @ 499 registerCommands:819
-  @field w selectUp  @ 499 registerCommands:818
-  @field r showCents  @ decorateCol:899
-  @field r showDelay  @ decorateCol:875
+  @field w sample  @ 850
+  @field w selectAll  @ 500 registerCommands:835
+  @field w selectClear  @ 499 registerCommands:830
+  @field w selectDown  @ 499 registerCommands:826
+  @field w selectLeft  @ 499 registerCommands:829
+  @field w selectRight  @ 499 registerCommands:828
+  @field w selectUp  @ 499 registerCommands:827
+  @field r showCents  @ decorateCol:908
+  @field r showDelay  @ decorateCol:884
   @field w shrinkNote  @ redirect.shrinkNote:763
   @field w springLoaded  @ 753
   @field r stop  @ selUpdate:123,128 swapEnds:190
   @field w stop  @ selStart:88 cycleHBlock:145 cycleVBlock:161 selectAll:176 moveStop:216 setSelection:421 selectSpan:472
   @field r stopPos  @ clampPos:60 moveStop:222,229 moveCol:268,272,275 moveChannel:295 selectionStopSpan:429 selectColumn:484
-  @field w stopPos  @ decorateCol:901
-  @field r stops  @ decorateCol:893
-  @field w stops  @ 841,842,843,844,845,846 decorateCol:881,883
+  @field w stopPos  @ decorateCol:910
+  @field r stops  @ decorateCol:902
+  @field w stops  @ 850,851,852,853,854,855 decorateCol:890,892
   @field r streams  @ moveByChan:603 blockKeys:637 laneWalkable:654
-  @field w swapBlockEnds  @ 500 registerCommands:829
-  @field r trackerMode  @ decorateCol:875
-  @field r type  @ moveChannel:302 noteLanesIn:622 caretToBlock:669 decorateCol:875
-  @field w val  @ 845
-  @field w vel  @ 842
-  @field r width  @ decorateCol:898
-  @field w width  @ 841,842,843,844,845,846 decorateCol:881,883,904
+  @field w swapBlockEnds  @ 500 registerCommands:838
+  @field r trackerMode  @ decorateCol:884
+  @field r type  @ moveChannel:302 noteLanesIn:622 caretToBlock:669 decorateCol:884
+  @field w val  @ 854
+  @field w vel  @ 851
+  @field r width  @ decorateCol:907
+  @field w width  @ 850,851,852,853,854,855 decorateCol:890,892,913

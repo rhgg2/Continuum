@@ -836,7 +836,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.cmgr:invoke('goBottom'); local lastRow = h.ec:row()
-      h.cmgr:invoke('goRight');  local lastCol = h.ec:col()
+      local lastCol = #h.vm.grid.cols
 
       h.ec:setPos(2, 2, 1)
       h.cmgr:invoke('selectAll')
@@ -848,6 +848,35 @@ return {
       t.eq(c2, lastCol,  'last col')
       t.eq(p1, '*',      'whole-col part sentinel at the left edge')
       t.eq(p2, '*',      'whole-col part sentinel at the right edge')
+    end,
+  },
+
+  {
+    name = 'goRight lands on the last column holding events',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq=0, endppq=60, chan=1, pitch=60, vel=100 },
+          { ppq=0, endppq=60, chan=3, pitch=60, vel=100 },
+        }},
+      }
+      h.vm:setGridSize(80, 40)
+      h.cmgr:invoke('goRight')
+      t.eq(h.ec:col(), 3, 'lands on the last non-empty column')
+
+      h.ec:setPos(0, 8, 1)   -- right of the content edge
+      h.cmgr:invoke('goRight')
+      t.eq(h.ec:col(), 3, 'snaps back left onto the content edge')
+    end,
+  },
+
+  {
+    name = 'goRight on an empty grid falls back to the last column',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = {} } }
+      h.vm:setGridSize(80, 40)
+      h.cmgr:invoke('goRight')
+      t.eq(h.ec:col(), #h.vm.grid.cols, 'right edge when nothing holds events')
     end,
   },
 

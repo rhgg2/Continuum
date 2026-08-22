@@ -802,6 +802,15 @@ end
 
 ----- Commands
 
+-- goRight targets the last column holding events; an all-empty grid
+-- falls back to the right edge.
+local function lastFilledCol()
+  for i = #grid.cols, 1, -1 do
+    if #grid.cols[i].events > 0 then return i end
+  end
+  return #grid.cols
+end
+
 function ec:registerCommands(scope)
   scope:registerAll{
     cursorDown    = function(p) moveRow( p) end,
@@ -811,7 +820,7 @@ function ec:registerCommands(scope)
     goTop         = function() moveRow(-cursorRow) end,
     goBottom      = function() moveRow((grid.numRows or 1) - cursorRow) end,
     goLeft        = function() moveCol(-cursorCol) end,
-    goRight       = function() moveCol(#grid.cols - cursorCol) end,
+    goRight       = function() moveCol(lastFilledCol() - cursorCol) end,
     cursorRight   = function(p) moveStop( p) end,
     cursorLeft    = function(p) moveStop(-p) end,
     selectDown    = function(p) moveRow( p, true) end,
