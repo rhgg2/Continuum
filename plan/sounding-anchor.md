@@ -36,10 +36,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-22 sonority: open the dials at a lock of 1 and a purity of 32 (§ The dials, § Open)
 - 2026-08-22 sonority: put the beam back at twenty-four, where purity puts it (§ The dials, § Open)
 - 2026-08-22 sonority: narrow the beam to twelve, the cap staying at six (§ The dials, § Open)
 - 2026-08-22 design: settle the box on spans, not pairs (§ What the box charges)
-- 2026-08-21 sonority: give the ambient a dial, opening at a quarter (§ Open)
 
 ## Now
 
@@ -47,6 +47,5 @@
 
 ## Queued (current phase; one-liners)
 
-4. **Harmonic lock and purity's opening value and useful span**, and a
-   value for `RECENT` (§ The dials, § Open).
+(empty — the phase's last item is in flight.)
 

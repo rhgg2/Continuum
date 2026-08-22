@@ -95,10 +95,15 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    held by recency counts for as much as one that sounds; at zero it
    counts for nothing, the sonorities decouple, and the passage falls
    apart into independent solves, which is the collapse `n` at the
-   arity itself produces. The useful value stands well clear of zero,
-   and no passage measured tells a half from one — the five-part take
-   spells identically under both, though twenty-six of its onset
-   memberships are held by recency.
+   arity itself produces.
+
+1. Nothing measured tells a half from one. The five-part take spells
+   identically under both, though twenty-six of its onset memberships
+   are held by recency, and a strained recency spring destabilises
+   rather than deciding: an F sharp released as C–E–G strikes, its
+   tritone spelled by a chain, moves the chord three hundredths of a
+   cent between the two values, where B–F released into E♭–G–B♭ flips
+   the spelling outright (`tests/spikes/springs/recency.lua`).
 
 ## The box
 
@@ -432,7 +437,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    voices needs the twelfth spelling to reach the septimal seventh its
    set names, an eighty-eight-note take needs the twenty-fourth and five
    answers abreast, and nothing measured needs more of either. That take
-   answers in 2.2 seconds at the pair, and
+   answers in 1.2 seconds at the pair, and
    `tests/spikes/springs/cap_sweep.lua` sweeps the dials together at the
    ambient share the modal opens on.
 
@@ -440,7 +445,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    further down the beam's ranking, so the width a passage needs rises
    with the dial: the eighty-eight-note take takes all it gains by a
    beam of twelve at a purity of 8, by sixteen at 16, and by twenty-four
-   at 32 and at 64.
+   at 32, where it holds to the top of the dial's span.
 
 1. Widening past that pair costs more than it returns. The cuts rank
    partial states, so the candidates a wider search admits can crowd out
@@ -459,22 +464,53 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 ## The dials
 
 1. **Harmonic lock** is the pull's strength, a field on the retune
-   modal set per invocation, and it opens at 1 under either facility. A
-   written C7 sounding alone takes the otonal `4:5:6:7` below a pull of
-   0.95 and the Pythagorean `16/9` above it, trading 0.36 of box
-   against 27¢ of fidelity, so 1 is where the commonest trade turns
-   over and the useful travel is roughly 0 → 2. At the free end several
-   tunings score alike and the winner is arbitrary rather than musical;
-   at the stiff end the solve is a no-op.
+   modal set per invocation, and it opens at 1 under either facility
+   over a logarithmic span from 0.1 to 10. A written C7 sounding alone
+   takes the otonal `4:5:6:7` below a pull of 0.95 and the Pythagorean
+   `16/9` above it, trading 0.36 of box against 27¢ of fidelity, so 1 is
+   where the commonest trade turns over.
+
+1. The span stops short of zero, and its stiff end still moves. With no
+   pull the objective is flat under a translation of every displacement,
+   so the answer states the sweep's order rather than the music: at a
+   lock of nothing the eighty-eight-note take stands 184¢ from its page
+   on average. At the floor the page holds the answer loosely, a
+   step-class wandering 115¢ across that take where a lock of 0.5 holds
+   it to 21¢; at the ceiling the pull buys the page at the expense of
+   the harmony, the same take's wolf pairs going from 53 to 64 and its
+   springs left holding 3.3¢ the spelling said would be pure. Between
+   0.5 and 4 nothing measured moves at all.
 
 1. **Purity** is the springs' stiffness, authored as how nearly a
-   spelled interval sounds pure, and it opens at 8 over a logarithmic
-   span from 0.5 to 64. Doubling it halves the mistuning — a major
+   spelled interval sounds pure, and it opens at 32 over a logarithmic
+   span from 4 to 256. Doubling it halves the mistuning — a major
    triad's third stands 3.4¢ wide of a pure `5/4` at 1, 0.5¢ at 8 and
-   0.1¢ at 32 — so equal travel along the slider buys equal halving. At
-   zero the springs are slack and every note stands where it was
-   written, which is the snap the command already offers, so the span
-   stops short of it.
+   0.14¢ at 32 — so equal travel along the slider buys equal halving.
+
+1. Below 16 a passage chooses spellings it cannot realise. The
+   eighty-eight-note take is left holding 16.05¢ of what its spelling
+   said would be pure at a purity of 8, 1.28¢ at 16 and 0.71¢ at 32,
+   and a factor of twelve across one doubling is a change of spelling
+   rather than the halving. At 32 the 258-note take states its fewest
+   wolf pairs, 42 against 48 at 8, and its narrowest class wander, 10.7¢
+   against 19.3¢ (`tests/spikes/springs/dial_sweep.lua`). The floor
+   stands where the springs stop deciding anything: at 4 every passage
+   measured leaves 14¢ or more of its spelling unrealised, and the box
+   has the choice to itself.
+
+1. Only the ratio of the two dials moves a settled note. A strand
+   settles at a weighted mean of what its springs ask of it and its own
+   rest, so the strength divides out of it (§ The springs): a lock of 1
+   with a purity of 8, a lock of 2 with 16 and a lock of 4 with 32
+   return one answer to the last figure on every passage measured. The
+   scale the pair stands at decides how much say the box has in the
+   spelling. Both spans are logarithmic and each dial opens at the
+   geometric centre of its own, so a step up of one is a step down of
+   the other.
+
+1. The author owns drift against distribution across the pair: the pull
+   prices how far a note may stand from where it was written, and the
+   stiffness how impure an interval may become.
 
 1. **Ambient** is the share of the sonority it was born into that a
    strand takes as its rest, and it opens at 0.25 over a linear span
@@ -496,11 +532,10 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 1. Purity and ambient are the moves facility's alone: a points solve
    selects among a target's points and prices no interval against a
    spelling, and it rests a strand on the step its note was written on
-   (§ The pull), so there is nothing there for either dial to hold.
-   Harmonic lock and purity are dials of their own rather than one
-   riding the other — the pull prices how far a note may stand from
-   where it was written, and the stiffness how impure an interval may
-   become — so an author owns drift against distribution.
+   (§ The pull), so there is nothing there for either dial to hold. The
+   lock's floor costs that facility nothing either, a shortlist bounding
+   a strand's strain at one half-window, so a lock of 0.1 leaves the box
+   deciding as a lock of nothing did.
 
 ## What it gives up
 
@@ -508,9 +543,9 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    pull pricing the drift rather than a bound stopping it, so a note's
    name and its sound come apart and the cell reports the gap in cents
    (`docs/tuning.md` § The written step). Over the five-part take at the
-   dials' openings — a lock of 1, purity 8 and a quarter of the ambient —
-   a strand stands 6.62¢ from its seat on average and none stands past
-   10.98¢.
+   dials' openings — a lock of 1, purity 32 and a quarter of the ambient —
+   a strand stands 6.74¢ from its seat on average and none stands past
+   11.15¢.
 
 1. The order two strands were written in. Past its own half-window some
    other strand is the nearer host for a pitch, and nothing holds two
@@ -520,7 +555,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 1. Exactness. A spelled interval is pure to the stiffness rather than
    by construction, and two strands resting apart are drawn apart
    against the spring that ties them: over the five-part take at the
-   dials' openings, the worst pair of sounding members stands 0.61¢ wide
+   dials' openings, the worst pair of sounding members stands 0.19¢ wide
    of what its spelling states. An author wanting more turns the dial up.
 
 1. A statement about the passage. The moves solve places no passage at

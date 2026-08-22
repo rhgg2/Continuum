@@ -572,7 +572,7 @@ tier and written back there as OK commits, so the modal reopens on the answers
 the take carries; a key past the notation's steps — the take having since
 changed temper — clamps into range rather than raising. The strength, the
 sonority size and the three dials are seeded at their defaults on every open:
-harmonic lock at 1 under either facility, purity at 8 and the ambient at 0.25
+harmonic lock at 1 under either facility, purity at 32 and the ambient at 0.25
 (docs/sonority.md § The dials).
 
 The target picker offers the library's eligible tempers, `tuning.isTarget`
@@ -583,9 +583,9 @@ facility is a choice of its own beside the target, nothing in the object
 recovering which reading was meant, and it disables three more slots between
 them: under `'moves'` the key draws disabled for want of a pitch line to name a
 place on, and under `'points'` purity and the ambient do, a point solve pricing
-no interval against a spelling and resting a strand on its own step. Purity's
-slider is logarithmic, so equal travel buys equal halving of the mistuning; the
-ambient's is linear, a share being a share. A picker popup
+no interval against a spelling and resting a strand on its own step. The lock's
+slider and purity's are both logarithmic, only the ratio of the two moving a
+settled note; the ambient's is linear, a share being a share. A picker popup
 consumes its own Enter and Escape where `IsKeyPressed` cannot see it, so the
 modal gates OK and Cancel on `chrome.pickerIsActive()`: without it one Enter
 picks a row and commits the modal behind it. Only a take with a temper bound

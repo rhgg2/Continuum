@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-22** — The retune modal opens at a harmonic lock of 1 and a purity of 32, over
+  logarithmic spans of 0.1 to 10 and 4 to 256. Only the ratio of the two moves a settled note, the
+  strength dividing out of the weighted mean a strand settles at, so the sliders are scaled alike
+  and each opens at the geometric centre of its own span. Purity stood at 8, where the
+  eighty-eight-note take is left holding 16¢ of what its spellings said would be pure against 0.7¢
+  at 32, and where the 258-note take states more wolf pairs and a wider wander. A lock of nothing
+  leaves the answer to the sweep's order, so the span stops short of it at 0.1. `RECENT` stays at a
+  half: a strained recency spring flips a spelling rather than deciding the value.
+
 - **2026-08-22** — The beam holds at twenty-four, and the narrowing to twelve is withdrawn. That
   sweep was taken at a purity of 8, and the width answers to that dial: a stiffer spring separates
   spellings further down the beam's ranking, so the eighty-eight-note take takes all it gains by a

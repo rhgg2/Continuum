@@ -1601,7 +1601,7 @@ return {
       -- Everything the facility does, in one call: the seats the notation states, the
       -- spellings the beam chooses, the walk over them, and the joint relaxation that
       -- settles the winner.
-      local cents = sonority.solveToMoves(take, 5, 1, edo12, elevenPitches, 8, 0.25)
+      local cents = sonority.solveToMoves(take, 5, 1, edo12, elevenPitches, 32, 0.25)
       t.truthy(cents, 'the take is answered')
 
       local seat = sonority.seats(take, edo12)
@@ -1616,9 +1616,9 @@ return {
         total, worst = total + math.abs(moved), math.max(worst, math.abs(moved))
         signed = signed + moved
       end
-      nearly(total / #take, 6.6250, 'the mean displacement of § What it gives up, 6.62 cents')
-      t.truthy(worst < 10.98, 'and no note past 10.98 cents: ' .. string.format('%.2f', worst))
-      nearly(signed, 8.2562, 'the forty of them standing eight cents sharp between them')
+      nearly(total / #take, 6.7416, 'the mean displacement of § What it gives up, 6.74 cents')
+      t.truthy(worst < 11.15, 'and no note past 11.15 cents: ' .. string.format('%.2f', worst))
+      nearly(signed, 3.9090, 'the forty of them standing four cents sharp between them')
     end,
   },
 
@@ -1629,24 +1629,24 @@ return {
       -- intervals by under a cent between them, and the pull seats the chord where the
       -- three displacements together cost least.
       local cents = sonority.solveToMoves(progression{ { 60, 64, 67 } }, 5, 1, edo12,
-                                          fifthsAndThirds, 8, 0.25)
+                                          fifthsAndThirds, 32, 0.25)
       t.truthy(cents, 'the chord is answered')
-      near(cents[1] - 6000, 3.75, 'the C carried off its seat by the pull')
-      near(cents[2] - cents[1], 386.86, 'the third stretched from 386.31')
-      near(cents[3] - cents[1], 701.88, 'and the fifth narrowed from 701.96')
+      near(cents[1] - 6000, 3.87, 'the C carried off its seat by the pull')
+      near(cents[2] - cents[1], 386.45, 'the third stretched from 386.31')
+      near(cents[3] - cents[1], 701.93, 'and the fifth narrowed from 701.96')
 
       -- No chain of moves reaches the tritone, so the diminished triad is spelled at what
       -- the set can name and priced for the stretch rather than refusing the passage that
-      -- holds it: the C settles sixty cents flat, and reads back on the B below it.
+      -- holds it: the C settles sixty-two cents flat, and reads back on the B below it.
       local diminished = sonority.solveToMoves(progression{ { 60, 63, 66 } }, 5, 1, edo12,
-                                               fifthsAndThirds, 8, 0.25)
+                                               fifthsAndThirds, 32, 0.25)
       t.truthy(diminished, 'while a diminished triad under the same set is answered')
-      nearly(diminished[1], 5939.7534, 'the C carried past the step below it')
-      nearly(diminished[2], 6322.6145, 'the E flat above it')
-      nearly(diminished[3], 6637.6302, 'and the G flat above that')
+      nearly(diminished[1], 5937.8877, 'the C carried past the step below it')
+      nearly(diminished[2], 6323.3116, 'the E flat above it')
+      nearly(diminished[3], 6638.7917, 'and the G flat above that')
 
       local signed = (diminished[1] - 6000) + (diminished[2] - 6300) + (diminished[3] - 6600)
-      t.truthy(math.abs(signed) < 0.01, 'the three displacements summing to nothing: '
+      t.truthy(math.abs(signed) < 0.02, 'the three displacements summing to nothing: '
         .. string.format('%.4f', signed))
     end,
   },
@@ -1659,8 +1659,8 @@ return {
       -- four times over for the same drift, and settled the chord elsewhere; taken in
       -- cents, the notation states the seats and measures nothing.
       local chord  = progression{ { 60, 64, 67 } }
-      local coarse = sonority.solveToMoves(chord, 5, 1, edo12, fifthsAndThirds, 8, 0.25)
-      local fine   = sonority.solveToMoves(chord, 5, 1, edo24, fifthsAndThirds, 8, 0.25)
+      local coarse = sonority.solveToMoves(chord, 5, 1, edo12, fifthsAndThirds, 32, 0.25)
+      local fine   = sonority.solveToMoves(chord, 5, 1, edo24, fifthsAndThirds, 32, 0.25)
 
       t.truthy(fine, 'the chord is answered under the finer notation')
       for index = 1, 3 do
@@ -1677,12 +1677,12 @@ return {
       -- set: at the beam of § The solve they state 4:5:6:7, where a beam of eight spells the
       -- seventh 16/9 and the chord Pythagorean. This passage sets the beam's floor.
       local cents = sonority.solveToMoves(rolled({ 60, 64, 67, 70 }, 240), 5, 1, edo12,
-                                          elevenPitches, 8, 0.25)
+                                          elevenPitches, 32, 0.25)
       t.truthy(cents, 'the arpeggio is answered')
-      nearly(cents[2] - cents[1], 386.5012, 'the third a fifth of a cent wide of 5/4')
-      nearly(cents[3] - cents[1], 701.8944, 'the fifth six hundredths narrow of 3/2')
-      nearly(cents[4] - cents[1], 969.6944,
-        'and the seventh, which a narrower beam loses, 0.87 wide of 7/4')
+      nearly(cents[2] - cents[1], 386.3611, 'the third a twentieth of a cent wide of 5/4')
+      nearly(cents[3] - cents[1], 701.9396, 'the fifth two hundredths narrow of 3/2')
+      nearly(cents[4] - cents[1], 969.0480,
+        'and the seventh, which a narrower beam loses, 0.22 wide of 7/4')
     end,
   },
 

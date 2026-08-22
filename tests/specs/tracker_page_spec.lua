@@ -242,7 +242,7 @@ return {
       t.eq(fakeModalHost.last.key, 1,          'the key opens on the first step of the notation')
       t.eq(fakeModalHost.last.sonoritySize, 5, 'sonority size opens at 5')
       t.eq(fakeModalHost.last.harmonicLock, 1, 'harmonic lock opens at 1')
-      t.eq(fakeModalHost.last.purity, 8,       'purity opens at 8')
+      t.eq(fakeModalHost.last.purity, 32,      'purity opens at 32')
 
       stack.tv:ec():setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
                                   part1 = 'pitch', part2 = 'pitch' }
@@ -288,13 +288,13 @@ return {
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.facility, 'points', 'a take carrying no facility opens on points')
       t.eq(fakeModalHost.last.harmonicLock, 1, 'and harmonic lock on its figure')
-      t.eq(fakeModalHost.last.purity, 8, 'purity on its own')
+      t.eq(fakeModalHost.last.purity, 32, 'purity on its own')
 
       h.cm:set('take', 'retune.facility', 'moves')
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.facility, 'moves', 'the modal reopens on the facility the take carries')
       t.eq(fakeModalHost.last.harmonicLock, 1, 'harmonic lock standing at 1 under either facility')
-      t.eq(fakeModalHost.last.purity, 8, 'and purity at 8, which the moves facility alone reads')
+      t.eq(fakeModalHost.last.purity, 32, 'and purity at 32, which the moves facility alone reads')
 
       -- No target is a snap, which reads no facility at all -- the answer still
       -- rides back to the take, so the next open stands where this one did.

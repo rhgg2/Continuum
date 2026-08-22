@@ -326,55 +326,7 @@ charged by whether its two members sound together.**
 
 ## The dials
 
-1. Purity is unchanged. It is the springs' stiffness, authored as how
-   nearly a spelled interval sounds pure, and it keeps the unit it is
-   taken in — cents against a reference of fifty, held constant so that a
-   stiffness means one thing under any notation. What has changed is that
-   the pull is taken there too (§ The pull in cents), so the two charges
-   are commensurable and the dials are the weights a strand settles under.
-
-1. Purity now holds a spelling together against the ambient as well.
-   Rests differ between strands born at different onsets, so the pull
-   draws two tied strands apart where under the wall it moved the whole
-   system alike, and a spring stretches under it. What that asks of the
-   dial is small: over the five-part take at a lock of 1 and a purity of
-   8, the worst mistuning between two sounding members is 0.74¢, against
-   0.63¢ under the wall.
-
-1. Harmonic lock's opening value goes back into play. The lattice this
-   model replaced carried a single offset chosen to minimise the pull,
-   which left the pull charging the spread of a placement's displacements
-   while the mean rode free; a strength then bought less resistance, and
-   the dial opened at 1.5 where it now opens at 1
-   (`design/archive/adaptive-springs.md` § The dials). An
-   ambient reference restores that effect one strand at a time, and the
-   change of unit moves the dial again under every notation but 12-EDO,
-   so the opening value and the useful span are both unsettled.
-
-1. A lock of zero now leaves a passage unmoored. The pull is the only term
-   that reads where the page is — the springs read differences and the box
-   reads coords — so at a strength of nothing the objective is flat under a
-   translation of every displacement, and the sweep stops wherever it has
-   drifted from the start it opened at. The five-part take settles 41¢ flat
-   under it, its worst note 82¢ off, which is a figure of the sweep order
-   rather than of the music. The clamp bounded that at the window before, so
-   the dial's floor is unsettled along with its opening value.
-
-1. The moves figures in the record lapse. A major triad's third stands
-   3.4¢ wide of a pure `5/4` at purity 1 and 0.5¢ at 8; the five-part
-   take's worst mistuning is 0.54¢. Each was taken under a wall, an
-   absolute reference and unweighted springs, and neither speaks for the
-   model this doc describes. The pull of 0.95 at which a written C7 turns
-   from the otonal `4:5:6:7` to the Pythagorean `16/9` stands, being a
-   points figure (`tests/specs/sonority_spec.lua:1667`) and so untouched
-   here.
-
-1. The change of unit is not what costs the moves figures. That record is
-   taken in 12-EDO throughout, where a half-window is fifty cents less a
-   hair, so the new ruler is the old one there and every figure holds
-   across the change of unit alone; it is the wall, the reference and the
-   springs' weights that unsettle them. What the ruler was worth outside
-   12-EDO was never measured.
+> Landed 2026-08-22; the model is `docs/sonority.md` § The dials.
 
 ## What it costs
 
@@ -404,10 +356,6 @@ charged by whether its two members sound together.**
    § The candidates), and nothing here holds two strands of a sonority in
    their written order. What that sounds like is not known.
 
-1. The measured record lapses (§ The dials). The two figures the search
-   was tuned to have been taken again — a beam of twenty-four and six
-   answers abreast — and the rest of the record stands unmeasured.
-
 1. A dozen sites write a note's detune, and each must be taught what to
    do with the intent beside it. Most copy it or clear it; the transpose
    reads it for the step it steps from and then clears it, and the
@@ -418,31 +366,6 @@ charged by whether its two members sound together.**
    term in the objective objects.
 
 ## Open
-
-1. What `RECENT` is. The value stands at a half by the argument of
-   `docs/sonority.md` § The walk, and no passage measured so far decides between that and
-   one. The five-part take of `tests/specs/sonority_spec.lua` spells
-   identically under both, though twenty-six of its onset memberships
-   are held by recency; only the settled cents move — a mean
-   displacement of 6.63¢ from the seat at one against 6.57 at a half.
-
-1. A measurement wants a strained recency spring. A released strand
-   keeps the tuning its own chord gave it, so presence decides only how
-   hard it drags the chord that follows, and a spelling already stating
-   a near-pure interval leaves that spring slack. The D held from D–F–A
-   into G–B♭–D (`docs/sonority.md` § The strand) and released as the
-   second chord strikes moves that chord's G by five hundredths of a
-   cent, the spelling standing at a pure fifth under either value. What
-   would decide is a chord that cannot state a pure interval to the
-   pitch held into it.
-
-1. Where harmonic lock now opens, and how far it usefully travels
-   (§ The dials).
-
-1. Where purity opens. It has stood at 8 since the springs were
-   unweighted, and a passage holds together better at 32; the beam's
-   width answers to the dial (`docs/sonority.md` § The solve), so the two
-   settle together.
 
 1. A strand deciding a rest may be merged away before it decides it.
    `visibleAhead` keys the strands a later onset names, and a member of

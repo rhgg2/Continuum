@@ -841,7 +841,7 @@ local RETUNE_LABELS    = { 'Target:', 'Sonority size:', 'Harmonic lock:', 'Purit
 local RETUNE_LABEL_GAP = 6
 
 -- The three dials' opening figures. see docs/sonority.md § The dials
-local RETUNE_LOCK, RETUNE_PURITY, RETUNE_AMBIENT = 1, 8, 0.25
+local RETUNE_LOCK, RETUNE_PURITY, RETUNE_AMBIENT = 1, 32, 0.25
 
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
 -- here, not scopedAction's confirm, and OK is the single commit point.
@@ -908,17 +908,20 @@ modalHost:registerKind('retune', function(s, close)
         local rvN, size = chrome.numberStepper('retuneSonority', s.sonoritySize, { min = 2, max = 12 })
         if rvN then s.sonoritySize = size end
       end)
+      -- Both dials are logarithmic, a doubling of one worth a halving of the other, and the
+      -- lock's floor stops short of zero. see docs/sonority.md § The dials
       labelled('Harmonic lock:', function()
         ImGui.SetNextItemWidth(ctx, 150)
-        local rvH, lock = ImGui.SliderDouble(ctx, '##harmonicLock', s.harmonicLock, 0, 2, '%.2f')
+        local rvH, lock = ImGui.SliderDouble(ctx, '##harmonicLock', s.harmonicLock, 0.1, 10,
+                                             '%.2f', ImGui.SliderFlags_Logarithmic)
         if rvH then s.harmonicLock = lock end
       end)
-      -- Only the moves facility prices an interval against a spelling, and its slider is
-      -- logarithmic, a doubling halving the mistuning. see docs/sonority.md § The dials
+      -- Only the moves facility prices an interval against a spelling, a doubling of the dial
+      -- halving the mistuning. see docs/sonority.md § The dials
       labelled('Purity:', function()
         chrome.disabledIf(s.facility ~= 'moves', function()
           ImGui.SetNextItemWidth(ctx, 150)
-          local rvP, purity = ImGui.SliderDouble(ctx, '##purity', s.purity, 0.5, 64, '%.2f',
+          local rvP, purity = ImGui.SliderDouble(ctx, '##purity', s.purity, 4, 256, '%.2f',
                                                  ImGui.SliderFlags_Logarithmic)
           if rvP then s.purity = purity end
         end)
