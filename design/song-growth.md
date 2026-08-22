@@ -1,6 +1,6 @@
 # Song growth — the tracker grows the arrangement behind you
 
-> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 2
+> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 3
 
 **The tracker learns which placement it is inside, from the playhead,
 and gains the two verbs that grow the arrangement from there.**
@@ -29,23 +29,33 @@ item rather than a position. The answer was in hand and discarded:
 `diveSelected` holds the instance the arrange cursor sat on, and passes
 on the slot alone.
 
-## Both take-creating commands park
+## The append point
 
-Two tracker commands create takes: `newTakeBelow` (Super+Enter), which
-asks for a name and a length; and `duplicateUnpooledBelow`
-(Super+Shift+Enter), which copies the bound take into a fresh pool.
-Both route through the arrange facade to `am:mintParkedTake`, which
-creates the item on the shared scratch track — hidden, muted, off the
-grid. Parking is where a slot's takes go rather than where they die:
-deleting a slot's last live instance parks that item too, as the slot's
-**keeper**, so a palette entry outlives its placements.
+The **append point** of a placement is its rendered end, and a verb
+appending there needs the free span from it to cover the take's natural
+length. A shorter gap gives a copy truncated by its neighbour, which is
+a different sound from the one being copied, and making room by pushing
+the rest of the track down is a larger change than this design carries.
 
-The tracker can therefore grow the palette and not the song. A new take
-is silent until you leave for the arrange page, put the cursor
-somewhere and press its slot key; and that same page switch is the only
-way to repeat a take you are happy with. The machinery is not missing:
-the arrange facade already publishes `dropSlot`, and the tracker calls
-it from nowhere.
+With no room, what the verb does next turns on what it creates.
+`newTakeBelow` and `duplicateUnpooledBelow` mint a slot, so they park
+it: the item goes to the shared scratch track — hidden, muted, off the
+grid — and the palette entry stands without a placement. Parking is
+where a slot's takes go rather than where they die: deleting a slot's
+last live instance parks that item too, as the slot's **keeper**, so a
+palette entry outlives its placements.
+
+`again` and the arrange page's pooled `duplicateBelow` place another
+instance of a slot that already has one, so they refuse. A parked
+sibling would show nothing, since the palette already carries the slot,
+and it would leave the pool with an item on scratch that was never a
+keeper. The palette can therefore always grow, while the song grows
+where there is room.
+
+The tracker's new take lands on the grid. It parked whatever it made
+while the tracker had no instance to append to; with one, the take goes
+to the append point and binds as the current instance, so the loop
+follows it where loop to item is on.
 
 ## Rendered span and source span
 
@@ -66,49 +76,17 @@ instance it appends.
 
 ## What the grid draws
 
-The grid gains two marks. The **play row** is a caret on the row the
-playhead occupies within the current instance; the cut is drawn as a
-line across the grid where the rendered span ends, when it ends before
-the source does. Between them they say where you are and how much of
-what you see is heard. The caret never passes the line, since below it
-there is no sounding instance to be inside, and the line is what keeps
-that from reading as a fault.
-
-The caret marks metric position rather than any channel's onset. Swing
-resolves per channel over a global composite — `tm:toLogical(chan,
-ppqI)` inverts the global shape and then the column's — so one realised
-instant inverts to a different logical ppq per channel: at a given
-moment channel 1's row 4 has fired and channel 2's has not, and there
-is no single sounding row to point at. The caret therefore maps the
-playhead through the grid's own metric, `(playQN − instanceStartQN)`
-over `ppqPerRow`, and swung notes sound around it, since swing
-displaces a note from the metric grid rather than moving the grid.
-
-The caret dims where the play head is inside another instance of the
-bound slot. The row is still the row being heard, since the instances of
-a slot share one take; the mute says the placement sounding is not the
-placement bound. Entry carries the current instance to whatever the play
-head walks into, so the two part company only where a dive or a slot
-change has pinned the tracker elsewhere.
-
-With no current instance there is no caret, and that is the reading the
-refusals want: an unlit grid says the tracker is not inside a
-placement, so `again` and `vary` will decline.
+Landed; the model is `docs/trackerPage.md` § The play row and § The
+cut. An unlit grid says the tracker is inside no placement, which is
+the reading `again` and `vary` want for their refusals.
 
 ## again
 
-**again** appends a pooled instance of the bound slot immediately after
-the current one, binds the tracker to it, and with loop to item on
-moves the loop onto it — so the transport keeps rolling and the repeat
-is what you hear next.
-
-The append point is the current instance's rendered end, and `again`
-refuses unless the free span from there is at least the take's natural
-length. Appending into a shorter gap would give a repeat truncated by
-its neighbour, which is a different sound from the one being repeated;
-and refusal is the rule rather than a placeholder, since making room by
-pushing the rest of the track down is a larger change than this design
-carries.
+**again** (Alt+Shift+↓) appends a pooled instance of the bound slot at
+the current instance's append point (§ The append point), binds the
+tracker to it, and with loop to item on moves the loop onto it — so the
+transport keeps rolling and the repeat is what you hear next. It
+refuses where the free span falls short.
 
 Nothing is added to the palette. Four presses give four instances of
 one slot, which is what lets a column of repeats read as A A A A rather
@@ -117,8 +95,8 @@ than as four sources that happen to agree. The verb is one
 
 ## vary
 
-**vary** replaces the current instance with an instance of a fresh
-slot that has its own pool — a **variant slot**, carrying a copy of the
+**vary** (Alt+Shift+→) replaces the current instance with an instance of
+a fresh slot that has its own pool — a **variant slot**, carrying a copy of the
 source's events and of the source's pool metadata. Edits then reach
 that placement alone, and the original slot keeps its other instances.
 
@@ -141,6 +119,11 @@ item goes, or it has none and the item becomes that slot's keeper; and
 drop the variant at the start QN, which moves its own keeper onto the
 grid. One atomic block, one undo point, and the tracker rebinds to the
 new take.
+
+The tracker's unpooled duplicate retires with `vary`. It copied the
+bound take into a fresh parked slot and asked for a name; `again` then
+`vary` gives the same fork with a placement to hold it, and takes the
+variant's name from its parent.
 
 The two verbs compose into **again, but…** — `again` says it once more,
 `vary` says this one is different now. Each stands alone as well: a
