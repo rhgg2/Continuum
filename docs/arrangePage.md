@@ -80,7 +80,8 @@ happened; av decides what it does to the state.
 The grid carries two independent pointers.
 
 The **cursor** is the grid caret — a `(row, col)` position in `av`,
-drawn as a horizontal I-beam on the top edge of the cursor row. Moved
+drawn as a horizontal I-beam on the top edge of the cursor row, with a
+wash down its column. Moved
 only by the keyboard (arrow keys, PageUp/Down, Home/End, the wheel,
 and the boot / reveal seeds). The mouse never moves it.
 
@@ -99,6 +100,20 @@ command time, not at landing time. The visible focus indicator
 survives across cursor nav so the user can see what the most recent
 mouse click or mutation picked, but it is overwritten the moment the
 next kb mutation fires.
+
+Finding the caret is its own problem. The grid is built from 1px rules
+— row separators, column gridlines, item borders — so a 1px caret is
+camouflage, and where a take starts on the cursor row it disappears
+into that take's top border entirely. The caret is 2px with serifs down
+both column edges: shape separates it from the rules, not colour alone.
+The column wash carries the coarse cue. It answers "which track" from
+across the grid where the caret answers "which QN", it doesn't blink,
+and it draws under the take names, so it tints content without hiding
+it.
+
+The wash is one band, not a crosshair. A row band would run beneath a
+caret that straddles the row's top edge, so the caret would read as
+sitting on top of the band rather than marking the row the band fills.
 
 Focus self-heals — a handle whose take has been deleted (here or in
 REAPER) resolves to nil and clears on the next command.

@@ -173,7 +173,8 @@ local declarations = {
 
   ----- arrange
   { 'colour.arrange.cursorOn',         'base.zone2'           },
-  { 'colour.arrange.cursorOff',        'base.zone6'           },
+  { 'colour.arrange.cursorOff',        {'base.zone6', 0.5}    },
+  { 'colour.arrange.cursorWash',       {'alt.zone4', 0.05}    },  -- wash down the cursor's track column
   { 'colour.arrange.itemBorder',       'base.zone5'           },  -- solid neutral box outline (one zone below cursorOff)
   { 'colour.arrange.phrase',           {'colour.global.rowBeat', 1.0} },  -- bar tint at full alpha
   { 'colour.arrange.blockedBorder',    {'red', 0.95}          },  -- drag would overlap a neighbour

@@ -363,7 +363,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
   end
 
   -- Take rects: snapped corners so adjacent borders coincide; ±1px insets are screen-space.
-  -- Three passes (fills → cursor fill → names) so names stay crisp over the cursor tint.
+  -- Three passes (fills → cursor wash → names) so names stay crisp over the wash.
   local selected = av:selectionSet()
   local nameDraws = {}
   local truncDraws = {}   -- ellipsis decoration for items truncated below natural
@@ -500,19 +500,27 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     end
   end
 
-  -- Cursor caret: horizontal I-beam on the top edge of the cursor row.
-  -- Cell-shaped highlight would lie about the model; blinks ~1s so it stays findable.
-  local CARET_BLINK = 0.75   -- seconds per on/off half-cycle
+  -- Cursor column wash: coarse "which track" cue; column only, not a row band, and doesn't
+  -- blink. Paints under fills/names — see docs/arrangePage.md § Cursor and focus are separate.
+  if curCol >= sc and curCol <= lastCol then
+    ps.fill(rect(colX(curCol) + 1, rowYs(sr), colX(curCol + 1), rowYs(sr + visRows)),
+            'arrange.cursorWash')
+  end
+
+  -- Cursor caret: I-beam on the cursor row's top edge; 2px with serifs so the grid's own
+  -- 1px rules don't camouflage it. Blinks ~1s. See docs/arrangePage.md § Cursor and focus are separate.
+  local CARET_BLINK = 0.6   -- seconds per on/off half-cycle
+  local CARET_THICK, CARET_SERIF = 2, 5
   local caretOn = (reaper.time_precise() % (2 * CARET_BLINK)) < CARET_BLINK
   if curRow >= sr and curRow < sr + visRows
      and curCol >= sc and curCol <= lastCol then
     local cx0, cx1 = colX(curCol), colX(curCol + 1)
-    local cy    = rowYs(curRow)
-    local serif = 2
-    local caret = caretOn and 'arrange.cursorOn' or 'arrange.cursorOff'
-    ps.segment(cx0, cy,         cx1, cy,         caret)
-    ps.segment(cx0, cy - serif, cx0, cy + serif+1, caret)
-    ps.segment(cx1, cy - serif, cx1, cy + serif+1, caret)
+    local cy      = rowYs(curRow) - math.floor(CARET_THICK / 2)
+    local serifHi, serifLo = cy - CARET_SERIF+1, cy + CARET_SERIF+1
+    local caret   = caretOn and 'arrange.cursorOn' or 'arrange.cursorOff'
+    ps.segment(cx0, cy, cx1, cy, caret, CARET_THICK)
+    ps.segment(cx0, serifHi, cx0, serifLo, caret, CARET_THICK)
+    ps.segment(cx1 - CARET_THICK+1, serifHi, cx1 - CARET_THICK+1, serifLo, caret, CARET_THICK)
   end
 
   -- Loop region: stroked `[` down the gutter left edge, 'tail' colour, no fill.
@@ -539,8 +547,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     end
   end
 
-  -- Take names — last, so they stay crisp over the translucent cursor
-  -- fill.
+  -- Take names — last, so they stay crisp over the cursor column wash.
   for _, nd in ipairs(nameDraws) do
     local tw = ps.measure(nd.name)
     local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - tw) / 2)
@@ -550,7 +557,7 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
   end
 
   -- Truncation ellipsis: bottom-row glyph for items shortened below natural length.
-  -- Final-pass draw so it sits over the cursor fill.
+  -- Final-pass draw so it sits over the cursor wash.
   for _, td in ipairs(truncDraws) do
     local ell = '…'
     local tw  = ps.measure(ell)
