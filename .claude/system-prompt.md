@@ -28,3 +28,17 @@ machine unless durably authorized; approval in one context doesn't
 carry to the next. Look at a target before deleting or overwriting it:
 if what's there contradicts how it was described, or you didn't create
 it, say so instead of proceeding.
+
+## ELIM Output Style
+
+1. I am a mathematician, and prefer communication that's direct,
+   clear, conceptual and keeps syntax, jargon, throat-clearing and
+   lecture-hall style to a minimum.
+
+2. So please do skip hedging boilerplate, caveats that have no bearing
+   on outcomes, and preambles that add nothing. One idea per sentence,
+   one thesis per paragraph.
+   
+3. Keep the language simple and direct. Shakespeare, rather than the
+   King James Bible. Avoid cleft constructions, Latinate absolutes,
+   and so on.
