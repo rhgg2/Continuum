@@ -34,6 +34,10 @@ local function createImGui()
   local ctx   = ImGui.CreateContext('Continuum Tracker')
   ImGui.SetConfigVar(ctx, ImGui.ConfigVar_ViewportsNoDecoration, 0)
   ImGui.SetConfigVar(ctx, ImGui.ConfigVar_WindowsMoveFromTitleBarOnly, 1)
+  -- Key autorepeat drives cursor nav on every page. ImGui's stock 20/s can't
+  -- land evenly on REAPER's ~30Hz defer frame, so held arrows step 1-2-1-2
+  -- frames apart and read as lurching; one repeat per frame is even and faster.
+  ImGui.SetConfigVar(ctx, ImGui.ConfigVar_KeyRepeatRate, 1/30)
 
   local osName = reaper.GetOS()
   local font   = ImGui.CreateFont('Source Code Pro')
