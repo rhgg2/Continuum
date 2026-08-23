@@ -108,6 +108,20 @@ local function adjacencies(g)
   return { forward = forward, reverse = reverse }
 end
 
+-- Directed reachability over one of adjacencies' lists: true iff target lies downstream of start.
+local function reaches(adj, start, target)
+  local seen = {}
+  local function visit(id)
+    if seen[id] then return false end
+    seen[id] = true
+    for _, nxt in ipairs(adj[id] or {}) do
+      if nxt == target or visit(nxt) then return true end
+    end
+    return false
+  end
+  return visit(start)
+end
+
 -- Lazy past ensureLoaded so the nil reload-sentinel resolves before any compile.
 local function ensureCompiled()
   ensureLoaded()
@@ -751,6 +765,55 @@ function wm:insertBus(spec)
   end)
   if not ok then return nil, err end
   return newId
+end
+
+--contract: true iff nodeId may splice into edges[edgeIdx]: pair 1 free, off both ends, no loop
+function wm:spliceable(edgeIdx, nodeId)
+  ensureLoaded()
+  local edge = userGraph.edges[edgeIdx]
+  local node = userGraph.nodes[nodeId]
+  if not (edge and node) or edge.type ~= 'audio' then return false end
+  if nodeId == edge.from or nodeId == edge.to then return false end
+  local audio = node.ports.audio
+  if (audio.ins or 0) < 1 or (audio.outs or 0) < 1 then return false end
+  for _, e in ipairs(userGraph.edges) do
+    if e.type == 'audio'
+       and ((e.to   == nodeId and (e.toPort   or 1) == 1)
+         or (e.from == nodeId and (e.fromPort or 1) == 1)) then
+      return false
+    end
+  end
+  -- Splicing N between A and B closes a loop iff N already reaches A, or B reaches N.
+  local reach = self:reach()
+  return not reaches(reach.forward, nodeId, edge.from)
+     and not reaches(reach.forward, edge.to, nodeId)
+end
+
+--contract: re-points audio edges[edgeIdx] through nodeId's audio pair 1 and mints the output leg
+--contract: the wire's gain rides the input side, the output leg is unity; node lands at pos
+--contract: returns true, or nil+err when the splice isn't offered
+function wm:spliceIntoEdge(edgeIdx, nodeId, pos)
+  if not self:spliceable(edgeIdx, nodeId) then
+    return nil, { code = 'not_spliceable', edge = edgeIdx, id = nodeId }
+  end
+  local ok, err
+  rm:transaction('wiring: splice ' .. (userGraph.nodes[nodeId].fxDisplay or 'fx'), function()
+    ok, err = self:mutate(function(g)
+      local edge = g.edges[edgeIdx]
+      local toId, toPort = edge.to, edge.toPort
+      edge.to, edge.toPort = nodeId, 1
+      util.add(g.edges, { type = 'audio', from = nodeId, fromPort = 1,
+                          to = toId, toPort = toPort })
+      local node = g.nodes[nodeId]
+      node.pos.x, node.pos.y = pos.x, pos.y
+    end)
+    if ok then
+      local node = userGraph.nodes[nodeId]
+      persistNodeMeta(node, { pos = node.pos })
+    end
+  end)
+  if not ok then return nil, err end
+  return true
 end
 
 --shape: busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix

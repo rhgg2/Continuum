@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=2089  mode=chunk  self=wm
+@module wiringManager  src=wiringManager.lua  loc=2152  mode=chunk  self=wm
 @deps rm
 
 # Invariants & contracts
@@ -12,10 +12,10 @@
   @invariant  scratch is owned by scratch.lua (scratch.id/track); wm parks fx there  @ 18
   @invariant  a newTrack carries its trackKey in its metadata; snapshot recovers addressing  @ 19
   @invariant  scratch hosts FX with no compile-graph track — disconnected or lowered-parked  @ 20
-  @contract  one Undo block around instantiate + mutate; stamps fxId on the new fx-node  @ 530
-  @contract  generators (io.ins==0) also spawn sourceTrack + source-node + midi edge  @ 531
-  @contract  a generator with audio outs also wires straight to master  @ 532
-  @contract  returns fx-node id + sourceGuid (nil if none); nil+err on validate/refusal  @ 533
+  @contract  one Undo block around instantiate + mutate; stamps fxId on the new fx-node  @ 544
+  @contract  generators (io.ins==0) also spawn sourceTrack + source-node + midi edge  @ 545
+  @contract  a generator with audio outs also wires straight to master  @ 546
+  @contract  returns fx-node id + sourceGuid (nil if none); nil+err on validate/refusal  @ 547
 
 # Shapes
   @shape  snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }  @ 9
@@ -24,8 +24,8 @@
   @shape  snapshotFxEntry = { id?=string, ident=string, name?=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read; name feeds fxDisplay  @ 12
   @shape  wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, parent?=guid, nchan?=int, hasMidiTake?=bool, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.  @ 13
   @shape  wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }  @ 14
-  @shape  busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix  @ 756
-  @shape  routing[edgeIdx] = {kind='mergeCU',consumerId,trackKey,slot} | {kind='mainSend',cls} | {kind='send',from,to} | {kind='product',crossings={{target,parts=int[]},…}}  @ 1898
+  @shape  busRecord = { pos={x,y}, orient='V'|'H', ext={lo,hi}?, ins={{node,port,gain?},…}, outs={…}, trackId? } — ext = hand-sized bar span (axial offsets from pos); taps mirror the node's edges; trackId iff matrix  @ 819
+  @shape  routing[edgeIdx] = {kind='mergeCU',consumerId,trackKey,slot} | {kind='mainSend',cls} | {kind='send',from,to} | {kind='product',crossings={{target,parts=int[]},…}}  @ 1961
 
 # Imports
   @require util = 'util'  @ 22
@@ -48,9 +48,9 @@
   @state AUTO_BUS = 126  @ 44   -- its CC-propagation bus; sends on it aren't wiring's
   @state compiledCache = nil  @ 52   -- { graph, ctx, reach } | nil; cleared on every graph swap
   @state PIN_GROW_FIXED_VERSION = 7075  @ 74   -- maj*1000+min of the fix; nil = unfixed, guard always holds
-  @state jsfxTraitsMemo = {}  @ 143
-  @state CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }  @ 805
-  @state MASTER_KEY = '__master__'  @ 1032
+  @state jsfxTraitsMemo = {}  @ 157
+  @state CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }  @ 868
+  @state MASTER_KEY = '__master__'  @ 1095
 
 # Private functions
   @fn isJS(ident)  @ 46-48
@@ -68,365 +68,376 @@
       -- then re-assert the intended maps off-transaction. See docs/wiringManager.md § Pin re-assert after grow.
   -- compiled-graph cache: one clone+compile per structural change, pulled by wv
   @fn adjacencies(g)  @ 102-109
-  @fn ensureCompiled()  @ 112-121
+  @fn reaches(adj, start, target)  @ 112-123
+      -- Directed reachability over one of adjacencies' lists: true iff target lies downstream of start.
+  @fn ensureCompiled()  @ 126-135
       -- Lazy past ensureLoaded so the nil reload-sentinel resolves before any compile.
-  @fn parseJSFXMidiTraits(content)  @ 125-137
+  @fn parseJSFXMidiTraits(content)  @ 139-151
       -- JSFX midi traits: busAware iff ext_midi_bus=1, recv/send iff midirecv/midisend present
       -- (midisyx counts as send). Unreadable source → assume both recv and send.
-  @fn parseJSFXBusAware(content)  @ 138-140
-  @fn jsfxTraits(ident)  @ 144-149
-  @fn fxMidiPorts(ident)  @ 152-156
+  @fn parseJSFXBusAware(content)  @ 152-154
+  @fn jsfxTraits(ident)  @ 158-163
+  @fn fxMidiPorts(ident)  @ 166-170
       -- Native fx keep the optimistic {1,1}; a JSFX's real midi surface comes from the scan.
-  @fn persistNodeMeta(node, meta)  @ 230-239
+  @fn persistNodeMeta(node, meta)  @ 244-253
       -- Decoration (pos, source tags) is not routing: persist to the rm meta store (fx GUID for fx-nodes,
       -- track GUID for source/master) — orthogonal to the differ, so a decoration-only change skips reconcile.
-  @fn srcTagKey(e)  @ 243-245
+  @fn srcTagKey(e)  @ 257-259
       -- Source-tag offsets key by out-edge identity (type + consumer + port): one source
       -- fans to many consumers, each tag its own; wiringView writes through this same key.
-  @fn pruneSourceTags(g)  @ 250-267
+  @fn pruneSourceTags(g)  @ 264-281
       -- A deleted or retargeted out-edge orphans its source-tag key; recreating that edge
       -- would otherwise resurrect the stale offset. Drop keys with no live edge, persist.
-  @fn mirrorBusTaps(g)  @ 300-320
+  @fn mirrorBusTaps(g)  @ 314-334
       -- The record's taps are a write-through mirror of the bus node's incident audio edges —
       -- below 2×2 they are the persistence carrier that mints the edges back on read.
-  @fn shortFxName(s)  @ 524-528
+  @fn shortFxName(s)  @ 538-542
       -- Strips the "Type: " prefix and a trailing balanced-paren author / out-count
       -- ("... (Cockos)", "... (2 outs)"); %b() so a nested paren can't end it early.
-  @fn nextBusId(g)  @ 667-676
+  @fn nextBusId(g)  @ 681-690
       -- Buss ids are synthetic and stable for the buss's life: nodes and records share the
       -- 'bus-N' space, so a fresh id collides with neither carrier.
-  @fn nodeHasMidiOut(graph, nodeId)  @ 764-769
+  @fn nodeHasMidiOut(graph, nodeId)  @ 827-832
       -- True iff `graph` has any edge with type='midi' leaving `nodeId`.
       -- Drives target.midiOut for non-JS fx in projectEntry.
-  @fn nodeHasMidiIn(graph, nodeId)  @ 773-778
+  @fn nodeHasMidiIn(graph, nodeId)  @ 836-841
       -- True iff `graph` has any edge with type='midi' entering `nodeId`. Drives midi
       -- inDisabled: an fx with no midi-in must not inherit source bus 0 (the phantom).
   -- Snapshot / target / diff (Stage 2)
-  @fn readCuParams(params)  @ 784-801
+  @fn readCuParams(params)  @ 847-864
       -- Decode CU slider floats (rm:fx params, by display name) into wm/CU vocabulary;
       -- only the meaningful subset per mode, so the snapshot diff ignores stale lanes.
-  @fn flattenCuParams(params)  @ 806-822
-  @fn snapFx(fx)  @ 826-840
+  @fn flattenCuParams(params)  @ 869-885
+  @fn snapFx(fx)  @ 889-903
       -- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, JSFX a busAware flag;
       -- native fx carry midi routing. fxId is the identity the differ matches fxOrder by.
-  @fn snapFxList(fxList)  @ 844-850
+  @fn snapFxList(fxList)  @ 907-913
       -- Every fx on a managed track is wm's (whole-track-set quarantine): surface the full chain so the
       -- differ's full-replace can prune — except paramAutomation's CC node, hidden from read and diff.
-  @fn ownedSends(sendList, keyByGuid)  @ 854-866
+  @fn ownedSends(sendList, keyByGuid)  @ 917-929
       -- Sends to a managed dst only, re-keyed .to guid→trackKey via the caller's map; midi gain dropped
       -- (only audio sends carry a written D_VOL). paramAutomation's bus-126 sends aren't wiring's: hidden.
-  @fn stateEntry(rec, trackKey, kind, keyByGuid)  @ 870-882
+  @fn stateEntry(rec, trackKey, kind, keyByGuid)  @ 933-945
       -- One rm track record → wiringSnapshot entry. Scratch is forced main-off/sendless (it only parks
       -- fx); other tracks re-key their sends via keyByGuid. Shared by snapshot's loop and state refreshes.
-  @fn keyByGuidFromState()  @ 885-893
+  @fn keyByGuidFromState()  @ 948-956
       -- guid→trackKey over the current model, for re-keying a refreshed track's sends.
-  @fn refreshStateTrack(id, trackKey, kind)  @ 897-901
+  @fn refreshStateTrack(id, trackKey, kind)  @ 960-964
       -- Re-read one live track into the model after a local write (cheap: one track, not the whole
       -- project). No-op when the model is cold — the next reconcile takes a full snapshot.
-  @fn projectEntry(spec, compileNodes, scratchGuid)  @ 953-1011
+  @fn projectEntry(spec, compileNodes, scratchGuid)  @ 1016-1074
       -- pinMaps nest inline on each fx entry; an unmaterialised entry (id=nil) carries
       -- them too, and the applier resolves its guid through the freshly-stamped graph.
   -- read : wiringSnapshot -> userGraph
-  @fn readGraph(snap, busMeta)  @ 1034-1428
-      @invariant  folder parent reads as a source summing children; child midi takes wire into the parent  @ 1033
-  @fn stampDecoration(g, tracks, busMeta)  @ 1434-1455
+  @fn readGraph(snap, busMeta)  @ 1097-1491
+      @invariant  folder parent reads as a source summing children; child midi takes wire into the parent  @ 1096
+  @fn stampDecoration(g, tracks, busMeta)  @ 1497-1518
       -- Decoration is orthogonal to routing: positions live in the rm meta store, never the routing
       -- snapshot. Stamp them back after the pure read; absent meta (never-placed) defaults to origin.
-  @fn sendKey(s)  @ 1470-1472
-  @fn fxOrderEq(a, b)  @ 1474-1483
-  @fn sendsEq(a, b)  @ 1485-1496
-  @fn pinMapsEq(t_, s)  @ 1500-1521
+  @fn sendKey(s)  @ 1533-1535
+  @fn fxOrderEq(a, b)  @ 1537-1546
+  @fn sendsEq(a, b)  @ 1548-1559
+  @fn pinMapsEq(t_, s)  @ 1563-1584
       -- pinMaps live on fx entries now; an unmaterialised target fx (no id) can't be
       -- represented in snap (snap fx are all live) so any pinMap it carries must drift.
   -- Apply ops (Stage 2)
-  @fn stampOrigin(origin, guid)  @ 1635-1644
+  @fn stampOrigin(origin, guid)  @ 1698-1707
       -- Inline stamp/clear of CU-bridge guids onto userGraph: stamping never changes structure,
       -- so it skips the mutate transaction. Node fx already carry their guid, so only bridges stamp.
-  @fn originGuid(origin)  @ 1648-1656
+  @fn originGuid(origin)  @ 1711-1719
       -- Read-side inverse of stampOrigin: the guid a CU-bridge origin resolves to once
       -- setFXChain has stamped it, so setPinMaps can address an id-less entry.
-  @fn buildGuidOwners()  @ 1659-1671
+  @fn buildGuidOwners()  @ 1722-1734
       -- guid → the user-graph field carrying it, so a retracted CU bridge clears its stamp.
-  @fn clearOwner(owners, guid)  @ 1674-1684
+  @fn clearOwner(owners, guid)  @ 1737-1747
       -- Clear a retracted guid's stamp; returns true iff a field was actually cleared.
-  @fn reconcileFXChain(trackId, target, owners)  @ 1688-1765
+  @fn reconcileFXChain(trackId, target, owners)  @ 1751-1828
       -- Full-replace `trackId`'s FX chain to `target` via rm. Whole-track-set quarantine means the
       -- live chain is wm's working set: live fx absent from target are deleted, id-less bridges minted.
-  @fn authoredRouting(routing, spliceParts)  @ 1879-1894
+  @fn authoredRouting(routing, spliceParts)  @ 1942-1957
       -- A spliced product edge maps back to its authored taps: each tap collects the
       -- crossings it participates in, so a lone-side poke fans out (the group fader).
-  @fn gainRouting()  @ 1899-1924
+  @fn gainRouting()  @ 1962-1987
       -- Gain routing derived once per structural change from the cached ctx.
       -- Merge-CU entries carry consumerId/trackKey (not a guid); mergeGuids are stamped live by applyOps.
-  @fn idForKey(trackKey)  @ 1928-1932
+  @fn idForKey(trackKey)  @ 1991-1995
       -- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks resolve
       -- through the in-memory addressing map (refreshed by snapshot/applyOps), scratch via scratch.lua, master via rm.
-  @fn pokeGainTarget(target, gain)  @ 1934-1950
-  @fn setStateGain(target, gain)  @ 1953-1972
+  @fn pokeGainTarget(target, gain)  @ 1997-2013
+  @fn setStateGain(target, gain)  @ 2016-2035
       -- Mirror a live gain poke into the model so the next reconcile sees no spurious change.
-  @fn crossingGain(parts, pokedIdx, pokedGain)  @ 1976-1982
+  @fn crossingGain(parts, pokedIdx, pokedGain)  @ 2039-2045
       -- A crossing's realized volume: the product of its taps' gains, the poked tap
       -- riding the live drag value (its ops.gain is only written at commit).
-  @fn rememberApplied()  @ 2041-2049
+  @fn rememberApplied()  @ 2104-2112
       -- After a self-driven apply REAPER equals the applied target; overlay realised track ids so the
       -- model stands in for a fresh snapshot on the next reconcile. see docs/wiringManager.md § actual-state model
-  @fn stampBusTracks()  @ 2053-2063
+  @fn stampBusTracks()  @ 2116-2126
       -- A matrix buss record carries its summing track's guid: stamped once the track exists,
       -- cleared when its class loses one. Never on the node, so the id survives fan⇄matrix.
 
 # Public API (wm:*)
-  @api wm:load()  @ 161-165
-      @contract  reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}  @ 160
-  @api wm:graph()  @ 168-171
-      @contract  returns a deep copy of the user graph; caller mutations never leak into wm state  @ 167
-  @api wm:viewGraph()  @ 174
-      @contract  cached deep clone of the user graph; one clone per structural change, read-only  @ 173
-  @api wm:reach()  @ 177
-      @contract  cached { forward, reverse } adjacency over viewGraph.edges for reachability walks  @ 176
-  @api wm:edgeGain(idx)  @ 182-187
+  @api wm:load()  @ 175-179
+      @contract  reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}  @ 174
+  @api wm:graph()  @ 182-185
+      @contract  returns a deep copy of the user graph; caller mutations never leak into wm state  @ 181
+  @api wm:viewGraph()  @ 188
+      @contract  cached deep clone of the user graph; one clone per structural change, read-only  @ 187
+  @api wm:reach()  @ 191
+      @contract  cached { forward, reverse } adjacency over viewGraph.edges for reachability walks  @ 190
+  @api wm:edgeGain(idx)  @ 196-201
       -- Live, uncloned: fastGainCommit writes ops.gain without a wiringChanged,
       -- so the cached viewGraph would lag a fader drag.
-      @contract  live gain on audio edges[idx]; 1.0 if unset/non-audio/absent; reads userGraph uncloned  @ 181
-  @api wm:setMuted(nodeId, on)  @ 192-196
+      @contract  live gain on audio edges[idx]; 1.0 if unset/non-audio/absent; reads userGraph uncloned  @ 195
+  @api wm:setMuted(nodeId, on)  @ 206-210
       -- Mute/bypass act on nodeId's fx via rm (pin-stash / native enable): neither perturbs
       -- the graph nor fires wiringChanged. One Undo block each.
-      @contract  output-mute nodeId's fx via rm's pin-stash; wire preserved, no graph change.  @ 191
-  @api wm:muted(nodeId)  @ 198
-      @contract  true iff nodeId's fx is output-muted.  @ 197
-  @api wm:setBypassed(nodeId, on)  @ 201-205
-      @contract  bypass nodeId's fx (REAPER-native enable); orthogonal to the graph.  @ 200
-  @api wm:bypassed(nodeId)  @ 207
-      @contract  true iff nodeId's fx is bypassed.  @ 206
-  @api wm:mutate(mutator, kind)  @ 213-226
-      @contract  clone-validate-swap; DAG.validate failure returns false,err with no state change;  @ 211
-      @contract  on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile  @ 212
-  @api wm:moveBus(id, pos, ext)  @ 270-278
-      @contract  buss move/resize — writes the bus node pos + persists pos & axial ext to the bus store  @ 269
-  @api wm:moveNodes(moves)  @ 281-296
-      @contract  writes node pos per {[id]={x,y}} + persists busses to the bus store; unknown ids skipped  @ 280
-  @api wm:setSourceTagPos(nodeId, key, pos)  @ 323-335
-      @contract  persists pos to node.tagPos[key] (consumer-relative); source tag decoration only  @ 322
-  @api wm:readJSFXContent(ident)  @ 338-346
-      @contract  read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails  @ 337
-  @api wm:checkUserAddable(ident)  @ 353-358
-      @contract  refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse  @ 352
-  @api wm:instantiateFxOnScratch(ident)  @ 362-372
-      @contract  AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}  @ 360
-      @contract  unknown ident → fxId=nil, ins=outs=0, empty name lists  @ 361
-  @api wm:isScratchTrack(track)  @ 375-378
-      @contract  true iff `track` is the live scratch track (never mints — peek only)  @ 374
-  @api wm:isWiringOwnedTrack(track)  @ 381-389
-      @contract  true iff `track` is wiring-owned (scratch/spawned newTrack); arrange hides these  @ 380
-  @api wm:trackNames()  @ 393-402
+      @contract  output-mute nodeId's fx via rm's pin-stash; wire preserved, no graph change.  @ 205
+  @api wm:muted(nodeId)  @ 212
+      @contract  true iff nodeId's fx is output-muted.  @ 211
+  @api wm:setBypassed(nodeId, on)  @ 215-219
+      @contract  bypass nodeId's fx (REAPER-native enable); orthogonal to the graph.  @ 214
+  @api wm:bypassed(nodeId)  @ 221
+      @contract  true iff nodeId's fx is bypassed.  @ 220
+  @api wm:mutate(mutator, kind)  @ 227-240
+      @contract  clone-validate-swap; DAG.validate failure returns false,err with no state change;  @ 225
+      @contract  on success swaps + fires wiringChanged{kind}; REAPER realises via reconcile  @ 226
+  @api wm:moveBus(id, pos, ext)  @ 284-292
+      @contract  buss move/resize — writes the bus node pos + persists pos & axial ext to the bus store  @ 283
+  @api wm:moveNodes(moves)  @ 295-310
+      @contract  writes node pos per {[id]={x,y}} + persists busses to the bus store; unknown ids skipped  @ 294
+  @api wm:setSourceTagPos(nodeId, key, pos)  @ 337-349
+      @contract  persists pos to node.tagPos[key] (consumer-relative); source tag decoration only  @ 336
+  @api wm:readJSFXContent(ident)  @ 352-360
+      @contract  read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails  @ 351
+  @api wm:checkUserAddable(ident)  @ 367-372
+      @contract  refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse  @ 366
+  @api wm:instantiateFxOnScratch(ident)  @ 376-386
+      @contract  AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}  @ 374
+      @contract  unknown ident → fxId=nil, ins=outs=0, empty name lists  @ 375
+  @api wm:isScratchTrack(track)  @ 389-392
+      @contract  true iff `track` is the live scratch track (never mints — peek only)  @ 388
+  @api wm:isWiringOwnedTrack(track)  @ 395-403
+      @contract  true iff `track` is wiring-owned (scratch/spawned newTrack); arrange hides these  @ 394
+  @api wm:trackNames()  @ 407-416
       -- An unnamed track falls back to its REAPER number ("Track 3") — a label only, no real rename.
-      @contract  { [trackId] = name } for every project track + master; one rm:trackLabels() pass  @ 391
-  @api wm:fxTrack(fxId)  @ 407-409
+      @contract  { [trackId] = name } for every project track + master; one rm:trackLabels() pass  @ 405
+  @api wm:fxTrack(fxId)  @ 421-423
       -- Resolve the host track directly via rm: reading the full fx record (rm:fx)
       -- cost ~100ms/plugin (chunk + pin reads) and ran every frame via paramTargets.
-      @contract  raw MediaTrack hosting the fx instance guid, or nil if the guid isn't live.  @ 404
-  @api wm:showFxWindow(fxId)  @ 412-414
-      @contract  floats the FX window for the instance guid; false if the guid is no longer live  @ 411
-  @api wm:isSamplerNode(node)  @ 418-421
+      @contract  raw MediaTrack hosting the fx instance guid, or nil if the guid isn't live.  @ 418
+  @api wm:showFxWindow(fxId)  @ 426-428
+      @contract  floats the FX window for the instance guid; false if the guid is no longer live  @ 425
+  @api wm:isSamplerNode(node)  @ 432-435
       -- A graph node is the Continuum Sampler by its fx display name; the wiring
       -- graph is the authority on which takes reach one (legacy: a per-track FX scan).
-  @api wm:samplerReachable(track)  @ 424-444
-      @contract  true iff track's source node reaches a Continuum Sampler via midi cone; false off-graph  @ 423
-  @api wm:paramTargets(sourceTrack)  @ 449-511
-      @contract  fx rows in sourceTrack's cone, flow order: midi-cone (generator=true) first, then audio  @ 446
-      @contract  row = { fxGuid, name, trackGuid, generator? }; {} when sourceTrack isn't a graph node  @ 447
-      @contract  a never-read graph realises once here (live mode) so fx resolve before the cone walk  @ 448
-  @api wm:createSourceTrack(opts)  @ 515-520
+  @api wm:samplerReachable(track)  @ 438-458
+      @contract  true iff track's source node reaches a Continuum Sampler via midi cone; false off-graph  @ 437
+  @api wm:paramTargets(sourceTrack)  @ 463-525
+      @contract  fx rows in sourceTrack's cone, flow order: midi-cone (generator=true) first, then audio  @ 460
+      @contract  row = { fxGuid, name, trackGuid, generator? }; {} when sourceTrack isn't a graph node  @ 461
+      @contract  a never-read graph realises once here (live mode) so fx resolve before the cone walk  @ 462
+  @api wm:createSourceTrack(opts)  @ 529-534
       -- snapshot derives source identity from graph source nodes, not a tag. see docs/wiringManager.md § createSourceTrack
-      @contract  appends a source track via rm and returns its id; called outside mutate.  @ 513
-  @api wm:addFxNode(x, y, fx, opts)  @ 534-589
-  @api wm:deleteSource(nodeId, force)  @ 594-615
+      @contract  appends a source track via rm and returns its id; called outside mutate.  @ 527
+  @api wm:addFxNode(x, y, fx, opts)  @ 548-603
+  @api wm:deleteSource(nodeId, force)  @ 608-629
       -- Reconcile never deletes sourceTracks (protects authored takes), so deletion is explicit
       -- here. Refuses with false, takeCount when the track holds takes unless force is set.
-      @contract  deletes a source node + incident edges and its REAPER track in one Undo block.  @ 591
-  @api wm:deleteBus(nodeId)  @ 618-635
-      @contract  deletes a buss node + incident edges and clears its decoration record, in one Undo block  @ 617
-  @api wm:addSourceNode(opts)  @ 638-663
-      @contract  creates source track + node at opts.pos in one Undo block; returns node id or nil+err  @ 637
-  @api wm:addBusNode(pos, orient)  @ 679-698
-      @contract  mints a placed, unwired buss node + its decoration record; orient defaults 'V'  @ 678
-  @api wm:rotateBus(id)  @ 701-713
-      @contract  flips a buss's orientation V↔H on node + decoration record; returns true or nil+err  @ 700
-  @api wm:insertBus(spec)  @ 717-754
-      @contract  mints a buss node mid-wire: re-points the (node,port,dir) edge ends through it +  @ 715
-      @contract  a unity trunk edge — audio-identical under the splice; returns id, or nil+err  @ 716
-  @api wm:busRecords()  @ 758-760
-      @contract  deep copy of the 'bus' meta store: { [busId] = busRecord }  @ 757
-  @api wm:snapshot(tracks)  @ 905-949
+      @contract  deletes a source node + incident edges and its REAPER track in one Undo block.  @ 605
+  @api wm:deleteBus(nodeId)  @ 632-649
+      @contract  deletes a buss node + incident edges and clears its decoration record, in one Undo block  @ 631
+  @api wm:addSourceNode(opts)  @ 652-677
+      @contract  creates source track + node at opts.pos in one Undo block; returns node id or nil+err  @ 651
+  @api wm:addBusNode(pos, orient)  @ 693-712
+      @contract  mints a placed, unwired buss node + its decoration record; orient defaults 'V'  @ 692
+  @api wm:rotateBus(id)  @ 715-727
+      @contract  flips a buss's orientation V↔H on node + decoration record; returns true or nil+err  @ 714
+  @api wm:insertBus(spec)  @ 731-768
+      @contract  mints a buss node mid-wire: re-points the (node,port,dir) edge ends through it +  @ 729
+      @contract  a unity trunk edge — audio-identical under the splice; returns id, or nil+err  @ 730
+  @api wm:spliceable(edgeIdx, nodeId)  @ 771-790
+      @contract  true iff nodeId may splice into edges[edgeIdx]: pair 1 free, off both ends, no loop  @ 770
+  @api wm:spliceIntoEdge(edgeIdx, nodeId, pos)  @ 795-817
+      @contract  re-points audio edges[edgeIdx] through nodeId's audio pair 1 and mints the output leg  @ 792
+      @contract  the wire's gain rides the input side, the output leg is unity; node lands at pos  @ 793
+      @contract  returns true, or nil+err when the splice isn't offered  @ 794
+  @api wm:busRecords()  @ 821-823
+      @contract  deep copy of the 'bus' meta store: { [busId] = busRecord }  @ 820
+  @api wm:snapshot(tracks)  @ 968-1012
       -- managed track surfaces (full chain — adoption is free, no ownership filter). Read-only.
-      @contract  rm:tracks() re-keyed by trackKey, send dsts remapped guid→trackKey; every fx on a  @ 903
-  @api wm:targetState()  @ 1015-1026
+      @contract  rm:tracks() re-keyed by trackKey, send dsts remapped guid→trackKey; every fx on a  @ 966
+  @api wm:targetState()  @ 1078-1089
       -- see docs/wiringManager.md
-      @contract  pure; scratch id via rm; derives wiringSnapshot from DAG.targetTracks  @ 1013
-  @api wm:read()  @ 1460-1468
+      @contract  pure; scratch id via rm; derives wiringSnapshot from DAG.targetTracks  @ 1076
+  @api wm:read()  @ 1523-1531
       -- (3c: + component classification — bus-aware + feedback quarantine; decoration stamped from meta)
-      @contract  reconstructs the user graph from REAPER routing; node ids are rm ids  @ 1457
-      @contract  second return is the wiringSnapshot it consumed — callers seed the actual-state model  @ 1458
-  @api wm:diff(target, snap)  @ 1525-1629
+      @contract  reconstructs the user graph from REAPER routing; node ids are rm ids  @ 1520
+      @contract  second return is the wiringSnapshot it consumed — callers seed the actual-state model  @ 1521
+  @api wm:diff(target, snap)  @ 1588-1692
       -- Op order and deletion rules: see docs/wiringManager.md § diff op ordering
-      @contract  pure structural diff → wiringOp[] that carries snap to target.  @ 1523
-  @api wm:applyOps(ops, label)  @ 1770-1875
-      @contract  walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx  @ 1767
-      @contract  stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm  @ 1768
-      @contract  no-op on an empty op list — no write, no undo block, hence no undo point  @ 1769
-  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1986-2005
+      @contract  pure structural diff → wiringOp[] that carries snap to target.  @ 1586
+  @api wm:applyOps(ops, label)  @ 1833-1938
+      @contract  walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx  @ 1830
+      @contract  stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm  @ 1831
+      @contract  no-op on an empty op list — no write, no undo block, hence no undo point  @ 1832
+  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 2049-2068
       -- see docs/wiringManager.md § pokeEdgeGain routing
-      @contract  pokes the live gain for an edge via cached routing; no mutate/signal/undo.  @ 1984
-  @api wm:fastGainCommit(edgeIdx, gain)  @ 2008-2020
-      @contract  in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile  @ 2007
-  @api wm:listInstalledFX()  @ 2023-2025
-      @contract  delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there  @ 2022
-  @api wm:syncExternal()  @ 2030-2037
+      @contract  pokes the live gain for an edge via cached routing; no mutate/signal/undo.  @ 2047
+  @api wm:fastGainCommit(edgeIdx, gain)  @ 2071-2083
+      @contract  in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile  @ 2070
+  @api wm:listInstalledFX()  @ 2086-2088
+      @contract  delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there  @ 2085
+  @api wm:syncExternal()  @ 2093-2100
       -- see docs/wiringManager.md § external sync
-      @contract  rereads the graph from routing when REAPER's project state moved without us — undo/redo  @ 2027
-      @contract  or a manual routing edit. Our own writes rebaseline (markState), so they never trigger.  @ 2028
-  @api wm:reconcile(label)  @ 2067-2074
-      @contract  one reconcile pass — diff targetState vs the actual side (the actualState model or a  @ 2065
-      @contract  fresh snapshot), applyOps, then refresh the model for the next self-driven reconcile  @ 2066
-  @api wm:enableLive(label)  @ 2077-2087
-      @contract  idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.  @ 2076
+      @contract  rereads the graph from routing when REAPER's project state moved without us — undo/redo  @ 2090
+      @contract  or a manual routing edit. Our own writes rebaseline (markState), so they never trigger.  @ 2091
+  @api wm:reconcile(label)  @ 2130-2137
+      @contract  one reconcile pass — diff targetState vs the actual side (the actualState model or a  @ 2128
+      @contract  fresh snapshot), applyOps, then refresh the model for the next self-driven reconcile  @ 2129
+  @api wm:enableLive(label)  @ 2140-2150
+      @contract  idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.  @ 2139
 
 # Signals emitted (via util.installHooks)
-  @emits wiringChanged   @ load:164 mutate:224 syncExternal:2036
+  @emits wiringChanged   @ load:178 mutate:238 syncExternal:2099
 
 # Uses (outbound edges)
-  @use call    DAG.allocate  @ targetState:1019
-  @use call    DAG.classify  @ readGraph:1426
-  @use call    DAG.compile  @ ensureCompiled:116 targetState:1017
-  @use call    DAG.targetTracks  @ targetState:1019 gainRouting:1903
-  @use call    DAG.validate  @ mutate:217
-  @use call    fs.join  @ readJSFXContent:340
-  @use call    rm:addFx  @ instantiateFxOnScratch:363 reconcileFXChain:1729
-  @use call    rm:addTrack  @ createSourceTrack:516 applyOps:1805
-  @use call    rm:assignFx  @ persistNodeMeta:232 reconcileFXChain:1746,1756 applyOps:1831,1842 pokeGainTarget:1939
-  @use call    rm:assignMeta  @ moveBus:276 moveNodes:291 mirrorBusTaps:317 deleteBus:631 addBusNode:693 rotateBus:711 insertBus:723,750 stampBusTracks:2060
-  @use call    rm:assignTrack  @ persistNodeMeta:235,237 applyOps:1818,1822,1854 pokeGainTarget:1944
-  @use call    rm:bypassed  @ bypassed:207
-  @use call    rm:deleteFx  @ reconcileFXChain:1719
-  @use call    rm:deleteTrack  @ deleteSource:610 applyOps:1808
-  @use call    rm:fx  @ instantiateFxOnScratch:369
-  @use call    rm:fxIds  @ reconcileFXChain:1694
-  @use call    rm:fxTrack  @ fxTrack:408
-  @use call    rm:installedFx  @ listInstalledFX:2024
-  @use call    rm:masterId  @ persistNodeMeta:234 stampDecoration:1440 applyOps:1785 idForKey:1930 rememberApplied:2043
-  @use call    rm:meta  @ mirrorBusTaps:301 nextBusId:674 busRecords:759 read:1464 stampBusTracks:2054
-  @use call    rm:muted  @ muted:198
-  @use call    rm:params  @ snapFx:832
-  @use call    rm:reaperTrack  @ deleteSource:598 pokeGainTarget:1943
+  @use call    DAG.allocate  @ targetState:1082
+  @use call    DAG.classify  @ readGraph:1489
+  @use call    DAG.compile  @ ensureCompiled:130 targetState:1080
+  @use call    DAG.targetTracks  @ targetState:1082 gainRouting:1966
+  @use call    DAG.validate  @ mutate:231
+  @use call    fs.join  @ readJSFXContent:354
+  @use call    rm:addFx  @ instantiateFxOnScratch:377 reconcileFXChain:1792
+  @use call    rm:addTrack  @ createSourceTrack:530 applyOps:1868
+  @use call    rm:assignFx  @ persistNodeMeta:246 reconcileFXChain:1809,1819 applyOps:1894,1905 pokeGainTarget:2002
+  @use call    rm:assignMeta  @ moveBus:290 moveNodes:305 mirrorBusTaps:331 deleteBus:645 addBusNode:707 rotateBus:725 insertBus:737,764 stampBusTracks:2123
+  @use call    rm:assignTrack  @ persistNodeMeta:249,251 applyOps:1881,1885,1917 pokeGainTarget:2007
+  @use call    rm:bypassed  @ bypassed:221
+  @use call    rm:deleteFx  @ reconcileFXChain:1782
+  @use call    rm:deleteTrack  @ deleteSource:624 applyOps:1871
+  @use call    rm:fx  @ instantiateFxOnScratch:383
+  @use call    rm:fxIds  @ reconcileFXChain:1757
+  @use call    rm:fxTrack  @ fxTrack:422
+  @use call    rm:installedFx  @ listInstalledFX:2087
+  @use call    rm:masterId  @ persistNodeMeta:248 stampDecoration:1503 applyOps:1848 idForKey:1993 rememberApplied:2106
+  @use call    rm:meta  @ mirrorBusTaps:315 nextBusId:688 busRecords:822 read:1527 stampBusTracks:2117
+  @use call    rm:muted  @ muted:212
+  @use call    rm:params  @ snapFx:895
+  @use call    rm:reaperTrack  @ deleteSource:612 pokeGainTarget:2006
   @use call    rm:rewritePins  @ schedulePinCorrection:94
-  @use call    rm:setBypassed  @ setBypassed:203
-  @use call    rm:setMuted  @ setMuted:194
-  @use call    rm:setSendGain  @ pokeGainTarget:1947
-  @use call    rm:showFx  @ showFxWindow:413
-  @use call    rm:track  @ refreshStateTrack:899
-  @use call    rm:trackLabels  @ trackNames:395
-  @use call    rm:tracks  @ snapshot:914 read:1462
-  @use call    rm:transaction  @ setMuted:193 setBypassed:202 addFxNode:540 deleteSource:601 deleteBus:622 addSourceNode:642 addBusNode:683 insertBus:721 applyOps:1776 fastGainCommit:2012
-  @use call    rm:writeChainMidi  @ reconcileFXChain:1762
-  @use call    scratch.id  @ instantiateFxOnScratch:363,368 snapshot:911 targetState:1020 read:1461 idForKey:1929
-  @use call    scratch.peek  @ isScratchTrack:376
-  @use call    util.add  @ mirrorBusTaps:310,311 samplerReachable:439 paramTargets:467,483,487,491,504,505,509 addFxNode:572,575 deleteSource:606 deleteBus:627 insertBus:743,746 snapFxList:847 ownedSends:860 projectEntry:985,994 readGraph:1055,1070,1074,1093,1094,1124,1158,1165,1170,1175,1178,1182,1194,1198,1237,1278,1287,1334,1367,1387,1408 diff:1539,1556,1571,1578,1583,1603,1608,1620,1622 reconcileFXChain:1699,1733,1760 applyOps:1850 authoredRouting:1889
-  @use call    util.bucket  @ adjacencies:105,106 samplerReachable:431 paramTargets:459,460 readGraph:1374 applyOps:1832
-  @use call    util.clone  @ applyOps:1779
-  @use call    util.deepClone  @ ensureCompiled:115 graph:170 mutate:215 busRecords:759 projectEntry:990 stampDecoration:1452
-  @use call    util.deepEq  @ mirrorBusTaps:316 fxOrderEq:1479,1480 pinMapsEq:1517
+  @use call    rm:setBypassed  @ setBypassed:217
+  @use call    rm:setMuted  @ setMuted:208
+  @use call    rm:setSendGain  @ pokeGainTarget:2010
+  @use call    rm:showFx  @ showFxWindow:427
+  @use call    rm:track  @ refreshStateTrack:962
+  @use call    rm:trackLabels  @ trackNames:409
+  @use call    rm:tracks  @ snapshot:977 read:1525
+  @use call    rm:transaction  @ setMuted:207 setBypassed:216 addFxNode:554 deleteSource:615 deleteBus:636 addSourceNode:656 addBusNode:697 insertBus:735 spliceIntoEdge:800 applyOps:1839 fastGainCommit:2075
+  @use call    rm:writeChainMidi  @ reconcileFXChain:1825
+  @use call    scratch.id  @ instantiateFxOnScratch:377,382 snapshot:974 targetState:1083 read:1524 idForKey:1992
+  @use call    scratch.peek  @ isScratchTrack:390
+  @use call    util.add  @ mirrorBusTaps:324,325 samplerReachable:453 paramTargets:481,497,501,505,518,519,523 addFxNode:586,589 deleteSource:620 deleteBus:641 insertBus:757,760 spliceIntoEdge:805 snapFxList:910 ownedSends:923 projectEntry:1048,1057 readGraph:1118,1133,1137,1156,1157,1187,1221,1228,1233,1238,1241,1245,1257,1261,1300,1341,1350,1397,1430,1450,1471 diff:1602,1619,1634,1641,1646,1666,1671,1683,1685 reconcileFXChain:1762,1796,1823 applyOps:1913 authoredRouting:1952
+  @use call    util.bucket  @ adjacencies:105,106 samplerReachable:445 paramTargets:473,474 readGraph:1437 applyOps:1895
+  @use call    util.clone  @ applyOps:1842
+  @use call    util.deepClone  @ ensureCompiled:129 graph:184 mutate:229 busRecords:822 projectEntry:1053 stampDecoration:1515
+  @use call    util.deepEq  @ mirrorBusTaps:330 fxOrderEq:1542,1543 pinMapsEq:1580
   @use call    util.installHooks  @ <load>:30
-  @use call    util.key  @ readGraph:1374,1398 sendKey:1471
+  @use call    util.key  @ readGraph:1437,1461 sendKey:1534
   @use require DAG  @ <load>:23
   @use require fs  @ <load>:24
   @use require scratch  @ <load>:25
   @use require util  @ <load>:22
-  @use sub     self:wiringChanged  @ enableLive:2082
+  @use sub     self:wiringChanged  @ enableLive:2145
 
 # Calls (intra-file)
-  @call adjacencies  @ ensureCompiled:117
-  @call affectedByPinGrowBug  @ applyOps:1874
-  @call authoredRouting  @ gainRouting:1921
-  @call buildGuidOwners  @ applyOps:1780
-  @call clearOwner  @ reconcileFXChain:1720
-  @call crossingGain  @ pokeEdgeGain:1996
-  @call ensureCompiled  @ viewGraph:174 reach:177 gainRouting:1900 stampBusTracks:2057
-  @call ensureLoaded  @ ensureCompiled:113 load:163 graph:169 edgeGain:183 mutate:214 addFxNode:535 deleteSource:595 deleteBus:619 addSourceNode:639 addBusNode:680 insertBus:718 targetState:1016
-  @call ensureLoaded  @ applyOps:1774 fastGainCommit:2009
-  @call flattenCuParams  @ snapFx:833 projectEntry:967,973
-  @call fxMidiPorts  @ addFxNode:543 readGraph:1313
-  @call fxOrderEq  @ diff:1570
-  @call gainRouting  @ pokeEdgeGain:1987
-  @call idForKey  @ pokeGainTarget:1942,1947
-  @call isJS  @ fxMidiPorts:153 snapFx:834 projectEntry:977 readGraph:1109,1328
-  @call jsfxTraits  @ fxMidiPorts:154 checkUserAddable:355 snapFx:835 readGraph:1109,1328
-  @call keyByGuidFromState  @ refreshStateTrack:900
-  @call markState  @ schedulePinCorrection:95 instantiateFxOnScratch:365 createSourceTrack:517 deleteSource:612 deleteBus:633 applyOps:1866 pokeEdgeGain:1991,2003 fastGainCommit:2018
-  @call mirrorBusTaps  @ mutate:222 fastGainCommit:2015
-  @call nextBusId  @ addBusNode:685 insertBus:719
-  @call nodeHasMidiIn  @ projectEntry:980
-  @call nodeHasMidiOut  @ projectEntry:981
-  @call originGuid  @ applyOps:1828
-  @call ownedSends  @ stateEntry:880
-  @call parseJSFXMidiTraits  @ parseJSFXBusAware:139 jsfxTraits:146
-  @call persistNodeMeta  @ pruneSourceTags:263 moveNodes:292 setSourceTagPos:333 addFxNode:580,583 addSourceNode:658
-  @call pinMapsEq  @ diff:1582
-  @call pokeGainTarget  @ pokeEdgeGain:1990,1997
-  @call projectEntry  @ targetState:1023
-  @call pruneSourceTags  @ mutate:221
-  @call readCuParams  @ snapFx:833 readGraph:1272
-  @call readGraph  @ read:1465
-  @call reconcileFXChain  @ applyOps:1837
-  @call refreshStateTrack  @ instantiateFxOnScratch:368 createSourceTrack:518
-  @call rememberApplied  @ reconcile:2073
-  @call schedulePinCorrection  @ applyOps:1874
-  @call sendKey  @ sendsEq:1490,1492
-  @call sendsEq  @ diff:1607
-  @call setGraph  @ ensureLoaded:61 load:162 mutate:219 applyOps:1861 syncExternal:2034
-  @call setStateGain  @ pokeEdgeGain:1991,1998
-  @call shortFxName  @ addFxNode:538 readGraph:1311
-  @call snapFx  @ snapFxList:847
-  @call snapFxList  @ stateEntry:879 snapshot:941
-  @call srcTagKey  @ pruneSourceTags:255
-  @call stampBusTracks  @ reconcile:2072
-  @call stampDecoration  @ read:1466
-  @call stampOrigin  @ reconcileFXChain:1731
-  @call stateEntry  @ refreshStateTrack:900 snapshot:937
-  @call wm:applyOps  @ reconcile:2071
-  @call wm:checkUserAddable  @ addFxNode:536
-  @call wm:createSourceTrack  @ addFxNode:546 addSourceNode:643
-  @call wm:diff  @ reconcile:2070
-  @call wm:edgeGain  @ crossingGain:1979
-  @call wm:fxTrack  @ paramTargets:500
-  @call wm:instantiateFxOnScratch  @ addFxNode:541
-  @call wm:isSamplerNode  @ samplerReachable:437
-  @call wm:isScratchTrack  @ isWiringOwnedTrack:382
-  @call wm:mutate  @ moveBus:271 moveNodes:282 setSourceTagPos:324 addFxNode:547 deleteSource:602 deleteBus:623 addSourceNode:644 addBusNode:684 rotateBus:703 insertBus:725
-  @call wm:pokeEdgeGain  @ fastGainCommit:2016
+  @call adjacencies  @ ensureCompiled:131
+  @call affectedByPinGrowBug  @ applyOps:1937
+  @call authoredRouting  @ gainRouting:1984
+  @call buildGuidOwners  @ applyOps:1843
+  @call clearOwner  @ reconcileFXChain:1783
+  @call crossingGain  @ pokeEdgeGain:2059
+  @call ensureCompiled  @ viewGraph:188 reach:191 gainRouting:1963 stampBusTracks:2120
+  @call ensureLoaded  @ ensureCompiled:127 load:177 graph:183 edgeGain:197 mutate:228 addFxNode:549 deleteSource:609 deleteBus:633 addSourceNode:653 addBusNode:694 insertBus:732 spliceable:772
+  @call ensureLoaded  @ targetState:1079 applyOps:1837 fastGainCommit:2072
+  @call flattenCuParams  @ snapFx:896 projectEntry:1030,1036
+  @call fxMidiPorts  @ addFxNode:557 readGraph:1376
+  @call fxOrderEq  @ diff:1633
+  @call gainRouting  @ pokeEdgeGain:2050
+  @call idForKey  @ pokeGainTarget:2005,2010
+  @call isJS  @ fxMidiPorts:167 snapFx:897 projectEntry:1040 readGraph:1172,1391
+  @call jsfxTraits  @ fxMidiPorts:168 checkUserAddable:369 snapFx:898 readGraph:1172,1391
+  @call keyByGuidFromState  @ refreshStateTrack:963
+  @call markState  @ schedulePinCorrection:95 instantiateFxOnScratch:379 createSourceTrack:531 deleteSource:626 deleteBus:647 applyOps:1929 pokeEdgeGain:2054,2066 fastGainCommit:2081
+  @call mirrorBusTaps  @ mutate:236 fastGainCommit:2078
+  @call nextBusId  @ addBusNode:699 insertBus:733
+  @call nodeHasMidiIn  @ projectEntry:1043
+  @call nodeHasMidiOut  @ projectEntry:1044
+  @call originGuid  @ applyOps:1891
+  @call ownedSends  @ stateEntry:943
+  @call parseJSFXMidiTraits  @ parseJSFXBusAware:153 jsfxTraits:160
+  @call persistNodeMeta  @ pruneSourceTags:277 moveNodes:306 setSourceTagPos:347 addFxNode:594,597 addSourceNode:672 spliceIntoEdge:812
+  @call pinMapsEq  @ diff:1645
+  @call pokeGainTarget  @ pokeEdgeGain:2053,2060
+  @call projectEntry  @ targetState:1086
+  @call pruneSourceTags  @ mutate:235
+  @call reaches  @ spliceable:788,789
+  @call readCuParams  @ snapFx:896 readGraph:1335
+  @call readGraph  @ read:1528
+  @call reconcileFXChain  @ applyOps:1900
+  @call refreshStateTrack  @ instantiateFxOnScratch:382 createSourceTrack:532
+  @call rememberApplied  @ reconcile:2136
+  @call schedulePinCorrection  @ applyOps:1937
+  @call sendKey  @ sendsEq:1553,1555
+  @call sendsEq  @ diff:1670
+  @call setGraph  @ ensureLoaded:61 load:176 mutate:233 applyOps:1924 syncExternal:2097
+  @call setStateGain  @ pokeEdgeGain:2054,2061
+  @call shortFxName  @ addFxNode:552 readGraph:1374
+  @call snapFx  @ snapFxList:910
+  @call snapFxList  @ stateEntry:942 snapshot:1004
+  @call srcTagKey  @ pruneSourceTags:269
+  @call stampBusTracks  @ reconcile:2135
+  @call stampDecoration  @ read:1529
+  @call stampOrigin  @ reconcileFXChain:1794
+  @call stateEntry  @ refreshStateTrack:963 snapshot:1000
+  @call wm:applyOps  @ reconcile:2134
+  @call wm:checkUserAddable  @ addFxNode:550
+  @call wm:createSourceTrack  @ addFxNode:560 addSourceNode:657
+  @call wm:diff  @ reconcile:2133
+  @call wm:edgeGain  @ crossingGain:2042
+  @call wm:fxTrack  @ paramTargets:514
+  @call wm:instantiateFxOnScratch  @ addFxNode:555
+  @call wm:isSamplerNode  @ samplerReachable:451
+  @call wm:isScratchTrack  @ isWiringOwnedTrack:396
+  @call wm:mutate  @ moveBus:285 moveNodes:296 setSourceTagPos:338 addFxNode:561 deleteSource:616 deleteBus:637 addSourceNode:658 addBusNode:698 rotateBus:717 insertBus:739 spliceIntoEdge:801
+  @call wm:pokeEdgeGain  @ fastGainCommit:2079
+  @call wm:reach  @ spliceable:787
   @call wm:read  @ ensureLoaded:60
-  @call wm:readJSFXContent  @ jsfxTraits:146
-  @call wm:reconcile  @ paramTargets:452 enableLive:2084,2086
-  @call wm:snapshot  @ read:1463 reconcile:2069
-  @call wm:targetState  @ rememberApplied:2042 reconcile:2068
-  @call wm:viewGraph  @ samplerReachable:426 paramTargets:454
+  @call wm:readJSFXContent  @ jsfxTraits:160
+  @call wm:reconcile  @ paramTargets:466 enableLive:2147,2149
+  @call wm:snapshot  @ read:1526 reconcile:2132
+  @call wm:spliceable  @ spliceIntoEdge:796
+  @call wm:targetState  @ rememberApplied:2105 reconcile:2131
+  @call wm:viewGraph  @ samplerReachable:440 paramTargets:468
 
 # Bindings (by name)
-  @bind parseJSFXBusAware  @ 349
-  @bind parseJSFXMidiTraits  @ 350
-  @bind readGraph  @ 1430
-  @bind srcTagKey  @ 246
+  @bind parseJSFXBusAware  @ 363
+  @bind parseJSFXMidiTraits  @ 364
+  @bind readGraph  @ 1493
+  @bind srcTagKey  @ 260
 
 # Unresolved receivers
-  @drop code:find  @ parseJSFXMidiTraits:131,132
-  @drop code:match  @ parseJSFXMidiTraits:130
-  @drop content:gmatch  @ parseJSFXMidiTraits:128
-  @drop ctx:gainHost  @ gainRouting:1911
-  @drop ctx:trackKeyOf  @ stampBusTracks:2057
-  @drop f:close  @ readJSFXContent:344
-  @drop f:read  @ readJSFXContent:343
-  @drop fxDisplay:find  @ isSamplerNode:420
-  @drop ident:sub  @ isJS:47 readJSFXContent:339,340 checkUserAddable:354
-  @drop line:gsub  @ parseJSFXMidiTraits:129
-  @drop s:gsub  @ shortFxName:525,526
+  @drop code:find  @ parseJSFXMidiTraits:145,146
+  @drop code:match  @ parseJSFXMidiTraits:144
+  @drop content:gmatch  @ parseJSFXMidiTraits:142
+  @drop ctx:gainHost  @ gainRouting:1974
+  @drop ctx:trackKeyOf  @ stampBusTracks:2120
+  @drop f:close  @ readJSFXContent:358
+  @drop f:read  @ readJSFXContent:357
+  @drop fxDisplay:find  @ isSamplerNode:434
+  @drop ident:sub  @ isJS:47 readJSFXContent:353,354 checkUserAddable:368
+  @drop line:gsub  @ parseJSFXMidiTraits:143
+  @drop s:gsub  @ shortFxName:539,540
   @drop version:match  @ affectedByPinGrowBug:79
 
 # REAPER API surface
@@ -439,266 +450,273 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r GetAppVersion  @ affectedByPinGrowBug:78
-  @field r GetProjectStateChangeCount  @ markState:69 syncExternal:2031
-  @field r REMOVE  @ pruneSourceTags:263 stampBusTracks:2060
-  @field r audio  @ projectEntry:976 readGraph:1209,1361
-  @field w audio  @ addFxNode:557,569 addSourceNode:652 addBusNode:690 insertBus:730 readGraph:1042,1225,1250,1260,1303,1312,1347
-  @field w audio  @ readGraph:1381
-  @field r audioSum  @ readCuParams:798 readGraph:1285
-  @field w audioSum  @ readCuParams:798
-  @field r autoSource  @ addFxNode:545
-  @field r bracketNodes  @ projectEntry:955
-  @field r busAware  @ parseJSFXBusAware:139 checkUserAddable:355 snapFx:835 readGraph:1310
-  @field w busAware  @ parseJSFXMidiTraits:126,127,130 addFxNode:555 snapFx:835 readGraph:1310
-  @field w busRoute  @ 805
-  @field r cls  @ gainRouting:1914 pokeGainTarget:1942 setStateGain:1964
-  @field w cls  @ gainRouting:1914
-  @field w code  @ checkUserAddable:356 addFxNode:542
-  @field w components  @ readGraph:1426
-  @field r consumer  @ stampOrigin:1640 originGuid:1653
-  @field w consumer  @ projectEntry:974
-  @field r consumerId  @ pokeGainTarget:1936 setStateGain:1956
-  @field w consumerId  @ gainRouting:1906
-  @field r crossings  @ authoredRouting:1889 pokeEdgeGain:1995
-  @field w crossings  @ authoredRouting:1888
-  @field r ctx  @ gainRouting:1902 stampBusTracks:2057
-  @field w ctx  @ ensureCompiled:118
-  @field w defaults  @ createSourceTrack:516
-  @field r dir  @ insertBus:732
-  @field w displayName  @ addFxNode:568 addSourceNode:651
-  @field r dstBus  @ readGraph:1207
-  @field w dstBus  @ readGraph:1134
-  @field r dstChan  @ ownedSends:862 projectEntry:995 readGraph:1130,1134 sendKey:1471 applyOps:1851
-  @field w dstChan  @ ownedSends:862 projectEntry:995 applyOps:1851
-  @field r dstPair  @ readGraph:1209
-  @field w dstPair  @ readGraph:1130,1142,1146
-  @field r edges  @ adjacencies:104 edgeGain:184 pruneSourceTags:254 mirrorBusTaps:306 samplerReachable:430 paramTargets:458,479 addFxNode:572,575 deleteSource:605 deleteBus:626 insertBus:733
-  @field r edges  @ insertBus:743,746 nodeHasMidiOut:765 nodeHasMidiIn:774 fastGainCommit:2010
-  @field w edges  @ deleteSource:608 deleteBus:629 readGraph:1425
-  @field w ext  @ moveBus:276
-  @field r field  @ clearOwner:1681
-  @field w field  @ buildGuidOwners:1663,1664
+  @field r GetProjectStateChangeCount  @ markState:69 syncExternal:2094
+  @field r REMOVE  @ pruneSourceTags:277 stampBusTracks:2123
+  @field r audio  @ spliceable:777 projectEntry:1039 readGraph:1272,1424
+  @field w audio  @ addFxNode:571,583 addSourceNode:666 addBusNode:704 insertBus:744 readGraph:1105,1288,1313,1323,1366,1375,1410
+  @field w audio  @ readGraph:1444
+  @field r audioSum  @ readCuParams:861 readGraph:1348
+  @field w audioSum  @ readCuParams:861
+  @field r autoSource  @ addFxNode:559
+  @field r bracketNodes  @ projectEntry:1018
+  @field r busAware  @ parseJSFXBusAware:153 checkUserAddable:369 snapFx:898 readGraph:1373
+  @field w busAware  @ parseJSFXMidiTraits:140,141,144 addFxNode:569 snapFx:898 readGraph:1373
+  @field w busRoute  @ 868
+  @field r cls  @ gainRouting:1977 pokeGainTarget:2005 setStateGain:2027
+  @field w cls  @ gainRouting:1977
+  @field w code  @ checkUserAddable:370 addFxNode:556 spliceIntoEdge:797
+  @field w components  @ readGraph:1489
+  @field r consumer  @ stampOrigin:1703 originGuid:1716
+  @field w consumer  @ projectEntry:1037
+  @field r consumerId  @ pokeGainTarget:1999 setStateGain:2019
+  @field w consumerId  @ gainRouting:1969
+  @field r crossings  @ authoredRouting:1952 pokeEdgeGain:2058
+  @field w crossings  @ authoredRouting:1951
+  @field r ctx  @ gainRouting:1965 stampBusTracks:2120
+  @field w ctx  @ ensureCompiled:132
+  @field w defaults  @ createSourceTrack:530
+  @field r dir  @ insertBus:746
+  @field w displayName  @ addFxNode:582 addSourceNode:665
+  @field r dstBus  @ readGraph:1270
+  @field w dstBus  @ readGraph:1197
+  @field r dstChan  @ ownedSends:925 projectEntry:1058 readGraph:1193,1197 sendKey:1534 applyOps:1914
+  @field w dstChan  @ ownedSends:925 projectEntry:1058 applyOps:1914
+  @field r dstPair  @ readGraph:1272
+  @field w dstPair  @ readGraph:1193,1205,1209
+  @field w edge  @ spliceIntoEdge:797
+  @field r edges  @ adjacencies:104 edgeGain:198 pruneSourceTags:268 mirrorBusTaps:320 samplerReachable:444 paramTargets:472,493 addFxNode:586,589 deleteSource:619 deleteBus:640 insertBus:747
+  @field r edges  @ insertBus:757,760 spliceable:773,779 spliceIntoEdge:802,805 nodeHasMidiOut:828 nodeHasMidiIn:837 fastGainCommit:2073
+  @field w edges  @ deleteSource:622 deleteBus:643 readGraph:1488
+  @field w ext  @ moveBus:290
+  @field r field  @ clearOwner:1744
+  @field w field  @ buildGuidOwners:1726,1727
+  @field r forward  @ spliceable:788,789
   @field w forward  @ adjacencies:108
-  @field r from  @ adjacencies:105,106 pruneSourceTags:255 mirrorBusTaps:309,310 samplerReachable:431 paramTargets:459,460,480 deleteSource:606 deleteBus:627 insertBus:737
-  @field r from  @ insertBus:738 nodeHasMidiOut:766 readCuParams:789 readGraph:1082,1163,1165,1205,1374 gainRouting:1916 pokeGainTarget:1947 setStateGain:1967
-  @field w from  @ addFxNode:572,575 insertBus:743,746 readCuParams:789 readGraph:1053,1129,1133,1141,1145,1237,1334
-  @field w from  @ gainRouting:1916
-  @field r fromPort  @ mirrorBusTaps:310 insertBus:737 readGraph:1374
-  @field w fromPort  @ addFxNode:575 insertBus:738,743,746 readGraph:1053
-  @field w fromTrackGuid  @ diff:1558
-  @field w fromTrackKind  @ diff:1558
-  @field r fx  @ stateEntry:879 snapshot:941 readGraph:1104,1305 stampDecoration:1438 pinMapsEq:1503 diff:1547,1552,1570,1573,1585
-  @field r fx  @ diff:1621 applyOps:1827,1837 setStateGain:1959
-  @field w fx  @ stateEntry:879 snapshot:944 projectEntry:1004 readGraph:1358 diff:1573,1585,1623
-  @field r fxDisplay  @ isSamplerNode:419,420 paramTargets:502
-  @field w fxDisplay  @ addFxNode:553 readGraph:1311
-  @field w fxGuid  @ paramTargets:502
-  @field r fxId  @ persistNodeMeta:232 addFxNode:542,548,549,554,572,575,579 projectEntry:961 applyOps:1842
-  @field w fxId  @ instantiateFxOnScratch:364,370 addFxNode:554 readGraph:1310 diff:1557
-  @field r fxIdent  @ paramTargets:502 projectEntry:961,977
-  @field w fxIdent  @ addFxNode:552 readGraph:1310
-  @field r fxMidiBus  @ projectEntry:978
-  @field r fxOrder  @ projectEntry:958
-  @field r gain  @ edgeGain:186 mirrorBusTaps:308 ownedSends:861 projectEntry:994 readGraph:1050,1054,1130,1143,1147,1209
-  @field r gain  @ readGraph:1414,1419 sendsEq:1490,1493 diff:1591,1592 applyOps:1813,1850
-  @field w gain  @ mirrorBusTaps:310,311 ownedSends:861 projectEntry:994,1005 readGraph:1050,1054,1130,1143,1147,1414,1419
-  @field w gain  @ diff:1605 applyOps:1813,1850 pokeGainTarget:1944 setStateGain:1965,1969 fastGainCommit:2014
-  @field r gains  @ readGraph:1276
-  @field w gains  @ readCuParams:797
-  @field w generator  @ paramTargets:504
-  @field r graph  @ viewGraph:174
-  @field w graph  @ ensureCompiled:118
-  @field r guid  @ applyOps:1872
-  @field w guid  @ applyOps:1832
-  @field r hasMidiTake  @ stateEntry:877 readGraph:1244,1253
-  @field w hasMidiTake  @ stateEntry:877
-  @field r id  @ trackNames:397 snapFx:827,832 stateEntry:874 keyByGuidFromState:889 snapshot:919,920,921,928,929
-  @field r id  @ snapshot:929,935 readGraph:1201,1223,1224,1248,1249,1309 stampDecoration:1437,1438 fxOrderEq:1478
-  @field r id  @ fxOrderEq:1478 pinMapsEq:1505 diff:1548,1553,1557,1558,1559,1573,1579
-  @field r id  @ diff:1584,1604,1610,1620,1623 stampOrigin:1637,1638 originGuid:1650,1651 reconcileFXChain:1710
-  @field r id  @ reconcileFXChain:1710,1715,1728,1741,1744,1746,1756,1760 applyOps:1828 setStateGain:1960
-  @field w id  @ snapFx:827 stateEntry:874 projectEntry:961,964,969,972,1003 reconcileFXChain:1710,1730,1760 rememberApplied:2045,2046
-  @field r ident  @ addFxNode:536,538,541,542,543,552 snapFx:827,831,834,835 snapFxList:847 readGraph:1105
-  @field r ident  @ readGraph:1109,1306,1310,1313,1328 fxOrderEq:1478 reconcileFXChain:1729
-  @field w ident  @ checkUserAddable:356 instantiateFxOnScratch:363 addFxNode:542 snapFx:827 projectEntry:961 reconcileFXChain:1729
-  @field r inBus  @ projectEntry:979 readGraph:1107,1324
-  @field w inBus  @ projectEntry:979
-  @field r inDisabled  @ readGraph:1108,1325
-  @field w inDisabled  @ projectEntry:980
-  @field r inMask  @ readGraph:1063
-  @field w inMask  @ readCuParams:800
-  @field r inNames  @ instantiateFxOnScratch:371 addFxNode:558
-  @field w inNames  @ instantiateFxOnScratch:364,371 addFxNode:558
-  @field w index  @ reconcileFXChain:1729,1746
-  @field r inputEdges  @ gainRouting:1905
-  @field r ins  @ mirrorBusTaps:310,316 instantiateFxOnScratch:370 addFxNode:544,557,574 snapFx:827,828 projectEntry:976
-  @field r ins  @ readGraph:1275,1312,1316,1394,1413 pinMapsEq:1504
-  @field w ins  @ fxMidiPorts:153,155 mirrorBusTaps:304 instantiateFxOnScratch:364,370 addFxNode:557,569,570 addSourceNode:652,653 addBusNode:690
-  @field w ins  @ addBusNode:694 insertBus:730 snapFx:827 readGraph:1042,1225,1250,1260
-  @field w ins  @ readGraph:1273,1312,1315,1381,1395 pinMapsEq:1517,1518 applyOps:1830
-  @field r isMaster  @ trackNames:398 snapshot:928,938
-  @field r kind  @ persistNodeMeta:231,233 moveNodes:291 isSamplerNode:419 paramTargets:499 deleteSource:597 deleteBus:621 rotateBus:705 ownedSends:858,860,861 projectEntry:960
-  @field r kind  @ readGraph:1114,1128,1132 stampDecoration:1442,1448,1449 sendKey:1471 stampOrigin:1637,1638,1639 originGuid:1650,1651
-  @field r kind  @ originGuid:1652 buildGuidOwners:1662 applyOps:1850 gainRouting:1913,1915 pokeGainTarget:1935,1941,1946 setStateGain:1955,1963,1966,1969
-  @field r kind  @ pokeEdgeGain:1989 enableLive:2083,2084
-  @field w kind  @ load:164 mutate:224 addFxNode:550,565 addSourceNode:648 addBusNode:687 insertBus:727 ownedSends:860 projectEntry:968,974,994 readGraph:1041
-  @field w kind  @ readGraph:1224,1249,1259,1310,1380 applyOps:1850 authoredRouting:1888 gainRouting:1906,1914,1916 syncExternal:2036
-  @field r mainSend  @ stateEntry:878 projectEntry:1005,1007 readGraph:1138,1142,1143,1146,1147 diff:1587,1588 setStateGain:1965
-  @field r mainSend  @ setStateGain:1965
-  @field w mainSend  @ stateEntry:878 snapshot:944 projectEntry:1005 applyOps:1818 pokeGainTarget:1944
-  @field r mainSendGain  @ projectEntry:1005
-  @field r mainSendOffs  @ projectEntry:1006
-  @field w master  @ readGraph:1041
-  @field w merge  @ 805
-  @field r mergeGuids  @ projectEntry:972 stampOrigin:1641,1642 originGuid:1654 buildGuidOwners:1666,1667 clearOwner:1678,1679 pokeGainTarget:1937
-  @field r mergeGuids  @ setStateGain:1957
-  @field w mergeGuids  @ stampOrigin:1641 clearOwner:1679
-  @field r mergeKey  @ clearOwner:1677,1678
-  @field w mergeKey  @ buildGuidOwners:1667
-  @field r midi  @ snapFx:837 readGraph:1106,1206,1207,1213,1323 fxOrderEq:1479 reconcileFXChain:1760
-  @field w midi  @ addFxNode:559,570 addSourceNode:653 addBusNode:690 insertBus:730 snapFx:837 projectEntry:979 readGraph:1042,1133,1225,1250,1260
-  @field w midi  @ readGraph:1303,1313,1347,1381 reconcileFXChain:1760
-  @field r midiInBracketGuid  @ projectEntry:965 originGuid:1650 buildGuidOwners:1663
-  @field w midiInBracketGuid  @ stampOrigin:1637
-  @field r midiOutBracketGuid  @ projectEntry:966 originGuid:1651 buildGuidOwners:1664
-  @field w midiOutBracketGuid  @ stampOrigin:1638
-  @field r mode  @ readCuParams:785 readGraph:1294
-  @field w mode  @ readCuParams:788,797 flattenCuParams:816
-  @field r nPairs  @ readCuParams:793
-  @field w nPairs  @ readCuParams:797
-  @field r name  @ trackNames:397,399 createSourceTrack:516 addFxNode:538 addSourceNode:643,651 snapFx:827 readGraph:1311
-  @field w name  @ paramTargets:502 createSourceTrack:516 addFxNode:546 addSourceNode:643 snapFx:827 applyOps:1805
-  @field r nch  @ applyOps:1816
-  @field w nch  @ diff:1605
-  @field r nchan  @ stateEntry:876 snapshot:943 projectEntry:1009 diff:1575,1576,1595,1596
-  @field w nchan  @ stateEntry:876 snapshot:943 projectEntry:1007,1009 applyOps:1816,1822
-  @field r node  @ insertBus:735,737,744,746 readGraph:1050,1053,1237,1334,1387,1398,1414
-  @field r node  @ readGraph:1418,1419 clearOwner:1678,1679,1681
-  @field w node  @ mirrorBusTaps:310,311 readGraph:1050,1231,1244,1252,1253,1265,1338,1342,1414,1419
-  @field w node  @ buildGuidOwners:1663,1664,1667
-  @field r nodes  @ pruneSourceTags:251 moveBus:272 moveNodes:284,290 mirrorBusTaps:304 setSourceTagPos:325,332 samplerReachable:427,437 paramTargets:455,498 addFxNode:549
-  @field r nodes  @ addFxNode:564,579,582 deleteSource:596,603 deleteBus:620,624 addSourceNode:647,657 nextBusId:673 addBusNode:686 rotateBus:704
-  @field r nodes  @ insertBus:726 targetState:1018 stampDecoration:1441 stampOrigin:1636 originGuid:1649 buildGuidOwners:1661 pokeGainTarget:1936 setStateGain:1956 stampBusTracks:2056
-  @field w nodes  @ readGraph:1425
-  @field r number  @ trackNames:398
-  @field r offs  @ applyOps:1815
-  @field w offs  @ diff:1605
-  @field r on  @ readGraph:1138 diff:1589,1590
-  @field w on  @ stateEntry:878 snapshot:944 projectEntry:1005 applyOps:1813
-  @field r op  @ applyOps:1804,1807,1810,1820,1824,1835,1840,1843
-  @field w op  @ diff:1539,1556,1571,1578,1583,1603,1608,1620,1622
-  @field r ops  @ edgeGain:186 mirrorBusTaps:308 fastGainCommit:2013,2014
-  @field w ops  @ readGraph:1054 fastGainCommit:2013
-  @field r orient  @ rotateBus:706 insertBus:724,729 stampDecoration:1445
-  @field w orient  @ addBusNode:689,693 rotateBus:707,711 insertBus:724,729 stampDecoration:1445
-  @field r origin  @ reconcileFXChain:1731 applyOps:1828
-  @field w origin  @ projectEntry:968,974
-  @field r originConsumer  @ projectEntry:970,971,974 gainRouting:1906
-  @field r originNode  @ projectEntry:963,969
-  @field r originSide  @ projectEntry:962,964,968
-  @field r originTrackKey  @ projectEntry:972,974 gainRouting:1907
-  @field r outBus  @ readCuParams:799 projectEntry:979 readGraph:1061,1324
-  @field w outBus  @ readCuParams:799 projectEntry:979
-  @field r outDisabled  @ readGraph:1326
-  @field w outDisabled  @ projectEntry:981
-  @field r outNames  @ instantiateFxOnScratch:371 addFxNode:558
-  @field w outNames  @ instantiateFxOnScratch:364,371 addFxNode:558
-  @field r outs  @ mirrorBusTaps:311,316 instantiateFxOnScratch:370 addFxNode:557,574 snapFx:827,828 projectEntry:976 readGraph:1290,1312,1337
-  @field r outs  @ readGraph:1394,1416 pinMapsEq:1504
-  @field w outs  @ fxMidiPorts:153,155 mirrorBusTaps:304 instantiateFxOnScratch:364,370 addFxNode:557,569,570 addSourceNode:652,653 addBusNode:690
-  @field w outs  @ addBusNode:694 insertBus:730 snapFx:827 projectEntry:976 readGraph:1042,1225,1250,1260
-  @field w outs  @ readGraph:1260,1273,1312,1315,1381,1395 pinMapsEq:1517,1518 applyOps:1830
-  @field r params  @ projectEntry:967,973 readGraph:1272 fxOrderEq:1480 reconcileFXChain:1756 setStateGain:1960
-  @field w params  @ snapFx:833 projectEntry:967,973 reconcileFXChain:1756 pokeGainTarget:1939 setStateGain:1960
-  @field r parent  @ stateEntry:875 readGraph:1139,1140,1141,1224,1249
-  @field w parent  @ stateEntry:875 readGraph:1224,1249
-  @field r parentSend  @ readGraph:1210
-  @field w parentSend  @ readGraph:1141
-  @field w parseJSFXBusAware  @ 349
-  @field w parseJSFXMidiTraits  @ 350
-  @field r parts  @ gainRouting:1921 pokeEdgeGain:1996
-  @field w parts  @ authoredRouting:1889
-  @field r pinMaps  @ snapFx:828,829 projectEntry:988 readGraph:1273,1315 pinMapsEq:1504,1505 applyOps:1830
-  @field r pinMaps  @ applyOps:1872
-  @field w pinMaps  @ snapFx:829 projectEntry:990 applyOps:1831,1832
-  @field r port  @ insertBus:735,737,744,746 readGraph:1050,1053,1398,1414,1419
-  @field w port  @ mirrorBusTaps:310,311 readGraph:1050,1231,1252,1265,1338,1414,1419
-  @field r ports  @ projectEntry:976
-  @field w ports  @ addFxNode:556,569 addSourceNode:652 addBusNode:690 insertBus:730 readGraph:1042,1225,1250,1260,1312,1381
-  @field r pos  @ moveBus:273 moveNodes:285,291,292 addFxNode:580,583 addSourceNode:646,658 insertBus:723
-  @field r pos  @ insertBus:728 ownedSends:862 readGraph:1131,1135 stampDecoration:1444,1451 sendKey:1471
-  @field r pos  @ applyOps:1851
-  @field w pos  @ moveBus:276 moveNodes:291,292 addFxNode:551,566,580,583 addSourceNode:649,658 addBusNode:688,693 insertBus:723
-  @field w pos  @ insertBus:728 ownedSends:862 projectEntry:996 stampDecoration:1444,1451 applyOps:1851
-  @field r preFx  @ projectEntry:996 readGraph:1205
-  @field w preFx  @ readGraph:1131,1135
-  @field r reach  @ reach:177
-  @field w reach  @ ensureCompiled:118
-  @field w readGraph  @ 1430
-  @field r recv  @ fxMidiPorts:155 readGraph:1109,1330
-  @field w recv  @ parseJSFXMidiTraits:126,127,131 readGraph:1109,1329
-  @field r retain  @ readCuParams:791 readGraph:1087
-  @field w retain  @ readCuParams:791
+  @field r from  @ adjacencies:105,106 pruneSourceTags:269 mirrorBusTaps:323,324 samplerReachable:445 paramTargets:473,474,494 deleteSource:620 deleteBus:641 insertBus:751
+  @field r from  @ insertBus:752 spliceable:776,782,788 nodeHasMidiOut:829 readCuParams:852 readGraph:1145,1226,1228,1268,1437 gainRouting:1979
+  @field r from  @ pokeGainTarget:2010 setStateGain:2030
+  @field w from  @ addFxNode:586,589 insertBus:757,760 spliceIntoEdge:805 readCuParams:852 readGraph:1116,1192,1196,1204,1208,1300
+  @field w from  @ readGraph:1397 gainRouting:1979
+  @field r fromPort  @ mirrorBusTaps:324 insertBus:751 spliceable:782 readGraph:1437
+  @field w fromPort  @ addFxNode:589 insertBus:752,757,760 spliceIntoEdge:805 readGraph:1116
+  @field w fromTrackGuid  @ diff:1621
+  @field w fromTrackKind  @ diff:1621
+  @field r fx  @ stateEntry:942 snapshot:1004 readGraph:1167,1368 stampDecoration:1501 pinMapsEq:1566 diff:1610,1615,1633,1636,1648
+  @field r fx  @ diff:1684 applyOps:1890,1900 setStateGain:2022
+  @field w fx  @ stateEntry:942 snapshot:1007 projectEntry:1067 readGraph:1421 diff:1636,1648,1686
+  @field r fxDisplay  @ isSamplerNode:433,434 paramTargets:516 spliceIntoEdge:800
+  @field w fxDisplay  @ addFxNode:567 readGraph:1374
+  @field w fxGuid  @ paramTargets:516
+  @field r fxId  @ persistNodeMeta:246 addFxNode:556,562,563,568,586,589,593 projectEntry:1024 applyOps:1905
+  @field w fxId  @ instantiateFxOnScratch:378,384 addFxNode:568 readGraph:1373 diff:1620
+  @field r fxIdent  @ paramTargets:516 projectEntry:1024,1040
+  @field w fxIdent  @ addFxNode:566 readGraph:1373
+  @field r fxMidiBus  @ projectEntry:1041
+  @field r fxOrder  @ projectEntry:1021
+  @field r gain  @ edgeGain:200 mirrorBusTaps:322 ownedSends:924 projectEntry:1057 readGraph:1113,1117,1193,1206,1210,1272
+  @field r gain  @ readGraph:1477,1482 sendsEq:1553,1556 diff:1654,1655 applyOps:1876,1913
+  @field w gain  @ mirrorBusTaps:324,325 ownedSends:924 projectEntry:1057,1068 readGraph:1113,1117,1193,1206,1210,1477,1482
+  @field w gain  @ diff:1668 applyOps:1876,1913 pokeGainTarget:2007 setStateGain:2028,2032 fastGainCommit:2077
+  @field r gains  @ readGraph:1339
+  @field w gains  @ readCuParams:860
+  @field w generator  @ paramTargets:518
+  @field r graph  @ viewGraph:188
+  @field w graph  @ ensureCompiled:132
+  @field r guid  @ applyOps:1935
+  @field w guid  @ applyOps:1895
+  @field r hasMidiTake  @ stateEntry:940 readGraph:1307,1316
+  @field w hasMidiTake  @ stateEntry:940
+  @field r id  @ trackNames:411 snapFx:890,895 stateEntry:937 keyByGuidFromState:952 snapshot:982,983,984,991,992
+  @field r id  @ snapshot:992,998 readGraph:1264,1286,1287,1311,1312,1372 stampDecoration:1500,1501 fxOrderEq:1541
+  @field r id  @ fxOrderEq:1541 pinMapsEq:1568 diff:1611,1616,1620,1621,1622,1636,1642
+  @field r id  @ diff:1647,1667,1673,1683,1686 stampOrigin:1700,1701 originGuid:1713,1714 reconcileFXChain:1773
+  @field r id  @ reconcileFXChain:1773,1778,1791,1804,1807,1809,1819,1823 applyOps:1891 setStateGain:2023
+  @field w id  @ spliceIntoEdge:797 snapFx:890 stateEntry:937 projectEntry:1024,1027,1032,1035,1066 reconcileFXChain:1773,1793,1823 rememberApplied:2108
+  @field w id  @ rememberApplied:2109
+  @field r ident  @ addFxNode:550,552,555,556,557,566 snapFx:890,894,897,898 snapFxList:910 readGraph:1168
+  @field r ident  @ readGraph:1172,1369,1373,1376,1391 fxOrderEq:1541 reconcileFXChain:1792
+  @field w ident  @ checkUserAddable:370 instantiateFxOnScratch:377 addFxNode:556 snapFx:890 projectEntry:1024 reconcileFXChain:1792
+  @field r inBus  @ projectEntry:1042 readGraph:1170,1387
+  @field w inBus  @ projectEntry:1042
+  @field r inDisabled  @ readGraph:1171,1388
+  @field w inDisabled  @ projectEntry:1043
+  @field r inMask  @ readGraph:1126
+  @field w inMask  @ readCuParams:863
+  @field r inNames  @ instantiateFxOnScratch:385 addFxNode:572
+  @field w inNames  @ instantiateFxOnScratch:378,385 addFxNode:572
+  @field w index  @ reconcileFXChain:1792,1809
+  @field r inputEdges  @ gainRouting:1968
+  @field r ins  @ mirrorBusTaps:324,330 instantiateFxOnScratch:384 addFxNode:558,571,588 spliceable:778 snapFx:890,891 projectEntry:1039
+  @field r ins  @ projectEntry:1039 readGraph:1338,1375,1379,1457,1476 pinMapsEq:1567
+  @field w ins  @ fxMidiPorts:167,169 mirrorBusTaps:318 instantiateFxOnScratch:378,384 addFxNode:571,583,584 addSourceNode:666,667 addBusNode:704
+  @field w ins  @ addBusNode:708 insertBus:744 snapFx:890 readGraph:1105,1288,1313,1323
+  @field w ins  @ readGraph:1336,1375,1378,1444,1458 pinMapsEq:1580,1581 applyOps:1893
+  @field r isMaster  @ trackNames:412 snapshot:991,1001
+  @field r kind  @ persistNodeMeta:245,247 moveNodes:305 isSamplerNode:433 paramTargets:513 deleteSource:611 deleteBus:635 rotateBus:719 ownedSends:921,923,924 projectEntry:1023
+  @field r kind  @ readGraph:1177,1191,1195 stampDecoration:1505,1511,1512 sendKey:1534 stampOrigin:1700,1701,1702 originGuid:1713,1714
+  @field r kind  @ originGuid:1715 buildGuidOwners:1725 applyOps:1913 gainRouting:1976,1978 pokeGainTarget:1998,2004,2009 setStateGain:2018,2026,2029,2032
+  @field r kind  @ pokeEdgeGain:2052 enableLive:2146,2147
+  @field w kind  @ load:178 mutate:238 addFxNode:564,579 addSourceNode:662 addBusNode:701 insertBus:741 ownedSends:923 projectEntry:1031,1037,1057 readGraph:1104
+  @field w kind  @ readGraph:1287,1312,1322,1373,1443 applyOps:1913 authoredRouting:1951 gainRouting:1969,1977,1979 syncExternal:2099
+  @field r mainSend  @ stateEntry:941 projectEntry:1068,1070 readGraph:1201,1205,1206,1209,1210 diff:1650,1651 setStateGain:2028
+  @field r mainSend  @ setStateGain:2028
+  @field w mainSend  @ stateEntry:941 snapshot:1007 projectEntry:1068 applyOps:1881 pokeGainTarget:2007
+  @field r mainSendGain  @ projectEntry:1068
+  @field r mainSendOffs  @ projectEntry:1069
+  @field w master  @ readGraph:1104
+  @field w merge  @ 868
+  @field r mergeGuids  @ projectEntry:1035 stampOrigin:1704,1705 originGuid:1717 buildGuidOwners:1729,1730 clearOwner:1741,1742 pokeGainTarget:2000
+  @field r mergeGuids  @ setStateGain:2020
+  @field w mergeGuids  @ stampOrigin:1704 clearOwner:1742
+  @field r mergeKey  @ clearOwner:1740,1741
+  @field w mergeKey  @ buildGuidOwners:1730
+  @field r midi  @ snapFx:900 readGraph:1169,1269,1270,1276,1386 fxOrderEq:1542 reconcileFXChain:1823
+  @field w midi  @ addFxNode:573,584 addSourceNode:667 addBusNode:704 insertBus:744 snapFx:900 projectEntry:1042 readGraph:1105,1196,1288,1313,1323
+  @field w midi  @ readGraph:1366,1376,1410,1444 reconcileFXChain:1823
+  @field r midiInBracketGuid  @ projectEntry:1028 originGuid:1713 buildGuidOwners:1726
+  @field w midiInBracketGuid  @ stampOrigin:1700
+  @field r midiOutBracketGuid  @ projectEntry:1029 originGuid:1714 buildGuidOwners:1727
+  @field w midiOutBracketGuid  @ stampOrigin:1701
+  @field r mode  @ readCuParams:848 readGraph:1357
+  @field w mode  @ readCuParams:851,860 flattenCuParams:879
+  @field r nPairs  @ readCuParams:856
+  @field w nPairs  @ readCuParams:860
+  @field r name  @ trackNames:411,413 createSourceTrack:530 addFxNode:552 addSourceNode:657,665 snapFx:890 readGraph:1374
+  @field w name  @ paramTargets:516 createSourceTrack:530 addFxNode:560 addSourceNode:657 snapFx:890 applyOps:1868
+  @field r nch  @ applyOps:1879
+  @field w nch  @ diff:1668
+  @field r nchan  @ stateEntry:939 snapshot:1006 projectEntry:1072 diff:1638,1639,1658,1659
+  @field w nchan  @ stateEntry:939 snapshot:1006 projectEntry:1070,1072 applyOps:1879,1885
+  @field r node  @ insertBus:749,751,758,760 readGraph:1113,1116,1300,1397,1450,1461,1477
+  @field r node  @ readGraph:1481,1482 clearOwner:1741,1742,1744
+  @field w node  @ mirrorBusTaps:324,325 readGraph:1113,1294,1307,1315,1316,1328,1401,1405,1477,1482
+  @field w node  @ buildGuidOwners:1726,1727,1730
+  @field r nodes  @ pruneSourceTags:265 moveBus:286 moveNodes:298,304 mirrorBusTaps:318 setSourceTagPos:339,346 samplerReachable:441,451 paramTargets:469,512 addFxNode:563
+  @field r nodes  @ addFxNode:578,593,596 deleteSource:610,617 deleteBus:634,638 addSourceNode:661,671 nextBusId:687 addBusNode:700 rotateBus:718
+  @field r nodes  @ insertBus:740 spliceable:774 spliceIntoEdge:800,807,811 targetState:1081 stampDecoration:1504 stampOrigin:1699 originGuid:1712 buildGuidOwners:1724 pokeGainTarget:1999 setStateGain:2019
+  @field r nodes  @ stampBusTracks:2119
+  @field w nodes  @ readGraph:1488
+  @field r number  @ trackNames:412
+  @field r offs  @ applyOps:1878
+  @field w offs  @ diff:1668
+  @field r on  @ readGraph:1201 diff:1652,1653
+  @field w on  @ stateEntry:941 snapshot:1007 projectEntry:1068 applyOps:1876
+  @field r op  @ applyOps:1867,1870,1873,1883,1887,1898,1903,1906
+  @field w op  @ diff:1602,1619,1634,1641,1646,1666,1671,1683,1685
+  @field r ops  @ edgeGain:200 mirrorBusTaps:322 fastGainCommit:2076,2077
+  @field w ops  @ readGraph:1117 fastGainCommit:2076
+  @field r orient  @ rotateBus:720 insertBus:738,743 stampDecoration:1508
+  @field w orient  @ addBusNode:703,707 rotateBus:721,725 insertBus:738,743 stampDecoration:1508
+  @field r origin  @ reconcileFXChain:1794 applyOps:1891
+  @field w origin  @ projectEntry:1031,1037
+  @field r originConsumer  @ projectEntry:1033,1034,1037 gainRouting:1969
+  @field r originNode  @ projectEntry:1026,1032
+  @field r originSide  @ projectEntry:1025,1027,1031
+  @field r originTrackKey  @ projectEntry:1035,1037 gainRouting:1970
+  @field r outBus  @ readCuParams:862 projectEntry:1042 readGraph:1124,1387
+  @field w outBus  @ readCuParams:862 projectEntry:1042
+  @field r outDisabled  @ readGraph:1389
+  @field w outDisabled  @ projectEntry:1044
+  @field r outNames  @ instantiateFxOnScratch:385 addFxNode:572
+  @field w outNames  @ instantiateFxOnScratch:378,385 addFxNode:572
+  @field r outs  @ mirrorBusTaps:325,330 instantiateFxOnScratch:384 addFxNode:571,588 spliceable:778 snapFx:890,891 projectEntry:1039 readGraph:1353,1375
+  @field r outs  @ readGraph:1400,1457,1479 pinMapsEq:1567
+  @field w outs  @ fxMidiPorts:167,169 mirrorBusTaps:318 instantiateFxOnScratch:378,384 addFxNode:571,583,584 addSourceNode:666,667 addBusNode:704
+  @field w outs  @ addBusNode:708 insertBus:744 snapFx:890 projectEntry:1039 readGraph:1105,1288,1313,1323
+  @field w outs  @ readGraph:1323,1336,1375,1378,1444,1458 pinMapsEq:1580,1581 applyOps:1893
+  @field r params  @ projectEntry:1030,1036 readGraph:1335 fxOrderEq:1543 reconcileFXChain:1819 setStateGain:2023
+  @field w params  @ snapFx:896 projectEntry:1030,1036 reconcileFXChain:1819 pokeGainTarget:2002 setStateGain:2023
+  @field r parent  @ stateEntry:938 readGraph:1202,1203,1204,1287,1312
+  @field w parent  @ stateEntry:938 readGraph:1287,1312
+  @field r parentSend  @ readGraph:1273
+  @field w parentSend  @ readGraph:1204
+  @field w parseJSFXBusAware  @ 363
+  @field w parseJSFXMidiTraits  @ 364
+  @field r parts  @ gainRouting:1984 pokeEdgeGain:2059
+  @field w parts  @ authoredRouting:1952
+  @field r pinMaps  @ snapFx:891,892 projectEntry:1051 readGraph:1336,1378 pinMapsEq:1567,1568 applyOps:1893
+  @field r pinMaps  @ applyOps:1935
+  @field w pinMaps  @ snapFx:892 projectEntry:1053 applyOps:1894,1895
+  @field r port  @ insertBus:749,751,758,760 readGraph:1113,1116,1461,1477,1482
+  @field w port  @ mirrorBusTaps:324,325 readGraph:1113,1294,1315,1328,1401,1477,1482
+  @field r ports  @ spliceable:777 projectEntry:1039
+  @field w ports  @ addFxNode:570,583 addSourceNode:666 addBusNode:704 insertBus:744 readGraph:1105,1288,1313,1323,1375,1444
+  @field r pos  @ moveBus:287 moveNodes:299,305,306 addFxNode:594,597 addSourceNode:660,672 insertBus:737
+  @field r pos  @ insertBus:742 spliceIntoEdge:808,812 ownedSends:925 readGraph:1194,1198 stampDecoration:1507,1514
+  @field r pos  @ stampDecoration:1514 sendKey:1534 applyOps:1914
+  @field w pos  @ moveBus:290 moveNodes:305,306 addFxNode:565,580,594,597 addSourceNode:663,672 addBusNode:702,707 insertBus:737
+  @field w pos  @ insertBus:742 spliceIntoEdge:812 ownedSends:925 projectEntry:1059 stampDecoration:1507,1514 applyOps:1914
+  @field r preFx  @ projectEntry:1059 readGraph:1268
+  @field w preFx  @ readGraph:1194,1198
+  @field r reach  @ reach:191
+  @field w reach  @ ensureCompiled:132
+  @field w readGraph  @ 1493
+  @field r recv  @ fxMidiPorts:169 readGraph:1172,1393
+  @field w recv  @ parseJSFXMidiTraits:140,141,145 readGraph:1172,1392
+  @field r retain  @ readCuParams:854 readGraph:1150
+  @field w retain  @ readCuParams:854
   @field w reverse  @ adjacencies:108
   @field r rm  @ 27
-  @field r routing  @ gainRouting:1901
-  @field w routing  @ gainRouting:1922
-  @field r send  @ fxMidiPorts:155 readGraph:1330
-  @field w send  @ parseJSFXMidiTraits:126,127,133 readGraph:1329
-  @field r sends  @ stateEntry:880 projectEntry:993 readGraph:1113,1127 diff:1607,1610 applyOps:1847 setStateGain:1968
-  @field w sends  @ stateEntry:880 snapshot:944 projectEntry:1008 diff:1610 applyOps:1854
-  @field r slot  @ pokeGainTarget:1939 setStateGain:1960
-  @field w slot  @ gainRouting:1907
-  @field r sourcePos  @ addFxNode:563
-  @field r splice  @ gainRouting:1921
-  @field r srcBus  @ readGraph:1207
-  @field w srcBus  @ readGraph:1134
-  @field r srcChan  @ ownedSends:858,862 projectEntry:995 readGraph:1114,1129,1134 sendKey:1471 applyOps:1851
-  @field w srcChan  @ ownedSends:862 projectEntry:995 applyOps:1851
-  @field r srcPair  @ readGraph:1209
-  @field w srcPair  @ readGraph:1129,1141,1145
-  @field w srcTagKey  @ 246
-  @field r synthNodes  @ projectEntry:954 gainRouting:1904
-  @field r tagPos  @ pruneSourceTags:252,258,259,262,263 setSourceTagPos:327,328,333 stampDecoration:1452
-  @field w tagPos  @ pruneSourceTags:262,263 setSourceTagPos:327,333 stampDecoration:1452
-  @field r target  @ pokeEdgeGain:1997,1998
-  @field w target  @ authoredRouting:1889
-  @field r tgtOffset  @ readGraph:1142,1146 diff:1593,1594
-  @field w tgtOffset  @ projectEntry:1006 applyOps:1815
-  @field r to  @ adjacencies:105,106 srcTagKey:244 mirrorBusTaps:309,311 samplerReachable:431 paramTargets:459,460,480 deleteSource:606
-  @field r to  @ deleteBus:627 insertBus:735,736 nodeHasMidiIn:775 readCuParams:790 ownedSends:857 projectEntry:994 readGraph:1082,1129,1133,1374 sendKey:1471
-  @field r to  @ applyOps:1848 gainRouting:1916 pokeGainTarget:1947 setStateGain:1969
-  @field w to  @ addFxNode:572,575 insertBus:744,747 readCuParams:790 ownedSends:860 projectEntry:994 readGraph:1053,1237,1334 applyOps:1850 gainRouting:1916
-  @field r toMaster  @ readGraph:1163
-  @field w toMaster  @ readGraph:1145
-  @field r toPort  @ srcTagKey:244 mirrorBusTaps:311 insertBus:735 readGraph:1374
-  @field w toPort  @ addFxNode:575 insertBus:736,744,747 readGraph:1053
-  @field r toTrackGuid  @ applyOps:1841
-  @field w toTrackGuid  @ diff:1559
-  @field r toTrackKey  @ applyOps:1841
-  @field w toTrackKey  @ diff:1560
-  @field r toTrackKind  @ applyOps:1841
-  @field w toTrackKind  @ diff:1559
-  @field w track  @ applyOps:1842
-  @field w trackGuid  @ paramTargets:503
-  @field r trackId  @ persistNodeMeta:236,237 deleteSource:598,610,613 projectEntry:999 readGraph:1038 applyOps:1808
-  @field r trackId  @ applyOps:1811,1821,1836,1844 stampBusTracks:2059
-  @field w trackId  @ addFxNode:567 addSourceNode:650 readGraph:1224,1249 diff:1573,1579,1584,1604,1610,1620,1623 stampBusTracks:2060
-  @field r trackKey  @ snapshot:919,920,921 stampOrigin:1642 originGuid:1654 applyOps:1788,1805,1806,1809
-  @field r trackKey  @ applyOps:1811,1821,1823,1832,1836,1844 pokeGainTarget:1937 setStateGain:1957
-  @field w trackKey  @ projectEntry:974 diff:1539,1571,1578,1583,1603,1608,1620,1622 applyOps:1806 gainRouting:1907
-  @field r trackKind  @ projectEntry:999,1000,1002 readGraph:1157,1245 diff:1531,1538,1558,1559
-  @field r trackKind  @ diff:1572,1579,1584,1599,1604,1609,1619,1623 applyOps:1788,1811,1821,1836
-  @field r trackKind  @ applyOps:1844 rememberApplied:2045,2046
-  @field w trackKind  @ stateEntry:873 snapshot:943 projectEntry:1002 readGraph:1358 diff:1539,1572,1579,1584,1604,1609,1623
-  @field r type  @ edgeGain:185 srcTagKey:244 mirrorBusTaps:307 samplerReachable:431 paramTargets:460 insertBus:734 nodeHasMidiOut:766 nodeHasMidiIn:775 projectEntry:994 readGraph:1373 fastGainCommit:2011
-  @field w type  @ addFxNode:572,575 insertBus:743,746 readGraph:1053,1237,1334
-  @field r value  @ applyOps:1813,1814,1822
-  @field w value  @ diff:1580,1605
-  @field r x  @ moveBus:273,276 moveNodes:285 addFxNode:566 addSourceNode:649 addBusNode:688,693 insertBus:723,728 stampDecoration:1444
-  @field r x  @ stampDecoration:1451
-  @field w x  @ moveBus:276 addFxNode:551,563,566 addSourceNode:646,649 addBusNode:688,693 insertBus:723,728 stampDecoration:1444
-  @field w x  @ stampDecoration:1451
-  @field r y  @ moveBus:273,276 moveNodes:285 addFxNode:566 addSourceNode:649 addBusNode:688,693 insertBus:723,728 stampDecoration:1444,1451
-  @field w y  @ moveBus:273,276 moveNodes:285 addFxNode:551,563,566 addSourceNode:646,649 addBusNode:688,693 insertBus:723,728
-  @field w y  @ stampDecoration:1444,1451
+  @field r routing  @ gainRouting:1964
+  @field w routing  @ gainRouting:1985
+  @field r send  @ fxMidiPorts:169 readGraph:1393
+  @field w send  @ parseJSFXMidiTraits:140,141,147 readGraph:1392
+  @field r sends  @ stateEntry:943 projectEntry:1056 readGraph:1176,1190 diff:1670,1673 applyOps:1910 setStateGain:2031
+  @field w sends  @ stateEntry:943 snapshot:1007 projectEntry:1071 diff:1673 applyOps:1917
+  @field r slot  @ pokeGainTarget:2002 setStateGain:2023
+  @field w slot  @ gainRouting:1970
+  @field r sourcePos  @ addFxNode:577
+  @field r splice  @ gainRouting:1984
+  @field r srcBus  @ readGraph:1270
+  @field w srcBus  @ readGraph:1197
+  @field r srcChan  @ ownedSends:921,925 projectEntry:1058 readGraph:1177,1192,1197 sendKey:1534 applyOps:1914
+  @field w srcChan  @ ownedSends:925 projectEntry:1058 applyOps:1914
+  @field r srcPair  @ readGraph:1272
+  @field w srcPair  @ readGraph:1192,1204,1208
+  @field w srcTagKey  @ 260
+  @field r synthNodes  @ projectEntry:1017 gainRouting:1967
+  @field r tagPos  @ pruneSourceTags:266,272,273,276,277 setSourceTagPos:341,342,347 stampDecoration:1515
+  @field w tagPos  @ pruneSourceTags:276,277 setSourceTagPos:341,347 stampDecoration:1515
+  @field r target  @ pokeEdgeGain:2060,2061
+  @field w target  @ authoredRouting:1952
+  @field r tgtOffset  @ readGraph:1205,1209 diff:1656,1657
+  @field w tgtOffset  @ projectEntry:1069 applyOps:1878
+  @field r to  @ adjacencies:105,106 srcTagKey:258 mirrorBusTaps:323,325 samplerReachable:445 paramTargets:473,474,494 deleteSource:620
+  @field r to  @ deleteBus:641 insertBus:749,750 spliceable:776,781,789 spliceIntoEdge:803,804 nodeHasMidiIn:838 readCuParams:853 ownedSends:920 projectEntry:1057
+  @field r to  @ readGraph:1145,1192,1196,1437 sendKey:1534 applyOps:1911 gainRouting:1979 pokeGainTarget:2010 setStateGain:2032
+  @field w to  @ addFxNode:586,589 insertBus:758,761 spliceIntoEdge:806 readCuParams:853 ownedSends:923 projectEntry:1057 readGraph:1116,1300,1397 applyOps:1913
+  @field w to  @ gainRouting:1979
+  @field r toMaster  @ readGraph:1226
+  @field w toMaster  @ readGraph:1208
+  @field r toPort  @ srcTagKey:258 mirrorBusTaps:325 insertBus:749 spliceable:781 spliceIntoEdge:803 readGraph:1437
+  @field w toPort  @ addFxNode:589 insertBus:750,758,761 spliceIntoEdge:804,806 readGraph:1116
+  @field r toTrackGuid  @ applyOps:1904
+  @field w toTrackGuid  @ diff:1622
+  @field r toTrackKey  @ applyOps:1904
+  @field w toTrackKey  @ diff:1623
+  @field r toTrackKind  @ applyOps:1904
+  @field w toTrackKind  @ diff:1622
+  @field w track  @ applyOps:1905
+  @field w trackGuid  @ paramTargets:517
+  @field r trackId  @ persistNodeMeta:250,251 deleteSource:612,624,627 projectEntry:1062 readGraph:1101 applyOps:1871
+  @field r trackId  @ applyOps:1874,1884,1899,1907 stampBusTracks:2122
+  @field w trackId  @ addFxNode:581 addSourceNode:664 readGraph:1287,1312 diff:1636,1642,1647,1667,1673,1683,1686 stampBusTracks:2123
+  @field r trackKey  @ snapshot:982,983,984 stampOrigin:1705 originGuid:1717 applyOps:1851,1868,1869,1872
+  @field r trackKey  @ applyOps:1874,1884,1886,1895,1899,1907 pokeGainTarget:2000 setStateGain:2020
+  @field w trackKey  @ projectEntry:1037 diff:1602,1634,1641,1646,1666,1671,1683,1685 applyOps:1869 gainRouting:1970
+  @field r trackKind  @ projectEntry:1062,1063,1065 readGraph:1220,1308 diff:1594,1601,1621,1622
+  @field r trackKind  @ diff:1635,1642,1647,1662,1667,1672,1682,1686 applyOps:1851,1874,1884,1899
+  @field r trackKind  @ applyOps:1907 rememberApplied:2108,2109
+  @field w trackKind  @ stateEntry:936 snapshot:1006 projectEntry:1065 readGraph:1421 diff:1602,1635,1642,1647,1667,1672,1686
+  @field r type  @ edgeGain:199 srcTagKey:258 mirrorBusTaps:321 samplerReachable:445 paramTargets:474 insertBus:748 spliceable:775,780 nodeHasMidiOut:829 nodeHasMidiIn:838 projectEntry:1057 readGraph:1436
+  @field r type  @ fastGainCommit:2074
+  @field w type  @ addFxNode:586,589 insertBus:757,760 spliceIntoEdge:805 readGraph:1116,1300,1397
+  @field r value  @ applyOps:1876,1877,1885
+  @field w value  @ diff:1643,1668
+  @field r x  @ moveBus:287,290 moveNodes:299 addFxNode:580 addSourceNode:663 addBusNode:702,707 insertBus:737,742 spliceIntoEdge:808
+  @field r x  @ spliceIntoEdge:808 stampDecoration:1507,1514
+  @field w x  @ moveBus:290 addFxNode:565,577,580 addSourceNode:660,663 addBusNode:702,707 insertBus:737,742 stampDecoration:1507
+  @field w x  @ stampDecoration:1514
+  @field r y  @ moveBus:287,290 moveNodes:299 addFxNode:580 addSourceNode:663 addBusNode:702,707 insertBus:737,742 spliceIntoEdge:808 stampDecoration:1507,1514
+  @field w y  @ moveBus:287,290 moveNodes:299 addFxNode:565,577,580 addSourceNode:660,663 addBusNode:702,707 insertBus:737,742
+  @field w y  @ spliceIntoEdge:808 stampDecoration:1507,1514

@@ -39,7 +39,7 @@ them in a fixed precedence:
   (the grabbed one alone if unselected, else the whole selection) to its
   origin pos; each redraws at `start + (mouse − mouseStart)` while the
   button is held. Mouseup commits the set in one `moveNodes` — one
-  mutate, one signal.
+  mutate, one signal — unless the drag splices (below).
 - **`band`** — mousedown on empty canvas, drawn as a translucent rect.
   Mouseup with movement replaces the selection with the intersected ids;
   mouseup without movement (a click) clears it.
@@ -72,6 +72,26 @@ Two non-drag gestures sit outside the precedence chain:
   re-arming a drag.
 - **Right-click** resolves triangle → wire menu, node body → node menu
   (Delete node), empty canvas → FX picker.
+
+### Splice on drop
+
+A lone dragged node whose **body covers a wire's triangle** splices into
+that wire on mouseup: the wire re-points onto the node's audio pair 1, a
+fresh leg carries the signal on to the old destination, and the node
+snaps to the triangle it was dropped on. The wire's gain stays on the
+input side and the new leg is unity, so the splice changes only what the
+effect does — everything downstream hears the same level as before.
+
+The offer is made only where it can be taken (`wv:spliceable`): the node
+needs a free audio pair 1 both ways, it can't be either end of the wire,
+and it can't already sit downstream of it. Eligible or not decides the
+highlight as well as the commit, so an unhighlighted wire is a promise of
+nothing and the drop is a plain move. The whole target wire highlights,
+drawn in the wire layer rather than over the node pass: the bodies at its
+ends and the dragged body itself overpaint it, so the highlight reads as
+a wire and not as an overlay. Where the body covers several triangles the
+one nearest the cursor wins. Audio only — MIDI wires carry no gain, so a MIDI splice
+would be its own gesture.
 
 ### The wire end leads the cursor
 
@@ -140,8 +160,9 @@ under *Spillover engagement and pinning*.
 
 The canvas is a strict z-stack, and several effects depend on the order:
 
-1. **Existing wires** (bottom), overpainted at the node edge by step 4 so
-   they read as emerging from behind the body.
+1. **Existing wires** (bottom), the splice highlight painted over them,
+   both overpainted at the node edge by step 4 so they read as emerging
+   from behind the body.
 2. **Popup sleeves** — the pale port-row backgrounds — before the nodes,
    so the body overpaints their overlap and so wires entering an engaged
    node's popout are occluded.

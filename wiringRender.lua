@@ -1696,6 +1696,32 @@ local function nodesInBand(nodeViews, bx0, by0, bx1, by1)
   return set
 end
 
+-- The one node a drag carries, as its nodeView; nil when it carries a selection.
+local function soleDragged(nodeViews, d)
+  local id = next(d.starts)
+  if next(d.starts, id) then return nil end
+  for _, nv in ipairs(nodeViews) do
+    if nv.id == id then return nv end
+  end
+end
+
+-- Splice-on-drop target: among the audio triangles the dragged body covers, the
+-- nearest spliceable one to the cursor. See docs/wiringPage.md § Splice on drop.
+local function spliceTargetHit(segs, nv, mx, my)
+  local box = nodeBox(nv)
+  local best, bestDist
+  for i, seg in pairs(segs) do
+    if seg.w.type == 'audio' and inRect(seg.cx, seg.cy, box) then
+      local dx, dy = seg.cx - mx, seg.cy - my
+      local dist   = dx * dx + dy * dy
+      if (not bestDist or dist < bestDist) and wv:spliceable(i, nv.id) then
+        best, bestDist = i, dist
+      end
+    end
+  end
+  return best
+end
+
 local function renderCanvas(w, h)
   -- Canvas origin = viewport centre (logical 0,0 in the middle). The painter
   -- carries it, so draw helpers use canvas-local coords and the same transform
@@ -1814,6 +1840,14 @@ local function renderCanvas(w, h)
   -- anchor here, so a single source keeps draw and hit-test from drifting.
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
 
+  -- A lone node dragged over an audio wire's triangle splices into that wire on
+  -- release, and the whole wire highlights meanwhile.
+  local spliceIdx, spliceNode
+  if drag then
+    spliceNode = soleDragged(nodeViews, drag)
+    if spliceNode then spliceIdx = spliceTargetHit(segs, spliceNode, lmx, lmy) end
+  end
+
   -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
   -- Suppressed during any active gesture so neither fires under a drag.
   local wireEndHover, tagHover
@@ -1909,6 +1943,12 @@ local function renderCanvas(w, h)
   local placedLabels = {}
   drawWiresPass(p, segs, wireViewsList,
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx }, placedLabels)
+  -- In the wire layer, not over the node pass: the bodies at the wire's ends and
+  -- the dragged body itself overpaint it, so the highlight reads as a wire.
+  if spliceIdx then
+    local seg = segs[spliceIdx]
+    p.line(seg.sx, seg.sy, seg.ex, seg.ey, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
+  end
   for i = 1, #wireViewsList do
     local seg = segs[i]
     if seg and seg.w.fromKind == 'source' then
@@ -2278,7 +2318,10 @@ local function renderCanvas(w, h)
     busDrag = nil
   elseif drag and not ImGui.IsMouseDown(ctx, 0) then
     local dx, dy = lmx - drag.mx0, lmy - drag.my0
-    if dx ~= 0 or dy ~= 0 then
+    if spliceIdx then
+      local seg = segs[spliceIdx]
+      wv:spliceIntoEdge(spliceIdx, spliceNode.id, { x = seg.cx, y = seg.cy })
+    elseif dx ~= 0 or dy ~= 0 then
       local moves = {}
       for id, s in pairs(drag.starts) do moves[id] = { x = s.x + dx, y = s.y + dy } end
       wv:moveNodes(moves)

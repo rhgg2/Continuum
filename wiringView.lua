@@ -187,6 +187,12 @@ end
 --contract: pass-through to wm:insertBus {pos,orient,node,port,dir}; mints + re-points; returns id
 function wv:insertBus(spec) return wm:insertBus(spec) end
 
+--contract: pass-through to wm:spliceable — true iff nodeId may splice into audio edge edgeIdx
+function wv:spliceable(edgeIdx, nodeId) return wm:spliceable(edgeIdx, nodeId) end
+
+--contract: pass-through to wm:spliceIntoEdge; node lands at pos, gain rides the input side
+function wv:spliceIntoEdge(edgeIdx, nodeId, pos) return wm:spliceIntoEdge(edgeIdx, nodeId, pos) end
+
 --contract: pass-through to wm:addBusNode; mints unwired buss at (x,y); orient defaults 'V'
 function wv:addBusNode(x, y, orient) return wm:addBusNode({ x = x, y = y }, orient) end
 
