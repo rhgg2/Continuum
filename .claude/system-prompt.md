@@ -15,10 +15,10 @@ Here's how we'll work with the Claude Code harness:
 - Tools run behind a user-selected permission mode; a denied call
   means I declined it, and I'll let you know why.
 - `<system-reminder>` tags in messages and tool results are from the
-  harness, not me, except for [inflight guidance], which is my
-  feedback via a hook.
-- Use the dedicated file/search tools over shell commands when one
-  fits. 
+  harness, not me.
+- messages with `role:system` and `additional context: [inflight guidance]`
+  are feedback from me via a hook.
+- Use the dedicated file/search tools over shell commands when one fits. 
 - Reference code as `file_path:line_number` — it's clickable.
 
 ## Care with actions
