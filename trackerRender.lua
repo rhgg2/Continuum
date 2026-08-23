@@ -735,7 +735,6 @@ help:registerPage('tracker', {
     { cmd = 'duplicateBelow', label = 'Duplicate' },
     { cmd = 'prevVariant', label = 'Previous variant' },
     { cmd = 'nextVariant', label = 'Next variant / vary' },
-    { cmd = 'duplicateUnpooledBelow', label = 'Duplicate (unpooled)' },
     { cmd = 'takeProperties', label = 'Take properties' },
     { cmd = 'deleteBoundSlot', label = 'Delete take + instances' },
   }},
@@ -793,7 +792,7 @@ modalHost:registerKind('takeProps', function(s, close)
   local appearing = ImGui.IsWindowAppearing(ctx)
 
   ImGui.Text(ctx, 'Item name')
-  -- Duplicate paths open with focusName so the clone is named first.
+  -- Arrange's unpooled duplicate opens with focusName, so the clone is named first.
   if appearing and s.focusName then ImGui.SetKeyboardFocusHere(ctx) end
   local selFlags, selCb = 0, nil
   if s.selectTo then selFlags, selCb = chrome.selectTo(s.selectTo) end
@@ -1606,12 +1605,6 @@ modalHost:registerKind('newTake', function(s, close)
   elseif cancel then close(false) end
 end)
 
--- Mint the clone, open take-properties focused on name. No rebind: slot selection re-binds
--- to the clone before any commit lands, so the seed and commit both target the clone.
-local function duplicateUnpooledTake()
-  if tv:duplicateBoundUnpooled() then tr:openTakeProperties{ focusName = true } end
-end
-
 -- Super-R toggles the parameters tab: park it over an auto-shown chain and land on the find box, or,
 -- if already parked, drop the override back to the auto chain. Super-X (editFx) is the mirror, owning fx.
 local function focusParams()
@@ -1646,7 +1639,6 @@ tracker:registerAll{
   duplicateBelow         = { function() tv:duplicateBelow() end, 'Duplicate take' },
   prevVariant            = { function() tv:stepVariant(-1) end, 'Previous variant' },
   nextVariant            = { function() tv:stepVariant(1)  end, 'Next variant' },
-  duplicateUnpooledBelow = { duplicateUnpooledTake, 'Duplicate take (unpooled)' },
   deleteBoundSlot        = deleteBoundSlot,
 
   prevTrack = { function() tv:gotoTrack(-1) end, 'Previous track' },

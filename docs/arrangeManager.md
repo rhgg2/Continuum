@@ -66,7 +66,7 @@ the genuine forever-gone case, reached only through `deleteSlot`.
 
 `am:mintParkedTake` reaches the same end-state forward: it mints a fresh
 slot whose sole instance is born on the scratch track, never grid-placed.
-The tracker's new-take and unpooled-duplicate gestures use it to add a
+The tracker's new take and arrange's unpooled duplicate use it to add a
 slot the user edits in place and drops onto the grid later. A new MIDI
 item already carries its own pool, so the clone is unpooled by
 construction.

@@ -214,7 +214,7 @@ return {
   },
 
   {
-    name = 'with no live instance, new take and unpooled duplicate mint a parked slot and select it',
+    name = 'with no live instance, the new take mints a parked slot and selects it',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
@@ -231,11 +231,6 @@ return {
       t.eq(fakeArrange.calls.mint.beats, 4,    'and the modal length')
       t.eq(fakeArrange.calls.mint.src,   nil,  'new take has no clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
-
-      h.cmgr:invoke('duplicateUnpooledBelow')      -- clones the bound take, opens take-properties
-      t.eq(fakeArrange.calls.mint.src, 'tr1/t1', 'dup passed the bound take as clone source')
-      t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
-      t.eq(fakeModalHost.last.focusName, true, 'dup opens take-properties focused on the name field')
     end,
   },
 
@@ -316,7 +311,7 @@ return {
   },
 
   -- The tracker grows the arrangement from the placement it is in.
-  -- see docs/trackerPage.md § New take and unpooled duplicate
+  -- see docs/trackerPage.md § New take
   {
     name = 'the new take places below the current instance and becomes current',
     run = function(harness)

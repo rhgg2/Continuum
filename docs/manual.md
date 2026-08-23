@@ -99,8 +99,10 @@ To be filled out with descriptions, screenshots, examples.
 
 ### Take management
 - New take
-- Duplicate (unpooled)
+- Duplicate below (another instance of the bound take)
+- Previous/next variant (stepping past the last one varies)
 - Take properties (modal: length ×2/÷2, Resize/Rescale/Tile mode, truncate confirm)
+- Delete take + instances (confirm)
 
 ### Grid — mouse only
 - Click channel-label row to select channel; right-click to mute

@@ -351,16 +351,6 @@ function tv:stepVariant(dir)
   return slot
 end
 
---contract: clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx
-function tv:duplicateBoundUnpooled()
-  local trackIdx = selectedTrackIdx(); if not trackIdx then return end
-  local src = tm:currentTake(); if not src then return end
-  local slot = arrange().mintParkedTake(trackIdx, '', nil, src)
-  if not slot then return end
-  self:selectSlot(slot)
-  return slot
-end
-
 local ec, clipboard, ctx
 
 ---------- SHARED HELPERS

@@ -579,7 +579,7 @@ Changing track always restores that track's last-viewed slot — that is the
 per-track memory, and the same path as dive's "no take under the cursor"
 fallback.
 
-### New take and unpooled duplicate
+### New take
 
 `newTakeBelow` grows the song from the placement the tracker is in. Its
 name+length modal (the name defaults to the next-free slot's zero-padded
@@ -595,10 +595,6 @@ Either way `tv:selectSlot` selects the new slot, so the tracker switches
 straight to the blank take with no arrange-cursor move. A placed take is
 also named as the current instance (`tv:nameInstance`), so loop to item
 moves the loop onto it.
-
-`duplicateUnpooledBelow` places nothing: it mints a slot whose only
-instance is parked on the scratch track (`am:mintParkedTake`), cloning
-the currently-bound take, and selects that slot the same way.
 
 Because a parked take's only instance lives on the scratch track, binding
 it would key cm's **track** tier to scratch — desyncing every per-track read.

@@ -28,17 +28,15 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 tracker: the unpooled duplicate retires in favour of vary (§ vary)
 - 2026-08-23 tracker/arrange: Alt+Shift+←/→ step a placement along its family (§ vary)
 - 2026-08-23 tracker: vary swaps the current instance for a variant slot (§ vary)
 - 2026-08-23 rename: a rename edits the root, from either field (§ vary)
-- 2026-08-23 am: vary replaces an instance with one of a fresh variant slot (§ vary)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- The tracker's unpooled duplicate retires: `tv:duplicateBoundUnpooled`,
-  `duplicateUnpooledTake` and its Cmd+Shift+Enter binding and menu row.
-  Arrange's own unpooled duplicate stays, and `am:duplicateUnpooledBelow`
-  with it. `docs/trackerPage.md` § New take and unpooled duplicate.
+
+(empty)

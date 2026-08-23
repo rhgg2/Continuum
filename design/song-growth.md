@@ -33,8 +33,8 @@ on the slot alone.
 
 Landed; the model is `docs/arrangeManager.md` § The append point, the
 parking it falls back on § Parking, and the tracker's new take
-`docs/trackerPage.md` § New take and unpooled duplicate. `vary` mints
-its variant through that same parking.
+`docs/trackerPage.md` § New take. `vary` mints its variant through that
+same parking.
 
 ## Rendered span and source span
 

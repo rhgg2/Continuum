@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — The tracker's unpooled duplicate retires. duplicateBelow followed by vary gives
+  the same fork, with a placement to hold it and a name taken from the parent slot, so the tracker
+  no longer mints a parked clone of its own. Arrange keeps its unpooled duplicate, which is the way
+  to fork a take without placing it. See design/song-growth.md § vary.
+
 - **2026-08-23** — Arrange binds Super+U to replace mode, shadowing the global universal-argument
   prefix. No arrange command reads a prefix, and while one is open the digit keys feed its buffer
   instead of dropping slots, so the page lost nothing it used. Replace picks its targets the way
