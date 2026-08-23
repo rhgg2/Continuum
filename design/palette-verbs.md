@@ -1,22 +1,15 @@
 # Palette verbs — prune and tidy
 
 > opened: 2026-08-23 · status: in flight — plan/palette-verbs.md, at
-> phase 1 (prune)
+> phase 2 (the commit)
 
 **The arrange palette's buttons: prune drops every slot with no live
 instance, and tidy re-groups the track's slot names into families.**
 
 ## Prune
 
-1. **Prune** deletes every slot on the track with no live instance on
-   the grid, much as `deleteSlot` does, by discarding the parked
-   keeper and the pool's metadata.
-
-1. Slot rows carry `parked`, so the count can be read off
-   `trackSlots`. A confirm dialog names the consequences before
-   anything is deleted.
-
-1. Prune reaches both audio and MIDI slots.
+Landed — see docs/arrangeManager.md § A slot outlives its takes and
+docs/arrangePage.md § The prune button.
 
 ## Bases
 
@@ -70,11 +63,11 @@ instance, and tidy re-groups the track's slot names into families.**
    it; the editor hands over the assignment alone. The ordinal rule 
    sits beside `variantFamily` and `nextVariantName`.
 
-1. `am:pruneSlots(trackIdx)` deletes the parked slots and returns how
-   many went.
+1. Tidy reaches the palette through `av`, which passes it to am; a
+   rename leaves every slot standing, so the palette focus holds.
 
-1. Both reach the palette through `av`, which clears the palette focus
-   where the focused slot no longer stands.
+1. The assignment is a plain map from slot index to base. A slot the
+   map omits is pinned.
 
 ## Open
 

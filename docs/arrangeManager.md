@@ -30,7 +30,10 @@ scratch track (`scratch.lua`); the pool and the palette slot stay alive
 until an instance is dropped back or the slot is deleted. (Slot rows
 carry a `parked` flag for liveness, but the palette does not grey them.)
 The one true forever-delete is `deleteSlot`, which removes every live
-instance *and* the parked keeper.
+instance *and* the parked keeper. `pruneSlots(trackIdx)` applies it to
+every slot on the track whose row carries `parked`, and returns how
+many went — the palette's one verb, since a parked slot has no take on
+the grid to aim a gesture at.
 
 The persistence in `arrangeSlots` is an **index-to-id stability map**.
 Without it, two reads of the same project could allocate `{p1}` to

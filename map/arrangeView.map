@@ -12,7 +12,7 @@
   @invariant  selection is a per-session set of take handles; setFocus/focus are single-element.  @ 11
   @invariant  a Shift+arrow band lasts until the first command that isn't a Shift+arrow.  @ 12
   @invariant  replace mode lasts until the drop it reinterprets, or the first other command.  @ 13
-  @invariant  paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.  @ 14
+  @invariant  paletteSlot is per-session (0..61 or nil) — palette's highlighted row; not cursorCol.  @ 14
   @invariant  edit cmds target via actionTargets; off-screen + nothing selected = no-op.  @ 242
   @invariant  drop0..dropZ place a fresh instance at the cursor and advance the caret past it.  @ 393
   @invariant  arrangeAdvanceBy0..9 (Ctrl+digit) set the step; arrangeAdvanceMode (Ctrl-`) picks it.  @ 394

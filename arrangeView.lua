@@ -11,7 +11,7 @@
 --invariant: selection is a per-session set of take handles; setFocus/focus are single-element.
 --invariant: a Shift+arrow band lasts until the first command that isn't a Shift+arrow.
 --invariant: replace mode lasts until the drop it reinterprets, or the first other command.
---invariant: paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.
+--invariant: paletteSlot is per-session (0..61 or nil) — palette's highlighted row; not cursorCol.
 
 local util = require 'util'
 

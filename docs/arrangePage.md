@@ -139,25 +139,27 @@ discipline as the tracker view, scaled down: the cursor names "what
 the user is looking at" and everything else derives.
 
 The **focused slot** within the palette is a separate pointer
-(`av:paletteSlot()`) because rename and delete need to act on a slot
-even when the cursor lives in the grid. It's per-session
-module-local, set by clicking a row in the palette, cleared with
-`setPaletteSlot(nil)`. Same persistence model as the grid cursor —
-not a project property, just a UI attention pointer.
+(`av:paletteSlot()`) marking the row the user last clicked, which the
+list highlights; `createSlot` points it at the slot it mints. It's
+per-session module-local, cleared with `setPaletteSlot(nil)` — and
+`av:pruneSlots` clears it when the slot holding it went. Same
+persistence model as the grid cursor: not a project property, just a
+UI attention pointer.
 
-### Palette buttons
+### The prune button
 
-`rename` and `del` act on the focused slot (`av:paletteSlot()`).
-`rename` opens an `InputText` modal seeded with the slot's current
-derived name. `del` opens a confirm modal — deletion removes every
-instance of the slot's source on the track, which always warrants
-the extra click. There are no "new slot" buttons; minting is a
+The palette carries one verb. `prune` forever-deletes every slot on
+the track with no instance on the grid, and is disabled while the
+track has none; the confirm modal names the count, read off the same
+slot list the button is drawn from. Rename and delete are keyboard
+gestures on the cursor take's slot, so the palette needs no per-slot
+buttons, and there are no "new slot" buttons either — minting is a
 keyboard gesture (see below).
 
 ### Modal infrastructure
 
-A single popup id (`MODAL_TITLE`) backs all three modals (rename,
-create, delete). The `modal` module-local holds `{ kind, ... fields }`
+A single popup id (`MODAL_TITLE`) backs all three modals (create,
+delete, prune). The `modal` module-local holds `{ kind, ... fields }`
 or nil; `renderModal()` dispatches by `kind`. Pinning `(trackIdx,
 slotIdx)` (or `(trackIdx, qnPos)` for create) into modal at open-time
 means the cursor moving mid-edit can't retarget the action.
@@ -184,7 +186,7 @@ index so the palette highlights it.
 
 This is the only slot-minting gesture. There is no separate "declare
 a slot" step — a slot has no existence apart from items on the grid
-that carry its id. Audio creation waits on a file picker (`del` and
+that carry its id. Audio creation waits on a file picker (delete, prune and
 the place commands still handle audio slots that pre-existing REAPER
 items materialise; only the *creation* gesture is MIDI-only).
 

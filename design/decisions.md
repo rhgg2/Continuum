@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — Tidy's assignment is a plain map from slot index to base, and a slot the map
+  omits is pinned. An explicit pinned flag reads better at the call site, but it adds a shape where
+  an absence says the same thing; the editor builds the map by dropping the rows the user pinned. am
+  wraps no undo block for the commit — every arrange undo block sits at the view or render layer, so
+  the editor's commit supplies it.
+
 - **2026-08-24** — The arrange palette carries one verb, prune, which forever-deletes every slot on
   the track with no live instance, behind a confirm naming the count. The rename and del buttons
   went at the same time: Cmd+Backspace and Ctrl+Delete already reach the cursor take's slot, and the
