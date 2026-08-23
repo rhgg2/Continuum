@@ -81,9 +81,9 @@ old bucket, shadowing nondeterministically at `load`.
 ## Pooled vs unpooled
 
 Pooling shares; unpooling forks. A pooled clone keeps the source guid, so it
-shares the metadata for free. An *unpooled* clone (REAPER's "new MIDI item"
-mint, or a `rePool` chunk-clone) gets a fresh guid and would start empty —
-`arrangeManager` calls `copyPool(srcGuid, dstGuid)` at each such mint to fork
-the source's blob onto the new pool. The genuine forever-delete (`deleteSlot`)
+shares the metadata for free. An *unpooled* clone — a fresh "new MIDI item"
+mint that `mintParkedTake` populates by hand — gets a fresh guid and would
+start empty, so `arrangeManager` calls `copyPool(srcGuid, dstGuid)` at each
+such mint to fork the source's blob onto the new pool. The genuine forever-delete (`deleteSlot`)
 calls `dropPool` to clear it; project-scoped metadata otherwise outlives the
 take, since it no longer dies with the take's ext-data.

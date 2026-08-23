@@ -1488,80 +1488,6 @@ return {
   },
 
   {
-    name = 'duplicateUnpooledBelow mints a fresh slot and copies the MIDI blob',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'lead' } } },
-      })
-      local src = am:tracksTakes(0)[1]
-      h.reaper.MIDI_SetAllEvts(src.take, 'EVTS-BLOB')
-      local slotIdx, copy = am:duplicateUnpooledBelow(src)
-      t.truthy(copy, 'copy returned')
-      local takes = am:tracksTakes(0)
-      t.eq(#takes, 2)
-      local below
-      for _, tk in ipairs(takes) do if tk.startQN == 4 then below = tk end end
-      t.truthy(below, 'copy lands at the append point')
-      t.eq(below.slotIdx ~= src.slotIdx, true, 'fresh slot — not pooled with the source')
-      t.eq(below.slotIdx, slotIdx, 'the slot it landed in comes back with the take')
-      t.eq(below.name, 'lead', 'inherits the source name')
-      local _, blob = h.reaper.MIDI_GetAllEvts(copy, '')
-      t.eq(blob, 'EVTS-BLOB', 'MIDI events copied to the new take')
-    end,
-  },
-
-  {
-    -- The fix for "parking desyncs notes from their metadata": an unpooled clone
-    -- mints a fresh pool, so eventMeta:copyPool must fork the source's metadata.
-    name = 'duplicateUnpooledBelow forks the source per-event metadata onto the fresh pool',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
-      })
-      local src = am:tracksTakes(0)[1]
-      t.seedMeta(src.take, 1, { detune = -50 })       -- author metadata on the source pool
-      local _, copy = am:duplicateUnpooledBelow(src)
-      t.truthy(copy, 'copy returned')
-      t.eq(t.loadMeta(copy)[1].detune, -50, 'the fresh pool inherited the source metadata')
-    end,
-  },
-
-  {
-    name = 'duplicateUnpooledBelow parks the clone for want of room',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'lead' },
-                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
-      })
-      local src = am:tracksTakes(0)[1]
-      h.reaper.MIDI_SetAllEvts(src.take, 'EVTS-BLOB')
-      local slotIdx, parked = am:duplicateUnpooledBelow(src)
-      t.truthy(slotIdx, 'a slot is minted even with nowhere to place it')
-      t.eq(am:isParkedTake(parked), true, 'the clone hosts on scratch')
-      t.eq(#am:tracksTakes(0), 2, 'nothing added to the grid')
-      t.eq(am:takeForSlot(0, slotIdx), parked, 'the new slot resolves to the parked take')
-      local _, blob = h.reaper.MIDI_GetAllEvts(parked, '')
-      t.eq(blob, 'EVTS-BLOB', 'the parked clone carries the source events')
-      t.eq(h.reaper.GetTakeName(parked), 'lead', 'and the source name')
-    end,
-  },
-
-  {
-    name = 'duplicateUnpooledBelow refuses on audio',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'audio', pos = 0, len = 4, srcFile = '/a.wav' } } },
-      })
-      t.eq(am:duplicateUnpooledBelow(am:tracksTakes(0)[1]), nil, 'audio refused silently')
-      t.eq(#am:trackSlots(0), 1, 'and no slot minted')
-    end,
-  },
-
-  {
     name = 'newTakeBelow creates an empty MIDI take of the asked-for length at the append point',
     run = function(harness)
       local h, am = mkAm(harness)
@@ -1670,26 +1596,6 @@ return {
       local stamped = h.reaper.GetMediaItemTakeInfo_Value(take, 'I_CUSTOMCOLOR')
       t.truthy(stamped ~= 0, 'fresh take carries the minted REAPER stamp')
       t.truthy(stamped & 0x1000000 ~= 0, 'active-flag bit is set so REAPER honours the colour')
-    end,
-  },
-
-  {
-    name = 'duplicateUnpooledBelow strips the source colour and mints a fresh one',
-    run = function(harness)
-      local h, am = mkAm(harness)
-      seedTracks(h, {
-        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
-      })
-      local src = am:tracksTakes(0)[1]
-      local srcStamp = h.reaper.GetMediaItemTakeInfo_Value(src.take, 'I_CUSTOMCOLOR')
-      local _, copy = am:duplicateUnpooledBelow(src)
-      t.truthy(copy, 'clone returned')
-      local copyStamp = h.reaper.GetMediaItemTakeInfo_Value(copy, 'I_CUSTOMCOLOR')
-      t.truthy(copyStamp ~= 0, 'clone carries its own stamp')
-      t.truthy(copyStamp ~= srcStamp,
-               'fresh pool identity gets a separate colour, not the source\'s')
-      t.eq(h.reaper.GetMediaItemTakeInfo_Value(src.take, 'I_CUSTOMCOLOR'), srcStamp,
-           'source stamp untouched: rePool clears the new item only')
     end,
   },
 

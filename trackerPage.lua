@@ -133,11 +133,11 @@ facade.publish('tracker', {
 
   -- Arrange opens take properties without diving: bind to it (so tv reads its
   -- model), then open the modal. bindFromSelection drives the bind back, so no restore.
-  openTakeProperties = function(item, opts)
+  openTakeProperties = function(item)
     local take = item and reaper.GetActiveTake(item)
     if not take then return end
     if take ~= tp:currentTake() then tp:bind(take) end
-    tr:openTakeProperties{ focusName = opts and opts.focusName }
+    tr:openTakeProperties()
   end,
   -- Swing edits: bind each affected take through tm (markSwingStale) to re-realise, restore after.
   -- am owns the walk; tm owns the bind.

@@ -382,20 +382,6 @@ local function stepVariantOfSelected(dir)
   if take then am:stepVariant(take, dir) end
 end
 
--- The clone parks for want of room, and take-props opens on it either way: the name prompt
--- is the point of the command. Only focus and the cursor advance need it on the grid.
-local function duplicateUnpooledSelectedBelow()
-  local take = singleTarget()
-  if not take then return end
-  local _, newTake = am:duplicateUnpooledBelow(take)
-  if not newTake then return end
-  if not am:isParkedTake(newTake) then
-    av:setFocus(newTake)
-    advanceCursorPastNewTake(newTake)
-  end
-  tracker().openTakeProperties(reaper.GetMediaItemTake_Item(newTake), { focusName = true })
-end
-
 --invariant: drop0..dropZ place a fresh instance at the cursor and advance the caret past it.
 --invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the step; arrangeAdvanceMode (Ctrl-`) picks it.
 --invariant: drop on an empty slot is a no-op; new takes inherit the slot's instance length.
@@ -877,8 +863,7 @@ arrange:registerAll {
   arrangeDeleteAdvance          = { deleteSelectedAndAdvance,       'Delete take and advance' },
   arrangeDive                   = diveSelected,
   arrangeTakeProperties         = selectedTakeProperties,
-  arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate pooled take' },
-  arrangeDuplicateUnpooledBelow = { duplicateUnpooledSelectedBelow, 'Duplicate take' },
+  arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate take' },
   arrangePrevVariant            = { function() stepVariantOfSelected(-1) end, 'Previous variant' },
   arrangeNextVariant            = { function() stepVariantOfSelected( 1) end, 'Next variant' },
   arrangeReplaceMode            = toggleReplaceMode,

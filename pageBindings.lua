@@ -173,7 +173,6 @@ local arrange = {
                                     { ImGui.Key_DownArrow,  ImGui.Mod_Alt, ImGui.Mod_Shift } },
   arrangePrevVariant            = { { ImGui.Key_LeftArrow,  ImGui.Mod_Alt, ImGui.Mod_Shift } },
   arrangeNextVariant            = { { ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift } },
-  arrangeDuplicateUnpooledBelow = { { ImGui.Key_Enter,      ImGui.Mod_Super, ImGui.Mod_Shift } },
   -- Shadows the global universal-argument prefix, which no arrange command reads.
   arrangeReplaceMode            = { { ImGui.Key_U,          ImGui.Mod_Super } },
   arrangeAdvanceMode            = { { ImGui.Key_GraveAccent, ImGui.Mod_Ctrl } },

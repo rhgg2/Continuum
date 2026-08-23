@@ -884,49 +884,32 @@ return {
   },
 
   {
-    name = 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props',
+    -- The pooled duplicate leaves the caret on the copy's bottom edge, so takeAtCursor
+    -- adopts it and the variant step forks it onto a slot of its own.
+    name = 'arrangeDuplicateBelow then arrangeNextVariant forks the copy onto a fresh slot',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 2, srcLen = 2,
+                                poolGuid = '{p1}', takeName = 'Bass' })
       h.reaper:setProjectTracks{ 'tr1' }
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeDuplicateUnpooledBelow')
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      h.cmgr:invoke('arrangeNextVariant')
       local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
-      t.eq(#takes, 2, 'fresh clone added below')
-      t.eq(takes[2].startQN, 2, 'clone starts where the source take\'s render ends')
-      t.truthy(captured.props, 'take properties opened on the new item')
-      t.truthy(captured.props ~= takes[1].item, 'auto-open targets the new take, not the source')
-    end,
-  },
-
-  {
-    name = 'arrangeDuplicateUnpooledBelow parks the clone for want of room, and still names it',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
-      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
-                                pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
-      h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()
-      h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeDuplicateUnpooledBelow')
-      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
-      local takes = am:tracksTakes(0)
-      t.eq(#takes, 2, 'nothing added to the grid')
-      t.eq(#am:trackSlots(0), 3, 'the palette grew all the same')
-      t.truthy(captured.props, 'take properties opened on the parked clone')
-      t.truthy(captured.props ~= takes[1].item and captured.props ~= takes[2].item,
-               'and on neither of the takes already on the grid')
+      t.eq(#takes, 2, 'the source and its copy')
+      local src, copy
+      for _, take in ipairs(takes) do
+        if take.startQN == 0 then src = take else copy = take end
+      end
+      t.eq(copy.startQN, 2, 'the copy sits at the append point')
+      t.truthy(copy.slotIdx ~= src.slotIdx, 'on a slot of its own -- the fork')
+      t.eq(copy.name, 'Bass (var 1)', 'named from the parent root')
+      t.eq(#am:trackSlots(0), 2, 'the palette grew by the forked slot')
     end,
   },
 

@@ -237,7 +237,8 @@ To be filled out with descriptions, screenshots, examples.
 - Nudge back/forward; move the tail, or the head from a take's start row
 - Source the take doesn't show is marked in it: `(4)…` skipped above, `…(8)` left below
 - Delete / delete-and-advance
-- Duplicate (pooled) / duplicate below (unpooled, opens properties)
+- Duplicate below (pooled)
+- Previous/next variant (stepping past the last one forks a new one)
 - Take properties
 - Dive into take/tracker
 

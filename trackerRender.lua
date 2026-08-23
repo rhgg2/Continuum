@@ -792,16 +792,11 @@ modalHost:registerKind('takeProps', function(s, close)
   local appearing = ImGui.IsWindowAppearing(ctx)
 
   ImGui.Text(ctx, 'Item name')
-  -- Arrange's unpooled duplicate opens with focusName, so the clone is named first.
-  if appearing and s.focusName then ImGui.SetKeyboardFocusHere(ctx) end
-  local selFlags, selCb = 0, nil
-  if s.selectTo then selFlags, selCb = chrome.selectTo(s.selectTo) end
-  local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf, selFlags, selCb)
-  if s.selectTo and ImGui.IsItemActive(ctx) then s.selectTo = nil end
+  local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf)
   if rvN then s.nameBuf = name end
 
   ImGui.Text(ctx, 'Length (beats)')
-  if (appearing and not s.focusName) or s.refocusBeats then
+  if appearing or s.refocusBeats then
     ImGui.SetKeyboardFocusHere(ctx)
     s.refocusBeats = nil
   end
@@ -1634,7 +1629,7 @@ tracker:registerAll{
     end)
   end,
 
-  takeProperties         = { function() tr:openTakeProperties{} end, 'Take properties' },
+  takeProperties         = { function() tr:openTakeProperties() end, 'Take properties' },
   newTakeBelow           = { openNewTakeModal, 'New take' },
   duplicateBelow         = { function() tv:duplicateBelow() end, 'Duplicate take' },
   prevVariant            = { function() tv:stepVariant(-1) end, 'Previous variant' },
@@ -1685,8 +1680,7 @@ tv:wireGroupLifetime()
 
 -- Shared by the tracker's takeProperties command and arrange's, which binds tm first.
 -- see docs/trackerPage.md § Take properties
-function tr:openTakeProperties(args)
-  args = args or {}
+function tr:openTakeProperties()
   local rpb       = cm:get('rowPerBeat')
   local origBeats = (tv.grid.numRows or 0) / rpb
   local takeName  = tv:takeName() or ''
@@ -1694,13 +1688,9 @@ function tr:openTakeProperties(args)
     kind     = 'takeProps',
     title    = 'Take properties',
     nameBuf  = takeName,
-    -- Opening on the name field is opening to rename, so its root comes up
-    -- selected. see docs/chrome.md § Opening a field with a selection
-    selectTo = args.focusName and #util.variantRoot(takeName) or nil,
     beatsBuf = ('%g'):format(origBeats),
     beatsGen = 0,
     mode     = 'resize',
-    focusName = args.focusName,
     callback = function(name, beats, mode)
       if not beats or beats <= 0 then return end
       -- rescale is the monotone stretch — never deletes events.

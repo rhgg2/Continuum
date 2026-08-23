@@ -66,16 +66,16 @@ the genuine forever-gone case, reached only through `deleteSlot`.
 
 `am:mintParkedTake` reaches the same end-state forward: it mints a fresh
 slot whose sole instance is born on the scratch track, never grid-placed.
-The tracker's new take and arrange's unpooled duplicate use it to add a
-slot the user edits in place and drops onto the grid later. A new MIDI
-item already carries its own pool, so the clone is unpooled by
-construction.
+The tracker's new take uses it to add a slot the user edits in place and
+drops onto the grid later; `am:vary` uses it to fork a placement onto a
+slot of its own. A new MIDI item already carries its own pool, so the
+clone is unpooled by construction.
 
 Per-event metadata follows the pool, not the take (docs/eventMeta.md). The
 keeper move (`MoveMediaItemToTrack`) and pooled re-drops keep the same pool
-guid, so metadata travels for free. The *unpooled* mints — `mintParkedTake`
-and `cloneMidiItem(rePool=true)` — get a fresh guid, so they `eventMeta:copyPool`
-the source's blob onto it; `deleteSlot` (the lone forever-delete) `dropPool`s it.
+guid, so metadata travels for free. The one unpooled mint — `mintParkedTake`
+— gets a fresh guid, so it `eventMeta:copyPool`s the source's blob onto it;
+`deleteSlot` (the lone forever-delete) `dropPool`s it.
 
 ### Renaming and name drift
 
@@ -200,10 +200,9 @@ REAPER syncs the empty events of the freshly-pooled item back across
 the existing instances on the next refresh. The chunk-clone path
 sidesteps this by seeding the new item populated from the start.
 
-`duplicateTake` (pooled) and `duplicateUnpooledBelow` (fresh pool)
-share the same `cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)`
-helper; `rePool=true` rewrites `POOLEDEVTS` to the fresh guid before
-the chunk write, then explicitly copies events into the new pool.
+`duplicateTake` goes through the same `cloneMidiItem` helper: a copy is
+another instance of the source's pool, so the chunk carries the events
+and the `POOLEDEVTS` guid across untouched.
 
 MIDI drops resolve their chunk source through `siblingInstance`, which
 prefers a live instance on the track and falls back to the slot's parked
@@ -381,14 +380,13 @@ gap would render the copy truncated by its neighbour, which is a
 different sound from the one being copied, and pushing the rest of the
 track down to make room is a larger change than these verbs carry.
 
-What each verb places is its own. The two duplicates carry the source's
+What each verb places is its own. `duplicateBelow` carries the source's
 natural length; `newTakeBelow` takes a name and a length from its
 caller, and measures the room against that length.
 
 With no room, what the verb does next turns on what it creates.
-`newTakeBelow` and `duplicateUnpooledBelow` mint a slot, so they park it
-(§ Parking): the item goes to the scratch track and the palette entry
-stands without a placement.
+`newTakeBelow` mints a slot, so it parks it (§ Parking): the item goes
+to the scratch track and the palette entry stands without a placement.
 
 `duplicateBelow` places another instance of a slot that already has one,
 so it refuses. A parked sibling would show nothing, since the palette
@@ -396,9 +394,9 @@ already carries the slot, and it would leave the pool with an item on
 scratch that was never a keeper. The palette can therefore always grow,
 while the song grows where there is room.
 
-The two minting verbs return `(slotIdx, take)`, as `createAndDropMidi`
-and `mintParkedTake` do. Which of the two happened is not a third
-return: `am:isParkedTake` reads it off the take.
+`newTakeBelow` returns `(slotIdx, take)`, as `createAndDropMidi` and
+`mintParkedTake` do. Which of the two happened is not a third return:
+`am:isParkedTake` reads it off the take.
 
 ## Instances of a slot
 

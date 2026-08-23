@@ -731,14 +731,6 @@ end
 
 ----- Placement
 
-local function chunkSetPool(chunk, guid)
-  if chunk:find('POOLEDEVTS', 1, true) then
-    return (chunk:gsub('POOLEDEVTS%s+{[^}]+}', 'POOLEDEVTS ' .. guid))
-  end
-  -- Defensive: CreateNewMIDIItemInProj always emits a POOLEDEVTS line, so this branch is unreachable in practice.
-  return (chunk:gsub('(<SOURCE MIDI\n)', '%1    POOLEDEVTS ' .. guid .. '\n', 1))
-end
-
 -- REAPER keys undo bookkeeping by item GUID: a clone replaying srcItem's IGUID is
 -- invisible to undo capture (dirty marks resolve to the original), so edits on it never rewind.
 local function chunkFreshGuids(chunk)
@@ -775,34 +767,18 @@ local function placeAudio(track, filePath, qnPos, lengthQN)
 end
 
 -- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
---contract: MIDI clone of srcItem at qnPos; rePool=true mints a fresh pool; nil if REAPER refuses.
-local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
+--contract: MIDI clone of srcItem at qnPos, pooled with it; nil if REAPER refuses.
+local function cloneMidiItem(track, srcItem, qnPos, lengthQN)
   local newItem = reaper.CreateNewMIDIItemInProj(track, qnPos, qnPos + lengthQN, true)
   if not newItem then return end
   local ok, srcChunk = reaper.GetItemStateChunk(srcItem, '', false)
   if not (ok and srcChunk) then return reaper.GetActiveTake(newItem) end
 
-  local chunk = srcChunk
-  if rePool then
-    local freshGuid = harvestPoolGuid(newItem)
-    if freshGuid then
-      chunk = chunkSetPool(srcChunk, freshGuid)
-      eventMeta:copyPool(harvestPoolGuid(srcItem), freshGuid)   -- fresh pool: fork metadata
-    end
-  end
-  reaper.SetItemStateChunk(newItem, chunkFreshGuids(chunk), false)
+  reaper.SetItemStateChunk(newItem, chunkFreshGuids(srcChunk), false)
   -- Chunk replays src POSITION/LENGTH and may swap the active take; restore + refetch.
   setItemQNRange(newItem, qnPos, qnPos + lengthQN)
   local newTake = reaper.GetActiveTake(newItem)
-  if rePool then
-    -- Fresh pool identity sheds the source's visual identity; the next
-    -- stamp pass mints a hue against the new takeId.
-    reaper.SetMediaItemInfo_Value(newItem, 'I_CUSTOMCOLOR', 0)
-    if newTake then reaper.SetMediaItemTakeInfo_Value(newTake, 'I_CUSTOMCOLOR', 0) end
-  end
-  -- Pooled: idempotent (chunk already carried events). Unpooled: the only
-  -- step that populates events into the freshly-minted pool.
-  copyMidiEvents(reaper.GetActiveTake(srcItem), newTake)
+  copyMidiEvents(reaper.GetActiveTake(srcItem), newTake)   -- idempotent: the chunk carried them
   return newTake
 end
 
@@ -902,7 +878,7 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
       setItemQNRange(sibItem, qnPos, qnPos + len)
       take = reaper.GetActiveTake(sibItem)
     else
-      take = cloneMidiItem(track, sibItem, qnPos, len, false)
+      take = cloneMidiItem(track, sibItem, qnPos, len)
     end
   else
     take = placeAudio(track, entry.id, qnPos, len)
@@ -922,7 +898,7 @@ function am:duplicateTake(take, qnPos)
   if not track then return end
   local copy
   if take.kind == 'midi' then
-    copy = cloneMidiItem(track, take.item, qnPos, take.lengthQN, false)
+    copy = cloneMidiItem(track, take.item, qnPos, take.lengthQN)
   else
     local id = takeIdOf(take.take)
     if not id then return end
@@ -945,33 +921,11 @@ local function roomBelow(take, lengthQN)
   return am:freeSpan(take.trackIdx, appendPoint(take)) >= lengthQN
 end
 
--- An unpooled clone's fresh pool takes its slot at the next build, so the slot is read back
--- off the placed take rather than allocated here.
-local function slotOfPlacedTake(trackIdx, take)
-  for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.take == take then return other.slotIdx end
-  end
-end
-
 --contract: pooled clone at the append point; nil iff non-MIDI or the free span falls short.
 function am:duplicateBelow(take)
   if take.kind ~= 'midi' then return end
   if not roomBelow(take, take.naturalLenQN) then return end
   return am:duplicateTake(take, appendPoint(take))
-end
-
---contract: (slotIdx, take) for an unpooled clone at the append point; nil iff non-MIDI/no slot.
---invariant: parks the clone on scratch for want of room -- the palette grows either way.
-function am:duplicateUnpooledBelow(take)
-  if take.kind ~= 'midi' then return end
-  if not roomBelow(take, take.naturalLenQN) then return am:mintParkedTake(take.trackIdx, '', nil, take.take) end
-  local track = visibleTrackOfCol(take.trackIdx)
-  local newTake = cloneMidiItem(track, take.item, appendPoint(take), take.naturalLenQN, true)
-  if not newTake then return end
-  setTakeName(newTake, take.name)
-  stampForTake(newTake)
-  relayoutTrack(track)
-  return slotOfPlacedTake(take.trackIdx, newTake), newTake
 end
 
 --contract: (slotIdx, take) for an empty lengthQN take named `name` below take; nil iff non-MIDI
@@ -1002,7 +956,6 @@ function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   if srcTake then
     copyMidiEvents(srcTake, take)
     eventMeta:copyPool(takeIdOf(srcTake), guid)   -- fresh pool: fork the source's metadata
-    if name == '' then name = reaper.GetTakeName(srcTake) or '' end
   end
 
   dict[slotIdx] = { kind = 'midi', id = guid }

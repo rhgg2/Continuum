@@ -106,7 +106,7 @@ local function hasUuid(list, uuidTxt)
 end
 
 -- Verbatim chunk clone keeping the same POOLEDEVTS guid → a pooled instance,
--- exactly as arrangeManager.cloneMidiItem(rePool=false) does it.
+-- exactly as arrangeManager.cloneMidiItem does it.
 local function pooledCopy(track, srcItem, atQN)
   local _, chunk = reaper.GetItemStateChunk(srcItem, '', false)
   local item = reaper.CreateNewMIDIItemInProj(track, atQN, atQN + 1, true)

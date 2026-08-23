@@ -52,7 +52,7 @@ into a live take-shape through `am:findTake` and prunes any whose take
 is gone (deleted here or in REAPER). Storing handles rather than grid
 positions means takes moved or resized under the selection still
 resolve correctly. `setFocus`/`focus` are single-element conveniences
-over the same set, for the mouse path and the unpooled duplicate.
+over the same set, for the mouse path.
 
 Cursor and selection are separate pointers, but the caret leads. The
 cursor is the keyboard caret — drawn as a horizontal I-beam on the top
@@ -63,11 +63,10 @@ block left standing somewhere off-screen. Shift+arrow is the exception,
 and builds the selection out of the caret's own travel.
 
 The caret also moves as part of an edit: nudge and shrink follow the
-take, a drop advances the caret, duplicate lands on the copy.
-Those moves keep the selection, and go through `moveCursorBy` rather
-than the `navCursorTo` the nav commands use. They are consequences of
-an edit, not navigation, and clearing there would undo the focus the
-unpooled duplicate has just set.
+take, a drop advances the caret. Those moves keep the selection, and go
+through `moveCursorBy` rather than the `navCursorTo` the nav commands
+use. They are consequences of an edit, not navigation, and clearing
+there would break a run of nudges by dropping what it acts on.
 
 Ctrl-` picks between the two readings of that drop advance. The
 default is a fixed step of `arrangeAdvanceBy` rows, set by Ctrl+digit;
@@ -78,11 +77,16 @@ neighbour advances the caret only as far as it sounds. The fixed step
 survives the toggle, so Ctrl+digit still sets what the caret goes back
 to.
 
-The pooled duplicate (Ctrl-D, Alt+Shift+↓) ends with nothing selected:
-the copy lands, the selection clears, and the caret advances onto the
-copy. The caret alone therefore carries a run of presses down the track,
-each duplicating the copy the last one made — a held selection would
-pin every press to the same source and refuse for want of room.
+The duplicate (Ctrl-D, Alt+Shift+↓) ends with nothing selected: the copy
+lands, the selection clears, and the caret advances onto the copy. The
+caret alone therefore carries a run of presses down the track, each
+duplicating the copy the last one made — a held selection would pin
+every press to the same source and refuse for want of room.
+
+The copy is pooled with its source. The caret lands on it, so the
+variant step (Alt+Shift+→) reaches it next and forks it onto a slot of
+its own: two keys for a copy that edits independently, named from the
+parent root rather than through a prompt.
 The variant step (Alt+Shift+←/→) moves neither, the slot stepped onto
 standing exactly where the source stood; the source's handle prunes
 itself from the selection when the take goes.
@@ -94,12 +98,6 @@ selected. With nothing selected and the cursor parked off-screen (only
 a wheel-pan can strand it there), there is no target and the command
 no-ops. Boot lands the cursor on REAPER's selected item but selects
 nothing (`seedCursor`).
-
-The unpooled duplicate always ends in the name prompt. Where the free
-span at the append point falls short the clone parks on the scratch
-track (`docs/arrangeManager.md` § The append point), and take-properties
-opens on the parked item; only the focus move and the cursor advance
-need it on the grid.
 
 Single-take commands — dive, take-properties, duplicate-below, the
 variant step — go

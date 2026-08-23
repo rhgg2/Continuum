@@ -34,7 +34,7 @@
   @held tracker.diveTo(guid, slotIdx, take, qn)  @ 119-122
   @held tracker.restorePerfFlags()  @ 125
   @held tracker.selectNewTake(guid)  @ 129-132
-  @held tracker.openTakeProperties(item, opts)  @ 136-141
+  @held tracker.openTakeProperties(item)  @ 136-141
   @held tracker.reswingTakes(takes)  @ 144-154
   @held tracker.timeSig()  @ 156
   @held tracker.cursorAnchor()  @ 157
@@ -138,8 +138,6 @@
   @field w eventMeta  @ 31
   @field r facade  @ 18
   @field w facade  @ 35,36,41,45
-  @field r focusName  @ tracker.openTakeProperties:140
-  @field w focusName  @ tracker.openTakeProperties:140
   @field w gm  @ 36,114
   @field r gui  @ 18
   @field w gui  @ 41,45

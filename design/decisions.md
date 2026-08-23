@@ -12,6 +12,12 @@ not eight or ten.
   build. A source shrunk to inside the head floors the item at its start, the floor relayout already
   uses. See docs/arrangeManager.md § Rendered span and source span.
 
+- **2026-08-23** — Arrange's unpooled duplicate retires too, so neither page carries one.
+  duplicateBelow leaves the caret on the copy and next-variant past the last of the family forks it
+  onto a slot of its own: the same fresh pool, named from the parent root instead of through a
+  prompt. Lost with it is forking a take with no room below it, which parked the clone. The rePool
+  arm of cloneMidiItem and take-props' focusName were its only users and go too.
+
 - **2026-08-23** — A dive carries the caret between the arrange and tracker pages in both
   directions, in project QN, each page working out its own row from it. The alternative was the
   sticky arrange cursor the return leg had before, which pointed at the take the dive began on after
