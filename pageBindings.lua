@@ -1,6 +1,9 @@
 -- Every page scope's keymap in one place — cross-page coherence auditable here;
 -- the fx-pattern mini cmgr binds a filtered tracker subset.
 
+-- A delete binding carries Backspace beside Delete: on a Mac laptop the bare key
+-- is Backspace, and Key_Delete (⌦) needs Fn.
+
 --shape: { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }
 
 if not reaper.ImGui_GetBuiltinPath then
@@ -60,7 +63,7 @@ pageBindings.tracker = {
   copy                   = { {ImGui.Key_W, ImGui.Mod_Ctrl},  {ImGui.Key_C, ImGui.Mod_Ctrl} },
   paste                  = { {ImGui.Key_Y, ImGui.Mod_Super}, {ImGui.Key_V, ImGui.Mod_Ctrl} },
   duplicateDown          = { {ImGui.Key_D, ImGui.Mod_Ctrl} },
-  deleteSel              = { ImGui.Key_Delete },
+  deleteSel              = { ImGui.Key_Delete, ImGui.Key_Backspace },
   nudgeCoarseUp          = { {ImGui.Key_Equal, ImGui.Mod_Ctrl} },
   nudgeCoarseDown        = { {ImGui.Key_Minus, ImGui.Mod_Ctrl} },
   nudgeFineUp            = { {ImGui.Key_Equal, ImGui.Mod_Shift} },
@@ -78,6 +81,7 @@ pageBindings.tracker = {
   prevVariant            = { {ImGui.Key_LeftArrow,  ImGui.Mod_Alt, ImGui.Mod_Shift} },
   nextVariant            = { {ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} },
   duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift} },
+  deleteBoundSlot        = { {ImGui.Key_Delete, ImGui.Mod_Ctrl}, {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
   matchGridToCursor      = { {ImGui.Key_M, ImGui.Mod_Super} },
   groupDuplicate         = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   groupPaste             = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
@@ -158,8 +162,10 @@ local arrange = {
   arrangeNudgeForward           = { { ImGui.Key_DownArrow,  ImGui.Mod_Super } },
   arrangeShrinkTake             = { { ImGui.Key_UpArrow,    ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeGrowTake               = { { ImGui.Key_DownArrow,  ImGui.Mod_Super, ImGui.Mod_Shift } },
-  arrangeDeleteTake             = { ImGui.Key_Delete },
+  arrangeDeleteTake             = { ImGui.Key_Delete, ImGui.Key_Backspace },
   arrangeDeleteAdvance          = { ImGui.Key_Period },
+  deleteSlot                    = { { ImGui.Key_Delete,      ImGui.Mod_Ctrl },
+                                    { ImGui.Key_Backspace,   ImGui.Mod_Ctrl } },
   arrangeDive                   = { ImGui.Key_Enter },
   arrangeTakeProperties         = { { ImGui.Key_Backspace,  ImGui.Mod_Super } },
   arrangeDuplicateBelow         = { { ImGui.Key_D,          ImGui.Mod_Ctrl },

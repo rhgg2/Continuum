@@ -310,6 +310,56 @@ return {
     end,
   },
 
+  -- Ctrl+Delete escalates Delete: not the instance under the cursor but the slot
+  -- it belongs to, every instance of it, and the parked copy.
+  {
+    name = 'deleteSlot forever-deletes the cursor take\'s slot behind a confirm',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 4, len = 1, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t3', isMidi = true,
+                                pos = 8, len = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()                    -- cursor on the first {p1} instance
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('deleteSlot')
+      t.truthy(fakeModalHost.last, 'confirm opened before anything is destroyed')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      t.eq(#am:tracksTakes(0), 3, 'nothing gone while the confirm stands')
+      fakeModalHost.last.callback(true)
+      t.eq(#am:tracksTakes(0), 1, 'both instances of the cursor slot are gone')
+      local slots = am:trackSlots(0)
+      t.eq(#slots, 1, 'and the slot itself left the palette')
+      t.eq(slots[1].id, '{p2}', 'the other slot untouched')
+    end,
+  },
+
+  {
+    name = 'deleteSlot no-ops with the cursor off every take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      -- Row 1 is the take's bottom-edge row (still on it); row 2 is empty.
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('deleteSlot')
+      t.eq(fakeModalHost.last, nil, 'no take under the cursor — no confirm, nothing deleted')
+    end,
+  },
+
   {
     name = 'arrangeNudgeForward is a no-op when the next row is occupied',
     run = function(harness)

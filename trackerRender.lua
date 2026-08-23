@@ -737,6 +737,7 @@ help:registerPage('tracker', {
     { cmd = 'nextVariant', label = 'Next variant / vary' },
     { cmd = 'duplicateUnpooledBelow', label = 'Duplicate (unpooled)' },
     { cmd = 'takeProperties', label = 'Take properties' },
+    { cmd = 'deleteBoundSlot', label = 'Delete take + instances' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Global', items = {
     { cmd = 'undo', label = 'Undo' },
@@ -1618,6 +1619,19 @@ local function focusParams()
   tv:overrideTab('parameters', caretKeyNow()); paletteFocus, focusFindReq = 'find', true
 end
 
+-- Ctrl+Delete forever-deletes the bound slot — every instance across the arrange and
+-- the parked copy — so it stands behind a confirm, as the arrange page's does.
+local function deleteBoundSlot()
+  local trackIdx, slotIdx = tv:currentTrackIdx(), tv:currentSlotIdx()
+  if not (trackIdx and slotIdx) then return end
+  openConfirm('Delete take',
+              util.atomic('Delete slot', function(yes)
+                if yes then arrange().deleteSlot(trackIdx, slotIdx) end
+              end),
+              ('Delete take %s?\nRemoves every instance and discards the parked copy. (y/n)')
+                :format(currentSlotLabel()))
+end
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -1633,6 +1647,7 @@ tracker:registerAll{
   prevVariant            = { function() tv:stepVariant(-1) end, 'Previous variant' },
   nextVariant            = { function() tv:stepVariant(1)  end, 'Next variant' },
   duplicateUnpooledBelow = { duplicateUnpooledTake, 'Duplicate take (unpooled)' },
+  deleteBoundSlot        = deleteBoundSlot,
 
   prevTrack = { function() tv:gotoTrack(-1) end, 'Previous track' },
   nextTrack = { function() tv:gotoTrack(1)  end, 'Next track' },

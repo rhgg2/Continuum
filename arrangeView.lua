@@ -395,6 +395,12 @@ function av:scroll()      return scrollRow, scrollCol end
 function av:focus()       return selection[1] end
 function av:paletteSlot() return paletteSlot end
 
+--contract: the slot index of the take under the grid cursor; nil over empty space.
+function av:cursorSlot()
+  local take = takeAtCursor()
+  return take and take.slotIdx or nil
+end
+
 --contract: clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.
 function av:setCursor(row, col)
   cursorRow = math.max(0, math.floor(row))

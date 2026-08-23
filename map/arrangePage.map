@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=79  mode=chunk  self=ap
+@module arrangePage  src=arrangePage.lua  loc=80  mode=chunk  self=ap
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta
 
 # Imports
@@ -30,19 +30,20 @@
   @held arrange.stepVariant(take, dir)  @ 55
   @held arrange.dropSlot(trackIdx, slotIdx, qnPos)  @ 56
   @held arrange.renameSlot(trackIdx, slotIdx, name)  @ 57
-  @held arrange.hasPlacedTakes()  @ 58
-  @held arrange.isParkedTake(take)  @ 59
-  @held arrange.ownerTrack(take)  @ 60
-  @held arrange.findTake(take)  @ 61
-  @held arrange.slotOfTake(take)  @ 62
-  @held arrange.seekInstance(take, qn, back)  @ 63
-  @held arrange.playPositionQN()  @ 64
-  @held arrange.editCursorQN()  @ 65
-  @held arrange.playFromQN(qn)  @ 66
-  @held arrange.loopTo(loQN, hiQN)  @ 67
-  @held arrange.reswingAll(name)  @ 68
-  @held arrange.takesUsing(name)  @ 69
-  @held arrange.tempersInUse()  @ 70
+  @held arrange.deleteSlot(trackIdx, slotIdx)  @ 58
+  @held arrange.hasPlacedTakes()  @ 59
+  @held arrange.isParkedTake(take)  @ 60
+  @held arrange.ownerTrack(take)  @ 61
+  @held arrange.findTake(take)  @ 62
+  @held arrange.slotOfTake(take)  @ 63
+  @held arrange.seekInstance(take, qn, back)  @ 64
+  @held arrange.playPositionQN()  @ 65
+  @held arrange.editCursorQN()  @ 66
+  @held arrange.playFromQN(qn)  @ 67
+  @held arrange.loopTo(loQN, hiQN)  @ 68
+  @held arrange.reswingAll(name)  @ 69
+  @held arrange.takesUsing(name)  @ 70
+  @held arrange.tempersInUse()  @ 71
 
 # Public API (ap:*)
   -- Page lifecycle — arrange is project-wide, so bind takes no take
@@ -53,43 +54,44 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.  @ 37
   -- Arrange service surface — av passthroughs
   -- Page interface — render delegates to the renderer
-  @api ap:toolbarSegments()  @ 74
-  @api ap:renderBody(_, w, h, dispatch)  @ 75
-  @api ap:renderStatusBar(ctx)  @ 76
-  @api ap:focusState()  @ 77
+  @api ap:toolbarSegments()  @ 75
+  @api ap:renderBody(_, w, h, dispatch)  @ 76
+  @api ap:renderStatusBar(ctx)  @ 77
+  @api ap:focusState()  @ 78
 
 # Uses (outbound edges)
-  @use call    ar:focusState  @ focusState:77
-  @use call    ar:renderBody  @ renderBody:75
-  @use call    ar:renderStatusBar  @ renderStatusBar:76
-  @use call    ar:toolbarSegments  @ toolbarSegments:74
+  @use call    ar:focusState  @ focusState:78
+  @use call    ar:renderBody  @ renderBody:76
+  @use call    ar:renderStatusBar  @ renderStatusBar:77
+  @use call    ar:toolbarSegments  @ toolbarSegments:75
   @use call    av:cursorCol  @ arrange.currentTrackIdx:42
+  @use call    av:deleteSlot  @ arrange.deleteSlot:58
   @use call    av:dropBand  @ unbind:35
   @use call    av:dropSlot  @ arrange.dropSlot:56
   @use call    av:duplicateBelow  @ arrange.duplicateBelow:54
-  @use call    av:editCursorQN  @ arrange.editCursorQN:65
-  @use call    av:findTake  @ arrange.findTake:61
-  @use call    av:hasPlacedTakes  @ arrange.hasPlacedTakes:58
-  @use call    av:isParkedTake  @ arrange.isParkedTake:59
+  @use call    av:editCursorQN  @ arrange.editCursorQN:66
+  @use call    av:findTake  @ arrange.findTake:62
+  @use call    av:hasPlacedTakes  @ arrange.hasPlacedTakes:59
+  @use call    av:isParkedTake  @ arrange.isParkedTake:60
   @use call    av:keyForSlot  @ arrange.keyForSlot:48
-  @use call    av:loopTo  @ arrange.loopTo:67
+  @use call    av:loopTo  @ arrange.loopTo:68
   @use call    av:midiSlots  @ arrange.midiSlots:44
   @use call    av:mintParkedTake  @ arrange.mintParkedTake:51
   @use call    av:newTakeBelow  @ arrange.newTakeBelow:53
   @use call    av:nextFreeSlot  @ arrange.nextFreeSlot:49
-  @use call    av:ownerTrack  @ arrange.ownerTrack:60
-  @use call    av:playFromQN  @ arrange.playFromQN:66
-  @use call    av:playPositionQN  @ arrange.playPositionQN:64
+  @use call    av:ownerTrack  @ arrange.ownerTrack:61
+  @use call    av:playFromQN  @ arrange.playFromQN:67
+  @use call    av:playPositionQN  @ arrange.playPositionQN:65
   @use call    av:projectTracks  @ arrange.tracks:43
   @use call    av:renameSlot  @ arrange.renameSlot:57
-  @use call    av:reswingAll  @ arrange.reswingAll:68
+  @use call    av:reswingAll  @ arrange.reswingAll:69
   @use call    av:seedCursor  @ seedCursorFromReaper:38
-  @use call    av:seekInstance  @ arrange.seekInstance:63
-  @use call    av:slotOfTake  @ arrange.slotOfTake:62
+  @use call    av:seekInstance  @ arrange.seekInstance:64
+  @use call    av:slotOfTake  @ arrange.slotOfTake:63
   @use call    av:stepVariant  @ arrange.stepVariant:55
   @use call    av:takeForSlot  @ arrange.takeForSlot:45
-  @use call    av:takesUsing  @ arrange.takesUsing:69
-  @use call    av:tempersInUse  @ arrange.tempersInUse:70
+  @use call    av:takesUsing  @ arrange.takesUsing:70
+  @use call    av:tempersInUse  @ arrange.tempersInUse:71
   @use call    av:trackHandle  @ arrange.trackHandle:47
   @use call    av:trackIdxForGuid  @ arrange.trackIdxForGuid:46
   @use call    facade.publish  @ <load>:41
@@ -114,39 +116,40 @@
   @field r cmgr  @ 19
   @field w cmgr  @ 24,25
   @field w currentTrackIdx  @ arrange.currentTrackIdx:42
+  @field w deleteSlot  @ arrange.deleteSlot:58
   @field w dropSlot  @ arrange.dropSlot:56
   @field r ds  @ 19
   @field w ds  @ 23
   @field w duplicateBelow  @ arrange.duplicateBelow:54
-  @field w editCursorQN  @ arrange.editCursorQN:65
+  @field w editCursorQN  @ arrange.editCursorQN:66
   @field r eventMeta  @ 19
   @field w eventMeta  @ 23
   @field r facade  @ 19
   @field w facade  @ 23,24
-  @field w findTake  @ arrange.findTake:61
+  @field w findTake  @ arrange.findTake:62
   @field r gui  @ 19
   @field w gui  @ 25
-  @field w hasPlacedTakes  @ arrange.hasPlacedTakes:58
-  @field w isParkedTake  @ arrange.isParkedTake:59
+  @field w hasPlacedTakes  @ arrange.hasPlacedTakes:59
+  @field w isParkedTake  @ arrange.isParkedTake:60
   @field w keyForSlot  @ arrange.keyForSlot:48
-  @field w loopTo  @ arrange.loopTo:67
+  @field w loopTo  @ arrange.loopTo:68
   @field w midiSlots  @ arrange.midiSlots:44
   @field w mintParkedTake  @ arrange.mintParkedTake:50
   @field r modalHost  @ 19
   @field w modalHost  @ 25
   @field w newTakeBelow  @ arrange.newTakeBelow:53
   @field w nextFreeSlot  @ arrange.nextFreeSlot:49
-  @field w ownerTrack  @ arrange.ownerTrack:60
-  @field w playFromQN  @ arrange.playFromQN:66
-  @field w playPositionQN  @ arrange.playPositionQN:64
+  @field w ownerTrack  @ arrange.ownerTrack:61
+  @field w playFromQN  @ arrange.playFromQN:67
+  @field w playPositionQN  @ arrange.playPositionQN:65
   @field w renameSlot  @ arrange.renameSlot:57
-  @field w reswingAll  @ arrange.reswingAll:68
-  @field w seekInstance  @ arrange.seekInstance:63
-  @field w slotOfTake  @ arrange.slotOfTake:62
+  @field w reswingAll  @ arrange.reswingAll:69
+  @field w seekInstance  @ arrange.seekInstance:64
+  @field w slotOfTake  @ arrange.slotOfTake:63
   @field w stepVariant  @ arrange.stepVariant:55
   @field w takeForSlot  @ arrange.takeForSlot:45
-  @field w takesUsing  @ arrange.takesUsing:69
-  @field w tempersInUse  @ arrange.tempersInUse:70
+  @field w takesUsing  @ arrange.takesUsing:70
+  @field w tempersInUse  @ arrange.tempersInUse:71
   @field w trackHandle  @ arrange.trackHandle:47
   @field w trackIdxForGuid  @ arrange.trackIdxForGuid:46
   @field w tracks  @ arrange.tracks:43

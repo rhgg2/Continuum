@@ -100,6 +100,9 @@ local function resetArrange()
   fakeArrange.renameSlot = function(trackIdx, slotIdx, name)
     fakeArrange.calls.rename = { trackIdx = trackIdx, slotIdx = slotIdx, name = name }
   end
+  fakeArrange.deleteSlot = function(trackIdx, slotIdx)
+    fakeArrange.calls.deleteSlot = { trackIdx = trackIdx, slotIdx = slotIdx }
+  end
   fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
@@ -233,6 +236,33 @@ return {
       t.eq(fakeArrange.calls.mint.src, 'tr1/t1', 'dup passed the bound take as clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
       t.eq(fakeModalHost.last.focusName, true, 'dup opens take-properties focused on the name field')
+    end,
+  },
+
+  -- Ctrl+Delete forever-deletes the bound slot; the same gesture and the same
+  -- confirm as the arrange page's.
+  {
+    name = 'deleteBoundSlot confirms, then deletes the bound slot through the arrange facade',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind the take
+      h.cmgr:push('tracker')
+
+      h.cmgr:invoke('deleteBoundSlot')
+      t.truthy(fakeModalHost.last, 'confirm opened before anything is destroyed')
+      t.eq(fakeArrange.calls.deleteSlot, nil, 'nothing deleted while the confirm stands')
+      fakeModalHost.last.callback(false)
+      t.eq(fakeArrange.calls.deleteSlot, nil, 'declined — still nothing deleted')
+
+      h.cmgr:invoke('deleteBoundSlot')
+      fakeModalHost.last.callback(true)
+      t.eq(fakeArrange.calls.deleteSlot.trackIdx, 0, 'deleted on the bound track')
+      t.eq(fakeArrange.calls.deleteSlot.slotIdx,  0, 'and the bound slot')
     end,
   },
 

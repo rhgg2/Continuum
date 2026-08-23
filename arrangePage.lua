@@ -55,6 +55,7 @@ facade.publish('arrange', {
   stepVariant     = function(take, dir) return av:stepVariant(take, dir) end,
   dropSlot        = function(trackIdx, slotIdx, qnPos) return av:dropSlot(trackIdx, slotIdx, qnPos) end,
   renameSlot      = function(trackIdx, slotIdx, name)  av:renameSlot(trackIdx, slotIdx, name) end,
+  deleteSlot      = function(trackIdx, slotIdx)        av:deleteSlot(trackIdx, slotIdx) end,
   hasPlacedTakes  = function() return av:hasPlacedTakes() end,
   isParkedTake    = function(take) return av:isParkedTake(take) end,
   ownerTrack      = function(take) return av:ownerTrack(take) end,

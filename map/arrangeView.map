@@ -1,4 +1,4 @@
-@module arrangeView  src=arrangeView.lua  loc=766  mode=chunk  self=av
+@module arrangeView  src=arrangeView.lua  loc=772  mode=chunk  self=av
 @deps cm, cmgr, facade, am
 
 # Invariants & contracts
@@ -38,8 +38,8 @@
   @state DRAG_EDGE_PX = 5  @ 42   -- end-edge grab band for a resize hit-test
   @state PAGE_ROWS = 16  @ 43   -- PageUp / PageDown cursor step
   @state selectScope = cmgr:scope('arrangeSelect')  @ 150
-  @state arrange = cmgr:scope('arrange')  @ 716
-  @state placeCmds = {}  @ 760
+  @state arrange = cmgr:scope('arrange')  @ 722
+  @state placeCmds = {}  @ 766
 
 # Private functions
   @fn tracker()  @ 19
@@ -129,35 +129,35 @@
   -- Project data — proxied from am so the page holds no am reference
   -- Transport — gutter mouse drives the REAPER edit cursor / loop range
   -- Grid mouse — hit-test, in-flight drag geometry, commit
-  @fn groupDragCandidate(press, mouseQN, snapped)  @ 574-588
+  @fn groupDragCandidate(press, mouseQN, snapped)  @ 580-594
       -- Group drag: one deltaQN from the grabbed take's snapped destination, applied
       -- to every member. fits excludes members on move (they vacate), not on dup.
-  @fn commitGroupDrag(press, cand)  @ 644-658
+  @fn commitGroupDrag(press, cand)  @ 650-664
       -- Commit a group drag: move all members by deltaQN (travel-ordered) or
       -- duplicate each at its shifted start and reselect the copies.
 
 # Functions held in tables
-  @held arrange.arrangeCursorUp()  @ 719
-  @held arrange.arrangeCursorDown()  @ 720
-  @held arrange.arrangeCursorLeft()  @ 721
-  @held arrange.arrangeCursorRight()  @ 722
-  @held arrange.arrangePageUp()  @ 723
-  @held arrange.arrangePageDown()  @ 724
-  @held arrange.arrangeHome()  @ 725
-  @held arrange.arrangeEnd()  @ 726
-  @held arrange.arrangeSelectUp()  @ 727
-  @held arrange.arrangeSelectDown()  @ 728
-  @held arrange.arrangeSelectLeft()  @ 729
-  @held arrange.arrangeSelectRight()  @ 730
-  @held arrange.arrangeNudgeBack()  @ 731
-  @held arrange.arrangeNudgeForward()  @ 732
-  @held arrange.arrangeShrinkTake()  @ 733
-  @held arrange.arrangeGrowTake()  @ 734
-  @held arrange.arrangePrevVariant()  @ 741
-  @held arrange.arrangeNextVariant()  @ 742
-  @held arrange.arrangeClearSelection()  @ 743
-  @held arrange.arrangeZoomIn()  @ 749
-  @held arrange.arrangeZoomOut()  @ 750
+  @held arrange.arrangeCursorUp()  @ 725
+  @held arrange.arrangeCursorDown()  @ 726
+  @held arrange.arrangeCursorLeft()  @ 727
+  @held arrange.arrangeCursorRight()  @ 728
+  @held arrange.arrangePageUp()  @ 729
+  @held arrange.arrangePageDown()  @ 730
+  @held arrange.arrangeHome()  @ 731
+  @held arrange.arrangeEnd()  @ 732
+  @held arrange.arrangeSelectUp()  @ 733
+  @held arrange.arrangeSelectDown()  @ 734
+  @held arrange.arrangeSelectLeft()  @ 735
+  @held arrange.arrangeSelectRight()  @ 736
+  @held arrange.arrangeNudgeBack()  @ 737
+  @held arrange.arrangeNudgeForward()  @ 738
+  @held arrange.arrangeShrinkTake()  @ 739
+  @held arrange.arrangeGrowTake()  @ 740
+  @held arrange.arrangePrevVariant()  @ 747
+  @held arrange.arrangeNextVariant()  @ 748
+  @held arrange.arrangeClearSelection()  @ 749
+  @held arrange.arrangeZoomIn()  @ 755
+  @held arrange.arrangeZoomOut()  @ 756
 
 # Public API (av:*)
   @api av:cursorRow()  @ 392
@@ -165,296 +165,298 @@
   @api av:scroll()  @ 394
   @api av:focus()  @ 395
   @api av:paletteSlot()  @ 396
-  @api av:setCursor(row, col)  @ 399-406
-      @contract  clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.  @ 398
-  @api av:scrollBy(dRow, dCol)  @ 410-416
-      @contract  wheel-driven viewport pan, independent of the cursor; cursor stays put.  @ 408
-      @contract  scroll-right stops once the last column is fully visible (maxCol - gridCols + 1).  @ 409
-  @api av:followsPlay()  @ 418
-  @api av:setFollowPlay(on)  @ 419
-  @api av:followPlay()  @ 423-442
-      @contract  no-op unless follow is on and transport runs; boundary-scrolls play head into view.  @ 421
-      @contract  a manual scrollBy suspends follow until the next play-start or a transport seek.  @ 422
-  @api av:setFocus(handle)  @ 445
-      @contract  setFocus(h) makes {h} the selection (nil clears); focus() returns the first handle.  @ 444
-  @api av:isSelected(handle)  @ 448
-      @contract  isSelected(handle) → true iff that handle is currently selected (no liveness check).  @ 447
-  @api av:addToSelection(handles)  @ 451-455
-      @contract  addToSelection unions handles in (already-present and nil handles skipped).  @ 450
-  @api av:toggleSelected(handle)  @ 458-461
-      @contract  toggleSelected adds the handle if absent, removes it if present.  @ 457
-  @api av:selectionSet()  @ 464-468
-      @contract  selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.  @ 463
-  @api av:setSelection(handles)  @ 471
-      @contract  setSelection replaces the selection with the handle list (nils filtered); [] clears.  @ 470
-  @api av:clearSelection()  @ 472
-  @api av:selectBand()  @ 475
-      @contract  the standing Shift+arrow rect as {colLo,colHi,qnLo,qnHi}; nil when no band is up.  @ 474
-  @api av:dropBand()  @ 478
-      @contract  takes the band down and pops its scope; the page calls this on unbind.  @ 477
-  @api av:setPaletteSlot(idx)  @ 481-483
-      @contract  setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).  @ 480
-  @api av:beatPerRow()  @ 485
-  @api av:setBeatPerRow(v)  @ 487-495
-      @contract  clamps to [1/4, 64]; rescales cursorRow to hold its QN, so zoom anchors on the cursor.  @ 486
-  @api av:qnToRow(qn)  @ 496
-  @api av:rowToQN(row)  @ 497
-  @api av:setGridSize(rows, cols)  @ 500-506
-      @contract  page hands over visible cell counts each frame; follows cursor only on resize.  @ 499
-  @api av:setMaxCol(n)  @ 509
-      @contract  page pushes live track count each frame; setCursor clamps cursorCol to it.  @ 508
-  @api av:projectTracks()  @ 513
-  @api av:tracksTakes(trackIdx)  @ 514
-  @api av:columnChanRange(c)  @ 515
-  @api av:visibleTakes(fromCol, toCol, qnLo, qnHi)  @ 516-518
-  @api av:trackSlots(trackIdx)  @ 519
-  @api av:takeForSlot(trackIdx, slotIdx)  @ 520
-  @api av:trackIdxForGuid(guid)  @ 521
-  @api av:trackHandle(trackIdx)  @ 522
-  @api av:keyForSlot(slotIdx)  @ 523
-  @api av:nextFreeSlot(trackIdx)  @ 524
-  @api av:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 525-527
-  @api av:newTakeBelow(take, name, lengthQN)  @ 528-530
-  @api av:duplicateBelow(take)  @ 531
-  @api av:stepVariant(take, dir)  @ 532
-  @api av:isParkedTake(take)  @ 533
-  @api av:ownerTrack(take)  @ 534
-  @api av:dropSlot(trackIdx, slotIdx, qnPos)  @ 535
-  @api av:hasPlacedTakes()  @ 536
-  @api av:editCursorQN()  @ 537
-  @api av:playPositionQN()  @ 538
-  @api av:playFromQN(qn)  @ 539
-  @api av:findTake(take)  @ 540
-  @api av:slotOfTake(take)  @ 541
-  @api av:seekInstance(take, qn, back)  @ 542
-  @api av:loopRangeQN()  @ 543
-  @api av:takesUsing(name)  @ 544
-  @api av:reswingAll(name)  @ 545
-  @api av:tempersInUse()  @ 546
-  @api av:midiSlots(trackIdx)  @ 548
-  @api av:setEditCursorQN(qn)  @ 552
-  @api av:setLoopRangeQN(lo, hi)  @ 553
-  @api av:loopTo(loQN, hiQN)  @ 554
-  @api av:clearLoopRange()  @ 555
-  @api av:hitTake(trackIdx, qn, qnPerPx)  @ 561-570
-      @contract  returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.  @ 559
-      @contract  end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.  @ 560
-  @api av:dragCandidate(press, mouseQN, snapped)  @ 593-614
-      @contract  returns { ghosts={{take,startQN,lengthQN},…}, fits }; one ghost per selected member.  @ 590
-      @contract  fits false iff any ghost's destination start is occupied.  @ 591
-      @contract  move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.  @ 592
-  @api av:gutterLoopCand(press, mouseQN, snapped)  @ 617-624
-      @contract  returns { loQN, hiQN } floored to row boxes unless snapped=false; widens to ≥1 row.  @ 616
-  @api av:createCandidate(press, mouseQN, snapped)  @ 627-632
-      @contract  returns {startQN=press.qn, lengthQN}; end floors to row box if snapped; >=1 row.  @ 626
-  @api av:lassoCandidate(press, mcol, mqn)  @ 635-640
-      @contract  takes intersecting the free press/drag rect (colFrac x QN); returns bounds + handles.  @ 634
-  @api av:commitDrag(press, cand)  @ 661-678
-      @contract  group drag moves/dups the whole selection; single drag keeps focus, dup reselects copy.  @ 660
+  @api av:cursorSlot()  @ 399-402
+      @contract  the slot index of the take under the grid cursor; nil over empty space.  @ 398
+  @api av:setCursor(row, col)  @ 405-412
+      @contract  clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.  @ 404
+  @api av:scrollBy(dRow, dCol)  @ 416-422
+      @contract  wheel-driven viewport pan, independent of the cursor; cursor stays put.  @ 414
+      @contract  scroll-right stops once the last column is fully visible (maxCol - gridCols + 1).  @ 415
+  @api av:followsPlay()  @ 424
+  @api av:setFollowPlay(on)  @ 425
+  @api av:followPlay()  @ 429-448
+      @contract  no-op unless follow is on and transport runs; boundary-scrolls play head into view.  @ 427
+      @contract  a manual scrollBy suspends follow until the next play-start or a transport seek.  @ 428
+  @api av:setFocus(handle)  @ 451
+      @contract  setFocus(h) makes {h} the selection (nil clears); focus() returns the first handle.  @ 450
+  @api av:isSelected(handle)  @ 454
+      @contract  isSelected(handle) → true iff that handle is currently selected (no liveness check).  @ 453
+  @api av:addToSelection(handles)  @ 457-461
+      @contract  addToSelection unions handles in (already-present and nil handles skipped).  @ 456
+  @api av:toggleSelected(handle)  @ 464-467
+      @contract  toggleSelected adds the handle if absent, removes it if present.  @ 463
+  @api av:selectionSet()  @ 470-474
+      @contract  selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.  @ 469
+  @api av:setSelection(handles)  @ 477
+      @contract  setSelection replaces the selection with the handle list (nils filtered); [] clears.  @ 476
+  @api av:clearSelection()  @ 478
+  @api av:selectBand()  @ 481
+      @contract  the standing Shift+arrow rect as {colLo,colHi,qnLo,qnHi}; nil when no band is up.  @ 480
+  @api av:dropBand()  @ 484
+      @contract  takes the band down and pops its scope; the page calls this on unbind.  @ 483
+  @api av:setPaletteSlot(idx)  @ 487-489
+      @contract  setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).  @ 486
+  @api av:beatPerRow()  @ 491
+  @api av:setBeatPerRow(v)  @ 493-501
+      @contract  clamps to [1/4, 64]; rescales cursorRow to hold its QN, so zoom anchors on the cursor.  @ 492
+  @api av:qnToRow(qn)  @ 502
+  @api av:rowToQN(row)  @ 503
+  @api av:setGridSize(rows, cols)  @ 506-512
+      @contract  page hands over visible cell counts each frame; follows cursor only on resize.  @ 505
+  @api av:setMaxCol(n)  @ 515
+      @contract  page pushes live track count each frame; setCursor clamps cursorCol to it.  @ 514
+  @api av:projectTracks()  @ 519
+  @api av:tracksTakes(trackIdx)  @ 520
+  @api av:columnChanRange(c)  @ 521
+  @api av:visibleTakes(fromCol, toCol, qnLo, qnHi)  @ 522-524
+  @api av:trackSlots(trackIdx)  @ 525
+  @api av:takeForSlot(trackIdx, slotIdx)  @ 526
+  @api av:trackIdxForGuid(guid)  @ 527
+  @api av:trackHandle(trackIdx)  @ 528
+  @api av:keyForSlot(slotIdx)  @ 529
+  @api av:nextFreeSlot(trackIdx)  @ 530
+  @api av:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 531-533
+  @api av:newTakeBelow(take, name, lengthQN)  @ 534-536
+  @api av:duplicateBelow(take)  @ 537
+  @api av:stepVariant(take, dir)  @ 538
+  @api av:isParkedTake(take)  @ 539
+  @api av:ownerTrack(take)  @ 540
+  @api av:dropSlot(trackIdx, slotIdx, qnPos)  @ 541
+  @api av:hasPlacedTakes()  @ 542
+  @api av:editCursorQN()  @ 543
+  @api av:playPositionQN()  @ 544
+  @api av:playFromQN(qn)  @ 545
+  @api av:findTake(take)  @ 546
+  @api av:slotOfTake(take)  @ 547
+  @api av:seekInstance(take, qn, back)  @ 548
+  @api av:loopRangeQN()  @ 549
+  @api av:takesUsing(name)  @ 550
+  @api av:reswingAll(name)  @ 551
+  @api av:tempersInUse()  @ 552
+  @api av:midiSlots(trackIdx)  @ 554
+  @api av:setEditCursorQN(qn)  @ 558
+  @api av:setLoopRangeQN(lo, hi)  @ 559
+  @api av:loopTo(loQN, hiQN)  @ 560
+  @api av:clearLoopRange()  @ 561
+  @api av:hitTake(trackIdx, qn, qnPerPx)  @ 567-576
+      @contract  returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.  @ 565
+      @contract  end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.  @ 566
+  @api av:dragCandidate(press, mouseQN, snapped)  @ 599-620
+      @contract  returns { ghosts={{take,startQN,lengthQN},…}, fits }; one ghost per selected member.  @ 596
+      @contract  fits false iff any ghost's destination start is occupied.  @ 597
+      @contract  move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.  @ 598
+  @api av:gutterLoopCand(press, mouseQN, snapped)  @ 623-630
+      @contract  returns { loQN, hiQN } floored to row boxes unless snapped=false; widens to ≥1 row.  @ 622
+  @api av:createCandidate(press, mouseQN, snapped)  @ 633-638
+      @contract  returns {startQN=press.qn, lengthQN}; end floors to row box if snapped; >=1 row.  @ 632
+  @api av:lassoCandidate(press, mcol, mqn)  @ 641-646
+      @contract  takes intersecting the free press/drag rect (colFrac x QN); returns bounds + handles.  @ 640
+  @api av:commitDrag(press, cand)  @ 667-684
+      @contract  group drag moves/dups the whole selection; single drag keeps focus, dup reselects copy.  @ 666
   -- Slot operations — the page's modal commits these
-  @api av:renameSlot(trackIdx, slotIdx, name)  @ 682-684
-  @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 687-697
-      @contract  mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.  @ 686
-  @api av:deleteSlot(trackIdx, slotIdx)  @ 699-702
+  @api av:renameSlot(trackIdx, slotIdx, name)  @ 688-690
+  @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 693-703
+      @contract  mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.  @ 692
+  @api av:deleteSlot(trackIdx, slotIdx)  @ 705-708
   -- Boot + reveal — the page interface delegates here
-  @api av:seedCursor()  @ 707-711
-      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.  @ 706
+  @api av:seedCursor()  @ 713-717
+      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.  @ 712
 
 # Uses (outbound edges)
-  @use call    am:clearLoopRange  @ clearLoop:373 clearLoopRange:555
-  @use call    am:columnChanRange  @ columnChanRange:515
-  @use call    am:createAndDropMidi  @ createSlot:688
-  @use call    am:deleteSlot  @ deleteSlot:700
+  @use call    am:clearLoopRange  @ clearLoop:373 clearLoopRange:561
+  @use call    am:columnChanRange  @ columnChanRange:521
+  @use call    am:createAndDropMidi  @ createSlot:694
+  @use call    am:deleteSlot  @ deleteSlot:706
   @use call    am:deleteTake  @ deleteSelected:283
-  @use call    am:dropInstance  @ dropAt:341 dropSlot:535
-  @use call    am:duplicateBelow  @ duplicateSelectedBelow:309 duplicateBelow:531
-  @use call    am:duplicateTake  @ commitGroupDrag:650 commitDrag:672
+  @use call    am:dropInstance  @ dropAt:341 dropSlot:541
+  @use call    am:duplicateBelow  @ duplicateSelectedBelow:309 duplicateBelow:537
+  @use call    am:duplicateTake  @ commitGroupDrag:656 commitDrag:678
   @use call    am:duplicateUnpooledBelow  @ duplicateUnpooledSelectedBelow:327
-  @use call    am:editCursorQN  @ editCursorQN:537
-  @use call    am:findTake  @ advanceCursorPastNewTake:90 selectedTakes:101 findTake:540
-  @use call    am:hasPlacedTakes  @ hasPlacedTakes:536
-  @use call    am:initialCursor  @ seedCursor:708
-  @use call    am:isParkedTake  @ duplicateUnpooledSelectedBelow:329 isParkedTake:533
-  @use call    am:keyForSlot  @ keyForSlot:523 <load>:762
-  @use call    am:loopRangeQN  @ setLoopStartHere:357 setLoopEndHere:364 loopRangeQN:543
-  @use call    am:loopTo  @ loopToTargets:385 loopTo:554
-  @use call    am:mintParkedTake  @ mintParkedTake:526
-  @use call    am:moveTake  @ moveTakesBy:247 commitDrag:675
-  @use call    am:newTakeBelow  @ newTakeBelow:529
-  @use call    am:nextFreeSlot  @ nextFreeSlot:524
-  @use call    am:ownerTrack  @ ownerTrack:534
-  @use call    am:playFromQN  @ playFromCursor:370 playFromQN:539
-  @use call    am:playPositionQN  @ followPlay:425 playPositionQN:538
-  @use call    am:projectEndQN  @ setLoopStartHere:359 arrange.arrangeEnd:726
-  @use call    am:projectTracks  @ diveSelected:290 projectTracks:513 createSlot:692
-  @use call    am:renameSlot  @ renameSlot:683
-  @use call    am:resizeTake  @ resizeSelected:267 commitDrag:670
-  @use call    am:reswingAll  @ reswingAll:545
-  @use call    am:seekInstance  @ seekInstance:542
-  @use call    am:setEditCursorQN  @ setEditCursorQN:552
-  @use call    am:setLoopRangeQN  @ setLoopStartHere:359 setLoopEndHere:366 setLoopRangeQN:553
-  @use call    am:slotOfTake  @ slotOfTake:541
-  @use call    am:startIsClear  @ dragCandidate:612
-  @use call    am:stepVariant  @ stepVariantOfSelected:319 stepVariant:532
-  @use call    am:takeForSlot  @ takeForSlot:520
-  @use call    am:takesUsing  @ takesUsing:544
-  @use call    am:tempersInUse  @ tempersInUse:546
-  @use call    am:trackHandle  @ trackHandle:522
-  @use call    am:trackIdxForGuid  @ trackIdxForGuid:521
-  @use call    am:trackSlots  @ midiSlots:214 trackSlots:519
-  @use call    am:tracksTakes  @ takeAtCursor:75 takesInRect:127 groupFits:231 tracksTakes:514 hitTake:562
-  @use call    am:visibleTakes  @ visibleTakes:517
-  @use call    cm:get  @ dropAt:342 deleteSelectedAndAdvance:348 followsPlay:418 followPlay:424 beatPerRow:485 setBeatPerRow:489
-  @use call    cm:set  @ setFollowPlay:419 setBeatPerRow:493 757
-  @use call    cmgr:invoke  @ diveSelected:295 createSlot:694
+  @use call    am:editCursorQN  @ editCursorQN:543
+  @use call    am:findTake  @ advanceCursorPastNewTake:90 selectedTakes:101 findTake:546
+  @use call    am:hasPlacedTakes  @ hasPlacedTakes:542
+  @use call    am:initialCursor  @ seedCursor:714
+  @use call    am:isParkedTake  @ duplicateUnpooledSelectedBelow:329 isParkedTake:539
+  @use call    am:keyForSlot  @ keyForSlot:529 <load>:768
+  @use call    am:loopRangeQN  @ setLoopStartHere:357 setLoopEndHere:364 loopRangeQN:549
+  @use call    am:loopTo  @ loopToTargets:385 loopTo:560
+  @use call    am:mintParkedTake  @ mintParkedTake:532
+  @use call    am:moveTake  @ moveTakesBy:247 commitDrag:681
+  @use call    am:newTakeBelow  @ newTakeBelow:535
+  @use call    am:nextFreeSlot  @ nextFreeSlot:530
+  @use call    am:ownerTrack  @ ownerTrack:540
+  @use call    am:playFromQN  @ playFromCursor:370 playFromQN:545
+  @use call    am:playPositionQN  @ followPlay:431 playPositionQN:544
+  @use call    am:projectEndQN  @ setLoopStartHere:359 arrange.arrangeEnd:732
+  @use call    am:projectTracks  @ diveSelected:290 projectTracks:519 createSlot:698
+  @use call    am:renameSlot  @ renameSlot:689
+  @use call    am:resizeTake  @ resizeSelected:267 commitDrag:676
+  @use call    am:reswingAll  @ reswingAll:551
+  @use call    am:seekInstance  @ seekInstance:548
+  @use call    am:setEditCursorQN  @ setEditCursorQN:558
+  @use call    am:setLoopRangeQN  @ setLoopStartHere:359 setLoopEndHere:366 setLoopRangeQN:559
+  @use call    am:slotOfTake  @ slotOfTake:547
+  @use call    am:startIsClear  @ dragCandidate:618
+  @use call    am:stepVariant  @ stepVariantOfSelected:319 stepVariant:538
+  @use call    am:takeForSlot  @ takeForSlot:526
+  @use call    am:takesUsing  @ takesUsing:550
+  @use call    am:tempersInUse  @ tempersInUse:552
+  @use call    am:trackHandle  @ trackHandle:528
+  @use call    am:trackIdxForGuid  @ trackIdxForGuid:527
+  @use call    am:trackSlots  @ midiSlots:214 trackSlots:525
+  @use call    am:tracksTakes  @ takeAtCursor:75 takesInRect:127 groupFits:231 tracksTakes:520 hitTake:568
+  @use call    am:visibleTakes  @ visibleTakes:523
+  @use call    cm:get  @ dropAt:342 deleteSelectedAndAdvance:348 followsPlay:424 followPlay:430 beatPerRow:491 setBeatPerRow:495
+  @use call    cm:set  @ setFollowPlay:425 setBeatPerRow:499 763
+  @use call    cmgr:invoke  @ diveSelected:295 createSlot:700
   @use call    cmgr:pop  @ disarmBand:159
   @use call    cmgr:push  @ selectBy:170
-  @use call    cmgr:scope  @ <load>:150,716
+  @use call    cmgr:scope  @ <load>:150,722
   @use call    facade.get  @ tracker:19
-  @use call    util.add  @ selectedTakes:102 setSelection:111 takesInRect:129 midiSlots:215 addToSelection:453 toggleSelected:460 groupDragCandidate:584 commitGroupDrag:651
-  @use call    util.atomic  @ nudgeSelected:256 resizeSelected:265 deleteSelected:282 commitGroupDrag:647,656 commitDrag:668
-  @use call    util.clamp  @ followViewport:51,55 setBeatPerRow:488
+  @use call    util.add  @ selectedTakes:102 setSelection:111 takesInRect:129 midiSlots:215 addToSelection:459 toggleSelected:466 groupDragCandidate:590 commitGroupDrag:657
+  @use call    util.atomic  @ nudgeSelected:256 resizeSelected:265 deleteSelected:282 commitGroupDrag:653,662 commitDrag:674
+  @use call    util.clamp  @ followViewport:51,55 setBeatPerRow:494
   @use require util  @ <load>:15
 
 # Calls (intra-file)
   @call actionTargets  @ singleTarget:192 nudgeSelected:252 resizeSelected:262 deleteSelected:280 loopToTargets:378
   @call advanceCursorPastNewTake  @ duplicateSelectedBelow:312 duplicateUnpooledSelectedBelow:331
-  @call av:beatPerRow  @ takeAtCursor:71 advanceCursorPastNewTake:92 rectFromAnchor:141 nudgeSelected:254 resizeSelected:264 qnToRow:496 rowToQN:497 groupDragCandidate:576 dragCandidate:596 gutterLoopCand:618 createCandidate:628 arrange.arrangeZoomIn:749
-  @call av:beatPerRow  @ arrange.arrangeZoomOut:750
-  @call av:qnToRow  @ followPlay:430 createSlot:691 seedCursor:709 arrange.arrangeEnd:726
+  @call av:beatPerRow  @ takeAtCursor:71 advanceCursorPastNewTake:92 rectFromAnchor:141 nudgeSelected:254 resizeSelected:264 qnToRow:502 rowToQN:503 groupDragCandidate:582 dragCandidate:602 gutterLoopCand:624 createCandidate:634 arrange.arrangeZoomIn:755
+  @call av:beatPerRow  @ arrange.arrangeZoomOut:756
+  @call av:qnToRow  @ followPlay:436 createSlot:697 seedCursor:715 arrange.arrangeEnd:732
   @call av:rowToQN  @ takeAtCursor:70 dropAt:341 setLoopStartHere:356 setLoopEndHere:363 playFromCursor:370
-  @call av:setBeatPerRow  @ arrange.arrangeZoomIn:749 arrange.arrangeZoomOut:750
-  @call av:setCursor  @ advanceCursorPastNewTake:93 selectBy:167 moveCursorBy:198 navCursorTo:203 createSlot:691 seedCursor:709
+  @call av:setBeatPerRow  @ arrange.arrangeZoomIn:755 arrange.arrangeZoomOut:756
+  @call av:setCursor  @ advanceCursorPastNewTake:93 selectBy:167 moveCursorBy:198 navCursorTo:203 createSlot:697 seedCursor:715
   @call av:setFocus  @ duplicateUnpooledSelectedBelow:330
-  @call av:setPaletteSlot  @ createSlot:690 deleteSlot:701
-  @call commitGroupDrag  @ commitDrag:662
+  @call av:setPaletteSlot  @ createSlot:696 deleteSlot:707
+  @call commitGroupDrag  @ commitDrag:668
   @call cursorOnScreen  @ actionTargets:186
   @call deleteSelected  @ deleteSelectedAndAdvance:347
-  @call disarmBand  @ dropBand:478
-  @call dropAt  @ 762
-  @call floorTo  @ gutterLoopCand:621 createCandidate:630
-  @call followViewport  @ setCursor:405 setBeatPerRow:494 setGridSize:504
-  @call groupDragCandidate  @ dragCandidate:594
-  @call groupFits  @ nudgeSelected:255 groupDragCandidate:587
-  @call midiSlots  @ midiSlots:548
+  @call disarmBand  @ dropBand:484
+  @call dropAt  @ 768
+  @call floorTo  @ gutterLoopCand:627 createCandidate:636
+  @call followViewport  @ setCursor:411 setBeatPerRow:500 setGridSize:510
+  @call groupDragCandidate  @ dragCandidate:600
+  @call groupFits  @ nudgeSelected:255 groupDragCandidate:593
+  @call midiSlots  @ midiSlots:554
   @call moveCursorBy  @ nudgeSelected:257 resizeSelected:275 dropAt:342 deleteSelectedAndAdvance:348
-  @call moveTakesBy  @ nudgeSelected:256 commitGroupDrag:656
-  @call navCursorBy  @ arrange.arrangeCursorUp:719 arrange.arrangeCursorDown:720 arrange.arrangeCursorLeft:721 arrange.arrangeCursorRight:722 arrange.arrangePageUp:723 arrange.arrangePageDown:724
-  @call navCursorTo  @ navCursorBy:208 arrange.arrangeHome:725 arrange.arrangeEnd:726
-  @call nudgeSelected  @ arrange.arrangeNudgeBack:731 arrange.arrangeNudgeForward:732
-  @call rectFromAnchor  @ selectBy:168 selectBand:475
-  @call resizeSelected  @ arrange.arrangeShrinkTake:733 arrange.arrangeGrowTake:734
-  @call roundTo  @ groupDragCandidate:578 dragCandidate:601,605
-  @call selectBy  @ arrange.arrangeSelectUp:727 arrange.arrangeSelectDown:728 arrange.arrangeSelectLeft:729 arrange.arrangeSelectRight:730
-  @call selectedTakes  @ actionTargets:184 selectionSet:466 groupDragCandidate:575 commitGroupDrag:645
-  @call selectionIndex  @ isSelected:448 addToSelection:453 toggleSelected:459
-  @call setSelection  @ selectBy:168 navCursorTo:204 deleteSelected:285 duplicateSelectedBelow:311 setFocus:445 setSelection:471 clearSelection:472 commitGroupDrag:653 commitDrag:673 seedCursor:710 arrange.arrangeClearSelection:743
+  @call moveTakesBy  @ nudgeSelected:256 commitGroupDrag:662
+  @call navCursorBy  @ arrange.arrangeCursorUp:725 arrange.arrangeCursorDown:726 arrange.arrangeCursorLeft:727 arrange.arrangeCursorRight:728 arrange.arrangePageUp:729 arrange.arrangePageDown:730
+  @call navCursorTo  @ navCursorBy:208 arrange.arrangeHome:731 arrange.arrangeEnd:732
+  @call nudgeSelected  @ arrange.arrangeNudgeBack:737 arrange.arrangeNudgeForward:738
+  @call rectFromAnchor  @ selectBy:168 selectBand:481
+  @call resizeSelected  @ arrange.arrangeShrinkTake:739 arrange.arrangeGrowTake:740
+  @call roundTo  @ groupDragCandidate:584 dragCandidate:607,611
+  @call selectBy  @ arrange.arrangeSelectUp:733 arrange.arrangeSelectDown:734 arrange.arrangeSelectLeft:735 arrange.arrangeSelectRight:736
+  @call selectedTakes  @ actionTargets:184 selectionSet:472 groupDragCandidate:581 commitGroupDrag:651
+  @call selectionIndex  @ isSelected:454 addToSelection:459 toggleSelected:465
+  @call setSelection  @ selectBy:168 navCursorTo:204 deleteSelected:285 duplicateSelectedBelow:311 setFocus:451 setSelection:477 clearSelection:478 commitGroupDrag:659 commitDrag:679 seedCursor:716 arrange.arrangeClearSelection:749
   @call singleTarget  @ selectedTakeProperties:300 duplicateSelectedBelow:307 stepVariantOfSelected:318 duplicateUnpooledSelectedBelow:325
-  @call stepVariantOfSelected  @ arrange.arrangePrevVariant:741 arrange.arrangeNextVariant:742
-  @call takeAtCursor  @ actionTargets:187 diveSelected:292
-  @call takesInRect  @ selectBy:168 lassoCandidate:638
-  @call tracker  @ diveSelected:294 selectedTakeProperties:301 duplicateUnpooledSelectedBelow:333 createSlot:693
+  @call stepVariantOfSelected  @ arrange.arrangePrevVariant:747 arrange.arrangeNextVariant:748
+  @call takeAtCursor  @ actionTargets:187 diveSelected:292 cursorSlot:400
+  @call takesInRect  @ selectBy:168 lassoCandidate:644
+  @call tracker  @ diveSelected:294 selectedTakeProperties:301 duplicateUnpooledSelectedBelow:333 createSlot:699
 
 # Bindings (by name)
-  @bind clearLoop  @ 748
-  @bind deleteSelected  @ 735
-  @bind deleteSelectedAndAdvance  @ 736
+  @bind clearLoop  @ 754
+  @bind deleteSelected  @ 741
+  @bind deleteSelectedAndAdvance  @ 742
   @bind disarmBand  @ 161
-  @bind diveSelected  @ 737
-  @bind duplicateSelectedBelow  @ 739
-  @bind duplicateUnpooledSelectedBelow  @ 740
-  @bind loopToTargets  @ 746
-  @bind playFromCursor  @ 747
-  @bind selectedTakeProperties  @ 738
-  @bind setLoopEndHere  @ 745
-  @bind setLoopStartHere  @ 744
+  @bind diveSelected  @ 743
+  @bind duplicateSelectedBelow  @ 745
+  @bind duplicateUnpooledSelectedBelow  @ 746
+  @bind loopToTargets  @ 752
+  @bind playFromCursor  @ 753
+  @bind selectedTakeProperties  @ 744
+  @bind setLoopEndHere  @ 751
+  @bind setLoopStartHere  @ 750
 
 # Unresolved receivers
-  @drop arrange:register  @ <load>:756
-  @drop arrange:registerAll  @ <load>:718,764
+  @drop arrange:register  @ <load>:762
+  @drop arrange:registerAll  @ <load>:724,770
 
 # REAPER API surface
   @reaper GetMediaItemTake_Item
 
 # Fields (r read / w write incl. constructor keys)
   @field r am  @ 17
-  @field w arrangeClearLoop  @ 748
-  @field w arrangeClearSelection  @ arrange.arrangeClearSelection:743
-  @field w arrangeCursorDown  @ arrange.arrangeCursorDown:720
-  @field w arrangeCursorLeft  @ arrange.arrangeCursorLeft:721
-  @field w arrangeCursorRight  @ arrange.arrangeCursorRight:722
-  @field w arrangeCursorUp  @ arrange.arrangeCursorUp:719
-  @field w arrangeDeleteAdvance  @ 736
-  @field w arrangeDeleteTake  @ 735
-  @field w arrangeDive  @ 737
-  @field w arrangeDuplicateBelow  @ 739
-  @field w arrangeDuplicateUnpooledBelow  @ 740
-  @field w arrangeEnd  @ arrange.arrangeEnd:726
-  @field w arrangeGrowTake  @ arrange.arrangeGrowTake:734
-  @field w arrangeHome  @ arrange.arrangeHome:725
-  @field w arrangeLoopToItem  @ 746
-  @field w arrangeNextVariant  @ arrange.arrangeNextVariant:742
-  @field w arrangeNudgeBack  @ arrange.arrangeNudgeBack:731
-  @field w arrangeNudgeForward  @ arrange.arrangeNudgeForward:732
-  @field w arrangePageDown  @ arrange.arrangePageDown:724
-  @field w arrangePageUp  @ arrange.arrangePageUp:723
-  @field w arrangePlayFromCursor  @ 747
-  @field w arrangePrevVariant  @ arrange.arrangePrevVariant:741
-  @field w arrangeSelectDown  @ 152 arrange.arrangeSelectDown:728
-  @field w arrangeSelectLeft  @ 153 arrange.arrangeSelectLeft:729
-  @field w arrangeSelectRight  @ 153 arrange.arrangeSelectRight:730
-  @field w arrangeSelectUp  @ 152 arrange.arrangeSelectUp:727
-  @field w arrangeSetLoopEnd  @ 745
-  @field w arrangeSetLoopStart  @ 744
-  @field w arrangeShrinkTake  @ arrange.arrangeShrinkTake:733
-  @field w arrangeTakeProperties  @ 738
-  @field w arrangeZoomIn  @ arrange.arrangeZoomIn:749
-  @field w arrangeZoomOut  @ arrange.arrangeZoomOut:750
+  @field w arrangeClearLoop  @ 754
+  @field w arrangeClearSelection  @ arrange.arrangeClearSelection:749
+  @field w arrangeCursorDown  @ arrange.arrangeCursorDown:726
+  @field w arrangeCursorLeft  @ arrange.arrangeCursorLeft:727
+  @field w arrangeCursorRight  @ arrange.arrangeCursorRight:728
+  @field w arrangeCursorUp  @ arrange.arrangeCursorUp:725
+  @field w arrangeDeleteAdvance  @ 742
+  @field w arrangeDeleteTake  @ 741
+  @field w arrangeDive  @ 743
+  @field w arrangeDuplicateBelow  @ 745
+  @field w arrangeDuplicateUnpooledBelow  @ 746
+  @field w arrangeEnd  @ arrange.arrangeEnd:732
+  @field w arrangeGrowTake  @ arrange.arrangeGrowTake:740
+  @field w arrangeHome  @ arrange.arrangeHome:731
+  @field w arrangeLoopToItem  @ 752
+  @field w arrangeNextVariant  @ arrange.arrangeNextVariant:748
+  @field w arrangeNudgeBack  @ arrange.arrangeNudgeBack:737
+  @field w arrangeNudgeForward  @ arrange.arrangeNudgeForward:738
+  @field w arrangePageDown  @ arrange.arrangePageDown:730
+  @field w arrangePageUp  @ arrange.arrangePageUp:729
+  @field w arrangePlayFromCursor  @ 753
+  @field w arrangePrevVariant  @ arrange.arrangePrevVariant:747
+  @field w arrangeSelectDown  @ 152 arrange.arrangeSelectDown:734
+  @field w arrangeSelectLeft  @ 153 arrange.arrangeSelectLeft:735
+  @field w arrangeSelectRight  @ 153 arrange.arrangeSelectRight:736
+  @field w arrangeSelectUp  @ 152 arrange.arrangeSelectUp:733
+  @field w arrangeSetLoopEnd  @ 751
+  @field w arrangeSetLoopStart  @ 750
+  @field w arrangeShrinkTake  @ arrange.arrangeShrinkTake:739
+  @field w arrangeTakeProperties  @ 744
+  @field w arrangeZoomIn  @ arrange.arrangeZoomIn:755
+  @field w arrangeZoomOut  @ arrange.arrangeZoomOut:756
   @field r cm  @ 17
   @field r cmgr  @ 17
   @field r col  @ rectFromAnchor:142,143
   @field w col  @ selectBy:166
   @field r colHi  @ takesInRect:125,126
-  @field w colHi  @ rectFromAnchor:143 lassoCandidate:636
+  @field w colHi  @ rectFromAnchor:143 lassoCandidate:642
   @field r colLo  @ takesInRect:125,126
-  @field w colLo  @ rectFromAnchor:142 lassoCandidate:636
-  @field r deltaQN  @ commitGroupDrag:650,656
-  @field w deltaQN  @ groupDragCandidate:586
-  @field r duplicate  @ groupDragCandidate:587 dragCandidate:609 commitGroupDrag:646 commitDrag:666,671
+  @field w colLo  @ rectFromAnchor:142 lassoCandidate:642
+  @field r deltaQN  @ commitGroupDrag:656,662
+  @field w deltaQN  @ groupDragCandidate:592
+  @field r duplicate  @ groupDragCandidate:593 dragCandidate:615 commitGroupDrag:652 commitDrag:672,677
   @field r facade  @ 17
-  @field w fits  @ groupDragCandidate:587 dragCandidate:612
+  @field w fits  @ groupDragCandidate:593 dragCandidate:618
   @field w focusName  @ duplicateUnpooledSelectedBelow:333
-  @field r ghosts  @ commitDrag:664
-  @field w ghosts  @ groupDragCandidate:586 dragCandidate:611
-  @field r group  @ dragCandidate:594 commitDrag:662
-  @field r guid  @ diveSelected:294 createSlot:693
-  @field w hiQN  @ gutterLoopCand:623
-  @field r huge  @ loopToTargets:380 groupDragCandidate:579
-  @field r item  @ groupFits:227,232 selectedTakeProperties:301 dragCandidate:609
+  @field r ghosts  @ commitDrag:670
+  @field w ghosts  @ groupDragCandidate:592 dragCandidate:617
+  @field r group  @ dragCandidate:600 commitDrag:668
+  @field r guid  @ diveSelected:294 createSlot:699
+  @field w hiQN  @ gutterLoopCand:629
+  @field r huge  @ loopToTargets:380 groupDragCandidate:585
+  @field r item  @ groupFits:227,232 selectedTakeProperties:301 dragCandidate:615
   @field w keepAlive  @ 152
   @field r kind  @ midiSlots:215 diveSelected:293 selectedTakeProperties:301
-  @field r lengthQN  @ takeAtCursor:76 advanceCursorPastNewTake:92 takesInRect:128 resizeSelected:267,274 loopToTargets:383 hitTake:563,565 dragCandidate:600 commitDrag:670
-  @field w lengthQN  @ groupDragCandidate:584 dragCandidate:611 createCandidate:631
-  @field w loQN  @ gutterLoopCand:623
-  @field r mcol  @ lassoCandidate:636
-  @field r mode  @ dragCandidate:599 commitDrag:665,669
-  @field r naturalLenQN  @ groupDragCandidate:584 dragCandidate:607
+  @field r lengthQN  @ takeAtCursor:76 advanceCursorPastNewTake:92 takesInRect:128 resizeSelected:267,274 loopToTargets:383 hitTake:569,571 dragCandidate:606 commitDrag:676
+  @field w lengthQN  @ groupDragCandidate:590 dragCandidate:617 createCandidate:637
+  @field w loQN  @ gutterLoopCand:629
+  @field r mcol  @ lassoCandidate:642
+  @field r mode  @ dragCandidate:605 commitDrag:671,675
+  @field r naturalLenQN  @ groupDragCandidate:590 dragCandidate:613
   @field w onBail  @ 161
-  @field r qn  @ groupDragCandidate:577 dragCandidate:600,604 gutterLoopCand:619,620 createCandidate:629,631 lassoCandidate:637
+  @field r qn  @ groupDragCandidate:583 dragCandidate:606,610 gutterLoopCand:625,626 createCandidate:635,637 lassoCandidate:643
   @field r qnHi  @ takesInRect:128
-  @field w qnHi  @ rectFromAnchor:145 lassoCandidate:637
+  @field w qnHi  @ rectFromAnchor:145 lassoCandidate:643
   @field r qnLo  @ takesInRect:128
-  @field w qnLo  @ rectFromAnchor:144 lassoCandidate:637
-  @field r row  @ rectFromAnchor:144,145 setBeatPerRow:492
-  @field w row  @ selectBy:166 setBeatPerRow:492
-  @field w set  @ lassoCandidate:638
-  @field r slotIdx  @ diveSelected:293
+  @field w qnLo  @ rectFromAnchor:144 lassoCandidate:643
+  @field r row  @ rectFromAnchor:144,145 setBeatPerRow:498
+  @field w row  @ selectBy:166 setBeatPerRow:498
+  @field w set  @ lassoCandidate:644
+  @field r slotIdx  @ diveSelected:293 cursorSlot:401
   @field w springLoaded  @ 151
   @field r startQN  @ takeAtCursor:76,77,79 takesInRect:128 groupFits:229,232 moveTakesBy:244,245 resizeSelected:274
-  @field r startQN  @ loopToTargets:382,383 hitTake:563,564 groupDragCandidate:578,580,584 dragCandidate:597,604 commitGroupDrag:650 commitDrag:672
-  @field r startQN  @ commitDrag:675
-  @field w startQN  @ groupDragCandidate:584 dragCandidate:611 createCandidate:631
-  @field r take  @ takesInRect:129,130 diveSelected:294 selectionSet:466 groupDragCandidate:578 dragCandidate:595 commitDrag:663
-  @field w take  @ groupDragCandidate:584 dragCandidate:611
-  @field r takes  @ lassoCandidate:638
-  @field r trackIdx  @ groupFits:231 dragCandidate:612
+  @field r startQN  @ loopToTargets:382,383 hitTake:569,570 groupDragCandidate:584,586,590 dragCandidate:603,610 commitGroupDrag:656 commitDrag:678
+  @field r startQN  @ commitDrag:681
+  @field w startQN  @ groupDragCandidate:590 dragCandidate:617 createCandidate:637
+  @field r take  @ takesInRect:129,130 diveSelected:294 selectionSet:472 groupDragCandidate:584 dragCandidate:601 commitDrag:669
+  @field w take  @ groupDragCandidate:590 dragCandidate:617
+  @field r takes  @ lassoCandidate:644
+  @field r trackIdx  @ groupFits:231 dragCandidate:618

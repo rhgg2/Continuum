@@ -642,8 +642,8 @@ end
 ----- Palette pane
 
 -- Locate slot in trackSlots() output (packed array, not indexed by slotIdx).
--- Returns nil when no slot is focused or the focused slot index isn't populated.
-local function focusedSlotEntry(slots, slotIdx)
+-- Returns nil when slotIdx is nil or isn't populated.
+local function slotEntry(slots, slotIdx)
   if slotIdx == nil then return nil end
   for _, s in ipairs(slots) do
     if s.idx == slotIdx then return s end
@@ -774,7 +774,7 @@ end
 
 local function renderPaletteBody(focusedTrack)
   local slots       = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
-  local focusedSlot = focusedSlotEntry(slots, av:paletteSlot())
+  local focusedSlot = slotEntry(slots, av:paletteSlot())
   renderPaletteActions(focusedTrack, focusedSlot)
   ImGui.Separator(ctx)
   renderPaletteList(slots)
@@ -868,12 +868,19 @@ end
 
 
 --invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.
+--invariant: deleteSlot (Ctrl+Delete) takes the slot of the cursor take, as the palette's del
+-- button takes the palette-focused one; both open the same confirm.
 -- cmgr:scope is idempotent — same scope av registers into.
 local arrange = cmgr:scope('arrange')
 
 arrange:registerAll {
   createSlot = function()
     openCreateModal(av:cursorCol(), av:rowToQN(av:cursorRow()))
+  end,
+  deleteSlot = function()
+    local trackIdx = av:cursorCol()
+    local slot     = slotEntry(av:trackSlots(trackIdx), av:cursorSlot())
+    if slot then openDeleteModal(trackIdx, slot) end
   end,
   toggleFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,
   arrangeSetBeatPerRow = function()
