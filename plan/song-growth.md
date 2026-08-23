@@ -22,8 +22,8 @@
    same rule. — landed 2026-08-23, three commits.
 4. **Phase 4 — vary** (§ vary) — the current instance replaced by an instance
    of a fresh variant slot named `<parent> (var N)`; refused on a slot with one
-   instance; one atomic block, rebind; the tracker's unpooled duplicate
-   retires.
+   instance; one atomic block, rebind; a rename carries the family; the
+   tracker's unpooled duplicate retires. ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -38,4 +38,26 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+- `am:vary(take)` replaces the instance with one of a fresh variant slot:
+  read the track, start QN and source; mint through `mintParkedTake` at
+  `<root> (var N)`, N the family's highest ordinal plus one; delete the
+  instance; drop the variant at the start QN. Returns `(slotIdx, take)`,
+  nil for non-MIDI or a slot with one live instance. Gathers before it
+  mutates. `am_spec`.
+- A rename edits the root: `am:renameSlot` rewrites the root across every
+  slot on the track sharing it, each keeping its own ordinal, when the
+  submitted ordinal matches the slot's own; a changed ordinal renames that
+  slot alone and takes it out of the family. The rename fields open with
+  the root selected — tracker take properties and the arrange palette,
+  through an EEL `SelectionStart`/`SelectionEnd` callback (the picker
+  idiom at `chrome.lua:609`, parameterised with `Function_SetValue`).
+  `am_spec`, `docs/arrangeManager.md` § Renaming and name drift.
+- `tv:vary()` on Alt+Shift+→, with a menu row beside duplicate: selects the
+  variant slot, so the tracker rebinds, and names the new take as the
+  current instance, so loop to item follows it. Refuses in silence with no
+  current instance. One undo point through the command table's undoDesc.
+  `tracker_page_spec`, `docs/trackerPage.md` § vary.
+- The tracker's unpooled duplicate retires: `tv:duplicateBoundUnpooled`,
+  `duplicateUnpooledTake` and its Cmd+Shift+Enter binding and menu row.
+  Arrange's own unpooled duplicate stays, and `am:duplicateUnpooledBelow`
+  with it. `docs/trackerPage.md` § New take and unpooled duplicate.

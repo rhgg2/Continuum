@@ -1,6 +1,6 @@
 # Song growth — the tracker grows the arrangement behind you
 
-> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 3
+> opened: 2026-08-16 · status: in flight — plan/song-growth.md, at phase 4
 
 **The tracker learns which placement it is inside, from the playhead,
 and gains the two verbs that grow the arrangement from there.**
@@ -31,31 +31,10 @@ on the slot alone.
 
 ## The append point
 
-The **append point** of a placement is its rendered end, and a verb
-appending there needs the free span from it to cover the length it
-places. A shorter gap gives a copy truncated by its neighbour, which is
-a different sound from the one being copied, and making room by pushing
-the rest of the track down is a larger change than this design carries.
-
-With no room, what the verb does next turns on what it creates.
-`newTakeBelow` and `duplicateUnpooledBelow` mint a slot, so they park
-it: the item goes to the shared scratch track — hidden, muted, off the
-grid — and the palette entry stands without a placement. Parking is
-where a slot's takes go rather than where they die: deleting a slot's
-last live instance parks that item too, as the slot's **keeper**, so a
-palette entry outlives its placements.
-
-The pooled `duplicateBelow`, on either page, places another instance of
-a slot that already has one, so it refuses. A parked
-sibling would show nothing, since the palette already carries the slot,
-and it would leave the pool with an item on scratch that was never a
-keeper. The palette can therefore always grow, while the song grows
-where there is room.
-
-The tracker's new take lands on the grid. It parked whatever it made
-while the tracker had no instance to append to; with one, the take goes
-to the append point at the length its modal asked for, and binds as the
-current instance, so the loop follows it where loop to item is on.
+Landed; the model is `docs/arrangeManager.md` § The append point, the
+parking it falls back on § Parking, and the tracker's new take
+`docs/trackerPage.md` § New take and unpooled duplicate. `vary` mints
+its variant through that same parking.
 
 ## Rendered span and source span
 
@@ -82,16 +61,7 @@ the reading the duplicate and `vary` want for their refusals.
 
 ## Duplicate below
 
-**duplicateBelow** (Alt+Shift+↓) appends a pooled instance of the bound
-slot at the current instance's append point (§ The append point), binds
-the tracker to it, and with loop to item on moves the loop onto it — so
-the transport keeps rolling and the repeat is what you hear next. It
-refuses where the free span falls short.
-
-Nothing is added to the palette. Four presses give four instances of
-one slot, which is what lets a column of repeats read as A A A A rather
-than as four sources that happen to agree. The verb is one
-`util.atomic` block: one item created, one undo point.
+Landed; the model is `docs/trackerPage.md` § Duplicate below.
 
 ## vary
 
@@ -102,8 +72,24 @@ that placement alone, and the original slot keeps its other instances.
 
 A variant takes its parent's name with a bracketed ordinal: a variant
 of `Bassline` is `Bassline (var 1)`, and the next is `Bassline (var
-2)`. The palette then reads as a list of ideas with their departures,
-rather than as a list of sources that happen to resemble one another.
+2)`. The next ordinal is the family's highest plus one, so deleting a
+variant keeps its name out of circulation. A variant of a variant joins
+the same family — varying `Bassline (var 1)` gives `Bassline (var 3)`
+— since the departures from an idea are a list and not a tree.
+
+The **family** is a slot's name and nothing else records it: the slots
+on a track whose names share a **root**, the name with any bracketed
+ordinal removed. A stored parent link would say one thing while the
+palette showed another the moment a take was renamed in REAPER, and
+the name is already the only place a slot's name lives
+(`docs/arrangeManager.md` § Renaming and name drift).
+
+A rename therefore edits the root. The field opens showing the whole
+name with the root selected, so typing over it renames the whole
+family and leaves each ordinal where it was: `Sausage (var 1)` and
+`Sausage (var 2)` become `Kenneth (var 1)` and `Kenneth (var 2)`.
+Editing the ordinal as well takes that slot out of the family, renamed
+as typed with nothing else touched.
 
 `vary` refuses on a slot with a single instance. Nothing propagates
 there, so the verb would fork a source nothing else shares, and the

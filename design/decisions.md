@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — A variant slot's family is its name and nothing else records it: the slots on a
+  track whose names share a root, the name with any bracketed ordinal removed. A stored parent link
+  on the pool would say one thing while the palette showed another as soon as a take was renamed in
+  REAPER, and the name is already the only place a slot's name lives. A rename therefore edits the
+  root and carries the family; editing the ordinal too takes that slot out of the family. See
+  design/song-growth.md § vary.
+
 - **2026-08-23** — The tracker's repeat verb is named duplicateBelow rather than again. It is the
   arrange page's pooled duplicate below seen from inside a placement, and the tracker already
   carries duplicateUnpooledBelow, so one name serves both pages and the pair reads together.
