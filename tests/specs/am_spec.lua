@@ -900,6 +900,108 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- stepVariant
+  --------------------------------------------------------------------
+  {
+    name = 'stepVariant moves the placement onto the next slot of the family',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline (var 1)' } } },
+      })
+      local src = am:tracksTakes(0)[2]
+      local slotIdx, take = am:stepVariant(src, 1)
+      t.truthy(slotIdx, 'the family neighbour was found')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 3, 'the placement moved, nothing was added')
+      local moved
+      for _, tk in ipairs(takes) do if tk.startQN == 4 then moved = tk end end
+      t.eq(moved.take, take, 'the returned take is the one on the grid')
+      t.eq(moved.slotIdx, slotIdx, 'it is an instance of the variant slot')
+      t.eq(moved.name, 'Bassline (var 1)', 'the placement now plays the variant')
+      t.eq(#am:trackSlots(0), 2, 'no slot was minted')
+    end,
+  },
+
+  {
+    name = 'stepVariant past the last of the family varies',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline (var 1)' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline (var 1)' } } },
+      })
+      local last = am:tracksTakes(0)[3]
+      local slotIdx, take = am:stepVariant(last, 1)
+      t.truthy(slotIdx, 'a variant slot was minted')
+      t.eq(#am:trackSlots(0), 3, 'the palette grew by it')
+      t.eq(am:findTake(take).name, 'Bassline (var 2)', 'one past the family high-water mark')
+    end,
+  },
+
+  {
+    name = 'stepVariant off the front of the family does nothing',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      local root = am:tracksTakes(0)[1]
+      t.eq(am:stepVariant(root, -1), nil, 'the plain root has nothing before it')
+      t.eq(#am:tracksTakes(0), 2, 'both placements stand where they did')
+      t.eq(#am:trackSlots(0), 1, 'no slot minted')
+    end,
+  },
+
+  {
+    name = 'stepping back off a variant parks it; stepping on again brings it live',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      local varSlot = am:vary(am:tracksTakes(0)[2])
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
+      end
+
+      local backSlot = am:stepVariant(takeAt(4), -1)
+      t.eq(takeAt(4).slotIdx, backSlot, 'the placement returned to the root slot')
+      t.eq(slotAt(am, 0, varSlot).parked, true, 'the variant it left has no live instance')
+
+      local onSlot = am:stepVariant(takeAt(4), 1)
+      t.eq(onSlot, varSlot, 'stepping forward finds the variant again')
+      t.eq(takeAt(4).slotIdx, varSlot, 'and the placement plays it')
+      t.eq(slotAt(am, 0, varSlot).parked, false, 'the keeper came back onto the grid')
+    end,
+  },
+
+  {
+    name = 'a variant with two namesake bases steps forward but not back',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p3}', takeName = 'Bassline (var 1)' },
+                    { kind = 'midi', pos = 12, len = 4, srcLen = 4, poolGuid = '{p4}', takeName = 'Bassline (var 2)' } } },
+      })
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
+      end
+      local var1 = takeAt(8).slotIdx
+      t.eq(am:stepVariant(takeAt(8), -1), nil, 'no base to step back to — two claim the root')
+      t.eq(am:stepVariant(takeAt(0), 1), var1, 'a namesake still steps forward into the variants')
+      t.eq(takeAt(4).name, 'Bassline', 'the other namesake was left alone')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Boot cursor
   --------------------------------------------------------------------
   {

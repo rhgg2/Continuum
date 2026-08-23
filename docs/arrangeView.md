@@ -74,9 +74,9 @@ the copy lands, the selection clears, and the caret advances onto the
 copy. The caret alone therefore carries a run of presses down the track,
 each duplicating the copy the last one made — a held selection would
 pin every press to the same source and refuse for want of room.
-Vary (Alt+Shift+→) moves neither, the variant standing exactly where its
-source stood; the source's handle prunes itself from the selection when
-the take goes.
+The variant step (Alt+Shift+←/→) moves neither, the slot stepped onto
+standing exactly where the source stood; the source's handle prunes
+itself from the selection when the take goes.
 
 Selection is decoupled from action. An edit command resolves its
 targets through `actionTargets`: the whole selection if one is held,
@@ -92,7 +92,8 @@ track (`docs/arrangeManager.md` § The append point), and take-properties
 opens on the parked item; only the focus move and the cursor advance
 need it on the grid.
 
-Single-take commands — dive, take-properties, duplicate-below, vary — go
+Single-take commands — dive, take-properties, duplicate-below, the
+variant step — go
 through `singleTarget` and no-op unless exactly one take is targeted:
 you can't dive into five takes, and a duplicate has one copy to advance
 onto. Group commands — nudge, resize, delete — act on every target in

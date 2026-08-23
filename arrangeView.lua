@@ -312,11 +312,11 @@ local function duplicateSelectedBelow()
   advanceCursorPastNewTake(newTake)
 end
 
---invariant: vary: single-target MIDI; the variant stands in the source's place, unselected.
+--invariant: stepVariant: single-target MIDI; the neighbour stands in source's place, unselected.
 -- The source take is gone, so its handle prunes itself from the selection on the next read.
-local function varySelected()
+local function stepVariantOfSelected(dir)
   local take = singleTarget()
-  if take then am:vary(take) end
+  if take then am:stepVariant(take, dir) end
 end
 
 -- The clone parks for want of room, and take-props opens on it either way: the name prompt
@@ -529,7 +529,7 @@ function av:newTakeBelow(take, name, lengthQN)
   return am:newTakeBelow(take, name, lengthQN)
 end
 function av:duplicateBelow(take) return am:duplicateBelow(take) end
-function av:vary(take)          return am:vary(take) end
+function av:stepVariant(take, dir) return am:stepVariant(take, dir) end
 function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:ownerTrack(take)   return am:ownerTrack(take) end
 function av:dropSlot(trackIdx, slotIdx, qnPos) return am:dropInstance(trackIdx, slotIdx, qnPos) end
@@ -738,7 +738,8 @@ arrange:registerAll {
   arrangeTakeProperties         = selectedTakeProperties,
   arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate pooled take' },
   arrangeDuplicateUnpooledBelow = { duplicateUnpooledSelectedBelow, 'Duplicate take' },
-  arrangeVary                   = { varySelected,                   'Vary take' },
+  arrangePrevVariant            = { function() stepVariantOfSelected(-1) end, 'Previous variant' },
+  arrangeNextVariant            = { function() stepVariantOfSelected( 1) end, 'Next variant' },
   arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },
   arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },

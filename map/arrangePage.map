@@ -27,7 +27,7 @@
   @held arrange.mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 50-52
   @held arrange.newTakeBelow(inst, name, lengthQN)  @ 53
   @held arrange.duplicateBelow(take)  @ 54
-  @held arrange.vary(take)  @ 55
+  @held arrange.stepVariant(take, dir)  @ 55
   @held arrange.dropSlot(trackIdx, slotIdx, qnPos)  @ 56
   @held arrange.renameSlot(trackIdx, slotIdx, name)  @ 57
   @held arrange.hasPlacedTakes()  @ 58
@@ -86,12 +86,12 @@
   @use call    av:seedCursor  @ seedCursorFromReaper:38
   @use call    av:seekInstance  @ arrange.seekInstance:63
   @use call    av:slotOfTake  @ arrange.slotOfTake:62
+  @use call    av:stepVariant  @ arrange.stepVariant:55
   @use call    av:takeForSlot  @ arrange.takeForSlot:45
   @use call    av:takesUsing  @ arrange.takesUsing:69
   @use call    av:tempersInUse  @ arrange.tempersInUse:70
   @use call    av:trackHandle  @ arrange.trackHandle:47
   @use call    av:trackIdxForGuid  @ arrange.trackIdxForGuid:46
-  @use call    av:vary  @ arrange.vary:55
   @use call    facade.publish  @ <load>:41
   @use call    util.instantiate  @ <load>:23,24,25
   @use require arrangeManager  @ <load>:23
@@ -143,10 +143,10 @@
   @field w reswingAll  @ arrange.reswingAll:68
   @field w seekInstance  @ arrange.seekInstance:63
   @field w slotOfTake  @ arrange.slotOfTake:62
+  @field w stepVariant  @ arrange.stepVariant:55
   @field w takeForSlot  @ arrange.takeForSlot:45
   @field w takesUsing  @ arrange.takesUsing:69
   @field w tempersInUse  @ arrange.tempersInUse:70
   @field w trackHandle  @ arrange.trackHandle:47
   @field w trackIdxForGuid  @ arrange.trackIdxForGuid:46
   @field w tracks  @ arrange.tracks:43
-  @field w vary  @ arrange.vary:55

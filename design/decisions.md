@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Alt+Shift+←/→ step a placement along its family, and vary is the forward step
+  off the last of it. Vary on a key of its own minted a variant per press, so a placement that had
+  already forked could only fork again; stepping makes the family a dial the placement turns, and
+  the walk loses nothing, since a variant left with no instance parks rather than dying. See
+  docs/arrangeManager.md § Variants.
+
 - **2026-08-23** — Wrapped labels break to balance the lines rather than fill them: a line costs the
   square of its slack, and the cheapest split wins. Greedy first-fit orphaned the tail, breaking
   "Bassline (var 1)" after the bracket; the squared cost also settles how many lines to use.

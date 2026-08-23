@@ -404,6 +404,27 @@ on a track never overlap.
    source's natural length, and relayout caps it at the neighbour just
    as it capped the instance replaced.
 
+1. `am:stepVariant(take, dir)` moves a placement one step along its
+   family: the neighbouring slot's instance stands in its place, dropped
+   at the same start QN and on the same terms of length. A step back off
+   the first of the family does nothing, and a step forward off the last
+   varies. A run of forward presses therefore walks the family and mints
+   one variant at the end of it — where that variant is the placement's
+   only instance, the vary refuses and the walk stops there.
+
+1. The step order is the family in ordinal order, the plain root first.
+   Where two slots hold the root plain they are namesakes (§ Renaming and
+   name drift): each steps forward into the variants, and a variant has no
+   base to step back to. The unnamed slot falls out the same way, sharing
+   its empty root with every other, so it steps alone and a forward step
+   varies it.
+
+1. Stepping off a variant that holds no other instance parks it rather
+   than losing it (§ Parking), and stepping back onto it moves the keeper
+   out again. A walk is therefore reversible: the slots a placement has
+   passed through survive with their events, whether or not anything
+   stands on them.
+
 ## Transport
 
 `am` is where the stack meets REAPER's transport, all of it in QN: the

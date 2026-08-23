@@ -719,7 +719,7 @@ return {
   },
 
   {
-    name = 'arrangeVary swaps the target instance for one of a fresh variant slot',
+    name = 'arrangeNextVariant past the last of the family swaps the target for a fresh variant',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -732,7 +732,7 @@ return {
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeVary')
+      h.cmgr:invoke('arrangeNextVariant')
       local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'the instance was replaced, not added to')
@@ -744,6 +744,12 @@ return {
       t.truthy(varied, 'a take still stands where the source instance did')
       t.truthy(varied.slotIdx ~= parent.slotIdx, 'on a slot of its own')
       t.eq(varied.name, 'Bass (var 1)', 'named from the parent root')
+
+      h.cmgr:invoke('arrangePrevVariant')
+      local back
+      for _, take in ipairs(am:tracksTakes(0)) do if take.startQN == 0 then back = take end end
+      t.eq(back.slotIdx, parent.slotIdx, 'stepping back returns the placement to the parent slot')
+      t.eq(#am:trackSlots(0), 2, 'the variant it left stands parked')
     end,
   },
 

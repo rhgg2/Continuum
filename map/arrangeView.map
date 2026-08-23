@@ -1,4 +1,4 @@
-@module arrangeView  src=arrangeView.lua  loc=765  mode=chunk  self=av
+@module arrangeView  src=arrangeView.lua  loc=766  mode=chunk  self=av
 @deps cm, cmgr, facade, am
 
 # Invariants & contracts
@@ -39,7 +39,7 @@
   @state PAGE_ROWS = 16  @ 43   -- PageUp / PageDown cursor step
   @state selectScope = cmgr:scope('arrangeSelect')  @ 150
   @state arrange = cmgr:scope('arrange')  @ 716
-  @state placeCmds = {}  @ 759
+  @state placeCmds = {}  @ 760
 
 # Private functions
   @fn tracker()  @ 19
@@ -107,9 +107,9 @@
   @fn duplicateSelectedBelow()  @ 306-313
       -- Nothing is selected afterwards, so the caret alone carries a run of presses down the track.
       @invariant  duplicateBelow: single-target clone at append point; caret advances, selection clears.  @ 304
-  @fn varySelected()  @ 317-320
+  @fn stepVariantOfSelected(dir)  @ 317-320
       -- The source take is gone, so its handle prunes itself from the selection on the next read.
-      @invariant  vary: single-target MIDI; the variant stands in the source's place, unselected.  @ 315
+      @invariant  stepVariant: single-target MIDI; the neighbour stands in source's place, unselected.  @ 315
   @fn duplicateUnpooledSelectedBelow()  @ 324-334
       -- The clone parks for want of room, and take-props opens on it either way: the name prompt
       -- is the point of the command. Only focus and the cursor advance need it on the grid.
@@ -153,9 +153,11 @@
   @held arrange.arrangeNudgeForward()  @ 732
   @held arrange.arrangeShrinkTake()  @ 733
   @held arrange.arrangeGrowTake()  @ 734
-  @held arrange.arrangeClearSelection()  @ 742
-  @held arrange.arrangeZoomIn()  @ 748
-  @held arrange.arrangeZoomOut()  @ 749
+  @held arrange.arrangePrevVariant()  @ 741
+  @held arrange.arrangeNextVariant()  @ 742
+  @held arrange.arrangeClearSelection()  @ 743
+  @held arrange.arrangeZoomIn()  @ 749
+  @held arrange.arrangeZoomOut()  @ 750
 
 # Public API (av:*)
   @api av:cursorRow()  @ 392
@@ -214,7 +216,7 @@
   @api av:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 525-527
   @api av:newTakeBelow(take, name, lengthQN)  @ 528-530
   @api av:duplicateBelow(take)  @ 531
-  @api av:vary(take)  @ 532
+  @api av:stepVariant(take, dir)  @ 532
   @api av:isParkedTake(take)  @ 533
   @api av:ownerTrack(take)  @ 534
   @api av:dropSlot(trackIdx, slotIdx, qnPos)  @ 535
@@ -273,7 +275,7 @@
   @use call    am:hasPlacedTakes  @ hasPlacedTakes:536
   @use call    am:initialCursor  @ seedCursor:708
   @use call    am:isParkedTake  @ duplicateUnpooledSelectedBelow:329 isParkedTake:533
-  @use call    am:keyForSlot  @ keyForSlot:523 <load>:761
+  @use call    am:keyForSlot  @ keyForSlot:523 <load>:762
   @use call    am:loopRangeQN  @ setLoopStartHere:357 setLoopEndHere:364 loopRangeQN:543
   @use call    am:loopTo  @ loopToTargets:385 loopTo:554
   @use call    am:mintParkedTake  @ mintParkedTake:526
@@ -293,6 +295,7 @@
   @use call    am:setLoopRangeQN  @ setLoopStartHere:359 setLoopEndHere:366 setLoopRangeQN:553
   @use call    am:slotOfTake  @ slotOfTake:541
   @use call    am:startIsClear  @ dragCandidate:612
+  @use call    am:stepVariant  @ stepVariantOfSelected:319 stepVariant:532
   @use call    am:takeForSlot  @ takeForSlot:520
   @use call    am:takesUsing  @ takesUsing:544
   @use call    am:tempersInUse  @ tempersInUse:546
@@ -300,10 +303,9 @@
   @use call    am:trackIdxForGuid  @ trackIdxForGuid:521
   @use call    am:trackSlots  @ midiSlots:214 trackSlots:519
   @use call    am:tracksTakes  @ takeAtCursor:75 takesInRect:127 groupFits:231 tracksTakes:514 hitTake:562
-  @use call    am:vary  @ varySelected:319 vary:532
   @use call    am:visibleTakes  @ visibleTakes:517
   @use call    cm:get  @ dropAt:342 deleteSelectedAndAdvance:348 followsPlay:418 followPlay:424 beatPerRow:485 setBeatPerRow:489
-  @use call    cm:set  @ setFollowPlay:419 setBeatPerRow:493 756
+  @use call    cm:set  @ setFollowPlay:419 setBeatPerRow:493 757
   @use call    cmgr:invoke  @ diveSelected:295 createSlot:694
   @use call    cmgr:pop  @ disarmBand:159
   @use call    cmgr:push  @ selectBy:170
@@ -317,11 +319,11 @@
 # Calls (intra-file)
   @call actionTargets  @ singleTarget:192 nudgeSelected:252 resizeSelected:262 deleteSelected:280 loopToTargets:378
   @call advanceCursorPastNewTake  @ duplicateSelectedBelow:312 duplicateUnpooledSelectedBelow:331
-  @call av:beatPerRow  @ takeAtCursor:71 advanceCursorPastNewTake:92 rectFromAnchor:141 nudgeSelected:254 resizeSelected:264 qnToRow:496 rowToQN:497 groupDragCandidate:576 dragCandidate:596 gutterLoopCand:618 createCandidate:628 arrange.arrangeZoomIn:748
-  @call av:beatPerRow  @ arrange.arrangeZoomOut:749
+  @call av:beatPerRow  @ takeAtCursor:71 advanceCursorPastNewTake:92 rectFromAnchor:141 nudgeSelected:254 resizeSelected:264 qnToRow:496 rowToQN:497 groupDragCandidate:576 dragCandidate:596 gutterLoopCand:618 createCandidate:628 arrange.arrangeZoomIn:749
+  @call av:beatPerRow  @ arrange.arrangeZoomOut:750
   @call av:qnToRow  @ followPlay:430 createSlot:691 seedCursor:709 arrange.arrangeEnd:726
   @call av:rowToQN  @ takeAtCursor:70 dropAt:341 setLoopStartHere:356 setLoopEndHere:363 playFromCursor:370
-  @call av:setBeatPerRow  @ arrange.arrangeZoomIn:748 arrange.arrangeZoomOut:749
+  @call av:setBeatPerRow  @ arrange.arrangeZoomIn:749 arrange.arrangeZoomOut:750
   @call av:setCursor  @ advanceCursorPastNewTake:93 selectBy:167 moveCursorBy:198 navCursorTo:203 createSlot:691 seedCursor:709
   @call av:setFocus  @ duplicateUnpooledSelectedBelow:330
   @call av:setPaletteSlot  @ createSlot:690 deleteSlot:701
@@ -329,7 +331,7 @@
   @call cursorOnScreen  @ actionTargets:186
   @call deleteSelected  @ deleteSelectedAndAdvance:347
   @call disarmBand  @ dropBand:478
-  @call dropAt  @ 761
+  @call dropAt  @ 762
   @call floorTo  @ gutterLoopCand:621 createCandidate:630
   @call followViewport  @ setCursor:405 setBeatPerRow:494 setGridSize:504
   @call groupDragCandidate  @ dragCandidate:594
@@ -346,38 +348,38 @@
   @call selectBy  @ arrange.arrangeSelectUp:727 arrange.arrangeSelectDown:728 arrange.arrangeSelectLeft:729 arrange.arrangeSelectRight:730
   @call selectedTakes  @ actionTargets:184 selectionSet:466 groupDragCandidate:575 commitGroupDrag:645
   @call selectionIndex  @ isSelected:448 addToSelection:453 toggleSelected:459
-  @call setSelection  @ selectBy:168 navCursorTo:204 deleteSelected:285 duplicateSelectedBelow:311 setFocus:445 setSelection:471 clearSelection:472 commitGroupDrag:653 commitDrag:673 seedCursor:710 arrange.arrangeClearSelection:742
-  @call singleTarget  @ selectedTakeProperties:300 duplicateSelectedBelow:307 varySelected:318 duplicateUnpooledSelectedBelow:325
+  @call setSelection  @ selectBy:168 navCursorTo:204 deleteSelected:285 duplicateSelectedBelow:311 setFocus:445 setSelection:471 clearSelection:472 commitGroupDrag:653 commitDrag:673 seedCursor:710 arrange.arrangeClearSelection:743
+  @call singleTarget  @ selectedTakeProperties:300 duplicateSelectedBelow:307 stepVariantOfSelected:318 duplicateUnpooledSelectedBelow:325
+  @call stepVariantOfSelected  @ arrange.arrangePrevVariant:741 arrange.arrangeNextVariant:742
   @call takeAtCursor  @ actionTargets:187 diveSelected:292
   @call takesInRect  @ selectBy:168 lassoCandidate:638
   @call tracker  @ diveSelected:294 selectedTakeProperties:301 duplicateUnpooledSelectedBelow:333 createSlot:693
 
 # Bindings (by name)
-  @bind clearLoop  @ 747
+  @bind clearLoop  @ 748
   @bind deleteSelected  @ 735
   @bind deleteSelectedAndAdvance  @ 736
   @bind disarmBand  @ 161
   @bind diveSelected  @ 737
   @bind duplicateSelectedBelow  @ 739
   @bind duplicateUnpooledSelectedBelow  @ 740
-  @bind loopToTargets  @ 745
-  @bind playFromCursor  @ 746
+  @bind loopToTargets  @ 746
+  @bind playFromCursor  @ 747
   @bind selectedTakeProperties  @ 738
-  @bind setLoopEndHere  @ 744
-  @bind setLoopStartHere  @ 743
-  @bind varySelected  @ 741
+  @bind setLoopEndHere  @ 745
+  @bind setLoopStartHere  @ 744
 
 # Unresolved receivers
-  @drop arrange:register  @ <load>:755
-  @drop arrange:registerAll  @ <load>:718,763
+  @drop arrange:register  @ <load>:756
+  @drop arrange:registerAll  @ <load>:718,764
 
 # REAPER API surface
   @reaper GetMediaItemTake_Item
 
 # Fields (r read / w write incl. constructor keys)
   @field r am  @ 17
-  @field w arrangeClearLoop  @ 747
-  @field w arrangeClearSelection  @ arrange.arrangeClearSelection:742
+  @field w arrangeClearLoop  @ 748
+  @field w arrangeClearSelection  @ arrange.arrangeClearSelection:743
   @field w arrangeCursorDown  @ arrange.arrangeCursorDown:720
   @field w arrangeCursorLeft  @ arrange.arrangeCursorLeft:721
   @field w arrangeCursorRight  @ arrange.arrangeCursorRight:722
@@ -390,23 +392,24 @@
   @field w arrangeEnd  @ arrange.arrangeEnd:726
   @field w arrangeGrowTake  @ arrange.arrangeGrowTake:734
   @field w arrangeHome  @ arrange.arrangeHome:725
-  @field w arrangeLoopToItem  @ 745
+  @field w arrangeLoopToItem  @ 746
+  @field w arrangeNextVariant  @ arrange.arrangeNextVariant:742
   @field w arrangeNudgeBack  @ arrange.arrangeNudgeBack:731
   @field w arrangeNudgeForward  @ arrange.arrangeNudgeForward:732
   @field w arrangePageDown  @ arrange.arrangePageDown:724
   @field w arrangePageUp  @ arrange.arrangePageUp:723
-  @field w arrangePlayFromCursor  @ 746
+  @field w arrangePlayFromCursor  @ 747
+  @field w arrangePrevVariant  @ arrange.arrangePrevVariant:741
   @field w arrangeSelectDown  @ 152 arrange.arrangeSelectDown:728
   @field w arrangeSelectLeft  @ 153 arrange.arrangeSelectLeft:729
   @field w arrangeSelectRight  @ 153 arrange.arrangeSelectRight:730
   @field w arrangeSelectUp  @ 152 arrange.arrangeSelectUp:727
-  @field w arrangeSetLoopEnd  @ 744
-  @field w arrangeSetLoopStart  @ 743
+  @field w arrangeSetLoopEnd  @ 745
+  @field w arrangeSetLoopStart  @ 744
   @field w arrangeShrinkTake  @ arrange.arrangeShrinkTake:733
   @field w arrangeTakeProperties  @ 738
-  @field w arrangeVary  @ 741
-  @field w arrangeZoomIn  @ arrange.arrangeZoomIn:748
-  @field w arrangeZoomOut  @ arrange.arrangeZoomOut:749
+  @field w arrangeZoomIn  @ arrange.arrangeZoomIn:749
+  @field w arrangeZoomOut  @ arrange.arrangeZoomOut:750
   @field r cm  @ 17
   @field r cmgr  @ 17
   @field r col  @ rectFromAnchor:142,143

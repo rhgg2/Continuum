@@ -642,9 +642,9 @@
       @contract  another instance of the bound slot at the current instance's append point  @ 334
       @contract  nil with no current instance, or where the free span falls short of the source  @ 335
       @invariant  the copy becomes the current instance, so loop to item follows it  @ 336
-  @api tv:vary()  @ 346-352
-      @contract  the current instance replaced by one of a fresh variant slot; nil with no instance  @ 344
-      @invariant  the tracker rebinds to the variant, and its placement becomes the current instance  @ 345
+  @api tv:stepVariant(dir)  @ 346-352
+      @contract  the current instance moved ±1 along its family, varying past the last; nil with none  @ 344
+      @invariant  the tracker rebinds to that slot, and its placement becomes the current instance  @ 345
   @api tv:duplicateBoundUnpooled()  @ 355-362
       @contract  clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx  @ 354
   @api tv:setRowPerBeat(n)  @ 618-628
@@ -1088,7 +1088,7 @@
   @call applyRegionWindow  @ regionNoteOff:1727,1731 regionAdjustDuration:1741 regionAdjustPosition:1752
   @call arrange  @ selectedTrackIdx:168 effectiveSlot:172 resolveSelectionTake:188,191,194 retargetTrackTier:201,203 selectTrack:209,212,214 currentInstance:233 bracketCurrentInstance:240
   @call arrange  @ resolveCurrentInstance:257,265,267,271,279,280 gotoTrack:291 gotoTake:299 pickTrack:311 newTakeBelow:326,327,330
-  @call arrange  @ duplicateBelow:339 vary:348 duplicateBoundUnpooled:358 applyTakeProperties:636,637 playRow:3339,3348 tracker.playFromTop:4085
+  @call arrange  @ duplicateBelow:339 stepVariant:348 duplicateBoundUnpooled:358 applyTakeProperties:636,637 playRow:3339,3348 tracker.playFromTop:4085
   @call assignNoteMove  @ adjustPositionMulti:1931 adjustPosition:1974
   @call assignStamp  @ adjustPositionMulti:1933 adjustPosition:1986
   @call assignTail  @ applyNoteOff:1808 adjustDurationCore:1869 insertRowCore:2334 deleteRowCore:2354
@@ -1209,7 +1209,7 @@
   @call tv:chordNudgeVel  @ tracker.nudgeFineUp:4074 tracker.nudgeFineDown:4078
   @call tv:clearMoveGap  @ groupBridge.clearMoveGap:4504
   @call tv:clearRegionAt  @ groupDuplicate:3995 groupPaste:4011 groupBridge.clearAt:4498
-  @call tv:currentInstance  @ bracketCurrentInstance:239 newTakeBelow:323 duplicateBelow:338 vary:347 playRow:3340 cutRow:3355 tracker.playFromTop:4084
+  @call tv:currentInstance  @ bracketCurrentInstance:239 newTakeBelow:323 duplicateBelow:338 stepVariant:347 playRow:3340 cutRow:3355 tracker.playFromTop:4084
   @call tv:cursorAnchor  @ duplicateCascade:3398,3415 groupPaste:4007 groupBridge.cursorAnchor:4491
   @call tv:deletedCells  @ deleteEvent:3013
   @call tv:digitsAbandon  @ rebuild:4159 dropGrid:4450
@@ -1226,14 +1226,14 @@
   @call tv:instanceAtCursor  @ deleteEvent:3011 localBlocked:3540 groupBridge.instanceAt:4492
   @call tv:localMode  @ deleteEvent:3010 localBlocked:3539
   @call tv:loopsToItem  @ resolveCurrentInstance:285
-  @call tv:nameInstance  @ newTakeBelow:330 duplicateBelow:340 vary:350
+  @call tv:nameInstance  @ newTakeBelow:330 duplicateBelow:340 stepVariant:350
   @call tv:noteFx  @ setFxField:2819 addFxStage:2838 removeFxStage:2844 pruneEmptyRegion:2854 moveFxStage:2859 replaceFxStage:2870 saveFxPatch:2882
   @call tv:octaveWidth  @ reserveGhostReadout:3622
   @call tv:paintRegionStream  @ groupBridge.paintStream:4493
   @call tv:rebuild  @ releaseTransientFrame:567 hideExtraCol:3768,3807 unautomateParam:3958 tm:rebuild:4466 <load>:4633
   @call tv:rowToPPQ  @ mintRegionForSelection:2641,2642
   @call tv:scaleSelection  @ tracker.scaleHalf:4055,4056 tracker.scaleDouble:4062,4063
-  @call tv:selectSlot  @ gotoTake:306 pickTake:314 newTakeBelow:329 vary:349 duplicateBoundUnpooled:360
+  @call tv:selectSlot  @ gotoTake:306 pickTake:314 newTakeBelow:329 stepVariant:349 duplicateBoundUnpooled:360
   @call tv:selectTrack  @ gotoTrack:292 pickTrack:312
   @call tv:selectionAsRect  @ duplicateCascade:3384 groupBridge.selectionAsRect:4490 wireGroupLifetime:4611
   @call tv:setFxField  @ setFxBypass:2831

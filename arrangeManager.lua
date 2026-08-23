@@ -994,16 +994,46 @@ end
 
 ----- Variants
 
--- Next name in the family: the highest ordinal in use plus one, so a deleted
--- variant keeps its name out of circulation. See docs/arrangeManager.md § Variants.
-local function nextVariantName(trackIdx, name)
-  local root    = util.variantRoot(name)
-  local highest = 0
-  for _, slot in ipairs(am:trackSlots(trackIdx)) do
-    local slotRoot, ordinal = util.variantRoot(slot.name)
-    if slotRoot == root and ordinal and ordinal > highest then highest = ordinal end
+-- The family of the slot at slotIdx in step order (root then variants by ordinal), with
+-- that root and the slot's place. See docs/arrangeManager.md § Variants.
+--shape: ({ {idx = n, ordinal = n}, ... }, root, pos)
+local function variantFamily(trackIdx, slotIdx)
+  local slots, root = am:trackSlots(trackIdx), nil
+  for _, slot in ipairs(slots) do
+    if slot.idx == slotIdx then root = util.variantRoot(slot.name) end
   end
-  return ('%s (var %d)'):format(root, highest + 1)
+  if not root then return {} end
+
+  local family, bases = {}, {}
+  for _, slot in ipairs(slots) do
+    local slotRoot, ordinal = util.variantRoot(slot.name)
+    if slot.kind == 'midi' and slotRoot == root then
+      if ordinal then util.add(family, { idx = slot.idx, ordinal = ordinal })
+      else            util.add(bases,  { idx = slot.idx, ordinal = 0 }) end
+    end
+  end
+
+  -- Namesakes (two slots with the plain root) each stand in their own family and step
+  -- forward only; an unnamed slot falls out the same way. See docs/arrangeManager.md § Variants.
+  for _, base in ipairs(bases) do
+    if #bases == 1 or base.idx == slotIdx then util.add(family, base) end
+  end
+  table.sort(family, function(a, b)
+    if a.ordinal ~= b.ordinal then return a.ordinal < b.ordinal end
+    return a.idx < b.idx
+  end)
+
+  local pos
+  for i, member in ipairs(family) do if member.idx == slotIdx then pos = i end end
+  return family, root, pos
+end
+
+-- Next name in the family: the highest ordinal in use plus one, so a deleted
+-- variant keeps its name out of circulation.
+local function nextVariantName(trackIdx, slotIdx)
+  local family, root = variantFamily(trackIdx, slotIdx)
+  local last = family[#family]
+  return ('%s (var %d)'):format(root, (last and last.ordinal or 0) + 1)
 end
 
 local function liveInstances(trackIdx, slotIdx)
@@ -1019,10 +1049,28 @@ function am:vary(take)
   if take.kind ~= 'midi' then return end
   if liveInstances(take.trackIdx, take.slotIdx) < 2 then return end
   local trackIdx, startQN = take.trackIdx, take.startQN
-  local slotIdx = am:mintParkedTake(trackIdx, nextVariantName(trackIdx, take.name), nil, take.take)
+  local slotIdx = am:mintParkedTake(trackIdx, nextVariantName(trackIdx, take.slotIdx), nil, take.take)
   if not slotIdx then return end
   am:deleteTake(take)
   return slotIdx, am:dropInstance(trackIdx, slotIdx, startQN)
+end
+
+-- The drop names no length, so the neighbour arrives at its own natural length and relayout
+-- caps it where it capped the placement it replaces.
+--contract: (slotIdx, take) for the placement moved ±1 along its family; varies past the last
+--contract: nil off the front, on a non-MIDI take, or where the vary refuses
+function am:stepVariant(take, dir)
+  if take.kind ~= 'midi' then return end
+  local family, _, pos = variantFamily(take.trackIdx, take.slotIdx)
+  if not pos then return end
+  local target = family[pos + dir]
+  if not target then
+    if dir < 0 then return end
+    return am:vary(take)
+  end
+  local placed = am:dropInstance(take.trackIdx, target.idx, take.startQN)
+  if not placed then return end
+  return target.idx, placed
 end
 
 ----- Per-take edits

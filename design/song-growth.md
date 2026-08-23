@@ -95,6 +95,19 @@ as typed with nothing else touched.
 there, so the verb would fork a source nothing else shares, and the
 take is already yours to edit where it stands.
 
+Alt+Shift+← and Alt+Shift+→ step the current placement along its family,
+the neighbouring slot's instance standing in its place at the same start
+QN. `vary` is the forward step off the last of the family, so one key
+walks the variants already made and then makes the next.
+
+The walk is reversible. Stepping off a variant nothing else stands on
+parks it, and stepping back onto it moves the keeper out again, so the
+slots a placement has passed through survive with their events.
+
+A held forward key mints one variant and stops there. That variant holds
+the placement alone, and `vary` refuses to fork a source nothing else
+shares.
+
 It is built from verbs that already exist, and gathers everything
 before it mutates anything. Read the current instance's track, start
 QN and natural length; mint the variant through

@@ -430,10 +430,10 @@ return {
     end,
   },
 
-  -- vary: the current instance swapped for one of a fresh variant slot.
-  -- see docs/trackerPage.md § vary
+  -- stepVariant: the current instance moved along its family, varying past the last.
+  -- see docs/trackerPage.md § Stepping the family
   {
-    name = 'vary rebinds the tracker to the variant slot and follows its placement',
+    name = 'the variant step rebinds the tracker to the slot stepped to and follows its placement',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
@@ -444,10 +444,10 @@ return {
       fakeArrange.instances = {
         { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 4, lengthQN = 4 },
       }
-      -- am:vary deletes the instance and drops the variant in its place; the
-      -- palette grows by the variant slot (am_spec pins the real one).
-      fakeArrange.vary = function(inst)
-        fakeArrange.calls.vary = { take = inst.take }
+      -- am:stepVariant drops the neighbour in the instance's place; past the last of
+      -- the family that is a fresh variant slot (am_spec pins the real one).
+      fakeArrange.stepVariant = function(inst, dir)
+        fakeArrange.calls.stepVariant = { take = inst.take, dir = dir }
         fakeArrange.instances = {
           { take = 'v0', trackIdx = 0, slotIdx = 9, startQN = 4, lengthQN = 4 },
         }
@@ -459,9 +459,10 @@ return {
       tp:bindFromSelection()                       -- seed track 0 / slot 0, bind i0
       h.cm:set('global', 'trackerLoopToItem', true)
 
-      h.cmgr:invoke('vary')
-      t.eq(fakeArrange.calls.vary.take, 'i0', 'varied the instance the tracker is in')
-      t.eq(h.cm:getAt('track', 'trackerSlot'), 9, 'and selected the variant slot')
+      h.cmgr:invoke('nextVariant')
+      t.eq(fakeArrange.calls.stepVariant.take, 'i0', 'stepped the instance the tracker is in')
+      t.eq(fakeArrange.calls.stepVariant.dir, 1, 'forward along the family')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 9, 'and selected the slot it landed on')
 
       tp:bindFromSelection()                       -- the next frame's resolve
       t.eq(tp:currentTake(), 'v0', 'the tracker rebound onto the variant')
@@ -470,19 +471,20 @@ return {
   },
 
   {
-    name = 'vary with the tracker in no instance does nothing',
+    name = 'a variant step with the tracker in no instance does nothing',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
       seedItems(h, { 'parked' })
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       fakeArrange.takeByKey['0:0'] = 'parked'       -- bound, but on no placement
-      fakeArrange.vary = function() fakeArrange.calls.vary = true end
+      fakeArrange.stepVariant = function() fakeArrange.calls.stepVariant = true end
       h.cmgr:push('tracker')
       tp:bindFromSelection()
 
-      h.cmgr:invoke('vary')
-      t.falsy(fakeArrange.calls.vary, 'no instance to diverge from, so nothing was minted')
+      h.cmgr:invoke('nextVariant')
+      h.cmgr:invoke('prevVariant')
+      t.falsy(fakeArrange.calls.stepVariant, 'no instance to step from, in either direction')
     end,
   },
 

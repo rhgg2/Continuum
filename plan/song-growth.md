@@ -22,15 +22,16 @@
    same rule. — landed 2026-08-23, three commits.
 4. **Phase 4 — vary** (§ vary) — the current instance replaced by an instance
    of a fresh variant slot named `<parent> (var N)`; refused on a slot with one
-   instance; one atomic block, rebind; a rename carries the family; the
+   instance; one atomic block, rebind; a rename carries the family;
+   Alt+Shift+←/→ step the family and vary past the last of it; the
    tracker's unpooled duplicate retires. ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 tracker/arrange: Alt+Shift+←/→ step a placement along its family (§ vary)
 - 2026-08-23 tracker: vary swaps the current instance for a variant slot (§ vary)
 - 2026-08-23 rename: a rename edits the root, from either field (§ vary)
 - 2026-08-23 am: vary replaces an instance with one of a fresh variant slot (§ vary)
-- 2026-08-23 tracker: duplicate below appends another instance of the bound slot (§ Duplicate below)
 
 ## Now
 
