@@ -73,6 +73,10 @@ grepping `map/*.map`; its schema documents the filters, query syntax
 and return shape. `mcp__reaper_docs__reaper_doc_lookup` reads parsed
 ReaScript/ReaImGui entries.
 
+Anything with a name — a function, a field, a signal, a module — can
+be answered by `map_query` directly. Save the `Explore` agent for
+genuinely fuzzy and open-ended queries that can't be found in an index.
+
 `mcp__reaper__reaper_eval` runs a Lua chunk inside the running
 Continuum instance. Undoable edits route through mm/tm with an
 `undo_label`. `docs/bridge-cookbook.md` has the recipes,
