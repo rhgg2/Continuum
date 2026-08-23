@@ -660,6 +660,7 @@ function M.new()
   state.srcIsQN         = {}    -- src   → true if MIDI (beat-based)
   state.itemCustomColor = {}    -- item  → REAPER native int (|0x1000000 set), 0 = unset
   state.takeCustomColor = {}    -- take  → REAPER native int (|0x1000000 set), 0 = unset
+  state.takeStartOffs   = {}    -- take  → start offset into the source, seconds (= QN here)
   function r.GetMediaItem_Track(item) return state.trackForItem[item] end
   function r.CountTrackMediaItems(track) return #(state.itemsByTrack[track] or {}) end
   function r.GetTrackMediaItem(track, i) return (state.itemsByTrack[track] or {})[i + 1] end
@@ -684,6 +685,7 @@ function M.new()
   end
   function r.GetMediaItemTakeInfo_Value(take, parm)
     if parm == 'I_CUSTOMCOLOR' then return state.takeCustomColor[take] or 0 end
+    if parm == 'D_STARTOFFS'   then return state.takeStartOffs[take]   or 0 end
     return 0
   end
   -- Resolution: take override → item override → 0. Real REAPER also
@@ -812,6 +814,7 @@ function M.new()
   end
   function r.SetMediaItemTakeInfo_Value(take, parm, value)
     if parm == 'I_CUSTOMCOLOR' then state.takeCustomColor[take] = value end
+    if parm == 'D_STARTOFFS'   then state.takeStartOffs[take]   = value end
     bump()
     return true
   end
@@ -924,6 +927,14 @@ function M.new()
   -- Item at project start, no tempo-map skew: a QN maps to ppqPerQN ticks.
   function r.MIDI_GetPPQPosFromProjQN(_take, qn)
     return qn * state.ppqPerQN
+  end
+
+  -- Source ppq → project QN, shifted by the take's start offset, so ppq 0
+  -- lands on the source origin: the item start less the offset.
+  function r.MIDI_GetProjQNFromPPQPos(take, ppq)
+    local item    = state.itemForTake[take]
+    local startQN = item and state.itemPos[item] or 0
+    return startQN - (state.takeStartOffs[take] or 0) + ppq / state.ppqPerQN
   end
 
   -- Project time-signature map. Default: one prevailing sig (4/4) and no

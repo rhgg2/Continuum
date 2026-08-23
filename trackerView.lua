@@ -3329,14 +3329,23 @@ function tv:playRow()
   local playQN = arrange().playPositionQN()
   local inst   = playQN and self:currentInstance()
   if not inst then return end
-  local function rowIn(startQN) return (playQN - startQN) * resolution / ctx:ppqPerRow() end
+  local function rowIn(originQN) return (playQN - originQN) * resolution / ctx:ppqPerRow() end
   if playQN >= inst.startQN and playQN < inst.startQN + inst.lengthQN then
-    return rowIn(inst.startQN)
+    return rowIn(inst.originQN)
   end
   -- Siblings share one take, so a row of the instance being heard is a row of
   -- the grid on screen; the dim says it is not the instance bound.
   local other, contains = arrange().seekInstance(inst.take, playQN, false)
-  if contains then return rowIn(other.startQN), true end
+  if contains then return rowIn(other.originQN), true end
+end
+
+--contract: the row where the rendered span starts; nil unless a head skips source above it
+-- see docs/trackerPage.md § The cut
+function tv:headRow()
+  local inst = self:currentInstance()
+  if not inst then return end
+  local row = (inst.startQN - inst.originQN) * resolution / ctx:ppqPerRow()
+  if row > 0 then return row end
 end
 
 --contract: the row where the rendered span ends; nil unless the source outruns it
@@ -3344,7 +3353,7 @@ end
 function tv:cutRow()
   local inst = self:currentInstance()
   if not inst then return end
-  local row = inst.lengthQN * resolution / ctx:ppqPerRow()
+  local row = (inst.startQN + inst.lengthQN - inst.originQN) * resolution / ctx:ppqPerRow()
   if row < grid.numRows then return row end
 end
 function tv:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end

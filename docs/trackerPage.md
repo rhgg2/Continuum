@@ -549,21 +549,23 @@ where a dive or a slot change has pinned the tracker elsewhere.
 
 ### The cut
 
-A dotted line marks where the current instance's rendered span ends,
-where the source span runs on past it. The rows below the line are drawn
-but never heard: the item stops there, so the song never reaches them.
+A dotted line marks each end of the current instance's rendered span,
+where the source span runs on past it. The rows outside the lines are
+drawn but never heard: the item does not cover them, so the song never
+reaches them.
 
-`tv:cutRow` takes the instance's rendered `lengthQN` through the metric
-the caret uses, and returns nil where the row falls at or past
-`grid.numRows`. The grid's row count is the source span in rows, so that
-one test is the whole condition — a row inside the grid is a render the
-source outruns.
+The grid is the source, and the instance is a window onto it. `tv:headRow`
+and `tv:cutRow` put that window's two edges on the grid, both measured
+from the instance's source origin through the metric the caret uses. A
+head of zero marks nothing, and so does a render the source does not
+outrun — `cutRow` returns nil where the row falls at or past
+`grid.numRows`.
 
-The line spans the pane, the gutter with the columns, and the grid
-carries on below it. Those rows come back into play as soon as the
-neighbour moves away, which keeps the mark a boundary and not an edge.
-See `docs/arrangeManager.md` § Rendered span and source span for where
-the two extents come from.
+The lines span the pane, the gutter with the columns, and the grid
+carries on past them. Those rows come back into play as soon as the
+neighbour moves away or the head is handed back, which keeps each mark a
+boundary and not an edge. See `docs/arrangeManager.md` § Rendered span
+and source span for where the two extents come from.
 
 ### Slot recovery and the per-track memory
 

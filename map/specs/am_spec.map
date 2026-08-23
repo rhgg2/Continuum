@@ -1,6 +1,6 @@
-@spec am_spec  src=tests/specs/am_spec.lua  loc=1649  cases=98
+@spec am_spec  src=tests/specs/am_spec.lua  loc=1713  cases=102
 @exercises arrangeManager (am), scratch (scratch), dataStore (h.ds), configManager (h.cm)
-@surface   am:trackSlots, am:projectTracks, am:tracksTakes, am:hasPlacedTakes, am:mintParkedTake, am:createAndDropMidi, am:takeForSlot, scratch.peek, am:ownerTrack, am:renameSlot, am:deleteSlot, am:dropInstance, am:duplicateTake, am:startIsClear, am:keyForSlot, ds:assign, am:takesUsing, cm:set, am:tempersInUse, am:moveTake, am:deleteTake, am:resizeTake, ds:getAt, am:isParkedTake, am:vary, am:findTake, am:stepVariant, am:initialCursor, am:editCursorQN, am:setEditCursorQN, am:loopRangeQN, am:setLoopRangeQN, am:loopTo, am:clearLoopRange, am:playPositionQN, am:seekInstance, am:projectEndQN, am:freeSpan, am:duplicateBelow, am:duplicateUnpooledBelow, am:newTakeBelow
+@surface   am:trackSlots, am:projectTracks, am:tracksTakes, am:hasPlacedTakes, am:mintParkedTake, am:createAndDropMidi, am:takeForSlot, scratch.peek, am:ownerTrack, am:renameSlot, am:deleteSlot, am:dropInstance, am:duplicateTake, am:startIsClear, am:keyForSlot, ds:assign, am:takesUsing, cm:set, am:tempersInUse, am:moveTake, am:deleteTake, am:resizeTake, ds:getAt, am:trimHead, am:isParkedTake, am:vary, am:findTake, am:stepVariant, am:initialCursor, am:editCursorQN, am:setEditCursorQN, am:loopRangeQN, am:setLoopRangeQN, am:loopTo, am:clearLoopRange, am:playPositionQN, am:seekInstance, am:projectEndQN, am:freeSpan, am:duplicateBelow, am:duplicateUnpooledBelow, am:newTakeBelow
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.GetMediaItemTake_Track, reaper.GetTakeName, reaper.MIDI_SetAllEvts, reaper.MIDI_GetAllEvts, reaper.CountTrackMediaItems, reaper.SetMediaItemSelected, reaper:setCursor, reaper:setSelectedTracks, reaper:setLoopRange, reaper.GetSetRepeat, reaper:setPlay, reaper.GetMediaItemTakeInfo_Value, reaper.SetMediaItemTakeInfo_Value, r._state.playState
 
 # Intent
@@ -57,78 +57,82 @@
   @case 'trimmed audio take keeps its trim across a move (no balloon to source)'  [harness]  @ 677-689
   @case 'moveTake shifts start; refused on start-collision; returns ok flag'  [harness]  @ 693-704
   @case 'resizeTake writes natural; rendered is min(natural, source, gap)'  [harness]  @ 708-719
-  @case 'deleteTake removes the item, leaving the other take intact'  [harness]  @ 723-734
-  @case 'deleteTake parks a slot\'s last instance; the slot survives, greyed'  [harness]  @ 740-756
-  @case 'deleteTake of a non-last instance deletes outright (no park)'  [harness]  @ 760-775
-  @case 're-dropping from a parked slot re-materialises off the keeper'  [harness]  @ 779-792
-  @case 'deleteSlot forever-deletes: live instances and the parked keeper'  [harness]  @ 796-809
-  @case 'deleteSlot forever-deletes the pool per-event metadata'  [harness]  @ 813-824
-  @case 'mintParkedTake shows the new slot at once; isParkedTake flags scratch-hosted takes'  [harness]  @ 828-843
-  @case 'vary replaces the instance with one of a fresh variant slot'  [harness]  @ 850-872
-  @case 'vary numbers from the family high-water mark; a variant of a variant joins the family'  [harness]  @ 876-887
-  @case 'vary refuses on a slot with a single instance'  [harness]  @ 891-899
-  @case 'stepVariant moves the placement onto the next slot of the family'  [harness]  @ 906-925
-  @case 'stepVariant past the last of the family varies'  [harness]  @ 929-942
-  @case 'stepVariant off the front of the family does nothing'  [harness]  @ 946-957
-  @case 'stepping back off a variant parks it; stepping on again brings it live'  [harness]  @ 961-981
-  @case 'a variant with two namesake bases steps forward but not back'  [harness]  @ 985-1001
-  @case 'findTake resolves a REAPER take handle back to its grid take-shape'  [harness]  @ 1008-1022
-  @case 'initialCursor reads the selected item: its take track and start'  [harness]  @ 1026-1038
-  @case 'initialCursor falls back to the edit cursor and selected track'  [harness]  @ 1042-1051
-  @case 'initialCursor defaults to track 0 when nothing is selected'  [harness]  @ 1055-1063
-  @case 'editCursorQN reads the REAPER edit cursor'  [harness]  @ 1070-1075
-  @case 'setEditCursorQN moves the REAPER edit cursor'  [harness]  @ 1079-1084
-  @case 'loopRangeQN returns the project loop range'  [harness]  @ 1088-1095
-  @case 'loopRangeQN is nil when no loop is set'  [harness]  @ 1099-1103
-  @case 'setLoopRangeQN writes the project loop range'  [harness]  @ 1107-1114
-  @case 'loopTo brackets a span: loop range, repeat on, cursor at its start'  [harness]  @ 1118-1126
-  @case 'loopTo leaves the cursor alone when the play head is inside the span'  [harness]  @ 1130-1139
-  @case 'clearLoopRange removes the project loop range'  [harness]  @ 1143-1149
-  @case 'playPositionQN is nil when the transport is stopped'  [harness]  @ 1153-1157
-  @case 'playPositionQN returns the play head qn while playing'  [harness]  @ 1161-1166
-  @case 'seekInstance takes the instance whose rendered span holds qn'  [harness]  @ 1173-1187
-  @case 'seekInstance spans are half-open — the end belongs to the next'  [harness]  @ 1191-1200
-  @case 'seekInstance from a gap travels forwards by default, backwards when asked'  [harness]  @ 1204-1216
-  @case 'seekInstance falls back to the other direction when its own is empty'  [harness]  @ 1220-1230
-  @case 'seekInstance ignores instances of other slots'  [harness]  @ 1234-1246
-  @case 'seekInstance matches on the rendered span, not the source span'  [harness]  @ 1250-1262
-  @case 'seekInstance is nil for a slot whose only take is parked'  [harness]  @ 1266-1276
-  @case 'projectEndQN is 0 for a project with no items'  [harness]  @ 1280-1284
-  @case 'projectEndQN reports the largest take end across all tracks'  [harness]  @ 1288-1297
-  @case 'freeSpan is the gap to the next take, and unbounded past the last'  [harness]  @ 1304-1314
-  @case 'duplicateBelow places a pooled clone at the append point'  [harness]  @ 1318-1334
-  @case 'duplicateBelow refuses where a truncating neighbour leaves no room'  [harness]  @ 1338-1354
-  @case 'duplicateBelow refuses where the gap is shorter than the natural length'  [harness]  @ 1358-1369
-  @case 'duplicateBelow refuses on exact-start collision at the destination'  [harness]  @ 1373-1383
-  @case 'duplicateBelow refuses on audio takes'  [harness]  @ 1387-1396
-  @case 'duplicateUnpooledBelow mints a fresh slot and copies the MIDI blob'  [harness]  @ 1400-1420
-  @case 'duplicateUnpooledBelow forks the source per-event metadata onto the fresh pool'  [harness]  @ 1426-1437
-  @case 'duplicateUnpooledBelow parks the clone for want of room'  [harness]  @ 1441-1458
-  @case 'duplicateUnpooledBelow refuses on audio'  [harness]  @ 1462-1470
-  @case 'newTakeBelow creates an empty MIDI take of the asked-for length at the append point'  [harness]  @ 1474-1495
-  @case 'newTakeBelow parks the take for want of room'  [harness]  @ 1499-1511
-  @case 'newTakeBelow measures the room against the length asked for'  [harness]  @ 1515-1526
-  @case 'newTakeBelow refuses on audio'  [harness]  @ 1530-1538
-  @case 'distinct pool guids on different tracks get distinct colourIdx'  [harness]  @ 1543-1556
-  @case 'pooled instances on different tracks share one colourIdx'  [harness]  @ 1560-1570
-  @case 'createAndDropMidi stamps I_CUSTOMCOLOR on the new take'  [harness]  @ 1574-1582
-  @case 'duplicateUnpooledBelow strips the source colour and mints a fresh one'  [harness]  @ 1586-1602
-  @case 'placement does not overwrite a pre-existing take colour (preserve override)'  [harness]  @ 1606-1618
-  @case 'a recycled take handle reports the new item\'s pool, not the dead take\'s'  [harness]  @ 1623-1646
+  @case 'trimHead walks the start edge in, holding the content and the end still'  [harness]  @ 723-739
+  @case 'a head is refused before the origin, at the source end, or onto an occupied start'  [harness]  @ 742-753
+  @case 'a trimmed take is capped by the gap, and regrows to source-minus-head without one'  [harness]  @ 756-769
+  @case 'trimming the head of a resized take keeps the end where the resize put it'  [harness]  @ 772-783
+  @case 'deleteTake removes the item, leaving the other take intact'  [harness]  @ 787-798
+  @case 'deleteTake parks a slot\'s last instance; the slot survives, greyed'  [harness]  @ 804-820
+  @case 'deleteTake of a non-last instance deletes outright (no park)'  [harness]  @ 824-839
+  @case 're-dropping from a parked slot re-materialises off the keeper'  [harness]  @ 843-856
+  @case 'deleteSlot forever-deletes: live instances and the parked keeper'  [harness]  @ 860-873
+  @case 'deleteSlot forever-deletes the pool per-event metadata'  [harness]  @ 877-888
+  @case 'mintParkedTake shows the new slot at once; isParkedTake flags scratch-hosted takes'  [harness]  @ 892-907
+  @case 'vary replaces the instance with one of a fresh variant slot'  [harness]  @ 914-936
+  @case 'vary numbers from the family high-water mark; a variant of a variant joins the family'  [harness]  @ 940-951
+  @case 'vary refuses on a slot with a single instance'  [harness]  @ 955-963
+  @case 'stepVariant moves the placement onto the next slot of the family'  [harness]  @ 970-989
+  @case 'stepVariant past the last of the family varies'  [harness]  @ 993-1006
+  @case 'stepVariant off the front of the family does nothing'  [harness]  @ 1010-1021
+  @case 'stepping back off a variant parks it; stepping on again brings it live'  [harness]  @ 1025-1045
+  @case 'a variant with two namesake bases steps forward but not back'  [harness]  @ 1049-1065
+  @case 'findTake resolves a REAPER take handle back to its grid take-shape'  [harness]  @ 1072-1086
+  @case 'initialCursor reads the selected item: its take track and start'  [harness]  @ 1090-1102
+  @case 'initialCursor falls back to the edit cursor and selected track'  [harness]  @ 1106-1115
+  @case 'initialCursor defaults to track 0 when nothing is selected'  [harness]  @ 1119-1127
+  @case 'editCursorQN reads the REAPER edit cursor'  [harness]  @ 1134-1139
+  @case 'setEditCursorQN moves the REAPER edit cursor'  [harness]  @ 1143-1148
+  @case 'loopRangeQN returns the project loop range'  [harness]  @ 1152-1159
+  @case 'loopRangeQN is nil when no loop is set'  [harness]  @ 1163-1167
+  @case 'setLoopRangeQN writes the project loop range'  [harness]  @ 1171-1178
+  @case 'loopTo brackets a span: loop range, repeat on, cursor at its start'  [harness]  @ 1182-1190
+  @case 'loopTo leaves the cursor alone when the play head is inside the span'  [harness]  @ 1194-1203
+  @case 'clearLoopRange removes the project loop range'  [harness]  @ 1207-1213
+  @case 'playPositionQN is nil when the transport is stopped'  [harness]  @ 1217-1221
+  @case 'playPositionQN returns the play head qn while playing'  [harness]  @ 1225-1230
+  @case 'seekInstance takes the instance whose rendered span holds qn'  [harness]  @ 1237-1251
+  @case 'seekInstance spans are half-open — the end belongs to the next'  [harness]  @ 1255-1264
+  @case 'seekInstance from a gap travels forwards by default, backwards when asked'  [harness]  @ 1268-1280
+  @case 'seekInstance falls back to the other direction when its own is empty'  [harness]  @ 1284-1294
+  @case 'seekInstance ignores instances of other slots'  [harness]  @ 1298-1310
+  @case 'seekInstance matches on the rendered span, not the source span'  [harness]  @ 1314-1326
+  @case 'seekInstance is nil for a slot whose only take is parked'  [harness]  @ 1330-1340
+  @case 'projectEndQN is 0 for a project with no items'  [harness]  @ 1344-1348
+  @case 'projectEndQN reports the largest take end across all tracks'  [harness]  @ 1352-1361
+  @case 'freeSpan is the gap to the next take, and unbounded past the last'  [harness]  @ 1368-1378
+  @case 'duplicateBelow places a pooled clone at the append point'  [harness]  @ 1382-1398
+  @case 'duplicateBelow refuses where a truncating neighbour leaves no room'  [harness]  @ 1402-1418
+  @case 'duplicateBelow refuses where the gap is shorter than the natural length'  [harness]  @ 1422-1433
+  @case 'duplicateBelow refuses on exact-start collision at the destination'  [harness]  @ 1437-1447
+  @case 'duplicateBelow refuses on audio takes'  [harness]  @ 1451-1460
+  @case 'duplicateUnpooledBelow mints a fresh slot and copies the MIDI blob'  [harness]  @ 1464-1484
+  @case 'duplicateUnpooledBelow forks the source per-event metadata onto the fresh pool'  [harness]  @ 1490-1501
+  @case 'duplicateUnpooledBelow parks the clone for want of room'  [harness]  @ 1505-1522
+  @case 'duplicateUnpooledBelow refuses on audio'  [harness]  @ 1526-1534
+  @case 'newTakeBelow creates an empty MIDI take of the asked-for length at the append point'  [harness]  @ 1538-1559
+  @case 'newTakeBelow parks the take for want of room'  [harness]  @ 1563-1575
+  @case 'newTakeBelow measures the room against the length asked for'  [harness]  @ 1579-1590
+  @case 'newTakeBelow refuses on audio'  [harness]  @ 1594-1602
+  @case 'distinct pool guids on different tracks get distinct colourIdx'  [harness]  @ 1607-1620
+  @case 'pooled instances on different tracks share one colourIdx'  [harness]  @ 1624-1634
+  @case 'createAndDropMidi stamps I_CUSTOMCOLOR on the new take'  [harness]  @ 1638-1646
+  @case 'duplicateUnpooledBelow strips the source colour and mints a fresh one'  [harness]  @ 1650-1666
+  @case 'placement does not overwrite a pre-existing take colour (preserve override)'  [harness]  @ 1670-1682
+  @case 'a recycled take handle reports the new item\'s pool, not the dead take\'s'  [harness]  @ 1687-1710
 
 # Uses (outbound edges)
-  @use call am:trackSlots  @ 43,47,86,125,126,300,307,330,748,769,802,804,806,821,838,870,898,924,940,956,1469,1537
+  @use call am:trackSlots  @ 43,47,86,125,126,300,307,330,812,833,866,868,870,885,902,934,962,988,1004,1020,1533,1601
   @use call am:projectTracks  @ 64
-  @use call am:tracksTakes  @ 103,155,179,201,305,324,358,379,398,422,423,444,456,482,505,590,604,617,630,631,635,646,647,650,651,666,669,684,685,686,700,701,702,703,714,715,730,731,746,747,767,768,785,786,789,803,819,834,857,861,884,897,914,917,937,953,955,968,970,995,1015,1033,1181,1198,1211,1227,1242,1258,1259,1275,1324,1327,1348,1349,1353,1365,1368,1380,1382,1393,1395,1406,1410,1432,1448,1453,1468,1480,1484,1506,1509,1523,1525,1536,1550,1551,1567,1568,1592,1632
+  @use call am:tracksTakes  @ 103,155,179,201,305,324,358,379,398,422,423,444,456,482,505,590,604,617,630,631,635,646,647,650,651,666,669,684,685,686,700,701,702,703,714,715,729,730,735,736,749,750,751,752,763,764,765,766,778,779,780,794,795,810,811,831,832,849,850,853,867,883,898,921,925,948,961,978,981,1001,1017,1019,1032,1034,1059,1079,1097,1245,1262,1275,1291,1306,1322,1323,1339,1388,1391,1412,1413,1417,1429,1432,1444,1446,1457,1459,1470,1474,1496,1512,1517,1532,1544,1548,1570,1573,1587,1589,1600,1614,1615,1631,1632,1656,1696
   @use call am:hasPlacedTakes  @ 137,139,141
-  @use call am:mintParkedTake  @ 138,156,274,285,835,1272
-  @use call am:createAndDropMidi  @ 140,321,341,342,343,346,356,371,373,392,394,421,440,455,467,481,515,783,1578,1610
-  @use call am:takeForSlot  @ 157,837,839,1273,1454,1510
-  @use call scratch.peek  @ 159,753,772,807
+  @use call am:mintParkedTake  @ 138,156,274,285,899,1336
+  @use call am:createAndDropMidi  @ 140,321,341,342,343,346,356,371,373,392,394,421,440,455,467,481,515,847,1642,1674
+  @use call am:takeForSlot  @ 157,901,903,1337,1518,1574
+  @use call scratch.peek  @ 159,817,836,871
   @use call am:ownerTrack  @ 160,161,162
   @use call am:renameSlot  @ 178,197,215,230,246,261,275,286
-  @use call am:deleteSlot  @ 303,345,805,822
-  @use call am:dropInstance  @ 357,372,375,393,411,412,441,469,787,1615
+  @use call am:deleteSlot  @ 303,345,869,886
+  @use call am:dropInstance  @ 357,372,375,393,411,412,441,469,851,1679
   @use call am:duplicateTake  @ 422,444,458,484
   @use call am:startIsClear  @ 501,502,503,504,506
   @use call am:keyForSlot  @ 526,527,528,529,530,531
@@ -136,150 +140,156 @@
   @use call am:takesUsing  @ 551,555
   @use call cm:set  @ 568,569
   @use call am:tempersInUse  @ 571
-  @use call am:moveTake  @ 630,668,685,700,702,1348
-  @use call am:deleteTake  @ 634,730,746,767,785,803,1637
-  @use call am:resizeTake  @ 646,650,714
+  @use call am:moveTake  @ 630,668,685,700,702,1412
+  @use call am:deleteTake  @ 634,765,794,810,831,849,867,1701
+  @use call am:resizeTake  @ 646,650,714,778
   @use call ds:getAt  @ 654,672
-  @use call am:isParkedTake  @ 841,842,1452,1508,1524
-  @use call am:vary  @ 859,885,897,968
-  @use call am:findTake  @ 886,941,1016,1020,1021
-  @use call am:stepVariant  @ 915,938,954,973,977,998,999
-  @use call am:initialCursor  @ 1035,1048,1060
-  @use call am:editCursorQN  @ 1074,1083,1124,1138
-  @use call am:setEditCursorQN  @ 1082,1133
-  @use call am:loopRangeQN  @ 1092,1102,1111,1122,1136,1148
-  @use call am:setLoopRangeQN  @ 1110
-  @use call am:loopTo  @ 1121,1135
-  @use call am:clearLoopRange  @ 1147
-  @use call am:playPositionQN  @ 1156,1165
-  @use call am:seekInstance  @ 1182,1199,1212,1215,1228,1229,1243,1260,1274,1275
-  @use call am:projectEndQN  @ 1283,1296
-  @use call am:freeSpan  @ 1311,1312,1313
-  @use call am:duplicateBelow  @ 1325,1352,1367,1381,1394
-  @use call am:duplicateUnpooledBelow  @ 1408,1434,1450,1468,1594
-  @use call am:newTakeBelow  @ 1482,1506,1523,1536
+  @use call am:trimHead  @ 729,735,749,750,751,763,779
+  @use call am:isParkedTake  @ 905,906,1516,1572,1588
+  @use call am:vary  @ 923,949,961,1032
+  @use call am:findTake  @ 950,1005,1080,1084,1085
+  @use call am:stepVariant  @ 979,1002,1018,1037,1041,1062,1063
+  @use call am:initialCursor  @ 1099,1112,1124
+  @use call am:editCursorQN  @ 1138,1147,1188,1202
+  @use call am:setEditCursorQN  @ 1146,1197
+  @use call am:loopRangeQN  @ 1156,1166,1175,1186,1200,1212
+  @use call am:setLoopRangeQN  @ 1174
+  @use call am:loopTo  @ 1185,1199
+  @use call am:clearLoopRange  @ 1211
+  @use call am:playPositionQN  @ 1220,1229
+  @use call am:seekInstance  @ 1246,1263,1276,1279,1292,1293,1307,1324,1338,1339
+  @use call am:projectEndQN  @ 1347,1360
+  @use call am:freeSpan  @ 1375,1376,1377
+  @use call am:duplicateBelow  @ 1389,1416,1431,1445,1458
+  @use call am:duplicateUnpooledBelow  @ 1472,1498,1514,1532,1658
+  @use call am:newTakeBelow  @ 1546,1570,1587,1600
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _state  @ 1125
+  @field r _state  @ 1189
   @field w cm  @ 10
-  @field r colourIdx  @ 1552,1553,1555,1569,1645
-  @field r detune  @ 871,1436
-  @field w detune  @ 820,858,1433
+  @field r colourIdx  @ 1616,1617,1619,1633,1709
+  @field r detune  @ 935,1500
+  @field w detune  @ 884,922,1497
   @field w ds  @ 10
   @field w eventMeta  @ 10
   @field w global  @ 549
-  @field r huge  @ 1313
-  @field r id  @ 43,88,90,302,309,332,750
+  @field r huge  @ 1377
+  @field r id  @ 43,88,90,302,309,332,814
   @field r idx  @ 47,127,128,178,196,215,230,246,261,275
-  @field r idx  @ 302,802,821
-  @field w isMidi  @ 28,546,565,1640
-  @field r item  @ 506,1034
+  @field r idx  @ 302,866,885
+  @field w isMidi  @ 28,546,565,1704
+  @field r item  @ 506,1098
   @field r items  @ 24
   @field w items  @ 59,60,61,82,100,122,136,153,174,191,212,226
   @field w items  @ 242,258,272,284,296,320,340,355,370,391,410,420
   @field w items  @ 439,454,466,480,496,514,588,601,615,626,644,663
-  @field w items  @ 681,697,712,727,744,764,782,800,817,832,854,880
-  @field w items  @ 895,910,933,950,965,989,1012,1013,1030,1031,1045
-  @field w items  @ 1058,1177,1195,1208,1224,1238,1254,1270,1292,1294,1308,1322
-  @field w items  @ 1345,1362,1377,1391,1404,1430,1445,1466,1478,1503,1519,1534
-  @field w items  @ 1547,1548,1564,1565,1577,1590,1609,1627
+  @field w items  @ 681,697,712,727,746,760,776,791,808,828,846,864
+  @field w items  @ 881,896,918,944,959,974,997,1014,1029,1053,1076,1077
+  @field w items  @ 1094,1095,1109,1122,1241,1259,1272,1288,1302,1318,1334
+  @field w items  @ 1356,1358,1372,1386,1409,1426,1441,1455,1468,1494,1509,1530
+  @field w items  @ 1542,1567,1583,1598,1611,1612,1628,1629,1641,1654,1673,1691
   @field r kind  @ 28,105,109
   @field w kind  @ 59,61,62,82,83,84,100,101,122,123,153,174
   @field w kind  @ 175,176,191,192,193,194,212,213,226,227,228,242
   @field w kind  @ 243,244,258,259,272,296,297,298,497,498,588,601
-  @field w kind  @ 602,615,626,627,644,663,681,697,698,712,727,728
-  @field w kind  @ 744,764,765,800,817,832,854,855,880,881,882,895
-  @field w kind  @ 910,911,912,933,934,935,950,951,965,966,989,990
-  @field w kind  @ 991,992,1012,1013,1031,1177,1178,1179,1195,1196,1208,1209
-  @field w kind  @ 1224,1225,1238,1239,1240,1254,1255,1256,1270,1292,1293,1294
-  @field w kind  @ 1308,1309,1322,1345,1346,1362,1363,1377,1378,1391,1404,1430
-  @field w kind  @ 1445,1446,1466,1478,1503,1504,1519,1520,1534,1547,1548,1564
-  @field w kind  @ 1565,1590,1627,1628,1629
+  @field w kind  @ 602,615,626,627,644,663,681,697,698,712,727,746
+  @field w kind  @ 747,760,761,776,791,792,808,828,829,864,881,896
+  @field w kind  @ 918,919,944,945,946,959,974,975,976,997,998,999
+  @field w kind  @ 1014,1015,1029,1030,1053,1054,1055,1056,1076,1077,1095,1241
+  @field w kind  @ 1242,1243,1259,1260,1272,1273,1288,1289,1302,1303,1304,1318
+  @field w kind  @ 1319,1320,1334,1356,1357,1358,1372,1373,1386,1409,1410,1426
+  @field w kind  @ 1427,1441,1442,1455,1468,1494,1509,1510,1530,1542,1567,1568
+  @field w kind  @ 1583,1584,1598,1611,1612,1628,1629,1654,1691,1692,1693
   @field r len  @ 30
   @field w len  @ 30,100,101,153,497,498,546,565,588,601,602,615
-  @field w len  @ 626,627,644,663,681,697,698,712,727,728,832,854
-  @field w len  @ 855,880,881,882,895,910,911,912,933,934,935,950
-  @field w len  @ 951,965,966,989,990,991,992,1012,1013,1031,1177,1178
-  @field w len  @ 1179,1195,1196,1208,1209,1224,1225,1238,1239,1240,1254,1255
-  @field w len  @ 1256,1270,1292,1293,1294,1308,1309,1322,1345,1346,1362,1363
-  @field w len  @ 1377,1378,1391,1404,1430,1445,1446,1466,1478,1503,1504,1519
-  @field w len  @ 1520,1534,1590,1627,1628,1629,1641
+  @field w len  @ 626,627,644,663,681,697,698,712,727,746,747,760
+  @field w len  @ 761,776,791,792,896,918,919,944,945,946,959,974
+  @field w len  @ 975,976,997,998,999,1014,1015,1029,1030,1053,1054,1055
+  @field w len  @ 1056,1076,1077,1095,1241,1242,1243,1259,1260,1272,1273,1288
+  @field w len  @ 1289,1302,1303,1304,1318,1319,1320,1334,1356,1357,1358,1372
+  @field w len  @ 1373,1386,1409,1410,1426,1427,1441,1442,1455,1468,1494,1509
+  @field w len  @ 1510,1530,1542,1567,1568,1583,1584,1598,1654,1691,1692,1693
+  @field w len  @ 1705
   @field r lengthQN  @ 107,327,431,592,605,606,617,632,635,648,652,671
-  @field r lengthQN  @ 688,717,869,1185,1259,1350,1366,1492
+  @field r lengthQN  @ 688,717,733,738,764,767,782,933,1249,1323,1414,1430
+  @field r lengthQN  @ 1556
   @field r name  @ 22,66,89,91,111,180,181,182,198,199,200,202
   @field r name  @ 203,216,217,231,232,233,247,248,249,262,263,276
-  @field r name  @ 287,329,751,868,886,923,941,1000,1333,1417,1491
+  @field r name  @ 287,329,815,932,950,987,1005,1064,1397,1481,1555
   @field w name  @ 55,59,60,61,78,96,118,133,149,170,187,208
   @field w name  @ 222,238,254,268,281,292,317,337,352,367,388,407
   @field w name  @ 417,436,451,463,477,492,511,523,539,560,584,596
-  @field w name  @ 610,622,640,659,677,693,708,723,740,760,779,796
-  @field w name  @ 813,828,850,876,891,906,929,946,961,985,1008,1026
-  @field w name  @ 1042,1055,1070,1079,1088,1099,1107,1118,1130,1143,1153,1161
-  @field w name  @ 1173,1191,1204,1220,1234,1250,1266,1280,1288,1304,1318,1338
-  @field w name  @ 1358,1373,1387,1400,1426,1441,1462,1474,1499,1515,1530,1543
-  @field w name  @ 1560,1574,1586,1606,1623
-  @field r naturalLenQN  @ 591,633,649,653,667,684,718,1186,1351
-  @field r parked  @ 752,769,975,980
-  @field r playState  @ 1125
+  @field w name  @ 610,622,640,659,677,693,708,723,742,756,772,787
+  @field w name  @ 804,824,843,860,877,892,914,940,955,970,993,1010
+  @field w name  @ 1025,1049,1072,1090,1106,1119,1134,1143,1152,1163,1171,1182
+  @field w name  @ 1194,1207,1217,1225,1237,1255,1268,1284,1298,1314,1330,1344
+  @field w name  @ 1352,1368,1382,1402,1422,1437,1451,1464,1490,1505,1526,1538
+  @field w name  @ 1563,1579,1594,1607,1624,1638,1650,1670,1687
+  @field r naturalLenQN  @ 591,633,649,653,667,684,718,768,1250,1415
+  @field r originQN  @ 732
+  @field r parked  @ 816,833,1039,1044
+  @field r playState  @ 1189
   @field r poolGuid  @ 32
   @field w poolGuid  @ 32,59,61,62,82,83,84,100,122,123,153,174
   @field w poolGuid  @ 175,176,191,192,193,194,212,213,226,227,228,242
   @field w poolGuid  @ 243,244,258,259,272,296,297,298,497,498,546,565
-  @field w poolGuid  @ 588,601,602,615,626,627,644,697,698,712,727,728
-  @field w poolGuid  @ 744,764,765,800,817,832,854,855,880,881,882,895
-  @field w poolGuid  @ 910,911,912,933,934,935,950,951,965,966,989,990
-  @field w poolGuid  @ 991,992,1012,1013,1031,1177,1178,1179,1195,1196,1208,1209
-  @field w poolGuid  @ 1224,1225,1238,1239,1240,1254,1255,1256,1270,1292,1293,1294
-  @field w poolGuid  @ 1308,1309,1322,1345,1346,1362,1363,1377,1378,1404,1430,1445
-  @field w poolGuid  @ 1446,1478,1503,1504,1519,1520,1547,1548,1564,1565,1590,1627
-  @field w poolGuid  @ 1628,1629,1641
+  @field w poolGuid  @ 588,601,602,615,626,627,644,697,698,712,727,746
+  @field w poolGuid  @ 747,760,761,776,791,792,808,828,829,864,881,896
+  @field w poolGuid  @ 918,919,944,945,946,959,974,975,976,997,998,999
+  @field w poolGuid  @ 1014,1015,1029,1030,1053,1054,1055,1056,1076,1077,1095,1241
+  @field w poolGuid  @ 1242,1243,1259,1260,1272,1273,1288,1289,1302,1303,1304,1318
+  @field w poolGuid  @ 1319,1320,1334,1356,1357,1358,1372,1373,1386,1409,1410,1426
+  @field w poolGuid  @ 1427,1441,1442,1468,1494,1509,1510,1542,1567,1568,1583,1584
+  @field w poolGuid  @ 1611,1612,1628,1629,1654,1691,1692,1693,1705
   @field r pos  @ 29
   @field w pos  @ 29,100,101,153,191,192,193,194,212,213,226,227
   @field w pos  @ 228,242,243,244,258,259,272,497,498,546,565,588
   @field w pos  @ 601,602,615,626,627,644,663,681,697,698,712,727
-  @field w pos  @ 728,764,765,832,854,855,880,881,882,895,910,911
-  @field w pos  @ 912,933,934,935,950,951,965,966,989,990,991,992
-  @field w pos  @ 1012,1013,1031,1177,1178,1179,1195,1196,1208,1209,1224,1225
-  @field w pos  @ 1238,1239,1240,1254,1255,1256,1270,1292,1293,1294,1308,1309
-  @field w pos  @ 1322,1345,1346,1362,1363,1377,1378,1391,1404,1430,1445,1446
-  @field w pos  @ 1466,1478,1503,1504,1519,1520,1534,1590,1627,1628,1629,1641
+  @field w pos  @ 746,747,760,761,776,791,792,828,829,896,918,919
+  @field w pos  @ 944,945,946,959,974,975,976,997,998,999,1014,1015
+  @field w pos  @ 1029,1030,1053,1054,1055,1056,1076,1077,1095,1241,1242,1243
+  @field w pos  @ 1259,1260,1272,1273,1288,1289,1302,1303,1304,1318,1319,1320
+  @field w pos  @ 1334,1356,1357,1358,1372,1373,1386,1409,1410,1426,1427,1441
+  @field w pos  @ 1442,1455,1468,1494,1509,1510,1530,1542,1567,1568,1583,1584
+  @field w pos  @ 1598,1654,1691,1692,1693,1705
   @field w ps  @ 9
   @field w run  @ 56,79,97,119,134,150,171,188,209,223,239,255
   @field w run  @ 269,282,293,318,338,353,368,389,408,418,437,452
   @field w run  @ 464,478,493,512,524,540,561,585,597,611,623,641
-  @field w run  @ 660,678,694,709,724,741,761,780,797,814,829,851
-  @field w run  @ 877,892,907,930,947,962,986,1009,1027,1043,1056,1071
-  @field w run  @ 1080,1089,1100,1108,1119,1131,1144,1154,1162,1174,1192,1205
-  @field w run  @ 1221,1235,1251,1267,1281,1289,1305,1319,1339,1359,1374,1388
-  @field w run  @ 1401,1427,1442,1463,1475,1500,1516,1531,1544,1561,1575,1587
-  @field w run  @ 1607,1624
+  @field w run  @ 660,678,694,709,724,743,757,773,788,805,825,844
+  @field w run  @ 861,878,893,915,941,956,971,994,1011,1026,1050,1073
+  @field w run  @ 1091,1107,1120,1135,1144,1153,1164,1172,1183,1195,1208,1218
+  @field w run  @ 1226,1238,1256,1269,1285,1299,1315,1331,1345,1353,1369,1383
+  @field w run  @ 1403,1423,1438,1452,1465,1491,1506,1527,1539,1564,1580,1595
+  @field w run  @ 1608,1625,1639,1651,1671,1688
   @field r slotCount  @ 69,70
-  @field r slotIdx  @ 108,112,113,328,361,383,402,430,789,867,922
-  @field r slotIdx  @ 974,979,997,1332,1415,1416,1489,1490,1644
-  @field r slotIdx  @ 1644
+  @field r slotIdx  @ 108,112,113,328,361,383,402,430,853,931,986
+  @field r slotIdx  @ 1038,1043,1061,1396,1479,1480,1553,1554,1708
+  @field r slotIdx  @ 1708
   @field r srcFile  @ 33
-  @field w srcFile  @ 33,101,664,682,1391,1466,1534
+  @field w srcFile  @ 33,101,664,682,1455,1530,1598
   @field r srcLen  @ 31
   @field w srcLen  @ 31,153,588,601,602,615,626,627,644,663,681,712
-  @field w srcLen  @ 832,854,855,880,881,882,895,910,911,912,933,934
-  @field w srcLen  @ 935,950,951,965,966,989,990,991,992,1177,1178,1179
-  @field w srcLen  @ 1195,1196,1208,1209,1224,1225,1238,1239,1240,1254,1255,1256
-  @field w srcLen  @ 1270,1308,1309,1322,1345,1346,1362,1363,1377,1378,1404,1430
-  @field w srcLen  @ 1445,1446,1478,1503,1504,1519,1520,1590
-  @field r startQN  @ 106,110,326,380,399,427,670,687,701,703,716,733
-  @field r startQN  @ 864,920,970,995,1019,1183,1199,1213,1215,1228,1229,1244
-  @field r startQN  @ 1330,1413,1487,1633
-  @field r take  @ 155,483,654,672,820,823,834,858,866,871,921,1016
-  @field r take  @ 1181,1198,1211,1227,1242,1258,1275,1407,1433,1449,1481,1593
-  @field r take  @ 1600
-  @field w take  @ 27,546,565,1640
+  @field w srcLen  @ 727,746,747,760,761,776,896,918,919,944,945,946
+  @field w srcLen  @ 959,974,975,976,997,998,999,1014,1015,1029,1030,1053
+  @field w srcLen  @ 1054,1055,1056,1241,1242,1243,1259,1260,1272,1273,1288,1289
+  @field w srcLen  @ 1302,1303,1304,1318,1319,1320,1334,1372,1373,1386,1409,1410
+  @field w srcLen  @ 1426,1427,1441,1442,1468,1494,1509,1510,1542,1567,1568,1583
+  @field w srcLen  @ 1584,1654
+  @field r startQN  @ 106,110,326,380,399,427,670,687,701,703,716,731
+  @field r startQN  @ 737,752,781,797,928,984,1034,1059,1083,1247,1263,1277
+  @field r startQN  @ 1279,1292,1293,1308,1394,1477,1551,1697
+  @field r take  @ 155,483,654,672,884,887,898,922,930,935,985,1080
+  @field r take  @ 1245,1262,1275,1291,1306,1322,1339,1471,1497,1513,1545,1657
+  @field r take  @ 1664
+  @field w take  @ 27,546,565,1704
   @field r takeCount  @ 67,68
   @field r takeName  @ 34
   @field w takeName  @ 34,82,83,84,100,101,174,175,176,191,192,193
-  @field w takeName  @ 194,212,213,226,227,228,242,243,244,272,744,800
-  @field w takeName  @ 832,854,855,880,881,882,895,910,911,912,933,934
-  @field w takeName  @ 935,950,951,965,966,989,990,991,992,1322,1404,1445
-  @field w takeName  @ 1478
+  @field w takeName  @ 194,212,213,226,227,228,242,243,244,272,808,864
+  @field w takeName  @ 896,918,919,944,945,946,959,974,975,976,997,998
+  @field w takeName  @ 999,1014,1015,1029,1030,1053,1054,1055,1056,1386,1468,1509
+  @field w takeName  @ 1542
   @field w tm  @ 10
-  @field r trackIdx  @ 1018
+  @field r trackIdx  @ 1082
   @field w trackIdx  @ 457

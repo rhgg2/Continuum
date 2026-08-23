@@ -720,6 +720,70 @@ return {
   },
 
   {
+    name = 'trimHead walks the start edge in, holding the content and the end still',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      t.eq(am:trimHead(am:tracksTakes(0)[1], 1), true, 'head accepted')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  1, 'start edge walked in by the head')
+      t.eq(tk.originQN, 0, 'the source origin stays where it was')
+      t.eq(tk.lengthQN, 3, 'rendered shrinks by the head, so the end holds at 4')
+      -- Absolute, not a delta: a smaller head hands the skipped rows back.
+      am:trimHead(am:tracksTakes(0)[1], 0)
+      tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  0, 'start edge back at the origin')
+      t.eq(tk.lengthQN, 4, 'whole source rendered again')
+    end,
+  },
+  {
+    name = 'a head is refused before the origin, at the source end, or onto an occupied start',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 2, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 2, len = 2, srcLen = 2, poolGuid = '{p2}' } } },
+      })
+      t.eq(am:trimHead(am:tracksTakes(0)[1], -1), false, 'nothing to skip before the origin')
+      t.eq(am:trimHead(am:tracksTakes(0)[1],  4), false, 'a head at the source end would render nothing')
+      t.eq(am:trimHead(am:tracksTakes(0)[1],  2), false, 'the start would land on {p2}')
+      t.eq(am:tracksTakes(0)[1].startQN, 0, 'a refusal leaves the take alone')
+    end,
+  },
+  {
+    name = 'a trimmed take is capped by the gap, and regrows to source-minus-head without one',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 8, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
+      })
+      am:trimHead(am:tracksTakes(0)[1], 1)
+      t.eq(am:tracksTakes(0)[1].lengthQN, 3, 'capped at the gap to {p2}')
+      am:deleteTake(am:tracksTakes(0)[2])
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.lengthQN,     7, 'regrows to source minus head, ending where the source does')
+      t.eq(tk.naturalLenQN, 7, 'the natural it reports is what the head leaves')
+    end,
+  },
+  {
+    name = 'trimming the head of a resized take keeps the end where the resize put it',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 8, poolGuid = '{p1}' } } },
+      })
+      am:resizeTake(am:tracksTakes(0)[1], 6)
+      am:trimHead(am:tracksTakes(0)[1], 2)
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  2, 'start edge in by 2')
+      t.eq(tk.lengthQN, 4, 'natural is measured from the origin, so the end holds at 6')
+    end,
+  },
+
+  {
     name = 'deleteTake removes the item, leaving the other take intact',
     run = function(harness)
       local h, am = mkAm(harness)

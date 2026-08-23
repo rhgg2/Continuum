@@ -281,16 +281,38 @@ snap, and the minimum-length floor are owned by the caller.
 decide what placement is legal before invoking a mutator. Abutting
 items are legal under the half-open ranges used throughout.
 
-## Natural length and `D_LENGTH`
+## The take's window
 
-Each take carries a **natural length** in the cm key
-`arrangeNaturalLenQN`; `nil` means `util.OPEN` (grow to fill). What
-REAPER actually plays — the item's `D_LENGTH` — is *derived*, never
-the natural length verbatim: `D_LENGTH = min(natural, gap-to-next,
-source)`. `relayoutTrack` walks the track in `startQN` order and
-re-derives `D_LENGTH` for every take after any mutation, so the cap is
-always current; the mutators (`moveTake`, `resizeTake`, …) preserve
-natural length and lean on relayout to re-derive the playing length.
+A take renders a **window** of its source, and two numbers place it.
+The **head** is the QN of source skipped before the take starts; the
+**natural length** is how much of the source the take wants, measured
+from the source origin. What REAPER actually plays — the item's
+`D_LENGTH` — is *derived* from both, never either verbatim:
+`D_LENGTH = min(natural, source) - head`, capped by the gap to the
+next take.
+
+The two numbers have different owners. The natural length is ours, in
+the cm key `arrangeNaturalLenQN`, where `nil` means `util.OPEN` (grow
+to fill). The head is REAPER's, held as the take's start offset, so
+nothing in `ds` mirrors it and an edge dragged in REAPER's own arrange
+view is picked up for free.
+
+The **origin** of a take is where source ppq 0 lands in the project,
+which makes the head `startQN - originQN`. Reading the origin through
+`MIDI_GetProjQNFromPPQPos` is exact under any tempo map, and REAPER
+keeps a MIDI take's start offset beat-locked, so a tempo change moves
+neither the origin nor the head.
+
+Measuring the natural length from the origin rather than from the
+start is what holds a take's end still while its head moves.
+Trimming the head by one QN walks the start edge in and shortens the
+rendered span by exactly that QN.
+
+`relayoutTrack` walks the track in `startQN` order and re-derives
+`D_LENGTH` for every take after any mutation, so the cap is always
+current; the mutators (`moveTake`, `resizeTake`, `trimHead`, …) settle
+the stored natural and lean on relayout to re-derive the playing
+length.
 
 `relayoutTrack` also runs **per track inside `buildState`** (every
 rebuild), not only from the mutators. A source-length change made
@@ -306,18 +328,28 @@ A stored natural that is **≥ the source length** is demoted to
 would freeze the take at today's source length; demoting to OPEN lets
 future source growth widen the cap automatically.
 
+Audio has no head. It carries no ppq frame to read an origin from, so
+its origin is its start, and `am:trimHead` refuses it. Its natural
+length is the user's trim or loop, captured on first sight rather than
+read from the source.
+
 ## Rendered span and source span
 
 A take has two extents, and they are routinely different. The **source
 span** is the MIDI source's length, which the tracker derives its row
 count from; the **rendered span** is the item's `D_LENGTH`, derived
-above as `min(natural, gap-to-next, source)`.
+above from the window.
 
 A take whose neighbour starts before its source would end is **cut**:
 the tracker draws rows the song never reaches. Natural length makes the
 cut ordinary rather than exceptional, since growing a take past its
 neighbour stores intent that takes effect when the neighbour moves
 away, and takes appended one after another meet it often.
+
+A head cuts the same way at the other end, and the two are
+independent: an instance can skip the source's first rows, its last,
+or both. Siblings of one slot therefore need not agree about which
+rows they play, only about what the rows contain.
 
 ## The append point
 
@@ -491,4 +523,4 @@ lengthQN?)`.
 Folded from sequenceManager: `am:takesUsing`, `am:reswingAll`.
 
 Take mutation: `am:duplicateTake`, `am:moveTake`, `am:resizeTake`,
-`am:deleteTake`.
+`am:trimHead`, `am:deleteTake`.

@@ -167,7 +167,6 @@ local function Main()
     stop            = { ImGui.Key_F8    },
     undo            = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
     redo            = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-    togglePage      = { {ImGui.Key_Tab, ImGui.Mod_Alt }},
     switchToArrange = { ImGui.Key_F2 },
     switchToWiring  = { ImGui.Key_F3 },
     switchToTracker = { ImGui.Key_F4 },

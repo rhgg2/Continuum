@@ -279,6 +279,31 @@ return {
   },
 
   {
+    name = 'growing a trimmed take moves its end, leaving the head where it was',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 4, srcLen = 8, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:trimHead(am:tracksTakes(0)[1], 2)         -- starts at row 2, skipping two beats
+      am:resizeTake(am:tracksTakes(0)[1], 4)       -- four beats from the origin: two rendered
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')          -- onto the trimmed take at row 2
+      h.cmgr:invoke('arrangeGrowTake')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.lengthQN, 3, 'one more row rendered — the end moved, not the start')
+      t.eq(tk.startQN,  2, 'the head is untouched by a resize')
+      t.eq(tk.originQN, 0, 'and so is the origin')
+    end,
+  },
+
+  {
     name = 'arrangeGrowTake silently no-ops at the take-source length cap',
     run = function(harness)
       local h = harness.mk()

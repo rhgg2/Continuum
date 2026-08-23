@@ -794,15 +794,17 @@ local function drawTracker()
     drawLocalScrim(draw, localHole, totalWidth, math.min(viewRows, math.max(numRows - scrollRow, 0)))
   end
 
-  -- The cut: below it the rows are drawn but never heard. Two pixels across the
+  -- The cut: outside it the rows are drawn but never heard. Two pixels across the
   -- whole pane, the gutter with the columns. See docs/trackerPage.md § The cut.
-  local cutRow = tv:cutRow()
-  if cutRow then
-    local y = cutRow - scrollRow
+  local function drawCut(row)
+    if not row then return end
+    local y = row - scrollRow
     if y >= 0 and y < viewRows then
       draw:dottedHLine(-GUTTER, totalWidth - 1, y, 'cutRow', 2)
     end
   end
+  drawCut(tv:headRow())
+  drawCut(tv:cutRow())
 
   -- Play row: painted over the cells so a wash or glyph can't hide it, and
   -- across the gutter with them. See docs/trackerPage.md § The play row.

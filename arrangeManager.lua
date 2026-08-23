@@ -11,8 +11,9 @@
 --invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
 --invariant: the takeId memo dies with the build — REAPER recycles a freed take's pointer
 --invariant: reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
---invariant: natural length in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
---invariant: a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
+--invariant: natural in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § The take's window
+--invariant: a stored natural ≥ source demotes to util.OPEN; see docs § The take's window
+--invariant: head = startQN - originQN, owned by REAPER as the take's start offset; MIDI only
 --invariant: 'arrangeColours' (project scope) maps takeId → colourIdx project-wide
 --invariant: arrangeColours allocates lowest-free across live takeIds; ensureColours prunes dead ids
 --invariant: placement stamps painter.hueNative(idx) on new takes iff I_CUSTOMCOLOR == 0
@@ -135,7 +136,7 @@ local function isLastInstanceOnTrack(track, id, exceptItem)
   return others == 0
 end
 
------ Natural length
+----- The window: origin, head, natural length
 
 local function sourceLenQN(take, item)
   local src = reaper.GetMediaItemTake_Source(take)
@@ -156,7 +157,36 @@ local function setNaturalLenOf(take, v)
   else                   ds:assignAt(take, 'arrangeNaturalLenQN', v) end
 end
 
---contract: re-derives each D_LENGTH walking startQN order; idempotent. See docs § Natural length
+-- Source origin: ppq 0, mapped through the take's start offset. Audio has no
+-- ppq frame or head, so its origin is its start. See docs § The take's window.
+--reaper: MIDI_GetProjQNFromPPQPos
+local function originQNOf(take, item)
+  if takeKind(take) == 'audio' then return (itemQNRange(item)) end
+  return reaper.MIDI_GetProjQNFromPPQPos(take, 0)
+end
+
+-- The head as REAPER holds it: seconds into the source. It keeps a MIDI take's
+-- offset beat-locked thereafter, so the head survives a tempo change untouched.
+local function setHeadOf(take, originQN, headQN)
+  local originSec = reaper.TimeMap2_QNToTime(0, originQN)
+  reaper.SetMediaItemTakeInfo_Value(take, 'D_STARTOFFS',
+    reaper.TimeMap2_QNToTime(0, originQN + headQN) - originSec)
+end
+
+-- What the take renders from its start: natural resolved against the source,
+-- less what the head skips. Exposed as naturalLenQN via tracksTakes.
+local function effectiveNaturalLenQN(take, item)
+  local natural = naturalLenOf(take)
+  if takeKind(take) == 'audio' then
+    if natural == util.OPEN then return (select(2, itemQNRange(item))) end
+    return natural
+  end
+  local src      = sourceLenQN(take, item)
+  local resolved = natural == util.OPEN and src or math.min(natural, src)
+  return resolved - (itemQNRange(item) - originQNOf(take, item))
+end
+
+--contract: re-derives each D_LENGTH walking startQN order; idempotent. See docs § The take's window
 local function relayoutTrack(track)
   if not track then return end
   local rows = {}
@@ -166,43 +196,23 @@ local function relayoutTrack(track)
   end)
   table.sort(rows, function(a, b) return a.startQN < b.startQN end)
 
+  -- Settle the stored natural, then read the window it leaves.
   for i, r in ipairs(rows) do
     local natural = naturalLenOf(r.take)
-    local effective
     if takeKind(r.take) == 'audio' then
       -- Audio length is the user's trim/loop, never the source: capture once
       -- so truncation is non-destructive and a freed neighbour lets it re-grow.
-      if natural == util.OPEN then
-        natural = (select(2, itemQNRange(r.item)))
-        setNaturalLenOf(r.take, natural)
-      end
-      effective = natural
-    else
-      local src = sourceLenQN(r.take, r.item)
-      if natural ~= util.OPEN and natural >= src then
-        setNaturalLenOf(r.take, util.OPEN)
-        natural = util.OPEN
-      end
-      effective = natural == util.OPEN and src or math.min(natural, src)
+      if natural == util.OPEN then setNaturalLenOf(r.take, (select(2, itemQNRange(r.item)))) end
+    elseif natural ~= util.OPEN and natural >= sourceLenQN(r.take, r.item) then
+      setNaturalLenOf(r.take, util.OPEN)
     end
+    local effective = effectiveNaturalLenQN(r.take, r.item)
     local nextStart = rows[i+1] and rows[i+1].startQN or math.huge
     local rendered  = math.min(effective, nextStart - r.startQN)
     if rendered < 0 then rendered = 0 end
     setItemQNRange(r.item, r.startQN, r.startQN + rendered)
   end
   invalidate()
-end
-
--- The effective natural length (post-OPEN-resolution) exposed via tracksTakes.
-local function effectiveNaturalLenQN(take, item)
-  local natural = naturalLenOf(take)
-  if takeKind(take) == 'audio' then
-    if natural == util.OPEN then return (select(2, itemQNRange(item))) end
-    return natural
-  end
-  local src = sourceLenQN(take, item)
-  if natural == util.OPEN then return src end
-  return math.min(natural, src)
 end
 
 --contract: idempotent within a frame; returns (dict, slotForId, firstName, liveIds)
@@ -364,6 +374,7 @@ local function buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId
     take         = take,
     trackIdx     = trackIdx,
     startQN      = startQN,
+    originQN     = originQNOf(take, item),
     lengthQN     = lengthQN,
     naturalLenQN = effectiveNaturalLenQN(take, item),
     kind         = kind,
@@ -1107,7 +1118,23 @@ function am:moveTake(take, deltaQN)
   return true
 end
 
---contract: writes the take's natural length; relayout caps it. See docs § Natural length.
+--contract: sets the head — QN of source skipped — walking the start edge; content and end hold
+--contract: false if the head is negative, at/past the source, the start is occupied, or audio
+function am:trimHead(take, headQN)
+  if takeKind(take.take) == 'audio' then return false end
+  if headQN < 0 or headQN >= sourceLenQN(take.take, take.item) then return false end
+  local originQN = originQNOf(take.take, take.item)
+  local newStart = originQN + headQN
+  if not am:startIsClear(take.trackIdx, newStart, take.item) then return false end
+
+  local _, lengthQN = itemQNRange(take.item)
+  setItemQNRange(take.item, newStart, newStart + lengthQN)
+  setHeadOf(take.take, originQN, headQN)
+  relayoutTrack(visibleTrackOfCol(take.trackIdx))
+  return true
+end
+
+--contract: writes the take's natural length; relayout caps it. See docs § The take's window.
 function am:resizeTake(take, newNaturalQN)
   setNaturalLenOf(take.take, newNaturalQN)
   local track = visibleTrackOfCol(take.trackIdx)

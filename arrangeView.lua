@@ -283,16 +283,18 @@ local function resizeSelected(direction)
   local takes = actionTargets()
   if #takes == 0 then return end
   local bpr = av:beatPerRow()
+  local function renderedAfter(take) return math.max(bpr, take.lengthQN + direction * bpr) end
   util.atomic('Resize takes', function()
     for _, take in ipairs(takes) do
-      am:resizeTake(take, math.max(bpr, take.lengthQN + direction * bpr))
+      -- Natural is measured from the source origin, so a head rides along and
+      -- the edge that moves is the end.
+      am:resizeTake(take, take.startQN - take.originQN + renderedAfter(take))
     end
   end)()
   -- A single shrink that ate the cursor's row pulls the cursor back a row;
   -- multi-selection edits leave the cursor where it is.
   if #takes == 1 and direction < 0 then
-    local take   = takes[1]
-    local endRow = (take.startQN + math.max(bpr, take.lengthQN + direction * bpr)) / bpr
+    local endRow = (takes[1].startQN + renderedAfter(takes[1])) / bpr
     if cursorRow >= endRow then moveCursorBy(-1, 0) end
   end
 end

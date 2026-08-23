@@ -80,11 +80,17 @@ local function resetArrange()
 
   -- The placement world tv resolves its current instance against: one record per
   -- instance, and a seek modelling am:seekInstance's contract (am_spec pins the real one).
-  fakeArrange.instances = {}     -- { take, trackIdx, slotIdx, startQN, lengthQN }
+  fakeArrange.instances = {}     -- { take, trackIdx, slotIdx, startQN, originQN?, lengthQN }
+  -- am always carries the source origin; a record that says nothing about a
+  -- head reads as an untrimmed instance, whose origin is its start.
+  local function instances()
+    for _, inst in ipairs(fakeArrange.instances) do inst.originQN = inst.originQN or inst.startQN end
+    return fakeArrange.instances
+  end
   fakeArrange.playQN    = nil
   fakeArrange.cursorQN  = 0
   fakeArrange.findTake = function(take)
-    for _, inst in ipairs(fakeArrange.instances) do
+    for _, inst in ipairs(instances()) do
       if inst.take == take then return inst end
     end
   end
@@ -110,7 +116,7 @@ local function resetArrange()
   fakeArrange.seekInstance = function(take, qn, back)
     local from = fakeArrange.findTake(take); if not from then return end
     local ahead, behind
-    for _, inst in ipairs(fakeArrange.instances) do
+    for _, inst in ipairs(instances()) do
       if inst.trackIdx == from.trackIdx and inst.slotIdx == from.slotIdx then
         if qn >= inst.startQN and qn < inst.startQN + inst.lengthQN then return inst, true end
         if inst.startQN > qn then
@@ -764,6 +770,36 @@ return {
 
       fakeArrange.instances[1].lengthQN = 16          -- the neighbour moved away
       t.falsy(stack.tv:cutRow(), 'a fully rendered span cuts nothing')
+    end,
+  },
+
+  -- A head trimmed on the arrange page skips the source's first rows: the grid
+  -- still draws them, and the window the instance plays starts below them.
+  {
+    name = 'the play row and the head row count from the source origin, not the start',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' }, 16)
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      -- i0 starts at 8 having skipped its first two beats, so it renders
+      -- source beats 2..10 — rows 8..40 of a sixty-four row grid.
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 8, originQN = 6, lengthQN = 8 },
+      }
+      fakeArrange.playQN = 8
+      tp:bindFromSelection()
+      t.eq(stack.tv:playRow(), 8, 'the head enters the grid eight rows down, where the window opens')
+      t.eq(stack.tv:headRow(), 8, 'the head row marks the same place')
+      t.eq(stack.tv:cutRow(),  40, 'and the cut sits a window below it')
+
+      fakeArrange.instances[1].originQN = 8         -- the head handed back
+      t.falsy(stack.tv:headRow(), 'an untrimmed instance marks no head')
     end,
   },
 

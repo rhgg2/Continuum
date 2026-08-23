@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — A take's head — the QN of source it skips — is REAPER's take start offset rather
+  than a second key in ds beside the natural length. REAPER keeps a MIDI take's offset beat-locked
+  and maps source ppq 0 through it, so MIDI_GetProjQNFromPPQPos(take, 0) reads the origin exactly
+  under any tempo map, and an edge dragged in REAPER's own arrange view is picked up for free.
+  Natural length stays measured from that origin, so trimming a head moves the start edge alone and
+  leaves the end where it was. Pooled siblings keep one POOLEDEVTS identity across differing
+  offsets, which is what lets an instance be split without minting a slot. See
+  docs/arrangeManager.md § The take's window.
+
 - **2026-08-23** — Tab and Shift+Tab step the arrange caret between the stop rows of its own column:
   each instance's start, and the first free row after it. Stopping only at starts would need a
   special case to reach the append point past the last take. Holding both rows in a set collapses
