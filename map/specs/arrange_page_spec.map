@@ -41,7 +41,7 @@
   @case 'a second delete finds an empty cell under the cursor — no-op'  [harness]  @ 580-598
   @case 'seedCursorFromReaper lands the cursor on the selected take'  [harness]  @ 602-619
   @case 'seedCursorFromReaper falls back to the edit-cursor row'  [harness]  @ 623-637
-  @case 'arrangeTakeProperties routes the focused MIDI take through onTakeProperties'  [harness]  @ 646-659
+  @case 'arrangeTakeProperties routes the focused MIDI take through the tracker facade'  [harness]  @ 646-659
   @case 'arrangeTakeProperties is a no-op on an audio take'  [harness]  @ 663-676
   @case 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s append point'  [harness]  @ 680-696
   @case 'arrangeDuplicateBelow is silent for want of room and on audio takes'  [harness]  @ 700-718

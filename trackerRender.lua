@@ -1672,32 +1672,13 @@ tv:wireGroupLifetime()
 
 ----- Take properties modal helper
 
--- Shared by the tracker-scope `takeProperties` command and the
--- arrange-scope `arrangeTakeProperties` (which binds tm to its focused
--- take first and supplies an onClose to restore the prior bind). The
--- helper reads name/beats from tp's currently-bound take and applies
--- through tv:applyTakeProperties; callers without a bound take get a
--- no-op-ish modal seeded with 0 beats.
---
--- onClose fires exactly once, after the whole modal chain — including
--- any truncate-confirm follow-up. Two sources of "chain done":
--- the apply path (callback ran, valid input, either direct apply or
--- truncate-confirm resolution) fires onClose at the leaf; the cancel
--- path (modal cancel, or invalid input) fires it via modalHost's own
--- onClose. The `transfer` flag handshake makes these mutually
--- exclusive: once a valid callback starts the apply chain it claims
--- ownership, so modalHost's onClose becomes a no-op.
+-- Shared by the tracker's takeProperties command and arrange's, which binds tm first.
+-- see docs/trackerPage.md § Take properties
 function tr:openTakeProperties(args)
   args = args or {}
-  local rpb        = cm:get('rowPerBeat')
-  local origBeats  = (tv.grid.numRows or 0) / rpb
-  local pendingOnClose = true
-  local function fireOnClose()
-    if not pendingOnClose then return end
-    pendingOnClose = false
-    if args.onClose then args.onClose() end
-  end
-  local takeName = tv:takeName() or ''
+  local rpb       = cm:get('rowPerBeat')
+  local origBeats = (tv.grid.numRows or 0) / rpb
+  local takeName  = tv:takeName() or ''
   modalHost:open{
     kind     = 'takeProps',
     title    = 'Take properties',
@@ -1711,7 +1692,6 @@ function tr:openTakeProperties(args)
     focusName = args.focusName,
     callback = function(name, beats, mode)
       if not beats or beats <= 0 then return end
-      pendingOnClose = false  -- transfer ownership to the apply chain
       -- rescale is the monotone stretch — never deletes events.
       -- resize and tile both fall back to truncation when shrinking.
       if beats < origBeats and mode ~= 'rescale' then
@@ -1719,15 +1699,12 @@ function tr:openTakeProperties(args)
         openConfirm('Truncate take',
           function(yes)
             if yes then tv:applyTakeProperties{ name = name, beats = beats, mode = mode } end
-            if args.onClose then args.onClose() end
           end,
           ('Truncate to %s beats? Events past beat %s will be deleted. (y/n)'):format(txt, txt))
       else
         tv:applyTakeProperties{ name = name, beats = beats, mode = mode }
-        if args.onClose then args.onClose() end
       end
     end,
-    onClose = fireOnClose,
   }
 end
 

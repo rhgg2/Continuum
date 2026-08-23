@@ -619,12 +619,11 @@ end
 
 -- props = { name, beats, mode = 'resize'|'rescale'|'tile' }; mode defaults to 'resize'.
 -- Length is universal beats; rows = round(beats * rpb), floored at 1 row.
-tv.applyTakeProperties = util.atomic('Take properties', function(self, props)
+tv.applyTakeProperties = util.atomic('Take properties', function(_, props)
   -- The field names the slot, not the take, so every instance of it follows.
   -- see docs/arrangeManager.md § Renaming and name drift
   if props.name ~= tm:name() then
-    local trackIdx = self:currentTrackIdx()
-    local slotIdx  = trackIdx and self:currentSlotIdx()
+    local trackIdx, slotIdx = arrange().slotOfTake(tm:currentTake())
     if slotIdx then arrange().renameSlot(trackIdx, slotIdx, props.name) end
   end
   local rows   = math.max(1, math.floor(props.beats * currentRpb() + 0.5))

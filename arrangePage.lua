@@ -58,6 +58,7 @@ facade.publish('arrange', {
   isParkedTake    = function(take) return av:isParkedTake(take) end,
   ownerTrack      = function(take) return av:ownerTrack(take) end,
   findTake        = function(take) return av:findTake(take) end,
+  slotOfTake      = function(take) return av:slotOfTake(take) end,
   seekInstance    = function(take, qn, back) return av:seekInstance(take, qn, back) end,
   playPositionQN  = function()     return av:playPositionQN() end,
   editCursorQN    = function()     return av:editCursorQN()   end,

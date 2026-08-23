@@ -88,6 +88,15 @@ local function resetArrange()
       if inst.take == take then return inst end
     end
   end
+  -- The slot a take sits in, live or parked — am scans the slot dicts by take id.
+  fakeArrange.slotOfTake = function(take)
+    for key, tk in pairs(fakeArrange.takeByKey) do
+      if tk == take then
+        local trackIdx, slotIdx = key:match('^(%d+):(%d+)$')
+        return tonumber(trackIdx), tonumber(slotIdx)
+      end
+    end
+  end
   fakeArrange.renameSlot = function(trackIdx, slotIdx, name)
     fakeArrange.calls.rename = { trackIdx = trackIdx, slotIdx = slotIdx, name = name }
   end
@@ -230,7 +239,7 @@ return {
   -- The name field names the slot, so every instance follows it.
   -- see docs/arrangeManager.md § Renaming and name drift
   {
-    name = 'take properties renames the slot the tracker is on, not the bound take',
+    name = 'take properties renames the bound take\'s slot, not that one take',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
@@ -246,8 +255,33 @@ return {
       fakeModalHost.last.callback('Kenneth', beats, 'resize')
       local renamed = fakeArrange.calls.rename
       t.eq(renamed.name,     'Kenneth', 'the slot took the submitted name')
-      t.eq(renamed.trackIdx, 0,         'on the track the tracker is on')
-      t.eq(renamed.slotIdx,  0,         'and the slot it is on')
+      t.eq(renamed.trackIdx, 0,         'on the track the take is on')
+      t.eq(renamed.slotIdx,  0,         'and the slot it is in')
+    end,
+  },
+
+  -- Arrange opens this modal on the take under its own cursor, binding tm off the
+  -- tracker's selection. Name and length both read the bound take, so the rename
+  -- follows it too. see docs/trackerPage.md § Selection
+  {
+    name = 'take properties follows the bound take when the tracker sits on another slot',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'tr1/t1', 'tr1/t2' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      util.add(fakeArrange.slotsByIdx[0], { idx = 7, name = '', kind = 'midi' })
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      fakeArrange.takeByKey['0:7'] = 'tr1/t2'
+      tp:bindFromSelection()                       -- tracker selection: track 0 / slot 0
+      h.cmgr:push('tracker')
+
+      tp:bind('tr1/t2')                            -- arrange's route: bind away from the selection
+      h.cmgr:invoke('takeProperties')
+      fakeModalHost.last.callback('Kenneth', tonumber(fakeModalHost.last.beatsBuf), 'resize')
+      local renamed = fakeArrange.calls.rename
+      t.eq(renamed.name,    'Kenneth', 'the submitted name landed')
+      t.eq(renamed.slotIdx, 7,         "on the bound take's slot, not the tracker's")
     end,
   },
 

@@ -451,6 +451,22 @@ track; if a MIDI take sits under the cursor it pins that slot, otherwise it
 restores the track's last-viewed slot. Arrange's own edit cursor is left
 untouched.
 
+### Take properties
+
+Arrange's take-properties command is the other cross-page entry: the
+`tracker` facade's `openTakeProperties` binds `tm` to the take under
+arrange's cursor and raises the modal on it. The tracker's own selection
+stays put, and `bindFromSelection` binds back on the next tracker frame,
+so nothing is restored on close. The same helper backs the tracker's own
+`takeProperties` command; with nothing bound at all it seeds a no-op-ish
+modal at 0 beats.
+
+The modal reads the name and length from the bind, and the commit writes
+to the same place: `tv:applyTakeProperties` renames the slot the bound
+take sits in (`docs/arrangeManager.md` § Renaming and name drift). Read
+off the selection instead, the name would land on whichever slot the
+tracker last sat on.
+
 ### The current instance
 
 The tracker holds one instance of the bound slot (`docs/arrangeManager.md`

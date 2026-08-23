@@ -620,6 +620,17 @@ function am:ownerTrack(take)
   return host
 end
 
+--contract: (trackIdx, slotIdx) of the slot take sits in, live or parked; nil if it holds none
+function am:slotOfTake(take)
+  local id = take and takeIdOf(take)
+  if not id then return end
+  for _, tr in ipairs(am:projectTracks()) do
+    for slotIdx, entry in pairs(readSlots(visibleTrackOfCol(tr.idx))) do
+      if entry.id == id then return tr.idx, slotIdx end
+    end
+  end
+end
+
 function am:keyForSlot(slotIdx)
   return util.toBase62(slotIdx)
 end

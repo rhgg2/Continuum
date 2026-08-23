@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Take properties act on the bound take throughout. The name half read its slot
+  from the tracker's (track, slot) selection while the length half wrote to tm's bind, so the modal
+  opened from arrange — which binds off the selection — renamed whichever slot the tracker last sat
+  on. am:slotOfTake reads the slot off the bind, live or parked, and the selection no longer enters
+  into it.
+
 - **2026-08-23** — A family holds one slot with the root plain, and two slots holding it plain are
   namesakes rather than a family: neither carries the other's rename, though the variants follow
   either. Carrying every slot that shares the root renamed two same-named takes together, which is

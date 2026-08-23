@@ -530,6 +530,7 @@ function av:editCursorQN()        return am:editCursorQN() end
 function av:playPositionQN()      return am:playPositionQN() end
 function av:playFromQN(qn)        return am:playFromQN(qn) end
 function av:findTake(take)        return am:findTake(take) end
+function av:slotOfTake(take)      return am:slotOfTake(take) end
 function av:seekInstance(take, qn, back) return am:seekInstance(take, qn, back) end
 function av:loopRangeQN()         return am:loopRangeQN() end
 function av:takesUsing(name)      return am:takesUsing(name) end

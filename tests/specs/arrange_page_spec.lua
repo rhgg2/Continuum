@@ -640,10 +640,10 @@ return {
   -- arrangeTakeProperties / arrangeDuplicateBelow / arrangeDuplicateUnpooledBelow:
   -- the keyboard-bound counterparts of the take-props modal and the dup-below
   -- trio. arrangeTakeProperties + arrangeDuplicateUnpooledBelow both route the
-  -- target take's item through onTakeProperties so coord can host the modal on
-  -- the tracker page's tm/tv. arrangeDuplicateBelow is silent.
+  -- target take's item through the tracker facade, which binds tm to it and
+  -- hosts the modal on the tracker page's tm/tv. arrangeDuplicateBelow is silent.
   {
-    name = 'arrangeTakeProperties routes the focused MIDI take through onTakeProperties',
+    name = 'arrangeTakeProperties routes the focused MIDI take through the tracker facade',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)

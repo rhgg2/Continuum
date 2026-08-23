@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=4626  mode=chunk  self=tv
+@module trackerView  src=trackerView.lua  loc=4625  mode=chunk  self=tv
 @deps tm, cm, ds, cmgr, gm, pa, facade, lib
 
 # Invariants & contracts
@@ -22,46 +22,46 @@
   @invariant  tail overlaps NOT resolved here; tm's universal tail pass owns every raw note-off  @ 407
   @contract  skips non-note plans/cols; optional `deleted` event-set excluded from the walk  @ 408
   @invariant  deleted corpses still live in col.events snapshot until next rebuild  @ 409
-  @invariant  a freshly placed note is unbounded: endppq = util.OPEN, no authored ceiling  @ 856
-  @invariant  universal tail pass derives the real tail (next onset/take length) each rebuild  @ 857
-  @contract  caller pre-pins (ppq, ppqL, rpb) onto `update` before calling  @ 858
-  @contract  col nil only for a chord sprout (no column yet): no prev-vel to inherit, lane pre-set  @ 859
-  @invariant  notes ordered by entry; members re-resolved via cells[row], never held event refs  @ 1206
-  @contract  arms on a note col's first pitch stop; pins (row, chan) until shift release  @ 1226
-  @contract  returns true iff consumed; false lets the drain fall through (to value-digit entry)  @ 1227
-  @contract  re-striking a gesture pitch toggles it off; freed slots are reused lowest-first  @ 1228
-  @contract  spreadChan strikes walk channels up from home; plain strikes stack home-channel lanes  @ 1229
-  @invariant  pins (col,row,part); overwrites a place keep-below, steps the sub-caret right  @ 1349
-  @invariant  field re-read via cells[row] each keystroke; undo snapshots drive backspace-restore  @ 1350
-  @contract  target, facility and key are remembered at take tier; the rest is per invocation  @ 2249
-  @contract  with no target the whole of it is the notation snap  @ 2250
-  @contract  the facility reads the target as points of the pitch line or as moves between strands  @ 2251
-  @contract  purity is the moves facility's alone: how nearly a spelled interval sounds pure  @ 2252
-  @contract  ambient is the moves facility's alone: the share of its sonority a strand rests on  @ 2253
-  @contract  returns the steps whose empty shortlists refused the solve, else nil  @ 2254
-  @contract  widen stretches those windows to the nearest points instead, so none refuses  @ 2255
-  @contract  selection must be exactly one grid column; multi-col selection is a no-op  @ 3053
-  @invariant  a 1-col block stays contiguous when it lands on the destination col  @ 3054
-  @contract  cursor follows to the destination column (single event and selection alike)  @ 3055
-  @contract  refuse if dest col has any onset in source's row extent (note: note-on; else any event)  @ 3056
-  @invariant  source's row extent = selection's [r1,r2] for a block, moved event's onset row for a single  @ 3057
-  @invariant  tails (either direction) clipped by tm's tail pass; never block  @ 3058
-  @contract  per-frame overlay for the chain the caret addresses: notes to ghost, cells to suppress  @ 3596
-  @contract  the gate is fxHostAtCursor -- a cell that runs no chain of its own answers nil  @ 3597
-  @contract  the window is the viewport's rows, resolved on the producer's own channel  @ 3598
-  @contract  notes[colIndex][row] = tm's record by reference; note columns only; first onset wins  @ 3632
-  @contract  values[colIndex][row] = { val }; the producer's claimed targets only  @ 3633
-  @contract  hidden[cell] = true for every plain original this chain parked; a host cell never hides  @ 3634
-  @invariant  a ghosted row may also carry a real cell; precedence is the draw arm's  @ 3635
-  @invariant  the overlay lands in the columns that exist; a claim materialises none of its own  @ 3636
-  @contract  reentrancy-guarded; bails on no-take (page shows placeholder)  @ 4127
-  @contract  takeChanged=true resets ec and re-reads resolution/length/timeSigs  @ 4128
-  @contract  grid + ctx rebuild each call; pushMute at end  @ 4129
-  @contract  a column's cells/ghosts carry while its events table + projection epoch are unchanged  @ 4130
-  @contract  tv consumes configChanged only for transient-frame release and mute pulse  @ 4460
-  @contract  rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race  @ 4461
-  @contract  non-transient FRAME_KEYS write while transient override active routes into releaseTransientFrame  @ 4462
-  @invariant  releaseTransientFrame's cm:assign fires configChanged → tm:rebuild → tv:rebuild  @ 4463
+  @invariant  a freshly placed note is unbounded: endppq = util.OPEN, no authored ceiling  @ 855
+  @invariant  universal tail pass derives the real tail (next onset/take length) each rebuild  @ 856
+  @contract  caller pre-pins (ppq, ppqL, rpb) onto `update` before calling  @ 857
+  @contract  col nil only for a chord sprout (no column yet): no prev-vel to inherit, lane pre-set  @ 858
+  @invariant  notes ordered by entry; members re-resolved via cells[row], never held event refs  @ 1205
+  @contract  arms on a note col's first pitch stop; pins (row, chan) until shift release  @ 1225
+  @contract  returns true iff consumed; false lets the drain fall through (to value-digit entry)  @ 1226
+  @contract  re-striking a gesture pitch toggles it off; freed slots are reused lowest-first  @ 1227
+  @contract  spreadChan strikes walk channels up from home; plain strikes stack home-channel lanes  @ 1228
+  @invariant  pins (col,row,part); overwrites a place keep-below, steps the sub-caret right  @ 1348
+  @invariant  field re-read via cells[row] each keystroke; undo snapshots drive backspace-restore  @ 1349
+  @contract  target, facility and key are remembered at take tier; the rest is per invocation  @ 2248
+  @contract  with no target the whole of it is the notation snap  @ 2249
+  @contract  the facility reads the target as points of the pitch line or as moves between strands  @ 2250
+  @contract  purity is the moves facility's alone: how nearly a spelled interval sounds pure  @ 2251
+  @contract  ambient is the moves facility's alone: the share of its sonority a strand rests on  @ 2252
+  @contract  returns the steps whose empty shortlists refused the solve, else nil  @ 2253
+  @contract  widen stretches those windows to the nearest points instead, so none refuses  @ 2254
+  @contract  selection must be exactly one grid column; multi-col selection is a no-op  @ 3052
+  @invariant  a 1-col block stays contiguous when it lands on the destination col  @ 3053
+  @contract  cursor follows to the destination column (single event and selection alike)  @ 3054
+  @contract  refuse if dest col has any onset in source's row extent (note: note-on; else any event)  @ 3055
+  @invariant  source's row extent = selection's [r1,r2] for a block, moved event's onset row for a single  @ 3056
+  @invariant  tails (either direction) clipped by tm's tail pass; never block  @ 3057
+  @contract  per-frame overlay for the chain the caret addresses: notes to ghost, cells to suppress  @ 3595
+  @contract  the gate is fxHostAtCursor -- a cell that runs no chain of its own answers nil  @ 3596
+  @contract  the window is the viewport's rows, resolved on the producer's own channel  @ 3597
+  @contract  notes[colIndex][row] = tm's record by reference; note columns only; first onset wins  @ 3631
+  @contract  values[colIndex][row] = { val }; the producer's claimed targets only  @ 3632
+  @contract  hidden[cell] = true for every plain original this chain parked; a host cell never hides  @ 3633
+  @invariant  a ghosted row may also carry a real cell; precedence is the draw arm's  @ 3634
+  @invariant  the overlay lands in the columns that exist; a claim materialises none of its own  @ 3635
+  @contract  reentrancy-guarded; bails on no-take (page shows placeholder)  @ 4126
+  @contract  takeChanged=true resets ec and re-reads resolution/length/timeSigs  @ 4127
+  @contract  grid + ctx rebuild each call; pushMute at end  @ 4128
+  @contract  a column's cells/ghosts carry while its events table + projection epoch are unchanged  @ 4129
+  @contract  tv consumes configChanged only for transient-frame release and mute pulse  @ 4459
+  @contract  rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race  @ 4460
+  @contract  non-transient FRAME_KEYS write while transient override active routes into releaseTransientFrame  @ 4461
+  @invariant  releaseTransientFrame's cm:assign fires configChanged → tm:rebuild → tv:rebuild  @ 4462
 
 # Shapes
   @shape  grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }  @ 15
@@ -71,17 +71,17 @@
   @shape  fx tail = { startRow, endRow, evt, stack={[row]={glyph,[bypass]}}, [clipped] }  @ 20
   @shape  selection = { row1, row2, col1, col2, part1, part2 }  @ 21
   @shape  plan = { col, e, [newppq], [newEndppq], [newDelay] }  @ 23
-  @shape  target = { col?, evt?, ppq, rpb, lane?, chan? } (evt is the cell's occupant)  @ 898
-  @shape  chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane, chan }, ... } }  @ 1205
-  @shape  digits = { colIdx, row, part, stop0, undo = { { existed, vals, stop }, ... } }  @ 1348
-  @shape  strandNote = { ppq, endppq=<the render clip>, pitch, detune, intentCents, event=<what seatStrand writes> }  @ 2178
-  @shape  retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, facility='points'|'moves', key=step, sonoritySize, harmonicLock, purity, ambient=0..1 }  @ 2248
-  @shape  paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter  @ 3803
-  @shape  paletteExpanded = { [fxGuid] = true } — open fx subtrees in the palette tree  @ 3806
-  @shape  paletteCursor = { fxGuid, param } — palette tree cursor; param nil = the fx heading row  @ 3808
-  @shape  stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field  @ 3810
-  @shape  tabOverride = { tab, anchor } — a clicked/keyboard tab pin ('parameters'|'fx'); caret move clears it  @ 3812
-  @shape  learn = { trackGuid, fxGuid, floated, away, baseline } — armed touch-learn, or nil  @ 3819
+  @shape  target = { col?, evt?, ppq, rpb, lane?, chan? } (evt is the cell's occupant)  @ 897
+  @shape  chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane, chan }, ... } }  @ 1204
+  @shape  digits = { colIdx, row, part, stop0, undo = { { existed, vals, stop }, ... } }  @ 1347
+  @shape  strandNote = { ppq, endppq=<the render clip>, pitch, detune, intentCents, event=<what seatStrand writes> }  @ 2177
+  @shape  retuneSlots = { scope='selection'|'all', strength=0..1, target?=temperName, facility='points'|'moves', key=step, sonoritySize, harmonicLock, purity, ambient=0..1 }  @ 2247
+  @shape  paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter  @ 3802
+  @shape  paletteExpanded = { [fxGuid] = true } — open fx subtrees in the palette tree  @ 3805
+  @shape  paletteCursor = { fxGuid, param } — palette tree cursor; param nil = the fx heading row  @ 3807
+  @shape  stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field  @ 3809
+  @shape  tabOverride = { tab, anchor } — a clicked/keyboard tab pin ('parameters'|'fx'); caret move clears it  @ 3811
+  @shape  learn = { trackGuid, fxGuid, floated, away, baseline } — armed touch-learn, or nil  @ 3818
 
 # Imports
   @require util = 'util'  @ 26
@@ -94,9 +94,9 @@
   @require perf = 'perf'  @ 32
 
 # Constructed sub-instances
-  @construct ctx       = util.instantiate('viewContext')  @ 4257
-  @construct ec        = util.instantiate('editCursor')  @ 4502
-  @construct clipboard = util.instantiate('clipboard')  @ 4512
+  @construct ctx       = util.instantiate('viewContext')  @ 4256
+  @construct ec        = util.instantiate('editCursor')  @ 4501
+  @construct clipboard = util.instantiate('clipboard')  @ 4511
 
 # Private state
   @state backing = {  @ 64
@@ -115,25 +115,25 @@
   @state namedInstance  @ 227   -- a command knew the placement; outranks the rest, one-shot
   @state seekBack  @ 228   -- prevTake travels backwards; cleared on resolve
   @state playInstanceTake  @ 229   -- where the play head was last resolve, for entry detection
-  @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 3059
-  @state dupeState = nil  @ 3218
-  @state groupSrc, groupDupState  @ 3222
-  @state paletteParam = nil  @ 3804
-  @state paletteFilter = ''  @ 3805
-  @state paletteExpanded = {}  @ 3807
-  @state paletteCursor = nil  @ 3809
-  @state stripCursor = nil  @ 3811
-  @state tabOverride = { tab = nil, anchor = nil }  @ 3813
-  @state hoist = { take = nil, byFx = {} }  @ 3817
-  @state learn = nil  @ 3820
-  @state tracker = cmgr:scope('tracker')  @ 4023
-  @state rebuilding = false  @ 4102
-  @state lastEpochSig  @ 4103   -- projection-epoch signature carried from the last rebuild; guards the cell cache
-  @state CLIP_GLYPH = '\xe2\x80\xa6'  @ 4115
-  @state groupBridge = {  @ 4478
-  @state GROUP_PASSTHROUGH = {  @ 4571
-  @state GROUP_KEEP = {}  @ 4580
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 4587
+  @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 3058
+  @state dupeState = nil  @ 3217
+  @state groupSrc, groupDupState  @ 3221
+  @state paletteParam = nil  @ 3803
+  @state paletteFilter = ''  @ 3804
+  @state paletteExpanded = {}  @ 3806
+  @state paletteCursor = nil  @ 3808
+  @state stripCursor = nil  @ 3810
+  @state tabOverride = { tab = nil, anchor = nil }  @ 3812
+  @state hoist = { take = nil, byFx = {} }  @ 3816
+  @state learn = nil  @ 3819
+  @state tracker = cmgr:scope('tracker')  @ 4022
+  @state rebuilding = false  @ 4101
+  @state lastEpochSig  @ 4102   -- projection-epoch signature carried from the last rebuild; guards the cell cache
+  @state CLIP_GLYPH = '\xe2\x80\xa6'  @ 4114
+  @state groupBridge = {  @ 4477
+  @state GROUP_PASSTHROUGH = {  @ 4570
+  @state GROUP_KEEP = {}  @ 4579
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 4586
 
 # Private functions
   @fn arrange()  @ 37
@@ -210,241 +210,241 @@
       -- here would clamp to numRows (ctx:ppqToRow) and erase the overshoot,
       -- so any further inward move can't regrow the tail. util.OPEN stays open.
   @fn matchGridToCursor()  @ 595-606
-  @fn setTakeSwing(slot, value)  @ 643-647
+  @fn setTakeSwing(slot, value)  @ 642-646
       -- swing is take document data: one map { global=name, [chan]=name }. defaultSwing
       -- mirrors that shape across config tiers as a pure seed (copied in on bind, never realised).
-  @fn setDefaultSwing(tier, slot, value)  @ 649-653
+  @fn setDefaultSwing(tier, slot, value)  @ 648-652
   -- Mute / solo
-  @fn toggleChannelFlag(key, chan)  @ 700-704
-  @fn pushMute()  @ 709-720
-      @contract  effective mute = persistent-mute ∪ solo-implied mute  @ 706
-      @invariant  any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)  @ 707
-      @invariant  both sets persist in ds so reload's tm:lastMuteSet matches the wire  @ 708
+  @fn toggleChannelFlag(key, chan)  @ 699-703
+  @fn pushMute()  @ 708-719
+      @contract  effective mute = persistent-mute ∪ solo-implied mute  @ 705
+      @invariant  any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)  @ 706
+      @invariant  both sets persist in ds so reload's tm:lastMuteSet matches the wire  @ 707
   -- Audition
-  @fn sendBend(chan, cents)  @ 738-743
+  @fn sendBend(chan, cents)  @ 737-742
       -- Detune→live pitch-bend on the audition channel; mirrors tm's centsToRaw
       -- slope so the preview bends like the seated note (synth range = pbRange).
-  @fn killAudition()  @ 745-751
-  @fn auditionAdd(pitch, vel, chan, detune)  @ 755-761
+  @fn killAudition()  @ 744-750
+  @fn auditionAdd(pitch, vel, chan, detune)  @ 754-760
       -- Additive: joins the sounding set. Chord voices share one channel, so only
       -- the first voice's detune bends — mirrors "only lane-1 notes drive detune".
-  @fn auditionRelease(pitch)  @ 763-772
-  @fn audition(pitch, vel, chan, detune)  @ 774-777
+  @fn auditionRelease(pitch)  @ 762-771
+  @fn audition(pitch, vel, chan, detune)  @ 773-776
   -- Viewport
-  @fn lastVisibleFrom(startCol)  @ 792-802
-  @fn followViewport()  @ 804-828
+  @fn lastVisibleFrom(startCol)  @ 791-801
+  @fn followViewport()  @ 803-827
   -- Editing
-  @fn findCol(d)  @ 838-846
+  @fn findCol(d)  @ 837-845
       -- Column lookup by descriptor { chan, type, lane?, cc? } → col, index.
-  @fn placeNewNote(col, update)  @ 860-868
-  @fn notePAEvents(col, pitch, startppq, endppq)  @ 870-879
-  @fn repinToRow(evt, update, ppq, rpb)  @ 882-888
+  @fn placeNewNote(col, update)  @ 859-867
+  @fn notePAEvents(col, pitch, startppq, endppq)  @ 869-878
+  @fn repinToRow(evt, update, ppq, rpb)  @ 881-887
       -- Off-grid occupant: repin evt.ppq to the row, preserving span length.
-  @fn pitchFromKey(nk)  @ 891-896
+  @fn pitchFromKey(nk)  @ 890-895
       -- Key → MIDI pitch at the input octave, snapped onto the active temper.
-  @fn strikePitch(target, pitch, detune)  @ 902-931
-      @contract  shared by editEvent and the chord gesture (tv:chordStrike)  @ 899
-      @contract  col nil only for a chord strike sprouting a new lane (no column yet)  @ 900
-      @contract  returns the struck note's vel, for the caller to audition  @ 901
-  @fn toggleSignFlip(part)  @ 936-944
-  @fn inheritedSign(col, row)  @ 948-953
+  @fn strikePitch(target, pitch, detune)  @ 901-930
+      @contract  shared by editEvent and the chord gesture (tv:chordStrike)  @ 898
+      @contract  col nil only for a chord strike sprouting a new lane (no column yet)  @ 899
+      @contract  returns the struck note's vel, for the caller to audition  @ 900
+  @fn toggleSignFlip(part)  @ 935-943
+  @fn inheritedSign(col, row)  @ 947-952
       -- Sign a digit lands with on an empty cell: the displayed ghost's, else the
       -- previous visible breakpoint's, else positive.
       · Chord entry (shift-held gesture; gridPane's key drain routes here)
-  @fn chordCell(chan, lane)  @ 1211-1214
+  @fn chordCell(chan, lane)  @ 1210-1213
       -- The gesture's occupant cell at (chan, lane): fresh col fetch every call —
       -- each flush reclones columns.
-  @fn settleTypedEdit()  @ 1218-1222
+  @fn settleTypedEdit()  @ 1217-1221
       -- Typed gesture mutations bypass cmgr exactly like editEvent's commit: end
       -- every cascade by hand (see the comment there), then flush.
       · Value entry (shift-held gesture: a left-to-right overwrite cursor over a field's places)
-  @fn digitPartAt(colIdx, stop)  @ 1355-1360
+  @fn digitPartAt(colIdx, stop)  @ 1354-1359
       -- The pinned field's part if the caret sits on a gesture-editable part. The
       -- pitch part's first stop is the note name, which is chordStrike's to take.
-  @fn fieldSnapshot(evt, part)  @ 1363-1367
+  @fn fieldSnapshot(evt, part)  @ 1362-1366
       -- The fields a part's gesture writes, as they stand before this keystroke.
-  @fn validDigit(part, char)  @ 1369-1372
+  @fn validDigit(part, char)  @ 1368-1371
   -- Lane-strip edits (drag, add, delete, shape, tension)
-  @fn visibleAt(col, i)  @ 1442-1451
+  @fn visibleAt(col, i)  @ 1441-1450
       -- Skips hidden absorbers; returns nil if i out of range.
   -- Interpolation
-  @fn nextShape(s)  @ 1530-1535
-  @fn cycleShape(col, A)  @ 1537-1540
-  @fn interpolate()  @ 1553-1584
-  @fn interpolateValues(col)  @ 1587-1609
+  @fn nextShape(s)  @ 1529-1534
+  @fn cycleShape(col, A)  @ 1536-1539
+  @fn interpolate()  @ 1552-1583
+  @fn interpolateValues(col)  @ 1586-1608
       -- Returns nil for non-interpolable cols so callers can assign unconditionally.
-  @fn rewriteRegion(uuid, mutate)  @ 1614-1626
+  @fn rewriteRegion(uuid, mutate)  @ 1613-1625
       -- fxRegions doc-data mutation: mutate(region) -> fresh region | nil (drop); others verbatim,
       -- then persist + re-derive. Shared by the window verbs, region delete, setNoteFx's region arm.
-  @fn cursorRegionBefore(col)  @ 1630-1637
+  @fn cursorRegionBefore(col)  @ 1629-1636
       -- The fx region a verb acts on within a column (its lane): the badge with the greatest onset
       -- at-or-before the cursor row. Manual scan -- fx cells sit in storage, not ppq, order.
   -- Duration & position
-  @fn fxLaneOf(col)  @ 1645-1654
+  @fn fxLaneOf(col)  @ 1644-1653
       -- The lane (1-based) of the cursor's fx column -- columns are added in lane order, so the k-th
       -- fx column on the channel is lane k. A window edit reorders storage to hold this lane.
-  @fn recentreOnRegion(uuid, rowDelta)  @ 1658-1666
+  @fn recentreOnRegion(uuid, rowDelta)  @ 1657-1665
       -- After the rebuild, put the caret back on the region by uuid (its column may have shifted),
       -- tracking the row by the same delta the window moved.
-  @fn applyRegionWindow(col, cell, ns, ne, rowDelta)  @ 1670-1707
+  @fn applyRegionWindow(col, cell, ns, ne, rowDelta)  @ 1669-1706
       -- Rewrite the region's window, holding its lane. Only when the edit adds overlapping siblings
       -- before it (a lane bump) does it slide after the (lane-1)-th overlap; else storage is untouched.
-  @fn regionNoteOff(col)  @ 1711-1723
+  @fn regionNoteOff(col)  @ 1710-1722
       -- noteOff shortens the region's tail to the cursor row; the onset row is a no-op -- deletion
       -- belongs to the delete verb, not a duration edit. see docs/trackerView.md § Addressing a chain
-  @fn regionAdjustDuration(col, rowDelta)  @ 1725-1733
-  @fn regionAdjustPosition(col, rowDelta)  @ 1736-1744
+  @fn regionAdjustDuration(col, rowDelta)  @ 1724-1732
+  @fn regionAdjustPosition(col, rowDelta)  @ 1735-1743
       -- Shift start and end together (duration fixed); fx regions may overlap, so no onset guard.
-  @fn fxColAtLane(chan, lane)  @ 1747-1755
+  @fn fxColAtLane(chan, lane)  @ 1746-1754
       -- The k-th fx column on the channel (nil past the last lane) -- the adjacent-lane badge column.
-  @fn shiftFxLane(col, dir)  @ 1759-1779
+  @fn shiftFxLane(col, dir)  @ 1758-1778
       -- Move the cursor's fx region one badge column toward dir, swapping storage precedence with the
       -- sibling beside it at the cursor row. Nothing overlapping there -> no-op. see docs/generators.md § Multiplicity
-  @fn cursorNoteBefore()  @ 1781-1786
-  @fn applyNoteOff(col, last, targetppq, undo)  @ 1793-1801
+  @fn cursorNoteBefore()  @ 1780-1785
+  @fn applyNoteOff(col, last, targetppq, undo)  @ 1792-1800
       -- Undo reopens authored intent: the tail was OPEN before any noteOff
       -- closed it (or we have no record), so write util.OPEN and let tm's
       -- universal tail pass re-derive the realised note-off. The finite
       -- branch writes the user's targeted ceiling unclamped -- tm clips
       -- realised against same-pitch onsets and take length on rebuild.
-  @fn noteOff()  @ 1803-1845
-  @fn adjustDurationCore(col, note, rowDelta)  @ 1851-1861
+  @fn noteOff()  @ 1802-1844
+  @fn adjustDurationCore(col, note, rowDelta)  @ 1850-1860
       -- The user grows/shrinks from the ceiling they SEE — the clipped
       -- logical endppqC — even when the authored endppq is util.OPEN or
       -- runs longer. assignTail writes a finite logical ceiling, so tm
       -- stamps endppqL and an open note closes.
-  @fn adjustDuration(prefix, rowDelta)  @ 1863-1880
-  @fn adjustPositionMulti(rowDelta)  @ 1888-1930
+  @fn adjustDuration(prefix, rowDelta)  @ 1862-1879
+  @fn adjustPositionMulti(rowDelta)  @ 1887-1929
       -- Selection nudge: the rows the block will occupy after the shift
       -- ([selLo..selHi] + rowDelta) must be clear of any foreign onset in
       -- every touched column -- the SELECTION's full row extent, not just
       -- the sparse moving-onset rows. A foreign onset on a selected-but-
       -- empty row would otherwise slip through and let repeated nudges
       -- accumulate overlaps. Onset-only: tm clips note tails on rebuild.
-  @fn adjustPosition(prefix, rowDelta)  @ 1940-1980
+  @fn adjustPosition(prefix, rowDelta)  @ 1939-1979
       -- Notes: onset-only band (rowBounds) -- a neighbour tail never blocks
       -- the move; tm clips an overrun on the next rebuild. The cursor
       -- follows by rowDelta unless that row already holds another note
       -- (cursorNoteBefore would otherwise retarget it). Non-note events
       -- nudge in time too, all-or-nothing like shiftEvents: refuse off the
       -- grid edge or onto a same-column event (a same-ppq collision).
-      @contract  single move: notes blocked only by onset reorder; cc/at/pa/pc by occupied dest row  @ 1938
-      @contract  selection: refuse if any col's [selLo..selHi]+rowDelta destination holds a foreign onset  @ 1939
+      @contract  single move: notes blocked only by onset reorder; cc/at/pa/pc by occupied dest row  @ 1937
+      @contract  selection: refuse if any col's [selLo..selHi]+rowDelta destination holds a foreign onset  @ 1938
   -- Quantize / scale
-  @fn quantizeScope(groups)  @ 1992-2018
+  @fn quantizeScope(groups)  @ 1991-2017
       -- Plan-then-write so conformOverlaps can clip plan geometry against
       -- col-mates before the writes commit. Two off-grid col-mates can
       -- otherwise quantize-collapse onto the same ppq (or onto adjacent
       -- rows whose post-snap distance crosses the lenient threshold),
       -- and the allocator would reject the persisted lane on rebuild.
-  @fn quantizeKeepRealisedScope(groups)  @ 2021-2048
+  @fn quantizeKeepRealisedScope(groups)  @ 2020-2047
       -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
-  @fn scaleScope(groups, kNum, kDen)  @ 2065-2135
+  @fn scaleScope(groups, kNum, kDen)  @ 2064-2134
   -- Retune
-  @fn blend(e, strength, pitch, detune)  @ 2145-2151
+  @fn blend(e, strength, pitch, detune)  @ 2144-2150
       -- Strength: blend from carried cents toward snap's pair, re-seated on the
       -- nearest semitone. See docs/trackerView.md § Retune.
-  @fn notesIn(groups)  @ 2154-2162
+  @fn notesIn(groups)  @ 2153-2161
       -- The notes of a scope, whichever facility is about to move them.
-  @fn snapToTemper(notes, notation, strength)  @ 2166-2174
+  @fn snapToTemper(notes, notation, strength)  @ 2165-2173
       -- Notation snap: every note in scope onto the step it was written on, spending the intent.
       -- see docs/trackerView.md § Retune, docs/tuning.md § The written step
-  @fn strandsOf(notes, notation)  @ 2179-2186
+  @fn strandsOf(notes, notation)  @ 2178-2185
       -- The scope's notes as strands: those of a step-class that overlap over their
       -- render clip, not the authored ceiling on endppq -- see design/adaptive-tuning.md § The strand.
-  @fn seatStrand(strand, notation, cents, strength)  @ 2190-2198
+  @fn seatStrand(strand, notation, cents, strength)  @ 2189-2197
       -- A strand's tuning, seated on every note that writes it, in that note's own register, each
       -- stamped with the step it was written on. see docs/tuning.md § The written step
-  @fn shortlisted(notes, notation, target, keyStep, widen)  @ 2202-2220
+  @fn shortlisted(notes, notation, target, keyStep, widen)  @ 2201-2219
       -- The scope's strands, shortlisted against the target; or nil and the steps with nowhere
       -- to go, in notation order and named once however many strands wrote it.
-  @fn solveToTarget(notes, notation, target, slots, widen)  @ 2224-2232
+  @fn solveToTarget(notes, notation, target, slots, widen)  @ 2223-2231
       -- The adaptive solve: one point per strand, seated on every note that writes it, in its own register.
       -- see design/adaptive-tuning.md § What the solver takes
-  @fn solveToMoves(notes, notation, target, slots)  @ 2236-2246
+  @fn solveToMoves(notes, notation, target, slots)  @ 2235-2245
       -- The moves facility: moves between strands rather than points, springs holding purity and
       -- rests the ambient share (docs/sonority.md § The dials); a chain none reaches places nothing.
-  @fn notDerived(e)  @ 2278
+  @fn notDerived(e)  @ 2277
       -- Absorber pbs are tm-managed, tied to note seats — row ops shift
       -- only real events and leave derived pbs to tm's reconcile.
-  @fn shiftPlan(col, e, dLogical)  @ 2284-2292
+  @fn shiftPlan(col, e, dLogical)  @ 2283-2291
       -- An open authored tail stays open across the shift; a finite ceiling
       -- shifts with the note, UNCLAMPED — endppq is authored intent, not a
       -- realised value. tm's universal tail pass owns clipping (against take
       -- length and same-pitch onsets); clamping here would shrink intent.
-  @fn insertRowCore(col, topRow, numRows)  @ 2294-2328
-  @fn deleteRowCore(col, topRow, numRows)  @ 2330-2361
-  @fn colInInstance(col, inst)  @ 2365-2369
+  @fn insertRowCore(col, topRow, numRows)  @ 2293-2327
+  @fn deleteRowCore(col, topRow, numRows)  @ 2329-2360
+  @fn colInInstance(col, inst)  @ 2364-2368
       -- True iff grid column `col` carries one of instance `inst`'s streams. Mirrors
       -- the render-pass occupancy test (eachMemberEvent): the column IS the stream.
-  @fn planInstanceMoves(cols, topRow, numRows, isInsert)  @ 2373-2410
+  @fn planInstanceMoves(cols, topRow, numRows, isInsert)  @ 2372-2409
       -- Group instances are atomic blocks: re-anchor wholly-past-cut ones, refuse bisects.
       -- Returns { move | delete } plan, or nil to refuse. see docs/groupManager.md § Row-op atomicity.
-  @fn forEachRowOp(core, preSel, noSelCols, isInsert)  @ 2413-2436
+  @fn forEachRowOp(core, preSel, noSelCols, isInsert)  @ 2412-2435
       -- `noSelCols` picks the column set when no selection is active.
-  @fn allCols()  @ 2438
-  @fn curCol()  @ 2439-2442
-  @fn insertRow()  @ 2444
-  @fn deleteRow()  @ 2445
-  @fn insertRowCol()  @ 2446
-  @fn deleteRowCol()  @ 2447
+  @fn allCols()  @ 2437
+  @fn curCol()  @ 2438-2441
+  @fn insertRow()  @ 2443
+  @fn deleteRow()  @ 2444
+  @fn insertRowCol()  @ 2445
+  @fn deleteRowCol()  @ 2446
   -- Nudge
-  @fn pitchStep(coarse)  @ 2455-2459
+  @fn pitchStep(coarse)  @ 2454-2458
       -- Coarse is one period of the temper. Not octaveStep, which is where the octave
       -- *label* turns over and so stands a step past the period under a named twelve.
-  @fn valueInterval(col)  @ 2462-2466
+  @fn valueInterval(col)  @ 2461-2465
       -- Coarse snap interval per column type. nil = no coarse (pc).
-  @fn valueBounds(col)  @ 2468-2475
-  @fn scaledScalar(v, lo, hi, dir, baseInterval, p)  @ 2480-2485
+  @fn valueBounds(col)  @ 2467-2474
+  @fn scaledScalar(v, lo, hi, dir, baseInterval, p)  @ 2479-2484
       -- p scales the step magnitude (universal-argument prefix; defaults
       -- to 1 from the call site). Coarse scales the interval; fine scales
       -- the direction unit.
-  @fn nudgePitch(col, note, dir, coarse, audible, p)  @ 2487-2506
-  @fn nudgeVel(col, note, dir, coarse, audible, p)  @ 2508-2513
-  @fn nudgeDelay(col, note, dir, coarse, p)  @ 2515-2522
-  @fn nudgeValue(col, evt, dir, coarse, p)  @ 2524-2529
-  @fn applyNudge(col, evt, part, dir, coarse, audible, p)  @ 2531-2537
-  @fn cursorRowEvent(col)  @ 2540-2547
+  @fn nudgePitch(col, note, dir, coarse, audible, p)  @ 2486-2505
+  @fn nudgeVel(col, note, dir, coarse, audible, p)  @ 2507-2512
+  @fn nudgeDelay(col, note, dir, coarse, p)  @ 2514-2521
+  @fn nudgeValue(col, evt, dir, coarse, p)  @ 2523-2528
+  @fn applyNudge(col, evt, part, dir, coarse, audible, p)  @ 2530-2536
+  @fn cursorRowEvent(col)  @ 2539-2546
       -- PAs skipped on note cols.
-  @fn nudge(prefix, dir, coarse)  @ 2553-2586
+  @fn nudge(prefix, dir, coarse)  @ 2552-2585
       -- Column-typed nudge. Selection rule: if any note event is selected,
       -- transpose / velocity- / delay-nudge the notes and leave value events
       -- alone; otherwise nudge val on every value event. Solo cursor: first
       -- event in the cursor row, column- and part-typed.
   -- Note FX (macros)
-  @fn parkedByUuid(uuid)  @ 2597-2603
+  @fn parkedByUuid(uuid)  @ 2596-2602
       -- An fx host is a note (mm, integer uuid), a parked note host (off-take, original or minted
       -- 'fxp-N' uuid), or a region (ds, 'fxr-N'); the editor addresses all three by uuid.
       -- Disjoint namespaces: a missed lookup falls through in that order.
-  @fn regionByUuid(uuid)  @ 2605-2609
-  @fn maxFxRegionN(list)  @ 2611-2618
-  @fn mintRegionUuid()  @ 2620-2622
-  @fn mintRegionForSelection()  @ 2626-2639
+  @fn regionByUuid(uuid)  @ 2604-2608
+  @fn maxFxRegionN(list)  @ 2610-2617
+  @fn mintRegionUuid()  @ 2619-2621
+  @fn mintRegionForSelection()  @ 2625-2638
       -- A selection always mints a fresh region over its (channel, ppq span). Regions may
       -- overlap, so a repeated selection stacks a new one rather than reopening the last.
   -- FX region clipboard
-  @fn eachFxRegionInRect(r1, r2, c1, c2, fn)  @ 2645-2660
+  @fn eachFxRegionInRect(r1, r2, c1, c2, fn)  @ 2644-2659
       -- Visit every fx region the copy rectangle catches: authored onset within the row band, in a
       -- selected fx column -- the one capture rule copy and delete-selection share.
-  @fn gatherFxRegions(r1, r2, c1, c2, anchorChan)  @ 2664-2675
+  @fn gatherFxRegions(r1, r2, c1, c2, anchorChan)  @ 2663-2674
       -- Clip-top-relative rows + chanDelta off the rectangle's left edge, as multi-mode cells;
       -- see docs/trackerView.md § FX regions for why the whole window rides past the band.
-  @fn pasteFxRegions(list)  @ 2679-2701
+  @fn pasteFxRegions(list)  @ 2678-2700
       -- Drop each gathered region at the cursor: fresh uuid, channel rebased by chanDelta, window off
       -- the cursor row. Regions stack (no destination wipe) -- they overlap by design, unlike cell paste.
-  @fn deleteFxRegionAtCursor(col)  @ 2705-2708
+  @fn deleteFxRegionAtCursor(col)  @ 2704-2707
       -- Caret delete: the region under the cursor (whole window), matching the sibling fx verbs' target --
       -- not the onset-in-band rule copy uses.
-  @fn deleteFxRegionsInRect(r1, r2, c1, c2)  @ 2711-2721
+  @fn deleteFxRegionsInRect(r1, r2, c1, c2)  @ 2710-2720
       -- Delete-selection's fx arm: drop every region the rectangle catches (the copy rule) in one write.
-  @fn freezeRegionAtCursor()  @ 2725-2728
+  @fn freezeRegionAtCursor()  @ 2724-2727
       -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
       -- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block.
-  @fn freezeGroupAtCursor()  @ 2732-2735
+  @fn freezeGroupAtCursor()  @ 2731-2734
       -- The group door on the same host. Freeze-to-raw mints no rect, so a group collision is none of its
       -- business and it asks tm directly; only this verb needs the tri-state.
   -- Deletion
-  @fn queueDeleteNotes(col, locs)  @ 2948-2952
+  @fn queueDeleteNotes(col, locs)  @ 2947-2951
       -- Delete notes; extend each predecessor that ended at-or-past a deleted run
       -- into the next survivor's start (or `length`). PAs are out of scope here.
       -- Fixups are computed before any mutation: tm:assignEvent's same-key clamp
@@ -452,86 +452,86 @@
       -- Plain delete. A survivor that legato-owned the run grows back over
       -- the hole for free: tm re-derives every raw tail next rebuild, up to
       -- the survivor's ceiling (take length when it is open).
-  @fn queueResetDelays(col, locs)  @ 2955-2961
-  @fn queueResetVelocities(col, locs)  @ 2965-2978
+  @fn queueResetDelays(col, locs)  @ 2954-2960
+  @fn queueResetVelocities(col, locs)  @ 2964-2977
       -- Reset selected note vels to the prior event's vel (notes or PAs carry
       -- forward); delete selected PAs outright.
-  @fn queueDeleteCCs(col, locs)  @ 2980-2982
-  @fn deleteEvent()  @ 2992-3024
-  @fn deleteSelection()  @ 3026-3033
-  @fn deleteOrBackspace()  @ 3036-3039
+  @fn queueDeleteCCs(col, locs)  @ 2979-2981
+  @fn deleteEvent()  @ 2991-3023
+  @fn deleteSelection()  @ 3025-3032
+  @fn deleteOrBackspace()  @ 3035-3038
   -- Horizontal move
-  @fn ppqRowOf(ppq, chan)  @ 3063-3066
+  @fn ppqRowOf(ppq, chan)  @ 3062-3065
       -- Grid row for ppq: an on-grid onset near a boundary snaps; an off-grid one floors.
       -- Shared by the region-tag pass, kindAt, deletedCells and move dispatch, so they agree.
-  @fn colTypeOf(evt)  @ 3070-3073
+  @fn colTypeOf(evt)  @ 3069-3072
       -- The grid column an event lives in, from its own chan + lane (notes/PA) or
       -- cc-number (cc). nil if off-grid (e.g. a fresh clone) -- kindAt reads that plain.
-  @fn colFor(evt)  @ 3075-3084
+  @fn colFor(evt)  @ 3074-3083
       -- Second return is its column index; single-value callers truncate it away.
-  @fn kindAt(col, ppq)  @ 3088-3090
+  @fn kindAt(col, ppq)  @ 3087-3089
       -- Kind of a (col, ppq) cell: 'member' inside a region (cellKind-tagged at build),
       -- else 'plain'. A nil col (event off the grid) is plain.
-  @fn shiftEvents(dir)  @ 3092-3206
-  @fn stepSample(dir)  @ 3211-3214
+  @fn shiftEvents(dir)  @ 3091-3205
+  @fn stepSample(dir)  @ 3210-3213
       -- Step currentSample by ±1 across the full 0..127 range. Empty slots
       -- are reachable — the user may want to author a sample value before
       -- the sampler has loaded that slot.
   -- Duplicate
-  @fn cursorRect()  @ 3228-3235
+  @fn cursorRect()  @ 3227-3234
       -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
       -- duplicate when there is no real selection (selectionAsRect is nil).
       -- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
       -- selection is a no-op there; plain duplicate clones the cursor cell.
-  @fn colsForAnchor(anchor, rect)  @ 3241-3251
+  @fn colsForAnchor(anchor, rect)  @ 3240-3250
       -- The grid columns the rect's stream set lands on when its chanLo is
       -- pinned to `anchor.chan` -- the shared logical->grid mapping. Resolving
       -- this at paste/select time (not freezing the seed column) is what lets
       -- a channel-changing cursor move carry the cascade to the new channel.
-  @fn stopForPart(col, part)  @ 3256-3261
+  @fn stopForPart(col, part)  @ 3255-3260
       -- First stop in `col` carrying part `part` (the seed's part name), or
       -- 1 if unknown -- keeps pasteSingle's pitch/vel dispatch on the part
       -- the user duplicated, at whatever column the anchor resolved to.
-  @fn selectRegionAt(anchor, rect)  @ 3266-3279
+  @fn selectRegionAt(anchor, rect)  @ 3265-3278
       -- Inverse of selectionAsRect: drop a grid selection (cursor at its
       -- top-left) at a logical anchor. Whole-column parts -- the cascade
       -- carries part precision in its payload, not in the live selection.
-  @fn duplicate()  @ 3285-3302
+  @fn duplicate()  @ 3284-3301
       -- Plain duplicate: clip payload, cursor-cell seed fallback. The cascade
       -- lifetime, anchor and select-the-copy live in tv:duplicateCascade.
       -- place re-homes the paste to the anchor's channel (colsForAnchor), so a
       -- channel-changing cursor move moves subsequent copies, not just rows.
   -- Accessors for trackerPage
   -- Mirror bridge
-  @fn eachMemberEvent(rect, chanOrigin, lo, hi, body, laneDelta)  @ 3439-3446
+  @fn eachMemberEvent(rect, chanOrigin, lo, hi, body, laneDelta)  @ 3438-3445
       -- Shared spine of eventsInRect/clearRegionAt/clearMoveGap. Backfills chan/lane/cc
       -- (gm needs per-event identity for propagation); no swing (col.events ppq is logical).
-  @fn localBlocked(evt)  @ 3529-3535
+  @fn localBlocked(evt)  @ 3528-3534
   -- Non-command callbacks from trackerPage
   -- Columns
   -- Param automation (palette selection, touch-learn + pa pass-throughs)
-  @fn takeHoist()  @ 3822-3825
-  @fn hoistTouch(fxGuid, paramIndex)  @ 3827-3835
+  @fn takeHoist()  @ 3821-3824
+  @fn hoistTouch(fxGuid, paramIndex)  @ 3826-3834
   -- Touch-learn
   -- Group quick-verbs
-  @fn groupDuplicate()  @ 3982-3991
+  @fn groupDuplicate()  @ 3981-3990
       -- destination so the projection replaces rather than interleaves;
       -- tm:flush commits gm's staged adds (it only stages otherwise,
       -- colliding with the next edit).
-  @fn groupPaste()  @ 3997-4009
+  @fn groupPaste()  @ 3996-4008
       -- The pasted region [a.ppq, a.ppq+groupSrc.dur) must fit wholly inside
       -- the take. Out of bounds is a silent no-op, NOT a fallthrough to plain
       -- paste (that would paste non-group content the user didn't ask for);
       -- the fallthrough is only for "no group source".
   -- Command table
-  @fn inputOctaveUp()  @ 4016-4021
+  @fn inputOctaveUp()  @ 4015-4020
       -- Shift+8 doubles as digit entry: octave-up only claims the key on a pitch
       -- part; anywhere digits edit values it declines and the grid drain enters.
   -- Rebuild
-  @fn projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)  @ 4107-4113
+  @fn projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)  @ 4106-4112
       -- The (ppq,chan)->row projection is a pure function of viewContext's constructor inputs, so a
       -- column's built cells stay valid iff these hold.
-  @fn chainStack(stages, headRow, endRow)  @ 4119-4125
+  @fn chainStack(stages, headRow, endRow)  @ 4118-4124
       -- The chain's glyphs down a region's rows, keyed by absolute grid row -- badge snaps via
       -- placeRow, tail startRow stays float. see docs/trackerView.md § Addressing a chain
 
@@ -548,59 +548,59 @@
   @held edit.add(evt)  @ 104
   @held edit.delete(evt)  @ 105
   @held edit.assign(evt, update)  @ 106-123
-  @held DELETE_BY_PART.sample()  @ 2989
-  @held tracker.cut()  @ 4026
-  @held tracker.interpolate()  @ 4028
-  @held tracker.deleteSel()  @ 4029
-  @held tracker.inputOctaveDown()  @ 4032
-  @held tracker.inputSampleUp()  @ 4034
-  @held tracker.inputSampleDown()  @ 4035
-  @held tracker.growNote(p)  @ 4037
-  @held tracker.shrinkNote(p)  @ 4038
-  @held tracker.nudgeBack(p)  @ 4039
-  @held tracker.nudgeForward(p)  @ 4040
-  @held tracker.scaleHalf()  @ 4042-4048
-  @held tracker.scaleDouble()  @ 4050-4055
-  @held tracker.insertRow()  @ 4056
-  @held tracker.deleteRow()  @ 4057
-  @held tracker.insertRowCol()  @ 4058
-  @held tracker.deleteRowCol()  @ 4059
-  @held tracker.nudgeCoarseUp(p)  @ 4060
-  @held tracker.nudgeCoarseDown(p)  @ 4061
-  @held tracker.nudgeFineUp(p)  @ 4064-4067
-  @held tracker.nudgeFineDown(p)  @ 4068-4071
-  @held tracker.eventShiftLeft()  @ 4072
-  @held tracker.eventShiftRight()  @ 4073
-  @held tracker.playFromTop()  @ 4074-4077
-  @held tracker.playFromCursor()  @ 4078-4081
-  @held tracker.doubleRPB()  @ 4082
-  @held tracker.halveRPB()  @ 4083
-  @held tracker.incRPB()  @ 4084
-  @held tracker.decRPB()  @ 4085
-  @held tracker.groupLocalToggle()  @ 4089
-  @held tracker.regionArm()  @ 4090
-  @held groupBridge.eventsInRect(rect)  @ 4480
-  @held groupBridge.selectionAsRect()  @ 4481
-  @held groupBridge.cursorAnchor()  @ 4482
-  @held groupBridge.instanceAt()  @ 4483
-  @held groupBridge.paintStream(g, i, c, on)  @ 4484
-  @held groupBridge.clearAt(g, anchor)  @ 4487-4490
-  @held groupBridge.clearMoveGap(g, srcAnchor, destAnchor)  @ 4493-4496
-  @held groupBridge.commit()  @ 4499
-  @held editCursor.rowPerBar()  @ 4506
-  @held editCursor.logPerRow()  @ 4507
-  @held clipboard.aliases(cells)  @ 4519-4521
-  @held clipboard.getCtx()  @ 4523
-  @held clipboard.getLength()  @ 4524
+  @held DELETE_BY_PART.sample()  @ 2988
+  @held tracker.cut()  @ 4025
+  @held tracker.interpolate()  @ 4027
+  @held tracker.deleteSel()  @ 4028
+  @held tracker.inputOctaveDown()  @ 4031
+  @held tracker.inputSampleUp()  @ 4033
+  @held tracker.inputSampleDown()  @ 4034
+  @held tracker.growNote(p)  @ 4036
+  @held tracker.shrinkNote(p)  @ 4037
+  @held tracker.nudgeBack(p)  @ 4038
+  @held tracker.nudgeForward(p)  @ 4039
+  @held tracker.scaleHalf()  @ 4041-4047
+  @held tracker.scaleDouble()  @ 4049-4054
+  @held tracker.insertRow()  @ 4055
+  @held tracker.deleteRow()  @ 4056
+  @held tracker.insertRowCol()  @ 4057
+  @held tracker.deleteRowCol()  @ 4058
+  @held tracker.nudgeCoarseUp(p)  @ 4059
+  @held tracker.nudgeCoarseDown(p)  @ 4060
+  @held tracker.nudgeFineUp(p)  @ 4063-4066
+  @held tracker.nudgeFineDown(p)  @ 4067-4070
+  @held tracker.eventShiftLeft()  @ 4071
+  @held tracker.eventShiftRight()  @ 4072
+  @held tracker.playFromTop()  @ 4073-4076
+  @held tracker.playFromCursor()  @ 4077-4080
+  @held tracker.doubleRPB()  @ 4081
+  @held tracker.halveRPB()  @ 4082
+  @held tracker.incRPB()  @ 4083
+  @held tracker.decRPB()  @ 4084
+  @held tracker.groupLocalToggle()  @ 4088
+  @held tracker.regionArm()  @ 4089
+  @held groupBridge.eventsInRect(rect)  @ 4479
+  @held groupBridge.selectionAsRect()  @ 4480
+  @held groupBridge.cursorAnchor()  @ 4481
+  @held groupBridge.instanceAt()  @ 4482
+  @held groupBridge.paintStream(g, i, c, on)  @ 4483
+  @held groupBridge.clearAt(g, anchor)  @ 4486-4489
+  @held groupBridge.clearMoveGap(g, srcAnchor, destAnchor)  @ 4492-4495
+  @held groupBridge.commit()  @ 4498
+  @held editCursor.rowPerBar()  @ 4505
+  @held editCursor.logPerRow()  @ 4506
+  @held clipboard.aliases(cells)  @ 4518-4520
+  @held clipboard.getCtx()  @ 4522
+  @held clipboard.getLength()  @ 4523
 
 # Handlers registered
-  @handler tracker:register()  @ 4097
-  @handler tm:takeSwapped()  @ 4455
-  @handler tm:rebuild()  @ 4456-4459
-  @handler cm:configChanged(change)  @ 4464-4466
-  @handler ds:dataChanged(change)  @ 4469-4471
-  @handler cmgr:doAfter()  @ 4537
-  @handler cmgr:doBefore()  @ 4561
+  @handler tracker:register()  @ 4096
+  @handler tm:takeSwapped()  @ 4454
+  @handler tm:rebuild()  @ 4455-4458
+  @handler cm:configChanged(change)  @ 4463-4465
+  @handler ds:dataChanged(change)  @ 4468-4470
+  @handler cmgr:doAfter()  @ 4536
+  @handler cmgr:doBefore()  @ 4560
 
 # Public API (tv:*)
   @api tv:currentTrackIdx()  @ 175
@@ -645,147 +645,147 @@
   @api tv:duplicateBoundUnpooled()  @ 345-352
       @contract  clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx  @ 344
   @api tv:setRowPerBeat(n)  @ 608-618
-  @api tv:applyTakeProperties(props)  @ 622-639
-  @api tv:setSwingSlot(name)  @ 656-662
+  @api tv:applyTakeProperties(_, props)  @ 622-638
+  @api tv:setSwingSlot(name)  @ 655-661
       -- Take-wide swing: the take map's 'global' slot + project & track seed.
-  @api tv:setColSwingSlot(chan, name)  @ 666-671
+  @api tv:setColSwingSlot(chan, name)  @ 665-670
       -- Per-channel swing: the take map's channel slot + track seed only
       -- (the project tier carries 'global' alone, never per-channel).
-  @api tv:setTemperSlot(name)  @ 673-679
-  @api tv:seedSharedSlots()  @ 682-686
-      @contract  bind materialises a take's swing from defaultSwing (identity floor); no-op once set  @ 681
-  @api tv:setSwingComposite(name, composite)  @ 688-693
-  @api tv:isChannelMuted(chan)  @ 722
-  @api tv:isChannelSoloed(chan)  @ 723
-  @api tv:isChannelEffectivelyMuted(chan)  @ 724
-  @api tv:toggleChannelMute(chan)  @ 725
-  @api tv:toggleChannelSolo(chan)  @ 726
-  @api tv:tick()  @ 781-786
+  @api tv:setTemperSlot(name)  @ 672-678
+  @api tv:seedSharedSlots()  @ 681-685
+      @contract  bind materialises a take's swing from defaultSwing (identity floor); no-op once set  @ 680
+  @api tv:setSwingComposite(name, composite)  @ 687-692
+  @api tv:isChannelMuted(chan)  @ 721
+  @api tv:isChannelSoloed(chan)  @ 722
+  @api tv:isChannelEffectivelyMuted(chan)  @ 723
+  @api tv:toggleChannelMute(chan)  @ 724
+  @api tv:toggleChannelSolo(chan)  @ 725
+  @api tv:tick()  @ 780-785
       -- A live chord gesture pins the voices sounding: shift is held down, so the
       -- timeout is suspended until chordCommit/chordAbandon drops them on release.
-  @api tv:scroll()  @ 830-832
-  @api tv:entrySignAt(row, colIdx)  @ 957-971
+  @api tv:scroll()  @ 829-831
+  @api tv:entrySignAt(row, colIdx)  @ 956-970
       -- Part name + the sign the next digit lands with, for cells where that sign
       -- is fixed by arm or inheritance; nil unless the cursor is on the cell.
-  @api tv:editEvent(col, evt, stop, char, keep)  @ 976-1201
-      @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)  @ 973
-      @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame  @ 974
-      @contract  commit flushes+advances by advanceBy; '-' flips and keep gesture stay put  @ 975
-  @api tv:chordActive()  @ 1224
-  @api tv:chordStrike(char, spreadChan)  @ 1230-1295
-  @api tv:chordBackspace()  @ 1298-1307
-      @contract  deletes the last-entered gesture note, freeing its lane for reuse  @ 1297
-  @api tv:chordNudgeVel(dir)  @ 1310-1323
-      @contract  nudges the last-entered gesture note's velocity by one, re-auditioning it  @ 1309
-  @api tv:chordCommit()  @ 1326-1331
-      @contract  shift release commits: advance once if any note survives, silence the chord  @ 1325
-  @api tv:chordAbandon()  @ 1334-1338
-      @contract  drops the gesture without committing; rebuild(takeChanged)/dropGrid route here  @ 1333
-  @api tv:digitsActive()  @ 1374
-  @api tv:digitsStrike(char)  @ 1378-1399
-      @contract  arms on a value part; false declines (off a value part / char not a field digit)  @ 1376
-      @contract  overwrites the caret's place keep-below, then steps the sub-caret one place right  @ 1377
-  @api tv:digitsBackspace()  @ 1402-1416
-      @contract  restores the place the last digit overwrote and steps the sub-caret back onto it  @ 1401
-  @api tv:digitsCommit()  @ 1419-1424
-      @contract  shift release restores the entry column, advances one row, drops the gesture  @ 1418
-  @api tv:digitsAbandon()  @ 1427
-      @contract  drops the gesture without advancing; rebuild(takeChanged)/dropGrid route here  @ 1426
-  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 1455-1475
-      @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1  @ 1453
-      @invariant  ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild  @ 1454
-  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 1479-1504
+  @api tv:editEvent(col, evt, stop, char, keep)  @ 975-1200
+      @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)  @ 972
+      @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame  @ 973
+      @contract  commit flushes+advances by advanceBy; '-' flips and keep gesture stay put  @ 974
+  @api tv:chordActive()  @ 1223
+  @api tv:chordStrike(char, spreadChan)  @ 1229-1294
+  @api tv:chordBackspace()  @ 1297-1306
+      @contract  deletes the last-entered gesture note, freeing its lane for reuse  @ 1296
+  @api tv:chordNudgeVel(dir)  @ 1309-1322
+      @contract  nudges the last-entered gesture note's velocity by one, re-auditioning it  @ 1308
+  @api tv:chordCommit()  @ 1325-1330
+      @contract  shift release commits: advance once if any note survives, silence the chord  @ 1324
+  @api tv:chordAbandon()  @ 1333-1337
+      @contract  drops the gesture without committing; rebuild(takeChanged)/dropGrid route here  @ 1332
+  @api tv:digitsActive()  @ 1373
+  @api tv:digitsStrike(char)  @ 1377-1398
+      @contract  arms on a value part; false declines (off a value part / char not a field digit)  @ 1375
+      @contract  overwrites the caret's place keep-below, then steps the sub-caret one place right  @ 1376
+  @api tv:digitsBackspace()  @ 1401-1415
+      @contract  restores the place the last digit overwrote and steps the sub-caret back onto it  @ 1400
+  @api tv:digitsCommit()  @ 1418-1423
+      @contract  shift release restores the entry column, advances one row, drops the gesture  @ 1417
+  @api tv:digitsAbandon()  @ 1426
+      @contract  drops the gesture without advancing; rebuild(takeChanged)/dropGrid route here  @ 1425
+  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 1454-1474
+      @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1  @ 1452
+      @invariant  ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild  @ 1453
+  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 1478-1503
       -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
       -- Returns the new event's visible index post-flush for drag-seed.
-  @api tv:deleteLaneEvent(col, i)  @ 1506-1512
-  @api tv:setLaneTension(col, i, tension)  @ 1516-1522
+  @api tv:deleteLaneEvent(col, i)  @ 1505-1511
+  @api tv:setLaneTension(col, i, tension)  @ 1515-1521
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
-  @api tv:cycleLaneShape(col, i)  @ 1545-1551
+  @api tv:cycleLaneShape(col, i)  @ 1544-1550
       -- Cycle the segment-owner's shape on the i-th visible event in a
       -- cc/pb/at column. Segment-owner = left endpoint (REAPER convention:
       -- A.shape governs the curve from A to next).
-  @api tv:quantizeSelection()  @ 2055
-  @api tv:quantizeAll()  @ 2056
-  @api tv:quantizeKeepRealisedSelection()  @ 2057
-  @api tv:quantizeKeepRealisedAll()  @ 2058
-  @api tv:scaleSelection(kNum, kDen)  @ 2137
-  @api tv:scaleAll(kNum, kDen)  @ 2138
-  @api tv:retune(slots, widen)  @ 2256-2273
-  @api tv:noteFx(uuid)  @ 2737-2744
-  @api tv:fxHostAtCursor()  @ 2748-2762
+  @api tv:quantizeSelection()  @ 2054
+  @api tv:quantizeAll()  @ 2055
+  @api tv:quantizeKeepRealisedSelection()  @ 2056
+  @api tv:quantizeKeepRealisedAll()  @ 2057
+  @api tv:scaleSelection(kNum, kDen)  @ 2136
+  @api tv:scaleAll(kNum, kDen)  @ 2137
+  @api tv:retune(slots, widen)  @ 2255-2272
+  @api tv:noteFx(uuid)  @ 2736-2743
+  @api tv:fxHostAtCursor()  @ 2747-2761
       -- Chain host at the caret: note/region whose [onset, tail) brackets the row (strip opens anywhere
       -- in the region). PA is skipped -- point-event, no window. No selection: movement must not mint regions.
-  @api tv:fxHostForEdit()  @ 2766-2769
+  @api tv:fxHostForEdit()  @ 2765-2768
       -- The fx host the editor opens on: a selection always mints a fresh region; else the
       -- read-only caret host (v1). 2nd return = freshly minted (modal takes no snapshot).
-  @api tv:noteByUuid(uuid)  @ 2773
+  @api tv:noteByUuid(uuid)  @ 2772
       -- The host note behind a uuid; the stepInterval editor anchors its step ladder on the
       -- step that note was written on, and on the notation's unison where a region returns none.
-  @api tv:setNoteFx(uuid, fxOrRemove)  @ 2777-2805
+  @api tv:setNoteFx(uuid, fxOrRemove)  @ 2776-2804
       -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
       -- re-derives its fxNotes. uuid, not the event, is the durable handle.
-  @api tv:setFxField(uuid, index, field, value)  @ 2809-2816
+  @api tv:setFxField(uuid, index, field, value)  @ 2808-2815
       -- Set one field of fx entry `index`, preserving sibling entries, then flush.
       -- The generic write the per-kind editor descriptors drive -- no per-kind code.
-  @api tv:setFxBypass(uuid, index, on)  @ 2821-2823
+  @api tv:setFxBypass(uuid, index, on)  @ 2820-2822
       -- Its own verb rather than a setFxField call at the renderer: an honest undo label, and the
       -- storage convention stays owned by the model layer rather than duplicated at the call site.
-      @contract  bypass is realisation metadata on the entry -- true or absent, never false  @ 2820
-  @api tv:addFxStage(uuid, entry)  @ 2827-2832
+      @contract  bypass is realisation metadata on the entry -- true or absent, never false  @ 2819
+  @api tv:addFxStage(uuid, entry)  @ 2826-2831
       -- The fx list is an ordered series (C1); stages are addressed by position, not kind (duplicates
       -- allowed). see docs/trackerView.md § Note FX stages
-  @api tv:removeFxStage(uuid, index)  @ 2834-2840
-  @api tv:pruneEmptyRegion(uuid)  @ 2844-2847
+  @api tv:removeFxStage(uuid, index)  @ 2833-2839
+  @api tv:pruneEmptyRegion(uuid)  @ 2843-2846
       -- A region husk with no kinds is inert; drop it. Notes/parked never hold an empty fx
       -- list (setNoteFx normalises those to absence), so in practice this only culls regions.
-  @api tv:moveFxStage(uuid, index, dir)  @ 2849-2858
-  @api tv:replaceFxStage(uuid, index, entry)  @ 2860-2867
-  @api tv:saveFxPatch(uuid, tier, name)  @ 2872-2876
+  @api tv:moveFxStage(uuid, index, dir)  @ 2848-2857
+  @api tv:replaceFxStage(uuid, index, entry)  @ 2859-2866
+  @api tv:saveFxPatch(uuid, tier, name)  @ 2871-2875
       -- Stamp the host's chain into `tier` under `name`, verbatim -- bypass flags and inline pattern
       -- bodies included. A patch is instantiated by copy, so nothing points back here.
-      @contract  no host, no chain, or a blank name is a silent no-op; never mints a host  @ 2871
-  @api tv:loadFxPatch(uuid, tier, name)  @ 2881-2885
+      @contract  no host, no chain, or a blank name is a silent no-op; never mints a host  @ 2870
+  @api tv:loadFxPatch(uuid, tier, name)  @ 2880-2884
       -- Instantiate the named tier's chain onto the host, replacing whatever it held. The picker row
       -- names its tier rather than the load resolving one; cm deep-copies on the way out. See docs/trackerRender.md § FX chain.
-      @contract  unknown host, or a name that tier does not hold, is a silent no-op; never mints a host  @ 2880
-  @api tv:deleteFxPatch(tier, name)  @ 2889-2892
+      @contract  unknown host, or a name that tier does not hold, is a silent no-op; never mints a host  @ 2879
+  @api tv:deleteFxPatch(tier, name)  @ 2888-2891
       -- Delete the copy the picker row is showing; the same name in the other tier stands.
-      @contract  a nil name is a silent no-op; any tier but project/global raises  @ 2888
-  @api tv:freezeRegion(uuid)  @ 2895
-      @contract  a region or fx-carrying note host; any other uuid is a silent no-op  @ 2894
-  @api tv:freezeMode(uuid)  @ 2899-2903
+      @contract  a nil name is a silent no-op; any tier but project/global raises  @ 2887
+  @api tv:freezeRegion(uuid)  @ 2894
+      @contract  a region or fx-carrying note host; any other uuid is a silent no-op  @ 2893
+  @api tv:freezeMode(uuid)  @ 2898-2902
       -- Not atomic: the whole point is a decline that opens no undo block.
-      @contract  nil for a non-producer; 'raw' when a live group's footprint blocks it; else 'group'  @ 2897
-  @api tv:freezeToGroup(uuid)  @ 2907-2919
-      @contract  freezeRegion's conversion, plus a stock gm group over its output  @ 2905
-      @contract  no members, no mint -- but the conversion still runs  @ 2906
-  @api tv:ec()  @ 3306
-  @api tv:clipboard()  @ 3307
-  @api tv:rowPerBar()  @ 3311
-  @api tv:takeName()  @ 3312
-  @api tv:activeTemper()  @ 3313
-  @api tv:cellWidth()  @ 3314
-  @api tv:octaveWidth()  @ 3315
-  @api tv:noteLabel(evt)  @ 3316
-  @api tv:noteDeviation(evt)  @ 3317
-  @api tv:rowBeatInfo(row)  @ 3318
-  @api tv:barBeatSub(row)  @ 3319
-  @api tv:ppqToRow(ppq, chan)  @ 3320
-  @api tv:rowToPPQ(row, chan)  @ 3321
-  @api tv:logPerRow()  @ 3322
-  @api tv:playRow()  @ 3329-3341
+      @contract  nil for a non-producer; 'raw' when a live group's footprint blocks it; else 'group'  @ 2896
+  @api tv:freezeToGroup(uuid)  @ 2906-2918
+      @contract  freezeRegion's conversion, plus a stock gm group over its output  @ 2904
+      @contract  no members, no mint -- but the conversion still runs  @ 2905
+  @api tv:ec()  @ 3305
+  @api tv:clipboard()  @ 3306
+  @api tv:rowPerBar()  @ 3310
+  @api tv:takeName()  @ 3311
+  @api tv:activeTemper()  @ 3312
+  @api tv:cellWidth()  @ 3313
+  @api tv:octaveWidth()  @ 3314
+  @api tv:noteLabel(evt)  @ 3315
+  @api tv:noteDeviation(evt)  @ 3316
+  @api tv:rowBeatInfo(row)  @ 3317
+  @api tv:barBeatSub(row)  @ 3318
+  @api tv:ppqToRow(ppq, chan)  @ 3319
+  @api tv:rowToPPQ(row, chan)  @ 3320
+  @api tv:logPerRow()  @ 3321
+  @api tv:playRow()  @ 3328-3340
       -- The play head as a row of the grid on screen. Lives here, not with the
       -- current instance above, because ctx is a grid of its own.
       -- see docs/trackerPage.md § The play row
-      @contract  (row, elsewhere) for the play head; nil when stopped or in no instance of the slot  @ 3326
-      @contract  fractional row; elsewhere is true when the head sounds a sibling instance  @ 3327
-  @api tv:cutRow()  @ 3345-3350
+      @contract  (row, elsewhere) for the play head; nil when stopped or in no instance of the slot  @ 3325
+      @contract  fractional row; elsewhere is true when the head sounds a sibling instance  @ 3326
+  @api tv:cutRow()  @ 3344-3349
       -- see docs/trackerPage.md § The cut
-      @contract  the row where the rendered span ends; nil unless the source outruns it  @ 3343
-  @api tv:sampleCurve(A, B, ppq)  @ 3351
-  @api tv:timeSig()  @ 3352-3355
-  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 3370-3407
+      @contract  the row where the rendered span ends; nil unless the source outruns it  @ 3342
+  @api tv:sampleCurve(A, B, ppq)  @ 3350
+  @api tv:timeSig()  @ 3351-3354
+  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 3369-3406
       -- Shared duplicate cascade. `state` is the run token (nil seeds);
       -- `collectSource` captures a payload while the source is still intact
       -- (plain dup: clip + part; mirror: nil -- events come from the rect in
@@ -797,12 +797,12 @@
       -- selection re-selects each copy; one seeded from the fallback rect
       -- (no selection -- the 1x1 cell carveout) leaves no selection, like a
       -- classic cell duplicate. Returns the new run token.
-  @api tv:selectionAsRect()  @ 3412-3435
+  @api tv:selectionAsRect()  @ 3411-3434
       -- The active selection as a mirror rect: a logical-frame time span x a
       -- per-channel streamId set, chanOffset relative to the lowest selected
       -- channel. nil unless a real (non-degenerate) selection exists.
-  @api tv:eventsInRect(rect)  @ 3448-3458
-  @api tv:clearRegionAt(rect, anchor)  @ 3473-3476
+  @api tv:eventsInRect(rect)  @ 3447-3457
+  @api tv:clearRegionAt(rect, anchor)  @ 3472-3475
       -- Clears the take cells the rect's projection lands on at `anchor` -- the
       -- footprint inverse of eventsInRect. gm:stamp / gm:newInstance only
       -- re-place their own concretes (contract: the caller clears foreign
@@ -816,251 +816,251 @@
       -- stages, so it never eats the projection; a gm op that then rejects
       -- (out-of-range / live-group overlap) is a rare pre-beta edge the
       -- bounds/no-straddle gates already exclude for the common path.
-  @api tv:clearMoveGap(rect, srcAnchor, destAnchor)  @ 3480-3491
+  @api tv:clearMoveGap(rect, srcAnchor, destAnchor)  @ 3479-3490
       -- Clear foreign notes the destination covers; source-overlap is spared (moveInstance re-places those).
       -- Shared column (row nudge): spare source rows. Channel/lane move: different columns, so whole dest clears.
-  @api tv:cursorAnchor()  @ 3494-3499
+  @api tv:cursorAnchor()  @ 3493-3498
       -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
-  @api tv:streamRefAt(colIx, chanLo, laneDelta)  @ 3503-3507
+  @api tv:streamRefAt(colIx, chanLo, laneDelta)  @ 3502-3506
       -- (channel offset, group-frame stream id) for a grid column at chanLo —
       -- laneDelta un-shifts a realised column back to the group-frame id.
-  @api tv:instanceAtCursor()  @ 3511-3523
+  @api tv:instanceAtCursor()  @ 3510-3522
       -- The instance whose region covers the caret cell, or nil. Region mode
       -- seeds from this so entry lands on what the caret is over.
-  @api tv:localMode()  @ 3527
+  @api tv:localMode()  @ 3526
       -- localMode confines edits to the instance the caret sits inside; other instances wash
       -- out (trackerRender) and go read-only. Copy bypasses `edit`, so reads stay free.
-  @api tv:eachInstance()  @ 3538
+  @api tv:eachInstance()  @ 3537
       -- Page region-wash reads group instances and per-event state through tv, never gm.
-  @api tv:stateOf(uuid)  @ 3539
-  @api tv:deletedCells(groupId, instId)  @ 3544-3553
+  @api tv:stateOf(uuid)  @ 3538
+  @api tv:deletedCells(groupId, instId)  @ 3543-3552
       -- gm's delete overrides resolved to grid cells for render highlight and deleteEvent's revert.
       -- Located by group event projection (no concrete = no uuid) rather than uuid.
-      @contract  (groupId, instId) -> { { col, row, vuid } }  @ 3543
-  @api tv:movePreview()  @ 3557-3592
+      @contract  (groupId, instId) -> { { col, row, vuid } }  @ 3542
+  @api tv:movePreview()  @ 3556-3591
       -- Drag preview for trackerRender: armed instance shifted by pending row /
       -- channel / lane deltas; srcMember = suppressed source cols, destSrc[x] = its source col.
-  @api tv:reserveGhostReadout()  @ 3606-3629
-      @contract  opens the readout in every lane drawing an off-step ghost, closes the ones it opened  @ 3604
-      @invariant  runs before the frame's column layout, which reads the widths it writes  @ 3605
-  @api tv:ghostOverlay()  @ 3637-3675
-  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 3680-3706
-      @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)  @ 3677
-      @contract  idempotent: re-painting an already on/off stream is a no-op true  @ 3678
-      @invariant  group's live rect found by id off gm:eachInstance — ec carries no geometry  @ 3679
-  @api tv:setGridSize(w, h)  @ 3710-3712
-  @api tv:addExtraCol(type, cc)  @ 3716-3742
-  @api tv:hideExtraCol()  @ 3744-3799
-  @api tv:paletteParam()  @ 3837
-  @api tv:setPaletteParam(sel)  @ 3838
-  @api tv:paletteFilter()  @ 3839
-  @api tv:setPaletteFilter(text)  @ 3840
-  @api tv:paletteExpanded()  @ 3841
-  @api tv:setFxExpanded(fxGuid, on)  @ 3842
-  @api tv:paletteCursor()  @ 3843
-  @api tv:setPaletteCursor(c)  @ 3844
-  @api tv:stripCursor()  @ 3845
-  @api tv:setStripCursor(c)  @ 3846
-  @api tv:tabOverride(caretKey)  @ 3850-3853
+  @api tv:reserveGhostReadout()  @ 3605-3628
+      @contract  opens the readout in every lane drawing an off-step ghost, closes the ones it opened  @ 3603
+      @invariant  runs before the frame's column layout, which reads the widths it writes  @ 3604
+  @api tv:ghostOverlay()  @ 3636-3674
+  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 3679-3705
+      @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)  @ 3676
+      @contract  idempotent: re-painting an already on/off stream is a no-op true  @ 3677
+      @invariant  group's live rect found by id off gm:eachInstance — ec carries no geometry  @ 3678
+  @api tv:setGridSize(w, h)  @ 3709-3711
+  @api tv:addExtraCol(type, cc)  @ 3715-3741
+  @api tv:hideExtraCol()  @ 3743-3798
+  @api tv:paletteParam()  @ 3836
+  @api tv:setPaletteParam(sel)  @ 3837
+  @api tv:paletteFilter()  @ 3838
+  @api tv:setPaletteFilter(text)  @ 3839
+  @api tv:paletteExpanded()  @ 3840
+  @api tv:setFxExpanded(fxGuid, on)  @ 3841
+  @api tv:paletteCursor()  @ 3842
+  @api tv:setPaletteCursor(c)  @ 3843
+  @api tv:stripCursor()  @ 3844
+  @api tv:setStripCursor(c)  @ 3845
+  @api tv:tabOverride(caretKey)  @ 3849-3852
       -- A clicked or keyboard override pins a tab; absent one, fx auto-wins whenever a chain is
       -- showable. The pin lapses on the next caret move (a new caretKey), like the old params override.
-  @api tv:overrideTab(tab, caretKey)  @ 3854
-  @api tv:clearTabOverride()  @ 3855
-  @api tv:paletteTab(caretKey, fxAvailable)  @ 3856-3858
-  @api tv:paramTargets()  @ 3860
-  @api tv:paramBinding(chan, lane)  @ 3861
-  @api tv:listParams(trackGuid, fxGuid)  @ 3864-3879
-      @contract  pa's frecency order with this take's learn-touched params on top, recent first  @ 3863
-  @api tv:armLearn(row)  @ 3884-3891
-      @contract  arming floats the fx ui; the pre-arm touch is snapshotted so it can't select  @ 3883
-  @api tv:learnFxGuid()  @ 3893
-  @api tv:showFx(row)  @ 3896
+  @api tv:overrideTab(tab, caretKey)  @ 3853
+  @api tv:clearTabOverride()  @ 3854
+  @api tv:paletteTab(caretKey, fxAvailable)  @ 3855-3857
+  @api tv:paramTargets()  @ 3859
+  @api tv:paramBinding(chan, lane)  @ 3860
+  @api tv:listParams(trackGuid, fxGuid)  @ 3863-3878
+      @contract  pa's frecency order with this take's learn-touched params on top, recent first  @ 3862
+  @api tv:armLearn(row)  @ 3883-3890
+      @contract  arming floats the fx ui; the pre-arm touch is snapshotted so it can't select  @ 3882
+  @api tv:learnFxGuid()  @ 3892
+  @api tv:showFx(row)  @ 3895
       -- The palette's 'show' button: float the fx ui without arming learn.
-  @api tv:cancelLearn()  @ 3899-3902
-      @contract  pops the fx window down only when arming floated it  @ 3898
-  @api tv:pollLearn(focused)  @ 3906-3923
-      @contract  focused = any ImGui window focused; cancel fires on regain after a loss  @ 3904
-      @contract  a touch on the armed fx selects + hoists; frecency is bumped by automate only  @ 3905
-  @api tv:automateParam()  @ 3926-3940
-      @contract  binds the selected palette param at the cursor column's channel; adds its cc column  @ 3925
-  @api tv:unautomateParam()  @ 3943-3951
-      @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol  @ 3942
-  @api tv:showDelay()  @ 3958-3972
-  @api tv:rebuild(takeChanged)  @ 4131-4436
-  @api tv:dropGrid()  @ 4439-4446
-      @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.  @ 4438
+  @api tv:cancelLearn()  @ 3898-3901
+      @contract  pops the fx window down only when arming floated it  @ 3897
+  @api tv:pollLearn(focused)  @ 3905-3922
+      @contract  focused = any ImGui window focused; cancel fires on regain after a loss  @ 3903
+      @contract  a touch on the armed fx selects + hoists; frecency is bumped by automate only  @ 3904
+  @api tv:automateParam()  @ 3925-3939
+      @contract  binds the selected palette param at the cursor column's channel; adds its cc column  @ 3924
+  @api tv:unautomateParam()  @ 3942-3950
+      @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol  @ 3941
+  @api tv:showDelay()  @ 3957-3971
+  @api tv:rebuild(takeChanged)  @ 4130-4435
+  @api tv:dropGrid()  @ 4438-4445
+      @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.  @ 4437
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 4601-4610
+  @api tv:wireGroupLifetime()  @ 4600-4609
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endReselectCascades()  @ 4614
+  @api tv:endReselectCascades()  @ 4613
       -- Mouse re-selection ends both cursor-anchored cascades by hand (cmgr's keep-set
       -- sweep doesn't see the mouse, so the run tokens would outlive a fresh selection).
-  @api tv:endAllCascades()  @ 4619-4622
+  @api tv:endAllCascades()  @ 4618-4621
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
 
 # Uses (outbound edges)
-  @use call    clipboard:collect  @ duplicate:3288
-  @use call    clipboard:copy  @ deleteRow:2445 deleteRowCol:2447 tracker.cut:4026
-  @use call    clipboard:pasteClip  @ duplicate:3298
-  @use call    clipboard:registerCommands  @ <load>:4528
+  @use call    clipboard:collect  @ duplicate:3287
+  @use call    clipboard:copy  @ deleteRow:2444 deleteRowCol:2446 tracker.cut:4025
+  @use call    clipboard:pasteClip  @ duplicate:3297
+  @use call    clipboard:registerCommands  @ <load>:4527
   @use call    cm:assign  @ releaseTransientFrame:553 matchGridToCursor:605
-  @use call    cm:boundTake  @ takeHoist:3823
+  @use call    cm:boundTake  @ takeHoist:3822
   @use call    cm:boundTrack  @ resolveSelectionTake:189
-  @use call    cm:get  @ loopsToItem:244 currentRpb:547 releaseTransientFrame:552,554 matchGridToCursor:603 setRowPerBeat:610,616 seedSharedSlots:684 sendBend:739 placeNewNote:862,865 pitchFromKey:892 strikePitch:909 editEvent:1123 retune:2265 queueResetVelocities:2966 stepSample:3213 inputOctaveUp:4020 tracker.inputOctaveDown:4032 tracker.doubleRPB:4082 tracker.halveRPB:4083 tracker.incRPB:4084 tracker.decRPB:4085 rebuild:4154,4177,4178,4334
-  @use call    cm:getAt  @ selectedTrackIdx:167 effectiveSlot:172 resolveSelectionTake:190 selectTrack:213 releaseTransientFrame:551 setDefaultSwing:650 setSwingComposite:690
-  @use call    cm:set  @ resolveSelectionTake:193 selectTrack:211,215 selectSlot:219 setLoopToItem:246 setRowPerBeat:617 setDefaultSwing:652 setTemperSlot:676,677,678 setSwingComposite:692 editEvent:1073 scaleScope:2130 retune:2258,2259,2260 stepSample:3212 inputOctaveUp:4020 tracker.inputOctaveDown:4032 tracker:register:4097
+  @use call    cm:get  @ loopsToItem:244 currentRpb:547 releaseTransientFrame:552,554 matchGridToCursor:603 setRowPerBeat:610,616 seedSharedSlots:683 sendBend:738 placeNewNote:861,864 pitchFromKey:891 strikePitch:908 editEvent:1122 retune:2264 queueResetVelocities:2965 stepSample:3212 inputOctaveUp:4019 tracker.inputOctaveDown:4031 tracker.doubleRPB:4081 tracker.halveRPB:4082 tracker.incRPB:4083 tracker.decRPB:4084 rebuild:4153,4176,4177,4333
+  @use call    cm:getAt  @ selectedTrackIdx:167 effectiveSlot:172 resolveSelectionTake:190 selectTrack:213 releaseTransientFrame:551 setDefaultSwing:649 setSwingComposite:689
+  @use call    cm:set  @ resolveSelectionTake:193 selectTrack:211,215 selectSlot:219 setLoopToItem:246 setRowPerBeat:617 setDefaultSwing:651 setTemperSlot:675,676,677 setSwingComposite:691 editEvent:1072 scaleScope:2129 retune:2257,2258,2259 stepSample:3211 inputOctaveUp:4019 tracker.inputOctaveDown:4031 tracker:register:4096
   @use call    cm:setTrack  @ resolveSelectionTake:189 retargetTrackTier:204 selectTrack:212
-  @use call    cmgr:doAfter  @ <load>:4530,4537
-  @use call    cmgr:doBefore  @ <load>:4539,4561 wireGroupLifetime:4602,4608,4609
-  @use call    cmgr:invoke  @ groupPaste:4007
-  @use call    cmgr:noteChars  @ editEvent:1015 chordStrike:1231
-  @use call    cmgr:prefixRational  @ tracker.scaleHalf:4045 tracker.scaleDouble:4052
-  @use call    cmgr:scope  @ <load>:4023
-  @use call    ctx:activeTemper  @ pitchFromKey:893 editEvent:1025 retune:2262 pitchStep:2457 nudgePitch:2489 activeTemper:3313 cellWidth:3314 octaveWidth:3315
-  @use call    ctx:barBeatSub  @ barBeatSub:3319
-  @use call    ctx:noteDeviation  @ snapToTemper:2168 noteDeviation:3317 reserveGhostReadout:3611 rebuild:4186
-  @use call    ctx:noteLabel  @ noteLabel:3316
-  @use call    ctx:placeRow  @ ppqRowOf:3064 rebuild:4352
-  @use call    ctx:ppqPerRow  @ rowBounds:391 applyTakeProperties:631 adjustDurationCore:1853 playRow:3333 cutRow:3348
-  @use call    ctx:ppqToRow  @ interpolateValues:1598,1599 regionAdjustDuration:1729,1730 regionAdjustPosition:1740,1741 adjustPositionMulti:1903,1922,1924 quantizeScope:1997,2002 gatherFxRegions:2669,2670 shiftEvents:3175,3182 ppqToRow:3320 rebuild:4365
-  @use call    ctx:rowBeatInfo  @ rowBeatInfo:3318
-  @use call    ctx:rowToPPQ  @ eventsByCol:506 moveLaneEvent:1468 interpolate:1559,1560,1581 interpolateValues:1602 cursorRegionBefore:1631 regionNoteOff:1718,1720 regionAdjustDuration:1731 regionAdjustPosition:1743 cursorNoteBefore:1784 noteOff:1810,1811,1837,1838 adjustDurationCore:1857,1858 quantizeScope:1999,2003 quantizeKeepRealisedScope:2027 scaleScope:2075 insertRowCore:2297 deleteRowCore:2333,2334 cursorRowEvent:2543 eachFxRegionInRect:2650,2651 pasteFxRegions:2693,2694 fxHostAtCursor:2751,2752 shiftEvents:3113,3114,3132 rowToPPQ:3321 ghostOverlay:3660 tracker.playFromCursor:4080
-  @use call    ctx:snapRow  @ regionNoteOff:1717 noteOff:1820,1842 adjustDurationCore:1857 adjustPosition:1953,1960,1975 quantizeKeepRealisedScope:2026
-  @use call    ds:assign  @ setTakeSwing:646 seedSharedSlots:684 toggleChannelFlag:703 rewriteRegion:1624 applyRegionWindow:1704 shiftFxLane:1776 mintRegionForSelection:2637 pasteFxRegions:2699 deleteFxRegionsInRect:2719 addExtraCol:3738 hideExtraCol:3758,3797 automateParam:3939 showDelay:3971
-  @use call    ds:get  @ setTakeSwing:644 seedSharedSlots:683 toggleChannelFlag:701 pushMute:710,711 isChannelMuted:722 isChannelSoloed:723 rewriteRegion:1616 applyRegionWindow:1672 shiftFxLane:1769 regionByUuid:2606 mintRegionUuid:2621 mintRegionForSelection:2635 pasteFxRegions:2684 deleteFxRegionsInRect:2716 addExtraCol:3717 hideExtraCol:3753,3768 automateParam:3933 showDelay:3959 rebuild:4175,4176,4230,4402
-  @use call    ec:advance  @ editEvent:998 chordCommit:1330 digitsCommit:1423 noteOff:1844 deleteOrBackspace:3038
-  @use call    ec:anchorRow  @ scaleScope:2070,2103
-  @use call    ec:clampPos  @ rebuild:4432
-  @use call    ec:col  @ matchGridToCursor:598 followViewport:809 interpolate:1575 cursorNoteBefore:1782 adjustDuration:1874 adjustPosition:1944 curCol:2440 nudge:2581 pasteFxRegions:2680 fxHostAtCursor:2749 deleteEvent:2993,3005 shiftEvents:3093,3117 hideExtraCol:3745 automateParam:3927 unautomateParam:3944 tracker.playFromCursor:4079
-  @use call    ec:cursorPart  @ noteOff:1832 nudge:2584 deleteEvent:3021 inputOctaveUp:4019
-  @use call    ec:decorateCol  @ reserveGhostReadout:3617,3625 rebuild:4219
-  @use call    ec:eachSelectedCol  @ interpolate:1557 noteOff:1807 forEachRowOp:2420 addExtraCol:3719 showDelay:3961
-  @use call    ec:hasSelection  @ interpolate:1554 noteOff:1804 adjustDuration:1865 adjustPosition:1942 scaleScope:2097 forEachRowOp:2415 nudge:2554 fxHostForEdit:2767 shiftEvents:3106 selectionAsRect:3413 tracker.scaleHalf:4044 tracker.scaleDouble:4051
-  @use call    ec:isSticky  @ deleteOrBackspace:3037
-  @use call    ec:pos  @ toggleSignFlip:937 entrySignAt:958 editEvent:987 chordStrike:1233 digitsStrike:1379 noteOff:1828 cursorRect:3229 cursorAnchor:3495 instanceAtCursor:3512 inputOctaveUp:4017
-  @use call    ec:region  @ eventsByCol:497 interpolate:1555 noteOff:1805 adjustPositionMulti:1890 scaleScope:2102 forEachRowOp:2417 mintRegionForSelection:2627 deleteSelection:3031 shiftEvents:3107 selectionAsRect:3414
-  @use call    ec:regionArm  @ tracker.regionArm:4090
-  @use call    ec:regionCursor  @ movePreview:3558
-  @use call    ec:regionStart  @ duplicate:3290
-  @use call    ec:registerCommands  @ <load>:4527
-  @use call    ec:rescaleRow  @ releaseTransientFrame:556 matchGridToCursor:604 setRowPerBeat:616 scaleScope:2129
-  @use call    ec:reset  @ rebuild:4148
-  @use call    ec:row  @ matchGridToCursor:599 followViewport:809 editEvent:981 interpolate:1577 cursorRegionBefore:1631 recentreOnRegion:1662 regionNoteOff:1717,1720 cursorNoteBefore:1784 noteOff:1836 adjustPosition:1948,1971 scaleScope:2070 forEachRowOp:2422 cursorRowEvent:2542 pasteFxRegions:2682 fxHostAtCursor:2751,2752 deleteEvent:2996 shiftEvents:3118,3205 cursorRect:3233 cursorAnchor:3498 instanceAtCursor:3514 tracker.playFromCursor:4080
-  @use call    ec:selClear  @ deleteSelection:3032 deleteOrBackspace:3038 duplicateCascade:3402 cmgr:doAfter:4537
-  @use call    ec:setPos  @ digitsStrike:1397 digitsBackspace:1413 digitsCommit:1421 recentreOnRegion:1662 adjustPosition:1967,1979 shiftEvents:3205 selectRegionAt:3276 duplicate:3296
-  @use call    ec:setSelection  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
-  @use call    ec:shiftSelection  @ adjustPositionMulti:1929
-  @use call    ec:unstick  @ 4535
+  @use call    cmgr:doAfter  @ <load>:4529,4536
+  @use call    cmgr:doBefore  @ <load>:4538,4560 wireGroupLifetime:4601,4607,4608
+  @use call    cmgr:invoke  @ groupPaste:4006
+  @use call    cmgr:noteChars  @ editEvent:1014 chordStrike:1230
+  @use call    cmgr:prefixRational  @ tracker.scaleHalf:4044 tracker.scaleDouble:4051
+  @use call    cmgr:scope  @ <load>:4022
+  @use call    ctx:activeTemper  @ pitchFromKey:892 editEvent:1024 retune:2261 pitchStep:2456 nudgePitch:2488 activeTemper:3312 cellWidth:3313 octaveWidth:3314
+  @use call    ctx:barBeatSub  @ barBeatSub:3318
+  @use call    ctx:noteDeviation  @ snapToTemper:2167 noteDeviation:3316 reserveGhostReadout:3610 rebuild:4185
+  @use call    ctx:noteLabel  @ noteLabel:3315
+  @use call    ctx:placeRow  @ ppqRowOf:3063 rebuild:4351
+  @use call    ctx:ppqPerRow  @ rowBounds:391 applyTakeProperties:630 adjustDurationCore:1852 playRow:3332 cutRow:3347
+  @use call    ctx:ppqToRow  @ interpolateValues:1597,1598 regionAdjustDuration:1728,1729 regionAdjustPosition:1739,1740 adjustPositionMulti:1902,1921,1923 quantizeScope:1996,2001 gatherFxRegions:2668,2669 shiftEvents:3174,3181 ppqToRow:3319 rebuild:4364
+  @use call    ctx:rowBeatInfo  @ rowBeatInfo:3317
+  @use call    ctx:rowToPPQ  @ eventsByCol:506 moveLaneEvent:1467 interpolate:1558,1559,1580 interpolateValues:1601 cursorRegionBefore:1630 regionNoteOff:1717,1719 regionAdjustDuration:1730 regionAdjustPosition:1742 cursorNoteBefore:1783 noteOff:1809,1810,1836,1837 adjustDurationCore:1856,1857 quantizeScope:1998,2002 quantizeKeepRealisedScope:2026 scaleScope:2074 insertRowCore:2296 deleteRowCore:2332,2333 cursorRowEvent:2542 eachFxRegionInRect:2649,2650 pasteFxRegions:2692,2693 fxHostAtCursor:2750,2751 shiftEvents:3112,3113,3131 rowToPPQ:3320 ghostOverlay:3659 tracker.playFromCursor:4079
+  @use call    ctx:snapRow  @ regionNoteOff:1716 noteOff:1819,1841 adjustDurationCore:1856 adjustPosition:1952,1959,1974 quantizeKeepRealisedScope:2025
+  @use call    ds:assign  @ setTakeSwing:645 seedSharedSlots:683 toggleChannelFlag:702 rewriteRegion:1623 applyRegionWindow:1703 shiftFxLane:1775 mintRegionForSelection:2636 pasteFxRegions:2698 deleteFxRegionsInRect:2718 addExtraCol:3737 hideExtraCol:3757,3796 automateParam:3938 showDelay:3970
+  @use call    ds:get  @ setTakeSwing:643 seedSharedSlots:682 toggleChannelFlag:700 pushMute:709,710 isChannelMuted:721 isChannelSoloed:722 rewriteRegion:1615 applyRegionWindow:1671 shiftFxLane:1768 regionByUuid:2605 mintRegionUuid:2620 mintRegionForSelection:2634 pasteFxRegions:2683 deleteFxRegionsInRect:2715 addExtraCol:3716 hideExtraCol:3752,3767 automateParam:3932 showDelay:3958 rebuild:4174,4175,4229,4401
+  @use call    ec:advance  @ editEvent:997 chordCommit:1329 digitsCommit:1422 noteOff:1843 deleteOrBackspace:3037
+  @use call    ec:anchorRow  @ scaleScope:2069,2102
+  @use call    ec:clampPos  @ rebuild:4431
+  @use call    ec:col  @ matchGridToCursor:598 followViewport:808 interpolate:1574 cursorNoteBefore:1781 adjustDuration:1873 adjustPosition:1943 curCol:2439 nudge:2580 pasteFxRegions:2679 fxHostAtCursor:2748 deleteEvent:2992,3004 shiftEvents:3092,3116 hideExtraCol:3744 automateParam:3926 unautomateParam:3943 tracker.playFromCursor:4078
+  @use call    ec:cursorPart  @ noteOff:1831 nudge:2583 deleteEvent:3020 inputOctaveUp:4018
+  @use call    ec:decorateCol  @ reserveGhostReadout:3616,3624 rebuild:4218
+  @use call    ec:eachSelectedCol  @ interpolate:1556 noteOff:1806 forEachRowOp:2419 addExtraCol:3718 showDelay:3960
+  @use call    ec:hasSelection  @ interpolate:1553 noteOff:1803 adjustDuration:1864 adjustPosition:1941 scaleScope:2096 forEachRowOp:2414 nudge:2553 fxHostForEdit:2766 shiftEvents:3105 selectionAsRect:3412 tracker.scaleHalf:4043 tracker.scaleDouble:4050
+  @use call    ec:isSticky  @ deleteOrBackspace:3036
+  @use call    ec:pos  @ toggleSignFlip:936 entrySignAt:957 editEvent:986 chordStrike:1232 digitsStrike:1378 noteOff:1827 cursorRect:3228 cursorAnchor:3494 instanceAtCursor:3511 inputOctaveUp:4016
+  @use call    ec:region  @ eventsByCol:497 interpolate:1554 noteOff:1804 adjustPositionMulti:1889 scaleScope:2101 forEachRowOp:2416 mintRegionForSelection:2626 deleteSelection:3030 shiftEvents:3106 selectionAsRect:3413
+  @use call    ec:regionArm  @ tracker.regionArm:4089
+  @use call    ec:regionCursor  @ movePreview:3557
+  @use call    ec:regionStart  @ duplicate:3289
+  @use call    ec:registerCommands  @ <load>:4526
+  @use call    ec:rescaleRow  @ releaseTransientFrame:556 matchGridToCursor:604 setRowPerBeat:616 scaleScope:2128
+  @use call    ec:reset  @ rebuild:4147
+  @use call    ec:row  @ matchGridToCursor:599 followViewport:808 editEvent:980 interpolate:1576 cursorRegionBefore:1630 recentreOnRegion:1661 regionNoteOff:1716,1719 cursorNoteBefore:1783 noteOff:1835 adjustPosition:1947,1970 scaleScope:2069 forEachRowOp:2421 cursorRowEvent:2541 pasteFxRegions:2681 fxHostAtCursor:2750,2751 deleteEvent:2995 shiftEvents:3117,3204 cursorRect:3232 cursorAnchor:3497 instanceAtCursor:3513 tracker.playFromCursor:4079
+  @use call    ec:selClear  @ deleteSelection:3031 deleteOrBackspace:3037 duplicateCascade:3401 cmgr:doAfter:4536
+  @use call    ec:setPos  @ digitsStrike:1396 digitsBackspace:1412 digitsCommit:1420 recentreOnRegion:1661 adjustPosition:1966,1978 shiftEvents:3204 selectRegionAt:3275 duplicate:3295
+  @use call    ec:setSelection  @ scaleScope:2113 shiftEvents:3201 selectRegionAt:3276
+  @use call    ec:shiftSelection  @ adjustPositionMulti:1928
+  @use call    ec:unstick  @ 4534
   @use call    facade.get  @ arrange:37
-  @use call    generators.glyphOf  @ rebuild:4321
+  @use call    generators.glyphOf  @ rebuild:4320
   @use call    gm:addEvent  @ member.add:72
   @use call    gm:assignEvent  @ member.assign:73
-  @use call    gm:clearActive  @ wireGroupLifetime:4608 endAllCascades:4621
+  @use call    gm:clearActive  @ wireGroupLifetime:4607 endAllCascades:4620
   @use call    gm:deleteEvent  @ member.delete:74
-  @use call    gm:deleteInstance  @ forEachRowOp:2431
-  @use call    gm:deletedCells  @ deletedCells:3546
-  @use call    gm:duplicateInto  @ groupDuplicate:3987
-  @use call    gm:eachInstance  @ planInstanceMoves:2384 instanceAtCursor:3515 eachInstance:3538 movePreview:3564 paintRegionStream:3682 rebuild:4380
-  @use call    gm:footprintAliases  @ shiftEvents:3135 clipboard.aliases:4520
-  @use call    gm:groupRect  @ groupBridge.clearAt:4488 groupBridge.clearMoveGap:4494
-  @use call    gm:instanceOf  @ localBlocked:3533
-  @use call    gm:localMode  @ shiftEvents:3129 localMode:3527 tracker.groupLocalToggle:4089 clipboard.aliases:4520
-  @use call    gm:markGroup  @ freezeToGroup:2914
-  @use call    gm:moveInstance  @ forEachRowOp:2432
-  @use call    gm:rectConflict  @ freezeMode:2902
-  @use call    gm:resizeGroup  @ paintRegionStream:3705
-  @use call    gm:revertDelete  @ deleteEvent:3006
-  @use call    gm:setLocalMode  @ tracker.groupLocalToggle:4089
-  @use call    gm:stamp  @ groupPaste:4003
-  @use call    gm:stateOf  @ stateOf:3539
-  @use call    groupsCore.shiftStream  @ colInInstance:2367 eachMemberEvent:3442 clearMoveGap:3487 streamRefAt:3506
-  @use call    lib.delete  @ deleteFxPatch:2891
-  @use call    lib.getAt  @ loadFxPatch:2882
-  @use call    lib.localize  @ setSwingSlot:658 setColSwingSlot:668 setTemperSlot:675 retune:2257
-  @use call    lib.save  @ saveFxPatch:2875
-  @use call    pa:apply  @ rewriteRegion:1625 applyRegionWindow:1705 shiftFxLane:1777 pasteFxRegions:2700 deleteFxRegionsInRect:2720 setNoteFx:2785,2795 addExtraCol:3741
-  @use call    pa:automate  @ automateParam:3929
-  @use call    pa:binding  @ hideExtraCol:3785 paramBinding:3861
-  @use call    pa:bumpFrecency  @ automateParam:3931
-  @use call    pa:floatFx  @ armLearn:3889 showFx:3896
-  @use call    pa:lastTouched  @ armLearn:3890 pollLearn:3913
-  @use call    pa:params  @ listParams:3865
-  @use call    pa:targets  @ paramTargets:3860
-  @use call    pa:unautomate  @ hideExtraCol:3785
-  @use call    pa:unfloatFx  @ cancelLearn:3900
-  @use call    perf.start  @ rebuild:4266,4338,4376,4423,4434
-  @use call    perf.stop  @ rebuild:4331,4374,4421,4429,4434
-  @use call    sonority.solveToMoves  @ solveToMoves:2238
-  @use call    sonority.solveToPoints  @ solveToTarget:2228
-  @use call    sonority.strands  @ strandsOf:2185
-  @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:2041
+  @use call    gm:deleteInstance  @ forEachRowOp:2430
+  @use call    gm:deletedCells  @ deletedCells:3545
+  @use call    gm:duplicateInto  @ groupDuplicate:3986
+  @use call    gm:eachInstance  @ planInstanceMoves:2383 instanceAtCursor:3514 eachInstance:3537 movePreview:3563 paintRegionStream:3681 rebuild:4379
+  @use call    gm:footprintAliases  @ shiftEvents:3134 clipboard.aliases:4519
+  @use call    gm:groupRect  @ groupBridge.clearAt:4487 groupBridge.clearMoveGap:4493
+  @use call    gm:instanceOf  @ localBlocked:3532
+  @use call    gm:localMode  @ shiftEvents:3128 localMode:3526 tracker.groupLocalToggle:4088 clipboard.aliases:4519
+  @use call    gm:markGroup  @ freezeToGroup:2913
+  @use call    gm:moveInstance  @ forEachRowOp:2431
+  @use call    gm:rectConflict  @ freezeMode:2901
+  @use call    gm:resizeGroup  @ paintRegionStream:3704
+  @use call    gm:revertDelete  @ deleteEvent:3005
+  @use call    gm:setLocalMode  @ tracker.groupLocalToggle:4088
+  @use call    gm:stamp  @ groupPaste:4002
+  @use call    gm:stateOf  @ stateOf:3538
+  @use call    groupsCore.shiftStream  @ colInInstance:2366 eachMemberEvent:3441 clearMoveGap:3486 streamRefAt:3505
+  @use call    lib.delete  @ deleteFxPatch:2890
+  @use call    lib.getAt  @ loadFxPatch:2881
+  @use call    lib.localize  @ setSwingSlot:657 setColSwingSlot:667 setTemperSlot:674 retune:2256
+  @use call    lib.save  @ saveFxPatch:2874
+  @use call    pa:apply  @ rewriteRegion:1624 applyRegionWindow:1704 shiftFxLane:1776 pasteFxRegions:2699 deleteFxRegionsInRect:2719 setNoteFx:2784,2794 addExtraCol:3740
+  @use call    pa:automate  @ automateParam:3928
+  @use call    pa:binding  @ hideExtraCol:3784 paramBinding:3860
+  @use call    pa:bumpFrecency  @ automateParam:3930
+  @use call    pa:floatFx  @ armLearn:3888 showFx:3895
+  @use call    pa:lastTouched  @ armLearn:3889 pollLearn:3912
+  @use call    pa:params  @ listParams:3864
+  @use call    pa:targets  @ paramTargets:3859
+  @use call    pa:unautomate  @ hideExtraCol:3784
+  @use call    pa:unfloatFx  @ cancelLearn:3899
+  @use call    perf.start  @ rebuild:4265,4337,4375,4422,4433
+  @use call    perf.stop  @ rebuild:4330,4373,4420,4428,4433
+  @use call    sonority.solveToMoves  @ solveToMoves:2237
+  @use call    sonority.solveToPoints  @ solveToTarget:2227
+  @use call    sonority.strands  @ strandsOf:2184
+  @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:2040
   @use call    timing.logPerRow  @ logPerRowFor:535
-  @use call    timing.ppqToDelay  @ quantizeKeepRealisedScope:2042
+  @use call    timing.ppqToDelay  @ quantizeKeepRealisedScope:2041
   @use call    tm:addEvent  @ plain.add:66 member.add:72
   @use call    tm:addParked  @ parked.add:80
   @use call    tm:assignEvent  @ plain.assign:67 member.assign:73
-  @use call    tm:assignParked  @ parked.assign:81 setNoteFx:2793
-  @use call    tm:byUuid  @ noteFx:2738 noteByUuid:2773 setNoteFx:2779
-  @use call    tm:channels  @ rebuild:4267,4415
-  @use call    tm:currentTake  @ retargetTrackTier:200 resolveCurrentInstance:256 duplicateBoundUnpooled:347 rebuild:4133
-  @use call    tm:deleteEvent  @ plain.delete:68 member.delete:74 clearRegionAt:3475 clearMoveGap:3489
+  @use call    tm:assignParked  @ parked.assign:81 setNoteFx:2792
+  @use call    tm:byUuid  @ noteFx:2737 noteByUuid:2772 setNoteFx:2778
+  @use call    tm:channels  @ rebuild:4266,4414
+  @use call    tm:currentTake  @ retargetTrackTier:200 resolveCurrentInstance:256 duplicateBoundUnpooled:347 applyTakeProperties:626 rebuild:4132
+  @use call    tm:deleteEvent  @ plain.delete:68 member.delete:74 clearRegionAt:3474 clearMoveGap:3488
   @use call    tm:deleteParked  @ parked.delete:82
-  @use call    tm:flush  @ editEvent:997 settleTypedEdit:1221 moveLaneEvent:1474 addLaneEvent:1493 deleteLaneEvent:1511 setLaneTension:1521 cycleLaneShape:1550 interpolate:1571,1583 noteOff:1824,1843 adjustDuration:1879 adjustPositionMulti:1928 adjustPosition:1966,1978 quantizeScope:2017 quantizeKeepRealisedScope:2047 scaleScope:2092 retune:2271 forEachRowOp:2435 nudge:2577,2585 setNoteFx:2784,2794 freezeToGroup:2918 deleteEvent:3007,3017,3023 deleteSelection:3030 shiftEvents:3196 unautomateParam:3947 groupDuplicate:3988 groupPaste:4004 groupBridge.commit:4499
-  @use call    tm:freezeEligible  @ freezeRegionAtCursor:2727 freezeMode:2900
-  @use call    tm:freezeRect  @ freezeMode:2902 freezeToGroup:2910
-  @use call    tm:freezeRegion  @ freezeRegion:2895
-  @use call    tm:freezeToGroup  @ freezeToGroup:2911
-  @use call    tm:fxCurveAt  @ ghostOverlay:3660
-  @use call    tm:fxRealisation  @ reserveGhostReadout:3608 ghostOverlay:3638
-  @use call    tm:getChannel  @ rowBounds:395 parkedByUuid:2599
-  @use call    tm:interpolate  @ interpolateValues:1602 sampleCurve:3351
-  @use call    tm:length  @ applyTakeProperties:632 duplicateCascade:3399,3404 groupPaste:4000 rebuild:4145
-  @use call    tm:name  @ applyTakeProperties:625 takeName:3312
-  @use call    tm:playFrom  @ tracker.playFromCursor:4080
-  @use call    tm:requestRebuild  @ freezeToGroup:2917
-  @use call    tm:rescaleLength  @ applyTakeProperties:634
-  @use call    tm:resolution  @ rebuild:4144
-  @use call    tm:setLength  @ applyTakeProperties:636
-  @use call    tm:setMutedChannels  @ pushMute:719
-  @use call    tm:tileLength  @ applyTakeProperties:635
-  @use call    tm:timeSigs  @ rebuild:4146
-  @use call    tuning.moves  @ solveToMoves:2239
-  @use call    tuning.noteStep  @ editEvent:1030 snapToTemper:2169 shortlisted:2210
-  @use call    tuning.seat  @ seatStrand:2193
-  @use call    tuning.seatWindow  @ seatStrand:2192
-  @use call    tuning.shortlist  @ shortlisted:2208
-  @use call    tuning.snap  @ pitchFromKey:894
-  @use call    tuning.stepClass  @ strandsOf:2185
-  @use call    tuning.stepToMidi  @ snapToTemper:2170
-  @use call    tuning.transposeNote  @ editEvent:1053 nudgePitch:2492
-  @use call    util.add  @ conformOverlaps:417,428 allGroups:491 eventsByCol:515 auditionAdd:759 notePAEvents:875 chordStrike:1273,1291 digitsStrike:1391 moveLaneEvent:1461 interpolate:1563,1565 interpolateValues:1593 rewriteRegion:1618,1621 applyRegionWindow:1689,1696,1699,1702 shiftFxLane:1769 noteOff:1813 adjustPositionMulti:1898,1907 quantizeScope:2010 quantizeKeepRealisedScope:2029 scaleScope:2082 notesIn:2158 shortlisted:2216 insertRowCore:2304,2305 deleteRowCore:2353,2354 planInstanceMoves:2400,2402 forEachRowOp:2420 mintRegionForSelection:2635,2636 gatherFxRegions:2667 pasteFxRegions:2684,2690 deleteFxRegionsInRect:2717 addFxStage:2829,2830 removeFxStage:2838 shiftEvents:3115,3132 eventsInRect:3455 deletedCells:3549 hideExtraCol:3776 listParams:3872,3876 projectionEpoch:4110 rebuild:4220,4277,4278,4291,4292,4303,4310,4311,4321,4324,4368 <load>:4559 wireGroupLifetime:4605,4606
-  @use call    util.assign  @ edit.assign:117 editEvent:1188,1189
-  @use call    util.atomic  @ <load>:622,1431,1432,1433,1434,1435,1436,2052,2053,2923,2924,2925,2926,2927,2928,2929,2930,2931,2932,2934,2935,2936,3955,3956
-  @use call    util.between  @ eventsByCol:510 interpolate:1562 insertRowCore:2301 deleteRowCore:2351 shiftEvents:3115 eachMemberEvent:3443
-  @use call    util.bucket  @ rebuild:4231,4246,4247,4286,4301
-  @use call    util.clamp  @ setRowPerBeat:609 sendBend:740 followViewport:814,819 pitchFromKey:892 editEvent:1067,1091,1095,1110,1149,1152,1168 regionAdjustDuration:1730 adjustDurationCore:1856 nudgePitch:2497 stepSample:3213 inputOctaveUp:4020 tracker.inputOctaveDown:4032
-  @use call    util.clone  @ toParkedUpdate:62 edit.assign:116 applyRegionWindow:1679 setNoteFx:2803 setFxField:2813
-  @use call    util.deepClone  @ gatherFxRegions:2671 pasteFxRegions:2695 addFxStage:2830 replaceFxStage:2865
-  @use call    util.gcd  @ scaleScope:2108
-  @use call    util.instantiate  @ rebuild:4257 <load>:4502,4512
-  @use call    util.isNote  @ notePreds:377,378 conformOverlaps:415,426 writePlans:478 strikePitch:905 editEvent:1022,1065,1078 chordStrike:1248,1272 chordBackspace:1303 chordNudgeVel:1315 digitsStrike:1385 adjustPositionMulti:1902 adjustPosition:1959 quantizeScope:2001,2006,2009 quantizeKeepRealisedScope:2040 scaleScope:2079 notesIn:2158 shiftPlan:2286 nudge:2561,2571 colTypeOf:3071 shiftEvents:3119,3181 rebuild:4186
-  @use call    util.nudgedScalar  @ chordNudgeVel:1316 scaledScalar:2482,2484
-  @use call    util.oneOf  @ editEvent:1143 moveLaneEvent:1457 addLaneEvent:1480 deleteLaneEvent:1507 setLaneTension:1517
+  @use call    tm:flush  @ editEvent:996 settleTypedEdit:1220 moveLaneEvent:1473 addLaneEvent:1492 deleteLaneEvent:1510 setLaneTension:1520 cycleLaneShape:1549 interpolate:1570,1582 noteOff:1823,1842 adjustDuration:1878 adjustPositionMulti:1927 adjustPosition:1965,1977 quantizeScope:2016 quantizeKeepRealisedScope:2046 scaleScope:2091 retune:2270 forEachRowOp:2434 nudge:2576,2584 setNoteFx:2783,2793 freezeToGroup:2917 deleteEvent:3006,3016,3022 deleteSelection:3029 shiftEvents:3195 unautomateParam:3946 groupDuplicate:3987 groupPaste:4003 groupBridge.commit:4498
+  @use call    tm:freezeEligible  @ freezeRegionAtCursor:2726 freezeMode:2899
+  @use call    tm:freezeRect  @ freezeMode:2901 freezeToGroup:2909
+  @use call    tm:freezeRegion  @ freezeRegion:2894
+  @use call    tm:freezeToGroup  @ freezeToGroup:2910
+  @use call    tm:fxCurveAt  @ ghostOverlay:3659
+  @use call    tm:fxRealisation  @ reserveGhostReadout:3607 ghostOverlay:3637
+  @use call    tm:getChannel  @ rowBounds:395 parkedByUuid:2598
+  @use call    tm:interpolate  @ interpolateValues:1601 sampleCurve:3350
+  @use call    tm:length  @ applyTakeProperties:631 duplicateCascade:3398,3403 groupPaste:3999 rebuild:4144
+  @use call    tm:name  @ applyTakeProperties:625 takeName:3311
+  @use call    tm:playFrom  @ tracker.playFromCursor:4079
+  @use call    tm:requestRebuild  @ freezeToGroup:2916
+  @use call    tm:rescaleLength  @ applyTakeProperties:633
+  @use call    tm:resolution  @ rebuild:4143
+  @use call    tm:setLength  @ applyTakeProperties:635
+  @use call    tm:setMutedChannels  @ pushMute:718
+  @use call    tm:tileLength  @ applyTakeProperties:634
+  @use call    tm:timeSigs  @ rebuild:4145
+  @use call    tuning.moves  @ solveToMoves:2238
+  @use call    tuning.noteStep  @ editEvent:1029 snapToTemper:2168 shortlisted:2209
+  @use call    tuning.seat  @ seatStrand:2192
+  @use call    tuning.seatWindow  @ seatStrand:2191
+  @use call    tuning.shortlist  @ shortlisted:2207
+  @use call    tuning.snap  @ pitchFromKey:893
+  @use call    tuning.stepClass  @ strandsOf:2184
+  @use call    tuning.stepToMidi  @ snapToTemper:2169
+  @use call    tuning.transposeNote  @ editEvent:1052 nudgePitch:2491
+  @use call    util.add  @ conformOverlaps:417,428 allGroups:491 eventsByCol:515 auditionAdd:758 notePAEvents:874 chordStrike:1272,1290 digitsStrike:1390 moveLaneEvent:1460 interpolate:1562,1564 interpolateValues:1592 rewriteRegion:1617,1620 applyRegionWindow:1688,1695,1698,1701 shiftFxLane:1768 noteOff:1812 adjustPositionMulti:1897,1906 quantizeScope:2009 quantizeKeepRealisedScope:2028 scaleScope:2081 notesIn:2157 shortlisted:2215 insertRowCore:2303,2304 deleteRowCore:2352,2353 planInstanceMoves:2399,2401 forEachRowOp:2419 mintRegionForSelection:2634,2635 gatherFxRegions:2666 pasteFxRegions:2683,2689 deleteFxRegionsInRect:2716 addFxStage:2828,2829 removeFxStage:2837 shiftEvents:3114,3131 eventsInRect:3454 deletedCells:3548 hideExtraCol:3775 listParams:3871,3875 projectionEpoch:4109 rebuild:4219,4276,4277,4290,4291,4302,4309,4310,4320,4323,4367 <load>:4558 wireGroupLifetime:4604,4605
+  @use call    util.assign  @ edit.assign:117 editEvent:1187,1188
+  @use call    util.atomic  @ <load>:622,1430,1431,1432,1433,1434,1435,2051,2052,2922,2923,2924,2925,2926,2927,2928,2929,2930,2931,2933,2934,2935,3954,3955
+  @use call    util.between  @ eventsByCol:510 interpolate:1561 insertRowCore:2300 deleteRowCore:2350 shiftEvents:3114 eachMemberEvent:3442
+  @use call    util.bucket  @ rebuild:4230,4245,4246,4285,4300
+  @use call    util.clamp  @ setRowPerBeat:609 sendBend:739 followViewport:813,818 pitchFromKey:891 editEvent:1066,1090,1094,1109,1148,1151,1167 regionAdjustDuration:1729 adjustDurationCore:1855 nudgePitch:2496 stepSample:3212 inputOctaveUp:4019 tracker.inputOctaveDown:4031
+  @use call    util.clone  @ toParkedUpdate:62 edit.assign:116 applyRegionWindow:1678 setNoteFx:2802 setFxField:2812
+  @use call    util.deepClone  @ gatherFxRegions:2670 pasteFxRegions:2694 addFxStage:2829 replaceFxStage:2864
+  @use call    util.gcd  @ scaleScope:2107
+  @use call    util.instantiate  @ rebuild:4256 <load>:4501,4511
+  @use call    util.isNote  @ notePreds:377,378 conformOverlaps:415,426 writePlans:478 strikePitch:904 editEvent:1021,1064,1077 chordStrike:1247,1271 chordBackspace:1302 chordNudgeVel:1314 digitsStrike:1384 adjustPositionMulti:1901 adjustPosition:1958 quantizeScope:2000,2005,2008 quantizeKeepRealisedScope:2039 scaleScope:2078 notesIn:2157 shiftPlan:2285 nudge:2560,2570 colTypeOf:3070 shiftEvents:3118,3180 rebuild:4185
+  @use call    util.nudgedScalar  @ chordNudgeVel:1315 scaledScalar:2481,2483
+  @use call    util.oneOf  @ editEvent:1142 moveLaneEvent:1456 addLaneEvent:1479 deleteLaneEvent:1506 setLaneTension:1516
   @use call    util.pick  @ toParkedSpec:53,55,57
-  @use call    util.round  @ sendBend:740 interpolateValues:1600,1603 adjustDurationCore:1856 quantizeScope:1998,2002 scaleScope:2077,2080 ghostOverlay:3663
-  @use call    util.seek  @ neighbourEvents:367,368 placeNewNote:861 strikePitch:916 inheritedSign:951 editEvent:1124,1196 addLaneEvent:1482 interpolate:1581 cursorNoteBefore:1785 noteOff:1812,1840 insertRowCore:2322 deleteRowCore:2342 cursorRowEvent:2545
-  @use call    util.setDigit  @ editEvent:1046,1068,1091,1095,1110,1148,1152,1168,1172
-  @use require clipboard  @ <load>:4512
-  @use require editCursor  @ <load>:4502
+  @use call    util.round  @ sendBend:739 interpolateValues:1599,1602 adjustDurationCore:1855 quantizeScope:1997,2001 scaleScope:2076,2079 ghostOverlay:3662
+  @use call    util.seek  @ neighbourEvents:367,368 placeNewNote:860 strikePitch:915 inheritedSign:950 editEvent:1123,1195 addLaneEvent:1481 interpolate:1580 cursorNoteBefore:1784 noteOff:1811,1839 insertRowCore:2321 deleteRowCore:2341 cursorRowEvent:2544
+  @use call    util.setDigit  @ editEvent:1045,1067,1090,1094,1109,1147,1151,1167,1171
+  @use require clipboard  @ <load>:4511
+  @use require editCursor  @ <load>:4501
   @use require generators  @ <load>:31
   @use require groups  @ <load>:30
   @use require perf  @ <load>:32
@@ -1068,696 +1068,694 @@
   @use require timing  @ <load>:27
   @use require tuning  @ <load>:28
   @use require util  @ <load>:26
-  @use require viewContext  @ rebuild:4257
-  @use sub     cm:configChanged  @ <load>:4464
-  @use sub     ds:dataChanged  @ <load>:4469
-  @use sub     tm:rebuild  @ <load>:4456
-  @use sub     tm:takeSwapped  @ <load>:4455
+  @use require viewContext  @ rebuild:4256
+  @use sub     cm:configChanged  @ <load>:4463
+  @use sub     ds:dataChanged  @ <load>:4468
+  @use sub     tm:rebuild  @ <load>:4455
+  @use sub     tm:takeSwapped  @ <load>:4454
 
 # Calls (intra-file)
-  @call adjustDuration  @ tracker.growNote:4037 tracker.shrinkNote:4038
-  @call adjustDurationCore  @ adjustDuration:1869,1877
-  @call adjustPosition  @ tracker.nudgeBack:4039 tracker.nudgeForward:4040
-  @call adjustPositionMulti  @ adjustPosition:1942
-  @call allGroups  @ quantizeAll:2056 quantizeKeepRealisedAll:2058 scaleAll:2138 retune:2264
-  @call applyNoteOff  @ noteOff:1823,1842
-  @call applyNudge  @ nudge:2572,2584
-  @call applyRegionWindow  @ regionNoteOff:1718,1722 regionAdjustDuration:1732 regionAdjustPosition:1743
+  @call adjustDuration  @ tracker.growNote:4036 tracker.shrinkNote:4037
+  @call adjustDurationCore  @ adjustDuration:1868,1876
+  @call adjustPosition  @ tracker.nudgeBack:4038 tracker.nudgeForward:4039
+  @call adjustPositionMulti  @ adjustPosition:1941
+  @call allGroups  @ quantizeAll:2055 quantizeKeepRealisedAll:2057 scaleAll:2137 retune:2263
+  @call applyNoteOff  @ noteOff:1822,1841
+  @call applyNudge  @ nudge:2571,2583
+  @call applyRegionWindow  @ regionNoteOff:1717,1721 regionAdjustDuration:1731 regionAdjustPosition:1742
   @call arrange  @ selectedTrackIdx:168 effectiveSlot:172 resolveSelectionTake:188,191,194 retargetTrackTier:201,203 selectTrack:209,212,214 currentInstance:233 bracketCurrentInstance:240
   @call arrange  @ resolveCurrentInstance:257,265,267,271,279,280 gotoTrack:291 gotoTake:299 pickTrack:311 newTakeBelow:326,327,330
-  @call arrange  @ duplicateBelow:339 duplicateBoundUnpooled:348 applyTakeProperties:628 playRow:3330,3339 tracker.playFromTop:4076
-  @call assignNoteMove  @ adjustPositionMulti:1922 adjustPosition:1965
-  @call assignStamp  @ adjustPositionMulti:1924 adjustPosition:1977
-  @call assignTail  @ applyNoteOff:1799 adjustDurationCore:1860 insertRowCore:2325 deleteRowCore:2345
-  @call audition  @ editEvent:1000 nudgePitch:2505 nudgeVel:2512
-  @call auditionAdd  @ audition:776 chordStrike:1274,1293 chordNudgeVel:1322
-  @call auditionRelease  @ chordStrike:1251 chordBackspace:1306 chordNudgeVel:1321
-  @call blend  @ snapToTemper:2170 seatStrand:2193
-  @call chainStack  @ rebuild:4367
-  @call chordCell  @ chordStrike:1247,1287 chordBackspace:1302 chordNudgeVel:1314
-  @call colFor  @ kindOf:44 deletedCells:3547 reserveGhostReadout:3610 ghostOverlay:3646,3656 rebuild:4417
-  @call colInInstance  @ planInstanceMoves:2387
-  @call colTypeOf  @ colFor:3076
-  @call colsForAnchor  @ selectRegionAt:3267 duplicate:3294
-  @call conformOverlaps  @ quantizeScope:2015 quantizeKeepRealisedScope:2034 scaleScope:2090 insertRowCore:2311 deleteRowCore:2358
-  @call currentRpb  @ assignStamp:565 assignTail:578 assignNoteMove:587 applyTakeProperties:630 inheritedSign:951 editEvent:979,1132 chordStrike:1237 moveLaneEvent:1473 addLaneEvent:1487 applyNoteOff:1795 scaleScope:2121
-  @call currentRpb  @ insertRowCore:2296 deleteRowCore:2332 planInstanceMoves:2375 cursorRect:3232 selectRegionAt:3269 duplicate:3296 logPerRow:3322 selectionAsRect:3432 cursorAnchor:3498 instanceAtCursor:3514 movePreview:3568 editCursor.logPerRow:4507
-  @call cursorNoteBefore  @ adjustDuration:1876 adjustPosition:1951
-  @call cursorRegionBefore  @ regionNoteOff:1712 regionAdjustDuration:1726 regionAdjustPosition:1737 shiftFxLane:1760,1766 deleteFxRegionAtCursor:2706
-  @call cursorRowEvent  @ nudge:2582
-  @call cycleShape  @ cycleLaneShape:1549 interpolate:1569,1583
-  @call deleteEvent  @ deleteOrBackspace:3038
-  @call deleteFxRegionAtCursor  @ deleteEvent:2995
-  @call deleteFxRegionsInRect  @ deleteSelection:3031
-  @call deleteRow  @ tracker.deleteRow:4057
-  @call deleteRowCol  @ tracker.deleteRowCol:4059
-  @call deleteSelection  @ deleteOrBackspace:3037 tracker.cut:4026 tracker.deleteSel:4029
-  @call digitPartAt  @ digitsStrike:1380
-  @call eachFxRegionInRect  @ gatherFxRegions:2666 deleteFxRegionsInRect:2713
-  @call eachMemberEvent  @ eventsInRect:3450 clearRegionAt:3474 clearMoveGap:3485
+  @call arrange  @ duplicateBelow:339 duplicateBoundUnpooled:348 applyTakeProperties:626,627 playRow:3329,3338 tracker.playFromTop:4075
+  @call assignNoteMove  @ adjustPositionMulti:1921 adjustPosition:1964
+  @call assignStamp  @ adjustPositionMulti:1923 adjustPosition:1976
+  @call assignTail  @ applyNoteOff:1798 adjustDurationCore:1859 insertRowCore:2324 deleteRowCore:2344
+  @call audition  @ editEvent:999 nudgePitch:2504 nudgeVel:2511
+  @call auditionAdd  @ audition:775 chordStrike:1273,1292 chordNudgeVel:1321
+  @call auditionRelease  @ chordStrike:1250 chordBackspace:1305 chordNudgeVel:1320
+  @call blend  @ snapToTemper:2169 seatStrand:2192
+  @call chainStack  @ rebuild:4366
+  @call chordCell  @ chordStrike:1246,1286 chordBackspace:1301 chordNudgeVel:1313
+  @call colFor  @ kindOf:44 deletedCells:3546 reserveGhostReadout:3609 ghostOverlay:3645,3655 rebuild:4416
+  @call colInInstance  @ planInstanceMoves:2386
+  @call colTypeOf  @ colFor:3075
+  @call colsForAnchor  @ selectRegionAt:3266 duplicate:3293
+  @call conformOverlaps  @ quantizeScope:2014 quantizeKeepRealisedScope:2033 scaleScope:2089 insertRowCore:2310 deleteRowCore:2357
+  @call currentRpb  @ assignStamp:565 assignTail:578 assignNoteMove:587 applyTakeProperties:629 inheritedSign:950 editEvent:978,1131 chordStrike:1236 moveLaneEvent:1472 addLaneEvent:1486 applyNoteOff:1794 scaleScope:2120
+  @call currentRpb  @ insertRowCore:2295 deleteRowCore:2331 planInstanceMoves:2374 cursorRect:3231 selectRegionAt:3268 duplicate:3295 logPerRow:3321 selectionAsRect:3431 cursorAnchor:3497 instanceAtCursor:3513 movePreview:3567 editCursor.logPerRow:4506
+  @call cursorNoteBefore  @ adjustDuration:1875 adjustPosition:1950
+  @call cursorRegionBefore  @ regionNoteOff:1711 regionAdjustDuration:1725 regionAdjustPosition:1736 shiftFxLane:1759,1765 deleteFxRegionAtCursor:2705
+  @call cursorRowEvent  @ nudge:2581
+  @call cycleShape  @ cycleLaneShape:1548 interpolate:1568,1582
+  @call deleteEvent  @ deleteOrBackspace:3037
+  @call deleteFxRegionAtCursor  @ deleteEvent:2994
+  @call deleteFxRegionsInRect  @ deleteSelection:3030
+  @call deleteRow  @ tracker.deleteRow:4056
+  @call deleteRowCol  @ tracker.deleteRowCol:4058
+  @call deleteSelection  @ deleteOrBackspace:3036 tracker.cut:4025 tracker.deleteSel:4028
+  @call digitPartAt  @ digitsStrike:1379
+  @call eachFxRegionInRect  @ gatherFxRegions:2665 deleteFxRegionsInRect:2712
+  @call eachMemberEvent  @ eventsInRect:3449 clearRegionAt:3473 clearMoveGap:3484
   @call effectiveSlot  @ currentSlotIdx:178 gotoTake:300
-  @call eventsByCol  @ adjustDuration:1866 adjustPositionMulti:1895 quantizeSelection:2055 quantizeKeepRealisedSelection:2057 scaleSelection:2137 retune:2264 nudge:2555 deleteSelection:3027
-  @call fieldSnapshot  @ digitsStrike:1392
-  @call findCol  @ chordCell:1212 shiftEvents:3167,3198
-  @call followViewport  @ rebuild:4432
-  @call forEachRowOp  @ insertRow:2444 deleteRow:2445 insertRowCol:2446 deleteRowCol:2447
-  @call fxColAtLane  @ shiftFxLane:1764
-  @call fxLaneOf  @ applyRegionWindow:1671 shiftFxLane:1762
-  @call hoistTouch  @ pollLearn:3922
-  @call inheritedSign  @ entrySignAt:969
-  @call insertRow  @ tracker.insertRow:4056
-  @call insertRowCol  @ tracker.insertRowCol:4058
-  @call interpolate  @ tracker.interpolate:4028
-  @call interpolateValues  @ rebuild:4427
-  @call isFrameChange  @ cm:configChanged:4465
-  @call killAudition  @ audition:775 tick:784 editEvent:999 chordAbandon:1337
-  @call kindAt  @ kindOf:44 insertRowCore:2302,2323 deleteRowCore:2343,2352
+  @call eventsByCol  @ adjustDuration:1865 adjustPositionMulti:1894 quantizeSelection:2054 quantizeKeepRealisedSelection:2056 scaleSelection:2136 retune:2263 nudge:2554 deleteSelection:3026
+  @call fieldSnapshot  @ digitsStrike:1391
+  @call findCol  @ chordCell:1211 shiftEvents:3166,3197
+  @call followViewport  @ rebuild:4431
+  @call forEachRowOp  @ insertRow:2443 deleteRow:2444 insertRowCol:2445 deleteRowCol:2446
+  @call fxColAtLane  @ shiftFxLane:1763
+  @call fxLaneOf  @ applyRegionWindow:1670 shiftFxLane:1761
+  @call hoistTouch  @ pollLearn:3921
+  @call inheritedSign  @ entrySignAt:968
+  @call insertRow  @ tracker.insertRow:4055
+  @call insertRowCol  @ tracker.insertRowCol:4057
+  @call interpolate  @ tracker.interpolate:4027
+  @call interpolateValues  @ rebuild:4426
+  @call isFrameChange  @ cm:configChanged:4464
+  @call killAudition  @ audition:774 tick:783 editEvent:998 chordAbandon:1336
+  @call kindAt  @ kindOf:44 insertRowCore:2301,2322 deleteRowCore:2342,2351
   @call kindOf  @ edit.add:104 edit.delete:105 edit.assign:108,113
-  @call lastVisibleFrom  @ followViewport:822,825 scroll:831
+  @call lastVisibleFrom  @ followViewport:821,824 scroll:830
   @call localBlocked  @ edit.add:104 edit.delete:105 edit.assign:107
-  @call logPerRowFor  @ assignStamp:566 assignNoteMove:588 inheritedSign:951 editEvent:980 chordStrike:1238 insertRowCore:2296 deleteRowCore:2332 planInstanceMoves:2375 cursorRect:3232 selectRegionAt:3269 duplicate:3296 logPerRow:3322
-  @call logPerRowFor  @ selectionAsRect:3432 cursorAnchor:3498 instanceAtCursor:3514 movePreview:3568 editCursor.logPerRow:4507
-  @call maxFxRegionN  @ mintRegionUuid:2621 pasteFxRegions:2685
-  @call mintRegionForSelection  @ fxHostForEdit:2767
-  @call mintRegionUuid  @ mintRegionForSelection:2631
+  @call logPerRowFor  @ assignStamp:566 assignNoteMove:588 inheritedSign:950 editEvent:979 chordStrike:1237 insertRowCore:2295 deleteRowCore:2331 planInstanceMoves:2374 cursorRect:3231 selectRegionAt:3268 duplicate:3295 logPerRow:3321
+  @call logPerRowFor  @ selectionAsRect:3431 cursorAnchor:3497 instanceAtCursor:3513 movePreview:3567 editCursor.logPerRow:4506
+  @call maxFxRegionN  @ mintRegionUuid:2620 pasteFxRegions:2684
+  @call mintRegionForSelection  @ fxHostForEdit:2766
+  @call mintRegionUuid  @ mintRegionForSelection:2630
   @call neighbourEvents  @ rowBounds:394,395
-  @call nextShape  @ cycleShape:1539
-  @call notHidden  @ interpolate:1563
-  @call notePAEvents  @ strikePitch:918
+  @call nextShape  @ cycleShape:1538
+  @call notHidden  @ interpolate:1562
+  @call notePAEvents  @ strikePitch:917
   @call notePreds  @ rowBounds:392
-  @call notesIn  @ retune:2264
-  @call nudge  @ tracker.nudgeCoarseUp:4060 tracker.nudgeCoarseDown:4061 tracker.nudgeFineUp:4066 tracker.nudgeFineDown:4070
-  @call nudgeDelay  @ applyNudge:2535
-  @call nudgePitch  @ applyNudge:2536
-  @call nudgeValue  @ applyNudge:2533
-  @call nudgeVel  @ applyNudge:2534
-  @call parkedByUuid  @ noteFx:2740 noteByUuid:2773 setNoteFx:2790
-  @call pitchFromKey  @ editEvent:1016 chordStrike:1242
-  @call pitchStep  @ nudgePitch:2488
-  @call placeNewNote  @ strikePitch:929
-  @call planInstanceMoves  @ forEachRowOp:2426
-  @call ppqRowOf  @ kindAt:3089 deletedCells:3549 ghostOverlay:3644 rebuild:4390,4391,4406,4418
-  @call projectionEpoch  @ rebuild:4334
-  @call pushMute  @ rebuild:4434 ds:dataChanged:4470
-  @call quantizeKeepRealisedScope  @ quantizeKeepRealisedSelection:2057 quantizeKeepRealisedAll:2058
-  @call quantizeScope  @ quantizeSelection:2055 quantizeAll:2056
-  @call recentreOnRegion  @ applyRegionWindow:1706 shiftFxLane:1778
+  @call notesIn  @ retune:2263
+  @call nudge  @ tracker.nudgeCoarseUp:4059 tracker.nudgeCoarseDown:4060 tracker.nudgeFineUp:4065 tracker.nudgeFineDown:4069
+  @call nudgeDelay  @ applyNudge:2534
+  @call nudgePitch  @ applyNudge:2535
+  @call nudgeValue  @ applyNudge:2532
+  @call nudgeVel  @ applyNudge:2533
+  @call parkedByUuid  @ noteFx:2739 noteByUuid:2772 setNoteFx:2789
+  @call pitchFromKey  @ editEvent:1015 chordStrike:1241
+  @call pitchStep  @ nudgePitch:2487
+  @call placeNewNote  @ strikePitch:928
+  @call planInstanceMoves  @ forEachRowOp:2425
+  @call ppqRowOf  @ kindAt:3088 deletedCells:3548 ghostOverlay:3643 rebuild:4389,4390,4405,4417
+  @call projectionEpoch  @ rebuild:4333
+  @call pushMute  @ rebuild:4433 ds:dataChanged:4469
+  @call quantizeKeepRealisedScope  @ quantizeKeepRealisedSelection:2056 quantizeKeepRealisedAll:2057
+  @call quantizeScope  @ quantizeSelection:2054 quantizeAll:2055
+  @call recentreOnRegion  @ applyRegionWindow:1705 shiftFxLane:1777
   @call recoverSlot  @ effectiveSlot:172 resolveSelectionTake:191 selectTrack:214
-  @call regionAdjustDuration  @ adjustDuration:1875
-  @call regionAdjustPosition  @ adjustPosition:1946
-  @call regionByUuid  @ eachFxRegionInRect:2653 noteFx:2742
-  @call regionNoteOff  @ noteOff:1830
-  @call releaseTransientFrame  @ matchGridToCursor:596 setRowPerBeat:615 scaleScope:2128 cm:configChanged:4465
+  @call regionAdjustDuration  @ adjustDuration:1874
+  @call regionAdjustPosition  @ adjustPosition:1945
+  @call regionByUuid  @ eachFxRegionInRect:2652 noteFx:2741
+  @call regionNoteOff  @ noteOff:1829
+  @call releaseTransientFrame  @ matchGridToCursor:596 setRowPerBeat:615 scaleScope:2127 cm:configChanged:4464
   @call relocate  @ edit.assign:111
-  @call repinToRow  @ strikePitch:910 editEvent:1003
-  @call rewriteRegion  @ deleteFxRegionAtCursor:2707 setNoteFx:2801
-  @call rowBounds  @ adjustPosition:1954
-  @call scaleScope  @ scaleSelection:2137 scaleAll:2138
-  @call scaledScalar  @ nudgeVel:2509 nudgeDelay:2519 nudgeValue:2526
-  @call seatStrand  @ solveToTarget:2230 solveToMoves:2244
-  @call selectRegionAt  @ duplicateCascade:3402
+  @call repinToRow  @ strikePitch:909 editEvent:1002
+  @call rewriteRegion  @ deleteFxRegionAtCursor:2706 setNoteFx:2800
+  @call rowBounds  @ adjustPosition:1953
+  @call scaleScope  @ scaleSelection:2136 scaleAll:2137
+  @call scaledScalar  @ nudgeVel:2508 nudgeDelay:2518 nudgeValue:2525
+  @call seatStrand  @ solveToTarget:2229 solveToMoves:2243
+  @call selectRegionAt  @ duplicateCascade:3401
   @call selectedTrackIdx  @ currentTrackIdx:175 currentSlotIdx:177 resolveSelectionTake:184 retargetTrackTier:202 gotoTrack:290 gotoTake:297 newTakeBelow:320 duplicateBoundUnpooled:346
-  @call sendBend  @ killAudition:749 auditionAdd:757 auditionRelease:768
-  @call setDefaultSwing  @ setSwingSlot:660,661 setColSwingSlot:670
-  @call setTakeSwing  @ setSwingSlot:659 setColSwingSlot:669
-  @call settleTypedEdit  @ chordStrike:1250,1292 chordBackspace:1305 chordNudgeVel:1320 digitsBackspace:1414
-  @call shiftEvents  @ tracker.eventShiftLeft:4072 tracker.eventShiftRight:4073
-  @call shiftFxLane  @ shiftEvents:3094
-  @call shiftPlan  @ insertRowCore:2303 deleteRowCore:2354
-  @call shortlisted  @ solveToTarget:2225
-  @call snapToTemper  @ retune:2268
-  @call solveToMoves  @ retune:2269
-  @call solveToTarget  @ retune:2270
-  @call stepSample  @ tracker.inputSampleUp:4034 tracker.inputSampleDown:4035
-  @call stopForPart  @ duplicate:3297
-  @call strandsOf  @ shortlisted:2203 solveToMoves:2237
-  @call streamIdOf  @ colInInstance:2367 cursorRect:3234 colsForAnchor:3245 selectionAsRect:3428 eachMemberEvent:3442 clearMoveGap:3487 streamRefAt:3506
-  @call strikePitch  @ editEvent:1017 chordStrike:1288
-  @call takeHoist  @ hoistTouch:3828 listParams:3866
+  @call sendBend  @ killAudition:748 auditionAdd:756 auditionRelease:767
+  @call setDefaultSwing  @ setSwingSlot:659,660 setColSwingSlot:669
+  @call setTakeSwing  @ setSwingSlot:658 setColSwingSlot:668
+  @call settleTypedEdit  @ chordStrike:1249,1291 chordBackspace:1304 chordNudgeVel:1319 digitsBackspace:1413
+  @call shiftEvents  @ tracker.eventShiftLeft:4071 tracker.eventShiftRight:4072
+  @call shiftFxLane  @ shiftEvents:3093
+  @call shiftPlan  @ insertRowCore:2302 deleteRowCore:2353
+  @call shortlisted  @ solveToTarget:2224
+  @call snapToTemper  @ retune:2267
+  @call solveToMoves  @ retune:2268
+  @call solveToTarget  @ retune:2269
+  @call stepSample  @ tracker.inputSampleUp:4033 tracker.inputSampleDown:4034
+  @call stopForPart  @ duplicate:3296
+  @call strandsOf  @ shortlisted:2202 solveToMoves:2236
+  @call streamIdOf  @ colInInstance:2366 cursorRect:3233 colsForAnchor:3244 selectionAsRect:3427 eachMemberEvent:3441 clearMoveGap:3486 streamRefAt:3505
+  @call strikePitch  @ editEvent:1016 chordStrike:1287
+  @call takeHoist  @ hoistTouch:3827 listParams:3865
   @call toParkedSpec  @ parked.add:80
   @call toParkedUpdate  @ parked.assign:81
-  @call toggleChannelFlag  @ toggleChannelMute:725 toggleChannelSolo:726
-  @call toggleSignFlip  @ editEvent:1038,1083,1159
+  @call toggleChannelFlag  @ toggleChannelMute:724 toggleChannelSolo:725
+  @call toggleSignFlip  @ editEvent:1037,1082,1158
   @call tv:bracketCurrentInstance  @ setLoopToItem:247 resolveCurrentInstance:285
-  @call tv:cancelLearn  @ armLearn:3886 pollLearn:3911 automateParam:3932
-  @call tv:cellWidth  @ reserveGhostReadout:3613
-  @call tv:chordAbandon  @ chordCommit:1329 rebuild:4149 dropGrid:4440
-  @call tv:chordActive  @ tick:782 tracker.inputSampleUp:4034 tracker.inputSampleDown:4035 tracker.scaleHalf:4044 tracker.scaleDouble:4051 tracker.nudgeFineUp:4065 tracker.nudgeFineDown:4069
-  @call tv:chordNudgeVel  @ tracker.nudgeFineUp:4065 tracker.nudgeFineDown:4069
-  @call tv:clearMoveGap  @ groupBridge.clearMoveGap:4495
-  @call tv:clearRegionAt  @ groupDuplicate:3986 groupPaste:4002 groupBridge.clearAt:4489
-  @call tv:currentInstance  @ bracketCurrentInstance:239 newTakeBelow:323 duplicateBelow:338 playRow:3331 cutRow:3346 tracker.playFromTop:4075
-  @call tv:currentSlotIdx  @ applyTakeProperties:627
-  @call tv:currentTrackIdx  @ applyTakeProperties:626
-  @call tv:cursorAnchor  @ duplicateCascade:3389,3406 groupPaste:3998 groupBridge.cursorAnchor:4482
-  @call tv:deletedCells  @ deleteEvent:3004
-  @call tv:digitsAbandon  @ rebuild:4150 dropGrid:4441
-  @call tv:duplicateCascade  @ duplicate:3286 groupDuplicate:3983
-  @call tv:editEvent  @ digitsStrike:1394
-  @call tv:endAllCascades  @ editEvent:996 settleTypedEdit:1220
-  @call tv:entrySignAt  @ editEvent:987
-  @call tv:eventsInRect  @ paintRegionStream:3702 groupDuplicate:3985 groupPaste:4001 groupBridge.eventsInRect:4480
-  @call tv:freezeMode  @ freezeGroupAtCursor:2734
-  @call tv:freezeRegion  @ freezeRegionAtCursor:2727
-  @call tv:freezeToGroup  @ freezeGroupAtCursor:2734
-  @call tv:fxHostAtCursor  @ freezeRegionAtCursor:2726 freezeGroupAtCursor:2733 fxHostForEdit:2768 reserveGhostReadout:3608 ghostOverlay:3638
-  @call tv:hideExtraCol  @ unautomateParam:3950
-  @call tv:instanceAtCursor  @ deleteEvent:3002 localBlocked:3531 groupBridge.instanceAt:4483
-  @call tv:localMode  @ deleteEvent:3001 localBlocked:3530
+  @call tv:cancelLearn  @ armLearn:3885 pollLearn:3910 automateParam:3931
+  @call tv:cellWidth  @ reserveGhostReadout:3612
+  @call tv:chordAbandon  @ chordCommit:1328 rebuild:4148 dropGrid:4439
+  @call tv:chordActive  @ tick:781 tracker.inputSampleUp:4033 tracker.inputSampleDown:4034 tracker.scaleHalf:4043 tracker.scaleDouble:4050 tracker.nudgeFineUp:4064 tracker.nudgeFineDown:4068
+  @call tv:chordNudgeVel  @ tracker.nudgeFineUp:4064 tracker.nudgeFineDown:4068
+  @call tv:clearMoveGap  @ groupBridge.clearMoveGap:4494
+  @call tv:clearRegionAt  @ groupDuplicate:3985 groupPaste:4001 groupBridge.clearAt:4488
+  @call tv:currentInstance  @ bracketCurrentInstance:239 newTakeBelow:323 duplicateBelow:338 playRow:3330 cutRow:3345 tracker.playFromTop:4074
+  @call tv:cursorAnchor  @ duplicateCascade:3388,3405 groupPaste:3997 groupBridge.cursorAnchor:4481
+  @call tv:deletedCells  @ deleteEvent:3003
+  @call tv:digitsAbandon  @ rebuild:4149 dropGrid:4440
+  @call tv:duplicateCascade  @ duplicate:3285 groupDuplicate:3982
+  @call tv:editEvent  @ digitsStrike:1393
+  @call tv:endAllCascades  @ editEvent:995 settleTypedEdit:1219
+  @call tv:entrySignAt  @ editEvent:986
+  @call tv:eventsInRect  @ paintRegionStream:3701 groupDuplicate:3984 groupPaste:4000 groupBridge.eventsInRect:4479
+  @call tv:freezeMode  @ freezeGroupAtCursor:2733
+  @call tv:freezeRegion  @ freezeRegionAtCursor:2726
+  @call tv:freezeToGroup  @ freezeGroupAtCursor:2733
+  @call tv:fxHostAtCursor  @ freezeRegionAtCursor:2725 freezeGroupAtCursor:2732 fxHostForEdit:2767 reserveGhostReadout:3607 ghostOverlay:3637
+  @call tv:hideExtraCol  @ unautomateParam:3949
+  @call tv:instanceAtCursor  @ deleteEvent:3001 localBlocked:3530 groupBridge.instanceAt:4482
+  @call tv:localMode  @ deleteEvent:3000 localBlocked:3529
   @call tv:loopsToItem  @ resolveCurrentInstance:285
   @call tv:nameInstance  @ newTakeBelow:330 duplicateBelow:340
-  @call tv:noteFx  @ setFxField:2810 addFxStage:2829 removeFxStage:2835 pruneEmptyRegion:2845 moveFxStage:2850 replaceFxStage:2861 saveFxPatch:2873
-  @call tv:octaveWidth  @ reserveGhostReadout:3613
-  @call tv:paintRegionStream  @ groupBridge.paintStream:4484
-  @call tv:rebuild  @ releaseTransientFrame:557 hideExtraCol:3759,3798 unautomateParam:3949 tm:rebuild:4457 <load>:4624
-  @call tv:rowToPPQ  @ mintRegionForSelection:2632,2633
-  @call tv:scaleSelection  @ tracker.scaleHalf:4046,4047 tracker.scaleDouble:4053,4054
+  @call tv:noteFx  @ setFxField:2809 addFxStage:2828 removeFxStage:2834 pruneEmptyRegion:2844 moveFxStage:2849 replaceFxStage:2860 saveFxPatch:2872
+  @call tv:octaveWidth  @ reserveGhostReadout:3612
+  @call tv:paintRegionStream  @ groupBridge.paintStream:4483
+  @call tv:rebuild  @ releaseTransientFrame:557 hideExtraCol:3758,3797 unautomateParam:3948 tm:rebuild:4456 <load>:4623
+  @call tv:rowToPPQ  @ mintRegionForSelection:2631,2632
+  @call tv:scaleSelection  @ tracker.scaleHalf:4045,4046 tracker.scaleDouble:4052,4053
   @call tv:selectSlot  @ gotoTake:306 pickTake:314 newTakeBelow:329 duplicateBoundUnpooled:350
   @call tv:selectTrack  @ gotoTrack:292 pickTrack:312
-  @call tv:selectionAsRect  @ duplicateCascade:3375 groupBridge.selectionAsRect:4481 wireGroupLifetime:4602
-  @call tv:setFxField  @ setFxBypass:2822
-  @call tv:setNoteFx  @ setFxField:2815 addFxStage:2831 removeFxStage:2839 pruneEmptyRegion:2846 moveFxStage:2856 replaceFxStage:2866 loadFxPatch:2884
-  @call tv:setRowPerBeat  @ tracker.doubleRPB:4082 tracker.halveRPB:4083 tracker.incRPB:4084 tracker.decRPB:4085
-  @call tv:streamRefAt  @ instanceAtCursor:3517 movePreview:3575,3583 paintRegionStream:3686 rebuild:4388
-  @call tv:tabOverride  @ paletteTab:3857
-  @call validDigit  @ digitsStrike:1381
-  @call valueBounds  @ nudgeValue:2525
-  @call valueInterval  @ nudgeValue:2526
-  @call visibleAt  @ deleteLaneEvent:1508 setLaneTension:1518 cycleLaneShape:1547
-  @call writePlans  @ quantizeScope:2016 quantizeKeepRealisedScope:2046 scaleScope:2091 insertRowCore:2313 deleteRowCore:2360
+  @call tv:selectionAsRect  @ duplicateCascade:3374 groupBridge.selectionAsRect:4480 wireGroupLifetime:4601
+  @call tv:setFxField  @ setFxBypass:2821
+  @call tv:setNoteFx  @ setFxField:2814 addFxStage:2830 removeFxStage:2838 pruneEmptyRegion:2845 moveFxStage:2855 replaceFxStage:2865 loadFxPatch:2883
+  @call tv:setRowPerBeat  @ tracker.doubleRPB:4081 tracker.halveRPB:4082 tracker.incRPB:4083 tracker.decRPB:4084
+  @call tv:streamRefAt  @ instanceAtCursor:3516 movePreview:3574,3582 paintRegionStream:3685 rebuild:4387
+  @call tv:tabOverride  @ paletteTab:3856
+  @call validDigit  @ digitsStrike:1380
+  @call valueBounds  @ nudgeValue:2524
+  @call valueInterval  @ nudgeValue:2525
+  @call visibleAt  @ deleteLaneEvent:1507 setLaneTension:1517 cycleLaneShape:1546
+  @call writePlans  @ quantizeScope:2015 quantizeKeepRealisedScope:2045 scaleScope:2090 insertRowCore:2312 deleteRowCore:2359
 
 # Bindings (by name)
-  @bind allCols  @ insertRow:2444 deleteRow:2445
-  @bind curCol  @ insertRowCol:2446 deleteRowCol:2447
-  @bind currentRpb  @ 4522
-  @bind cursorRect  @ duplicate:3301
-  @bind deleteOrBackspace  @ 4027
-  @bind deleteRowCore  @ deleteRow:2445 deleteRowCol:2447
-  @bind duplicate  @ 4030
-  @bind followViewport  @ 4508
-  @bind freezeGroupAtCursor  @ 4093
-  @bind freezeRegionAtCursor  @ 4092
-  @bind gatherFxRegions  @ 4516
-  @bind groupDuplicate  @ 4087
-  @bind groupPaste  @ 4088
-  @bind inputOctaveUp  @ 4031
-  @bind insertRowCore  @ insertRow:2444 insertRowCol:2446
-  @bind killAudition  @ 4545
-  @bind matchGridToCursor  @ 4086
-  @bind notDerived  @ insertRowCore:2301 deleteRowCore:2351
-  @bind notHidden  @ inheritedSign:951 editEvent:1196 addLaneEvent:1482 interpolate:1581
-  @bind noteOff  @ 4036
-  @bind pasteFxRegions  @ 4516
-  @bind quantizeKeepRealisedScope  @ 2053
-  @bind quantizeScope  @ 2052
-  @bind queueDeleteCCs  @ 2988
-  @bind queueDeleteNotes  @ 2985
-  @bind queueResetDelays  @ 2987
-  @bind queueResetVelocities  @ 2986
+  @bind allCols  @ insertRow:2443 deleteRow:2444
+  @bind curCol  @ insertRowCol:2445 deleteRowCol:2446
+  @bind currentRpb  @ 4521
+  @bind cursorRect  @ duplicate:3300
+  @bind deleteOrBackspace  @ 4026
+  @bind deleteRowCore  @ deleteRow:2444 deleteRowCol:2446
+  @bind duplicate  @ 4029
+  @bind followViewport  @ 4507
+  @bind freezeGroupAtCursor  @ 4092
+  @bind freezeRegionAtCursor  @ 4091
+  @bind gatherFxRegions  @ 4515
+  @bind groupDuplicate  @ 4086
+  @bind groupPaste  @ 4087
+  @bind inputOctaveUp  @ 4030
+  @bind insertRowCore  @ insertRow:2443 insertRowCol:2445
+  @bind killAudition  @ 4544
+  @bind matchGridToCursor  @ 4085
+  @bind notDerived  @ insertRowCore:2300 deleteRowCore:2350
+  @bind notHidden  @ inheritedSign:950 editEvent:1195 addLaneEvent:1481 interpolate:1580
+  @bind noteOff  @ 4035
+  @bind pasteFxRegions  @ 4515
+  @bind quantizeKeepRealisedScope  @ 2052
+  @bind quantizeScope  @ 2051
+  @bind queueDeleteCCs  @ 2987
+  @bind queueDeleteNotes  @ 2984
+  @bind queueResetDelays  @ 2986
+  @bind queueResetVelocities  @ 2985
 
 # Unresolved receivers
-  @drop edit.add  @ placeNewNote:867 editEvent:1126,1198 addLaneEvent:1492
-  @drop edit.assign  @ writePlans:479 assignStamp:569 assignTail:578 assignNoteMove:592 strikePitch:910 editEvent:1060,1069,1103,1114,1119,1186 chordNudgeVel:1319
-  @drop edit.assign  @ digitsBackspace:1409 moveLaneEvent:1473 setLaneTension:1520 cycleShape:1539 applyNoteOff:1795 snapToTemper:2171 seatStrand:2195 nudgePitch:2504 nudgeVel:2511 nudgeDelay:2521 nudgeValue:2528 setNoteFx:2783
-  @drop edit.assign  @ queueResetDelays:2958 queueResetVelocities:2972 deleteEvent:3016 shiftEvents:3194
-  @drop edit.delete  @ strikePitch:919,922 chordStrike:1248 chordBackspace:1303 digitsBackspace:1411 deleteLaneEvent:1510 applyNoteOff:1797 insertRowCore:2312 deleteRowCore:2359 queueDeleteNotes:2950 queueResetVelocities:2970 queueDeleteCCs:2981
-  @drop edit.delete  @ unautomateParam:3946
-  @drop tracker:register  @ <load>:4097
-  @drop tracker:registerAll  @ <load>:4025
+  @drop edit.add  @ placeNewNote:866 editEvent:1125,1197 addLaneEvent:1491
+  @drop edit.assign  @ writePlans:479 assignStamp:569 assignTail:578 assignNoteMove:592 strikePitch:909 editEvent:1059,1068,1102,1113,1118,1185 chordNudgeVel:1318
+  @drop edit.assign  @ digitsBackspace:1408 moveLaneEvent:1472 setLaneTension:1519 cycleShape:1538 applyNoteOff:1794 snapToTemper:2170 seatStrand:2194 nudgePitch:2503 nudgeVel:2510 nudgeDelay:2520 nudgeValue:2527 setNoteFx:2782
+  @drop edit.assign  @ queueResetDelays:2957 queueResetVelocities:2971 deleteEvent:3015 shiftEvents:3193
+  @drop edit.delete  @ strikePitch:918,921 chordStrike:1247 chordBackspace:1302 digitsBackspace:1410 deleteLaneEvent:1509 applyNoteOff:1796 insertRowCore:2311 deleteRowCore:2358 queueDeleteNotes:2949 queueResetVelocities:2969 queueDeleteCCs:2980
+  @drop edit.delete  @ unautomateParam:3945
+  @drop tracker:register  @ <load>:4096
+  @drop tracker:registerAll  @ <load>:4024
 
 # REAPER API surface
   @reaper time_precise
   @reaper StuffMIDIMessage
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ assignNoteMove:590 placeNewNote:863 applyNoteOff:1795 insertRowCore:2324 deleteRowCore:2344
-  @field r REMOVE  @ releaseTransientFrame:553 strikePitch:908 editEvent:1060 rewriteRegion:1624 snapToTemper:2171 nudgePitch:2504 deleteFxRegionsInRect:2719 setNoteFx:2783,2792,2793,2800 pruneEmptyRegion:2846
-  @field r REMOVE  @ hideExtraCol:3758,3797
+  @field r OPEN  @ assignNoteMove:590 placeNewNote:862 applyNoteOff:1794 insertRowCore:2323 deleteRowCore:2343
+  @field r REMOVE  @ releaseTransientFrame:553 strikePitch:907 editEvent:1059 rewriteRegion:1623 snapToTemper:2170 nudgePitch:2503 deleteFxRegionsInRect:2718 setNoteFx:2782,2791,2792,2799 pruneEmptyRegion:2845
+  @field r REMOVE  @ hideExtraCol:3757,3796
   @field w add  @ plain.add:66 member.add:72 parked.add:80 edit.add:104
-  @field r addFxStage  @ 2925
-  @field w addFxStage  @ 2925
-  @field w aliases  @ clipboard.aliases:4519
-  @field r ambient  @ solveToMoves:2240
-  @field r anchor  @ colInInstance:2366,2367 planInstanceMoves:2393,2403,2404 forEachRowOp:2432 instanceAtCursor:3516,3517 movePreview:3569
-  @field r anchor  @ movePreview:3572,3575,3583 tabOverride:3851 rebuild:4383,4388,4390,4391
-  @field w anchor  @ planInstanceMoves:2403 3813 overrideTab:3854
+  @field r addFxStage  @ 2924
+  @field w addFxStage  @ 2924
+  @field w aliases  @ clipboard.aliases:4518
+  @field r ambient  @ solveToMoves:2239
+  @field r anchor  @ colInInstance:2365,2366 planInstanceMoves:2392,2402,2403 forEachRowOp:2431 instanceAtCursor:3515,3516 movePreview:3568
+  @field r anchor  @ movePreview:3571,3574,3582 tabOverride:3850 rebuild:4382,4387,4389,4390
+  @field w anchor  @ planInstanceMoves:2402 3812 overrideTab:3853
   @field w applyTakeProperties  @ applyTakeProperties:622
   @field w assign  @ plain.assign:67 member.assign:73 parked.assign:81 edit.assign:106
-  @field r at  @ hideExtraCol:3794 rebuild:4297
-  @field w at  @ 1527,3059 rebuild:4138
-  @field r away  @ pollLearn:3910
-  @field w away  @ armLearn:3890 pollLearn:3909
-  @field r baseline  @ pollLearn:3915
-  @field w baseline  @ armLearn:3890 pollLearn:3917
-  @field r beats  @ applyTakeProperties:630
-  @field r bipolar  @ entrySignAt:966 editEvent:1156 valueBounds:2469 rebuild:4215
-  @field w bipolar  @ rebuild:4215
-  @field r byFx  @ takeHoist:3824
-  @field w byFx  @ 3817 takeHoist:3823
-  @field r bypass  @ rebuild:4321
-  @field w bypass  @ rebuild:4321
-  @field r cc  @ relocate:94,99 streamIdOf:526 findCol:842 editEvent:1188 addLaneEvent:1490 colFor:3080
-  @field r cc  @ shiftEvents:3133,3142,3193 eventsInRect:3454 hideExtraCol:3785,3787 rebuild:4301,4405
-  @field w cc  @ relocate:99 editEvent:1188 addLaneEvent:1490 1527,3059 shiftEvents:3133,3142,3193 eventsInRect:3454 ghostOverlay:3657 rebuild:4138,4197
-  @field r ccs  @ addExtraCol:3730,3731 hideExtraCol:3786,3787,3788,3794 automateParam:3937,3938 rebuild:4211,4303,4306
-  @field w ccs  @ addExtraCol:3730 hideExtraCol:3788 automateParam:3937
-  @field r cellKind  @ kindAt:3089 rebuild:4392,4407,4418
-  @field w cellKind  @ rebuild:4206
-  @field r cellWidth  @ cellWidth:3314 rebuild:4179
-  @field r cells  @ matchGridToCursor:599 entrySignAt:967 chordCell:1213 chordStrike:1270,1271 digitsStrike:1383 digitsBackspace:1407
-  @field r cells  @ interpolate:1580 interpolateValues:1589 adjustPosition:1971 deleteEvent:2997 shiftEvents:3118 rebuild:4166,4342
-  @field r cells  @ rebuild:4354,4357
-  @field w cells  @ rebuild:4166,4205
-  @field r cents  @ editEvent:1053 shortlisted:2215 solveToTarget:2230 pitchStep:2458
-  @field r chan  @ relocate:92,97 killAudition:747,749 auditionRelease:766,768 findCol:840 strikePitch:927 chordStrike:1247
-  @field r chan  @ chordStrike:1258,1261,1282,1284 chordBackspace:1302 chordNudgeVel:1314,1322 applyRegionWindow:1674 colInInstance:2366 planInstanceMoves:2403 colFor:3078 shiftEvents:3191
-  @field r chan  @ colsForAnchor:3244 duplicateCascade:3391,3392,3394 eventsInRect:3452 clearRegionAt:3474 clearMoveGap:3485,3486 instanceAtCursor:3517 movePreview:3575,3583
-  @field r chan  @ ghostOverlay:3644,3656,3657,3660 rebuild:4231,4383,4388,4405
-  @field w chan  @ relocate:97 auditionAdd:759 strikePitch:927 editEvent:1129,1191 chordCell:1212 chordStrike:1239,1273,1289,1291 addLaneEvent:1486 planInstanceMoves:2403
-  @field w chan  @ mintRegionForSelection:2631 pasteFxRegions:2692 shiftEvents:3132,3142,3146,3154,3191 duplicateCascade:3400 eventsInRect:3452 cursorAnchor:3498 ghostOverlay:3656,3657
-  @field r chanDelta  @ pasteFxRegions:2687 movePreview:3560
-  @field w chanDelta  @ gatherFxRegions:2668 movePreview:3589
-  @field r chanFirstCol  @ chordStrike:1268 shiftEvents:3097 hideExtraCol:3774 rebuild:4221,4384
-  @field w chanFirstCol  @ 141 rebuild:4171 dropGrid:4443
-  @field r chanLastCol  @ chordStrike:1268 shiftEvents:3097 hideExtraCol:3774 rebuild:4222,4384
-  @field w chanLastCol  @ 142 rebuild:4172 dropGrid:4444
-  @field r chanLo  @ duplicateCascade:3387 eventsInRect:3450 paintRegionStream:3686,3703
-  @field w chanLo  @ cursorRect:3233 selectionAsRect:3434 paintRegionStream:3703
-  @field w channelLeft  @ 4555,4574,4591
-  @field w channelRight  @ 4555,4574,4591
-  @field r chordBackspace  @ 1433
-  @field w chordBackspace  @ 1433
-  @field r chordNudgeVel  @ 1434
-  @field w chordNudgeVel  @ 1434
-  @field r chordStrike  @ 1432
-  @field w chordStrike  @ 1432
-  @field w clearAt  @ groupBridge.clearAt:4487
-  @field w clearMoveGap  @ groupBridge.clearMoveGap:4493
-  @field r clip  @ duplicate:3298
-  @field w clip  @ duplicate:3291
-  @field w clipped  @ rebuild:4367
+  @field r at  @ hideExtraCol:3793 rebuild:4296
+  @field w at  @ 1526,3058 rebuild:4137
+  @field r away  @ pollLearn:3909
+  @field w away  @ armLearn:3889 pollLearn:3908
+  @field r baseline  @ pollLearn:3914
+  @field w baseline  @ armLearn:3889 pollLearn:3916
+  @field r beats  @ applyTakeProperties:629
+  @field r bipolar  @ entrySignAt:965 editEvent:1155 valueBounds:2468 rebuild:4214
+  @field w bipolar  @ rebuild:4214
+  @field r byFx  @ takeHoist:3823
+  @field w byFx  @ 3816 takeHoist:3822
+  @field r bypass  @ rebuild:4320
+  @field w bypass  @ rebuild:4320
+  @field r cc  @ relocate:94,99 streamIdOf:526 findCol:841 editEvent:1187 addLaneEvent:1489 colFor:3079
+  @field r cc  @ shiftEvents:3132,3141,3192 eventsInRect:3453 hideExtraCol:3784,3786 rebuild:4300,4404
+  @field w cc  @ relocate:99 editEvent:1187 addLaneEvent:1489 1526,3058 shiftEvents:3132,3141,3192 eventsInRect:3453 ghostOverlay:3656 rebuild:4137,4196
+  @field r ccs  @ addExtraCol:3729,3730 hideExtraCol:3785,3786,3787,3793 automateParam:3936,3937 rebuild:4210,4302,4305
+  @field w ccs  @ addExtraCol:3729 hideExtraCol:3787 automateParam:3936
+  @field r cellKind  @ kindAt:3088 rebuild:4391,4406,4417
+  @field w cellKind  @ rebuild:4205
+  @field r cellWidth  @ cellWidth:3313 rebuild:4178
+  @field r cells  @ matchGridToCursor:599 entrySignAt:966 chordCell:1212 chordStrike:1269,1270 digitsStrike:1382 digitsBackspace:1406
+  @field r cells  @ interpolate:1579 interpolateValues:1588 adjustPosition:1970 deleteEvent:2996 shiftEvents:3117 rebuild:4165,4341
+  @field r cells  @ rebuild:4353,4356
+  @field w cells  @ rebuild:4165,4204
+  @field r cents  @ editEvent:1052 shortlisted:2214 solveToTarget:2229 pitchStep:2457
+  @field r chan  @ relocate:92,97 killAudition:746,748 auditionRelease:765,767 findCol:839 strikePitch:926 chordStrike:1246
+  @field r chan  @ chordStrike:1257,1260,1281,1283 chordBackspace:1301 chordNudgeVel:1313,1321 applyRegionWindow:1673 colInInstance:2365 planInstanceMoves:2402 colFor:3077 shiftEvents:3190
+  @field r chan  @ colsForAnchor:3243 duplicateCascade:3390,3391,3393 eventsInRect:3451 clearRegionAt:3473 clearMoveGap:3484,3485 instanceAtCursor:3516 movePreview:3574,3582
+  @field r chan  @ ghostOverlay:3643,3655,3656,3659 rebuild:4230,4382,4387,4404
+  @field w chan  @ relocate:97 auditionAdd:758 strikePitch:926 editEvent:1128,1190 chordCell:1211 chordStrike:1238,1272,1288,1290 addLaneEvent:1485 planInstanceMoves:2402
+  @field w chan  @ mintRegionForSelection:2630 pasteFxRegions:2691 shiftEvents:3131,3141,3145,3153,3190 duplicateCascade:3399 eventsInRect:3451 cursorAnchor:3497 ghostOverlay:3655,3656
+  @field r chanDelta  @ pasteFxRegions:2686 movePreview:3559
+  @field w chanDelta  @ gatherFxRegions:2667 movePreview:3588
+  @field r chanFirstCol  @ chordStrike:1267 shiftEvents:3096 hideExtraCol:3773 rebuild:4220,4383
+  @field w chanFirstCol  @ 141 rebuild:4170 dropGrid:4442
+  @field r chanLastCol  @ chordStrike:1267 shiftEvents:3096 hideExtraCol:3773 rebuild:4221,4383
+  @field w chanLastCol  @ 142 rebuild:4171 dropGrid:4443
+  @field r chanLo  @ duplicateCascade:3386 eventsInRect:3449 paintRegionStream:3685,3702
+  @field w chanLo  @ cursorRect:3232 selectionAsRect:3433 paintRegionStream:3702
+  @field w channelLeft  @ 4554,4573,4590
+  @field w channelRight  @ 4554,4573,4590
+  @field r chordBackspace  @ 1432
+  @field w chordBackspace  @ 1432
+  @field r chordNudgeVel  @ 1433
+  @field w chordNudgeVel  @ 1433
+  @field r chordStrike  @ 1431
+  @field w chordStrike  @ 1431
+  @field w clearAt  @ groupBridge.clearAt:4486
+  @field w clearMoveGap  @ groupBridge.clearMoveGap:4492
+  @field r clip  @ duplicate:3297
+  @field w clip  @ duplicate:3290
+  @field w clipped  @ rebuild:4366
   @field r cm  @ 35
-  @field w cm  @ 4504,4513
+  @field w cm  @ 4503,4512
   @field r cmgr  @ 35
-  @field w cmgr  @ 4505
-  @field r col  @ conformOverlaps:416,417 strikePitch:903 interpolate:1569 noteOff:1820,1823 adjustDuration:1867,1869 adjustPositionMulti:1896,1915 quantizeScope:1995
-  @field r col  @ quantizeScope:1995 quantizeKeepRealisedScope:2024 scaleScope:2074 nudge:2559,2572 deleteEvent:3005 deleteSelection:3028
-  @field w col  @ allGroups:491 eventsByCol:515 editEvent:1017 chordStrike:1288 interpolate:1565 noteOff:1813 adjustPositionMulti:1907 quantizeScope:2008 quantizeKeepRealisedScope:2029 scaleScope:2078 shiftPlan:2285 deletedCells:3549
-  @field w col1  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
-  @field w col2  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
-  @field r colIdx  @ toggleSignFlip:938 entrySignAt:960 digitsStrike:1387 digitsBackspace:1406
-  @field w colIdx  @ toggleSignFlip:942 digitsStrike:1388
-  @field w colLeft  @ 4554,4574,4590
-  @field w colRight  @ 4554,4574,4590
-  @field r cols  @ allGroups:488 eventsByCol:499,503 matchGridToCursor:598 lastVisibleFrom:795,796 followViewport:807,819 findCol:839 entrySignAt:964 chordStrike:1234
-  @field r cols  @ chordStrike:1269 digitPartAt:1356 digitsStrike:1396 digitsBackspace:1406 addLaneEvent:1495 interpolate:1575 fxLaneOf:1647 recentreOnRegion:1659 fxColAtLane:1749 cursorNoteBefore:1782 noteOff:1829 adjustDuration:1874
-  @field r cols  @ adjustPosition:1944 planInstanceMoves:2386 allCols:2438 curCol:2440 nudge:2581 mintRegionForSelection:2628 eachFxRegionInRect:2647 pasteFxRegions:2680 fxHostAtCursor:2749 deleteEvent:2993 colFor:3077 shiftEvents:3093
-  @field r cols  @ shiftEvents:3098,3109,3117 cursorRect:3230 colsForAnchor:3243 stopForPart:3257 selectRegionAt:3275 duplicate:3291 selectionAsRect:3417,3424 eachMemberEvent:3440
-  @field r cols  @ cursorAnchor:3496 streamRefAt:3504 instanceAtCursor:3513 movePreview:3574,3582 hideExtraCol:3745,3775 automateParam:3927 unautomateParam:3944 inputOctaveUp:4018 tracker.playFromCursor:4079 rebuild:4165
-  @field r cols  @ rebuild:4220,4221,4222,4339,4387,4403,4424
-  @field w cols  @ 140 rebuild:4170 dropGrid:4442
-  @field r columns  @ rowBounds:395 rebuild:4268
-  @field w commit  @ groupBridge.commit:4499
-  @field w currentRpb  @ 4522
-  @field w cursorAnchor  @ groupBridge.cursorAnchor:4482
-  @field w cursorDown  @ 4552,4572,4588
-  @field w cursorLeft  @ 4552,4572,4588
-  @field w cursorRight  @ 4552,4572,4588
-  @field w cursorUp  @ 4552,4572,4588
-  @field w cut  @ tracker.cut:4026
-  @field w cycleBlock  @ 4576
-  @field w cycleVBlock  @ 4576
-  @field w decRPB  @ tracker.decRPB:4085
-  @field r delay  @ editEvent:1079 quantizeKeepRealisedScope:2041 nudgeDelay:2518 queueResetDelays:2957
-  @field w delay  @ writePlans:477 editEvent:1103 1344,2987 nudgeDelay:2521 queueResetDelays:2958
-  @field r delete  @ forEachRowOp:2431
-  @field w delete  @ plain.delete:68 member.delete:74 parked.delete:82 edit.delete:105 planInstanceMoves:2400 4027
-  @field r deleteFxPatch  @ 2936
-  @field w deleteFxPatch  @ 2936
-  @field w deleteRow  @ tracker.deleteRow:4057
-  @field w deleteRowCol  @ tracker.deleteRowCol:4059
-  @field w deleteSel  @ tracker.deleteSel:4029
-  @field w delta  @ movePreview:3589
-  @field r denom  @ logPerRowFor:534 timeSig:3354 projectionEpoch:4110 rebuild:4157
-  @field w denom  @ timeSig:3353
-  @field r derived  @ notDerived:2278 fxHostAtCursor:2755
-  @field w destSrc  @ movePreview:3591
-  @field r detune  @ editEvent:1056 chordStrike:1274 chordNudgeVel:1318 blend:2147 strandsOf:2182 seatStrand:2194 nudgePitch:2497,2503 nudgeVel:2512
-  @field w detune  @ strikePitch:908,926 editEvent:1060 snapToTemper:2171 strandsOf:2182 seatStrand:2195 nudgePitch:2504
-  @field r digitsBackspace  @ 1436
-  @field w digitsBackspace  @ 1436
-  @field r digitsStrike  @ 1435
-  @field w digitsStrike  @ 1435
-  @field w doubleRPB  @ tracker.doubleRPB:4082
+  @field w cmgr  @ 4504
+  @field r col  @ conformOverlaps:416,417 strikePitch:902 interpolate:1568 noteOff:1819,1822 adjustDuration:1866,1868 adjustPositionMulti:1895,1914 quantizeScope:1994
+  @field r col  @ quantizeScope:1994 quantizeKeepRealisedScope:2023 scaleScope:2073 nudge:2558,2571 deleteEvent:3004 deleteSelection:3027
+  @field w col  @ allGroups:491 eventsByCol:515 editEvent:1016 chordStrike:1287 interpolate:1564 noteOff:1812 adjustPositionMulti:1906 quantizeScope:2007 quantizeKeepRealisedScope:2028 scaleScope:2077 shiftPlan:2284 deletedCells:3548
+  @field w col1  @ scaleScope:2113 shiftEvents:3201 selectRegionAt:3276
+  @field w col2  @ scaleScope:2113 shiftEvents:3201 selectRegionAt:3276
+  @field r colIdx  @ toggleSignFlip:937 entrySignAt:959 digitsStrike:1386 digitsBackspace:1405
+  @field w colIdx  @ toggleSignFlip:941 digitsStrike:1387
+  @field w colLeft  @ 4553,4573,4589
+  @field w colRight  @ 4553,4573,4589
+  @field r cols  @ allGroups:488 eventsByCol:499,503 matchGridToCursor:598 lastVisibleFrom:794,795 followViewport:806,818 findCol:838 entrySignAt:963 chordStrike:1233
+  @field r cols  @ chordStrike:1268 digitPartAt:1355 digitsStrike:1395 digitsBackspace:1405 addLaneEvent:1494 interpolate:1574 fxLaneOf:1646 recentreOnRegion:1658 fxColAtLane:1748 cursorNoteBefore:1781 noteOff:1828 adjustDuration:1873
+  @field r cols  @ adjustPosition:1943 planInstanceMoves:2385 allCols:2437 curCol:2439 nudge:2580 mintRegionForSelection:2627 eachFxRegionInRect:2646 pasteFxRegions:2679 fxHostAtCursor:2748 deleteEvent:2992 colFor:3076 shiftEvents:3092
+  @field r cols  @ shiftEvents:3097,3108,3116 cursorRect:3229 colsForAnchor:3242 stopForPart:3256 selectRegionAt:3274 duplicate:3290 selectionAsRect:3416,3423 eachMemberEvent:3439
+  @field r cols  @ cursorAnchor:3495 streamRefAt:3503 instanceAtCursor:3512 movePreview:3573,3581 hideExtraCol:3744,3774 automateParam:3926 unautomateParam:3943 inputOctaveUp:4017 tracker.playFromCursor:4078 rebuild:4164
+  @field r cols  @ rebuild:4219,4220,4221,4338,4386,4402,4423
+  @field w cols  @ 140 rebuild:4169 dropGrid:4441
+  @field r columns  @ rowBounds:395 rebuild:4267
+  @field w commit  @ groupBridge.commit:4498
+  @field w currentRpb  @ 4521
+  @field w cursorAnchor  @ groupBridge.cursorAnchor:4481
+  @field w cursorDown  @ 4551,4571,4587
+  @field w cursorLeft  @ 4551,4571,4587
+  @field w cursorRight  @ 4551,4571,4587
+  @field w cursorUp  @ 4551,4571,4587
+  @field w cut  @ tracker.cut:4025
+  @field w cycleBlock  @ 4575
+  @field w cycleVBlock  @ 4575
+  @field w decRPB  @ tracker.decRPB:4084
+  @field r delay  @ editEvent:1078 quantizeKeepRealisedScope:2040 nudgeDelay:2517 queueResetDelays:2956
+  @field w delay  @ writePlans:477 editEvent:1102 1343,2986 nudgeDelay:2520 queueResetDelays:2957
+  @field r delete  @ forEachRowOp:2430
+  @field w delete  @ plain.delete:68 member.delete:74 parked.delete:82 edit.delete:105 planInstanceMoves:2399 4026
+  @field r deleteFxPatch  @ 2935
+  @field w deleteFxPatch  @ 2935
+  @field w deleteRow  @ tracker.deleteRow:4056
+  @field w deleteRowCol  @ tracker.deleteRowCol:4058
+  @field w deleteSel  @ tracker.deleteSel:4028
+  @field w delta  @ movePreview:3588
+  @field r denom  @ logPerRowFor:534 timeSig:3353 projectionEpoch:4109 rebuild:4156
+  @field w denom  @ timeSig:3352
+  @field r derived  @ notDerived:2277 fxHostAtCursor:2754
+  @field w destSrc  @ movePreview:3590
+  @field r detune  @ editEvent:1055 chordStrike:1273 chordNudgeVel:1317 blend:2146 strandsOf:2181 seatStrand:2193 nudgePitch:2496,2502 nudgeVel:2511
+  @field w detune  @ strikePitch:907,925 editEvent:1059 snapToTemper:2170 strandsOf:2181 seatStrand:2194 nudgePitch:2503
+  @field r digitsBackspace  @ 1435
+  @field w digitsBackspace  @ 1435
+  @field r digitsStrike  @ 1434
+  @field w digitsStrike  @ 1434
+  @field w doubleRPB  @ tracker.doubleRPB:4081
   @field r ds  @ 35
-  @field w duplicateDown  @ 4030,4551
-  @field r dur  @ planInstanceMoves:2393 selectRegionAt:3274 duplicateCascade:3387,3403 eventsInRect:3450 clearRegionAt:3474 clearMoveGap:3481 instanceAtCursor:3516 movePreview:3570 paintRegionStream:3702 groupPaste:4000 rebuild:4391
-  @field w dur  @ cursorRect:3233 selectionAsRect:3433 paintRegionStream:3702
-  @field r e  @ conformOverlaps:415,422,434,448,451 writePlans:465,470,478,479 quantizeKeepRealisedScope:2040
-  @field r e  @ quantizeKeepRealisedScope:2041
-  @field w e  @ conformOverlaps:428 quantizeScope:2008 quantizeKeepRealisedScope:2029 scaleScope:2078 shiftPlan:2285
-  @field w ec  @ 4513
-  @field w edit  @ 4514
-  @field r editEvent  @ 1431
-  @field w editEvent  @ 1431
-  @field r endRow  @ pasteFxRegions:2694
-  @field w endRow  @ gatherFxRegions:2670 rebuild:4366
-  @field r endppq  @ assignNoteMove:590,591 repinToRow:886 strikePitch:917,918 editEvent:1125 applyRegionWindow:1674 quantizeScope:2002,2006 scaleScope:2080 shiftPlan:2289
-  @field r endppq  @ insertRowCore:2324,2325 deleteRowCore:2344,2346 gatherFxRegions:2670 rebuild:4245,4246,4324,4406
-  @field w endppq  @ writePlans:478 assignStamp:568 assignTail:578 assignNoteMove:592 placeNewNote:863 repinToRow:886 applyRegionWindow:1679 applyNoteOff:1795 strandsOf:2182 mintRegionForSelection:2633 pasteFxRegions:2694
-  @field r endppqC  @ regionNoteOff:1717 regionAdjustDuration:1730,1732 regionAdjustPosition:1741 shiftFxLane:1767 noteOff:1820,1842 adjustDurationCore:1854 strandsOf:2182 fxHostAtCursor:2756 rebuild:4364
-  @field r endppqC  @ rebuild:4365
-  @field w endppqC  @ rebuild:4324
-  @field r evType  @ toParkedSpec:52,54 relocate:96 notePAEvents:873 strikePitch:915 editEvent:1113 fxHostAtCursor:2755 queueDeleteNotes:2950 queueResetDelays:2957 queueResetVelocities:2969 colTypeOf:3071,3072
-  @field r evType  @ rebuild:4405
-  @field w evType  @ relocate:96 placeNewNote:866 editEvent:1127,1193 addLaneEvent:1491 shiftEvents:3133 ghostOverlay:3656,3657
-  @field r event  @ seatStrand:2195
-  @field w event  @ strandsOf:2183
-  @field w eventShiftLeft  @ tracker.eventShiftLeft:4072
-  @field w eventShiftRight  @ tracker.eventShiftRight:4073
-  @field r events  @ neighbourEvents:367,368 conformOverlaps:425 allGroups:490 eventsByCol:510 placeNewNote:861 notePAEvents:872 strikePitch:916 inheritedSign:951 editEvent:1124,1196 visibleAt:1443
-  @field r events  @ visibleAt:1445 moveLaneEvent:1456,1460 addLaneEvent:1482,1498 interpolate:1562,1581 interpolateValues:1593 cursorRegionBefore:1633 recentreOnRegion:1661 cursorNoteBefore:1785 noteOff:1812
-  @field r events  @ noteOff:1840 adjustPositionMulti:1901 adjustPosition:1958,1974 insertRowCore:2301,2322 deleteRowCore:2342,2351 cursorRowEvent:2545 eachFxRegionInRect:2652 fxHostAtCursor:2754 queueResetVelocities:2967
-  @field r events  @ shiftEvents:3115,3180 eachMemberEvent:3443 hideExtraCol:3766,3782 unautomateParam:3946 rebuild:4166,4269,4274,4277,4288,4291
-  @field r events  @ rebuild:4297,4307,4310,4340,4350,4425
-  @field w events  @ rebuild:4200
-  @field w eventsInRect  @ groupBridge.eventsInRect:4480
-  @field r evs  @ adjustPositionMulti:1916,1917,1918,1920
-  @field w evs  @ adjustPositionMulti:1907
-  @field r evt  @ strikePitch:903 deletedCells:3547,3549
-  @field w evt  @ editEvent:1017 chordStrike:1288 rebuild:4366
-  @field r evts  @ interpolate:1569
-  @field w evts  @ interpolate:1565
-  @field r existed  @ digitsBackspace:1408
-  @field w existed  @ digitsStrike:1392
+  @field w duplicateDown  @ 4029,4550
+  @field r dur  @ planInstanceMoves:2392 selectRegionAt:3273 duplicateCascade:3386,3402 eventsInRect:3449 clearRegionAt:3473 clearMoveGap:3480 instanceAtCursor:3515 movePreview:3569 paintRegionStream:3701 groupPaste:3999 rebuild:4390
+  @field w dur  @ cursorRect:3232 selectionAsRect:3432 paintRegionStream:3701
+  @field r e  @ conformOverlaps:415,422,434,448,451 writePlans:465,470,478,479 quantizeKeepRealisedScope:2039
+  @field r e  @ quantizeKeepRealisedScope:2040
+  @field w e  @ conformOverlaps:428 quantizeScope:2007 quantizeKeepRealisedScope:2028 scaleScope:2077 shiftPlan:2284
+  @field w ec  @ 4512
+  @field w edit  @ 4513
+  @field r editEvent  @ 1430
+  @field w editEvent  @ 1430
+  @field r endRow  @ pasteFxRegions:2693
+  @field w endRow  @ gatherFxRegions:2669 rebuild:4365
+  @field r endppq  @ assignNoteMove:590,591 repinToRow:885 strikePitch:916,917 editEvent:1124 applyRegionWindow:1673 quantizeScope:2001,2005 scaleScope:2079 shiftPlan:2288
+  @field r endppq  @ insertRowCore:2323,2324 deleteRowCore:2343,2345 gatherFxRegions:2669 rebuild:4244,4245,4323,4405
+  @field w endppq  @ writePlans:478 assignStamp:568 assignTail:578 assignNoteMove:592 placeNewNote:862 repinToRow:885 applyRegionWindow:1678 applyNoteOff:1794 strandsOf:2181 mintRegionForSelection:2632 pasteFxRegions:2693
+  @field r endppqC  @ regionNoteOff:1716 regionAdjustDuration:1729,1731 regionAdjustPosition:1740 shiftFxLane:1766 noteOff:1819,1841 adjustDurationCore:1853 strandsOf:2181 fxHostAtCursor:2755 rebuild:4363
+  @field r endppqC  @ rebuild:4364
+  @field w endppqC  @ rebuild:4323
+  @field r evType  @ toParkedSpec:52,54 relocate:96 notePAEvents:872 strikePitch:914 editEvent:1112 fxHostAtCursor:2754 queueDeleteNotes:2949 queueResetDelays:2956 queueResetVelocities:2968 colTypeOf:3070,3071
+  @field r evType  @ rebuild:4404
+  @field w evType  @ relocate:96 placeNewNote:865 editEvent:1126,1192 addLaneEvent:1490 shiftEvents:3132 ghostOverlay:3655,3656
+  @field r event  @ seatStrand:2194
+  @field w event  @ strandsOf:2182
+  @field w eventShiftLeft  @ tracker.eventShiftLeft:4071
+  @field w eventShiftRight  @ tracker.eventShiftRight:4072
+  @field r events  @ neighbourEvents:367,368 conformOverlaps:425 allGroups:490 eventsByCol:510 placeNewNote:860 notePAEvents:871 strikePitch:915 inheritedSign:950 editEvent:1123,1195 visibleAt:1442
+  @field r events  @ visibleAt:1444 moveLaneEvent:1455,1459 addLaneEvent:1481,1497 interpolate:1561,1580 interpolateValues:1592 cursorRegionBefore:1632 recentreOnRegion:1660 cursorNoteBefore:1784 noteOff:1811
+  @field r events  @ noteOff:1839 adjustPositionMulti:1900 adjustPosition:1957,1973 insertRowCore:2300,2321 deleteRowCore:2341,2350 cursorRowEvent:2544 eachFxRegionInRect:2651 fxHostAtCursor:2753 queueResetVelocities:2966
+  @field r events  @ shiftEvents:3114,3179 eachMemberEvent:3442 hideExtraCol:3765,3781 unautomateParam:3945 rebuild:4165,4268,4273,4276,4287,4290
+  @field r events  @ rebuild:4296,4306,4309,4339,4349,4424
+  @field w events  @ rebuild:4199
+  @field w eventsInRect  @ groupBridge.eventsInRect:4479
+  @field r evs  @ adjustPositionMulti:1915,1916,1917,1919
+  @field w evs  @ adjustPositionMulti:1906
+  @field r evt  @ strikePitch:902 deletedCells:3546,3548
+  @field w evt  @ editEvent:1016 chordStrike:1287 rebuild:4365
+  @field r evts  @ interpolate:1568
+  @field w evts  @ interpolate:1564
+  @field r existed  @ digitsBackspace:1407
+  @field w existed  @ digitsStrike:1391
   @field r facade  @ 35
-  @field r facility  @ retune:2260,2269
-  @field r floated  @ cancelLearn:3900
-  @field w floated  @ armLearn:3889
-  @field w freezeFxGroup  @ 4093
-  @field w freezeFxRegion  @ 4092
-  @field r freezeRegion  @ 2931
-  @field w freezeRegion  @ 2931
-  @field r freezeToGroup  @ 2932
-  @field w freezeToGroup  @ 2932
-  @field r fromEvt  @ interpolate:1579 deleteEvent:3016
-  @field w fromEvt  @ interpolateValues:1603
-  @field r fromSel  @ duplicateCascade:3373
-  @field w fromSel  @ duplicateCascade:3405
-  @field r fx  @ gatherFxRegions:2671 pasteFxRegions:2695 noteFx:2739,2741,2743 ghostOverlay:3672 rebuild:4320
-  @field w fx  @ mintRegionForSelection:2633 gatherFxRegions:2671 pasteFxRegions:2695 setNoteFx:2783,2793,2803 rebuild:4138 4516
-  @field r fxGuid  @ armLearn:3885,3888,3889 learnFxGuid:3893 showFx:3896 cancelLearn:3900 pollLearn:3914,3916,3918
-  @field r fxGuid  @ pollLearn:3918,3920,3922 automateParam:3931
-  @field w fxGuid  @ armLearn:3888 pollLearn:3920
-  @field w gained  @ paintRegionStream:3705
-  @field w gather  @ 4516
-  @field w getCtx  @ clipboard.getCtx:4523
-  @field w getLength  @ clipboard.getLength:4524
-  @field r ghosts  @ inheritedSign:949 interpolate:1578 deleteEvent:3014 rebuild:4167,4426
-  @field w ghosts  @ rebuild:4167,4426,4427
-  @field w glyph  @ chainStack:4123 rebuild:4321
+  @field r facility  @ retune:2259,2268
+  @field r floated  @ cancelLearn:3899
+  @field w floated  @ armLearn:3888
+  @field w freezeFxGroup  @ 4092
+  @field w freezeFxRegion  @ 4091
+  @field r freezeRegion  @ 2930
+  @field w freezeRegion  @ 2930
+  @field r freezeToGroup  @ 2931
+  @field w freezeToGroup  @ 2931
+  @field r fromEvt  @ interpolate:1578 deleteEvent:3015
+  @field w fromEvt  @ interpolateValues:1602
+  @field r fromSel  @ duplicateCascade:3372
+  @field w fromSel  @ duplicateCascade:3404
+  @field r fx  @ gatherFxRegions:2670 pasteFxRegions:2694 noteFx:2738,2740,2742 ghostOverlay:3671 rebuild:4319
+  @field w fx  @ mintRegionForSelection:2632 gatherFxRegions:2670 pasteFxRegions:2694 setNoteFx:2782,2792,2802 rebuild:4137 4515
+  @field r fxGuid  @ armLearn:3884,3887,3888 learnFxGuid:3892 showFx:3895 cancelLearn:3899 pollLearn:3913,3915,3917
+  @field r fxGuid  @ pollLearn:3917,3919,3921 automateParam:3930
+  @field w fxGuid  @ armLearn:3887 pollLearn:3919
+  @field w gained  @ paintRegionStream:3704
+  @field w gather  @ 4515
+  @field w getCtx  @ clipboard.getCtx:4522
+  @field w getLength  @ clipboard.getLength:4523
+  @field r ghosts  @ inheritedSign:948 interpolate:1577 deleteEvent:3013 rebuild:4166,4425
+  @field w ghosts  @ rebuild:4166,4425,4426
+  @field w glyph  @ chainStack:4122 rebuild:4320
   @field r gm  @ 35
-  @field w gm  @ 4479
-  @field w goBottom  @ 4553,4573,4589
-  @field w goLeft  @ 4554,4573,4590
-  @field w goRight  @ 4554,4573,4590
-  @field w goTop  @ 4553,4573,4589
-  @field r grid  @ inputOctaveUp:4018
-  @field w grid  @ 147,4503,4513
-  @field w groupBridge  @ 4509
-  @field w groupDuplicate  @ 4087,4587
-  @field r groupId  @ planInstanceMoves:2400,2402 forEachRowOp:2431,2432 deleteEvent:3004,3006 instanceAtCursor:3519 localBlocked:3534 movePreview:3565,3588 paintRegionStream:3683
-  @field w groupId  @ planInstanceMoves:2400,2402 instanceAtCursor:3519 movePreview:3588
-  @field w groupLocalToggle  @ tracker.groupLocalToggle:4089
-  @field w groupPaste  @ 4088
-  @field w growNote  @ tracker.growNote:4037
+  @field w gm  @ 4478
+  @field w goBottom  @ 4552,4572,4588
+  @field w goLeft  @ 4553,4572,4589
+  @field w goRight  @ 4553,4572,4589
+  @field w goTop  @ 4552,4572,4588
+  @field r grid  @ inputOctaveUp:4017
+  @field w grid  @ 147,4502,4512
+  @field w groupBridge  @ 4508
+  @field w groupDuplicate  @ 4086,4586
+  @field r groupId  @ planInstanceMoves:2399,2401 forEachRowOp:2430,2431 deleteEvent:3003,3005 instanceAtCursor:3518 localBlocked:3533 movePreview:3564,3587 paintRegionStream:3682
+  @field w groupId  @ planInstanceMoves:2399,2401 instanceAtCursor:3518 movePreview:3587
+  @field w groupLocalToggle  @ tracker.groupLocalToggle:4088
+  @field w groupPaste  @ 4087
+  @field w growNote  @ tracker.growNote:4036
   @field r guid  @ gotoTrack:292 pickTrack:312
-  @field w halveRPB  @ tracker.halveRPB:4083
-  @field r harmonicLock  @ solveToTarget:2228 solveToMoves:2238
-  @field r hidden  @ notHidden:39 visibleAt:1446 moveLaneEvent:1461 addLaneEvent:1499 interpolateValues:1593 rebuild:4351
-  @field w hidden  @ ghostOverlay:3674
-  @field r hideExtraCol  @ 3955
-  @field w hideExtraCol  @ 3955
-  @field r huge  @ shiftEvents:3173
+  @field w halveRPB  @ tracker.halveRPB:4082
+  @field r harmonicLock  @ solveToTarget:2227 solveToMoves:2237
+  @field r hidden  @ notHidden:39 visibleAt:1445 moveLaneEvent:1460 addLaneEvent:1498 interpolateValues:1592 rebuild:4350
+  @field w hidden  @ ghostOverlay:3673
+  @field r hideExtraCol  @ 3954
+  @field w hideExtraCol  @ 3954
+  @field r huge  @ shiftEvents:3172
   @field r idx  @ recoverSlot:156,159,160,161 gotoTake:302,306
-  @field w incRPB  @ tracker.incRPB:4084
-  @field r index  @ listParams:3872,3876
-  @field w inputOctaveDown  @ tracker.inputOctaveDown:4032
-  @field w inputOctaveUp  @ 4031
-  @field w inputSampleDown  @ tracker.inputSampleDown:4035
-  @field w inputSampleUp  @ tracker.inputSampleUp:4034
-  @field w insertRow  @ tracker.insertRow:4056
-  @field w insertRowCol  @ tracker.insertRowCol:4058
-  @field r instId  @ planInstanceMoves:2400,2402 forEachRowOp:2431,2432 deleteEvent:3004,3006 instanceAtCursor:3519 localBlocked:3534 movePreview:3565,3588
-  @field w instId  @ planInstanceMoves:2400,2402 instanceAtCursor:3519 movePreview:3588
-  @field w instanceAt  @ groupBridge.instanceAt:4483
-  @field r intentCents  @ editEvent:1058 snapToTemper:2168 strandsOf:2183 seatStrand:2194 nudgePitch:2501
-  @field w intentCents  @ strikePitch:908 editEvent:1060 snapToTemper:2171 strandsOf:2183 seatStrand:2195 nudgePitch:2504
-  @field w interpolate  @ tracker.interpolate:4028
-  @field r isNote  @ placeNewNote:861 strikePitch:916 editEvent:1124 cursorNoteBefore:1785 noteOff:1812,1840 insertRowCore:2322 deleteRowCore:2342 cursorRowEvent:2544 shiftEvents:3112
-  @field r key  @ isFrameChange:544 solveToTarget:2225 retune:2259
-  @field r kind  @ rebuild:4321
-  @field r label  @ rebuild:4217
-  @field w label  @ pollLearn:3921 rebuild:4199,4217
-  @field r lane  @ relocate:93,98 streamIdOf:525 findCol:841 placeNewNote:864 strikePitch:926 editEvent:1130
-  @field r lane  @ chordStrike:1239,1247,1273,1282 chordBackspace:1302 chordNudgeVel:1314 colFor:3079 shiftEvents:3099,3133,3144,3192
-  @field r lane  @ eventsInRect:3453 hideExtraCol:3752 showDelay:3964,3965 rebuild:4286
-  @field w lane  @ relocate:98 placeNewNote:864 strikePitch:926 editEvent:1130 chordCell:1212 chordStrike:1273,1289,1291 shiftEvents:3133,3146,3154,3192
-  @field w lane  @ eventsInRect:3453 rebuild:4198
-  @field r lane1Col  @ rebuild:4223
-  @field w lane1Col  @ rebuild:4173 dropGrid:4445
-  @field r laneDelta  @ colInInstance:2367 planInstanceMoves:2404 clearMoveGap:3484,3490 instanceAtCursor:3517 movePreview:3561,3572 rebuild:4388
-  @field w laneDelta  @ planInstanceMoves:2404 movePreview:3589
-  @field w length  @ rebuild:4258
-  @field r lengthQN  @ bracketCurrentInstance:240 playRow:3334 cutRow:3348
+  @field w incRPB  @ tracker.incRPB:4083
+  @field r index  @ listParams:3871,3875
+  @field w inputOctaveDown  @ tracker.inputOctaveDown:4031
+  @field w inputOctaveUp  @ 4030
+  @field w inputSampleDown  @ tracker.inputSampleDown:4034
+  @field w inputSampleUp  @ tracker.inputSampleUp:4033
+  @field w insertRow  @ tracker.insertRow:4055
+  @field w insertRowCol  @ tracker.insertRowCol:4057
+  @field r instId  @ planInstanceMoves:2399,2401 forEachRowOp:2430,2431 deleteEvent:3003,3005 instanceAtCursor:3518 localBlocked:3533 movePreview:3564,3587
+  @field w instId  @ planInstanceMoves:2399,2401 instanceAtCursor:3518 movePreview:3587
+  @field w instanceAt  @ groupBridge.instanceAt:4482
+  @field r intentCents  @ editEvent:1057 snapToTemper:2167 strandsOf:2182 seatStrand:2193 nudgePitch:2500
+  @field w intentCents  @ strikePitch:907 editEvent:1059 snapToTemper:2170 strandsOf:2182 seatStrand:2194 nudgePitch:2503
+  @field w interpolate  @ tracker.interpolate:4027
+  @field r isNote  @ placeNewNote:860 strikePitch:915 editEvent:1123 cursorNoteBefore:1784 noteOff:1811,1839 insertRowCore:2321 deleteRowCore:2341 cursorRowEvent:2543 shiftEvents:3111
+  @field r key  @ isFrameChange:544 solveToTarget:2224 retune:2258
+  @field r kind  @ rebuild:4320
+  @field r label  @ rebuild:4216
+  @field w label  @ pollLearn:3920 rebuild:4198,4216
+  @field r lane  @ relocate:93,98 streamIdOf:525 findCol:840 placeNewNote:863 strikePitch:925 editEvent:1129
+  @field r lane  @ chordStrike:1238,1246,1272,1281 chordBackspace:1301 chordNudgeVel:1313 colFor:3078 shiftEvents:3098,3132,3143,3191
+  @field r lane  @ eventsInRect:3452 hideExtraCol:3751 showDelay:3963,3964 rebuild:4285
+  @field w lane  @ relocate:98 placeNewNote:863 strikePitch:925 editEvent:1129 chordCell:1211 chordStrike:1272,1288,1290 shiftEvents:3132,3145,3153,3191
+  @field w lane  @ eventsInRect:3452 rebuild:4197
+  @field r lane1Col  @ rebuild:4222
+  @field w lane1Col  @ rebuild:4172 dropGrid:4444
+  @field r laneDelta  @ colInInstance:2366 planInstanceMoves:2403 clearMoveGap:3483,3489 instanceAtCursor:3516 movePreview:3560,3571 rebuild:4387
+  @field w laneDelta  @ planInstanceMoves:2403 movePreview:3588
+  @field w length  @ rebuild:4257
+  @field r lengthQN  @ bracketCurrentInstance:240 playRow:3333 cutRow:3347
   @field r level  @ isFrameChange:544
   @field r lib  @ 35
-  @field r loadFxPatch  @ 2935
-  @field w loadFxPatch  @ 2935
-  @field r locs  @ adjustDuration:1868 adjustPositionMulti:1898 quantizeScope:1996 quantizeKeepRealisedScope:2025 scaleScope:2076 notesIn:2157 nudge:2560,2570 deleteSelection:3028
+  @field r loadFxPatch  @ 2934
+  @field w loadFxPatch  @ 2934
+  @field r locs  @ adjustDuration:1867 adjustPositionMulti:1897 quantizeScope:1995 quantizeKeepRealisedScope:2024 scaleScope:2075 notesIn:2156 nudge:2559,2569 deleteSelection:3027
   @field w locs  @ allGroups:491 eventsByCol:515
-  @field w logPerRow  @ editCursor.logPerRow:4507
-  @field r mark  @ duplicateCascade:3391
-  @field w mark  @ duplicateCascade:3406
-  @field w matchGridToCursor  @ 4086
+  @field w logPerRow  @ editCursor.logPerRow:4506
+  @field r mark  @ duplicateCascade:3390
+  @field w mark  @ duplicateCascade:3405
+  @field w matchGridToCursor  @ 4085
   @field w member  @ 71
-  @field w mergeTiers  @ retune:2265 rebuild:4178
-  @field r midiChan  @ rowBounds:395 eventsByCol:506 findCol:840 strikePitch:927 editEvent:1000,1129,1191 chordStrike:1239 moveLaneEvent:1466 addLaneEvent:1481 interpolate:1559
-  @field r midiChan  @ interpolate:1560,1581 interpolateValues:1589 cursorRegionBefore:1631 fxLaneOf:1648 applyRegionWindow:1671 regionNoteOff:1714 regionAdjustDuration:1728 regionAdjustPosition:1739 fxColAtLane:1750 shiftFxLane:1764
-  @field r midiChan  @ cursorNoteBefore:1784 applyNoteOff:1799 noteOff:1809,1820,1837,1838,1842 adjustDurationCore:1852 adjustPositionMulti:1903,1915 adjustPosition:1947 quantizeScope:1995
-  @field r midiChan  @ quantizeKeepRealisedScope:2024 scaleScope:2074 insertRowCore:2295 deleteRowCore:2331 colInInstance:2366 nudgePitch:2505 nudgeVel:2512 cursorRowEvent:2543 mintRegionForSelection:2630 eachFxRegionInRect:2649 pasteFxRegions:2682
-  @field r midiChan  @ fxHostAtCursor:2751,2752 colFor:3078 kindAt:3089 shiftEvents:3113,3114,3125,3175,3182 cursorRect:3233 colsForAnchor:3244 selectionAsRect:3418
-  @field r midiChan  @ selectionAsRect:3418,3426 eachMemberEvent:3441 eventsInRect:3452 clearMoveGap:3486 cursorAnchor:3498 streamRefAt:3506 deletedCells:3549 addExtraCol:3720 hideExtraCol:3747 automateParam:3929,3935
-  @field r midiChan  @ automateParam:3936 showDelay:3963,3966 tracker.playFromCursor:4080 rebuild:4349,4390,4391,4405,4406
-  @field w midiChan  @ rebuild:4204
-  @field r mode  @ applyTakeProperties:633
-  @field r moveDelta  @ movePreview:3559
-  @field r moveFxStage  @ 2928
-  @field w moveFxStage  @ 2928
-  @field w moveHook  @ 4508
-  @field w mutedChannels  @ 4452
-  @field r name  @ applyTakeProperties:625,628 pollLearn:3921 ds:dataChanged:4470
+  @field w mergeTiers  @ retune:2264 rebuild:4177
+  @field r midiChan  @ rowBounds:395 eventsByCol:506 findCol:839 strikePitch:926 editEvent:999,1128,1190 chordStrike:1238 moveLaneEvent:1465 addLaneEvent:1480 interpolate:1558
+  @field r midiChan  @ interpolate:1559,1580 interpolateValues:1588 cursorRegionBefore:1630 fxLaneOf:1647 applyRegionWindow:1670 regionNoteOff:1713 regionAdjustDuration:1727 regionAdjustPosition:1738 fxColAtLane:1749 shiftFxLane:1763
+  @field r midiChan  @ cursorNoteBefore:1783 applyNoteOff:1798 noteOff:1808,1819,1836,1837,1841 adjustDurationCore:1851 adjustPositionMulti:1902,1914 adjustPosition:1946 quantizeScope:1994
+  @field r midiChan  @ quantizeKeepRealisedScope:2023 scaleScope:2073 insertRowCore:2294 deleteRowCore:2330 colInInstance:2365 nudgePitch:2504 nudgeVel:2511 cursorRowEvent:2542 mintRegionForSelection:2629 eachFxRegionInRect:2648 pasteFxRegions:2681
+  @field r midiChan  @ fxHostAtCursor:2750,2751 colFor:3077 kindAt:3088 shiftEvents:3112,3113,3124,3174,3181 cursorRect:3232 colsForAnchor:3243 selectionAsRect:3417
+  @field r midiChan  @ selectionAsRect:3417,3425 eachMemberEvent:3440 eventsInRect:3451 clearMoveGap:3485 cursorAnchor:3497 streamRefAt:3505 deletedCells:3548 addExtraCol:3719 hideExtraCol:3746 automateParam:3928,3934
+  @field r midiChan  @ automateParam:3935 showDelay:3962,3965 tracker.playFromCursor:4079 rebuild:4348,4389,4390,4404,4405
+  @field w midiChan  @ rebuild:4203
+  @field r mode  @ applyTakeProperties:632
+  @field r moveDelta  @ movePreview:3558
+  @field r moveFxStage  @ 2927
+  @field w moveFxStage  @ 2927
+  @field w moveHook  @ 4507
+  @field w mutedChannels  @ 4451
+  @field r name  @ applyTakeProperties:625,627 pollLearn:3920 ds:dataChanged:4469
   @field r newDelay  @ writePlans:477
-  @field w newDelay  @ quantizeKeepRealisedScope:2042
+  @field w newDelay  @ quantizeKeepRealisedScope:2041
   @field r newEndppq  @ writePlans:478
-  @field w newEndppq  @ quantizeScope:2009 scaleScope:2080 shiftPlan:2289
-  @field r newppq  @ conformOverlaps:429,438 writePlans:465,470,476 quantizeKeepRealisedScope:2042 scaleScope:2088 insertRowCore:2304
-  @field w newppq  @ conformOverlaps:438 quantizeScope:2008 quantizeKeepRealisedScope:2029 scaleScope:2078 shiftPlan:2285
-  @field r next  @ duplicateCascade:3392
-  @field w next  @ duplicateCascade:3406
-  @field r normalized  @ entrySignAt:966 editEvent:1156,1167,1173 valueBounds:2469 rebuild:4214
-  @field w normalized  @ rebuild:4214
-  @field r note  @ noteOff:1820,1823 adjustPositionMulti:1921
-  @field w note  @ noteOff:1813 adjustPositionMulti:1907 3059 rebuild:4138
-  @field w noteOff  @ 4036
-  @field r notes  @ rowBounds:395 chordStrike:1245,1249,1261,1273,1281,1291 chordBackspace:1300,1304 chordNudgeVel:1312
-  @field r notes  @ chordNudgeVel:1312 chordCommit:1328 seatStrand:2191 shortlisted:2207 reserveGhostReadout:3609 ghostOverlay:3643 addExtraCol:3728 hideExtraCol:3794 rebuild:4287
-  @field w notes  @ chordStrike:1239 ghostOverlay:3674 addExtraCol:3725,3728 hideExtraCol:3769,3783 automateParam:3935
-  @field w nudgeBack  @ tracker.nudgeBack:4039
-  @field w nudgeCoarseDown  @ tracker.nudgeCoarseDown:4061
-  @field w nudgeCoarseUp  @ tracker.nudgeCoarseUp:4060
-  @field w nudgeFineDown  @ tracker.nudgeFineDown:4068
-  @field w nudgeFineUp  @ tracker.nudgeFineUp:4064
-  @field w nudgeForward  @ tracker.nudgeForward:4040
-  @field r num  @ timeSig:3354 projectionEpoch:4110 rebuild:4158
-  @field w num  @ timeSig:3353
-  @field r numRows  @ rowBounds:397 followViewport:808 interpolateValues:1601 regionNoteOff:1718 regionAdjustDuration:1730 regionAdjustPosition:1742 adjustDurationCore:1856 adjustPositionMulti:1892 adjustPosition:1973 selectRegionAt:3274 cutRow:3349
-  @field w numRows  @ rebuild:4255,4259
-  @field r octaveStep  @ editEvent:1031
-  @field r octaveWidth  @ editEvent:1045 octaveWidth:3315 rebuild:4180
-  @field r offGrid  @ rebuild:4167,4343,4358
-  @field w offGrid  @ rebuild:4167,4347
-  @field r overflow  @ rebuild:4166,4342,4355
-  @field w overflow  @ rebuild:4166,4342,4346
+  @field w newEndppq  @ quantizeScope:2008 scaleScope:2079 shiftPlan:2288
+  @field r newppq  @ conformOverlaps:429,438 writePlans:465,470,476 quantizeKeepRealisedScope:2041 scaleScope:2087 insertRowCore:2303
+  @field w newppq  @ conformOverlaps:438 quantizeScope:2007 quantizeKeepRealisedScope:2028 scaleScope:2077 shiftPlan:2284
+  @field r next  @ duplicateCascade:3391
+  @field w next  @ duplicateCascade:3405
+  @field r normalized  @ entrySignAt:965 editEvent:1155,1166,1172 valueBounds:2468 rebuild:4213
+  @field w normalized  @ rebuild:4213
+  @field r note  @ noteOff:1819,1822 adjustPositionMulti:1920
+  @field w note  @ noteOff:1812 adjustPositionMulti:1906 3058 rebuild:4137
+  @field w noteOff  @ 4035
+  @field r notes  @ rowBounds:395 chordStrike:1244,1248,1260,1272,1280,1290 chordBackspace:1299,1303 chordNudgeVel:1311
+  @field r notes  @ chordNudgeVel:1311 chordCommit:1327 seatStrand:2190 shortlisted:2206 reserveGhostReadout:3608 ghostOverlay:3642 addExtraCol:3727 hideExtraCol:3793 rebuild:4286
+  @field w notes  @ chordStrike:1238 ghostOverlay:3673 addExtraCol:3724,3727 hideExtraCol:3768,3782 automateParam:3934
+  @field w nudgeBack  @ tracker.nudgeBack:4038
+  @field w nudgeCoarseDown  @ tracker.nudgeCoarseDown:4060
+  @field w nudgeCoarseUp  @ tracker.nudgeCoarseUp:4059
+  @field w nudgeFineDown  @ tracker.nudgeFineDown:4067
+  @field w nudgeFineUp  @ tracker.nudgeFineUp:4063
+  @field w nudgeForward  @ tracker.nudgeForward:4039
+  @field r num  @ timeSig:3353 projectionEpoch:4109 rebuild:4157
+  @field w num  @ timeSig:3352
+  @field r numRows  @ rowBounds:397 followViewport:807 interpolateValues:1600 regionNoteOff:1717 regionAdjustDuration:1729 regionAdjustPosition:1741 adjustDurationCore:1855 adjustPositionMulti:1891 adjustPosition:1972 selectRegionAt:3273 cutRow:3348
+  @field w numRows  @ rebuild:4254,4258
+  @field r octaveStep  @ editEvent:1030
+  @field r octaveWidth  @ editEvent:1044 octaveWidth:3314 rebuild:4179
+  @field r offGrid  @ rebuild:4166,4342,4357
+  @field w offGrid  @ rebuild:4166,4346
+  @field r overflow  @ rebuild:4165,4341,4354
+  @field w overflow  @ rebuild:4165,4341,4345
   @field r pa  @ 35
-  @field w pa  @ rebuild:4138
-  @field w pageDown  @ 4553,4573,4589
-  @field w pageUp  @ 4553,4573,4589
-  @field w paintStream  @ groupBridge.paintStream:4484
-  @field r param  @ pollLearn:3916,3919,3921,3922 automateParam:3931
-  @field w param  @ pollLearn:3921
-  @field r parked  @ parkedByUuid:2599 ghostOverlay:3671 rebuild:4286,4416
+  @field w pa  @ rebuild:4137
+  @field w pageDown  @ 4552,4572,4588
+  @field w pageUp  @ 4552,4572,4588
+  @field w paintStream  @ groupBridge.paintStream:4483
+  @field r param  @ pollLearn:3915,3918,3920,3921 automateParam:3930
+  @field w param  @ pollLearn:3920
+  @field r parked  @ parkedByUuid:2598 ghostOverlay:3670 rebuild:4285,4415
   @field w parked  @ 79
-  @field r parkedCC  @ rebuild:4301
-  @field r parkedPb  @ rebuild:4272
-  @field r part  @ toggleSignFlip:939 entrySignAt:961 digitsStrike:1387 nudge:2568,2571,2572 deleteSelection:3028 duplicate:3297
-  @field w part  @ eventsByCol:515 toggleSignFlip:942 digitsStrike:1388 duplicate:3291
-  @field w part1  @ scaleScope:2115 shiftEvents:3203 selectRegionAt:3278
-  @field w part2  @ scaleScope:2115 shiftEvents:3203 selectRegionAt:3278
-  @field r partAt  @ editEvent:1009 chordStrike:1235 digitPartAt:1357 digitsStrike:1397 stopForPart:3257 selectRegionAt:3275 duplicate:3291
-  @field r partStart  @ editEvent:1010 chordStrike:1236 digitPartAt:1358 noteOff:1833
-  @field w paste  @ 4516
-  @field r payload  @ duplicateCascade:3380
-  @field w payload  @ duplicateCascade:3405
-  @field r pb  @ hideExtraCol:3794 rebuild:4212,4273,4274,4277
-  @field w pb  @ 1345,1527,3059 rebuild:4138
-  @field r pc  @ hideExtraCol:3794 rebuild:4269
-  @field w pc  @ 3059 rebuild:4138
-  @field w pick  @ retune:2265 rebuild:4178
-  @field r pitch  @ notePreds:376,377,378 killAudition:747 auditionRelease:765,766 notePAEvents:873 strikePitch:918 editEvent:1033,1056,1058,1131
-  @field r pitch  @ chordStrike:1246,1272 chordBackspace:1306 chordNudgeVel:1321,1322 blend:2147 strandsOf:2182 seatStrand:2194 nudgePitch:2497,2500,2503 nudgeVel:2512
-  @field w pitch  @ auditionAdd:759 strikePitch:908,926 editEvent:1060,1131 chordStrike:1273,1291 1345 snapToTemper:2171 strandsOf:2182 seatStrand:2195 nudgePitch:2504
-  @field w pitch  @ 2985
+  @field r parkedCC  @ rebuild:4300
+  @field r parkedPb  @ rebuild:4271
+  @field r part  @ toggleSignFlip:938 entrySignAt:960 digitsStrike:1386 nudge:2567,2570,2571 deleteSelection:3027 duplicate:3296
+  @field w part  @ eventsByCol:515 toggleSignFlip:941 digitsStrike:1387 duplicate:3290
+  @field w part1  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
+  @field w part2  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
+  @field r partAt  @ editEvent:1008 chordStrike:1234 digitPartAt:1356 digitsStrike:1396 stopForPart:3256 selectRegionAt:3274 duplicate:3290
+  @field r partStart  @ editEvent:1009 chordStrike:1235 digitPartAt:1357 noteOff:1832
+  @field w paste  @ 4515
+  @field r payload  @ duplicateCascade:3379
+  @field w payload  @ duplicateCascade:3404
+  @field r pb  @ hideExtraCol:3793 rebuild:4211,4272,4273,4276
+  @field w pb  @ 1344,1526,3058 rebuild:4137
+  @field r pc  @ hideExtraCol:3793 rebuild:4268
+  @field w pc  @ 3058 rebuild:4137
+  @field w pick  @ retune:2264 rebuild:4177
+  @field r pitch  @ notePreds:376,377,378 killAudition:746 auditionRelease:764,765 notePAEvents:872 strikePitch:917 editEvent:1032,1055,1057,1130
+  @field r pitch  @ chordStrike:1245,1271 chordBackspace:1305 chordNudgeVel:1320,1321 blend:2146 strandsOf:2181 seatStrand:2193 nudgePitch:2496,2499,2502 nudgeVel:2511
+  @field w pitch  @ auditionAdd:758 strikePitch:907,925 editEvent:1059,1130 chordStrike:1272,1290 1344 snapToTemper:2170 strandsOf:2181 seatStrand:2194 nudgePitch:2503
+  @field w pitch  @ 2984
   @field w plain  @ 65
   @field r plan  @ conformOverlaps:447,448,450,451
   @field w plan  @ conformOverlaps:428
-  @field w playFromCursor  @ tracker.playFromCursor:4078
-  @field w playFromTop  @ tracker.playFromTop:4074
+  @field w playFromCursor  @ tracker.playFromCursor:4077
+  @field w playFromTop  @ tracker.playFromTop:4073
   @field r ppq  @ kindOf:44 relocate:91,100 neighbourEvents:369,370 rowBounds:398
   @field r ppq  @ rowBounds:399 conformOverlaps:429,433,434,438,446
-  @field r ppq  @ conformOverlaps:449,452 writePlans:465,470 assignNoteMove:591 placeNewNote:861 notePAEvents:874 repinToRow:883,886 strikePitch:910
-  @field r ppq  @ strikePitch:916,917,918,927 chordStrike:1288 moveLaneEvent:1469,1470,1471 addLaneEvent:1501 interpolateValues:1598
-  @field r ppq  @ interpolateValues:1599 cursorRegionBefore:1634 regionNoteOff:1718,1721,1722 regionAdjustDuration:1729,1732 regionAdjustPosition:1740 shiftFxLane:1767
-  @field r ppq  @ applyNoteOff:1796,1799 adjustDurationCore:1857 adjustPositionMulti:1903,1916,1922,1924 adjustPosition:1953,1954,1960,1975
-  @field r ppq  @ quantizeScope:1997,2005 quantizeKeepRealisedScope:2026,2028,2041 scaleScope:2077,2080 strandsOf:2182 shiftPlan:2285 insertRowCore:2302,2323 deleteRowCore:2343
-  @field r ppq  @ deleteRowCore:2352,2353 planInstanceMoves:2393 cursorRowEvent:2546 fxHostAtCursor:2756,2757 shiftEvents:3175,3182 selectRegionAt:3270 duplicate:3296
-  @field r ppq  @ duplicateCascade:3387,3391,3394 eventsInRect:3450 clearRegionAt:3474 clearMoveGap:3482,3483
-  @field r ppq  @ clearMoveGap:3488 instanceAtCursor:3516 deletedCells:3549 movePreview:3569 ghostOverlay:3644 paintRegionStream:3702 groupPaste:4000 projectionEpoch:4110 rebuild:4279
-  @field r ppq  @ rebuild:4293,4312,4352,4390,4391,4418
-  @field w ppq  @ relocate:100 conformOverlaps:429,449,452 writePlans:476 assignStamp:567 assignNoteMove:592 repinToRow:884 strikePitch:927 editEvent:1017,1128,1190
-  @field w ppq  @ chordStrike:1238,1288 moveLaneEvent:1473 addLaneEvent:1485 strandsOf:2182 planInstanceMoves:2403 shiftEvents:3132 cursorRect:3233 duplicateCascade:3400 selectionAsRect:3433 cursorAnchor:3498 paintRegionStream:3702
-  @field w ppq  @ rebuild:4324
-  @field w ppqPerRow  @ rebuild:4261
-  @field r pruneEmptyRegion  @ 2930
-  @field w pruneEmptyRegion  @ 2930
-  @field r purity  @ solveToMoves:2239
+  @field r ppq  @ conformOverlaps:449,452 writePlans:465,470 assignNoteMove:591 placeNewNote:860 notePAEvents:873 repinToRow:882,885 strikePitch:909
+  @field r ppq  @ strikePitch:915,916,917,926 chordStrike:1287 moveLaneEvent:1468,1469,1470 addLaneEvent:1500 interpolateValues:1597
+  @field r ppq  @ interpolateValues:1598 cursorRegionBefore:1633 regionNoteOff:1717,1720,1721 regionAdjustDuration:1728,1731 regionAdjustPosition:1739 shiftFxLane:1766
+  @field r ppq  @ applyNoteOff:1795,1798 adjustDurationCore:1856 adjustPositionMulti:1902,1915,1921,1923 adjustPosition:1952,1953,1959,1974
+  @field r ppq  @ quantizeScope:1996,2004 quantizeKeepRealisedScope:2025,2027,2040 scaleScope:2076,2079 strandsOf:2181 shiftPlan:2284 insertRowCore:2301,2322 deleteRowCore:2342
+  @field r ppq  @ deleteRowCore:2351,2352 planInstanceMoves:2392 cursorRowEvent:2545 fxHostAtCursor:2755,2756 shiftEvents:3174,3181 selectRegionAt:3269 duplicate:3295
+  @field r ppq  @ duplicateCascade:3386,3390,3393 eventsInRect:3449 clearRegionAt:3473 clearMoveGap:3481,3482
+  @field r ppq  @ clearMoveGap:3487 instanceAtCursor:3515 deletedCells:3548 movePreview:3568 ghostOverlay:3643 paintRegionStream:3701 groupPaste:3999 projectionEpoch:4109 rebuild:4278
+  @field r ppq  @ rebuild:4292,4311,4351,4389,4390,4417
+  @field w ppq  @ relocate:100 conformOverlaps:429,449,452 writePlans:476 assignStamp:567 assignNoteMove:592 repinToRow:883 strikePitch:926 editEvent:1016,1127,1189
+  @field w ppq  @ chordStrike:1237,1287 moveLaneEvent:1472 addLaneEvent:1484 strandsOf:2181 planInstanceMoves:2402 shiftEvents:3131 cursorRect:3232 duplicateCascade:3399 selectionAsRect:3432 cursorAnchor:3497 paintRegionStream:3701
+  @field w ppq  @ rebuild:4323
+  @field w ppqPerRow  @ rebuild:4260
+  @field r pruneEmptyRegion  @ 2929
+  @field w pruneEmptyRegion  @ 2929
+  @field r purity  @ solveToMoves:2238
   @field w realised  @ 69,77,84
-  @field r rect  @ colInInstance:2366 planInstanceMoves:2393 duplicateCascade:3373 instanceAtCursor:3516,3518 movePreview:3570,3571 paintRegionStream:3683 rebuild:4382,4389
-  @field r rect  @ rebuild:4391
-  @field w rect  @ duplicateCascade:3405
-  @field w regionArm  @ tracker.regionArm:4090
-  @field r registered  @ 4558 wireGroupLifetime:4604
+  @field r rect  @ colInInstance:2365 planInstanceMoves:2392 duplicateCascade:3372 instanceAtCursor:3515,3517 movePreview:3569,3570 paintRegionStream:3682 rebuild:4381,4388
+  @field r rect  @ rebuild:4390
+  @field w rect  @ duplicateCascade:3404
+  @field w regionArm  @ tracker.regionArm:4089
+  @field r registered  @ 4557 wireGroupLifetime:4603
   @field r relocateDrop  @ edit.assign:116
   @field w relocateDrop  @ 69,77,84
-  @field r removeFxStage  @ 2927
-  @field w removeFxStage  @ 2927
-  @field r replaceFxStage  @ 2929
-  @field w replaceFxStage  @ 2929
-  @field r row  @ toggleSignFlip:938 entrySignAt:960 chordCell:1213 chordStrike:1271 digitsStrike:1387 digitsBackspace:1407 pasteFxRegions:2693 deleteEvent:3005
-  @field w row  @ toggleSignFlip:942 chordStrike:1238 digitsStrike:1388 gatherFxRegions:2669 deletedCells:3549
-  @field w row1  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
-  @field w row2  @ scaleScope:2114 shiftEvents:3202 selectRegionAt:3277
-  @field w rowPerBar  @ editCursor.rowPerBar:4506
-  @field w rowPerBeat  @ 539 releaseTransientFrame:553 matchGridToCursor:605 rebuild:4260
-  @field r rpb  @ matchGridToCursor:600,604,605 strikePitch:910,928 chordStrike:1289
-  @field w rpb  @ toParkedUpdate:62 assignStamp:567 assignTail:578 assignNoteMove:592 repinToRow:885 strikePitch:928 editEvent:1017,1132,1191 chordStrike:1238,1289 moveLaneEvent:1473
-  @field w rpb  @ addLaneEvent:1487 applyNoteOff:1795
-  @field r sample  @ editEvent:1068
-  @field w sample  @ placeNewNote:865 strikePitch:909 editEvent:1069 1344,1346 DELETE_BY_PART.sample:2989
-  @field r saveFxPatch  @ 2934
-  @field w saveFxPatch  @ 2934
-  @field w scaleDouble  @ tracker.scaleDouble:4050
-  @field w scaleHalf  @ tracker.scaleHalf:4042
-  @field r scope  @ retune:2264
-  @field w selectAll  @ 4576
-  @field w selectClear  @ 4551,4575,4587
-  @field w selectDown  @ 4575
-  @field w selectLeft  @ 4575
-  @field w selectRight  @ 4575
-  @field w selectUp  @ 4575
-  @field w selectionAsRect  @ groupBridge.selectionAsRect:4481
-  @field r setFxBypass  @ 2926
-  @field w setFxBypass  @ 2926
-  @field r setFxField  @ 2924
-  @field w setFxField  @ 2924
-  @field r setNoteFx  @ 2923
-  @field w setNoteFx  @ 2923
-  @field r shape  @ editEvent:1197 addLaneEvent:1488 cycleShape:1539 interpolateValues:1597
-  @field w shape  @ editEvent:1197 addLaneEvent:1488 setLaneTension:1520 cycleShape:1539 deleteEvent:3016
-  @field r shortlist  @ shortlisted:2209 solveToTarget:2230
-  @field w shortlist  @ shortlisted:2208
-  @field r showCents  @ reserveGhostReadout:3615
-  @field w showCents  @ reserveGhostReadout:3616,3624 rebuild:4202
-  @field w showDelay  @ rebuild:4201
-  @field w shrinkNote  @ tracker.shrinkNote:4038
+  @field r removeFxStage  @ 2926
+  @field w removeFxStage  @ 2926
+  @field r replaceFxStage  @ 2928
+  @field w replaceFxStage  @ 2928
+  @field r row  @ toggleSignFlip:937 entrySignAt:959 chordCell:1212 chordStrike:1270 digitsStrike:1386 digitsBackspace:1406 pasteFxRegions:2692 deleteEvent:3004
+  @field w row  @ toggleSignFlip:941 chordStrike:1237 digitsStrike:1387 gatherFxRegions:2668 deletedCells:3548
+  @field w row1  @ scaleScope:2113 shiftEvents:3201 selectRegionAt:3276
+  @field w row2  @ scaleScope:2113 shiftEvents:3201 selectRegionAt:3276
+  @field w rowPerBar  @ editCursor.rowPerBar:4505
+  @field w rowPerBeat  @ 539 releaseTransientFrame:553 matchGridToCursor:605 rebuild:4259
+  @field r rpb  @ matchGridToCursor:600,604,605 strikePitch:909,927 chordStrike:1288
+  @field w rpb  @ toParkedUpdate:62 assignStamp:567 assignTail:578 assignNoteMove:592 repinToRow:884 strikePitch:927 editEvent:1016,1131,1190 chordStrike:1237,1288 moveLaneEvent:1472
+  @field w rpb  @ addLaneEvent:1486 applyNoteOff:1794
+  @field r sample  @ editEvent:1067
+  @field w sample  @ placeNewNote:864 strikePitch:908 editEvent:1068 1343,1345 DELETE_BY_PART.sample:2988
+  @field r saveFxPatch  @ 2933
+  @field w saveFxPatch  @ 2933
+  @field w scaleDouble  @ tracker.scaleDouble:4049
+  @field w scaleHalf  @ tracker.scaleHalf:4041
+  @field r scope  @ retune:2263
+  @field w selectAll  @ 4575
+  @field w selectClear  @ 4550,4574,4586
+  @field w selectDown  @ 4574
+  @field w selectLeft  @ 4574
+  @field w selectRight  @ 4574
+  @field w selectUp  @ 4574
+  @field w selectionAsRect  @ groupBridge.selectionAsRect:4480
+  @field r setFxBypass  @ 2925
+  @field w setFxBypass  @ 2925
+  @field r setFxField  @ 2923
+  @field w setFxField  @ 2923
+  @field r setNoteFx  @ 2922
+  @field w setNoteFx  @ 2922
+  @field r shape  @ editEvent:1196 addLaneEvent:1487 cycleShape:1538 interpolateValues:1596
+  @field w shape  @ editEvent:1196 addLaneEvent:1487 setLaneTension:1519 cycleShape:1538 deleteEvent:3015
+  @field r shortlist  @ shortlisted:2208 solveToTarget:2229
+  @field w shortlist  @ shortlisted:2207
+  @field r showCents  @ reserveGhostReadout:3614
+  @field w showCents  @ reserveGhostReadout:3615,3623 rebuild:4201
+  @field w showDelay  @ rebuild:4200
+  @field w shrinkNote  @ tracker.shrinkNote:4037
   @field r slotIdx  @ resolveCurrentInstance:278
-  @field w soloedChannels  @ 4452
-  @field r sonoritySize  @ solveToTarget:2228 solveToMoves:2238
-  @field w srcHi  @ movePreview:3590
-  @field w srcLo  @ movePreview:3590
-  @field w srcMember  @ movePreview:3591
-  @field r stack  @ rebuild:4367
-  @field r stages  @ rebuild:4367
-  @field w stages  @ rebuild:4325
-  @field r startLane  @ chordStrike:1284
-  @field w startLane  @ chordStrike:1239
-  @field r startQN  @ bracketCurrentInstance:240 resolveCurrentInstance:279 playRow:3334,3335,3340 tracker.playFromTop:4076
-  @field w startRow  @ rebuild:4366
-  @field r startppq  @ applyRegionWindow:1674,1679 eachFxRegionInRect:2654 gatherFxRegions:2669 rebuild:4245,4246,4324,4406
-  @field w startppq  @ mintRegionForSelection:2632 pasteFxRegions:2693
-  @field r stop  @ digitsBackspace:1413
-  @field w stop  @ digitsStrike:1392
-  @field r stop0  @ digitsCommit:1421
-  @field w stop0  @ digitsStrike:1388
-  @field r streams  @ colInInstance:2366 colsForAnchor:3244 eachMemberEvent:3441 clearMoveGap:3486 instanceAtCursor:3518 movePreview:3571 paintRegionStream:3689,3693 rebuild:4382,4389
-  @field r streams  @ rebuild:4389
-  @field w streams  @ cursorRect:3234 selectionAsRect:3434 paintRegionStream:3703,3705
-  @field r strength  @ solveToTarget:2230 solveToMoves:2244 retune:2263,2268
-  @field w swapBlockEnds  @ 4576
-  @field r tab  @ tabOverride:3851,3852 overrideTab:3854
-  @field w tab  @ 3813 tabOverride:3851 clearTabOverride:3855
-  @field r tails  @ rebuild:4167,4343,4368
-  @field w tails  @ rebuild:4167,4343,4348
-  @field r take  @ resolveCurrentInstance:268,281 playRow:3339 takeHoist:3823
-  @field w take  @ 3817 takeHoist:3823
-  @field r target  @ retune:2257,2258,2265
-  @field r targetppq  @ noteOff:1823
-  @field w targetppq  @ noteOff:1813
-  @field r targets  @ ghostOverlay:3655
-  @field w temper  @ rebuild:4263
-  @field w tension  @ setLaneTension:1520
-  @field w timeSigs  @ rebuild:4262
+  @field w soloedChannels  @ 4451
+  @field r sonoritySize  @ solveToTarget:2227 solveToMoves:2237
+  @field w srcHi  @ movePreview:3589
+  @field w srcLo  @ movePreview:3589
+  @field w srcMember  @ movePreview:3590
+  @field r stack  @ rebuild:4366
+  @field r stages  @ rebuild:4366
+  @field w stages  @ rebuild:4324
+  @field r startLane  @ chordStrike:1283
+  @field w startLane  @ chordStrike:1238
+  @field r startQN  @ bracketCurrentInstance:240 resolveCurrentInstance:279 playRow:3333,3334,3339 tracker.playFromTop:4075
+  @field w startRow  @ rebuild:4365
+  @field r startppq  @ applyRegionWindow:1673,1678 eachFxRegionInRect:2653 gatherFxRegions:2668 rebuild:4244,4245,4323,4405
+  @field w startppq  @ mintRegionForSelection:2631 pasteFxRegions:2692
+  @field r stop  @ digitsBackspace:1412
+  @field w stop  @ digitsStrike:1391
+  @field r stop0  @ digitsCommit:1420
+  @field w stop0  @ digitsStrike:1387
+  @field r streams  @ colInInstance:2365 colsForAnchor:3243 eachMemberEvent:3440 clearMoveGap:3485 instanceAtCursor:3517 movePreview:3570 paintRegionStream:3688,3692 rebuild:4381,4388
+  @field r streams  @ rebuild:4388
+  @field w streams  @ cursorRect:3233 selectionAsRect:3433 paintRegionStream:3702,3704
+  @field r strength  @ solveToTarget:2229 solveToMoves:2243 retune:2262,2267
+  @field w swapBlockEnds  @ 4575
+  @field r tab  @ tabOverride:3850,3851 overrideTab:3853
+  @field w tab  @ 3812 tabOverride:3850 clearTabOverride:3854
+  @field r tails  @ rebuild:4166,4342,4367
+  @field w tails  @ rebuild:4166,4342,4347
+  @field r take  @ resolveCurrentInstance:268,281 playRow:3338 takeHoist:3822
+  @field w take  @ 3816 takeHoist:3822
+  @field r target  @ retune:2256,2257,2264
+  @field r targetppq  @ noteOff:1822
+  @field w targetppq  @ noteOff:1812
+  @field r targets  @ ghostOverlay:3654
+  @field w temper  @ rebuild:4262
+  @field w tension  @ setLaneTension:1519
+  @field w timeSigs  @ rebuild:4261
   @field r tm  @ 35
-  @field w tm  @ 4513
-  @field w toEvt  @ interpolateValues:1603
-  @field r trackGuid  @ armLearn:3888,3889 showFx:3896 cancelLearn:3900 pollLearn:3920 automateParam:3931
-  @field w trackGuid  @ armLearn:3888 pollLearn:3920
+  @field w tm  @ 4512
+  @field w toEvt  @ interpolateValues:1602
+  @field r trackGuid  @ armLearn:3887,3888 showFx:3895 cancelLearn:3899 pollLearn:3919 automateParam:3930
+  @field w trackGuid  @ armLearn:3887 pollLearn:3919
   @field r trackIdx  @ resolveCurrentInstance:277 newTakeBelow:324
-  @field w trackerMode  @ rebuild:4203
-  @field r type  @ eventsByCol:499,514 streamIdOf:525,526,528 matchGridToCursor:599 findCol:840,841,842 entrySignAt:965 editEvent:978
-  @field r type  @ chordStrike:1235,1270 moveLaneEvent:1457 addLaneEvent:1480,1490,1491 deleteLaneEvent:1507 setLaneTension:1517 cycleLaneShape:1546 interpolate:1558,1576 interpolateValues:1588
-  @field r type  @ fxLaneOf:1648 recentreOnRegion:1660 fxColAtLane:1750 cursorNoteBefore:1783 noteOff:1808,1830,1831 adjustDuration:1867,1875 adjustPositionMulti:1900 adjustPosition:1946,1950
-  @field r type  @ insertRowCore:2321 deleteRowCore:2341 valueInterval:2463,2464 valueBounds:2473 cursorRowEvent:2544 nudge:2559 eachFxRegionInRect:2648 fxHostAtCursor:2750 deleteEvent:2995
-  @field r type  @ deleteEvent:3021 colFor:3078 shiftEvents:3094,3099,3112,3119,3133,3139,3142,3179,3192,3193
-  @field r type  @ shiftEvents:3201 eventsInRect:3453,3454 hideExtraCol:3751,3766,3772,3776,3784,3791 unautomateParam:3945 showDelay:3962 inputOctaveUp:4019
-  @field r type  @ rebuild:4348,4405
-  @field w type  @ chordCell:1212 shiftEvents:3142,3146,3154 rebuild:4196
-  @field r unautomateParam  @ 3956
-  @field w unautomateParam  @ 3956
-  @field r undo  @ digitsStrike:1391 digitsBackspace:1404
-  @field w undo  @ digitsStrike:1388
-  @field r uuid  @ member.assign:73 member.delete:74 allGroups:490 rewriteRegion:1617 recentreOnRegion:1662 applyRegionWindow:1671,1678,1689,1694 shiftFxLane:1772,1773
-  @field r uuid  @ shiftFxLane:1773,1778 parkedByUuid:2600 regionByUuid:2607 maxFxRegionN:2614 mintRegionForSelection:2638 eachFxRegionInRect:2653 deleteFxRegionAtCursor:2707 deleteFxRegionsInRect:2713,2717 fxHostAtCursor:2755,2761
-  @field r uuid  @ ghostOverlay:3660 rebuild:4325
-  @field w uuid  @ 77,84 mintRegionForSelection:2631 pasteFxRegions:2691 rebuild:4325
-  @field r val  @ inheritedSign:950,952 entrySignAt:968 editEvent:1148,1152,1155 nudgeValue:2526,2527
-  @field w val  @ editEvent:1150,1152,1160,1179 1345,1346,2988 moveLaneEvent:1473 addLaneEvent:1484 interpolateValues:1603 nudgeValue:2528 ghostOverlay:3663
-  @field r vals  @ digitsBackspace:1409
-  @field w vals  @ digitsStrike:1392
-  @field w values  @ ghostOverlay:3674
-  @field r vel  @ placeNewNote:862 strikePitch:911,930 editEvent:1061,1114,1119 chordStrike:1274 chordNudgeVel:1316,1317 nudgePitch:2505 nudgeVel:2509,2510
-  @field r vel  @ queueResetVelocities:2975
-  @field w vel  @ placeNewNote:862 editEvent:1114,1119,1131 chordNudgeVel:1319 1344,1346,2986 nudgeVel:2511 queueResetVelocities:2972
-  @field r vuid  @ deleteEvent:3006 deletedCells:3549
-  @field w vuid  @ deletedCells:3549
-  @field r width  @ lastVisibleFrom:796
+  @field w trackerMode  @ rebuild:4202
+  @field r type  @ eventsByCol:499,514 streamIdOf:525,526,528 matchGridToCursor:599 findCol:839,840,841 entrySignAt:964 editEvent:977
+  @field r type  @ chordStrike:1234,1269 moveLaneEvent:1456 addLaneEvent:1479,1489,1490 deleteLaneEvent:1506 setLaneTension:1516 cycleLaneShape:1545 interpolate:1557,1575 interpolateValues:1587
+  @field r type  @ fxLaneOf:1647 recentreOnRegion:1659 fxColAtLane:1749 cursorNoteBefore:1782 noteOff:1807,1829,1830 adjustDuration:1866,1874 adjustPositionMulti:1899 adjustPosition:1945,1949
+  @field r type  @ insertRowCore:2320 deleteRowCore:2340 valueInterval:2462,2463 valueBounds:2472 cursorRowEvent:2543 nudge:2558 eachFxRegionInRect:2647 fxHostAtCursor:2749 deleteEvent:2994
+  @field r type  @ deleteEvent:3020 colFor:3077 shiftEvents:3093,3098,3111,3118,3132,3138,3141,3178,3191,3192
+  @field r type  @ shiftEvents:3200 eventsInRect:3452,3453 hideExtraCol:3750,3765,3771,3775,3783,3790 unautomateParam:3944 showDelay:3961 inputOctaveUp:4018
+  @field r type  @ rebuild:4347,4404
+  @field w type  @ chordCell:1211 shiftEvents:3141,3145,3153 rebuild:4195
+  @field r unautomateParam  @ 3955
+  @field w unautomateParam  @ 3955
+  @field r undo  @ digitsStrike:1390 digitsBackspace:1403
+  @field w undo  @ digitsStrike:1387
+  @field r uuid  @ member.assign:73 member.delete:74 allGroups:490 rewriteRegion:1616 recentreOnRegion:1661 applyRegionWindow:1670,1677,1688,1693 shiftFxLane:1771,1772
+  @field r uuid  @ shiftFxLane:1772,1777 parkedByUuid:2599 regionByUuid:2606 maxFxRegionN:2613 mintRegionForSelection:2637 eachFxRegionInRect:2652 deleteFxRegionAtCursor:2706 deleteFxRegionsInRect:2712,2716 fxHostAtCursor:2754,2760
+  @field r uuid  @ ghostOverlay:3659 rebuild:4324
+  @field w uuid  @ 77,84 mintRegionForSelection:2630 pasteFxRegions:2690 rebuild:4324
+  @field r val  @ inheritedSign:949,951 entrySignAt:967 editEvent:1147,1151,1154 nudgeValue:2525,2526
+  @field w val  @ editEvent:1149,1151,1159,1178 1344,1345,2987 moveLaneEvent:1472 addLaneEvent:1483 interpolateValues:1602 nudgeValue:2527 ghostOverlay:3662
+  @field r vals  @ digitsBackspace:1408
+  @field w vals  @ digitsStrike:1391
+  @field w values  @ ghostOverlay:3673
+  @field r vel  @ placeNewNote:861 strikePitch:910,929 editEvent:1060,1113,1118 chordStrike:1273 chordNudgeVel:1315,1316 nudgePitch:2504 nudgeVel:2508,2509
+  @field r vel  @ queueResetVelocities:2974
+  @field w vel  @ placeNewNote:861 editEvent:1113,1118,1130 chordNudgeVel:1318 1343,1345,2985 nudgeVel:2510 queueResetVelocities:2971
+  @field r vuid  @ deleteEvent:3005 deletedCells:3548
+  @field w vuid  @ deletedCells:3548
+  @field r width  @ lastVisibleFrom:795

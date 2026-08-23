@@ -99,8 +99,10 @@ the source's blob onto it; `deleteSlot` (the lone forever-delete) `dropPool`s it
    unnamed slot renames alone.
 
 1. Every rename inside Continuum goes through `am:renameSlot` — the
-   arrange palette's, and the tracker's take properties, which names the
-   slot the tracker is on rather than the take it is bound to.
+   arrange palette's, and take properties, which names the slot the
+   bound take sits in rather than that take alone. Arrange opens the
+   modal on the take under its cursor, so the slot is read off the
+   bind, not off the tracker's own selection.
 
 1. If the user renames a single take directly in REAPER, the palette
    will start showing that name once it's the first-found — accepted
