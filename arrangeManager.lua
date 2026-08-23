@@ -879,8 +879,8 @@ local function appendPoint(take) return take.startQN + take.lengthQN end
 
 -- A copy has to fit whole: a shorter free span renders it truncated by its neighbour, which
 -- is a different sound from the one being copied.
-local function roomBelow(take)
-  return am:freeSpan(take.trackIdx, appendPoint(take)) >= take.naturalLenQN
+local function roomBelow(take, lengthQN)
+  return am:freeSpan(take.trackIdx, appendPoint(take)) >= lengthQN
 end
 
 -- An unpooled clone's fresh pool takes its slot at the next build, so the slot is read back
@@ -894,7 +894,7 @@ end
 --contract: pooled clone at the append point; nil iff non-MIDI or the free span falls short.
 function am:duplicateBelow(take)
   if take.kind ~= 'midi' then return end
-  if not roomBelow(take) then return end
+  if not roomBelow(take, take.naturalLenQN) then return end
   return am:duplicateTake(take, appendPoint(take))
 end
 
@@ -902,7 +902,7 @@ end
 --invariant: parks the clone on scratch for want of room -- the palette grows either way.
 function am:duplicateUnpooledBelow(take)
   if take.kind ~= 'midi' then return end
-  if not roomBelow(take) then return am:mintParkedTake(take.trackIdx, '', nil, take.take) end
+  if not roomBelow(take, take.naturalLenQN) then return am:mintParkedTake(take.trackIdx, '', nil, take.take) end
   local track = visibleTrackOfCol(take.trackIdx)
   local newTake = cloneMidiItem(track, take.item, appendPoint(take), take.naturalLenQN, true)
   if not newTake then return end
@@ -912,12 +912,13 @@ function am:duplicateUnpooledBelow(take)
   return slotOfPlacedTake(take.trackIdx, newTake), newTake
 end
 
---contract: (slotIdx, take) for an empty naturalLenQN take at the append point; nil iff non-MIDI
+--contract: (slotIdx, take) for an empty lengthQN take named `name` below take; nil iff non-MIDI
 --invariant: parks the take on scratch for want of room -- the palette grows either way.
-function am:newTakeBelow(take)
+-- The length is the caller's, not the source's: room is measured against what is being made.
+function am:newTakeBelow(take, name, lengthQN)
   if take.kind ~= 'midi' then return end
-  if not roomBelow(take) then return am:mintParkedTake(take.trackIdx, '', take.naturalLenQN) end
-  return am:createAndDropMidi(take.trackIdx, appendPoint(take), take.naturalLenQN, '')
+  if not roomBelow(take, lengthQN) then return am:mintParkedTake(take.trackIdx, name, lengthQN) end
+  return am:createAndDropMidi(take.trackIdx, appendPoint(take), lengthQN, name)
 end
 
 --contract: mints a slot on trackIdx parked on scratch; (slotIdx, take), nil if no track/free slot

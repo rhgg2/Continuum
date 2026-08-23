@@ -565,16 +565,26 @@ fallback.
 
 ### New take and unpooled duplicate
 
-`newTakeBelow` and `duplicateUnpooledBelow` place nothing on the arrange
-grid. Each mints a new slot whose only instance is parked on the scratch
-track (`am:mintParkedTake`) and selects it (`tv:selectSlot`), so the
-tracker switches straight to a blank — or cloned — take with no
-arrange-cursor move. New-take keeps the name+length modal (the name
-defaults to the next-free slot's zero-padded index); the unpooled
-duplicate clones the currently-bound take. Arrange's own create/duplicate
-commands still place visible instances.
+`newTakeBelow` grows the song from the placement the tracker is in. Its
+name+length modal (the name defaults to the next-free slot's zero-padded
+index) hands both answers to `am:newTakeBelow` at the current instance's
+append point (`docs/arrangeManager.md` § The append point), so the new
+take lands on the grid below the one being edited. The verb parks it
+where the gap falls short of the length asked for, and where the
+selected track holds no current instance — which is how a generator's
+freshly spawned track gets its first take, the selection having outrun
+the resolve.
 
-Because the minted take's only instance lives on the scratch track, binding
+Either way `tv:selectSlot` selects the new slot, so the tracker switches
+straight to the blank take with no arrange-cursor move. A placed take is
+also named as the current instance (`tv:nameInstance`), so loop to item
+moves the loop onto it.
+
+`duplicateUnpooledBelow` places nothing: it mints a slot whose only
+instance is parked on the scratch track (`am:mintParkedTake`), cloning
+the currently-bound take, and selects that slot the same way.
+
+Because a parked take's only instance lives on the scratch track, binding
 it would key cm's **track** tier to scratch — desyncing every per-track read.
 The sharpest symptom is `trackerSlot` itself: read under the scratch tier it
 resolves to nothing, so `resolveSelectionTake` recovers to the old slot and

@@ -1203,7 +1203,7 @@ return {
   },
 
   {
-    name = 'newTakeBelow creates an empty MIDI take at the append point',
+    name = 'newTakeBelow creates an empty MIDI take of the asked-for length at the append point',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -1211,7 +1211,7 @@ return {
       })
       local src = am:tracksTakes(0)[1]
       h.reaper.MIDI_SetAllEvts(src.take, 'EVTS-BLOB')
-      local slotIdx, fresh = am:newTakeBelow(src)
+      local slotIdx, fresh = am:newTakeBelow(src, 'verse', 2)
       t.truthy(fresh, 'fresh take returned')
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2)
@@ -1220,7 +1220,8 @@ return {
       t.truthy(below, 'fresh take lands at the append point')
       t.eq(below.slotIdx ~= src.slotIdx, true, 'separate slot')
       t.eq(below.slotIdx, slotIdx, 'the slot it landed in comes back with the take')
-      t.eq(below.name, '', 'empty name — caller will rename via take-props')
+      t.eq(below.name, 'verse', 'named by the caller')
+      t.eq(below.lengthQN, 2, 'as long as the caller asked, not as long as its source')
       local _, blob = h.reaper.MIDI_GetAllEvts(fresh, '')
       t.eq(blob, '', 'no events copied across')
     end,
@@ -1234,11 +1235,26 @@ return {
         { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
                     { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
       })
-      local slotIdx, parked = am:newTakeBelow(am:tracksTakes(0)[1])
+      local slotIdx, parked = am:newTakeBelow(am:tracksTakes(0)[1], 'verse', 4)
       t.truthy(slotIdx, 'a slot is minted even with nowhere to place it')
       t.eq(am:isParkedTake(parked), true, 'the empty take hosts on scratch')
       t.eq(#am:tracksTakes(0), 2, 'nothing added to the grid')
       t.eq(am:takeForSlot(0, slotIdx), parked, 'the new slot resolves to the parked take')
+    end,
+  },
+
+  {
+    name = 'newTakeBelow measures the room against the length asked for',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p2}' } } },
+      })
+      -- The gap below is 4 QN: the source's own length would fit, the asked-for 8 does not.
+      local _, parked = am:newTakeBelow(am:tracksTakes(0)[1], 'verse', 8)
+      t.eq(am:isParkedTake(parked), true, 'the take parks, the palette still grows')
+      t.eq(#am:tracksTakes(0), 2, 'nothing added to the grid')
     end,
   },
 
@@ -1249,7 +1265,7 @@ return {
       seedTracks(h, {
         { items = { { kind = 'audio', pos = 0, len = 4, srcFile = '/a.wav' } } },
       })
-      t.eq(am:newTakeBelow(am:tracksTakes(0)[1]), nil, 'audio refused silently')
+      t.eq(am:newTakeBelow(am:tracksTakes(0)[1], '', 4), nil, 'audio refused silently')
       t.eq(#am:trackSlots(0), 1, 'and no slot minted')
     end,
   },

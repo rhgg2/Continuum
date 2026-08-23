@@ -518,6 +518,9 @@ function av:nextFreeSlot(trackIdx) return am:nextFreeSlot(trackIdx) end
 function av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   return am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
 end
+function av:newTakeBelow(take, name, lengthQN)
+  return am:newTakeBelow(take, name, lengthQN)
+end
 function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:ownerTrack(take)   return am:ownerTrack(take) end
 function av:dropSlot(trackIdx, slotIdx, qnPos) return am:dropInstance(trackIdx, slotIdx, qnPos) end

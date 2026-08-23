@@ -32,8 +32,8 @@ on the slot alone.
 ## The append point
 
 The **append point** of a placement is its rendered end, and a verb
-appending there needs the free span from it to cover the take's natural
-length. A shorter gap gives a copy truncated by its neighbour, which is
+appending there needs the free span from it to cover the length it
+places. A shorter gap gives a copy truncated by its neighbour, which is
 a different sound from the one being copied, and making room by pushing
 the rest of the track down is a larger change than this design carries.
 
@@ -54,8 +54,8 @@ where there is room.
 
 The tracker's new take lands on the grid. It parked whatever it made
 while the tracker had no instance to append to; with one, the take goes
-to the append point and binds as the current instance, so the loop
-follows it where loop to item is on.
+to the append point at the length its modal asked for, and binds as the
+current instance, so the loop follows it where loop to item is on.
 
 ## Rendered span and source span
 

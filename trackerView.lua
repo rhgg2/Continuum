@@ -313,11 +313,21 @@ function tv:pickTrack(trackIdx)
 end
 function tv:pickTake(slotIdx) self:selectSlot(slotIdx) end
 
---contract: mint an empty parked take on the current track, select it; returns its slot
-function tv:newParkedTake(name, beats)
+--contract: an empty take of `beats` at the current instance's append point; returns its slot
+--contract: parks it for want of room, or an instance to append to; selects it either way
+--invariant: a placed take becomes the current instance, so loop to item follows it
+function tv:newTakeBelow(name, beats)
   local trackIdx = selectedTrackIdx(); if not trackIdx then return end
-  local slot = arrange().mintParkedTake(trackIdx, name, beats)
-  if slot then self:selectSlot(slot) end
+  -- A selection made this frame outruns the resolve, so the instance still held may
+  -- belong to the track we just left; the take appends only on the track it is made on.
+  local inst = self:currentInstance()
+  if inst and inst.trackIdx ~= trackIdx then inst = nil end
+  local slot, take
+  if inst then slot, take = arrange().newTakeBelow(inst, name, beats)
+  else         slot, take = arrange().mintParkedTake(trackIdx, name, beats) end
+  if not slot then return end
+  self:selectSlot(slot)
+  if not arrange().isParkedTake(take) then self:nameInstance(take) end
   return slot
 end
 

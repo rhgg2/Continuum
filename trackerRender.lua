@@ -1575,7 +1575,7 @@ local function openNewTakeModal()
     callback = util.atomic('New take', function(nameBuf, beatsBuf)
       local b = math.max(1e-3, tonumber(beatsBuf) or cm:get('newTakeBeats'))
       cm:set('project', 'newTakeBeats', b)
-      tv:newParkedTake(nameBuf, b)
+      tv:newTakeBelow(nameBuf, b)
     end),
   }
 end

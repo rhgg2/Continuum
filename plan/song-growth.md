@@ -26,10 +26,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 tracker: the new take places at the append point (§ The append point)
 - 2026-08-23 am: append at the rendered end, park for want of room (§ The append point)
 - 2026-08-22 tracker: draw the cut where the rendered span stops short (§ What the grid draws)
 - 2026-08-22 tracker: draw the play row, dimmed for a sibling instance (§ What the grid draws)
-- 2026-08-22 tracker, arrange: loop to item as a pressed verb (§ Loop to item)
 
 ## Now
 
@@ -37,10 +37,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The tracker's new take places** — the name-and-length modal routes
-   through the am verb at the current instance's append point, parks only for
-   want of room, selects the slot either way, and names a placed instance as
-   current. `tv:newParkedTake` goes.
 1. **again** — `tv:again()` appends a pooled instance at the append point and
    names it, so loop to item follows; refuses where the span falls short.
    Alt+Shift+↓, the Take management toolbar group, and a section in

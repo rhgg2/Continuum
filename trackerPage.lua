@@ -119,11 +119,11 @@ facade.publish('tracker', {
   -- Continuum quit re-enables anticipative FX on the guarded track (docs/midiManager.md).
   restorePerfFlags = function() tm:restoreGuarded() end,
 
-  -- Wiring spawns a generator's source track; ready its first take to author:
-  -- select the track, mint a default-length '00' parked take, select it; returns its slot.
-  selectNewParkedTake = function(guid)
+  -- Wiring spawns a generator's source track; select it and make a default-length '00'
+  -- take there. The fresh track has no instance to append to, so it parks; wiring places it.
+  selectNewTake = function(guid)
     tv:selectTrack(guid)
-    return tv:newParkedTake('00', cm:get('newTakeBeats'))
+    return tv:newTakeBelow('00', cm:get('newTakeBeats'))
   end,
 
   -- Arrange opens take properties without diving: bind to it (so tv reads its

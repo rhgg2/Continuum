@@ -33,7 +33,7 @@
 # Functions held in tables
   @held tracker.diveTo(guid, slotIdx, take)  @ 114-117
   @held tracker.restorePerfFlags()  @ 120
-  @held tracker.selectNewParkedTake(guid)  @ 124-127
+  @held tracker.selectNewTake(guid)  @ 124-127
   @held tracker.openTakeProperties(item, opts)  @ 131-136
   @held tracker.reswingTakes(takes)  @ 139-149
   @held tracker.timeSig()  @ 151
@@ -64,7 +64,7 @@
       @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline  @ 162
 
 # Uses (outbound edges)
-  @use call    cm:get  @ tracker.selectNewParkedTake:126
+  @use call    cm:get  @ tracker.selectNewTake:126
   @use call    cm:getAt  @ bindFromSelection:91
   @use call    facade.get  @ arrange:20 samplerMode:26
   @use call    facade.publish  @ <load>:113
@@ -83,12 +83,12 @@
   @use call    tv:cursorAnchor  @ tracker.cursorAnchor:152
   @use call    tv:dropGrid  @ dropTake:81
   @use call    tv:nameInstance  @ tracker.diveTo:116
-  @use call    tv:newParkedTake  @ tracker.selectNewParkedTake:126
+  @use call    tv:newTakeBelow  @ tracker.selectNewTake:126
   @use call    tv:resolveCurrentInstance  @ bindFromSelection:105
   @use call    tv:resolveSelectionTake  @ bindFromSelection:96
   @use call    tv:retargetTrackTier  @ bind:74
   @use call    tv:seedSharedSlots  @ bind:75
-  @use call    tv:selectTrack  @ bindFromSelection:94 tracker.diveTo:115 tracker.selectNewParkedTake:125
+  @use call    tv:selectTrack  @ bindFromSelection:94 tracker.diveTo:115 tracker.selectNewTake:125
   @use call    tv:setSwingComposite  @ tracker.setSwingComposite:153
   @use call    tv:timeSig  @ tracker.timeSig:151
   @use call    util.instantiate  @ <load>:31,32,33,34,35,36,40,43
@@ -155,7 +155,7 @@
   @field w pe  @ 45
   @field w restorePerfFlags  @ tracker.restorePerfFlags:120
   @field w reswingTakes  @ tracker.reswingTakes:139
-  @field w selectNewParkedTake  @ tracker.selectNewParkedTake:124
+  @field w selectNewTake  @ tracker.selectNewTake:124
   @field w setSwingComposite  @ tracker.setSwingComposite:153
   @field w take  @ 31
   @field w timeSig  @ tracker.timeSig:151

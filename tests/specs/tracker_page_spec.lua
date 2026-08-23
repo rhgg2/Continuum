@@ -71,11 +71,11 @@ local function resetArrange()
   fakeArrange.takeForSlot = function(idx, slot) return fakeArrange.takeByKey[idx .. ':' .. slot] end
   fakeArrange.keyForSlot  = function() return '' end
   fakeArrange.nextFreeSlot   = function() return 7 end
-  fakeArrange.isParkedTake   = function() return false end
+  fakeArrange.isParkedTake   = function(take) return take == 'parked7' end
   fakeArrange.ownerTrack     = function(take) return take end
   fakeArrange.mintParkedTake = function(trackIdx, name, beats, src)
     fakeArrange.calls.mint = { trackIdx = trackIdx, name = name, beats = beats, src = src }
-    return 7                                       -- the new parked slot
+    return 7, 'parked7'                            -- the new parked slot, its take on scratch
   end
 
   -- The placement world tv resolves its current instance against: one record per
@@ -180,7 +180,7 @@ return {
   },
 
   -- The tracker owns its (track, slot) selection in cm (decoupled from the arrange cursor); nav
-  -- writes that selection via tv. newTakeBelow / dup mint a slot parked on scratch and select it.
+  -- writes that selection via tv. New take grows from the current instance; dup mints parked.
   {
     name = 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots',
     run = function(harness)
@@ -199,7 +199,7 @@ return {
   },
 
   {
-    name = 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it',
+    name = 'with no live instance, new take and unpooled duplicate mint a parked slot and select it',
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
@@ -212,14 +212,82 @@ return {
 
       h.cmgr:invoke('newTakeBelow')                -- opens the name+length modal
       fakeModalHost.last.callback('07', '4')       -- commit the modal
-      t.eq(fakeArrange.calls.mint.name, '07', 'minted with the modal name')
-      t.eq(fakeArrange.calls.mint.src,  nil,  'new take has no clone source')
+      t.eq(fakeArrange.calls.mint.name,  '07', 'minted with the modal name')
+      t.eq(fakeArrange.calls.mint.beats, 4,    'and the modal length')
+      t.eq(fakeArrange.calls.mint.src,   nil,  'new take has no clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
 
       h.cmgr:invoke('duplicateUnpooledBelow')      -- clones the bound take, opens take-properties
       t.eq(fakeArrange.calls.mint.src, 'tr1/t1', 'dup passed the bound take as clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
       t.eq(fakeModalHost.last.focusName, true, 'dup opens take-properties focused on the name field')
+    end,
+  },
+
+  -- The tracker grows the arrangement from the placement it is in.
+  -- see docs/trackerPage.md § New take and unpooled duplicate
+  {
+    name = 'the new take places below the current instance and becomes current',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'n7' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+      }
+      -- Placing: the slot joins the palette and its take joins the placements, at the append point.
+      fakeArrange.newTakeBelow = function(inst, name, beats)
+        fakeArrange.calls.below = { take = inst.take, name = name, beats = beats }
+        util.add(fakeArrange.slotsByIdx[0], { idx = 7, name = name, kind = 'midi' })
+        fakeArrange.takeByKey['0:7'] = 'n7'
+        util.add(fakeArrange.instances,
+                 { take = 'n7', trackIdx = 0, slotIdx = 7, startQN = 4, lengthQN = 4 })
+        return 7, 'n7'
+      end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind i0
+
+      h.cmgr:invoke('newTakeBelow')                -- opens the name+length modal
+      fakeModalHost.last.callback('07', '4')       -- commit the modal
+      t.eq(fakeArrange.calls.below.take,  'i0', 'appended below the current instance')
+      t.eq(fakeArrange.calls.below.name,  '07', 'with the modal name')
+      t.eq(fakeArrange.calls.below.beats, 4,    'and the modal length')
+      t.eq(fakeArrange.calls.mint, nil, 'nothing parked — there was room')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new slot')
+
+      tp:bindFromSelection()
+      h.cmgr:invoke('playFromTop')
+      t.eq(fakeArrange.calls.playFrom, 4, 'the placed take is now the current instance')
+    end,
+  },
+
+  {
+    name = 'a new take on a just-selected track parks, rather than appending on the old one',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      seedItems(h, { 'i0' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.tracksList = {
+        { idx = 0, guid = '{g0}', name = 'tr1' },
+        { idx = 1, guid = '{g1}', name = 'tr2' },
+      }
+      fakeArrange.slotsByIdx = { [0] = { { idx = 0, kind = 'midi' } }, [1] = {} }
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+      }
+      fakeArrange.newTakeBelow = function(inst) fakeArrange.calls.below = { take = inst.take } end
+      tp:bindFromSelection()                       -- the tracker is inside i0, on track 0
+
+      -- Wiring's entry: select the new track and make its first take there, both
+      -- before the next resolve can catch the current instance up with the selection.
+      local slot = fakeFacade.published.tracker.selectNewTake('{g1}')
+      t.eq(fakeArrange.calls.below, nil, 'no append onto the instance the tracker just left')
+      t.eq(slot, 7, 'the take was minted parked instead')
+      t.eq(fakeArrange.calls.mint.trackIdx, 1, 'on the track just selected')
     end,
   },
 

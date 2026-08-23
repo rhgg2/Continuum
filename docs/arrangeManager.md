@@ -303,12 +303,16 @@ The **append point** of a placement is its rendered end. A copy
 appended there starts where the sound stops, not where the intent does,
 so a take cut short by its neighbour appends at the cut.
 
-A verb appending there needs the **free span** from it to cover the
-take's natural length. `am:freeSpan(trackIdx, startQN)` gives that span
-— the gap up to the next take's start, unbounded past the last. A
-shorter gap would render the copy truncated by its neighbour, which is
-a different sound from the one being copied, and pushing the rest of
-the track down to make room is a larger change than these verbs carry.
+A verb appending there needs the **free span** from it to cover what it
+is about to place. `am:freeSpan(trackIdx, startQN)` gives that span —
+the gap up to the next take's start, unbounded past the last. A shorter
+gap would render the copy truncated by its neighbour, which is a
+different sound from the one being copied, and pushing the rest of the
+track down to make room is a larger change than these verbs carry.
+
+What each verb places is its own. The two duplicates carry the source's
+natural length; `newTakeBelow` takes a name and a length from its
+caller, and measures the room against that length.
 
 With no room, what the verb does next turns on what it creates.
 `newTakeBelow` and `duplicateUnpooledBelow` mint a slot, so they park it

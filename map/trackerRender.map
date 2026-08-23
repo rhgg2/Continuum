@@ -396,7 +396,7 @@
   @use call    tv:loadFxPatch  @ catalogueRow:1393
   @use call    tv:loopsToItem  @ toolbarSegments.render:190 tracker.toggleLoopToItem:1645
   @use call    tv:moveFxStage  @ handleFxChainKeys:1317 drawChainStage:1481,1485
-  @use call    tv:newParkedTake  @ openNewTakeModal:1578
+  @use call    tv:newTakeBelow  @ openNewTakeModal:1578
   @use call    tv:noteByUuid  @ adjustRow:1147 fxFieldWidget:1187
   @use call    tv:noteFx  @ stripPlan:1258 catalogueRow:1371 drawAddChainStage:1429 enterStrip:1436 editFx:1549
   @use call    tv:overrideTab  @ drawParamPalette:579 handleFxChainKeys:1296 focusParams:1612
