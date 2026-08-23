@@ -849,9 +849,10 @@ end
 function ar:renderStatusBar(_)
   if not ctx then return end
   ImGui.Text(ctx, string.format(
-    'arrange | row %d  col %d  | %g beats/row | Advance: %d',
+    'arrange | row %d  col %d  | %g beats/row | Advance: %d%s',
     av:cursorRow(), av:cursorCol(), av:beatPerRow(),
-    cm:get('arrangeAdvanceBy')))
+    cm:get('arrangeAdvanceBy'),
+    av:replaceArmed() and '  | REPLACE' or ''))
 end
 
 --contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.

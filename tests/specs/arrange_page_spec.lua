@@ -54,6 +54,29 @@ local function newArrangePage(cm, ds, cmgr, chrome, gui)
       modalHost = fakeModalHost, facade = fakeFacade })
 end
 
+-- Two instances of slot 0, one row each at QN 0 and 1, with rows 0..1 banded.
+-- The siblings at QN 10 and 20 are what slots 0 and 1 clone from.
+local function twoSelected(h)
+  h.cm:set('project', 'arrangeBeatPerRow', 1)
+  h.cm:set('project', 'arrangeAdvanceBy', 1)
+  h.reaper:setTrackName('tr1', 'Track 1')
+  h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                            pos = 10, len = 1, srcLen = 1, poolGuid = '{p1}' })
+  h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                            pos = 20, len = 2, srcLen = 2, poolGuid = '{p2}' })
+  h.reaper:setProjectTracks{ 'tr1' }
+  newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+  h.cmgr:push('arrange')
+  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+  am:tracksTakes(0)
+  h.cmgr:invoke('drop0')               -- QN 0, cursor to row 1
+  h.cmgr:invoke('drop0')               -- QN 1, cursor to row 2
+  h.cmgr:invoke('arrangeCursorUp')
+  h.cmgr:invoke('arrangeCursorUp')     -- back to row 0, selection cleared
+  h.cmgr:invoke('arrangeSelectDown')   -- band over rows 0..1: both takes
+  return am
+end
+
 return {
   {
     name = 'bind / unbind are no-ops — arrange page never re-keys cm',
@@ -847,6 +870,201 @@ return {
       t.truthy(captured.props, 'take properties opened on the parked clone')
       t.truthy(captured.props ~= takes[1].item and captured.props ~= takes[2].item,
                'and on neither of the takes already on the grid')
+    end,
+  },
+
+  -- Replace mode (Super+U). The two sibling instances parked at QN 10 and 20
+  -- are what slots 0 and 1 clone from; everything below QN 10 is the test's.
+  {
+    name = 'replace mode: a drop swaps the take under the cursor, keeping its start',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.cm:set('project', 'arrangeAdvanceBy', 0)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 20, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:tracksTakes(0)                    -- materialise both pools into slots
+      h.cmgr:invoke('drop0')               -- slot 0 lands at row 0, three rows long
+      h.cmgr:invoke('arrangeCursorDown')   -- cursor inside it, past its start
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')
+      local placed = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then util.add(placed, tk) end
+      end
+      t.eq(#placed, 1, 'one take on the grid — the replacement stands in the original\'s place')
+      t.eq(placed[1].slotIdx,  1, 'it is the slot the drop key names')
+      t.eq(placed[1].startQN,  0, 'at the replaced take\'s start, not at the cursor row')
+      t.eq(placed[1].lengthQN, 2, 'at slot 1\'s natural length, not the length it replaced')
+    end,
+  },
+
+  {
+    name = 'a replace with a selection held replaces every selected take',
+    run = function(harness)
+      local h  = harness.mk()
+      local am = twoSelected(h)
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')
+      local placed = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then util.add(placed, tk) end
+      end
+      table.sort(placed, function(a, b) return a.startQN < b.startQN end)
+      t.eq(#placed, 2, 'both selected takes still stand')
+      t.eq(placed[1].slotIdx, 1, 'the first was replaced')
+      t.eq(placed[2].slotIdx, 1, 'and so was the second, not just the cursor\'s')
+      t.eq(placed[1].startQN, 0, 'each keeps its own start')
+      t.eq(placed[2].startQN, 1, 'each keeps its own start')
+      t.eq(placed[2].lengthQN, 2, 'the last one runs to slot 1\'s natural length')
+    end,
+  },
+
+  {
+    name = 'the replacements become the selection',
+    run = function(harness)
+      local h  = harness.mk()
+      local am = twoSelected(h)
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')
+      h.cmgr:invoke('arrangeDeleteTake')   -- acts on the selection, if there is one
+      local left = 0
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then left = left + 1 end
+      end
+      t.eq(left, 0, 'delete took both replacements — they carried the selection')
+    end,
+  },
+
+  {
+    name = 'a shorter replacement pulls the cursor back inside it',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.cm:set('project', 'arrangeAdvanceBy', 0)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 20, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:tracksTakes(0)
+      h.cmgr:invoke('drop0')               -- rows 0..2
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')   -- cursor on row 2, the last row inside
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')               -- two rows: row 2 is now past its end
+      h.cmgr:invoke('drop0')               -- places at wherever the cursor now sits
+      local starts = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then util.add(starts, tk.startQN) end
+      end
+      table.sort(starts)
+      t.eq(#starts, 2, 'the replacement and the drop that followed it')
+      t.eq(starts[2], 1, 'cursor pulled up to the last row inside the replacement')
+    end,
+  },
+
+  {
+    name = 'replace mode disarms on the drop it reinterprets — the next drop places',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.cm:set('project', 'arrangeAdvanceBy', 0)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 20, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:tracksTakes(0)
+      h.cmgr:invoke('drop0')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')               -- replaces at QN 0
+      h.cmgr:invoke('drop1')               -- disarmed: places at the cursor row
+      local placed = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then util.add(placed, tk) end
+      end
+      table.sort(placed, function(a, b) return a.startQN < b.startQN end)
+      t.eq(#placed, 2, 'the second drop placed rather than replacing')
+      t.eq(placed[1].slotIdx, 1, 'the first drop did replace — slot 1 holds QN 0')
+      t.eq(placed[2].startQN, 1, 'and the second landed on the cursor row')
+    end,
+  },
+
+  {
+    name = 'a cursor move disarms replace mode',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.cm:set('project', 'arrangeAdvanceBy', 0)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 20, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:tracksTakes(0)
+      h.cmgr:invoke('drop0')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('arrangeCursorDown')   -- bails the mode
+      h.cmgr:invoke('drop1')
+      local starts = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then util.add(starts, tk.startQN) end
+      end
+      table.sort(starts)
+      t.eq(#starts, 2, 'the drop placed at the cursor and left the take at QN 0 standing')
+      t.eq(starts[2], 1, 'on the row the cursor had moved to')
+    end,
+  },
+
+  {
+    name = 'a second arrangeReplaceMode disarms — the mode is a toggle',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.cm:set('project', 'arrangeAdvanceBy', 0)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 20, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cmgr:push('arrange')
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:tracksTakes(0)
+      h.cmgr:invoke('drop0')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')
+      local starts = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN < 10 then util.add(starts, tk.startQN) end
+      end
+      table.sort(starts)
+      t.eq(#starts, 2, 'the drop placed rather than replacing')
+      t.eq(starts[2], 1, 'at the cursor row')
     end,
   },
 

@@ -61,8 +61,8 @@ If you changed no `.lua` files, you may as well commit yourself: `git
 add <scope> && git commit -m "<headline>"`, no commit body.
 
 Otherwise, spawn a `commit-finisher` subagent and hand it the headline
-plus which paths to stage, if the scope from step 1 is narrower than
-"all dirty files".
+(and to be clear, there is still no commit body) plus which paths to
+stage, if the scope from step 1 is narrower than "all dirty files".
 
 The agent runs a comment hygiene pass then commits. When it returns,
 eyeball its summary; no need to re-audit.

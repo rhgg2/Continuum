@@ -67,6 +67,7 @@
   @use call    av:cursorCol  @ arrange.currentTrackIdx:42
   @use call    av:deleteSlot  @ arrange.deleteSlot:58
   @use call    av:dropBand  @ unbind:35
+  @use call    av:dropReplaceMode  @ unbind:35
   @use call    av:dropSlot  @ arrange.dropSlot:56
   @use call    av:duplicateBelow  @ arrange.duplicateBelow:54
   @use call    av:editCursorQN  @ arrange.editCursorQN:66

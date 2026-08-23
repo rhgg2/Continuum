@@ -10,6 +10,7 @@
 --invariant: av registers arrange-scope command bodies; page owns key bindings and createSlot.
 --invariant: selection is a per-session set of take handles; setFocus/focus are single-element.
 --invariant: a Shift+arrow band lasts until the first command that isn't a Shift+arrow.
+--invariant: replace mode lasts until the drop it reinterprets, or the first other command.
 --invariant: paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.
 
 local util = require 'util'
@@ -348,6 +349,57 @@ local function deleteSelectedAndAdvance()
   moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
 end
 
+----- Replace mode — the drop keys, reinterpreted onto the take under the cursor
+
+-- While armed this spring-loaded scope rides the cmgr stack, redirecting every drop key;
+-- anything else — a cursor move included — bails it. See docs/arrangeView.md § Replace mode.
+local replaceScope = cmgr:scope('arrangeReplace')
+replaceScope.springLoaded = true
+replaceScope.keepAlive    = { arrangeReplaceMode = true }
+local replaceArmed = false
+
+local function disarmReplace()
+  if replaceArmed then replaceArmed = false; cmgr:pop(replaceScope) end
+end
+replaceScope.onBail = disarmReplace
+
+--invariant: arrangeReplaceMode is a toggle — pressing it while armed disarms.
+local function toggleReplaceMode()
+  if replaceArmed then return disarmReplace() end
+  replaceArmed = true
+  cmgr:push(replaceScope)
+end
+
+-- A shorter replacement can leave the cursor past its end. Pull it back to the last row inside,
+-- never down, from a cursor that sat on the take replaced, its end row included.
+local function pullCursorInside(replaced, rawTake)
+  local take = rawTake and am:findTake(rawTake)
+  if not take then return end
+  local cursorQN = av:rowToQN(cursorRow)
+  if cursorQN < replaced.startQN
+     or cursorQN > replaced.startQN + replaced.lengthQN then return end
+  local lastRow = math.ceil(av:qnToRow(take.startQN + take.lengthQN)) - 1
+  if cursorRow > lastRow then av:setCursor(lastRow, cursorCol) end
+end
+
+--invariant: a drop while armed stands the slot in for every action target.
+--invariant: each replacement keeps its target's start; each arrives at its own natural length.
+--invariant: a held selection passes to the replacements; a cursor-driven replace selects nothing.
+--invariant: a lone replacement pulls the cursor in. The drop disarms either way.
+-- Nothing clears what a newcomer overlaps — relayout truncates it at the next take's start.
+local function replaceAt(slotIdx)
+  local held  = #selectedTakes() > 0
+  local takes = actionTargets()
+  disarmReplace()
+  local placed = {}
+  for _, take in ipairs(takes) do
+    util.add(placed, am:dropInstance(take.trackIdx, slotIdx, take.startQN))
+  end
+  if #placed == 0 then return end
+  if #placed == 1 then pullCursorInside(takes[1], placed[1]) end
+  if held then setSelection(placed) end
+end
+
 ----- Loop + transport — REAPER loop range and playback, driven from the cursor
 
 --invariant: setLoopStart/End move one loop endpoint to cursorQN; never inverts the range.
@@ -482,6 +534,12 @@ function av:selectBand() return selAnchor and rectFromAnchor(selAnchor) or nil e
 
 --contract: takes the band down and pops its scope; the page calls this on unbind.
 function av:dropBand() disarmBand() end
+
+--contract: true while replace mode is armed — the status bar's only reader.
+function av:replaceArmed() return replaceArmed end
+
+--contract: disarms replace mode and pops its scope; the page calls this on unbind.
+function av:dropReplaceMode() disarmReplace() end
 
 --contract: setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).
 function av:setPaletteSlot(idx)
@@ -746,6 +804,7 @@ arrange:registerAll {
   arrangeDuplicateUnpooledBelow = { duplicateUnpooledSelectedBelow, 'Duplicate take' },
   arrangePrevVariant            = { function() stepVariantOfSelected(-1) end, 'Previous variant' },
   arrangeNextVariant            = { function() stepVariantOfSelected( 1) end, 'Next variant' },
+  arrangeReplaceMode            = toggleReplaceMode,
   arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },
   arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },
@@ -763,10 +822,15 @@ for i = 0, 9 do
     function() cm:set('project', 'arrangeAdvanceBy', i) end)
 end
 
-local placeCmds = {}
+-- One base62 loop mints both readings of a drop key: the place command the arrange scope
+-- registers, and the replace body the armed overlay redirects to — with its own undo label.
+local placeCmds, replaceCmds = {}, {}
 for i = 0, 61 do
-  placeCmds['drop' .. am:keyForSlot(i)] = { function() dropAt(i) end, 'Place pooled take' }
+  local name = 'drop' .. am:keyForSlot(i)
+  placeCmds[name]   = { function() dropAt(i) end, 'Place pooled take' }
+  replaceCmds[name] = util.atomic('Replace take', function() replaceAt(i) end)
 end
 arrange:registerAll(placeCmds)
+replaceScope.redirect = replaceCmds
 
 return av

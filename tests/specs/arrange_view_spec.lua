@@ -727,6 +727,57 @@ return {
   },
 
   {
+    name = 'a cursor-driven replace leaves nothing selected',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, len = 2 },
+        { track = 'tr1', name = 'b', pos = 8, len = 1 },
+      })
+      av:setCursor(0, 0)                 -- caret on a, nothing selected
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')             -- b's slot stands in for a
+      t.eq(takeAt(am:tracksTakes(0), 0).slotIdx, 1, 'the replace happened')
+      t.deepEq(av:selectionSet(), {}, 'and left the selection as it found it — empty')
+    end,
+  },
+
+  {
+    name = 'a replace of a selected take hands the selection to the replacement',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, len = 2 },
+        { track = 'tr1', name = 'b', pos = 8, len = 1 },
+      })
+      local before = takeAt(am:tracksTakes(0), 0).take
+      av:setSelection{ before }
+      av:setCursor(0, 0)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')
+      local after = takeAt(am:tracksTakes(0), 0).take
+      t.deepEq(av:selectionSet(), { [after] = true },
+               'the replacement is selected, the take it displaced is gone')
+    end,
+  },
+
+  {
+    name = 'a replace of a selection away from the cursor leaves the cursor alone',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, len = 4 },
+        { track = 'tr1', name = 'b', pos = 8, len = 1 },
+      })
+      av:setSelection{ takeAt(am:tracksTakes(0), 0).take }
+      av:setCursor(20, 0)                -- parked far below what is selected
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeReplaceMode')
+      h.cmgr:invoke('drop1')             -- a one-row slot stands in for a four-row take
+      t.eq(av:cursorRow(), 20, 'the cursor never sat inside the take replaced')
+    end,
+  },
+
+  {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)
       local _, av = mkAv(harness)

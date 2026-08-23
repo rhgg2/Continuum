@@ -209,6 +209,45 @@ another take starts at the same QN. This ensures a chained drop
 the just-placed take — `advanceCursorPastNewTake` lands the cursor on
 that boundary row on purpose.
 
+## Replace mode
+
+Super+U arms replace mode, in which the drop keys read differently: the
+next drop key stands its slot in for a take already on the grid rather
+than placing an instance at the cursor. Each replacement keeps the
+start of the take it displaces and arrives at its own natural length,
+so the key says what should sound there without saying where or how
+long.
+
+What a replace acts on is what every edit verb here acts on: the
+selection where one is held, else the take under the cursor, which the
+bottom-edge rule above resolves and whose start is usually above the
+cursor row. So one key replaces a whole selected block, each member in
+its own place and on its own track. A held selection passes to the
+replacements, so the block can be replaced again; a cursor-driven
+replace selects nothing, and the cursor alone carries the next one.
+
+Arming pushes a spring-loaded scope whose `redirect` covers all 62 drop
+keys, so the drop runs in place and the mode ends with it. Anything
+else bails the scope: a cursor move, an edit verb, leaving the page.
+Super+U again disarms, since the mode's own command is its
+`keepAlive`. A drop over empty space is a no-op that disarms all the
+same.
+
+A replacement longer than what it displaced is not stacked on its
+neighbour: relayout caps it at the next take's start, the same cap
+every drop gets.
+
+The cursor holds its row, because a replace edits in place rather than
+placing. A lone shorter replacement is the exception: where its end
+falls above a cursor that sat on the take replaced, the cursor comes up
+to the last row inside it, so a run of replaces on one item stays on
+that item. A selection elsewhere never drags the cursor to it, and a
+replace over several takes leaves the cursor alone, as a multi-take
+resize does.
+
+Nothing else on screen marks the mode, so the status bar carries a
+REPLACE flag while it stands.
+
 ## Drag geometry: ghost length and fits
 
 During a move or duplicate drag the ghost length equals

@@ -114,7 +114,8 @@ Commands the scope *owns* (registered on it) never trigger `onBail`;
 its own bail verb pops explicitly. The interception lives in `invoke`,
 so it governs mouse and programmatic invokes too, not just keys.
 
-region mode (the `\` verb) is the only spring-loaded scope today.
+Three scopes are spring-loaded today: region mode (the `\` verb),
+arrange's Shift+arrow selection band, and arrange's replace mode.
 
 ## Dispatch & result protocol
 

@@ -80,7 +80,6 @@ pageBindings.tracker = {
   duplicateBelow         = { {ImGui.Key_DownArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} },
   prevVariant            = { {ImGui.Key_LeftArrow,  ImGui.Mod_Alt, ImGui.Mod_Shift} },
   nextVariant            = { {ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} },
-  duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift} },
   deleteBoundSlot        = { {ImGui.Key_Delete, ImGui.Mod_Ctrl}, {ImGui.Key_Backspace, ImGui.Mod_Ctrl} },
   matchGridToCursor      = { {ImGui.Key_M, ImGui.Mod_Super} },
   groupDuplicate         = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
@@ -173,6 +172,8 @@ local arrange = {
   arrangePrevVariant            = { { ImGui.Key_LeftArrow,  ImGui.Mod_Alt, ImGui.Mod_Shift } },
   arrangeNextVariant            = { { ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift } },
   arrangeDuplicateUnpooledBelow = { { ImGui.Key_Enter,      ImGui.Mod_Super, ImGui.Mod_Shift } },
+  -- Shadows the global universal-argument prefix, which no arrange command reads.
+  arrangeReplaceMode            = { { ImGui.Key_U,          ImGui.Mod_Super } },
   arrangeSetLoopStart           = { { ImGui.Key_B,          ImGui.Mod_Super } },
   arrangeSetLoopEnd             = { { ImGui.Key_E,          ImGui.Mod_Super } },
   arrangeLoopToItem             = { { ImGui.Key_L,          ImGui.Mod_Super } },

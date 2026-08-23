@@ -198,17 +198,18 @@ index is a silent no-op (`am:dropInstance` returns nil); the user
 learns the palette is empty there by trying and seeing nothing.
 
 Drops land at `(av:cursorCol(), slotIdx, av:rowToQN(av:cursorRow()))`
-with length `av:beatPerRow()` — one visible row. There is no separate
-snap setting: the cursor already lives on row boundaries, so drops
-are implicitly row-snapped. A real snap selector lands with the
-toolbar in a later slice; until then beatPerRow is both the row
-density and the default length, which keeps the visible cell and the
-dropped rectangle aligned by construction.
+and name no length, so the instance arrives at the slot's natural
+length. There is no separate snap setting: the cursor already lives on
+row boundaries, so drops are implicitly row-snapped. A real snap
+selector lands with the toolbar in a later slice.
 
-Digit keys do not collide with the universal-argument prefix:
-`cmgr:beginPrefix` is bound to Super+U and the dispatcher only feeds
-digits into `appendPrefix` while `isPrefixActive()` is true. So bare
-0–9 are free in any scope unless the user has just typed Super+U.
+While replace mode is armed the same keys replace the take under the
+cursor instead of placing at it — `docs/arrangeView.md` § Replace mode.
+
+Digit keys never collide with the universal-argument prefix. Arrange
+binds Super+U to replace mode, shadowing the global `beginPrefix`
+binding, and no arrange command reads a prefix; so the prefix never
+opens on this page and bare 0–9 always drop.
 
 ## Grid is hand-drawn
 

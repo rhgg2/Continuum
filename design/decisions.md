@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Arrange binds Super+U to replace mode, shadowing the global universal-argument
+  prefix. No arrange command reads a prefix, and while one is open the digit keys feed its buffer
+  instead of dropping slots, so the page lost nothing it used. Replace picks its targets the way
+  every other arrange edit verb does: a held selection replaces as a block and passes to the
+  replacements, while a cursor-driven replace leaves nothing selected.
+
 - **2026-08-23** — Alt+Shift+←/→ step a placement along its family, and vary is the forward step
   off the last of it. Vary on a key of its own minted a variant per press, so a placement that had
   already forked could only fork again; stepping makes the family a dial the placement turns, and
