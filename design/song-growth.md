@@ -45,8 +45,8 @@ where a slot's takes go rather than where they die: deleting a slot's
 last live instance parks that item too, as the slot's **keeper**, so a
 palette entry outlives its placements.
 
-`again` and the arrange page's pooled `duplicateBelow` place another
-instance of a slot that already has one, so they refuse. A parked
+The pooled `duplicateBelow`, on either page, places another instance of
+a slot that already has one, so it refuses. A parked
 sibling would show nothing, since the palette already carries the slot,
 and it would leave the pool with an item on scratch that was never a
 keeper. The palette can therefore always grow, while the song grows
@@ -65,27 +65,27 @@ span.
 ## The tracker remembers its instance
 
 Landed; the model is `docs/trackerPage.md` § The current instance, and
-the seek `docs/arrangeManager.md` § Instances of a slot. `again` and
-`vary` name the instance they create, and refuse where there is none.
+the seek `docs/arrangeManager.md` § Instances of a slot. The duplicate
+and `vary` name the instance they create, and refuse where there is none.
 
 ## Loop to item
 
 Landed; the model is `docs/trackerPage.md` § Loop to item and
-`docs/arrangeView.md` § Loop to item. `again` moves the loop with the
-instance it appends.
+`docs/arrangeView.md` § Loop to item. The duplicate moves the loop with
+the instance it appends.
 
 ## What the grid draws
 
 Landed; the model is `docs/trackerPage.md` § The play row and § The
 cut. An unlit grid says the tracker is inside no placement, which is
-the reading `again` and `vary` want for their refusals.
+the reading the duplicate and `vary` want for their refusals.
 
-## again
+## Duplicate below
 
-**again** (Alt+Shift+↓) appends a pooled instance of the bound slot at
-the current instance's append point (§ The append point), binds the
-tracker to it, and with loop to item on moves the loop onto it — so the
-transport keeps rolling and the repeat is what you hear next. It
+**duplicateBelow** (Alt+Shift+↓) appends a pooled instance of the bound
+slot at the current instance's append point (§ The append point), binds
+the tracker to it, and with loop to item on moves the loop onto it — so
+the transport keeps rolling and the repeat is what you hear next. It
 refuses where the free span falls short.
 
 Nothing is added to the palette. Four presses give four instances of
@@ -121,14 +121,13 @@ grid. One atomic block, one undo point, and the tracker rebinds to the
 new take.
 
 The tracker's unpooled duplicate retires with `vary`. It copied the
-bound take into a fresh parked slot and asked for a name; `again` then
-`vary` gives the same fork with a placement to hold it, and takes the
-variant's name from its parent.
+bound take into a fresh parked slot and asked for a name;
+`duplicateBelow` then `vary` gives the same fork with a placement to
+hold it, and takes the variant's name from its parent.
 
-The two verbs compose into **again, but…** — `again` says it once more,
-`vary` says this one is different now. Each stands alone as well: a
-repeat you never vary, or a placement you fork on passing without
-repeating it.
+The two verbs compose: the duplicate says it once more, `vary` says this
+one is different now. Each stands alone as well: a repeat you never
+vary, or a placement you fork on passing without repeating it.
 
 ## Divergence is structural
 
@@ -155,7 +154,7 @@ song. It reaches well into the rebuild pipeline, and it belongs in
 
 - **Repool if unchanged.** `vary` has to be pressed before the edit
   that motivates it, at the moment it is least likely to be remembered.
-  One repair is to change `again` so that it places an unpooled copy
+  One repair is to change `duplicateBelow` so that it places an unpooled copy
   and folds that copy back into its source slot at the next bind, if
   events and metadata still match, so divergence is discovered rather
   than declared; it costs an equality test at every bind and the

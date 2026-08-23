@@ -331,6 +331,16 @@ function tv:newTakeBelow(name, beats)
   return slot
 end
 
+--contract: another instance of the bound slot at the current instance's append point
+--contract: nil with no current instance, or where the free span falls short of the source
+--invariant: the copy becomes the current instance, so loop to item follows it
+function tv:duplicateBelow()
+  local inst = self:currentInstance(); if not inst then return end
+  local take = arrange().duplicateBelow(inst); if not take then return end
+  self:nameInstance(take)
+  return take
+end
+
 --contract: clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx
 function tv:duplicateBoundUnpooled()
   local trackIdx = selectedTrackIdx(); if not trackIdx then return end

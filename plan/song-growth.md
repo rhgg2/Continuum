@@ -15,10 +15,11 @@
    caret from `(playQN − instanceStartQN)` over `ppqPerRow`, and the cut line
    where the rendered span ends before the source does. — landed 2026-08-22,
    two commits.
-3. **Phase 3 — The append point and again** (§ The append point, § again) —
-   one rule for where a take below goes and what happens with no room: a
-   minting verb parks, a placing verb refuses. The tracker's new take stops
-   parking by default, and `again` follows on the same rule.  ← in flight
+3. **Phase 3 — The append point and duplicate below** (§ The append point,
+   § Duplicate below) — one rule for where a take below goes and what happens
+   with no room: a minting verb parks, a placing verb refuses. The tracker's
+   new take stops parking by default, and its duplicate below follows on the
+   same rule. — landed 2026-08-23, three commits.
 4. **Phase 4 — vary** (§ vary) — the current instance replaced by an instance
    of a fresh variant slot named `<parent> (var N)`; refused on a slot with one
    instance; one atomic block, rebind; the tracker's unpooled duplicate
@@ -26,10 +27,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 tracker: duplicate below appends another instance of the bound slot (§ Duplicate below)
 - 2026-08-23 tracker: the new take places at the append point (§ The append point)
 - 2026-08-23 am: append at the rendered end, park for want of room (§ The append point)
 - 2026-08-22 tracker: draw the cut where the rendered span stops short (§ What the grid draws)
-- 2026-08-22 tracker: draw the play row, dimmed for a sibling instance (§ What the grid draws)
 
 ## Now
 
@@ -37,7 +38,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **again** — `tv:again()` appends a pooled instance at the append point and
-   names it, so loop to item follows; refuses where the span falls short.
-   Alt+Shift+↓, the Take management toolbar group, and a section in
-   `docs/trackerPage.md`.
+(empty)

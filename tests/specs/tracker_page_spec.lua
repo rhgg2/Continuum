@@ -291,6 +291,84 @@ return {
     end,
   },
 
+  -- Duplicate below: another placement of the slot already bound, at the append point.
+  -- see docs/trackerPage.md § Duplicate below
+  {
+    name = 'duplicate below appends another instance of the bound slot and makes it current',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'i4' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+      }
+      -- The pooled clone joins the placements of the same slot; the palette is untouched.
+      fakeArrange.duplicateBelow = function(inst)
+        fakeArrange.calls.dup = { take = inst.take }
+        util.add(fakeArrange.instances,
+                 { take = 'i4', trackIdx = 0, slotIdx = 0, startQN = 4, lengthQN = 4 })
+        return 'i4'
+      end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind i0
+      h.cm:set('global', 'trackerLoopToItem', true)
+
+      h.cmgr:invoke('duplicateBelow')
+      t.eq(fakeArrange.calls.dup.take, 'i0', 'duplicated the instance the tracker is in')
+      t.eq(fakeArrange.calls.mint, nil, 'nothing joined the palette')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 0, 'and the bound slot is the one it was')
+
+      tp:bindFromSelection()                       -- the next frame's resolve
+      t.deepEq(fakeArrange.calls.loopTo, { 4, 8 }, 'the loop moved onto the copy')
+      h.cmgr:invoke('playFromTop')
+      t.eq(fakeArrange.calls.playFrom, 4, 'which is now the current instance')
+    end,
+  },
+
+  {
+    name = 'duplicate below refuses where the free span falls short',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+      }
+      fakeArrange.duplicateBelow = function() fakeArrange.calls.dup = true end   -- no room
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      h.cm:set('global', 'trackerLoopToItem', true)
+
+      h.cmgr:invoke('duplicateBelow')
+      tp:bindFromSelection()
+      t.eq(fakeArrange.calls.dup, true, 'the verb ran')
+      t.falsy(fakeArrange.calls.loopTo, 'and the refusal left the loop where it was')
+      h.cmgr:invoke('playFromTop')
+      t.eq(fakeArrange.calls.playFrom, 0, 'the tracker still in the instance it was in')
+    end,
+  },
+
+  {
+    name = 'duplicate below on a slot whose only take is parked does nothing',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'parked' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'parked'       -- bound, but on no placement
+      fakeArrange.duplicateBelow = function() fakeArrange.calls.dup = true end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+
+      h.cmgr:invoke('duplicateBelow')
+      t.falsy(fakeArrange.calls.dup, 'no instance to append to, so nothing was placed')
+    end,
+  },
+
   {
     name = 'prev/next track + take drive the tv selection, not the arrange cursor',
     run = function(harness)

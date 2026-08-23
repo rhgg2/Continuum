@@ -51,6 +51,7 @@ facade.publish('arrange', {
     return av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   end,
   newTakeBelow    = function(inst, name, lengthQN) return av:newTakeBelow(inst, name, lengthQN) end,
+  duplicateBelow  = function(take) return av:duplicateBelow(take) end,
   dropSlot        = function(trackIdx, slotIdx, qnPos) return av:dropSlot(trackIdx, slotIdx, qnPos) end,
   hasPlacedTakes  = function() return av:hasPlacedTakes() end,
   isParkedTake    = function(take) return av:isParkedTake(take) end,

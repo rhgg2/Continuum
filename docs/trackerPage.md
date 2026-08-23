@@ -593,6 +593,25 @@ right after `tm:bindTake`: for a parked take (`am:isParkedTake`) it re-points
 the track tier at the selection's track, before `seedSharedSlots` and the
 rest read per-track config.
 
+### Duplicate below
+
+`duplicateBelow` (Alt+Shift+↓) appends another instance of the bound
+slot at the current instance's append point, through `am:duplicateBelow`
+(`docs/arrangeManager.md` § The append point). The palette does not grow:
+four presses give four placements of one source, so a column of repeats
+reads as one idea stated four times.
+
+The copy becomes the current instance (`tv:nameInstance`), so loop to
+item moves the loop onto it and a rolling transport plays the repeat
+next. The bound slot is the one it was, so the verb selects no slot and
+forces no rebind — the tracker edits what it was editing, one placement
+further down.
+
+The verb refuses in silence where the tracker is in no instance, and
+where the free span below is shorter than the source. An instance cut
+short by a neighbour therefore always refuses, its append point being
+that neighbour's start.
+
 ## External-mutation watcher
 
 `lastHash` is a `MIDI_GetHash` baseline of the bound take, snapshotted

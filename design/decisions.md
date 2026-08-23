@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — The tracker's repeat verb is named duplicateBelow rather than again. It is the
+  arrange page's pooled duplicate below seen from inside a placement, and the tracker already
+  carries duplicateUnpooledBelow, so one name serves both pages and the pair reads together.
+  design/song-growth.md § again is renamed to match; vary keeps its name.
+
 - **2026-08-23** — The tracker's new take hands am:newTakeBelow the name and length its modal asked
   for, and the verb measures the free span against that length rather than the source instance's
   natural length. A take being minted has no natural length except the one asked for, so the room
