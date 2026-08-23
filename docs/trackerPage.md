@@ -567,6 +567,41 @@ neighbour moves away or the head is handed back, which keeps each mark a
 boundary and not an edge. See `docs/arrangeManager.md` § Rendered span
 and source span for where the two extents come from.
 
+### The caret across the dive
+
+A dive carries the caret in both directions. The arrange cursor's
+position becomes the tracker caret's row, and the tracker caret's row
+becomes the arrange cursor's position on the way back. Both legs speak
+project QN, and each page works out its own row from it — arrange
+through `arrangeBeatPerRow`, the tracker through the metric the play row
+uses.
+
+The return leg carries the track and the slot as well as the row. That
+is the half that earns its keep: Alt-arrows, `gotoTrack` and again/vary
+all move the tracker to another placement, and an arrange cursor left
+where the dive began would point at the take you started from rather
+than the one you edited.
+
+The QN converts through the current instance, measured from its source
+origin rather than its start, so a head-trimmed instance answers rows in
+the frame the cut lines are drawn in. Both legs clamp the row to the
+rendered span, since a source row outside the window sounds nowhere in
+the song and the arrange cursor would land clear of the take it came
+from.
+
+The dive runs a frame ahead of the bind, so the QN travels with the
+named instance and is spent at the next `resolveCurrentInstance`, where
+the take is bound, the grid is rebuilt and there is a metric to convert
+through. `tp:unbind` pushes the other way, whichever page the tracker is
+leaving for — the same direction as the dive, and for the same reason
+that arrange never reads the tracker's state for itself.
+
+Neither leg touches REAPER's edit cursor. The two cursors that move are
+Continuum's own, so the transport still plays from where it was left and
+a loop set by hand survives the page switch. A dive over empty space
+carries no row at all: the tracker restores its own take, and the QN
+would read against a placement the cursor was never over.
+
 ### Slot recovery and the per-track memory
 
 A stored slot can vanish (deleted under us). `resolveSelectionTake`

@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=169  mode=chunk  self=tp
+@module trackerPage  src=trackerPage.lua  loc=174  mode=chunk  self=tp
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta, lib
 
 # Imports
@@ -31,14 +31,14 @@
       @reaper  MIDI_GetHash on the bound take — the external-mutation watcher baseline  @ 53
 
 # Functions held in tables
-  @held tracker.diveTo(guid, slotIdx, take)  @ 114-117
-  @held tracker.restorePerfFlags()  @ 120
-  @held tracker.selectNewTake(guid)  @ 124-127
-  @held tracker.openTakeProperties(item, opts)  @ 131-136
-  @held tracker.reswingTakes(takes)  @ 139-149
-  @held tracker.timeSig()  @ 151
-  @held tracker.cursorAnchor()  @ 152
-  @held tracker.setSwingComposite(name, c)  @ 153
+  @held tracker.diveTo(guid, slotIdx, take, qn)  @ 119-122
+  @held tracker.restorePerfFlags()  @ 125
+  @held tracker.selectNewTake(guid)  @ 129-132
+  @held tracker.openTakeProperties(item, opts)  @ 136-141
+  @held tracker.reswingTakes(takes)  @ 144-154
+  @held tracker.timeSig()  @ 156
+  @held tracker.cursorAnchor()  @ 157
+  @held tracker.setSwingComposite(name, c)  @ 158
 
 # Handlers registered
   @handler mm:flushed()  @ 62
@@ -48,49 +48,52 @@
   @api tp:currentTake()  @ 68
   @api tp:bind(t)  @ 71-77
       @contract  with a take, bind it on tm and seed tv; no arg = activation, resolve the selection  @ 70
-  @api tp:unbind()  @ 78
-  @api tp:dropTake()  @ 81
-      @contract  if take is destroyed, detach tm and blank the grid. Distinct from unbind.  @ 80
-  @api tp:reloadFromReaper()  @ 84
-      @contract  for coord's external-mutation watcher; re-reads the bound take, no swap  @ 83
+  @api tp:unbind()  @ 79-83
+      @contract  leaving hands the caret back to arrange as a QN; no instance, no move  @ 78
+  @api tp:dropTake()  @ 86
+      @contract  if take is destroyed, detach tm and blank the grid. Distinct from unbind.  @ 85
+  @api tp:reloadFromReaper()  @ 89
+      @contract  for coord's external-mutation watcher; re-reads the bound take, no swap  @ 88
   -- Selection — the tracker owns (track, slot) in cm; tv holds the nav + resolve,
-  @api tp:bindFromSelection()  @ 90-106
-      @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection  @ 89
+  @api tp:bindFromSelection()  @ 95-111
+      @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection  @ 94
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
-  @api tp:toolbarSegments()  @ 158
-  @api tp:renderStatusBar(ctx)  @ 159
-  @api tp:focusState()  @ 160
-  @api tp:renderBody(ctx, w, h, dispatch)  @ 163-167
-      @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline  @ 162
+  @api tp:toolbarSegments()  @ 163
+  @api tp:renderStatusBar(ctx)  @ 164
+  @api tp:focusState()  @ 165
+  @api tp:renderBody(ctx, w, h, dispatch)  @ 168-172
+      @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline  @ 167
 
 # Uses (outbound edges)
-  @use call    cm:get  @ tracker.selectNewTake:126
-  @use call    cm:getAt  @ bindFromSelection:91
+  @use call    cm:get  @ tracker.selectNewTake:131
+  @use call    cm:getAt  @ bindFromSelection:96
   @use call    facade.get  @ arrange:20 samplerMode:26
-  @use call    facade.publish  @ <load>:113
-  @use call    facade.publishDebug  @ <load>:109
+  @use call    facade.publish  @ <load>:118
+  @use call    facade.publishDebug  @ <load>:114
   @use call    pa:apply  @ bind:76
-  @use call    tm:bindTake  @ bind:73 unbind:78 tracker.reswingTakes:143,147
-  @use call    tm:currentTake  @ takeHash:55 currentTake:68 bindFromSelection:97 tracker.reswingTakes:140,146
-  @use call    tm:detach  @ dropTake:81
-  @use call    tm:reloadFromReaper  @ reloadFromReaper:84 bindFromSelection:103
-  @use call    tm:restoreGuarded  @ tracker.restorePerfFlags:120
-  @use call    tr:focusState  @ focusState:160
-  @use call    tr:openTakeProperties  @ tracker.openTakeProperties:135
-  @use call    tr:renderBody  @ renderBody:165
-  @use call    tr:renderStatusBar  @ renderStatusBar:159
-  @use call    tr:toolbarSegments  @ toolbarSegments:158
-  @use call    tv:cursorAnchor  @ tracker.cursorAnchor:152
-  @use call    tv:dropGrid  @ dropTake:81
-  @use call    tv:nameInstance  @ tracker.diveTo:116
-  @use call    tv:newTakeBelow  @ tracker.selectNewTake:126
-  @use call    tv:resolveCurrentInstance  @ bindFromSelection:105
-  @use call    tv:resolveSelectionTake  @ bindFromSelection:96
+  @use call    tm:bindTake  @ bind:73 unbind:82 tracker.reswingTakes:148,152
+  @use call    tm:currentTake  @ takeHash:55 currentTake:68 bindFromSelection:102 tracker.reswingTakes:145,151
+  @use call    tm:detach  @ dropTake:86
+  @use call    tm:reloadFromReaper  @ reloadFromReaper:89 bindFromSelection:108
+  @use call    tm:restoreGuarded  @ tracker.restorePerfFlags:125
+  @use call    tr:focusState  @ focusState:165
+  @use call    tr:openTakeProperties  @ tracker.openTakeProperties:140
+  @use call    tr:renderBody  @ renderBody:170
+  @use call    tr:renderStatusBar  @ renderStatusBar:164
+  @use call    tr:toolbarSegments  @ toolbarSegments:163
+  @use call    tv:currentInstance  @ unbind:80
+  @use call    tv:cursorAnchor  @ tracker.cursorAnchor:157
+  @use call    tv:cursorQN  @ unbind:80
+  @use call    tv:dropGrid  @ dropTake:86
+  @use call    tv:nameInstance  @ tracker.diveTo:121
+  @use call    tv:newTakeBelow  @ tracker.selectNewTake:131
+  @use call    tv:resolveCurrentInstance  @ bindFromSelection:110
+  @use call    tv:resolveSelectionTake  @ bindFromSelection:101
   @use call    tv:retargetTrackTier  @ bind:74
   @use call    tv:seedSharedSlots  @ bind:75
-  @use call    tv:selectTrack  @ bindFromSelection:94 tracker.diveTo:115 tracker.selectNewTake:125
-  @use call    tv:setSwingComposite  @ tracker.setSwingComposite:153
-  @use call    tv:timeSig  @ tracker.timeSig:151
+  @use call    tv:selectTrack  @ bindFromSelection:99 tracker.diveTo:120 tracker.selectNewTake:130
+  @use call    tv:setSwingComposite  @ tracker.setSwingComposite:158
+  @use call    tv:timeSig  @ tracker.timeSig:156
   @use call    util.instantiate  @ <load>:31,32,33,34,35,36,40,43
   @use require ccManager  @ <load>:34
   @use require groupManager  @ <load>:33
@@ -104,13 +107,13 @@
   @use sub     mm:flushed  @ <load>:62
 
 # Calls (intra-file)
-  @call arrange  @ samplerMode:25 bindFromSelection:92,93
-  @call samplerMode  @ bind:73 tracker.reswingTakes:143,147
-  @call takeHash  @ mm:flushed:62 bindFromSelection:102 renderBody:166
-  @call tp:bind  @ bindFromSelection:99 tracker.openTakeProperties:134
-  @call tp:bindFromSelection  @ bind:72 renderBody:164
-  @call tp:currentTake  @ tracker.openTakeProperties:134
-  @call tp:dropTake  @ bindFromSelection:99
+  @call arrange  @ samplerMode:25 unbind:81 bindFromSelection:97,98
+  @call samplerMode  @ bind:73 tracker.reswingTakes:148,152
+  @call takeHash  @ mm:flushed:62 bindFromSelection:107 renderBody:171
+  @call tp:bind  @ bindFromSelection:104 tracker.openTakeProperties:139
+  @call tp:bindFromSelection  @ bind:72 renderBody:169
+  @call tp:currentTake  @ tracker.openTakeProperties:139
+  @call tp:dropTake  @ bindFromSelection:104
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -120,46 +123,47 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 13
-  @field w ccm  @ 35,109
+  @field w ccm  @ 35,114
   @field r chrome  @ 18
   @field w chrome  @ 41,44
   @field r cm  @ 18
   @field w cm  @ 32,35,36,44
   @field r cmgr  @ 18
   @field w cmgr  @ 36,44
-  @field w cursorAnchor  @ tracker.cursorAnchor:152
-  @field w diveTo  @ tracker.diveTo:114
+  @field w cursorAnchor  @ tracker.cursorAnchor:157
+  @field w diveTo  @ tracker.diveTo:119
   @field r ds  @ 18
   @field w ds  @ 32,33,35,36,44
   @field r eventMeta  @ 18
   @field w eventMeta  @ 31
   @field r facade  @ 18
   @field w facade  @ 35,36,41,45
-  @field r focusName  @ tracker.openTakeProperties:135
-  @field w focusName  @ tracker.openTakeProperties:135
-  @field w gm  @ 36,109
+  @field r focusName  @ tracker.openTakeProperties:140
+  @field w focusName  @ tracker.openTakeProperties:140
+  @field w gm  @ 36,114
   @field r gui  @ 18
   @field w gui  @ 41,45
-  @field r guid  @ bindFromSelection:94
+  @field r guid  @ bindFromSelection:99
   @field r help  @ 18
   @field w help  @ 45
   @field w hostDs  @ 41
   @field r lib  @ 18
   @field w lib  @ 36
-  @field w markSwingStale  @ tracker.reswingTakes:143
-  @field w mm  @ 32,109
+  @field w markSwingStale  @ tracker.reswingTakes:148
+  @field w mm  @ 32,114
   @field r modalHost  @ 18
   @field w modalHost  @ 41,45
-  @field w openTakeProperties  @ tracker.openTakeProperties:131
-  @field w pa  @ 36,109
+  @field w openTakeProperties  @ tracker.openTakeProperties:136
+  @field w pa  @ 36,114
   @field w pe  @ 45
-  @field w restorePerfFlags  @ tracker.restorePerfFlags:120
-  @field w reswingTakes  @ tracker.reswingTakes:139
-  @field w selectNewTake  @ tracker.selectNewTake:124
-  @field w setSwingComposite  @ tracker.setSwingComposite:153
+  @field w restorePerfFlags  @ tracker.restorePerfFlags:125
+  @field w reswingTakes  @ tracker.reswingTakes:144
+  @field w selectNewTake  @ tracker.selectNewTake:129
+  @field w setSwingComposite  @ tracker.setSwingComposite:158
   @field w take  @ 31
-  @field w timeSig  @ tracker.timeSig:151
-  @field w tm  @ 33,36,109
-  @field w tr  @ 109
-  @field w trackerMode  @ bind:73 tracker.reswingTakes:143,147
-  @field w tv  @ 44,109
+  @field w timeSig  @ tracker.timeSig:156
+  @field w tm  @ 33,36,114
+  @field w tr  @ 114
+  @field r trackIdx  @ unbind:81
+  @field w trackerMode  @ bind:73 tracker.reswingTakes:148,152
+  @field w tv  @ 44,114

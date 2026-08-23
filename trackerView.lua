@@ -225,6 +225,7 @@ function tv:selectSlot(slotIdx) cm:set('track', 'trackerSlot', slotIdx) end
 -- so the shape is re-read on each access.
 local currentInstanceTake
 local namedInstance       -- a command knew the placement; outranks the rest, one-shot
+local divedQN             -- the arrange caret's QN, handed over by a dive; one-shot
 local seekBack            -- prevTake travels backwards; cleared on resolve
 local playInstanceTake    -- where the play head was last resolve, for entry detection
 
@@ -248,7 +249,8 @@ function tv:setLoopToItem(on)
 end
 
 --contract: name the placement — the dive, and later again/vary; read at the next resolve
-function tv:nameInstance(take) namedInstance = take end
+--contract: qn is the arrange caret, carried by a dive; a naming without one leaves the caret
+function tv:nameInstance(take, qn) namedInstance, divedQN = take, qn end
 
 --contract: per frame — a named instance beats play-head entry beats a slot-change seek, else sticky
 --contract: gesture writes bracket the instance when loop to item is on; entry, stickiness do not
@@ -282,6 +284,9 @@ function tv:resolveCurrentInstance()
   end
   namedInstance, seekBack, playInstanceTake = nil, nil, entered
 
+  -- The dive's QN reads against the instance it landed in, so it is spent here
+  -- rather than at the dive, a frame before the take is bound.
+  if divedQN then self:setCursorQN(divedQN); divedQN = nil end
   if gesture and self:loopsToItem() then self:bracketCurrentInstance() end
 end
 
@@ -3320,6 +3325,35 @@ function tv:ppqToRow(ppq, chan) return ctx:ppqToRow(ppq, chan) end
 function tv:rowToPPQ(row, chan) return ctx:rowToPPQ(row, chan) end
 function tv:logPerRow()         return logPerRowFor(currentRpb()) end
 
+-- Rows and project QN, converted through an instance: row 0 sits at the source
+-- origin, which a head trim puts above the instance's own start.
+local function rowAtQN(inst, qn)  return (qn - inst.originQN) * resolution / ctx:ppqPerRow() end
+local function qnAtRow(inst, row) return inst.originQN + row * ctx:ppqPerRow() / resolution end
+
+-- The rows the instance renders. A caret outside them sounds nowhere, so both
+-- ends of the dive clamp here and the arrange caret always lands on the take.
+local function clampToSpan(inst, row)
+  local first = math.floor(rowAtQN(inst, inst.startQN))
+  local last  = math.ceil(rowAtQN(inst, inst.startQN + inst.lengthQN)) - 1
+  return util.clamp(row, first, math.max(first, last))
+end
+
+-- The caret as a project QN — the dive's currency in both directions.
+-- see docs/trackerPage.md § The caret across the dive
+--contract: the caret's project QN, clamped to the rendered span; nil outside an instance
+function tv:cursorQN()
+  local inst = self:currentInstance()
+  if not inst then return end
+  return qnAtRow(inst, clampToSpan(inst, ec:row()))
+end
+
+--contract: parks the caret on the row holding qn, clamped to the span; no instance, no move
+function tv:setCursorQN(qn)
+  local inst = self:currentInstance()
+  if not inst then return end
+  ec:setPos(clampToSpan(inst, math.floor(rowAtQN(inst, qn))))
+end
+
 -- The play head as a row of the grid on screen. Lives here, not with the
 -- current instance above, because ctx is a grid of its own.
 --contract: (row, elsewhere) for the play head; nil when stopped or in no instance of the slot
@@ -3329,14 +3363,13 @@ function tv:playRow()
   local playQN = arrange().playPositionQN()
   local inst   = playQN and self:currentInstance()
   if not inst then return end
-  local function rowIn(originQN) return (playQN - originQN) * resolution / ctx:ppqPerRow() end
   if playQN >= inst.startQN and playQN < inst.startQN + inst.lengthQN then
-    return rowIn(inst.originQN)
+    return rowAtQN(inst, playQN)
   end
   -- Siblings share one take, so a row of the instance being heard is a row of
   -- the grid on screen; the dim says it is not the instance bound.
   local other, contains = arrange().seekInstance(inst.take, playQN, false)
-  if contains then return rowIn(other.originQN), true end
+  if contains then return rowAtQN(other, playQN), true end
 end
 
 --contract: the row where the rendered span starts; nil unless a head skips source above it
@@ -3344,7 +3377,7 @@ end
 function tv:headRow()
   local inst = self:currentInstance()
   if not inst then return end
-  local row = (inst.startQN - inst.originQN) * resolution / ctx:ppqPerRow()
+  local row = rowAtQN(inst, inst.startQN)
   if row > 0 then return row end
 end
 
@@ -3353,7 +3386,7 @@ end
 function tv:cutRow()
   local inst = self:currentInstance()
   if not inst then return end
-  local row = (inst.startQN + inst.lengthQN - inst.originQN) * resolution / ctx:ppqPerRow()
+  local row = rowAtQN(inst, inst.startQN + inst.lengthQN)
   if row < grid.numRows then return row end
 end
 function tv:sampleCurve(A, B, ppq) return tm:interpolate(A, B, ppq) end

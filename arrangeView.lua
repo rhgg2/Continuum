@@ -347,12 +347,14 @@ local function deleteSelected()
 end
 
 --invariant: dive follows the grid cursor: track ← cursor; take ← cursor or else restore
+--invariant: a take under the cursor carries the cursor QN over; empty space carries no row
 local function diveSelected()
   local tr = am:projectTracks()[cursorCol + 1]
   if not tr then return end
   local cur     = takeAtCursor()
   local slotIdx = cur and cur.kind == 'midi' and cur.slotIdx or nil
-  tracker().diveTo(tr.guid, slotIdx, slotIdx and cur.take or nil)
+  tracker().diveTo(tr.guid, slotIdx, slotIdx and cur.take or nil,
+                   slotIdx and av:rowToQN(cursorRow) or nil)
   cmgr:invoke('switchPage', 'tracker')
 end
 
@@ -521,6 +523,10 @@ function av:cursorSlot()
   local take = takeAtCursor()
   return take and take.slotIdx or nil
 end
+
+--contract: parks the cursor on the row holding a project QN, in that track's column
+-- The tracker speaks QN on the way back from a dive; the row is av's to work out.
+function av:setCursorAt(trackIdx, qn) self:setCursor(self:qnToRow(qn), trackIdx) end
 
 --contract: clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.
 function av:setCursor(row, col)
@@ -823,7 +829,7 @@ function av:createSlot(trackIdx, qnPos, lengthQN, name)
     self:setPaletteSlot(slotIdx)
     self:setCursor(self:qnToRow(qnPos), trackIdx)
     local tr = am:projectTracks()[trackIdx + 1]
-    if tr then tracker().diveTo(tr.guid, slotIdx, take) end
+    if tr then tracker().diveTo(tr.guid, slotIdx, take, qnPos) end
     cmgr:invoke('switchPage', 'tracker')
   end
   return slotIdx

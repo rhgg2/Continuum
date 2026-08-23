@@ -75,7 +75,12 @@ function tp:bind(t)
   tv:seedSharedSlots()
   pa:apply()
 end
-function tp:unbind() tm:bindTake(nil); wasDormant = true end
+--contract: leaving hands the caret back to arrange as a QN; no instance, no move
+function tp:unbind()
+  local inst, qn = tv:currentInstance(), tv:cursorQN()
+  if qn then arrange().setCursorAt(inst.trackIdx, qn) end
+  tm:bindTake(nil); wasDormant = true
+end
 
 --contract: if take is destroyed, detach tm and blank the grid. Distinct from unbind.
 function tp:dropTake() tm:detach(); tv:dropGrid() end
@@ -111,9 +116,9 @@ facade.publishDebug('tracker', { mm = mm, tm = tm, gm = gm, ccm = ccm, pa = pa, 
 -- Dive is the one cross-page entry: arrange sets the tracker's selection; the
 -- pickers/Alt-arrows go straight to tv. bindFromSelection binds next frame.
 facade.publish('tracker', {
-  diveTo = function(guid, slotIdx, take)
+  diveTo = function(guid, slotIdx, take, qn)
     tv:selectTrack(guid, slotIdx)
-    if take then tv:nameInstance(take) end
+    if take then tv:nameInstance(take, qn) end
   end,
 
   -- Continuum quit re-enables anticipative FX on the guarded track (docs/midiManager.md).

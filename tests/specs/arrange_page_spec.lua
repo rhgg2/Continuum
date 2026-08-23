@@ -35,7 +35,9 @@ local fakeFacade = {
     if name == 'tracker' then
       return {
         openTakeProperties = function(item) captured.props = item end,
-        diveTo = function(guid, slotIdx) captured.dive = { guid = guid, slot = slotIdx } end,
+        diveTo = function(guid, slotIdx, _, qn)
+          captured.dive = { guid = guid, slot = slotIdx, qn = qn }
+        end,
       }
     end
     if name == 'wiring' then
@@ -592,6 +594,31 @@ return {
       h.cmgr:invoke('arrangeDive')
       t.eq(captured.nav, 'tracker', 'empty cursor still switches and sets the track')
       t.eq(captured.dive.slot, nil, 'nothing under the cursor — take left unchanged (restore)')
+    end,
+  },
+
+  -- The caret QN is the tracker's half of the dive: it becomes a caret row there,
+  -- against the take's own origin. Empty space pins no take, so it carries no row.
+  {
+    name = 'the dive carries the caret QN, and carries none over empty space',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 4, poolGuid = '{p1}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeDive')
+      t.eq(captured.dive.qn, 2, 'two rows down at a beat a row is two beats in')
+
+      for _ = 1, 3 do h.cmgr:invoke('arrangeCursorDown') end   -- row 5, past the take
+      h.cmgr:invoke('arrangeDive')
+      t.falsy(captured.dive.qn, 'nothing under the caret — no row to carry')
     end,
   },
 

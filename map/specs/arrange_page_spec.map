@@ -1,4 +1,4 @@
-@spec arrange_page_spec  src=tests/specs/arrange_page_spec.lua  loc=1101  cases=47
+@spec arrange_page_spec  src=tests/specs/arrange_page_spec.lua  loc=1128  cases=48
 @exercises commandManager (h.cmgr), configManager (h.cm), arrangeManager (am)
 @surface   cmgr:registerAll, cm:set, cmgr:push, am:tracksTakes, cmgr:invoke, cm:get, am:resizeTake, am:trimHead, am:trackSlots
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.SetMediaItemSelected, reaper:setCursor
@@ -8,168 +8,171 @@
   Cursor mechanics, off-screen no-op, and selection-precedence: arrange_view_spec.
 
 # Helpers
-  @fn newArrangePage(cm, ds, cmgr, chrome, gui)  @ 47-55
-  @fn twoSelected(h)  @ 59-78
+  @fn newArrangePage(cm, ds, cmgr, chrome, gui)  @ 49-57
+  @fn twoSelected(h)  @ 61-80
       -- Two instances of slot 0, one row each at QN 0 and 1, with rows 0..1 banded.
       -- The siblings at QN 10 and 20 are what slots 0 and 1 clone from.
 
 # Cases
-  @case 'bind / unbind are no-ops — arrange page never re-keys cm'  [harness]  @ 82-92
-  @case 'focusState before any render returns both bits false'  [harness]  @ 96-103
-  @case 'arrange-scope is registered at module load (cursorRight invokable)'  [harness]  @ 107-114
-  @case 'arrange-scope place commands are registered (drop0/dropA/dropZ invokable)'  [harness]  @ 118-129
-  @case 'a place-command drop advances the cursor by cm.arrangeAdvanceBy rows'  [harness]  @ 133-156
-  @case 'arrangeAdvanceBy0..9 set cm.arrangeAdvanceBy at project tier'  [harness]  @ 160-171
-  @case 'chained Super-D walks down — each clone becomes the selection for the next'  [harness]  @ 175-194
-  @case 'a place-command drop inherits the length of an existing instance'  [harness]  @ 198-220
-  @case 'arrangeNudgeForward moves the cursor take by one row'  [harness]  @ 224-238
-  @case 'arrangeNudgeForward moves a take taller than one row'  [harness]  @ 242-257
-  @case 'arrangeEdgeDown lengthens the cursor take by one row'  [harness]  @ 261-279
-  @case 'growing a trimmed take moves its end, leaving the head where it was'  [harness]  @ 283-305
-  @case 'arrangeEdgeDown silently no-ops at the take-source length cap'  [harness]  @ 309-324
-  @case 'arrangeEdgeUp reduces the cursor take by one row'  [harness]  @ 328-344
-  @case 'arrangeDeleteTake removes the cursor take'  [harness]  @ 348-362
-  @case 'deleteSlot forever-deletes the cursor take\'s slot behind a confirm'  [harness]  @ 368-392
-  @case 'deleteSlot no-ops with the cursor off every take'  [harness]  @ 396-412
-  @case 'arrangeNudgeForward is a no-op when the next row is occupied'  [harness]  @ 416-432
-  @case 'arrangeNudgeBack is a no-op when the take is already at row 0'  [harness]  @ 436-450
-  @case 'arrangeEdgeDown against a flush neighbour stores intent; rendered is gap-capped'  [harness]  @ 454-473
-  @case 'arrangeNudgeForward steps past a neighbour without a start-collision'  [harness]  @ 477-497
-  @case 'arrangeNudgeForward truncates the displaced take when stepping past'  [harness]  @ 501-523
-  @case 'arrangeDive switches to the tracker for the cursor MIDI take'  [harness]  @ 527-542
-  @case 'createSlot dives the tracker onto the freshly-minted take'  [harness]  @ 546-561
-  @case 'arrangeDive over an audio take still switches and restores (no take pinned)'  [harness]  @ 565-579
-  @case 'arrangeDive over empty space switches and restores'  [harness]  @ 583-595
-  @case 'kb edit acts on the cursor take when nothing is selected'  [harness]  @ 599-617
-  @case 'kb delete no-ops when the cursor sits off every take'  [harness]  @ 621-639
-  @case 'kb nudge no-ops when cursor sits on empty space'  [harness]  @ 643-660
-  @case 'an edit command is a no-op when the cursor is over empty space'  [harness]  @ 664-679
-  @case 'a second delete finds an empty cell under the cursor — no-op'  [harness]  @ 683-701
-  @case 'seedCursorFromReaper lands the cursor on the selected take'  [harness]  @ 705-722
-  @case 'seedCursorFromReaper falls back to the edit-cursor row'  [harness]  @ 726-740
-  @case 'arrangeTakeProperties routes the focused MIDI take through the tracker facade'  [harness]  @ 749-762
-  @case 'arrangeTakeProperties is a no-op on an audio take'  [harness]  @ 766-779
-  @case 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s append point'  [harness]  @ 783-799
-  @case 'arrangeDuplicateBelow is silent for want of room and on audio takes'  [harness]  @ 803-821
-  @case 'arrangeNextVariant past the last of the family swaps the target for a fresh variant'  [harness]  @ 825-856
-  @case 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props'  [harness]  @ 860-878
-  @case 'arrangeDuplicateUnpooledBelow parks the clone for want of room, and still names it'  [harness]  @ 882-903
-  @case 'replace mode: a drop swaps the take under the cursor, keeping its start'  [harness]  @ 909-936
-  @case 'a replace with a selection held replaces every selected take'  [harness]  @ 940-957
-  @case 'the replacements become the selection'  [harness]  @ 961-973
-  @case 'a shorter replacement pulls the cursor back inside it'  [harness]  @ 977-1005
-  @case 'replace mode disarms on the drop it reinterprets — the next drop places'  [harness]  @ 1009-1037
-  @case 'a cursor move disarms replace mode'  [harness]  @ 1041-1067
-  @case 'a second arrangeReplaceMode disarms — the mode is a toggle'  [harness]  @ 1071-1098
+  @case 'bind / unbind are no-ops — arrange page never re-keys cm'  [harness]  @ 84-94
+  @case 'focusState before any render returns both bits false'  [harness]  @ 98-105
+  @case 'arrange-scope is registered at module load (cursorRight invokable)'  [harness]  @ 109-116
+  @case 'arrange-scope place commands are registered (drop0/dropA/dropZ invokable)'  [harness]  @ 120-131
+  @case 'a place-command drop advances the cursor by cm.arrangeAdvanceBy rows'  [harness]  @ 135-158
+  @case 'arrangeAdvanceBy0..9 set cm.arrangeAdvanceBy at project tier'  [harness]  @ 162-173
+  @case 'chained Super-D walks down — each clone becomes the selection for the next'  [harness]  @ 177-196
+  @case 'a place-command drop inherits the length of an existing instance'  [harness]  @ 200-222
+  @case 'arrangeNudgeForward moves the cursor take by one row'  [harness]  @ 226-240
+  @case 'arrangeNudgeForward moves a take taller than one row'  [harness]  @ 244-259
+  @case 'arrangeEdgeDown lengthens the cursor take by one row'  [harness]  @ 263-281
+  @case 'growing a trimmed take moves its end, leaving the head where it was'  [harness]  @ 285-307
+  @case 'arrangeEdgeDown silently no-ops at the take-source length cap'  [harness]  @ 311-326
+  @case 'arrangeEdgeUp reduces the cursor take by one row'  [harness]  @ 330-346
+  @case 'arrangeDeleteTake removes the cursor take'  [harness]  @ 350-364
+  @case 'deleteSlot forever-deletes the cursor take\'s slot behind a confirm'  [harness]  @ 370-394
+  @case 'deleteSlot no-ops with the cursor off every take'  [harness]  @ 398-414
+  @case 'arrangeNudgeForward is a no-op when the next row is occupied'  [harness]  @ 418-434
+  @case 'arrangeNudgeBack is a no-op when the take is already at row 0'  [harness]  @ 438-452
+  @case 'arrangeEdgeDown against a flush neighbour stores intent; rendered is gap-capped'  [harness]  @ 456-475
+  @case 'arrangeNudgeForward steps past a neighbour without a start-collision'  [harness]  @ 479-499
+  @case 'arrangeNudgeForward truncates the displaced take when stepping past'  [harness]  @ 503-525
+  @case 'arrangeDive switches to the tracker for the cursor MIDI take'  [harness]  @ 529-544
+  @case 'createSlot dives the tracker onto the freshly-minted take'  [harness]  @ 548-563
+  @case 'arrangeDive over an audio take still switches and restores (no take pinned)'  [harness]  @ 567-581
+  @case 'arrangeDive over empty space switches and restores'  [harness]  @ 585-597
+  @case 'the dive carries the caret QN, and carries none over empty space'  [harness]  @ 603-622
+  @case 'kb edit acts on the cursor take when nothing is selected'  [harness]  @ 626-644
+  @case 'kb delete no-ops when the cursor sits off every take'  [harness]  @ 648-666
+  @case 'kb nudge no-ops when cursor sits on empty space'  [harness]  @ 670-687
+  @case 'an edit command is a no-op when the cursor is over empty space'  [harness]  @ 691-706
+  @case 'a second delete finds an empty cell under the cursor — no-op'  [harness]  @ 710-728
+  @case 'seedCursorFromReaper lands the cursor on the selected take'  [harness]  @ 732-749
+  @case 'seedCursorFromReaper falls back to the edit-cursor row'  [harness]  @ 753-767
+  @case 'arrangeTakeProperties routes the focused MIDI take through the tracker facade'  [harness]  @ 776-789
+  @case 'arrangeTakeProperties is a no-op on an audio take'  [harness]  @ 793-806
+  @case 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s append point'  [harness]  @ 810-826
+  @case 'arrangeDuplicateBelow is silent for want of room and on audio takes'  [harness]  @ 830-848
+  @case 'arrangeNextVariant past the last of the family swaps the target for a fresh variant'  [harness]  @ 852-883
+  @case 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props'  [harness]  @ 887-905
+  @case 'arrangeDuplicateUnpooledBelow parks the clone for want of room, and still names it'  [harness]  @ 909-930
+  @case 'replace mode: a drop swaps the take under the cursor, keeping its start'  [harness]  @ 936-963
+  @case 'a replace with a selection held replaces every selected take'  [harness]  @ 967-984
+  @case 'the replacements become the selection'  [harness]  @ 988-1000
+  @case 'a shorter replacement pulls the cursor back inside it'  [harness]  @ 1004-1032
+  @case 'replace mode disarms on the drop it reinterprets — the next drop places'  [harness]  @ 1036-1064
+  @case 'a cursor move disarms replace mode'  [harness]  @ 1068-1094
+  @case 'a second arrangeReplaceMode disarms — the mode is a toggle'  [harness]  @ 1098-1125
 
 # Uses (outbound edges)
-  @use call cmgr:registerAll  @ 50
-  @use call cm:set  @ 60,61,136,137,178,201,227,245,264,286,312,331,351,371,399,419,439,457,480,504,530,549,568,586,602,624,646,667,686,708,729,752,769,786,806,828,863,885,912,913,980,981,1012,1013,1044,1045,1074,1075
-  @use call cmgr:push  @ 69,111,124,143,166,185,210,234,252,275,296,319,340,358,382,406,428,446,466,493,516,537,554,575,591,611,631,653,675,695,719,737,759,776,793,817,837,870,894,921,989,1021,1053,1083
-  @use call am:tracksTakes  @ 71,145,150,191,212,215,237,255,272,278,292,293,301,323,337,343,361,386,388,431,449,470,496,519,616,638,659,678,700,796,820,840,853,873,897,923,929,947,969,991,999,1023,1030,1055,1061,1085,1092
-  @use call cmgr:invoke  @ 72,73,74,75,76,112,126,146,149,167,169,188,189,213,235,253,276,277,297,298,299,300,320,321,341,342,359,383,408,409,410,429,447,467,468,494,517,538,555,576,592,612,613,614,634,635,636,655,656,657,676,696,697,720,738,760,777,794,818,838,851,871,895,924,925,926,927,944,945,965,966,967,992,993,994,995,996,997,1024,1025,1026,1027,1028,1056,1057,1058,1059,1086,1087,1088,1089,1090
-  @use call cm:get  @ 168,170
-  @use call am:resizeTake  @ 272,293,337
-  @use call am:trimHead  @ 292
-  @use call am:trackSlots  @ 389,842,855,899
+  @use call cmgr:registerAll  @ 52
+  @use call cm:set  @ 62,63,138,139,180,203,229,247,266,288,314,333,353,373,401,421,441,459,482,506,532,551,570,588,606,629,651,673,694,713,735,756,779,796,813,833,855,890,912,939,940,1007,1008,1039,1040,1071,1072,1101,1102
+  @use call cmgr:push  @ 71,113,126,145,168,187,212,236,254,277,298,321,342,360,384,408,430,448,468,495,518,539,556,577,593,613,638,658,680,702,722,746,764,786,803,820,844,864,897,921,948,1016,1048,1080,1110
+  @use call am:tracksTakes  @ 73,147,152,193,214,217,239,257,274,280,294,295,303,325,339,345,363,388,390,433,451,472,498,521,643,665,686,705,727,823,847,867,880,900,924,950,956,974,996,1018,1026,1050,1057,1082,1088,1112,1119
+  @use call cmgr:invoke  @ 74,75,76,77,78,114,128,148,151,169,171,190,191,215,237,255,278,279,299,300,301,302,322,323,343,344,361,385,410,411,412,431,449,469,470,496,519,540,557,578,594,614,615,616,619,620,639,640,641,661,662,663,682,683,684,703,723,724,747,765,787,804,821,845,865,878,898,922,951,952,953,954,971,972,992,993,994,1019,1020,1021,1022,1023,1024,1051,1052,1053,1054,1055,1083,1084,1085,1086,1113,1114,1115,1116,1117
+  @use call cm:get  @ 170,172
+  @use call am:resizeTake  @ 274,295,339
+  @use call am:trimHead  @ 294
+  @use call am:trackSlots  @ 391,869,882,926
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 16
   @field w Mod_None  @ 10
   @field w __index  @ 11
-  @field r acceptCmds  @ 102
-  @field w chrome  @ 52
-  @field w cm  @ 52,70,144,190,211,236,254,269,291,322,336,360
-  @field w cm  @ 385,430,448,469,495,518,615,637,658,677,699,795
-  @field w cm  @ 819,839,872,896,922,990,1022,1054,1084
-  @field w cmgr  @ 52
-  @field r dive  @ 48,540,541,559,560,578,594
-  @field w dive  @ 38
+  @field r acceptCmds  @ 104
+  @field w chrome  @ 54
+  @field w cm  @ 54,72,146,192,213,238,256,271,293,324,338,362
+  @field w cm  @ 387,432,450,471,497,520,642,664,685,704,726,822
+  @field w cm  @ 846,866,899,923,949,1017,1049,1081,1111
+  @field w cmgr  @ 54
+  @field r dive  @ 50,542,543,561,562,580,596,617,621
+  @field w dive  @ 39
   @field w diveTo  @ 38
-  @field w ds  @ 52,70,144,190,211,236,254,269,291,322,336,360
-  @field w ds  @ 385,430,448,469,495,518,615,637,658,677,699,795
-  @field w ds  @ 819,839,872,896,922,990,1022,1054,1084
-  @field w eventMeta  @ 53
-  @field w facade  @ 54
+  @field w ds  @ 54,72,146,192,213,238,256,271,293,324,338,362
+  @field w ds  @ 387,432,450,471,497,520,642,664,685,704,726,822
+  @field w ds  @ 846,866,899,923,949,1017,1049,1081,1111
+  @field w eventMeta  @ 55
+  @field w facade  @ 56
   @field r facades  @ 33
-  @field w facades  @ 31,48
+  @field w facades  @ 31,50
   @field w get  @ 34
-  @field w gui  @ 52
-  @field r guid  @ 540,559
-  @field w guid  @ 38
-  @field r id  @ 391
-  @field w isMidi  @ 63,65,139,180,206,229,247,266,288,314,333,353
-  @field w isMidi  @ 373,375,377,401,421,423,441,459,461,486,488,509
-  @field w isMidi  @ 511,532,570,606,626,648,670,688,690,711,713,731
-  @field w isMidi  @ 754,771,788,810,812,830,832,865,887,889,915,917
-  @field w isMidi  @ 983,985,1015,1017,1047,1049,1077,1079
+  @field w gui  @ 54
+  @field r guid  @ 542,561
+  @field w guid  @ 39
+  @field r id  @ 393
+  @field w isMidi  @ 65,67,141,182,208,231,249,268,290,316,335,355
+  @field w isMidi  @ 375,377,379,403,423,425,443,461,463,488,490,511
+  @field w isMidi  @ 513,534,572,608,633,653,675,697,715,717,738,740
+  @field w isMidi  @ 758,781,798,815,837,839,857,859,892,914,916,942
+  @field w isMidi  @ 944,1010,1012,1042,1044,1074,1076,1104,1106
   @field w isOpen  @ 26
-  @field w isWiringOwnedTrack  @ 42
-  @field r item  @ 877,901
-  @field r last  @ 384,387,411,556,557
-  @field w last  @ 21,22,23,24,49
-  @field w len  @ 64,66,140,181,207,230,248,267,289,315,334,354
-  @field w len  @ 374,376,378,402,422,424,442,460,462,487,489,510
-  @field w len  @ 512,533,571,607,627,649,671,689,691,712,714,732
-  @field w len  @ 755,772,789,811,813,830,832,866,888,890,916,918
-  @field w len  @ 984,986,1016,1018,1048,1050,1078,1080
-  @field r lengthQN  @ 218,278,302,323,343,471,521,935,956
-  @field w modalHost  @ 54
-  @field r name  @ 849
-  @field w name  @ 82,96,107,118,133,160,175,198,224,242,261,283
-  @field w name  @ 309,328,348,368,396,416,436,454,477,501,527,546
-  @field w name  @ 565,583,599,621,643,664,683,705,726,749,766,783
-  @field w name  @ 803,825,860,882,909,940,961,977,1009,1041,1071
-  @field r naturalLenQN  @ 472,522
-  @field r nav  @ 48,539,558,577,593,721,739
-  @field w nav  @ 50
+  @field w isWiringOwnedTrack  @ 44
+  @field r item  @ 904,928
+  @field r last  @ 386,389,413,558,559
+  @field w last  @ 21,22,23,24,51
+  @field w len  @ 66,68,142,183,209,232,250,269,291,317,336,356
+  @field w len  @ 376,378,380,404,424,426,444,462,464,489,491,512
+  @field w len  @ 514,535,573,609,634,654,676,698,716,718,739,741
+  @field w len  @ 759,782,799,816,838,840,857,859,893,915,917,943
+  @field w len  @ 945,1011,1013,1043,1045,1075,1077,1105,1107
+  @field r lengthQN  @ 220,280,304,325,345,473,523,962,983
+  @field w modalHost  @ 56
+  @field r name  @ 876
+  @field w name  @ 84,98,109,120,135,162,177,200,226,244,263,285
+  @field w name  @ 311,330,350,370,398,418,438,456,479,503,529,548
+  @field w name  @ 567,585,603,626,648,670,691,710,732,753,776,793
+  @field w name  @ 810,830,852,887,909,936,967,988,1004,1036,1068,1098
+  @field r naturalLenQN  @ 474,524
+  @field r nav  @ 50,541,560,579,595,748,766
+  @field w nav  @ 52
   @field w open  @ 22
   @field w openConfirm  @ 24
   @field w openPrompt  @ 23
   @field w openTakeProperties  @ 37
-  @field r originQN  @ 304
-  @field w poolGuid  @ 64,66,140,181,207,230,248,267,289,315,334,354
-  @field w poolGuid  @ 374,376,378,402,422,424,442,460,462,487,489,510
-  @field w poolGuid  @ 512,533,607,627,649,671,689,691,712,714,732,755
-  @field w poolGuid  @ 789,811,813,831,833,866,888,890,916,918,984,986
-  @field w poolGuid  @ 1016,1018,1048,1050,1078,1080
-  @field w pos  @ 64,66,140,181,207,230,248,267,289,315,334,354
-  @field w pos  @ 374,376,378,402,422,424,442,460,462,487,489,510
-  @field w pos  @ 512,533,571,607,627,649,671,689,691,712,714,732
-  @field w pos  @ 755,772,789,811,813,830,832,866,888,890,916,918
-  @field w pos  @ 984,986,1016,1018,1048,1050,1078,1080
+  @field r originQN  @ 306
+  @field w poolGuid  @ 66,68,142,183,209,232,250,269,291,317,336,356
+  @field w poolGuid  @ 376,378,380,404,424,426,444,462,464,489,491,512
+  @field w poolGuid  @ 514,535,609,634,654,676,698,716,718,739,741,759
+  @field w poolGuid  @ 782,816,838,840,858,860,893,915,917,943,945,1011
+  @field w poolGuid  @ 1013,1043,1045,1075,1077,1105,1107
+  @field w pos  @ 66,68,142,183,209,232,250,269,291,317,336,356
+  @field w pos  @ 376,378,380,404,424,426,444,462,464,489,491,512
+  @field w pos  @ 514,535,573,609,634,654,676,698,716,718,739,741
+  @field w pos  @ 759,782,799,816,838,840,857,859,893,915,917,943
+  @field w pos  @ 945,1011,1013,1043,1045,1075,1077,1105,1107
   @field r preload  @ 13
-  @field r props  @ 48,761,778,876,877,900,901
+  @field r props  @ 50,788,805,903,904,927,928
   @field w props  @ 37
-  @field w ps  @ 53
+  @field w ps  @ 55
   @field w publish  @ 33
+  @field r qn  @ 617,621
+  @field w qn  @ 39
   @field r reaper  @ 16
   @field w registerKind  @ 25
-  @field w run  @ 83,97,108,119,134,161,176,199,225,243,262,284
-  @field w run  @ 310,329,349,369,397,417,437,455,478,502,528,547
-  @field w run  @ 566,584,600,622,644,665,684,706,727,750,767,784
-  @field w run  @ 804,826,861,883,910,941,962,978,1010,1042,1072
-  @field w setContext  @ 88
-  @field w setTrack  @ 87
-  @field r slot  @ 541,560,578,594
-  @field w slot  @ 38
-  @field r slotIdx  @ 848,854,933,952,953,1035
-  @field w srcFile  @ 571,772
-  @field w srcLen  @ 64,66,140,181,207,267,289,315,334,460,462,487
-  @field w srcLen  @ 489,510,512,789,811,813,830,832,866,888,890,916
-  @field w srcLen  @ 918,984,986,1016,1018,1048,1050,1078,1080
-  @field r startQN  @ 153,193,216,237,255,303,431,449,496,520,659,798
-  @field r startQN  @ 845,853,875,930,934,948,950,954,955,970,1000
-  @field r startQN  @ 1000,1031,1033,1036,1062,1093
-  @field r suppressKbd  @ 101
-  @field w switchPage  @ 50
-  @field w take  @ 63,65,139,180,206,229,247,266,288,314,333,353
-  @field w take  @ 373,375,377,401,421,423,441,459,461,486,488,509
-  @field w take  @ 511,532,570,606,626,648,670,688,690,711,713,731
-  @field w take  @ 754,771,788,810,812,830,832,865,887,889,915,917
-  @field w take  @ 983,985,1015,1017,1047,1049,1077,1079
-  @field w takeName  @ 831,833
-  @field w tm  @ 70,144,190,211,236,254,269,291,322,336,360,385
-  @field w tm  @ 430,448,469,495,518,615,637,658,677,699,795,819
-  @field w tm  @ 839,872,896,922,990,1022,1054,1084
+  @field w run  @ 85,99,110,121,136,163,178,201,227,245,264,286
+  @field w run  @ 312,331,351,371,399,419,439,457,480,504,530,549
+  @field w run  @ 568,586,604,627,649,671,692,711,733,754,777,794
+  @field w run  @ 811,831,853,888,910,937,968,989,1005,1037,1069,1099
+  @field w setContext  @ 90
+  @field w setTrack  @ 89
+  @field r slot  @ 543,562,580,596
+  @field w slot  @ 39
+  @field r slotIdx  @ 875,881,960,979,980,1062
+  @field w srcFile  @ 573,799
+  @field w srcLen  @ 66,68,142,183,209,269,291,317,336,462,464,489
+  @field w srcLen  @ 491,512,514,816,838,840,857,859,893,915,917,943
+  @field w srcLen  @ 945,1011,1013,1043,1045,1075,1077,1105,1107
+  @field r startQN  @ 155,195,218,239,257,305,433,451,498,522,686,825
+  @field r startQN  @ 872,880,902,957,961,975,977,981,982,997,1027
+  @field r startQN  @ 1027,1058,1060,1063,1089,1120
+  @field r suppressKbd  @ 103
+  @field w switchPage  @ 52
+  @field w take  @ 65,67,141,182,208,231,249,268,290,316,335,355
+  @field w take  @ 375,377,379,403,423,425,443,461,463,488,490,511
+  @field w take  @ 513,534,572,608,633,653,675,697,715,717,738,740
+  @field w take  @ 758,781,798,815,837,839,857,859,892,914,916,942
+  @field w take  @ 944,1010,1012,1042,1044,1074,1076,1104,1106
+  @field w takeName  @ 858,860
+  @field w tm  @ 72,146,192,213,238,256,271,293,324,338,362,387
+  @field w tm  @ 432,450,471,497,520,642,664,685,704,726,822,846
+  @field w tm  @ 866,899,923,949,1017,1049,1081,1111
   @field w wasOpenAtFrameStart  @ 27

@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — A dive carries the caret between the arrange and tracker pages in both
+  directions, in project QN, each page working out its own row from it. The alternative was the
+  sticky arrange cursor the return leg had before, which pointed at the take the dive began on after
+  any hop to another track or slot. Both legs measure from the instance's source origin and clamp to
+  its rendered span, so the row sits in the frame the cut lines are drawn in and the arrange cursor
+  always lands on the take it came from. REAPER's edit cursor is untouched, since moving it would
+  change what the transport plays and discard a loop set by hand. See docs/trackerPage.md § The
+  caret across the dive.
+
 - **2026-08-23** — The arrange resize keys move whichever edge the caret stands on: the head when it
   is on the take's start row, the tail everywhere else. Two more commands for the top edge were the
   alternative, and the modifier space is nearly full. A nearest-edge rule was rejected for its tie

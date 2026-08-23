@@ -80,6 +80,18 @@ return {
     end,
   },
 
+  -- The tracker's half of the return: it speaks project QN, av owns the row.
+  {
+    name = 'setCursorAt lands the caret on the row holding a project QN',
+    run = function(harness)
+      local _, av = mkAv(harness)
+      av:setBeatPerRow(2)
+      av:setCursorAt(1, 5)
+      t.eq(av:cursorRow(), 2, 'five beats at two beats a row is row two')
+      t.eq(av:cursorCol(), 1, "and the column is the instance's track")
+    end,
+  },
+
   {
     name = 'scroll defaults to (0,0); setGridSize alone does not move scroll',
     run = function(harness)

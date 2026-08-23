@@ -64,6 +64,7 @@ facade.publish('arrange', {
   seekInstance    = function(take, qn, back) return av:seekInstance(take, qn, back) end,
   playPositionQN  = function()     return av:playPositionQN() end,
   editCursorQN    = function()     return av:editCursorQN()   end,
+  setCursorAt     = function(trackIdx, qn) av:setCursorAt(trackIdx, qn) end,
   playFromQN      = function(qn)   av:playFromQN(qn) end,
   loopTo          = function(loQN, hiQN) av:loopTo(loQN, hiQN) end,
   reswingAll             = function(name) av:reswingAll(name) end,

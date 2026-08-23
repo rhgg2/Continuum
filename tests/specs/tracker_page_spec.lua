@@ -113,6 +113,9 @@ local function resetArrange()
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
   fakeArrange.loopTo         = function(lo, hi) fakeArrange.calls.loopTo = { lo, hi } end
+  fakeArrange.setCursorAt    = function(trackIdx, qn)
+    fakeArrange.calls.setCursorAt = { trackIdx, qn }
+  end
   fakeArrange.seekInstance = function(take, qn, back)
     local from = fakeArrange.findTake(take); if not from then return end
     local ahead, behind
@@ -800,6 +803,81 @@ return {
 
       fakeArrange.instances[1].originQN = 8         -- the head handed back
       t.falsy(stack.tv:headRow(), 'an untrimmed instance marks no head')
+    end,
+  },
+
+  -- Dive and return (docs/trackerPage.md § The caret across the dive). One
+  -- instance, head-trimmed: it starts at 8 having skipped two beats of source,
+  -- so it renders source beats 2..10 — rows 8..39 of a sixty-four row grid.
+  {
+    name = 'a dive carries the arrange QN to the caret row, and the caret hands it back',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0' }, 16)
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 8, originQN = 6, lengthQN = 8 },
+      }
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'i0', 10)
+      tp:bindFromSelection()
+      t.eq(stack.tv:ec():row(), 16, 'four beats past the origin, four rows to the beat')
+      t.eq(stack.tv:cursorQN(), 10, 'and the caret hands the same QN back')
+    end,
+  },
+
+  {
+    name = 'a caret outside the rendered span hands back the row the span stops at',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0' }, 16)
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 8, originQN = 6, lengthQN = 8 },
+      }
+      tp:bindFromSelection()
+      stack.tv:ec():setPos(50)
+      t.eq(stack.tv:cursorQN(), 15.75, 'below the cut: the last row the render reaches')
+      stack.tv:ec():setPos(2)
+      t.eq(stack.tv:cursorQN(), 8, 'above the head: the row the render opens on')
+    end,
+  },
+
+  {
+    name = 'leaving the tracker puts the arrange caret where the tracker caret is',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0' }, 16)
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      tp:bindFromSelection()
+      tp:unbind()
+      t.falsy(fakeArrange.calls.setCursorAt, 'a take in no placement moves nothing')
+
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 8, originQN = 6, lengthQN = 8 },
+      }
+      tp:bindFromSelection()
+      stack.tv:ec():setPos(20)
+      tp:unbind()
+      t.deepEq(fakeArrange.calls.setCursorAt, { 0, 11 }, "the instance's track, the caret's QN")
     end,
   },
 
