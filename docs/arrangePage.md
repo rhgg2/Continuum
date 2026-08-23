@@ -221,9 +221,12 @@ header, the gutter, the row tints, the gridlines, the cursor marker,
 and the take rectangles. Mouse hit-testing (phase 7) is then a single
 division per axis.
 
-Takes are tinted by slot via golden-ratio hue rotation in HSV: 62
-visually distinct hues with no hand-picked palette, and pooled
-instances share a hue because they share `slotIdx`. Orphan takes
-(slot not in the cm dictionary) get a neutral grey. The label inside a
-rectangle is `<slot key> <take name>`, mono font, clipped at the
-rectangle edge.
+Takes are tinted by takeId via golden-ratio hue rotation in OkLCH: 62
+perceptually even hues with no hand-picked palette, held at one
+lightness so they read as a set. Pooled instances share a hue because
+they share a pool guid, and the map is project-wide (`arrangeColours`,
+owned by `am` — see docs/arrangeManager.md), so an instance keeps its
+hue wherever it lands. A take with no derivable id has no entry and
+gets a neutral grey. Selecting a take brightens the fill without
+moving the hue. The take name is centred in the rectangle and clipped
+at its edge.

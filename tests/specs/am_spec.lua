@@ -1277,4 +1277,32 @@ return {
     end,
   },
 
+  -- takeId memo: REAPER recycles a freed take's pointer
+  {
+    name = 'a recycled take handle reports the new item\'s pool, not the dead take\'s',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}', pos = 0, len = 4 },
+                    { kind = 'midi', poolGuid = '{p1}', pos = 4, len = 4 },
+                    { kind = 'midi', poolGuid = '{p2}', pos = 8, len = 4 } } },
+      })
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do
+          if tk.startQN == qn then return tk end
+        end
+      end
+      local p2 = takeAt(8)
+      am:deleteTake(takeAt(4))            -- warms the memo, then frees tr1/take2
+
+      -- REAPER hands the freed pointer back for a fresh {p2} instance.
+      h.reaper:addItem('tr1', { take = 'tr1/take2', isMidi = true,
+                                pos = 12, len = 4, poolGuid = '{p2}' })
+
+      local recycled = takeAt(12)
+      t.eq(recycled.slotIdx, p2.slotIdx, 'identity follows the item, not the recycled pointer')
+      t.eq(recycled.colourIdx, p2.colourIdx, 'and so does the colour')
+    end,
+  },
+
 }

@@ -258,7 +258,7 @@ To be filled out with descriptions, screenshots, examples.
 - Set exact beats-per-row (modal or toolbar stepper)
 
 ### Visual feedback (read-only)
-- Take colour by pooled slot; orphan takes greyed
+- Take colour by pool identity, shared by every instance; orphans greyed
 - Waveform / note previews inside take rectangles
 - Phrase/bar row tints
 - Blinking cursor caret

@@ -219,12 +219,23 @@ re-pool.
 
 trackerPage rebinds per frame through `am:takeForSlot` →
 `siblingInstance` → `takeIdOf`, which used to `GetItemStateChunk` the
-bound item every frame; the weak per-take memo keeps that to one read
-at first sight (pool identity is stable for a take's lifetime). Chunk
+bound item every frame; the per-take memo keeps that to one read at
+first sight (pool identity is stable for a take's lifetime). Chunk
 reads were suspected of poisoning undo capture during the pooled-undo
 investigation but were exonerated by the matrix harness — the memo
 survives purely as a cost saving (chunk reads are not cheap; cf. the
 GetTrackStateChunk lesson).
+
+`invalidate()` drops the memo, so it lasts one build. It began as a
+weak-keyed table, which was no protection at all: REAPER hands out
+take pointers as *light* userdata, which Lua never collects, so no
+entry was ever dropped. A freed take leaves its pointer behind, REAPER
+recycles the address for the next take it mints, and the memo then
+answers with the dead take's pool guid — the new instance inherits
+another slot's identity, colour and metadata. Pointer reuse can only
+follow a deletion, and every deletion either calls `invalidate()` or
+moves the project state count, so the build boundary is where the memo
+has to end.
 
 ## Audio drops are not pooled
 

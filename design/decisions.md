@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — The takeId memo lives one build, dropped by invalidate(), rather than being keyed
+  weakly per take. REAPER hands out take pointers as light userdata, which Lua never collects, so
+  the weak table dropped nothing: a recycled pointer answered with the dead take's pool guid, and a
+  fresh instance wore another slot's identity, colour and metadata. Pointer reuse can only follow a
+  deletion, and every deletion either invalidates or moves the project state count, so the build
+  boundary is the cheapest lifetime that is correct.
+
 - **2026-08-23** — Bare cursor nav in arrange clears the selection, reversing the earlier split
   where caret and selection moved independently. An edit after an arrow key should act where the
   caret is, not on a block left standing off-screen. The clear sits in the nav commands rather than

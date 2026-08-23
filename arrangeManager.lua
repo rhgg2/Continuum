@@ -9,6 +9,7 @@
 --invariant: deleteTake parks a slot's last instance; deleteSlot alone forever-deletes
 --invariant: createAndDropMidi + mintParkedTake mint slots; everything else reuses an existing one
 --invariant: takeId is the source-identity chokepoint; takes with no derivable id are skipped
+--invariant: the takeId memo dies with the build — REAPER recycles a freed take's pointer
 --invariant: reswingAll is sequenceManager folded in; bind loop lives behind the 'tracker' facade
 --invariant: natural length in ds 'arrangeNaturalLenQN', nil → util.OPEN; see docs § Natural length
 --invariant: a stored natural ≥ source demotes to util.OPEN; see docs § Natural length
@@ -32,13 +33,13 @@ local SLOT_MAX = 61    -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
 -- only on a project change. See docs/arrangeManager.md § state.
 local state, dirty, lastTick = nil, true, -1
 local ensureState                       -- assigned below buildTakeShape
-local function invalidate() dirty = true end
+local takeIdCache = {}                  -- take → takeId; dropped with the build, see takeIdOf
+local function invalidate() dirty, takeIdCache = true, {} end
 
 ----- Helpers
 
--- Memoized: a GetItemStateChunk read poisons the item's next undo point, and
--- takeForSlot polls this per frame. See docs/arrangeManager.md § Chunk reads poison undo.
-local takeIdCache = setmetatable({}, { __mode = 'k' })
+-- Memoised: costs one chunk read per take rather than one per frame. The memo
+-- lasts one build, not the take's life. See docs § takeIdOf is memoised.
 local function takeIdOf(take)
   local cached = takeIdCache[take]
   if cached then return cached end
@@ -442,7 +443,7 @@ end
 -- edit). Re-reading the count after the build absorbs the build's own ext writes.
 function ensureState()
   local tick = reaper.GetProjectStateChangeCount(0)
-  if tick ~= lastTick then dirty, lastTick = true, tick end
+  if tick ~= lastTick then invalidate(); lastTick = tick end
   if dirty then
     state, dirty = buildState(), false
     lastTick = reaper.GetProjectStateChangeCount(0)
