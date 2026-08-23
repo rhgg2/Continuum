@@ -491,6 +491,36 @@ on a track never overlap.
    such layer: two pooled items are one source, and for one of them to
    differ a second source has to exist.
 
+## Tidy
+
+1. A **tidy** renames a track's MIDI slots so that each **base** — a
+   name a group of slots share — comes out naming one family, one member
+   carrying it plain and the rest carrying ordinals (§ Variants).
+   `am:tidySlots(trackIdx, assignment)` derives every name and writes it.
+
+1. The assignment maps a slot index to a base. A slot the map omits is
+   **pinned**, and keeps the name it has.
+
+1. A base's members are the slots assigned to it together with the
+   pinned slots whose root is already that base. A name places a slot in
+   a base whether or not the assignment did.
+
+1. Members order by current ordinal, plain counting as 0, then by slot
+   index — the order a step walks a family in (§ Variants).
+
+1. A pinned member holds its ordinal, and each other member in that
+   order takes the lowest ordinal no pinned member holds and no earlier
+   member has taken. So a tidy writes no name another slot holds, though
+   two slots pinned on one name stand as namesakes afterwards as before.
+
+1. Audio slots take no part, since the family is a structure over MIDI
+   slots alone.
+
+1. The write reaches every live instance and the parked keeper, as a
+   rename does (§ Renaming and name drift), and a slot whose name the
+   tidy leaves alone is not written at all. `am:tidySlots` opens no undo
+   block, so the caller wraps the commit.
+
 ## Transport
 
 `am` is where the stack meets REAPER's transport, all of it in QN: the
@@ -538,9 +568,10 @@ read-only.
 Discovery: `am:projectTracks`, `am:tracksTakes`, `am:trackSlots`,
 `am:slotForTake`, `am:keyForSlot`.
 
-Slot mutation: `am:renameSlot`, `am:deleteSlot` (forever-deletes the
-slot — every live instance plus the parked keeper — and returns the
-live count).
+Slot mutation: `am:renameSlot`, `am:tidySlots`, `am:deleteSlot`
+(forever-deletes the slot — every live instance plus the parked keeper —
+and returns the live count), `am:pruneSlots` (the same for every parked
+slot on the track, returning how many went).
 
 Placement: `am:createAndDropMidi(trackIdx, qnPos, lengthQN, name) ->
 (slotIdx, take)`, `am:dropInstance(trackIdx, slotIdx, qnPos,

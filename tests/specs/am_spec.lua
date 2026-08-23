@@ -337,6 +337,96 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- Tidy
+  --------------------------------------------------------------------
+  {
+    name = 'tidySlots numbers a base\'s members plain then (var N), by ordinal then slot',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4,  poolGuid = '{p2}', takeName = 'Sausage' },
+                    { kind = 'midi', pos = 8,  poolGuid = '{p3}', takeName = 'Kenneth (var 4)' },
+                    { kind = 'midi', pos = 12, poolGuid = '{p4}', takeName = 'Drums' } } },
+      })
+      am:tidySlots(0, { [slotFor(am, 0, '{p1}').idx] = 'Lead',
+                        [slotFor(am, 0, '{p2}').idx] = 'Lead',
+                        [slotFor(am, 0, '{p3}').idx] = 'Lead' })
+      t.eq(slotFor(am, 0, '{p1}').name, 'Lead',         'ordinal 0, lowest slot index, holds the base plain')
+      t.eq(slotFor(am, 0, '{p2}').name, 'Lead (var 1)', 'same ordinal, later slot')
+      t.eq(slotFor(am, 0, '{p3}').name, 'Lead (var 2)', 'a higher ordinal orders last')
+      t.eq(slotFor(am, 0, '{p4}').name, 'Drums',        'a slot in no base is left alone')
+    end,
+  },
+
+  {
+    name = 'a pinned slot holds its ordinal, and joins its base by name alone',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}', takeName = 'Bassline (var 1)' },
+                    { kind = 'midi', pos = 8, poolGuid = '{p3}', takeName = 'Sausage' } } },
+      })
+      am:tidySlots(0, { [slotFor(am, 0, '{p1}').idx] = 'Bassline',
+                        [slotFor(am, 0, '{p3}').idx] = 'Bassline' })
+      t.eq(slotFor(am, 0, '{p2}').name, 'Bassline (var 1)', 'the pinned member kept its ordinal')
+      t.eq(slotFor(am, 0, '{p1}').name, 'Bassline',         'the first member takes the base plain')
+      t.eq(slotFor(am, 0, '{p3}').name, 'Bassline (var 2)', 'and the next steps over the ordinal held')
+    end,
+  },
+
+  {
+    name = 'two pinned members holding the base plain both keep it',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, poolGuid = '{p3}', takeName = 'Sausage' } } },
+      })
+      am:tidySlots(0, { [slotFor(am, 0, '{p3}').idx] = 'Bassline' })
+      t.eq(slotFor(am, 0, '{p1}').name, 'Bassline',         'namesakes are pinned, so both stand')
+      t.eq(slotFor(am, 0, '{p2}').name, 'Bassline')
+      t.eq(slotFor(am, 0, '{p3}').name, 'Bassline (var 1)', 'the assigned member starts past ordinal 0')
+    end,
+  },
+
+  {
+    name = 'an audio slot takes no part in a base',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 2, srcFile = '/a.wav', takeName = 'Lead' },
+                    { kind = 'midi',  pos = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      am:tidySlots(0, { [slotFor(am, 0, '{p1}').idx] = 'Lead' })
+      t.eq(slotFor(am, 0, '{p1}').name, 'Lead', 'the audio namesake is no member, so the base is free')
+      local audio
+      for _, s in ipairs(am:trackSlots(0)) do if s.kind == 'audio' then audio = s end end
+      t.eq(audio.name, 'Lead', 'and the audio slot is not renamed')
+    end,
+  },
+
+  {
+    name = 'tidySlots writes every live instance and the parked keeper',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      local live   = slotFor(am, 0, '{p1}').idx    -- materialise the live slot first, so it holds index 0
+      local parked = am:mintParkedTake(0, 'Sausage', 4)
+      am:tidySlots(0, { [live] = 'Lead', [parked] = 'Lead' })
+      local takes = am:tracksTakes(0)
+      t.eq(takes[1].name, 'Lead', 'both instances of the slot renamed')
+      t.eq(takes[2].name, 'Lead')
+      t.eq(slotAt(am, 0, parked).name, 'Lead (var 1)', 'the parked keeper carries its new name')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Placement
   --------------------------------------------------------------------
   {

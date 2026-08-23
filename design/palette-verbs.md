@@ -41,21 +41,8 @@ docs/arrangePage.md § The prune button.
 
 ## Committing an assignment
 
-1. A base's members are the slots assigned to it, together with the
-   pinned slots whose root is that base. A name places a slot in a base
-   whether or not the assignment did.
-
-1. Members order by current ordinal, plain counting as ordinal 0, then
-   by slot index — `variantFamily`'s order.
-
-1. A pinned member holds its ordinal. Each unpinned member, in that
-   order, takes the lowest ordinal no pinned member holds and no
-   earlier member has taken. Ordinal 0 is the base plain, and the rest
-   carry ` (var N)`.
-
-1. Tidy therefore never gives a slot a name another slot holds.
-
-1. The commit is one undo block.
+Landed — see docs/arrangeManager.md § Tidy. The editor's commit wraps
+it in one undo block.
 
 ## Where the naming lives
 

@@ -686,15 +686,9 @@ local function familyRenames(slots, target, name)
   return out
 end
 
---contract: renames the family when the ordinal is unchanged, else the slot alone; live + parked
-function am:renameSlot(trackIdx, slotIdx, name)
-  local track = visibleTrackOfCol(trackIdx)
-  if not track then return end
-  local slots, target = am:trackSlots(trackIdx), nil
-  for _, slot in ipairs(slots) do if slot.idx == slotIdx then target = slot end end
-  if not target or not target.id then return end
-
-  local renames = familyRenames(slots, target, name)
+-- Land a batch of slot names, keyed by slot id: every live instance carrying it,
+-- and the parked keeper where the slot has no live one.
+local function writeSlotNames(track, renames)
   forEachActiveTake(track, function(take)
     local renamed = renames[takeIdOf(take)]
     if renamed then writeTakeName(take, renamed) end
@@ -704,6 +698,17 @@ function am:renameSlot(trackIdx, slotIdx, name)
     if keeper then writeTakeName(keeper, renamed) end
   end
   invalidate()
+end
+
+--contract: renames the family when the ordinal is unchanged, else the slot alone; live + parked
+function am:renameSlot(trackIdx, slotIdx, name)
+  local track = visibleTrackOfCol(trackIdx)
+  if not track then return end
+  local slots, target = am:trackSlots(trackIdx), nil
+  for _, slot in ipairs(slots) do if slot.idx == slotIdx then target = slot end end
+  if not target or not target.id then return end
+
+  writeSlotNames(track, familyRenames(slots, target, name))
 end
 
 --contract: forever-deletes the slot: every live instance + the parked keeper; returns live count
@@ -1020,6 +1025,47 @@ local function nextVariantName(trackIdx, slotIdx)
   local family, root = variantFamily(trackIdx, slotIdx)
   local last = family[#family]
   return ('%s (var %d)'):format(root, (last and last.ordinal or 0) + 1)
+end
+
+-- The names a tidy writes, id -> name, for a base's members: its assigned slots plus
+-- pinned slots already carrying it, in variantFamily's order. See docs/arrangeManager.md § Tidy.
+local function tidyNames(slots, assignment)
+  local byBase = {}
+  for _, slot in ipairs(slots) do
+    local root, ordinal = util.variantRoot(slot.name)
+    local base = assignment[slot.idx]
+    if slot.kind == 'midi' then
+      util.bucket(byBase, base or root, { idx = slot.idx, id = slot.id, name = slot.name,
+                                          ordinal = ordinal or 0, pinned = base == nil })
+    end
+  end
+
+  local out = {}
+  for base, members in pairs(byBase) do
+    table.sort(members, function(a, b)
+      if a.ordinal ~= b.ordinal then return a.ordinal < b.ordinal end
+      return a.idx < b.idx
+    end)
+    local held, ordinal = {}, 0
+    for _, member in ipairs(members) do if member.pinned then held[member.ordinal] = true end end
+    for _, member in ipairs(members) do
+      if not member.pinned then
+        while held[ordinal] do ordinal = ordinal + 1 end
+        held[ordinal] = true
+        local name = ordinal == 0 and base or ('%s (var %d)'):format(base, ordinal)
+        if name ~= member.name then out[member.id] = name end
+      end
+    end
+  end
+  return out
+end
+
+--contract: renames the track's MIDI slots so each base names one family; the caller owns the undo
+--shape: assignment = { [slotIdx] = base, ... } -- a MIDI slot the map omits is pinned
+function am:tidySlots(trackIdx, assignment)
+  local track = visibleTrackOfCol(trackIdx)
+  if not track then return end
+  writeSlotNames(track, tidyNames(am:trackSlots(trackIdx), assignment))
 end
 
 local function liveInstances(trackIdx, slotIdx)

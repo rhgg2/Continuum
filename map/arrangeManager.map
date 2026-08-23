@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=1208  mode=chunk  self=am
+@module arrangeManager  src=arrangeManager.lua  loc=1254  mode=chunk  self=am
 @deps cm, ds, facade, eventMeta
 
 # Invariants & contracts
@@ -22,7 +22,8 @@
   @invariant  render reads serve one cached build; rebuilt on invalidate() or state-count change  @ 21
 
 # Shapes
-  @shape  ({ {idx = n, ordinal = n}, ... }, root, pos)  @ 985
+  @shape  ({ {idx = n, ordinal = n}, ... }, root, pos)  @ 990
+  @shape  assignment = { [slotIdx] = base, ... } -- a MIDI slot the map omits is pinned  @ 1064
 
 # Imports
   @require util = 'util'  @ 23
@@ -113,37 +114,43 @@
   @fn familyRenames(slots, target, name)  @ 670-687
       -- Which slots a rename touches: unchanged ordinal reroots the family,
       -- a changed ordinal renames just this slot. See docs/arrangeManager.md § Renaming and name drift.
+  @fn writeSlotNames(track, renames)  @ 691-701
+      -- Land a batch of slot names, keyed by slot id: every live instance carrying it,
+      -- and the parked keeper where the slot has no live one.
   -- Placement
-  @fn chunkFreshGuids(chunk)  @ 748-752
+  @fn chunkFreshGuids(chunk)  @ 753-757
       -- REAPER keys undo bookkeeping by item GUID: a clone replaying srcItem's IGUID is
       -- invisible to undo capture (dirty marks resolve to the original), so edits on it never rewind.
-  @fn harvestPoolGuid(item)  @ 754-758
-  @fn setTakeName(take, name)  @ 760-762
-  @fn copyMidiEvents(srcTake, dstTake)  @ 764-767
-  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 769-779
-  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN)  @ 783-795
+  @fn harvestPoolGuid(item)  @ 759-763
+  @fn setTakeName(take, name)  @ 765-767
+  @fn copyMidiEvents(srcTake, dstTake)  @ 769-772
+  @fn placeAudio(track, filePath, qnPos, lengthQN)  @ 774-784
+  @fn cloneMidiItem(track, srcItem, qnPos, lengthQN)  @ 788-800
       -- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
-      @contract  MIDI clone of srcItem at qnPos, pooled with it; nil if REAPER refuses.  @ 782
-  @fn siblingInstance(track, id)  @ 829-837
+      @contract  MIDI clone of srcItem at qnPos, pooled with it; nil if REAPER refuses.  @ 787
+  @fn siblingInstance(track, id)  @ 834-842
       -- First instance matching id: item, length, name — what a fresh drop inherits.
       -- Falls back to the parked keeper so drops from emptied slots re-materialise.
-  @fn appendPoint(take)  @ 928
+  @fn appendPoint(take)  @ 933
       -- Where a take appends: its rendered end, so a copy starts where the sound stops rather than
       -- where the intent does. See docs/arrangeManager.md § The append point.
-  @fn roomBelow(take, lengthQN)  @ 932-934
+  @fn roomBelow(take, lengthQN)  @ 937-939
       -- A copy has to fit whole: a shorter free span renders it truncated by its neighbour, which
       -- is a different sound from the one being copied.
   -- Variants
-  @fn variantFamily(trackIdx, slotIdx)  @ 986-1015
+  @fn variantFamily(trackIdx, slotIdx)  @ 991-1020
       -- The family of the slot at slotIdx in step order (root then variants by ordinal), with
       -- that root and the slot's place. See docs/arrangeManager.md § Variants.
-  @fn nextVariantName(trackIdx, slotIdx)  @ 1019-1023
+  @fn nextVariantName(trackIdx, slotIdx)  @ 1024-1028
       -- Next name in the family: the highest ordinal in use plus one, so a deleted
       -- variant keeps its name out of circulation.
-  @fn liveInstances(trackIdx, slotIdx)  @ 1025-1031
+  @fn tidyNames(slots, assignment)  @ 1032-1061
+      -- The names a tidy writes, id -> name, for a base's members: its assigned slots plus
+      -- pinned slots already carrying it, in variantFamily's order. See docs/arrangeManager.md § Tidy.
+  @fn liveInstances(trackIdx, slotIdx)  @ 1071-1077
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 1163-1174
+  @fn projectMidiTakes()  @ 1209-1220
 
 # Public API (am:*)
   @api am:projectTracks()  @ 354
@@ -186,164 +193,169 @@
   @api am:keyForSlot(slotIdx)  @ 655-657
   @api am:nextFreeSlot(trackIdx)  @ 660-664
       @contract  lowest-free slot index on trackIdx; nil if track full or missing.  @ 659
-  @api am:renameSlot(trackIdx, slotIdx, name)  @ 690-707
-      @contract  renames the family when the ordinal is unchanged, else the slot alone; live + parked  @ 689
-  @api am:deleteSlot(trackIdx, slotIdx)  @ 710-730
-      @contract  forever-deletes the slot: every live instance + the parked keeper; returns live count  @ 709
-  @api am:pruneSlots(trackIdx)  @ 733-742
-      @contract  forever-deletes every parked slot on the track; returns how many went  @ 732
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 799-825
-      @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot  @ 797
-      @invariant  overwrites any take already starting at qnPos; create never stacks (matches dropInstance).  @ 798
-  @api am:takeForSlot(trackIdx, slotIdx)  @ 840-847
-      @contract  live-or-parked MIDI take for slot slotIdx on trackIdx; nil if no track/slot/instance  @ 839
-  @api am:trackHandle(trackIdx)  @ 849
-  @api am:isParkedTake(take)  @ 852-856
-      @contract  true iff take's host is the scratch track (its slot's only instance is parked)  @ 851
-  @api am:trackIdxForGuid(guid)  @ 859-864
-      @contract  visible-column index of the track carrying this GUID; nil if it is gone  @ 858
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 868-905
-      @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)  @ 866
-      @invariant  overwrites any take already starting at qnPos; drop never stacks (matches startIsClear).  @ 867
-  @api am:duplicateTake(take, qnPos)  @ 908-924
-      @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing  @ 907
-  @api am:duplicateBelow(take)  @ 937-941
-      @contract  pooled clone at the append point; nil iff non-MIDI or the free span falls short.  @ 936
-  @api am:newTakeBelow(take, name, lengthQN)  @ 946-950
+  @api am:renameSlot(trackIdx, slotIdx, name)  @ 704-712
+      @contract  renames the family when the ordinal is unchanged, else the slot alone; live + parked  @ 703
+  @api am:deleteSlot(trackIdx, slotIdx)  @ 715-735
+      @contract  forever-deletes the slot: every live instance + the parked keeper; returns live count  @ 714
+  @api am:pruneSlots(trackIdx)  @ 738-747
+      @contract  forever-deletes every parked slot on the track; returns how many went  @ 737
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 804-830
+      @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot  @ 802
+      @invariant  overwrites any take already starting at qnPos; create never stacks (matches dropInstance).  @ 803
+  @api am:takeForSlot(trackIdx, slotIdx)  @ 845-852
+      @contract  live-or-parked MIDI take for slot slotIdx on trackIdx; nil if no track/slot/instance  @ 844
+  @api am:trackHandle(trackIdx)  @ 854
+  @api am:isParkedTake(take)  @ 857-861
+      @contract  true iff take's host is the scratch track (its slot's only instance is parked)  @ 856
+  @api am:trackIdxForGuid(guid)  @ 864-869
+      @contract  visible-column index of the track carrying this GUID; nil if it is gone  @ 863
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 873-910
+      @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)  @ 871
+      @invariant  overwrites any take already starting at qnPos; drop never stacks (matches startIsClear).  @ 872
+  @api am:duplicateTake(take, qnPos)  @ 913-929
+      @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing  @ 912
+  @api am:duplicateBelow(take)  @ 942-946
+      @contract  pooled clone at the append point; nil iff non-MIDI or the free span falls short.  @ 941
+  @api am:newTakeBelow(take, name, lengthQN)  @ 951-955
       -- The length is the caller's, not the source's: room is measured against what is being made.
-      @contract  (slotIdx, take) for an empty lengthQN take named `name` below take; nil iff non-MIDI  @ 943
-      @invariant  parks the take on scratch for want of room -- the palette grows either way.  @ 944
-  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 954-979
+      @contract  (slotIdx, take) for an empty lengthQN take named `name` below take; nil iff non-MIDI  @ 948
+      @invariant  parks the take on scratch for want of room -- the palette grows either way.  @ 949
+  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 959-984
       -- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
-      @contract  mints a slot on trackIdx parked on scratch; (slotIdx, take), nil if no track/free slot  @ 952
-  @api am:vary(take)  @ 1034-1042
-      @contract  (slotIdx, take) for a variant slot in take's place; nil iff non-MIDI or lone instance  @ 1033
-  @api am:stepVariant(take, dir)  @ 1048-1060
+      @contract  mints a slot on trackIdx parked on scratch; (slotIdx, take), nil if no track/free slot  @ 957
+  @api am:tidySlots(trackIdx, assignment)  @ 1065-1069
+      @contract  renames the track's MIDI slots so each base names one family; the caller owns the undo  @ 1063
+  @api am:vary(take)  @ 1080-1088
+      @contract  (slotIdx, take) for a variant slot in take's place; nil iff non-MIDI or lone instance  @ 1079
+  @api am:stepVariant(take, dir)  @ 1094-1106
       -- The drop names no length, so the neighbour arrives at its own natural length and relayout
       -- caps it where it capped the placement it replaces.
-      @contract  (slotIdx, take) for the placement moved ±1 along its family; varies past the last  @ 1046
-      @contract  nil off the front, on a non-MIDI take, or where the vary refuses  @ 1047
-  @api am:freeSpan(trackIdx, startQN)  @ 1065-1071
-      @contract  QN from startQN to the next take start on trackIdx; math.huge with nothing downstream  @ 1064
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 1074-1081
-      @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)  @ 1073
-  @api am:moveTake(take, deltaQN)  @ 1084-1094
-      @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op  @ 1083
-  @api am:trimHead(take, headQN)  @ 1098-1110
-      @contract  sets the head — QN of source skipped — walking the start edge; content and end hold  @ 1096
-      @contract  false if the head is negative, at/past the source, the start is occupied, or audio  @ 1097
-  @api am:resizeTake(take, newNaturalQN)  @ 1113-1117
-      @contract  writes the take's natural length; relayout caps it. See docs § The take's window.  @ 1112
-  @api am:splitTake(take, splitQN)  @ 1122-1135
+      @contract  (slotIdx, take) for the placement moved ±1 along its family; varies past the last  @ 1092
+      @contract  nil off the front, on a non-MIDI take, or where the vary refuses  @ 1093
+  @api am:freeSpan(trackIdx, startQN)  @ 1111-1117
+      @contract  QN from startQN to the next take start on trackIdx; math.huge with nothing downstream  @ 1110
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 1120-1127
+      @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)  @ 1119
+  @api am:moveTake(take, deltaQN)  @ 1130-1140
+      @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op  @ 1129
+  @api am:trimHead(take, headQN)  @ 1144-1156
+      @contract  sets the head — QN of source skipped — walking the start edge; content and end hold  @ 1142
+      @contract  false if the head is negative, at/past the source, the start is occupied, or audio  @ 1143
+  @api am:resizeTake(take, newNaturalQN)  @ 1159-1163
+      @contract  writes the take's natural length; relayout caps it. See docs § The take's window.  @ 1158
+  @api am:splitTake(take, splitQN)  @ 1168-1181
       -- See docs/arrangeManager.md § The take's window for why the halves are built this way.
-      @contract  cuts take at splitQN into two pooled halves; returns the lower one, nil if refused  @ 1119
-      @contract  refused for audio, and for a splitQN not strictly inside the rendered span  @ 1120
-  @api am:takeSourceLengthQN(take)  @ 1138-1145
-      @contract  source length in QN at the take's position; 0 if source missing.  @ 1137
-  @api am:deleteTake(take)  @ 1149-1159
+      @contract  cuts take at splitQN into two pooled halves; returns the lower one, nil if refused  @ 1165
+      @contract  refused for audio, and for a splitQN not strictly inside the rendered span  @ 1166
+  @api am:takeSourceLengthQN(take)  @ 1184-1191
+      @contract  source length in QN at the take's position; 0 if source missing.  @ 1183
+  @api am:deleteTake(take)  @ 1195-1205
       -- Deleting a slot's last live instance parks it on the scratch track (keeping
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
-  @api am:takesUsing(name)  @ 1177-1188
-      @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance  @ 1176
-  @api am:tempersInUse()  @ 1191-1201
-      @contract  temper names referenced by any project take/track tier or project scalar, minus 12EDO  @ 1190
-  @api am:reswingAll(name)  @ 1204-1206
-      @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores  @ 1203
+  @api am:takesUsing(name)  @ 1223-1234
+      @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance  @ 1222
+  @api am:tempersInUse()  @ 1237-1247
+      @contract  temper names referenced by any project take/track tier or project scalar, minus 12EDO  @ 1236
+  @api am:reswingAll(name)  @ 1250-1252
+      @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores  @ 1249
 
 # Uses (outbound edges)
-  @use call    cm:getAt  @ tempersInUse:1194
-  @use call    cm:valueFor  @ tempersInUse:1195,1198
+  @use call    cm:getAt  @ tempersInUse:1240
+  @use call    cm:valueFor  @ tempersInUse:1241,1244
   @use call    ds:assign  @ writeColours:273
   @use call    ds:assignAt  @ writeSlots:94 setNaturalLenOf:156,157
   @use call    ds:get  @ readColours:272
-  @use call    ds:getAt  @ readSlots:90 naturalLenOf:151 takesUsing:1180
-  @use call    eventMeta:copyPool  @ mintParkedTake:970
-  @use call    eventMeta:dropPool  @ deleteSlot:726
-  @use call    facade.get  @ isVisibleTrack:326 reswingAll:1205
+  @use call    ds:getAt  @ readSlots:90 naturalLenOf:151 takesUsing:1226
+  @use call    eventMeta:copyPool  @ mintParkedTake:975
+  @use call    eventMeta:dropPool  @ deleteSlot:731
+  @use call    facade.get  @ isVisibleTrack:326 reswingAll:1251
   @use call    painter.hueNative  @ stampColour:308
-  @use call    scratch.peek  @ parkedItemFor:120 isVisibleTrack:324 deleteSlot:725 isParkedTake:854
-  @use call    scratch.track  @ mintParkedTake:964 deleteTake:1154
-  @use call    util.add  @ relayoutTrack:204 ensureSlots:237 midiNotesOf:364 slotRowsFor:407 buildState:449,457 visibleTakes:494 familyRenames:680 createAndDropMidi:808 dropInstance:880 variantFamily:997,998,1005 projectMidiTakes:1169 takesUsing:1183
+  @use call    scratch.peek  @ parkedItemFor:120 isVisibleTrack:324 deleteSlot:730 isParkedTake:859
+  @use call    scratch.track  @ mintParkedTake:969 deleteTake:1200
+  @use call    util.add  @ relayoutTrack:204 ensureSlots:237 midiNotesOf:364 slotRowsFor:407 buildState:449,457 visibleTakes:494 familyRenames:680 createAndDropMidi:813 dropInstance:885 variantFamily:1002,1003,1010 projectMidiTakes:1215 takesUsing:1229
+  @use call    util.bucket  @ tidyNames:1038
   @use call    util.toBase62  @ keyForSlot:656
-  @use call    util.variantRoot  @ familyRenames:671,672,677 variantFamily:989,995
+  @use call    util.variantRoot  @ familyRenames:671,672,677 variantFamily:994,1000 tidyNames:1035
   @use require painter  @ <load>:24
   @use require scratch  @ <load>:25
   @use require util  @ <load>:23
 
 # Calls (intra-file)
-  @call am:createAndDropMidi  @ newTakeBelow:949
-  @call am:deleteSlot  @ pruneSlots:737
-  @call am:deleteTake  @ createAndDropMidi:821 dropInstance:901 vary:1040
-  @call am:dropInstance  @ vary:1041 stepVariant:1057
-  @call am:duplicateTake  @ duplicateBelow:940 splitTake:1128
+  @call am:createAndDropMidi  @ newTakeBelow:954
+  @call am:deleteSlot  @ pruneSlots:742
+  @call am:deleteTake  @ createAndDropMidi:826 dropInstance:906 vary:1086
+  @call am:dropInstance  @ vary:1087 stepVariant:1103
+  @call am:duplicateTake  @ duplicateBelow:945 splitTake:1174
   @call am:findTake  @ initialCursor:548
-  @call am:freeSpan  @ roomBelow:933
+  @call am:freeSpan  @ roomBelow:938
   @call am:isParkedTake  @ ownerTrack:630
-  @call am:mintParkedTake  @ newTakeBelow:948 vary:1038
+  @call am:mintParkedTake  @ newTakeBelow:953 vary:1084
   @call am:ownerTrack  @ seekInstance:525
   @call am:playPositionQN  @ loopTo:585
-  @call am:projectTracks  @ ownerTrack:633 slotOfTake:648 trackIdxForGuid:861
+  @call am:projectTracks  @ ownerTrack:633 slotOfTake:648 trackIdxForGuid:866
   @call am:setEditCursorQN  @ loopTo:587 playFromQN:596
   @call am:setLoopRangeQN  @ loopTo:583
-  @call am:startIsClear  @ moveTake:1088 trimHead:1103
-  @call am:takesUsing  @ reswingAll:1205
-  @call am:trackSlots  @ renameSlot:693 pruneSlots:735 variantFamily:987
-  @call am:tracksTakes  @ seekInstance:528 createAndDropMidi:807 dropInstance:879 liveInstances:1027 freeSpan:1067 startIsClear:1075
-  @call am:vary  @ stepVariant:1055
-  @call appendPoint  @ roomBelow:933 duplicateBelow:940 newTakeBelow:949
+  @call am:startIsClear  @ moveTake:1134 trimHead:1149
+  @call am:takesUsing  @ reswingAll:1251
+  @call am:trackSlots  @ renameSlot:707 pruneSlots:740 variantFamily:992 tidySlots:1068
+  @call am:tracksTakes  @ seekInstance:528 createAndDropMidi:812 dropInstance:884 liveInstances:1073 freeSpan:1113 startIsClear:1121
+  @call am:vary  @ stepVariant:1101
+  @call appendPoint  @ roomBelow:938 duplicateBelow:945 newTakeBelow:954
   @call buildState  @ ensureState:473
   @call buildTakeShape  @ buildState:457
   @call chanRangeOf  @ buildState:460
-  @call chunkFreshGuids  @ cloneMidiItem:789
-  @call cloneMidiItem  @ dropInstance:893 duplicateTake:913
+  @call chunkFreshGuids  @ cloneMidiItem:794
+  @call cloneMidiItem  @ dropInstance:898 duplicateTake:918
   @call colOfTrack  @ seekInstance:525 initialCursor:553
-  @call copyMidiEvents  @ cloneMidiItem:793 mintParkedTake:969
-  @call effectiveNaturalLenQN  @ tailLenQN:192 relayoutTrack:218 buildTakeShape:388 mintParkedTake:962
+  @call copyMidiEvents  @ cloneMidiItem:798 mintParkedTake:974
+  @call effectiveNaturalLenQN  @ tailLenQN:192 relayoutTrack:218 buildTakeShape:388 mintParkedTake:967
   @call ensureColours  @ stampForTake:314 buildState:438
-  @call ensureSlots  @ buildState:445 deleteSlot:727
+  @call ensureSlots  @ buildState:445 deleteSlot:732
   @call ensureState  @ projectTracks:354 tracksTakes:480 columnChanRange:484 visibleTakes:489 hasPlacedTakes:503 findTake:512 trackSlots:623
-  @call familyRenames  @ renameSlot:697
-  @call forEachActiveTake  @ parkedItemFor:122 isLastInstanceOnTrack:133 relayoutTrack:202 ensureSlots:231 ensureColours:279 buildState:455 projectEndQN:612 renameSlot:698 siblingInstance:830 projectMidiTakes:1168
-  @call harvestPoolGuid  @ createAndDropMidi:813 mintParkedTake:966
-  @call invalidate  @ relayoutTrack:224 ensureState:471 renameSlot:706 deleteSlot:728 mintParkedTake:977
-  @call isLastInstanceOnTrack  @ deleteTake:1153
-  @call isVisibleTrack  @ visibleTrackOfCol:335 colOfTrack:347 buildState:442 projectEndQN:611 projectMidiTakes:1167 tempersInUse:1198
-  @call itemQNRange  @ originQNOf:164 effectiveNaturalLenQN:181,186 tailLenQN:195 relayoutTrack:203,214 buildState:456 projectEndQN:613 siblingInstance:835 moveTake:1085,1089 trimHead:1105
-  @call liveInstances  @ vary:1036
+  @call familyRenames  @ renameSlot:711
+  @call forEachActiveTake  @ parkedItemFor:122 isLastInstanceOnTrack:133 relayoutTrack:202 ensureSlots:231 ensureColours:279 buildState:455 projectEndQN:612 writeSlotNames:692 siblingInstance:835 projectMidiTakes:1214
+  @call harvestPoolGuid  @ createAndDropMidi:818 mintParkedTake:971
+  @call invalidate  @ relayoutTrack:224 ensureState:471 writeSlotNames:700 deleteSlot:733 mintParkedTake:982
+  @call isLastInstanceOnTrack  @ deleteTake:1199
+  @call isVisibleTrack  @ visibleTrackOfCol:335 colOfTrack:347 buildState:442 projectEndQN:611 projectMidiTakes:1213 tempersInUse:1244
+  @call itemQNRange  @ originQNOf:164 effectiveNaturalLenQN:181,186 tailLenQN:195 relayoutTrack:203,214 buildState:456 projectEndQN:613 siblingInstance:840 moveTake:1131,1135 trimHead:1151
+  @call liveInstances  @ vary:1082
   @call midiNotesOf  @ buildTakeShape:380
-  @call naturalLenOf  @ effectiveNaturalLenQN:179 relayoutTrack:210 splitTake:1126
-  @call nextFreeSlot  @ ensureSlots:258 nextFreeSlot:663 createAndDropMidi:802 mintParkedTake:957
-  @call nextVariantName  @ vary:1038
-  @call originQNOf  @ effectiveNaturalLenQN:186 tailLenQN:195 buildTakeShape:386 trimHead:1101
-  @call parkedItemFor  @ ensureSlots:247 renameSlot:703 deleteSlot:724 siblingInstance:832 deleteTake:1153
-  @call placeAudio  @ dropInstance:896 duplicateTake:917
-  @call projectMidiTakes  @ takesUsing:1179 tempersInUse:1195
+  @call naturalLenOf  @ effectiveNaturalLenQN:179 relayoutTrack:210 splitTake:1172
+  @call nextFreeSlot  @ ensureSlots:258 nextFreeSlot:663 createAndDropMidi:807 mintParkedTake:962
+  @call nextVariantName  @ vary:1084
+  @call originQNOf  @ effectiveNaturalLenQN:186 tailLenQN:195 buildTakeShape:386 trimHead:1147
+  @call parkedItemFor  @ ensureSlots:247 writeSlotNames:697 deleteSlot:729 siblingInstance:837 deleteTake:1199
+  @call placeAudio  @ dropInstance:901 duplicateTake:922
+  @call projectMidiTakes  @ takesUsing:1225 tempersInUse:1241
   @call readColours  @ ensureColours:284
-  @call readSlots  @ ensureSlots:229 ownerTrack:636 slotOfTake:649 nextFreeSlot:663 deleteSlot:713 createAndDropMidi:801 takeForSlot:843 dropInstance:871 mintParkedTake:956
-  @call relayoutTrack  @ buildState:443 createAndDropMidi:823 dropInstance:903 duplicateTake:922 moveTake:1092 trimHead:1108 resizeTake:1116 splitTake:1133 deleteTake:1158
-  @call roomBelow  @ duplicateBelow:939 newTakeBelow:948
-  @call setHeadOf  @ trimHead:1107 splitTake:1130
-  @call setItemQNRange  @ relayoutTrack:222 placeAudio:772 cloneMidiItem:791 dropInstance:890 moveTake:1090 trimHead:1106
-  @call setNaturalLenOf  @ relayoutTrack:214,216 resizeTake:1114 splitTake:1131,1132
-  @call setTakeName  @ dropInstance:899 duplicateTake:920 mintParkedTake:975
-  @call siblingInstance  @ takeForSlot:845 dropInstance:873
+  @call readSlots  @ ensureSlots:229 ownerTrack:636 slotOfTake:649 nextFreeSlot:663 deleteSlot:718 createAndDropMidi:806 takeForSlot:848 dropInstance:876 mintParkedTake:961
+  @call relayoutTrack  @ buildState:443 createAndDropMidi:828 dropInstance:908 duplicateTake:927 moveTake:1138 trimHead:1154 resizeTake:1162 splitTake:1179 deleteTake:1204
+  @call roomBelow  @ duplicateBelow:944 newTakeBelow:953
+  @call setHeadOf  @ trimHead:1153 splitTake:1176
+  @call setItemQNRange  @ relayoutTrack:222 placeAudio:777 cloneMidiItem:796 dropInstance:895 moveTake:1136 trimHead:1152
+  @call setNaturalLenOf  @ relayoutTrack:214,216 resizeTake:1160 splitTake:1177,1178
+  @call setTakeName  @ dropInstance:904 duplicateTake:925 mintParkedTake:980
+  @call siblingInstance  @ takeForSlot:850 dropInstance:878
   @call slotRowsFor  @ buildState:461
-  @call sourceLenQN  @ effectiveNaturalLenQN:184 tailLenQN:193 relayoutTrack:215 trimHead:1100
+  @call sourceLenQN  @ effectiveNaturalLenQN:184 tailLenQN:193 relayoutTrack:215 trimHead:1146
   @call stampColour  @ stampForTake:314
-  @call stampForTake  @ createAndDropMidi:822 dropInstance:902 duplicateTake:921 mintParkedTake:976
+  @call stampForTake  @ createAndDropMidi:827 dropInstance:907 duplicateTake:926 mintParkedTake:981
   @call tailLenQN  @ buildTakeShape:389
-  @call takeIdOf  @ parkedItemFor:123 isLastInstanceOnTrack:134 ensureSlots:232 ensureColours:280 stampForTake:312 buildTakeShape:377 seekInstance:523,529 ownerTrack:631 slotOfTake:646 renameSlot:699 deleteSlot:719
-  @call takeIdOf  @ siblingInstance:831 duplicateTake:915 mintParkedTake:970 deleteTake:1152
-  @call takeKind  @ originQNOf:164 effectiveNaturalLenQN:180 tailLenQN:192 relayoutTrack:211 ensureSlots:236 buildTakeShape:378 trimHead:1099
-  @call variantFamily  @ nextVariantName:1020 stepVariant:1050
-  @call visibleTrackOfCol  @ ownerTrack:634 slotOfTake:649 nextFreeSlot:661 renameSlot:691 deleteSlot:711 createAndDropMidi:800 takeForSlot:841 trackHandle:849 dropInstance:869 duplicateTake:909 mintParkedTake:955 moveTake:1091
-  @call visibleTrackOfCol  @ trimHead:1108 resizeTake:1115 splitTake:1133 deleteTake:1150
+  @call takeIdOf  @ parkedItemFor:123 isLastInstanceOnTrack:134 ensureSlots:232 ensureColours:280 stampForTake:312 buildTakeShape:377 seekInstance:523,529 ownerTrack:631 slotOfTake:646 writeSlotNames:693 deleteSlot:724
+  @call takeIdOf  @ siblingInstance:836 duplicateTake:920 mintParkedTake:975 deleteTake:1198
+  @call takeKind  @ originQNOf:164 effectiveNaturalLenQN:180 tailLenQN:192 relayoutTrack:211 ensureSlots:236 buildTakeShape:378 trimHead:1145
+  @call tidyNames  @ tidySlots:1068
+  @call variantFamily  @ nextVariantName:1025 stepVariant:1096
+  @call visibleTrackOfCol  @ ownerTrack:634 slotOfTake:649 nextFreeSlot:661 renameSlot:705 deleteSlot:716 createAndDropMidi:805 takeForSlot:846 trackHandle:854 dropInstance:874 duplicateTake:914 mintParkedTake:960 tidySlots:1066
+  @call visibleTrackOfCol  @ moveTake:1137 trimHead:1154 resizeTake:1161 splitTake:1179 deleteTake:1196
   @call writeColours  @ ensureColours:299
-  @call writeSlots  @ ensureSlots:266 createAndDropMidi:817 mintParkedTake:974
-  @call writeTakeName  @ renameSlot:700,704 setTakeName:761
+  @call writeSlotNames  @ renameSlot:711 tidySlots:1068
+  @call writeSlots  @ ensureSlots:266 createAndDropMidi:822 mintParkedTake:979
+  @call writeTakeName  @ writeSlotNames:694,698 setTakeName:766
 
 # Unresolved receivers
-  @drop chunk:match  @ takeIdOf:53 harvestPoolGuid:757
+  @drop chunk:match  @ takeIdOf:53 harvestPoolGuid:762
   @drop wiring.isWiringOwnedTrack  @ isVisibleTrack:327
 
 # REAPER API surface
@@ -402,59 +414,61 @@
   @field r ds  @ 27
   @field r eventMeta  @ 27
   @field r facade  @ 27
-  @field r guid  @ trackIdxForGuid:862
+  @field r guid  @ trackIdxForGuid:867
   @field w guid  @ buildState:450
   @field w hi  @ chanRangeOf:432
-  @field r huge  @ sourceLenQN:143 tailLenQN:194 relayoutTrack:219 freeSpan:1066
+  @field r huge  @ sourceLenQN:143 tailLenQN:194 relayoutTrack:219 freeSpan:1112
   @field r id  @ ensureSlots:243,244,246,247,249,250 slotRowsFor:410,411,412,413
-  @field r id  @ ownerTrack:637 slotOfTake:650 familyRenames:673,678,679,685 renameSlot:695 deleteSlot:714,719,724,726 takeForSlot:844
-  @field r id  @ takeForSlot:845 dropInstance:872,873,896
-  @field w id  @ ensureSlots:260 slotRowsFor:410 createAndDropMidi:816 mintParkedTake:973
-  @field r idx  @ ownerTrack:634 slotOfTake:649,650 renameSlot:694 pruneSlots:737 trackIdxForGuid:862 variantFamily:989,997,998,1005,1009
-  @field r idx  @ variantFamily:1013 stepVariant:1057,1059
-  @field w idx  @ slotRowsFor:408 buildState:450 variantFamily:997,998
-  @field r item  @ relayoutTrack:214,215,218,222 duplicateTake:913 startIsClear:1076 moveTake:1085,1088,1089,1090 trimHead:1100,1101
-  @field r item  @ trimHead:1103,1105,1106 takeSourceLengthQN:1143 deleteTake:1153,1154,1156
+  @field r id  @ ownerTrack:637 slotOfTake:650 familyRenames:673,678,679,685 renameSlot:709 deleteSlot:719,724,729,731 takeForSlot:849
+  @field r id  @ takeForSlot:850 dropInstance:877,878,901 tidyNames:1038,1056
+  @field w id  @ ensureSlots:260 slotRowsFor:410 createAndDropMidi:821 mintParkedTake:978 tidyNames:1038
+  @field r idx  @ ownerTrack:634 slotOfTake:649,650 renameSlot:708 pruneSlots:742 trackIdxForGuid:867 variantFamily:994,1002,1003,1010,1014
+  @field r idx  @ variantFamily:1018 tidyNames:1036,1038,1047 stepVariant:1103,1105
+  @field w idx  @ slotRowsFor:408 buildState:450 variantFamily:1002,1003 tidyNames:1038
+  @field r item  @ relayoutTrack:214,215,218,222 duplicateTake:918 startIsClear:1122 moveTake:1131,1134,1135,1136 trimHead:1146,1147
+  @field r item  @ trimHead:1149,1151,1152 takeSourceLengthQN:1189 deleteTake:1199,1200,1202
   @field w item  @ relayoutTrack:204 buildTakeShape:382
-  @field r kind  @ slotRowsFor:409 deleteSlot:726 takeForSlot:844 dropInstance:884 duplicateTake:912 duplicateBelow:938 newTakeBelow:947 variantFamily:996 vary:1035 stepVariant:1049 splitTake:1123
-  @field w kind  @ ensureSlots:260 buildTakeShape:390 slotRowsFor:409 createAndDropMidi:816 mintParkedTake:973
-  @field r lengthQN  @ visibleTakes:493 seekInstance:530 duplicateTake:913,917 appendPoint:928 splitTake:1124
+  @field r kind  @ slotRowsFor:409 deleteSlot:731 takeForSlot:849 dropInstance:889 duplicateTake:917 duplicateBelow:943 newTakeBelow:952 variantFamily:1001 tidyNames:1037 vary:1081 stepVariant:1095 splitTake:1169
+  @field w kind  @ ensureSlots:260 buildTakeShape:390 slotRowsFor:409 createAndDropMidi:821 mintParkedTake:978
+  @field r lengthQN  @ visibleTakes:493 seekInstance:530 duplicateTake:918,922 appendPoint:933 splitTake:1170
   @field w lengthQN  @ buildTakeShape:387
   @field w lo  @ chanRangeOf:432
-  @field r name  @ familyRenames:671,677 duplicateTake:920 variantFamily:989,995
-  @field w name  @ buildTakeShape:396 slotRowsFor:412 buildState:450
+  @field r name  @ familyRenames:671,677 duplicateTake:925 variantFamily:994,1000 tidyNames:1035,1038,1056
+  @field w name  @ buildTakeShape:396 slotRowsFor:412 buildState:450 tidyNames:1038
   @field w nativeColour  @ buildTakeShape:395
-  @field r naturalLenQN  @ duplicateBelow:939
+  @field r naturalLenQN  @ duplicateBelow:944
   @field w naturalLenQN  @ buildTakeShape:388
   @field w notes  @ buildTakeShape:391
   @field w offE  @ midiNotesOf:366
   @field w offS  @ midiNotesOf:365
-  @field r ordinal  @ variantFamily:1008 nextVariantName:1022
-  @field w ordinal  @ variantFamily:997,998
-  @field r originQN  @ splitTake:1125
+  @field r ordinal  @ variantFamily:1013 nextVariantName:1027 tidyNames:1046,1050
+  @field w ordinal  @ variantFamily:1002,1003 tidyNames:1039
+  @field r originQN  @ splitTake:1171
   @field w originQN  @ buildTakeShape:386
-  @field r parked  @ pruneSlots:736
+  @field r parked  @ pruneSlots:741
   @field w parked  @ slotRowsFor:413
+  @field r pinned  @ tidyNames:1050,1052
+  @field w pinned  @ tidyNames:1039
   @field w pitch  @ midiNotesOf:368
   @field w slotCount  @ buildState:451
-  @field r slotIdx  @ liveInstances:1028 vary:1036,1038 stepVariant:1050
+  @field r slotIdx  @ liveInstances:1074 vary:1082,1084 stepVariant:1096
   @field w slotIdx  @ buildTakeShape:393
   @field r slotsByCol  @ trackSlots:623
   @field w slotsByCol  @ buildState:464
   @field r startQN  @ relayoutTrack:206,219,220,222 visibleTakes:493 seekInstance:530,531,532
-  @field r startQN  @ seekInstance:532,534 initialCursor:549 createAndDropMidi:808 dropInstance:880 appendPoint:928 vary:1037 stepVariant:1057 freeSpan:1068
-  @field r startQN  @ startIsClear:1076 splitTake:1124
+  @field r startQN  @ seekInstance:532,534 initialCursor:549 createAndDropMidi:813 dropInstance:885 appendPoint:933 vary:1083 stepVariant:1103 freeSpan:1114
+  @field r startQN  @ startIsClear:1122 splitTake:1170
   @field w startQN  @ relayoutTrack:204 buildTakeShape:385
   @field w tailQN  @ buildTakeShape:389
-  @field r take  @ relayoutTrack:210,211,214,215,216,218 findTake:514 seekInstance:529 duplicateTake:915 vary:1038 trimHead:1099,1100
-  @field r take  @ trimHead:1101,1107 resizeTake:1114 splitTake:1126,1132 takeSourceLengthQN:1139 deleteTake:1152
+  @field r take  @ relayoutTrack:210,211,214,215,216,218 findTake:514 seekInstance:529 duplicateTake:920 vary:1084 trimHead:1145,1146
+  @field r take  @ trimHead:1147,1153 resizeTake:1160 splitTake:1172,1178 takeSourceLengthQN:1185 deleteTake:1198
   @field w take  @ relayoutTrack:204 buildTakeShape:383
   @field w takeCount  @ buildState:452
   @field r takesByCol  @ tracksTakes:480 visibleTakes:489 hasPlacedTakes:503 findTake:512
   @field w takesByCol  @ buildState:464
   @field w track  @ buildState:450
-  @field r trackIdx  @ initialCursor:549 duplicateTake:909 roomBelow:933 newTakeBelow:948,949 vary:1036,1037 stepVariant:1050,1057 moveTake:1088,1091 trimHead:1103
-  @field r trackIdx  @ trimHead:1108 resizeTake:1115 splitTake:1133 deleteTake:1150
+  @field r trackIdx  @ initialCursor:549 duplicateTake:914 roomBelow:938 newTakeBelow:953,954 vary:1082,1083 stepVariant:1096,1103 moveTake:1134,1137 trimHead:1149
+  @field r trackIdx  @ trimHead:1154 resizeTake:1161 splitTake:1179 deleteTake:1196
   @field w trackIdx  @ buildTakeShape:384
   @field r tracks  @ projectTracks:354
   @field w tracks  @ buildState:464
