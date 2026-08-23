@@ -819,7 +819,7 @@ function av:renameSlot(trackIdx, slotIdx, name)
   am:renameSlot(trackIdx, slotIdx, name)
 end
 
---contract: mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.
+--contract: mints a MIDI slot via am, palette-focuses it, dives the tracker; nil if am refused.
 function av:createSlot(trackIdx, qnPos, lengthQN, name)
   local slotIdx, take = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if slotIdx then
@@ -835,6 +835,16 @@ end
 function av:deleteSlot(trackIdx, slotIdx)
   am:deleteSlot(trackIdx, slotIdx)
   self:setPaletteSlot(nil)
+end
+
+--contract: forever-deletes the track's parked slots; drops the palette focus if its slot went too
+function av:pruneSlots(trackIdx)
+  am:pruneSlots(trackIdx)
+  local stands = false
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    if slot.idx == paletteSlot then stands = true end
+  end
+  if not stands then self:setPaletteSlot(nil) end
 end
 
 ----- Boot + reveal — the page interface delegates here

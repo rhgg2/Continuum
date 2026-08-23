@@ -30,7 +30,9 @@ local function mkArrange(harness, items)
       poolGuid = '{' .. item.track .. item.name .. '}' })
   end
   h.reaper:setProjectTracks(order)
-  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+  local em = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') })
+  local am = util.instantiate('arrangeManager',
+    { cm = h.cm, ds = h.ds, tm = h.tm, eventMeta = em })
   local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
   return h, av, am
 end
@@ -250,6 +252,37 @@ return {
       t.eq(av:paletteSlot(), 3, 'floored')
       av:setPaletteSlot(nil)
       t.eq(av:paletteSlot(), nil, 'nil clears')
+    end,
+  },
+
+  {
+    name = 'a prune takes the palette focus down with the slot it lost',
+    run = function(harness)
+      local _, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 4 },
+      })
+      local doomed = takeAt(av:tracksTakes(0), 4)
+      av:setPaletteSlot(doomed.slotIdx)
+      am:deleteTake(doomed)           -- last instance: the slot parks rather than goes
+      av:pruneSlots(0)
+      t.eq(#av:trackSlots(0), 1, 'the parked slot went')
+      t.eq(av:paletteSlot(), nil, 'the focus went with it')
+    end,
+  },
+
+  {
+    name = 'a prune leaves the palette focus alone when its slot still stands',
+    run = function(harness)
+      local _, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 4 },
+      })
+      local liveSlot = takeAt(av:tracksTakes(0), 0).slotIdx
+      av:setPaletteSlot(liveSlot)
+      am:deleteTake(takeAt(av:tracksTakes(0), 4))
+      av:pruneSlots(0)
+      t.eq(av:paletteSlot(), liveSlot, 'the live slot keeps the focus')
     end,
   },
 

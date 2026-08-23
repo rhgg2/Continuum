@@ -23,6 +23,7 @@ assignment, which the render layer can't be tested through.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 arrange: a prune button on the palette, and no per-slot verbs (§ Prune)
 - 2026-08-24 am: prune a track's parked slots (§ Prune)
 
 ## Now
@@ -31,6 +32,4 @@ assignment, which the render layer can't be tested through.
 
 ## Queued (current phase; one-liners)
 
-2. `av:pruneSlots(trackIdx)` clears the palette focus when the focused
-   slot was among the pruned, and the palette grows a `prune` button,
-   disabled with nothing parked, opening a confirm that names the count.
+(empty — phase 1 lands with this item.)

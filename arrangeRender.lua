@@ -661,19 +661,6 @@ local function paletteTrackLabel(focusedTrack)
     or '(no track)'
 end
 
-local function openRenameModal(trackIdx, slotIdx, currentName)
-  local current = currentName or ''
-  modalHost:openPrompt{
-    title    = 'Rename slot',
-    prompt   = 'New name',
-    buf      = current,
-    -- The root opens selected: typing over it reroots the whole family and leaves
-    -- each ordinal. see docs/arrangeManager.md § Renaming and name drift
-    selectTo = #util.variantRoot(current),
-    callback = util.atomic('Rename slot', function(name) av:renameSlot(trackIdx, slotIdx, name) end),
-  }
-end
-
 local function openDeleteModal(trackIdx, slot)
   local key  = av:keyForSlot(slot.idx)
   local name = slot.name ~= '' and slot.name
@@ -682,6 +669,15 @@ local function openDeleteModal(trackIdx, slot)
     title    = 'Delete slot',
     prompt   = string.format('Delete slot %s "%s"?\nRemoves every instance and discards the parked copy. (y/n)', key, name),
     callback = util.atomic('Delete slot', function(yes) if yes then av:deleteSlot(trackIdx, slot.idx) end end),
+  }
+end
+
+local function openPruneModal(trackIdx, parked)
+  modalHost:openConfirm{
+    title    = 'Prune slots',
+    prompt   = string.format('Prune %d slot%s with no instance on the grid?\nDiscards each parked copy for good. (y/n)',
+                             parked, parked == 1 and '' or 's'),
+    callback = util.atomic('Prune slots', function(yes) if yes then av:pruneSlots(trackIdx) end end),
   }
 end
 
@@ -723,19 +719,16 @@ modalHost:registerKind('createSlot', function(s, close)
   elseif cancel then close(false) end
 end)
 
-local function renderPaletteActions(focusedTrack, focusedSlot)
-  local trackIdx = focusedTrack and focusedTrack.idx
-  local canActOnSlot = focusedSlot ~= nil
-
-  chrome.disabledIf(not canActOnSlot, function()
-    if ImGui.Button(ctx, 'rename##slot') then
-      openRenameModal(trackIdx, focusedSlot.idx, focusedSlot.name)
-    end
-  end)
-  ImGui.SameLine(ctx, 0, 4)
-  chrome.disabledIf(not canActOnSlot, function()
-    if ImGui.Button(ctx, 'del##slot') then
-      openDeleteModal(trackIdx, focusedSlot)
+-- Rename and delete are keyboard gestures on the cursor take; prune is the one
+-- palette verb with no take to stand on, so it lives here.
+local function renderPaletteActions(focusedTrack, slots)
+  local parked = 0
+  for _, slot in ipairs(slots) do
+    if slot.parked then parked = parked + 1 end
+  end
+  chrome.disabledIf(parked == 0, function()
+    if ImGui.Button(ctx, 'prune##slots') then
+      openPruneModal(focusedTrack.idx, parked)
     end
   end)
 end
@@ -776,9 +769,8 @@ local function renderPaletteList(slots)
 end
 
 local function renderPaletteBody(focusedTrack)
-  local slots       = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
-  local focusedSlot = slotEntry(slots, av:paletteSlot())
-  renderPaletteActions(focusedTrack, focusedSlot)
+  local slots = focusedTrack and av:trackSlots(focusedTrack.idx) or {}
+  renderPaletteActions(focusedTrack, slots)
   ImGui.Separator(ctx)
   renderPaletteList(slots)
 end
@@ -887,8 +879,8 @@ end
 
 
 --invariant: createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.
---invariant: deleteSlot (Ctrl+Delete) takes the slot of the cursor take, as the palette's del
--- button takes the palette-focused one; both open the same confirm.
+--invariant: deleteSlot (Ctrl+Delete) takes the slot of the cursor take; the palette carries
+-- no per-slot verbs, only prune.
 -- cmgr:scope is idempotent — same scope av registers into.
 local arrange = cmgr:scope('arrange')
 

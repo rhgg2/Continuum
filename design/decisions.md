@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The arrange palette carries one verb, prune, which forever-deletes every slot on
+  the track with no live instance, behind a confirm naming the count. The rename and del buttons
+  went at the same time: Cmd+Backspace and Ctrl+Delete already reach the cursor take's slot, and the
+  buttons only added a second route from the palette focus. av:pruneSlots drops that focus when the
+  slot holding it went, and returns nothing — the confirm names the count from the slot list it
+  already holds, before anything is deleted.
+
 - **2026-08-23** — An edge mark says only that an edge is trimmed — a bare ellipsis leading the
   take's name above the head, and one on the box's bottom row below the cut. How many beats each
   hides is read in the status bar, off the take under the cursor. The count used to sit in the mark,
