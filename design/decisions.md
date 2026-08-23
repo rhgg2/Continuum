@@ -7,7 +7,7 @@ not eight or ten.
 - **2026-08-23** — The tracker's unpooled duplicate retires. duplicateBelow followed by vary gives
   the same fork, with a placement to hold it and a name taken from the parent slot, so the tracker
   no longer mints a parked clone of its own. Arrange keeps its unpooled duplicate, which is the way
-  to fork a take without placing it. See design/song-growth.md § vary.
+  to fork a take without placing it. See docs/trackerPage.md § Stepping the family.
 
 - **2026-08-23** — Arrange binds Super+U to replace mode, shadowing the global universal-argument
   prefix. No arrange command reads a prefix, and while one is open the digit keys feed its buffer
@@ -65,12 +65,12 @@ not eight or ten.
   on the pool would say one thing while the palette showed another as soon as a take was renamed in
   REAPER, and the name is already the only place a slot's name lives. A rename therefore edits the
   root and carries the family; editing the ordinal too takes that slot out of the family. See
-  design/song-growth.md § vary.
+  docs/arrangeManager.md § Variants.
 
 - **2026-08-23** — The tracker's repeat verb is named duplicateBelow rather than again. It is the
   arrange page's pooled duplicate below seen from inside a placement, and the tracker already
-  carries duplicateUnpooledBelow, so one name serves both pages and the pair reads together.
-  design/song-growth.md § again is renamed to match; vary keeps its name.
+  carries duplicateUnpooledBelow, so one name serves both pages and the pair reads together. vary
+  keeps its name.
 
 - **2026-08-23** — The tracker's new take hands am:newTakeBelow the name and length its modal asked
   for, and the verb measures the free span against that length rather than the source instance's

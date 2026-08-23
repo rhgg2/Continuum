@@ -425,6 +425,14 @@ on a track never overlap.
    passed through survive with their events, whether or not anything
    stands on them.
 
+1. Divergence is structural, so it is a verb pressed once rather than a
+   mode left on. One level down a group instance is a table with
+   `assigns`, `adds` and `deletes` in it, so `localMode` routes an edit
+   into the instance rather than the pattern (`docs/groupManager.md`
+   § localMode) and nothing structural happens. A REAPER pool has no
+   such layer: two pooled items are one source, and for one of them to
+   differ a second source has to exist.
+
 ## Transport
 
 `am` is where the stack meets REAPER's transport, all of it in QN: the
