@@ -301,15 +301,22 @@ local function selectedTakeProperties()
   if take and take.kind == 'midi' then tracker().openTakeProperties(take.item) end
 end
 
---invariant: duplicateBelow: single-target MIDI clone at the append point; focus+cursor advance.
+--invariant: duplicateBelow: single-target clone at append point; caret advances, selection clears.
+-- Nothing is selected afterwards, so the caret alone carries a run of presses down the track.
 local function duplicateSelectedBelow()
   local take = singleTarget()
   if not take then return end
   local newTake = am:duplicateBelow(take)
-  if newTake then
-    av:setFocus(newTake)
-    advanceCursorPastNewTake(newTake)
-  end
+  if not newTake then return end
+  setSelection {}
+  advanceCursorPastNewTake(newTake)
+end
+
+--invariant: vary: single-target MIDI; the variant stands in the source's place, unselected.
+-- The source take is gone, so its handle prunes itself from the selection on the next read.
+local function varySelected()
+  local take = singleTarget()
+  if take then am:vary(take) end
 end
 
 -- The clone parks for want of room, and take-props opens on it either way: the name prompt
@@ -731,6 +738,7 @@ arrange:registerAll {
   arrangeTakeProperties         = selectedTakeProperties,
   arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate pooled take' },
   arrangeDuplicateUnpooledBelow = { duplicateUnpooledSelectedBelow, 'Duplicate take' },
+  arrangeVary                   = { varySelected,                   'Vary take' },
   arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },
   arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },

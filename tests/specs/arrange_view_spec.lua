@@ -428,6 +428,27 @@ return {
   },
 
   {
+    name = 'the pooled duplicate clears the selection and lands the caret on the copy',
+    run = function(harness)
+      local h, av = mkArrange(harness, { { track = 'tr1', name = 'a', pos = 0 } })
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      local src = av:tracksTakes(0)[1].take
+      av:setFocus(src)
+      h.cmgr:invoke('arrangeDuplicateBelow')
+      local am2   = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      local takes = am2:tracksTakes(0)
+      t.eq(#takes, 2, 'the clone landed at the append point')
+      local copy = takeAt(takes, 1)
+      t.truthy(copy, 'one row below the source')
+      t.eq(av:isSelected(copy.take), false, 'the copy is not selected')
+      t.eq(av:isSelected(src), false, 'nor is the source it was made from')
+      t.eq(av:cursorRow(), 1, 'the caret advanced onto the copy')
+    end,
+  },
+
+  {
     name = 'the band stands through a run and comes down on the next command',
     run = function(harness)
       local h, av = mkArrange(harness, shiftNavItems)

@@ -719,6 +719,35 @@ return {
   },
 
   {
+    name = 'arrangeVary swaps the target instance for one of a fresh variant slot',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 2, srcLen = 2,
+                                poolGuid = '{p1}', takeName = 'Bass' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true, pos = 2, len = 2, srcLen = 2,
+                                poolGuid = '{p1}', takeName = 'Bass' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeVary')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'the instance was replaced, not added to')
+      t.eq(#am:trackSlots(0), 2, 'the palette grew by the variant slot')
+      local varied, parent
+      for _, take in ipairs(takes) do
+        if take.startQN == 0 then varied = take else parent = take end
+      end
+      t.truthy(varied, 'a take still stands where the source instance did')
+      t.truthy(varied.slotIdx ~= parent.slotIdx, 'on a slot of its own')
+      t.eq(varied.name, 'Bass (var 1)', 'named from the parent root')
+    end,
+  },
+
+  {
     name = 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props',
     run = function(harness)
       local h = harness.mk()

@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=195  mode=chunk
+@module continuum  src=continuum.lua  loc=199  mode=chunk
 
 # Invariants & contracts
   @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer  @ 3
@@ -10,68 +10,68 @@
   @require perf = 'perf'  @ 18
 
 # Constructed sub-instances
-  @construct ps        = util.instantiate('pextStore')  @ 70
-  @construct cm        = util.instantiate('configManager')  @ 71
-  @construct ds        = util.instantiate('dataStore')  @ 72
-  @construct eventMeta = util.instantiate('eventMeta')  @ 73
-  @construct cmgr      = util.instantiate('commandManager')  @ 74
-  @construct coord     = util.instantiate('coordinator')  @ 75
+  @construct ps        = util.instantiate('pextStore')  @ 74
+  @construct cm        = util.instantiate('configManager')  @ 75
+  @construct ds        = util.instantiate('dataStore')  @ 76
+  @construct eventMeta = util.instantiate('eventMeta')  @ 77
+  @construct cmgr      = util.instantiate('commandManager')  @ 78
+  @construct coord     = util.instantiate('coordinator')  @ 79
 
 # Private functions
   @fn err_handler(err)  @ 22-26
   @fn run(fn)  @ 28-31
-  @fn createImGui()  @ 33-64
-  @fn Main()  @ 68-193
-      @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()  @ 66
-      @contract  each page owns its cross-page state, exposed through the facade registry coord wires  @ 67
+  @fn createImGui()  @ 33-68
+  @fn Main()  @ 72-197
+      @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()  @ 70
+      @contract  each page owns its cross-page state, exposed through the facade registry coord wires  @ 71
 
 # Uses (outbound edges)
-  @use call    ImGui.Attach  @ createImGui:49,50,51
+  @use call    ImGui.Attach  @ createImGui:53,54,55
   @use call    ImGui.CreateContext  @ createImGui:34
-  @use call    ImGui.CreateFont  @ createImGui:39,46,48
-  @use call    ImGui.SetConfigVar  @ createImGui:35,36
-  @use call    cmgr:beginPrefix  @ Main:157
-  @use call    cmgr:bindAll  @ Main:161
-  @use call    cmgr:loadOverrides  @ Main:190
-  @use call    cmgr:registerAll  @ Main:136
-  @use call    cmgr:scope  @ Main:185
-  @use call    coord:getFacade  @ Main:151,152,154,156
-  @use call    coord:onExternalCommand  @ Main:180
-  @use call    coord:previousPage  @ Main:153
-  @use call    coord:quit  @ Main:156
-  @use call    coord:register  @ Main:79,80,81,82,83
-  @use call    coord:reloadAfterExternalMutation  @ Main:142,144
-  @use call    coord:returnToArrange  @ Main:186
-  @use call    coord:run  @ Main:192
-  @use call    coord:setActive  @ Main:145,146,147,148,149,150,151,152,153,154
-  @use call    coord:togglePage  @ Main:155
-  @use call    perf.toggle  @ Main:159
-  @use call    util.add  @ Main:110,118
-  @use call    util.instantiate  @ Main:70,71,72,73,74,75
-  @use require commandManager  @ Main:74
-  @use require configManager  @ Main:71
-  @use require coordinator  @ Main:75
-  @use require dataStore  @ Main:72
-  @use require eventMeta  @ Main:73
+  @use call    ImGui.CreateFont  @ createImGui:43,50,52
+  @use call    ImGui.SetConfigVar  @ createImGui:35,36,40
+  @use call    cmgr:beginPrefix  @ Main:161
+  @use call    cmgr:bindAll  @ Main:165
+  @use call    cmgr:loadOverrides  @ Main:194
+  @use call    cmgr:registerAll  @ Main:140
+  @use call    cmgr:scope  @ Main:189
+  @use call    coord:getFacade  @ Main:155,156,158,160
+  @use call    coord:onExternalCommand  @ Main:184
+  @use call    coord:previousPage  @ Main:157
+  @use call    coord:quit  @ Main:160
+  @use call    coord:register  @ Main:83,84,85,86,87
+  @use call    coord:reloadAfterExternalMutation  @ Main:146,148
+  @use call    coord:returnToArrange  @ Main:190
+  @use call    coord:run  @ Main:196
+  @use call    coord:setActive  @ Main:149,150,151,152,153,154,155,156,157,158
+  @use call    coord:togglePage  @ Main:159
+  @use call    perf.toggle  @ Main:163
+  @use call    util.add  @ Main:114,122
+  @use call    util.instantiate  @ Main:74,75,76,77,78,79
+  @use require commandManager  @ Main:78
+  @use require configManager  @ Main:75
+  @use require coordinator  @ Main:79
+  @use require dataStore  @ Main:76
+  @use require eventMeta  @ Main:77
   @use require imgui  @ <load>:17
   @use require perf  @ <load>:18
-  @use require pextStore  @ Main:70
+  @use require pextStore  @ Main:74
   @use require util  @ <load>:16
 
 # Calls (intra-file)
-  @call createImGui  @ Main:69
-  @call run  @ <load>:195
+  @call createImGui  @ Main:73
+  @call run  @ <load>:199
 
 # Bindings (by name)
-  @bind Main  @ 195
-  @bind err_handler  @ run:30 Main:192
+  @bind Main  @ 199
+  @bind err_handler  @ run:30 Main:196
 
 # Unresolved receivers
-  @drop ap:seedCursorFromReaper  @ Main:85
-  @drop osName:find  @ createImGui:41,43
-  @drop trackerScope:bindAll  @ Main:187
-  @drop trackerScope:registerAll  @ Main:186
-  @drop wp:enableLive  @ Main:84
+  @drop ap:seedCursorFromReaper  @ Main:89
+  @drop osName:find  @ createImGui:45,47
+  @drop trackerScope:bindAll  @ Main:191
+  @drop trackerScope:registerAll  @ Main:190
+  @drop wp:enableLive  @ Main:88
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -88,70 +88,71 @@
   @reaper Main_OnCommand
 
 # Fields (r read / w write incl. constructor keys)
+  @field r ConfigVar_KeyRepeatRate  @ createImGui:40
   @field r ConfigVar_ViewportsNoDecoration  @ createImGui:35
   @field r ConfigVar_WindowsMoveFromTitleBarOnly  @ createImGui:36
-  @field r FontFlags_Bold  @ createImGui:48
+  @field r FontFlags_Bold  @ createImGui:52
   @field r ImGui_GetBuiltinPath  @ 9
-  @field r Key_Enter  @ Main:187
-  @field r Key_F10  @ Main:171
-  @field r Key_F11  @ Main:174
-  @field r Key_F2  @ Main:167
-  @field r Key_F3  @ Main:168
-  @field r Key_F4  @ Main:169
-  @field r Key_F8  @ Main:163
-  @field r Key_F9  @ Main:170
-  @field r Key_KeypadEnter  @ Main:187
-  @field r Key_P  @ Main:175
-  @field r Key_Q  @ Main:172
-  @field r Key_Space  @ Main:162
-  @field r Key_Tab  @ Main:166
-  @field r Key_U  @ Main:173
-  @field r Key_Z  @ Main:164,165
-  @field r Mod_Alt  @ Main:166
-  @field r Mod_Ctrl  @ Main:164,165,172,175
-  @field r Mod_Shift  @ Main:165,175
-  @field r Mod_Super  @ Main:173
-  @field w beginPrefix  @ Main:157,173
-  @field w closeEditor  @ Main:153
-  @field w cm  @ Main:74,75
-  @field w cmgr  @ Main:75
-  @field w ctx  @ createImGui:58
-  @field w diveToSampler  @ Main:154
-  @field w ds  @ Main:75
-  @field w editSwing  @ Main:152
-  @field w editTuning  @ Main:151
-  @field w eventMeta  @ Main:75
-  @field w font  @ createImGui:59
-  @field w fontSize  @ createImGui:62
-  @field r fxIdx  @ Main:119
-  @field w fxIdx  @ Main:110
-  @field w grid  @ createImGui:62
-  @field w gui  @ Main:75
-  @field r guid  @ Main:118
-  @field w guid  @ Main:111
+  @field r Key_Enter  @ Main:191
+  @field r Key_F10  @ Main:175
+  @field r Key_F11  @ Main:178
+  @field r Key_F2  @ Main:171
+  @field r Key_F3  @ Main:172
+  @field r Key_F4  @ Main:173
+  @field r Key_F8  @ Main:167
+  @field r Key_F9  @ Main:174
+  @field r Key_KeypadEnter  @ Main:191
+  @field r Key_P  @ Main:179
+  @field r Key_Q  @ Main:176
+  @field r Key_Space  @ Main:166
+  @field r Key_Tab  @ Main:170
+  @field r Key_U  @ Main:177
+  @field r Key_Z  @ Main:168,169
+  @field r Mod_Alt  @ Main:170
+  @field r Mod_Ctrl  @ Main:168,169,176,179
+  @field r Mod_Shift  @ Main:169,179
+  @field r Mod_Super  @ Main:177
+  @field w beginPrefix  @ Main:161,177
+  @field w closeEditor  @ Main:157
+  @field w cm  @ Main:78,79
+  @field w cmgr  @ Main:79
+  @field w ctx  @ createImGui:62
+  @field w diveToSampler  @ Main:158
+  @field w ds  @ Main:79
+  @field w editSwing  @ Main:156
+  @field w editTuning  @ Main:155
+  @field w eventMeta  @ Main:79
+  @field w font  @ createImGui:63
+  @field w fontSize  @ createImGui:66
+  @field r fxIdx  @ Main:123
+  @field w fxIdx  @ Main:114
+  @field w grid  @ createImGui:66
+  @field w gui  @ Main:79
+  @field r guid  @ Main:122
+  @field w guid  @ Main:115
   @field r path  @ 8,13
   @field w path  @ 8,13
-  @field w play  @ Main:137
-  @field w playPause  @ Main:138,162
-  @field w ps  @ Main:71,72,73
-  @field w quit  @ Main:156,172
-  @field w redo  @ Main:144,165
-  @field w returnToArrange  @ Main:186,187
+  @field w play  @ Main:141
+  @field w playPause  @ Main:142,166
+  @field w ps  @ Main:75,76,77
+  @field w quit  @ Main:160,176
+  @field w redo  @ Main:148,169
+  @field w returnToArrange  @ Main:190,191
   @field r source  @ 7
-  @field w stop  @ Main:139,163
-  @field w switchPage  @ Main:145
-  @field w switchToArrange  @ Main:146,167
-  @field w switchToEditor  @ Main:150,171
-  @field w switchToSample  @ Main:149,170
-  @field w switchToTracker  @ Main:148,169
-  @field w switchToWiring  @ Main:147,168
-  @field w toggleFxWindows  @ Main:158,174
-  @field w togglePage  @ Main:155,166
-  @field w toggleProfiler  @ Main:159,175
-  @field r track  @ Main:119
-  @field w track  @ Main:110
-  @field w ui  @ createImGui:62
-  @field w uiFont  @ createImGui:60
-  @field w undo  @ Main:140,164
-  @field w wire  @ createImGui:62
-  @field w wireFont  @ createImGui:61
+  @field w stop  @ Main:143,167
+  @field w switchPage  @ Main:149
+  @field w switchToArrange  @ Main:150,171
+  @field w switchToEditor  @ Main:154,175
+  @field w switchToSample  @ Main:153,174
+  @field w switchToTracker  @ Main:152,173
+  @field w switchToWiring  @ Main:151,172
+  @field w toggleFxWindows  @ Main:162,178
+  @field w togglePage  @ Main:159,170
+  @field w toggleProfiler  @ Main:163,179
+  @field r track  @ Main:123
+  @field w track  @ Main:114
+  @field w ui  @ createImGui:66
+  @field w uiFont  @ createImGui:64
+  @field w undo  @ Main:144,168
+  @field w wire  @ createImGui:66
+  @field w wireFont  @ createImGui:65

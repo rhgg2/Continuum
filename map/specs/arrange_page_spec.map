@@ -1,4 +1,4 @@
-@spec arrange_page_spec  src=tests/specs/arrange_page_spec.lua  loc=768  cases=36
+@spec arrange_page_spec  src=tests/specs/arrange_page_spec.lua  loc=797  cases=37
 @exercises commandManager (h.cmgr), configManager (h.cm), arrangeManager (am)
 @surface   cmgr:registerAll, cmgr:push, cmgr:invoke, cm:set, am:tracksTakes, cm:get, am:resizeTake, am:trackSlots
 @harness   mk, reaper:setTrackName, reaper:setProjectTracks, reaper:addItem, reaper.SetMediaItemSelected, reaper:setCursor
@@ -45,18 +45,19 @@
   @case 'arrangeTakeProperties is a no-op on an audio take'  [harness]  @ 663-676
   @case 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s append point'  [harness]  @ 680-696
   @case 'arrangeDuplicateBelow is silent for want of room and on audio takes'  [harness]  @ 700-718
-  @case 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props'  [harness]  @ 722-740
-  @case 'arrangeDuplicateUnpooledBelow parks the clone for want of room, and still names it'  [harness]  @ 744-765
+  @case 'arrangeVary swaps the target instance for one of a fresh variant slot'  [harness]  @ 722-747
+  @case 'arrangeDuplicateUnpooledBelow mints a fresh-pool clone and auto-opens take-props'  [harness]  @ 751-769
+  @case 'arrangeDuplicateUnpooledBelow parks the clone for want of room, and still names it'  [harness]  @ 773-794
 
 # Uses (outbound edges)
   @use call cmgr:registerAll  @ 50
-  @use call cmgr:push  @ 88,101,120,143,162,187,211,229,252,269,289,306,326,344,364,390,413,434,451,472,488,508,528,550,572,592,616,634,656,673,690,714,732,756
-  @use call cmgr:invoke  @ 89,103,123,126,144,146,165,166,190,212,230,253,270,290,307,327,345,365,391,414,435,452,473,489,509,510,511,531,532,533,552,553,554,573,593,594,617,635,657,674,691,715,733,757
-  @use call cm:set  @ 113,114,155,178,204,222,241,262,280,299,317,337,355,377,401,427,446,465,483,499,521,543,564,583,605,626,649,666,683,703,725,747
-  @use call am:tracksTakes  @ 122,127,168,189,192,214,232,249,254,272,286,291,309,329,347,367,393,416,513,535,556,575,597,693,717,735,759
+  @use call cmgr:push  @ 88,101,120,143,162,187,211,229,252,269,289,306,326,344,364,390,413,434,451,472,488,508,528,550,572,592,616,634,656,673,690,714,734,761,785
+  @use call cmgr:invoke  @ 89,103,123,126,144,146,165,166,190,212,230,253,270,290,307,327,345,365,391,414,435,452,473,489,509,510,511,531,532,533,552,553,554,573,593,594,617,635,657,674,691,715,735,762,786
+  @use call cm:set  @ 113,114,155,178,204,222,241,262,280,299,317,337,355,377,401,427,446,465,483,499,521,543,564,583,605,626,649,666,683,703,725,754,776
+  @use call am:tracksTakes  @ 122,127,168,189,192,214,232,249,254,272,286,291,309,329,347,367,393,416,513,535,556,575,597,693,717,737,764,788
   @use call cm:get  @ 145,147
   @use call am:resizeTake  @ 249,286
-  @use call am:trackSlots  @ 761
+  @use call am:trackSlots  @ 739,790
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 16
@@ -65,13 +66,15 @@
   @field r acceptCmds  @ 79
   @field w chrome  @ 52
   @field w cm  @ 52,121,167,188,213,231,246,271,285,308,328,346
-  @field w cm  @ 366,392,415,512,534,555,574,596,692,716,734,758
+  @field w cm  @ 366,392,415,512,534,555,574,596,692,716,736,763
+  @field w cm  @ 787
   @field w cmgr  @ 52
   @field r dive  @ 48,437,438,456,457,475,491
   @field w dive  @ 38
   @field w diveTo  @ 38
   @field w ds  @ 52,121,167,188,213,231,246,271,285,308,328,346
-  @field w ds  @ 366,392,415,512,534,555,574,596,692,716,734,758
+  @field w ds  @ 366,392,415,512,534,555,574,596,692,716,736,763
+  @field w ds  @ 787
   @field w eventMeta  @ 53
   @field w facade  @ 54
   @field r facades  @ 33
@@ -82,22 +85,24 @@
   @field w guid  @ 38
   @field w isMidi  @ 116,157,183,206,224,243,264,282,301,319,321,339
   @field w isMidi  @ 357,359,383,385,406,408,429,467,503,523,545,567
-  @field w isMidi  @ 585,587,608,610,628,651,668,685,707,709,727,749
-  @field w isMidi  @ 751
+  @field w isMidi  @ 585,587,608,610,628,651,668,685,707,709,727,729
+  @field w isMidi  @ 756,778,780
   @field w isOpen  @ 26
   @field w isWiringOwnedTrack  @ 42
-  @field r item  @ 739,763
+  @field r item  @ 768,792
   @field r last  @ 453,454
   @field w last  @ 21,22,23,24,49
   @field w len  @ 117,158,184,207,225,244,265,283,302,320,322,340
   @field w len  @ 358,360,384,386,407,409,430,468,504,524,546,568
-  @field w len  @ 586,588,609,611,629,652,669,686,708,710,728,750
-  @field w len  @ 752
+  @field w len  @ 586,588,609,611,629,652,669,686,708,710,727,729
+  @field w len  @ 757,779,781
   @field r lengthQN  @ 195,254,272,291,368,418
   @field w modalHost  @ 54
+  @field r name  @ 746
   @field w name  @ 59,73,84,95,110,137,152,175,201,219,238,259
   @field w name  @ 277,296,314,334,352,374,398,424,443,462,480,496
-  @field w name  @ 518,540,561,580,602,623,646,663,680,700,722,744
+  @field w name  @ 518,540,561,580,602,623,646,663,680,700,722,751
+  @field w name  @ 773
   @field r naturalLenQN  @ 369,419
   @field r nav  @ 48,436,455,474,490,618,636
   @field w nav  @ 50
@@ -107,13 +112,14 @@
   @field w openTakeProperties  @ 37
   @field w poolGuid  @ 117,158,184,207,225,244,265,283,302,320,322,340
   @field w poolGuid  @ 358,360,384,386,407,409,430,504,524,546,568,586
-  @field w poolGuid  @ 588,609,611,629,652,686,708,710,728,750,752
+  @field w poolGuid  @ 588,609,611,629,652,686,708,710,728,730,757,779
+  @field w poolGuid  @ 781
   @field w pos  @ 117,158,184,207,225,244,265,283,302,320,322,340
   @field w pos  @ 358,360,384,386,407,409,430,468,504,524,546,568
-  @field w pos  @ 586,588,609,611,629,652,669,686,708,710,728,750
-  @field w pos  @ 752
+  @field w pos  @ 586,588,609,611,629,652,669,686,708,710,727,729
+  @field w pos  @ 757,779,781
   @field r preload  @ 13
-  @field r props  @ 48,658,675,738,739,762,763
+  @field r props  @ 48,658,675,767,768,791,792
   @field w props  @ 37
   @field w ps  @ 53
   @field w publish  @ 33
@@ -121,21 +127,25 @@
   @field w registerKind  @ 25
   @field w run  @ 60,74,85,96,111,138,153,176,202,220,239,260
   @field w run  @ 278,297,315,335,353,375,399,425,444,463,481,497
-  @field w run  @ 519,541,562,581,603,624,647,664,681,701,723,745
+  @field w run  @ 519,541,562,581,603,624,647,664,681,701,723,752
+  @field w run  @ 774
   @field w setContext  @ 65
   @field w setTrack  @ 64
   @field r slot  @ 438,457,475,491
   @field w slot  @ 38
+  @field r slotIdx  @ 745
   @field w srcFile  @ 468,669
   @field w srcLen  @ 117,158,184,244,265,283,358,360,384,386,407,409
-  @field w srcLen  @ 686,708,710,728,750,752
-  @field r startQN  @ 130,170,193,214,232,329,347,393,417,556,695,737
+  @field w srcLen  @ 686,708,710,727,729,757,779,781
+  @field r startQN  @ 130,170,193,214,232,329,347,393,417,556,695,742
+  @field r startQN  @ 766
   @field r suppressKbd  @ 78
   @field w switchPage  @ 50
   @field w take  @ 116,157,183,206,224,243,264,282,301,319,321,339
   @field w take  @ 357,359,383,385,406,408,429,467,503,523,545,567
-  @field w take  @ 585,587,608,610,628,651,668,685,707,709,727,749
-  @field w take  @ 751
+  @field w take  @ 585,587,608,610,628,651,668,685,707,709,727,729
+  @field w take  @ 756,778,780
+  @field w takeName  @ 728,730
   @field w tm  @ 121,167,188,213,231,246,271,285,308,328,346,366
-  @field w tm  @ 392,415,512,534,555,574,596,692,716,734,758
+  @field w tm  @ 392,415,512,534,555,574,596,692,716,736,763,787
   @field w wasOpenAtFrameStart  @ 27

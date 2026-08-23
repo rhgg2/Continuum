@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Arrange's pooled duplicate ends with nothing selected: the copy lands, the
+  selection clears, and the caret advances onto it. Selecting the copy, as it did before, chained a
+  run of presses only when the run started from the caret — a held selection pinned every press to
+  the same source, which refuses for want of room. The caret now carries the chain alone. vary joins
+  duplicate on the arrange page, both under the tracker's keys (Alt+Shift+down, Alt+Shift+right).
+
 - **2026-08-23** — Take properties act on the bound take throughout. The name half read its slot
   from the tracker's (track, slot) selection while the length half wrote to tm's bind, so the modal
   opened from arrange — which binds off the selection — renamed whichever slot the tracker last sat
