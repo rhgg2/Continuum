@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — mm measures a take's length and time signatures from the source origin rather
+  than from the item, so a head-trimmed instance sizes and scans the source it actually edits;
+  measured from the item, both were out by the head. Handing the item extent to arrange's relayout
+  instead was the alternative, and it was left alone, since relayout runs from buildState and
+  re-derives every D_LENGTH anyway — mm's write only keeps the item right until the next arrange
+  build. A source shrunk to inside the head floors the item at its start, the floor relayout already
+  uses. See docs/arrangeManager.md § Rendered span and source span.
+
 - **2026-08-23** — A dive carries the caret between the arrange and tracker pages in both
   directions, in project QN, each page working out its own row from it. The alternative was the
   sticky arrange cursor the return leg had before, which pointed at the take the dive began on after

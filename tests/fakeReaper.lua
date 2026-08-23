@@ -803,12 +803,14 @@ function M.new()
 
   -- Resize item and MIDI source together so mm:length reflects the new extent.
   -- Mirrors mm:setLength, which sets source EOT then calls this to sync the item.
+  -- The source runs from its origin — the item start less the take's offset — so
+  -- a head-trimmed item is shorter than the source it renders from.
   function r.MIDI_SetItemExtents(item, startQN, endQN)
     state.itemPos[item] = startQN
     state.itemLen[item] = endQN - startQN
     local take = state.activeTake[item]
     local src  = take and state.takeSrc[take]
-    if src then state.srcLen[src] = endQN - startQN end
+    if src then state.srcLen[src] = endQN - (startQN - (state.takeStartOffs[take] or 0)) end
     bump()
     return true
   end

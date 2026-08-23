@@ -360,6 +360,14 @@ independent: an instance can skip the source's first rows, its last,
 or both. Siblings of one slot therefore need not agree about which
 rows they play, only about what the rows contain.
 
+The tracker edits the source, so everything `mm` measures runs from
+the source origin rather than from the item: a length change ends the
+item where the source now ends, and the time-signature scan spans the
+whole source, so a marker lying in the head or the tail still reaches
+the rows. Measured from the item, both would be out by the head — the
+fault the window introduced, since before it every take began at its
+origin.
+
 ## The append point
 
 The **append point** of a placement is its rendered end. A copy

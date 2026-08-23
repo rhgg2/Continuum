@@ -1438,34 +1438,41 @@ end
 -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
 -- source is the right size, then bring the item to match.
 -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
+--contract: qn sizes the source from its origin, so a head-trimmed item renders qn less its head
 function mm:setLength(qn)
   if not liveTake() then return end
   local item     = reaper.GetMediaItemTake_Item(take)
   local startSec = reaper.GetMediaItemInfo_Value(item, 'D_POSITION')
   local startQN  = reaper.TimeMap2_timeToQN(0, startSec)
+  local originQN = reaper.MIDI_GetProjQNFromPPQPos(take, 0)
   local ok, buf = reaper.MIDI_GetAllEvts(take)
   if ok then
     local newBuf = setEot(buf, qn * self:resolution())
     if newBuf ~= buf then reaper.MIDI_SetAllEvts(take, newBuf) end
   end
-  reaper.MIDI_SetItemExtents(item, startQN, startQN + qn)
+  -- The head sits before the item, so the source's end lands originQN + qn.
+  -- A source shrunk inside the head floors at the start, as relayoutTrack does.
+  reaper.MIDI_SetItemExtents(item, startQN, math.max(startQN, originQN + qn))
   reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)   -- EOT write bypasses flushTake; same undo-capture mark
   self:reload()
 end
 
+-- Spanned from the source origin to the source end, not the item's edges: a
+-- head-trimmed instance starts inside its source, and tm's frame runs from ppq 0.
+--contract: ppq is measured from the source origin; the span covers head and tail alike
 function mm:timeSigs()
   if not liveTake() then return {} end
 
-  local item = reaper.GetMediaItemTake_Item(take)
-  local startTime = reaper.GetMediaItemInfo_Value(item, 'D_POSITION')
-  local itemLength = reaper.GetMediaItemInfo_Value(item, 'D_LENGTH')
-  local endTime = startTime + itemLength
-  local baseppq = reaper.MIDI_GetPPQPosFromProjTime(take, startTime)
+  local originQN  = reaper.MIDI_GetProjQNFromPPQPos(take, 0)
+  local endQN     = reaper.MIDI_GetProjQNFromPPQPos(take, self:length())
+  local startTime = reaper.TimeMap2_QNToTime(0, originQN)
+  local endTime   = reaper.TimeMap2_QNToTime(0, endQN)
+  local baseppq   = reaper.MIDI_GetPPQPosFromProjTime(take, startTime)
 
   local result = {}
   local count = reaper.CountTempoTimeSigMarkers(0)
 
-  -- Scan for the last time-sig marker at or before take start; fall back to
+  -- Scan for the last time-sig marker at or before the source origin; fall back to
   -- TimeMap_GetTimeSigAtTime if none precedes it (covers takes at project start).
   local initNum, initDenom
   for i = 0, count - 1 do

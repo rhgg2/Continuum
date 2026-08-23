@@ -58,6 +58,7 @@ local specs = {
   'mm_unified_spec',
   'mm_wide_cc_spec',
   'mm_take_validity_spec',
+  'mm_take_window_spec',
   'mm_blob_parse_spec',
   'mm_blob_serialise_spec',
   'mm_blob_wide_spec',
