@@ -1,6 +1,7 @@
 # Palette verbs — prune and tidy
 
-> opened: 2026-08-23 · status: working design; not started
+> opened: 2026-08-23 · status: in flight — plan/palette-verbs.md, at
+> phase 1 (prune)
 
 **The arrange palette's buttons: prune drops every slot with no live
 instance, and tidy re-groups the track's slot names into families.**

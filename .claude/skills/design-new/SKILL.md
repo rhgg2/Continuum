@@ -88,7 +88,7 @@ The skeleton becomes markdown thusly:
 deliberately unsettled, and whose settlement would advance the doc.
 
 Stage the doc as one `apply_patches` call, then apply the `/refining`
-skill and the `/surveying` skill.
+skill.
 
-**Done when** surveying's findings have been agreed and landed. Point
+**Done when** refining's findings have been agreed and landed. Point
 at `/mature` for the first round of advance.
