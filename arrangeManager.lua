@@ -951,6 +951,43 @@ function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   return slotIdx, take
 end
 
+----- Variants
+
+-- A variant's family is its name: `<root> (var N)`, shared root, own ordinal.
+-- See docs/arrangeManager.md § Variants.
+local VARIANT = '^(.-)%s*%(var (%d+)%)$'
+
+-- Next name in the family: the highest ordinal in use plus one, so a deleted
+-- variant keeps its name out of circulation.
+local function nextVariantName(trackIdx, name)
+  local root    = name:match(VARIANT) or name
+  local highest = 0
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    local slotRoot, ordinal = slot.name:match(VARIANT)
+    if slotRoot == root and tonumber(ordinal) > highest then highest = tonumber(ordinal) end
+  end
+  return ('%s (var %d)'):format(root, highest + 1)
+end
+
+local function liveInstances(trackIdx, slotIdx)
+  local n = 0
+  for _, other in ipairs(am:tracksTakes(trackIdx)) do
+    if other.slotIdx == slotIdx then n = n + 1 end
+  end
+  return n
+end
+
+--contract: (slotIdx, take) for a variant slot in take's place; nil iff non-MIDI or lone instance
+function am:vary(take)
+  if take.kind ~= 'midi' then return end
+  if liveInstances(take.trackIdx, take.slotIdx) < 2 then return end
+  local trackIdx, startQN = take.trackIdx, take.startQN
+  local slotIdx = am:mintParkedTake(trackIdx, nextVariantName(trackIdx, take.name), nil, take.take)
+  if not slotIdx then return end
+  am:deleteTake(take)
+  return slotIdx, am:dropInstance(trackIdx, slotIdx, startQN)
+end
+
 ----- Per-take edits
 
 --contract: QN from startQN to the next take start on trackIdx; math.huge with nothing downstream

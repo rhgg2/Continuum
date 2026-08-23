@@ -347,6 +347,40 @@ At most one instance can contain a position. A pool never spans tracks
 track, and relayout caps each item at the gap to its neighbour, so items
 on a track never overlap.
 
+## Variants
+
+1. A **variant slot** is a slot minted from one instance of another
+   slot, carrying a copy of that source's events and pool metadata and
+   standing in the instance's place. `am:vary(take)` mints it, deletes
+   the instance and drops the variant at the vacated start QN,
+   returning `(slotIdx, take)`. An edit then reaches that placement
+   alone, and the original slot keeps its other instances.
+
+1. The **family** is a slot's name and nothing else records it: the
+   slots on a track whose names share a **root**, the name with a
+   trailing ` (var N)` removed. A stored parent link would say one
+   thing while the palette showed another the moment a take was renamed
+   in REAPER, and the name is already the only place a slot's name
+   lives (§ Renaming and name drift).
+
+1. A variant's ordinal is the family's highest plus one, so a deleted
+   variant keeps its name out of circulation. The scan covers parked
+   slots too, since a parked variant still holds its number. A variant
+   of a variant joins the same family — varying `Bassline (var 1)`
+   gives `Bassline (var 3)` where `(var 2)` stands — since the
+   departures from an idea are a list and not a tree.
+
+1. `am:vary` refuses on a slot with fewer than two live instances on
+   the track. Nothing propagates from a lone instance, so the fork
+   would leave a source nothing else shares. The rule also keeps the
+   delete plain: the slot has a sibling, so the item goes rather than
+   parking (§ Parking).
+
+1. The variant is minted parked, and `dropInstance` moves its keeper
+   onto the grid. The drop names no length, so the keeper carries the
+   source's natural length, and relayout caps it at the neighbour just
+   as it capped the instance replaced.
+
 ## Transport
 
 `am` is where the stack meets REAPER's transport, all of it in QN: the

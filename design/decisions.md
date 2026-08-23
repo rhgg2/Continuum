@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — am:vary drops its variant naming no length, so the parked keeper's own length —
+  the source's natural length — carries, and relayout caps it at the neighbour. The alternative was
+  to replay the replaced instance's rendered length, which would have made the variant born
+  pre-truncated rather than cut short by the same neighbour that cut its parent. See
+  docs/arrangeManager.md § Variants.
+
 - **2026-08-23** — A variant slot's family is its name and nothing else records it: the slots on a
   track whose names share a root, the name with any bracketed ordinal removed. A stored parent link
   on the pool would say one thing while the palette showed another as soon as a take was renamed in

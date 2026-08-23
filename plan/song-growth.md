@@ -27,23 +27,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 am: vary replaces an instance with one of a fresh variant slot (§ vary)
 - 2026-08-23 tracker: duplicate below appends another instance of the bound slot (§ Duplicate below)
 - 2026-08-23 tracker: the new take places at the append point (§ The append point)
 - 2026-08-23 am: append at the rendered end, park for want of room (§ The append point)
-- 2026-08-22 tracker: draw the cut where the rendered span stops short (§ What the grid draws)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- `am:vary(take)` replaces the instance with one of a fresh variant slot:
-  read the track, start QN and source; mint through `mintParkedTake` at
-  `<root> (var N)`, N the family's highest ordinal plus one; delete the
-  instance; drop the variant at the start QN. Returns `(slotIdx, take)`,
-  nil for non-MIDI or a slot with one live instance. Gathers before it
-  mutates. `am_spec`.
 - A rename edits the root: `am:renameSlot` rewrites the root across every
   slot on the track sharing it, each keeping its own ordinal, when the
   submitted ordinal matches the slot's own; a changed ordinal renames that

@@ -734,6 +734,62 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- vary
+  --------------------------------------------------------------------
+  {
+    name = 'vary replaces the instance with one of a fresh variant slot',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      local src = am:tracksTakes(0)[2]
+      t.seedMeta(src.take, 1, { detune = -50 })
+      local slotIdx, take = am:vary(src)
+      t.truthy(slotIdx, 'a variant slot was minted')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'the instance was replaced, not added to')
+      local below
+      for _, tk in ipairs(takes) do if tk.startQN == 4 then below = tk end end
+      t.truthy(below, 'a take still stands at the start QN')
+      t.eq(below.take, take, 'the returned take is the one on the grid')
+      t.eq(below.slotIdx, slotIdx, 'it is an instance of the variant slot')
+      t.eq(below.name, 'Bassline (var 1)', 'named from the parent root')
+      t.eq(below.lengthQN, 4, 'the variant carries the source length')
+      t.eq(#am:trackSlots(0), 2, 'the parent slot survives with its other instance')
+      t.eq(t.loadMeta(below.take)[1].detune, -50, 'the fresh pool forked the metadata')
+    end,
+  },
+
+  {
+    name = 'vary numbers from the family high-water mark; a variant of a variant joins the family',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline (var 3)' } } },
+      })
+      local src = am:tracksTakes(0)[2]
+      local _, take = am:vary(src)
+      t.eq(am:findTake(take).name, 'Bassline (var 4)', 'one past the family high-water mark')
+    end,
+  },
+
+  {
+    name = 'vary refuses on a slot with a single instance',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      t.eq(am:vary(am:tracksTakes(0)[1]), nil, 'nothing to diverge from')
+      t.eq(#am:trackSlots(0), 1, 'no slot minted')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Boot cursor
   --------------------------------------------------------------------
   {
