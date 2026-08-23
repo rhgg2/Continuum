@@ -334,14 +334,23 @@ local function duplicateUnpooledSelectedBelow()
   tracker().openTakeProperties(reaper.GetMediaItemTake_Item(newTake), { focusName = true })
 end
 
---invariant: drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.
---invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the advance step.
+--invariant: drop0..dropZ place a fresh instance at the cursor and advance the caret past it.
+--invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the step; arrangeAdvanceMode (Ctrl-`) picks it.
 --invariant: drop on an empty slot is a no-op; new takes inherit the slot's instance length.
 --invariant: drop over a take starting at the cursor overwrites it; drops never stack.
 local function dropAt(slotIdx)
-  if am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow)) then
+  local placed = am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow))
+  if not placed then return end
+  if cm:get('arrangeAdvanceByLength') then
+    advanceCursorPastNewTake(placed)
+  else
     moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
   end
+end
+
+-- The fixed step stands behind the toggle, so Ctrl-` reads back as whatever Ctrl+digit last set.
+local function toggleAdvanceByLength()
+  cm:set('project', 'arrangeAdvanceByLength', not cm:get('arrangeAdvanceByLength'))
 end
 
 local function deleteSelectedAndAdvance()
@@ -805,6 +814,7 @@ arrange:registerAll {
   arrangePrevVariant            = { function() stepVariantOfSelected(-1) end, 'Previous variant' },
   arrangeNextVariant            = { function() stepVariantOfSelected( 1) end, 'Next variant' },
   arrangeReplaceMode            = toggleReplaceMode,
+  arrangeAdvanceMode            = toggleAdvanceByLength,
   arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },
   arrangeSetLoopStart           = { setLoopStartHere,               'Set loop start at cursor' },
   arrangeSetLoopEnd             = { setLoopEndHere,                 'Set loop end at cursor' },

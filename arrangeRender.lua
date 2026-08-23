@@ -848,10 +848,13 @@ end
 
 function ar:renderStatusBar(_)
   if not ctx then return end
+  -- Length mode names the step it stands in front of, so Ctrl+digit reads back while armed.
+  local step    = cm:get('arrangeAdvanceBy')
+  local advance = cm:get('arrangeAdvanceByLength')
+                  and string.format('take length or %d', step) or tostring(step)
   ImGui.Text(ctx, string.format(
-    'arrange | row %d  col %d  | %g beats/row | Advance: %d%s',
-    av:cursorRow(), av:cursorCol(), av:beatPerRow(),
-    cm:get('arrangeAdvanceBy'),
+    'arrange | row %d  col %d  | %g beats/row | Advance: %s%s',
+    av:cursorRow(), av:cursorCol(), av:beatPerRow(), advance,
     av:replaceArmed() and '  | REPLACE' or ''))
 end
 

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Ctrl-` toggles arrange's drop advance between arrangeAdvanceBy rows and the
+  length of the take just placed, so a run of drop keys lays takes end to end whatever their
+  lengths. The length read is the clipped one: relayout truncates a placement at its downstream
+  neighbour, and the caret belongs where the take stops sounding. The fixed step stands behind the
+  toggle rather than being replaced, so Ctrl+digit stays live while the mode is armed and the status
+  line shows both.
+
 - **2026-08-23** — The tracker's unpooled duplicate retires. duplicateBelow followed by vary gives
   the same fork, with a placement to hold it and a name taken from the parent slot, so the tracker
   no longer mints a parked clone of its own. Arrange keeps its unpooled duplicate, which is the way

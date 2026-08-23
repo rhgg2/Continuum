@@ -174,6 +174,7 @@ local arrange = {
   arrangeDuplicateUnpooledBelow = { { ImGui.Key_Enter,      ImGui.Mod_Super, ImGui.Mod_Shift } },
   -- Shadows the global universal-argument prefix, which no arrange command reads.
   arrangeReplaceMode            = { { ImGui.Key_U,          ImGui.Mod_Super } },
+  arrangeAdvanceMode            = { { ImGui.Key_GraveAccent, ImGui.Mod_Ctrl } },
   arrangeSetLoopStart           = { { ImGui.Key_B,          ImGui.Mod_Super } },
   arrangeSetLoopEnd             = { { ImGui.Key_E,          ImGui.Mod_Super } },
   arrangeLoopToItem             = { { ImGui.Key_L,          ImGui.Mod_Super } },

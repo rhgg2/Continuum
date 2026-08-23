@@ -777,6 +777,60 @@ return {
     end,
   },
 
+  -- Advance mode (Ctrl-`): the drop advance reads as the take's own length
+  -- rather than arrangeAdvanceBy rows.
+  {
+    name = 'with advance-by-length armed, a drop advances by the take it placed',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 8, len = 3 },   -- slot 0, three rows long
+      })
+      h.cm:set('project', 'arrangeAdvanceBy', 1)
+      am:tracksTakes(0)                  -- materialise the pool into its slot
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeAdvanceMode')
+      h.cmgr:invoke('drop0')
+      t.eq(av:cursorRow(), 3, 'the caret sits on the end edge of what it placed, not one row down')
+    end,
+  },
+
+  {
+    name = 'advance-by-length reads the clipped length, not the slot length',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 8, len = 3 },   -- slot 0, three rows long
+        { track = 'tr1', name = 'b', pos = 2, len = 1 },   -- truncates the drop at row 2
+      })
+      am:tracksTakes(0)
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeAdvanceMode')
+      h.cmgr:invoke('drop0')
+      t.eq(av:cursorRow(), 2, 'the caret stopped where the neighbour cut the placement short')
+    end,
+  },
+
+  {
+    name = 'a second Ctrl-` puts the drop advance back on arrangeAdvanceBy',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 8, len = 3 },
+      })
+      h.cm:set('project', 'arrangeAdvanceBy', 2)
+      am:tracksTakes(0)
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeAdvanceMode')
+      h.cmgr:invoke('arrangeAdvanceMode')
+      h.cmgr:invoke('drop0')
+      t.eq(av:cursorRow(), 2, 'back to the fixed step')
+    end,
+  },
+
   {
     name = 'qnToRow / rowToQN are inverses through beatPerRow',
     run = function(harness)

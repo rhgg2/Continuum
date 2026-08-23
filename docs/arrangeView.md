@@ -63,11 +63,20 @@ block left standing somewhere off-screen. Shift+arrow is the exception,
 and builds the selection out of the caret's own travel.
 
 The caret also moves as part of an edit: nudge and shrink follow the
-take, a drop advances past what it placed, duplicate lands on the copy.
+take, a drop advances the caret, duplicate lands on the copy.
 Those moves keep the selection, and go through `moveCursorBy` rather
 than the `navCursorTo` the nav commands use. They are consequences of
 an edit, not navigation, and clearing there would undo the focus the
 unpooled duplicate has just set.
+
+Ctrl-` picks between the two readings of that drop advance. The
+default is a fixed step of `arrangeAdvanceBy` rows, set by Ctrl+digit;
+armed, the caret advances by the length of the take that just landed,
+so a run of drop keys lays takes end to end whatever their lengths.
+That length is the clipped one — a take truncated by its downstream
+neighbour advances the caret only as far as it sounds. The fixed step
+survives the toggle, so Ctrl+digit still sets what the caret goes back
+to.
 
 The pooled duplicate (Ctrl-D, Alt+Shift+↓) ends with nothing selected:
 the copy lands, the selection clears, and the caret advances onto the
