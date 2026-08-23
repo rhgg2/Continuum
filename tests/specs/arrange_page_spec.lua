@@ -677,7 +677,7 @@ return {
   },
 
   {
-    name = 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s natural end',
+    name = 'arrangeDuplicateBelow drops a pooled clone at the focused take\'s append point',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -692,18 +692,18 @@ return {
       local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'pooled clone added below')
-      t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
+      t.eq(takes[2].startQN, 2, 'clone starts where the source take\'s render ends')
     end,
   },
 
   {
-    name = 'arrangeDuplicateBelow is silent on start-collision and on audio takes',
+    name = 'arrangeDuplicateBelow is silent for want of room and on audio takes',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
-      -- A flush downstream neighbour shares the natural-end QN — the dup
-      -- would collide and is refused silently.
+      -- A flush downstream neighbour starts on the append point — no free
+      -- span at all, so the dup is refused silently.
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
       h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
@@ -714,7 +714,7 @@ return {
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDuplicateBelow')
       local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
-      t.eq(#am:tracksTakes(0), 2, 'no clone added — destination collided')
+      t.eq(#am:tracksTakes(0), 2, 'no clone added — no room at the append point')
     end,
   },
 
@@ -734,9 +734,34 @@ return {
       local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'fresh clone added below')
-      t.eq(takes[2].startQN, 2, 'clone starts at the source take\'s natural end')
+      t.eq(takes[2].startQN, 2, 'clone starts where the source take\'s render ends')
       t.truthy(captured.props, 'take properties opened on the new item')
       t.truthy(captured.props ~= takes[1].item, 'auto-open targets the new take, not the source')
+    end,
+  },
+
+  {
+    name = 'arrangeDuplicateUnpooledBelow parks the clone for want of room, and still names it',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 2, len = 1, srcLen = 1, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('arrangeDuplicateUnpooledBelow')
+      local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'nothing added to the grid')
+      t.eq(#am:trackSlots(0), 3, 'the palette grew all the same')
+      t.truthy(captured.props, 'take properties opened on the parked clone')
+      t.truthy(captured.props ~= takes[1].item and captured.props ~= takes[2].item,
+               'and on neither of the takes already on the grid')
     end,
   },
 

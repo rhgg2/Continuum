@@ -873,42 +873,54 @@ function am:duplicateTake(take, qnPos)
   return copy
 end
 
--- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
--- drops past its downstream neighbour; relayout handles the symmetric truncation.
-local function destBelow(take) return take.startQN + take.naturalLenQN end
+-- Where a take appends: its rendered end, so a copy starts where the sound stops rather than
+-- where the intent does. See docs/arrangeManager.md § The append point.
+local function appendPoint(take) return take.startQN + take.lengthQN end
 
---contract: pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-function am:duplicateBelow(take)
-  if take.kind ~= 'midi' then return end
-  local destQN = destBelow(take)
-  if not am:startIsClear(take.trackIdx, destQN) then return end
-  return am:duplicateTake(take, destQN)
+-- A copy has to fit whole: a shorter free span renders it truncated by its neighbour, which
+-- is a different sound from the one being copied.
+local function roomBelow(take)
+  return am:freeSpan(take.trackIdx, appendPoint(take)) >= take.naturalLenQN
 end
 
---contract: unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
+-- An unpooled clone's fresh pool takes its slot at the next build, so the slot is read back
+-- off the placed take rather than allocated here.
+local function slotOfPlacedTake(trackIdx, take)
+  for _, other in ipairs(am:tracksTakes(trackIdx)) do
+    if other.take == take then return other.slotIdx end
+  end
+end
+
+--contract: pooled clone at the append point; nil iff non-MIDI or the free span falls short.
+function am:duplicateBelow(take)
+  if take.kind ~= 'midi' then return end
+  if not roomBelow(take) then return end
+  return am:duplicateTake(take, appendPoint(take))
+end
+
+--contract: (slotIdx, take) for an unpooled clone at the append point; nil iff non-MIDI/no slot.
+--invariant: parks the clone on scratch for want of room -- the palette grows either way.
 function am:duplicateUnpooledBelow(take)
   if take.kind ~= 'midi' then return end
-  local destQN = destBelow(take)
-  if not am:startIsClear(take.trackIdx, destQN) then return end
+  if not roomBelow(take) then return am:mintParkedTake(take.trackIdx, '', nil, take.take) end
   local track = visibleTrackOfCol(take.trackIdx)
-  local newTake = cloneMidiItem(track, take.item, destQN, take.naturalLenQN, true)
+  local newTake = cloneMidiItem(track, take.item, appendPoint(take), take.naturalLenQN, true)
   if not newTake then return end
   setTakeName(newTake, take.name)
   stampForTake(newTake)
   relayoutTrack(track)
-  return newTake
+  return slotOfPlacedTake(take.trackIdx, newTake), newTake
 end
 
---contract: empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
+--contract: (slotIdx, take) for an empty naturalLenQN take at the append point; nil iff non-MIDI
+--invariant: parks the take on scratch for want of room -- the palette grows either way.
 function am:newTakeBelow(take)
   if take.kind ~= 'midi' then return end
-  local destQN = destBelow(take)
-  if not am:startIsClear(take.trackIdx, destQN) then return end
-  local _, newTake = am:createAndDropMidi(take.trackIdx, destQN, take.naturalLenQN, '')
-  return newTake
+  if not roomBelow(take) then return am:mintParkedTake(take.trackIdx, '', take.naturalLenQN) end
+  return am:createAndDropMidi(take.trackIdx, appendPoint(take), take.naturalLenQN, '')
 end
 
---contract: mints a slot on trackIdx parked on scratch; returns slotIdx (nil if no track/free slot)
+--contract: mints a slot on trackIdx parked on scratch; (slotIdx, take), nil if no track/free slot
 -- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
 function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   local track   = visibleTrackOfCol(trackIdx)
@@ -935,10 +947,19 @@ function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   setTakeName(take, name)
   stampForTake(take)
   invalidate()                  -- the slot palette cache must see the new parked slot at once
-  return slotIdx
+  return slotIdx, take
 end
 
 ----- Per-take edits
+
+--contract: QN from startQN to the next take start on trackIdx; math.huge with nothing downstream
+function am:freeSpan(trackIdx, startQN)
+  local nextStart = math.huge
+  for _, other in ipairs(am:tracksTakes(trackIdx)) do
+    if other.startQN >= startQN and other.startQN < nextStart then nextStart = other.startQN end
+  end
+  return nextStart - startQN
+end
 
 --contract: true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
 function am:startIsClear(trackIdx, startQN, exceptItem)

@@ -255,7 +255,7 @@ materialised from pre-existing REAPER items remain droppable.
 unclamped — they pass the requested QN straight to REAPER without
 checking for overlap or snapping to grid. Overlap prevention, grid
 snap, and the minimum-length floor are owned by the caller.
-`freeSpan` and `rangeIsClear` are the reads a caller consults to
+`am:freeSpan` and `am:startIsClear` are the reads a caller consults to
 decide what placement is legal before invoking a mutator. Abutting
 items are legal under the half-open ranges used throughout.
 
@@ -296,6 +296,34 @@ the tracker draws rows the song never reaches. Natural length makes the
 cut ordinary rather than exceptional, since growing a take past its
 neighbour stores intent that takes effect when the neighbour moves
 away, and takes appended one after another meet it often.
+
+## The append point
+
+The **append point** of a placement is its rendered end. A copy
+appended there starts where the sound stops, not where the intent does,
+so a take cut short by its neighbour appends at the cut.
+
+A verb appending there needs the **free span** from it to cover the
+take's natural length. `am:freeSpan(trackIdx, startQN)` gives that span
+— the gap up to the next take's start, unbounded past the last. A
+shorter gap would render the copy truncated by its neighbour, which is
+a different sound from the one being copied, and pushing the rest of
+the track down to make room is a larger change than these verbs carry.
+
+With no room, what the verb does next turns on what it creates.
+`newTakeBelow` and `duplicateUnpooledBelow` mint a slot, so they park it
+(§ Parking): the item goes to the scratch track and the palette entry
+stands without a placement.
+
+`duplicateBelow` places another instance of a slot that already has one,
+so it refuses. A parked sibling would show nothing, since the palette
+already carries the slot, and it would leave the pool with an item on
+scratch that was never a keeper. The palette can therefore always grow,
+while the song grows where there is room.
+
+The two minting verbs return `(slotIdx, take)`, as `createAndDropMidi`
+and `mintParkedTake` do. Which of the two happened is not a third
+return: `am:isParkedTake` reads it off the take.
 
 ## Instances of a slot
 

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — The two minting below-verbs return (slotIdx, take), the shape createAndDropMidi
+  and mintParkedTake already answer in, over a third return saying whether the take parked;
+  am:isParkedTake reads that off the take. Arrange's unpooled duplicate opens take-properties
+  whether the clone placed or parked, since the name prompt is the point of the command; only the
+  focus move and the cursor advance need the clone on the grid.
+
 - **2026-08-23** — The takeId memo lives one build, dropped by invalidate(), rather than being keyed
   weakly per take. REAPER hands out take pointers as light userdata, which Lua never collects, so
   the weak table dropped nothing: a recycled pointer answered with the dead take's pool guid, and a

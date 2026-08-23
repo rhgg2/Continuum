@@ -77,6 +77,12 @@ a wheel-pan can strand it there), there is no target and the command
 no-ops. Boot lands the cursor on REAPER's selected item but selects
 nothing (`seedCursor`).
 
+The unpooled duplicate always ends in the name prompt. Where the free
+span at the append point falls short the clone parks on the scratch
+track (`docs/arrangeManager.md` § The append point), and take-properties
+opens on the parked item; only the focus move and the cursor advance
+need it on the grid.
+
 Single-take commands — dive, take-properties, duplicate-below — go
 through `singleTarget` and no-op unless exactly one take is targeted:
 you can't dive into five takes, and a duplicate has one copy to advance

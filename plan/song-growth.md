@@ -26,10 +26,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 am: append at the rendered end, park for want of room (§ The append point)
 - 2026-08-22 tracker: draw the cut where the rendered span stops short (§ What the grid draws)
 - 2026-08-22 tracker: draw the play row, dimmed for a sibling instance (§ What the grid draws)
 - 2026-08-22 tracker, arrange: loop to item as a pressed verb (§ Loop to item)
-- 2026-08-22 tracker: surface loop to item as a toggle command and checkbox (§ Loop to item)
 
 ## Now
 
@@ -37,13 +37,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The append point, and parking for want of room** — `am` gains the append
-   point (a placement's rendered end) and the free-span test (the gap from it
-   covers the take's natural length). `duplicateBelow` refuses where the test
-   fails; `newTakeBelow` and `duplicateUnpooledBelow` fall back to
-   `mintParkedTake`. Rewrites the below-trio cases in `am_spec`, among them
-   'duplicateBelow lands past a truncating downstream neighbour', which flips
-   to a refusal.
 1. **The tracker's new take places** — the name-and-length modal routes
    through the am verb at the current instance's append point, parks only for
    want of room, selects the slot either way, and names a placed instance as

@@ -301,7 +301,7 @@ local function selectedTakeProperties()
   if take and take.kind == 'midi' then tracker().openTakeProperties(take.item) end
 end
 
---invariant: duplicateBelow: single-target clone at natural end; focus+cursor advance. MIDI-only.
+--invariant: duplicateBelow: single-target MIDI clone at the append point; focus+cursor advance.
 local function duplicateSelectedBelow()
   local take = singleTarget()
   if not take then return end
@@ -312,15 +312,18 @@ local function duplicateSelectedBelow()
   end
 end
 
+-- The clone parks for want of room, and take-props opens on it either way: the name prompt
+-- is the point of the command. Only focus and the cursor advance need it on the grid.
 local function duplicateUnpooledSelectedBelow()
   local take = singleTarget()
   if not take then return end
-  local newTake = am:duplicateUnpooledBelow(take)
-  if newTake then
+  local _, newTake = am:duplicateUnpooledBelow(take)
+  if not newTake then return end
+  if not am:isParkedTake(newTake) then
     av:setFocus(newTake)
     advanceCursorPastNewTake(newTake)
-    tracker().openTakeProperties(reaper.GetMediaItemTake_Item(newTake), { focusName = true })
   end
+  tracker().openTakeProperties(reaper.GetMediaItemTake_Item(newTake), { focusName = true })
 end
 
 --invariant: drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.
