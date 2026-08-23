@@ -310,6 +310,32 @@ return {
     end,
   },
 
+  {
+    name = 'pruneSlots forever-deletes every parked slot, MIDI and audio alike',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi',  pos = 0, poolGuid = '{p1}', takeName = 'lead' },
+                    { kind = 'midi',  pos = 4, poolGuid = '{p2}', takeName = 'sketch' },
+                    { kind = 'audio', pos = 8, len = 2, srcFile = '/a.wav', takeName = 'kick' } } },
+      })
+      local function takeNamed(name)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.name == name then return tk end end
+      end
+      am:deleteTake(takeNamed('sketch'))
+      am:deleteTake(takeNamed('kick'))
+      t.eq(#am:trackSlots(0), 3, 'all three slots still stand, two of them parked')
+
+      t.eq(am:pruneSlots(0), 2, 'both parked slots went')
+      local slots = am:trackSlots(0)
+      t.eq(#slots, 1, 'the live slot alone remains')
+      t.eq(slots[1].id, '{p1}')
+      local _, scratchTrack = scratch.peek()
+      t.eq(scratchTrack and h.reaper.CountTrackMediaItems(scratchTrack) or 0, 0,
+           'both parked keepers were purged from scratch')
+    end,
+  },
+
   --------------------------------------------------------------------
   -- Placement
   --------------------------------------------------------------------

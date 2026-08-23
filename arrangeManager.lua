@@ -729,6 +729,18 @@ function am:deleteSlot(trackIdx, slotIdx)
   return removed
 end
 
+--contract: forever-deletes every parked slot on the track; returns how many went
+function am:pruneSlots(trackIdx)
+  local pruned = 0
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    if slot.parked then
+      am:deleteSlot(trackIdx, slot.idx)
+      pruned = pruned + 1
+    end
+  end
+  return pruned
+end
+
 ----- Placement
 
 -- REAPER keys undo bookkeeping by item GUID: a clone replaying srcItem's IGUID is
