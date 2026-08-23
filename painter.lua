@@ -22,6 +22,7 @@
 -- differ only in origin and scale.
 
 local ImGui = require 'imgui' '0.10'
+local util  = require 'util'
 
 local painter = {}
 
@@ -90,6 +91,129 @@ function painter.measureRotated(ctx, s, size)
   local tex = rotatedTex(ctx, s, size)
   if not tex then return nil end
   return tex.h / OVERSAMPLE, tex.w / OVERSAMPLE
+end
+
+----- Label wrapping
+
+local ELLIPSIS = '…'
+
+-- Split a word at CamelCase boundaries. Plugin and track names are ASCII in
+-- practice, so raw byte-class checks (no utf8) are sufficient.
+local function camelSplit(word)
+  local pieces, last = {}, 1
+  for i = 2, #word do
+    local prev, cur = word:byte(i - 1), word:byte(i)
+    if prev >= 97 and prev <= 122 and cur >= 65 and cur <= 90 then
+      util.add(pieces, word:sub(last, i - 1))
+      last = i
+    end
+  end
+  util.add(pieces, word:sub(last))
+  return pieces
+end
+
+-- Tokenise into atoms with per-pair separators: seps[k] joins atoms[k..k+1] when
+-- they share a line — ' ' between words, '' between CamelCase pieces, so a rejoined line has no added space.
+local function atomise(text)
+  local atoms, seps = {}, {}
+  for word in text:gmatch('%S+') do
+    local pieces = camelSplit(word)
+    for j, piece in ipairs(pieces) do
+      util.add(atoms, piece)
+      if #atoms > 1 then
+        seps[#atoms - 1] = (j == 1) and ' ' or ''
+      end
+    end
+  end
+  return atoms, seps
+end
+
+local function joinAtoms(atoms, seps, i, j)
+  local s = atoms[i]
+  for k = i + 1, j do s = s .. (seps[k - 1] or '') .. atoms[k] end
+  return s
+end
+
+-- Balanced break: a line costs the square of its slack, and the cheapest split
+-- wins, which also settles the line count — see docs/arrangePage.md § Grid is hand-drawn.
+--contract: nil when atoms can't fit — one wider than the box, or more lines needed than maxLines
+local function balancedLines(atoms, seps, maxW, maxLines, widthOf)
+  local n, memo = #atoms, {}
+  -- Cheapest setting of atoms i..n in at most `left` lines, with the atom that
+  -- ends the first of them; nil cost when no such setting exists.
+  local function best(i, left)
+    if i > n then return 0 end
+    if left == 0 then return nil end
+    local key = i * (maxLines + 1) + left
+    local hit = memo[key]
+    if hit then return hit.cost, hit.j end
+    local cost, endsAt
+    for j = i, n do
+      local slack = maxW - widthOf(joinAtoms(atoms, seps, i, j))
+      if slack < 0 then break end
+      local rest = best(j + 1, left - 1)
+      if rest and (not cost or rest + slack * slack < cost) then
+        cost, endsAt = rest + slack * slack, j
+      end
+    end
+    memo[key] = { cost = cost, j = endsAt }
+    return cost, endsAt
+  end
+
+  if not best(1, maxLines) then return nil end
+  local lines, i, left = {}, 1, maxLines
+  while i <= n do
+    local _, endsAt = best(i, left)
+    util.add(lines, joinAtoms(atoms, seps, i, endsAt))
+    i, left = endsAt + 1, left - 1
+  end
+  return lines
+end
+
+--contract: text as <=maxLines lines each <=maxW by widthOf, surplus ellipsised onto the last line
+--contract: widthOf measures in the font the caller draws in, or the lines overflow the fitted box
+function painter.wrapLines(text, maxW, maxLines, widthOf)
+  local atoms, seps = atomise(text)
+  if #atoms == 0 then return { '' } end
+
+  -- One line an atom is the finest split there is, so asking for more is moot.
+  local lines = balancedLines(atoms, seps, maxW, math.min(maxLines, #atoms), widthOf)
+  if lines then return lines end
+
+  -- Nothing fits: fill the first maxLines-1 lines greedily — balance is moot once
+  -- the tail's dropped — then pack what follows into the last line with a trailing ellipsis.
+  local function ellipsise(s)
+    for len = #s, 0, -1 do
+      local cand = s:sub(1, len) .. ELLIPSIS
+      if widthOf(cand) <= maxW then return cand end
+    end
+    return ELLIPSIS
+  end
+
+  local out, i = {}, 1
+  while #out < maxLines - 1 and i <= #atoms do
+    if widthOf(atoms[i]) > maxW then
+      util.add(out, ellipsise(atoms[i]))
+      i = i + 1
+    else
+      local j = i
+      while j < #atoms and widthOf(joinAtoms(atoms, seps, i, j + 1)) <= maxW do j = j + 1 end
+      util.add(out, joinAtoms(atoms, seps, i, j))
+      i = j + 1
+    end
+  end
+
+  -- An over-wide atom is ellipsised in place, so the fill can exhaust the atoms
+  -- before the last line: then there is no surplus and nothing to pack.
+  if i > #atoms then return out end
+
+  local packed
+  for k = i, #atoms do
+    local cand = joinAtoms(atoms, seps, i, k)
+    if widthOf(cand .. ELLIPSIS) <= maxW then packed = cand else break end
+  end
+  out[maxLines] = packed and (packed .. ELLIPSIS) or ellipsise(atoms[i])
+  return out
 end
 
 --contract: sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.

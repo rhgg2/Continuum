@@ -1,77 +1,106 @@
-@module painter  src=painter.lua  loc=313  mode=namespace  self=painter
+@module painter  src=painter.lua  loc=437  mode=namespace  self=painter
 
 # Invariants & contracts
-  @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.  @ 189
-  @contract  centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.  @ 226
-  @contract  x is the strip's horizontal centre, yBottom its bottom edge; size is screen px  @ 249
-  @contract  returns false (drawing nothing) when the LICE path is unavailable; callers fall back  @ 250
+  @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.  @ 313
+  @contract  centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.  @ 350
+  @contract  x is the strip's horizontal centre, yBottom its bottom edge; size is screen px  @ 373
+  @contract  returns false (drawing nothing) when the LICE path is unavailable; callers fall back  @ 374
 
 # Imports
   @const ImGui = 'imgui'  @ 24
+  @const util = 'util'  @ 25
 
 # Module-level constants
-  @const painter = {}  @ 26
-  @const OVERSAMPLE = 2  @ 32   -- rasterise at 2x, draw half-size: retina stays crisp
-  @const rotatedCache = {}  @ 34   -- size .. ':' .. text -> {img, w, h} | false: LICE path unavailable
-  @const GOLDEN = 0.6180339887498949  @ 268
+  @const painter = {}  @ 27
+  @const OVERSAMPLE = 2  @ 33   -- rasterise at 2x, draw half-size: retina stays crisp
+  @const rotatedCache = {}  @ 35   -- size .. ':' .. text -> {img, w, h} | false: LICE path unavailable
+  @const ELLIPSIS = '…'  @ 98
+  @const GOLDEN = 0.6180339887498949  @ 392
 
 # Private functions
   -- Rotated text
-  @fn rasteriseRotated(ctx, s, size)  @ 36-75
-  @fn rotatedTex(ctx, s, size)  @ 79-86
+  @fn rasteriseRotated(ctx, s, size)  @ 37-76
+  @fn rotatedTex(ctx, s, size)  @ 80-87
       -- pcall doubles as the js_ReaScriptAPI presence check; a failure caches
       -- false so callers fall back for good.
-  @fn gamma(x)  @ 270-275
-  @fn oklchToRgb(light, chroma, hueTurns)  @ 277-289
-  @fn hueRGB(idx, chroma, light)  @ 293-295
+  -- Label wrapping
+  @fn camelSplit(word)  @ 102-113
+      -- Split a word at CamelCase boundaries. Plugin and track names are ASCII in
+      -- practice, so raw byte-class checks (no utf8) are sufficient.
+  @fn atomise(text)  @ 117-129
+      -- Tokenise into atoms with per-pair separators: seps[k] joins atoms[k..k+1] when
+      -- they share a line — ' ' between words, '' between CamelCase pieces, so a rejoined line has no added space.
+  @fn joinAtoms(atoms, seps, i, j)  @ 131-135
+  @fn balancedLines(atoms, seps, maxW, maxLines, widthOf)  @ 140-171
+      -- Balanced break: a line costs the square of its slack, and the cheapest split
+      -- wins, which also settles the line count — see docs/arrangePage.md § Grid is hand-drawn.
+      @contract  nil when atoms can't fit — one wider than the box, or more lines needed than maxLines  @ 139
+  @fn gamma(x)  @ 394-399
+  @fn oklchToRgb(light, chroma, hueTurns)  @ 401-413
+  @fn hueRGB(idx, chroma, light)  @ 417-419
       -- Golden-ratio rotation throws adjacent indices to opposite sides of the
       -- wheel; light/chroma are held constant so the set stays perceptually even.
 
 # Public API (painter.*)
-  @api painter.measureRotated(ctx, s, size)  @ 89-93
-      @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable  @ 88
-  @api painter.new(ctx, chrome, transform, page)  @ 96-264
-      @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.  @ 95
-  @api painter.hue(idx, chroma, light, alpha)  @ 299-302
+  @api painter.measureRotated(ctx, s, size)  @ 90-94
+      @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable  @ 89
+  @api painter.wrapLines(text, maxW, maxLines, widthOf)  @ 175-217
+      @contract  text as <=maxLines lines each <=maxW by widthOf, surplus ellipsised onto the last line  @ 173
+      @contract  widthOf measures in the font the caller draws in, or the lines overflow the fitted box  @ 174
+  @api painter.new(ctx, chrome, transform, page)  @ 220-388
+      @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.  @ 219
+  @api painter.hue(idx, chroma, light, alpha)  @ 423-426
       -- The idx-th perceptually-even hue. chroma/light/alpha tone it.
-      @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.  @ 297
-  @api painter.hueNative(idx)  @ 305-311
-      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.  @ 304
+      @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.  @ 421
+  @api painter.hueNative(idx)  @ 429-435
+      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.  @ 428
 
 # Uses (outbound edges)
-  @use call    ImGui.Attach  @ rasteriseRotated:73
-  @use call    ImGui.CalcTextSize  @ new:240,242
-  @use call    ImGui.ColorConvertDouble4ToU32  @ hue:301
-  @use call    ImGui.CreateImageFromSize  @ rasteriseRotated:71
-  @use call    ImGui.DrawList_AddCircleFilled  @ new:192
-  @use call    ImGui.DrawList_AddImageQuad  @ new:257
-  @use call    ImGui.DrawList_AddLine  @ new:179
-  @use call    ImGui.DrawList_AddPolyline  @ new:203
-  @use call    ImGui.DrawList_AddRect  @ new:138
-  @use call    ImGui.DrawList_AddRectFilled  @ new:132,149,150,151,152,162
-  @use call    ImGui.DrawList_AddText  @ new:172
-  @use call    ImGui.DrawList_AddTextEx  @ new:170
-  @use call    ImGui.DrawList_AddTriangleFilled  @ new:186
-  @use call    ImGui.DrawList_PathArcTo  @ new:229
-  @use call    ImGui.DrawList_PathClear  @ new:219
-  @use call    ImGui.DrawList_PathLineTo  @ new:223
-  @use call    ImGui.DrawList_PathStroke  @ new:233
-  @use call    ImGui.DrawList_PopClipRect  @ new:214
-  @use call    ImGui.DrawList_PushClipRect  @ new:211
-  @use call    ImGui.GetWindowDrawList  @ new:102
-  @use call    ImGui.Image_SetPixels_Array  @ rasteriseRotated:72
-  @use call    ImGui.PopFont  @ new:243
-  @use call    ImGui.PushFont  @ new:241
+  @use call    ImGui.Attach  @ rasteriseRotated:74
+  @use call    ImGui.CalcTextSize  @ new:364,366
+  @use call    ImGui.ColorConvertDouble4ToU32  @ hue:425
+  @use call    ImGui.CreateImageFromSize  @ rasteriseRotated:72
+  @use call    ImGui.DrawList_AddCircleFilled  @ new:316
+  @use call    ImGui.DrawList_AddImageQuad  @ new:381
+  @use call    ImGui.DrawList_AddLine  @ new:303
+  @use call    ImGui.DrawList_AddPolyline  @ new:327
+  @use call    ImGui.DrawList_AddRect  @ new:262
+  @use call    ImGui.DrawList_AddRectFilled  @ new:256,273,274,275,276,286
+  @use call    ImGui.DrawList_AddText  @ new:296
+  @use call    ImGui.DrawList_AddTextEx  @ new:294
+  @use call    ImGui.DrawList_AddTriangleFilled  @ new:310
+  @use call    ImGui.DrawList_PathArcTo  @ new:353
+  @use call    ImGui.DrawList_PathClear  @ new:343
+  @use call    ImGui.DrawList_PathLineTo  @ new:347
+  @use call    ImGui.DrawList_PathStroke  @ new:357
+  @use call    ImGui.DrawList_PopClipRect  @ new:338
+  @use call    ImGui.DrawList_PushClipRect  @ new:335
+  @use call    ImGui.GetWindowDrawList  @ new:226
+  @use call    ImGui.Image_SetPixels_Array  @ rasteriseRotated:73
+  @use call    ImGui.PopFont  @ new:367
+  @use call    ImGui.PushFont  @ new:365
+  @use call    util.add  @ camelSplit:107,111 atomise:122 balancedLines:167 wrapLines:196,201
   @use require imgui  @ <load>:24
+  @use require util  @ <load>:25
 
 # Calls (intra-file)
-  @call gamma  @ oklchToRgb:286,287,288
-  @call hueRGB  @ hue:300 hueNative:306
-  @call oklchToRgb  @ hueRGB:294
-  @call rotatedTex  @ measureRotated:90 new:252
+  @call atomise  @ wrapLines:176
+  @call balancedLines  @ wrapLines:180
+  @call camelSplit  @ atomise:120
+  @call gamma  @ oklchToRgb:410,411,412
+  @call hueRGB  @ hue:424 hueNative:430
+  @call joinAtoms  @ balancedLines:152,167 wrapLines:200,201,212
+  @call oklchToRgb  @ hueRGB:418
+  @call rotatedTex  @ measureRotated:91 new:376
 
 # Bindings (by name)
-  @bind rasteriseRotated  @ rotatedTex:82
+  @bind rasteriseRotated  @ rotatedTex:83
+
+# Unresolved receivers
+  @drop s:sub  @ wrapLines:187
+  @drop text:gmatch  @ atomise:119
+  @drop word:byte  @ camelSplit:105
+  @drop word:sub  @ camelSplit:107,111
 
 # REAPER API surface
   @reaper JS_LICE_CreateBitmap, JS_GDI_CreateFont, JS_LICE_CreateFont, JS_LICE_SetFontFromGDI, JS_LICE_SetFontColor, JS_LICE_SetFontBkColor, JS_LICE_Clear, JS_LICE_DrawText, JS_LICE_GetPixel, JS_LICE_DestroyFont, JS_GDI_DeleteObject, JS_LICE_DestroyBitmap
@@ -80,51 +109,56 @@
   @reaper ColorToNative
 
 # Fields (r read / w write incl. constructor keys)
-  @field r DrawFlags_Closed  @ new:202
-  @field r DrawFlags_None  @ new:202,233
-  @field w border  @ new:144
-  @field w circle  @ new:190
-  @field r colour  @ new:103
-  @field w fill  @ new:129
-  @field w fromScreen  @ new:117
-  @field r h  @ measureRotated:92 new:255
-  @field w h  @ rasteriseRotated:74
-  @field w hue  @ hue:299
-  @field w hueNative  @ hueNative:305
-  @field r img  @ new:257
-  @field w img  @ rasteriseRotated:74
-  @field w line  @ new:176
-  @field w measure  @ new:239
-  @field w measureRotated  @ measureRotated:89
-  @field w new  @ new:96
-  @field r ox  @ new:99
-  @field w ox  @ new:116
-  @field r oy  @ new:99
-  @field w oy  @ new:116
-  @field w pathArcTo  @ new:227
-  @field w pathClear  @ new:219
-  @field w pathLineTo  @ new:221
-  @field w pathStroke  @ new:232
-  @field r pi  @ oklchToRgb:278
-  @field w polyline  @ new:197
-  @field w popClip  @ new:214
-  @field w pushClip  @ new:208
-  @field w segment  @ new:157
-  @field r snap  @ new:101
-  @field w stroke  @ new:135
-  @field r sx  @ new:100
-  @field w sx  @ new:116
-  @field r sy  @ new:100
-  @field w sy  @ new:116
-  @field w text  @ new:167
-  @field w textUp  @ new:251
-  @field w toScreen  @ new:117
-  @field w tri  @ new:182
-  @field r u32  @ new:125
-  @field w u32  @ hue:301
-  @field r w  @ measureRotated:92 new:255
-  @field w w  @ rasteriseRotated:74
-  @field r x0  @ new:130,136,145,209
-  @field r x1  @ new:131,137,146,210
-  @field r y0  @ new:130,136,145,209
-  @field r y1  @ new:131,137,146,210
+  @field r DrawFlags_Closed  @ new:326
+  @field r DrawFlags_None  @ new:326,357
+  @field w border  @ new:268
+  @field w circle  @ new:314
+  @field r colour  @ new:227
+  @field r cost  @ balancedLines:149
+  @field w cost  @ balancedLines:159
+  @field w fill  @ new:253
+  @field w fromScreen  @ new:241
+  @field r h  @ measureRotated:93 new:379
+  @field w h  @ rasteriseRotated:75
+  @field w hue  @ hue:423
+  @field w hueNative  @ hueNative:429
+  @field r img  @ new:381
+  @field w img  @ rasteriseRotated:75
+  @field r j  @ balancedLines:149
+  @field w j  @ balancedLines:159
+  @field w line  @ new:300
+  @field w measure  @ new:363
+  @field w measureRotated  @ measureRotated:90
+  @field w new  @ new:220
+  @field r ox  @ new:223
+  @field w ox  @ new:240
+  @field r oy  @ new:223
+  @field w oy  @ new:240
+  @field w pathArcTo  @ new:351
+  @field w pathClear  @ new:343
+  @field w pathLineTo  @ new:345
+  @field w pathStroke  @ new:356
+  @field r pi  @ oklchToRgb:402
+  @field w polyline  @ new:321
+  @field w popClip  @ new:338
+  @field w pushClip  @ new:332
+  @field w segment  @ new:281
+  @field r snap  @ new:225
+  @field w stroke  @ new:259
+  @field r sx  @ new:224
+  @field w sx  @ new:240
+  @field r sy  @ new:224
+  @field w sy  @ new:240
+  @field w text  @ new:291
+  @field w textUp  @ new:375
+  @field w toScreen  @ new:241
+  @field w tri  @ new:306
+  @field r u32  @ new:249
+  @field w u32  @ hue:425
+  @field r w  @ measureRotated:93 new:379
+  @field w w  @ rasteriseRotated:75
+  @field w wrapLines  @ wrapLines:175
+  @field r x0  @ new:254,260,269,333
+  @field r x1  @ new:255,261,270,334
+  @field r y0  @ new:254,260,269,333
+  @field r y1  @ new:255,261,270,334

@@ -172,39 +172,60 @@ end
 
 ----- Grid pane
 
--- Grid header geometry; must match chrome's palette-header HEADER_PAD/HEADER_GAP
--- so the grid and palette dividers line up across PANE_GAP.
+-- Grid header geometry; shares chrome's palette-header HEADER_PAD/HEADER_GAP.
 local HEADER_PAD = 8
 local HEADER_GAP = 4
+-- The band grows from one line to this many for a visible track's name; longer
+-- names ellipsise. The palette header stays one line, so a grown band leaves the dividers uneven.
+local HEADER_MAX_LINES = 3
 
 -- Snap a click's QN down to the top edge of the row box it sits in.
 local function floorTo(v, step) return math.floor(v / step) * step end
 
+-- A track's header label; an unnamed track reads as its 1-based number.
+local function trackLabel(tr, col)
+  return (tr and tr.name and tr.name ~= '') and tr.name
+         or string.format('Track %d', col + 1)
+end
+
 -- Shared (col,row)→screen transform for mouse pass and paint pass: both call gridGeom at the
 -- same layout-cursor position, so hit-test and draw resolve through one mapping.
-local function gridGeom(nTracks)
+local function gridGeom(tracks)
+  local nTracks        = #tracks
   local paneLeft, oy   = ImGui.GetCursorScreenPos(ctx)
   local ox             = paneLeft + LOOP_PAD
   local availW, availH = ImGui.GetContentRegionAvail(ctx)
   local rowH           = math.ceil(math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx)))
-  local headerH        = rowH + HEADER_PAD
-  local bodyTop        = oy + headerH + HEADER_GAP
-  local visRows        = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
   local sr, sc         = av:scroll()
   sr, sc               = sr or 0, sc or 0
   local bandLeft       = ox + QN_W + GUTTER_PAD   -- fixed: left edge of the scrolling column band
   local paneR          = paneLeft + availW
   local visCols        = math.max(1, math.floor((paneR - bandLeft) / TRACK_W))
+  local lastCol        = math.min(nTracks - 1, sc + visCols)
+
+  -- Header names wrap here, not at the draw, so the band's height and the lines it
+  -- holds come from one measurement; only visible columns count, so it settles back as a name scrolls out.
+  local function widthOf(s) return (ImGui.CalcTextSize(ctx, s)) end
+  local headerLabels, headerLines = {}, 1
+  for c = sc, lastCol do
+    headerLabels[c] = painter.wrapLines(trackLabel(tracks[c + 1], c), TRACK_W - 4,
+                                        HEADER_MAX_LINES, widthOf)
+    headerLines = math.max(headerLines, #headerLabels[c])
+  end
+
+  local headerH  = rowH * headerLines + HEADER_PAD
+  local bodyTop  = oy + headerH + HEADER_GAP
+  local visRows  = math.max(1, math.floor((oy + availH - bodyTop) / rowH))
   local pg = painter.new(ctx, chrome, {
     ox = bandLeft - sc * TRACK_W, oy = bodyTop - sr * rowH,
     sx = TRACK_W, sy = rowH, snap = true,
   }, 'arrange')
   return {
     pg = pg, paneLeft = paneLeft, ox = ox, oy = oy, availH = availH,
+    headerLabels = headerLabels, headerLines = headerLines,
     rowH = rowH, headerH = headerH, bodyTop = bodyTop,
     bodyBot = bodyTop + visRows * rowH, visRows = visRows, sr = sr,
-    sc = sc, visCols = visCols,
-    lastCol = math.min(nTracks - 1, sc + visCols),
+    sc = sc, visCols = visCols, lastCol = lastCol,
     gutterR = pg.ox + sc * TRACK_W,                        -- fixed gutter right / band left edge
     paneR   = paneR,
     gridR   = math.min(pg.ox + nTracks * TRACK_W, paneR),  -- visible right edge of the band
@@ -214,9 +235,10 @@ end
 
 -- Runs before renderGrid so in-flight drag/loop/create candidates are ready for the paint pass.
 -- Must run inside ##arrangeGrid so IsWindowHovered resolves correctly.
-local function handleGridMouse(nTracks)
-  local g  = gridGeom(nTracks)
-  local pg = g.pg
+local function handleGridMouse(tracks)
+  local g       = gridGeom(tracks)
+  local pg      = g.pg
+  local nTracks = #tracks
 
   av:setGridSize(g.visRows, g.visCols)
   av:setMaxCol(nTracks)
@@ -320,8 +342,8 @@ local function handleGridMouse(nTracks)
   return dragCand, loopCand, createCand, lassoCand
 end
 
-local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lassoCand)
-  local g  = gridGeom(nTracks)
+local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
+  local g  = gridGeom(tracks)
   local pg = g.pg
   local ps = painter.new(ctx, chrome, {}, 'arrange')   -- screen space: gutter, header, full-width rules
   local sr, rowH, visRows = g.sr, g.rowH, g.visRows
@@ -428,8 +450,8 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     local endRow   = av:qnToRow(startQN + lengthQN)
     if endRow <= sr or startRow >= sr + visRows then return end
     local rx0, rx1 = colX(tk.trackIdx), colX(tk.trackIdx + 1)
-    local ry0 = rowYs(math.max(startRow, sr))
-    local ry1 = rowYs(math.min(endRow, sr + visRows))
+    local visTop, visBot = math.max(startRow, sr), math.min(endRow, sr + visRows)
+    local ry0, ry1 = rowYs(visTop), rowYs(visBot)
     local fill   = slotFill(tk.colourIdx, focused)
     local border = blocked and 'arrange.blockedBorder' or 'arrange.itemBorder'
     ps.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
@@ -440,14 +462,17 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
       drawNotes(tk, rx0, rx1, ry0 + 1, ry1)
     end
     ps.border(rect(rx0, ry0, rx1 + 1, ry1 + 1), border)
+    -- Truncation indicator: downstream take cuts this one short. Show only when box > 1 row
+    -- so the ellipsis doesn't displace the name.
+    local truncated = lengthQN + 1e-6 < tk.naturalLenQN and endRow - startRow > 1
     if tk.name and tk.name ~= '' then
       util.add(nameDraws, {
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
+        -- Line budget in rows: the ellipsis owns the bottom one when truncated.
+        rows = math.floor(visBot - visTop) - (truncated and 1 or 0),
       })
     end
-    -- Truncation indicator: downstream take cuts this one short. Show only when box > 1 row
-    -- so the ellipsis doesn't displace the name.
-    if lengthQN + 1e-6 < tk.naturalLenQN and endRow - startRow > 1 then
+    if truncated then
       util.add(truncDraws, { rx0 = rx0, rx1 = rx1, ry1 = ry1 })
     end
   end
@@ -547,12 +572,16 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     end
   end
 
-  -- Take names — last, so they stay crisp over the cursor column wash.
+  -- Take names — last, so they stay crisp over the cursor column wash. A name wraps
+  -- to one line a grid row, as many as its box holds; the surplus ellipsises on the last line.
+  local function widthOf(s) return (ps.measure(s)) end
   for _, nd in ipairs(nameDraws) do
-    local tw = ps.measure(nd.name)
-    local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - tw) / 2)
+    local lines = painter.wrapLines(nd.name, nd.rx1 - nd.rx0 - 4, math.max(1, nd.rows), widthOf)
     ps.pushClip(rect(nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1))
-    ps.text(tx, nd.ry0 + 1, 'text', nd.name)
+    for i, line in ipairs(lines) do
+      local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - widthOf(line)) / 2)
+      ps.text(tx, nd.ry0 + 1 + (i - 1) * rowH, 'text', line)
+    end
     ps.popClip()
   end
 
@@ -590,17 +619,16 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     ps.text(ox + QN_W - tw - 4, rowYs(sr + r) + 2, 'text', label)
   end
 
-  -- Header track names at the bottom of the header band (HEADER_PAD reads as space above).
-  -- Clipped at cell edges so long names ellipsise rather than spill.
-  local headerTextY = oy + HEADER_PAD
+  -- Header track names sit at the bottom of the band (HEADER_PAD reads as space above),
+  -- so a name's last line rests on the divider; gridGeom sized the band to the tallest.
   for c = sc, lastCol do
-    local tr   = tracks[c + 1]
-    local name = (tr and tr.name and tr.name ~= '')
-                 and tr.name or string.format('Track %d', c + 1)
-    local tw   = ps.measure(name)
-    local lx   = colX(c) + math.floor((TRACK_W - tw) / 2)
+    local lines = g.headerLabels[c]
+    local yTop  = oy + g.headerH - rowH * #lines
     ps.pushClip(rect(colX(c) + 2, oy, colX(c + 1) - 2, oy + g.headerH))
-    ps.text(lx, headerTextY, 'text', name)
+    for i, line in ipairs(lines) do
+      local lx = colX(c) + math.floor((TRACK_W - ps.measure(line)) / 2)
+      ps.text(lx, yTop + (i - 1) * rowH, 'text', line)
+    end
     ps.popClip()
   end
 
@@ -802,8 +830,8 @@ function ar:renderBody(_, w, h, dispatch)
                       ImGui.WindowFlags_NoNav
                       | ImGui.WindowFlags_NoScrollWithMouse
                       | ImGui.WindowFlags_NoScrollbar) then
-    local dragCand, loopCand, createCand, lassoCand = handleGridMouse(nTracks)
-    renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lassoCand)
+    local dragCand, loopCand, createCand, lassoCand = handleGridMouse(tracks)
+    renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
   end
   ImGui.EndChild(ctx)
 

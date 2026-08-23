@@ -721,8 +721,8 @@ end
 
 ----- Palette pane (shared right-hand pane: arrange / wiring / tracker / sampler)
 
--- Pane geometry. HEADER_PAD/HEADER_GAP also size a flanking grid header (see
--- arrangeRender) so the grid and palette dividers line up across PANE_GAP.
+-- Pane geometry. HEADER_PAD/HEADER_GAP also size a flanking grid header (see arrangeRender)
+-- so the dividers line up — until arrange's band grows for a wrapped track name.
 local PALETTE_W, PANE_GAP    = 200, 11
 local HEADER_PAD, HEADER_GAP = 8, 4
 
@@ -730,7 +730,7 @@ local HEADER_PAD, HEADER_GAP = 8, 4
 function chrome.gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
 
 -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
--- with the flanking grid header so dividers align across PANE_GAP. Returns divider screen-y.
+-- with the flanking grid header. Returns divider screen-y.
 function chrome.paletteHeader(label)
   local p       = chrome.screenPainter()
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)

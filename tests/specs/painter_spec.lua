@@ -52,6 +52,10 @@ local chrome = { colour = function(name) return 'col:' .. name end }
 -- ox=100 oy=200 sx=2 sy=3 — distinct per axis so a swapped axis is caught.
 local function mk() return painter.new('CTX', chrome, { ox = 100, oy = 200, sx = 2, sy = 3 }) end
 
+-- Width model for the wrapLines cases: the stub's 7px-a-character metric,
+-- called directly so a case reads its budget off the character count.
+local function widthOf(s) return #s * 7 end
+
 local function last() return calls[#calls] end
 local function has(fn)
   for _, c in ipairs(calls) do if c.fn == fn then return true end end
@@ -228,6 +232,46 @@ return {
       t.eq(x, 1); t.eq(y, 2)
       local lx, ly = p.fromScreen(1, 2)
       t.eq(lx, 0.5); t.eq(ly, 2 / 3)
+    end,
+  },
+  {
+    name = 'wrapLines breaks on spaces and CamelCase, rejoining without a space at the case boundary',
+    run = function()
+      -- widthOf: 7px a character, so maxW = 70 fits ten characters a line.
+      t.deepEq(painter.wrapLines('one two three', 70, 3, widthOf), { 'one two', 'three' })
+      t.deepEq(painter.wrapLines('ReaEQBandPass', 70, 3, widthOf), { 'ReaEQBand', 'Pass' })
+    end,
+  },
+  {
+    name = 'wrapLines balances the lines rather than filling the first — no orphan tail',
+    run = function()
+      -- Greedy first-fit fits 'Bassline (var' on line one (13 chars, 91px <= 105)
+      -- and orphans '1)'; the balanced break splits at the bracket instead.
+      t.deepEq(painter.wrapLines('Bassline (var 1)', 105, 2, widthOf), { 'Bassline', '(var 1)' })
+    end,
+  },
+  {
+    name = 'wrapLines uses fewer lines than allowed when the text reads evenly on them',
+    run = function()
+      t.deepEq(painter.wrapLines('one two', 70, 4, widthOf), { 'one two' })
+      t.deepEq(painter.wrapLines('one two three', 70, 4, widthOf), { 'one two', 'three' })
+    end,
+  },
+  {
+    name = 'wrapLines packs the surplus into the last line with an ellipsis',
+    run = function()
+      local lines = painter.wrapLines('one two three four five', 70, 2, widthOf)
+      t.eq(#lines, 2)
+      t.eq(lines[1], 'one two')
+      t.eq(lines[2], 'three\u{2026}')
+    end,
+  },
+  {
+    name = 'wrapLines ellipsises a single atom too wide for the box; empty text is one empty line',
+    run = function()
+      -- widthOf counts bytes and the ellipsis is three of them, so seven letters fit.
+      t.deepEq(painter.wrapLines('unsplittable', 70, 2, widthOf), { 'unsplit\u{2026}' })
+      t.deepEq(painter.wrapLines('', 70, 2, widthOf), { '' })
     end,
   },
   {

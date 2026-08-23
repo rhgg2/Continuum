@@ -32,7 +32,6 @@ local NODE_H           = 55
 local CORNER_R         = 5
 local LABEL_PAD        = 4   -- inner horizontal padding for the wrapped name
 local LABEL_MAX_LINES  = 2
-local LABEL_ELLIPSIS   = '…'
 local PORT_SIZE        = 8
 local PORT_GAP         = 6
 local PORT_BAND_OFFSET = 4   -- gap between node edge and the hover-only port row
@@ -168,100 +167,17 @@ local function strokeNodeRect(p, r, name)
            name, SELECTED_STROKE, CORNER_R)
 end
 
--- Split a word at CamelCase boundaries. Plugin names are ASCII in practice,
--- so raw byte-class checks (no utf8) are sufficient.
-local function camelSplit(word)
-  local pieces, last = {}, 1
-  for i = 2, #word do
-    local prev, cur = word:byte(i - 1), word:byte(i)
-    if prev >= 97 and prev <= 122 and cur >= 65 and cur <= 90 then
-      util.add(pieces, word:sub(last, i - 1))
-      last = i
-    end
-  end
-  util.add(pieces, word:sub(last))
-  return pieces
-end
-
--- Tokenise into atoms with per-pair separators: seps[k] joins atoms[k..k+1]
--- when they share a line. ' ' between words, '' between CamelCase pieces of
--- one word, so a re-joined line has no space at the case boundary.
-local function atomise(text)
-  local atoms, seps = {}, {}
-  for word in text:gmatch('%S+') do
-    local pieces = camelSplit(word)
-    for j, piece in ipairs(pieces) do
-      util.add(atoms, piece)
-      if #atoms > 1 then
-        seps[#atoms - 1] = (j == 1) and ' ' or ''
-      end
-    end
-  end
-  return atoms, seps
-end
-
---contract: with no widthOf supplied, the caller must have pushed the measuring font.
-local function wrapLabel(text, maxW, widthOf)
-  widthOf = widthOf or function(s) return (ImGui.CalcTextSize(ctx, s)) end
-  local function ellipsise(s)
-    for n = #s, 0, -1 do
-      local cand = s:sub(1, n) .. LABEL_ELLIPSIS
-      if widthOf(cand) <= maxW then return cand end
-    end
-    return LABEL_ELLIPSIS
-  end
-
-  local atoms, seps = atomise(text)
-  if #atoms == 0 then return { '' } end
-
-  local lines, lineStart, cur = {}, {}, nil
-  for i, atom in ipairs(atoms) do
-    if widthOf(atom) > maxW then
-      if cur then util.add(lines, cur); cur = nil end
-      lineStart[#lines + 1] = i
-      util.add(lines, ellipsise(atom))
-    elseif cur == nil then
-      cur = atom
-      lineStart[#lines + 1] = i
-    else
-      local cand = cur .. (seps[i - 1] or '') .. atom
-      if widthOf(cand) <= maxW then
-        cur = cand
-      else
-        util.add(lines, cur)
-        cur = atom
-        lineStart[#lines + 1] = i
-      end
-    end
-  end
-  if cur then util.add(lines, cur) end
-
-  if #lines <= LABEL_MAX_LINES then return lines end
-
-  -- Overflow: keep the first LABEL_MAX_LINES-1 lines, pack the rest into
-  -- the final line with a trailing ellipsis.
-  local out = {}
-  for k = 1, LABEL_MAX_LINES - 1 do out[k] = lines[k] end
-  local startIdx, packed = lineStart[LABEL_MAX_LINES], nil
-  for i = startIdx, #atoms do
-    local sep = (i == startIdx) and '' or (seps[i - 1] or '')
-    local cand = packed and (packed .. sep .. atoms[i]) or atoms[i]
-    if widthOf(cand .. LABEL_ELLIPSIS) <= maxW then packed = cand else break end
-  end
-  out[LABEL_MAX_LINES] = packed and (packed .. LABEL_ELLIPSIS) or ellipsise(atoms[startIdx])
-  return out
-end
-
 local function drawNode(p, nv, isSelected)
   local r = nodeBox(nv)
   p.fill(r, 'wiring.node.' .. nv.category, CORNER_R)
   if isSelected then
     strokeNodeRect(p, r, 'wiring.node.selected')
   end
-  -- The wrapLabel / CalcTextSize measurements read the pushed font, so the
+  -- The wrapLines / CalcTextSize measurements read the pushed font, so the
   -- block push stays; the per-line draws inherit that current font.
   if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
-  local lines = wrapLabel(nv.label, NODE_W - 2 * LABEL_PAD)
+  local lines = painter.wrapLines(nv.label, NODE_W - 2 * LABEL_PAD, LABEL_MAX_LINES,
+                                  function(s) return (ImGui.CalcTextSize(ctx, s)) end)
   local lineH = select(2, ImGui.CalcTextSize(ctx, 'Mg'))
   local blockH = lineH * #lines
   local yTop = r.y0 + math.floor((NODE_H - blockH) / 2)
@@ -1236,7 +1152,7 @@ end
 -- for draw, wire-trim, and grab-hit. TAG_VIS_H trims ascent/descent so the box hugs the glyphs.
 local function sourceTagLayout(p, label)
   local function widthOf(s) return (p.measure(s, wireFont, WIRE_LABEL_SIZE)) end
-  local lines  = wrapLabel(label, TAG_MAX_W, widthOf)
+  local lines  = painter.wrapLines(label, TAG_MAX_W, LABEL_MAX_LINES, widthOf)
   local lineH  = select(2, p.measure('Mg', wireFont, WIRE_LABEL_SIZE))
   local maxW   = 0
   for _, ln in ipairs(lines) do maxW = math.max(maxW, widthOf(ln)) end

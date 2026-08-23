@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Wrapped labels break to balance the lines rather than fill them: a line costs the
+  square of its slack, and the cheapest split wins. Greedy first-fit orphaned the tail, breaking
+  "Bassline (var 1)" after the bracket; the squared cost also settles how many lines to use.
+  Arrange's header band grows from one line to three to fit the visible track names, while its
+  palette header stays at one — the two dividers no longer line up, but the palette reads the same
+  on every page.
+
 - **2026-08-23** — Arrange's pooled duplicate ends with nothing selected: the copy lands, the
   selection clears, and the caret advances onto it. Selecting the copy, as it did before, chained a
   run of presses only when the run started from the caret — a held selection pinned every press to

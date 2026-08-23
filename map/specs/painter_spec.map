@@ -1,6 +1,6 @@
-@spec painter_spec  src=tests/specs/painter_spec.lua  loc=248  cases=17
+@spec painter_spec  src=tests/specs/painter_spec.lua  loc=292  cases=22
 @exercises painter (painter)
-@surface   painter.new, painter.hue
+@surface   painter.new, painter.hue, painter.wrapLines
 
 # Intent
   painter: coordinate-parametrised, colour-disciplined drawlist binder.
@@ -12,31 +12,40 @@
   @fn rec(name)  @ 9-11
   @fn mk()  @ 53
       -- ox=100 oy=200 sx=2 sy=3 — distinct per axis so a swapped axis is caught.
-  @fn last()  @ 55
-  @fn has(fn)  @ 56-59
+  @fn widthOf(s)  @ 57
+      -- Width model for the wrapLines cases: the stub's 7px-a-character metric,
+      -- called directly so a case reads its budget off the character count.
+  @fn last()  @ 59
+  @fn has(fn)  @ 60-63
 
 # Cases
-  @case 'toScreen / fromScreen are inverse — one transform, no drift'  [pure]  @ 63-72
-  @case 'fill converts both corners, resolves colour by name, passes rounding'  [pure]  @ 75-81
-  @case 'stroke maps corners but leaves thickness / rounding in screen px'  [pure]  @ 84-90
-  @case 'line and tri convert every endpoint'  [pure]  @ 93-103
-  @case 'circle maps the centre but keeps the radius in screen px'  [pure]  @ 106-112
-  @case 'polyline converts every logical pair; closed sets the closed flag'  [pure]  @ 115-124
-  @case 'text without a font uses AddText at the mapped position'  [pure]  @ 127-133
-  @case 'text with a font uses AddTextEx and never pushes the font stack'  [pure]  @ 136-143
-  @case 'measure without a font reads CalcTextSize directly'  [pure]  @ 146-152
-  @case 'measure with a font brackets CalcTextSize in Push/PopFont'  [pure]  @ 155-165
-  @case 'a name routes through chrome; a token passes its packed colour straight through'  [pure]  @ 168-176
-  @case 'a bare int colour is rejected — the one way to bypass the palette'  [pure]  @ 179-186
-  @case 'painter.hue mints an opaque token; golden-ratio rotation makes adjacent indices distinct'  [pure]  @ 189-196
-  @case 'pushClip converts both corners; intersect defaults true, explicit false respected'  [pure]  @ 199-209
-  @case 'ox/oy round to whole pixels; sx/sy pass through unrounded'  [pure]  @ 212-220
-  @case 'snap rounds toScreen output for fractional logical coords; fromScreen stays exact'  [pure]  @ 223-231
-  @case 'path: points convert, arc keeps screen-px radius and raw angles, stroke resolves colour by name'  [pure]  @ 234-246
+  @case 'toScreen / fromScreen are inverse — one transform, no drift'  [pure]  @ 67-76
+  @case 'fill converts both corners, resolves colour by name, passes rounding'  [pure]  @ 79-85
+  @case 'stroke maps corners but leaves thickness / rounding in screen px'  [pure]  @ 88-94
+  @case 'line and tri convert every endpoint'  [pure]  @ 97-107
+  @case 'circle maps the centre but keeps the radius in screen px'  [pure]  @ 110-116
+  @case 'polyline converts every logical pair; closed sets the closed flag'  [pure]  @ 119-128
+  @case 'text without a font uses AddText at the mapped position'  [pure]  @ 131-137
+  @case 'text with a font uses AddTextEx and never pushes the font stack'  [pure]  @ 140-147
+  @case 'measure without a font reads CalcTextSize directly'  [pure]  @ 150-156
+  @case 'measure with a font brackets CalcTextSize in Push/PopFont'  [pure]  @ 159-169
+  @case 'a name routes through chrome; a token passes its packed colour straight through'  [pure]  @ 172-180
+  @case 'a bare int colour is rejected — the one way to bypass the palette'  [pure]  @ 183-190
+  @case 'painter.hue mints an opaque token; golden-ratio rotation makes adjacent indices distinct'  [pure]  @ 193-200
+  @case 'pushClip converts both corners; intersect defaults true, explicit false respected'  [pure]  @ 203-213
+  @case 'ox/oy round to whole pixels; sx/sy pass through unrounded'  [pure]  @ 216-224
+  @case 'snap rounds toScreen output for fractional logical coords; fromScreen stays exact'  [pure]  @ 227-235
+  @case 'wrapLines breaks on spaces and CamelCase, rejoining without a space at the case boundary'  [pure]  @ 238-243
+  @case 'wrapLines balances the lines rather than filling the first — no orphan tail'  [pure]  @ 246-251
+  @case 'wrapLines uses fewer lines than allowed when the text reads evenly on them'  [pure]  @ 254-258
+  @case 'wrapLines packs the surplus into the last line with an ellipsis'  [pure]  @ 261-267
+  @case 'wrapLines ellipsises a single atom too wide for the box; empty text is one empty line'  [pure]  @ 270-275
+  @case 'path: points convert, arc keeps screen-px radius and raw angles, stroke resolves colour by name'  [pure]  @ 278-290
 
 # Uses (outbound edges)
-  @use call painter.new  @ 53,215,226
-  @use call painter.hue  @ 191,192
+  @use call painter.new  @ 53,219,230
+  @use call painter.hue  @ 195,196
+  @use call painter.wrapLines  @ 241,242,250,256,257,263,273,274
 
 # Fields (r read / w write incl. constructor keys)
   @field w CalcTextSize  @ 30
@@ -45,32 +54,32 @@
   @field w DrawFlags_Closed  @ 23
   @field w DrawFlags_None  @ 22
   @field w GetWindowDrawList  @ 29
-  @field r args  @ 123,173,175,206
-  @field w args  @ 10,31,80,89,99,102,111,121,132,141,161,162
-  @field w args  @ 163,204,208,239,241,243,245
+  @field r args  @ 127,177,179,210
+  @field w args  @ 10,31,84,93,103,106,115,125,136,145,165,166
+  @field w args  @ 167,208,212,283,285,287,289
   @field w colour  @ 50
-  @field r fn  @ 57
-  @field w fn  @ 10,31,79,88,98,101,110,120,131,140,161,162
-  @field w fn  @ 163,204,208,239,241,243,245
+  @field r fn  @ 61
+  @field w fn  @ 10,31,83,92,102,105,114,124,135,144,165,166
+  @field w fn  @ 167,208,212,283,285,287,289
   @field r loaded  @ 43,44
-  @field w name  @ 63,75,84,93,106,115,127,136,146,155,168,179
-  @field w name  @ 189,199,212,223,234
+  @field w name  @ 67,79,88,97,110,119,131,140,150,159,172,183
+  @field w name  @ 193,203,216,227,238,246,254,261,270,278
   @field w new_array  @ 28
-  @field r ox  @ 67,216
-  @field w ox  @ 53,215,226
-  @field r oy  @ 216
-  @field w oy  @ 53,215,226
+  @field r ox  @ 71,220
+  @field w ox  @ 53,219,230
+  @field r oy  @ 220
+  @field w oy  @ 53,219,230
   @field r preload  @ 39
-  @field w run  @ 64,76,85,94,107,116,128,137,147,156,169,180
-  @field w run  @ 190,200,213,224,235
-  @field w snap  @ 226
-  @field r sx  @ 67,217
-  @field w sx  @ 53,215,226
-  @field r sy  @ 217
-  @field w sy  @ 53,215,226
-  @field r u32  @ 194,195
-  @field w u32  @ 174
-  @field w x0  @ 78,87,172,174,182,203,205
-  @field w x1  @ 78,87,172,174,182,203,205
-  @field w y0  @ 78,87,172,174,182,203,205
-  @field w y1  @ 78,87,172,174,182,203,205
+  @field w run  @ 68,80,89,98,111,120,132,141,151,160,173,184
+  @field w run  @ 194,204,217,228,239,247,255,262,271,279
+  @field w snap  @ 230
+  @field r sx  @ 71,221
+  @field w sx  @ 53,219,230
+  @field r sy  @ 221
+  @field w sy  @ 53,219,230
+  @field r u32  @ 198,199
+  @field w u32  @ 178
+  @field w x0  @ 82,91,176,178,186,207,209
+  @field w x1  @ 82,91,176,178,186,207,209
+  @field w y0  @ 82,91,176,178,186,207,209
+  @field w y1  @ 82,91,176,178,186,207,209

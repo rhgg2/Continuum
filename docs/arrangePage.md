@@ -230,3 +230,12 @@ hue wherever it lands. A take with no derivable id has no entry and
 gets a neutral grey. Selecting a take brightens the fill without
 moving the hue. The take name is centred in the rectangle and clipped
 at its edge.
+
+Names wrap: a take name takes one line a grid row, as many as its box
+holds, and the header band grows from one line to three when a visible
+track name needs the room. Both breaks come from `painter.wrapLines`,
+which costs a line by the square of its slack and takes the cheapest
+split. Greedy first-fit instead crams the first line and orphans what
+is left, breaking "Bassline (var 1)" after the bracket. That squared
+cost also settles how many lines to use, since another line only adds
+more slack — a short name in a tall box stays on one.
