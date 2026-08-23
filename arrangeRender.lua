@@ -631,10 +631,14 @@ local function paletteTrackLabel(focusedTrack)
 end
 
 local function openRenameModal(trackIdx, slotIdx, currentName)
+  local current = currentName or ''
   modalHost:openPrompt{
     title    = 'Rename slot',
     prompt   = 'New name',
-    buf      = currentName or '',
+    buf      = current,
+    -- The root opens selected: typing over it reroots the whole family and leaves
+    -- each ordinal. see docs/arrangeManager.md § Renaming and name drift
+    selectTo = #util.variantRoot(current),
     callback = util.atomic('Rename slot', function(name) av:renameSlot(trackIdx, slotIdx, name) end),
   }
 end

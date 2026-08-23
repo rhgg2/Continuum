@@ -35,6 +35,7 @@ function modalHost:openPrompt(args)
     resolve  = args.resolve,
     onChord  = args.onChord,
     buf      = args.buf or '',
+    selectTo = args.selectTo,
   }
 end
 
@@ -139,8 +140,13 @@ modalHost:registerKind('prompt', function(s, close)
       close(false)
     end
   else
+    -- selectTo opens the field with its first n characters selected, armed until
+    -- the field goes active. see docs/chrome.md § Opening a field with a selection
+    local selFlags, selCb = 0, nil
+    if s.selectTo then selFlags, selCb = chrome.selectTo(s.selectTo) end
     local rv, buf = ImGui.InputText(ctx, '##modal', s.buf,
-      ImGui.InputTextFlags_EnterReturnsTrue)
+      ImGui.InputTextFlags_EnterReturnsTrue | selFlags, selCb)
+    if s.selectTo and ImGui.IsItemActive(ctx) then s.selectTo = nil end
     if rv then
       close(true, buf)
     elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — A family holds one slot with the root plain, and two slots holding it plain are
+  namesakes rather than a family: neither carries the other's rename, though the variants follow
+  either. Carrying every slot that shares the root renamed two same-named takes together, which is
+  commoner in practice than a genuine family; a variant, by contrast, is unambiguous. The rule also
+  subsumes the unnamed slot, which would otherwise share its empty root with every other. See
+  docs/arrangeManager.md § Renaming and name drift.
+
 - **2026-08-23** — The tracker's take-properties name field renames the slot the tracker is on
   rather than the take it is bound to, and every rename reaches the parked keeper as well as the
   live instances. A pooled slot's name can then only split through a rename made in REAPER, which

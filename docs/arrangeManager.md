@@ -88,10 +88,15 @@ the source's blob onto it; `deleteSlot` (the lone forever-delete) `dropPool`s it
    else.
 
 1. A rename edits the root. Where the submitted ordinal matches the
-   slot's own, every slot on the track sharing that root is renamed with
-   it, each keeping its ordinal: `Sausage (var 1)` and `Sausage (var 2)`
-   become `Kenneth (var 1)` and `Kenneth (var 2)` (§ Variants). A changed
-   ordinal renames that one slot, exactly as typed.
+   slot's own, the family is renamed with it, each slot keeping its own
+   ordinal: `Sausage (var 1)` and `Sausage (var 2)` become `Kenneth (var
+   1)` and `Kenneth (var 2)` (§ Variants). A changed ordinal renames that
+   one slot, exactly as typed.
+
+1. A family holds one slot with the root plain, and two slots holding it
+   plain are namesakes rather than a family. Renaming one of them carries
+   the variants and leaves the other where it is, which is also why an
+   unnamed slot renames alone.
 
 1. Every rename inside Continuum goes through `am:renameSlot` — the
    arrange palette's, and the tracker's take properties, which names the
@@ -373,7 +378,8 @@ on a track never overlap.
 
 1. The **family** is a slot's name and nothing else records it: the
    slots on a track whose names share a **root**, the name with a
-   trailing ` (var N)` removed. A stored parent link would say one
+   trailing ` (var N)` removed, one holding the root plain and the rest
+   carrying ordinals. A stored parent link would say one
    thing while the palette showed another the moment a take was renamed
    in REAPER, and the name is already the only place a slot's name
    lives (§ Renaming and name drift).

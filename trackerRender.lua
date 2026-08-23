@@ -792,7 +792,10 @@ modalHost:registerKind('takeProps', function(s, close)
   ImGui.Text(ctx, 'Item name')
   -- Duplicate paths open with focusName so the clone is named first.
   if appearing and s.focusName then ImGui.SetKeyboardFocusHere(ctx) end
-  local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf)
+  local selFlags, selCb = 0, nil
+  if s.selectTo then selFlags, selCb = chrome.selectTo(s.selectTo) end
+  local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf, selFlags, selCb)
+  if s.selectTo and ImGui.IsItemActive(ctx) then s.selectTo = nil end
   if rvN then s.nameBuf = name end
 
   ImGui.Text(ctx, 'Length (beats)')
@@ -1694,10 +1697,14 @@ function tr:openTakeProperties(args)
     pendingOnClose = false
     if args.onClose then args.onClose() end
   end
+  local takeName = tv:takeName() or ''
   modalHost:open{
     kind     = 'takeProps',
     title    = 'Take properties',
-    nameBuf  = tv:takeName() or '',
+    nameBuf  = takeName,
+    -- Opening on the name field is opening to rename, so its root comes up
+    -- selected. see docs/chrome.md § Opening a field with a selection
+    selectTo = args.focusName and #util.variantRoot(takeName) or nil,
     beatsBuf = ('%g'):format(origBeats),
     beatsGen = 0,
     mode     = 'resize',

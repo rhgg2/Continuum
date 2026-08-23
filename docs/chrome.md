@@ -68,6 +68,27 @@ The -/+ symbols are drawn as crisp axis-aligned filled rects on the window draw 
 
 `onStep` overrides the default `±step` arithmetic, receiving `(currentValue, dir)` and returning the new value — used e.g. by the swing editor's `stepRpb` to walk a fixed ladder of valid row divisions.
 
+## Opening a field with a selection
+
+1. `selectTo(n)` returns the `(flags, callback)` pair for one
+   `InputText`, opening it with its first `n` characters selected. The
+   callback is EEL, written and attached once; `n` travels through
+   `Function_SetValue`, set immediately before the call that consumes
+   it, so one function instance serves every caller.
+
+1. The selection has to come from a callback, since ImGui selects the
+   whole buffer when a field takes focus from `SetKeyboardFocusHere`.
+   That select-all lands on activation, near the top of the widget's
+   own frame, and the callback runs later in the same call.
+
+1. The caller arms it and disarms on `IsItemActive`. A field is active
+   exactly when the callback runs, so the two cannot come apart; leaving
+   it armed would rewrite the selection every frame and pin the caret.
+
+1. Only a field focused as its modal opens comes up with a selection.
+   Overriding the caret on a click would fight the click, since someone
+   clicking at the end of a name means to type there.
+
 ## Picker
 
 The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped: pages check it before consuming Enter so the picker's own Enter handler wins.

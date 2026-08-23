@@ -406,6 +406,22 @@ function chrome.makeToolbar()
   end
 end
 
+----- Text-field selection
+
+-- One EEL instance for every caller: selEnd is set immediately before the
+-- InputText that consumes it. see docs/chrome.md § Opening a field with a selection
+local selectCb = nil
+
+--contract: (flags, callback) for one InputText, opening it with [0, n) selected
+function chrome.selectTo(n)
+  if not selectCb then
+    selectCb = ImGui.CreateFunctionFromEEL('SelectionStart = 0; SelectionEnd = selEnd; CursorPos = selEnd;')
+    ImGui.Attach(ctx, selectCb)
+  end
+  ImGui.Function_SetValue(selectCb, 'selEnd', n)
+  return ImGui.InputTextFlags_CallbackAlways, selectCb
+end
+
 ----- Picker (typeahead popup, shared across pages)
 
 -- Per-kind state; popups close on focus loss so a missing entry just

@@ -219,6 +219,38 @@ return {
   },
 
   {
+    name = 'two slots holding the root plain are namesakes, not a family',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, poolGuid = '{p3}', takeName = 'Bassline (var 1)' } } },
+      })
+      am:renameSlot(0, slotFor(am, 0, '{p1}').idx, 'Kenneth')
+      t.eq(slotFor(am, 0, '{p1}').name, 'Kenneth')
+      t.eq(slotFor(am, 0, '{p2}').name, 'Bassline',        'the namesake is left where it is')
+      t.eq(slotFor(am, 0, '{p3}').name, 'Kenneth (var 1)', 'the variants follow the slot renamed')
+    end,
+  },
+
+  {
+    name = 'with the root held plain twice, a variant reroots neither',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, poolGuid = '{p3}', takeName = 'Bassline (var 1)' } } },
+      })
+      am:renameSlot(0, slotFor(am, 0, '{p3}').idx, 'Kenneth (var 1)')
+      t.eq(slotFor(am, 0, '{p3}').name, 'Kenneth (var 1)')
+      t.eq(slotFor(am, 0, '{p1}').name, 'Bassline', 'no base to carry — two claim the root')
+      t.eq(slotFor(am, 0, '{p2}').name, 'Bassline')
+    end,
+  },
+
+  {
     name = 'an unnamed slot has no family',
     run = function(harness)
       local h, am = mkAm(harness)

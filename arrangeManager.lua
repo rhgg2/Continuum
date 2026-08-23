@@ -638,15 +638,19 @@ end
 local function familyRenames(slots, target, name)
   local oldRoot, oldOrdinal = util.variantRoot(target.name)
   local newRoot, newOrdinal = util.variantRoot(name)
-  -- An unnamed slot has no family: every other unnamed slot shares its root.
-  if newOrdinal ~= oldOrdinal or oldRoot == '' then return { [target.id] = name } end
-  local out = {}
+  local out = { [target.id] = name }
+  if newOrdinal ~= oldOrdinal then return out end
+  local bases = {}
   for _, slot in ipairs(slots) do
     local root, ordinal = util.variantRoot(slot.name)
     if slot.id and root == oldRoot then
-      out[slot.id] = ordinal and ('%s (var %d)'):format(newRoot, ordinal) or newRoot
+      if ordinal then out[slot.id] = ('%s (var %d)'):format(newRoot, ordinal)
+      else            util.add(bases, slot) end
     end
   end
+  -- A family holds one slot with the root plain; two are namesakes, and a
+  -- rename of one leaves the other where it is.
+  if #bases == 1 then out[bases[1].id] = newRoot end
   return out
 end
 
