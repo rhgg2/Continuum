@@ -117,8 +117,9 @@
   @field w arrangeDive  @ 170
   @field w arrangeDuplicateBelow  @ 172
   @field w arrangeDuplicateUnpooledBelow  @ 176
+  @field w arrangeEdgeDown  @ 165
+  @field w arrangeEdgeUp  @ 164
   @field w arrangeEnd  @ 154
-  @field w arrangeGrowTake  @ 165
   @field w arrangeHome  @ 153
   @field w arrangeLoopToItem  @ 182
   @field w arrangeNextDrop  @ 155
@@ -138,7 +139,6 @@
   @field w arrangeSetBeatPerRow  @ 189
   @field w arrangeSetLoopEnd  @ 181
   @field w arrangeSetLoopStart  @ 180
-  @field w arrangeShrinkTake  @ 164
   @field w arrangeTakeProperties  @ 171
   @field w arrangeZoomIn  @ 187
   @field w arrangeZoomOut  @ 188

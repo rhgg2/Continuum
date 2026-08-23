@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — The arrange resize keys move whichever edge the caret stands on: the head when it
+  is on the take's start row, the tail everywhere else. Two more commands for the top edge were the
+  alternative, and the modifier space is nearly full. A nearest-edge rule was rejected for its tie
+  on the middle row of every even-length take, which is every power-of-two pattern. The caret rides the
+  head it moved, and a tail shrink stops short of the start row, so an edit never rearms the other
+  edge. See docs/arrangeView.md § Nudge and resize.
+
 - **2026-08-23** — A take's head — the QN of source it skips — is REAPER's take start offset rather
   than a second key in ds beside the natural length. REAPER keeps a MIDI take's offset beat-locked
   and maps source ppq 0 through it, so MIDI_GetProjQNFromPPQPos(take, 0) reads the origin exactly

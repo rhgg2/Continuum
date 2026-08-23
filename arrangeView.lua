@@ -278,25 +278,63 @@ local function nudgeSelected(direction)
   if #takes == 1 then moveCursorBy(direction, 0) end
 end
 
---invariant: resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.
-local function resizeSelected(direction)
-  local takes = actionTargets()
-  if #takes == 0 then return end
+-- The target whose start row the caret stands on, if any. That row is the one
+-- place the head is armed, and only that take's move carries the caret along.
+local function armedByCursor(takes)
+  local cursorQN = av:rowToQN(cursorRow)
+  for _, take in ipairs(takes) do
+    if math.abs(take.startQN - cursorQN) < 1e-6 then return take end
+  end
+end
+
+-- The start edge walks and the end holds, so the rendered length moves the other way —
+-- floored at one row, since a take that renders nothing is gone from the grid undeleted.
+local function moveHeads(takes, armed, direction)
+  local bpr, plan = av:beatPerRow(), {}
+  for _, take in ipairs(takes) do
+    if take.lengthQN - direction * bpr >= bpr then
+      util.add(plan, { take = take, headQN = take.startQN - take.originQN + direction * bpr })
+    end
+  end
+  local caretFollows = false
+  util.atomic('Trim heads', function()
+    for _, p in ipairs(plan) do
+      local moved = am:trimHead(p.take, p.headQN)
+      if p.take == armed then caretFollows = moved end
+    end
+  end)()
+  if caretFollows then moveCursorBy(direction, 0) end
+end
+
+-- Natural is measured from the source origin, so a head rides along and the
+-- edge that moves is the end.
+local function moveTails(takes, direction)
   local bpr = av:beatPerRow()
   local function renderedAfter(take) return math.max(bpr, take.lengthQN + direction * bpr) end
   util.atomic('Resize takes', function()
     for _, take in ipairs(takes) do
-      -- Natural is measured from the source origin, so a head rides along and
-      -- the edge that moves is the end.
       am:resizeTake(take, take.startQN - take.originQN + renderedAfter(take))
     end
   end)()
-  -- A single shrink that ate the cursor's row pulls the cursor back a row;
-  -- multi-selection edits leave the cursor where it is.
+  -- A single shrink that ate the cursor's row pulls the cursor back a row, but never onto
+  -- the start row (which would arm the head); multi-selection edits leave the cursor alone.
   if #takes == 1 and direction < 0 then
-    local endRow = (takes[1].startQN + renderedAfter(takes[1])) / bpr
-    if cursorRow >= endRow then moveCursorBy(-1, 0) end
+    local take   = takes[1]
+    local endRow = (take.startQN + renderedAfter(take)) / bpr
+    if cursorRow >= endRow then
+      av:setCursor(math.max(take.startQN / bpr + 1, cursorRow - 1), cursorCol)
+    end
   end
+end
+
+--invariant: caret on a target's start row moves the head, else the tail. See docs/arrangeView.md
+--invariant: resize writes natural length (±1 bpr, floored 1 bpr); a head move floors the same way
+local function resizeSelected(direction)
+  local takes = actionTargets()
+  if #takes == 0 then return end
+  local armed = armedByCursor(takes)
+  if armed then moveHeads(takes, armed, direction)
+  else          moveTails(takes, direction) end
 end
 
 local function deleteSelected()
@@ -827,8 +865,8 @@ arrange:registerAll {
   arrangeSelectRight  = function() selectBy( 0,  1) end,
   arrangeNudgeBack    = { function() nudgeSelected(-1) end, 'Nudge take back'    },
   arrangeNudgeForward = { function() nudgeSelected( 1) end, 'Nudge take forward' },
-  arrangeShrinkTake   = { function() resizeSelected(-1) end, 'Shrink take' },
-  arrangeGrowTake     = { function() resizeSelected( 1) end, 'Grow take'   },
+  arrangeEdgeUp       = { function() resizeSelected(-1) end, 'Move edge up'   },
+  arrangeEdgeDown     = { function() resizeSelected( 1) end, 'Move edge down' },
   arrangeDeleteTake             = { deleteSelected,                 'Delete take' },
   arrangeDeleteAdvance          = { deleteSelectedAndAdvance,       'Delete take and advance' },
   arrangeDive                   = diveSelected,

@@ -753,6 +753,33 @@ return {
     end,
   },
   {
+    name = 'tailQN is the source past the rendered end, whatever shortened the take',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 8, poolGuid = '{p1}' } } },
+      })
+      t.eq(am:tracksTakes(0)[1].tailQN, 0, 'an OPEN take renders to the end of its source')
+      am:resizeTake(am:tracksTakes(0)[1], 3)
+      t.eq(am:tracksTakes(0)[1].tailQN, 5, 'a shrunk take leaves the rest of the source behind')
+    end,
+  },
+  {
+    name = 'head, rendered length and tail partition the source',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 8, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 2, srcLen = 2, poolGuid = '{p2}' } } },
+      })
+      t.eq(am:tracksTakes(0)[1].tailQN, 4, 'the neighbour cuts four beats of source off the end')
+      am:trimHead(am:tracksTakes(0)[1], 1)
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.lengthQN, 3, 'the window slid down a beat into the same gap')
+      t.eq(tk.tailQN,   4, 'head 1 + rendered 3 + tail 4 = the source')
+    end,
+  },
+  {
     name = 'a trimmed take is capped by the gap, and regrows to source-minus-head without one',
     run = function(harness)
       local h, am = mkAm(harness)

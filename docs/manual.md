@@ -234,7 +234,8 @@ To be filled out with descriptions, screenshots, examples.
 ### Takes
 - Drag to move (snaps to row; Shift = free); Ctrl+drag to duplicate
 - Drag end edge to resize
-- Nudge back/forward; shrink/grow
+- Nudge back/forward; move the tail, or the head from a take's start row
+- Source the take doesn't show is marked in it: `(4)…` skipped above, `…(8)` left below
 - Delete / delete-and-advance
 - Duplicate (pooled) / duplicate below (unpooled, opens properties)
 - Take properties

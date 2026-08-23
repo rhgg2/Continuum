@@ -204,12 +204,34 @@ destination start == another take's start on the same track. Later
 takes truncate earlier ones in the rendered frame, so passing through a
 neighbour is fine — `am:moveTake` handles the relayout.
 
-Resize writes a numeric natural length (±1 bpr from the current rendered
-length, floored at 1 bpr). The relayout pass caps it against the source
-duration and the next take, and demotes any natural ≥ source back to
-`util.OPEN`. This means grow-past-source is a self-healing no-op, and
-grow-past-neighbour stores intent that takes effect when the neighbour
-moves away.
+Resize moves one edge in the direction of the key: `arrangeEdgeDown`
+walks the armed edge down the grid, `arrangeEdgeUp` walks it up. The
+**armed edge** is the head when the caret stands on a target's start
+row, and the tail everywhere else. A midpoint rule — nearest edge wins
+— would tie on the middle row of every even-length take, which is every
+power-of-two pattern; the start row ties with nothing, and Tab already
+stops there, so the head costs one press to reach.
+
+A tail move writes a numeric natural length (±1 bpr from the current
+rendered length, floored at 1 bpr). The relayout pass caps it against
+the source duration and the next take, and demotes any natural ≥ source
+back to `util.OPEN`. This means grow-past-source is a self-healing
+no-op, and grow-past-neighbour stores intent that takes effect when the
+neighbour moves away.
+
+A head move hands `am:trimHead` the absolute head ±1 bpr. Natural is
+measured from the source origin, so the end holds and the rendered
+length moves the other way — floored at one row, since a take rendering
+nothing would leave the grid without being deleted. `am:trimHead`
+refuses a head below the origin, or a start row another take occupies.
+
+An edit never changes which edge is armed. The caret rides the head it
+moved, so a run of presses keeps trimming the same edge, and a refusal
+leaves the caret where it was. A tail shrink that ate the caret's row
+still pulls it back a row, but stops at the take's end edge rather than
+its start row, where the bottom-edge rule resolves to the same take.
+With a multi-take selection the edge is decided once, from the take
+whose start row the caret is on, and the caret follows that one.
 
 ## Loop to item
 

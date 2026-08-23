@@ -26,7 +26,7 @@ local function mkArrange(harness, items)
   end
   for _, item in ipairs(items) do
     h.reaper:addItem(item.track, { take = item.track .. '/' .. item.name,
-      isMidi = true, pos = item.pos, len = item.len or 1,
+      isMidi = true, pos = item.pos, len = item.len or 1, srcLen = item.srcLen,
       poolGuid = '{' .. item.track .. item.name .. '}' })
   end
   h.reaper:setProjectTracks(order)
@@ -37,6 +37,17 @@ end
 
 local function takeAt(list, startQN)
   for _, take in ipairs(list) do if take.startQN == startQN then return take end end
+end
+
+-- One four-row take at rows 2..5, with four rows of source left over: enough
+-- room for the head to walk in and for the tail to grow.
+local function mkTrimmable(harness)
+  local h, av, am = mkArrange(harness, {
+    { track = 'tr1', name = 'a', pos = 2, len = 4, srcLen = 8 },
+  })
+  am:resizeTake(am:tracksTakes(0)[1], 4)   -- a finite natural, so a grow has somewhere to go
+  h.cmgr:push('arrange')
+  return h, av, am
 end
 
 -- Layout for the Shift+arrow cases: tr1 holds takes at rows 0, 1, 3 and 6, tr2 one at row 0.
@@ -923,6 +934,112 @@ return {
       h.cmgr:invoke('arrangeAdvanceMode')
       h.cmgr:invoke('drop0')
       t.eq(av:cursorRow(), 2, 'back to the fixed step')
+    end,
+  },
+
+  -- Resize arming (docs/arrangeView.md § Nudge and resize): the caret standing
+  -- on a target's start row moves the head, anywhere else moves the tail, and
+  -- an edit never changes which of the two is armed.
+  {
+    name = 'the caret on a start row moves the head down, holding the end still',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      av:setCursor(2, 0)
+      h.cmgr:invoke('arrangeEdgeDown')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  3, 'the start edge walked down a row')
+      t.eq(tk.lengthQN, 3, 'the end held, so a row less is rendered')
+      t.eq(av:cursorRow(), 3, 'the caret rode the head down, so the head stays armed')
+    end,
+  },
+
+  {
+    name = 'the caret off the start row moves the tail, leaving the head alone',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      av:setCursor(3, 0)
+      h.cmgr:invoke('arrangeEdgeDown')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  2, 'the start edge held')
+      t.eq(tk.lengthQN, 5, 'the tail grew a row')
+      t.eq(av:cursorRow(), 3, 'a tail move leaves the caret alone')
+    end,
+  },
+
+  {
+    name = 'Up on the start row hands back a row of head, taking the caret with it',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      am:trimHead(am:tracksTakes(0)[1], 2)      -- two rows of head: the take starts at row 4
+      av:setCursor(4, 0)
+      h.cmgr:invoke('arrangeEdgeUp')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  3, 'the start edge walked up a row')
+      t.eq(tk.lengthQN, 3, 'and a row more of source is rendered')
+      t.eq(av:cursorRow(), 3, 'the caret rode the head up')
+    end,
+  },
+
+  {
+    name = 'a head at the origin refuses to grow, and the caret holds',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      av:setCursor(2, 0)
+      h.cmgr:invoke('arrangeEdgeUp')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  2, 'nothing above the origin to hand back')
+      t.eq(tk.lengthQN, 4, 'and the refusal does not fall through to the tail')
+      t.eq(av:cursorRow(), 2, 'a refusal leaves the caret on the start row')
+    end,
+  },
+
+  {
+    name = 'a head trim is floored at one rendered row',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      am:resizeTake(am:tracksTakes(0)[1], 1)    -- down to a single rendered row
+      av:setCursor(2, 0)
+      h.cmgr:invoke('arrangeEdgeDown')
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  2, 'the take would render nothing, so the head holds')
+      t.eq(tk.lengthQN, 1)
+      t.eq(av:cursorRow(), 2, 'and so does the caret')
+    end,
+  },
+
+  {
+    name = 'a tail shrink never parks the caret on the head row',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, len = 2 },
+      })
+      h.cmgr:push('arrange')
+      av:setCursor(1, 0)
+      h.cmgr:invoke('arrangeEdgeUp')
+      t.eq(am:tracksTakes(0)[1].lengthQN, 1, 'the tail came up a row')
+      t.eq(av:cursorRow(), 1, 'the caret stops on the end edge rather than the start row')
+      h.cmgr:invoke('arrangeEdgeUp')
+      t.eq(am:tracksTakes(0)[1].lengthQN, 1, 'floored at one row, so still the tail that is armed')
+      t.eq(av:cursorRow(), 1)
+    end,
+  },
+
+  {
+    name = 'the armed edge is decided once, from the take the caret stands on',
+    run = function(harness)
+      local h, av, am = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 2, len = 2 },
+        { track = 'tr1', name = 'b', pos = 6, len = 2 },
+      })
+      h.cmgr:push('arrange')
+      local takes = am:tracksTakes(0)
+      av:setSelection{ takes[1].take, takes[2].take }
+      av:setCursor(6, 0)                        -- the start row of the second take
+      h.cmgr:invoke('arrangeEdgeDown')
+      local after = am:tracksTakes(0)
+      t.eq(after[1].startQN, 3, 'the whole selection trims its head')
+      t.eq(after[2].startQN, 7)
+      t.eq(av:cursorRow(), 7, 'the caret follows the take it armed')
     end,
   },
 

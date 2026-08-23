@@ -258,7 +258,7 @@ return {
   },
 
   {
-    name = 'arrangeGrowTake lengthens the cursor take by one row',
+    name = 'arrangeEdgeDown lengthens the cursor take by one row',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -273,7 +273,8 @@ return {
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeGrowTake')
+      h.cmgr:invoke('arrangeCursorDown')          -- off the start row, so the tail is armed
+      h.cmgr:invoke('arrangeEdgeDown')
       t.eq(am:tracksTakes(0)[1].lengthQN, 3, 'take grew one row')
     end,
   },
@@ -294,8 +295,9 @@ return {
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeCursorDown')
-      h.cmgr:invoke('arrangeCursorDown')          -- onto the trimmed take at row 2
-      h.cmgr:invoke('arrangeGrowTake')
+      h.cmgr:invoke('arrangeCursorDown')
+      h.cmgr:invoke('arrangeCursorDown')          -- inside the trimmed take, below its start row
+      h.cmgr:invoke('arrangeEdgeDown')
       local tk = am:tracksTakes(0)[1]
       t.eq(tk.lengthQN, 3, 'one more row rendered — the end moved, not the start')
       t.eq(tk.startQN,  2, 'the head is untouched by a resize')
@@ -304,7 +306,7 @@ return {
   },
 
   {
-    name = 'arrangeGrowTake silently no-ops at the take-source length cap',
+    name = 'arrangeEdgeDown silently no-ops at the take-source length cap',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -315,14 +317,15 @@ return {
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeGrowTake')
+      h.cmgr:invoke('arrangeCursorDown')          -- off the start row, so the tail is armed
+      h.cmgr:invoke('arrangeEdgeDown')
       local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'grow past source length is a no-op')
     end,
   },
 
   {
-    name = 'arrangeShrinkTake reduces the cursor take by one row',
+    name = 'arrangeEdgeUp reduces the cursor take by one row',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -335,7 +338,8 @@ return {
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeShrinkTake')
+      h.cmgr:invoke('arrangeCursorDown')          -- off the start row, so the tail is armed
+      h.cmgr:invoke('arrangeEdgeUp')
       t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'shrink reduced the take by one row')
     end,
   },
@@ -447,7 +451,7 @@ return {
   },
 
   {
-    name = 'arrangeGrowTake against a flush neighbour stores intent; rendered is gap-capped',
+    name = 'arrangeEdgeDown against a flush neighbour stores intent; rendered is gap-capped',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -460,7 +464,8 @@ return {
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeGrowTake')
+      h.cmgr:invoke('arrangeCursorDown')          -- off the start row, so the tail is armed
+      h.cmgr:invoke('arrangeEdgeDown')
       local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local t1 = am:tracksTakes(0)[1]
       t.eq(t1.lengthQN,    2, 'rendered stuck at the next-take start')

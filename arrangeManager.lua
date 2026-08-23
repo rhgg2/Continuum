@@ -186,6 +186,15 @@ local function effectiveNaturalLenQN(take, item)
   return resolved - (itemQNRange(item) - originQNOf(take, item))
 end
 
+-- Source lying past the rendered end — the mirror of the head, 0 where the take renders
+-- to the end. Audio has no head or source window; its leftover is measured from natural.
+local function tailLenQN(take, item, lengthQN)
+  if takeKind(take) == 'audio' then return effectiveNaturalLenQN(take, item) - lengthQN end
+  local src = sourceLenQN(take, item)
+  if src == math.huge then return 0 end
+  return src - (itemQNRange(item) - originQNOf(take, item)) - lengthQN
+end
+
 --contract: re-derives each D_LENGTH walking startQN order; idempotent. See docs § The take's window
 local function relayoutTrack(track)
   if not track then return end
@@ -377,6 +386,7 @@ local function buildTakeShape(take, item, trackIdx, startQN, lengthQN, slotForId
     originQN     = originQNOf(take, item),
     lengthQN     = lengthQN,
     naturalLenQN = effectiveNaturalLenQN(take, item),
+    tailQN       = tailLenQN(take, item, lengthQN),
     kind         = kind,
     notes        = notes,
     chanMask     = chanMask,

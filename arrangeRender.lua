@@ -388,7 +388,7 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
   -- Three passes (fills → cursor wash → names) so names stay crisp over the wash.
   local selected = av:selectionSet()
   local nameDraws = {}
-  local truncDraws = {}   -- ellipsis decoration for items truncated below natural
+  local markDraws = {}   -- edge marks: source elided above the head, or below the cut
 
   -- Vertical waveform: time→Y, amplitude→X (centred). ≥1px span per pixel so
   -- near-silence draws a line. fullTop/fullBot = full take edges (may be off-screen).
@@ -462,19 +462,29 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
       drawNotes(tk, rx0, rx1, ry0 + 1, ry1)
     end
     ps.border(rect(rx0, ry0, rx1 + 1, ry1 + 1), border)
-    -- Truncation indicator: downstream take cuts this one short. Show only when box > 1 row
-    -- so the ellipsis doesn't displace the name.
-    local truncated = lengthQN + 1e-6 < tk.naturalLenQN and endRow - startRow > 1
-    if tk.name and tk.name ~= '' then
+    -- Edge marks: beats of source elided above the head, and below the cut, each owns a row
+    -- when the box has room, else folds into the name line; marking an edge needs it on screen.
+    local headQN  = tk.startQN - tk.originQN
+    -- The tail is the settled one; a resize drag passes a candidate length, and
+    -- whatever it takes off the end the source behind it takes on.
+    local cutQN   = tk.tailQN + (tk.lengthQN - lengthQN)
+    local boxRows = math.floor(visBot - visTop)
+    local head    = headQN > 1e-6 and startRow >= sr         and string.format('(%g)…', headQN)
+    local cut     = cutQN  > 1e-6 and endRow <= sr + visRows and string.format('…(%g)', cutQN)
+    local headRow = head and boxRows >= 3
+    local cutRow  = cut  and boxRows >= 2
+    local text    = (head and not headRow and head or '') .. (tk.name or '')
+                 .. (cut  and not cutRow  and cut  or '')
+    if text ~= '' then
       util.add(nameDraws, {
-        name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
-        -- Line budget in rows: the ellipsis owns the bottom one when truncated.
-        rows = math.floor(visBot - visTop) - (truncated and 1 or 0),
+        name = text, rx0 = rx0, rx1 = rx1, ry1 = ry1,
+        ry0 = ry0, ty0 = ry0 + 1 + (headRow and rowH or 0),
+        rows = boxRows - (headRow and 1 or 0) - (cutRow and 1 or 0),
       })
     end
-    if truncated then
-      util.add(truncDraws, { rx0 = rx0, rx1 = rx1, ry1 = ry1 })
-    end
+    if headRow then util.add(markDraws, { rx0 = rx0, rx1 = rx1, y = ry0 + 1, text = head }) end
+    if cutRow  then util.add(markDraws,
+                             { rx0 = rx0, rx1 = rx1, y = ry1 - rowH + 1, text = cut }) end
   end
 
   -- Settled takes; takes being moved are held back, painted last at the candidate
@@ -580,20 +590,16 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
     ps.pushClip(rect(nd.rx0 + 2, nd.ry0, nd.rx1 - 2, nd.ry1))
     for i, line in ipairs(lines) do
       local tx = nd.rx0 + math.floor((nd.rx1 - nd.rx0 - widthOf(line)) / 2)
-      ps.text(tx, nd.ry0 + 1 + (i - 1) * rowH, 'text', line)
+      ps.text(tx, nd.ty0 + (i - 1) * rowH, 'text', line)
     end
     ps.popClip()
   end
 
-  -- Truncation ellipsis: bottom-row glyph for items shortened below natural length.
-  -- Final-pass draw so it sits over the cursor wash.
-  for _, td in ipairs(truncDraws) do
-    local ell = '…'
-    local tw  = ps.measure(ell)
-    local tx  = td.rx0 + math.floor((td.rx1 - td.rx0 - tw) / 2)
-    local ty  = td.ry1 - rowH + 1
-    ps.pushClip(rect(td.rx0 + 2, ty, td.rx1 - 2, td.ry1))
-    ps.text(tx, ty, 'text', ell)
+  -- Edge marks, in the same final pass as the names so they sit over the cursor wash.
+  for _, md in ipairs(markDraws) do
+    local tx = md.rx0 + math.floor((md.rx1 - md.rx0 - ps.measure(md.text)) / 2)
+    ps.pushClip(rect(md.rx0 + 2, md.y, md.rx1 - 2, md.y + rowH))
+    ps.text(tx, md.y, 'text', md.text)
     ps.popClip()
   end
 
