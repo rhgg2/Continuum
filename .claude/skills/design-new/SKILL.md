@@ -34,7 +34,8 @@ We now settle the fundamentals:
 - what the doc covers;
 - the stage it opens at; 
 - the slug and title;
-- the design abstract (a succinct paragraph that clearly describes the idea).
+- the design abstract: one or two sentences that describe the main
+  idea.
 
 We will do this collaboratively. Bring what you found in §1 to the
 chat, along with your suggestions for answers to the above questions.

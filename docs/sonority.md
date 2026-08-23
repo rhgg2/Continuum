@@ -18,7 +18,7 @@ The strand, the walk, the box and the pull are shared between the two
 facilities, each charging the pull in a unit of its own (§ The pull);
 § The springs onward belongs to the moves facility alone. The points
 solve's own machinery — shortlists, the DP over them, and the widening
-offered to a refused strand — is `design/adaptive-tuning.md`.
+offered to an excluded strand — is `design/adaptive-tuning.md`.
 
 ## The strand
 
@@ -84,7 +84,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    requires `n` to reach the classes the two chords hold between them, six
    where a C7 resolves to F–A–C.
 
-1. The sonority forgets only what has fallen silent, so a note held
+1. The sonority loses only what has fallen silent, so a note held
    through the chords behind it drops out of the last `n` struck while
    it still sounds. The coupling usually survives that, each note being
    tuned against its predecessors and so, at one remove, against the
@@ -107,7 +107,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    apart into independent solves, which is the collapse `n` at the
    arity itself produces.
 
-1. Nothing measured tells a half from one. The five-part take spells
+1. No measurement separates a half from one. The five-part take spells
    identically under both, though twenty-six of its onset memberships
    are held by recency, and a strained recency spring destabilises
    rather than deciding: an F sharp released as C–E–G strikes, its
@@ -317,7 +317,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    variable stays free while the strand sounds, so a rolled chord's
    early third is seated by the fifth that arrives after it; coords are
    another matter, since a member joined against an incomplete sonority
-   claims an interval the chord has not yet stated. A member may
+   carries an interval the chord has not yet stated. A member may
    therefore be left **unplaced**, taking its coords at a later onset
    from a member it sounds with: spelled where it stands, the rolled C
    minor's opening pair takes its C a `5/4` below the E♭, stretching
@@ -328,10 +328,11 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    sonority holds by recency has stopped, so it is joined to and does
    not itself wait. An unspelled member states no interval, so it is
    charged none, and a spelling that left one untied would price under
-   every spelling that spoke for it — the price of saying nothing has
-   to be everything, or saying nothing wins. A member out of waits that
-   joins nothing therefore refuses the sonority that holds it, and a
-   bare tritone under a 5-limit set is no spelling at all.
+   every spelling that covered it — an untied member has to cost
+   everything, or it undercuts every placement. A member out of waits
+   that joins nothing therefore leaves the sonority that holds it with
+   no spelling, and a bare tritone under a 5-limit set is no spelling
+   at all.
 
 1. The first member to place anchors, and the members before it wait.
    Every move has its inversion, so a spelling stands at as many coords
@@ -432,7 +433,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    spelling starts from them, tying only what it wrote: its own
    sonority's springs, and those of the deferrals it completed.
 
-1. An extension that cannot survive the cut is refused before it is
+1. An extension that cannot survive the cut is dropped before it is
    relaxed. The spring and pull terms are sums of squares, so what an
    answer had closed plus the boxes an extension carries is a floor
    under any cost it can come back with, known before its ties are
@@ -463,7 +464,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    monotonically: a beam of forty-eight matches twenty-four at a purity
    of 32, and at 64 it is 0.6 per cent cheaper with a step-class
    wandering 111 cents where twenty-four holds it to 41. No term of the
-   objective charges that wander, so the reach a wider beam buys is
+   objective charges that wander, so the reach a wider beam adds is
    spent on it.
 
 1. The winner is settled by one joint relaxation over its springs,
@@ -486,7 +487,7 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
    lock of nothing the eighty-eight-note take stands 184¢ from its page
    on average. At the floor the page holds the answer loosely, a
    step-class wandering 115¢ across that take where a lock of 0.5 holds
-   it to 21¢; at the ceiling the pull buys the page at the expense of
+   it to 21¢; at the ceiling the pull holds the page at the cost of
    the harmony, the same take's wolf pairs going from 53 to 64 and its
    springs left holding 3.3¢ the spelling said would be pure. Between
    0.5 and 4 nothing measured moves at all.
@@ -576,12 +577,12 @@ offered to a refused strand — is `design/adaptive-tuning.md`.
 1. A bound on the drift of a long piece, at an ambient of 1. The first
    onset asserts the page and every rest after it is inherited whole, so
    a passage returning to its opening chord may return to it flat, and
-   no term in the objective objects. Below 1 the inheritance decays and
+   the objective charges nothing for it. Below 1 the inheritance decays and
    the drift has a time constant instead (§ The dials).
 
 1. One account of a carried strand. A strand present at two onsets is
    spelled at both, and the box charges each onset's spelling; where
-   the two disagree the springs arbitrate. That has no counterpart in a
+   the two disagree the springs settle it. That has no counterpart in a
    one-coord-per-strand account, and it has not been squeezed for
    anomalies.
 
