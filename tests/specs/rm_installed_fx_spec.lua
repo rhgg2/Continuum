@@ -23,15 +23,22 @@ return {
     name = 'installedFx enumerates the installed plugins as {ident, name}',
     run = function()
       local reaper, rm = mkRm()
+      -- Production shape: EnumInstalledFX hands JS rows a bare path under Effects/.
+      -- Every other format's ident is already canonical — VST/VST3 an absolute path,
+      -- AU 'Vendor: Name', CLAP the plugin id.
       reaper:setInstalledFx({
-        { name = 'VST3: ReaEQ (Cockos)',  ident = 'VST3:ReaEQ' },
-        { name = 'JS: Volume Adjustment', ident = 'JS:utility/volume' },
+        { name = 'VST3: ReaEQ (Cockos)',           ident = '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3' },
+        { name = 'JS: Volume Adjustment',          ident = 'utility/volume' },
+        { name = 'AU: BitShiftGain (Airwindows)',  ident = 'Airwindows: BitShiftGain' },
+        { name = 'CLAPi: Aeolus (Arthur Benilov)', ident = 'com.ArthurBenilov.Aeolus' },
       })
       local fx = rm:installedFx()
-      t.eq(#fx, 2, 'both plugins enumerated')
-      t.eq(fx[1].ident, 'VST3:ReaEQ')
+      t.eq(#fx, 4, 'every plugin enumerated')
+      t.eq(fx[1].ident, '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3', 'VST3 path ident untouched')
       t.eq(fx[1].name,  'VST3: ReaEQ (Cockos)')
-      t.eq(fx[2].ident, 'JS:utility/volume')
+      t.eq(fx[2].ident, 'JS:utility/volume', "JS ident canonicalised to the 'JS:' form")
+      t.eq(fx[3].ident, 'Airwindows: BitShiftGain', 'AU ident untouched')
+      t.eq(fx[4].ident, 'com.ArthurBenilov.Aeolus', 'CLAP plugin id untouched')
     end,
   },
   {

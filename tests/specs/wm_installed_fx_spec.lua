@@ -16,7 +16,7 @@ return {
       local rows = {
         { 'VST3: ReaEQ (Cockos)',   'VST3:ReaEQ (Cockos)'   },
         { 'VST3: ReaComp (Cockos)', 'VST3:ReaComp (Cockos)' },
-        { 'JS: 1175',               'JS:1175'               },
+        { 'JS: 1175',               '1175'                  },
       }
       local calls = 0
       reaper.EnumInstalledFX = function(i)
@@ -31,6 +31,7 @@ return {
       t.eq(list[1].ident, 'VST3:ReaEQ (Cockos)')
       t.eq(list[2].name,  'VST3: ReaComp (Cockos)')
       t.eq(list[3].name,  'JS: 1175')
+      t.eq(list[3].ident, 'JS:1175', "bare JS path canonicalised before it reaches the picker")
       t.eq(calls, 4, 'walked indices 0..3 — three hits + one terminating miss')
     end,
   },

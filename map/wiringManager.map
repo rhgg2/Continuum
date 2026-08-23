@@ -287,7 +287,7 @@
   @api wm:fastGainCommit(edgeIdx, gain)  @ 2071-2083
       @contract  in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile  @ 2070
   @api wm:listInstalledFX()  @ 2086-2088
-      @contract  delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there  @ 2085
+      @contract  delegates to rm:installedFx — raw "Type: Name (Author)" names, canonical idents  @ 2085
   @api wm:syncExternal()  @ 2093-2100
       -- see docs/wiringManager.md § external sync
       @contract  rereads the graph from routing when REAPER's project state moved without us — undo/redo  @ 2090

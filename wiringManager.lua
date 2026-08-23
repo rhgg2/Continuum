@@ -2082,7 +2082,7 @@ function wm:fastGainCommit(edgeIdx, gain)
   return true
 end
 
---contract: delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there
+--contract: delegates to rm:installedFx — raw "Type: Name (Author)" names, canonical idents
 function wm:listInstalledFX()
   return rm:installedFx()
 end

@@ -1,4 +1,4 @@
-@spec rm_installed_fx_spec  src=tests/specs/rm_installed_fx_spec.lua  loc=71  cases=4
+@spec rm_installed_fx_spec  src=tests/specs/rm_installed_fx_spec.lua  loc=78  cases=4
 @exercises harness (harness), routingManager (rm)
 @surface   harness.mk, rm:installedFx, rm:showFx
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setInstalledFx, reaper:setTrackFX, reaper:setFxGuid, r._state.calls
@@ -12,25 +12,25 @@
   @fn seedTrack(reaper, name)  @ 13-19
 
 # Cases
-  @case 'installedFx enumerates the installed plugins as {ident, name}'  [pure]  @ 23-35
-  @case 'installedFx memoises the runtime-fixed list'  [pure]  @ 38-44
-  @case 'showFx floats the window for a live fx id'  [pure]  @ 47-62
-  @case 'showFx returns false for an unknown id'  [pure]  @ 65-69
+  @case 'installedFx enumerates the installed plugins as {ident, name}'  [pure]  @ 23-42
+  @case 'installedFx memoises the runtime-fixed list'  [pure]  @ 45-51
+  @case 'showFx floats the window for a live fx id'  [pure]  @ 54-69
+  @case 'showFx returns false for an unknown id'  [pure]  @ 72-76
 
 # Uses (outbound edges)
   @use call harness.mk  @ 8
-  @use call rm:installedFx  @ 30,42,43
-  @use call rm:showFx  @ 54,68
+  @use call rm:installedFx  @ 35,49,50
+  @use call rm:showFx  @ 61,75
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _state  @ 56
-  @field r calls  @ 56
+  @field r _state  @ 63
+  @field r calls  @ 63
   @field w ds  @ 9
-  @field r fn  @ 57
-  @field r fxIdx  @ 60
-  @field r ident  @ 32,34
-  @field w ident  @ 27,28,41,51
-  @field r name  @ 33
-  @field w name  @ 23,27,28,38,41,47,65
-  @field w run  @ 24,39,48,66
-  @field r showFlag  @ 61
+  @field r fn  @ 64
+  @field r fxIdx  @ 67
+  @field r ident  @ 37,39,40,41
+  @field w ident  @ 30,31,32,33,48,58
+  @field r name  @ 38
+  @field w name  @ 23,30,31,32,33,45,48,54,72
+  @field w run  @ 24,46,55,73
+  @field r showFlag  @ 68

@@ -347,11 +347,16 @@ local function fxTypeAt(track, idx)
   return fxType
 end
 
--- fx_ident for a JSFX is a bare path ('utility/volume'); the system keys JS on a
--- 'JS:' prefix (CU_IDENT, isJS, readJSFXContent), so restore it via fx_type on read.
+-- REAPER hands JSFX idents as bare paths ('utility/volume') from fx_ident and
+-- EnumInstalledFX; JS keys on a 'JS:' prefix (CU_IDENT, isJS, readJSFXContent).
+local function jsIdent(ident)
+  if ident:sub(1, 3) == 'JS:' then return ident end
+  return 'JS:' .. ident
+end
+
 local function fxIdentAt(track, idx, fxType)
   local _, ident = reaper.TrackFX_GetNamedConfigParm(track, idx, 'fx_ident')
-  if fxType == 'JS' and ident ~= '' and ident:sub(1, 3) ~= 'JS:' then ident = 'JS:' .. ident end
+  if fxType == 'JS' and ident ~= '' then ident = jsIdent(ident) end
   return ident
 end
 
@@ -1049,12 +1054,14 @@ function rm:showFx(id)
 end
 
 --contract: enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
+--contract: JS rows enumerate bare; their ident is canonicalised to the 'JS:' form
 function rm:installedFx()
   if installedFxCache then return installedFxCache end
   local out, i = {}, 0
   while true do
     local ok, name, ident = reaper.EnumInstalledFX(i)
     if not ok then break end
+    if name:sub(1, 3) == 'JS:' then ident = jsIdent(ident) end
     util.add(out, { ident = ident, name = name })
     i = i + 1
   end
