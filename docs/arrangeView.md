@@ -186,6 +186,17 @@ Cursor nav steps by whole rows and columns — arrows ±1, PageUp/Down
 negative coordinates clamp (in `setCursor`), so PageDown, End, and the
 wheel may park the cursor on empty rows past the last take.
 
+Tab and Shift+Tab step between the stop rows of the cursor's own
+column: the start row of each instance, and the first free row after
+it. Where takes abut the two coincide and collapse to one stop, so a
+solid run costs one press per take; a gap earns a stop of its own,
+which is where the next drop would land.
+
+Both ends hold rather than wrap, matching the rest of cursor nav. Only
+stops strictly past the cursor row count, so Shift+Tab from inside a
+take goes to that take's own start before moving on — the snap you
+want when a nudge has left you mid-item.
+
 ## Nudge and resize
 
 Nudge steps one row at a time. The only block is a head-on collision:

@@ -209,6 +209,26 @@ local function navCursorBy(dRow, dCol)
   navCursorTo(cursorRow + dRow, cursorCol + dCol)
 end
 
+-- Every row Tab stops on in a column: each instance's start, and the first free
+-- row after it. The set collapses the two where takes abut.
+local function stopRows(trackIdx)
+  local stops = {}
+  for _, take in ipairs(am:tracksTakes(trackIdx)) do
+    stops[math.floor(av:qnToRow(take.startQN))] = true
+    stops[math.floor(av:qnToRow(take.startQN + take.lengthQN))] = true
+  end
+  return stops
+end
+
+--invariant: drop-seek lands on the nearest stop row past the cursor in its column; the ends hold.
+local function seekDrop(dir)
+  local best
+  for row in pairs(stopRows(cursorCol)) do
+    if (row - cursorRow) * dir > 0 and (not best or (row - best) * dir < 0) then best = row end
+  end
+  if best then navCursorTo(best, cursorCol) end
+end
+
 -- MIDI slots on a track — for the tracker's pickers/nav via the arrange facade.
 local function midiSlots(trackIdx)
   local out = {}
@@ -797,6 +817,8 @@ arrange:registerAll {
   arrangePageDown     = function() navCursorBy( PAGE_ROWS, 0) end,
   arrangeHome         = function() navCursorTo(0, cursorCol) end,
   arrangeEnd          = function() navCursorTo(av:qnToRow(am:projectEndQN()), cursorCol) end,
+  arrangeNextDrop     = function() seekDrop( 1) end,
+  arrangePrevDrop     = function() seekDrop(-1) end,
   arrangeSelectUp     = function() selectBy(-1,  0) end,
   arrangeSelectDown   = function() selectBy( 1,  0) end,
   arrangeSelectLeft   = function() selectBy( 0, -1) end,

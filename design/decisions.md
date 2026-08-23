@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Tab and Shift+Tab step the arrange caret between the stop rows of its own column:
+  each instance's start, and the first free row after it. Stopping only at starts would need a
+  special case to reach the append point past the last take. Holding both rows in a set collapses
+  the shared boundary where takes abut, so a solid run still costs one press per take, and a gap
+  earns a stop where the next drop would land.
+
 - **2026-08-23** — Ctrl-` toggles arrange's drop advance between arrangeAdvanceBy rows and the
   length of the take just placed, so a run of drop keys lays takes end to end whatever their
   lengths. The length read is the clipped one: relayout truncates a placement at its downstream

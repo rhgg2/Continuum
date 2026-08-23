@@ -48,6 +48,14 @@ local shiftNavItems = {
   { track = 'tr2', name = 'd', pos = 0 },
 }
 
+-- Layout for the Tab cases: tr1 holds takes at rows 0, 2 (four rows long) and 8; tr2 one at row 4.
+local tabNavItems = {
+  { track = 'tr1', name = 'a', pos = 0 },
+  { track = 'tr1', name = 'b', pos = 2, len = 4 },
+  { track = 'tr1', name = 'c', pos = 8 },
+  { track = 'tr2', name = 'd', pos = 4 },
+}
+
 return {
   {
     name = 'cursor defaults to (0,0); setCursor clamps negatives and floors',
@@ -409,6 +417,93 @@ return {
       h.cmgr:invoke('arrangeHome')
       t.eq(av:cursorRow(), 0, 'Home parked the caret at the top')
       t.eq(#util.keys(av:selectionSet()), 0, 'and cleared the selection')
+    end,
+  },
+
+  {
+    name = 'Tab walks down the column, stopping at each start and each free row after a take',
+    run = function(harness)
+      local h, av = mkArrange(harness, tabNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 1, 'the free row where the take at row 0 ends')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 2, 'on to the next start')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 6, 'over the four rows that take covers, to where it ends')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 8, 'the last start')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 9, 'and the free row after it — the append point')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 9, 'which holds the caret; no wrap')
+    end,
+  },
+
+  {
+    name = 'abutting takes collapse their shared boundary to one Tab stop',
+    run = function(harness)
+      local h, av = mkArrange(harness, { { track = 'tr1', name = 'a', pos = 0, len = 2 },
+                                         { track = 'tr1', name = 'b', pos = 2, len = 2 } })
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 2, "the second take's start, which is also the first take's end")
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 4, 'the free row past the run')
+    end,
+  },
+
+  {
+    name = 'Shift+Tab walks back up, snapping to the start of the take it is inside',
+    run = function(harness)
+      local h, av = mkArrange(harness, tabNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(4, 0)                   -- inside the take spanning rows 2..5
+      h.cmgr:invoke('arrangePrevDrop')
+      t.eq(av:cursorRow(), 2, 'the take under the caret pulls it to its own start')
+      h.cmgr:invoke('arrangePrevDrop')
+      t.eq(av:cursorRow(), 1, 'the free row above it, where the take at row 0 ends')
+      h.cmgr:invoke('arrangePrevDrop')
+      t.eq(av:cursorRow(), 0, 'then on to that take')
+      h.cmgr:invoke('arrangePrevDrop')
+      t.eq(av:cursorRow(), 0, 'the first take holds the caret; no wrap')
+    end,
+  },
+
+  {
+    name = 'Tab only sees the takes in the cursor column',
+    run = function(harness)
+      local h, av = mkArrange(harness, tabNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 1)
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 4, "tr2's lone take, not tr1's at row 1 or 2")
+      t.eq(av:cursorCol(), 1, 'and the column is unchanged')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 5, 'the free row after it')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 5, 'nothing below that in this column')
+    end,
+  },
+
+  {
+    name = 'Tab clears the selection like any other bare nav',
+    run = function(harness)
+      local h, av = mkArrange(harness, tabNavItems)
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(0, 0)
+      h.cmgr:invoke('arrangeSelectDown')
+      t.eq(#util.keys(av:selectionSet()), 1, 'the run selected the take at row 0')
+      h.cmgr:invoke('arrangeNextDrop')
+      t.eq(av:cursorRow(), 2, 'Tab still moved the caret')
+      t.eq(#util.keys(av:selectionSet()), 0, 'and took the selection with it')
     end,
   },
 
