@@ -34,17 +34,10 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+**A rename edits the root** — implemented directly, without a brief.
+(design § vary; `docs/arrangeManager.md` § Renaming and name drift)
 
 ## Queued (current phase; one-liners)
-- A rename edits the root: `am:renameSlot` rewrites the root across every
-  slot on the track sharing it, each keeping its own ordinal, when the
-  submitted ordinal matches the slot's own; a changed ordinal renames that
-  slot alone and takes it out of the family. The rename fields open with
-  the root selected — tracker take properties and the arrange palette,
-  through an EEL `SelectionStart`/`SelectionEnd` callback (the picker
-  idiom at `chrome.lua:609`, parameterised with `Function_SetValue`).
-  `am_spec`, `docs/arrangeManager.md` § Renaming and name drift.
 - `tv:vary()` on Alt+Shift+→, with a menu row beside duplicate: selects the
   variant slot, so the tracker rebinds, and names the new take as the
   current instance, so loop to item follows it. Refuses in silence with no

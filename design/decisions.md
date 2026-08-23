@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — The tracker's take-properties name field renames the slot the tracker is on
+  rather than the take it is bound to, and every rename reaches the parked keeper as well as the
+  live instances. A pooled slot's name can then only split through a rename made in REAPER, which
+  stays the one accepted source of drift; tm:setName and mm:setName retire with their last caller.
+  An unnamed slot has no family, since every unnamed slot on a track shares its empty root. See
+  docs/arrangeManager.md § Renaming and name drift.
+
 - **2026-08-23** — am:vary drops its variant naming no length, so the parked keeper's own length —
   the source's natural length — carries, and relayout caps it at the neighbour. The alternative was
   to replay the replaced instance's rendered length, which would have made the variant born

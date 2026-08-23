@@ -79,13 +79,28 @@ the source's blob onto it; `deleteSlot` (the lone forever-delete) `dropPool`s it
 
 ### Renaming and name drift
 
-No slot-name field is stored. The displayed name is whatever the
-first-found take with that id is called. Renaming a slot walks every
-item on the track and writes `SetTakeName` to each take whose id
-matches. cm holds no name. If the user renames a single take
-directly in REAPER, the palette will start showing that name once
-it's the first-found — accepted drift, in exchange for not
-multiplying the staleness problem with a cm cache.
+1. No slot-name field is stored, and cm holds no name. The displayed
+   name is whatever the first-found take with that id is called.
+
+1. A rename writes `P_NAME` to every take carrying the slot's id — each
+   live instance, and the parked keeper where the slot has no live one.
+   So a rename never leaves one instance of a pool called something
+   else.
+
+1. A rename edits the root. Where the submitted ordinal matches the
+   slot's own, every slot on the track sharing that root is renamed with
+   it, each keeping its ordinal: `Sausage (var 1)` and `Sausage (var 2)`
+   become `Kenneth (var 1)` and `Kenneth (var 2)` (§ Variants). A changed
+   ordinal renames that one slot, exactly as typed.
+
+1. Every rename inside Continuum goes through `am:renameSlot` — the
+   arrange palette's, and the tracker's take properties, which names the
+   slot the tracker is on rather than the take it is bound to.
+
+1. If the user renames a single take directly in REAPER, the palette
+   will start showing that name once it's the first-found — accepted
+   drift, in exchange for not multiplying the staleness problem with a
+   cm cache.
 
 ## The id chokepoint
 

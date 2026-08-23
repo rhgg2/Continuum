@@ -1,6 +1,6 @@
-@spec vm_take_properties_spec  src=tests/specs/vm_take_properties_spec.lua  loc=328  cases=11
-@exercises midiManager (h.fm), trackerView (h.vm), configManager (h.cm)
-@surface   fm:setName, vm:applyTakeProperties, cm:get, fm:name, fm:length, fm:dump
+@spec vm_take_properties_spec  src=tests/specs/vm_take_properties_spec.lua  loc=311  cases=10
+@exercises trackerView (h.vm), midiManager (h.fm)
+@surface   vm:applyTakeProperties, fm:name, fm:length, fm:dump
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
@@ -15,72 +15,68 @@
   Layer split under test:
     vm:applyTakeProperties — converts beats → rows → ppq, dispatches by mode.
     tm:setLength / rescaleLength / tileLength — own the event walk.
-    tm:setName             — proxies to mm:setName.
+  The name half of the commit renames the slot through arrange, so it is
+  pinned in tracker_page_spec, where that facade exists.
 
 # Cases
-  @case 'rename only: name written, length untouched'  [harness]  @ 22-36
-  @case 'grow: setLength called, no events mutated'  [harness]  @ 40-56
-  @case 'shrink: events past boundary deleted; spanning note clamped'  [harness]  @ 60-98
-  @case 'rescale grow 2×: ppq + endppq scale, length doubles, no deletions'  [harness]  @ 104-132
-  @case 'rescale shrink 0.5×: ppq + endppq halve, length halves'  [harness]  @ 136-153
-  @case 'rescale scales delay: realised stretch is uniform when swing is identity'  [harness]  @ 157-175
-  @case 'tile grow 2×: pattern duplicated once at oldPpq offset'  [harness]  @ 181-211
-  @case 'tile non-multiple 1.5×: full tile + partial tail; events past newPpq dropped'  [harness]  @ 215-236
-  @case 'tile clamps copy endppq at newPpq'  [harness]  @ 240-258
-  @case 'tile preserves cc number, pb shape, and arbitrary metadata on copies'  [harness]  @ 262-306
-  @case 'tile shrink falls through to truncation (resize semantics)'  [harness]  @ 310-325
+  @case 'grow: setLength called, no events mutated'  [harness]  @ 23-39
+  @case 'shrink: events past boundary deleted; spanning note clamped'  [harness]  @ 43-81
+  @case 'rescale grow 2×: ppq + endppq scale, length doubles, no deletions'  [harness]  @ 87-115
+  @case 'rescale shrink 0.5×: ppq + endppq halve, length halves'  [harness]  @ 119-136
+  @case 'rescale scales delay: realised stretch is uniform when swing is identity'  [harness]  @ 140-158
+  @case 'tile grow 2×: pattern duplicated once at oldPpq offset'  [harness]  @ 164-194
+  @case 'tile non-multiple 1.5×: full tile + partial tail; events past newPpq dropped'  [harness]  @ 198-219
+  @case 'tile clamps copy endppq at newPpq'  [harness]  @ 223-241
+  @case 'tile preserves cc number, pb shape, and arbitrary metadata on copies'  [harness]  @ 245-289
+  @case 'tile shrink falls through to truncation (resize semantics)'  [harness]  @ 293-308
 
 # Uses (outbound edges)
-  @use call fm:setName  @ 30
-  @use call vm:applyTakeProperties  @ 31,49,82,117,145,169,193,227,250,282,319
-  @use call cm:get  @ 31
-  @use call fm:name  @ 33,49,82,117,145,169,193,227,250,282,319
-  @use call fm:length  @ 34,51,84,119,147,195,229,321
-  @use call fm:dump  @ 35,52,86,95,120,129,148,171,196,206,230,252,287,322
+  @use call vm:applyTakeProperties  @ 32,65,100,128,152,176,210,233,265,302
+  @use call fm:name  @ 32,65,100,128,152,176,210,233,265,302
+  @use call fm:length  @ 34,67,102,130,178,212,304
+  @use call fm:dump  @ 35,69,78,103,112,131,154,179,189,213,235,270,305
 
 # Fields (r read / w write incl. constructor keys)
-  @field w beats  @ 31,49,82,117,145,169,193,227,250,282,319
-  @field r cc  @ 295,304
-  @field w cc  @ 74,76,78,113,189,272,278
-  @field r ccs  @ 95,129,206,287
-  @field w ccs  @ 72,112,188,270
-  @field w chan  @ 26,27,44,45,65,67,69,70,74,76,78,108
-  @field w chan  @ 109,110,113,140,141,165,185,186,189,220,222,246
-  @field w chan  @ 268,272,276,278,314,315
-  @field r delay  @ 172
-  @field w delay  @ 26,27,44,45,65,67,69,70,108,109,110,140
-  @field w delay  @ 141,165,185,186,220,222,246,268,314,315
-  @field r derived  @ 288
-  @field w detune  @ 26,27,44,45,65,67,69,70,108,109,110,140
-  @field w detune  @ 141,165,185,186,220,222,246,268,314,315
-  @field r endppq  @ 55,90,93,123,125,127,150,152,174,255,257
-  @field w endppq  @ 26,27,44,45,65,67,69,70,108,109,110,140
-  @field w endppq  @ 141,165,185,186,220,222,246,268,314,315
-  @field r evType  @ 296,299
-  @field w evType  @ 74,76,78,113,189,272,276,278
-  @field r grid  @ 31
-  @field r label  @ 305
-  @field w label  @ 278
-  @field w mode  @ 117,145,169,193,227,250,282,319
-  @field w name  @ 22,31,40,49,60,82,104,117,136,145,157,169
-  @field w name  @ 181,193,215,227,240,250,262,282,310,319
-  @field r notes  @ 35,52,86,120,148,171,196,230,252,322
-  @field w notes  @ 25,43,63,107,139,164,184,218,245,267,313
-  @field r numRows  @ 31
-  @field r pitch  @ 202,204
-  @field w pitch  @ 26,27,44,45,65,67,69,70,108,109,110,140
-  @field w pitch  @ 141,165,185,186,220,222,246,268,314,315
-  @field r ppq  @ 54,89,92,97,122,124,126,131,151,173,197
-  @field r ppq  @ 199,200,201,203,207,209,210,231,233,234
-  @field r ppq  @ 235,253,256,290,294,298,303,324
-  @field w ppq  @ 26,27,44,45,65,67,69,70,74,76,78,108
-  @field w ppq  @ 109,110,113,140,141,165,185,186,189,220,222,246
-  @field w ppq  @ 268,272,276,278,314,315
-  @field w run  @ 23,41,61,105,137,158,182,216,241,265,311
-  @field w seed  @ 24,42,62,106,138,163,183,217,244,266,312
-  @field r tag  @ 300
-  @field w tag  @ 276
-  @field r val  @ 301
-  @field w val  @ 74,76,78,113,189,272,276,278
-  @field w vel  @ 26,27,44,45,65,67,69,70,108,109,110,140
-  @field w vel  @ 141,165,185,186,220,222,246,268,314,315
+  @field w beats  @ 32,65,100,128,152,176,210,233,265,302
+  @field r cc  @ 278,287
+  @field w cc  @ 57,59,61,96,172,255,261
+  @field r ccs  @ 78,112,189,270
+  @field w ccs  @ 55,95,171,253
+  @field w chan  @ 27,28,48,50,52,53,57,59,61,91,92,93
+  @field w chan  @ 96,123,124,148,168,169,172,203,205,229,251,255
+  @field w chan  @ 259,261,297,298
+  @field r delay  @ 155
+  @field w delay  @ 27,28,48,50,52,53,91,92,93,123,124,148
+  @field w delay  @ 168,169,203,205,229,251,297,298
+  @field r derived  @ 271
+  @field w detune  @ 27,28,48,50,52,53,91,92,93,123,124,148
+  @field w detune  @ 168,169,203,205,229,251,297,298
+  @field r endppq  @ 38,73,76,106,108,110,133,135,157,238,240
+  @field w endppq  @ 27,28,48,50,52,53,91,92,93,123,124,148
+  @field w endppq  @ 168,169,203,205,229,251,297,298
+  @field r evType  @ 279,282
+  @field w evType  @ 57,59,61,96,172,255,259,261
+  @field r label  @ 288
+  @field w label  @ 261
+  @field w mode  @ 100,128,152,176,210,233,265,302
+  @field w name  @ 23,32,43,65,87,100,119,128,140,152,164,176
+  @field w name  @ 198,210,223,233,245,265,293,302
+  @field r notes  @ 35,69,103,131,154,179,213,235,305
+  @field w notes  @ 26,46,90,122,147,167,201,228,250,296
+  @field r pitch  @ 185,187
+  @field w pitch  @ 27,28,48,50,52,53,91,92,93,123,124,148
+  @field w pitch  @ 168,169,203,205,229,251,297,298
+  @field r ppq  @ 37,72,75,80,105,107,109,114,134,156,180
+  @field r ppq  @ 182,183,184,186,190,192,193,214,216,217
+  @field r ppq  @ 218,236,239,273,277,281,286,307
+  @field w ppq  @ 27,28,48,50,52,53,57,59,61,91,92,93
+  @field w ppq  @ 96,123,124,148,168,169,172,203,205,229,251,255
+  @field w ppq  @ 259,261,297,298
+  @field w run  @ 24,44,88,120,141,165,199,224,248,294
+  @field w seed  @ 25,45,89,121,146,166,200,227,249,295
+  @field r tag  @ 283
+  @field w tag  @ 259
+  @field r val  @ 284
+  @field w val  @ 57,59,61,96,172,255,259,261
+  @field w vel  @ 27,28,48,50,52,53,91,92,93,123,124,148
+  @field w vel  @ 168,169,203,205,229,251,297,298

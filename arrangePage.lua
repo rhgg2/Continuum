@@ -53,6 +53,7 @@ facade.publish('arrange', {
   newTakeBelow    = function(inst, name, lengthQN) return av:newTakeBelow(inst, name, lengthQN) end,
   duplicateBelow  = function(take) return av:duplicateBelow(take) end,
   dropSlot        = function(trackIdx, slotIdx, qnPos) return av:dropSlot(trackIdx, slotIdx, qnPos) end,
+  renameSlot      = function(trackIdx, slotIdx, name)  av:renameSlot(trackIdx, slotIdx, name) end,
   hasPlacedTakes  = function() return av:hasPlacedTakes() end,
   isParkedTake    = function(take) return av:isParkedTake(take) end,
   ownerTrack      = function(take) return av:ownerTrack(take) end,

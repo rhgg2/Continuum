@@ -39,6 +39,14 @@ local function seedTracks(h, specs)
   return tracks
 end
 
+local function slotFor(am, trackIdx, id)
+  for _, s in ipairs(am:trackSlots(trackIdx)) do if s.id == id then return s end end
+end
+
+local function slotAt(am, trackIdx, slotIdx)
+  for _, s in ipairs(am:trackSlots(trackIdx)) do if s.idx == slotIdx then return s end end
+end
+
 return {
   --------------------------------------------------------------------
   -- Discovery
@@ -167,14 +175,84 @@ return {
                     { kind = 'midi', poolGuid = '{p1}', takeName = 'old' },
                     { kind = 'midi', poolGuid = '{other}', takeName = 'leave-me' } } },
       })
-      local slots = am:trackSlots(0)
-      local p1Slot
-      for _, s in ipairs(slots) do if s.id == '{p1}' then p1Slot = s.idx end end
-      am:renameSlot(0, p1Slot, 'lead')
+      am:renameSlot(0, slotFor(am, 0, '{p1}').idx, 'lead')
       local takes = am:tracksTakes(0)
       t.eq(takes[1].name, 'lead')
       t.eq(takes[2].name, 'lead')
       t.eq(takes[3].name, 'leave-me', 'unrelated take untouched')
+    end,
+  },
+
+  {
+    name = 'renameSlot reroots the family, each slot keeping its own ordinal',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4,  poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8,  poolGuid = '{p2}', takeName = 'Bassline (var 1)' },
+                    { kind = 'midi', pos = 12, poolGuid = '{p3}', takeName = 'Sausage (var 1)' } } },
+      })
+      local varSlot = slotFor(am, 0, '{p2}').idx
+      am:renameSlot(0, varSlot, 'Kenneth (var 1)')
+      t.eq(slotFor(am, 0, '{p2}').name, 'Kenneth (var 1)', 'the slot renamed takes the new root')
+      t.eq(slotFor(am, 0, '{p1}').name, 'Kenneth',         'its ordinal-less parent follows')
+      t.eq(slotFor(am, 0, '{p3}').name, 'Sausage (var 1)', 'another family is left alone')
+      local takes = am:tracksTakes(0)
+      t.eq(takes[1].name, 'Kenneth', 'every instance of the parent renamed')
+      t.eq(takes[2].name, 'Kenneth')
+    end,
+  },
+
+  {
+    name = 'renameSlot with a changed ordinal renames that slot alone',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}', takeName = 'Bassline (var 1)' } } },
+      })
+      am:renameSlot(0, slotFor(am, 0, '{p2}').idx, 'Bassline (var 7)')
+      t.eq(slotFor(am, 0, '{p2}').name, 'Bassline (var 7)', 'renamed as typed')
+      t.eq(slotFor(am, 0, '{p1}').name, 'Bassline',         'the family stands where it was')
+    end,
+  },
+
+  {
+    name = 'an unnamed slot has no family',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}' } } },
+      })
+      am:renameSlot(0, slotFor(am, 0, '{p1}').idx, 'Kenneth')
+      t.eq(slotFor(am, 0, '{p1}').name, 'Kenneth')
+      t.eq(slotFor(am, 0, '{p2}').name, '', 'the other unnamed slot is not swept up')
+    end,
+  },
+
+  {
+    name = 'the reroot reaches a parked family member',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' } } },
+      })
+      local parked = am:mintParkedTake(0, 'Bassline (var 2)', 4)
+      am:renameSlot(0, slotFor(am, 0, '{p1}').idx, 'Kenneth')
+      t.eq(slotAt(am, 0, parked).name, 'Kenneth (var 2)', 'the parked keeper followed the root')
+    end,
+  },
+
+  {
+    name = 'renameSlot renames a parked slot through its keeper',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local parked = am:mintParkedTake(0, 'Sketch', 4)
+      am:renameSlot(0, parked, 'Kenneth')
+      t.eq(slotAt(am, 0, parked).name, 'Kenneth', 'no live instance, and still renamed')
     end,
   },
 

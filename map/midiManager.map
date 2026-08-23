@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1503  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1498  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -225,7 +225,7 @@
       @contract  addCC always mints a uuid; a cc with no non-structural key is plain -- no sidecar  @ 1264
   -- Unified uuid-addressed surface
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1421-1440
+  @fn setEot(buf, targetPpq)  @ 1416-1435
       -- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
       -- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
@@ -282,13 +282,12 @@
   @api mm:length()  @ 1401-1406
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
   @api mm:name()  @ 1408-1412
-  @api mm:setName(name)  @ 1414-1417
-  @api mm:setLength(qn)  @ 1446-1459
+  @api mm:setLength(qn)  @ 1441-1454
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1461-1499
+  @api mm:timeSigs()  @ 1456-1494
 
 # Signals emitted (via util.installHooks)
   @emits reload   -- { wholesale=false, chans=set }; chans nil only when wholesale   @ load:604,910 modify:1064
@@ -312,7 +311,7 @@
   @use call    perf.line  @ resolveCollisions:966,983
   @use call    perf.start  @ rebuild:473,474,478,481 flushTake:527,533,545 load:595,630 leaveNest:1044 modify:1060,1064
   @use call    perf.stop  @ rebuild:477,480,514,515 flushTake:540,543,554 load:605,634,915 leaveNest:1044 modify:1060,1064
-  @use call    util.add  @ freeSlot:373 rebuild:495,504 load:644,645,648,649,651,701,707,729,735,754,782,859,865,866 resolveCollisions:960,964,981 timeSigs:1494
+  @use call    util.add  @ freeSlot:373 rebuild:495,504 load:644,645,648,649,651,701,707,729,735,754,782,859,865,866 resolveCollisions:960,964,981 timeSigs:1489
   @use call    util.assign  @ rebuild:500,507 load:644,648,672,783 assignNote:1114,1130 assignCC:1216,1231
   @use call    util.bucket  @ load:661,686,698,723,770,771
   @use call    util.clamp  @ bezierSample:120
@@ -360,14 +359,14 @@
   @call indexPut  @ resolveCollisions:979 addNote:1173 pushCC:1260 assign:1329
   @call leaveNest  @ modify:1065 batch:1076
   @call listOf  @ indexPut:410 indexDrop:411
-  @call liveTake  @ reload:919 modify:1056 take:1374 resolution:1396 length:1402 name:1409 setName:1415 setLength:1447 timeSigs:1462
+  @call liveTake  @ reload:919 modify:1056 take:1374 resolution:1396 length:1402 name:1409 setLength:1442 timeSigs:1457
   @call markChan  @ add:1310 assign:1321,1333 delete:1343
   @call markWire  @ markWireAdded:1013 assign:1322 delete:1344
   @call markWireAdded  @ add:1311
   @call metaFieldsOf  @ saveMetadatum:258
-  @call mm:load  @ reload:920 <load>:1501
-  @call mm:reload  @ eventMeta:poolsRewound:928 setLength:1458
-  @call mm:resolution  @ length:1405 setLength:1453
+  @call mm:load  @ reload:920 <load>:1496
+  @call mm:reload  @ eventMeta:poolsRewound:928 setLength:1453
+  @call mm:resolution  @ length:1405 setLength:1448
   @call noteCollision  @ assignNote:1136 addNote:1176
   @call noteSidecarDecode  @ load:643
   @call noteSidecarEncode  @ noteSidecarEntry:431
@@ -383,8 +382,8 @@
   @call saveMetadatum  @ assignNote:1115,1141 addNote:1179 assignCC:1217,1243 addCC:1289
   @call seatKey  @ cachedSeatKey:388 assignNote:1124,1134 addNote:1175 delete:1349
   @call seatSidecar  @ sidecarPut:460,461 sidecarDrop:465
-  @call setEot  @ setLength:1453
-  @call setTakeGuid  @ load:611 <load>:1501
+  @call setEot  @ setLength:1448
+  @call setTakeGuid  @ load:611 <load>:1496
   @call sidecarDrop  @ resolveCollisions:969 delete:1346
   @call sidecarPut  @ resolveCollisions:980 addNote:1174 addCC:1291 assign:1332
   @call stableByPpq  @ rebuild:479
@@ -393,9 +392,9 @@
 # Unresolved receivers
   @drop body:byte  @ ccSidecarDecode:208,211,212,216,217
   @drop body:sub  @ ccSidecarDecode:205,209
-  @drop buf:sub  @ setEot:1431,1438
+  @drop buf:sub  @ setEot:1426,1433
   @drop chunk:match  @ setTakeGuid:36,37
-  @drop msg:byte  @ setEot:1432,1434,1435
+  @drop msg:byte  @ setEot:1427,1429,1430
   @drop msg:match  @ noteSidecarDecode:171
 
 # REAPER API surface
@@ -431,7 +430,7 @@
   @field r chan  @ delete:1343
   @field w chan  @ noteSidecarDecode:173 ccSidecarDecode:212 224,229 cachedSeatKey:389 noteSidecarEntry:430 ccSidecarEntry:443 load:708 noteCollision:950 resolveCollisions:965,982
   @field w chans  @ load:604 modify:1064
-  @field w denom  @ timeSigs:1488,1494
+  @field w denom  @ timeSigs:1483,1489
   @field w droppedCount  @ load:701,735
   @field r endppq  @ assignNote:1108 addNote:1148
   @field w endppq  @ 224
@@ -464,7 +463,7 @@
   @field r note  @ rebuild:491
   @field w note  @ 70,89 rebuild:483 flushTake:559 enterNest:1030
   @field w noteSidecars  @ 84 rebuild:512
-  @field w num  @ timeSigs:1488,1494
+  @field w num  @ timeSigs:1483,1489
   @field w offset  @ load:842
   @field w oldUuid  @ load:754
   @field w oldVal  @ load:805
@@ -485,7 +484,7 @@
   @field r ppq  @ assignNote:1127 addNote:1148 assignCC:1209,1228 addCC:1271 assign:1325 interpolate:1385
   @field r ppq  @ interpolate:1385,1387
   @field w ppq  @ 224,229 cachedSeatKey:389 noteSidecarEntry:434 ccSidecarEntry:448 load:644,648,706,708 resolveCollisions:965,978,982
-  @field w ppq  @ timeSigs:1488,1494
+  @field w ppq  @ timeSigs:1483,1489
   @field w sampleShadowed  @ 226
   @field r shape  @ assignCC:1210,1238 pushCC:1252,1253 interpolate:1384,1388
   @field w shape  @ 231 pushCC:1252

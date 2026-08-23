@@ -88,6 +88,9 @@ local function resetArrange()
       if inst.take == take then return inst end
     end
   end
+  fakeArrange.renameSlot = function(trackIdx, slotIdx, name)
+    fakeArrange.calls.rename = { trackIdx = trackIdx, slotIdx = slotIdx, name = name }
+  end
   fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
@@ -221,6 +224,30 @@ return {
       t.eq(fakeArrange.calls.mint.src, 'tr1/t1', 'dup passed the bound take as clone source')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 7, 'tracker selected the new parked slot')
       t.eq(fakeModalHost.last.focusName, true, 'dup opens take-properties focused on the name field')
+    end,
+  },
+
+  -- The name field names the slot, so every instance follows it.
+  -- see docs/arrangeManager.md § Renaming and name drift
+  {
+    name = 'take properties renames the slot the tracker is on, not the bound take',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind the take
+      h.cmgr:push('tracker')
+
+      h.cmgr:invoke('takeProperties')
+      local beats = tonumber(fakeModalHost.last.beatsBuf)
+      fakeModalHost.last.callback('Kenneth', beats, 'resize')
+      local renamed = fakeArrange.calls.rename
+      t.eq(renamed.name,     'Kenneth', 'the slot took the submitted name')
+      t.eq(renamed.trackIdx, 0,         'on the track the tracker is on')
+      t.eq(renamed.slotIdx,  0,         'and the slot it is on')
     end,
   },
 

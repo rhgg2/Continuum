@@ -123,6 +123,10 @@ local function parkedItemFor(id)
   end)
 end
 
+local function writeTakeName(take, name)
+  reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
+end
+
 local function isLastInstanceOnTrack(track, id, exceptItem)
   local others = 0
   forEachActiveTake(track, function(take, item)
@@ -629,16 +633,40 @@ end
 
 ----- Slot mutation
 
+-- Which slots a rename touches: unchanged ordinal reroots the family,
+-- a changed ordinal renames just this slot. See docs/arrangeManager.md § Renaming and name drift.
+local function familyRenames(slots, target, name)
+  local oldRoot, oldOrdinal = util.variantRoot(target.name)
+  local newRoot, newOrdinal = util.variantRoot(name)
+  -- An unnamed slot has no family: every other unnamed slot shares its root.
+  if newOrdinal ~= oldOrdinal or oldRoot == '' then return { [target.id] = name } end
+  local out = {}
+  for _, slot in ipairs(slots) do
+    local root, ordinal = util.variantRoot(slot.name)
+    if slot.id and root == oldRoot then
+      out[slot.id] = ordinal and ('%s (var %d)'):format(newRoot, ordinal) or newRoot
+    end
+  end
+  return out
+end
+
+--contract: renames the family when the ordinal is unchanged, else the slot alone; live + parked
 function am:renameSlot(trackIdx, slotIdx, name)
   local track = visibleTrackOfCol(trackIdx)
   if not track then return end
-  local entry = readSlots(track)[slotIdx]
-  if not entry or not entry.id then return end
+  local slots, target = am:trackSlots(trackIdx), nil
+  for _, slot in ipairs(slots) do if slot.idx == slotIdx then target = slot end end
+  if not target or not target.id then return end
+
+  local renames = familyRenames(slots, target, name)
   forEachActiveTake(track, function(take)
-    if takeIdOf(take) == entry.id then
-      reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
-    end
+    local renamed = renames[takeIdOf(take)]
+    if renamed then writeTakeName(take, renamed) end
   end)
+  for id, renamed in pairs(renames) do
+    local _, keeper = parkedItemFor(id)      -- a slot with no live instance still holds its name
+    if keeper then writeTakeName(keeper, renamed) end
+  end
   invalidate()
 end
 
@@ -690,9 +718,7 @@ local function harvestPoolGuid(item)
 end
 
 local function setTakeName(take, name)
-  if take and name and name ~= '' then
-    reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
-  end
+  if take and name and name ~= '' then writeTakeName(take, name) end
 end
 
 local function copyMidiEvents(srcTake, dstTake)
@@ -953,18 +979,14 @@ end
 
 ----- Variants
 
--- A variant's family is its name: `<root> (var N)`, shared root, own ordinal.
--- See docs/arrangeManager.md § Variants.
-local VARIANT = '^(.-)%s*%(var (%d+)%)$'
-
 -- Next name in the family: the highest ordinal in use plus one, so a deleted
--- variant keeps its name out of circulation.
+-- variant keeps its name out of circulation. See docs/arrangeManager.md § Variants.
 local function nextVariantName(trackIdx, name)
-  local root    = name:match(VARIANT) or name
+  local root    = util.variantRoot(name)
   local highest = 0
   for _, slot in ipairs(am:trackSlots(trackIdx)) do
-    local slotRoot, ordinal = slot.name:match(VARIANT)
-    if slotRoot == root and tonumber(ordinal) > highest then highest = tonumber(ordinal) end
+    local slotRoot, ordinal = util.variantRoot(slot.name)
+    if slotRoot == root and ordinal and ordinal > highest then highest = ordinal end
   end
   return ('%s (var %d)'):format(root, highest + 1)
 end

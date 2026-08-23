@@ -1411,11 +1411,6 @@ function mm:name()
   return name
 end
 
-function mm:setName(name)
-  if not liveTake() then return end
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
-end
-
 -- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
 -- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 local function setEot(buf, targetPpq)

@@ -370,6 +370,17 @@ function util.fromBase62(txt)
   return n
 end
 
+-- A slot name splits into root and variant ordinal: `Bassline (var 2)` is
+-- root `Bassline`, ordinal 2. See docs/arrangeManager.md § Variants.
+local VARIANT = '^(.-)%s*%(var (%d+)%)$'
+
+--contract: (root, ordinal) of a slot name; ordinal nil unless the name carries one
+function util.variantRoot(name)
+  local root, ordinal = name:match(VARIANT)
+  if not root then return name end
+  return root, tonumber(ordinal)
+end
+
 --contract: overloaded on type of v: function => call n times for side effect; else build n-array filled with v
 function util.dotimes(n, v)
   if type(v) == 'function' then

@@ -1625,7 +1625,6 @@ end
 function tm:length()               return pendingLen or (mm and mm:length()) or 0 end
 function tm:resolution()           return mm and mm:resolution() end
 function tm:name()                 return mm and mm:name() end
-function tm:setName(name)          if mm then mm:setName(name) end end
 function tm:timeSigs()             return mm and mm:timeSigs() or {} end
 function tm:interpolate(A, B, ppq, field) return mm and mm:interpolate(A, B, ppq, field) end
 

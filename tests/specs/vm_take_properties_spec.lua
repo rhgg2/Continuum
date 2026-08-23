@@ -9,7 +9,8 @@
 -- Layer split under test:
 --   vm:applyTakeProperties — converts beats → rows → ppq, dispatches by mode.
 --   tm:setLength / rescaleLength / tileLength — own the event walk.
---   tm:setName             — proxies to mm:setName.
+-- The name half of the commit renames the slot through arrange, so it is
+-- pinned in tracker_page_spec, where that facade exists.
 
 local t = require('support')
 
@@ -17,24 +18,6 @@ local t = require('support')
 local PPR = 60
 
 return {
-
-  {
-    name = 'rename only: name written, length untouched',
-    run = function(harness)
-      local h = harness.mk{ seed = {
-        notes = {
-          { ppq = 0,   endppq = 60,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
-          { ppq = 600, endppq = 660, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
-        },
-      }}
-      h.fm:setName('Original')
-      h.vm:applyTakeProperties{ name = 'Renamed', beats = h.vm.grid.numRows / h.cm:get('rowPerBeat') }
-
-      t.eq(h.fm:name(),   'Renamed', 'name written')
-      t.eq(h.fm:length(), 3840,      'length unchanged')
-      t.eq(#h.fm:dump().notes, 2,    'no notes deleted')
-    end,
-  },
 
   {
     name = 'grow: setLength called, no events mutated',
