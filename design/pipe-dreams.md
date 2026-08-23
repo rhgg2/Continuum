@@ -204,3 +204,26 @@ Nothing asks for it yet.
 
 **The obligation now:** the interval field's stored value stays cents,
 and the step ladder stays a reading of it.
+
+## A per-placement overlay — one pattern, different each time it stands
+
+> Read `docs/arrangeManager.md` § Variants for what a divergence costs
+> today, and `docs/groupManager.md` § localMode for the routed override
+> one level down.
+
+Two pooled items are one source, so for one of them to differ a second
+source has to exist — which is what `vary` mints. An overlay riding the
+item instead, read at realisation — a transposition, a mute mask, a
+macro depth — would let a placement differ while the source stayed
+single. That is how one pattern stays one pattern across a whole song,
+and it would collapse the fork and the repeat into one gesture.
+
+The cost is a tier realisation does not have. Every rebuild reads the
+take's events and the slot's metadata; the overlay adds a per-item
+reading under both, and the tracker would then draw and edit a picture
+that is no longer the pool's. That reaches well into the rebuild
+pipeline for a divergence a fork already delivers.
+
+**The obligation now:** divergence stays structural. A placement carries
+a start QN and a rendered length and nothing else realisation reads, so
+an overlay would be added rather than untangled.

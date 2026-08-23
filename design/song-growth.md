@@ -143,19 +143,3 @@ REAPER pool has no such layer. Two pooled items are one source; for one
 of them to differ, a second source has to exist. Divergence is
 structural, so it is a verb pressed once rather than a mode left on.
 
-What would collapse the difference is a per-placement overlay —
-transposition, a mute mask, a macro depth, riding the item and read at
-realisation — which is how one pattern stays one pattern across a whole
-song. It reaches well into the rebuild pipeline, and it belongs in
-`design/pipe-dreams.md` rather than here.
-
-## Open
-
-- **Repool if unchanged.** `vary` has to be pressed before the edit
-  that motivates it, at the moment it is least likely to be remembered.
-  One repair is to change `duplicateBelow` so that it places an unpooled copy
-  and folds that copy back into its source slot at the next bind, if
-  events and metadata still match, so divergence is discovered rather
-  than declared; it costs an equality test at every bind and the
-  repooling machinery, and it surprises anyone who wanted a distinct
-  slot holding identical content.
