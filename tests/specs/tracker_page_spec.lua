@@ -430,6 +430,62 @@ return {
     end,
   },
 
+  -- vary: the current instance swapped for one of a fresh variant slot.
+  -- see docs/trackerPage.md § vary
+  {
+    name = 'vary rebinds the tracker to the variant slot and follows its placement',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'v0' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.slotsByIdx[0] = { { idx = 0, name = 'Bassline', kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 4, lengthQN = 4 },
+      }
+      -- am:vary deletes the instance and drops the variant in its place; the
+      -- palette grows by the variant slot (am_spec pins the real one).
+      fakeArrange.vary = function(inst)
+        fakeArrange.calls.vary = { take = inst.take }
+        fakeArrange.instances = {
+          { take = 'v0', trackIdx = 0, slotIdx = 9, startQN = 4, lengthQN = 4 },
+        }
+        util.add(fakeArrange.slotsByIdx[0], { idx = 9, name = 'Bassline (var 1)', kind = 'midi' })
+        fakeArrange.takeByKey['0:9'] = 'v0'
+        return 9, 'v0'
+      end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind i0
+      h.cm:set('global', 'trackerLoopToItem', true)
+
+      h.cmgr:invoke('vary')
+      t.eq(fakeArrange.calls.vary.take, 'i0', 'varied the instance the tracker is in')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 9, 'and selected the variant slot')
+
+      tp:bindFromSelection()                       -- the next frame's resolve
+      t.eq(tp:currentTake(), 'v0', 'the tracker rebound onto the variant')
+      t.deepEq(fakeArrange.calls.loopTo, { 4, 8 }, 'the loop moved onto its placement')
+    end,
+  },
+
+  {
+    name = 'vary with the tracker in no instance does nothing',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'parked' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'parked'       -- bound, but on no placement
+      fakeArrange.vary = function() fakeArrange.calls.vary = true end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+
+      h.cmgr:invoke('vary')
+      t.falsy(fakeArrange.calls.vary, 'no instance to diverge from, so nothing was minted')
+    end,
+  },
+
   {
     name = 'prev/next track + take drive the tv selection, not the arrange cursor',
     run = function(harness)

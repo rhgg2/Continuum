@@ -733,6 +733,7 @@ help:registerPage('tracker', {
   { anchor = 'body.grid', place = 'flow', title = 'Take management', items = {
     { cmd = 'newTakeBelow', label = 'New take' },
     { cmd = 'duplicateBelow', label = 'Duplicate' },
+    { cmd = 'vary', label = 'Vary' },
     { cmd = 'duplicateUnpooledBelow', label = 'Duplicate (unpooled)' },
     { cmd = 'takeProperties', label = 'Take properties' },
   }},
@@ -1628,6 +1629,7 @@ tracker:registerAll{
   takeProperties         = { function() tr:openTakeProperties{} end, 'Take properties' },
   newTakeBelow           = { openNewTakeModal, 'New take' },
   duplicateBelow         = { function() tv:duplicateBelow() end, 'Duplicate take' },
+  vary                   = { function() tv:vary() end, 'Vary take' },
   duplicateUnpooledBelow = { duplicateUnpooledTake, 'Duplicate take (unpooled)' },
 
   prevTrack = { function() tv:gotoTrack(-1) end, 'Previous track' },

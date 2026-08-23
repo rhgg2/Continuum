@@ -522,6 +522,7 @@ function av:newTakeBelow(take, name, lengthQN)
   return am:newTakeBelow(take, name, lengthQN)
 end
 function av:duplicateBelow(take) return am:duplicateBelow(take) end
+function av:vary(take)          return am:vary(take) end
 function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:ownerTrack(take)   return am:ownerTrack(take) end
 function av:dropSlot(trackIdx, slotIdx, qnPos) return am:dropInstance(trackIdx, slotIdx, qnPos) end

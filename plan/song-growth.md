@@ -27,21 +27,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-23 tracker: vary swaps the current instance for a variant slot (§ vary)
 - 2026-08-23 rename: a rename edits the root, from either field (§ vary)
 - 2026-08-23 am: vary replaces an instance with one of a fresh variant slot (§ vary)
 - 2026-08-23 tracker: duplicate below appends another instance of the bound slot (§ Duplicate below)
-- 2026-08-23 tracker: the new take places at the append point (§ The append point)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- `tv:vary()` on Alt+Shift+→, with a menu row beside duplicate: selects the
-  variant slot, so the tracker rebinds, and names the new take as the
-  current instance, so loop to item follows it. Refuses in silence with no
-  current instance. One undo point through the command table's undoDesc.
-  `tracker_page_spec`, `docs/trackerPage.md` § vary.
 - The tracker's unpooled duplicate retires: `tv:duplicateBoundUnpooled`,
   `duplicateUnpooledTake` and its Cmd+Shift+Enter binding and menu row.
   Arrange's own unpooled duplicate stays, and `am:duplicateUnpooledBelow`

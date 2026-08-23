@@ -628,6 +628,22 @@ where the free span below is shorter than the source. An instance cut
 short by a neighbour therefore always refuses, its append point being
 that neighbour's start.
 
+### vary
+
+`vary` (Alt+Shift+→) replaces the current instance with an instance of a
+fresh variant slot, through `am:vary` (`docs/arrangeManager.md` §
+Variants). The variant has its own pool, carrying a copy of the source's
+events and metadata, so edits from here reach this placement alone and
+the parent slot keeps its other instances.
+
+`tv:selectSlot` selects the variant, so the tracker rebinds to it on the
+next frame, and `tv:nameInstance` names its placement, so loop to item
+moves the loop onto it. Both name the same take, the one just dropped
+where the old instance stood.
+
+The verb refuses in silence where the tracker is in no instance, and
+`am:vary` refuses on its own where the bound slot has a single instance.
+
 ## External-mutation watcher
 
 `lastHash` is a `MIDI_GetHash` baseline of the bound take, snapshotted

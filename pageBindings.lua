@@ -75,6 +75,7 @@ pageBindings.tracker = {
   takeProperties         = { {ImGui.Key_Backspace, ImGui.Mod_Super} },
   newTakeBelow           = { {ImGui.Key_Enter, ImGui.Mod_Super} },
   duplicateBelow         = { {ImGui.Key_DownArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} },
+  vary                   = { {ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} },
   duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift} },
   matchGridToCursor      = { {ImGui.Key_M, ImGui.Mod_Super} },
   groupDuplicate         = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },

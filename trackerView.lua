@@ -341,6 +341,16 @@ function tv:duplicateBelow()
   return take
 end
 
+--contract: the current instance replaced by one of a fresh variant slot; nil with no instance
+--invariant: the tracker rebinds to the variant, and its placement becomes the current instance
+function tv:vary()
+  local inst = self:currentInstance(); if not inst then return end
+  local slot, take = arrange().vary(inst); if not slot then return end
+  self:selectSlot(slot)
+  self:nameInstance(take)
+  return slot
+end
+
 --contract: clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx
 function tv:duplicateBoundUnpooled()
   local trackIdx = selectedTrackIdx(); if not trackIdx then return end
