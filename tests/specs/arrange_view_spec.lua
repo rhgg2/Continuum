@@ -966,6 +966,30 @@ return {
   },
 
   {
+    name = 'the split key cuts the take at the caret and leaves the caret on the lower half',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      av:setCursor(4, 0)
+      h.cmgr:invoke('arrangeSplit')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'one take became two')
+      t.eq(takeAt(takes, 2).lengthQN, 2, 'the upper half ends at the caret')
+      t.eq(takeAt(takes, 4).lengthQN, 2, 'the lower half runs to where the whole one did')
+      t.eq(av:cursorRow(), 4, 'the caret holds, so it stands on the new start row')
+    end,
+  },
+
+  {
+    name = 'a split on the start row has nothing to cut',
+    run = function(harness)
+      local h, av, am = mkTrimmable(harness)
+      av:setCursor(2, 0)
+      h.cmgr:invoke('arrangeSplit')
+      t.eq(#am:tracksTakes(0), 1, 'the take is left whole')
+    end,
+  },
+
+  {
     name = 'the caret off the start row moves the tail, leaving the head alone',
     run = function(harness)
       local h, av, am = mkTrimmable(harness)

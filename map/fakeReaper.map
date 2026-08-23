@@ -1,28 +1,28 @@
-@module fakeReaper  src=tests/fakeReaper.lua  loc=1418  mode=namespace  self=M
+@module fakeReaper  src=tests/fakeReaper.lua  loc=1435  mode=namespace  self=M
 
 # Module-level constants
   @const M = {}  @ 5
 
 # Public API (M.*)
-  @api M.new()  @ 7-1416
+  @api M.new()  @ 7-1433
 
 # Unresolved receivers
   @drop B64A:byte  @ new:311
   @drop B64A:sub  @ new:320,326
   @drop bytes:byte  @ new:421,422,423
   @drop chunk:gmatch  @ new:383
-  @drop chunk:match  @ new:826
+  @drop chunk:match  @ new:838
   @drop ident:sub  @ new:244
   @drop k:match  @ new:130
   @drop k:sub  @ new:129
   @drop ln:match  @ new:388,389
-  @drop msg:byte  @ new:1081,1084
-  @drop msg:match  @ new:1194
-  @drop msg:sub  @ new:1101,1102,1104,1107
+  @drop msg:byte  @ new:1098,1101
+  @drop msg:match  @ new:1211
+  @drop msg:sub  @ new:1118,1119,1121,1124
   @drop parm:match  @ new:231,232
-  @drop r.MIDI_GetAllEvts  @ new:1145
-  @drop r.MIDI_GetPPQPosFromProjQN  @ new:1125
-  @drop r.genGuid  @ new:764,1297
+  @drop r.MIDI_GetAllEvts  @ new:1162
+  @drop r.MIDI_GetPPQPosFromProjQN  @ new:1142
+  @drop r.genGuid  @ new:764,1314
   @drop s:byte  @ new:315,334
   @drop s:match  @ new:399
   @drop s:sub  @ new:397
@@ -37,7 +37,7 @@
   @field w ColorToNative  @ new:700
   @field w CountMediaItems  @ new:494
   @field w CountTakes  @ new:496
-  @field w CountTempoTimeSigMarkers  @ new:944
+  @field w CountTempoTimeSigMarkers  @ new:961
   @field w CountTrackMediaItems  @ new:665
   @field w CountTracks  @ new:488
   @field w CreateNewMIDIItemInProj  @ new:748
@@ -47,10 +47,10 @@
   @field w EnumInstalledFX  @ new:477
   @field w GetActiveTake  @ new:667
   @field w GetAppVersion  @ new:68
-  @field w GetCursorPosition  @ new:893
-  @field w GetCursorPositionEx  @ new:894
+  @field w GetCursorPosition  @ new:910
+  @field w GetCursorPositionEx  @ new:911
   @field w GetDisplayedMediaItemColor2  @ new:693
-  @field w GetExtState  @ new:975
+  @field w GetExtState  @ new:992
   @field w GetItemStateChunk  @ new:675
   @field w GetMasterTrack  @ new:550
   @field w GetMediaItem  @ new:495
@@ -64,23 +64,23 @@
   @field w GetMediaSourceFileName  @ new:671
   @field w GetMediaSourceLength  @ new:672
   @field w GetMediaTrackInfo_Value  @ new:513
-  @field w GetPlayPosition  @ new:909
-  @field w GetPlayPositionEx  @ new:910
-  @field w GetPlayState  @ new:908
+  @field w GetPlayPosition  @ new:926
+  @field w GetPlayPositionEx  @ new:927
+  @field w GetPlayState  @ new:925
   @field w GetProjExtState  @ new:50
   @field w GetProjectPath  @ new:70
   @field w GetProjectStateChangeCount  @ new:60
   @field w GetResourcePath  @ new:74
-  @field w GetSelectedMediaItem  @ new:878
+  @field w GetSelectedMediaItem  @ new:895
   @field w GetSelectedTrack  @ new:512
   @field w GetSetMediaItemTakeInfo_String  @ new:88
   @field w GetSetMediaTrackInfo_String  @ new:78
-  @field w GetSetRepeat  @ new:902
-  @field w GetSet_LoopTimeRange  @ new:912
+  @field w GetSetRepeat  @ new:919
+  @field w GetSet_LoopTimeRange  @ new:929
   @field w GetTake  @ new:497
   @field w GetTakeGUID  @ new:98
   @field w GetTakeName  @ new:669
-  @field w GetTempoTimeSigMarker  @ new:945
+  @field w GetTempoTimeSigMarker  @ new:962
   @field w GetTouchedOrFocusedFX  @ new:467
   @field w GetTrack  @ new:489
   @field w GetTrackGUID  @ new:542
@@ -91,56 +91,56 @@
   @field w GetTrackStateChunk  @ new:347
   @field w ImGui_GetBuiltinPath  @ new:46
   @field w InsertTrackAtIndex  @ new:535
-  @field w MIDI_CountEvts  @ new:1011
-  @field w MIDI_DeleteCC  @ new:1203
-  @field w MIDI_DeleteNote  @ new:1187
-  @field w MIDI_DeleteTextSysexEvt  @ new:1207
-  @field w MIDI_DisableSort  @ new:1173
-  @field w MIDI_GetAllEvts  @ new:1129
-  @field w MIDI_GetCC  @ new:1155
-  @field w MIDI_GetCCShape  @ new:1161
-  @field w MIDI_GetHash  @ new:1144
-  @field w MIDI_GetNote  @ new:1149
-  @field w MIDI_GetPPQPosFromProjQN  @ new:930
-  @field w MIDI_GetPPQPosFromProjTime  @ new:921
-  @field w MIDI_GetProjQNFromPPQPos  @ new:936
-  @field w MIDI_GetProjTimeFromPPQPos  @ new:925
-  @field w MIDI_GetTextSysexEvt  @ new:1167
-  @field w MIDI_InsertCC  @ new:1248
-  @field w MIDI_InsertNote  @ new:1229
-  @field w MIDI_InsertTextSysexEvt  @ new:1212
-  @field w MIDI_SetAllEvts  @ new:1136
-  @field w MIDI_SetCC  @ new:1255
-  @field w MIDI_SetCCShape  @ new:1266
+  @field w MIDI_CountEvts  @ new:1028
+  @field w MIDI_DeleteCC  @ new:1220
+  @field w MIDI_DeleteNote  @ new:1204
+  @field w MIDI_DeleteTextSysexEvt  @ new:1224
+  @field w MIDI_DisableSort  @ new:1190
+  @field w MIDI_GetAllEvts  @ new:1146
+  @field w MIDI_GetCC  @ new:1172
+  @field w MIDI_GetCCShape  @ new:1178
+  @field w MIDI_GetHash  @ new:1161
+  @field w MIDI_GetNote  @ new:1166
+  @field w MIDI_GetPPQPosFromProjQN  @ new:947
+  @field w MIDI_GetPPQPosFromProjTime  @ new:938
+  @field w MIDI_GetProjQNFromPPQPos  @ new:953
+  @field w MIDI_GetProjTimeFromPPQPos  @ new:942
+  @field w MIDI_GetTextSysexEvt  @ new:1184
+  @field w MIDI_InsertCC  @ new:1265
+  @field w MIDI_InsertNote  @ new:1246
+  @field w MIDI_InsertTextSysexEvt  @ new:1229
+  @field w MIDI_SetAllEvts  @ new:1153
+  @field w MIDI_SetCC  @ new:1272
+  @field w MIDI_SetCCShape  @ new:1283
   @field w MIDI_SetItemExtents  @ new:808
-  @field w MIDI_SetNote  @ new:1236
-  @field w MIDI_SetTextSysexEvt  @ new:1219
-  @field w MIDI_Sort  @ new:1174
-  @field w Main_OnCommand  @ new:954
+  @field w MIDI_SetNote  @ new:1253
+  @field w MIDI_SetTextSysexEvt  @ new:1236
+  @field w MIDI_Sort  @ new:1191
+  @field w Main_OnCommand  @ new:971
   @field w MarkTrackItemsDirty  @ new:101
   @field w MoveMediaItemToTrack  @ new:717
   @field w PCM_Source_CreateFromFile  @ new:786
   @field w PreventUIRefresh  @ new:545
   @field w RemoveTrackSend  @ new:605
-  @field w SelectAllMediaItems  @ new:869
-  @field w SetEditCurPos  @ new:896
-  @field w SetExtState  @ new:971
-  @field w SetItemStateChunk  @ new:825
+  @field w SelectAllMediaItems  @ new:886
+  @field w SetEditCurPos  @ new:913
+  @field w SetExtState  @ new:988
+  @field w SetItemStateChunk  @ new:837
   @field w SetMediaItemInfo_Value  @ new:796
-  @field w SetMediaItemSelected  @ new:875
+  @field w SetMediaItemSelected  @ new:892
   @field w SetMediaItemTakeInfo_Value  @ new:817
   @field w SetMediaItemTake_Source  @ new:791
   @field w SetMediaTrackInfo_Value  @ new:528
   @field w SetProjExtState  @ new:56
   @field w SetTrackSendInfo_Value  @ new:612
   @field w SetTrackStateChunk  @ new:376
-  @field w ShowConsoleMsg  @ new:979
-  @field w ShowMessageBox  @ new:966
-  @field w StuffMIDIMessage  @ new:960
+  @field w ShowConsoleMsg  @ new:996
+  @field w ShowMessageBox  @ new:983
+  @field w StuffMIDIMessage  @ new:977
   @field w TakeIsMIDI  @ new:668
-  @field w TimeMap2_QNToTime  @ new:832
+  @field w TimeMap2_QNToTime  @ new:849
   @field w TimeMap2_timeToQN  @ new:709
-  @field w TimeMap_GetTimeSigAtTime  @ new:950
+  @field w TimeMap_GetTimeSigAtTime  @ new:967
   @field w TrackFX_AddByName  @ new:156
   @field w TrackFX_CopyToTrack  @ new:178
   @field w TrackFX_Delete  @ new:163
@@ -166,90 +166,90 @@
   @field w Undo_EndBlock2  @ new:548
   @field w ValidatePtr2  @ new:498
   @field r __item  @ new:759,778
-  @field w __item  @ new:742,837
-  @field w __midiSrc  @ new:765,850,1299
-  @field r __order  @ new:1006
-  @field w __order  @ new:1003,1008
+  @field w __item  @ new:742,854
+  @field w __midiSrc  @ new:765,867,1316
+  @field r __order  @ new:1023
+  @field w __order  @ new:1020,1025
   @field w __src  @ new:787
   @field w __take  @ new:759,778
   @field w __track  @ new:537,549
   @field w _state  @ new:36
-  @field r activeTake  @ new:667,760,779,811,843,1293
+  @field r activeTake  @ new:667,760,779,811,827,841,860,1310
   @field w activeTake  @ new:653
   @field r appVersion  @ new:68
-  @field w b1  @ new:961
-  @field w b2  @ new:961
-  @field w b3  @ new:961
-  @field w btn  @ new:967
-  @field r calls  @ new:263,271,458,898,915,955
-  @field r calls  @ new:961
-  @field w calls  @ new:29,1375
-  @field r ccs  @ new:1013,1038,1131,1156,1162,1177,1204,1250,1252,1256,1267
-  @field r ccs  @ new:1401,1407,1412
-  @field w ccs  @ new:996,1112,1398,1412
-  @field r chan  @ new:1035,1036,1041,1152,1158,1195,1400,1402
-  @field w chan  @ new:1087,1096,1231,1242,1250,1261,1400,1402
-  @field r chanmsg  @ new:1041,1158,1401
-  @field w chanmsg  @ new:1096,1250,1260,1401
-  @field w cmd  @ new:955
-  @field r console  @ new:980
-  @field w console  @ new:31,1376
-  @field r cursorTime  @ new:893,894
-  @field w cursorTime  @ new:10,897,1275
+  @field w b1  @ new:978
+  @field w b2  @ new:978
+  @field w b3  @ new:978
+  @field w btn  @ new:984
+  @field r calls  @ new:263,271,458,915,932,972
+  @field r calls  @ new:978
+  @field w calls  @ new:29,1392
+  @field r ccs  @ new:1030,1055,1148,1173,1179,1194,1221,1267,1269,1273,1284
+  @field r ccs  @ new:1418,1424,1429
+  @field w ccs  @ new:1013,1129,1415,1429
+  @field r chan  @ new:1052,1053,1058,1169,1175,1212,1417,1419
+  @field w chan  @ new:1104,1113,1248,1259,1267,1278,1417,1419
+  @field r chanmsg  @ new:1058,1175,1418
+  @field w chanmsg  @ new:1113,1267,1277,1418
+  @field w cmd  @ new:972
+  @field r console  @ new:997
+  @field w console  @ new:31,1393
+  @field r cursorTime  @ new:910,911
+  @field w cursorTime  @ new:10,914,1292
   @field w defer  @ new:65
   @field r deferred  @ new:65
   @field w deferred  @ new:34
-  @field r denom  @ new:948
-  @field w denom  @ new:1286
+  @field r denom  @ new:965
+  @field w denom  @ new:1303
   @field r dst  @ new:558,582,593,635
-  @field w dst  @ new:602,1358
-  @field r dstChan  @ new:639,1359
-  @field w dstChan  @ new:602,620,1359
+  @field w dst  @ new:602,1375
+  @field r dstChan  @ new:639,1376
+  @field w dstChan  @ new:602,620,1376
   @field r enabled  @ new:149
   @field w enabled  @ new:153
-  @field w endT  @ new:916
-  @field r endppq  @ new:1036,1152,1399
-  @field w endppq  @ new:1087,1094,1231,1241,1399
-  @field r eventtype  @ new:1047,1049,1170,1194,1403
-  @field w eventtype  @ new:1104,1107,1214,1224,1403
+  @field w endT  @ new:933
+  @field r endppq  @ new:1053,1169,1416
+  @field w endppq  @ new:1104,1111,1248,1258,1416
+  @field r eventtype  @ new:1064,1066,1187,1211,1420
+  @field w eventtype  @ new:1121,1124,1231,1241,1420
   @field r flag  @ new:359,363
-  @field w flag  @ new:358,421,955
-  @field r flags  @ new:1053,1062,1406
-  @field w flags  @ new:1032,1109,1406
+  @field w flag  @ new:358,421,972
+  @field r flags  @ new:1070,1079,1423
+  @field w flags  @ new:1049,1126,1423
   @field r floatingFx  @ new:456,457,462
   @field w floatingFx  @ new:453
-  @field w fn  @ new:263,271,459,898,916,955,961
-  @field r fxByTrack  @ new:113,140,158,159,164,179,196,197,348,377,561,1307
+  @field w fn  @ new:263,271,459,915,933,972,978
+  @field r fxByTrack  @ new:113,140,158,159,164,179,196,197,348,377,561,1324
   @field w fxByTrack  @ new:111
-  @field r fxGuids  @ new:166,182,201,202,440,441,562,1324,1325
+  @field r fxGuids  @ new:166,182,201,202,440,441,562,1341,1342
   @field w fxGuids  @ new:437
-  @field r fxIO  @ new:210,230,1310
+  @field r fxIO  @ new:210,230,1327
   @field w fxIO  @ new:112
   @field r fxIdx  @ new:471
   @field w fxIdx  @ new:264,272,459
   @field r fxNamedParms  @ new:174,254,262
   @field w fxNamedParms  @ new:174,260
-  @field r fxParamNames  @ new:284,291,1329
+  @field r fxParamNames  @ new:284,291,1346
   @field w fxParamNames  @ new:281
-  @field r fxParamSections  @ new:299,1332
+  @field r fxParamSections  @ new:299,1349
   @field w fxParamSections  @ new:297
   @field r fxParams  @ new:173,270,276
   @field w fxParams  @ new:173,267
   @field r fxPinMaps  @ new:220,225
   @field w fxPinMaps  @ new:214
   @field r fxType  @ new:119
-  @field r gain  @ new:1361
+  @field r gain  @ new:1378
   @field w genGuid  @ new:733
-  @field r globalExt  @ new:972,976
+  @field r globalExt  @ new:989,993
   @field w globalExt  @ new:21
-  @field r gmem  @ new:1372,1373,1384
-  @field w gmem  @ new:33,1377
-  @field w gmem_attach  @ new:1371
-  @field w gmem_read  @ new:1373
-  @field w gmem_write  @ new:1372
+  @field r gmem  @ new:1389,1390,1401
+  @field w gmem  @ new:33,1394
+  @field w gmem_attach  @ new:1388
+  @field w gmem_read  @ new:1390
+  @field w gmem_write  @ new:1389
   @field r hi  @ new:221
   @field w hi  @ new:225
-  @field r huge  @ new:673,860,1124
+  @field r huge  @ new:673,877,1141
   @field r ident  @ new:114,193,480
   @field w ident  @ new:160,193,418
   @field r inBus  @ new:359
@@ -257,58 +257,58 @@
   @field r ins  @ new:211
   @field w ins  @ new:210
   @field r installedFx  @ new:478
-  @field w installedFx  @ new:30,1319
-  @field r isMidi  @ new:846,848
-  @field r item  @ new:837
+  @field w installedFx  @ new:30,1336
+  @field r isMidi  @ new:863,865
+  @field r item  @ new:854
   @field w item  @ new:759,778
   @field r itemCustomColor  @ new:683,696,799
   @field w itemCustomColor  @ new:661
-  @field r itemForTake  @ new:100,105,761,780,844,937,1291
+  @field r itemForTake  @ new:100,105,761,780,861,954,1308
   @field w itemForTake  @ new:22
-  @field r itemLen  @ new:682,758,774,798,810,842,1304
+  @field r itemLen  @ new:682,758,774,798,810,859,1321
   @field w itemLen  @ new:652
-  @field r itemPos  @ new:681,757,773,797,809,841,938,1303
+  @field r itemPos  @ new:681,757,773,797,809,858,955,1320
   @field w itemPos  @ new:651
-  @field r itemsByTrack  @ new:665,666,711,719,725,726,740,741,837,838,839,871
-  @field r itemsByTrack  @ new:881
+  @field r itemsByTrack  @ new:665,666,711,719,725,726,740,741,854,855,856,888
+  @field r itemsByTrack  @ new:898
   @field w itemsByTrack  @ new:650
   @field r lastTouched  @ new:468
-  @field r len  @ new:842,855
+  @field r len  @ new:859,872
   @field r lo  @ new:221
   @field w lo  @ new:225
-  @field r loopEnd  @ new:918
-  @field w loopEnd  @ new:28,914,1276
-  @field r loopStart  @ new:914,918,1276
+  @field r loopEnd  @ new:935
+  @field w loopEnd  @ new:28,931,1293
+  @field r loopStart  @ new:931,935,1293
   @field w loopStart  @ new:27
   @field r master  @ new:550
   @field w master  @ new:549
-  @field r messages  @ new:967
+  @field r messages  @ new:984
   @field w messages  @ new:32
-  @field r midiBlob  @ new:1118,1134,1138
-  @field w midiBlob  @ new:1118
-  @field r midiFlags  @ new:637,1346
-  @field w midiFlags  @ new:602,618,1360
-  @field r missingFx  @ new:157,1313
+  @field r midiBlob  @ new:1135,1151,1155
+  @field w midiBlob  @ new:1135
+  @field r midiFlags  @ new:637,1363
+  @field w midiFlags  @ new:602,618,1377
+  @field r missingFx  @ new:157,1330
   @field w missingFx  @ new:155
-  @field w mode  @ new:961
-  @field r msg  @ new:1048,1049,1053,1062,1170,1194,1404,1406
-  @field w msg  @ new:967,1032,1104,1107,1109,1214,1225,1404,1406
-  @field r msg2  @ new:1041,1158,1402
-  @field w msg2  @ new:1096,1251,1262,1402
-  @field r msg3  @ new:1041,1158,1402
-  @field w msg3  @ new:1096,1251,1263,1402
-  @field r mute  @ new:642,1360
-  @field w mute  @ new:623,1360
-  @field r muted  @ new:1035,1040,1050,1152,1158,1170,1400,1402,1404
-  @field w muted  @ new:1087,1097,1104,1107,1214,1222,1232,1239,1251,1258,1400,1402
-  @field w muted  @ new:1404
+  @field w mode  @ new:978
+  @field r msg  @ new:1065,1066,1070,1079,1187,1211,1421,1423
+  @field w msg  @ new:984,1049,1121,1124,1126,1231,1242,1421,1423
+  @field r msg2  @ new:1058,1175,1419
+  @field w msg2  @ new:1113,1268,1279,1419
+  @field r msg3  @ new:1058,1175,1419
+  @field w msg3  @ new:1113,1268,1280,1419
+  @field r mute  @ new:642,1377
+  @field w mute  @ new:623,1377
+  @field r muted  @ new:1052,1057,1067,1169,1175,1187,1417,1419,1421
+  @field w muted  @ new:1104,1114,1121,1124,1231,1239,1249,1256,1268,1275,1417,1419
+  @field w muted  @ new:1421
   @field r name  @ new:248,480
   @field w new  @ new:7
-  @field r notes  @ new:1013,1034,1131,1150,1176,1189,1190,1231,1233,1237,1399
-  @field r notes  @ new:1399,1407,1412
-  @field w notes  @ new:996,1112,1398,1412
-  @field r num  @ new:948
-  @field w num  @ new:1286
+  @field r notes  @ new:1030,1051,1148,1167,1193,1206,1207,1248,1250,1254,1416
+  @field r notes  @ new:1416,1424,1429
+  @field w notes  @ new:1013,1129,1415,1429
+  @field r num  @ new:965
+  @field w num  @ new:1303
   @field r outBus  @ new:359
   @field w outBus  @ new:358,423
   @field r outs  @ new:211
@@ -316,26 +316,26 @@
   @field r param  @ new:471
   @field w paramIdx  @ new:272
   @field w parm  @ new:264
-  @field r passthrough  @ new:1052,1131,1405,1407,1412
-  @field w passthrough  @ new:996,1112,1398,1412
-  @field r pitch  @ new:1035,1036,1152,1195,1400
-  @field w pitch  @ new:1087,1232,1243,1400
-  @field r playState  @ new:908
-  @field w playState  @ new:24,1278
-  @field r playTime  @ new:909,910
-  @field w playTime  @ new:25,1279
-  @field r poolByItem  @ new:676,764,827,849,1297
+  @field r passthrough  @ new:1069,1148,1422,1424,1429
+  @field w passthrough  @ new:1013,1129,1415,1429
+  @field r pitch  @ new:1052,1053,1169,1212,1417
+  @field w pitch  @ new:1104,1249,1260,1417
+  @field r playState  @ new:925
+  @field w playState  @ new:24,1295
+  @field r playTime  @ new:926,927
+  @field w playTime  @ new:25,1296
+  @field r poolByItem  @ new:676,764,825,840,866,1314
   @field w poolByItem  @ new:654
-  @field r poolGuid  @ new:849
-  @field r pos  @ new:841
-  @field r ppq  @ new:1005,1035,1041,1043,1050,1053,1056
-  @field r ppq  @ new:1056,1062,1063,1152,1158,1170,1195,1399,1401,1403,1406
-  @field w ppq  @ new:1032,1087,1096,1104,1107,1109,1214,1223,1231,1240,1250,1259
-  @field w ppq  @ new:1399,1401,1403,1406
-  @field r ppqPerQN  @ new:922,926,931,939
-  @field w ppqPerQN  @ new:13,1283
-  @field r precise  @ new:964,1281
-  @field w precise  @ new:11,1281
+  @field r poolGuid  @ new:866
+  @field r pos  @ new:858
+  @field r ppq  @ new:1022,1052,1058,1060,1067,1070,1073
+  @field r ppq  @ new:1073,1079,1080,1169,1175,1187,1212,1416,1418,1420,1423
+  @field w ppq  @ new:1049,1104,1113,1121,1124,1126,1231,1240,1248,1257,1267,1276
+  @field w ppq  @ new:1416,1418,1420,1423
+  @field r ppqPerQN  @ new:939,943,948,956
+  @field w ppqPerQN  @ new:13,1300
+  @field r precise  @ new:981,1298
+  @field w precise  @ new:11,1298
   @field r preset  @ new:360
   @field r projExt  @ new:51,57
   @field w projExt  @ new:17
@@ -344,92 +344,92 @@
   @field r projectItems  @ new:494,495
   @field w projectItems  @ new:493
   @field r projectPath  @ new:71
-  @field w projectPath  @ new:1338
-  @field r projectTracks  @ new:470,488,489,500,515,538,552,553,880
-  @field w projectTracks  @ new:486,1335
-  @field r rank  @ new:1057
-  @field w rank  @ new:1032
+  @field w projectPath  @ new:1355
+  @field r projectTracks  @ new:470,488,489,500,515,538,552,553,897
+  @field w projectTracks  @ new:486,1352
+  @field r rank  @ new:1074
+  @field w rank  @ new:1049
   @field r renamed  @ new:252
-  @field r repeatOn  @ new:904,905
-  @field w repeatOn  @ new:26,903,904
+  @field r repeatOn  @ new:921,922
+  @field w repeatOn  @ new:26,920,921
   @field r resourcePath  @ new:75
   @field r routingBytes  @ new:357
   @field w routingBytes  @ new:420
-  @field r selected  @ new:1152,1158,1170
-  @field r selectedItems  @ new:872,876,882
-  @field w selectedItems  @ new:868,870
+  @field r selected  @ new:1169,1175,1187
+  @field r selectedItems  @ new:889,893,899
+  @field w selectedItems  @ new:885,887
   @field r selectedTracks  @ new:512
-  @field w selectedTracks  @ new:511,1365
-  @field r sendMode  @ new:641,1361
-  @field w sendMode  @ new:622,1361
+  @field w selectedTracks  @ new:511,1382
+  @field r sendMode  @ new:641,1378
+  @field w sendMode  @ new:622,1378
   @field r sendsByTrack  @ new:555,556,572,573,580,591,607,614
   @field w sendsByTrack  @ new:570
-  @field r seq  @ new:1058
-  @field w seq  @ new:1032
-  @field r shape  @ new:1039,1102,1164,1402
-  @field w shape  @ new:1097,1269,1402
+  @field r seq  @ new:1075
+  @field w seq  @ new:1049
+  @field r shape  @ new:1056,1119,1181,1419
+  @field w shape  @ new:1114,1286,1419
   @field w showFlag  @ new:459
-  @field r sortDisabled  @ new:1215,1233,1252
-  @field w sortDisabled  @ new:996,1112,1173,1179
-  @field r srcChan  @ new:638,1345
-  @field w srcChan  @ new:602,619,1358
-  @field r srcFile  @ new:671,788,857,858,859,860,861
+  @field r sortDisabled  @ new:1232,1250,1269
+  @field w sortDisabled  @ new:1013,1129,1190,1196
+  @field r srcChan  @ new:638,1362
+  @field w srcChan  @ new:602,619,1375
+  @field r srcFile  @ new:671,788,874,875,876,877,878
   @field w srcFile  @ new:658
-  @field r srcIsQN  @ new:673,768,856,861,1302
+  @field r srcIsQN  @ new:673,768,873,878,1319
   @field w srcIsQN  @ new:660
-  @field r srcLen  @ new:673,767,813,855,860,1123,1301
+  @field r srcLen  @ new:673,767,813,872,877,1140,1318
   @field w srcLen  @ new:659
-  @field w startT  @ new:916
-  @field r take  @ new:843,844,846,847,849,850,851,858
+  @field w startT  @ new:933
+  @field r take  @ new:860,861,863,864,866,867,868,875
   @field r takeCustomColor  @ new:687,694,818
   @field w takeCustomColor  @ new:662
   @field r takeExt  @ new:94,95
   @field w takeExt  @ new:20
-  @field r takeIsMidi  @ new:668,762,781,846,1294
+  @field r takeIsMidi  @ new:668,762,781,863,1311
   @field w takeIsMidi  @ new:655
-  @field r takeMidi  @ new:994,997,1137
-  @field w takeMidi  @ new:992
-  @field r takeName  @ new:90,91,669,763,782,847
+  @field r takeMidi  @ new:1011,1014,1154
+  @field w takeMidi  @ new:1009
+  @field r takeName  @ new:90,91,669,763,782,864
   @field w takeName  @ new:656
-  @field r takeSrc  @ new:670,766,792,812,851,858,1122,1300
+  @field r takeSrc  @ new:670,766,792,812,828,843,868,875,1139,1317
   @field w takeSrc  @ new:657
-  @field r takeStartOffs  @ new:688,813,819,939
+  @field r takeStartOffs  @ new:688,813,819,956
   @field w takeStartOffs  @ new:663
   @field r takes  @ new:496,497
-  @field r tempoBPM  @ new:922,926,948,951
-  @field w tempoBPM  @ new:12,1282
-  @field r tension  @ new:1043,1164,1402
-  @field w tension  @ new:1102,1269,1402
-  @field r texts  @ new:1013,1046,1131,1168,1178,1192,1196,1208,1214,1215,1220
-  @field r texts  @ new:1403,1407,1412
-  @field w texts  @ new:996,1112,1398,1412
-  @field r time  @ new:948
-  @field w time  @ new:898,1286
-  @field r timeSigDenom  @ new:951
-  @field w timeSigDenom  @ new:15,1284
-  @field r timeSigMarkers  @ new:944,946,1286
+  @field r tempoBPM  @ new:939,943,965,968
+  @field w tempoBPM  @ new:12,1299
+  @field r tension  @ new:1060,1181,1419
+  @field w tension  @ new:1119,1286,1419
+  @field r texts  @ new:1030,1063,1148,1185,1195,1209,1213,1225,1231,1232,1237
+  @field r texts  @ new:1420,1424,1429
+  @field w texts  @ new:1013,1129,1415,1429
+  @field r time  @ new:965
+  @field w time  @ new:915,1303
+  @field r timeSigDenom  @ new:968
+  @field w timeSigDenom  @ new:15,1301
+  @field r timeSigMarkers  @ new:961,963,1303
   @field w timeSigMarkers  @ new:16
-  @field r timeSigNum  @ new:951,1284
+  @field r timeSigNum  @ new:968,1301
   @field w timeSigNum  @ new:14
-  @field w time_precise  @ new:964
-  @field w title  @ new:967
+  @field w time_precise  @ new:981
+  @field w title  @ new:984
   @field r track  @ new:471
-  @field w track  @ new:264,272,459,742,837
+  @field w track  @ new:264,272,459,742,854
   @field r trackExt  @ new:81,85
   @field w trackExt  @ new:19
-  @field r trackForItem  @ new:103,105,664,718,728,744,845,1292
+  @field r trackForItem  @ new:103,105,664,718,728,744,862,1309
   @field w trackForItem  @ new:23
-  @field r trackGuids  @ new:539,543,1316
+  @field r trackGuids  @ new:539,543,1333
   @field w trackGuids  @ new:533
-  @field r trackNames  @ new:82,506,1368
+  @field r trackNames  @ new:82,506,1385
   @field w trackNames  @ new:487
   @field r trackValues  @ new:520,529
   @field w trackValues  @ new:527
-  @field r type  @ new:1344
+  @field r type  @ new:1361
   @field w value  @ new:264,272
-  @field r vel  @ new:1035,1152,1400
-  @field w vel  @ new:1087,1232,1244,1400
+  @field r vel  @ new:1052,1169,1417
+  @field w vel  @ new:1104,1249,1261,1417
   @field r vol  @ new:640
-  @field w vol  @ new:621,1361
-  @field r wantDefaults  @ new:540,1316
+  @field w vol  @ new:621,1378
+  @field r wantDefaults  @ new:540,1333
   @field w wantDefaults  @ new:534

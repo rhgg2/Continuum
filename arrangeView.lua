@@ -337,6 +337,14 @@ local function resizeSelected(direction)
   else          moveTails(takes, direction) end
 end
 
+-- One take, cut where the caret stands. The caret holds, which puts it on the
+-- lower half's start row, so the seam just made is the armed edge.
+local function splitAtCursor()
+  local take = singleTarget()
+  if not take then return end
+  am:splitTake(take, av:rowToQN(cursorRow))
+end
+
 local function deleteSelected()
   local takes = actionTargets()
   if #takes == 0 then return end
@@ -859,6 +867,7 @@ arrange:registerAll {
   arrangeNudgeForward = { function() nudgeSelected( 1) end, 'Nudge take forward' },
   arrangeEdgeUp       = { function() resizeSelected(-1) end, 'Move edge up'   },
   arrangeEdgeDown     = { function() resizeSelected( 1) end, 'Move edge down' },
+  arrangeSplit                  = { splitAtCursor,                  'Split take' },
   arrangeDeleteTake             = { deleteSelected,                 'Delete take' },
   arrangeDeleteAdvance          = { deleteSelectedAndAdvance,       'Delete take and advance' },
   arrangeDive                   = diveSelected,

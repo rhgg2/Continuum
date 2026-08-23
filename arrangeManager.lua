@@ -1104,6 +1104,24 @@ function am:resizeTake(take, newNaturalQN)
   relayoutTrack(track)
 end
 
+--contract: cuts take at splitQN into two pooled halves; returns the lower one, nil if refused
+--contract: refused for audio, and for a splitQN not strictly inside the rendered span
+-- See docs/arrangeManager.md § The take's window for why the halves are built this way.
+function am:splitTake(take, splitQN)
+  if take.kind ~= 'midi' then return end
+  if splitQN <= take.startQN or splitQN >= take.startQN + take.lengthQN then return end
+  local originQN = take.originQN
+  local naturalQN = naturalLenOf(take.take)
+
+  local lower = am:duplicateTake(take, splitQN)
+  if not lower then return end
+  setHeadOf(lower, originQN, splitQN - originQN)
+  setNaturalLenOf(lower, naturalQN)
+  setNaturalLenOf(take.take, splitQN - originQN)
+  relayoutTrack(visibleTrackOfCol(take.trackIdx))
+  return lower
+end
+
 --contract: source length in QN at the take's position; 0 if source missing.
 function am:takeSourceLengthQN(take)
   local src = reaper.GetMediaItemTake_Source(take.take)

@@ -235,6 +235,7 @@ To be filled out with descriptions, screenshots, examples.
 - Drag to move (snaps to row; Shift = free); Ctrl+drag to duplicate
 - Drag end edge to resize
 - Nudge back/forward; move the tail, or the head from a take's start row
+- Split at the caret into two pooled halves of one source
 - Source the take doesn't show is marked in it: `(4)…` skipped above, `…(8)` left below
 - Delete / delete-and-advance
 - Duplicate below (pooled)

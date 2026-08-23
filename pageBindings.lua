@@ -163,6 +163,7 @@ local arrange = {
   arrangeNudgeForward           = { { ImGui.Key_DownArrow,  ImGui.Mod_Super } },
   arrangeEdgeUp                 = { { ImGui.Key_UpArrow,    ImGui.Mod_Super, ImGui.Mod_Shift } },
   arrangeEdgeDown               = { { ImGui.Key_DownArrow,  ImGui.Mod_Super, ImGui.Mod_Shift } },
+  arrangeSplit                  = { { ImGui.Key_S,          ImGui.Mod_Ctrl } },
   arrangeDeleteTake             = { ImGui.Key_Delete, ImGui.Key_Backspace },
   arrangeDeleteAdvance          = { ImGui.Key_Period },
   deleteSlot                    = { { ImGui.Key_Delete,      ImGui.Mod_Ctrl },

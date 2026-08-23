@@ -810,6 +810,77 @@ return {
     end,
   },
 
+  -- Split (docs/arrangeManager.md § The take's window): one window becomes two
+  -- that meet at the cut, both reading the same source from the same origin.
+  {
+    name = 'splitTake cuts a take into two pooled halves that meet at the cut',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 8, poolGuid = '{p1}' } } },
+      })
+      t.truthy(am:splitTake(am:tracksTakes(0)[1], 3), 'the cut lands')
+      local takes = am:tracksTakes(0)
+      t.eq(#takes, 2, 'one take became two')
+      t.eq(takes[1].startQN,  0, 'the upper half keeps the start')
+      t.eq(takes[1].lengthQN, 3, 'and ends at the cut')
+      t.eq(takes[2].startQN,  3, 'the lower half starts there')
+      t.eq(takes[2].lengthQN, 5, 'and runs to where the whole take did')
+      t.eq(takes[2].originQN, 0, 'both halves read the source from the same origin')
+      t.eq(takes[1].tailQN,   5, 'the upper half now leaves the lower half\'s source behind')
+      t.eq(takes[2].tailQN,   0, 'and the lower half reaches the end of the source')
+      t.eq(takes[1].slotIdx, takes[2].slotIdx, 'the halves are instances of one slot')
+    end,
+  },
+  {
+    name = 'the lower half inherits the natural, so the pair ends where the whole did',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 16, poolGuid = '{p1}' } } },
+      })
+      am:resizeTake(am:tracksTakes(0)[1], 6)
+      am:splitTake(am:tracksTakes(0)[1], 2)
+      local takes = am:tracksTakes(0)
+      t.eq(takes[1].lengthQN, 2, 'the upper half ends at the cut')
+      t.eq(takes[2].lengthQN, 4, 'the lower half stops where the hand-set natural did')
+      t.eq(takes[2].tailQN,  10, 'the source past that natural is still left over')
+    end,
+  },
+  {
+    name = 'splitting a head-trimmed take leaves both halves on the source origin',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 8, poolGuid = '{p1}' } } },
+      })
+      am:trimHead(am:tracksTakes(0)[1], 2)
+      am:splitTake(am:tracksTakes(0)[1], 5)
+      local takes = am:tracksTakes(0)
+      t.eq(takes[1].startQN,  2, 'the upper half keeps the head it had')
+      t.eq(takes[1].lengthQN, 3, 'and ends at the cut')
+      t.eq(takes[2].startQN,  5, 'the lower half starts at the cut')
+      t.eq(takes[2].lengthQN, 3, 'and renders the rest of the source')
+      t.eq(takes[2].originQN, 0, 'its origin is the source\'s, not where it was placed')
+    end,
+  },
+  {
+    name = 'a split is refused on either edge, off the take, and on audio',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi',  pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' },
+                    { kind = 'audio', pos = 8, len = 4, srcFile = '/a.wav' } } },
+      })
+      local midi, audio = am:tracksTakes(0)[1], am:tracksTakes(0)[2]
+      t.falsy(am:splitTake(midi,  0), 'on the start row there is no upper half')
+      t.falsy(am:splitTake(midi,  4), 'at the end there is nothing to cut')
+      t.falsy(am:splitTake(midi,  9), 'and less than nothing past it')
+      t.falsy(am:splitTake(audio, 10), 'audio has no source window to cut')
+      t.eq(#am:tracksTakes(0), 2, 'a refusal leaves the track alone')
+    end,
+  },
+
   {
     name = 'deleteTake removes the item, leaving the other take intact',
     run = function(harness)

@@ -336,6 +336,14 @@ A stored natural that is **≥ the source length** is demoted to
 would freeze the take at today's source length; demoting to OPEN lets
 future source growth widen the cap automatically.
 
+**Splitting** cuts one window into two. The upper half's natural comes
+in to the cut; the lower half is a pooled clone placed there, carrying
+a head of the same size and the natural the original had. The pair
+ends where the whole take did, and the cut needs no free space, since
+the lower half fills what the upper gave up. A take its neighbour
+already cuts short splits without a special case — the neighbour goes
+on cutting the lower half exactly as it cut the whole.
+
 Audio has no head. It carries no ppq frame to read an origin from, so
 its origin is its start, and `am:trimHead` refuses it. Its natural
 length is the user's trim or loop, captured on first sight rather than

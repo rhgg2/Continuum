@@ -231,6 +231,18 @@ its start row, where the bottom-edge rule resolves to the same take.
 With a multi-take selection the edge is decided once, from the take
 whose start row the caret is on, and the caret follows that one.
 
+## Split
+
+Ctrl+S cuts the take at the caret in two, through `am:splitTake`
+(`docs/arrangeManager.md` § The take's window). It acts on one take —
+the selection where a single take is held, else the take under the
+caret — and does nothing on a start row or off a take, where there is
+no cut to make.
+
+The caret holds, which leaves it standing on the lower half's start
+row. The head is armed there, so the seam just made is the edge the
+resize keys move.
+
 ## Loop to item
 
 `arrangeLoopToItem` brackets what the page's verbs act on — the

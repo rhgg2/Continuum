@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — Split cuts a take at the caret into two pooled halves: the upper half's natural
+  comes in to the cut, and the lower half is a clone placed there with a head to match, inheriting
+  the natural the original had. Inheriting it holds the pair's end where the whole take's was, where
+  OPEN for the lower half would silently lengthen a take shortened by hand. The verb is
+  single-target on Ctrl+S, unlike the nudge and resize keys, which act across a selection. The caret
+  holds, so it lands on the lower half's start row with the head armed, and the resize keys go on to
+  move the seam just made. See docs/arrangeManager.md § The take's window.
+
 - **2026-08-23** — mm measures a take's length and time signatures from the source origin rather
   than from the item, so a head-trimmed instance sizes and scans the source it actually edits;
   measured from the item, both were out by the head. Handing the item extent to arrange's relayout

@@ -820,11 +820,28 @@ function M.new()
     bump()
     return true
   end
+  -- The source already held by pool `guid`, if any item other than `exclude` holds it.
+  local function srcOfPool(guid, exclude)
+    for held, heldGuid in pairs(state.poolByItem) do
+      if heldGuid == guid and held ~= exclude then
+        local take = state.activeTake[held]
+        if take and state.takeSrc[take] then return state.takeSrc[take] end
+      end
+    end
+  end
+
   -- Round-trip POOLEDEVTS via the chunk. Only the guid is preserved;
-  -- the surrounding XML shape is regenerated on every read.
+  -- the surrounding XML shape is regenerated on every read. Pooled items are one
+  -- source in REAPER, so a chunk naming a live pool adopts that pool's source in
+  -- place of the fresh one CreateNewMIDIItemInProj minted for the clone.
   function r.SetItemStateChunk(item, chunk, _isUndo)
     local guid = chunk and chunk:match('POOLEDEVTS%s+({[^}]+})')
-    if guid then state.poolByItem[item] = guid end
+    if guid then
+      state.poolByItem[item] = guid
+      local take = state.activeTake[item]
+      local src  = srcOfPool(guid, item)
+      if take and src then state.takeSrc[take] = src end
+    end
     return true
   end
   -- Identity inverse to TimeMap2_timeToQN — the fake treats QN and
