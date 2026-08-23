@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-23** — An edge mark says only that an edge is trimmed — a bare ellipsis leading the
+  take's name above the head, and one on the box's bottom row below the cut. How many beats each
+  hides is read in the status bar, off the take under the cursor. The count used to sit in the mark,
+  which spent two of a small box's rows on figures wanted only when an edge is about to move; by
+  then the caret is on the take anyway, so the status bar is where they belong.
+
 - **2026-08-23** — Split cuts a take at the caret into two pooled halves: the upper half's natural
   comes in to the cut, and the lower half is a clone placed there with a head to match, inheriting
   the natural the original had. Inheriting it holds the pair's end where the whole take's was, where

@@ -512,6 +512,9 @@ function av:scroll()      return scrollRow, scrollCol end
 function av:focus()       return selection[1] end
 function av:paletteSlot() return paletteSlot end
 
+--contract: the take shape under the grid cursor; nil over empty space.
+function av:cursorTake() return takeAtCursor() end
+
 --contract: the slot index of the take under the grid cursor; nil over empty space.
 function av:cursorSlot()
   local take = takeAtCursor()

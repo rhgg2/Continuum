@@ -310,7 +310,7 @@ rendered span by exactly that QN.
 The **tail** completes the partition: the source lying past the
 rendered end, so head, rendered length and tail sum to the source.
 It reaches the grid as `tailQN` on the take shape, which is what the
-edge marks count. The tail draws no distinction between source a
+status bar counts. The tail draws no distinction between source a
 neighbour cuts off and source a shorter natural leaves behind — both
 are source the window does not show. Audio has neither a head nor a
 source window here, so an audio take's tail is measured from its

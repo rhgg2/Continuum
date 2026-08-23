@@ -1030,6 +1030,21 @@ return {
   },
 
   {
+    name = 'the take under the cursor carries the source its box hides',
+    run = function(harness)
+      local h, av = mkTrimmable(harness)
+      av:setCursor(2, 0)
+      h.cmgr:invoke('arrangeEdgeDown')          -- walk the head in one row
+      av:setCursor(3, 0)
+      local tk = av:cursorTake()
+      t.eq(tk.startQN - tk.originQN, 1, 'one row of source skipped above the head')
+      t.eq(tk.tailQN, 4, 'and four rows left below the cut')
+      av:setCursor(9, 0)
+      t.eq(av:cursorTake(), nil, 'empty space has no take to report')
+    end,
+  },
+
+  {
     name = 'a head trim is floored at one rendered row',
     run = function(harness)
       local h, av, am = mkTrimmable(harness)

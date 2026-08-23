@@ -388,7 +388,7 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
   -- Three passes (fills → cursor wash → names) so names stay crisp over the wash.
   local selected = av:selectionSet()
   local nameDraws = {}
-  local markDraws = {}   -- edge marks: source elided above the head, or below the cut
+  local markDraws = {}   -- edge marks: the row marking source elided below the cut
 
   -- Vertical waveform: time→Y, amplitude→X (centred). ≥1px span per pixel so
   -- near-silence draws a line. fullTop/fullBot = full take edges (may be off-screen).
@@ -462,29 +462,26 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
       drawNotes(tk, rx0, rx1, ry0 + 1, ry1)
     end
     ps.border(rect(rx0, ry0, rx1 + 1, ry1 + 1), border)
-    -- Edge marks: beats of source elided above the head, and below the cut, each owns a row
-    -- when the box has room, else folds into the name line; marking an edge needs it on screen.
+    -- Edge marks: an ellipsis where source is elided and the edge is on screen; the head's
+    -- leads the name, the cut's owns the bottom row or folds onto the name; beats: status bar.
     local headQN  = tk.startQN - tk.originQN
     -- The tail is the settled one; a resize drag passes a candidate length, and
     -- whatever it takes off the end the source behind it takes on.
     local cutQN   = tk.tailQN + (tk.lengthQN - lengthQN)
     local boxRows = math.floor(visBot - visTop)
-    local head    = headQN > 1e-6 and startRow >= sr         and string.format('(%g)…', headQN)
-    local cut     = cutQN  > 1e-6 and endRow <= sr + visRows and string.format('…(%g)', cutQN)
-    local headRow = head and boxRows >= 3
-    local cutRow  = cut  and boxRows >= 2
-    local text    = (head and not headRow and head or '') .. (tk.name or '')
-                 .. (cut  and not cutRow  and cut  or '')
+    local head    = headQN > 1e-6 and startRow >= sr         and '…'
+    local cut     = cutQN  > 1e-6 and endRow <= sr + visRows and '…'
+    local cutRow  = cut and boxRows >= 2
+    local text    = (head or '') .. (tk.name or '') .. (cut and not cutRow and cut or '')
     if text ~= '' then
       util.add(nameDraws, {
         name = text, rx0 = rx0, rx1 = rx1, ry1 = ry1,
-        ry0 = ry0, ty0 = ry0 + 1 + (headRow and rowH or 0),
-        rows = boxRows - (headRow and 1 or 0) - (cutRow and 1 or 0),
+        ry0 = ry0, ty0 = ry0 + 1,
+        rows = boxRows - (cutRow and 1 or 0),
       })
     end
-    if headRow then util.add(markDraws, { rx0 = rx0, rx1 = rx1, y = ry0 + 1, text = head }) end
-    if cutRow  then util.add(markDraws,
-                             { rx0 = rx0, rx1 = rx1, y = ry1 - rowH + 1, text = cut }) end
+    if cutRow then util.add(markDraws,
+                            { rx0 = rx0, rx1 = rx1, y = ry1 - rowH + 1, text = cut }) end
   end
 
   -- Settled takes; takes being moved are held back, painted last at the candidate
@@ -852,6 +849,18 @@ function ar:renderBody(_, w, h, dispatch)
   if dispatch then dispatch(self:focusState()) end
 end
 
+-- The beats behind the cursor take's edge marks: the grid says an edge is trimmed,
+-- and how much it hides is read back here. Silent over an untrimmed take or empty space.
+local function trimReadout()
+  local tk = av:cursorTake()
+  if not tk then return '' end
+  local head, tail = tk.startQN - tk.originQN, tk.tailQN
+  local parts = {}
+  if head > 1e-6 then util.add(parts, string.format('%g above', head)) end
+  if tail > 1e-6 then util.add(parts, string.format('%g below', tail)) end
+  return #parts > 0 and ('  | Trim: ' .. table.concat(parts, ', ')) or ''
+end
+
 function ar:renderStatusBar(_)
   if not ctx then return end
   -- Length mode names the step it stands in front of, so Ctrl+digit reads back while armed.
@@ -859,8 +868,8 @@ function ar:renderStatusBar(_)
   local advance = cm:get('arrangeAdvanceByLength')
                   and string.format('take length or %d', step) or tostring(step)
   ImGui.Text(ctx, string.format(
-    'arrange | row %d  col %d  | %g beats/row | Advance: %s%s',
-    av:cursorRow(), av:cursorCol(), av:beatPerRow(), advance,
+    'arrange | row %d  col %d  | %g beats/row | Advance: %s%s%s',
+    av:cursorRow(), av:cursorCol(), av:beatPerRow(), advance, trimReadout(),
     av:replaceArmed() and '  | REPLACE' or ''))
 end
 
