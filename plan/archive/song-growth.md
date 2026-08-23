@@ -1,7 +1,8 @@
 # Song growth — plan
 
-> source: `design/song-growth.md` — synthesis compiled from there;
-> don't design here.
+> source: `docs/arrangeManager.md`, `docs/trackerPage.md`,
+> `docs/arrangeView.md` — where the model landed; the design doc it was
+> compiled from is gone.
 
 ## Phases
 
@@ -24,7 +25,7 @@
    of a fresh variant slot named `<parent> (var N)`; refused on a slot with one
    instance; one atomic block, rebind; a rename carries the family;
    Alt+Shift+←/→ step the family and vary past the last of it; the
-   tracker's unpooled duplicate retires. ← in flight
+   tracker's unpooled duplicate retires. — landed 2026-08-23, four commits.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -32,11 +33,3 @@
 - 2026-08-23 tracker/arrange: Alt+Shift+←/→ step a placement along its family (§ vary)
 - 2026-08-23 tracker: vary swaps the current instance for a variant slot (§ vary)
 - 2026-08-23 rename: a rename edits the root, from either field (§ vary)
-
-## Now
-
-(empty — run /plan-next to compile the next brief.)
-
-## Queued (current phase; one-liners)
-
-(empty)
