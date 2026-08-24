@@ -292,23 +292,26 @@ end
 
 ----- The arrange mini-map's window — see docs/trackerRender.md § The mini-map
 
+-- The page overlap: the stride is a page less this, so the bar a start crosses
+-- into at the foot of one page is the bar it reappears under at the head of the next.
+local MAP_PAGE_OVERLAP_QN = 16
+
 --shape: mapWindow = { colLo, colHi, qnLo, qnHi, takes, current }
 --contract: cols/qnSpan are the pane's measure; the bound column centres and clamps to tracks
---contract: time centres on the current instance's midpoint, held down to its start, clamped at QN 0
---contract: no instance means no mark, and the edit cursor stands in for the midpoint
+--contract: time pages — the window is the page a stride of qnSpan less a bar lands the start on
+--contract: no instance means no mark, and the edit cursor stands in for the start
 function tv:mapWindow(cols, qnSpan)
   local inst   = self:currentInstance()
   local tracks = arrange().tracks()
   local bound  = inst and inst.trackIdx or selectedTrackIdx() or 0
   local colLo  = util.clamp(bound - math.floor((cols - 1) / 2), 0, math.max(0, #tracks - cols))
   local colHi  = math.min(colLo + cols - 1, math.max(0, #tracks - 1))
-  -- An instance taller than the window would centre below its own start; the min
-  -- pulls the window back up to it, so the top edge is always on screen.
-  local qnLo   = inst
-             and math.min(inst.startQN + inst.lengthQN / 2 - qnSpan / 2, inst.startQN)
-              or arrange().editCursorQN() - qnSpan / 2
-  qnLo = math.max(0, qnLo)
-  local qnHi = qnLo + qnSpan
+  -- The start sits within a stride of the page's top, so it is always on screen and
+  -- an instance taller than the page needs no case of its own.
+  local startQN = inst and inst.startQN or arrange().editCursorQN()
+  local stride  = qnSpan - MAP_PAGE_OVERLAP_QN
+  local qnLo    = math.max(0, math.floor(startQN / stride) * stride)
+  local qnHi    = qnLo + qnSpan
   return { colLo = colLo, colHi = colHi, qnLo = qnLo, qnHi = qnHi,
            takes = arrange().visibleTakes(colLo, colHi, qnLo, qnHi),
            current = inst and inst.take or nil }

@@ -1,4 +1,4 @@
-@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=1539  cases=47
+@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=1543  cases=47
 @exercises tuning (tuning), configManager (h.cm), commandManager (h.cmgr), midiManager (h.mm), trackerManager (h.tm)
 @surface   tuning.derive, tuning.genDiamond, cm:setContext, cmgr:push, cmgr:invoke, cm:getAt, cm:set, cm:get, tuning.stepToMidi, mm:subscribe, mm:notes, tm:assignEvent, tm:byUuid, tm:flush
 @harness   mk, reaper:addItem, reaper:setProjectTracks, reaper:seedMidi
@@ -47,55 +47,55 @@
   @case 'deleting the instance drops that placement and lands on the one before it'  [harness]  @ 892-926
   @case 'a slot with no live instance leaves the tracker nowhere, and F6 silent'  [harness]  @ 930-946
   @case 'the map window centres the bound column, and clamps it at both ends'  [harness]  @ 955-973
-  @case 'the map window centres time on the current instance, holding its top on screen'  [harness]  @ 977-989
-  @case 'with the tracker in no instance the map window centres on the edit cursor'  [harness]  @ 993-1000
-  @case 'the map window carries the takes over it, the current instance marked'  [harness]  @ 1004-1015
-  @case 'the play row is the head\'s offset into the current instance, in rows'  [harness]  @ 1019-1046
-  @case 'the play row dims where the head is sounding a sibling instance'  [harness]  @ 1050-1074
-  @case 'the cut row is where the rendered span stops short of the source'  [harness]  @ 1081-1102
-  @case 'the play row and the head row count from the source origin, not the start'  [harness]  @ 1108-1132
-  @case 'a dive carries the arrange QN to the caret row, and the caret hands it back'  [harness]  @ 1139-1158
-  @case 'a caret outside the rendered span hands back the row the span stops at'  [harness]  @ 1162-1181
-  @case 'leaving the tracker puts the arrange caret where the tracker caret is'  [harness]  @ 1185-1207
-  @case 'with loop to item on, a dive brackets the instance dived into'  [harness]  @ 1213-1231
-  @case 'the play head entering an instance leaves the loop where it was'  [harness]  @ 1235-1253
-  @case 'the toggle command brackets the current instance as it comes on'  [harness]  @ 1257-1279
-  @case 'the loop-to-item verb brackets the current instance, toggle or no toggle'  [harness]  @ 1283-1307
-  @case 'retune opens on the scope the selection implies and OK snaps that scope'  [harness]  @ 1313-1368
-  @case 'retune opens on the facility the take carries, its dials on their figures'  [harness]  @ 1376-1405
-  @case 'a refused retune offers to widen, and the offer taken solves again'  [harness]  @ 1411-1454
-  @case 'empty grid shows the single no-takes message'  [harness]  @ 1460-1474
-  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 1481-1513
-  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 1517-1537
+  @case 'the map window pages time, a start in the last bar opening the next page'  [harness]  @ 977-993
+  @case 'with the tracker in no instance the map window pages on the edit cursor'  [harness]  @ 997-1004
+  @case 'the map window carries the takes over it, the current instance marked'  [harness]  @ 1008-1019
+  @case 'the play row is the head\'s offset into the current instance, in rows'  [harness]  @ 1023-1050
+  @case 'the play row dims where the head is sounding a sibling instance'  [harness]  @ 1054-1078
+  @case 'the cut row is where the rendered span stops short of the source'  [harness]  @ 1085-1106
+  @case 'the play row and the head row count from the source origin, not the start'  [harness]  @ 1112-1136
+  @case 'a dive carries the arrange QN to the caret row, and the caret hands it back'  [harness]  @ 1143-1162
+  @case 'a caret outside the rendered span hands back the row the span stops at'  [harness]  @ 1166-1185
+  @case 'leaving the tracker puts the arrange caret where the tracker caret is'  [harness]  @ 1189-1211
+  @case 'with loop to item on, a dive brackets the instance dived into'  [harness]  @ 1217-1235
+  @case 'the play head entering an instance leaves the loop where it was'  [harness]  @ 1239-1257
+  @case 'the toggle command brackets the current instance as it comes on'  [harness]  @ 1261-1283
+  @case 'the loop-to-item verb brackets the current instance, toggle or no toggle'  [harness]  @ 1287-1311
+  @case 'retune opens on the scope the selection implies and OK snaps that scope'  [harness]  @ 1317-1372
+  @case 'retune opens on the facility the take carries, its dials on their figures'  [harness]  @ 1380-1409
+  @case 'a refused retune offers to widen, and the offer taken solves again'  [harness]  @ 1415-1458
+  @case 'empty grid shows the single no-takes message'  [harness]  @ 1464-1478
+  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 1485-1517
+  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 1521-1541
 
 # Uses (outbound edges)
   @use call tuning.derive  @ 31,40
   @use call tuning.genDiamond  @ 40
   @use call cm:setContext  @ 234
-  @use call cmgr:push  @ 285,308,335,361,394,459,487,509,542,566,589,630,671,696,780,824,869,910,941,1268,1294,1329,1387,1428
-  @use call cmgr:invoke  @ 287,310,316,337,364,397,406,463,470,491,495,512,546,569,570,591,593,595,597,634,673,700,786,791,829,834,838,842,844,876,881,883,915,922,924,944,1271,1276,1298,1305,1338,1350,1358,1365,1389,1395,1440
-  @use call cm:getAt  @ 292,403,466,549,592,594,596,598,638,677,832,886,919,1404
-  @use call cm:set  @ 461,489,544,1227,1241,1363,1364,1394,1402
-  @use call cm:get  @ 1272,1277,1300
-  @use call tuning.stepToMidi  @ 1336
-  @use call mm:subscribe  @ 1497
-  @use call mm:notes  @ 1502
-  @use call tm:assignEvent  @ 1503
-  @use call tm:byUuid  @ 1503
-  @use call tm:flush  @ 1504
+  @use call cmgr:push  @ 285,308,335,361,394,459,487,509,542,566,589,630,671,696,780,824,869,910,941,1272,1298,1333,1391,1432
+  @use call cmgr:invoke  @ 287,310,316,337,364,397,406,463,470,491,495,512,546,569,570,591,593,595,597,634,673,700,786,791,829,834,838,842,844,876,881,883,915,922,924,944,1275,1280,1302,1309,1342,1354,1362,1369,1393,1399,1444
+  @use call cm:getAt  @ 292,403,466,549,592,594,596,598,638,677,832,886,919,1408
+  @use call cm:set  @ 461,489,544,1231,1245,1367,1368,1398,1406
+  @use call cm:get  @ 1276,1281,1304
+  @use call tuning.stepToMidi  @ 1340
+  @use call mm:subscribe  @ 1501
+  @use call mm:notes  @ 1506
+  @use call tm:assignEvent  @ 1507
+  @use call tm:byUuid  @ 1507
+  @use call tm:flush  @ 1508
 
 # Fields (r read / w write incl. constructor keys)
-  @field w FIVES  @ 1413
+  @field w FIVES  @ 1417
   @field w ImGui_GetBuiltinPath  @ 24
-  @field w MEAN  @ 1315,1378
+  @field w MEAN  @ 1319,1382
   @field w Mod_None  @ 11
   @field w PopFont  @ 12
   @field w PopStyleColor  @ 13
   @field w PushFont  @ 12
   @field w PushStyleColor  @ 13
-  @field r ShowConsoleMsg  @ 1529
-  @field w ShowConsoleMsg  @ 1530,1534
-  @field w Text  @ 1468,1473
+  @field r ShowConsoleMsg  @ 1533
+  @field w ShowConsoleMsg  @ 1534,1538
+  @field w Text  @ 1472,1477
   @field w __index  @ 14
   @field r acceptCmds  @ 252
   @field r beats  @ 290,401
@@ -103,37 +103,37 @@
   @field r beatsBuf  @ 338,365
   @field r below  @ 399,400,401,433
   @field w below  @ 387,427
-  @field r callback  @ 1448
+  @field r callback  @ 1452
   @field r calls  @ 77,111,114,119,138,139,141,289,290,291,312,314
   @field r calls  @ 318,319,340,366,387,399,400,401,402,407,427,433
   @field r calls  @ 435,454,464,465,469,471,486,493,494,496,508,513
-  @field r calls  @ 534,547,548,553,565,571,701,917,921,925,945,1198
-  @field r calls  @ 1206,1225,1230,1248,1249,1252,1273,1275,1278,1296,1299,1302
-  @field r calls  @ 1306
+  @field r calls  @ 534,547,548,553,565,571,701,917,921,925,945,1202
+  @field r calls  @ 1210,1229,1234,1252,1253,1256,1277,1279,1282,1300,1303,1306
+  @field r calls  @ 1310
   @field w calls  @ 60
-  @field r cells  @ 1434
-  @field w chan  @ 1320,1321,1383,1419,1420,1488,1510
+  @field r cells  @ 1438
+  @field w chan  @ 1324,1325,1387,1423,1424,1492,1514
   @field w chrome  @ 187,191
   @field w cm  @ 189,191
   @field w cmgr  @ 187,191
-  @field w col1  @ 1348
-  @field w col2  @ 1348
+  @field w col1  @ 1352
+  @field w col2  @ 1352
   @field r colHi  @ 963,967,972
   @field r colLo  @ 962,964,966,971
-  @field w colour  @ 1464
-  @field r cols  @ 1332,1433
-  @field w config  @ 1315,1378,1413
+  @field w colour  @ 1468
+  @field r cols  @ 1336,1437
+  @field w config  @ 1319,1382,1417
   @field r ctx  @ 187
   @field w ctx  @ 187
-  @field r current  @ 998,1014
+  @field r current  @ 1002,1018
   @field w currentTrackIdx  @ 65
   @field r cursorQN  @ 137
-  @field w cursorQN  @ 95,996
+  @field w cursorQN  @ 95,1000
   @field r deleteSlot  @ 312,314,318,319
   @field w deleteSlot  @ 113,114
   @field r deleteTake  @ 917,925
   @field w deleteTake  @ 118,119,921
-  @field r detune  @ 1355,1356,1361,1435
+  @field r detune  @ 1359,1360,1365,1439
   @field r dir  @ 548
   @field w dir  @ 534
   @field w ds  @ 191
@@ -141,146 +141,146 @@
   @field w dup  @ 454,486,508
   @field w duplicateBelow  @ 453,486,508
   @field w editCursorQN  @ 137
-  @field w endppq  @ 1320,1321,1383,1419,1420,1488,1510
-  @field r events  @ 1333
+  @field w endppq  @ 1324,1325,1387,1423,1424,1492,1514
+  @field r events  @ 1337
   @field w facade  @ 192
-  @field r facility  @ 1390,1396
-  @field w facility  @ 1403
+  @field r facility  @ 1394,1400
+  @field w facility  @ 1407
   @field w findTake  @ 96
-  @field w fontSize  @ 1465
+  @field w fontSize  @ 1469
   @field w get  @ 168
-  @field r grid  @ 1097,1332,1433
+  @field r grid  @ 1101,1336,1437
   @field w gui  @ 191
   @field r guid  @ 67
   @field w guid  @ 61,198,419,420,582,583
-  @field r harmonicLock  @ 1345,1391,1397
-  @field w harmonicLock  @ 1442
+  @field r harmonicLock  @ 1349,1395,1401
+  @field w harmonicLock  @ 1446
   @field w help  @ 192
   @field w identity  @ 189
   @field r idx  @ 67
   @field w idx  @ 61,62,198,357,388,419,420,422,526,538,582,583
   @field w idx  @ 586,587,618,619,658,659,770
   @field w idx  @ 770,809,861,902
-  @field r instances  @ 88,92,120,121,390,455,1008,1010,1100,1130
+  @field r instances  @ 88,92,120,121,390,455,1012,1014,1104,1134
   @field w instances  @ 83,216,382,424,449,483,528,535,624,665,692,717
-  @field w instances  @ 744,773,814,864,905,1030,1061,1092,1121,1150,1173,1200
-  @field w instances  @ 1220,1243,1264,1290
+  @field w instances  @ 744,773,814,864,905,1034,1065,1096,1125,1154,1177,1204
+  @field w instances  @ 1224,1247,1268,1294
   @field w isMidi  @ 179,263,280,303,330,610,611,612,613,650,651,652
-  @field w isMidi  @ 653,1317,1380,1416,1485,1521
+  @field w isMidi  @ 653,1321,1384,1420,1489,1525
   @field w isOpen  @ 51
   @field w isParkedTake  @ 74
-  @field r key  @ 1343,1367
-  @field w key  @ 1442
+  @field r key  @ 1347,1371
+  @field w key  @ 1446
   @field w keyForSlot  @ 72
-  @field r kind  @ 90,1339
+  @field r kind  @ 90,1343
   @field w kind  @ 62,90,357,388,422,526,538,586,587,618,619
   @field w kind  @ 619,658,659,770,809,818,861
   @field w kind  @ 861,902
-  @field r lane  @ 1333
-  @field r last  @ 288,311,313,317,338,339,365,398,1339,1340,1341
-  @field r last  @ 1342,1343,1344,1345,1346,1351,1353,1359,1366,1367,1390,1391
-  @field r last  @ 1392,1396,1397,1398,1403,1441,1443,1448
+  @field r lane  @ 1337
+  @field r last  @ 288,311,313,317,338,339,365,398,1343,1344,1345
+  @field r last  @ 1346,1347,1348,1349,1350,1355,1357,1363,1370,1371,1394,1395
+  @field r last  @ 1396,1400,1401,1402,1407,1445,1447,1452
   @field w last  @ 46,47,48,49,53
   @field w len  @ 180,264,281,304,331,610,611,612,613,650,651,652
-  @field w len  @ 653,1318,1381,1417,1486,1522
+  @field w len  @ 653,1322,1385,1421,1490,1526
   @field r lengthQN  @ 130,148
   @field w lengthQN  @ 383,391,425,450,456,484,529,536,625,626,627,628
   @field w lengthQN  @ 666,667,668,669,693,694,718,719,745,746,774,775
   @field w lengthQN  @ 776,777,778,815,816,817,818,819,820,821,822,865
-  @field w lengthQN  @ 866,867,906,907,908,959,970,981,1007,1009,1011,1031
-  @field w lengthQN  @ 1032,1062,1063,1093,1094,1100,1122,1151,1174,1201,1221,1222
-  @field w lengthQN  @ 1244,1245,1265,1266,1291,1292
+  @field w lengthQN  @ 866,867,906,907,908,959,970,981,1011,1013,1015,1035
+  @field w lengthQN  @ 1036,1066,1067,1097,1098,1104,1126,1155,1178,1205,1225,1226
+  @field w lengthQN  @ 1248,1249,1269,1270,1295,1296
   @field w lib  @ 191
   @field r loaded  @ 22
-  @field r loopTo  @ 469,494,553,1225,1230,1248,1252,1273,1278,1296,1299,1306
-  @field w loopTo  @ 139,1249,1275,1302
-  @field r midiChan  @ 1333,1434
+  @field r loopTo  @ 469,494,553,1229,1234,1252,1256,1277,1282,1300,1303,1310
+  @field w loopTo  @ 139,1253,1279,1306
+  @field r midiChan  @ 1337,1438
   @field w midiSlots  @ 70
   @field r mint  @ 289,290,291,402,435,465
   @field w mint  @ 77
   @field w mintParkedTake  @ 76
-  @field r mm  @ 1497,1502
+  @field r mm  @ 1501,1506
   @field w modalHost  @ 192
   @field r name  @ 69,289,341,367,400
   @field w name  @ 32,61,62,77,111,198,223,234,246,259,276,299
   @field w name  @ 326,351,357,375,387,388,412,419,420,442,476,501
   @field w name  @ 520,526,538,558,576,582,583,603,643,685,706,733
-  @field w name  @ 760,799,851,892,930,955,977,993,1004,1019,1050,1081
-  @field w name  @ 1108,1139,1162,1185,1213,1235,1257,1283,1313,1376,1411,1460
-  @field w name  @ 1481,1517
+  @field w name  @ 760,799,851,892,930,955,977,997,1008,1023,1054,1085
+  @field w name  @ 1112,1143,1166,1189,1217,1239,1261,1287,1317,1380,1415,1464
+  @field w name  @ 1485,1521
   @field w newTakeBelow  @ 386,427
   @field w nextFreeSlot  @ 73
-  @field w notes  @ 1319,1382,1418,1488,1510
-  @field r numRows  @ 1097
+  @field w notes  @ 1323,1386,1422,1492,1514
+  @field r numRows  @ 1101
   @field w open  @ 47
   @field w openConfirm  @ 49
   @field w openPrompt  @ 48
   @field r originQN  @ 89
-  @field w originQN  @ 89,1122,1130,1151,1174,1201
+  @field w originQN  @ 89,1126,1134,1155,1178,1205
   @field w ownerTrack  @ 75
-  @field w part1  @ 1349
-  @field w part2  @ 1349
+  @field w part1  @ 1353
+  @field w part2  @ 1353
   @field w periodPitch  @ 32
-  @field r pitch  @ 1435
-  @field w pitch  @ 1320,1321,1383,1419,1420,1488,1503,1510
+  @field r pitch  @ 1439
+  @field w pitch  @ 1324,1325,1387,1423,1424,1492,1507,1514
   @field w pitches  @ 33
   @field r playFrom  @ 407,471,496,701,945
   @field w playFrom  @ 138
   @field w playFromQN  @ 138
   @field w playPositionQN  @ 136
   @field r playQN  @ 136
-  @field w playQN  @ 94,721,750,753,1037,1043,1065,1124,1250
+  @field w playQN  @ 94,721,750,753,1041,1047,1069,1128,1254
   @field w poolGuid  @ 180,264,281,304,331,610,611,612,613,650,651,652
-  @field w poolGuid  @ 653,1318,1381,1417,1486,1522
+  @field w poolGuid  @ 653,1322,1385,1421,1490,1526
   @field w pos  @ 180,264,281,304,331,610,611,612,613,650,651,652
-  @field w pos  @ 653,1318,1381,1417,1486,1522
-  @field w ppq  @ 1320,1321,1383,1419,1420,1488,1510
+  @field w pos  @ 653,1322,1385,1421,1490,1526
+  @field w ppq  @ 1324,1325,1387,1423,1424,1492,1514
   @field r preload  @ 16
-  @field w project  @ 1315,1378,1413
-  @field r prompt  @ 1443
+  @field w project  @ 1319,1382,1417
+  @field r prompt  @ 1447
   @field w publish  @ 166
-  @field r publishDebug  @ 209,608,648,711,738,765,804,856,897,935,1024,1055
-  @field r publishDebug  @ 1086,1113,1144,1167,1190,1323,1422,1490
+  @field r publishDebug  @ 209,608,648,711,738,765,804,856,897,935,1028,1059
+  @field r publishDebug  @ 1090,1117,1148,1171,1194,1327,1426,1494
   @field w publishDebug  @ 167,210,213,609,615,649,655,712,715,739,742,766
-  @field w publishDebug  @ 769,805,808,857,860,898,901,936,939,1025,1028,1056
-  @field w publishDebug  @ 1059,1087,1090,1114,1117,1145,1148,1168,1171,1191,1194,1324
-  @field w publishDebug  @ 1326,1423,1425,1491,1493
-  @field r published  @ 166,432,698,724,782,826,871,912,1067,1154,1228
+  @field w publishDebug  @ 769,805,808,857,860,898,901,936,939,1029,1032,1060
+  @field w publishDebug  @ 1063,1091,1094,1118,1121,1149,1152,1172,1175,1195,1198,1328
+  @field w publishDebug  @ 1330,1427,1429,1495,1497
+  @field r published  @ 166,432,698,724,782,826,871,912,1071,1158,1232
   @field w published  @ 165
-  @field r purity  @ 1346,1392,1398
-  @field r qnHi  @ 985
-  @field r qnLo  @ 984,986,988,999
-  @field r reaper  @ 24,1529,1530,1534
+  @field r purity  @ 1350,1396,1402
+  @field r qnHi  @ 986
+  @field r qnLo  @ 985,987,988,990,992,1003
+  @field r reaper  @ 24,1533,1534,1538
   @field w registerKind  @ 50
   @field r rename  @ 340,366
   @field w rename  @ 111
   @field w renameSlot  @ 110
   @field w reset  @ 53
-  @field w row1  @ 1348
-  @field w row2  @ 1348
+  @field w row1  @ 1352
+  @field w row2  @ 1352
   @field w run  @ 224,235,247,260,277,300,327,352,376,413,443,477
   @field w run  @ 502,521,559,577,604,644,686,707,734,761,800,852
-  @field w run  @ 893,931,956,978,994,1005,1020,1051,1082,1109,1140,1163
-  @field w run  @ 1186,1214,1236,1258,1284,1314,1377,1412,1461,1482,1518
+  @field w run  @ 893,931,956,978,998,1009,1024,1055,1086,1113,1144,1167
+  @field w run  @ 1190,1218,1240,1262,1288,1318,1381,1416,1465,1486,1522
   @field w samplerReachable  @ 162
-  @field r scope  @ 1340,1351
-  @field w scope  @ 1353,1359,1403,1441
+  @field r scope  @ 1344,1355
+  @field w scope  @ 1357,1363,1407,1445
   @field w seekInstance  @ 143
-  @field w setContext  @ 228,239,1528
-  @field r setCursorAt  @ 1198,1206
+  @field w setContext  @ 228,239,1532
+  @field r setCursorAt  @ 1202,1210
   @field w setCursorAt  @ 140,141
   @field r slotIdx  @ 147,319,343,368
   @field w slotIdx  @ 111,114,383,391,425,450,456,484,529,536,625,626
   @field w slotIdx  @ 627,628,666,667,668,669,693,694,718,719,745,746
   @field w slotIdx  @ 774,775,776,777,778,815,816,817,818,820,821,822
-  @field w slotIdx  @ 865,866,867,906,907,908,958,969,980,1006,1008,1010
-  @field w slotIdx  @ 1031,1032,1062,1063,1093,1094,1122,1151,1174,1201,1221,1222
-  @field w slotIdx  @ 1244,1245,1265,1266,1291,1292
+  @field w slotIdx  @ 865,866,867,906,907,908,958,969,980,1010,1012,1014
+  @field w slotIdx  @ 1035,1036,1066,1067,1097,1098,1126,1155,1178,1205,1225,1226
+  @field w slotIdx  @ 1248,1249,1269,1270,1295,1296
   @field w slotOfTake  @ 102
-  @field r slotsByIdx  @ 70,269,357,388,526,538,770,809,861,902,1466
+  @field r slotsByIdx  @ 70,269,357,388,526,538,770,809,861,902,1470
   @field w slotsByIdx  @ 62,422,585,617,657
-  @field r sonoritySize  @ 1344
-  @field w sonoritySize  @ 1442
+  @field r sonoritySize  @ 1348
+  @field w sonoritySize  @ 1446
   @field r src  @ 291
   @field w src  @ 77
   @field w srcLen  @ 179
@@ -288,61 +288,61 @@
   @field w startQN  @ 383,391,425,450,456,484,529,536,625,626,627,628
   @field w startQN  @ 666,667,668,669,693,694,718,719,745,746,774,775
   @field w startQN  @ 776,777,778,815,816,817,818,819,820,821,822,865
-  @field w startQN  @ 866,867,906,907,908,959,970,981,1007,1009,1011,1031
-  @field w startQN  @ 1032,1062,1063,1093,1094,1122,1151,1174,1201,1221,1222,1244
-  @field w startQN  @ 1245,1265,1266,1291,1292
+  @field w startQN  @ 866,867,906,907,908,959,970,981,1011,1013,1015,1035
+  @field w startQN  @ 1036,1066,1067,1097,1098,1126,1155,1178,1205,1225,1226,1248
+  @field w startQN  @ 1249,1269,1270,1295,1296
   @field w stepNames  @ 35
   @field r stepVariant  @ 547,548,571
   @field w stepVariant  @ 533,534,565
-  @field r strength  @ 1341
-  @field w strength  @ 1353,1359,1403,1441
+  @field r strength  @ 1345
+  @field w strength  @ 1357,1363,1407,1445
   @field r suppressKbd  @ 251
   @field w swings  @ 189
   @field w synthetic  @ 189
   @field r take  @ 98,119,121,387,399,427,454,464,534,547,632
   @field r take  @ 636,675,723,726,728,749,752,755,784,788,793,831
-  @field r take  @ 836,840,843,846,878,885,918,1069
+  @field r take  @ 836,840,843,846,878,885,918,1073
   @field w take  @ 179,263,280,303,330,383,387,391,425,427,450,454
   @field w take  @ 456,484,529,534,536,610,611,612,613,625,626,627
   @field w take  @ 628,650,651,652,653,666,667,668,669,693,694,718
   @field w take  @ 719,745,746,774,775,776,777,778,815,816,817,818
   @field w take  @ 819,820,821,822,865,866,867,906,907,908,958,969
-  @field w take  @ 980,1006,1008,1010,1031,1032,1062,1063,1093,1094,1122,1151
-  @field w take  @ 1174,1201,1221,1222,1244,1245,1265,1266,1291,1292,1317,1380
-  @field w take  @ 1416,1485,1521
+  @field w take  @ 980,1010,1012,1014,1035,1036,1066,1067,1097,1098,1126,1155
+  @field w take  @ 1178,1205,1225,1226,1248,1249,1269,1270,1295,1296,1321,1384
+  @field w take  @ 1420,1489,1525
   @field r takeByKey  @ 71,103,214,266,283,306,333,358,359,381,389,423
   @field r takeByKey  @ 448,482,507,527,539,564,691,716,743,771,772,810
-  @field r takeByKey  @ 811,862,863,903,904,940,1029,1060,1091,1118,1149,1172
-  @field r takeByKey  @ 1195,1219,1242,1263,1289,1303,1327,1385,1426,1494,1524
+  @field r takeByKey  @ 811,862,863,903,904,940,1033,1064,1095,1122,1153,1176
+  @field r takeByKey  @ 1199,1223,1246,1267,1293,1307,1331,1389,1430,1498,1528
   @field w takeByKey  @ 63,622,663
   @field w takeForSlot  @ 71
-  @field r takes  @ 1013
-  @field r target  @ 1342,1366
-  @field w target  @ 1441
-  @field w temper  @ 1315,1378,1414
-  @field w tempers  @ 189,1315,1378,1413
-  @field r tm  @ 1503,1504
+  @field r takes  @ 1017
+  @field r target  @ 1346,1370
+  @field w target  @ 1445
+  @field w temper  @ 1319,1382,1418
+  @field w tempers  @ 189,1319,1382,1417
+  @field r tm  @ 1507,1508
   @field w trackHandle  @ 69
   @field r trackIdx  @ 129,147,318,342,435
   @field w trackIdx  @ 77,111,114,383,391,425,450,456,484,529,536,625
   @field w trackIdx  @ 626,627,628,666,667,668,669,693,694,718,719,745
   @field w trackIdx  @ 746,774,775,776,777,778,815,816,817,818,819,820
-  @field w trackIdx  @ 821,822,865,866,867,906,907,908,958,969,980,1006
-  @field w trackIdx  @ 1008,1010,1031,1032,1062,1063,1093,1094,1122,1151,1174,1201
-  @field w trackIdx  @ 1221,1222,1244,1245,1265,1266,1291,1292
+  @field w trackIdx  @ 821,822,865,866,867,906,907,908,958,969,980,1010
+  @field w trackIdx  @ 1012,1014,1035,1036,1066,1067,1097,1098,1126,1155,1178,1205
+  @field w trackIdx  @ 1225,1226,1248,1249,1269,1270,1295,1296
   @field w trackIdxForGuid  @ 66
-  @field r tracker  @ 432,698,724,782,826,871,912,1067,1154,1228
+  @field r tracker  @ 432,698,724,782,826,871,912,1071,1158,1232
   @field w tracks  @ 64
   @field r tracksList  @ 64,67,69
   @field w tracksList  @ 61,215,418,581,616,656
   @field r tv  @ 218,632,636,675,723,726,728,749,752,755,784,788
   @field r tv  @ 793,831,836,840,843,846,873,874,878,879,885,887
-  @field r tv  @ 918,943,1035,1039,1045,1069,1071,1097,1098,1101,1126,1127
-  @field r tv  @ 1128,1131,1156,1157,1177,1178,1179,1180,1204,1332,1348,1433
-  @field r type  @ 1333,1434
-  @field w ui  @ 1465
-  @field r uuid  @ 1503
-  @field w vel  @ 1320,1321,1383,1419,1420,1488,1510
+  @field r tv  @ 918,943,1039,1043,1049,1073,1075,1101,1102,1105,1130,1131
+  @field r tv  @ 1132,1135,1160,1161,1181,1182,1183,1184,1208,1336,1352,1437
+  @field r type  @ 1337,1438
+  @field w ui  @ 1469
+  @field r uuid  @ 1507
+  @field w vel  @ 1324,1325,1387,1423,1424,1492,1514
   @field w visibleTakes  @ 126
   @field w wasOpenAtFrameStart  @ 52
-  @field r wholesale  @ 1498
+  @field r wholesale  @ 1502

@@ -974,29 +974,33 @@ return {
   },
 
   {
-    name = 'the map window centres time on the current instance, holding its top on screen',
+    name = 'the map window pages time, a start in the last bar opening the next page',
     run = function(harness)
       local function placed(startQN, lengthQN)
         return mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
                                      startQN = startQN, lengthQN = lengthQN }, 3)
       end
-      local win = placed(40, 4):mapWindow(5, 20)
-      t.eq(win.qnLo, 32, 'half a window above the instance\'s midpoint')
-      t.eq(win.qnHi, 52, 'and half a window below it')
-      t.eq(placed(40, 60):mapWindow(5, 20).qnLo, 40,
-           'an instance taller than the window shows its top instead')
-      t.eq(placed(2, 4):mapWindow(5, 20).qnLo, 0, 'and the window never runs above QN 0')
+      -- An 80 QN page strides 64, the last bar of one page opening the next.
+      local win = placed(40, 4):mapWindow(5, 80)
+      t.eq(win.qnLo, 0, 'the first page holds while the instance stands on it')
+      t.eq(win.qnHi, 80, 'and the page is the pane deep')
+      t.eq(placed(60, 4):mapWindow(5, 80).qnLo, 0, 'a start short of the stride stays put')
+      t.eq(placed(70, 4):mapWindow(5, 80).qnLo, 64,
+           'past it the window steps a page, that bar now at the head')
+      t.eq(placed(40, 200):mapWindow(5, 80).qnLo, 0,
+           'an instance taller than the page still shows its top')
+      t.eq(placed(2, 4):mapWindow(5, 80).qnLo, 0, 'and the window never runs above QN 0')
     end,
   },
 
   {
-    name = 'with the tracker in no instance the map window centres on the edit cursor',
+    name = 'with the tracker in no instance the map window pages on the edit cursor',
     run = function(harness)
       local tv = mapTracker(harness, nil, 3)
       fakeArrange.cursorQN = 100
-      local win = tv:mapWindow(5, 20)
+      local win = tv:mapWindow(5, 80)
       t.eq(win.current, nil, 'nothing is marked')
-      t.eq(win.qnLo, 90, 'the edit cursor stands in for the midpoint')
+      t.eq(win.qnLo, 64, 'the edit cursor stands in for the start')
     end,
   },
 
@@ -1009,7 +1013,7 @@ return {
                                         startQN = 44,  lengthQN = 4 })
       util.add(fakeArrange.instances, { take = 'far', trackIdx = 2, slotIdx = 1,
                                         startQN = 200, lengthQN = 4 })
-      local win = tv:mapWindow(5, 20)
+      local win = tv:mapWindow(5, 80)
       t.eq(#win.takes, 2, 'the neighbour inside the window, not the one beyond it')
       t.eq(win.current, 'i0', 'the current instance is the marked take')
     end,

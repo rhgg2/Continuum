@@ -125,8 +125,8 @@ column's rule closing it off. To the right it reaches as far as the track list
 and no further, so the columns past the last track stay empty, and it sits under
 the boxes, as it does there.
 
-The window is fixed in scale and never scrolls — five track columns and a
-third-column gutter across the pane's width, 3 pixels per QN down it. The renderer measures the pane in those
+The window is fixed in scale — five track columns and a
+third-column gutter across the pane's width, 2 pixels per QN down it. The renderer measures the pane in those
 units and takes the window from `tv:mapWindow(cols, qnSpan)` in the
 arrangement's own terms: the column and QN bounds, the takes over them (the
 arrange facade's enumerator, `docs/arrangePage.md` § The take enumerator), and
@@ -134,10 +134,13 @@ the marked take. The pixels stay in the renderer, as they do for the grid's view
 (`gridPane` hands `tv:setGridSize` cells and rows).
 
 The window centres the bound track's column and clamps it at both ends, so a
-track list shorter than the pane left-aligns. Time centres on the current
-instance's midpoint, pulled back up to its start where the instance is taller
-than the window, and clamped at QN 0. With the tracker in no instance nothing is
-marked, and the edit cursor QN stands in for the midpoint.
+track list shorter than the pane left-aligns. Time pages rather than follows.
+The stride is the pane's depth less one bar, and the window is the page that
+stride lands the current instance's start on. So the window holds still while a
+walk moves down it, and a start crossing into the last bar opens the next page
+with that bar at its head. A start is always within a stride of the top, so an
+instance taller than the page needs no case of its own. With the tracker in no
+instance nothing is marked, and the edit cursor QN stands in for the start.
 
 ## FX chain — palette tab
 

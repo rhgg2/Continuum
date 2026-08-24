@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The mini-map's time window pages, over centring on the current instance: a stride
+  of the pane's depth less one bar, and the window is the page that stride lands the instance's
+  start on. So a walk moves down a still window and steps to the next page on reaching the last bar,
+  which reappears at its head, rather than dragging the map under a pinned mark. Paging from QN 0
+  keeps the window a function of the start alone, with no remembered position to drift; and the
+  start always falls within a stride of the top, so an instance taller than the page needs no case
+  of its own.
+
 - **2026-08-24** — A track step lands on the placement nearest the current instance, ranked by
   overlap first and gap second, over restoring the track's last-viewed slot: the mini-map shows the
   neighbouring tracks against the instance you are in, so a step across should land where the eye
