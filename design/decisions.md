@@ -4,6 +4,9 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The mini-map's palette tab is labelled `map`, not `mini-map`: three equal cells
+  across the 200px pane leave about 63px each, which the longer word overruns.
+
 - **2026-08-24** — A text field whose value a button reads is drawn without EnterReturnsTrue, and
   its Enter is caught with IsItemDeactivated plus the Enter keys. ReaImGui hands the buffer back
   only on a frame the call returns true, so under that flag the field reads blank to every gesture

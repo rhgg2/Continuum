@@ -42,6 +42,7 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 tracker: a third palette tab for the mini-map (§ The pane)
 - 2026-08-24 arrange: publish the take enumerator on the facade (§ What the tracker may see)
 
 ## Now
@@ -49,12 +50,6 @@ Notes carried into the phases:
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- tracker: a third palette tab — `PALETTE_TABS` (`trackerRender.lua:540`)
-  gains the map, with a stub body. The derivation is untouched, so the
-  map is reachable only by a tab click, and it never holds focus.
-  `docs/trackerRender.md` § Palette tabs corrected to three tabs, its
-  two-toggle account left standing. Spec pins that `tv:overrideTab`
-  holds the map and lapses it on a caret move.
 - tracker: draw the map — the window computed on `tv` from the current
   instance and the track list, the renderer only painting it: one filled
   box per instance in its slot's colour, the current instance in the

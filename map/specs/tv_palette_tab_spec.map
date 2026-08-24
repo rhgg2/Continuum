@@ -1,0 +1,22 @@
+@spec tv_palette_tab_spec  src=tests/specs/tv_palette_tab_spec.lua  loc=30  cases=2
+@exercises trackerView (h.vm)
+@surface   vm:paletteTab, vm:overrideTab
+@harness   mk
+
+# Intent
+  The palette's active tab. The derivation yields fx or parameters and
+  nothing else, so the map tab comes up only under an override; the
+  override holds it over an available chain and lapses on a caret move,
+  as it does for the other two tabs.
+
+# Cases
+  @case 'the derivation never yields the map'  [harness]  @ 11-16
+  @case 'an override holds the map up until the caret moves'  [harness]  @ 20-27
+
+# Uses (outbound edges)
+  @use call vm:paletteTab  @ 14,15,24,25,26
+  @use call vm:overrideTab  @ 23
+
+# Fields (r read / w write incl. constructor keys)
+  @field w name  @ 11,20
+  @field w run  @ 12,21

@@ -538,7 +538,8 @@ local drawFxChainBody
 local editFx
 
 local PALETTE_TABS = { { key = 'parameters', label = 'parameters' },
-                       { key = 'fx',         label = 'fx' } }
+                       { key = 'fx',         label = 'fx' },
+                       { key = 'map',        label = 'map' } }
 
 -- The parameters tree body — the palette's former sole content, drawn on the params tab.
 local function drawParamsBody(childFocused)
@@ -568,8 +569,12 @@ local function drawParamsBody(childFocused)
   end
 end
 
--- The right-hand pane: parameters | fx tabs. fx auto-raises on a showable chain; Super-R parks
--- parameters over it. See docs/trackerRender.md § Palette tabs.
+-- The arrange mini-map body. Empty until the map is drawn; the tab is reachable by a click only,
+-- since the derivation in tv:paletteTab never picks it.
+local function drawMapBody() end
+
+-- The right-hand pane: parameters | fx | map tabs. fx auto-raises on a showable chain; Super-R
+-- parks parameters over it. See docs/trackerRender.md § Palette tabs.
 local function drawParamPalette(x, y, h, caretKey, fxAvailable, fxPlan)
   local activeTab = tv:paletteTab(caretKey, fxAvailable)
   if activeTab ~= 'parameters' and paletteFocus then paletteFocus = nil end
@@ -578,8 +583,9 @@ local function drawParamPalette(x, y, h, caretKey, fxAvailable, fxPlan)
     tabs = PALETTE_TABS, activeTab = activeTab,
     onTab = function(key) tv:overrideTab(key, caretKey) end,   -- a tab click just switches the view; it never grabs focus
     draw = function(childFocused)
-      if activeTab == 'fx' then drawFxChainBody(fxPlan)
-      else                      drawParamsBody(childFocused) end
+      if     activeTab == 'fx'  then drawFxChainBody(fxPlan)
+      elseif activeTab == 'map' then drawMapBody()
+      else                           drawParamsBody(childFocused) end
     end,
   }
 end

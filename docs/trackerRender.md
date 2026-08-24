@@ -71,15 +71,17 @@ scores with it.
 
 ## Palette tabs
 
-The right-hand pane carries two tabs — **parameters** | **fx** — sharing one
-child and one focus (`chrome.paletteTabsHeader`: equal-width cells, the active
-label in text ink and the inactive one dimmed, a crisp cell divider). The active
-tab is *derived unless pinned*: `tv:paletteTab(caretKey, fxAvailable)` returns a
-`tabOverride` (either tab, set by a click or the keyboard toggles) when one holds,
-else **fx** whenever a chain is showable — the caret sits on an fx host, or a
-session is live (`stripPlan ~= nil`) — and **parameters** otherwise. So a chain
+The right-hand pane carries three tabs — **parameters** | **fx** | **map** —
+sharing one child and one focus (`chrome.paletteTabsHeader`: equal-width cells,
+the active label in text ink and the inactive ones dimmed, a crisp cell
+divider). The active tab is *derived unless pinned*: `tv:paletteTab(caretKey,
+fxAvailable)` returns a `tabOverride` (any of the three, set by a click or the
+keyboard toggles) when one holds, else **fx** whenever a chain is showable — the
+caret sits on an fx host, or a session is live (`stripPlan ~= nil`) — and
+**parameters** otherwise. The derivation never yields **map**, the arrange
+mini-map: a click alone brings it up, and it takes no keyboard focus. So a chain
 auto-raises under the caret exactly as the old docked strip did, and lapses when
-the caret leaves it. A mouse click on either tab pins it **without grabbing
+the caret leaves it. A mouse click on any tab pins it **without grabbing
 focus**: the grid keeps the keys until you click into the pane (a param row, a
 field label) or use the keyboard. The pin lapses on the next caret move — the
 `tabOverride` generalises the old parameters-only override.

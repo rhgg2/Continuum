@@ -194,6 +194,7 @@ local specs = {
   'pa_crosstrack_spec',
   'tv_param_bind_spec',
   'tv_param_learn_spec',
+  'tv_palette_tab_spec',
   'vm_quantize_lane_stability_spec',
   'vm_quantize_keep_realised_lane_spec',
   'vm_undo_label_spec',
