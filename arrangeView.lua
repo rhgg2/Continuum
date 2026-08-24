@@ -414,6 +414,22 @@ local function deleteSelectedAndAdvance()
   moveCursorBy(cm:get('arrangeAdvanceBy'), 0)
 end
 
+-- The retreat is measured before the delete, over the takes it spares: the caret
+-- lands on a start row that survives the gesture, not the one it stood on.
+local function deleteSelectedAndRetreat()
+  local takes = actionTargets()
+  if #takes == 0 then return end
+  local going = {}
+  for _, take in ipairs(takes) do going[take.take] = true end
+  local best
+  for _, take in ipairs(am:tracksTakes(cursorCol)) do
+    local row = math.floor(av:qnToRow(take.startQN))
+    if not going[take.take] and row < cursorRow and (not best or row > best) then best = row end
+  end
+  deleteSelected()
+  if best then navCursorTo(best, cursorCol) end
+end
+
 ----- Replace mode — the drop keys, reinterpreted onto the take under the cursor
 
 -- While armed this spring-loaded scope rides the cmgr stack, redirecting every drop key;
@@ -666,6 +682,7 @@ function av:newTakeBelow(take, name, lengthQN)
 end
 function av:duplicateBelow(take) return am:duplicateBelow(take) end
 function av:stepVariant(take, dir) return am:stepVariant(take, dir) end
+function av:deleteTake(take)   return am:deleteTake(take) end
 function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:ownerTrack(take)   return am:ownerTrack(take) end
 function av:dropSlot(trackIdx, slotIdx, qnPos) return am:dropInstance(trackIdx, slotIdx, qnPos) end
@@ -937,6 +954,7 @@ arrange:registerAll {
   arrangeSplit                  = { splitAtCursor,                  'Split take' },
   arrangeDeleteTake             = { deleteSelected,                 'Delete take' },
   arrangeDeleteAdvance          = { deleteSelectedAndAdvance,       'Delete take and advance' },
+  arrangeDeleteRetreat          = { deleteSelectedAndRetreat,       'Delete take and retreat' },
   arrangeDive                   = diveSelected,
   arrangeTakeProperties         = selectedTakeProperties,
   arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate take' },

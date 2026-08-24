@@ -794,6 +794,28 @@ return {
   },
 
   {
+    name = 'delete and retreat puts the caret on the start row of what is left above it',
+    run = function(harness)
+      local h, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0 },
+        { track = 'tr1', name = 'b', pos = 4, len = 2 },
+        { track = 'tr1', name = 'c', pos = 6 },
+      })
+      h.cmgr:push('arrange')
+      av:setGridSize(16, 4)
+      av:setCursor(6, 0)
+      h.cmgr:invoke('arrangeDeleteRetreat')
+      t.eq(#av:tracksTakes(0), 2, 'the cursor take went')
+      t.eq(av:cursorRow(), 4, "and the caret retreated to the previous placement's start row")
+
+      av:setSelection{ takeAt(av:tracksTakes(0), 4).take }
+      h.cmgr:invoke('arrangeDeleteRetreat')
+      t.eq(#av:tracksTakes(0), 1, 'the selection went, cursor take and all')
+      t.eq(av:cursorRow(), 0, 'the row the caret stood on was the deleted start, so it passed over it')
+    end,
+  },
+
+  {
     name = 'nudge refuses entirely when any selected take is blocked',
     run = function(harness)
       local h, av = mkArrange(harness, {

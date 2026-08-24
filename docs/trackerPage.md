@@ -612,9 +612,10 @@ parked on the scratch track is still a slot and still editable
 (`takeForSlot` resolves live-or-parked), so recovery and the empty test
 both key off *slots*, not live instances.
 
-Changing track always restores that track's last-viewed slot — that is the
-per-track memory, and the same path as dive's "no take under the cursor"
-fallback.
+The last-viewed slot is the per-track memory, and comes back on the paths
+with nothing better to go on: dive's "no take under the cursor" fallback,
+and a track step from no instance or onto a track holding no placement
+(§ The track step's landing).
 
 ### New take
 
@@ -711,6 +712,31 @@ A crossing landing therefore rebinds the tracker on the next frame, and
 the rebuild resets the caret to row 0. Instances of one slot share a
 take, so a walk within a slot rebinds nothing and the caret holds its
 row — the same row of a different placement.
+
+### The track step's landing
+
+`prevTrack` and `nextTrack` (Alt+←/→) land the way the walk does, on the
+placement of the new track nearest the one the tracker is in. Nearest is
+most overlap first: a placement covering the instance beats one that
+merely lies close, being the material that sounds against it. Where
+nothing overlaps, the smaller gap wins, and a tie between two gaps goes
+to the nearer start.
+
+A tracker in no instance, or a target track holding no placement, has
+nothing to measure and leaves the step as it was — the track's
+last-viewed slot comes back (§ Slot recovery and the per-track memory).
+
+### Deleting the instance
+
+`deleteInstance` (Alt+Shift+↑) deletes the placement the tracker stands
+in and lands on the stop before it, the mirror of duplicate below on
+Alt+Shift+↓. Only the drop goes: deleting a slot's last live placement
+parks it (`docs/arrangeManager.md` § Parking), so the material outlives
+the gesture and the slot stays editable.
+
+The stop is read before the delete, so the landing names a placement the
+gesture spares. Deleting the first placement on the track deletes it all
+the same and lands nowhere; the next resolve seeks the bound slot afresh.
 
 ## External-mutation watcher
 

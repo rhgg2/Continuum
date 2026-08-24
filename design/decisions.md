@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — A track step lands on the placement nearest the current instance, ranked by
+  overlap first and gap second, over restoring the track's last-viewed slot: the mini-map shows the
+  neighbouring tracks against the instance you are in, so a step across should land where the eye
+  already is. The last-viewed slot stays the fallback for a step with no instance to measure from.
+
 - **2026-08-24** — The walk lands by naming its stop and selecting that stop's slot, with no caret
   write of its own, over resetting the caret at a crossing landing: a slot change swaps the bound
   take, and the rebuild resets the caret to row 0 already. A walk within one slot rebinds nothing

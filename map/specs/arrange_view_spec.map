@@ -1,4 +1,4 @@
-@spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=1267  cases=71
+@spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=1289  cases=72
 @exercises configManager (h.cm), arrangeView (av), arrangeManager (am), commandManager (h.cmgr)
 @surface   cm:set, av:tracksTakes, av:tidyRows, am:resizeTake, am:tracksTakes, cmgr:push, av:cursorRow, av:cursorCol, av:setCursor, av:setBeatPerRow, av:setCursorAt, av:setGridSize, av:scroll, av:scrollBy, av:setMaxCol, av:beatPerRow, cm:get, av:rowToQN, av:paletteSlot, av:setPaletteSlot, am:deleteTake, av:pruneSlots, av:trackSlots, av:seedTidy, av:keyForSlot, av:tidyRenameBase, av:tidyDropBase, av:tidyAddBase, av:tidySlots, av:focus, av:setFocus, cmgr:invoke, av:lassoCandidate, av:selectionSet, av:isSelected, av:selectBand, cmgr:pop, av:dropBand, av:setSelection, av:addToSelection, av:toggleSelected, av:dragCandidate, av:commitDrag, am:loopRangeQN, am:editCursorQN, am:trimHead, av:cursorTake, av:qnToRow
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.GetSetRepeat
@@ -63,54 +63,55 @@
   @case 'a click takes the band down without waiting for a command'  [harness]  @ 750-761
   @case 'dropBand takes the band down and pops its scope'  [harness]  @ 765-775
   @case 'a multi-selection deletes every selected take in one pass'  [harness]  @ 779-793
-  @case 'nudge refuses entirely when any selected take is blocked'  [harness]  @ 797-814
-  @case 'nudge slides a contiguous selected block without self-collision'  [harness]  @ 818-833
-  @case 'a single-target command no-ops on a multi-selection'  [harness]  @ 837-850
-  @case 'arrangeClearSelection empties the selection'  [harness]  @ 854-865
-  @case 'addToSelection unions handles without duplicating a present one'  [harness]  @ 869-883
-  @case 'toggleSelected adds an absent handle and removes a present one'  [harness]  @ 887-900
-  @case 'group drag slides the whole selection by one delta'  [harness]  @ 904-920
-  @case 'group drag refuses when a member would hit an outside take'  [harness]  @ 924-937
-  @case 'group drag with Alt duplicates the block and reselects the copies'  [harness]  @ 941-959
-  @case 'loop to item brackets the take under the arrange cursor'  [harness]  @ 965-981
-  @case 'loop to item takes the selection over the cursor, and spans a block'  [harness]  @ 985-1002
-  @case 'a cursor-driven replace leaves nothing selected'  [harness]  @ 1006-1018
-  @case 'a replace of a selected take hands the selection to the replacement'  [harness]  @ 1022-1037
-  @case 'a replace of a selection away from the cursor leaves the cursor alone'  [harness]  @ 1041-1053
-  @case 'with advance-by-length armed, a drop advances by the take it placed'  [harness]  @ 1059-1072
-  @case 'advance-by-length reads the clipped length, not the slot length'  [harness]  @ 1076-1089
-  @case 'a second Ctrl-` puts the drop advance back on arrangeAdvanceBy'  [harness]  @ 1093-1107
-  @case 'the caret on a start row moves the head down, holding the end still'  [harness]  @ 1114-1123
-  @case 'the split key cuts the take at the caret and leaves the caret on the lower half'  [harness]  @ 1127-1137
-  @case 'a split on the start row has nothing to cut'  [harness]  @ 1141-1147
-  @case 'the caret off the start row moves the tail, leaving the head alone'  [harness]  @ 1151-1160
-  @case 'Up on the start row hands back a row of head, taking the caret with it'  [harness]  @ 1164-1174
-  @case 'a head at the origin refuses to grow, and the caret holds'  [harness]  @ 1178-1187
-  @case 'the take under the cursor carries the source its box hides'  [harness]  @ 1191-1202
-  @case 'a head trim is floored at one rendered row'  [harness]  @ 1206-1216
-  @case 'a tail shrink never parks the caret on the head row'  [harness]  @ 1220-1233
-  @case 'the armed edge is decided once, from the take the caret stands on'  [harness]  @ 1237-1252
-  @case 'qnToRow / rowToQN are inverses through beatPerRow'  [harness]  @ 1256-1265
+  @case 'delete and retreat puts the caret on the start row of what is left above it'  [harness]  @ 797-815
+  @case 'nudge refuses entirely when any selected take is blocked'  [harness]  @ 819-836
+  @case 'nudge slides a contiguous selected block without self-collision'  [harness]  @ 840-855
+  @case 'a single-target command no-ops on a multi-selection'  [harness]  @ 859-872
+  @case 'arrangeClearSelection empties the selection'  [harness]  @ 876-887
+  @case 'addToSelection unions handles without duplicating a present one'  [harness]  @ 891-905
+  @case 'toggleSelected adds an absent handle and removes a present one'  [harness]  @ 909-922
+  @case 'group drag slides the whole selection by one delta'  [harness]  @ 926-942
+  @case 'group drag refuses when a member would hit an outside take'  [harness]  @ 946-959
+  @case 'group drag with Alt duplicates the block and reselects the copies'  [harness]  @ 963-981
+  @case 'loop to item brackets the take under the arrange cursor'  [harness]  @ 987-1003
+  @case 'loop to item takes the selection over the cursor, and spans a block'  [harness]  @ 1007-1024
+  @case 'a cursor-driven replace leaves nothing selected'  [harness]  @ 1028-1040
+  @case 'a replace of a selected take hands the selection to the replacement'  [harness]  @ 1044-1059
+  @case 'a replace of a selection away from the cursor leaves the cursor alone'  [harness]  @ 1063-1075
+  @case 'with advance-by-length armed, a drop advances by the take it placed'  [harness]  @ 1081-1094
+  @case 'advance-by-length reads the clipped length, not the slot length'  [harness]  @ 1098-1111
+  @case 'a second Ctrl-` puts the drop advance back on arrangeAdvanceBy'  [harness]  @ 1115-1129
+  @case 'the caret on a start row moves the head down, holding the end still'  [harness]  @ 1136-1145
+  @case 'the split key cuts the take at the caret and leaves the caret on the lower half'  [harness]  @ 1149-1159
+  @case 'a split on the start row has nothing to cut'  [harness]  @ 1163-1169
+  @case 'the caret off the start row moves the tail, leaving the head alone'  [harness]  @ 1173-1182
+  @case 'Up on the start row hands back a row of head, taking the caret with it'  [harness]  @ 1186-1196
+  @case 'a head at the origin refuses to grow, and the caret holds'  [harness]  @ 1200-1209
+  @case 'the take under the cursor carries the source its box hides'  [harness]  @ 1213-1224
+  @case 'a head trim is floored at one rendered row'  [harness]  @ 1228-1238
+  @case 'a tail shrink never parks the caret on the head row'  [harness]  @ 1242-1255
+  @case 'the armed edge is decided once, from the take the caret stands on'  [harness]  @ 1259-1274
+  @case 'qnToRow / rowToQN are inverses through beatPerRow'  [harness]  @ 1278-1287
 
 # Uses (outbound edges)
-  @use call cm:set  @ 19,431,451,471,1064,1098
-  @use call av:tracksTakes  @ 53,284,300,302,314,401,402,479,499,500,501,519,520,521,522,538,556,572,698,713,787,806,826,845,861,876,893,911,932,948,993
+  @use call cm:set  @ 19,431,451,471,1086,1120
+  @use call av:tracksTakes  @ 53,284,300,302,314,401,402,479,499,500,501,519,520,521,522,538,556,572,698,713,787,808,811,813,828,848,867,883,898,915,933,954,970,1015
   @use call av:tidyRows  @ 59,316,379
-  @use call am:resizeTake  @ 69,1209
-  @use call am:tracksTakes  @ 69,1016,1028,1034,1047,1065,1082,1099,1119,1132,1146,1156,1167,1170,1183,1209,1212,1228,1231,1244,1248
-  @use call cmgr:push  @ 70,437,457,478,514,531,546,564,580,594,608,631,645,663,680,695,710,731,753,768,785,804,824,843,859,971,992,1013,1031,1049,1068,1085,1102,1225,1243
-  @use call av:cursorRow  @ 96,98,100,111,186,249,250,252,253,523,599,612,614,616,618,620,622,635,637,649,651,653,655,667,670,672,686,701,723,1052,1071,1088,1106,1122,1136,1159,1173,1186,1215,1229,1232,1251
+  @use call am:resizeTake  @ 69,1231
+  @use call am:tracksTakes  @ 69,1038,1050,1056,1069,1087,1104,1121,1141,1154,1168,1178,1189,1192,1205,1231,1234,1250,1253,1266,1270
+  @use call cmgr:push  @ 70,437,457,478,514,531,546,564,580,594,608,631,645,663,680,695,710,731,753,768,785,804,826,846,865,881,993,1014,1035,1053,1071,1090,1107,1124,1247,1265
+  @use call av:cursorRow  @ 96,98,100,111,186,249,250,252,253,523,599,612,614,616,618,620,622,635,637,649,651,653,655,667,670,672,686,701,723,809,814,1074,1093,1110,1128,1144,1158,1181,1195,1208,1237,1251,1254,1273
   @use call av:cursorCol  @ 96,98,100,112,187,668
-  @use call av:setCursor  @ 97,99,131,142,143,154,157,168,200,247,439,459,482,516,533,548,566,582,596,610,633,647,665,682,697,712,733,755,757,770,972,978,995,1012,1030,1048,1067,1084,1101,1117,1130,1144,1154,1168,1181,1194,1196,1200,1210,1226,1246
-  @use call av:setBeatPerRow  @ 109,235,238,248,251,254,1259,1262
+  @use call av:setCursor  @ 97,99,131,142,143,154,157,168,200,247,439,459,482,516,533,548,566,582,596,610,633,647,665,682,697,712,733,755,757,770,806,994,1000,1017,1034,1052,1070,1089,1106,1123,1139,1152,1166,1176,1190,1203,1216,1218,1222,1232,1248,1268
+  @use call av:setBeatPerRow  @ 109,235,238,248,251,254,1281,1284
   @use call av:setCursorAt  @ 110
-  @use call av:setGridSize  @ 120,130,141,153,167,171,182,195,210,222,224,438,458,481,498,515,532,547,565,581,595,609,632,646,664,681,696,711,732,754,769,786,805,825,844,860,910,931,947,1066,1083,1100
+  @use call av:setGridSize  @ 120,130,141,153,167,171,182,195,210,222,224,438,458,481,498,515,532,547,565,581,595,609,632,646,664,681,696,711,732,754,769,786,805,827,847,866,882,932,953,969,1088,1105,1122
   @use call av:scroll  @ 121,132,144,155,158,169,172,184,197,201,213,225
   @use call av:scrollBy  @ 183,196,199,212,223,460
   @use call av:setMaxCol  @ 211
   @use call av:beatPerRow  @ 234,236,239,255
   @use call cm:get  @ 237
-  @use call av:rowToQN  @ 250,253,1261,1264
+  @use call av:rowToQN  @ 250,253,1283,1286
   @use call av:paletteSlot  @ 263,265,267,269,271,273,289,304,410
   @use call av:setPaletteSlot  @ 264,266,268,270,272,285,301,403
   @use call am:deleteTake  @ 286,302
@@ -124,49 +125,49 @@
   @use call av:tidySlots  @ 404
   @use call av:focus  @ 418,421,423,443
   @use call av:setFocus  @ 420,422,480,699,714
-  @use call cmgr:invoke  @ 440,461,483,517,534,535,549,550,552,553,567,568,569,583,585,597,598,611,613,615,617,619,621,634,636,648,650,652,654,666,669,671,683,685,700,715,734,740,742,756,759,771,789,808,828,847,863,973,979,996,1000,1014,1015,1032,1033,1050,1051,1069,1070,1086,1087,1103,1104,1105,1118,1131,1145,1155,1169,1182,1195,1211,1227,1230,1247
+  @use call cmgr:invoke  @ 440,461,483,517,534,535,549,550,552,553,567,568,569,583,585,597,598,611,613,615,617,619,621,634,636,648,650,652,654,666,669,671,683,685,700,715,734,740,742,756,759,771,789,807,812,830,850,869,885,995,1001,1018,1022,1036,1037,1054,1055,1072,1073,1091,1092,1108,1109,1125,1126,1127,1140,1153,1167,1177,1191,1204,1217,1233,1249,1252,1269
   @use call am2:tracksTakes  @ 442,463,717
   @use call av:lassoCandidate  @ 502
-  @use call av:selectionSet  @ 518,536,551,554,570,584,586,600,684,687,744,792,862,864,879,957,1017,1035
-  @use call av:isSelected  @ 702,721,722,896,898,899
+  @use call av:selectionSet  @ 518,536,551,554,570,584,586,600,684,687,744,792,884,886,901,979,1039,1057
+  @use call av:isSelected  @ 702,721,722,918,920,921
   @use call av:selectBand  @ 735,741,743,758,773
   @use call cmgr:pop  @ 745,760,774
   @use call av:dropBand  @ 772
-  @use call av:setSelection  @ 788,807,827,846,861,877,894,912,933,949,994,999,1029,1047,1245
-  @use call av:addToSelection  @ 878
-  @use call av:toggleSelected  @ 895,897
-  @use call av:dragCandidate  @ 914,935,951
-  @use call av:commitDrag  @ 916,953
-  @use call am:loopRangeQN  @ 974,980,997,1001
-  @use call am:editCursorQN  @ 976
-  @use call am:trimHead  @ 1167
-  @use call av:cursorTake  @ 1197,1201
-  @use call av:qnToRow  @ 1260,1263
+  @use call av:setSelection  @ 788,811,829,849,868,883,899,916,934,955,971,1016,1021,1051,1069,1267
+  @use call av:addToSelection  @ 900
+  @use call av:toggleSelected  @ 917,919
+  @use call av:dragCandidate  @ 936,957,973
+  @use call av:commitDrag  @ 938,975
+  @use call am:loopRangeQN  @ 996,1002,1019,1023
+  @use call am:editCursorQN  @ 998
+  @use call am:trimHead  @ 1189
+  @use call av:cursorTake  @ 1219,1223
+  @use call av:qnToRow  @ 1282,1285
 
 # Fields (r read / w write incl. constructor keys)
   @field w am  @ 11,36,436,456,477
   @field r base  @ 320,322,380
   @field w cm  @ 9,11,35,36,435,436,441,455,456,462,476,477
-  @field w cm  @ 484,716,790,809,829,848,917,954
+  @field w cm  @ 484,716,790,831,851,870,939,976
   @field w cmgr  @ 11,36,436,456,477
   @field r colHi  @ 737
   @field r colLo  @ 736
-  @field w ds  @ 9,35,435,441,455,462,476,484,716,790,809,829
-  @field w ds  @ 848,917,954
-  @field w duplicate  @ 950
+  @field w ds  @ 9,35,435,441,455,462,476,484,716,790,831,851
+  @field w ds  @ 870,939,976
+  @field w duplicate  @ 972
   @field w eventMeta  @ 35
-  @field r fits  @ 915,936,952
-  @field w group  @ 913,934,950
+  @field r fits  @ 937,958,974
+  @field w group  @ 935,956,972
   @field r idx  @ 59,319,407
   @field w isMidi  @ 29,433,453,473,474
   @field r key  @ 319
   @field r len  @ 29
   @field w len  @ 29,67,86,433,453,473,474,494,495,496,629,630
-  @field w len  @ 968,969,988,989,990,1009,1010,1025,1026,1044,1045,1062
-  @field w len  @ 1079,1080,1096,1223,1240,1241
-  @field r lengthQN  @ 1121,1134,1135,1158,1172,1185,1214,1228,1231
+  @field w len  @ 801,990,991,1010,1011,1012,1031,1032,1047,1048,1066,1067
+  @field w len  @ 1084,1101,1102,1118,1245,1262,1263
+  @field r lengthQN  @ 1143,1156,1157,1180,1194,1207,1236,1250,1253
   @field w mcol  @ 502
-  @field w mode  @ 913,934,950
+  @field w mode  @ 935,956,972
   @field r name  @ 28,30,317,407
   @field w name  @ 47,48,49,67,76,77,78,79,80,85,86,87
   @field w name  @ 88,93,106,117,127,138,150,164,179,192,207,219
@@ -174,52 +175,53 @@
   @field w name  @ 371,395,398,399,415,428,448,468,491,494,495,496
   @field w name  @ 511,528,543,561,577,591,605,627,629,630,642,660
   @field w name  @ 677,692,707,709,728,750,765,779,782,783,797,800
-  @field w name  @ 801,802,818,821,822,837,840,841,854,857,869,872
-  @field w name  @ 873,874,887,890,891,904,907,908,924,927,928,929
-  @field w name  @ 941,944,945,965,968,969,985,988,989,990,1006,1009
-  @field w name  @ 1010,1022,1025,1026,1041,1044,1045,1059,1062,1076,1079,1080
-  @field w name  @ 1093,1096,1114,1127,1141,1151,1164,1178,1191,1206,1220,1223
-  @field w name  @ 1237,1240,1241,1256
-  @field r originQN  @ 1198
+  @field w name  @ 801,802,819,822,823,824,840,843,844,859,862,863
+  @field w name  @ 876,879,891,894,895,896,909,912,913,926,929,930
+  @field w name  @ 946,949,950,951,963,966,967,987,990,991,1007,1010
+  @field w name  @ 1011,1012,1028,1031,1032,1044,1047,1048,1063,1066,1067,1081
+  @field w name  @ 1084,1098,1101,1102,1115,1118,1136,1149,1163,1173,1186,1200
+  @field w name  @ 1213,1228,1242,1245,1259,1262,1263,1278
+  @field r originQN  @ 1220
   @field w poolGuid  @ 30,433,453,473,474
   @field r pos  @ 29
   @field w pos  @ 29,47,48,49,67,76,77,78,79,80,85,86
   @field w pos  @ 87,88,281,282,297,298,398,399,433,453,473,474
-  @field w pos  @ 494,495,496,629,630,709,782,783,800,801,802,821
-  @field w pos  @ 822,840,841,857,872,873,874,890,891,907,908,927
-  @field w pos  @ 928,929,944,945,968,969,988,989,990,1009,1010,1025
-  @field w pos  @ 1026,1044,1045,1062,1079,1080,1096,1223,1240,1241
+  @field w pos  @ 494,495,496,629,630,709,782,783,800,801,802,822
+  @field w pos  @ 823,824,843,844,862,863,879,894,895,896,912,913
+  @field w pos  @ 929,930,949,950,951,966,967,990,991,1010,1011,1012
+  @field w pos  @ 1031,1032,1047,1048,1066,1067,1084,1101,1102,1118,1245,1262
+  @field w pos  @ 1263
   @field r preview  @ 59,321,323
   @field w ps  @ 33
-  @field w qn  @ 502,913,934,950
+  @field w qn  @ 502,935,956,972
   @field r qnHi  @ 739,741
   @field r qnLo  @ 738
   @field w run  @ 94,107,118,128,139,151,165,180,193,208,220,232
   @field w run  @ 245,261,279,295,310,329,354,372,396,416,429,449
   @field w run  @ 469,492,512,529,544,562,578,592,606,628,643,661
-  @field w run  @ 678,693,708,729,751,766,780,798,819,838,855,870
-  @field w run  @ 888,905,925,942,966,986,1007,1023,1042,1060,1077,1094
-  @field w run  @ 1115,1128,1142,1152,1165,1179,1192,1207,1221,1238,1257
+  @field w run  @ 678,693,708,729,751,766,780,798,820,841,860,877
+  @field w run  @ 892,910,927,947,964,988,1008,1029,1045,1064,1082,1099
+  @field w run  @ 1116,1137,1150,1164,1174,1187,1201,1214,1229,1243,1260,1279
   @field r set  @ 504,505,506
-  @field r slotIdx  @ 54,285,300,314,401,402,1016
+  @field r slotIdx  @ 54,285,300,314,401,402,1038
   @field r srcLen  @ 29
   @field w srcLen  @ 29,67
-  @field r startQN  @ 41,442,486,1120,1157,1171,1184,1198,1213,1249,1250
-  @field r tailQN  @ 1199
+  @field r startQN  @ 41,442,486,1142,1179,1193,1206,1220,1235,1271,1272
+  @field r tailQN  @ 1221
   @field r take  @ 480,504,505,506,519,520,521,522,538,556,572,698
-  @field r take  @ 713,721,788,807,827,846,861,877
-  @field r take  @ 878,882,894,895,896,897,898,899,912,933
-  @field r take  @ 933,949,994,999,1028,1034,1047,1245
-  @field w take  @ 28,433,453,473,474,913,934,950
+  @field r take  @ 713,721,788,811,829,849,868,883
+  @field r take  @ 899,900,904,916,917,918,919,920,921,934
+  @field r take  @ 955,971,1016,1021,1050,1056,1069,1267
+  @field w take  @ 28,433,453,473,474,935,956,972
   @field r takeName  @ 30
   @field w takeName  @ 30,47,48,49,398,399
   @field r takes  @ 503
-  @field w tm  @ 35,435,441,455,462,476,484,716,790,809,829,848
-  @field w tm  @ 917,954
+  @field w tm  @ 35,435,441,455,462,476,484,716,790,831,851,870
+  @field w tm  @ 939,976
   @field r track  @ 22,23,24,28,30
   @field w track  @ 47,48,49,67,76,77,78,79,80,85,86,87
   @field w track  @ 88,281,282,297,298,398,399,494,495,496,629,630
-  @field w track  @ 709,782,783,800,801,802,821,822,840,841,857,872
-  @field w track  @ 873,874,890,891,907,908,927,928,929,944,945,968
-  @field w track  @ 969,988,989,990,1009,1010,1025,1026,1044,1045,1062,1079
-  @field w track  @ 1080,1096,1223,1240,1241
+  @field w track  @ 709,782,783,800,801,802,822,823,824,843,844,862
+  @field w track  @ 863,879,894,895,896,912,913,929,930,949,950,951
+  @field w track  @ 966,967,990,991,1010,1011,1012,1031,1032,1047,1048,1066
+  @field w track  @ 1067,1084,1101,1102,1118,1245,1262,1263

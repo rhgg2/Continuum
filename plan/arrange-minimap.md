@@ -33,6 +33,7 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 tracker/arrange: land a track step on the nearest placement; delete the instance (polish over § The walk)
 - 2026-08-24 tracker: walk the track's instances with Alt-up/down (§ The walk)
 - 2026-08-24 tracker: draw the arrange mini-map (§ The pane)
 - 2026-08-24 tracker: a third palette tab for the mini-map (§ The pane)

@@ -113,6 +113,14 @@ local function resetArrange()
   fakeArrange.deleteSlot = function(trackIdx, slotIdx)
     fakeArrange.calls.deleteSlot = { trackIdx = trackIdx, slotIdx = slotIdx }
   end
+  -- One placement gone. am parks a slot's last instance rather than GC-ing it;
+  -- either way the placement leaves the track, which is all tv can see.
+  fakeArrange.deleteTake = function(shape)
+    fakeArrange.calls.deleteTake = shape.take
+    for i, inst in ipairs(fakeArrange.instances) do
+      if inst.take == shape.take then table.remove(fakeArrange.instances, i); break end
+    end
+  end
   -- The mini-map's enumerator: the instances meeting a column span and a QN
   -- window, as am filters its cached take shapes (am_spec pins the real one).
   fakeArrange.visibleTakes = function(fromCol, toCol, qnLo, qnHi)
@@ -591,6 +599,85 @@ return {
     end,
   },
 
+  {
+    name = 'a track step lands on the placement overlapping the current instance most',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      h.reaper:addItem('tr1', { take = 'a8',    isMidi = true, pos = 8,    len = 4,  poolGuid = '{p1}' })
+      h.reaper:addItem('tr2', { take = 'cover', isMidi = true, pos = 0,    len = 20, poolGuid = '{p2}' })
+      h.reaper:addItem('tr2', { take = 'part',  isMidi = true, pos = 11,   len = 4,  poolGuid = '{p3}' })
+      h.reaper:addItem('tr2', { take = 'near',  isMidi = true, pos = 12.5, len = 2,  poolGuid = '{p4}' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.tracksList = trackList(2)
+      fakeArrange.slotsByIdx = {
+        [0] = { { idx = 0, kind = 'midi' } },
+        [1] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' }, { idx = 2, kind = 'midi' } },
+      }
+      -- Slot 0 holds the loser: it is the slot the track's own fallback restores.
+      fakeArrange.takeByKey = { ['0:0'] = 'a8',    ['1:0'] = 'part',
+                                ['1:1'] = 'cover', ['1:2'] = 'near' }
+      fakeArrange.instances = {
+        { take = 'a8',    trackIdx = 0, slotIdx = 0, startQN = 8,    lengthQN = 4  },
+        { take = 'part',  trackIdx = 1, slotIdx = 0, startQN = 11,   lengthQN = 4  },
+        { take = 'cover', trackIdx = 1, slotIdx = 1, startQN = 0,    lengthQN = 20 },
+        { take = 'near',  trackIdx = 1, slotIdx = 2, startQN = 12.5, lengthQN = 2  },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a8', 'the tracker stands in the one placement of track 1')
+
+      h.cmgr:invoke('nextTrack')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'cover',
+           'the placement covering a8 whole beats one overlapping it in part')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, "and the landing selects that placement's own slot")
+    end,
+  },
+
+  {
+    name = 'with nothing overlapping, a track step lands on the placement nearest in time',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      h.reaper:addItem('tr1', { take = 'a8',     isMidi = true, pos = 8,  len = 4, poolGuid = '{p1}' })
+      h.reaper:addItem('tr2', { take = 'before', isMidi = true, pos = 4,  len = 2, poolGuid = '{p2}' })
+      h.reaper:addItem('tr2', { take = 'after',  isMidi = true, pos = 14, len = 4, poolGuid = '{p3}' })
+      h.reaper:addItem('tr2', { take = 'far',    isMidi = true, pos = 20, len = 4, poolGuid = '{p4}' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.tracksList = trackList(2)
+      fakeArrange.slotsByIdx = {
+        [0] = { { idx = 0, kind = 'midi' } },
+        [1] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' }, { idx = 2, kind = 'midi' } },
+      }
+      -- Both 'before' and 'after' stand 2 QN clear of a8; 'far' stands 8 away.
+      -- Slot 0 holds a loser: it is the slot the track's own fallback restores.
+      fakeArrange.takeByKey = { ['0:0'] = 'a8',     ['1:0'] = 'after',
+                                ['1:1'] = 'before', ['1:2'] = 'far' }
+      fakeArrange.instances = {
+        { take = 'a8',     trackIdx = 0, slotIdx = 0, startQN = 8,  lengthQN = 4 },
+        { take = 'after',  trackIdx = 1, slotIdx = 0, startQN = 14, lengthQN = 4 },
+        { take = 'before', trackIdx = 1, slotIdx = 1, startQN = 4,  lengthQN = 2 },
+        { take = 'far',    trackIdx = 1, slotIdx = 2, startQN = 20, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      h.cmgr:invoke('nextTrack')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'before',
+           'the wider gap loses, and the tie between the two narrow ones goes to the nearer start')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'whose slot the landing selects')
+    end,
+  },
+
   -- The current instance: which placement of the bound slot the tracker is in.
   -- see docs/trackerPage.md § The current instance.
   -- Each instance take needs a real item, or binding it unbinds cm's track tier.
@@ -798,6 +885,44 @@ return {
       t.eq(stack.tv:currentInstance().take, 'b12', 'two back is the other slot')
       t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'which the walk selects')
       t.eq(stack.tv:cursorQN(), 12, "and the rebind's reset puts the caret on row 0")
+    end,
+  },
+
+  {
+    name = 'deleting the instance drops that placement and lands on the one before it',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'a0', 'a8', 'b4' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.slotsByIdx[0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'a0'
+      fakeArrange.takeByKey['0:1'] = 'b4'
+      fakeArrange.instances = {
+        { take = 'a0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'b4', trackIdx = 0, slotIdx = 1, startQN = 4, lengthQN = 4 },
+        { take = 'a8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'a8')
+      tp:bindFromSelection()
+
+      h.cmgr:invoke('deleteInstance')
+      tp:bindFromSelection()
+      t.eq(fakeArrange.calls.deleteTake, 'a8', 'the placement the tracker stood in went')
+      t.eq(stack.tv:currentInstance().take, 'b4', 'and the tracker landed on the one before it')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, "in that placement's own slot")
+
+      fakeArrange.calls.deleteTake = nil
+      h.cmgr:invoke('deleteInstance')       -- b4 gone; a0 is left, and is the first stop
+      tp:bindFromSelection()
+      h.cmgr:invoke('deleteInstance')
+      t.eq(fakeArrange.calls.deleteTake, 'a0', 'the first placement goes too, with nowhere to land')
     end,
   },
 

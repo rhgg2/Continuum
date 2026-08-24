@@ -314,11 +314,52 @@ function tv:mapWindow(cols, qnSpan)
            current = inst and inst.take or nil }
 end
 
---contract: step ±1 over all tracks (may land on an empty one); restores its last slot
+----- The track's placements — the walk's stops, and where a track step lands
+-- see docs/trackerPage.md § The walk
+
+--contract: the track's stops in start order, and the position of `take` among them
+-- Continuum's own edits never stack two placements on one start, but an outside
+-- one can; the tie-break on build order keeps the walk from cycling between them.
+local function trackStops(trackIdx, take)
+  local stops, built = {}, {}
+  for i, tk in ipairs(arrange().visibleTakes(trackIdx, trackIdx, 0, math.huge)) do
+    if tk.kind == 'midi' and tk.slotIdx then built[tk.take] = i; util.add(stops, tk) end
+  end
+  table.sort(stops, function(a, b)
+    if a.startQN ~= b.startQN then return a.startQN < b.startQN end
+    return built[a.take] < built[b.take]
+  end)
+  local pos
+  for i, tk in ipairs(stops) do if tk.take == take then pos = i end end
+  return stops, pos
+end
+
+--contract: the stop nearest `inst` in time — most overlap, then least gap, then nearest start
+-- Reach is the overlap where the two spans meet and the negated gap where they miss,
+-- so one comparison ranks a placement covering the instance over one merely near it.
+local function nearestStop(stops, inst)
+  local instEnd = inst.startQN + inst.lengthQN
+  local best, bestReach, bestGap
+  for _, tk in ipairs(stops) do
+    local reach = math.min(tk.startQN + tk.lengthQN, instEnd) - math.max(tk.startQN, inst.startQN)
+    local gap   = math.abs(tk.startQN - inst.startQN)
+    if not best or reach > bestReach or (reach == bestReach and gap < bestGap) then
+      best, bestReach, bestGap = tk, reach, gap
+    end
+  end
+  return best
+end
+
+--contract: step ±1 over all tracks (may land on an empty one)
+--contract: lands on the track's placement nearest the current instance, else restores its last slot
 function tv:gotoTrack(dir)
   local cur    = selectedTrackIdx()
   local target = cur and arrange().tracks()[cur + 1 + dir]
-  if target then self:selectTrack(target.guid) end
+  if not target then return end
+  local inst = self:currentInstance()
+  local stop = inst and nearestStop(trackStops(target.idx), inst)
+  self:selectTrack(target.guid, stop and stop.slotIdx)
+  if stop then self:nameInstance(stop.take) end
 end
 
 --contract: step ±1 slot on the current track, from the effective slot
@@ -387,22 +428,26 @@ end
 -- see docs/trackerPage.md § The walk
 function tv:stepInstance(dir)
   local inst = self:currentInstance(); if not inst then return end
-  local stops, built = {}, {}
-  for i, tk in ipairs(arrange().visibleTakes(inst.trackIdx, inst.trackIdx, 0, math.huge)) do
-    if tk.kind == 'midi' and tk.slotIdx then built[tk.take] = i; util.add(stops, tk) end
-  end
-  -- Continuum's own edits never stack two placements on one start, but an outside
-  -- one can; the tie-break on build order keeps the walk from cycling between them.
-  table.sort(stops, function(a, b)
-    if a.startQN ~= b.startQN then return a.startQN < b.startQN end
-    return built[a.take] < built[b.take]
-  end)
-  local pos
-  for i, tk in ipairs(stops) do if tk.take == inst.take then pos = i end end
+  local stops, pos = trackStops(inst.trackIdx, inst.take)
   local target = pos and stops[pos + dir]; if not target then return end
   if target.slotIdx ~= inst.slotIdx then self:selectSlot(target.slotIdx) end
   self:nameInstance(target.take)
   return target.take
+end
+
+--contract: deletes the current placement and lands on the stop before it; nil with no instance
+--invariant: a slot's last placement parks rather than dies, so the material outlives the drop
+-- see docs/trackerPage.md § Deleting the instance
+function tv:deleteInstance()
+  local inst = self:currentInstance(); if not inst then return end
+  local stops, pos = trackStops(inst.trackIdx, inst.take)
+  local prev = pos and stops[pos - 1]
+  arrange().deleteTake(inst)
+  if prev then
+    if prev.slotIdx ~= inst.slotIdx then self:selectSlot(prev.slotIdx) end
+    self:nameInstance(prev.take)
+  end
+  return inst.take
 end
 
 local ec, clipboard, ctx

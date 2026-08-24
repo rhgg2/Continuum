@@ -102,6 +102,7 @@ To be filled out with descriptions, screenshots, examples.
 - Duplicate below (another instance of the bound take)
 - Previous/next variant (stepping past the last one varies)
 - Previous/next instance (the track's placements in start order, across slots)
+- Delete instance (drops the placement, stepping back to the one before it)
 - Take properties (modal: length ×2/÷2, Resize/Rescale/Tile mode, truncate confirm)
 - Delete take + instances (confirm)
 
@@ -238,7 +239,7 @@ To be filled out with descriptions, screenshots, examples.
 - Nudge back/forward; move the tail, or the head from a take's start row
 - Split at the caret into two pooled halves of one source
 - Source the take doesn't show is marked in it with `…` — leading the name above the head, on its own line below the cut; the status bar counts the beats
-- Delete / delete-and-advance
+- Delete / delete-and-advance / delete-and-retreat (to the previous start row)
 - Duplicate below (pooled)
 - Previous/next variant (stepping past the last one forks a new one)
 - Take properties

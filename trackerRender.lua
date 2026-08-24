@@ -787,6 +787,7 @@ help:registerPage('tracker', {
     { cmd = 'nextVariant', label = 'Next variant / vary' },
     { cmd = 'prevInstance', label = 'Previous instance' },
     { cmd = 'nextInstance', label = 'Next instance' },
+    { cmd = 'deleteInstance', label = 'Delete instance' },
     { cmd = 'takeProperties', label = 'Take properties' },
     { cmd = 'deleteBoundSlot', label = 'Delete take + instances' },
   }},
@@ -1694,6 +1695,7 @@ tracker:registerAll{
   nextTake     = { function() tv:gotoTake(1)      end, 'Next take' },
   prevInstance = { function() tv:stepInstance(-1) end, 'Previous instance' },
   nextInstance = { function() tv:stepInstance(1)  end, 'Next instance' },
+  deleteInstance = { function() tv:deleteInstance() end, 'Delete instance' },
 
   addNoteLane = { function() tv:addExtraCol('note') end, 'Add note lane' },
   addTypedCol = addColumn,

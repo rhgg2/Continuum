@@ -83,6 +83,13 @@ caret alone therefore carries a run of presses down the track, each
 duplicating the copy the last one made — a held selection would pin
 every press to the same source and refuse for want of room.
 
+Alt+Shift+↑ is that gesture's mirror. It deletes the targets and retreats
+the caret to the start row of the nearest take left above it in the
+cursor's column, so a run of presses walks back up the track the way the
+duplicate walked down it. The retreat is measured before the delete and
+over the takes it spares, which keeps the caret off a row the gesture
+just emptied. With nothing above it the caret holds.
+
 The copy is pooled with its source. The caret lands on it, so the
 variant step (Alt+Shift+→) reaches it next and forks it onto a slot of
 its own: two keys for a copy that edits independently, named from the
