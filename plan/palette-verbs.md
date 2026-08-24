@@ -20,22 +20,16 @@ render layer still holds the assignment alone.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 am: preview the names a tidy will write, keyed by slot index (§ Where the naming lives)
 - 2026-08-24 am: seed a tidy from the track's slot names (§ The editor)
 - 2026-08-24 am: tidy a track's slot names into families (§ Committing an assignment)
 - 2026-08-24 arrange: a prune button on the palette, and no per-slot verbs (§ Prune)
-- 2026-08-24 am: prune a track's parked slots (§ Prune)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. `tidyNames` becomes `am:tidyNames(trackIdx, assignment)`, keyed by slot
-   index and covering every MIDI slot, so the editor can show the name a
-   slot will get. `am:tidySlots` consumes it, translating to slot id and
-   dropping the names that are unchanged. A case pins the preview against
-   what the write leaves behind.
 
 1. A `tidy` button on the palette beside `prune`, opening a `tidyTrack`
    modal kind: the seeded base list above, one row per MIDI slot below

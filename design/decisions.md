@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — A tidy's naming splits in two: am:tidyNames derives the name each MIDI slot ends
+  up with, keyed by slot index, and am:tidySlots writes the ones that differ. The map is total over
+  the track's MIDI slots, a pinned slot mapping to the name it already holds, so an editor row shows
+  its name without asking whether the tidy touches it. Keying the preview by id would save tidySlots
+  a translation, but the editor holds slot indices and the assignment is keyed by them already.
+
 - **2026-08-24** — A base two or more slots carry plain is ambiguous, and every slot under it seeds
   pinned; the base still stands in the seeded list, so the editor is where the choice between
   namesakes gets made.

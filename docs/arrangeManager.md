@@ -496,10 +496,14 @@ on a track never overlap.
 1. A **tidy** renames a track's MIDI slots so that each **base** — a
    name a group of slots share — comes out naming one family, one member
    carrying it plain and the rest carrying ordinals (§ Variants).
-   `am:tidySlots(trackIdx, assignment)` derives every name and writes it.
 
-1. The assignment maps a slot index to a base. A slot the map omits is
-   **pinned**, and keeps the name it has.
+1. A tidy's input is an **assignment**, mapping a slot index to a base.
+   A slot the map omits is **pinned**, and keeps the name it has.
+
+1. `am:tidyNames(trackIdx, assignment)` derives the name each MIDI slot
+   carries once the tidy is done, keyed by slot index. The map covers
+   every MIDI slot, a pinned one included, so a row of an editor can
+   show its name without regard to whether the tidy touches it.
 
 1. A base's members are the slots assigned to it together with the
    pinned slots whose root is already that base. A name places a slot in
@@ -516,10 +520,10 @@ on a track never overlap.
 1. Audio slots take no part, since the family is a structure over MIDI
    slots alone.
 
-1. The write reaches every live instance and the parked keeper, as a
-   rename does (§ Renaming and name drift), and a slot whose name the
-   tidy leaves alone is not written at all. `am:tidySlots` opens no undo
-   block, so the caller wraps the commit.
+1. `am:tidySlots(trackIdx, assignment)` writes those names, sparing the
+   slots already carrying theirs. The write reaches every live instance
+   and the parked keeper, as a rename does (§ Renaming and name drift).
+   It opens no undo block, so the caller wraps the commit.
 
 ## Seeding a tidy
 

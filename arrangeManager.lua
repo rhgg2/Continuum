@@ -1027,15 +1027,17 @@ local function nextVariantName(trackIdx, slotIdx)
   return ('%s (var %d)'):format(root, (last and last.ordinal or 0) + 1)
 end
 
--- The names a tidy writes, id -> name, for a base's members: its assigned slots plus
--- pinned slots already carrying it, in variantFamily's order. See docs/arrangeManager.md § Tidy.
-local function tidyNames(slots, assignment)
+-- A base's members are its assigned slots plus the pinned slots already carrying it,
+-- ordered as a family is. See docs/arrangeManager.md § Tidy.
+--contract: the name each of the track's MIDI slots carries after this tidy, keyed by slot index
+--shape: assignment = { [slotIdx] = base, ... } -- a MIDI slot the map omits is pinned
+function am:tidyNames(trackIdx, assignment)
   local byBase = {}
-  for _, slot in ipairs(slots) do
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
     local root, ordinal = util.variantRoot(slot.name)
     local base = assignment[slot.idx]
     if slot.kind == 'midi' then
-      util.bucket(byBase, base or root, { idx = slot.idx, id = slot.id, name = slot.name,
+      util.bucket(byBase, base or root, { idx = slot.idx, name = slot.name,
                                           ordinal = ordinal or 0, pinned = base == nil })
     end
   end
@@ -1047,25 +1049,29 @@ local function tidyNames(slots, assignment)
       return a.idx < b.idx
     end)
     local held, ordinal = {}, 0
-    for _, member in ipairs(members) do if member.pinned then held[member.ordinal] = true end end
+    for _, member in ipairs(members) do
+      if member.pinned then held[member.ordinal] = true; out[member.idx] = member.name end
+    end
     for _, member in ipairs(members) do
       if not member.pinned then
         while held[ordinal] do ordinal = ordinal + 1 end
         held[ordinal] = true
-        local name = ordinal == 0 and base or ('%s (var %d)'):format(base, ordinal)
-        if name ~= member.name then out[member.id] = name end
+        out[member.idx] = ordinal == 0 and base or ('%s (var %d)'):format(base, ordinal)
       end
     end
   end
   return out
 end
 
---contract: renames the track's MIDI slots so each base names one family; the caller owns the undo
---shape: assignment = { [slotIdx] = base, ... } -- a MIDI slot the map omits is pinned
+--contract: writes the names tidyNames derives, sparing the slots already carrying theirs
 function am:tidySlots(trackIdx, assignment)
   local track = visibleTrackOfCol(trackIdx)
   if not track then return end
-  writeSlotNames(track, tidyNames(am:trackSlots(trackIdx), assignment))
+  local names, renames = am:tidyNames(trackIdx, assignment), {}
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    if names[slot.idx] and names[slot.idx] ~= slot.name then renames[slot.id] = names[slot.idx] end
+  end
+  writeSlotNames(track, renames)
 end
 
 -- The state a tidy editor opens on. See docs/arrangeManager.md § Seeding a tidy.

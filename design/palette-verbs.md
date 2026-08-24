@@ -46,9 +46,10 @@ it in one undo block.
 
 ## Where the naming lives
 
-1. `am:tidySlots(trackIdx, assignment)` derives every name and writes
-   it; the editor hands over the assignment alone. The ordinal rule 
-   sits beside `variantFamily` and `nextVariantName`.
+1. `am:tidyNames(trackIdx, assignment)` derives the name every MIDI slot
+   will carry and `am:tidySlots` writes it; the editor hands over the
+   assignment alone, and shows the derived names in its rows. The ordinal
+   rule sits beside `variantFamily` and `nextVariantName`.
 
 1. Tidy reaches the palette through `av`, which passes it to am; a
    rename leaves every slot standing, so the palette focus holds.

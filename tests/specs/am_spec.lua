@@ -426,6 +426,34 @@ return {
     end,
   },
 
+  {
+    name = 'tidyNames previews the name every MIDI slot ends up with',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi',  pos = 0,  poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi',  pos = 4,  poolGuid = '{p2}', takeName = 'Kenneth (var 2)' },
+                    { kind = 'midi',  pos = 8,  poolGuid = '{p3}', takeName = 'Lead (var 1)' },
+                    { kind = 'midi',  pos = 12, poolGuid = '{p4}' },
+                    { kind = 'audio', pos = 16, len = 2, srcFile = '/a.wav', takeName = 'Lead' } } },
+      })
+      local assignment = { [slotFor(am, 0, '{p1}').idx] = 'Lead',
+                           [slotFor(am, 0, '{p2}').idx] = 'Lead' }
+      local names, audio = am:tidyNames(0, assignment), nil
+      t.eq(names[slotFor(am, 0, '{p3}').idx], 'Lead (var 1)', 'a pinned slot previews the name it holds')
+      t.eq(names[slotFor(am, 0, '{p4}').idx], '', 'the unnamed slot previews its empty name')
+      for _, s in ipairs(am:trackSlots(0)) do if s.kind == 'audio' then audio = s end end
+      t.eq(names[audio.idx], nil, 'an audio slot takes no part, so it has no preview')
+
+      am:tidySlots(0, assignment)
+      for _, slot in ipairs(am:trackSlots(0)) do
+        if slot.kind == 'midi' then
+          t.eq(slot.name, names[slot.idx], ('slot %d carries the name previewed for it'):format(slot.idx))
+        end
+      end
+    end,
+  },
+
   --------------------------------------------------------------------
   -- Tidy seed
   --------------------------------------------------------------------
