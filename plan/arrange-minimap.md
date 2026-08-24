@@ -16,28 +16,25 @@
 
 Notes carried into the phases:
 
-- The gestures phase 3 raises the map for are `duplicateBelow`,
-  `stepVariant`, `stepInstance` and the dive — the verbs that write
-  `tv:nameInstance` (`trackerView.lua:253`).
-- The tab machinery is two-valued in its fallback: `tv:paletteTab`
-  (`trackerView.lua:3921`) falls back fx-else-parameters. The map takes
-  no keyboard focus ever, so the one-pane-one-focus clamp
-  (`trackerRender.lua:624`) covers it unchanged; only the fallback needs
-  widening, and that waits for phase 3's raise.
+- The raise is written at one site, `tv:nameInstance`
+  (`trackerView.lua:253`), so every gesture that names an instance
+  raises the map — the dive included, through the tracker facade.
+- The map takes no keyboard focus ever, so the one-pane-one-focus clamp
+  (`trackerRender.lua:624`) covers it unchanged.
 - `cmgr` has no after-any-command hook — only `doAfter(names, fn)`
-  (`commandManager.lua:154`). Phase 3 needs a fall trigger; the existing
-  lapse is anchored to a caret key.
-- Design § Open is unresolved: raise suppression while a pane holds keys
-  (phase 3), clicking the map to travel and the play head (neither
-  phase).
+  (`commandManager.lua:154`) — so the fall rides a command serial rather
+  than a wrap.
+- Design § Open is unresolved on clicking the map to travel and on the
+  play head; neither belongs to a phase. Raise suppression under palette
+  focus was struck: `focusState.acceptCmds` (`trackerRender.lua:1832`)
+  already blocks every tracker command while a pane holds the keyboard.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 am: a drop opens the whole pool, not a sibling's window (polish over § The walk)
+- 2026-08-24 tracker: page the mini-map's window instead of centring it (polish over § The pane)
 - 2026-08-24 tracker/arrange: land a track step on the nearest placement; delete the instance (polish over § The walk)
 - 2026-08-24 tracker: walk the track's instances with Alt-up/down (§ The walk)
-- 2026-08-24 tracker: draw the arrange mini-map (§ The pane)
-- 2026-08-24 tracker: a third palette tab for the mini-map (§ The pane)
-- 2026-08-24 arrange: publish the take enumerator on the facade (§ What the tracker may see)
 
 ## Now
 
@@ -45,4 +42,15 @@ Notes carried into the phases:
 
 ## Queued (current phase; one-liners)
 
-(empty)
+1. **The pin** — Alt-M (`pinMap`) toggles the map as the palette's
+   default tab, widening `tv:paletteTab`'s two-valued fallback to
+   `override or (pinned and 'map') or fx or parameters`. The pin is
+   transient view state on tv, takes no keyboard focus, and drops when
+   the key is pressed again; a click, Super-R and Super-X still override
+   it. (design § The pin)
+1. **The raise** — `cmgr` gains a monotonic command serial, and the tab
+   override carries a serial anchor as well as its caret one, lapsing
+   when either moves. `tv:nameInstance` raises the map by writing an
+   override anchored to the serial, so a gesture that names an instance
+   shows the map until the next command, and the most recent of a raise
+   and a click wins. (design § The raise)

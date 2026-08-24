@@ -1,7 +1,7 @@
 # arrange mini-map — navigation from the tracker
 
 > opened: 2026-08-23 · status: in flight — plan/arrange-minimap.md, at
-> phase 2 (the walk)
+> phase 3 (raise and pin)
 
 **Draw a mini-map of the arrange view in the tracker palette, marking
 the current instance.**
@@ -42,49 +42,18 @@ Landed — the model is in `docs/trackerRender.md` § The mini-map.
 
 ## The walk
 
-1. **Alt-↓** and **Alt-↑** walk the current instance forward and back
-   along its own track. Forward is down the page, the direction time
-   runs.
-
-1. The Alt-arrows are the tracker's navigation family, Alt-←/→ already
-   stepping the track. So `prevTake` and `nextTake` give up Alt-↑/↓ and
-   move to Alt-comma and Alt-period.
-
-1. A **stop** is one instance. The walk visits the track's instances
-   in start order and holds at the ends, neither wrapping nor crossing
-   to another track.
-
-1. A gap between instances earns no stop. The tracker stands in an
-   instance, not on a row, and has no state for standing between two.
-
-1. The walk refuses in silence where the tracker is in no instance, as
-   duplicate below and stepping the family do (`docs/trackerPage.md` §
-   Duplicate below, § Stepping the family).
+Landed — the model is in `docs/trackerPage.md` § The walk.
 
 ## Landing
 
-1. A walk **lands** on the instance it stops at: `tv:nameInstance`
-   names it, so it is current at the next resolve and loop to item
-   brackets it.
-
-1. Where that instance belongs to another slot, `tv:selectSlot`
-   selects it and the tracker rebinds on the next frame — the pair a
-   family step already uses (`docs/trackerPage.md` § Stepping the
-   family).
-
-1. A rebinding landing resets the caret to (0,0). Instances of one
-   slot share a take, so a walk within one slot's instances rebinds
-   nothing and the caret holds.
+Landed — the model is in `docs/trackerPage.md` § The walk, § The track
+step's landing, § Deleting the instance.
 
 ## What the tracker may see
 
 Landed — the model is in `docs/arrangePage.md` § The take enumerator.
 
 ## Open
-
-1. Whether a raise is suppressed while a palette pane holds the
-   keyboard. A raise arriving mid-keystroke in the find box would
-   otherwise take the pane out from under it.
 
 1. Clicking the map to travel. A click on a box would set the current
    instance, reaching the walk's destination by another route.
