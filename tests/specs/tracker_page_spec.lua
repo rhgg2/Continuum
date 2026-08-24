@@ -93,6 +93,7 @@ local function resetArrange()
   end
   fakeArrange.playQN    = nil
   fakeArrange.cursorQN  = 0
+  fakeArrange.loopLo, fakeArrange.loopHi = nil, nil
   fakeArrange.findTake = function(take)
     for _, inst in ipairs(instances()) do
       if inst.take == take then return inst end
@@ -135,6 +136,7 @@ local function resetArrange()
   end
   fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
+  fakeArrange.loopRangeQN    = function() return fakeArrange.loopLo, fakeArrange.loopHi end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
   fakeArrange.loopTo         = function(lo, hi) fakeArrange.calls.loopTo = { lo, hi } end
   fakeArrange.setCursorAt    = function(trackIdx, qn)
@@ -1017,6 +1019,33 @@ return {
       local win = tv:mapWindow(5, 80)
       t.eq(#win.takes, 2, 'the neighbour inside the window, not the one beyond it')
       t.eq(win.current, 'i0', 'the current instance is the marked take')
+    end,
+  },
+
+  {
+    name = 'the map window carries the transport it meets, and only that',
+    run = function(harness)
+      -- The instance at QN 40 pages the window to 0..80.
+      local tv = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                       startQN = 40, lengthQN = 4 }, 3)
+      local win = tv:mapWindow(5, 80)
+      t.eq(win.playQN, nil, 'a stopped transport puts no head on the map')
+      t.eq(win.loopLoQN, nil, 'and an unset loop no bracket')
+
+      fakeArrange.playQN = 20
+      t.eq(tv:mapWindow(5, 80).playQN, 20, 'the head inside the window is carried')
+      fakeArrange.playQN = 200
+      t.eq(tv:mapWindow(5, 80).playQN, nil, 'a head past its foot is not')
+
+      fakeArrange.loopLo, fakeArrange.loopHi = 20, 30
+      win = tv:mapWindow(5, 80)
+      t.eq(win.loopLoQN, 20, 'a loop within the window is carried whole')
+      t.eq(win.loopHiQN, 30, 'both ends')
+      fakeArrange.loopLo, fakeArrange.loopHi = 60, 200
+      win = tv:mapWindow(5, 80)
+      t.eq(win.loopHiQN, 200, 'a loop running past the foot keeps its true end, for the renderer to clip')
+      fakeArrange.loopLo, fakeArrange.loopHi = 100, 120
+      t.eq(tv:mapWindow(5, 80).loopLoQN, nil, 'a loop the window misses is dropped')
     end,
   },
 

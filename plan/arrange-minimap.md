@@ -61,10 +61,10 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-25 tracker: show the transport on the arrange mini-map (§ The transport shown)
 - 2026-08-25 tracker: raise the arrange map when a gesture moves the instance (§ The raise)
 - 2026-08-25 tracker: pin the arrange map as the palette default with Alt-M (§ The pin)
 - 2026-08-24 am: a drop opens the whole pool, not a sibling's window (polish over § The walk)
-- 2026-08-24 tracker: page the mini-map's window instead of centring it (polish over § The pane)
 
 ## Now
 
@@ -72,6 +72,4 @@ Notes carried into the phases:
 
 ## Queued (current phase; one-liners)
 
-- publish `loopRangeQN` on the arrange facade
-- draw the play head across the map at its QN
-- draw the loop range as a bracket down the map's gutter
+(empty — the phase is this one item.)

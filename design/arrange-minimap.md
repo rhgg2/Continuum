@@ -1,7 +1,7 @@
 # arrange mini-map — navigation from the tracker
 
 > opened: 2026-08-23 · status: in flight — plan/arrange-minimap.md, at
-> phase 4 (the transport shown)
+> phase 5 (the transport driven)
 
 **Draw a mini-map of the arrange view in the tracker palette, marking
 the current instance.**
@@ -42,15 +42,7 @@ is published already.
 
 ## The transport shown
 
-1. The map draws the **play head** as a line across its columns, at the
-   head's QN, whenever the head falls within the window.
-
-1. The head is the project's, so the line marks a place in the
-   arrangement rather than a row of the bound take. It draws over gaps
-   and over other slots' takes alike.
-
-1. The map draws the **loop range** as a bracket down its gutter, as
-   the arrange page strokes one down its own, clipped to the window.
+Landed — the model is in `docs/trackerRender.md` § The mini-map.
 
 ## The transport driven
 

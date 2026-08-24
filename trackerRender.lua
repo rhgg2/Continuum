@@ -577,12 +577,14 @@ local function drawMapBody()
   -- and border here is 1px, so an unsnapped origin blurs the lot into invisibility.
   local curX, curY = ImGui.GetCursorScreenPos(ctx)
   local ox, oy     = math.floor(curX), math.floor(curY)
-  -- Five track columns and a third-column gutter down the left, filling the pane's
-  -- width: the grid runs out into the gutter, the first column's rule closing it off.
-  local colW   = availW / (MAP_COLS + 1/3)
-  local gutter = math.floor(colW / 3)
+  -- Five track columns and a half-column margin: a lane for the loop bracket, then a
+  -- gutter the grid runs out into, closed off by the first column's rule.
+  local colW   = availW / (MAP_COLS + 1/2)
+  local lane   = math.floor(colW / 4)
+  local gutter = math.floor(colW / 4)
+  local gridL  = ox + lane
   local win    = tv:mapWindow(MAP_COLS, availH / MAP_PX_PER_QN)
-  local function colX(col) return ox + gutter + math.floor((col - win.colLo) * colW) end
+  local function colX(col) return gridL + gutter + math.floor((col - win.colLo) * colW) end
   local function qnY(qn)   return oy + math.floor((qn - win.qnLo) * MAP_PX_PER_QN) end
 
   -- The arrange grid's cadence in its own inks: a cell every 4 QN ruled off, the bar and phrase cells tinted as the grid tints their rows.
@@ -593,9 +595,9 @@ local function drawMapBody()
               or (qn % MAP_BAR_QN == 0)    and 'rowBeat'
               or nil
     if tint then
-      p.fill({ x0 = ox, y0 = qnY(qn), x1 = gridR, y1 = qnY(qn + MAP_CELL_QN) }, tint)
+      p.fill({ x0 = gridL, y0 = qnY(qn), x1 = gridR, y1 = qnY(qn + MAP_CELL_QN) }, tint)
     end
-    p.segment(ox, qnY(qn), gridR, qnY(qn), 'separator')
+    p.segment(gridL, qnY(qn), gridR, qnY(qn), 'separator')
   end
   for col = win.colLo, win.colHi + 1 do
     p.segment(colX(col), oy, colX(col), oy + availH, 'separator')
@@ -611,6 +613,28 @@ local function drawMapBody()
     p.fill({ x0 = xLo + 1, y0 = yLo + 1, x1 = xHi, y1 = yHi },
            chrome.slotFill(tk.colourIdx, tk.take == win.current))
     p.border({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, 'arrange.itemBorder')
+  end
+
+  -- The loop range: the `[` the arrange page strokes down its gutter, drawn in its own
+  -- lane clear of the grid (docs/trackerRender.md § The mini-map).
+  if win.loopLoQN then
+    local r      = math.max(2, (lane - 2) // 2)
+    local x1     = ox + 1 + r
+    local y1, y2 = qnY(win.loopLoQN), qnY(win.loopHiQN)
+    p.pathClear()
+    p.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
+    p.pathLineTo(x1 - r, y1 + r + 1)
+    p.pathLineTo(x1 - r, y2 - r - 1)
+    p.pathArcTo(x1, y2 - r, r, math.pi, math.pi / 2)
+    p.pathStroke('tail', 1.5)
+    p.pathClear()
+  end
+
+  -- The play head last, in the tracker's own play-row ink, across the pane and over
+  -- boxes and gaps alike (docs/trackerRender.md § The mini-map).
+  if win.playQN then
+    local y = qnY(win.playQN)
+    p.segment(ox, y, math.floor(ox + availW), y, 'tracker.playRow')
   end
 end
 

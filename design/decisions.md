@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — The arrange mini-map takes the transport through tv:mapWindow rather than reading
+  the arrange facade in the renderer. The window already carries every QN fact the map draws from,
+  and only the window has a spec, so a fact routed through the renderer could not be pinned. The
+  window drops a play head or a loop range that misses it, but hands the loop's ends over untrimmed,
+  leaving the clip to the pane.
+
 - **2026-08-25** — A param binding is the track's, not the take's: the filter bank, the bus code and
   the plink it realises are all per track, so a second take binding the same param minted a rival
   bus code, and the single plink per target went to whichever was written last — the first take's

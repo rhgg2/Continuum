@@ -300,10 +300,11 @@ end
 -- into at the foot of one page is the bar it reappears under at the head of the next.
 local MAP_PAGE_OVERLAP_QN = 16
 
---shape: mapWindow = { colLo, colHi, qnLo, qnHi, takes, current }
+--shape: mapWindow = { colLo, colHi, qnLo, qnHi, takes, current, playQN, loopLoQN, loopHiQN }
 --contract: cols/qnSpan are the pane's measure; the bound column centres and clamps to tracks
 --contract: time pages — the window is the page a stride of qnSpan less a bar lands the start on
 --contract: no instance means no mark, and the edit cursor stands in for the start
+--contract: play head and loop are carried where they meet the window, the loop's ends untrimmed
 function tv:mapWindow(cols, qnSpan)
   local inst   = self:currentInstance()
   local tracks = arrange().tracks()
@@ -316,9 +317,18 @@ function tv:mapWindow(cols, qnSpan)
   local stride  = qnSpan - MAP_PAGE_OVERLAP_QN
   local qnLo    = math.max(0, math.floor(startQN / stride) * stride)
   local qnHi    = qnLo + qnSpan
+
+  -- The transport in the arrangement's terms; the renderer clips the loop's ends to
+  -- the pane, so they are handed over as they stand.
+  local playQN = arrange().playPositionQN()
+  if playQN and (playQN < qnLo or playQN >= qnHi) then playQN = nil end
+  local loopLo, loopHi = arrange().loopRangeQN()
+  if loopLo and (loopHi <= qnLo or loopLo >= qnHi) then loopLo, loopHi = nil, nil end
+
   return { colLo = colLo, colHi = colHi, qnLo = qnLo, qnHi = qnHi,
            takes = arrange().visibleTakes(colLo, colHi, qnLo, qnHi),
-           current = inst and inst.take or nil }
+           current = inst and inst.take or nil,
+           playQN = playQN, loopLoQN = loopLo, loopHiQN = loopHi }
 end
 
 ----- The track's placements — the walk's stops, and where a track step lands

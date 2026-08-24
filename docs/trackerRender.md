@@ -136,19 +136,30 @@ fill. Nothing else is drawn: no notes, waveforms or names.
 
 The boxes sit on a grid at the arrange page's cadence: a cell every 4 QN ruled
 off, the bar (16 QN) and phrase (64 QN) cells tinted as the grid tints their
-rows, and a rule down each column boundary. A third of a column of gutter runs
-down the pane's left edge, with the grid running out into it and the first
-column's rule closing it off. To the right it reaches as far as the track list
+rows, and a rule down each column boundary. Half a column of margin runs down the
+pane's left edge, split between a lane the loop bracket has to itself and a
+gutter the grid runs out into, with the first column's rule closing it off. To
+the right the grid reaches as far as the track list
 and no further, so the columns past the last track stay empty, and it sits under
 the boxes, as it does there.
 
 The window is fixed in scale — five track columns and a
-third-column gutter across the pane's width, 2 pixels per QN down it. The renderer measures the pane in those
+half-column margin across the pane's width, 2 pixels per QN down it. The renderer measures the pane in those
 units and takes the window from `tv:mapWindow(cols, qnSpan)` in the
 arrangement's own terms: the column and QN bounds, the takes over them (the
 arrange facade's enumerator, `docs/arrangePage.md` § The take enumerator), and
 the marked take. The pixels stay in the renderer, as they do for the grid's viewport
 (`gridPane` hands `tv:setGridSize` cells and rows).
+
+The map draws the transport over that window, both read from the arrange facade.
+The play head is a line right across the pane at its QN, in the tracker grid's
+own play-row ink, over boxes and gaps alike: it marks a place in the arrangement
+rather than a row of the bound take. The loop range is the bracket the arrange
+page strokes down its own gutter, drawn here in the left-hand lane, clear of the
+grid. The window carries each only where it meets it, so a
+stopped transport and a loop off the page leave the map plain; but a loop's ends
+come through untrimmed, and a range running past the pane loses its corner to
+the clip rather than closing early.
 
 The window centres the bound track's column and clamps it at both ends, so a
 track list shorter than the pane left-aligns. Time pages rather than follows.
