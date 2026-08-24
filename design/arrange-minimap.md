@@ -1,7 +1,7 @@
 # arrange mini-map — navigation from the tracker
 
 > opened: 2026-08-23 · status: in flight — plan/arrange-minimap.md, at
-> phase 3 (raise and pin)
+> phase 4 (the transport shown)
 
 **Draw a mini-map of the arrange view in the tracker palette, marking
 the current instance.**
@@ -21,17 +21,7 @@ Landed — the model is in `docs/trackerRender.md` § Palette tabs and
 
 ## The pin
 
-1. The **pin key**, Alt-M, **pins** the map up: it becomes the tab
-   shown by default, in place of the derivation between parameters and
-   fx (`docs/trackerRender.md` § Palette tabs).
-
-1. The other tabs still override that default — a click on either, or
-   Super-R and Super-X.
-
-1. Pressed again, the pin key drops the pin.
-
-1. Unlike Super-R for parameters and Super-X for fx, the pin key gives
-   the palette no keyboard focus.
+Landed — the model is in `docs/trackerRender.md` § Palette tabs.
 
 ## The walk
 
@@ -46,10 +36,64 @@ step's landing, § Deleting the instance.
 
 Landed — the model is in `docs/arrangePage.md` § The take enumerator.
 
-## Open
+The transport sections below add three calls to that facade:
+`loopRangeQN`, `setLoopRangeQN` and `clearLoopRange`. `playPositionQN`
+is published already.
 
-1. Clicking the map to travel. A click on a box would set the current
-   instance, reaching the walk's destination by another route.
+## The transport shown
 
-1. Whether the map draws anything of the transport. The play head
-   crossing it is the one thing a mini arrange usually carries.
+1. The map draws the **play head** as a line across its columns, at the
+   head's QN, whenever the head falls within the window.
+
+1. The head is the project's, so the line marks a place in the
+   arrangement rather than a row of the bound take. It draws over gaps
+   and over other slots' takes alike.
+
+1. The map draws the **loop range** as a bracket down its gutter, as
+   the arrange page strokes one down its own, clipped to the window.
+
+## The transport driven
+
+1. A press in the map's gutter drives the transport as the arrange
+   gutter does: a clean release seeks the edit cursor, a drag sets the
+   loop range.
+
+1. The snap is the map's own cell, 4 QN; Shift releases it.
+
+1. **Esc** clears the loop, and drops loop to item with it.
+
+1. Dropping loop to item clears the loop, however it is dropped. This
+   reverses today's rule, that turning the toggle off leaves the loop
+   standing.
+
+## The travel
+
+1. A click on a box makes its instance current.
+
+1. Landing is the walk's pair — `tv:nameInstance` for the placement,
+   `tv:selectSlot` for its slot — with the track as well where the box
+   sits on another, as the dive carries it.
+
+1. Unlike the walk, the click crosses tracks: every box in the window
+   is a stop.
+
+1. The click takes no keyboard focus, as the tab click and the pin take
+   none.
+
+## The chase
+
+1. A **follow** toggle, a checkbox on the tracker toolbar beside loop
+   to item, has the tracker chase the play head. It is off by default.
+
+1. Off, the current instance moves on the head's entry into an instance
+   of the bound slot, as it does today, and no further.
+
+1. On, entry into any slot's take carries the tracker to it, selecting
+   the slot as the walk does.
+
+1. On, the map's window pages off the play head rather than the current
+   instance's start, so the head stays on the page through an instance
+   longer than one.
+
+1. The head in a gap, or off the end of the song, leaves the tracker
+   where it was.
