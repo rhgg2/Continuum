@@ -1,6 +1,7 @@
 # arrange mini-map — navigation from the tracker
 
-> opened: 2026-08-23 · status: working design; not started
+> opened: 2026-08-23 · status: in flight — plan/arrange-minimap.md, at
+> phase 1 (the pane)
 
 **Draw a mini-map of the arrange view in the tracker palette, marking
 the current instance.**
