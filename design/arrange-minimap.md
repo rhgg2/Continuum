@@ -20,8 +20,14 @@ the current instance.**
 
 1. An **instance** is one placement of a slot
    (`docs/arrangeManager.md` § Instances of a slot). It draws as a
-   filled box in its slot's colour, as on the grid, and nothing else:
-   no notes, waveforms, row tints, or names.
+   filled box in its slot's colour under the grid's 1px border, as on
+   the grid, and nothing else: no notes, waveforms, or names.
+
+1. The boxes sit on a grid at the arrange page's own cadence — a ruled
+   cell every 4 QN, the bar and phrase cells tinted as the grid tints
+   their rows, and a rule down each column boundary. A gutter runs down
+   the left, the grid running out into it; to the right the grid
+   reaches as far as the track list and no further.
 
 ## The mark
 

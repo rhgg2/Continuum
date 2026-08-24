@@ -569,9 +569,53 @@ local function drawParamsBody(childFocused)
   end
 end
 
--- The arrange mini-map body. Empty until the map is drawn; the tab is reachable by a click only,
--- since the derivation in tv:paletteTab never picks it.
-local function drawMapBody() end
+-- The arrange mini-map body: one filled box per instance over a window of tracks and QN, the current instance in the focused fill and nothing else.
+-- The pane's pixels are this renderer's business — tv is asked for a window in columns and QN, as gridPane asks with setGridSize.
+local MAP_COLS, MAP_PX_PER_QN = 5, 2
+local MAP_CELL_QN, MAP_BAR_QN, MAP_PHRASE_QN = 4, 16, 64
+local function drawMapBody()
+  local p              = chrome.screenPainter()
+  local availW, availH = ImGui.GetContentRegionAvail(ctx)
+  -- Whole-pixel origin: the pane's screen position is fractional, and every rule
+  -- and border here is 1px, so an unsnapped origin blurs the lot into invisibility.
+  local curX, curY = ImGui.GetCursorScreenPos(ctx)
+  local ox, oy     = math.floor(curX), math.floor(curY)
+  -- Five track columns and a third-column gutter down the left, filling the pane's
+  -- width: the grid runs out into the gutter, the first column's rule closing it off.
+  local colW   = availW / (MAP_COLS + 1/3)
+  local gutter = math.floor(colW / 3)
+  local win    = tv:mapWindow(MAP_COLS, availH / MAP_PX_PER_QN)
+  local function colX(col) return ox + gutter + math.floor((col - win.colLo) * colW) end
+  local function qnY(qn)   return oy + math.floor((qn - win.qnLo) * MAP_PX_PER_QN) end
+
+  -- The arrange grid's cadence in its own inks: a cell every 4 QN ruled off, the bar and phrase cells tinted as the grid tints their rows.
+  -- The grid reaches as far as the track list and no further, and sits under the boxes, as it does there.
+  local gridR = colX(win.colHi + 1)
+  for qn = math.floor(win.qnLo / MAP_CELL_QN) * MAP_CELL_QN, win.qnHi, MAP_CELL_QN do
+    local tint = (qn % MAP_PHRASE_QN == 0) and 'arrange.phrase'
+              or (qn % MAP_BAR_QN == 0)    and 'rowBeat'
+              or nil
+    if tint then
+      p.fill({ x0 = ox, y0 = qnY(qn), x1 = gridR, y1 = qnY(qn + MAP_CELL_QN) }, tint)
+    end
+    p.segment(ox, qnY(qn), gridR, qnY(qn), 'separator')
+  end
+  for col = win.colLo, win.colHi + 1 do
+    p.segment(colX(col), oy, colX(col), oy + availH, 'separator')
+  end
+
+  -- Rects share their edge pixel with the neighbouring box and with the gridline
+  -- under it, as the arrange grid's do: the border rect runs a px past the fill.
+  for _, tk in ipairs(win.takes) do
+    local xLo, xHi = colX(tk.trackIdx), colX(tk.trackIdx + 1)
+    local yLo = math.max(oy, qnY(tk.startQN))
+    local yHi = math.min(oy + availH, qnY(tk.startQN + tk.lengthQN))
+    if yHi - yLo < 2 then yHi = yLo + 2 end
+    p.fill({ x0 = xLo + 1, y0 = yLo + 1, x1 = xHi, y1 = yHi },
+           chrome.slotFill(tk.colourIdx, tk.take == win.current))
+    p.border({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, 'arrange.itemBorder')
+  end
+end
 
 -- The right-hand pane: parameters | fx | map tabs. fx auto-raises on a showable chain; Super-R
 -- parks parameters over it. See docs/trackerRender.md § Palette tabs.

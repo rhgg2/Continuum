@@ -74,24 +74,8 @@ local function rowLabel(row)
   return string.format('%4d', math.floor(av:rowToQN(row) + 0.5))
 end
 
--- Per-takeId fill pair { fill, focusFill } off colourIdx; focus brightens to read
--- without losing hue. Borders are a uniform neutral, drawn by renderGrid.
-local SLOT_FILL_ALPHA = 1
-local colourCache = {}
-local function slotFill(colourIdx, focused)
-  if colourIdx == nil then
-    return focused and 'arrange.orphanFocusFill' or 'arrange.orphanFill'
-  end
-  local pair = colourCache[colourIdx]
-  if not pair then
-    pair = {
-      painter.hue(colourIdx, 0.08, 0.77, SLOT_FILL_ALPHA),
-      painter.hue(colourIdx, 0.1,  0.84, SLOT_FILL_ALPHA),
-    }
-    colourCache[colourIdx] = pair
-  end
-  return focused and pair[2] or pair[1]
-end
+-- Slot fills come from chrome (chrome.slotFill), shared with the tracker's mini-map.
+-- Borders are a uniform neutral, drawn by renderGrid.
 
 ----- Audio waveform previews (native REAPER peaks)
 
@@ -452,7 +436,7 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
     local rx0, rx1 = colX(tk.trackIdx), colX(tk.trackIdx + 1)
     local visTop, visBot = math.max(startRow, sr), math.min(endRow, sr + visRows)
     local ry0, ry1 = rowYs(visTop), rowYs(visBot)
-    local fill   = slotFill(tk.colourIdx, focused)
+    local fill   = chrome.slotFill(tk.colourIdx, focused)
     local border = blocked and 'arrange.blockedBorder' or 'arrange.itemBorder'
     ps.fill(rect(rx0 + 1, ry0 + 1, rx1, ry1), fill)
     if tk.kind == 'audio' then

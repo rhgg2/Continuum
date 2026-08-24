@@ -29,10 +29,14 @@ Notes carried into the phases:
   instantiates `trackerRender` to draw. Geometry goes red-first by
   computing the window on `tv`, where a spec can reach it.
 - The window rule, settled 2026-08-24: a fixed map column width and a
-  fixed pixels-per-QN, the bound track's column centred and clamped at
-  both ends (so a track list shorter than the pane's columns
-  left-aligns), time centred on the marked instance, else on the edit
-  cursor QN. No scroll interaction.
+  fixed pixels-per-QN (40px and 6px/QN — five columns in the 200px
+  pane), the bound track's column centred and clamped at both ends (so a
+  track list shorter than the pane's columns left-aligns), time centred
+  on the marked instance's midpoint, pulled down to its start when the
+  instance outgrows the window and clamped at QN 0, else centred on the
+  edit cursor QN. No scroll interaction. The renderer owns the two pixel
+  constants and asks `tv` for a window in columns and QN, as `gridPane`
+  does with `tv:setGridSize`.
 - `cmgr` has no after-any-command hook — only `doAfter(names, fn)`
   (`commandManager.lua:154`). Phase 3 needs a fall trigger; the existing
   lapse is anchored to a caret key.
@@ -42,6 +46,7 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 tracker: draw the arrange mini-map (§ The pane)
 - 2026-08-24 tracker: a third palette tab for the mini-map (§ The pane)
 - 2026-08-24 arrange: publish the take enumerator on the facade (§ What the tracker may see)
 
@@ -50,8 +55,3 @@ Notes carried into the phases:
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- tracker: draw the map — the window computed on `tv` from the current
-  instance and the track list, the renderer only painting it: one filled
-  box per instance in its slot's colour, the current instance in the
-  focused fill, nothing else. Spec pins the window's centring, both
-  clamps and its QN-to-y.

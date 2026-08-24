@@ -109,6 +109,18 @@ local function resetArrange()
   fakeArrange.deleteSlot = function(trackIdx, slotIdx)
     fakeArrange.calls.deleteSlot = { trackIdx = trackIdx, slotIdx = slotIdx }
   end
+  -- The mini-map's enumerator: the instances meeting a column span and a QN
+  -- window, as am filters its cached take shapes (am_spec pins the real one).
+  fakeArrange.visibleTakes = function(fromCol, toCol, qnLo, qnHi)
+    local out = {}
+    for _, inst in ipairs(instances()) do
+      if inst.trackIdx >= fromCol and inst.trackIdx <= toCol
+         and inst.startQN <= qnHi and inst.startQN + inst.lengthQN >= qnLo then
+        util.add(out, inst)
+      end
+    end
+    return out
+  end
   fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
@@ -166,6 +178,32 @@ local function newTrackerPage(cm, ds, cmgr, chrome, gui)
   return util.instantiate('trackerPage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, lib = lib,
       modalHost = fakeModalHost, help = help, facade = fakeFacade })
+end
+
+local function trackList(trackCount)
+  local out = {}
+  for i = 0, trackCount - 1 do
+    util.add(out, { idx = i, guid = '{g' .. i .. '}', name = 'tr' .. (i + 1) })
+  end
+  return out
+end
+
+-- A tracker bound to the take 'i0' over a track list of the given width, with
+-- i0's placement as the caller states it; inst = nil binds it into no instance.
+local function mapTracker(harness, inst, trackCount)
+  local h = harness.mk()
+  h.reaper:setProjectTracks{ 'tr1' }
+  local stack
+  local origPublishDebug = fakeFacade.publishDebug
+  fakeFacade.publishDebug = function(_, s) stack = s end
+  seedItems(h, { 'i0' })
+  local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+  fakeFacade.publishDebug = origPublishDebug
+  fakeArrange.takeByKey['0:0'] = 'i0'
+  fakeArrange.tracksList = trackList(trackCount)
+  fakeArrange.instances  = inst and { inst } or {}
+  tp:bindFromSelection()
+  return stack.tv
 end
 
 return {
@@ -689,6 +727,72 @@ return {
   -- The play row: a caret on the row the play head occupies, dimmed where the
   -- head is sounding a sibling instance. At 240 ppq and four rows to the beat,
   -- a row is a quarter of a QN.
+  ----- The arrange mini-map's window (design/arrange-minimap.md § The pane)
+
+  {
+    name = 'the map window centres the bound column, and clamps it at both ends',
+    run = function(harness)
+      local function boundAt(col)
+        return mapTracker(harness, { take = 'i0', trackIdx = col, slotIdx = 0,
+                                     startQN = 40, lengthQN = 4 }, 8)
+      end
+      local win = boundAt(4):mapWindow(5, 20)
+      t.eq(win.colLo, 2, 'the bound column sits in the middle of the five')
+      t.eq(win.colHi, 6, 'and the window is five columns wide')
+      t.eq(boundAt(0):mapWindow(5, 20).colLo, 0, 'nothing to the left: it holds at the first')
+      win = boundAt(7):mapWindow(5, 20)
+      t.eq(win.colLo, 3, 'nothing to the right: it holds at the last')
+      t.eq(win.colHi, 7, 'the eighth track is the window\'s right edge')
+
+      win = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                  startQN = 40, lengthQN = 4 }, 3):mapWindow(5, 20)
+      t.eq(win.colLo, 0, 'a track list shorter than the pane left-aligns')
+      t.eq(win.colHi, 2, 'and stops at its last track')
+    end,
+  },
+
+  {
+    name = 'the map window centres time on the current instance, holding its top on screen',
+    run = function(harness)
+      local function placed(startQN, lengthQN)
+        return mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                     startQN = startQN, lengthQN = lengthQN }, 3)
+      end
+      local win = placed(40, 4):mapWindow(5, 20)
+      t.eq(win.qnLo, 32, 'half a window above the instance\'s midpoint')
+      t.eq(win.qnHi, 52, 'and half a window below it')
+      t.eq(placed(40, 60):mapWindow(5, 20).qnLo, 40,
+           'an instance taller than the window shows its top instead')
+      t.eq(placed(2, 4):mapWindow(5, 20).qnLo, 0, 'and the window never runs above QN 0')
+    end,
+  },
+
+  {
+    name = 'with the tracker in no instance the map window centres on the edit cursor',
+    run = function(harness)
+      local tv = mapTracker(harness, nil, 3)
+      fakeArrange.cursorQN = 100
+      local win = tv:mapWindow(5, 20)
+      t.eq(win.current, nil, 'nothing is marked')
+      t.eq(win.qnLo, 90, 'the edit cursor stands in for the midpoint')
+    end,
+  },
+
+  {
+    name = 'the map window carries the takes over it, the current instance marked',
+    run = function(harness)
+      local tv = mapTracker(harness, { take = 'i0', trackIdx = 1, slotIdx = 0,
+                                       startQN = 40, lengthQN = 4 }, 3)
+      util.add(fakeArrange.instances, { take = 'n0',  trackIdx = 2, slotIdx = 1,
+                                        startQN = 44,  lengthQN = 4 })
+      util.add(fakeArrange.instances, { take = 'far', trackIdx = 2, slotIdx = 1,
+                                        startQN = 200, lengthQN = 4 })
+      local win = tv:mapWindow(5, 20)
+      t.eq(#win.takes, 2, 'the neighbour inside the window, not the one beyond it')
+      t.eq(win.current, 'i0', 'the current instance is the marked take')
+    end,
+  },
+
   {
     name = 'the play row is the head\'s offset into the current instance, in rows',
     run = function(harness)

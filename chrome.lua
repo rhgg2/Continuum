@@ -61,6 +61,25 @@ function chrome.colour(name, scope)
   return cache[key]
 end
 
+-- Per-takeId fill pair { fill, focusFill } off colourIdx; focus brightens to read without losing hue.
+-- Shared by the arrange grid and the tracker's mini-map, so a slot's colour means one thing across the two.
+local SLOT_FILL_ALPHA = 1
+local slotFillCache = {}
+function chrome.slotFill(colourIdx, focused)
+  if colourIdx == nil then
+    return focused and 'arrange.orphanFocusFill' or 'arrange.orphanFill'
+  end
+  local pair = slotFillCache[colourIdx]
+  if not pair then
+    pair = {
+      painter.hue(colourIdx, 0.08, 0.77, SLOT_FILL_ALPHA),
+      painter.hue(colourIdx, 0.1,  0.84, SLOT_FILL_ALPHA),
+    }
+    slotFillCache[colourIdx] = pair
+  end
+  return focused and pair[2] or pair[1]
+end
+
 -- painter binds colour names through chrome; it touches only colour().
 local paintBinder = { colour = chrome.colour }
 

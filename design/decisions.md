@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The mini-map's window is computed on tv in columns and QN, the pixel constants
+  held by the renderer, over tv returning pixel rects: gridPane already measures the tracker's
+  viewport in cells and hands tv:setGridSize the counts, so the pixels stay in the one layer that
+  has them.
+
 - **2026-08-24** — The mini-map's palette tab is labelled `map`, not `mini-map`: three equal cells
   across the 200px pane leave about 63px each, which the longer word overruns.
 

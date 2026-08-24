@@ -107,6 +107,37 @@ One pane, one focus: `drawParamPalette` forces `paletteFocus = nil` whenever the
 active tab isn't parameters, so the fx tab runs on `stripFocus` alone and the
 two panes never both wash the grid.
 
+## The mini-map
+
+The **map** tab draws the arrangement in the arrange page's own terms: one
+column per track, time running down the page in QN (`docs/arrangePage.md` § Grid
+is hand-drawn). An instance is a filled box in its slot's colour —
+`chrome.slotFill`, the pair the arrange grid paints from, so a slot's colour
+means one thing across the two — under the grid's own 1px border. The current
+instance (`docs/trackerPage.md` § The current instance) carries the focused
+fill. Nothing else is drawn: no notes, waveforms or names.
+
+The boxes sit on a grid at the arrange page's cadence: a cell every 4 QN ruled
+off, the bar (16 QN) and phrase (64 QN) cells tinted as the grid tints their
+rows, and a rule down each column boundary. A third of a column of gutter runs
+down the pane's left edge, with the grid running out into it and the first
+column's rule closing it off. To the right it reaches as far as the track list
+and no further, so the columns past the last track stay empty, and it sits under
+the boxes, as it does there.
+
+The window is fixed in scale and never scrolls — five track columns and a
+third-column gutter across the pane's width, 3 pixels per QN down it. The renderer measures the pane in those
+units and takes the window from `tv:mapWindow(cols, qnSpan)` in the
+arrangement's own terms: the column and QN bounds, the takes over them, and the
+marked take. The pixels stay in the renderer, as they do for the grid's viewport
+(`gridPane` hands `tv:setGridSize` cells and rows).
+
+The window centres the bound track's column and clamps it at both ends, so a
+track list shorter than the pane left-aligns. Time centres on the current
+instance's midpoint, pulled back up to its start where the instance is taller
+than the window, and clamped at QN 0. With the tracker in no instance nothing is
+marked, and the edit cursor QN stands in for the midpoint.
+
 ## FX chain — palette tab
 
 See `docs/generators.md` § The chain for what a chain means; this section is
