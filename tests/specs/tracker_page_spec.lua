@@ -202,6 +202,7 @@ end
 
 -- A tracker bound to the take 'i0' over a track list of the given width, with
 -- i0's placement as the caller states it; inst = nil binds it into no instance.
+-- Returns the page's tv, and the harness behind it for the cmgr.
 local function mapTracker(harness, inst, trackCount)
   local h = harness.mk()
   h.reaper:setProjectTracks{ 'tr1' }
@@ -215,7 +216,7 @@ local function mapTracker(harness, inst, trackCount)
   fakeArrange.tracksList = trackList(trackCount)
   fakeArrange.instances  = inst and { inst } or {}
   tp:bindFromSelection()
-  return stack.tv
+  return stack.tv, h
 end
 
 return {
@@ -1016,6 +1017,19 @@ return {
       local win = tv:mapWindow(5, 80)
       t.eq(#win.takes, 2, 'the neighbour inside the window, not the one beyond it')
       t.eq(win.current, 'i0', 'the current instance is the marked take')
+    end,
+  },
+
+  {
+    name = 'the pin key holds the map up as the palette default, and drops it when pressed again',
+    run = function(harness)
+      local tv, h = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                          startQN = 0, lengthQN = 4 }, 3)
+      h.cmgr:push('tracker')
+      h.cmgr:invoke('pinMap')
+      t.eq(tv:paletteTab('0,0', true), 'map', 'the map defaults up over an available chain')
+      h.cmgr:invoke('pinMap')
+      t.eq(tv:paletteTab('0,0', true), 'fx', 'pressing again drops the pin')
     end,
   },
 

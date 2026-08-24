@@ -375,7 +375,7 @@ local function handlePaletteKeys(nav)
     return true
   end
   if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_X) then
-    tv:clearTabOverride(); fxFocusReq = true; return true   -- cross to fx: drop the pin, focus the chain next fx draw
+    tv:overrideTab('fx', caretKeyNow()); fxFocusReq = true; return true   -- cross to fx: claim the tab, focus the chain next fx draw
   end
   if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_R) then
     tv:clearTabOverride(); return true   -- toggle parameters off: the auto chain re-shows and focus falls to the grid
@@ -788,6 +788,7 @@ help:registerPage('tracker', {
     { cmd = 'prevInstance', label = 'Previous instance' },
     { cmd = 'nextInstance', label = 'Next instance' },
     { cmd = 'deleteInstance', label = 'Delete instance' },
+    { cmd = 'pinMap', label = 'Pin the arrange map' },
     { cmd = 'takeProperties', label = 'Take properties' },
     { cmd = 'deleteBoundSlot', label = 'Delete take + instances' },
   }},
@@ -1594,10 +1595,10 @@ local stripPlan do
     end
   end
 
-  -- Super+X enters the fx session (a selection mints its region, the caret pins); any tab pin clears
-  -- first so entry always lands keyboard focus in the fx palette. Mouse entry is hostless (see stripPlan).
+  -- Super+X enters the fx session (a selection mints its region, the caret pins); the session claims
+  -- the fx tab so entry always lands keyboard focus there. Mouse entry is hostless (see stripPlan).
   function editFx()
-    tv:clearTabOverride()   -- drop any tab pin: the keyboard session owns the fx tab now
+    tv:overrideTab('fx', caretKeyNow())   -- claim the tab: the session outranks a parked parameters or a pinned map
     local host, fresh = tv:fxHostForEdit()
     if not host then return end
     local existing = tv:noteFx(host)
@@ -1714,6 +1715,7 @@ tracker:registerAll{
 
   editNoteFx        = editFx,
   focusParamPalette = focusParams,
+  pinMap            = function() tv:setMapPinned(not tv:mapPinned()) end,
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },

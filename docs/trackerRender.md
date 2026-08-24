@@ -74,17 +74,22 @@ scores with it.
 The right-hand pane carries three tabs — **parameters** | **fx** | **map** —
 sharing one child and one focus (`chrome.paletteTabsHeader`: equal-width cells,
 the active label in text ink and the inactive ones dimmed, a crisp cell
-divider). The active tab is *derived unless pinned*: `tv:paletteTab(caretKey,
+divider). The active tab is *derived unless claimed*: `tv:paletteTab(caretKey,
 fxAvailable)` returns a `tabOverride` (any of the three, set by a click or the
-keyboard toggles) when one holds, else **fx** whenever a chain is showable — the
-caret sits on an fx host, or a session is live (`stripPlan ~= nil`) — and
-**parameters** otherwise. The derivation never yields **map**, the arrange
-mini-map: a click alone brings it up, and it takes no keyboard focus. So a chain
+keyboard toggles) when one holds, else the **map** while it is pinned, else
+**fx** whenever a chain is showable — the caret sits on an fx host, or a session
+is live (`stripPlan ~= nil`) — and **parameters** otherwise. So a chain
 auto-raises under the caret exactly as the old docked strip did, and lapses when
-the caret leaves it. A mouse click on any tab pins it **without grabbing
-focus**: the grid keeps the keys until you click into the pane (a param row, a
-field label) or use the keyboard. The pin lapses on the next caret move — the
-`tabOverride` generalises the old parameters-only override.
+the caret leaves it. A mouse click on any tab overrides the derivation **without
+grabbing focus**: the grid keeps the keys until you click into the pane (a param
+row, a field label) or use the keyboard. The override lapses on the next caret
+move — the `tabOverride` generalises the old parameters-only override.
+
+**Alt-M** (`pinMap`) **pins** the map, the arrange mini-map, as the default tab
+in the derivation's place; pressed again it drops the pin. The derivation itself
+never yields **map**, and a pin never lapses on a caret move, so an override
+falling away reveals the pinned map rather than a chain. Like a tab click, the
+pin takes no keyboard focus.
 
 Two symmetric toggles bind the two panes: **Super-R** owns **parameters**,
 **Super-X** owns the **fx** palette. Super-R (`focusParams`) parks parameters
@@ -94,11 +99,11 @@ pressed again — from the grid, or while parameters holds focus via
 `handlePaletteKeys` — it drops the override, re-revealing the auto chain and
 letting focus fall to the grid. The override is anchored to the caret and clears
 on the next caret move (`tv:overrideTab` and the `caretKey` check in
-`tv:paletteTab`). Super-X (`editFx`) enters the fx session; while parameters is
-up it clears the override first, so Super-X always lands keyboard focus in the fx
-palette — from the grid via `editFx`, or while parameters holds focus via
+`tv:paletteTab`). Super-X (`editFx`) enters the fx session, writing an fx
+override of its own so the session outranks a parked parameters or a pinned map
+— from the grid via `editFx`, or while parameters holds focus via
 `handlePaletteKeys`, which raises `fxFocusReq`. A mouse click on the **fx** tab
-instead only pins it (`onTab` → `tv:overrideTab`) without focus — the FX chain
+instead only overrides the derivation (`onTab` → `tv:overrideTab`) without focus — the FX chain
 section covers how it then shows and mints hostless. Symmetrically, inside a live fx
 session `handleFxChainKeys` binds **Super-R** to commit-then-raise-parameters and
 **Super-X** to commit-and-leave.
@@ -226,7 +231,7 @@ focus; edits apply live as a preview; **Super+X**/`commit` keep them and leave, 
 `cancel` revert to the snapshot. A **mouse** edit — a value widget, a kind pick, or
 an add — applies live *without* entering the session; it never grabs strip focus.
 
-The **fx tab stands alone**: a click pins it (`tabOverride`) and `stripPlan` draws
+The **fx tab stands alone**: a click claims it (`tabOverride`) and `stripPlan` draws
 a bare add row even on a host with no fx, so the tab needs no pre-existing chain.
 The first `add` mints the host lazily — `host or tv:fxHostForEdit()`: the caret's
 note wins, else a bare selection materialises its region. Only the keyboard

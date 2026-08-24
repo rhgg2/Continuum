@@ -31,10 +31,10 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-25 tracker: pin the arrange map as the palette default with Alt-M (§ The pin)
 - 2026-08-24 am: a drop opens the whole pool, not a sibling's window (polish over § The walk)
 - 2026-08-24 tracker: page the mini-map's window instead of centring it (polish over § The pane)
 - 2026-08-24 tracker/arrange: land a track step on the nearest placement; delete the instance (polish over § The walk)
-- 2026-08-24 tracker: walk the track's instances with Alt-up/down (§ The walk)
 
 ## Now
 
@@ -42,12 +42,6 @@ Notes carried into the phases:
 
 ## Queued (current phase; one-liners)
 
-1. **The pin** — Alt-M (`pinMap`) toggles the map as the palette's
-   default tab, widening `tv:paletteTab`'s two-valued fallback to
-   `override or (pinned and 'map') or fx or parameters`. The pin is
-   transient view state on tv, takes no keyboard focus, and drops when
-   the key is pressed again; a click, Super-R and Super-X still override
-   it. (design § The pin)
 1. **The raise** — `cmgr` gains a monotonic command serial, and the tab
    override carries a serial anchor as well as its caret one, lapsing
    when either moves. `tv:nameInstance` raises the map by writing an

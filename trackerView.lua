@@ -3947,8 +3947,9 @@ local paletteExpanded = {}
 local paletteCursor   = nil
 --shape: stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field
 local stripCursor     = nil
---shape: tabOverride = { tab, anchor } — a clicked/keyboard tab pin ('parameters'|'fx'); caret move clears it
+--shape: tabOverride = { tab, anchor } — a clicked/keyboard tab claim ('parameters'|'fx'|'map'); caret move clears it
 local tabOverride  = { tab = nil, anchor = nil }
+local mapPinned    = false   -- Alt-M holds the mini-map up as the palette's default tab
 
 -- Learn-touched params float above pa's frecency order until the bound
 -- take changes; validated lazily against cm:boundTake, no lifecycle hook.
@@ -3983,16 +3984,21 @@ function tv:setPaletteCursor(c)        paletteCursor = c end
 function tv:stripCursor()             return stripCursor end
 function tv:setStripCursor(c)          stripCursor = c end
 
--- A clicked or keyboard override pins a tab; absent one, fx auto-wins whenever a chain is
--- showable. The pin lapses on the next caret move (a new caretKey), like the old params override.
+-- A clicked or keyboard override claims a tab; absent one, fx auto-wins whenever a chain is
+-- showable. The override lapses on the next caret move (a new caretKey), like the old params one.
 function tv:tabOverride(caretKey)
   if tabOverride.tab and caretKey ~= tabOverride.anchor then tabOverride.tab = nil end
   return tabOverride.tab
 end
 function tv:overrideTab(tab, caretKey) tabOverride.tab, tabOverride.anchor = tab, caretKey end
 function tv:clearTabOverride()         tabOverride.tab = nil end
+-- Alt-M's map pin ranks under an override and over the derivation. Only the key drops it, so
+-- an override lapsing on a caret move falls back to the map rather than to a chain.
+function tv:mapPinned()      return mapPinned end
+function tv:setMapPinned(on) mapPinned = on end
 function tv:paletteTab(caretKey, fxAvailable)
-  return self:tabOverride(caretKey) or (fxAvailable and 'fx' or 'parameters')
+  return self:tabOverride(caretKey) or (mapPinned and 'map')
+      or (fxAvailable and 'fx' or 'parameters')
 end
 
 function tv:paramTargets()           return pa:targets() end

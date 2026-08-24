@@ -108,6 +108,7 @@ pageBindings.tracker = {
   freezeFxRegion         = { {ImGui.Key_E, ImGui.Mod_Ctrl} },
   freezeFxGroup          = { {ImGui.Key_E, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   focusParamPalette      = { {ImGui.Key_R, ImGui.Mod_Super} },
+  pinMap                 = { {ImGui.Key_M, ImGui.Mod_Alt} },
 }
 -- Universal-argument digit prefixes: Ctrl+0..9 arm advBy0..advBy9.
 for i = 0, 9 do

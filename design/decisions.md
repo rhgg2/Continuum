@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — The mini-map's pin ranks under a tab override and over the derivation, and never
+  lapses on a caret move, so an override falling away reveals the pinned map. Super-X therefore
+  claims the fx tab with an override of its own rather than clearing one, keeping a live fx session
+  over the pin.
+
 - **2026-08-24** — A drop places a fresh instance at its pool's full length, over inheriting the
   sibling it clones from: the item state chunk carries the take's window across — the stored natural
   as a P_EXT blob, the head as D_STARTOFFS — so one resized instance made every later drop of that

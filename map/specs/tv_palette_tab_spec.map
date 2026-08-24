@@ -1,22 +1,26 @@
-@spec tv_palette_tab_spec  src=tests/specs/tv_palette_tab_spec.lua  loc=30  cases=2
+@spec tv_palette_tab_spec  src=tests/specs/tv_palette_tab_spec.lua  loc=54  cases=4
 @exercises trackerView (h.vm)
-@surface   vm:paletteTab, vm:overrideTab
+@surface   vm:paletteTab, vm:overrideTab, vm:setMapPinned
 @harness   mk
 
 # Intent
   The palette's active tab. The derivation yields fx or parameters and
-  nothing else, so the map tab comes up only under an override; the
-  override holds it over an available chain and lapses on a caret move,
-  as it does for the other two tabs.
+  nothing else, so the map tab comes up only under an override or a pin;
+  the override holds it over an available chain and lapses on a caret
+  move, as it does for the other two tabs. The pin ranks between them:
+  under the override, over the derivation, and it never lapses.
 
 # Cases
-  @case 'the derivation never yields the map'  [harness]  @ 11-16
-  @case 'an override holds the map up until the caret moves'  [harness]  @ 20-27
+  @case 'the derivation never yields the map'  [harness]  @ 12-17
+  @case 'an override holds the map up until the caret moves'  [harness]  @ 21-28
+  @case 'a pin makes the map the default tab'  [harness]  @ 32-40
+  @case 'an override outranks the pin, and lapses back to it'  [harness]  @ 44-51
 
 # Uses (outbound edges)
-  @use call vm:paletteTab  @ 14,15,24,25,26
-  @use call vm:overrideTab  @ 23
+  @use call vm:paletteTab  @ 15,16,25,26,27,36,37,39,49,50
+  @use call vm:overrideTab  @ 24,48
+  @use call vm:setMapPinned  @ 35,38,47
 
 # Fields (r read / w write incl. constructor keys)
-  @field w name  @ 11,20
-  @field w run  @ 12,21
+  @field w name  @ 12,21,32,44
+  @field w run  @ 13,22,33,45
