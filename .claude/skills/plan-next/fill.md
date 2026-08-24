@@ -19,8 +19,12 @@ Determine the new active phase of the plan: the first phase with work
 outstanding. 
 
 This phase needs splitting into Queued lines, each a single commit
-with its spec, landable in <150k context and carrying enough detail
-that one can compile a brief from it without re-reading the whole doc.
+with its spec, carrying enough detail that one can compile a brief
+from it without re-reading the whole doc.
+
+Each commit should be landable in <150k context, but don't get too
+granular: an item that's 2-5 lines of production code is likely too
+small.
    
 If the split exposes a decision the design doc leaves open, settle it
 with me before writing the queue; `/commit` records it.
