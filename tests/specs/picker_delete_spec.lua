@@ -16,12 +16,14 @@ local drawnButtons, clickRow = {}, nil
 for _, name in ipairs({ 'AlignTextToFramePadding', 'Text', 'SameLine', 'PushStyleVar', 'PopStyleVar',
   'PushStyleColor', 'PopStyleColor', 'OpenPopup', 'SetNextWindowPos', 'SetKeyboardFocusHere',
   'SetNextItemWidth', 'Attach', 'Separator', 'EndPopup', 'CloseCurrentPopup',
-  'PushID', 'PopID' }) do
+  'PushID', 'PopID', 'SetNextWindowSizeConstraints', 'SetCursorPosY', 'Dummy' }) do
   fakeImGui[name] = function() end
 end
 fakeImGui.Button                = function() return true end   -- always "opening" so the popup runs
 fakeImGui.GetItemRectMin        = function() return 0, 0 end
 fakeImGui.GetItemRectMax        = function() return 0, 0 end
+fakeImGui.GetStyleVar           = function() return 8, 4 end   -- window padding / item spacing
+fakeImGui.GetCursorPosY         = function() return 0 end
 fakeImGui.GetContentRegionAvail = function() return 200, 200 end
 fakeImGui.GetTextLineHeight     = function() return 13 end
 fakeImGui.CalcTextSize          = function() return 7, 13 end

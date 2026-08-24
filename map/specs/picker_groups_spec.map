@@ -1,4 +1,4 @@
-@spec picker_groups_spec  src=tests/specs/picker_groups_spec.lua  loc=112  cases=3
+@spec picker_groups_spec  src=tests/specs/picker_groups_spec.lua  loc=115  cases=3
 @harness   mk
 
 # Intent
@@ -10,59 +10,61 @@
   the popup body in submission order.
 
 # Helpers
-  @fn mkChrome(h)  @ 45-48
-  @fn frame(chrome, text)  @ 59-63
+  @fn mkChrome(h)  @ 48-51
+  @fn frame(chrome, text)  @ 62-66
       -- One picker frame under filter `text`; returns the popup body it drew.
-  @fn headings(drawn)  @ 66-70
+  @fn headings(drawn)  @ 69-73
       -- The headings drawn, in order.
-  @fn indexOf(drawn, label)  @ 73-75
+  @fn indexOf(drawn, label)  @ 76-78
       -- Index of the first entry naming `label`, whichever kind it is.
 
 # Cases
-  @case 'each labelled group announces its tier, once, above its first row'  [harness]  @ 79-87
-  @case 'the group with no label announces nothing'  [harness]  @ 91-97
-  @case 'the headings survive a filter, so a match still says which tier it came from'  [harness]  @ 101-110
+  @case 'each labelled group announces its tier, once, above its first row'  [harness]  @ 82-90
+  @case 'the group with no label announces nothing'  [harness]  @ 94-100
+  @case 'the headings survive a filter, so a match still says which tier it came from'  [harness]  @ 104-113
 
 # Fields (r read / w write incl. constructor keys)
-  @field w BeginPopup  @ 30
-  @field w Button  @ 23
-  @field w CalcTextSize  @ 29
-  @field w CreateFunctionFromEEL  @ 32
-  @field w GetContentRegionAvail  @ 26
-  @field w GetCursorScreenPos  @ 27
-  @field w GetItemRectMax  @ 25
-  @field w GetItemRectMin  @ 24
-  @field w GetTextLineHeight  @ 28
-  @field w ImGui_GetBuiltinPath  @ 41
-  @field w InputText  @ 33
-  @field w IsKeyPressed  @ 34
-  @field w IsWindowAppearing  @ 31
+  @field w BeginPopup  @ 33
+  @field w Button  @ 24
+  @field w CalcTextSize  @ 32
+  @field w CreateFunctionFromEEL  @ 35
+  @field w GetContentRegionAvail  @ 29
+  @field w GetCursorPosY  @ 28
+  @field w GetCursorScreenPos  @ 30
+  @field w GetItemRectMax  @ 26
+  @field w GetItemRectMin  @ 25
+  @field w GetStyleVar  @ 27
+  @field w GetTextLineHeight  @ 31
+  @field w ImGui_GetBuiltinPath  @ 44
+  @field w InputText  @ 36
+  @field w IsKeyPressed  @ 37
+  @field w IsWindowAppearing  @ 34
   @field w Mod_None  @ 11
-  @field w Selectable  @ 37
-  @field w Separator  @ 35
-  @field w TextDisabled  @ 36
+  @field w Selectable  @ 40
+  @field w Separator  @ 38
+  @field w TextDisabled  @ 39
   @field w __index  @ 12
-  @field w buttonLabel  @ 61
-  @field w cm  @ 46,47
-  @field w ctx  @ 47
-  @field w group  @ 52,53,54,55
-  @field w groupLabel  @ 53,54,55
-  @field r heading  @ 68,74
-  @field w heading  @ 36
-  @field w items  @ 61
-  @field w key  @ 53,54,55
-  @field w kind  @ 61
-  @field w label  @ 52,53,54,55
-  @field w lib  @ 47
-  @field r loaded  @ 40
-  @field w name  @ 79,91,101
-  @field w onPick  @ 61
-  @field r preload  @ 39
-  @field r reaper  @ 41
-  @field r row  @ 74
-  @field w row  @ 37
-  @field r rule  @ 108
-  @field w rule  @ 35
-  @field w run  @ 80,92,102
-  @field w synthetic  @ 46
-  @field w uiSize  @ 47
+  @field w buttonLabel  @ 64
+  @field w cm  @ 49,50
+  @field w ctx  @ 50
+  @field w group  @ 55,56,57,58
+  @field w groupLabel  @ 56,57,58
+  @field r heading  @ 71,77
+  @field w heading  @ 39
+  @field w items  @ 64
+  @field w key  @ 56,57,58
+  @field w kind  @ 64
+  @field w label  @ 55,56,57,58
+  @field w lib  @ 50
+  @field r loaded  @ 43
+  @field w name  @ 82,94,104
+  @field w onPick  @ 64
+  @field r preload  @ 42
+  @field r reaper  @ 44
+  @field r row  @ 77
+  @field w row  @ 40
+  @field r rule  @ 111
+  @field w rule  @ 38
+  @field w run  @ 83,95,105
+  @field w synthetic  @ 49
+  @field w uiSize  @ 50

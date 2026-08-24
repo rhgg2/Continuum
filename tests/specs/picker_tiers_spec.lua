@@ -16,7 +16,8 @@ local fakeImGui = setmetatable({ Mod_None = 0 }, {
 local filterText, pressed, body, idStack = '', {}, {}, {}
 for _, name in ipairs({ 'AlignTextToFramePadding', 'Text', 'SameLine', 'PushStyleVar', 'PopStyleVar',
   'PushStyleColor', 'PopStyleColor', 'OpenPopup', 'SetNextWindowPos', 'SetKeyboardFocusHere',
-  'SetNextItemWidth', 'Attach', 'EndPopup', 'CloseCurrentPopup' }) do
+  'SetNextItemWidth', 'Attach', 'EndPopup', 'CloseCurrentPopup',
+  'SetNextWindowSizeConstraints', 'SetCursorPosY', 'Dummy' }) do
   fakeImGui[name] = function() end
 end
 fakeImGui.PushID                = function(_, id) idStack[#idStack + 1] = id end
@@ -24,6 +25,8 @@ fakeImGui.PopID                 = function() idStack[#idStack] = nil end
 fakeImGui.Button                = function() return true end   -- always "opening" so the popup runs
 fakeImGui.GetItemRectMin        = function() return 0, 0 end
 fakeImGui.GetItemRectMax        = function() return 0, 0 end
+fakeImGui.GetStyleVar           = function() return 8, 4 end   -- window padding / item spacing
+fakeImGui.GetCursorPosY         = function() return 0 end
 fakeImGui.GetContentRegionAvail = function() return 200, 200 end
 fakeImGui.GetCursorScreenPos    = function() return 0, 0 end
 fakeImGui.GetTextLineHeight     = function() return 13 end

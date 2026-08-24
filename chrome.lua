@@ -563,6 +563,13 @@ local function inferGroups(items)
   return out
 end
 
+-- Px the filter's rule lifts out of ImGui's default gap, which hangs it nearer the first row than
+-- the field it divides from.
+local DIVIDER_LIFT = 1
+
+-- 'No maximum' for a size constraint; a zero max is taken literally and collapses the window.
+local FLT_MAX = 3.4028234663852886e38
+
 -- Generic typeahead picker. Enter picks the highlighted match; group
 -- separators show only when filter is empty.
 function chrome.drawPicker(d)
@@ -599,8 +606,8 @@ function chrome.drawPicker(d)
   ImGui.PopStyleVar(ctx, 1)
   -- Anchor popup to the button rect; OpenPopup otherwise uses mouse
   -- position, putting a keyboard-triggered popup at the text cursor.
-  local btnX, btnTop = ImGui.GetItemRectMin(ctx)
-  local _, btnBot    = ImGui.GetItemRectMax(ctx)
+  local btnX, btnTop     = ImGui.GetItemRectMin(ctx)
+  local btnRight, btnBot = ImGui.GetItemRectMax(ctx)
   local fromReq = false
   if pickerOpenReq == d.kind then
     pickerOpenReq = nil
@@ -616,14 +623,28 @@ function chrome.drawPicker(d)
   -- upward -- for pickers docked near the window's bottom edge, where opening below would clip.
   if d.placement == 'above' then ImGui.SetNextWindowPos(ctx, btnX, btnTop, ImGui.Cond_Appearing, 0, 1)
   else                           ImGui.SetNextWindowPos(ctx, btnX, btnBot, ImGui.Cond_Appearing) end
+  -- The popup is the button's own drawer, so it starts at the button's width; a zero max leaves the
+  -- auto-fit free to grow it for a label too long to sit in that.
+  ImGui.SetNextWindowSizeConstraints(ctx, btnRight - btnX, 0, FLT_MAX, FLT_MAX)
+  -- Field, rule and rows all sit on the work rect (see below), where the rows used to bleed half an
+  -- item spacing past it: take that off the horizontal padding so the list runs where it always did.
+  local spacingX, spacingY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
+  local padX, padY         = ImGui.GetStyleVar(ctx, ImGui.StyleVar_WindowPadding)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, padX + 1 - spacingX / 2, padY)
   -- NoNav: kill ImGui's built-in keyboard nav highlight on the popup —
   -- otherwise it draws a second cursor that fights ours and steals
   -- arrow keys / character input from the filter InputText.
-  if not ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav) then return end
+  local open = ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav)
+  ImGui.PopStyleVar(ctx, 1)
+  if not open then return end
   pickerActive = true   -- block page key dispatch this frame so Enter doesn't leak
 
+  -- No horizontal item spacing: a Selectable's rect is otherwise extended half a spacing past the
+  -- content edge on each side, standing the rows wider than the filter field and its rule.
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ItemSpacing, 0, spacingY)
+
   if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
-  ImGui.SetNextItemWidth(ctx, 180)
+  ImGui.SetNextItemWidth(ctx, (ImGui.GetContentRegionAvail(ctx)))
   local prevFilter = pickerFilter[d.kind] or ''
   -- Plain InputText (no EnterReturnsTrue): with that flag, ReaImGui
   -- only commits the buffer on Enter, so the live filter would never
@@ -637,6 +658,7 @@ function chrome.drawPicker(d)
   pickerFilter[d.kind] = filter
   local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
                or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) - DIVIDER_LIFT)
   ImGui.Separator(ctx)
 
   -- The popup body, in the order it draws: one block per group, each with its heading, optional
@@ -699,6 +721,9 @@ function chrome.drawPicker(d)
     if rows[cursor] then choose(rows[cursor]) end
     ImGui.CloseCurrentPopup(ctx)
   else
+    -- Hand the rule's lifted pixel back, so only the rule moved. It belongs to this branch: a cursor
+    -- moved with no item after it faults at EndPopup, and the two branches above draw nothing.
+    ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + DIVIDER_LIFT)
     -- Content left and full row width, for placing a trailing delete button; constant down the list.
     local rowLeft = ImGui.GetCursorScreenPos(ctx)
     local rowW    = ImGui.GetContentRegionAvail(ctx)
@@ -721,8 +746,13 @@ function chrome.drawPicker(d)
       end
       ImGui.PopID(ctx)
     end
+    -- ImGui measures content from a row's text, not the highlight, which runs half a spacing past
+    -- its foot: plant a zero-height item there, or the bottom margin comes up short of the sides.
+    ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) - spacingY // 2)
+    ImGui.Dummy(ctx, 0, 0)
   end
 
+  ImGui.PopStyleVar(ctx, 1)
   ImGui.EndPopup(ctx)
 end
 

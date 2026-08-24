@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=879  mode=chunk  self=chrome
+@module chrome  src=chrome.lua  loc=909  mode=chunk  self=chrome
 @deps cm, ctx, lib
 
 # Shapes
@@ -39,10 +39,12 @@
   @state BULLET = ' \xe2\x80\xa2'  @ 448
   @state DEL_GLYPH = 9  @ 514   -- px across the drawn ×
   @state DEFAULT_GROUP = 1  @ 555
-  @state PALETTE_W, PANE_GAP = 200, 11  @ 733
-  @state HEADER_PAD, HEADER_GAP = 8, 4  @ 734
-  @state TREE_INDENT, ARROW_GUTTER = 12, 14  @ 832
-  @state CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'  @ 833
+  @state DIVIDER_LIFT = 1  @ 568
+  @state FLT_MAX = 3.4028234663852886e38  @ 571
+  @state PALETTE_W, PANE_GAP = 200, 11  @ 763
+  @state HEADER_PAD, HEADER_GAP = 8, 4  @ 764
+  @state TREE_INDENT, ARROW_GUTTER = 12, 14  @ 862
+  @state CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'  @ 863
 
 # Private functions
   @fn resolve(key)  @ 23-42
@@ -66,10 +68,10 @@
       -- (SameLine's offset base, the Selectable's extended rect) -- see docs/chrome.md § Picker.
   @fn inferGroups(items)  @ 556-564
   -- Palette pane (shared right-hand pane: arrange / wiring / tracker / sampler)
-  @fn paletteTabsHeader(tabs, activeKey, onTab)  @ 761-784
+  @fn paletteTabsHeader(tabs, activeKey, onTab)  @ 791-814
       -- Tabbed header: equal-width cells, active in text ink, rest dimmed (palette.tabInactive).
       -- Dividers run the full header height with a bottom gap; a click fires onTab(key).
-  @fn fitLabel(text, maxW)  @ 808-817
+  @fn fitLabel(text, maxW)  @ 838-847
       -- Ellipsis-fit to a fixed pane width; no horizontal scroll exists. Private: the
       -- trees fit their own labels, and no caller outside chrome has wanted it.
 
@@ -120,102 +122,103 @@
       -- Build the picker-item list for a catalogue held by *copy* (`fxPatches`): both tiers in full, so
       -- a name held twice draws under each heading. See docs/chrome.md § Picker.
       @contract  project entries then library entries, each sorted; a divergent project copy is badged  @ 497
-  @api chrome.drawPicker(d)  @ 568-727
+  @api chrome.drawPicker(d)  @ 575-757
       -- Generic typeahead picker. Enter picks the highlighted match; group
       -- separators show only when filter is empty.
-  @api chrome.gridWidth(w)  @ 737
-      @contract  width of the main pane left of the palette; floors at 120.  @ 736
-  @api chrome.paletteHeader(label)  @ 741-757
+  @api chrome.gridWidth(w)  @ 767
+      @contract  width of the main pane left of the palette; floors at 120.  @ 766
+  @api chrome.paletteHeader(label)  @ 771-787
       -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
       -- with the flanking grid header. Returns divider screen-y.
-  @api chrome.palettePane(spec)  @ 787-804
-      @contract  x/y/h are body-window screen coords at the gap's left edge; draw paints the body.  @ 786
-  @api chrome.rowSelectable(label, selected, flags)  @ 821-828
+  @api chrome.palettePane(spec)  @ 817-834
+      @contract  x/y/h are body-window screen coords at the gap's left edge; draw paints the body.  @ 816
+  @api chrome.rowSelectable(label, selected, flags)  @ 851-858
       -- Selectable with hover/active highlight suppressed: only the selected row shows
       -- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
-  @api chrome.treeRow(opts)  @ 840-867
+  @api chrome.treeRow(opts)  @ 870-897
       -- One tree row, sampler-tree style: a draw-list chip in a fixed gutter (never
       -- highlighted), then a selectable label; the row owns its nesting indent.
-      @contract  chip toggles; body click selects and toggles a parent; allowDouble suppresses both  @ 837
-      @contract  childless rows show blank gutter so labels align across depths  @ 838
-      @contract  nesting indent = opts.indent (px) if set, else depth × TREE_INDENT  @ 839
-  @api chrome.treeHeading(opts)  @ 871-876
+      @contract  chip toggles; body click selects and toggles a parent; allowDouble suppresses both  @ 867
+      @contract  childless rows show blank gutter so labels align across depths  @ 868
+      @contract  nesting indent = opts.indent (px) if set, else depth × TREE_INDENT  @ 869
+  @api chrome.treeHeading(opts)  @ 901-906
       -- Non-selectable tree heading (fx-section labels, group dividers): a dimmed label.
-      @contract  gutter=true aligns text with a same-depth row label, not its chip; else flush indent  @ 870
+      @contract  gutter=true aligns text with a same-depth row label, not its chip; else flush indent  @ 900
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ headingLabel:276 drawPicker:575
-  @use call    ImGui.Attach  @ selectTo:426 drawPicker:633
-  @use call    ImGui.BeginChild  @ palettePane:794
+  @use call    ImGui.AlignTextToFramePadding  @ headingLabel:276 drawPicker:582
+  @use call    ImGui.Attach  @ selectTo:426 drawPicker:654
+  @use call    ImGui.BeginChild  @ palettePane:824
   @use call    ImGui.BeginDisabled  @ disabledIf:143
   @use call    ImGui.BeginGroup  @ disclosureHeading:314 drawSegment:325
-  @use call    ImGui.BeginPopup  @ dropdown:259 drawPicker:622
-  @use call    ImGui.Button  @ numberStepper:214 dropdown:247 drawPicker:596,597
-  @use call    ImGui.CalcTextSize  @ numberStepper:195,199 dropdown:239 disclosureHeading:310,311 rowButtonBox:519 drawPicker:587 fitLabel:809,811
+  @use call    ImGui.BeginPopup  @ dropdown:259 drawPicker:637
+  @use call    ImGui.Button  @ numberStepper:214 dropdown:247 drawPicker:603,604
+  @use call    ImGui.CalcTextSize  @ numberStepper:195,199 dropdown:239 disclosureHeading:310,311 rowButtonBox:519 drawPicker:594 fitLabel:839,841
   @use call    ImGui.Checkbox  @ checkbox:171
-  @use call    ImGui.CloseCurrentPopup  @ drawPicker:697,700
+  @use call    ImGui.CloseCurrentPopup  @ drawPicker:719,722
   @use call    ImGui.ColorConvertDouble4ToU32  @ colour:59 headingLabel:274
   @use call    ImGui.ColorConvertU32ToDouble4  @ headingLabel:273
-  @use call    ImGui.CreateFunctionFromEEL  @ selectTo:425 drawPicker:632
+  @use call    ImGui.CreateFunctionFromEEL  @ selectTo:425 drawPicker:653
   @use call    ImGui.DrawList_AddRectFilled  @ verticalSeparator:135 numberStepper:220,221
-  @use call    ImGui.DrawList_AddText  @ treeRow:849
-  @use call    ImGui.Dummy  @ verticalSeparator:137 paletteHeader:755 paletteTabsHeader:782
-  @use call    ImGui.EndChild  @ palettePane:803
+  @use call    ImGui.DrawList_AddText  @ treeRow:879
+  @use call    ImGui.Dummy  @ verticalSeparator:137 drawPicker:752 paletteHeader:785 paletteTabsHeader:812
+  @use call    ImGui.EndChild  @ palettePane:833
   @use call    ImGui.EndDisabled  @ disabledIf:145
   @use call    ImGui.EndGroup  @ disclosureHeading:319 drawSegment:335
-  @use call    ImGui.EndPopup  @ dropdown:263 drawPicker:726
+  @use call    ImGui.EndPopup  @ dropdown:263 drawPicker:756
   @use call    ImGui.Function_SetValue  @ selectTo:428
   @use call    ImGui.GetColor  @ numberStepper:219
-  @use call    ImGui.GetContentRegionAvail  @ makeToolbar:388 drawPicker:704 paletteHeader:746 paletteTabsHeader:764 treeRow:844
+  @use call    ImGui.GetContentRegionAvail  @ makeToolbar:388 drawPicker:647,729 paletteHeader:776 paletteTabsHeader:794 treeRow:874
   @use call    ImGui.GetCursorPosX  @ row:154 disclosureHeading:313
-  @use call    ImGui.GetCursorPosY  @ row:154 compactControl:164
-  @use call    ImGui.GetCursorScreenPos  @ verticalSeparator:133 makeToolbar:342,387 drawPicker:703 paletteHeader:743 paletteTabsHeader:763 treeRow:846
+  @use call    ImGui.GetCursorPosY  @ row:154 compactControl:164 drawPicker:661,726,751
+  @use call    ImGui.GetCursorScreenPos  @ verticalSeparator:133 makeToolbar:342,387 drawPicker:728 paletteHeader:773 paletteTabsHeader:793 treeRow:876
   @use call    ImGui.GetFrameHeight  @ verticalSeparator:134 row:153 compactControl:162,164 numberStepper:185
-  @use call    ImGui.GetItemRectMax  @ numberStepper:217 dropdown:251 makeToolbar:350,406 rowButton:533 drawPicker:603
-  @use call    ImGui.GetItemRectMin  @ numberStepper:216 dropdown:250 makeToolbar:349,405 rowButton:532 drawPicker:602
-  @use call    ImGui.GetScrollMaxY  @ paletteHeader:747 paletteTabsHeader:765
-  @use call    ImGui.GetStyleColor  @ rowSelectable:822
-  @use call    ImGui.GetStyleVar  @ pushChromeStyles:76 row:152 numberStepper:186,187 dropdown:242 drawPicker:588 paletteHeader:748 paletteTabsHeader:766
-  @use call    ImGui.GetTextLineHeight  @ rowButtonBox:518 rowButton:545 treeRow:845
-  @use call    ImGui.GetTextLineHeightWithSpacing  @ paletteHeader:750 paletteTabsHeader:768
-  @use call    ImGui.GetWindowDrawList  @ verticalSeparator:135 numberStepper:219 treeRow:849
+  @use call    ImGui.GetItemRectMax  @ numberStepper:217 dropdown:251 makeToolbar:350,406 rowButton:533 drawPicker:610
+  @use call    ImGui.GetItemRectMin  @ numberStepper:216 dropdown:250 makeToolbar:349,405 rowButton:532 drawPicker:609
+  @use call    ImGui.GetScrollMaxY  @ paletteHeader:777 paletteTabsHeader:795
+  @use call    ImGui.GetStyleColor  @ rowSelectable:852
+  @use call    ImGui.GetStyleVar  @ pushChromeStyles:76 row:152 numberStepper:186,187 dropdown:242 drawPicker:595,631,632 paletteHeader:778 paletteTabsHeader:796
+  @use call    ImGui.GetTextLineHeight  @ rowButtonBox:518 rowButton:545 treeRow:875
+  @use call    ImGui.GetTextLineHeightWithSpacing  @ paletteHeader:780 paletteTabsHeader:798
+  @use call    ImGui.GetWindowDrawList  @ verticalSeparator:135 numberStepper:219 treeRow:879
   @use call    ImGui.GetWindowPos  @ rowButton:527
-  @use call    ImGui.Indent  @ treeRow:842 treeHeading:873
+  @use call    ImGui.Indent  @ treeRow:872 treeHeading:903
   @use call    ImGui.InputDouble  @ numberStepper:204
   @use call    ImGui.InputInt  @ numberStepper:205
-  @use call    ImGui.InputText  @ drawPicker:635
-  @use call    ImGui.InvisibleButton  @ rowButton:530 paletteTabsHeader:778 treeRow:847
+  @use call    ImGui.InputText  @ drawPicker:656
+  @use call    ImGui.InvisibleButton  @ rowButton:530 paletteTabsHeader:808 treeRow:877
   @use call    ImGui.IsItemClicked  @ disclosureHeading:321
   @use call    ImGui.IsItemHovered  @ disclosureHeading:320 rowButton:538
-  @use call    ImGui.IsKeyPressed  @ drawPicker:638,639,681,683,695
-  @use call    ImGui.IsMouseDoubleClicked  @ treeRow:858
-  @use call    ImGui.IsWindowAppearing  @ drawPicker:625,674
-  @use call    ImGui.IsWindowFocused  @ palettePane:796
-  @use call    ImGui.OpenPopup  @ dropdown:249 drawPicker:612
-  @use call    ImGui.PopID  @ drawPicker:722
+  @use call    ImGui.IsKeyPressed  @ drawPicker:659,660,703,705,717
+  @use call    ImGui.IsMouseDoubleClicked  @ treeRow:888
+  @use call    ImGui.IsWindowAppearing  @ drawPicker:646,696
+  @use call    ImGui.IsWindowFocused  @ palettePane:826
+  @use call    ImGui.OpenPopup  @ dropdown:249 drawPicker:619
+  @use call    ImGui.PopID  @ drawPicker:747
   @use call    ImGui.PopItemFlag  @ numberStepper:229
-  @use call    ImGui.PopStyleColor  @ popChromeStyles:108 popChromeWindow:125 dropdown:265 headingLabel:278 drawPicker:598 rowSelectable:826
-  @use call    ImGui.PopStyleVar  @ popChromeStyles:109 popChromeWindow:126 compactControl:166 numberStepper:206,215 dropdown:248,266 makeToolbar:355 drawPicker:599
-  @use call    ImGui.PushID  @ drawPicker:711
+  @use call    ImGui.PopStyleColor  @ popChromeStyles:108 popChromeWindow:125 dropdown:265 headingLabel:278 drawPicker:605 rowSelectable:856
+  @use call    ImGui.PopStyleVar  @ popChromeStyles:109 popChromeWindow:126 compactControl:166 numberStepper:206,215 dropdown:248,266 makeToolbar:355 drawPicker:606,638,755
+  @use call    ImGui.PushID  @ drawPicker:736
   @use call    ImGui.PushItemFlag  @ numberStepper:209
-  @use call    ImGui.PushStyleColor  @ pushChromeStyles:78,79,82,83,84,87,88,89,90,91,92,93,96,99,102,103,104 pushChromeWindow:116,117,118,119,120,121 dropdown:257 headingLabel:275 drawPicker:594 rowSelectable:823,824
-  @use call    ImGui.PushStyleVar  @ pushChromeStyles:72,73,77 pushChromeWindow:115 compactControl:163 numberStepper:201,212 dropdown:246,256 makeToolbar:343 drawPicker:593
+  @use call    ImGui.PushStyleColor  @ pushChromeStyles:78,79,82,83,84,87,88,89,90,91,92,93,96,99,102,103,104 pushChromeWindow:116,117,118,119,120,121 dropdown:257 headingLabel:275 drawPicker:601 rowSelectable:853,854
+  @use call    ImGui.PushStyleVar  @ pushChromeStyles:72,73,77 pushChromeWindow:115 compactControl:163 numberStepper:201,212 dropdown:246,256 makeToolbar:343 drawPicker:600,633,644
   @use call    ImGui.RadioButton  @ radio:175
-  @use call    ImGui.SameLine  @ numberStepper:213 disclosureHeading:316 drawSegment:329 makeToolbar:347,397,399 rowButton:529 drawPicker:577 treeRow:852
-  @use call    ImGui.Selectable  @ dropdown:261 drawPicker:717 rowSelectable:825
-  @use call    ImGui.Separator  @ drawPicker:640,707
+  @use call    ImGui.SameLine  @ numberStepper:213 disclosureHeading:316 drawSegment:329 makeToolbar:347,397,399 rowButton:529 drawPicker:584 treeRow:882
+  @use call    ImGui.Selectable  @ dropdown:261 drawPicker:742 rowSelectable:855
+  @use call    ImGui.Separator  @ drawPicker:662,732
   @use call    ImGui.SetCursorPos  @ row:156
   @use call    ImGui.SetCursorPosX  @ disclosureHeading:317
-  @use call    ImGui.SetCursorPosY  @ compactControl:164
-  @use call    ImGui.SetCursorScreenPos  @ makeToolbar:356 paletteTabsHeader:777,781 palettePane:793
-  @use call    ImGui.SetKeyboardFocusHere  @ drawPicker:625
+  @use call    ImGui.SetCursorPosY  @ compactControl:164 drawPicker:661,726,751
+  @use call    ImGui.SetCursorScreenPos  @ makeToolbar:356 paletteTabsHeader:807,811 palettePane:823
+  @use call    ImGui.SetKeyboardFocusHere  @ drawPicker:646
   @use call    ImGui.SetMouseCursor  @ disclosureHeading:320
-  @use call    ImGui.SetNextItemWidth  @ numberStepper:202 drawPicker:626
-  @use call    ImGui.SetNextWindowPos  @ dropdown:252 drawPicker:617,618
+  @use call    ImGui.SetNextItemWidth  @ numberStepper:202 drawPicker:647
+  @use call    ImGui.SetNextWindowPos  @ dropdown:252 drawPicker:624,625
   @use call    ImGui.SetNextWindowSize  @ dropdown:253
-  @use call    ImGui.Text  @ headingLabel:277 drawPicker:576
-  @use call    ImGui.TextDisabled  @ drawPicker:708 treeHeading:874
-  @use call    ImGui.Unindent  @ treeRow:861 treeHeading:875
+  @use call    ImGui.SetNextWindowSizeConstraints  @ drawPicker:628
+  @use call    ImGui.Text  @ headingLabel:277 drawPicker:583
+  @use call    ImGui.TextDisabled  @ drawPicker:733 treeHeading:904
+  @use call    ImGui.Unindent  @ treeRow:891 treeHeading:905
   @use call    cm:get  @ resolve:31 setCollapsed:302 makeToolbar:383 libPicker:456
   @use call    cm:getAt  @ libPicker:455
   @use call    cm:isDeclared  @ scopedKey:51
@@ -223,7 +226,7 @@
   @use call    lib.modified  @ libPicker:469 tierPicker:503
   @use call    lib.names  @ tierPicker:500
   @use call    painter.new  @ screenPainter:69
-  @use call    util.add  @ resolve:27,30 libPicker:462,466,470,477,484 tierPicker:504,507 inferGroups:560,562 drawPicker:651,656,669
+  @use call    util.add  @ resolve:27,30 libPicker:462,466,470,477,484 tierPicker:504,507 inferGroups:560,562 drawPicker:673,678,691
   @use require imgui  @ <load>:11
   @use require painter  @ <load>:12
   @use require util  @ <load>:13
@@ -232,58 +235,58 @@
 # Calls (intra-file)
   @call chrome.colour  @ pushChromeStyles:78,79,82,83,84,87,88,89,90,91,92,93
   @call chrome.colour  @ pushChromeStyles:96,99,102,103,104 pushChromeWindow:116,117,118,119,120,121 verticalSeparator:136
-  @call chrome.colour  @ dropdown:257 headingLabel:273 treeRow:849
+  @call chrome.colour  @ dropdown:257 headingLabel:273 treeRow:879
   @call chrome.headingLabel  @ disclosureHeading:315,318
-  @call chrome.paletteHeader  @ palettePane:799
-  @call chrome.popChromeStyles  @ popChromeWindow:127 palettePane:801
-  @call chrome.pushChromeStyles  @ pushChromeWindow:114 palettePane:797
-  @call chrome.rowSelectable  @ treeRow:857
-  @call chrome.screenPainter  @ rowButton:539 paletteHeader:742 paletteTabsHeader:762 palettePane:789
+  @call chrome.paletteHeader  @ palettePane:829
+  @call chrome.popChromeStyles  @ popChromeWindow:127 palettePane:831
+  @call chrome.pushChromeStyles  @ pushChromeWindow:114 palettePane:827
+  @call chrome.rowSelectable  @ treeRow:887
+  @call chrome.screenPainter  @ rowButton:539 paletteHeader:772 paletteTabsHeader:792 palettePane:819
   @call chrome.verticalSeparator  @ makeToolbar:398
   @call compactControl  @ checkbox:171 radio:175
   @call disclosureHeading  @ drawSegment:327
   @call drawSegment  @ makeToolbar:348,404
-  @call fitLabel  @ treeRow:856
-  @call inferGroups  @ drawPicker:646
-  @call paletteTabsHeader  @ palettePane:798
+  @call fitLabel  @ treeRow:886
+  @call inferGroups  @ drawPicker:668
+  @call paletteTabsHeader  @ palettePane:828
   @call resolve  @ colour:58
-  @call rowButton  @ drawPicker:718
+  @call rowButton  @ drawPicker:743
   @call rowButtonBox  @ rowButton:526
   @call scopedKey  @ colour:56
   @call setCollapsed  @ drawSegment:327 makeToolbar:372
 
 # Unresolved receivers
-  @drop d.onCancel  @ drawPicker:696
-  @drop d.onCreate  @ drawPicker:692
-  @drop d.onDelete  @ drawPicker:719
-  @drop d.onPick  @ drawPicker:692
-  @drop filter:lower  @ drawPicker:644
-  @drop label:lower  @ drawPicker:650,652
+  @drop d.onCancel  @ drawPicker:718
+  @drop d.onCreate  @ drawPicker:714
+  @drop d.onDelete  @ drawPicker:744
+  @drop d.onPick  @ drawPicker:714
+  @drop filter:lower  @ drawPicker:666
+  @drop label:lower  @ drawPicker:672,674
   @drop name:match  @ scopedKey:49
   @drop opts.onStep  @ numberStepper:223
   @drop p.line  @ rowButton:540,541
-  @drop p.measure  @ paletteHeader:752 paletteTabsHeader:773
-  @drop p.segment  @ paletteHeader:754 paletteTabsHeader:776,780 palettePane:791
-  @drop p.text  @ rowButton:545 paletteHeader:753 paletteTabsHeader:775
+  @drop p.measure  @ paletteHeader:782 paletteTabsHeader:803
+  @drop p.segment  @ paletteHeader:784 paletteTabsHeader:806,810 palettePane:821
+  @drop p.text  @ rowButton:545 paletteHeader:783 paletteTabsHeader:805
   @drop seg.render  @ drawSegment:330,333
   @drop seg.visible  @ makeToolbar:346,361,392
-  @drop spec.draw  @ palettePane:800
-  @drop text:byte  @ fitLabel:815
-  @drop text:sub  @ fitLabel:811,816
+  @drop spec.draw  @ palettePane:830
+  @drop text:byte  @ fitLabel:845
+  @drop text:sub  @ fitLabel:841,846
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_None  @ palettePane:795
+  @field r ChildFlags_None  @ palettePane:825
   @field r Col_Border  @ pushChromeStyles:93 dropdown:257
-  @field r Col_Button  @ pushChromeStyles:79 drawPicker:594
+  @field r Col_Button  @ pushChromeStyles:79 drawPicker:601
   @field r Col_ButtonActive  @ pushChromeStyles:83
   @field r Col_ButtonHovered  @ pushChromeStyles:82
   @field r Col_CheckMark  @ pushChromeStyles:89
   @field r Col_FrameBg  @ pushChromeStyles:84
   @field r Col_FrameBgActive  @ pushChromeStyles:88
   @field r Col_FrameBgHovered  @ pushChromeStyles:87
-  @field r Col_Header  @ pushChromeStyles:102 rowSelectable:822
-  @field r Col_HeaderActive  @ pushChromeStyles:104 rowSelectable:824
-  @field r Col_HeaderHovered  @ pushChromeStyles:103 rowSelectable:823
+  @field r Col_Header  @ pushChromeStyles:102 rowSelectable:852
+  @field r Col_HeaderActive  @ pushChromeStyles:104 rowSelectable:854
+  @field r Col_HeaderHovered  @ pushChromeStyles:103 rowSelectable:853
   @field r Col_InputTextCursor  @ pushChromeStyles:96
   @field r Col_PopupBg  @ pushChromeStyles:92 pushChromeWindow:117
   @field r Col_Separator  @ pushChromeWindow:121
@@ -295,104 +298,105 @@
   @field r Col_TitleBgActive  @ pushChromeWindow:119
   @field r Col_TitleBgCollapsed  @ pushChromeWindow:120
   @field r Col_WindowBg  @ pushChromeWindow:116
-  @field r Cond_Appearing  @ dropdown:252 drawPicker:617,618
-  @field r InputTextFlags_CallbackAlways  @ selectTo:429 drawPicker:636
+  @field r Cond_Appearing  @ dropdown:252 drawPicker:624,625
+  @field r InputTextFlags_CallbackAlways  @ selectTo:429 drawPicker:657
   @field r ItemFlags_ButtonRepeat  @ numberStepper:209
-  @field r Key_DownArrow  @ drawPicker:681
-  @field r Key_Enter  @ drawPicker:638
-  @field r Key_Escape  @ drawPicker:695
-  @field r Key_KeypadEnter  @ drawPicker:639
-  @field r Key_LeftArrow  @ drawPicker:683
-  @field r Key_RightArrow  @ drawPicker:681
-  @field r Key_UpArrow  @ drawPicker:683
+  @field r Key_DownArrow  @ drawPicker:703
+  @field r Key_Enter  @ drawPicker:659
+  @field r Key_Escape  @ drawPicker:717
+  @field r Key_KeypadEnter  @ drawPicker:660
+  @field r Key_LeftArrow  @ drawPicker:705
+  @field r Key_RightArrow  @ drawPicker:703
+  @field r Key_UpArrow  @ drawPicker:705
   @field r MouseCursor_Hand  @ disclosureHeading:320
-  @field r SelectableFlags_AllowDoubleClick  @ treeRow:855
-  @field r SelectableFlags_AllowOverlap  @ drawPicker:716
+  @field r SelectableFlags_AllowDoubleClick  @ treeRow:885
+  @field r SelectableFlags_AllowOverlap  @ drawPicker:741
   @field r StyleVar_Alpha  @ makeToolbar:343
-  @field r StyleVar_ButtonTextAlign  @ dropdown:246 drawPicker:593
+  @field r StyleVar_ButtonTextAlign  @ dropdown:246 drawPicker:600
   @field r StyleVar_FrameBorderSize  @ pushChromeStyles:72
-  @field r StyleVar_FramePadding  @ pushChromeStyles:76,77 compactControl:163 numberStepper:187,201,212 dropdown:242 drawPicker:588
+  @field r StyleVar_FramePadding  @ pushChromeStyles:76,77 compactControl:163 numberStepper:187,201,212 dropdown:242 drawPicker:595
   @field r StyleVar_FrameRounding  @ pushChromeStyles:73
   @field r StyleVar_ItemInnerSpacing  @ numberStepper:186
-  @field r StyleVar_ItemSpacing  @ row:152
+  @field r StyleVar_ItemSpacing  @ row:152 drawPicker:631,644
   @field r StyleVar_PopupBorderSize  @ dropdown:256
-  @field r StyleVar_ScrollbarSize  @ paletteHeader:748 paletteTabsHeader:766
+  @field r StyleVar_ScrollbarSize  @ paletteHeader:778 paletteTabsHeader:796
   @field r StyleVar_WindowBorderSize  @ pushChromeWindow:115
-  @field r WindowFlags_NoNav  @ dropdown:259 drawPicker:622 palettePane:795
-  @field r activeTab  @ palettePane:798
+  @field r StyleVar_WindowPadding  @ drawPicker:632,633
+  @field r WindowFlags_NoNav  @ dropdown:259 drawPicker:637 palettePane:825
+  @field r activeTab  @ palettePane:828
   @field r align  @ numberStepper:197
-  @field r allowDouble  @ treeRow:855,858
+  @field r allowDouble  @ treeRow:885,888
   @field w arrange  @ 47
-  @field r buttonLabel  @ drawPicker:582
+  @field r buttonLabel  @ drawPicker:589
   @field w checkbox  @ checkbox:170
   @field w chrome  @ 47
   @field r cm  @ 15
   @field r colour  @ 65
   @field w colour  @ colour:55 65
-  @field r create  @ drawPicker:692
-  @field w create  @ drawPicker:661
+  @field r create  @ drawPicker:714
+  @field w create  @ drawPicker:683
   @field r ctx  @ 15
-  @field r current  @ libPicker:453 drawPicker:665
+  @field r current  @ libPicker:453 drawPicker:687
   @field w current  @ libPicker:462,471,485
-  @field r depth  @ treeRow:841 treeHeading:872
+  @field r depth  @ treeRow:871 treeHeading:902
   @field r digits  @ numberStepper:183
   @field w disabledIf  @ disabledIf:142
-  @field w doubleClicked  @ treeRow:865
-  @field w drawPicker  @ drawPicker:568
+  @field w doubleClicked  @ treeRow:895
+  @field w drawPicker  @ drawPicker:575
   @field w dropdown  @ dropdown:236
   @field r excludeOthers  @ libPicker:454
-  @field r flags  @ treeRow:854
-  @field r flat  @ drawPicker:594,598
+  @field r flags  @ treeRow:884
+  @field r flat  @ drawPicker:601,605
   @field r format  @ numberStepper:184
   @field w global  @ 46
-  @field w gridWidth  @ gridWidth:737
-  @field r group  @ inferGroups:559 drawPicker:649
+  @field w gridWidth  @ gridWidth:767
+  @field r group  @ inferGroups:559 drawPicker:671
   @field w group  @ libPicker:462,470,484 tierPicker:504,507
   @field r groupLabel  @ inferGroups:560
   @field w groupLabel  @ libPicker:470,484
-  @field r groups  @ drawPicker:646,669
-  @field r gutter  @ treeHeading:872
-  @field r h  @ palettePane:791,794
+  @field r groups  @ drawPicker:668,691
+  @field r gutter  @ treeHeading:902
+  @field r h  @ palettePane:821,824
   @field w h  @ makeToolbar:408
-  @field r hasChildren  @ treeRow:848,863
-  @field r heading  @ drawSegment:326,327 drawPicker:574,576
+  @field r hasChildren  @ treeRow:878,893
+  @field r heading  @ drawSegment:326,327 drawPicker:581,583
   @field w headingLabel  @ headingLabel:272
-  @field r id  @ drawSegment:327 makeToolbar:348,351,361,368,371,372,393,404,407,408 treeRow:847
-  @field r id  @ treeRow:857
-  @field r indent  @ treeRow:841
-  @field r index  @ drawPicker:717,718
-  @field w index  @ drawPicker:656
-  @field r item  @ drawPicker:692,713,718,719
-  @field w item  @ drawPicker:664
-  @field r items  @ drawPicker:646,648
-  @field r key  @ libPicker:453 tierPicker:499 drawPicker:647,649,661,692,711,713,718,719 paletteTabsHeader:772,778
-  @field r key  @ paletteTabsHeader:778
-  @field w key  @ libPicker:462,470,484 492,493 tierPicker:504,507 inferGroups:560,562 drawPicker:647
-  @field r kind  @ drawPicker:569,582,605,610,627,635,637,675,676,678,688,718
-  @field r label  @ drawPicker:647,650,652,664,707,708,717 paletteTabsHeader:773,775 palettePane:799 treeRow:856
-  @field w label  @ libPicker:462,470,484 492,493 tierPicker:504,507 inferGroups:560 drawPicker:647,661,664
+  @field r id  @ drawSegment:327 makeToolbar:348,351,361,368,371,372,393,404,407,408 treeRow:877
+  @field r id  @ treeRow:887
+  @field r indent  @ treeRow:871
+  @field r index  @ drawPicker:742,743
+  @field w index  @ drawPicker:678
+  @field r item  @ drawPicker:714,738,743,744
+  @field w item  @ drawPicker:686
+  @field r items  @ drawPicker:668,670
+  @field r key  @ libPicker:453 tierPicker:499 drawPicker:669,671,683,714,736,738,743,744 paletteTabsHeader:802,808
+  @field r key  @ paletteTabsHeader:808
+  @field w key  @ libPicker:462,470,484 492,493 tierPicker:504,507 inferGroups:560,562 drawPicker:669
+  @field r kind  @ drawPicker:576,589,612,617,648,656,658,697,698,700,710,743
+  @field r label  @ drawPicker:669,672,674,686,732,733,742 paletteTabsHeader:803,805 palettePane:829 treeRow:886
+  @field w label  @ libPicker:462,470,484 492,493 tierPicker:504,507 inferGroups:560 drawPicker:669,683,686
   @field r lib  @ 15
   @field w libPicker  @ libPicker:452
   @field r library  @ tierPicker:506
   @field w makeToolbar  @ makeToolbar:338
   @field r max  @ numberStepper:191
-  @field r maxWidth  @ drawPicker:583
+  @field r maxWidth  @ drawPicker:590
   @field w mergeTiers  @ libPicker:456
   @field r min  @ numberStepper:190
-  @field r minWidth  @ drawPicker:583
+  @field r minWidth  @ drawPicker:590
   @field w numberStepper  @ numberStepper:181
   @field r off  @ libPicker:461
-  @field r onCancel  @ drawPicker:696
-  @field r onCreate  @ drawPicker:660
-  @field r onDelete  @ drawPicker:713
+  @field r onCancel  @ drawPicker:718
+  @field r onCreate  @ drawPicker:682
+  @field r onDelete  @ drawPicker:738
   @field r onStep  @ numberStepper:223
-  @field r onTab  @ palettePane:798
-  @field r open  @ treeRow:850
-  @field w paletteHeader  @ paletteHeader:741
-  @field w palettePane  @ palettePane:787
+  @field r onTab  @ palettePane:828
+  @field r open  @ treeRow:880
+  @field w paletteHeader  @ paletteHeader:771
+  @field w palettePane  @ palettePane:817
   @field w pickerIsActive  @ pickerIsActive:444
   @field r pickers  @ makeToolbar:368,369
-  @field r placement  @ drawPicker:617
+  @field r placement  @ drawPicker:624
   @field w popChromeStyles  @ popChromeStyles:107
   @field w popChromeWindow  @ popChromeWindow:124
   @field r project  @ tierPicker:502
@@ -400,37 +404,37 @@
   @field w pushChromeWindow  @ pushChromeWindow:113
   @field w radio  @ radio:174
   @field w requestPickerOpen  @ requestPickerOpen:443
-  @field r reserve  @ treeRow:856
+  @field r reserve  @ treeRow:886
   @field w resetPickerActive  @ resetPickerActive:445
   @field w resetToolbar  @ resetToolbar:295
   @field w row  @ row:150
-  @field w rowSelectable  @ rowSelectable:821
-  @field r rows  @ drawPicker:656,669,712
-  @field w rows  @ drawPicker:647
+  @field w rowSelectable  @ rowSelectable:851
+  @field r rows  @ drawPicker:678,691,737
+  @field w rows  @ drawPicker:669
   @field w sampler  @ 46
   @field w screenPainter  @ screenPainter:69
   @field w selectTo  @ selectTo:423
-  @field r selected  @ treeRow:857
-  @field w selected  @ treeRow:864
+  @field r selected  @ treeRow:887
+  @field w selected  @ treeRow:894
   @field r step  @ numberStepper:223
-  @field r tabs  @ palettePane:798
-  @field r text  @ treeHeading:874
-  @field r tier  @ drawPicker:692,719
+  @field r tabs  @ palettePane:828
+  @field r text  @ treeHeading:904
+  @field r tier  @ drawPicker:714,744
   @field w tier  @ libPicker:471,485 tierPicker:504,507
   @field w tierGroups  @ 492
   @field w tierPicker  @ tierPicker:498
-  @field w toggled  @ treeRow:863
+  @field w toggled  @ treeRow:893
   @field w toolbarLineCount  @ toolbarLineCount:298
   @field w toolbarRects  @ toolbarRects:297
   @field w tracker  @ 46
-  @field w treeHeading  @ treeHeading:871
-  @field w treeRow  @ treeRow:840
+  @field w treeHeading  @ treeHeading:901
+  @field w treeRow  @ treeRow:870
   @field w verticalSeparator  @ verticalSeparator:132
   @field r visible  @ makeToolbar:346,361,392
   @field w w  @ makeToolbar:408
-  @field r width  @ numberStepper:195 drawPicker:584
+  @field r width  @ numberStepper:195 drawPicker:591
   @field w wiring  @ 47
-  @field r x  @ palettePane:790,793
+  @field r x  @ palettePane:820,823
   @field w x  @ makeToolbar:408
-  @field r y  @ palettePane:791,793
+  @field r y  @ palettePane:821,823
   @field w y  @ makeToolbar:408

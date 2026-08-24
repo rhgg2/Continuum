@@ -20,7 +20,6 @@
 - cv-2
 - roll, strum, echo
 - scales
-- Live/MIDI-in capture — promoted to `design/midi-capture.md`.
 - Quarantine UX (Open questions) — a darkened component still needs to
    signal why it went dark (feedback loop / bus-aware FX) and its
    recovery path in the wiring view.
@@ -39,3 +38,4 @@ destination and mints nothing over it — and it belongs to
   nothing exercises it — the specs cover pitch, vel and delay only. It
   needs tracker mode to have a part at all, so a case there would be
   worth having before anyone relies on it.
+- add slot renumbering to "tidy" button in arrange view
