@@ -94,6 +94,41 @@ return {
     end,
   },
 
+  -- The mini-map's window onto the arrangement: the tracker asks the arrange
+  -- facade for the instances over a span of columns and QN.
+  {
+    name = 'the arrange facade enumerates the takes over a span of columns and QN',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setTrackName('tr2', 'Track 2')
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 8, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:addItem('tr2', { take = 'tr2/t1', isMidi = true,
+                                pos = 1, len = 2, srcLen = 2, poolGuid = '{p3}' })
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      local arrange = captured.facades.arrange
+
+      local takes = arrange.visibleTakes(0, 1, 0, 4)
+      table.sort(takes, function(a, b)
+        if a.trackIdx ~= b.trackIdx then return a.trackIdx < b.trackIdx end
+        return a.startQN < b.startQN
+      end)
+      t.eq(#takes, 2, 'both instances meeting the window; the one at QN 8 is out')
+      t.eq(takes[1].trackIdx, 0, 'the first from the left-hand column')
+      t.eq(takes[1].startQN,  0, 'at its start QN')
+      t.eq(takes[2].trackIdx, 1, 'the second from the next column')
+      t.eq(takes[2].lengthQN, 2, 'carrying the length the grid paints')
+      t.truthy(takes[2].slotIdx, 'and the slot the map takes its colour from')
+
+      t.eq(#arrange.visibleTakes(0, 0, 0, 4), 1, 'the column span bounds the answer')
+    end,
+  },
+
   {
     name = 'focusState before any render returns both bits false',
     run = function(harness)

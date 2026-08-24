@@ -42,19 +42,13 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-24 arrange: publish the take enumerator on the facade (§ What the tracker may see)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- arrange: publish the take enumerator — `visibleTakes(fromCol, toCol,
-  qnLo, qnHi)` joins the facade table (`arrangePage.lua:41`), proxying
-  `av:visibleTakes` (`arrangeView.lua:652`) and returning the take shapes
-  the grid paints from. Spec drives the published facade over a span of
-  columns and QN.
 - tracker: a third palette tab — `PALETTE_TABS` (`trackerRender.lua:540`)
   gains the map, with a stub body. The derivation is untouched, so the
   map is reachable only by a tab click, and it never holds focus.

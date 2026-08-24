@@ -42,6 +42,9 @@ facade.publish('arrange', {
   currentTrackIdx = function()        return av:cursorCol()       end,
   tracks          = function()        return av:projectTracks()   end,
   midiSlots       = function(trackIdx) return av:midiSlots(trackIdx) end,
+  visibleTakes    = function(fromCol, toCol, qnLo, qnHi)
+    return av:visibleTakes(fromCol, toCol, qnLo, qnHi)
+  end,
   takeForSlot     = function(trackIdx, slotIdx) return av:takeForSlot(trackIdx, slotIdx) end,
   trackIdxForGuid = function(guid)     return av:trackIdxForGuid(guid) end,
   trackHandle     = function(trackIdx) return av:trackHandle(trackIdx) end,
