@@ -9,7 +9,7 @@ instance, and tidy re-groups the track's slot names into families.**
 ## Prune
 
 Landed — see docs/arrangeManager.md § A slot outlives its takes and
-docs/arrangePage.md § The prune button.
+docs/arrangePage.md § The palette buttons.
 
 ## Bases
 
@@ -39,6 +39,10 @@ docs/arrangePage.md § The prune button.
 1. An **ambiguous base** is one two or more slots hold plain. Every
    slot carrying that base seeds pinned.
 
+1. A row's combo lists the bases and a `(keep)` entry. Picking
+   `(keep)` drops the slot from the assignment, so it holds the name it
+   carries.
+
 ## Committing an assignment
 
 Landed — see docs/arrangeManager.md § Tidy. The editor's commit wraps
@@ -56,6 +60,10 @@ it in one undo block.
 
 1. The assignment is a plain map from slot index to base. A slot the
    map omits is pinned.
+
+1. `av:tidyRows(trackIdx, assignment)` joins the track's MIDI slots to
+   their keys, their assigned bases and their previewed names. The
+   editor draws those rows and holds no join of its own.
 
 ## Open
 

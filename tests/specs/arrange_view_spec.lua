@@ -27,7 +27,7 @@ local function mkArrange(harness, items)
   for _, item in ipairs(items) do
     h.reaper:addItem(item.track, { take = item.track .. '/' .. item.name,
       isMidi = true, pos = item.pos, len = item.len or 1, srcLen = item.srcLen,
-      poolGuid = '{' .. item.track .. item.name .. '}' })
+      takeName = item.takeName, poolGuid = '{' .. item.track .. item.name .. '}' })
   end
   h.reaper:setProjectTracks(order)
   local em = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') })
@@ -283,6 +283,49 @@ return {
       am:deleteTake(takeAt(av:tracksTakes(0), 4))
       av:pruneSlots(0)
       t.eq(av:paletteSlot(), liveSlot, 'the live slot keeps the focus')
+    end,
+  },
+
+  {
+    name = 'tidyRows joins each MIDI slot to its key, its base and the name a tidy writes',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, takeName = 'Bassline' },
+        { track = 'tr1', name = 'b', pos = 4, takeName = 'Bassline (var 3)' },
+        { track = 'tr1', name = 'c', pos = 8, takeName = 'Drums' },
+      })
+      local bases, assignment = av:seedTidy(0)
+      t.deepEq(bases, { 'Bassline', 'Drums' }, 'the seed lists the roots in use')
+      assignment[takeAt(av:tracksTakes(0), 8).slotIdx] = nil    -- pin the Drums slot
+
+      local rows, byName = av:tidyRows(0, assignment), {}
+      for _, row in ipairs(rows) do byName[row.name] = row end
+      t.eq(#rows, 3, 'one row per MIDI slot')
+      t.eq(rows[1].key, av:keyForSlot(rows[1].idx), 'the row carries the slot hotkey')
+      t.eq(byName['Bassline (var 3)'].base, 'Bassline', 'a variant seeds to the base its root names')
+      t.eq(byName['Bassline (var 3)'].preview, 'Bassline (var 1)', 'and previews the name it would take')
+      t.eq(byName['Drums'].base, nil, 'the map omits a pinned slot')
+      t.eq(byName['Drums'].preview, 'Drums', 'so it previews the name it holds')
+    end,
+  },
+
+  {
+    name = 'a tidy renames the track\'s slots, and the palette focus stands',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 0, takeName = 'Bassline' },
+        { track = 'tr1', name = 'b', pos = 4, takeName = 'Sausage' },
+      })
+      local first  = takeAt(av:tracksTakes(0), 0).slotIdx
+      local second = takeAt(av:tracksTakes(0), 4).slotIdx
+      av:setPaletteSlot(second)
+      av:tidySlots(0, { [first] = 'Lead', [second] = 'Lead' })
+
+      local names = {}
+      for _, slot in ipairs(av:trackSlots(0)) do names[slot.idx] = slot.name end
+      t.eq(names[first],  'Lead',         'the first member holds the base plain')
+      t.eq(names[second], 'Lead (var 1)', 'the next steps to a variant')
+      t.eq(av:paletteSlot(), second, 'a rename leaves every slot standing, so the focus holds')
     end,
   },
 

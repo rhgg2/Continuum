@@ -719,16 +719,100 @@ modalHost:registerKind('createSlot', function(s, close)
   elseif cancel then close(false) end
 end)
 
--- Rename and delete are keyboard gestures on the cursor take; prune is the one
--- palette verb with no take to stand on, so it lives here.
+-- The tidy editor. The base list is fixed at this stage; a row's combo assigns its slot
+-- to a base, and '(keep)' drops it from the assignment, pinning the name it holds.
+local TIDY_KEEP = '(keep)'
+
+local function openTidyModal(trackIdx)
+  local bases, assignment = av:seedTidy(trackIdx)
+  modalHost:open{
+    kind       = 'tidyTrack',
+    title      = 'Tidy slot names',
+    size       = { 520, 420 },
+    trackIdx   = trackIdx,
+    bases      = bases,
+    assignment = assignment,
+    callback   = util.atomic('Tidy slots', function(committed)
+      av:tidySlots(trackIdx, committed)
+    end),
+  }
+end
+
+modalHost:registerKind('tidyTrack', function(s, close)
+  local appearing = ImGui.IsWindowAppearing(ctx)
+  chrome.headingLabel('Bases')
+  for _, base in ipairs(s.bases) do ImGui.BulletText(ctx, base) end
+  if #s.bases == 0 then ImGui.TextDisabled(ctx, '(none)') end
+  ImGui.Separator(ctx)
+
+  -- The rows are a snapshot, so a pick lands after the walk and shows next frame.
+  local pick
+  if ImGui.BeginChild(ctx, '##tidyRows', 0, -ImGui.GetFrameHeightWithSpacing(ctx)) then
+    if ImGui.BeginTable(ctx, '##tidyList', 4, ImGui.TableFlags_SizingStretchProp) then
+      ImGui.TableSetupColumn(ctx, 'Key', ImGui.TableColumnFlags_WidthFixed, SLOT_KEY_W)
+      ImGui.TableSetupColumn(ctx, 'Name')
+      ImGui.TableSetupColumn(ctx, 'Base')
+      ImGui.TableSetupColumn(ctx, 'Becomes')
+      ImGui.TableHeadersRow(ctx)
+
+      for _, row in ipairs(av:tidyRows(s.trackIdx, s.assignment)) do
+        ImGui.TableNextRow(ctx)
+        ImGui.TableSetColumnIndex(ctx, 0)
+        if monoFont then ImGui.PushFont(ctx, monoFont, uiSize) end
+        ImGui.Text(ctx, row.key)
+        if monoFont then ImGui.PopFont(ctx) end
+
+        ImGui.TableSetColumnIndex(ctx, 1)
+        ImGui.Text(ctx, row.name ~= '' and row.name or string.format('(slot %d)', row.idx))
+
+        ImGui.TableSetColumnIndex(ctx, 2)
+        ImGui.SetNextItemWidth(ctx, -1)
+        if ImGui.BeginCombo(ctx, '##base' .. row.idx, row.base or TIDY_KEEP) then
+          if ImGui.Selectable(ctx, TIDY_KEEP, row.base == nil) then pick = { idx = row.idx } end
+          for _, base in ipairs(s.bases) do
+            if ImGui.Selectable(ctx, base, row.base == base) then
+              pick = { idx = row.idx, base = base }
+            end
+          end
+          ImGui.EndCombo(ctx)
+        end
+
+        ImGui.TableSetColumnIndex(ctx, 3)
+        ImGui.Text(ctx, row.preview)
+      end
+      ImGui.EndTable(ctx)
+    end
+  end
+  ImGui.EndChild(ctx)
+  if pick then s.assignment[pick.idx] = pick.base end
+
+  local ok = ImGui.Button(ctx, 'OK')
+              or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                                  or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
+  ImGui.SameLine(ctx)
+  local cancel = ImGui.Button(ctx, 'Cancel')
+              or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
+  if ok then close(true, s.assignment)
+  elseif cancel then close(false) end
+end)
+
+-- Rename and delete are keyboard gestures on the cursor take; prune and tidy are the
+-- palette verbs with no take to stand on, so they live here.
 local function renderPaletteActions(focusedTrack, slots)
-  local parked = 0
+  local parked, midi = 0, 0
   for _, slot in ipairs(slots) do
     if slot.parked then parked = parked + 1 end
+    if slot.kind == 'midi' then midi = midi + 1 end
   end
   chrome.disabledIf(parked == 0, function()
     if ImGui.Button(ctx, 'prune##slots') then
       openPruneModal(focusedTrack.idx, parked)
+    end
+  end)
+  ImGui.SameLine(ctx)
+  chrome.disabledIf(midi == 0, function()
+    if ImGui.Button(ctx, 'tidy##slots') then
+      openTidyModal(focusedTrack.idx)
     end
   end)
 end

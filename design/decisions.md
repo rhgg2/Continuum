@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The tidy editor's rows come from av:tidyRows, which joins the track's MIDI slots
+  to their keys, their assigned bases and the names am:tidyNames previews. The modal draws those
+  rows and holds the assignment alone, so only the ImGui stands outside the tests. A row's combo
+  carries a (keep) entry beside the bases; picking it drops the slot from the assignment, which pins
+  the name the slot holds.
+
 - **2026-08-24** — A tidy's naming splits in two: am:tidyNames derives the name each MIDI slot ends
   up with, keyed by slot index, and am:tidySlots writes the ones that differ. The map is total over
   the track's MIDI slots, a pinned slot mapping to the name it already holds, so an editor row shows

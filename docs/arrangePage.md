@@ -146,15 +146,32 @@ per-session module-local, cleared with `setPaletteSlot(nil)` — and
 persistence model as the grid cursor: not a project property, just a
 UI attention pointer.
 
-### The prune button
+### The palette buttons
 
-The palette carries one verb. `prune` forever-deletes every slot on
+The palette carries two verbs. `prune` forever-deletes every slot on
 the track with no instance on the grid, and is disabled while the
 track has none; the confirm modal names the count, read off the same
-slot list the button is drawn from. Rename and delete are keyboard
-gestures on the cursor take's slot, so the palette needs no per-slot
-buttons, and there are no "new slot" buttons either — minting is a
-keyboard gesture (see below).
+slot list the button is drawn from. `tidy` opens the editor below, and
+is disabled while the track holds no MIDI slot. Rename and delete are
+keyboard gestures on the cursor take's slot, so the palette needs no
+per-slot buttons, and there are no "new slot" buttons either — minting
+is a keyboard gesture (see below).
+
+### The tidy editor
+
+`tidy` opens a modal seeded from `av:seedTidy`: the base list above,
+and below it one row per MIDI slot, holding the slot's key, the name it
+carries, the base it is assigned to, and the name a commit would write.
+The rows come from `av:tidyRows`, which joins the slot list to the
+preview `am:tidyNames` derives, so only the drawing sits outside the
+tests. See docs/arrangeManager.md § Tidy for the naming itself.
+
+A row's combo lists the bases and a `(keep)` entry; picking `(keep)`
+drops the slot from the assignment, which pins the name it has. The
+modal holds the assignment alone and re-derives its rows each frame, so
+a pick shows in the preview column on the frame after it lands. OK
+commits through `av:tidySlots` in one undo block, Escape drops the
+edit, and the base list is fixed at this stage.
 
 ### Modal infrastructure
 

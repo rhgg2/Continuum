@@ -683,6 +683,22 @@ function av:tempersInUse()        return am:tempersInUse() end
 
 function av:midiSlots(trackIdx) return midiSlots(trackIdx) end
 
+function av:seedTidy(trackIdx) return am:seedTidy(trackIdx) end
+
+-- The tidy editor's rows, in slot order. See docs/arrangePage.md § The tidy editor.
+--shape: tidyRow = { idx, key, name, base?, preview } -- no base means pinned, and preview is then name
+function av:tidyRows(trackIdx, assignment)
+  local names, rows = am:tidyNames(trackIdx, assignment), {}
+  for _, slot in ipairs(midiSlots(trackIdx)) do
+    util.add(rows, { idx     = slot.idx,
+                     key     = am:keyForSlot(slot.idx),
+                     name    = slot.name,
+                     base    = assignment[slot.idx],
+                     preview = names[slot.idx] })
+  end
+  return rows
+end
+
 ----- Transport — gutter mouse drives the REAPER edit cursor / loop range
 
 function av:setEditCursorQN(qn)    am:setEditCursorQN(qn) end
@@ -836,6 +852,9 @@ function av:deleteSlot(trackIdx, slotIdx)
   am:deleteSlot(trackIdx, slotIdx)
   self:setPaletteSlot(nil)
 end
+
+--contract: renames in place, so every slot stands and the palette focus holds
+function av:tidySlots(trackIdx, assignment) am:tidySlots(trackIdx, assignment) end
 
 --contract: forever-deletes the track's parked slots; drops the palette focus if its slot went too
 function av:pruneSlots(trackIdx)

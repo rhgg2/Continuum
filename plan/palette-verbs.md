@@ -20,22 +20,16 @@ render layer still holds the assignment alone.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 arrange: a tidy button on the palette, and its seeded editor (§ The editor)
 - 2026-08-24 am: preview the names a tidy will write, keyed by slot index (§ Where the naming lives)
 - 2026-08-24 am: seed a tidy from the track's slot names (§ The editor)
 - 2026-08-24 am: tidy a track's slot names into families (§ Committing an assignment)
-- 2026-08-24 arrange: a prune button on the palette, and no per-slot verbs (§ Prune)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. A `tidy` button on the palette beside `prune`, opening a `tidyTrack`
-   modal kind: the seeded base list above, one row per MIDI slot below
-   with its key, current name, a base combo, and the name from
-   `am:tidyNames`. Commit calls `av:tidySlots` inside one undo block. The
-   base list is fixed at this stage.
 
 1. The base list becomes editable: entries can be added, edited and
    deleted, and deleting one drops its members from the assignment, which
