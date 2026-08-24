@@ -237,7 +237,8 @@ local declarations = {
   { 'colour.chrome.toolbar.meter.loud',  'base.zone5'               },  -- mono loudness reference line
   { 'colour.chrome.toolbar.fader.track', 'base.zone6'         },  -- master fader groove
   { 'colour.chrome.toolbar.meter.border','base.zone7'         },  -- meter frame / detent tick / readout box
-  { 'colour.chrome.toolbar.popupBg',      'base.zone10'        },
+  { 'colour.chrome.toolbar.popupBg',      'base.zone9'        },
+  { 'colour.chrome.toolbar.popupBorder',  'base.zone8'         },  -- 1px rule; reads on both popup fills, zone10 here and editor.bg in a modal
   { 'colour.chrome.toolbar.textSelection', 'alt.zone8'         },  -- text-selection highlight (Col_TextSelectedBg)
   { 'colour.chrome.toolbar.selectedRow',   'alt.zone8'         },  -- Selectable/list-row highlight (Col_Header family)
   { 'colour.chrome.statusBar.bg',         'alt.zone5'          },

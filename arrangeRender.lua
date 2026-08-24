@@ -719,16 +719,19 @@ modalHost:registerKind('createSlot', function(s, close)
   elseif cancel then close(false) end
 end)
 
--- The tidy editor. A row's combo assigns its slot to a base, and '(keep)' drops it from
+-- The tidy editor. A row's dropdown assigns its slot to a base, and '(keep)' drops it from
 -- the assignment, pinning the name it holds; the base list above is edited in place.
 local TIDY_KEEP = '(keep)'
+-- The base list's fields take a fixed width; the row list caps at TIDY_MAX_ROWS,
+-- and the modal auto-fits around the two.
+local TIDY_BASE_W, TIDY_LIST_W, TIDY_MAX_ROWS = 170, 340, 14
+local TIDY_GUTTER = 8   -- half the gap between columns, which hug their text
 
 local function openTidyModal(trackIdx)
   local bases, assignment = av:seedTidy(trackIdx)
   modalHost:open{
     kind       = 'tidyTrack',
     title      = 'Tidy slot names',
-    size       = { 520, 420 },
     trackIdx   = trackIdx,
     bases      = bases,
     assignment = assignment,
@@ -744,11 +747,9 @@ end
 local function drawBaseList(s)
   local edit
   local dropW = ImGui.GetFrameHeight(ctx)
-  local gapX  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
-  local addW  = ImGui.CalcTextSize(ctx, 'Add') + ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding) * 2
 
   for i, base in ipairs(s.bases) do
-    ImGui.SetNextItemWidth(ctx, -(dropW + gapX))
+    ImGui.SetNextItemWidth(ctx, TIDY_BASE_W)
     local editing = s.editing and s.editing.index == i
     local rv, buf = ImGui.InputText(ctx, '##base' .. i, editing and s.editing.buf or base)
     if rv then s.editing = { index = i, buf = buf } end
@@ -757,13 +758,13 @@ local function drawBaseList(s)
     end
     if ImGui.IsItemDeactivated(ctx) then s.editing = nil end
     ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, 'x##dropBase' .. i, dropW, 0) then edit = { drop = base } end
+    if ImGui.Button(ctx, '\xc3\x97##dropBase' .. i, dropW, 0) then edit = { drop = base } end
   end
   if #s.bases == 0 then ImGui.TextDisabled(ctx, '(none)') end
 
-  ImGui.SetNextItemWidth(ctx, -(addW + gapX))
-  local entered, newBuf = ImGui.InputText(ctx, '##newBase', s.newBase,
-                                          ImGui.InputTextFlags_EnterReturnsTrue)
+  ImGui.SetNextItemWidth(ctx, TIDY_BASE_W)
+  local entered, newBuf = ImGui.InputTextWithHint(ctx, '##newBase', 'new base', s.newBase,
+                                                  ImGui.InputTextFlags_EnterReturnsTrue)
   s.newBase = newBuf
   ImGui.SameLine(ctx)
   if ImGui.Button(ctx, 'Add') or entered then edit = { add = s.newBase } end
@@ -772,6 +773,17 @@ local function drawBaseList(s)
   if edit.add    then av:tidyAddBase(s.bases, edit.add); s.newBase = '' end
   if edit.drop   then av:tidyDropBase(s.bases, s.assignment, edit.drop) end
   if edit.rename then av:tidyRenameBase(s.bases, s.assignment, edit.rename.from, edit.rename.to) end
+end
+
+-- Plain dimmed labels rather than TableHeadersRow, whose filled bar clashes with the flat chrome.
+local TIDY_COLS = { 'Key', 'Name', 'Base', 'Becomes' }
+
+local function drawTidyLabels()
+  ImGui.TableNextRow(ctx)
+  for _, label in ipairs(TIDY_COLS) do
+    ImGui.TableNextColumn(ctx)
+    ImGui.TextDisabled(ctx, label)
+  end
 end
 
 modalHost:registerKind('tidyTrack', function(s, close)
@@ -784,45 +796,60 @@ modalHost:registerKind('tidyTrack', function(s, close)
   ImGui.Separator(ctx)
 
   -- The rows are a snapshot, so a pick lands after the walk and shows next frame.
-  local pick
-  if ImGui.BeginChild(ctx, '##tidyRows', 0, -ImGui.GetFrameHeightWithSpacing(ctx)) then
-    if ImGui.BeginTable(ctx, '##tidyList', 4, ImGui.TableFlags_SizingStretchProp) then
-      ImGui.TableSetupColumn(ctx, 'Key', ImGui.TableColumnFlags_WidthFixed, SLOT_KEY_W)
-      ImGui.TableSetupColumn(ctx, 'Name')
-      ImGui.TableSetupColumn(ctx, 'Base')
-      ImGui.TableSetupColumn(ctx, 'Becomes')
-      ImGui.TableHeadersRow(ctx)
+  local rows  = av:tidyRows(s.trackIdx, s.assignment)
+  local listH = math.min(#rows + 1, TIDY_MAX_ROWS) * ImGui.GetFrameHeightWithSpacing(ctx) + 4
+  -- Every row offers the same items, so the dropdowns size alike and the column stays flush.
+  local items = { TIDY_KEEP }
+  for _, base in ipairs(s.bases) do util.add(items, base) end
 
-      for _, row in ipairs(av:tidyRows(s.trackIdx, s.assignment)) do
+  local pick
+  local _, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_CellPadding)
+  if ImGui.BeginChild(ctx, '##tidyRows', TIDY_LIST_W, listH) then
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, TIDY_GUTTER, padY)
+    if ImGui.BeginTable(ctx, '##tidyList', 4) then
+      -- A base is a prefix of the names either side of it, so every column hugs its
+      -- content and only the last takes up the slack.
+      ImGui.TableSetupColumn(ctx, 'Key',     ImGui.TableColumnFlags_WidthFixed, SLOT_KEY_W)
+      ImGui.TableSetupColumn(ctx, 'Name',    ImGui.TableColumnFlags_WidthFixed)
+      ImGui.TableSetupColumn(ctx, 'Base',    ImGui.TableColumnFlags_WidthFixed)
+      ImGui.TableSetupColumn(ctx, 'Becomes', ImGui.TableColumnFlags_WidthStretch)
+      drawTidyLabels()
+
+      for _, row in ipairs(rows) do
         ImGui.TableNextRow(ctx)
         ImGui.TableSetColumnIndex(ctx, 0)
+        ImGui.AlignTextToFramePadding(ctx)
         if monoFont then ImGui.PushFont(ctx, monoFont, uiSize) end
         ImGui.Text(ctx, row.key)
         if monoFont then ImGui.PopFont(ctx) end
 
         ImGui.TableSetColumnIndex(ctx, 1)
+        ImGui.AlignTextToFramePadding(ctx)
         ImGui.Text(ctx, row.name ~= '' and row.name or string.format('(slot %d)', row.idx))
 
         ImGui.TableSetColumnIndex(ctx, 2)
-        ImGui.SetNextItemWidth(ctx, -1)
-        if ImGui.BeginCombo(ctx, '##base' .. row.idx, row.base or TIDY_KEEP) then
-          if ImGui.Selectable(ctx, TIDY_KEEP, row.base == nil) then pick = { idx = row.idx } end
-          for _, base in ipairs(s.bases) do
-            if ImGui.Selectable(ctx, base, row.base == base) then
-              pick = { idx = row.idx, base = base }
-            end
-          end
-          ImGui.EndCombo(ctx)
-        end
+        local picked = chrome.dropdown('tidyBase' .. row.idx, row.base or TIDY_KEEP, items)
+        -- Item 1 is '(keep)', which drops the slot from the assignment.
+        if picked then pick = { idx = row.idx, base = picked > 1 and items[picked] or nil } end
 
         ImGui.TableSetColumnIndex(ctx, 3)
-        ImGui.Text(ctx, row.preview)
+        ImGui.AlignTextToFramePadding(ctx)
+        -- A preview matching the name it replaces is a no-op; dim it, so what a
+        -- commit actually writes is what stands out.
+        if row.preview == row.name then ImGui.TextDisabled(ctx, row.preview)
+        else ImGui.Text(ctx, row.preview) end
       end
       ImGui.EndTable(ctx)
     end
+    ImGui.PopStyleVar(ctx, 1)
   end
   ImGui.EndChild(ctx)
   if pick then s.assignment[pick.idx] = pick.base end
+
+  local padX  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  local gapX  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
+  local pairW = ImGui.CalcTextSize(ctx, 'OK') + ImGui.CalcTextSize(ctx, 'Cancel') + padX * 4 + gapX
+  ImGui.SetCursorPosX(ctx, (ImGui.GetWindowWidth(ctx) - pairW) / 2)
 
   local ok = ImGui.Button(ctx, 'OK')
               or (not appearing and not typing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
@@ -847,7 +874,7 @@ local function renderPaletteActions(focusedTrack, slots)
       openPruneModal(focusedTrack.idx, parked)
     end
   end)
-  ImGui.SameLine(ctx)
+  ImGui.SameLine(ctx, 0, 4)
   chrome.disabledIf(midi == 0, function()
     if ImGui.Button(ctx, 'tidy##slots') then
       openTidyModal(focusedTrack.idx)

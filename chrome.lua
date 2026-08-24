@@ -241,14 +241,20 @@ function chrome.dropdown(id, current, items)
   end
   local padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   local btnW = widest + padX * 2
-  if ImGui.Button(ctx, current .. DROP_ARROW .. '##' .. id, btnW) then
-    ImGui.OpenPopup(ctx, id .. '_popup')
-  end
+  -- The box is cut for the widest entry, so a centred label would drift with the
+  -- current value's length. Left-align it, as the picker's own button reads.
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ButtonTextAlign, 0, 0.5)
+  local open = ImGui.Button(ctx, current .. DROP_ARROW .. '##' .. id, btnW)
+  ImGui.PopStyleVar(ctx, 1)
+  if open then ImGui.OpenPopup(ctx, id .. '_popup') end
   local x = ImGui.GetItemRectMin(ctx)
   local _, y = ImGui.GetItemRectMax(ctx)
   ImGui.SetNextWindowPos(ctx, x, y, ImGui.Cond_Appearing)
   ImGui.SetNextWindowSize(ctx, btnW, 0)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_PopupBorderSize, 0)   -- flat menu, no outline
+  -- A hairline one zone down from the fill, so the list reads as a surface of its
+  -- own rather than bleeding into whatever it covers.
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_PopupBorderSize, 1)
+  ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('toolbar.popupBorder'))
   local picked
   if ImGui.BeginPopup(ctx, id .. '_popup', ImGui.WindowFlags_NoNav) then
     for idx, it in ipairs(items) do
@@ -256,6 +262,7 @@ function chrome.dropdown(id, current, items)
     end
     ImGui.EndPopup(ctx)
   end
+  ImGui.PopStyleColor(ctx, 1)
   ImGui.PopStyleVar(ctx, 1)
   return picked
 end

@@ -166,7 +166,7 @@ The rows come from `av:tidyRows`, which joins the slot list to the
 preview `am:tidyNames` derives, so only the drawing sits outside the
 tests. See docs/arrangeManager.md § Tidy for the naming itself.
 
-A row's combo lists the bases and a `(keep)` entry; picking `(keep)`
+A row's dropdown lists the bases and a `(keep)` entry; picking `(keep)`
 drops the slot from the assignment, which pins the name it has. The
 modal holds the bases and the assignment and re-derives its rows each
 frame, so a pick shows in the preview column on the frame after it
