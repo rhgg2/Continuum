@@ -8,7 +8,7 @@ written to be read:
 - a plan's Queued lines.
 
 Where a document disagrees with this style guide, the style guide
-always has authority; there are no exceptions.
+always has authority.
 
 Implementation briefs are excluded; they are compressed by design. For
 annotations and inline comments, see `docs/CONVENTIONS.md`.
@@ -36,8 +36,10 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
 1. There are no rhetorical flourishes: anything which changes only the
    tone should be deleted. 
    
-1. Inanimate objects or abstract concepts are never actors: they are
-   not personified or anthropomorphised. 
+1. Inanimate objects or abstract concepts are not actors: they are not
+   personified or anthropomorphised. Standard technical idioms such as
+   "the function calls", "REAPER writes" or "the API accepts" are ok,
+   but not "REAPER knows", "the function charges" or "the API asks".
 
 ## Structure
 

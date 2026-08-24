@@ -12,11 +12,11 @@
 3. **Phase 3 — The editor** (§ The editor) — the seed (bases from the
    distinct roots, ambiguous bases and unnamed slots pinned) and the modal
    kind that shows it: base list above, one row per MIDI slot below with
-   its assignment and the name it will get.  ← next
+   its assignment and the name it will get.  ← in flight
 
-Phase 3 has to settle where the seed derivation lives. `am:seedTidy` puts
-it under test; the design says only that the editor hands over the
-assignment, which the render layer can't be tested through.
+The seed and the preview names both live in am, as `am:seedTidy` and
+`am:tidyNames`, so that everything but the ImGui stands under test. The
+render layer still holds the assignment alone.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -30,4 +30,25 @@ assignment, which the render layer can't be tested through.
 
 ## Queued (current phase; one-liners)
 
-(empty — the phase's last item is in flight.)
+1. `am:seedTidy(trackIdx)` returns the base list and the seed assignment:
+   bases are the distinct `util.variantRoot`s of the track's MIDI slot
+   names, sorted; each slot is assigned to the base matching its root; an
+   unnamed slot is omitted, and so is every slot carrying an ambiguous
+   base — one two or more slots hold plain. Audio slots take no part.
+   Cases in `am_spec`.
+
+1. `tidyNames` becomes `am:tidyNames(trackIdx, assignment)`, keyed by slot
+   index and covering every MIDI slot, so the editor can show the name a
+   slot will get. `am:tidySlots` consumes it, translating to slot id and
+   dropping the names that are unchanged. A case pins the preview against
+   what the write leaves behind.
+
+1. A `tidy` button on the palette beside `prune`, opening a `tidyTrack`
+   modal kind: the seeded base list above, one row per MIDI slot below
+   with its key, current name, a base combo, and the name from
+   `am:tidyNames`. Commit calls `av:tidySlots` inside one undo block. The
+   base list is fixed at this stage.
+
+1. The base list becomes editable: entries can be added, edited and
+   deleted, and deleting one drops its members from the assignment, which
+   pins them. The rows re-preview as the list changes.
