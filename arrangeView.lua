@@ -699,6 +699,41 @@ function av:tidyRows(trackIdx, assignment)
   return rows
 end
 
+-- The base list's own edits, mutating the (bases, assignment) pair the modal holds.
+local function trimmed(name) return (name or ''):match('^%s*(.-)%s*$') end
+local function baseAt(bases, name)
+  for i, base in ipairs(bases) do if base == name then return i end end
+end
+
+--contract: appends the trimmed name; a blank one or a name already listed adds nothing
+function av:tidyAddBase(bases, name)
+  name = trimmed(name)
+  if name == '' or baseAt(bases, name) then return end
+  util.add(bases, name)
+end
+
+--contract: the base's members follow the new name, merging into it if the list holds it
+function av:tidyRenameBase(bases, assignment, from, to)
+  to = trimmed(to)
+  local at = baseAt(bases, from)
+  if not at or to == '' or to == from then return end
+  table.remove(bases, at)
+  if not baseAt(bases, to) then table.insert(bases, at, to) end
+  for idx, base in pairs(assignment) do
+    if base == from then assignment[idx] = to end
+  end
+end
+
+--contract: the entry goes and its members leave the assignment, pinning the names they hold
+function av:tidyDropBase(bases, assignment, name)
+  local at = baseAt(bases, name)
+  if not at then return end
+  table.remove(bases, at)
+  for idx, base in pairs(assignment) do
+    if base == name then assignment[idx] = nil end
+  end
+end
+
 ----- Transport — gutter mouse drives the REAPER edit cursor / loop range
 
 function av:setEditCursorQN(qn)    am:setEditCursorQN(qn) end

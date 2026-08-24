@@ -43,6 +43,25 @@ docs/arrangePage.md § The palette buttons.
    `(keep)` drops the slot from the assignment, so it holds the name it
    carries.
 
+1. The base list is editable: an entry can be added, renamed or
+   deleted. The rows re-preview as it changes, since they derive from
+   the assignment each frame.
+
+1. A rename carries the base's members, since the assignment holds
+   names. A rename onto a name the list already holds merges the two:
+   the renamed entry goes and its members join the survivor.
+
+1. Deleting a base drops its members from the assignment, which pins
+   them at the names they hold. A pinned member whose root is still the
+   deleted name keeps that name like any other.
+
+1. A blank name adds nothing and renames nothing, and an add of a name
+   the list already holds does nothing.
+
+1. The seed sorts the list and an edit leaves that order alone, so an
+   added base joins at the end. A rename lands when its field loses
+   focus, so a half-typed name merges nothing.
+
 ## Committing an assignment
 
 Landed — see docs/arrangeManager.md § Tidy. The editor's commit wraps

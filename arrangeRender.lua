@@ -719,8 +719,8 @@ modalHost:registerKind('createSlot', function(s, close)
   elseif cancel then close(false) end
 end)
 
--- The tidy editor. The base list is fixed at this stage; a row's combo assigns its slot
--- to a base, and '(keep)' drops it from the assignment, pinning the name it holds.
+-- The tidy editor. A row's combo assigns its slot to a base, and '(keep)' drops it from
+-- the assignment, pinning the name it holds; the base list above is edited in place.
 local TIDY_KEEP = '(keep)'
 
 local function openTidyModal(trackIdx)
@@ -732,17 +732,55 @@ local function openTidyModal(trackIdx)
     trackIdx   = trackIdx,
     bases      = bases,
     assignment = assignment,
+    newBase    = '',
     callback   = util.atomic('Tidy slots', function(committed)
       av:tidySlots(trackIdx, committed)
     end),
   }
 end
 
+-- One base field is active at a time, so a single scratch buffer serves the list, and the
+-- edit lands after the walk, as a row's pick does; see docs/arrangePage.md § The tidy editor.
+local function drawBaseList(s)
+  local edit
+  local dropW = ImGui.GetFrameHeight(ctx)
+  local gapX  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
+  local addW  = ImGui.CalcTextSize(ctx, 'Add') + ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding) * 2
+
+  for i, base in ipairs(s.bases) do
+    ImGui.SetNextItemWidth(ctx, -(dropW + gapX))
+    local editing = s.editing and s.editing.index == i
+    local rv, buf = ImGui.InputText(ctx, '##base' .. i, editing and s.editing.buf or base)
+    if rv then s.editing = { index = i, buf = buf } end
+    if ImGui.IsItemDeactivatedAfterEdit(ctx) and s.editing then
+      edit = { rename = { from = base, to = s.editing.buf } }
+    end
+    if ImGui.IsItemDeactivated(ctx) then s.editing = nil end
+    ImGui.SameLine(ctx)
+    if ImGui.Button(ctx, 'x##dropBase' .. i, dropW, 0) then edit = { drop = base } end
+  end
+  if #s.bases == 0 then ImGui.TextDisabled(ctx, '(none)') end
+
+  ImGui.SetNextItemWidth(ctx, -(addW + gapX))
+  local entered, newBuf = ImGui.InputText(ctx, '##newBase', s.newBase,
+                                          ImGui.InputTextFlags_EnterReturnsTrue)
+  s.newBase = newBuf
+  ImGui.SameLine(ctx)
+  if ImGui.Button(ctx, 'Add') or entered then edit = { add = s.newBase } end
+
+  if not edit then return end
+  if edit.add    then av:tidyAddBase(s.bases, edit.add); s.newBase = '' end
+  if edit.drop   then av:tidyDropBase(s.bases, s.assignment, edit.drop) end
+  if edit.rename then av:tidyRenameBase(s.bases, s.assignment, edit.rename.from, edit.rename.to) end
+end
+
 modalHost:registerKind('tidyTrack', function(s, close)
   local appearing = ImGui.IsWindowAppearing(ctx)
+  -- Read before the fields are drawn, so a base field still counts as active on the frame
+  -- whose Enter deactivates it: that Enter commits the rename, not the tidy.
+  local typing = ImGui.IsAnyItemActive(ctx)
   chrome.headingLabel('Bases')
-  for _, base in ipairs(s.bases) do ImGui.BulletText(ctx, base) end
-  if #s.bases == 0 then ImGui.TextDisabled(ctx, '(none)') end
+  drawBaseList(s)
   ImGui.Separator(ctx)
 
   -- The rows are a snapshot, so a pick lands after the walk and shows next frame.
@@ -787,7 +825,7 @@ modalHost:registerKind('tidyTrack', function(s, close)
   if pick then s.assignment[pick.idx] = pick.base end
 
   local ok = ImGui.Button(ctx, 'OK')
-              or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+              or (not appearing and not typing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
                                   or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')

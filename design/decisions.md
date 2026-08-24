@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The tidy editor's base list is edited by three verbs on av — tidyAddBase,
+  tidyRenameBase and tidyDropBase — which mutate the (bases, assignment) pair the modal holds and
+  read no project state, so am stays out of it. The assignment holds base names, so a rename carries
+  the base's members and a delete pins them; a rename onto a name the list already holds merges the
+  two, the survivor keeping its place. A rename lands when its field deactivates, and the footer's
+  Enter is gated on IsAnyItemActive read before the fields are drawn — read after, the field has
+  already deactivated, and one Enter would commit the whole tidy.
+
 - **2026-08-24** — The tidy editor's rows come from av:tidyRows, which joins the track's MIDI slots
   to their keys, their assigned bases and the names am:tidyNames previews. The modal draws those
   rows and holds the assignment alone, so only the ImGui stands outside the tests. A row's combo

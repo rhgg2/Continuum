@@ -41,6 +41,25 @@ local function takeAt(list, startQN)
   for _, take in ipairs(list) do if take.startQN == startQN then return take end end
 end
 
+-- Two members of one family plus a base of its own: enough for a rename to carry
+-- members, a merge to renumber them, and a drop to pin them.
+local tidyItems = {
+  { track = 'tr1', name = 'a', pos = 0, takeName = 'Bassline' },
+  { track = 'tr1', name = 'b', pos = 4, takeName = 'Bassline (var 3)' },
+  { track = 'tr1', name = 'c', pos = 8, takeName = 'Drums' },
+}
+
+local function tidySlots(av)
+  local takes = av:tracksTakes(0)
+  return takeAt(takes, 0).slotIdx, takeAt(takes, 4).slotIdx, takeAt(takes, 8).slotIdx
+end
+
+local function tidyPreviews(av, assignment)
+  local out = {}
+  for _, row in ipairs(av:tidyRows(0, assignment)) do out[row.idx] = row.preview end
+  return out
+end
+
 -- One four-row take at rows 2..5, with four rows of source left over: enough
 -- room for the head to walk in and for the tail to grow.
 local function mkTrimmable(harness)
@@ -289,11 +308,7 @@ return {
   {
     name = 'tidyRows joins each MIDI slot to its key, its base and the name a tidy writes',
     run = function(harness)
-      local _, av = mkArrange(harness, {
-        { track = 'tr1', name = 'a', pos = 0, takeName = 'Bassline' },
-        { track = 'tr1', name = 'b', pos = 4, takeName = 'Bassline (var 3)' },
-        { track = 'tr1', name = 'c', pos = 8, takeName = 'Drums' },
-      })
+      local _, av = mkArrange(harness, tidyItems)
       local bases, assignment = av:seedTidy(0)
       t.deepEq(bases, { 'Bassline', 'Drums' }, 'the seed lists the roots in use')
       assignment[takeAt(av:tracksTakes(0), 8).slotIdx] = nil    -- pin the Drums slot
@@ -306,6 +321,73 @@ return {
       t.eq(byName['Bassline (var 3)'].preview, 'Bassline (var 1)', 'and previews the name it would take')
       t.eq(byName['Drums'].base, nil, 'the map omits a pinned slot')
       t.eq(byName['Drums'].preview, 'Drums', 'so it previews the name it holds')
+    end,
+  },
+
+  {
+    name = 'a base rename carries its members, and a rename onto another base merges the two',
+    run = function(harness)
+      local _, av = mkArrange(harness, tidyItems)
+      local bassline, variant, drums = tidySlots(av)
+      local bases, assignment = av:seedTidy(0)
+
+      av:tidyRenameBase(bases, assignment, 'Bassline', 'Kit')
+      t.deepEq(bases, { 'Kit', 'Drums' }, 'the renamed base holds its place in the list')
+      t.eq(assignment[bassline], 'Kit', 'and its members follow it')
+      t.eq(assignment[variant],  'Kit')
+
+      av:tidyRenameBase(bases, assignment, 'Kit', 'Drums')
+      t.deepEq(bases, { 'Drums' }, 'a rename onto a name in the list merges the two')
+      t.eq(assignment[bassline], 'Drums', 'the renamed base\'s members join the survivor')
+      t.eq(assignment[variant],  'Drums')
+      t.eq(assignment[drums],    'Drums', 'whose own members stand')
+
+      local preview = tidyPreviews(av, assignment)
+      t.eq(preview[bassline], 'Drums',         'the merged family numbers off by ordinal')
+      t.eq(preview[drums],    'Drums (var 1)', 'then by slot index')
+      t.eq(preview[variant],  'Drums (var 2)')
+    end,
+  },
+
+  {
+    name = 'deleting a base pins its members at the names they hold',
+    run = function(harness)
+      local _, av = mkArrange(harness, tidyItems)
+      local bassline, variant = tidySlots(av)
+      local bases, assignment = av:seedTidy(0)
+
+      av:tidyDropBase(bases, assignment, 'Bassline')
+      t.deepEq(bases, { 'Drums' }, 'the entry goes')
+      t.eq(assignment[bassline], nil, 'and its members leave the assignment')
+      t.eq(assignment[variant],  nil)
+
+      local preview = tidyPreviews(av, assignment)
+      t.eq(preview[bassline], 'Bassline',         'so each previews the name it carries')
+      t.eq(preview[variant],  'Bassline (var 3)')
+    end,
+  },
+
+  {
+    name = 'an added base takes no members until a row picks it',
+    run = function(harness)
+      local _, av = mkArrange(harness, tidyItems)
+      local _, _, drums = tidySlots(av)
+      local bases, assignment = av:seedTidy(0)
+
+      av:tidyAddBase(bases, 'Kit')
+      t.deepEq(bases, { 'Bassline', 'Drums', 'Kit' }, 'an added base joins at the end')
+      for _, row in ipairs(av:tidyRows(0, assignment)) do
+        t.truthy(row.base ~= 'Kit', 'and holds no members')
+      end
+
+      assignment[drums] = 'Kit'
+      t.eq(tidyPreviews(av, assignment)[drums], 'Kit', 'a row that picks it previews it')
+
+      av:tidyAddBase(bases, 'Kit')
+      av:tidyAddBase(bases, '   ')
+      av:tidyRenameBase(bases, assignment, 'Kit', '')
+      t.deepEq(bases, { 'Bassline', 'Drums', 'Kit' },
+               'a duplicate add, a blank add and a blank rename all leave the list alone')
     end,
   },
 

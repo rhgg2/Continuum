@@ -20,10 +20,10 @@ render layer still holds the assignment alone.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 arrange: an editable base list in the tidy editor (§ The editor)
 - 2026-08-24 arrange: a tidy button on the palette, and its seeded editor (§ The editor)
 - 2026-08-24 am: preview the names a tidy will write, keyed by slot index (§ Where the naming lives)
 - 2026-08-24 am: seed a tidy from the track's slot names (§ The editor)
-- 2026-08-24 am: tidy a track's slot names into families (§ Committing an assignment)
 
 ## Now
 
@@ -31,6 +31,4 @@ render layer still holds the assignment alone.
 
 ## Queued (current phase; one-liners)
 
-1. The base list becomes editable: entries can be added, edited and
-   deleted, and deleting one drops its members from the assignment, which
-   pins them. The rows re-preview as the list changes.
+(empty)

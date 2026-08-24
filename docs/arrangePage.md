@@ -168,10 +168,29 @@ tests. See docs/arrangeManager.md § Tidy for the naming itself.
 
 A row's combo lists the bases and a `(keep)` entry; picking `(keep)`
 drops the slot from the assignment, which pins the name it has. The
-modal holds the assignment alone and re-derives its rows each frame, so
-a pick shows in the preview column on the frame after it lands. OK
-commits through `av:tidySlots` in one undo block, Escape drops the
-edit, and the base list is fixed at this stage.
+modal holds the bases and the assignment and re-derives its rows each
+frame, so a pick shows in the preview column on the frame after it
+lands. OK commits through `av:tidySlots` in one undo block, and Escape
+drops the edit.
+
+The base list is editable: each entry is a field with a delete button
+beside it, and a field below adds one. `av:tidyAddBase`,
+`av:tidyRenameBase` and `av:tidyDropBase` mutate the pair the modal
+holds. Since the assignment maps a slot to a base *name*, a rename
+rewrites every assignment carrying the old name, so a base's members
+follow it; a delete drops its members from the assignment, which pins
+them; and an add gives a base no members until a row picks it.
+
+A rename onto a name the list already holds merges the two: the
+renamed entry goes, its members join the survivor, and the survivor
+keeps its place. Blank names and duplicates do nothing, and the order
+is otherwise stable — an added base joins at the end, and an edit
+leaves the rest where they are, so no row jumps under a rename.
+
+A rename lands when the field deactivates, not per keystroke, so a
+half-typed name merges nothing. Enter in a base field therefore
+commits that rename alone; the footer's Enter is gated on no item
+being active, read before the fields are drawn.
 
 ### Modal infrastructure
 
