@@ -44,10 +44,9 @@ contracts, shapes, emitted signals and REAPER touchpoints. They are
 one-liners, capped short (except `--shape`); `docs/CONVENTIONS.md` has
 the full details.
 
-Rationale, history or examples that wouldn't fit in a line live in
-`docs/<file>.md` with a one-line pointer at the site (`-- see
-docs/<file>.md § <section>`). The docs hold the current WHY, but don't
-describe the API surface or repeat annotations in the code.
+Rationale that wouldn't fit in a line live in `docs/<file>.md` with a
+one-line pointer at the site (`-- see docs/<file>.md § <section>`).
+The docs hold WHY: non-local information that forces the code's shape.
 
 Ongoing work larger than a couple of commits has a design doc in
 `design/` and a plan in `plan/`: the design doc holds the model being
@@ -55,27 +54,22 @@ proposed, without justifications; the plan holds the machinery —
 phases, what landed, what's next.
 
 `docs/` is the only permanent layer, and the others drain into it as
-work progresses. Citations point the same way: `design/` and
-`decisions.md` may cite `docs/`, `docs/` cites only `docs/`, and a
-pointer from `docs/` into `design/` says the substance is in the wrong
-file. `design/archive/` is inert — nothing cites into it, nothing new
-joins it.
+work progresses. Thus, citations should only point into `docs/` or
+into `design/` of an active plan. Outside of the plan workflow,
+`docs/` is updated alongside code as an atomic block.
 
 Docs, design docs and the decisions log share the register of
-`docs/STYLE.md`; give it a read before writing any of the three.
+`docs/STYLE.md`.
 
 ## Navigating the code
 
-`map/<file>.map` answers "where does X live" in one screen and is
-regenerated on every edit. For cross-file queries,
-`mcp__continuum_map__map_query` is faster and more complete than
-grepping `map/*.map`; its schema documents the filters, query syntax
-and return shape. `mcp__reaper_docs__reaper_doc_lookup` reads parsed
-ReaScript/ReaImGui entries.
+`map/<module>.map` and `map/specs/<spec>.map` are symbol maps,
+regenerated on every edit. Besides direct reading, the maps can be
+queried via `mcp__continuum_map__map_query`. These are optimised for
+cross-cutting queries you can put a name to; save the `Explore` agent
+for genuinely fuzzy and open-ended queries.
 
-Anything with a name — a function, a field, a signal, a module — can
-be answered by `map_query` directly. Save the `Explore` agent for
-genuinely fuzzy and open-ended queries that can't be found in an index.
+Use `mcp__reaper_docs__reaper_doc_lookup` for ReaScript/ReaImGui APIs.
 
 `mcp__reaper__reaper_eval` runs a Lua chunk inside the running
 Continuum instance. Undoable edits route through mm/tm with an
@@ -92,13 +86,9 @@ nil call. `mcp__continuum_perturb__spec_perturb` applies authored
 breakages to throwaway copies of the tree and says which the spec
 noticed.
 
-`map/specs/<spec>.map` outlines each spec (intent, cases, harness
-surface) and `map_query`'s `usedby` includes them under `scope='all'`, so
-"which specs exercise X" is askable before reading spec source.
-
 ## Commits
 
-**`config:` is the scope for Claude Code's own machinery** — skills,
+`config:` is the scope for Claude Code's own machinery — skills,
 hooks, settings, agents, and tools whose only consumer is a skill
 (e.g. `tools/comment_hygiene.py`).
 

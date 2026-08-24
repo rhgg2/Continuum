@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Complete the commit bookkeeping, write a headline here, then spawn a subagent for the purely mechanical steps.
+description: Complete commit bookkeeping and spawn a subagent for the mechanical steps.
 disable-model-invocation: true
 ---
 
@@ -22,7 +22,16 @@ injected stat for scope. The format is `<scope>: <headline>`,
 imperative, ≤70 chars, scoped to the affected area (eg `tm: fix
 off-by-one in selection rect`).
 
-## 2. Commit bookkeeping
+## 2. Docs pass
+
+The hook names the docs related to code you touched, as well as all
+cross-cutting docs.
+
+Where the model moved, the doc and code annotations move in the same
+commit. Check if a change is needed, and if so, apply it in one
+`apply_patches` call and add the changes to  the scope from step 1.
+
+## 3. Commit bookkeeping
 
 Assemble a commit bookkeeping JSON manifest for the bookkeeping
 script.
@@ -55,14 +64,15 @@ python3 tools/bookkeep.py <<'JSON'
 JSON
 ```
 
-## 3. The commit
+## 4. The commit
 
 If you changed no `.lua` files, you may as well commit yourself: `git
 add <scope> && git commit -m "<headline>"`, no commit body.
 
 Otherwise, spawn a `commit-finisher` subagent and hand it the headline
 (and to be clear, there is still no commit body) plus which paths to
-stage, if the scope from step 1 is narrower than "all dirty files".
+stage, if the scope from steps 1 and 2 is narrower than "all dirty
+files".
 
 The agent runs a comment hygiene pass then commits. When it returns,
 eyeball its summary; no need to re-audit.

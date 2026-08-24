@@ -135,6 +135,53 @@ emitDocsCitations() {
   printf '%s' "$problems"
 }
 
+# Code and its documentation are one change, so a commit that moves the model and
+# leaves `docs/` behind lands a half-change. Most of `docs/` is named for the
+# module it documents, so the doc a change owes is found by name match, with no
+# citation needed at the source end. The rest are cross-cutting, no match reaches
+# them, and they are few enough to list in full and leave to judgement.
+emitDocsOwed() {
+  local changed luaStems owed crossCutting stem
+
+  changed=$( { git diff --name-only HEAD
+               git status --porcelain | awk '/^\?\?/ { print $2 }'
+             } | sort -u )
+  grep -q '\.lua$' <<<"$changed" || return
+
+  owed=$(grep '\.lua$' <<<"$changed" | xargs -n1 basename | sed 's/\.lua$//' | sort -u |
+         while IFS= read -r stem; do [[ -f docs/$stem.md ]] && echo "$stem"; done)
+
+  luaStems=$(git ls-files '*.lua' | xargs -n1 basename | sed 's/\.lua$//' | sort -u)
+  crossCutting=$(for doc in docs/*.md; do
+                   stem=$(basename "$doc" .md)
+                   grep -qx "$stem" <<<"$luaStems" || printf '%s ' "$stem"
+                 done)
+
+  echo
+  echo "Docs owed, matched by hook. Code and its documentation are one change, so the"
+  echo "commit is not complete while a doc contradicts what you did:"
+  echo
+  if [[ -n $owed ]]; then
+    echo "  Named for a module you changed —"
+    # Headings are usually enough to tell whether the model moved, but a wide
+    # refactor would blow the context cap with them, and wants the docs read
+    # whole anyway.
+    while IFS= read -r stem; do
+      if grep -qx "docs/$stem.md" <<<"$changed"; then
+        echo "    docs/$stem.md   (already changed in this commit)"
+      elif [[ $(grep -c . <<<"$owed") -gt 6 ]]; then
+        echo "    docs/$stem.md"
+      else
+        echo "    docs/$stem.md"
+        grep -m12 '^##' "docs/$stem.md" | sed 's/^/        /'
+      fi
+    done <<<"$owed"
+    echo
+  fi
+  echo "  No module behind them, so no match reaches them — read the names and judge:"
+  echo "    $crossCutting"
+}
+
 emitTreeState() {
   echo "Working-tree state, injected by hook — it is current, so don't re-run these:"
   echo
@@ -153,7 +200,7 @@ emitContext() {
     implement-next) emitBrief ;;
     plan-new)       emitPlanShelf; emitPlanLinkage ;;
     plan-close)     emitLivePlan; emitBriefState; echo; emitPlanShelf; emitPlanLinkage ;;
-    commit)         emitTreeState; emitDocsCitations ;;
+    commit)         emitTreeState; emitDocsCitations; emitDocsOwed ;;
   esac
 }
 
