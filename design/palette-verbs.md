@@ -83,9 +83,3 @@ it in one undo block.
 1. `av:tidyRows(trackIdx, assignment)` joins the track's MIDI slots to
    their keys, their assigned bases and their previewed names. The
    editor draws those rows and holds no join of its own.
-
-## Open
-
-1. Whether the editor should let a base's members be reordered. The
-   commit numbers them in the order they already stand in, and a
-   reorder is a second feature.
