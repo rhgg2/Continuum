@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — The mini-map's raise is written at the resolve's gesture flag rather than at
+  tv:nameInstance: a serial read inside a command body is stale for the dive, which invokes
+  switchPage after naming, and nameInstance never sees the slot step. The raise falls at the next
+  command other than the transport and the walk, a name set held in tv and read at the lapse, since
+  cmgr:wrap cannot reach the transport commands, which continuum registers after the pages are
+  built.
+
 - **2026-08-25** — The mini-map's pin ranks under a tab override and over the derivation, and never
   lapses on a caret move, so an override falling away reveals the pinned map. Super-X therefore
   claims the fx tab with an override of its own rather than clearing one, keeping a live fx session

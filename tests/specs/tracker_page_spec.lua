@@ -1034,6 +1034,51 @@ return {
   },
 
   {
+    name = 'a gesture raises the map, and it falls at the next command',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0', 'i8' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'i8', trackIdx = 0, slotIdx = 0, startQN = 8, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      local tv  = stack.tv
+      local tab = function() return tv:paletteTab(tv:caretKey(), true) end
+      h.cmgr:invoke('cursorDown')                  -- spend the bind's own raise
+      t.eq(tab(), 'fx', 'with no raise standing the derivation has the chain')
+
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'i8')
+      tp:bindFromSelection()                       -- the frame that resolves the dive
+      t.eq(tab(), 'map', 'the dive raised the map over an available chain')
+
+      h.cmgr:invoke('playFromTop')
+      tp:bindFromSelection()
+      t.eq(tab(), 'map', 'the transport leaves a standing raise alone')
+
+      h.cmgr:invoke('nextInstance')                -- i8 is the last placement, so the walk stalls
+      tp:bindFromSelection()
+      t.eq(tab(), 'map', 'and a walk never lowers it, even where it holds')
+
+      h.cmgr:invoke('cursorDown')
+      tp:bindFromSelection()
+      t.eq(tab(), 'fx', 'the next ordinary command drops it')
+
+      h.cmgr:invoke('prevInstance')                -- the walk back to i0 moves
+      tp:bindFromSelection()
+      t.eq(tab(), 'map', 'and a walk that lands raises it again')
+    end,
+  },
+
+  {
     name = 'the play row is the head\'s offset into the current instance, in rows',
     run = function(harness)
       local h = harness.mk()

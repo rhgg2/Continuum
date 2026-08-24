@@ -16,15 +16,8 @@ Landed — the model is in `docs/trackerRender.md` § The mini-map.
 
 ## The raise
 
-1. Gestures that move the current instance — a dive, a slot change, a
-   walk, again and vary — **raise** the map tab, outranking the
-   derivation that would otherwise pick parameters or fx
-   (`docs/trackerRender.md` § Palette tabs).
-
-1. A raised map **falls** at the next command.
-
-1. A raise takes no keyboard focus. The grid keeps the keys, as it
-   does under a tab click.
+Landed — the model is in `docs/trackerRender.md` § Palette tabs and
+`docs/trackerPage.md` § The current instance.
 
 ## The pin
 

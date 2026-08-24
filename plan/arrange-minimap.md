@@ -16,9 +16,12 @@
 
 Notes carried into the phases:
 
-- The raise is written at one site, `tv:nameInstance`
-  (`trackerView.lua:253`), so every gesture that names an instance
-  raises the map — the dive included, through the tracker facade.
+- The raise is written at one site, the `gesture` flag at the tail of
+  `tv:resolveCurrentInstance` (`trackerView.lua:290`), which already
+  marks "the current instance moved by a gesture" for loop to item. It
+  runs outside any command, so the serial it anchors to is settled: the
+  dive raises through its `switchPage`, and the slot step, which names
+  no instance, raises too.
 - The map takes no keyboard focus ever, so the one-pane-one-focus clamp
   (`trackerRender.lua:624`) covers it unchanged.
 - `cmgr` has no after-any-command hook — only `doAfter(names, fn)`
@@ -31,10 +34,10 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-25 tracker: raise the arrange map when a gesture moves the instance (§ The raise)
 - 2026-08-25 tracker: pin the arrange map as the palette default with Alt-M (§ The pin)
 - 2026-08-24 am: a drop opens the whole pool, not a sibling's window (polish over § The walk)
 - 2026-08-24 tracker: page the mini-map's window instead of centring it (polish over § The pane)
-- 2026-08-24 tracker/arrange: land a track step on the nearest placement; delete the instance (polish over § The walk)
 
 ## Now
 
@@ -42,9 +45,4 @@ Notes carried into the phases:
 
 ## Queued (current phase; one-liners)
 
-1. **The raise** — `cmgr` gains a monotonic command serial, and the tab
-   override carries a serial anchor as well as its caret one, lapsing
-   when either moves. `tv:nameInstance` raises the map by writing an
-   override anchored to the serial, so a gesture that names an instance
-   shows the map until the next command, and the most recent of a raise
-   and a click wins. (design § The raise)
+(empty — the phase's last item is in flight.)

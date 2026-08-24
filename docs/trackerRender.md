@@ -91,6 +91,18 @@ never yields **map**, and a pin never lapses on a caret move, so an override
 falling away reveals the pinned map rather than a chain. Like a tab click, the
 pin takes no keyboard focus.
 
+A gesture that moves the current instance **raises** the map for one command:
+`tv:resolveCurrentInstance` writes an override of its own on the frame the
+gesture lands (`docs/trackerPage.md` § The current instance). A raise carries a
+`cmgr:lastCommand()` serial anchor as well as the caret one, so it lapses at the
+next command or the next caret move, whichever comes first. It writes the same
+single override a click does, so the later of the two wins, and it takes no
+keyboard focus either.
+
+Two sets of commands sit under a standing raise without lowering it (`HOLDS_MAP`):
+the transport, which moves nothing in the tracker, and the walk, so that Alt-up
+and Alt-down holding at the ends of a track leave the map where it is.
+
 Two symmetric toggles bind the two panes: **Super-R** owns **parameters**,
 **Super-X** owns the **fx** palette. Super-R (`focusParams`) parks parameters
 over an auto-shown chain and lands on the find box (mirroring the Tab-to-find

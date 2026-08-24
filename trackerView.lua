@@ -228,6 +228,7 @@ local namedInstance       -- a command knew the placement; outranks the rest, on
 local divedQN             -- the arrange caret's QN, handed over by a dive; one-shot
 local seekBack            -- prevTake travels backwards; cleared on resolve
 local playInstanceTake    -- where the play head was last resolve, for entry detection
+local raiseMapTab         -- raises the palette's map tab; defined with the tab state below
 
 --contract: shape of the instance the tracker is in; nil if none, or its item is gone
 function tv:currentInstance()
@@ -288,6 +289,9 @@ function tv:resolveCurrentInstance()
   -- rather than at the dive, a frame before the take is bound.
   if divedQN then self:setCursorQN(divedQN); divedQN = nil end
   if gesture and self:loopsToItem() then self:bracketCurrentInstance() end
+  -- A gesture that landed somewhere shows where: the map comes up for one command.
+  -- see docs/trackerRender.md § Palette tabs
+  if gesture and currentInstanceTake then raiseMapTab() end
 end
 
 ----- The arrange mini-map's window — see docs/trackerRender.md § The mini-map
@@ -3947,8 +3951,8 @@ local paletteExpanded = {}
 local paletteCursor   = nil
 --shape: stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field
 local stripCursor     = nil
---shape: tabOverride = { tab, anchor } — a clicked/keyboard tab claim ('parameters'|'fx'|'map'); caret move clears it
-local tabOverride  = { tab = nil, anchor = nil }
+--shape: tabOverride = { tab, anchor, serial } — a tab claim ('parameters'|'fx'|'map'); the caret anchor clears it, and a raise's command-serial anchor clears it at the next command
+local tabOverride  = { tab = nil, anchor = nil, serial = nil }
 local mapPinned    = false   -- Alt-M holds the mini-map up as the palette's default tab
 
 -- Learn-touched params float above pa's frecency order until the bound
@@ -3984,14 +3988,36 @@ function tv:setPaletteCursor(c)        paletteCursor = c end
 function tv:stripCursor()             return stripCursor end
 function tv:setStripCursor(c)          stripCursor = c end
 
--- A clicked or keyboard override claims a tab; absent one, fx auto-wins whenever a chain is
--- showable. The override lapses on the next caret move (a new caretKey), like the old params one.
+--contract: caret identity, 'row,col' — what a tab override anchors to; '' before the caret exists
+function tv:caretKey()
+  return ec and (ec:row() .. ',' .. ec:col()) or ''
+end
+
+-- Commands a standing raise sits through: the transport, which moves nothing in the tracker,
+-- and the walk, which would otherwise take the map away at the ends of a track.
+local HOLDS_MAP = { play = true, playPause = true, stop = true,
+                    playFromTop = true, playFromCursor = true,
+                    prevInstance = true, nextInstance = true }
+
+-- A clicked, keyboard, or raise override claims a tab; absent one, fx auto-wins whenever a
+-- chain is showable — anchors and lapse rules: docs/trackerRender.md § Palette tabs.
 function tv:tabOverride(caretKey)
-  if tabOverride.tab and caretKey ~= tabOverride.anchor then tabOverride.tab = nil end
+  local last, serial = cmgr:lastCommand()
+  local spent = tabOverride.serial and tabOverride.serial ~= serial and not HOLDS_MAP[last]
+  if tabOverride.tab and (spent or caretKey ~= tabOverride.anchor) then tabOverride.tab = nil end
   return tabOverride.tab
 end
-function tv:overrideTab(tab, caretKey) tabOverride.tab, tabOverride.anchor = tab, caretKey end
+function tv:overrideTab(tab, caretKey)
+  tabOverride.tab, tabOverride.anchor, tabOverride.serial = tab, caretKey, nil
+end
 function tv:clearTabOverride()         tabOverride.tab = nil end
+
+-- The raise: a gesture's own override, anchored to the command that ran it as well as to
+-- the caret, so the map shows where the gesture landed until the next command.
+function raiseMapTab()
+  local _, serial = cmgr:lastCommand()
+  tabOverride.tab, tabOverride.anchor, tabOverride.serial = 'map', tv:caretKey(), serial
+end
 -- Alt-M's map pin ranks under an override and over the derivation. Only the key drops it, so
 -- an override lapsing on a caret move falls back to the map rather than to a chain.
 function tv:mapPinned()      return mapPinned end

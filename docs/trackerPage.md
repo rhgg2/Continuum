@@ -488,6 +488,12 @@ the outgoing instance's start, or from REAPER's edit cursor when there is
 no outgoing instance; `gotoTake(-1)` seeks backwards and every other
 gesture forwards, matching the grid, where time runs down the page.
 
+A resolve that lands on an instance by gesture — a named one or a slot
+change, rather than a play head or stickiness — raises the arrange
+mini-map for one command (`docs/trackerRender.md` § Palette tabs). The
+flag it reads is the one that brackets the loop to item, so the dive,
+the slot step, the walk, again and vary all raise it.
+
 Leaving an instance writes nothing. Playback running into a gap, over
 another slot's take, or off the end of the song leaves the tracker where
 it was. The instance is nil only where the slot has no live one, its

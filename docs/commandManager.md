@@ -139,6 +139,15 @@ exposes the underlying domain verbs (e.g. `vm:reswingSelection`,
 Commands invoked by name outside the keymap path (mouse wheel,
 swing-editor buttons) ignore the return value and just run for effect.
 
+`cmgr:lastCommand()` returns the name of the last command body to run
+and a serial counting the bodies run, both written just inside the
+reachability gate, so an unknown name or one the stack blocks changes
+neither. There is no after-any-command hook, so view state that should
+last exactly one command anchors to the serial and compares it back
+later, reading the name for the commands it lets pass; the tracker's
+mini-map raise is the first consumer (`docs/trackerRender.md`
+§ Palette tabs).
+
 ## Prefix capture
 
 Prefix-argument entry is digit-only and gated. The dispatcher feeds

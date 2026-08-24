@@ -284,4 +284,24 @@ return {
       t.eq(mgr.stack[#mgr.stack], mgr:scope('tracker'), 'its body popped explicitly')
     end,
   },
+
+  {
+    name = 'the last command and its serial record the bodies that run',
+    run = function()
+      local mgr = newCmgr()
+      mgr:scope('tracker'):register('paste', function() end)
+      mgr:push('tracker')
+      local _, start = mgr:lastCommand()
+      mgr:invoke('paste')
+      local name, serial = mgr:lastCommand()
+      t.eq(name, 'paste', 'the body that ran is named')
+      t.eq(serial, start + 1, 'and the serial ticked once')
+      mgr:invoke('noSuchCommand')
+      t.eq(select(2, mgr:lastCommand()), start + 1, 'an unknown name leaves both alone')
+      newModalScope(mgr, {})
+      mgr:push('region')
+      mgr:invoke('paste')
+      t.eq(select(2, mgr:lastCommand()), start + 1, 'as does one a modal blocks')
+    end,
+  },
 }

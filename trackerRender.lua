@@ -246,12 +246,9 @@ local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc r
 local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
 local fxFocusReq    = false  -- one-shot: Super-X from the parameters pane enters the fx session next fx-body draw
 
--- Caret identity ('row,col') — the anchor for the Super-R parameters override, which
--- lapses as soon as the caret moves off it (see tv:paletteTab).
-local function caretKeyNow()
-  local e = tv:ec()
-  return e and (e:row() .. ',' .. e:col()) or ''
-end
+-- The caret identity a tab override anchors to, lapsing as soon as the caret moves off
+-- it; tv owns the format, since the raise writes an anchor of its own (see tv:paletteTab).
+local function caretKeyNow() return tv:caretKey() end
 
 local function paletteFindBox()
   ImGui.SetNextItemWidth(ctx, -1)

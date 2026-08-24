@@ -250,6 +250,12 @@ end
 
 ----- Dispatch
 
+-- The last command body to run, and a monotonic count run — cmgr has no after-any-command
+-- hook; see docs/commandManager.md § Dispatch & result protocol for why that matters.
+local lastCommand, commandSerial = nil, 0
+--contract: name and serial of the last body run; unknown or gated-out changes neither
+function cmgr:lastCommand() return lastCommand, commandSerial end
+
 --contract: returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
 --contract: always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
 --contract: spring-loaded scope: redirect[] runs fn in-place; keepAlive[] passes; else onBail()
@@ -269,6 +275,7 @@ function cmgr:invoke(name, ...)
   local scope = self.gates[name]
   if scope and not isReachable(scope, name) then return end
   local hadPending = pendingPrefix ~= nil
+  lastCommand, commandSerial = name, commandSerial + 1
   local r1, r2 = fn(pendingPrefix or 1, ...)
   if hadPending then clearPrefixState() end
   return r1, r2

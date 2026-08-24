@@ -1,4 +1,4 @@
-@spec tv_palette_tab_spec  src=tests/specs/tv_palette_tab_spec.lua  loc=54  cases=4
+@spec tv_palette_tab_spec  src=tests/specs/tv_palette_tab_spec.lua  loc=56  cases=4
 @exercises trackerView (h.vm)
 @surface   vm:paletteTab, vm:overrideTab, vm:setMapPinned
 @harness   mk
@@ -9,18 +9,20 @@
   the override holds it over an available chain and lapses on a caret
   move, as it does for the other two tabs. The pin ranks between them:
   under the override, over the derivation, and it never lapses.
+  A gesture's raise is an override with a command-serial anchor as well;
+  tracker_page_spec exercises it end to end.
 
 # Cases
-  @case 'the derivation never yields the map'  [harness]  @ 12-17
-  @case 'an override holds the map up until the caret moves'  [harness]  @ 21-28
-  @case 'a pin makes the map the default tab'  [harness]  @ 32-40
-  @case 'an override outranks the pin, and lapses back to it'  [harness]  @ 44-51
+  @case 'the derivation never yields the map'  [harness]  @ 14-19
+  @case 'an override holds the map up until the caret moves'  [harness]  @ 23-30
+  @case 'a pin makes the map the default tab'  [harness]  @ 34-42
+  @case 'an override outranks the pin, and lapses back to it'  [harness]  @ 46-53
 
 # Uses (outbound edges)
-  @use call vm:paletteTab  @ 15,16,25,26,27,36,37,39,49,50
-  @use call vm:overrideTab  @ 24,48
-  @use call vm:setMapPinned  @ 35,38,47
+  @use call vm:paletteTab  @ 17,18,27,28,29,38,39,41,51,52
+  @use call vm:overrideTab  @ 26,50
+  @use call vm:setMapPinned  @ 37,40,49
 
 # Fields (r read / w write incl. constructor keys)
-  @field w name  @ 12,21,32,44
-  @field w run  @ 13,22,33,45
+  @field w name  @ 14,23,34,46
+  @field w run  @ 15,24,35,47

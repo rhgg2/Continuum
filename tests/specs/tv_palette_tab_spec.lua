@@ -3,6 +3,8 @@
 -- the override holds it over an available chain and lapses on a caret
 -- move, as it does for the other two tabs. The pin ranks between them:
 -- under the override, over the derivation, and it never lapses.
+-- A gesture's raise is an override with a command-serial anchor as well;
+-- tracker_page_spec exercises it end to end.
 
 local t = require('support')
 
