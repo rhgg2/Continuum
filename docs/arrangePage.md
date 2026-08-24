@@ -75,6 +75,15 @@ scope; the mouse — clicks, drags, the wheel — is read in
 calls the matching av operation. The page decides which gesture
 happened; av decides what it does to the state.
 
+## The take enumerator
+
+`visibleTakes(fromCol, toCol, qnLo, qnHi)` on the facade answers the
+instances over a span of columns and QN, in the take shapes the grid
+paints from. It is an in-memory filter over am's cached shapes, so a
+caller pays no project walk. The tracker's mini-map draws from it
+(`docs/trackerRender.md` § The mini-map), and a slot's box carries the
+same colour and span on both pages.
+
 ## Cursor and focus are separate
 
 The grid carries two independent pointers.

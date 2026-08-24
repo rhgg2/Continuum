@@ -6,37 +6,31 @@
 ## Phases
 
 1. **Phase 1 — The pane** (§ What the tracker may see, § The pane,
-   § The mark) — the facade enumerator, a third palette tab, and the map
-   drawn from take shapes with the current instance marked.  ← in flight
-2. **Phase 2 — The walk** (§ The walk, § Landing) — Alt-Tab and
-   Alt-Shift-Tab along the track's instances, landing through
-   `nameInstance` / `selectSlot`.
+   § The mark) — landed 2026-08-24 in three commits; the model now lives
+   in `docs/trackerRender.md` § The mini-map and `docs/arrangePage.md`
+   § The take enumerator.
+2. **Phase 2 — The walk** (§ The walk, § Landing) — Alt-↓ and Alt-↑
+   along the track's instances, landing through
+   `nameInstance` / `selectSlot`.  ← in flight
 3. **Phase 3 — Raise and pin** (§ The raise, § The pin) — Alt-M pins the
    map; instance-moving gestures raise it for one command.
 
 Notes carried into the phases:
 
-- `av:visibleTakes(fromCol, toCol, qnLo, qnHi)` (`arrangeView.lua:652`)
-  already answers the enumerator; only the facade table
-  (`arrangePage.lua:41`) lacks it.
-- The tab machinery is two-valued throughout: `tv:paletteTab` falls back
-  fx-else-parameters (`trackerView.lua:3897`), and `docs/trackerRender.md`
-  § Palette tabs is written in the two-tab register. The map takes no
-  keyboard focus ever, so the one-pane-one-focus clamp
-  (`trackerRender.lua:575`) covers it unchanged; only the fallback needs
+- The walk's keys changed from Alt-Tab to Alt-↑/↓ (2026-08-24), and
+  `prevTake` / `nextTake` move to Alt-comma and Alt-period — a change
+  already sitting uncommitted at `pageBindings.lua:27`.
+- `tv:stepVariant` (`trackerView.lua:375`) is the landing model: refuse
+  in silence with no current instance, then `selectSlot` for the slot
+  stepped onto and `nameInstance` for its placement.
+- The spec's fake arrange returns `visibleTakes` in seeding order
+  (`tests/specs/tracker_page_spec.lua:114`), so a walk that sorts by
+  start can be pinned by seeding out of order.
+- The tab machinery is two-valued in its fallback: `tv:paletteTab`
+  (`trackerView.lua:3921`) falls back fx-else-parameters. The map takes
+  no keyboard focus ever, so the one-pane-one-focus clamp
+  (`trackerRender.lua:624`) covers it unchanged; only the fallback needs
   widening, and that waits for phase 3's raise.
-- Nothing under `tests/` touches the tab machinery today, and no spec
-  instantiates `trackerRender` to draw. Geometry goes red-first by
-  computing the window on `tv`, where a spec can reach it.
-- The window rule, settled 2026-08-24: a fixed map column width and a
-  fixed pixels-per-QN (40px and 6px/QN — five columns in the 200px
-  pane), the bound track's column centred and clamped at both ends (so a
-  track list shorter than the pane's columns left-aligns), time centred
-  on the marked instance's midpoint, pulled down to its start when the
-  instance outgrows the window and clamped at QN 0, else centred on the
-  edit cursor QN. No scroll interaction. The renderer owns the two pixel
-  constants and asks `tv` for a window in columns and QN, as `gridPane`
-  does with `tv:setGridSize`.
 - `cmgr` has no after-any-command hook — only `doAfter(names, fn)`
   (`commandManager.lua:154`). Phase 3 needs a fall trigger; the existing
   lapse is anchored to a caret key.
@@ -55,3 +49,17 @@ Notes carried into the phases:
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+1. **Walk the track's instances** — `tv:walkInstance(dir)` steps the
+   current instance to the previous or next placement on its own track,
+   over `arrange().visibleTakes(col, col, 0, huge)` sorted by start. It
+   holds at the ends, crosses to no other track, and refuses in silence
+   where the tracker is in no instance. Landing follows `tv:stepVariant`:
+   `tv:nameInstance(take)` always, `tv:selectSlot(slotIdx)` where the
+   stop belongs to another slot, and `ec:setPos(0, 0)` on that crossing
+   alone. Commands `prevInstance` / `nextInstance` in trackerRender's
+   registry on Alt-↑ / Alt-↓, with `prevTake` / `nextTake` on Alt-comma
+   and Alt-period. Docs: a § The walk section in `docs/trackerPage.md`
+   beside § Stepping the family. Red-first in
+   `tests/specs/tracker_page_spec.lua`, whose fake arrange already seeds
+   instances across slots.

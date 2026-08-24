@@ -44,11 +44,10 @@
   @field r Key_Backslash  @ 87,88
   @field r Key_Backspace  @ 66,78,83,167,170,172
   @field r Key_C  @ 63
-  @field r Key_Comma  @ 29,94,130
+  @field r Key_Comma  @ 27,29,94,130
   @field r Key_D  @ 65,85,173
   @field r Key_Delete  @ 66,83,167,169
-  @field r Key_DownArrow  @ 22,28,41,43,46,54,80,127,148,158,163,165
-  @field r Key_DownArrow  @ 174
+  @field r Key_DownArrow  @ 22,41,43,46,54,80,127,148,158,163,165,174
   @field r Key_E  @ 32,105,106,181
   @field r Key_End  @ 30,154
   @field r Key_Enter  @ 79,117,131,161,171
@@ -73,7 +72,7 @@
   @field r Key_P  @ 21
   @field r Key_PageDown  @ 34,152
   @field r Key_PageUp  @ 33,151
-  @field r Key_Period  @ 30,51,93,129,168
+  @field r Key_Period  @ 28,30,51,93,129,168
   @field r Key_R  @ 107
   @field r Key_RightArrow  @ 24,26,45,48,49,56,82,128,150,160,176
   @field r Key_RightBracket  @ 90
@@ -83,7 +82,7 @@
   @field r Key_T  @ 99,103
   @field r Key_Tab  @ 35,36,155,156
   @field r Key_U  @ 178
-  @field r Key_UpArrow  @ 21,27,40,42,47,53,126,147,157,162,164
+  @field r Key_UpArrow  @ 21,40,42,47,53,126,147,157,162,164
   @field r Key_V  @ 33,34,64,86
   @field r Key_W  @ 62,63
   @field r Key_X  @ 62,104

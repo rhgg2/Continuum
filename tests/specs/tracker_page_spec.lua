@@ -727,7 +727,7 @@ return {
   -- The play row: a caret on the row the play head occupies, dimmed where the
   -- head is sounding a sibling instance. At 240 ppq and four rows to the beat,
   -- a row is a quarter of a QN.
-  ----- The arrange mini-map's window (design/arrange-minimap.md § The pane)
+  ----- The arrange mini-map's window (docs/trackerRender.md § The mini-map)
 
   {
     name = 'the map window centres the bound column, and clamps it at both ends',

@@ -128,8 +128,9 @@ the boxes, as it does there.
 The window is fixed in scale and never scrolls — five track columns and a
 third-column gutter across the pane's width, 3 pixels per QN down it. The renderer measures the pane in those
 units and takes the window from `tv:mapWindow(cols, qnSpan)` in the
-arrangement's own terms: the column and QN bounds, the takes over them, and the
-marked take. The pixels stay in the renderer, as they do for the grid's viewport
+arrangement's own terms: the column and QN bounds, the takes over them (the
+arrange facade's enumerator, `docs/arrangePage.md` § The take enumerator), and
+the marked take. The pixels stay in the renderer, as they do for the grid's viewport
 (`gridPane` hands `tv:setGridSize` cells and rows).
 
 The window centres the bound track's column and clamps it at both ends, so a

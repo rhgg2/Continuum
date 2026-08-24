@@ -1,42 +1,18 @@
 # arrange mini-map — navigation from the tracker
 
 > opened: 2026-08-23 · status: in flight — plan/arrange-minimap.md, at
-> phase 1 (the pane)
+> phase 2 (the walk)
 
 **Draw a mini-map of the arrange view in the tracker palette, marking
 the current instance.**
 
 ## The pane
 
-1. The **mini-map** is a third tab in the tracker's right-hand palette,
-   beside parameters and fx (`docs/trackerRender.md` § Palette tabs).
-
-1. It draws the arrangement in the arrange page's own terms: one
-   column per track, time running down the page in QN
-   (`docs/arrangePage.md` § Grid is hand-drawn).
-
-1. The map is a window on the arrangement — the current instance's
-   track and its neighbours, over a time region around it.
-
-1. An **instance** is one placement of a slot
-   (`docs/arrangeManager.md` § Instances of a slot). It draws as a
-   filled box in its slot's colour under the grid's 1px border, as on
-   the grid, and nothing else: no notes, waveforms, or names.
-
-1. The boxes sit on a grid at the arrange page's own cadence — a ruled
-   cell every 4 QN, the bar and phrase cells tinted as the grid tints
-   their rows, and a rule down each column boundary. A gutter runs down
-   the left, the grid running out into it; to the right the grid
-   reaches as far as the track list and no further.
+Landed — the model is in `docs/trackerRender.md` § The mini-map.
 
 ## The mark
 
-1. The current instance (`docs/trackerPage.md` § The current instance)
-   carries **the mark** — the focused fill the arrange grid gives the
-   take under its cursor.
-
-1. Nothing is marked when the bound slot has no live instance, its
-   single take parked on scratch.
+Landed — the model is in `docs/trackerRender.md` § The mini-map.
 
 ## The raise
 
@@ -66,9 +42,13 @@ the current instance.**
 
 ## The walk
 
-1. **Alt-Tab** and **Alt-Shift-Tab** walk the current instance forward
-   and back along its own track. Forward is down the page, the
-   direction time runs.
+1. **Alt-↓** and **Alt-↑** walk the current instance forward and back
+   along its own track. Forward is down the page, the direction time
+   runs.
+
+1. The Alt-arrows are the tracker's navigation family, Alt-←/→ already
+   stepping the track. So `prevTake` and `nextTake` give up Alt-↑/↓ and
+   move to Alt-comma and Alt-period.
 
 1. A **stop** is one instance. The walk visits the track's instances
    in start order and holds at the ends, neither wrapping nor crossing
@@ -98,9 +78,7 @@ the current instance.**
 
 ## What the tracker may see
 
-1. The arrange facade (`docs/arrangePage.md`) gains an enumerator:
-   the instances across a span of tracks and QN, in the take shapes
-   the arrange grid paints from.
+Landed — the model is in `docs/arrangePage.md` § The take enumerator.
 
 ## Open
 

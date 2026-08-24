@@ -158,7 +158,7 @@
   @fn selectedTrackIdx()  @ 166-169
   @fn effectiveSlot(trackIdx)  @ 171-173
   -- The current instance — which placement of the bound slot we are in.
-  -- The arrange mini-map's window — see docs/trackerRender.md § Palette tabs
+  -- The arrange mini-map's window — see docs/trackerRender.md § The mini-map
   -- SHARED HELPERS
   -- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
   @fn neighbourEvents(cols, ppq, pred)  @ 393-402

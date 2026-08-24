@@ -290,7 +290,7 @@ function tv:resolveCurrentInstance()
   if gesture and self:loopsToItem() then self:bracketCurrentInstance() end
 end
 
------ The arrange mini-map's window — see docs/trackerRender.md § Palette tabs
+----- The arrange mini-map's window — see docs/trackerRender.md § The mini-map
 
 --shape: mapWindow = { colLo, colHi, qnLo, qnHi, takes, current }
 --contract: cols/qnSpan are the pane's measure; the bound column centres and clamps to tracks
