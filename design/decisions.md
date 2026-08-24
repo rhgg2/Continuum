@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — A drop places a fresh instance at its pool's full length, over inheriting the
+  sibling it clones from: the item state chunk carries the take's window across — the stored natural
+  as a P_EXT blob, the head as D_STARTOFFS — so one resized instance made every later drop of that
+  slot come in short. dropInstance clears both on the clone. Unparking is exempt, since it moves the
+  keeper itself rather than cloning it, so the window it returns with is its own.
+
 - **2026-08-24** — The mini-map's time window pages, over centring on the current instance: a stride
   of the pane's depth less one bar, and the window is the page that stride lands the instance's
   start on. So a walk moves down a still window and steps to the next page on reaching the last bar,

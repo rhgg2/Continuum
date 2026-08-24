@@ -672,10 +672,25 @@ function M.new()
   function r.GetMediaSourceLength(src)
     return state.srcLen[src] or math.huge, state.srcIsQN[src] == true
   end
+  -- Real REAPER's chunk carries the take's window with it: P_EXT blobs and the
+  -- start offset both round-trip, so a chunk clone inherits them (verified
+  -- against REAPER 7.77). Ext values are single-line, as pextStore writes them.
   function r.GetItemStateChunk(item, _, _)
     local guid = state.poolByItem[item]
     if not guid then return true, '' end
-    return true, '<ITEM\n  <SOURCE MIDI\n    POOLEDEVTS ' .. guid .. '\n  >\n>'
+    local take, lines = state.activeTake[item], {}
+    if take then
+      lines[#lines+1] = '  STARTOFFS ' .. tostring(state.takeStartOffs[take] or 0)
+      local prefix = tostring(take) .. '/'
+      for k, v in pairs(state.takeExt) do
+        if k:sub(1, #prefix) == prefix then
+          lines[#lines+1] = '  TAKEEXT ' .. k:sub(#prefix + 1) .. ' ' .. v
+        end
+      end
+      table.sort(lines)
+    end
+    return true, '<ITEM\n  <SOURCE MIDI\n    POOLEDEVTS ' .. guid .. '\n  >\n'
+      .. table.concat(lines, '\n') .. '\n>'
   end
   function r.GetMediaItemInfo_Value(item, parm)
     if parm == 'D_POSITION'     then return state.itemPos[item]         or 0 end
@@ -830,10 +845,10 @@ function M.new()
     end
   end
 
-  -- Round-trip POOLEDEVTS via the chunk. Only the guid is preserved;
-  -- the surrounding XML shape is regenerated on every read. Pooled items are one
-  -- source in REAPER, so a chunk naming a live pool adopts that pool's source in
-  -- place of the fresh one CreateNewMIDIItemInProj minted for the clone.
+  -- Round-trip POOLEDEVTS, the take's ext blobs and its start offset via the
+  -- chunk; the surrounding XML shape is regenerated on every read. Pooled items
+  -- are one source in REAPER, so a chunk naming a live pool adopts that pool's
+  -- source in place of the fresh one CreateNewMIDIItemInProj minted for the clone.
   function r.SetItemStateChunk(item, chunk, _isUndo)
     local guid = chunk and chunk:match('POOLEDEVTS%s+({[^}]+})')
     if guid then
@@ -841,6 +856,13 @@ function M.new()
       local take = state.activeTake[item]
       local src  = srcOfPool(guid, item)
       if take and src then state.takeSrc[take] = src end
+      if take then
+        local offs = chunk:match('STARTOFFS%s+([%d%.%-e]+)')
+        if offs then state.takeStartOffs[take] = tonumber(offs) end
+        for key, value in chunk:gmatch('TAKEEXT%s+(%S+)%s+([^\n]*)') do
+          state.takeExt[tostring(take) .. '/' .. key] = value
+        end
+      end
     end
     return true
   end

@@ -677,6 +677,49 @@ return {
   },
 
   {
+    name = 'a fresh drop opens the whole pool, not a resized sibling\'s window',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot = am:createAndDropMidi(0, 0, 16, 'lead')
+      am:resizeTake(am:tracksTakes(0)[1], 4)
+      local dropped = am:dropInstance(0, slot, 32)
+      t.eq(h.ds:getAt(dropped, 'arrangeNaturalLenQN'), nil,
+           'the sibling\'s natural did not ride the chunk onto the new instance')
+      t.eq(am:findTake(dropped).lengthQN, 16, 'the new instance renders the whole pool')
+    end,
+  },
+
+  {
+    name = 'a fresh drop starts at the pool origin, not a trimmed sibling\'s head',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slot = am:createAndDropMidi(0, 0, 16, 'lead')
+      am:trimHead(am:tracksTakes(0)[1], 4)
+      local dropped = am:dropInstance(0, slot, 32)
+      t.eq(h.reaper.GetMediaItemTakeInfo_Value(dropped, 'D_STARTOFFS'), 0,
+           'the sibling\'s head did not ride the chunk onto the new instance')
+      t.eq(am:findTake(dropped).lengthQN, 16, 'the new instance renders the whole pool')
+    end,
+  },
+
+  {
+    name = 'an audio drop inherits the sibling\'s natural, not its truncated render',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 8, srcLen = 16, srcFile = 'loop.wav' },
+                    { kind = 'audio', pos = 4, len = 4, srcLen = 4, srcFile = 'stab.wav' } } },
+      })
+      local first = am:tracksTakes(0)[1]
+      t.eq(first.lengthQN, 4, 'the neighbour truncates the first instance to 4')
+      local dropped = am:dropInstance(0, first.slotIdx, 16)
+      t.eq(am:findTake(dropped).lengthQN, 8, 'the new instance arrives at the natural 8')
+    end,
+  },
+
+  {
     name = 'dropInstance carries the sibling MIDI events into the new instance',
     run = function(harness)
       local h, am = mkAm(harness)

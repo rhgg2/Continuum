@@ -212,6 +212,26 @@ prefers a live instance on the track and falls back to the slot's parked
 keeper. A drop returns nil only when neither exists — a slot with no live
 and no parked instance, which `ensureSlots` would already have pruned.
 
+### A drop opens the whole pool
+
+A take's window — its stored natural length and its head — belongs to
+that instance, but the state chunk carries both across: P_EXT blobs and
+`D_STARTOFFS` round-trip through `SetItemStateChunk`. A clone therefore
+inherits the window of whichever sibling `siblingInstance` finds first,
+so one resized instance made every later drop of that slot come in
+short. `dropInstance` clears both on the clone: a fresh instance renders
+the whole pool from its origin, and relayout caps it against the take
+below.
+
+The keeper is exempt. Unparking moves the take itself rather than
+cloning it, so the window it returns with is its own.
+
+`siblingInstance` reports the sibling's natural length, not its rendered
+one; the two differ where a neighbour truncates it. For MIDI relayout
+re-derives the length anyway. For audio, whose natural is captured from
+the length the item is placed at, it is the difference between
+inheriting a trim and inheriting a truncation.
+
 ### Pools never span tracks
 
 Undo on a MIDI pool spanning tracks obeys a **one-era law** (isolated

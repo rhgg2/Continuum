@@ -16,7 +16,7 @@
   @invariant  edit cmds target via actionTargets; off-screen + nothing selected = no-op.  @ 242
   @invariant  drop0..dropZ place a fresh instance at the cursor and advance the caret past it.  @ 393
   @invariant  arrangeAdvanceBy0..9 (Ctrl+digit) set the step; arrangeAdvanceMode (Ctrl-`) picks it.  @ 394
-  @invariant  drop on an empty slot is a no-op; new takes inherit the slot's instance length.  @ 395
+  @invariant  drop on an empty slot is a no-op; new takes arrive at the slot's full pool length.  @ 395
   @invariant  drop over a take starting at the cursor overwrites it; drops never stack.  @ 396
   @invariant  a drop while armed stands the slot in for every action target.  @ 466
   @invariant  each replacement keeps its target's start; each arrives at its own natural length.  @ 467

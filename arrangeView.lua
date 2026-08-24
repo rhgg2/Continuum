@@ -392,7 +392,7 @@ end
 
 --invariant: drop0..dropZ place a fresh instance at the cursor and advance the caret past it.
 --invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the step; arrangeAdvanceMode (Ctrl-`) picks it.
---invariant: drop on an empty slot is a no-op; new takes inherit the slot's instance length.
+--invariant: drop on an empty slot is a no-op; new takes arrive at the slot's full pool length.
 --invariant: drop over a take starting at the cursor overwrites it; drops never stack.
 local function dropAt(slotIdx)
   local placed = am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow))

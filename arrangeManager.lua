@@ -173,6 +173,15 @@ local function setHeadOf(take, originQN, headQN)
     reaper.TimeMap2_QNToTime(0, originQN + headQN) - originSec)
 end
 
+-- A fresh instance carries no window of its own: the whole pool, from its origin.
+-- Both writes skip when there is nothing to clear, as setItemQNRange does.
+local function openWindow(take)
+  if naturalLenOf(take) ~= util.OPEN then setNaturalLenOf(take, util.OPEN) end
+  if reaper.GetMediaItemTakeInfo_Value(take, 'D_STARTOFFS') ~= 0 then
+    reaper.SetMediaItemTakeInfo_Value(take, 'D_STARTOFFS', 0)  -- head 0; cf. setHeadOf
+  end
+end
+
 -- What the take renders from its start: natural resolved against the source,
 -- less what the head skips. Exposed as naturalLenQN via tracksTakes.
 local function effectiveNaturalLenQN(take, item)
@@ -829,15 +838,15 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   return slotIdx, take
 end
 
--- First instance matching id: item, length, name — what a fresh drop inherits.
--- Falls back to the parked keeper so drops from emptied slots re-materialise.
+-- First instance matching id: item, natural length, name — what a fresh drop
+-- inherits, falling back to the parked keeper for emptied slots. See docs/arrangeManager.md § A drop opens the whole pool.
 local function siblingInstance(track, id)
   local sibItem = forEachActiveTake(track, function(take, item)
     if takeIdOf(take) == id then return item end
   end) or parkedItemFor(id)
   if not sibItem then return end
   return sibItem,
-         select(2, itemQNRange(sibItem)),
+         effectiveNaturalLenQN(reaper.GetActiveTake(sibItem), sibItem),
          reaper.GetTakeName(reaper.GetActiveTake(sibItem)) or ''
 end
 
@@ -875,8 +884,8 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   if not track then return end
   local entry = readSlots(track)[slotIdx]
   if not entry or not entry.id then return end
-  local sibItem, sibLen, sibName = siblingInstance(track, entry.id)
-  local len = lengthQN or sibLen or 1
+  local sibItem, sibNatural, sibName = siblingInstance(track, entry.id)
+  local len = lengthQN or sibNatural or 1
 
   -- Captured before placing: the new take starts at qnPos too, so it must not
   -- be in this list; for MIDI it also keeps the clone source alive until cloned.
@@ -896,6 +905,9 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
       take = reaper.GetActiveTake(sibItem)
     else
       take = cloneMidiItem(track, sibItem, qnPos, len)
+      -- The chunk replays the sibling's window — stored natural and head — onto a
+      -- take with no history of its own. See docs § A drop opens the whole pool.
+      if take then openWindow(take) end
     end
   else
     take = placeAudio(track, entry.id, qnPos, len)
@@ -1115,8 +1127,8 @@ function am:vary(take)
   return slotIdx, am:dropInstance(trackIdx, slotIdx, startQN)
 end
 
--- The drop names no length, so the neighbour arrives at its own natural length and relayout
--- caps it where it capped the placement it replaces.
+-- The drop names no length, so the neighbour arrives at its own pool's full length and
+-- relayout caps it where it capped the placement it replaces.
 --contract: (slotIdx, take) for the placement moved ±1 along its family; varies past the last
 --contract: nil off the front, on a non-MIDI take, or where the vary refuses
 function am:stepVariant(take, dir)
