@@ -21,6 +21,7 @@ local specs = {
   'cmgr_overrides_spec',
   'config_schema_spec',
   'library_spec',
+  'arrange_tidy_modal_spec',
   'libpicker_badge_spec',
   'picker_create_spec',
   'picker_delete_spec',
@@ -278,6 +279,7 @@ local specs = {
   'curveEditor_spec',
   'temperEditor_tree_spec',
   'editor_verbs_spec',
+  'editor_new_modal_spec',
 }
 
 local pass, fail, pending, failures = 0, 0, 0, {}

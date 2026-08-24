@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=802  mode=chunk  self=swingEditor
+@module swingEditor  src=swingEditor.lua  loc=807  mode=chunk  self=swingEditor
 @deps cm, ds, chrome, ctx, gui, facade, modalHost, lib
 
 # Invariants & contracts
@@ -32,7 +32,7 @@
   @state GLYPH_BOX = 36  @ 109   -- px reserved for each =/∘ separator between strips
   @state DIVIDER_GRAB = 7  @ 110   -- px hit-height of the draggable preview/factor splitter
   @state MIN_FACTOR_AREA = 80  @ 111   -- px kept below the splitter for the factor list
-  @state swingEditor = {}  @ 767
+  @state swingEditor = {}  @ 772
 
 # Private functions
   @fn arrange()  @ 48
@@ -129,77 +129,78 @@
   @fn openNewModal()  @ 602-610
       -- New-swing modal, hosted by modalHost (kind registered below). Creates at the
       -- project tier; the render keeps the popup open on a name clash.
-  @fn nearestRpb(v)  @ 644-651
+  @fn nearestRpb(v)  @ 649-656
       -- Rows/qn is a fixed ladder of valid divisions; the stepper walks adjacent rungs
       -- and snaps a typed value to the nearest. See RPB_CHOICES.
-  @fn stepRpb(v, dir)  @ 652-657
-  @fn drawToolsRow(composite, n)  @ 661-697
+  @fn stepRpb(v, dir)  @ 657-662
+  @fn drawToolsRow(composite, n)  @ 666-702
       -- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
       -- band (ui font + FramePadding already set). Vertical separators per group.
-  @fn drawEditBody(composite)  @ 699-748
-  @fn draw(w, h)  @ 752-763
+  @fn drawEditBody(composite)  @ 704-753
+  @fn draw(w, h)  @ 757-768
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
 # Handlers registered
-  @handler modalHost:swingNew(s, close)  @ 612-640
+  @handler modalHost:swingNew(s, close)  @ 612-645
 
 # Public API (swingEditor:*)
   -- Public
-  @api swingEditor:open(name)  @ 771-780
-      @contract  open(name?) selects entry; default prefers chan override → take swing → nil.  @ 769
-      @contract  when already open, re-selects resolved target; snapshot captured at selection time.  @ 770
-  @api swingEditor:render(w, h)  @ 782
-  @api swingEditor:renderToolbar()  @ 786-793
+  @api swingEditor:open(name)  @ 776-785
+      @contract  open(name?) selects entry; default prefers chan override → take swing → nil.  @ 774
+      @contract  when already open, re-selects resolved target; snapshot captured at selection time.  @ 775
+  @api swingEditor:render(w, h)  @ 787
+  @api swingEditor:renderToolbar()  @ 791-798
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
       -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-  @api swingEditor:libraryDescriptor()  @ 795
-  @api swingEditor:close()  @ 797
-  @api swingEditor:isOpen()  @ 799
+  @api swingEditor:libraryDescriptor()  @ 800
+  @api swingEditor:close()  @ 802
+  @api swingEditor:isOpen()  @ 804
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ drawFactorRow:326,362,389 modalHost:swingNew:616 drawToolsRow:662,681
-  @use call    ImGui.BeginChild  @ draw:758
-  @use call    ImGui.BeginDisabled  @ drawEditBody:741 renderToolbar:790
-  @use call    ImGui.Button  @ drawFactorRow:410,414,417 modalHost:swingNew:626,628 drawEditBody:746
-  @use call    ImGui.CalcTextSize  @ gridMetrics:116 drawBandInto:210 drawFactorRow:329 drawEditBody:742
-  @use call    ImGui.Dummy  @ drawEditBody:722
-  @use call    ImGui.EndChild  @ draw:761
-  @use call    ImGui.EndDisabled  @ drawEditBody:747 renderToolbar:792
-  @use call    ImGui.GetContentRegionAvail  @ drawEditBody:707
+  @use call    ImGui.AlignTextToFramePadding  @ drawFactorRow:326,362,389 modalHost:swingNew:616 drawToolsRow:667,686
+  @use call    ImGui.BeginChild  @ draw:763
+  @use call    ImGui.BeginDisabled  @ drawEditBody:746 renderToolbar:795
+  @use call    ImGui.Button  @ drawFactorRow:410,414,417 modalHost:swingNew:631,633 drawEditBody:751
+  @use call    ImGui.CalcTextSize  @ gridMetrics:116 drawBandInto:210 drawFactorRow:329 drawEditBody:747
+  @use call    ImGui.Dummy  @ drawEditBody:727
+  @use call    ImGui.EndChild  @ draw:766
+  @use call    ImGui.EndDisabled  @ drawEditBody:752 renderToolbar:797
+  @use call    ImGui.GetContentRegionAvail  @ drawEditBody:712
   @use call    ImGui.GetCursorPosX  @ drawFactorRow:328
-  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:718,727
-  @use call    ImGui.GetMousePos  @ drawEditBody:732
-  @use call    ImGui.InputText  @ modalHost:swingNew:622
-  @use call    ImGui.InvisibleButton  @ drawEditBody:729
-  @use call    ImGui.IsItemActive  @ drawEditBody:730
-  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawFactorRow:358,406 drawToolsRow:695
-  @use call    ImGui.IsItemHovered  @ drawEditBody:730
-  @use call    ImGui.IsKeyPressed  @ modalHost:swingNew:628
+  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:723,732
+  @use call    ImGui.GetMousePos  @ drawEditBody:737
+  @use call    ImGui.InputText  @ modalHost:swingNew:624
+  @use call    ImGui.InvisibleButton  @ drawEditBody:734
+  @use call    ImGui.IsItemActive  @ drawEditBody:735
+  @use call    ImGui.IsItemDeactivated  @ modalHost:swingNew:627
+  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawFactorRow:358,406 drawToolsRow:700
+  @use call    ImGui.IsItemHovered  @ drawEditBody:735
+  @use call    ImGui.IsKeyPressed  @ modalHost:swingNew:628,629,633
   @use call    ImGui.IsWindowAppearing  @ modalHost:swingNew:613
   @use call    ImGui.PopFont  @ bandLayout:181 drawBandInto:211,234
-  @use call    ImGui.PopID  @ drawFactorRow:419 modalHost:swingNew:623
+  @use call    ImGui.PopID  @ drawFactorRow:419 modalHost:swingNew:625
   @use call    ImGui.PushFont  @ bandLayout:172 drawBandInto:195,209
   @use call    ImGui.PushID  @ drawFactorRow:322 modalHost:swingNew:621
-  @use call    ImGui.SameLine  @ drawFactorRow:331,344,361,364,388,391,393,408,412,416 modalHost:swingNew:618,625,627 drawToolsRow:664,669,671,678,680,683
+  @use call    ImGui.SameLine  @ drawFactorRow:331,344,361,364,388,391,393,408,412,416 modalHost:swingNew:618,630,632 drawToolsRow:669,674,676,683,685,688
   @use call    ImGui.SetCursorPosX  @ drawFactorRow:329
-  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:728,739
+  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:733,744
   @use call    ImGui.SetKeyboardFocusHere  @ modalHost:swingNew:614
-  @use call    ImGui.SetMouseCursor  @ drawEditBody:738
-  @use call    ImGui.SetNextItemWidth  @ drawFactorRow:348,394 modalHost:swingNew:619 drawToolsRow:687
-  @use call    ImGui.SliderDouble  @ drawFactorRow:350,397 drawToolsRow:688
-  @use call    ImGui.Text  @ drawFactorRow:330,363,390,392 modalHost:swingNew:617 drawToolsRow:663,682
-  @use call    ImGui.TextColored  @ modalHost:swingNew:639
-  @use call    chrome.checkbox  @ drawToolsRow:673
-  @use call    chrome.colour  @ modalHost:swingNew:639
-  @use call    chrome.disabledIf  @ drawFactorRow:347,409,413 drawToolsRow:684
+  @use call    ImGui.SetMouseCursor  @ drawEditBody:743
+  @use call    ImGui.SetNextItemWidth  @ drawFactorRow:348,394 modalHost:swingNew:619 drawToolsRow:692
+  @use call    ImGui.SliderDouble  @ drawFactorRow:350,397 drawToolsRow:693
+  @use call    ImGui.Text  @ drawFactorRow:330,363,390,392 modalHost:swingNew:617 drawToolsRow:668,687
+  @use call    ImGui.TextColored  @ modalHost:swingNew:644
+  @use call    chrome.checkbox  @ drawToolsRow:678
+  @use call    chrome.colour  @ modalHost:swingNew:644
+  @use call    chrome.disabledIf  @ drawFactorRow:347,409,413 drawToolsRow:689
   @use call    chrome.dropdown  @ drawFactorRow:333,371
-  @use call    chrome.numberStepper  @ drawToolsRow:665
-  @use call    chrome.paletteHeader  @ drawEditBody:704,726
-  @use call    chrome.popChromeStyles  @ draw:762
-  @use call    chrome.pushChromeStyles  @ draw:757
-  @use call    chrome.verticalSeparator  @ drawToolsRow:670,679
-  @use call    cm:get  @ swingRead:240 modalHost:swingNew:633
+  @use call    chrome.numberStepper  @ drawToolsRow:670
+  @use call    chrome.paletteHeader  @ drawEditBody:709,731
+  @use call    chrome.popChromeStyles  @ draw:767
+  @use call    chrome.pushChromeStyles  @ draw:762
+  @use call    chrome.verticalSeparator  @ drawToolsRow:675,684
+  @use call    cm:get  @ swingRead:240 modalHost:swingNew:638
   @use call    cm:getAt  @ swingRead:238 projectSwings:424 globalSwings:426
   @use call    cm:set  @ deleteFromTier:447
   @use call    ds:get  @ resolvedSlots:486 activeEntries:497
@@ -220,8 +221,8 @@
   @use call    painter.new  @ drawBandInto:196
   @use call    timing.applyFactors  @ drawSwingStrip:159
   @use call    timing.atomTilePeriod  @ shiftCap:92 drawFactorRow:366
-  @use call    timing.compositePeriodQN  @ bandLayout:175 drawBandInto:227 drawToolsRow:685
-  @use call    timing.periodQN  @ periodPresetIndex:68 phaseQN:250 compositesEqual:261 drawFactorRow:376,396 drawToolsRow:686
+  @use call    timing.compositePeriodQN  @ bandLayout:175 drawBandInto:227 drawToolsRow:690
+  @use call    timing.periodQN  @ periodPresetIndex:68 phaseQN:250 compositesEqual:261 drawFactorRow:376,396 drawToolsRow:691
   @use call    timing.resolveFactors  @ materialise:106
   @use call    util.add  @ addFactor:301 drawFactorRow:369,370 activeEntries:501,503,506
   @use call    util.assign  @ patchFactor:294
@@ -235,20 +236,20 @@
 
 # Calls (intra-file)
   @call activeEntries  @ buildDescriptor:580
-  @call addFactor  @ drawEditBody:746
+  @call addFactor  @ drawEditBody:751
   @call arrange  @ commit:55 inUseNames:516
-  @call bandLayout  @ drawEditBody:706
-  @call buildDescriptor  @ libraryDescriptor:795
-  @call cloneForEdit  @ patchFactor:292 addFactor:300 removeFactor:306 moveFactor:316 drawFactorRow:355,400 drawToolsRow:691
-  @call commit  @ drawFactorRow:341,358,382,406 resetToSnapshot:567 drawToolsRow:695
+  @call bandLayout  @ drawEditBody:711
+  @call buildDescriptor  @ libraryDescriptor:800
+  @call cloneForEdit  @ patchFactor:292 addFactor:300 removeFactor:306 moveFactor:316 drawFactorRow:355,400 drawToolsRow:696
+  @call commit  @ drawFactorRow:341,358,382,406 resetToSnapshot:567 drawToolsRow:700
   @call compositesEqual  @ swingWrite:278 buildDescriptor:595
   @call deleteFromTier  @ deleteSel:476
-  @call draw  @ render:782
-  @call drawBandInto  @ drawEditBody:721
-  @call drawEditBody  @ draw:759
-  @call drawFactorRow  @ drawEditBody:744
+  @call draw  @ render:787
+  @call drawBandInto  @ drawEditBody:726
+  @call drawEditBody  @ draw:764
+  @call drawFactorRow  @ drawEditBody:749
   @call drawSwingStrip  @ drawBandInto:219,227
-  @call drawToolsRow  @ renderToolbar:791
+  @call drawToolsRow  @ renderToolbar:796
   @call forkToProject  @ swingWrite:279
   @call globalSwings  @ deleteFromTier:444 deleteSel:477
   @call gridMetrics  @ bandLayout:173
@@ -258,20 +259,20 @@
   @call meterClassifier  @ bandLayout:174
   @call meterQN  @ meterClassifier:123
   @call moveFactor  @ drawFactorRow:410,414
-  @call nearestRpb  @ stepRpb:656 drawToolsRow:667
+  @call nearestRpb  @ stepRpb:661 drawToolsRow:672
   @call patchFactor  @ drawFactorRow:340,381
   @call periodLabel  @ drawFactorRow:370,371
   @call periodOverPPC  @ drawFactorRow:375
   @call periodPresetIndex  @ periodLabel:74 drawFactorRow:367
   @call phaseQN  @ compositesEqual:255,262
   @call projectSwings  @ homeTier:431 deleteFromTier:444 deleteSel:477 inUseNames:515
-  @call readFactors  @ compositesEqual:256 moveFactor:313 drawEditBody:700 renderToolbar:789
+  @call readFactors  @ compositesEqual:256 moveFactor:313 drawEditBody:705 renderToolbar:794
   @call removeFactor  @ drawFactorRow:417
-  @call resolvedSlots  @ open:772
+  @call resolvedSlots  @ open:777
   @call shiftCap  @ drawFactorRow:336,345,378
-  @call swingRead  @ swingWrite:278 cloneForEdit:286 moveFactor:312 switchTo:440 buildDescriptor:595 draw:755 renderToolbar:788
-  @call swingWrite  @ patchFactor:295 addFactor:302 removeFactor:308 moveFactor:318 drawFactorRow:356,403 resetToSnapshot:566 drawToolsRow:693
-  @call switchTo  @ revert:470 deleteSel:477,478 buildDescriptor:587 openNewModal:607 open:775,779
+  @call swingRead  @ swingWrite:278 cloneForEdit:286 moveFactor:312 switchTo:440 buildDescriptor:595 draw:760 renderToolbar:793
+  @call swingWrite  @ patchFactor:295 addFactor:302 removeFactor:308 moveFactor:318 drawFactorRow:356,403 resetToSnapshot:566 drawToolsRow:698
+  @call switchTo  @ revert:470 deleteSel:477,478 buildDescriptor:587 openNewModal:607 open:780,784
   @call tracker  @ meterQN:59 swingWrite:280 resolvedSlots:489 openNewModal:606
 
 # Bindings (by name)
@@ -282,7 +283,7 @@
   @bind reloadFactory  @ buildDescriptor:592
   @bind resetToSnapshot  @ buildDescriptor:596
   @bind revert  @ buildDescriptor:590
-  @bind stepRpb  @ drawToolsRow:666
+  @bind stepRpb  @ drawToolsRow:671
   @bind tidy  @ buildDescriptor:591
 
 # Unresolved receivers
@@ -303,19 +304,20 @@
   @field r H  @ drawSwingStrip:159,166 drawBandInto:204,212
   @field w H  @ bandLayout:189 drawBandInto:204
   @field r ImGui_GetBuiltinPath  @ 18
-  @field r InputTextFlags_EnterReturnsTrue  @ modalHost:swingNew:622
-  @field r Key_Escape  @ modalHost:swingNew:628
-  @field r MouseCursor_ResizeNS  @ drawEditBody:738
+  @field r Key_Enter  @ modalHost:swingNew:628
+  @field r Key_Escape  @ modalHost:swingNew:633
+  @field r Key_KeypadEnter  @ modalHost:swingNew:629
+  @field r MouseCursor_ResizeNS  @ drawEditBody:743
   @field w active  @ buildDescriptor:580
   @field r add  @ reloadFactory:531
-  @field w align  @ drawToolsRow:666
+  @field w align  @ drawToolsRow:671
   @field r atom  @ shiftCap:94,97 compositesEqual:260 drawFactorRow:333,365,378
   @field w atom  @ addFactor:301 drawFactorRow:336,340,378
   @field r atomMeta  @ shiftCap:97 drawFactorRow:365
   @field r bandW  @ drawBandInto:197
   @field w bandW  @ bandLayout:189
-  @field r buf  @ modalHost:swingNew:622
-  @field w buf  @ openNewModal:604 modalHost:swingNew:624,634
+  @field r buf  @ modalHost:swingNew:624
+  @field w buf  @ openNewModal:604 modalHost:swingNew:626,639
   @field w callback  @ publish:458 reloadFactory:540 importFactory:557 openNewModal:605
   @field r chan  @ resolvedSlots:490
   @field r chrome  @ 46
@@ -323,37 +325,37 @@
   @field w classify  @ bandLayout:187 drawBandInto:204
   @field r cm  @ 46
   @field w col  @ activeEntries:501,506
-  @field r contentH  @ drawEditBody:715
+  @field r contentH  @ drawEditBody:720
   @field w contentH  @ bandLayout:189
   @field r ctx  @ 46
   @field r dQN  @ drawSwingStrip:143,158 drawBandInto:203
   @field w dQN  @ bandLayout:188 drawBandInto:203
   @field w dirty  @ buildDescriptor:595
   @field r ds  @ 46
-  @field r err  @ modalHost:swingNew:639
-  @field w err  @ modalHost:swingNew:632,634
+  @field r err  @ modalHost:swingNew:644
+  @field w err  @ modalHost:swingNew:637,639
   @field r facade  @ 46
   @field r factors  @ readFactors:246 cloneForEdit:287 patchFactor:293,294 addFactor:301 removeFactor:307 moveFactor:317 drawFactorRow:356
   @field r factors  @ drawFactorRow:401,402
   @field w factors  @ drawBandInto:226 cloneForEdit:287
   @field r font  @ bandLayout:172 drawBandInto:195
   @field r fontSize  @ bandLayout:172 drawBandInto:195,209,213
-  @field r gen  @ modalHost:swingNew:620,621,634
-  @field w gen  @ modalHost:swingNew:620,634
+  @field r gen  @ modalHost:swingNew:620,621,639
+  @field w gen  @ modalHost:swingNew:620,639
   @field r global  @ resolvedSlots:487 activeEntries:499
   @field r grid  @ bandLayout:172 drawBandInto:195
   @field r gui  @ 46
   @field r gx  @ drawSwingStrip:138 drawBandInto:202
   @field w gx  @ bandLayout:187 drawBandInto:202
-  @field r gy  @ drawSwingStrip:138 drawBandInto:202 drawEditBody:708
+  @field r gy  @ drawSwingStrip:138 drawBandInto:202 drawEditBody:713
   @field w gy  @ bandLayout:187 drawBandInto:202
-  @field r h  @ drawBandInto:199 drawEditBody:722
-  @field w h  @ drawEditBody:719
-  @field r h0  @ drawEditBody:734
-  @field w h0  @ drawEditBody:733
+  @field r h  @ drawBandInto:199 drawEditBody:727
+  @field w h  @ drawEditBody:724
+  @field r h0  @ drawEditBody:739
+  @field w h0  @ drawEditBody:738
   @field r heightQN  @ drawSwingStrip:159 drawBandInto:203
   @field w heightQN  @ bandLayout:188 drawBandInto:203
-  @field r huge  @ nearestRpb:645
+  @field r huge  @ nearestRpb:650
   @field w identity  @ 43
   @field w kind  @ openNewModal:604
   @field r label  @ periodLabel:75 drawFactorRow:369
@@ -361,13 +363,13 @@
   @field r lib  @ 46
   @field r library  @ buildDescriptor:582
   @field w library  @ buildDescriptor:582
-  @field w max  @ drawToolsRow:666
-  @field w mergeTiers  @ swingRead:240 modalHost:swingNew:633
-  @field w min  @ drawToolsRow:666
+  @field w max  @ drawToolsRow:671
+  @field w mergeTiers  @ swingRead:240 modalHost:swingNew:638
+  @field w min  @ drawToolsRow:671
   @field r modalHost  @ 46
   @field w modified  @ buildDescriptor:585
-  @field r name  @ commit:55 swingRead:239,240 forkToProject:272 swingWrite:279,280 buildDescriptor:586,595 drawEditBody:741,747
-  @field r name  @ draw:755 renderToolbar:788,790,792
+  @field r name  @ commit:55 swingRead:239,240 forkToProject:272 swingWrite:279,280 buildDescriptor:586,595 drawEditBody:746,752
+  @field r name  @ draw:760 renderToolbar:793,795,797
   @field w name  @ switchTo:438 activeEntries:501,506 buildDescriptor:586
   @field r negRange  @ shiftCap:98
   @field w onDelete  @ buildDescriptor:594
@@ -378,7 +380,7 @@
   @field w onReset  @ buildDescriptor:596
   @field w onRevert  @ buildDescriptor:590
   @field w onSelect  @ buildDescriptor:587
-  @field w onStep  @ drawToolsRow:666
+  @field w onStep  @ drawToolsRow:671
   @field w onTidy  @ buildDescriptor:591
   @field r overwrite  @ reloadFactory:535
   @field r path  @ 21
@@ -387,30 +389,30 @@
   @field w period  @ 32,33,34,35,36,37 addFactor:301 drawFactorRow:336,378,381
   @field r periodQN  @ drawBandInto:219
   @field w periodQN  @ bandLayout:187
-  @field r phase  @ compositesEqual:255,262 drawFactorRow:396 drawToolsRow:686
-  @field w phase  @ drawFactorRow:402 drawToolsRow:692
+  @field r phase  @ compositesEqual:255,262 drawFactorRow:396 drawToolsRow:691
+  @field w phase  @ drawFactorRow:402 drawToolsRow:697
   @field r posRange  @ shiftCap:98
-  @field r previewH  @ drawEditBody:719,733
-  @field w previewH  @ drawEditBody:715,734
-  @field r previewRpb  @ drawEditBody:713
-  @field w previewRpb  @ drawEditBody:714
+  @field r previewH  @ drawEditBody:724,738
+  @field w previewH  @ drawEditBody:720,739
+  @field r previewRpb  @ drawEditBody:718
+  @field w previewRpb  @ drawEditBody:719
   @field r project  @ buildDescriptor:575,581
   @field w project  @ buildDescriptor:581
   @field w prompt  @ publish:457 reloadFactory:539 importFactory:556
   @field r pulsesPerCycle  @ drawFactorRow:365
   @field r refocus  @ modalHost:swingNew:613
-  @field w refocus  @ modalHost:swingNew:614,634
+  @field w refocus  @ modalHost:swingNew:614,639
   @field r rows  @ drawSwingStrip:141,157 drawBandInto:203
   @field w rows  @ bandLayout:188 drawBandInto:203
-  @field r rpb  @ bandLayout:178 drawToolsRow:665 drawEditBody:713,714
-  @field w rpb  @ drawToolsRow:667 open:778
+  @field r rpb  @ bandLayout:178 drawToolsRow:670 drawEditBody:718,719
+  @field w rpb  @ drawToolsRow:672 open:783
   @field w sel  @ buildDescriptor:586
   @field r shift  @ compositesEqual:260 drawFactorRow:337,350,377
   @field w shift  @ addFactor:301 drawFactorRow:340,356,381
   @field r snapshot  @ resetToSnapshot:566 buildDescriptor:595
   @field w snapshot  @ switchTo:440
-  @field r splitDrag  @ drawEditBody:733,734
-  @field w splitDrag  @ drawEditBody:733,736
+  @field r splitDrag  @ drawEditBody:738,739
+  @field w splitDrag  @ drawEditBody:738,741
   @field r stripW  @ drawBandInto:220,228
   @field w stripW  @ bandLayout:188
   @field w synthetic  @ buildDescriptor:583
@@ -420,16 +422,16 @@
   @field r ui  @ drawBandInto:209,213
   @field r uiFont  @ drawBandInto:209,213
   @field w undeletable  @ buildDescriptor:584
-  @field r w  @ drawBandInto:197,199 drawEditBody:722
-  @field w w  @ drawEditBody:719
-  @field r wild  @ drawFactorRow:336,345,378 drawToolsRow:673
-  @field w wild  @ drawToolsRow:674
+  @field r w  @ drawBandInto:197,199 drawEditBody:727
+  @field w w  @ drawEditBody:724
+  @field r wild  @ drawFactorRow:336,345,378 drawToolsRow:678
+  @field w wild  @ drawToolsRow:679
   @field r x  @ drawSwingStrip:138 drawBandInto:197,198,199
-  @field w x  @ drawBandInto:218,225 drawEditBody:719
+  @field w x  @ drawBandInto:218,225 drawEditBody:724
   @field w x0  @ drawSwingStrip:145,147,166 drawBandInto:198
   @field w x1  @ drawSwingStrip:145,147,166 drawBandInto:199
   @field r y  @ drawSwingStrip:138 drawBandInto:198,199,202,212
-  @field w y  @ drawBandInto:202 drawEditBody:719
-  @field r y0  @ drawEditBody:734
-  @field w y0  @ drawSwingStrip:145,147,166 drawBandInto:198 drawEditBody:733
+  @field w y  @ drawBandInto:202 drawEditBody:724
+  @field r y0  @ drawEditBody:739
+  @field w y0  @ drawSwingStrip:145,147,166 drawBandInto:198 drawEditBody:738
   @field w y1  @ drawSwingStrip:145,147,166 drawBandInto:199

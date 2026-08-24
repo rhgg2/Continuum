@@ -763,9 +763,13 @@ local function drawBaseList(s)
   if #s.bases == 0 then ImGui.TextDisabled(ctx, '(none)') end
 
   ImGui.SetNextItemWidth(ctx, TIDY_BASE_W)
-  local entered, newBuf = ImGui.InputTextWithHint(ctx, '##newBase', 'new base', s.newBase,
-                                                  ImGui.InputTextFlags_EnterReturnsTrue)
+  -- No EnterReturnsTrue: that flag hands back the buffer only on the frame it fires, so
+  -- the Add button would read stale text; Enter still deactivates the field, watched for below.
+  local _, newBuf = ImGui.InputTextWithHint(ctx, '##newBase', 'new base', s.newBase)
   s.newBase = newBuf
+  local entered = ImGui.IsItemDeactivated(ctx)
+              and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                   or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter))
   ImGui.SameLine(ctx)
   if ImGui.Button(ctx, 'Add') or entered then edit = { add = s.newBase } end
 

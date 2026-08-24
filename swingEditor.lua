@@ -619,11 +619,16 @@ modalHost:registerKind('swingNew', function(s, close)
   ImGui.SetNextItemWidth(ctx, 240)
   s.gen = s.gen or 0
   ImGui.PushID(ctx, s.gen)
-  local rv, buf = ImGui.InputText(ctx, '##newname', s.buf, ImGui.InputTextFlags_EnterReturnsTrue)
+  -- No EnterReturnsTrue: that flag hands back the buffer only on the frame it fires, so
+  -- the Create button would read stale text; Enter still deactivates the field, watched for below.
+  local _, buf = ImGui.InputText(ctx, '##newname', s.buf)
   ImGui.PopID(ctx)
   s.buf = buf
+  local entered = ImGui.IsItemDeactivated(ctx)
+              and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+                   or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter))
   ImGui.SameLine(ctx)
-  local confirm = rv or ImGui.Button(ctx, 'Create')
+  local confirm = entered or ImGui.Button(ctx, 'Create')
   ImGui.SameLine(ctx)
   local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
   if confirm then

@@ -1,0 +1,63 @@
+@spec editor_new_modal_spec  src=tests/specs/editor_new_modal_spec.lua  loc=110  cases=5
+@harness   mk
+
+# Intent
+  The swing and temper editors' New modal, drawn over a fake imgui: does the Create button
+  see the name standing in the field? ReaImGui hands a buffer back only on a frame the call
+  returns true, so a field flagged EnterReturnsTrue reads blank to every gesture but Enter.
+  Fake-imgui recipe from temperEditor_tree_spec.
+
+# Helpers
+  @fn mkEditors(harness)  @ 45-59
+      -- Both editors, over one harness, returning the modal bodies they registered.
+  @fn create(harness, kind, text, gesture)  @ 62-67
+      -- One frame of a New modal, with the field holding `text` and `gesture` confirming it.
+
+# Cases
+  @case 'the Create button names the new swing from the field'  [harness]  @ 71-75
+  @case 'Enter in the field names it too'  [harness]  @ 79-83
+  @case 'the Create button names the new temper from the field'  [harness]  @ 87-91
+  @case 'Enter in the field names the temper too'  [harness]  @ 95-99
+  @case 'an empty field asks for a name rather than closing'  [harness]  @ 103-108
+
+# Fields (r read / w write incl. constructor keys)
+  @field w Button  @ 23
+  @field w ImGui_GetBuiltinPath  @ 38
+  @field w InputText  @ 27
+  @field r InputTextFlags_EnterReturnsTrue  @ 28
+  @field w IsItemDeactivated  @ 25
+  @field w IsKeyPressed  @ 26
+  @field w IsWindowAppearing  @ 22
+  @field r Key_Enter  @ 26
+  @field w Mod_None  @ 9
+  @field w __index  @ 10,41
+  @field w buf  @ 64
+  @field w chrome  @ 51
+  @field w cm  @ 48,51
+  @field w ctx  @ 51
+  @field w ds  @ 51
+  @field r err  @ 107
+  @field w facade  @ 52
+  @field w fontSize  @ 52
+  @field w get  @ 42
+  @field w gui  @ 52
+  @field w identity  @ 49
+  @field w lib  @ 52
+  @field w libraryForm  @ 50
+  @field r loaded  @ 36
+  @field w modalHost  @ 53
+  @field r name  @ 74,82,90,98
+  @field w name  @ 65,71,79,87,95,103
+  @field w ok  @ 65
+  @field w open  @ 53
+  @field w openConfirm  @ 54
+  @field r preload  @ 34
+  @field w publish  @ 42
+  @field r reaper  @ 38
+  @field w registerKind  @ 55
+  @field w run  @ 72,80,88,96,104
+  @field w swings  @ 49
+  @field w synthetic  @ 49
+  @field w tempers  @ 49,50
+  @field w ui  @ 52
+  @field r unrooted  @ 50

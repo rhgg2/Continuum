@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — A text field whose value a button reads is drawn without EnterReturnsTrue, and
+  its Enter is caught with IsItemDeactivated plus the Enter keys. ReaImGui hands the buffer back
+  only on a frame the call returns true, so under that flag the field reads blank to every gesture
+  but Enter, and the button beside it commits nothing. The flag stays where Enter is the only way to
+  commit — the sampler's slot rename and modalHost's prompt.
+
 - **2026-08-24** — The tidy editor's base list is edited by three verbs on av — tidyAddBase,
   tidyRenameBase and tidyDropBase — which mutate the (bases, assignment) pair the modal holds and
   read no project state, so am stays out of it. The assignment holds base names, so a rename carries
