@@ -1,8 +1,11 @@
 -- paramAutomation.lua
--- Simple automation applier; bindings at ds take scope, realised via JSFX + bus sends + plinks.
+-- Simple automation applier; bindings at ds track scope, realised via JSFX + bus sends + plinks.
 
 --invariant: automation bus is 126 — 127 is wiring's parking bus, wiring allocates 0..125
---invariant: authored (chan,lane) codes are track-unique across takes; bus codes project-unique
+--invariant: a binding is the track's, not the take's: every take on it authors the same lane
+--invariant: authored (chan,lane) codes are track-unique; bus codes project-unique
+--invariant: one binding per (fx,param): the target's single plink; a rival would win it silently
+--shape: paramAutomation (ds track key) = { [chan] = { [lane] = binding } }
 --shape: binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
 --shape: trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
 --shape: paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [paramIndex]={s=num,n0=int} } } }
@@ -10,8 +13,8 @@
 local util = require 'util'
 local cm, ds, facade, ccm = (...).cm, (...).ds, (...).facade, (...).ccm
 
--- Source-track resolution is logical, not physical: a parked take hosts on the
--- scratch track, but its automation belongs to the track owning its slot.
+-- Source-track resolution is logical, not physical: a parked take hosts on the scratch track,
+-- but automates the track owning its slot -- the ds tier names that track, kept current by tp:bind after every bindTake.
 local function arrange() return facade and facade.get('arrange') end
 local function ownerTrack(take) return take and arrange().ownerTrack(take) end
 
@@ -60,6 +63,10 @@ local function eachTake(visit)
   end
 end
 
+local function eachTrack(visit)
+  for i = 0, reaper.CountTracks(0) - 1 do visit(reaper.GetTrack(0, i)) end
+end
+
 local function boundTrack()
   return ownerTrack(cm:boundTake())
 end
@@ -68,10 +75,10 @@ end
 
 local function gatherBindings()
   local bindings = {}
-  eachTake(function(take)
-    local cfg = ds:getAt(take, 'paramAutomation')
+  eachTrack(function(track)
+    local cfg = ds:getAt(track, 'paramAutomation')
     if not cfg or not next(cfg) then return end
-    local srcGuid = reaper.GetTrackGUID(ownerTrack(take))
+    local srcGuid = reaper.GetTrackGUID(track)
     for chan, lanes in pairs(cfg) do
       for lane, b in pairs(lanes) do
         util.add(bindings, {
@@ -231,15 +238,14 @@ end
 
 ----- Allocation
 
--- Authored lanes are track-unique across takes (the filter bank is shared per
--- track): used = bound lanes, user cc columns, and event-bearing ccs on the
--- channel, across every take on the track.
+-- Authored lanes are track-unique (the filter bank is shared per track): used = the
+-- track's bound lanes, plus each of its takes' user cc columns and event-bearing ccs on the channel.
 local function usedLanes(srcTrack, chan)
   local used = {}
+  local bound = ds:getAt(srcTrack, 'paramAutomation') or {}
+  for lane in pairs(bound[chan] or {}) do used[lane] = true end
   eachTake(function(take)
     if ownerTrack(take) ~= srcTrack then return end
-    local cfg = ds:getAt(take, 'paramAutomation') or {}
-    for lane in pairs(cfg[chan] or {}) do used[lane] = true end
     local extras = ds:getAt(take, 'extraColumns') or {}
     for cc in pairs((extras[chan] or {}).ccs or {}) do used[cc] = true end
     if reaper.TakeIsMIDI(take) then
@@ -262,12 +268,7 @@ end
 
 local function allocBusCode()
   local used = {}
-  eachTake(function(take)
-    local cfg = ds:getAt(take, 'paramAutomation') or {}
-    for _, lanes in pairs(cfg) do
-      for _, b in pairs(lanes) do used[b.busCode] = true end
-    end
-  end)
+  for _, b in ipairs(gatherBindings()) do used[b.busCode] = true end
   for code = 0, 16 * 128 - 1 do
     if not used[code] then return code end
   end
@@ -309,28 +310,41 @@ end
 function pa:apply()
   local specs = pa.computeDesired(gatherBindings())
   local dirty = {}
-  for i = 0, reaper.CountTracks(0) - 1 do
-    local track = reaper.GetTrack(0, i)
+  eachTrack(function(track)
     local spec, mirror = specs[reaper.GetTrackGUID(track)], readMirror(track)
     if not util.deepEq(spec, mirror) then
       util.add(dirty, { track = track, spec = spec, mirror = mirror })
     end
-  end
+  end)
   if #dirty == 0 then return end
   util.atomic('Param automation', function()
     for _, d in ipairs(dirty) do applyTrack(d.track, d.spec, d.mirror) end
   end)()
 end
 
---contract: chan is the tracker's 1-based channel; returns the allocated cc lane, or nil + reason
+-- Where the track already drives this target, if anywhere.
+local function bindingFor(cfg, target)
+  for chan, lanes in pairs(cfg) do
+    for lane, b in pairs(lanes) do
+      if b.trackGuid == target.trackGuid and b.fxGuid == target.fxGuid
+         and b.param == target.param then return chan, lane end
+    end
+  end
+end
+
+--contract: chan is the tracker's 1-based channel; returns the cc lane, or nil + reason
+--contract: a target already bound answers on its own channel; asking on another is refused
 function pa:automate(chan, target)
   local srcTrack = boundTrack()
   if not srcTrack then return nil end
+  local cfg = ds:get('paramAutomation') or {}
+  local heldChan, heldLane = bindingFor(cfg, target)
+  if heldChan == chan then return heldLane end
+  if heldChan then return nil, ('already automated on channel %d'):format(heldChan) end
   local lane = allocLane(srcTrack, chan)
   if not lane then return nil, 'no free cc lane on channel ' .. chan end
   local busCode = allocBusCode()
   if not busCode then return nil, 'automation bus full' end
-  local cfg = ds:get('paramAutomation') or {}
   cfg[chan] = cfg[chan] or {}
   cfg[chan][lane] = {
     busCode = busCode,

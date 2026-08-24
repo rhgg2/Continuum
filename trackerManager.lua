@@ -238,7 +238,7 @@ local function derivationInputs()
     pbRange      = cm:get('pbRange'),          overlapOffset= cm:get('overlapOffset'),
     swing        = ds:get('swing'),            fxRegions    = ds:get('fxRegions'),
     extraColumns = ds:get('extraColumns'),     fxParked     = ds:get('fxParked'),
-    prevWindows  = ds:get('prevWindows'),
+    prevWindows  = ds:get('prevWindows'),      paramAutomation = ds:get('paramAutomation'),
   }
 end
 
@@ -2660,9 +2660,10 @@ end
 ----- Rebuild extra columns
 
 -- Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
--- channel already holds more note lanes than recorded.
-local function rebuildExtraColumns(extraColumns)
+-- channel already holds more note lanes than recorded; a param binding's cc column is derived here too -- see docs/trackerView.md § Extra columns & delay sub-column.
+local function rebuildExtraColumns(extraColumns, paramAutomation)
   local extras = extraColumns or {}
+  local bound  = paramAutomation or {}
   local grew   = false
   for i = 1, 16 do
     local c    = channels[i].columns
@@ -2679,6 +2680,9 @@ local function rebuildExtraColumns(extraColumns)
     if want.at then c.at = c.at or { events = {} } end
     for ccNum in pairs(want.ccs or {}) do
       c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
+    end
+    for lane in pairs(bound[i] or {}) do
+      c.ccs[lane] = c.ccs[lane] or { cc = lane, events = {} }
     end
   end
   if grew and mm:take() then ds:assign('extraColumns', extras) end
@@ -4975,16 +4979,17 @@ local function rebuildPipeline(didReload)
   -- One head snapshot of the ds intent keys the pipeline reads; stages take these as params.
   -- Every key is read before any same-pass write, so a head read equals each old use-site value.
   local sources = {
-    fxRegions    = ds:get('fxRegions'),
-    fxParked     = ds:get('fxParked'),
-    prevWindows  = ds:get('prevWindows'),
-    extraColumns = ds:get('extraColumns'),
+    fxRegions       = ds:get('fxRegions'),
+    fxParked        = ds:get('fxParked'),
+    prevWindows     = ds:get('prevWindows'),
+    extraColumns    = ds:get('extraColumns'),
+    paramAutomation = ds:get('paramAutomation'),
   }
 
   perf.start('internals'); local external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
-  perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
+  perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns, sources.paramAutomation); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
   perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
 
@@ -5217,8 +5222,9 @@ do
     elseif change.name == 'fxParked' then
       -- parking drives fx expansion + the pb keep-decision; seed only the changed members.
       if not flushingParked then seedParkedEdit(ds:get('fxParked')); tm:rebuild(false) end
-    elseif change.name == 'extraColumns' then
+    elseif change.name == 'extraColumns' or change.name == 'paramAutomation' then
       -- extraColumns is grow-only/merge-safe, not parking -- a whole re-derive stays. see design § phase 3
+      -- A binding shapes columns the same way, so bind/unbind (and its undo) arrives here too.
       if not flushingParked then dirtyChan(); tm:rebuild(false) end
     elseif change.name == 'noteDelay' then
       -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only,

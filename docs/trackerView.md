@@ -625,6 +625,17 @@ Columns beyond the data-driven ones are materialised by tm from
   `cfg.noteDelay[chan][lane] = true`) on every note col in the active
   selection, or on the cursor col when no selection. Idempotent.
 
+A cc column carrying a param binding is not in that spec at all. The
+binding belongs to the **track** — the filter bank, the bus code and the
+plink it realises are all the track's — so tm derives the column from the
+track's bindings at rebuild, and every take on the track opens with it
+already there. Automating writes no column; hiding one drops the binding,
+and the column goes from every take at once. What stays per take is what
+the column holds: the CC events themselves. A param takes one binding,
+since the target carries a single plink and a second would silently take
+it over — so re-automating a bound param returns the lane it has, and
+asking for it on another channel is refused.
+
 The delay sub-column is a display variant of the note column
 (`noteWithDelay` in `STOPS`/`SELGROUPS`), not a separate grid column.
 

@@ -154,7 +154,7 @@ Promoting a binding to the cv graph replaces "strip to bus" with
 "strip to CV channel"; the authored data does not move. Standing
 automation is out of scope here — it is cv's.
 
-**Binding shape** (cm take tier, sibling of `extraColumns`):
+**Binding shape** (ds track scope, sibling of `extraColumns`):
 
 ```lua
 paramAutomation = {

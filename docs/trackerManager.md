@@ -41,6 +41,12 @@ per channel" — columns present in extras but not backed by events are
 materialised as empty, so consumers see a uniform `channel.columns`
 irrespective of whether a column is data-driven or user-opened.
 
+One kind of column is opened from elsewhere: a cc lane driving an fx param.
+That binding is the *track's* (`paramAutomation`, ds track scope), so its
+column is derived at rebuild from the track's bindings and appears in every
+take on the track — `extraColumns` never records it. See
+`docs/trackerView.md` § Extra columns & delay sub-column.
+
 ```
 extraColumns[chan] = {
   notes = <count>,
@@ -471,7 +477,7 @@ Triggered by:
   from, so without the exemption each save would cost a full re-derivation of
   the take for a write no realisation reads;
 - ds `'dataChanged'` on the project data tm derives from: `swing`,
-  `fxRegions`, `fxParked`, `extraColumns` and `noteDelay`.
+  `fxRegions`, `fxParked`, `extraColumns`, `paramAutomation` and `noteDelay`.
 
 tm also forwards the reconciliation signals it receives from mm
 (`takeSwapped`, `notesDeduped`, `uuidsReassigned`) to its own subscribers,
@@ -509,7 +515,8 @@ runs it, with a pointer to its detail where one exists.
 - **Reconcile extras** (`rebuildExtraColumns`). Grow
   `extraColumns[chan].notes` if live allocation exceeded it; pad empty
   note lanes; materialise user-opened singleton/cc columns that carry no
-  events. Writes back via `ds:assign` if the high-water mark grew.
+  events, and the cc columns the track's param bindings imply. Writes back
+  via `ds:assign` if the high-water mark grew.
 - **Reintroduce externals** (`rebuildExternals`). In raw-ppq order, pack
   each external a lane against the placed internals, stamp
   `ppqL`/`endppqL` from raw, and backfill missing metadata. Tagged
@@ -961,9 +968,9 @@ marked all 16 channels dirty anyway. Under the converged-rebind gate
 while the tracker was away has to be recovered at the bind.
 
 Replaying the missed signals is not enough, because the worst case fires no
-signal at all: take-scoped ds/cm state (`swing`, `fxRegions`, `extraColumns`,
-`fxParked`, the take config tier) is rewound by a REAPER undo while `ps` watches
-only the *bound* take's slots — nothing is listening, and cm/ds simply refill
+signal at all: the ds/cm state under the bound take and its track (`swing`,
+`fxRegions`, `extraColumns`, `fxParked`, `paramAutomation`, the take config
+tier) is rewound by a REAPER undo while `ps` watches only the *bound* take's slots — nothing is listening, and cm/ds simply refill
 their caches from storage at the next `setContext`. The same blind spot swallows
 the `trackerMode` re-seed, which `bindTake` writes under its own suppression
 window.

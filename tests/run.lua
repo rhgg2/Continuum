@@ -192,6 +192,7 @@ local specs = {
   'pa_apply_spec',
   'pa_frecency_spec',
   'pa_crosstrack_spec',
+  'pa_track_scope_spec',
   'tv_param_bind_spec',
   'tv_param_learn_spec',
   'tv_palette_tab_spec',

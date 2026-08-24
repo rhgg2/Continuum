@@ -1,8 +1,9 @@
 -- Binding mutations through the real tv path. automateParam binds the
--- palette param at the cursor channel and requests its cc column;
--- unautomateParam empties the lane, then column + binding go via
--- hideExtraCol; hideExtraCol alone also drops the binding of an empty
--- bound column. Real trackerView + real paramAutomation via harness.mk.
+-- palette param at the cursor channel, and tm derives its cc column from
+-- the binding -- nothing is written per take; unautomateParam empties the
+-- lane, then column + binding go via hideExtraCol; hideExtraCol alone also
+-- drops the binding of an empty bound column. Real trackerView + real
+-- paramAutomation via harness.mk.
 
 local t = require('support')
 
@@ -21,9 +22,11 @@ end
 return {
 
   {
-    name = 'automateParam binds the palette param and requests its cc column',
+    name = 'automateParam binds the palette param and tm derives its cc column',
     run = function(harness)
       local h = harness.mk{ seed = { notes = { NOTE } } }
+      -- pa scans project tracks for bindings and project takes for used cc lanes.
+      h.reaper._state.projectTracks = { 'take1/track' }
       h.reaper._state.projectItems = { { takes = { 'take1' } } }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(0, 1, 1)
@@ -35,7 +38,7 @@ return {
       t.eq(b.label, 'Cutoff')
       t.eq(b.param, 3)
       t.eq(b.busCode, 0)
-      t.truthy(h.ds:get('extraColumns')[1].ccs[119], 'cc column requested')
+      t.falsy(h.ds:get('extraColumns'), 'no per-take column written -- the binding carries it')
       h.vm:rebuild()
       t.truthy(ccColIndex(h, 119), 'cc column materialised')
 
@@ -56,6 +59,7 @@ return {
         data = { extraColumns = { [1] = { notes = 1, ccs = { [118] = true } } } },
       }
       local r = h.reaper
+      r._state.projectTracks = { 'take1/track' }
       r._state.projectItems = { { takes = { 'take1' } } }
       r._state.takeIsMidi['take1'] = true
       -- A raw cc 119 on chan 1 lives in reaper but not in the fake mm —
@@ -80,8 +84,7 @@ return {
           ccs = { { ppq = 0,   chan = 1, evType = 'cc', cc = 110, val = 64 },
                   { ppq = 240, chan = 1, evType = 'cc', cc = 110, val = 80 } },
         },
-        data   = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } },
-                   paramAutomation = { [1] = { [110] = BINDING } } },
+        data   = { paramAutomation = { [1] = { [110] = BINDING } } },
       }
       h.vm:setGridSize(80, 40)
       local idx = ccColIndex(h, 110)
@@ -92,7 +95,6 @@ return {
 
       t.falsy(h.vm:paramBinding(1, 110), 'binding gone')
       t.falsy(ccColIndex(h, 110), 'column gone')
-      t.falsy((h.ds:get('extraColumns')[1] or {}).ccs, 'extraColumns entry cleaned')
     end,
   },
 
@@ -101,12 +103,11 @@ return {
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { NOTE } },
-        data   = { extraColumns = { [1] = { notes = 1, ccs = { [110] = true } } },
-                   paramAutomation = { [1] = { [110] = BINDING } } },
+        data   = { paramAutomation = { [1] = { [110] = BINDING } } },
       }
       h.vm:setGridSize(80, 40)
       local idx = ccColIndex(h, 110)
-      t.truthy(idx, 'bound cc column present')
+      t.truthy(idx, 'bound cc column present -- derived from the binding alone')
       h.ec:setPos(0, idx, 1)
       h.vm:hideExtraCol()
 

@@ -1,4 +1,4 @@
-@spec vm_undo_label_spec  src=tests/specs/vm_undo_label_spec.lua  loc=125  cases=3
+@spec vm_undo_label_spec  src=tests/specs/vm_undo_label_spec.lua  loc=123  cases=3
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm)
 @surface   vm:setGridSize, ec:setPos, fm:dump, vm:unautomateParam, vm:hideExtraCol
 @harness   mk{seed.notes, seed.ccs}
@@ -22,15 +22,15 @@
 
 # Cases
   @case 'every quantize verb opens one labelled block -- whole-take scope included'  [harness]  @ 68-81
-  @case 'unautomateParam labels its own block -- the confirm callback lands outside the command'  [harness]  @ 85-104
-  @case 'hideExtraCol labels its own block'  [harness]  @ 108-122
+  @case 'unautomateParam labels its own block -- the confirm callback lands outside the command'  [harness]  @ 85-103
+  @case 'hideExtraCol labels its own block'  [harness]  @ 107-120
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 38,96,115
-  @use call ec:setPos  @ 73,97,116
+  @use call vm:setGridSize  @ 38,95,113
+  @use call ec:setPos  @ 73,96,114
   @use call fm:dump  @ 77
-  @use call vm:unautomateParam  @ 99
-  @use call vm:hideExtraCol  @ 118
+  @use call vm:unautomateParam  @ 98
+  @use call vm:hideExtraCol  @ 116
 
 # Fields (r read / w write incl. constructor keys)
   @field w Undo_BeginBlock  @ 15
@@ -38,28 +38,27 @@
   @field w busCode  @ 56
   @field r cc  @ 61
   @field w cc  @ 90,91
-  @field w ccs  @ 90,93,112
+  @field w ccs  @ 90
   @field w chan  @ 32,53,90,91
   @field r cols  @ 60
   @field w config  @ 36
-  @field w data  @ 93,112
+  @field w data  @ 93,111
   @field w delay  @ 32,54
   @field w detune  @ 32,54
   @field w endppq  @ 31,53
   @field w endppqL  @ 31
   @field w evType  @ 90,91
-  @field w extraColumns  @ 93,112
   @field w fxGuid  @ 56
   @field r grid  @ 60
   @field r label  @ 76
   @field w label  @ 45,46,47,48,57
   @field w lane  @ 33,54
-  @field w name  @ 68,85,108
+  @field w name  @ 68,85,107
   @field r notes  @ 77
-  @field w notes  @ 30,89,93,111,112
+  @field w notes  @ 30,89,110
   @field w offset  @ 57
   @field w param  @ 57
-  @field w paramAutomation  @ 94,113
+  @field w paramAutomation  @ 93,111
   @field w pitch  @ 32,53
   @field r ppq  @ 78
   @field w ppq  @ 31,45,46,47,48,53,90,91
@@ -67,9 +66,9 @@
   @field w ppqL  @ 31,45,46,47,48
   @field w rowPerBeat  @ 36
   @field w rpb  @ 33
-  @field w run  @ 69,86,109
+  @field w run  @ 69,86,108
   @field w scale  @ 57
-  @field w seed  @ 29,88,111
+  @field w seed  @ 29,88,110
   @field w take  @ 36
   @field w trackGuid  @ 56
   @field r type  @ 61

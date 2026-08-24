@@ -331,8 +331,9 @@ The simple layer (landed 2026-06-10: `paramAutomation` store, the
 **standalone**, before any graph. Under "everything builds in the graph"
 it gets **re-founded**, not extended:
 
-- the binding stays take-tier but becomes a **contract**, projected into
-  the graph as a derived fragment (§ *Takes are contracts*); the
+- the binding stays a stored fact — track-tier, not take-tier — but
+  becomes a **contract**, projected into the graph as a derived fragment
+  (§ *Takes are contracts*); the
   standalone `paramAutomation` store-plus-applier dies — realization
   belongs to the one compiler;
 - the `Continuum CC` **listen bank is retired** — decode is native MIDI

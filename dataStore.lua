@@ -19,8 +19,6 @@ local function print(...) return util.print(...) end
 -- name -> scope (each key's actual write tier in the pre-split configManager).
 local registry = {
   groups              = 'take',
-  paramAutomation     = 'take',
-  columnDisplay       = 'take',
   noteDelay           = 'take',
   swing               = 'take',
   extraColumns        = 'take',
@@ -32,6 +30,8 @@ local registry = {
   soloedChannels      = 'take',
   slotEntries         = 'track',
   arrangeSlots        = 'track',
+  paramAutomation     = 'track',
+  columnDisplay       = 'track',
   arrangeColours      = 'project',
   fxPatterns          = 'project',
   fxMeta              = 'project',

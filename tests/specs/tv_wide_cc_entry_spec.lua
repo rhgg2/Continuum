@@ -1,4 +1,4 @@
--- 14-bit cc grid entry. A `14bit` column flag (the columnDisplay take-DS key,
+-- 14-bit cc grid entry. A `14bit` column flag (the columnDisplay track-DS key,
 -- stamped onto the gridCol at rebuild) widens the scalar to 4 hex digits over a
 -- display integer (val*256, even last: 0000..7FFE). editEvent stores the
 -- fractional cc mm's blob splits to an MSB/LSB pair. see design/fx-patterns.md
@@ -40,6 +40,20 @@ return {
       local col = ccCol(mk(harness))
       t.truthy(col and col['14bit'], 'cc column picked up the 14-bit flag from columnDisplay')
       t.deepEq(col.stopPos, {0, 1, 2, 3}, 'four hex-digit stops')
+    end,
+  },
+
+  {
+    name = 'the flag is the track\'s: a second take on it opens 14-bit too',
+    run = function(harness)
+      local h = mk(harness)
+      h.reaper:bindTake('take2', 'take2/item', 'take1/track', 16)
+      h.tm:bindTake('take2')
+      h.fm:seed{ ccs = { { evType = 'cc', ppq = 0, chan = 1, cc = 7, val = 0, shape = 'linear' } } }
+      h.vm:rebuild()
+
+      local col = ccCol(h)
+      t.truthy(col and col['14bit'], 'the second take reads the same flag')
     end,
   },
 

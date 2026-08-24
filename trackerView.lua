@@ -3907,6 +3907,13 @@ function tv:hideExtraCol()
   -- note lanes drop the topmost empty lane from any lane (handled below).
   if col.type ~= 'note' and #col.events > 0 then return end
 
+  -- A bound cc column is the track binding's, not extraColumns': dropping the
+  -- binding drops the column, and drops it in every take on the track.
+  if col.type == 'cc' and pa:binding(chan, col.cc) then
+    pa:unautomate(chan, col.cc)
+    return
+  end
+
   local extras = ds:get('extraColumns') or {}
   local want   = extras[chan] or { notes = 0 }
   extras[chan] = want
@@ -3924,7 +3931,6 @@ function tv:hideExtraCol()
     if #top.events > 0 then return end
     want.notes = #noteCols - 1
   elseif col.type == 'cc' then
-    if pa:binding(chan, col.cc) then pa:unautomate(chan, col.cc) end
     if want.ccs then
       want.ccs[col.cc] = nil
       if not next(want.ccs) then want.ccs = nil end
@@ -4092,7 +4098,7 @@ function tv:pollLearn(focused)
   hoistTouch(touched.fxGuid, touched.param)
 end
 
---contract: binds the selected palette param at the cursor column's channel; adds its cc column
+--contract: binds the selected palette param at the cursor channel; tm derives its cc column
 function tv:automateParam()
   local col = grid.cols[ec:col()]
   if not (col and paletteParam) then return end
@@ -4100,13 +4106,6 @@ function tv:automateParam()
   if not lane then return end
   pa:bumpFrecency(paletteParam.trackGuid, paletteParam.fxGuid, paletteParam.param)
   tv:cancelLearn()
-  local extras = ds:get('extraColumns') or {}
-  -- Absence-default mirrors tm:rebuild's, like addExtraCol: no entry means one note col.
-  local want = extras[col.midiChan] or { notes = 1 }
-  extras[col.midiChan] = want
-  want.ccs = want.ccs or {}
-  want.ccs[lane] = true
-  ds:assign('extraColumns', extras)
 end
 
 --contract: deletes the cursor cc column's events; column + binding then go via hideExtraCol
@@ -4375,7 +4374,7 @@ function tv:rebuild(takeChanged)
         cells       = {},
         cellKind    = {},   -- [row] = 'member' | 'plain'; the leaf-edit dispatch tag
       }
-      -- Curve/automation display flags ride the take DS, keyed like extraColumns:
+      -- Curve/automation display flags ride the track DS, keyed like extraColumns:
       -- pb per channel, cc per number. Absent = plain hex/decimal column.
       local disp  = colDisplay[chan]
       local flags = disp and (type == 'cc' and (disp.ccs or {})[key]

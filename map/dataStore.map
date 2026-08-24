@@ -94,36 +94,36 @@
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ assign:175,177 delete:186 assignAt:198
   @field w arrangeColours  @ 35
-  @field w arrangeNaturalLenQN  @ 30
-  @field w arrangeSlots  @ 34
+  @field w arrangeNaturalLenQN  @ 28
+  @field w arrangeSlots  @ 32
   @field w busMeta  @ 38
-  @field w columnDisplay  @ 23
-  @field w extraColumns  @ 26
+  @field w columnDisplay  @ 34
+  @field w extraColumns  @ 24
   @field w fxMeta  @ 37
-  @field w fxParked  @ 28
+  @field w fxParked  @ 26
   @field w fxPatterns  @ 36
-  @field w fxRegions  @ 27
+  @field w fxRegions  @ 25
   @field r global  @ persist:93
   @field w global  @ 66
   @field w groups  @ 21
   @field w guardedTrack  @ 39,121
   @field w invalidate  @ ps:watch:147
-  @field w mutedChannels  @ 31
+  @field w mutedChannels  @ 29
   @field r name  @ ps:watch:145,147
   @field w name  @ 138 ps:watch:147 assign:183 assignAt:200
-  @field w noteDelay  @ 24
-  @field w paramAutomation  @ 22
+  @field w noteDelay  @ 22
+  @field w paramAutomation  @ 33
   @field w paramFrecency  @ 40
-  @field w prevWindows  @ 29
+  @field w prevWindows  @ 27
   @field w project  @ 66
   @field r ps  @ 13
   @field r scope  @ ps:watch:144,145,147
   @field w scope  @ 138 ps:watch:147 assign:183 assignAt:200
   @field r slot  @ ps:watch:145
   @field w slot  @ 138
-  @field w slotEntries  @ 33
+  @field w slotEntries  @ 31
   @field w slots  @ 131
-  @field w soloedChannels  @ 32
-  @field w swing  @ 25
+  @field w soloedChannels  @ 30
+  @field w swing  @ 23
   @field w take  @ 66 ps:contextChanged:113
   @field w track  @ 66 ps:contextChanged:114

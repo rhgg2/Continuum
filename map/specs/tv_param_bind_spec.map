@@ -1,75 +1,76 @@
-@spec tv_param_bind_spec  src=tests/specs/tv_param_bind_spec.lua  loc=118  cases=4
+@spec tv_param_bind_spec  src=tests/specs/tv_param_bind_spec.lua  loc=119  cases=4
 @exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds)
 @surface   vm:setGridSize, ec:setPos, vm:setPaletteParam, vm:automateParam, vm:paramBinding, ds:get, vm:rebuild, vm:unautomateParam, vm:hideExtraCol
-@harness   mk{seed.notes, seed.ccs}, r:seedMidi, r._state.projectItems, r._state.takeIsMidi
+@harness   mk{seed.notes, seed.ccs}, r:seedMidi, r._state.projectTracks, r._state.projectItems, r._state.takeIsMidi
 
 # Intent
   Binding mutations through the real tv path. automateParam binds the
-  palette param at the cursor channel and requests its cc column;
-  unautomateParam empties the lane, then column + binding go via
-  hideExtraCol; hideExtraCol alone also drops the binding of an empty
-  bound column. Real trackerView + real paramAutomation via harness.mk.
+  palette param at the cursor channel, and tm derives its cc column from
+  the binding -- nothing is written per take; unautomateParam empties the
+  lane, then column + binding go via hideExtraCol; hideExtraCol alone also
+  drops the binding of an empty bound column. Real trackerView + real
+  paramAutomation via harness.mk.
 
 # Helpers
-  @fn ccColIndex(h, cc)  @ 15-19
+  @fn ccColIndex(h, cc)  @ 16-20
 
 # Cases
-  @case 'automateParam binds the palette param and requests its cc column'  [harness]  @ 24-48
-  @case 'allocation skips authored cc columns and event-bearing ccs'  [harness]  @ 52-71
-  @case 'unautomateParam deletes lane events then removes column and binding'  [harness]  @ 75-96
-  @case 'hideExtraCol on an empty bound cc column drops the binding'  [harness]  @ 100-115
+  @case 'automateParam binds the palette param and tm derives its cc column'  [harness]  @ 25-51
+  @case 'allocation skips authored cc columns and event-bearing ccs'  [harness]  @ 55-75
+  @case 'unautomateParam deletes lane events then removes column and binding'  [harness]  @ 79-98
+  @case 'hideExtraCol on an empty bound cc column drops the binding'  [harness]  @ 102-116
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 28,64,86,107
-  @use call ec:setPos  @ 29,65,90,110
-  @use call vm:setPaletteParam  @ 30,43,66
-  @use call vm:automateParam  @ 31,44,67
-  @use call vm:paramBinding  @ 33,45,69,93,113
-  @use call ds:get  @ 38,95
-  @use call vm:rebuild  @ 39
-  @use call vm:unautomateParam  @ 91
-  @use call vm:hideExtraCol  @ 111
+  @use call vm:setGridSize  @ 31,68,89,108
+  @use call ec:setPos  @ 32,69,93,111
+  @use call vm:setPaletteParam  @ 33,46,70
+  @use call vm:automateParam  @ 34,47,71
+  @use call vm:paramBinding  @ 36,48,73,96,114
+  @use call ds:get  @ 41
+  @use call vm:rebuild  @ 42
+  @use call vm:unautomateParam  @ 94
+  @use call vm:hideExtraCol  @ 112
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _state  @ 27,59,60
-  @field r busCode  @ 37,47
-  @field w busCode  @ 12
-  @field r cc  @ 17
-  @field w cc  @ 80,81
-  @field r ccs  @ 38,95
-  @field w ccs  @ 56,63,80,83,104
-  @field w chan  @ 9,63,80,81
-  @field w chanmsg  @ 63
-  @field r cols  @ 16,89
-  @field w data  @ 56,83,104
-  @field w delay  @ 10
-  @field w detune  @ 10
-  @field w endppq  @ 9
-  @field w evType  @ 80,81
-  @field r events  @ 89
-  @field w extraColumns  @ 56,83,104
-  @field w fxGuid  @ 12,30,43,66
-  @field r grid  @ 16,89
-  @field r label  @ 35
-  @field w label  @ 13,30,43,66
-  @field w lane  @ 10
-  @field w msg2  @ 63
-  @field w msg3  @ 63
-  @field w name  @ 24,52,75,100
-  @field w notes  @ 26,55,56,79,83,103,104
-  @field w offset  @ 13
-  @field r param  @ 36
-  @field w param  @ 13,30,43,66
-  @field w paramAutomation  @ 84,105
-  @field w pitch  @ 9
-  @field w ppq  @ 9,63,80,81
-  @field w projectItems  @ 27,59
-  @field w run  @ 25,53,76,101
-  @field w scale  @ 13
-  @field w seed  @ 26,55,78,103
-  @field r takeIsMidi  @ 60
-  @field w takes  @ 27,59
-  @field w trackGuid  @ 12,30,43,66
-  @field r type  @ 17
-  @field w val  @ 80,81
-  @field w vel  @ 9
+  @field r _state  @ 29,30,62,63,64
+  @field r busCode  @ 40,50
+  @field w busCode  @ 13
+  @field r cc  @ 18
+  @field w cc  @ 84,85
+  @field w ccs  @ 59,67,84
+  @field w chan  @ 10,67,84,85
+  @field w chanmsg  @ 67
+  @field r cols  @ 17,92
+  @field w data  @ 59,87,106
+  @field w delay  @ 11
+  @field w detune  @ 11
+  @field w endppq  @ 10
+  @field w evType  @ 84,85
+  @field r events  @ 92
+  @field w extraColumns  @ 59
+  @field w fxGuid  @ 13,33,46,70
+  @field r grid  @ 17,92
+  @field r label  @ 38
+  @field w label  @ 14,33,46,70
+  @field w lane  @ 11
+  @field w msg2  @ 67
+  @field w msg3  @ 67
+  @field w name  @ 25,55,79,102
+  @field w notes  @ 27,58,59,83,105
+  @field w offset  @ 14
+  @field r param  @ 39
+  @field w param  @ 14,33,46,70
+  @field w paramAutomation  @ 87,106
+  @field w pitch  @ 10
+  @field w ppq  @ 10,67,84,85
+  @field w projectItems  @ 30,63
+  @field w projectTracks  @ 29,62
+  @field w run  @ 26,56,80,103
+  @field w scale  @ 14
+  @field w seed  @ 27,58,82,105
+  @field r takeIsMidi  @ 64
+  @field w takes  @ 30,63
+  @field w trackGuid  @ 13,33,46,70
+  @field r type  @ 18
+  @field w val  @ 84,85
+  @field w vel  @ 10

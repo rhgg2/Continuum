@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — A param binding is the track's, not the take's: the filter bank, the bus code and
+  the plink it realises are all per track, so a second take binding the same param minted a rival
+  bus code, and the single plink per target went to whichever was written last — the first take's
+  column then drove nothing. The cc column follows from the binding rather than from each take's
+  extraColumns, and an already-bound target answers with the lane it has, refusing another channel.
+  columnDisplay moves to track scope with it: a bound column's display flags are the same fact one
+  layer down.
+
 - **2026-08-25** — The mini-map's raise is written at the resolve's gesture flag rather than at
   tv:nameInstance: a serial read inside a command body is stale for the dive, which invokes
   switchPage after naming, and nameInstance never sees the slot step. The raise falls at the next

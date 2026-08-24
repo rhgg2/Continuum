@@ -4,7 +4,7 @@ Per-key **document-data** storage — the second face over `pextStore`,
 beside `configManager`. Where cm holds user-facing *settings* (schema,
 five-tier merge, defaults), ds holds the project's structural *content*:
 mirror groups, sampler/arrange slot palettes, CV bindings, the swing map,
-per-take display columns, mix state.
+display columns, mix state.
 
 ## Document data is not config
 

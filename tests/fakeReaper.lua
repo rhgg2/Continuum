@@ -488,7 +488,7 @@ function M.new()
   function r.CountTracks(_proj)             return #state.projectTracks end
   function r.GetTrack(_proj, i)             return state.projectTracks[i + 1] end
 
-  -- Project item/take list (paramAutomation's project-wide binding scan).
+  -- Project item/take list (paramAutomation's project-wide cc-lane scan).
   -- Tests seed entries shaped { takes = { take, ... } }.
   state.projectItems = {}
   function r.CountMediaItems(_proj) return #state.projectItems end
