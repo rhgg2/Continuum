@@ -101,6 +101,7 @@ To be filled out with descriptions, screenshots, examples.
 - New take
 - Duplicate below (another instance of the bound take)
 - Previous/next variant (stepping past the last one varies)
+- Previous/next instance (the track's placements in start order, across slots)
 - Take properties (modal: length ×2/÷2, Resize/Rescale/Tile mode, truncate confirm)
 - Delete take + instances (confirm)
 

@@ -380,6 +380,31 @@ function tv:stepVariant(dir)
   return slot
 end
 
+--contract: the current instance stepped ±1 along its track's placements, in start order
+--contract: only a MIDI take in a slot is a stop; holds at the ends, crosses to no other track
+--contract: nil with no current instance
+--invariant: a stop in another slot rebinds the tracker, and the rebuild resets the caret
+-- see docs/trackerPage.md § The walk
+function tv:stepInstance(dir)
+  local inst = self:currentInstance(); if not inst then return end
+  local stops, built = {}, {}
+  for i, tk in ipairs(arrange().visibleTakes(inst.trackIdx, inst.trackIdx, 0, math.huge)) do
+    if tk.kind == 'midi' and tk.slotIdx then built[tk.take] = i; util.add(stops, tk) end
+  end
+  -- Continuum's own edits never stack two placements on one start, but an outside
+  -- one can; the tie-break on build order keeps the walk from cycling between them.
+  table.sort(stops, function(a, b)
+    if a.startQN ~= b.startQN then return a.startQN < b.startQN end
+    return built[a.take] < built[b.take]
+  end)
+  local pos
+  for i, tk in ipairs(stops) do if tk.take == inst.take then pos = i end end
+  local target = pos and stops[pos + dir]; if not target then return end
+  if target.slotIdx ~= inst.slotIdx then self:selectSlot(target.slotIdx) end
+  self:nameInstance(target.take)
+  return target.take
+end
+
 local ec, clipboard, ctx
 
 ---------- SHARED HELPERS

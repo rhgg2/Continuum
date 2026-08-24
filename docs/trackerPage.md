@@ -682,6 +682,36 @@ The verb refuses in silence where the tracker is in no instance, and
 `am:stepVariant` refuses on its own off the front of the family, and
 where the vary it falls through to has a single instance to fork.
 
+### The walk
+
+`prevInstance` and `nextInstance` (Alt+↑/↓) move the tracker to the
+placement before or after the current instance on its own track, through
+`tv:stepInstance`. Forward is down the page, the direction time runs.
+The track's placements come from the take enumerator
+(`docs/arrangePage.md` § The take enumerator) and are visited in start
+order, so the walk crosses into another slot wherever the next placement
+belongs to one. Where stepping the family holds the placement and
+changes the material, the walk holds the track and changes the placement.
+
+A stop is one instance, and a gap between placements earns none: the
+tracker stands in an instance, not on a row, and holds no state for
+standing between two. Only a MIDI take in a slot is a stop, so an audio
+item, or one dropped on the track outside Continuum, is passed over.
+
+The walk holds at both ends, and crosses to no other track. It refuses
+in silence where the tracker is in no instance, as § Duplicate below and
+§ Stepping the family do.
+
+Landing is the pair § Stepping the family uses: `tv:nameInstance` names
+the stop, so it is current at the next resolve and loop to item brackets
+it, and `tv:selectSlot` selects the stop's slot where it differs from
+the slot bound.
+
+A crossing landing therefore rebinds the tracker on the next frame, and
+the rebuild resets the caret to row 0. Instances of one slot share a
+take, so a walk within a slot rebinds nothing and the caret holds its
+row — the same row of a different placement.
+
 ## External-mutation watcher
 
 `lastHash` is a `MIDI_GetHash` baseline of the bound take, snapshotted

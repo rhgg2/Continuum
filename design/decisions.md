@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — The walk lands by naming its stop and selecting that stop's slot, with no caret
+  write of its own, over resetting the caret at a crossing landing: a slot change swaps the bound
+  take, and the rebuild resets the caret to row 0 already. A walk within one slot rebinds nothing
+  and keeps its row. Only a placement carrying a MIDI take in a slot is a stop, so an audio item, or
+  one dropped on the track outside Continuum, is passed over.
+
 - **2026-08-24** — The mini-map's window is computed on tv in columns and QN, the pixel constants
   held by the renderer, over tv returning pixel rects: gridPane already measures the tracker's
   viewport in cells and hands tv:setGridSize the counts, so the pixels stay in the one layer that

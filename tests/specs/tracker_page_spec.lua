@@ -80,11 +80,15 @@ local function resetArrange()
 
   -- The placement world tv resolves its current instance against: one record per
   -- instance, and a seek modelling am:seekInstance's contract (am_spec pins the real one).
-  fakeArrange.instances = {}     -- { take, trackIdx, slotIdx, startQN, originQN?, lengthQN }
-  -- am always carries the source origin; a record that says nothing about a
-  -- head reads as an untrimmed instance, whose origin is its start.
+  fakeArrange.instances = {}     -- { take, trackIdx, slotIdx?, startQN, originQN?, lengthQN, kind? }
+  -- am always carries the source origin and the take's kind; a record silent about
+  -- a head reads as an untrimmed instance, whose origin is its start, and one
+  -- silent about kind as MIDI. A take in no slot has no slotIdx.
   local function instances()
-    for _, inst in ipairs(fakeArrange.instances) do inst.originQN = inst.originQN or inst.startQN end
+    for _, inst in ipairs(fakeArrange.instances) do
+      inst.originQN = inst.originQN or inst.startQN
+      inst.kind     = inst.kind     or 'midi'
+    end
     return fakeArrange.instances
   end
   fakeArrange.playQN    = nil
@@ -701,6 +705,99 @@ return {
       tp:bindFromSelection()
       t.eq(stack.tv:currentInstance().take, 'a8',
            'prevTake seeks backwards from QN 12, passing over a16 ahead of it')
+    end,
+  },
+
+  {
+    name = "the walk steps along the track's placements in start order, holding at the ends",
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'a0', 'a8', 'a16', 'a20', 'b4', 'b12' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.slotsByIdx[0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'a0'
+      fakeArrange.takeByKey['0:1'] = 'b4'
+      -- Seeded out of start order, so the walk does the sorting. w6 is audio and x2
+      -- sits in no slot: neither is a stop.
+      fakeArrange.instances = {
+        { take = 'a16', trackIdx = 0, slotIdx = 0, startQN = 16, lengthQN = 4 },
+        { take = 'b4',  trackIdx = 0, slotIdx = 1, startQN = 4,  lengthQN = 4 },
+        { take = 'a0',  trackIdx = 0, slotIdx = 0, startQN = 0,  lengthQN = 4 },
+        { take = 'w6',  trackIdx = 0, slotIdx = 2, startQN = 6,  lengthQN = 2, kind = 'audio' },
+        { take = 'x2',  trackIdx = 0,              startQN = 2,  lengthQN = 2 },
+        { take = 'b12', trackIdx = 0, slotIdx = 1, startQN = 12, lengthQN = 4 },
+        { take = 'a8',  trackIdx = 0, slotIdx = 0, startQN = 8,  lengthQN = 4 },
+        { take = 'a20', trackIdx = 0, slotIdx = 0, startQN = 20, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'a8')
+      tp:bindFromSelection()
+
+      h.cmgr:invoke('prevInstance')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'b4', 'back from a8 over the audio take at QN 6')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, "the stop's own slot is selected")
+
+      h.cmgr:invoke('prevInstance')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a0', 'back over the slotless take at QN 2')
+
+      h.cmgr:invoke('prevInstance')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a0', 'the walk holds at the first placement')
+
+      for _ = 1, 5 do h.cmgr:invoke('nextInstance'); tp:bindFromSelection() end
+      t.eq(stack.tv:currentInstance().take, 'a20', 'forwards through b4, a8, b12 and a16 to a20')
+      h.cmgr:invoke('nextInstance')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a20', 'and holds at the last')
+    end,
+  },
+
+  {
+    name = 'a walk into another slot resets the caret; within one slot the caret holds',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'a16', 'a20', 'b12' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.slotsByIdx[0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'a16'
+      fakeArrange.takeByKey['0:1'] = 'b12'
+      fakeArrange.instances = {
+        { take = 'b12', trackIdx = 0, slotIdx = 1, startQN = 12, lengthQN = 4 },
+        { take = 'a16', trackIdx = 0, slotIdx = 0, startQN = 16, lengthQN = 4 },
+        { take = 'a20', trackIdx = 0, slotIdx = 0, startQN = 20, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      fakeFacade.published.tracker.diveTo('{g0}', 0, 'a16')
+      tp:bindFromSelection()
+      stack.tv:setCursorQN(16.5)
+      t.eq(stack.tv:cursorQN(), 16.5, 'the caret stands two rows into a16')
+
+      h.cmgr:invoke('nextInstance')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'a20', 'the next placement is a sibling of the same slot')
+      t.eq(stack.tv:cursorQN(), 20.5, 'which rebinds nothing, so the caret holds its row')
+
+      h.cmgr:invoke('prevInstance')
+      tp:bindFromSelection()
+      h.cmgr:invoke('prevInstance')
+      tp:bindFromSelection()
+      t.eq(stack.tv:currentInstance().take, 'b12', 'two back is the other slot')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'which the walk selects')
+      t.eq(stack.tv:cursorQN(), 12, "and the rebind's reset puts the caret on row 0")
     end,
   },
 
