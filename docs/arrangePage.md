@@ -171,7 +171,8 @@ drops the slot from the assignment, which pins the name it has. The
 modal holds the bases and the assignment and re-derives its rows each
 frame, so a pick shows in the preview column on the frame after it
 lands. OK commits through `av:tidySlots` in one undo block, and Escape
-drops the edit.
+drops the edit. A tidy renames and deletes nothing, so the palette
+focus stands through the commit.
 
 The base list is editable: each entry is a field with a delete button
 beside it, and a field below adds one. `av:tidyAddBase`,

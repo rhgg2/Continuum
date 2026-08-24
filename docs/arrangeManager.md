@@ -596,6 +596,9 @@ Slot mutation: `am:renameSlot`, `am:tidySlots`, `am:deleteSlot`
 and returns the live count), `am:pruneSlots` (the same for every parked
 slot on the track, returning how many went).
 
+Tidy: `am:seedTidy` (the base list and assignment an editor opens on),
+`am:tidyNames` (the name each MIDI slot would come out with).
+
 Placement: `am:createAndDropMidi(trackIdx, qnPos, lengthQN, name) ->
 (slotIdx, take)`, `am:dropInstance(trackIdx, slotIdx, qnPos,
 lengthQN?)`.
