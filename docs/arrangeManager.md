@@ -521,6 +521,25 @@ on a track never overlap.
    tidy leaves alone is not written at all. `am:tidySlots` opens no undo
    block, so the caller wraps the commit.
 
+## Seeding a tidy
+
+1. `am:seedTidy(trackIdx)` returns the base list and the assignment a
+   tidy editor opens on. The bases are the distinct roots the track's
+   MIDI slot names carry, sorted, and each slot is assigned to the base
+   its own root names.
+
+1. An **ambiguous** base is one two or more slots carry plain. Every slot
+   whose root is ambiguous seeds pinned, since namesakes stand in
+   separate families and no reading of them is the obvious one
+   (§ Variants). The base still stands in the list, so the choice can be
+   made there.
+
+1. An unnamed slot seeds pinned, and its empty root names no base.
+
+1. Audio slots take no part, as they take none in the tidy itself. An
+   audio slot carrying a root plain therefore leaves that base
+   unambiguous.
+
 ## Transport
 
 `am` is where the stack meets REAPER's transport, all of it in QN: the

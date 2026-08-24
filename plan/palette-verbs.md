@@ -20,6 +20,7 @@ render layer still holds the assignment alone.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-24 am: seed a tidy from the track's slot names (§ The editor)
 - 2026-08-24 am: tidy a track's slot names into families (§ Committing an assignment)
 - 2026-08-24 arrange: a prune button on the palette, and no per-slot verbs (§ Prune)
 - 2026-08-24 am: prune a track's parked slots (§ Prune)
@@ -29,13 +30,6 @@ render layer still holds the assignment alone.
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. `am:seedTidy(trackIdx)` returns the base list and the seed assignment:
-   bases are the distinct `util.variantRoot`s of the track's MIDI slot
-   names, sorted; each slot is assigned to the base matching its root; an
-   unnamed slot is omitted, and so is every slot carrying an ambiguous
-   base — one two or more slots hold plain. Audio slots take no part.
-   Cases in `am_spec`.
 
 1. `tidyNames` becomes `am:tidyNames(trackIdx, assignment)`, keyed by slot
    index and covering every MIDI slot, so the editor can show the name a

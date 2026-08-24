@@ -1068,6 +1068,28 @@ function am:tidySlots(trackIdx, assignment)
   writeSlotNames(track, tidyNames(am:trackSlots(trackIdx), assignment))
 end
 
+-- The state a tidy editor opens on. See docs/arrangeManager.md § Seeding a tidy.
+--contract: (bases, assignment); a slot unnamed or carrying an ambiguous base seeds pinned
+--shape: bases = { 'Bassline', 'Drums', ... } -- the roots in use, sorted
+function am:seedTidy(trackIdx)
+  local bases, plainHolders, rooted = {}, {}, {}
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    if slot.kind == 'midi' and slot.name ~= '' then
+      local root, ordinal = util.variantRoot(slot.name)
+      if not plainHolders[root] then plainHolders[root] = 0; util.add(bases, root) end
+      if not ordinal then plainHolders[root] = plainHolders[root] + 1 end
+      util.add(rooted, { idx = slot.idx, root = root })
+    end
+  end
+  table.sort(bases)
+
+  local assignment = {}
+  for _, slot in ipairs(rooted) do
+    if plainHolders[slot.root] < 2 then assignment[slot.idx] = slot.root end
+  end
+  return bases, assignment
+end
+
 local function liveInstances(trackIdx, slotIdx)
   local n = 0
   for _, other in ipairs(am:tracksTakes(trackIdx)) do

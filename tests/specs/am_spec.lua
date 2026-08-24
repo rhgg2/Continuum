@@ -427,6 +427,79 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- Tidy seed
+  --------------------------------------------------------------------
+  {
+    name = 'seedTidy lists the distinct roots sorted, each slot on its own',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Drums' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, poolGuid = '{p3}', takeName = 'Bassline (var 3)' } } },
+      })
+      local bases, assignment = am:seedTidy(0)
+      t.deepEq(bases, { 'Bassline', 'Drums' }, 'one entry per root, sorted')
+      t.deepEq(assignment, { [slotFor(am, 0, '{p1}').idx] = 'Drums',
+                             [slotFor(am, 0, '{p2}').idx] = 'Bassline',
+                             [slotFor(am, 0, '{p3}').idx] = 'Bassline' },
+               'a variant seeds to the base its root names')
+    end,
+  },
+
+  {
+    name = 'an unnamed slot seeds pinned, and names no base',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, poolGuid = '{p2}' } } },
+      })
+      local bases, assignment = am:seedTidy(0)
+      t.deepEq(bases, { 'Bassline' }, 'the empty root is no base')
+      t.eq(assignment[slotFor(am, 0, '{p2}').idx], nil, 'the unnamed slot is pinned')
+      t.eq(assignment[slotFor(am, 0, '{p1}').idx], 'Bassline')
+    end,
+  },
+
+  {
+    name = 'an ambiguous base pins every slot carrying it, and still stands in the list',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  poolGuid = '{p1}', takeName = 'Lead' },
+                    { kind = 'midi', pos = 4,  poolGuid = '{p2}', takeName = 'Lead' },
+                    { kind = 'midi', pos = 8,  poolGuid = '{p3}', takeName = 'Lead (var 2)' },
+                    { kind = 'midi', pos = 12, poolGuid = '{p4}', takeName = 'Drums' } } },
+      })
+      local bases, assignment = am:seedTidy(0)
+      t.deepEq(bases, { 'Drums', 'Lead' }, 'the ambiguous base is still offered')
+      t.eq(assignment[slotFor(am, 0, '{p1}').idx], nil, 'namesakes seed pinned')
+      t.eq(assignment[slotFor(am, 0, '{p2}').idx], nil)
+      t.eq(assignment[slotFor(am, 0, '{p3}').idx], nil, 'and so does the variant beneath them')
+      t.eq(assignment[slotFor(am, 0, '{p4}').idx], 'Drums', 'an unambiguous base assigns as usual')
+    end,
+  },
+
+  {
+    name = 'audio slots take no part, so an audio namesake leaves a base unambiguous',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'audio', pos = 0, len = 2, srcFile = '/a.wav', takeName = 'Strings' },
+                    { kind = 'audio', pos = 4, len = 2, srcFile = '/b.wav', takeName = 'Lead' },
+                    { kind = 'midi',  pos = 8, poolGuid = '{p1}', takeName = 'Lead' } } },
+      })
+      local bases, assignment = am:seedTidy(0)
+      t.deepEq(bases, { 'Lead' }, 'the audio roots name no base')
+      t.eq(assignment[slotFor(am, 0, '{p1}').idx], 'Lead', 'the MIDI slot holds the base alone')
+      for _, slot in ipairs(am:trackSlots(0)) do
+        if slot.kind == 'audio' then t.eq(assignment[slot.idx], nil, 'no audio slot is assigned') end
+      end
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Placement
   --------------------------------------------------------------------
   {

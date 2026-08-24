@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-24** — A base two or more slots carry plain is ambiguous, and every slot under it seeds
+  pinned; the base still stands in the seeded list, so the editor is where the choice between
+  namesakes gets made.
+
 - **2026-08-24** — Tidy's assignment is a plain map from slot index to base, and a slot the map
   omits is pinned. An explicit pinned flag reads better at the call site, but it adds a shape where
   an absence says the same thing; the editor builds the map by dropping the rows the user pinned. am
