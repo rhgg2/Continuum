@@ -60,6 +60,9 @@ closure: an id, an optional label, a declared pixel width, and a `get` read
 fresh each frame. The renderer owns all the drawing, so a datum the spec
 cannot express either grows the spec or stays in the toolbar.
 
+Each cell holds one datum. A mode toggle stays in the toolbar — it selects
+behaviour rather than reporting a value.
+
 A declared width is the value box, not the cell: the label is measured and the
 box follows it, so renaming a label cannot shrink the value it stands over. The
 rect the cell records for help spans both.

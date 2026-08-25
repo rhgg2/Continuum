@@ -199,9 +199,9 @@ from the one declaration.**
   and only a judgement per command settles it. The split is worth making
   visible in a spec, so that changing it later is deliberate.
 
-- **Ordering against `design/status-bar.md`.** Both designs occupy the
-  footer band, and both move the cheat-sheet's anchors. Landing the
-  status bar first settles the band's geometry and moves the pins once.
+- **The footer band.** The status bar has landed there (`docs/chrome.md`
+  § Status bar layout), so the band's geometry is settled and the
+  cheat-sheet's pins have moved once already.
 
 - **Whether a path is editable.** The cheat-sheet rebinds keys in place
   (`docs/help.md` § Editing bindings). Whether a path may be re-cut the

@@ -198,10 +198,9 @@ than solved for.**
 
 1. Where the reading renders. The pitch cell has no room for it (§ What
    the grid can hold), and the candidates differ in what they cost: a
-   column of its own widens the grid for every take; the status bar
-   carries the cursor note alone, and is a per-frame `printf` until
-   `design/status-bar.md` makes it a declared segment; a pane costs a
-   place to put it.
+   column of its own widens the grid for every take; the status bar takes
+   a declared segment with a `get` (`docs/chrome.md` § Status bar layout),
+   at the cost of a fixed width; a pane costs a place to put it.
 
 2. Whether a note below the anchor reads octave-reduced or literally. A
    fifth below the anchor is `3/2` under the first reading and `2/3` under
