@@ -216,9 +216,16 @@ local function trackList(trackCount)
   return out
 end
 
+-- The box the map draws for a take: the travel consumes the window's own shapes.
+local function mapBox(tv, take)
+  for _, tk in ipairs(tv:mapWindow(5, 80).takes) do
+    if tk.take == take then return tk end
+  end
+end
+
 -- A tracker bound to the take 'i0' over a track list of the given width, with
 -- i0's placement as the caller states it; inst = nil binds it into no instance.
--- Returns the page's tv, and the harness behind it for the cmgr.
+-- Returns the page's tv, the harness behind it for the cmgr, and the page itself.
 local function mapTracker(harness, inst, trackCount)
   local h = harness.mk()
   h.reaper:setProjectTracks{ 'tr1' }
@@ -232,7 +239,7 @@ local function mapTracker(harness, inst, trackCount)
   fakeArrange.tracksList = trackList(trackCount)
   fakeArrange.instances  = inst and { inst } or {}
   tp:bindFromSelection()
-  return stack.tv, h
+  return stack.tv, h, tp
 end
 
 return {
@@ -1098,6 +1105,67 @@ return {
       t.deepEq(fakeArrange.calls.setLoopRange, { 8, 20 }, 'a drag sets the loop range')
       t.eq(tv:loopsToItem(), false, 'and the hand-set loop drops the toggle')
       t.eq(fakeArrange.loopLo, 8, 'the drop clears the loop, and the drag\'s own stands over it')
+    end,
+  },
+
+  {
+    name = 'a click on a map box travels to its instance, across tracks as well as slots',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      h.reaper:addItem('tr1', { take = 'a0', isMidi = true, pos = 0, len = 4, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'b8', isMidi = true, pos = 8, len = 4, poolGuid = '{p2}' })
+      h.reaper:addItem('tr2', { take = 'c4', isMidi = true, pos = 4, len = 4, poolGuid = '{p3}' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.tracksList = trackList(2)
+      fakeArrange.slotsByIdx = {
+        [0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } },
+        [1] = { { idx = 0, kind = 'midi' } },
+      }
+      fakeArrange.takeByKey = { ['0:0'] = 'a0', ['0:1'] = 'b8', ['1:0'] = 'c4' }
+      fakeArrange.instances = {
+        { take = 'a0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 4 },
+        { take = 'b8', trackIdx = 0, slotIdx = 1, startQN = 8, lengthQN = 4 },
+        { take = 'c4', trackIdx = 1, slotIdx = 0, startQN = 4, lengthQN = 4 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      local tv = stack.tv
+      t.eq(tv:currentInstance().take, 'a0', 'the tracker stands in the first slot of track 1')
+
+      tv:travelTo(mapBox(tv, 'b8'))
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'b8', 'a box on the bound track is now the current instance')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'and its own slot is selected')
+      t.eq(h.cm:getAt('project', 'trackerTrack'), '{g0}', 'the track it sits on standing')
+
+      tv:travelTo(mapBox(tv, 'c4'))
+      tp:bindFromSelection()
+      t.eq(h.cm:getAt('project', 'trackerTrack'), '{g1}', 'a box on another track selects that track')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 0, 'and the slot it sits in there')
+      t.eq(tv:currentInstance().take, 'c4', 'the placement clicked being the instance')
+    end,
+  },
+
+  {
+    name = 'a map box that is no stop refuses the travel, as the walk passes it over',
+    run = function(harness)
+      local tv, _, tp = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                              startQN = 0, lengthQN = 4 }, 3)
+      util.add(fakeArrange.instances, { take = 'w8', trackIdx = 0, slotIdx = 1,
+                                        startQN = 8, lengthQN = 4, kind = 'audio' })
+      util.add(fakeArrange.instances, { take = 'x12', trackIdx = 0,
+                                        startQN = 12, lengthQN = 4 })
+      tv:travelTo(mapBox(tv, 'w8'))
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'i0', 'an audio box leaves the tracker where it stood')
+      tv:travelTo(mapBox(tv, 'x12'))
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'i0', 'and so does a placement in no slot')
     end,
   },
 

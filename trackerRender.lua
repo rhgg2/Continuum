@@ -632,6 +632,10 @@ local function drawMapBody()
 
   -- Rects share their edge pixel with the neighbouring box and with the gridline
   -- under it, as the arrange grid's do: the border rect runs a px past the fill.
+
+  -- A click travels to the box under it (docs/trackerRender.md § The mini-map).
+  local boxClick = ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx) and not inMargin
+  local travelTk
   for _, tk in ipairs(win.takes) do
     local xLo, xHi = colX(tk.trackIdx), colX(tk.trackIdx + 1)
     local yLo = math.max(oy, qnY(tk.startQN))
@@ -640,7 +644,10 @@ local function drawMapBody()
     p.fill({ x0 = xLo + 1, y0 = yLo + 1, x1 = xHi, y1 = yHi },
            chrome.slotFill(tk.colourIdx, tk.take == win.current))
     p.border({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, 'arrange.itemBorder')
+    if boxClick and not travelTk
+       and mx >= xLo and mx < xHi and my >= yLo and my < yHi then travelTk = tk end
   end
+  if travelTk then tv:travelTo(travelTk) end
 
   -- The loop range: the `[` the arrange page strokes down its gutter, drawn in its own lane
   -- clear of the grid (docs/trackerRender.md § The mini-map). An in-flight drag preempts the committed range, as arrangeRender.lua:544 does.

@@ -740,6 +740,23 @@ A tracker in no instance, or a target track holding no placement, has
 nothing to measure and leaves the step as it was — the track's
 last-viewed slot comes back (§ Slot recovery and the per-track memory).
 
+### The travel
+
+A click on a box of the arrange mini-map (`docs/trackerRender.md` § The
+mini-map) makes its instance current. The map shows the arrangement
+rather than the bound track, so the travel crosses tracks where the walk
+holds to one; it is the only landing that does.
+
+Landing is the dive's pair without a QN. `tv:travelTo` selects the box's
+track and its slot, then names the placement, so the next resolve makes
+it current and loop to item brackets it. The map has no caret, so the
+click carries the placement alone and the caret falls where the rebind
+leaves it (§ The walk).
+
+A box is a stop on the walk's terms: only a MIDI take in a slot. The map
+draws audio items and takes in no slot as well, and a click on one is
+refused, the tracker's selection reaching MIDI slots only.
+
 ### Deleting the instance
 
 `deleteInstance` (Alt+Shift+↑) deletes the placement the tracker stands

@@ -41,10 +41,10 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-25 tracker: travel to the instance a map box is clicked on (§ The travel)
 - 2026-08-25 tracker: clear the loop when loop to item drops, and Esc drops it (§ The transport driven)
 - 2026-08-25 tracker: drive the transport from the arrange map's gutter (§ The transport driven)
 - 2026-08-25 tracker: show the transport on the arrange mini-map (§ The transport shown)
-- 2026-08-25 tracker: raise the arrange map when a gesture moves the instance (§ The raise)
 
 ## Now
 
@@ -52,18 +52,6 @@ Notes carried into the phases:
 
 ## Queued (current phase; one-liners)
 
-- **The travel** — the map's second mouse pass, in `drawMapBody`: a
-  click right of the margin the transport gesture claims hit-tests
-  `win.takes` and lands the tracker on the box's instance. The landing
-  is the walk's pair — `tv:nameInstance(take)` for the placement,
-  `tv:selectSlot` for its slot — with `tv:selectTrack` on the track's
-  guid (`arrange().tracks()`) where the box sits on another, since the
-  click crosses tracks as the walk does not. No QN goes with the name:
-  the map has no caret, so the click carries the item alone. The click
-  takes no keyboard focus, and writes nothing to the transport. Spec in
-  `tracker_page_spec`: a box on the bound track names it, a box on
-  another track selects that track and slot, and a click in a gap does
-  nothing.
 - **The chase** — `trackerFollowPlay`, a global cm key beside
   `trackerLoopToItem`, with `tv:followsPlay`/`tv:setFollowPlay` and a
   toolbar checkbox beside loop to item. On, the entry branch of

@@ -183,6 +183,13 @@ The renderer holds the press, since the gesture is pixels; `tv:mapLoopCand`
 orders and snaps the candidate. The cell goes in as an argument, as the window's
 columns and depth do, so the map's measures stay in one place.
 
+A click clear of that margin travels: the box under it becomes the current
+instance (`docs/trackerPage.md` § The travel). The renderer hit-tests the rects
+it struck, so a box floored to the 2px minimum is as clickable as it is visible,
+and the first box hit wins where two placements overlap. The click takes no
+keyboard focus, as the tab click and the pin take none, and writes nothing to
+the transport.
+
 ## FX chain — palette tab
 
 See `docs/generators.md` § The chain for what a chain means; this section is

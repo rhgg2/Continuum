@@ -354,6 +354,16 @@ function tv:setLoopRangeQN(loQN, hiQN)
   arrange().setLoopRangeQN(loQN, hiQN)
 end
 
+--contract: a box clicked on the map becomes the current instance: its track, slot, and placement
+--contract: only a MIDI take in a slot is a stop, as the walk's are; anything else is refused
+-- see docs/trackerPage.md § The travel
+function tv:travelTo(tk)
+  if tk.kind ~= 'midi' or not tk.slotIdx then return end
+  local track = arrange().tracks()[tk.trackIdx + 1]; if not track then return end
+  self:selectTrack(track.guid, tk.slotIdx)
+  self:nameInstance(tk.take)
+end
+
 ----- The track's placements — the walk's stops, and where a track step lands
 -- see docs/trackerPage.md § The walk
 

@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — A click on an arrange mini-map box lands through tv:selectTrack whatever track
+  the box sits on, rather than branching on whether it is the bound one: selectTrack already writes
+  the slot, so the branch bought nothing, and the travel is then the dive's pair without its QN. A
+  box is a stop on the walk's terms, only a MIDI take in a slot, since the map draws audio items and
+  slotless takes too while the tracker's selection reaches MIDI slots alone. The hit test stays in
+  the renderer, over the rects it struck, so a box floored to the 2px minimum is as clickable as it
+  is visible.
+
 - **2026-08-25** — Dropping loop to item clears the transport loop, reversing the rule that turning
   the toggle off left the loop where it stood. The clear lives in tv:setLoopToItem, so the toolbar
   checkbox, Ctrl+L and Esc's clearLoop command all release the loop by the same path, and the gutter

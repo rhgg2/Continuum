@@ -49,12 +49,12 @@ Landed — the model is in `docs/trackerRender.md` § The mini-map and
 
 1. A click on a box makes its instance current.
 
-1. Landing is the walk's pair — `tv:nameInstance` for the placement,
-   `tv:selectSlot` for its slot — with the track as well where the box
-   sits on another, as the dive carries it.
+1. Landing is the dive's pair without its QN — `tv:selectTrack` for the
+   box's track and slot, `tv:nameInstance` for the placement.
 
-1. Unlike the walk, the click crosses tracks: every box in the window
-   is a stop.
+1. Unlike the walk, the click crosses tracks, so every instance in the
+   window is a stop. A stop is what the walk counts as one — a MIDI take
+   in a slot — so audio and slotless boxes are refused.
 
 1. The click takes no keyboard focus, as the tab click and the pin take
    none.
