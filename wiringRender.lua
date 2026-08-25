@@ -937,6 +937,24 @@ local function wireSegments(wireViews, nodesById)
   return segs
 end
 
+-- The in-flight draft as a seg. Kept end anchors at keptAnchor or the kept
+-- node's centre; nil if neither (a palette draft draws only as a floating tag).
+local function draftSeg(draft, nodesById, cx, cy)
+  local anchor = draft.keptAnchor
+  local kept   = nodesById[draft.keptId]
+  if not (anchor or kept) then return nil end
+  local ax = anchor and anchor.x or kept.pos.x
+  local ay = anchor and anchor.y or kept.pos.y
+  local seg = { fromHW = 0, fromHH = 0, toHW = 0, toHH = 0 }
+  if draft.cursorEnd == 'to' then
+    seg.sx, seg.sy, seg.ex, seg.ey = ax, ay, cx, cy
+  else
+    seg.sx, seg.sy, seg.ex, seg.ey = cx, cy, ax, ay
+  end
+  seg.cx, seg.cy = wireMid(seg)
+  return seg
+end
+
 -- End-region endpoints for one side of a wire (canvas-local): from the node-
 -- rect exit, WIRE_END_HIT px inward. Capped at 0.4*visible so a short wire's
 -- two ends don't overlap. nil for sub-pixel / fully-occluded wires.
@@ -1130,26 +1148,6 @@ local function drawFader(p, f)
   local db  = linToDb(f.currentLin)
   local txt = (db == -math.huge) and '-inf dB' or string.format('%+.1f dB', db)
   p.text(r.x1 + 4, indY - uiSize / 2, 'text', txt, uiFont, uiSize)
-end
-
--- In-flight draft wire (draw order in docs/wiringPage.md). Kept end anchors at
--- keptAnchor; for source edges (no body) keptAnchor is the only anchor.
-local function drawDraftWire(p, draft, nodesById, cx, cy)
-  if not draft then return end
-  local a   = draft.keptAnchor
-  local src = nodesById[draft.keptId]
-  if not (a or src) then return end
-  local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
-  local ax  = a and a.x or src.pos.x
-  local ay  = a and a.y or src.pos.y
-  local sx, sy, ex, ey
-  if draft.cursorEnd == 'to' then
-    sx, sy, ex, ey = ax, ay, cx, cy
-  else
-    sx, sy, ex, ey = cx, cy, ax, ay
-  end
-  p.line(sx, sy, ex, ey, name, WIRE_THICK)
-  drawWireArrow(p, sx, sy, ex, ey, name)
 end
 
 local function drawTagAt(p, cx, cy, label)
@@ -1889,7 +1887,12 @@ local function renderCanvas(w, h)
     if rail then drawBusBar(p, rail, selection[nv.id]) end
   end
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
-  drawDraftWire(p, wireDraft, nodesById, draftCx, draftCy)
+  -- The draft wire (draw order in docs/wiringPage.md).
+  local dSeg = wireDraft and draftSeg(wireDraft, nodesById, draftCx, draftCy)
+  if dSeg then
+    local name = wireDraft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
+    drawWire(p, dSeg, { name = name })
+  end
   for _, nv in ipairs(nodeViews) do
     if not (nv.category == 'bus' and matrixRails[nv.id]) then
       drawNode(p, nv, selection[nv.id])

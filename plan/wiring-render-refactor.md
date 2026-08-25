@@ -31,6 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: draw the draft wire through drawWire (§ Stage 1)
 - 2026-08-26 wiring: give wires one renderer and name the seg shape (§ Stage 1)
 
 ## Now
@@ -43,11 +44,6 @@ The design doc's line refs have drifted again — they run ~84 high across the
 drawing half of the file. Numbers below are against the current tree
 (`wiringRender.lua`, 2650 loc).
 
-- **The draft wire through `drawWire`.** Delete `drawDraftWire` (@1127–1143);
-  build its seg at the draw site (@1882) from `wireDraft` and `draftCx/draftCy`
-  — ends ordered by `cursorEnd`, kept end at `keptAnchor` or else the kept
-  node's centre, extents 0 both ends, `cx/cy` the geometric midpoint, `w` nil,
-  labels off. Same z slot, same pixels.
 - **The bus trunk through `drawWire`.** `busSegments` stores the trunk
   (@1383–1391, carried on the rail @1410) as a seg — extents 0 both ends,
   `cx/cy` the midpoint, `w` nil. `drawBusPass` (@1422) keeps the bar stroke and
