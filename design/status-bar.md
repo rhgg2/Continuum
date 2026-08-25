@@ -23,89 +23,11 @@ like a JS input field — and the renderer owns all drawing.
 
 ## Design
 
-### Page protocol
-
-`renderStatusBar(ctx)` leaves the page shape; `statusSegments() -> table`
-replaces it, mirroring `toolbarSegments()`. The coordinator renders the
-footer through a shared `chrome.makeStatusBar()`. Pages declare their
-segment table once at module scope; `get`/`set` closures read `cm`/`tv`
-fresh each frame, exactly as toolbar render closures do today.
-
-### Segment spec
-
-```lua
---shape: StatusSegment = {
---  id: string, label: string?, width: px,
---  get: fn() -> value,
---  format?: string | fn(v) -> string,     -- display text; default tostring
---  visible?: fn() -> bool,
---  set?: fn(v),                           -- presence makes it editable
---  edit? = { kind = 'number', min, max, step?, format? }
---        | { kind = 'pick', items = fn() -> pickerItems }
--- }
-```
-
-No render code in a segment, ever. If a datum can't be expressed in this
-spec, the spec grows a field or the datum stays in the toolbar.
-
-### Rendering
-
-Fixed-width cells laid left-to-right in declared order, separated by
-`chrome.verticalSeparator`, inside the existing footer child. Each cell:
-dimmed label in `headingLabel` style, then the value, run through chrome's
-private `fitLabel` so a long sample name truncates instead of blowing the
-cell. The declared width is the value box alone — the label is measured and
-the box follows it, so renaming a label cannot shrink the value it stands
-over. Widths are declared, so no measure pass or width cache — that machinery
-stays toolbar-only.
-
-The band is blue where the toolbar is parchment, and its text sits four ramp
-zones off its ground where the toolbar's text sits seven. Labels and rules
-therefore take their ink from the ambient `Col_Text` through
-`chrome.dimText`, each band passing its own dim, rather than from a fixed
-swatch that can suit only one of them. The `separator` swatch itself is left
-alone, since the tracker's grid lines and arrange's table borders draw from
-it too.
-
-Cells record their rects (à la `lastToolbarRects`) and expose them as
-`status.<id>` help anchors.
-
-### Edit interaction — uniform across all editable segments
-
-- **display-only** (`set` absent): plain text.
-- **`kind = 'number'`**: renders as text. The click swaps in an `InputText`
-  sized to the cell, content selected, on its release — a field appearing
-  under a held button takes the rest of that click as a drag, and drags the
-  selection away. Enter commits through `set` (clamped to min/max), Esc
-  cancels. Mouse-wheel over the cell steps by `step` without entering edit
-  mode, a notch away from the reader lowering the value. No ± buttons — they'd eat the fixed
-  width; `chrome.numberStepper` remains a toolbar widget.
-  - Integer fields (`octave`, `advance`, `rpb`) step ±1 and commit live
-    on wheel — `tv:setRowPerBeat` already absorbs per-click changes in
-    the toolbar today.
-  - Fractional zoom-like fields (`beatsPerRow`, later wiring zoom) parse
-    `0.25`-style input and wheel-step by **double/halve** rather than
-    ±1: `step = 'x2'` in the edit spec selects this. min ¼, `%g` display.
-- **`kind = 'pick'`**: click opens `chrome.drawPicker` with
-  `items()` — sample keeps its typeahead popup for free.
-
-An editable cell wears a well one zone lighter than the band (`alt.zone6`),
-the relation the toolbar's buttons already hold to theirs. Display cells stay
-flat, so the box marks what can be changed rather than decorating the row.
-The InputText opens into that same rect, so nothing moves on the transition.
-
-### Focus
-
-An active status edit must stop grid keys firing. Pages already fold
-`chrome.pickerIsActive()` into `focusState`; add
-`chrome.statusEditActive()` alongside it and gate the same way. Chars
-typed into the InputText follow the existing picker idiom, which already
-handles the two-input-streams gotcha (IsKeyPressed vs char queue).
-
-Note the frame ordering: `dispatch(focusState)` fires at end-of-body,
-*before* the coordinator draws the status bar. `statusEditActive()`
-therefore reports last frame's edit state on the frame an edit begins —
-same one-frame latency the picker gate already has; acceptable.
+The segment spec, the layout, the edit machinery and the focus gate all
+landed: see `docs/chrome.md` § Status bar layout and § Editing a status cell.
+The page protocol — `statusSegments()` where `renderStatusBar(ctx)` stood —
+is the `--shape: page` line in `coordinator.lua`, and the `status.<id>` help
+anchors are in `docs/help.md` § What's where.
 
 ### Per-page content
 
@@ -117,14 +39,9 @@ same one-frame latency the picker gate already has; acceptable.
 | sample  | track · slot                | — |
 | editor  | pane text, one segment      | — |
 
-`followPlay` stays in the arrange toolbar — it's a mode toggle, not a
-datum.
-
-### Help migration
-
-Tracker F1 pins anchored at `toolbar.rowsPerBeat` / `toolbar.sample`
-move to `status.rpb` / `status.sample`. `help.lua`'s anchor resolution
-grows the `status.<id>` family next to `toolbar.<id>`.
+All of this is on screen; arrange's two editable cells are what remains.
+`followPlay` stays in the arrange toolbar — it's a mode toggle, not a datum,
+and wiring's zoom factor waits until wiring has a zoom.
 
 ## Plan
 
