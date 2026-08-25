@@ -331,6 +331,28 @@ function tv:mapWindow(cols, qnSpan)
            playQN = playQN, loopLoQN = loopLo, loopHiQN = loopHi }
 end
 
+----- The mini-map's gutter — see docs/trackerRender.md § The mini-map
+
+local function floorTo(v, step) return math.floor(v / step) * step end
+
+--contract: (loQN, hiQN) for a gutter drag, floored to the cell when snapped; widens to one cell
+--contract: cellQN is the map's own measure, as cols and qnSpan are; the range never runs above QN 0
+function tv:mapLoopCand(press, mouseQN, snapped, cellQN)
+  local loQN = math.max(0, math.min(press.qn, mouseQN))
+  local hiQN = math.max(press.qn, mouseQN)
+  if snapped then loQN = floorTo(loQN, cellQN); hiQN = floorTo(hiQN, cellQN) end
+  if hiQN <= loQN then hiQN = loQN + cellQN end
+  return { loQN = loQN, hiQN = hiQN }
+end
+
+function tv:setEditCursorQN(qn) arrange().setEditCursorQN(qn) end
+
+--contract: a loop set by hand drops loop to item, so no later gesture brackets over it
+function tv:setLoopRangeQN(loQN, hiQN)
+  self:setLoopToItem(false)
+  arrange().setLoopRangeQN(loQN, hiQN)
+end
+
 ----- The track's placements — the walk's stops, and where a track step lands
 -- see docs/trackerPage.md § The walk
 

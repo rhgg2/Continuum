@@ -84,6 +84,10 @@ caller pays no project walk. The tracker's mini-map draws from it
 (`docs/trackerRender.md` § The mini-map), and a slot's box carries the
 same colour and span on both pages.
 
+The facade carries the transport beside it: `playPositionQN`,
+`editCursorQN` and `loopRangeQN` for what the map draws,
+`setEditCursorQN` and `setLoopRangeQN` for what its gutter sets.
+
 ## Cursor and focus are separate
 
 The grid carries two independent pointers.

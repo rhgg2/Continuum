@@ -529,7 +529,9 @@ slot change — and not per frame. Play-head entry moves the instance and
 writes nothing, since bracketing there would pull the transport back to
 the start of a placement already sounding. A loop set by hand survives
 until the next such gesture, the discipline `av:followPlay` keeps when a
-manual scroll suspends the follow. Turning the toggle on brackets the
+manual scroll suspends the follow. A loop swept in the mini-map's gutter
+is the exception: it drops the toggle, so no gesture brackets over it
+(`docs/trackerRender.md` § The mini-map). Turning the toggle on brackets the
 current instance at once; turning it off leaves the loop where it stands.
 
 ### The play row

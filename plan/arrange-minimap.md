@@ -53,27 +53,16 @@ Notes carried into the phases:
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-25 tracker: drive the transport from the arrange map's gutter (§ The transport driven)
 - 2026-08-25 tracker: show the transport on the arrange mini-map (§ The transport shown)
 - 2026-08-25 tracker: raise the arrange map when a gesture moves the instance (§ The raise)
 - 2026-08-25 tracker: pin the arrange map as the palette default with Alt-M (§ The pin)
-- 2026-08-24 am: a drop opens the whole pool, not a sibling's window (polish over § The walk)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **The gutter press** — the map's first mouse pass, in `drawMapBody`: a
-  press in the left margin drives the transport as the arrange gutter
-  does, a clean release seeking the edit cursor and a drag setting the
-  loop range, with the in-flight candidate preempting the drawn bracket
-  as `arrangeRender.lua:544` does. The snap is the map's own 4 QN cell,
-  released by Shift, so the candidate is tv's own — `tv:mapLoopCand`
-  beside `tv:mapWindow` — rather than `av:gutterLoopCand`. The facade
-  gains `setEditCursorQN` and `setLoopRangeQN`. Spec in
-  `tracker_page_spec`: the candidate's snap, its widening to one cell
-  and its clamp at 0, and the facade calls a release makes.
 - **Esc drops the loop** — a `clearLoop` command on Esc in the tracker
   scope clears the project loop and turns loop to item off with it; and
   `tv:setLoopToItem(false)` clears the loop however the toggle is

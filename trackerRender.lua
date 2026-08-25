@@ -570,6 +570,11 @@ end
 -- The pane's pixels are this renderer's business — tv is asked for a window in columns and QN, as gridPane asks with setGridSize.
 local MAP_COLS, MAP_PX_PER_QN = 5, 2
 local MAP_CELL_QN, MAP_BAR_QN, MAP_PHRASE_QN = 4, 16, 64
+-- Snap a press's QN down to the top edge of the cell it sits in.
+local function floorToCell(qn) return math.floor(qn / MAP_CELL_QN) * MAP_CELL_QN end
+--shape: mapPress = { qn, moved } — nil when no button is down over the map's margin; moved flips at the drag threshold.
+--invariant: a margin press drives the transport: release seeks the cursor, drag sets the loop.
+local mapPress = nil
 local function drawMapBody()
   local p              = chrome.screenPainter()
   local availW, availH = ImGui.GetContentRegionAvail(ctx)
@@ -586,6 +591,28 @@ local function drawMapBody()
   local win    = tv:mapWindow(MAP_COLS, availH / MAP_PX_PER_QN)
   local function colX(col) return gridL + gutter + math.floor((col - win.colLo) * colW) end
   local function qnY(qn)   return oy + math.floor((qn - win.qnLo) * MAP_PX_PER_QN) end
+  local function qnAt(y)   return win.qnLo + (y - oy) / MAP_PX_PER_QN end
+
+  -- The margin drives the transport, as the arrange page's gutter does (docs/trackerRender.md § The mini-map).
+  -- A release commits and the candidate stands for the frame, so the bracket never flicks back.
+  local loopCand
+  local mx, my  = ImGui.GetMousePos(ctx)
+  local inMargin = mx >= ox and mx < gridL + gutter and my >= oy and my < oy + availH
+  if ImGui.IsMouseClicked(ctx, 0) and ImGui.IsWindowHovered(ctx) and inMargin then
+    mapPress = { qn = qnAt(my), moved = false }
+  end
+  if mapPress then
+    local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+    if ImGui.IsMouseDragging(ctx, 0) then mapPress.moved = true end
+    if mapPress.moved then
+      loopCand = tv:mapLoopCand(mapPress, qnAt(my), snapped, MAP_CELL_QN)
+    end
+    if ImGui.IsMouseReleased(ctx, 0) then
+      if loopCand then tv:setLoopRangeQN(loopCand.loQN, loopCand.hiQN)
+      else tv:setEditCursorQN(snapped and floorToCell(mapPress.qn) or mapPress.qn) end
+      mapPress = nil
+    end
+  end
 
   -- The arrange grid's cadence in its own inks: a cell every 4 QN ruled off, the bar and phrase cells tinted as the grid tints their rows.
   -- The grid reaches as far as the track list and no further, and sits under the boxes, as it does there.
@@ -615,12 +642,14 @@ local function drawMapBody()
     p.border({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, 'arrange.itemBorder')
   end
 
-  -- The loop range: the `[` the arrange page strokes down its gutter, drawn in its own
-  -- lane clear of the grid (docs/trackerRender.md § The mini-map).
-  if win.loopLoQN then
+  -- The loop range: the `[` the arrange page strokes down its gutter, drawn in its own lane
+  -- clear of the grid (docs/trackerRender.md § The mini-map). An in-flight drag preempts the committed range, as arrangeRender.lua:544 does.
+  local loopLoQN, loopHiQN = win.loopLoQN, win.loopHiQN
+  if loopCand then loopLoQN, loopHiQN = loopCand.loQN, loopCand.hiQN end
+  if loopLoQN then
     local r      = math.max(2, (lane - 2) // 2)
     local x1     = ox + 1 + r
-    local y1, y2 = qnY(win.loopLoQN), qnY(win.loopHiQN)
+    local y1, y2 = qnY(loopLoQN), qnY(loopHiQN)
     p.pathClear()
     p.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
     p.pathLineTo(x1 - r, y1 + r + 1)

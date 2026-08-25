@@ -139,6 +139,8 @@ local function resetArrange()
   fakeArrange.loopRangeQN    = function() return fakeArrange.loopLo, fakeArrange.loopHi end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
   fakeArrange.loopTo         = function(lo, hi) fakeArrange.calls.loopTo = { lo, hi } end
+  fakeArrange.setEditCursorQN = function(qn) fakeArrange.calls.setEditCursor = qn end
+  fakeArrange.setLoopRangeQN  = function(lo, hi) fakeArrange.calls.setLoopRange = { lo, hi } end
   fakeArrange.setCursorAt    = function(trackIdx, qn)
     fakeArrange.calls.setCursorAt = { trackIdx, qn }
   end
@@ -1046,6 +1048,43 @@ return {
       t.eq(win.loopHiQN, 200, 'a loop running past the foot keeps its true end, for the renderer to clip')
       fakeArrange.loopLo, fakeArrange.loopHi = 100, 120
       t.eq(tv:mapWindow(5, 80).loopLoQN, nil, 'a loop the window misses is dropped')
+    end,
+  },
+
+  {
+    name = 'the map loop candidate snaps to the cell, widens to one, and holds at 0',
+    run = function(harness)
+      local tv = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                       startQN = 0, lengthQN = 4 }, 3)
+      local cand = tv:mapLoopCand({ qn = 10 }, 22, true, 4)
+      t.eq(cand.loQN, 8,  'the press floors to the cell it sits in')
+      t.eq(cand.hiQN, 20, 'and the mouse to its own')
+      cand = tv:mapLoopCand({ qn = 22 }, 10, true, 4)
+      t.eq(cand.loQN, 8,  'a sweep upwards orders the ends')
+      t.eq(cand.hiQN, 20, 'the press ending it')
+      cand = tv:mapLoopCand({ qn = 10 }, 22, false, 4)
+      t.eq(cand.loQN, 10, 'Shift releases the snap')
+      t.eq(cand.hiQN, 22, 'at both ends')
+      cand = tv:mapLoopCand({ qn = 10 }, 11, true, 4)
+      t.eq(cand.loQN, 8,  'a sweep inside one cell brackets that cell')
+      t.eq(cand.hiQN, 12, 'widened to its foot')
+      cand = tv:mapLoopCand({ qn = 2 }, -6, true, 4)
+      t.eq(cand.loQN, 0, 'a drag above the arrangement holds at 0')
+      t.eq(cand.hiQN, 4, 'and still brackets a cell')
+    end,
+  },
+
+  {
+    name = 'the map drives the transport, and a hand-set loop drops loop to item',
+    run = function(harness)
+      local tv = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                       startQN = 0, lengthQN = 4 }, 3)
+      tv:setEditCursorQN(12)
+      t.eq(fakeArrange.calls.setEditCursor, 12, 'a clean release seeks the edit cursor')
+      tv:setLoopToItem(true)
+      tv:setLoopRangeQN(8, 20)
+      t.deepEq(fakeArrange.calls.setLoopRange, { 8, 20 }, 'a drag sets the loop range')
+      t.eq(tv:loopsToItem(), false, 'and the hand-set loop drops the toggle')
     end,
   },
 

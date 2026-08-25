@@ -58,6 +58,9 @@ Landed — the model is in `docs/trackerRender.md` § The mini-map.
    reverses today's rule, that turning the toggle off leaves the loop
    standing.
 
+1. Setting a loop from the map's gutter drops loop to item, and the
+   loop the drag set stands.
+
 ## The travel
 
 1. A click on a box makes its instance current.

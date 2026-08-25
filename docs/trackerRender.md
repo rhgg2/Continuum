@@ -170,6 +170,19 @@ with that bar at its head. A start is always within a stride of the top, so an
 instance taller than the page needs no case of its own. With the tracker in no
 instance nothing is marked, and the edit cursor QN stands in for the start.
 
+The map's left margin drives the transport, as the arrange page's gutter drives
+it (`docs/arrangePage.md` § The take enumerator, for the facade calls). A press
+anywhere left of the first column's rule — the bracket's lane and the gutter
+beside it — starts the gesture. A clean release seeks the edit cursor to the
+press; a drag sets the loop range over the span swept, and the candidate
+preempts the committed loop in the bracket, so it tracks the mouse. The snap is
+the map's own 4 QN cell, floored rather than nearest, and Shift releases it. A
+loop set this way drops loop to item (`docs/trackerPage.md` § Loop to item).
+
+The renderer holds the press, since the gesture is pixels; `tv:mapLoopCand`
+orders and snaps the candidate. The cell goes in as an argument, as the window's
+columns and depth do, so the map's measures stay in one place.
+
 ## FX chain — palette tab
 
 See `docs/generators.md` § The chain for what a chain means; this section is

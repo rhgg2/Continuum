@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — A loop swept in the tracker mini-map's gutter drops loop to item, so no later
+  gesture brackets over it. The toggle's standing rule — a loop set by hand survives only until the
+  next gesture — holds for loops set anywhere else. The map's 4 QN snap cell goes into
+  tv:mapLoopCand as an argument rather than living in tv, as the window's columns and depth already
+  do, so a zoomable map moves one constant.
+
 - **2026-08-25** — The arrange mini-map takes the transport through tv:mapWindow rather than reading
   the arrange facade in the renderer. The window already carries every QN fact the map draws from,
   and only the window has a spec, so a fact routed through the renderer could not be pinned. The
