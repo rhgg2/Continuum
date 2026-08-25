@@ -916,14 +916,6 @@ local toolbarSegments = {
       if changed then av:setFollowPlay(on) end
     end,
   },
-  {
-    id = 'beatsPerRow', heading = 'BPR',
-    render = function()
-      local changed, n = chrome.numberStepper('bpr', av:beatPerRow(),
-        { min = 1/4, max = 64, format = '%g', digits = 4, align = 'center' })
-      if changed then av:setBeatPerRow(n) end
-    end,
-  },
 }
 
 function ar:toolbarSegments() return toolbarSegments end
@@ -986,17 +978,23 @@ local function trimReadout()
 end
 
 -- Length mode names the step it stands in front of, so Ctrl+digit reads back while armed.
-local function advanceReadout()
-  local step = cm:get('arrangeAdvanceBy')
+-- The step alone is the value, so an edit opens on the number rather than the wording.
+local function advanceReadout(step)
   return cm:get('arrangeAdvanceByLength')
      and string.format('take length or %d', step) or tostring(step)
 end
 
+local setAdvance = util.atomic('Set advance', function(n) cm:set('project', 'arrangeAdvanceBy', n) end)
+
 local statusSegments = {
-  { id = 'row',        label = 'Row',       width = 40,  get = function() return av:cursorRow()  end, format = '%d' },
-  { id = 'col',        label = 'Col',       width = 40,  get = function() return av:cursorCol()  end, format = '%d' },
-  { id = 'beatPerRow', label = 'Beats/row', width = 45,  get = function() return av:beatPerRow() end, format = '%g' },
-  { id = 'advance',    label = 'Advance',   width = 80,  get = advanceReadout },
+  { id = 'row',        label = 'Row',       width = 20,  get = function() return av:cursorRow()  end, format = '%d' },
+  { id = 'col',        label = 'Col',       width = 20,  get = function() return av:cursorCol()  end, format = '%d' },
+  { id = 'beatPerRow', label = 'Beats/row', width = 20,  get = function() return av:beatPerRow() end, format = '%g',
+    set = function(n) av:setBeatPerRow(n) end,
+    edit = { kind = 'number', min = 1/4, max = 64, step = 'x2', format = '%g' } },
+  { id = 'advance',    label = 'Advance',   width = 20,  get = function() return cm:get('arrangeAdvanceBy') end,
+    format = advanceReadout,
+    set = setAdvance, edit = { kind = 'number', min = 0, max = 9, format = '%d' } },
   { id = 'trim',       label = 'Trim',      width = 115, get = trimReadout,
     visible = function() return trimReadout() ~= '' end },
   { id = 'replace',    width = 70, get = function() return 'REPLACE' end,
@@ -1011,10 +1009,10 @@ end
 --contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.
 function ar:focusState()
   if not ctx then return { suppressKbd = false, acceptCmds = false } end
-  local pa = chrome and chrome.pickerIsActive() or false
+  local blocked = chrome and (chrome.pickerIsActive() or chrome.statusEditActive()) or false
   return {
-    suppressKbd = pa,
-    acceptCmds  = (not pa)
+    suppressKbd = blocked,
+    acceptCmds  = (not blocked)
                   and not ImGui.IsAnyItemActive(ctx)
                   and not modalHost:wasOpenAtFrameStart(),
   }
@@ -1037,16 +1035,6 @@ arrange:registerAll {
     if slot then openDeleteModal(trackIdx, slot) end
   end,
   toggleFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,
-  arrangeSetBeatPerRow = function()
-    modalHost:openPrompt{
-      title    = 'Beats per row',
-      prompt   = '0.25 – 64',
-      buf      = tostring(av:beatPerRow()),
-      callback = function(buf)
-        local n = tonumber(buf); if n then av:setBeatPerRow(n) end
-      end,
-    }
-  end,
 }
 
 arrange:bindAll(require('pageBindings').arrange)

@@ -193,7 +193,6 @@ local arrange = {
   arrangeClearSelection         = { { ImGui.Key_G,          ImGui.Mod_Super } },
   arrangeZoomIn                 = { { ImGui.Key_Equal,      ImGui.Mod_Super } },
   arrangeZoomOut                = { { ImGui.Key_Minus,      ImGui.Mod_Super } },
-  arrangeSetBeatPerRow          = { { ImGui.Key_Z,          ImGui.Mod_Super } },
 }
 
 -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →

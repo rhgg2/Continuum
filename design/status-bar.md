@@ -39,8 +39,7 @@ anchors are in `docs/help.md` § What's where.
 | sample  | track · slot                | — |
 | editor  | pane text, one segment      | — |
 
-All of this is on screen; arrange's two editable cells are what remains.
-`followPlay` stays in the arrange toolbar — it's a mode toggle, not a datum,
+All of this is on screen. `followPlay` stays in the arrange toolbar — it's a mode toggle, not a datum,
 and wiring's zoom factor waits until wiring has a zoom.
 
 ## Plan

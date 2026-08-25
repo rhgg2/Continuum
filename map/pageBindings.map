@@ -1,4 +1,4 @@
-@module pageBindings  src=pageBindings.lua  loc=215  mode=chunk
+@module pageBindings  src=pageBindings.lua  loc=214  mode=chunk
 
 # Shapes
   @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }  @ 7
@@ -17,17 +17,17 @@
   -- sample (command bodies + slot-clamp invariant in sampleRender)
   -- wiring
   -- arrange (command bodies in arrangeRender + arrangeView)
-  @fn placeKey(slotIdx)  @ 201-205
+  @fn placeKey(slotIdx)  @ 200-204
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Uses (outbound edges)
-  @use call    util.toBase62  @ <load>:208
+  @use call    util.toBase62  @ <load>:207
   @use require imgui  @ <load>:13
   @use require util  @ <load>:14
 
 # Calls (intra-file)
-  @call placeKey  @ <load>:208
+  @call placeKey  @ <load>:207
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -35,12 +35,12 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 9
-  @field r Key_0  @ 74,117,211 placeKey:202
+  @field r Key_0  @ 74,117,210 placeKey:201
   @field r Key_1  @ 41
   @field r Key_7  @ 95
   @field r Key_8  @ 94
   @field r Key_9  @ 73
-  @field r Key_A  @ 33,63 placeKey:203,204
+  @field r Key_A  @ 33,63 placeKey:202,203
   @field r Key_B  @ 23,39,187
   @field r Key_Backslash  @ 90,91
   @field r Key_Backspace  @ 68,86,173,177,179
@@ -89,24 +89,24 @@
   @field r Key_W  @ 64,65
   @field r Key_X  @ 64,109
   @field r Key_Y  @ 66
-  @field r Key_Z  @ 79,196
+  @field r Key_Z  @ 79
   @field r Mod_Alt  @ 25,26,27,28,29,30,80,81,82,83,84,85
   @field r Mod_Alt  @ 113,161,162,175,181,182,183
   @field r Mod_Ctrl  @ 31,32,39,40,48,49,50,51,52,54,61,63
   @field r Mod_Ctrl  @ 64,65,66,67,69,70,86,88,89,101
   @field r Mod_Ctrl  @ 102,106,107,108,110,111,117,132,133,134,172,176
-  @field r Mod_Ctrl  @ 177,180,186,211
+  @field r Mod_Ctrl  @ 177,180,186,210
   @field r Mod_Shift  @ 31,32,35,37,42,43,51,55,56,57,58,71
   @field r Mod_Shift  @ 72,73,74,77,78,82,83,84,85,88,89,90
   @field r Mod_Shift  @ 94,95,96,97,107,111,135,136,163,164,165,166
-  @field r Mod_Shift  @ 170,171,175,181,182,183 placeKey:204
+  @field r Mod_Shift  @ 170,171,175,181,182,183 placeKey:203
   @field r Mod_Super  @ 21,22,23,24,33,34,35,36,42,43,44,45
   @field r Mod_Super  @ 46,47,59,60,62,64,66,75,76,77,78,79
   @field r Mod_Super  @ 87,100,104,105,109,112,124,167,168,169,170,171
-  @field r Mod_Super  @ 179,185,187,188,189,190,193,194,195,196
+  @field r Mod_Super  @ 179,185,187,188,189,190,193,194,195
   @field w addNoteLane  @ 50
   @field w addTypedCol  @ 51
-  @field w arrange  @ 213
+  @field w arrange  @ 212
   @field w arrangeAdvanceMode  @ 186
   @field w arrangeClearLoop  @ 192
   @field w arrangeClearSelection  @ 193
@@ -138,7 +138,6 @@
   @field w arrangeSelectLeft  @ 165
   @field w arrangeSelectRight  @ 166
   @field w arrangeSelectUp  @ 163
-  @field w arrangeSetBeatPerRow  @ 196
   @field w arrangeSetLoopEnd  @ 188
   @field w arrangeSetLoopStart  @ 187
   @field w arrangeSplit  @ 172
