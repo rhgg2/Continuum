@@ -4,6 +4,22 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — An editable status cell's hit box takes the band's padding above and below it, so
+  the footer tiles with no dead strip and a pointer flung at a bar on the window's bottom edge lands
+  on the control rather than beside it. The padding is read from the window being drawn into rather
+  than imported, so the coordinator keeps the constant.
+
+- **2026-08-26** — What belongs in which chrome band is settled by reach against check rather than
+  by datum against mode: the toolbar holds what a pointer is aimed at, the status bar what is
+  glanced at. The tracker's Loop, Follow and Graph move down as one flags cell — each is checked far
+  more often than flipped, and two carry keys. Three headed segments cost ~290px in the band that
+  wraps, against ~190 for the cell, and the toolbar is three segments lighter. Track and take stay
+  up, being reached for constantly.
+
+- **2026-08-26** — A status cell's control is selected by `edit` alone, where `set` and `edit` were
+  both required and always agreed. A flags cell has no single value to write, so it carries no `set`
+  and the redundancy had to go one way or the other; keying on `edit` keeps one discriminator.
+
 - **2026-08-25** — Arrange's beats-per-row keeps two routes, not three: the status cell and the zoom
   keys. The Super+Z prompt modal existed because the toolbar stepper was clumsy for fine values, and
   a click on the cell now does that job.

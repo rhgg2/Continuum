@@ -130,7 +130,7 @@ edges — the clip rect is padded vertically so values at the extremes
 aren't half-clipped.
 
 Strip height is `laneStrip.rows * gridY`. Visibility is controlled by
-`laneStrip.visible` (toolbar checkbox "Graph"); when false, the strip
+`laneStrip.visible` (the status bar's "Graph" flag); when false, the strip
 draws nothing and `computeLayout` reclaims its rows for the tracker.
 A pair of `+`/`-` `SmallButton`s in the strip's gutter nudge
 `laneStrip.rows` between 3 and 32 (the half-row pad on each side eats

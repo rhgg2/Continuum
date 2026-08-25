@@ -456,9 +456,10 @@ local function fitLabel(text, maxW)
   return text:sub(1, keep) .. '…'
 end
 
---shape: statusSegment = { id: string, label?: string, width: px (the value box; the label sits to its left), get: fn() -> value, format?: string | fn(v) -> string, visible?: fn() -> bool, set?: fn(v) — presence makes the cell editable, edit?: numberEdit | pickEdit }
+--shape: statusSegment = { id: string, label?: string, width: px (the value box; the label sits to its left; omitted by a flags cell, which measures its own), get: fn() -> value, format?: string | fn(v) -> string, visible?: fn() -> bool, edit?: numberEdit | pickEdit | flagsEdit — presence makes the cell a control, set?: fn(v) — the writer for number and pick }
 --shape: numberEdit = { kind = 'number', min?, max?, step? = 1 | 'x2' (halve/double), format? }
 --shape: pickEdit = { kind = 'pick', items: fn() -> pickerItems }
+--shape: flagsEdit = { kind = 'flags', items: [{ label: string, get: fn() -> bool, set: fn(bool) }] — each flag carries its own pair, so the cell needs no get/set }
 -- see docs/chrome.md § Status bar layout, § Editing a status cell
 local lastStatusRects = {}
 local STATUS_GAP, STATUS_LABEL_GAP = 8, 6   -- either side of the rule; between label and value
@@ -512,6 +513,13 @@ local function wheelNotches(id)
   return whole
 end
 
+-- The hit box takes the band's padding above and below the cell, so a pointer flung at
+-- a bottom-edge bar lands on the control, not beside it — docs/chrome.md § Editing a status cell.
+local function bandHit(y, h)
+  local _, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_WindowPadding)
+  return y - padY, h + padY * 2
+end
+
 -- An editable cell wears a well one zone off the band, so the box marks what can be
 -- changed rather than decorating the row. One colour, hovered or not: on a row of
 -- adjacent boxes a shade that follows the pointer reads as flicker.
@@ -524,8 +532,9 @@ end
 -- Resting number cell: the rect takes both the click that opens the edit and the wheel
 -- that steps without one; release timing is explained in docs/chrome.md § Editing a status cell.
 local function numberCell(seg, x, y, w, h)
-  ImGui.SetCursorScreenPos(ctx, x, y)
-  local clicked = ImGui.InvisibleButton(ctx, '##status_' .. seg.id, w, h)
+  local hitY, hitH = bandHit(y, h)
+  ImGui.SetCursorScreenPos(ctx, x, hitY)
+  local clicked = ImGui.InvisibleButton(ctx, '##status_' .. seg.id, w, hitH)
   local hovered = ImGui.IsItemHovered(ctx)
   if clicked then
     local text = editText(seg)
@@ -591,8 +600,34 @@ local function pickCell(seg, x, y, w)
   ImGui.PopStyleColor(ctx, 3)
 end
 
--- Dimmed label, then the value in a box of exactly `width`, ellipsis-fitted into it. A
--- `set` closure makes that box a control. Returns the whole cell's width, label included.
+-- Self-naming tokens over one cell: a lit one wears the well, an unlit one dim text in
+-- the same footprint, so toggling never reflows the row — docs/chrome.md § Editing a status cell.
+local FLAG_GAP = 4
+local function flagsCell(seg, x, y, h)
+  local padX, used = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding), 0
+  for i, flag in ipairs(seg.edit.items) do
+    if i > 1 then used = used + FLAG_GAP end
+    local w, fx, on = ImGui.CalcTextSize(ctx, flag.label) + padX * 2, x + used, flag.get()
+    local hitY, hitH = bandHit(y, h)
+    ImGui.SetCursorScreenPos(ctx, fx, hitY)
+    if ImGui.InvisibleButton(ctx, '##status_' .. seg.id .. '_' .. flag.label, w, hitH) then
+      flag.set(not on)
+    end
+    if on then statusWell(fx, y, w, h) end
+    ImGui.SetCursorScreenPos(ctx, fx + padX, y)
+    if on then
+      ImGui.AlignTextToFramePadding(ctx)
+      ImGui.Text(ctx, flag.label)
+    else
+      chrome.headingLabel(flag.label, STATUS_LABEL_DIM)
+    end
+    used = used + w
+  end
+  return used
+end
+
+-- Dimmed label, then the value in a box of exactly `width`, ellipsis-fitted into it. An
+-- `edit` kind makes that box a control. Returns the whole cell's width, label included.
 local function drawStatusCell(seg, x, y, h)
   local used = 0
   if seg.label then
@@ -600,8 +635,11 @@ local function drawStatusCell(seg, x, y, h)
     chrome.headingLabel(seg.label, STATUS_LABEL_DIM)
     used = ImGui.CalcTextSize(ctx, seg.label) + STATUS_LABEL_GAP
   end
-  local vx, vw = x + used, seg.width
-  if not seg.set then
+  local vx = x + used
+  -- A flags cell measures its own static labels, so it declares no width.
+  if seg.edit and seg.edit.kind == 'flags' then return used + flagsCell(seg, vx, y, h) end
+  local vw = seg.width
+  if not seg.edit then
     ImGui.SetCursorScreenPos(ctx, vx, y)
     ImGui.AlignTextToFramePadding(ctx)
     ImGui.Text(ctx, fitLabel(statusText(seg), vw))

@@ -60,12 +60,16 @@ closure: an id, an optional label, a declared pixel width, and a `get` read
 fresh each frame. The renderer owns all the drawing, so a datum the spec
 cannot express either grows the spec or stays in the toolbar.
 
-Each cell holds one datum. A mode toggle stays in the toolbar — it selects
-behaviour rather than reporting a value.
+Which band a control belongs to is a question of reach against check. The
+toolbar holds what you aim a pointer at; the status bar what you glance down
+to read. A picker you switch takes with sits up there however plain its datum,
+and a mode you set once a session sits here however much it selects behaviour
+rather than reporting a value.
 
 A declared width is the value box, not the cell: the label is measured and the
 box follows it, so renaming a label cannot shrink the value it stands over. The
-rect the cell records for help spans both.
+rect the cell records for help spans both. A flags cell is the exception that
+declares nothing — its labels are fixed, so it measures its own span.
 
 Widths are declared, so the bar needs neither the pre-measure pass nor the
 width cache the toolbar carries. Each cell is placed by explicit screen
@@ -80,12 +84,18 @@ against the toolbar's ink and the status bar's alike.
 
 ## Editing a status cell
 
-1. A segment carrying `set` draws as a control rather than as text, and wears a
+1. A segment carrying `edit` draws as a control rather than as text, and wears a
    well one zone off the band (`statusBar.well`), so the box marks what can be
-   changed. The `edit` kind selects the control: `number` is a value the pointer
-   writes two ways, `pick` is the shared picker under a cell-width button. The well
-   holds one colour, hovered or not — across a row of adjacent boxes a shade that
-   follows the pointer reads as flicker rather than as affordance.
+   changed. The kind selects the control: `number` is a value the pointer
+   writes two ways, `pick` is the shared picker under a cell-width button, and
+   `flags` a row of booleans. The well holds one colour, hovered or not — across a
+   row of adjacent boxes a shade that follows the pointer reads as flicker rather
+   than as affordance.
+
+1. A control's hit box takes the band's padding above and below the cell it draws in, so a
+   pointer flung at a bar on the window's bottom edge lands on the control rather than beside
+   it. The padding is read from the window being drawn into, so the coordinator keeps the
+   constant. The well still draws at the cell's own height.
 
 1. A number cell claims its rect with an `InvisibleButton` and draws the value
    over it, so the whole cell takes the click and the hover. The wheel over it
@@ -119,6 +129,13 @@ against the toolbar's ink and the status bar's alike.
    owns the popup. The well arrives as that button's fill rather than as a rect
    behind text, and the popup is placed above, since the bar sits on the window's
    bottom edge.
+
+1. A flags cell is a row of self-naming tokens over one cell, each claiming its own
+   rect. A lit token wears the well and the band's ink, an unlit one dim text in the
+   same footprint, so toggling never reflows the row. Each flag carries its own
+   `get`/`set` pair rather than a key the cell writes through: the flags of one page
+   commonly answer to different owners, and one writer keyed by name would land as a
+   chain over those names at the call site.
 
 ## Vertical separator
 

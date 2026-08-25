@@ -27,8 +27,13 @@ fakeImGui.GetStyleColor            = function() return 0 end
 fakeImGui.ColorConvertU32ToDouble4 = function() return 1, 1, 1, 1 end
 fakeImGui.ColorConvertDouble4ToU32 = function() return 0 end
 fakeImGui.CreateFunctionFromEEL    = function() return {} end
--- A button reports its click on release, which is when the cell opens its edit.
-fakeImGui.InvisibleButton          = function(_, id) frame.hits[#frame.hits + 1] = id; return frame.clicked end
+-- A button reports its click on release, which is when the cell opens its edit. `clickId`
+-- aims the click at one button, for a cell that claims several.
+fakeImGui.InvisibleButton          = function(_, id, w, h)
+  frame.hits[#frame.hits + 1] = { id = id, w = w, h = h }
+  if frame.clickId then return id == frame.clickId end
+  return frame.clicked
+end
 fakeImGui.IsItemHovered            = function() return frame.hovered end
 fakeImGui.IsItemActive             = function() return true end
 fakeImGui.IsItemDeactivated        = function() return false end
@@ -57,8 +62,26 @@ local function mkBar(harness, value, edit)
                      set = function(n) box.v = n end,
                      edit = edit } }
   local draw   = chrome.makeStatusBar()
-  frame.wheel, frame.hovered, frame.clicked, frame.pressed = 0, false, false, {}
+  frame.wheel, frame.hovered, frame.clicked, frame.clickId, frame.pressed = 0, false, false, nil, {}
   return chrome, box, function() draw(segs) end
+end
+
+-- A flags cell over three booleans the test can watch. Labels of three lengths, so a
+-- per-token width is distinguishable from a shared one.
+local FLAGS = { 'Loop', 'Follow', 'Graph' }
+local function mkFlags(harness)
+  local chrome = mkChrome(harness.mk())
+  local box    = { Loop = false, Follow = false, Graph = false }
+  local items  = {}
+  for _, name in ipairs(FLAGS) do
+    items[#items + 1] = { label = name,
+                          get = function() return box[name] end,
+                          set = function(v) box[name] = v end }
+  end
+  local segs = { { id = 'modes', edit = { kind = 'flags', items = items } } }
+  local draw = chrome.makeStatusBar()
+  frame.wheel, frame.hovered, frame.clicked, frame.clickId, frame.pressed = 0, false, false, nil, {}
+  return chrome, box, function() frame.hits = {}; draw(segs) end
 end
 
 return {
@@ -160,6 +183,67 @@ return {
       draw()
       t.eq(box.v, 4, 'the typed value is dropped')
       t.eq(chrome.statusEditActive(), false, 'the edit closed')
+    end,
+  },
+
+  {
+    name = 'a click on a flag token flips that flag and leaves its neighbours alone',
+    run = function(harness)
+      local _, box, draw = mkFlags(harness)
+      draw()
+      frame.clickId = '##status_modes_Follow'
+      draw()
+      t.eq(box.Follow, true, 'the token clicked went on')
+      t.eq(box.Loop,   false, 'the token to its left is untouched')
+      t.eq(box.Graph,  false, 'the token to its right is untouched')
+      draw()
+      t.eq(box.Follow, false, 'a second click flips it back')
+    end,
+  },
+
+  {
+    name = 'each flag token claims its own hit rect, sized to its own label',
+    run = function(harness)
+      local _, _, draw = mkFlags(harness)
+      draw()
+      t.eq(#frame.hits, 3, 'one rect per token')
+      -- The fake measures text at 7px a character; the fake FramePadding is 8 a side, its
+      -- WindowPadding 4, and a frame 20 tall.
+      for i, name in ipairs(FLAGS) do
+        t.eq(frame.hits[i].id, '##status_modes_' .. name, 'tokens claim in declared order')
+        t.eq(frame.hits[i].w, 7 * #name + 16, 'the token is its label plus padding')
+        t.eq(frame.hits[i].h, 20 + 8, "the token takes the band's pad above and below it")
+      end
+    end,
+  },
+
+  {
+    name = "a flags cell's recorded rect spans every token and the gaps between them",
+    run = function(harness)
+      local chrome, _, draw = mkFlags(harness)
+      draw()
+      local tokens = 0
+      for _, hit in ipairs(frame.hits) do tokens = tokens + hit.w end
+      local slack = chrome.statusRects().modes.w - tokens
+      -- Measured, not declared: the cell spans its tokens plus one gap between each pair.
+      t.eq(slack >= 0, true, 'the cell is at least as wide as the tokens it claimed')
+      t.eq(slack % (#FLAGS - 1), 0, 'the slack divides evenly into the gaps')
+    end,
+  },
+
+  {
+    name = 'a lit token has the footprint of an unlit one, so toggling never reflows the row',
+    run = function(harness)
+      local chrome, box, draw = mkFlags(harness)
+      draw()
+      local dark = {}
+      for i, hit in ipairs(frame.hits) do dark[i] = hit.w end
+      local darkSpan = chrome.statusRects().modes.w
+      box.Loop, box.Follow, box.Graph = true, true, true
+      draw()
+      t.eq(#frame.hits, #dark, 'the same tokens are claimed')
+      for i, hit in ipairs(frame.hits) do t.eq(hit.w, dark[i], 'each token holds its width') end
+      t.eq(chrome.statusRects().modes.w, darkSpan, 'and so the cell spans the same')
     end,
   },
 }

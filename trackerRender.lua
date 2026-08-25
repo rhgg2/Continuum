@@ -142,27 +142,6 @@ local toolbarSegments = {
       if ImGui.Button(ctx, 'edit##editSwing') then cmgr:invoke('editSwing') end
     end,
   },
-  {
-    id = 'loopToItem', heading = 'Loop',
-    render = function()
-      local changed, on = chrome.checkbox('##loopToItem', tv:loopsToItem())
-      if changed then tv:setLoopToItem(on) end
-    end,
-  },
-  {
-    id = 'followPlay', heading = 'Follow',
-    render = function()
-      local changed, on = chrome.checkbox('##followPlay', tv:followsPlay())
-      if changed then tv:setFollowPlay(on) end
-    end,
-  },
-  {
-    id = 'graph', heading = 'Graph',
-    render = function()
-      local cv, newVis = chrome.checkbox('##', cm:get('laneStrip.visible'))
-      if cv then cm:set('global', 'laneStrip.visible', newVis) end
-    end,
-  },
 }
 
 ----- Param palette
@@ -715,6 +694,14 @@ local statusSegments = {
   { id = 'sample',  label = 'Sample',  width = 125, get = sampleReadout,
     visible = function() return cm:get('trackerMode') end,
     set = setSample,  edit = { kind = 'pick', items = sampleItems } },
+  -- The page's modes, at the bar's right end. Each is checked far more often than it is
+  -- flipped, and two carry keys, so none earns the toolbar frontage a headed segment costs.
+  { id = 'modes', edit = { kind = 'flags', items = {
+    { label = 'Loop',   get = function() return tv:loopsToItem() end, set = function(v) tv:setLoopToItem(v) end },
+    { label = 'Follow', get = function() return tv:followsPlay()  end, set = function(v) tv:setFollowPlay(v)  end },
+    { label = 'Curve',  get = function() return cm:get('laneStrip.visible') end,
+                        set = function(v) cm:set('global', 'laneStrip.visible', v) end },
+  } } },
 }
 
 ----- Input
@@ -753,7 +740,7 @@ help:registerPage('tracker', {
     { cmd = 'inputSampleUp', label = 'Sample +' },
     { cmd = 'inputSampleDown', label = 'Sample -' },
   }},
-  { anchor = 'toolbar.loopToItem', place = 'pin', title = 'Loop', items = {
+  { anchor = 'status.modes', place = 'pin', title = 'Loop', items = {
     { cmd = 'loopToItemNow', label = 'Loop to item' },
     { cmd = 'toggleLoopToItem', label = 'Loop to item on each move' },
     { cmd = 'clearLoop', label = 'Clear loop' },
