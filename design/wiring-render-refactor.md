@@ -1,6 +1,7 @@
 # wiringRender refactor — one wire renderer, explicit gesture machine
 
-> opened: 2026-06-12 · status: approved, ready to implement
+> opened: 2026-06-12 · status: in flight — plan/wiring-render-refactor.md,
+> phase 1 (one wire renderer)
 
 Target: `wiringRender.lua` only (2,687 loc). Line refs below were
 re-grounded against the current file (sha 217c1f8) on 2026-07-16; if
