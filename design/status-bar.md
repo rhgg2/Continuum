@@ -1,6 +1,6 @@
 # status bar — declarative fixed-width segments
 
-> opened: 2026-07-08 · status: approved in principle; not started
+> opened: 2026-07-08 · status: in flight — see `plan/status-bar.md`
 >
 > Working design doc.
 
@@ -96,7 +96,7 @@ same one-frame latency the picker gate already has; acceptable.
 | page    | display segments            | editable segments |
 |---------|-----------------------------|-------------------|
 | tracker | col label · bar:beat.sub    | octave · advance · rpb (from toolbar) · sample (from toolbar, `pick`) |
-| arrange | row · col                   | beats-per-row (from toolbar) · advance |
+| arrange | row · col · trim · REPLACE  | beats-per-row (from toolbar) · advance |
 | wiring  | page name                   | zoom factor (later) |
 | sample  | track/slot text, one segment| — |
 | editor  | pane text, one segment      | — |
@@ -112,22 +112,4 @@ grows the `status.<id>` family next to `toolbar.<id>`.
 
 ## Plan
 
-1. **`chrome.makeStatusBar()`** — cell layout, display rendering,
-   number edit (click-to-edit + wheel), pick kind, rect recording,
-   `statusEditActive()`. Sibling of `makeToolbar` in `chrome.lua`.
-2. **Coordinator** — instantiate the shared status bar; footer child
-   calls it with `page:statusSegments()`; drop `renderStatusBar` from
-   the page shape annotation.
-3. **Tracker page** (proving ground) — declare segments; delete
-   `drawStatusBar`; remove `rowsPerBeat` and `sample` toolbar segments;
-   migrate help pins.
-4. **Arrange** — segments incl. beats-per-row migration (`x2` wheel);
-   remove the toolbar `beatsPerRow` segment.
-5. **Wiring / sample / editor** — trivial display segments.
-6. **Spec** — wired-behaviour spec through the real coordinator→chrome
-   path: segment renders declared value, edit commit calls `set`,
-   Esc cancels, wheel steps clamp, `statusEditActive` gates focusState.
-   ImGui stubbed at the surface only.
-
-Steps 1–3 land together (the bar is unusable without a page driving
-it); 4–6 can follow independently.
+See `plan/status-bar.md`.
