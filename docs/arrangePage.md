@@ -86,7 +86,8 @@ same colour and span on both pages.
 
 The facade carries the transport beside it: `playPositionQN`,
 `editCursorQN` and `loopRangeQN` for what the map draws,
-`setEditCursorQN` and `setLoopRangeQN` for what its gutter sets.
+`setEditCursorQN`, `setLoopRangeQN` and `clearLoopRange` for what its
+gutter sets and Esc drops.
 
 ## Cursor and focus are separate
 

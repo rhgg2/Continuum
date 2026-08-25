@@ -72,6 +72,7 @@ facade.publish('arrange', {
   setCursorAt     = function(trackIdx, qn) av:setCursorAt(trackIdx, qn) end,
   setEditCursorQN = function(qn)   av:setEditCursorQN(qn) end,
   setLoopRangeQN  = function(loQN, hiQN) av:setLoopRangeQN(loQN, hiQN) end,
+  clearLoopRange  = function()     av:clearLoopRange() end,
   playFromQN      = function(qn)   av:playFromQN(qn) end,
   loopTo          = function(loQN, hiQN) av:loopTo(loQN, hiQN) end,
   reswingAll             = function(name) av:reswingAll(name) end,

@@ -753,6 +753,7 @@ help:registerPage('tracker', {
   { anchor = 'toolbar.loopToItem', place = 'pin', title = 'Loop', items = {
     { cmd = 'loopToItemNow', label = 'Loop to item' },
     { cmd = 'toggleLoopToItem', label = 'Loop to item on each move' },
+    { cmd = 'clearLoop', label = 'Clear loop' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Movement', items = {
     { cmd = 'cursorUp', label = 'Up' },
@@ -1762,6 +1763,7 @@ tracker:registerAll{
 
   toggleLoopToItem = function() tv:setLoopToItem(not tv:loopsToItem()) end,
   loopToItemNow    = function() tv:bracketCurrentInstance() end,
+  clearLoop        = function() tv:setLoopToItem(false) end,
 
   editNoteFx        = editFx,
   focusParamPalette = focusParams,

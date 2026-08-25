@@ -242,11 +242,11 @@ function tv:bracketCurrentInstance()
   if inst then arrange().loopTo(inst.startQN, inst.startQN + inst.lengthQN) end
 end
 
---contract: the loop-to-item toggle; coming on brackets the current instance at once
+--contract: the loop-to-item toggle; on brackets the current instance, off clears the loop
 function tv:loopsToItem() return cm:get('trackerLoopToItem') end
 function tv:setLoopToItem(on)
   cm:set('global', 'trackerLoopToItem', not not on)
-  if on then self:bracketCurrentInstance() end
+  if on then self:bracketCurrentInstance() else arrange().clearLoopRange() end
 end
 
 --contract: name the placement — the dive, and later again/vary; read at the next resolve
@@ -348,6 +348,7 @@ end
 function tv:setEditCursorQN(qn) arrange().setEditCursorQN(qn) end
 
 --contract: a loop set by hand drops loop to item, so no later gesture brackets over it
+-- The drop clears the standing loop, so the write follows it rather than preceding it.
 function tv:setLoopRangeQN(loQN, hiQN)
   self:setLoopToItem(false)
   arrange().setLoopRangeQN(loQN, hiQN)
@@ -4035,7 +4036,9 @@ end
 -- and the walk, which would otherwise take the map away at the ends of a track.
 local HOLDS_MAP = { play = true, playPause = true, stop = true,
                     playFromTop = true, playFromCursor = true,
-                    prevInstance = true, nextInstance = true }
+                    prevInstance = true, nextInstance = true,
+                    loopToItemNow = true, toggleLoopToItem = true,
+                    clearLoop = true}
 
 -- A clicked, keyboard, or raise override claims a tab; absent one, fx auto-wins whenever a
 -- chain is showable — anchors and lapse rules: docs/trackerRender.md § Palette tabs.

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — Dropping loop to item clears the transport loop, reversing the rule that turning
+  the toggle off left the loop where it stood. The clear lives in tv:setLoopToItem, so the toolbar
+  checkbox, Ctrl+L and Esc's clearLoop command all release the loop by the same path, and the gutter
+  sweep writes its own range over the clear its drop causes. The arrange page's Esc still clears the
+  range alone: the toggle belongs to the tracker.
+
 - **2026-08-25** — A loop swept in the tracker mini-map's gutter drops loop to item, so no later
   gesture brackets over it. The toggle's standing rule — a loop set by hand survives only until the
   next gesture — holds for loops set anywhere else. The map's 4 QN snap cell goes into

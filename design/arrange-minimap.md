@@ -36,30 +36,14 @@ step's landing, § Deleting the instance.
 
 Landed — the model is in `docs/arrangePage.md` § The take enumerator.
 
-The transport sections below add three calls to that facade:
-`loopRangeQN`, `setLoopRangeQN` and `clearLoopRange`. `playPositionQN`
-is published already.
-
 ## The transport shown
 
 Landed — the model is in `docs/trackerRender.md` § The mini-map.
 
 ## The transport driven
 
-1. A press in the map's gutter drives the transport as the arrange
-   gutter does: a clean release seeks the edit cursor, a drag sets the
-   loop range.
-
-1. The snap is the map's own cell, 4 QN; Shift releases it.
-
-1. **Esc** clears the loop, and drops loop to item with it.
-
-1. Dropping loop to item clears the loop, however it is dropped. This
-   reverses today's rule, that turning the toggle off leaves the loop
-   standing.
-
-1. Setting a loop from the map's gutter drops loop to item, and the
-   loop the drag set stands.
+Landed — the model is in `docs/trackerRender.md` § The mini-map and
+`docs/trackerPage.md` § Loop to item.
 
 ## The travel
 

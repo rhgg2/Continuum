@@ -531,8 +531,14 @@ the start of a placement already sounding. A loop set by hand survives
 until the next such gesture, the discipline `av:followPlay` keeps when a
 manual scroll suspends the follow. A loop swept in the mini-map's gutter
 is the exception: it drops the toggle, so no gesture brackets over it
-(`docs/trackerRender.md` § The mini-map). Turning the toggle on brackets the
-current instance at once; turning it off leaves the loop where it stands.
+(`docs/trackerRender.md` § The mini-map).
+
+Turning the toggle on brackets the current instance at once, and
+dropping it clears the loop — however the drop comes, from the
+checkbox, from Ctrl+L, or from `clearLoop` (Esc), whose whole body is
+the drop. So Esc is the tracker's release from the loop, as it is the
+arrange page's. The gutter sweep drops the toggle first and writes its
+own range over the clear, which is why the loop it set stands.
 
 ### The play row
 

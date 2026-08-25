@@ -138,9 +138,21 @@ local function resetArrange()
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.loopRangeQN    = function() return fakeArrange.loopLo, fakeArrange.loopHi end
   fakeArrange.playFromQN     = function(qn) fakeArrange.calls.playFrom = qn end
-  fakeArrange.loopTo         = function(lo, hi) fakeArrange.calls.loopTo = { lo, hi } end
+  -- The loop range is state, not just a call: every writer moves the same pair, so
+  -- a test reading it back sees which of a clear and a set landed last.
+  fakeArrange.loopTo         = function(lo, hi)
+    fakeArrange.calls.loopTo = { lo, hi }
+    fakeArrange.loopLo, fakeArrange.loopHi = lo, hi
+  end
   fakeArrange.setEditCursorQN = function(qn) fakeArrange.calls.setEditCursor = qn end
-  fakeArrange.setLoopRangeQN  = function(lo, hi) fakeArrange.calls.setLoopRange = { lo, hi } end
+  fakeArrange.setLoopRangeQN  = function(lo, hi)
+    fakeArrange.calls.setLoopRange = { lo, hi }
+    fakeArrange.loopLo, fakeArrange.loopHi = lo, hi
+  end
+  fakeArrange.clearLoopRange  = function()
+    fakeArrange.calls.clearLoop = true
+    fakeArrange.loopLo, fakeArrange.loopHi = nil, nil
+  end
   fakeArrange.setCursorAt    = function(trackIdx, qn)
     fakeArrange.calls.setCursorAt = { trackIdx, qn }
   end
@@ -1085,6 +1097,7 @@ return {
       tv:setLoopRangeQN(8, 20)
       t.deepEq(fakeArrange.calls.setLoopRange, { 8, 20 }, 'a drag sets the loop range')
       t.eq(tv:loopsToItem(), false, 'and the hand-set loop drops the toggle')
+      t.eq(fakeArrange.loopLo, 8, 'the drop clears the loop, and the drag\'s own stands over it')
     end,
   },
 
@@ -1406,7 +1419,22 @@ return {
       fakeArrange.calls.loopTo = nil
       h.cmgr:invoke('toggleLoopToItem')
       t.falsy(h.cm:get('trackerLoopToItem'), 'invoking again turned it off')
-      t.falsy(fakeArrange.calls.loopTo, 'going off leaves the loop where it was')
+      t.falsy(fakeArrange.loopLo, 'and the loop goes off with it')
+    end,
+  },
+
+  {
+    name = 'Esc clears the loop and drops loop to item with it',
+    run = function(harness)
+      local tv, h = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                          startQN = 0, lengthQN = 4 }, 3)
+      h.cmgr:push('tracker')
+      tv:setLoopToItem(true)
+      t.eq(fakeArrange.loopLo, 0, 'the toggle coming on bracketed the instance')
+
+      h.cmgr:invoke('clearLoop')
+      t.falsy(fakeArrange.loopLo, 'Esc clears the project loop')
+      t.eq(tv:loopsToItem(), false, 'and the toggle with it, so no gesture brings it back')
     end,
   },
 
