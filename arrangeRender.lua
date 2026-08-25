@@ -27,7 +27,7 @@ local ar = {}
 
 local QN_W, TRACK_W = 32, 72
 -- Empty band between gutter numbers (right-aligned at QN_W) and the first
--- gridline; wide enough to host the edit-cursor / play-head triangles.
+-- gridline, so the numbers don't crowd the grid.
 local GUTTER_PAD = 14
 -- The loop bracket strokes down the left edge; the grid shifts LOOP_PAD right to clear it.
 -- Must exceed the bracket radius (5) plus its 1.5px stroke.
@@ -584,22 +584,6 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
     ps.popClip()
   end
 
-  -- Edit cursor + play head — equilateral triangles in the gutter, apex 2px
-  -- left of the column divider. Play head draws only while the transport runs.
-  local TRI_BASE, TRI_H = 7, 7
-  local function gutterTri(qn, fill)
-    local y    = rowYs(av:qnToRow(qn))
-    local apex = g.gutterR - 2
-    local base = apex - TRI_H
-    local half = TRI_BASE / 2
-    ps.tri(apex, y, base, y - half, base, y + half, fill)
-    ps.polyline({ apex, y, base, y - half, base, y + half },
-                'arrange.cursorTriBorder', 1, true)
-  end
-  gutterTri(av:editCursorQN(), 'arrange.editCursor')
-  local playQN = av:playPositionQN()
-  if playQN then gutterTri(playQN, 'arrange.playHead') end
-
   for r = 0, visRows - 1 do
     local label = rowLabel(sr + r)
     local tw    = ps.measure(label)
@@ -620,6 +604,15 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
   end
 
   ps.popClip()
+
+  -- Play head, in the tracker's own yellow; drawn last so nothing hides it,
+  -- outside the grid clip so it spans the full pane. Nil while stopped.
+  local playQN  = av:playPositionQN()
+  local playRow = playQN and av:qnToRow(playQN)
+  if playRow and playRow >= sr and playRow < sr + visRows then
+    local y = rowYs(playRow)
+    ps.segment(g.paneLeft, y, g.paneR, y, 'arrange.playHead')
+  end
 
   -- Advance the ImGui layout cursor so subsequent siblings know we
   -- consumed the grid's footprint.

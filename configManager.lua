@@ -185,9 +185,7 @@ local declarations = {
   { 'colour.arrange.itemBorder',       'base.zone5'           },  -- solid neutral box outline (one zone below cursorOff)
   { 'colour.arrange.phrase',           {'colour.global.rowBeat', 1.0} },  -- bar tint at full alpha
   { 'colour.arrange.blockedBorder',    {'red', 0.95}          },  -- drag would overlap a neighbour
-  { 'colour.arrange.editCursor',       'base.zone2'           },  -- edit-cursor triangle fill
-  { 'colour.arrange.playHead',         'alt.zone5'            },  -- play-head triangle fill
-  { 'colour.arrange.cursorTriBorder',  'base.zone6'           },  -- shared border for both gutter triangles
+  { 'colour.arrange.playHead',         {'yellow', 0.9}        },  -- play-head line; the tracker's own (colour.tracker.playRow)
   { 'colour.arrange.ghostFill',        {'base.zone9', 0.35}   },  -- create-preview fill
   { 'colour.arrange.ghostBorder',      {'base.zone3', 0.90}   },  -- create-preview border
   { 'colour.arrange.orphanFill',       {'base.zone5', 0.35}   },  -- slot-less item, neutral

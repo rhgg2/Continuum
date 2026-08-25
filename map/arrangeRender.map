@@ -1,17 +1,17 @@
-@module arrangeRender  src=arrangeRender.lua  loc=1048  mode=chunk  self=ar
+@module arrangeRender  src=arrangeRender.lua  loc=1041  mode=chunk  self=ar
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
   @invariant  render + input only — holds av only, never am; all queries/mutations go through av.  @ 3
   @invariant  key bindings here; command bodies in av; coord pushes the scope on activation.  @ 4
   @contract  arrangePage (the controller) owns the stack (am/av) and hands this renderer av only  @ 16
-  @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.  @ 1018
-  @invariant  deleteSlot (Ctrl+Delete) takes the slot of the cursor take; the palette carries  @ 1019
+  @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.  @ 1011
+  @invariant  deleteSlot (Ctrl+Delete) takes the slot of the cursor take; the palette carries  @ 1012
 
 # Shapes
   @shape  body = grid pane (variable width) | fixed-width palette (chrome.palettePane); palette shows slots for the track under av:cursorCol().  @ 5
   @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.  @ 41
-  @shape  ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }  @ 917
+  @shape  ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }  @ 910
 
 # Imports
   @require util = 'util'  @ 7
@@ -39,12 +39,12 @@
   @state HEADER_PAD = 8  @ 160
   @state HEADER_GAP = 4  @ 161
   @state HEADER_MAX_LINES = 3  @ 164
-  @state TIDY_KEEP = '(keep)'  @ 708
-  @state TIDY_BASE_W, TIDY_LIST_W, TIDY_MAX_ROWS = 170, 340, 14  @ 711
-  @state TIDY_GUTTER = 8  @ 712   -- half the gap between columns, which hug their text
-  @state TIDY_COLS = { 'Key', 'Name', 'Base', 'Becomes' }  @ 767
-  @state toolbarSegments = {  @ 918
-  @state arrange = cmgr:scope('arrange')  @ 1022
+  @state TIDY_KEEP = '(keep)'  @ 701
+  @state TIDY_BASE_W, TIDY_LIST_W, TIDY_MAX_ROWS = 170, 340, 14  @ 704
+  @state TIDY_GUTTER = 8  @ 705   -- half the gap between columns, which hug their text
+  @state TIDY_COLS = { 'Key', 'Name', 'Base', 'Becomes' }  @ 760
+  @state toolbarSegments = {  @ 911
+  @state arrange = cmgr:scope('arrange')  @ 1015
 
 # Private functions
   @fn drainWheel(accum, wheel, unitsPerNotch)  @ 53-57
@@ -76,228 +76,225 @@
   @fn handleGridMouse(tracks)  @ 222-327
       -- Runs before renderGrid so in-flight drag/loop/create candidates are ready for the paint pass.
       -- Must run inside ##arrangeGrid so IsWindowHovered resolves correctly.
-  @fn renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)  @ 329-627
+  @fn renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)  @ 329-620
   -- Palette pane
-  @fn slotEntry(slots, slotIdx)  @ 633-639
+  @fn slotEntry(slots, slotIdx)  @ 626-632
       -- Locate slot in trackSlots() output (packed array, not indexed by slotIdx).
       -- Returns nil when slotIdx is nil or isn't populated.
-  @fn paletteTrackLabel(focusedTrack)  @ 641-646
-  @fn openDeleteModal(trackIdx, slot)  @ 648-657
-  @fn openPruneModal(trackIdx, parked)  @ 659-666
-  @fn openCreateModal(trackIdx, qnPos, beats)  @ 670-683
+  @fn paletteTrackLabel(focusedTrack)  @ 634-639
+  @fn openDeleteModal(trackIdx, slot)  @ 641-650
+  @fn openPruneModal(trackIdx, parked)  @ 652-659
+  @fn openCreateModal(trackIdx, qnPos, beats)  @ 663-676
       -- Length seeds from a drag-sweep when given, else the project-tier newTakeBeats
       -- config; the committed length persists back to it.
-  @fn openTidyModal(trackIdx)  @ 714-727
-  @fn drawBaseList(s)  @ 731-764
+  @fn openTidyModal(trackIdx)  @ 707-720
+  @fn drawBaseList(s)  @ 724-757
       -- One base field is active at a time, so a single scratch buffer serves the list, and the
       -- edit lands after the walk, as a row's pick does; see docs/arrangePage.md § The tidy editor.
-  @fn drawTidyLabels()  @ 769-775
-  @fn renderPaletteActions(focusedTrack, slots)  @ 854-871
+  @fn drawTidyLabels()  @ 762-768
+  @fn renderPaletteActions(focusedTrack, slots)  @ 847-864
       -- Rename and delete are keyboard gestures on the cursor take; prune and tidy are the
       -- palette verbs with no take to stand on, so they live here.
-  @fn renderPaletteList(slots)  @ 875-906
+  @fn renderPaletteList(slots)  @ 868-899
       -- Three columns: key (monospace — hotkey), kind glyph, name (UI font).
       -- Selectable in col 0 with SpanAllColumns; key text painted on top via SameLine.
-  @fn renderPaletteBody(focusedTrack)  @ 908-913
-  @fn trimReadout()  @ 983-991
+  @fn renderPaletteBody(focusedTrack)  @ 901-906
+  @fn trimReadout()  @ 976-984
       -- The beats behind the cursor take's edge marks: the grid says an edge is trimmed,
       -- and how much it hides is read back here. Silent over an untrimmed take or empty space.
 
 # Functions held in tables
-  @held toolbarSegments.render()  @ 921-924
-  @held toolbarSegments.render()  @ 928-932
-  @held arrange.createSlot()  @ 1025-1027
-  @held arrange.deleteSlot()  @ 1028-1032
-  @held arrange.toggleFollowPlay()  @ 1033
-  @held arrange.arrangeSetBeatPerRow()  @ 1034-1043
+  @held toolbarSegments.render()  @ 914-917
+  @held toolbarSegments.render()  @ 921-925
+  @held arrange.createSlot()  @ 1018-1020
+  @held arrange.deleteSlot()  @ 1021-1025
+  @held arrange.toggleFollowPlay()  @ 1026
+  @held arrange.arrangeSetBeatPerRow()  @ 1027-1036
 
 # Handlers registered
-  @handler modalHost:createSlot(s, close)  @ 687-704
-  @handler modalHost:tidyTrack(s, close)  @ 777-850
+  @handler modalHost:createSlot(s, close)  @ 680-697
+  @handler modalHost:tidyTrack(s, close)  @ 770-843
 
 # Public API (ar:*)
-  @api ar:toolbarSegments()  @ 936
-  @api ar:renderBody(_, w, h, dispatch)  @ 941-979
-      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.  @ 938
-      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.  @ 939
-      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.  @ 940
-  @api ar:renderStatusBar(_)  @ 993-1003
-  @api ar:focusState()  @ 1006-1015
-      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.  @ 1005
+  @api ar:toolbarSegments()  @ 929
+  @api ar:renderBody(_, w, h, dispatch)  @ 934-972
+      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.  @ 931
+      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.  @ 932
+      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.  @ 933
+  @api ar:renderStatusBar(_)  @ 986-996
+  @api ar:focusState()  @ 999-1008
+      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.  @ 998
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ modalHost:tidyTrack:809,815,824
-  @use call    ImGui.BeginChild  @ modalHost:tidyTrack:795 renderBody:960
-  @use call    ImGui.BeginTable  @ modalHost:tidyTrack:797 renderPaletteList:881
-  @use call    ImGui.Button  @ modalHost:createSlot:696,700 drawBaseList:745,758 modalHost:tidyTrack:842,846 renderPaletteActions:861,867
-  @use call    ImGui.CalcTextSize  @ gridGeom:192 modalHost:tidyTrack:839
-  @use call    ImGui.Dummy  @ renderGrid:626
-  @use call    ImGui.EndChild  @ modalHost:tidyTrack:834 renderBody:968
-  @use call    ImGui.EndTable  @ modalHost:tidyTrack:830 renderPaletteList:905
+  @use call    ImGui.AlignTextToFramePadding  @ modalHost:tidyTrack:802,808,817
+  @use call    ImGui.BeginChild  @ modalHost:tidyTrack:788 renderBody:953
+  @use call    ImGui.BeginTable  @ modalHost:tidyTrack:790 renderPaletteList:874
+  @use call    ImGui.Button  @ modalHost:createSlot:689,693 drawBaseList:738,751 modalHost:tidyTrack:835,839 renderPaletteActions:854,860
+  @use call    ImGui.CalcTextSize  @ gridGeom:192 modalHost:tidyTrack:832
+  @use call    ImGui.Dummy  @ renderGrid:619
+  @use call    ImGui.EndChild  @ modalHost:tidyTrack:827 renderBody:961
+  @use call    ImGui.EndTable  @ modalHost:tidyTrack:823 renderPaletteList:898
   @use call    ImGui.GetContentRegionAvail  @ gridGeom:181
-  @use call    ImGui.GetCursorScreenPos  @ gridGeom:179 renderBody:956
-  @use call    ImGui.GetFrameHeight  @ drawBaseList:733
-  @use call    ImGui.GetFrameHeightWithSpacing  @ modalHost:tidyTrack:788
+  @use call    ImGui.GetCursorScreenPos  @ gridGeom:179 renderBody:949
+  @use call    ImGui.GetFrameHeight  @ drawBaseList:726
+  @use call    ImGui.GetFrameHeightWithSpacing  @ modalHost:tidyTrack:781
   @use call    ImGui.GetKeyMods  @ handleGridMouse:234,263
   @use call    ImGui.GetMousePos  @ handleGridMouse:230
   @use call    ImGui.GetMouseWheel  @ handleGridMouse:244
-  @use call    ImGui.GetStyleVar  @ modalHost:tidyTrack:794,837,838
+  @use call    ImGui.GetStyleVar  @ modalHost:tidyTrack:787,830,831
   @use call    ImGui.GetTextLineHeightWithSpacing  @ gridGeom:182
-  @use call    ImGui.GetWindowWidth  @ modalHost:tidyTrack:840
-  @use call    ImGui.InputText  @ modalHost:createSlot:691,694 drawBaseList:738
-  @use call    ImGui.InputTextWithHint  @ drawBaseList:752
-  @use call    ImGui.IsAnyItemActive  @ modalHost:tidyTrack:781 focusState:1012
-  @use call    ImGui.IsItemDeactivated  @ drawBaseList:743,754
-  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawBaseList:740
-  @use call    ImGui.IsKeyPressed  @ modalHost:createSlot:697,698,701 drawBaseList:755,756 modalHost:tidyTrack:843,844,847
+  @use call    ImGui.GetWindowWidth  @ modalHost:tidyTrack:833
+  @use call    ImGui.InputText  @ modalHost:createSlot:684,687 drawBaseList:731
+  @use call    ImGui.InputTextWithHint  @ drawBaseList:745
+  @use call    ImGui.IsAnyItemActive  @ modalHost:tidyTrack:774 focusState:1005
+  @use call    ImGui.IsItemDeactivated  @ drawBaseList:736,747
+  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawBaseList:733
+  @use call    ImGui.IsKeyPressed  @ modalHost:createSlot:690,691,694 drawBaseList:748,749 modalHost:tidyTrack:836,837,840
   @use call    ImGui.IsMouseClicked  @ handleGridMouse:238,255
   @use call    ImGui.IsMouseDoubleClicked  @ handleGridMouse:276
   @use call    ImGui.IsMouseDragging  @ handleGridMouse:286
   @use call    ImGui.IsMouseReleased  @ handleGridMouse:298
-  @use call    ImGui.IsWindowAppearing  @ modalHost:createSlot:688 modalHost:tidyTrack:778
+  @use call    ImGui.IsWindowAppearing  @ modalHost:createSlot:681 modalHost:tidyTrack:771
   @use call    ImGui.IsWindowHovered  @ handleGridMouse:238,245,255
-  @use call    ImGui.PopFont  @ modalHost:tidyTrack:812 renderPaletteList:896
+  @use call    ImGui.PopFont  @ modalHost:tidyTrack:805 renderPaletteList:889
   @use call    ImGui.PopStyleColor  @ popBodyStyles:69
-  @use call    ImGui.PopStyleVar  @ modalHost:tidyTrack:832
-  @use call    ImGui.PushFont  @ modalHost:tidyTrack:810 renderPaletteList:894
+  @use call    ImGui.PopStyleVar  @ modalHost:tidyTrack:825
+  @use call    ImGui.PushFont  @ modalHost:tidyTrack:803 renderPaletteList:887
   @use call    ImGui.PushStyleColor  @ pushBodyStyles:62,63,64,65,66,67
-  @use call    ImGui.PushStyleVar  @ modalHost:tidyTrack:796
-  @use call    ImGui.SameLine  @ modalHost:createSlot:699 drawBaseList:744,757 modalHost:tidyTrack:845 renderPaletteActions:865 renderPaletteList:893
-  @use call    ImGui.Selectable  @ renderPaletteList:889
-  @use call    ImGui.Separator  @ modalHost:tidyTrack:784 renderPaletteBody:911
-  @use call    ImGui.SetCursorPosX  @ modalHost:tidyTrack:840
-  @use call    ImGui.SetKeyboardFocusHere  @ modalHost:createSlot:690
-  @use call    ImGui.SetNextItemWidth  @ drawBaseList:736,749
-  @use call    ImGui.TableNextColumn  @ drawTidyLabels:772
-  @use call    ImGui.TableNextRow  @ drawTidyLabels:770 modalHost:tidyTrack:807 renderPaletteList:887
-  @use call    ImGui.TableSetColumnIndex  @ modalHost:tidyTrack:808,814,818,823 renderPaletteList:888,898,901
-  @use call    ImGui.TableSetupColumn  @ modalHost:tidyTrack:800,801,802,803 renderPaletteList:882,883,884
-  @use call    ImGui.Text  @ modalHost:createSlot:689,693 modalHost:tidyTrack:811,816,828 renderPaletteList:895,899,902 renderBody:949 renderStatusBar:999
-  @use call    ImGui.TextDisabled  @ drawBaseList:747 drawTidyLabels:773 modalHost:tidyTrack:827 renderPaletteList:877
+  @use call    ImGui.PushStyleVar  @ modalHost:tidyTrack:789
+  @use call    ImGui.SameLine  @ modalHost:createSlot:692 drawBaseList:737,750 modalHost:tidyTrack:838 renderPaletteActions:858 renderPaletteList:886
+  @use call    ImGui.Selectable  @ renderPaletteList:882
+  @use call    ImGui.Separator  @ modalHost:tidyTrack:777 renderPaletteBody:904
+  @use call    ImGui.SetCursorPosX  @ modalHost:tidyTrack:833
+  @use call    ImGui.SetKeyboardFocusHere  @ modalHost:createSlot:683
+  @use call    ImGui.SetNextItemWidth  @ drawBaseList:729,742
+  @use call    ImGui.TableNextColumn  @ drawTidyLabels:765
+  @use call    ImGui.TableNextRow  @ drawTidyLabels:763 modalHost:tidyTrack:800 renderPaletteList:880
+  @use call    ImGui.TableSetColumnIndex  @ modalHost:tidyTrack:801,807,811,816 renderPaletteList:881,891,894
+  @use call    ImGui.TableSetupColumn  @ modalHost:tidyTrack:793,794,795,796 renderPaletteList:875,876,877
+  @use call    ImGui.Text  @ modalHost:createSlot:682,686 modalHost:tidyTrack:804,809,821 renderPaletteList:888,892,895 renderBody:942 renderStatusBar:992
+  @use call    ImGui.TextDisabled  @ drawBaseList:740 drawTidyLabels:766 modalHost:tidyTrack:820 renderPaletteList:870
   @use call    av:addToSelection  @ handleGridMouse:304
-  @use call    av:beatPerRow  @ handleGridMouse:232 toolbarSegments.render:929 renderStatusBar:1001 arrange.arrangeSetBeatPerRow:1038
+  @use call    av:beatPerRow  @ handleGridMouse:232 toolbarSegments.render:922 renderStatusBar:994 arrange.arrangeSetBeatPerRow:1031
   @use call    av:clearLoopRange  @ handleGridMouse:240
   @use call    av:commitDrag  @ handleGridMouse:300
   @use call    av:createCandidate  @ handleGridMouse:293
-  @use call    av:createSlot  @ openCreateModal:680
-  @use call    av:cursorCol  @ renderGrid:342 renderBody:970 renderStatusBar:1001 arrange.createSlot:1026 arrange.deleteSlot:1029
-  @use call    av:cursorRow  @ renderGrid:342 renderStatusBar:1001 arrange.createSlot:1026
-  @use call    av:cursorSlot  @ arrange.deleteSlot:1030
-  @use call    av:cursorTake  @ trimReadout:984
-  @use call    av:deleteSlot  @ openDeleteModal:655
+  @use call    av:createSlot  @ openCreateModal:673
+  @use call    av:cursorCol  @ renderGrid:342 renderBody:963 renderStatusBar:994 arrange.createSlot:1019 arrange.deleteSlot:1022
+  @use call    av:cursorRow  @ renderGrid:342 renderStatusBar:994 arrange.createSlot:1019
+  @use call    av:cursorSlot  @ arrange.deleteSlot:1023
+  @use call    av:cursorTake  @ trimReadout:977
+  @use call    av:deleteSlot  @ openDeleteModal:648
   @use call    av:dragCandidate  @ handleGridMouse:289
-  @use call    av:editCursorQN  @ renderGrid:599
   @use call    av:followPlay  @ handleGridMouse:254
-  @use call    av:followsPlay  @ toolbarSegments.render:922 arrange.toggleFollowPlay:1033
+  @use call    av:followsPlay  @ toolbarSegments.render:915 arrange.toggleFollowPlay:1026
   @use call    av:gutterLoopCand  @ handleGridMouse:291
   @use call    av:hitTake  @ handleGridMouse:262
   @use call    av:isSelected  @ handleGridMouse:269
-  @use call    av:keyForSlot  @ openDeleteModal:649 renderPaletteList:895
+  @use call    av:keyForSlot  @ openDeleteModal:642 renderPaletteList:888
   @use call    av:lassoCandidate  @ handleGridMouse:296
   @use call    av:loopRangeQN  @ renderGrid:548
-  @use call    av:nextFreeSlot  @ openCreateModal:671
-  @use call    av:paletteSlot  @ renderPaletteList:880
-  @use call    av:playPositionQN  @ renderGrid:600
-  @use call    av:projectTracks  @ renderBody:946
-  @use call    av:pruneSlots  @ openPruneModal:664
-  @use call    av:qnToRow  @ renderGrid:417,418,433,434,492,493,509,510,551,591
-  @use call    av:replaceArmed  @ renderStatusBar:1002
-  @use call    av:rowToQN  @ rowLabel:74 handleGridMouse:233 renderGrid:351,477 arrange.createSlot:1026
+  @use call    av:nextFreeSlot  @ openCreateModal:664
+  @use call    av:paletteSlot  @ renderPaletteList:873
+  @use call    av:playPositionQN  @ renderGrid:610
+  @use call    av:projectTracks  @ renderBody:939
+  @use call    av:pruneSlots  @ openPruneModal:657
+  @use call    av:qnToRow  @ renderGrid:417,418,433,434,492,493,509,510,551,611
+  @use call    av:replaceArmed  @ renderStatusBar:995
+  @use call    av:rowToQN  @ rowLabel:74 handleGridMouse:233 renderGrid:351,477 arrange.createSlot:1019
   @use call    av:scroll  @ gridGeom:183
   @use call    av:scrollBy  @ handleGridMouse:250
-  @use call    av:seedTidy  @ openTidyModal:715
+  @use call    av:seedTidy  @ openTidyModal:708
   @use call    av:selectBand  @ renderGrid:505
   @use call    av:selectionSet  @ renderGrid:373
-  @use call    av:setBeatPerRow  @ toolbarSegments.render:931 arrange.arrangeSetBeatPerRow:1040
+  @use call    av:setBeatPerRow  @ toolbarSegments.render:924 arrange.arrangeSetBeatPerRow:1033
   @use call    av:setCursor  @ handleGridMouse:314
   @use call    av:setEditCursorQN  @ handleGridMouse:312
   @use call    av:setFocus  @ handleGridMouse:275,320
-  @use call    av:setFollowPlay  @ toolbarSegments.render:923 arrange.toggleFollowPlay:1033
-  @use call    av:setGridSize  @ handleGridMouse:227 renderBody:950
+  @use call    av:setFollowPlay  @ toolbarSegments.render:916 arrange.toggleFollowPlay:1026
+  @use call    av:setGridSize  @ handleGridMouse:227 renderBody:943
   @use call    av:setLoopRangeQN  @ handleGridMouse:302
   @use call    av:setMaxCol  @ handleGridMouse:228
-  @use call    av:setPaletteSlot  @ renderPaletteList:891
+  @use call    av:setPaletteSlot  @ renderPaletteList:884
   @use call    av:setSelection  @ handleGridMouse:305
-  @use call    av:tidyAddBase  @ drawBaseList:761
-  @use call    av:tidyDropBase  @ drawBaseList:762
-  @use call    av:tidyRenameBase  @ drawBaseList:763
-  @use call    av:tidyRows  @ modalHost:tidyTrack:787
-  @use call    av:tidySlots  @ openTidyModal:724
+  @use call    av:tidyAddBase  @ drawBaseList:754
+  @use call    av:tidyDropBase  @ drawBaseList:755
+  @use call    av:tidyRenameBase  @ drawBaseList:756
+  @use call    av:tidyRows  @ modalHost:tidyTrack:780
+  @use call    av:tidySlots  @ openTidyModal:717
   @use call    av:toggleSelected  @ handleGridMouse:317
-  @use call    av:trackSlots  @ renderPaletteBody:909 arrange.deleteSlot:1030
+  @use call    av:trackSlots  @ renderPaletteBody:902 arrange.deleteSlot:1023
   @use call    av:visibleTakes  @ renderGrid:478
-  @use call    chrome.checkbox  @ toolbarSegments.render:922
+  @use call    chrome.checkbox  @ toolbarSegments.render:915
   @use call    chrome.colour  @ pushBodyStyles:62,63,64,65,66,67
-  @use call    chrome.disabledIf  @ renderPaletteActions:860,866
-  @use call    chrome.dropdown  @ modalHost:tidyTrack:819
-  @use call    chrome.gridWidth  @ renderBody:957
-  @use call    chrome.headingLabel  @ modalHost:tidyTrack:782
-  @use call    chrome.numberStepper  @ toolbarSegments.render:929
-  @use call    chrome.palettePane  @ renderBody:971
-  @use call    chrome.pickerIsActive  @ focusState:1008
+  @use call    chrome.disabledIf  @ renderPaletteActions:853,859
+  @use call    chrome.dropdown  @ modalHost:tidyTrack:812
+  @use call    chrome.gridWidth  @ renderBody:950
+  @use call    chrome.headingLabel  @ modalHost:tidyTrack:775
+  @use call    chrome.numberStepper  @ toolbarSegments.render:922
+  @use call    chrome.palettePane  @ renderBody:964
+  @use call    chrome.pickerIsActive  @ focusState:1001
   @use call    chrome.slotFill  @ renderGrid:439
-  @use call    cm:get  @ openCreateModal:676,678 renderStatusBar:996,997
-  @use call    cm:set  @ openCreateModal:679
-  @use call    cmgr:scope  @ <load>:1022
-  @use call    modalHost:open  @ openCreateModal:672 openTidyModal:716
-  @use call    modalHost:openConfirm  @ openDeleteModal:652 openPruneModal:660
-  @use call    modalHost:openPrompt  @ arrange.arrangeSetBeatPerRow:1035
-  @use call    modalHost:registerKind  @ <load>:687,777
-  @use call    modalHost:wasOpenAtFrameStart  @ focusState:1013
+  @use call    cm:get  @ openCreateModal:669,671 renderStatusBar:989,990
+  @use call    cm:set  @ openCreateModal:672
+  @use call    cmgr:scope  @ <load>:1015
+  @use call    modalHost:open  @ openCreateModal:665 openTidyModal:709
+  @use call    modalHost:openConfirm  @ openDeleteModal:645 openPruneModal:653
+  @use call    modalHost:openPrompt  @ arrange.arrangeSetBeatPerRow:1028
+  @use call    modalHost:registerKind  @ <load>:680,770
+  @use call    modalHost:wasOpenAtFrameStart  @ focusState:1006
   @use call    painter.new  @ gridGeom:203 renderGrid:332
   @use call    painter.wrapLines  @ gridGeom:195 renderGrid:570
-  @use call    util.add  @ renderGrid:461,467 modalHost:tidyTrack:791 trimReadout:988,989
-  @use call    util.atomic  @ openDeleteModal:655 openPruneModal:664 openCreateModal:677 openTidyModal:723
+  @use call    util.add  @ renderGrid:461,467 modalHost:tidyTrack:784 trimReadout:981,982
+  @use call    util.atomic  @ openDeleteModal:648 openPruneModal:657 openCreateModal:670 openTidyModal:716
   @use require imgui  @ <load>:13
   @use require painter  @ <load>:14
   @use require util  @ <load>:7
 
 # Calls (intra-file)
-  @call ar:focusState  @ renderBody:952,978
+  @call ar:focusState  @ renderBody:945,971
   @call drainWheel  @ handleGridMouse:247,248
-  @call drawBaseList  @ modalHost:tidyTrack:783
-  @call drawTidyLabels  @ modalHost:tidyTrack:804
+  @call drawBaseList  @ modalHost:tidyTrack:776
+  @call drawTidyLabels  @ modalHost:tidyTrack:797
   @call floorTo  @ handleGridMouse:277,312
   @call gridGeom  @ handleGridMouse:223 renderGrid:330
-  @call handleGridMouse  @ renderBody:965
-  @call openCreateModal  @ handleGridMouse:309 arrange.createSlot:1026
-  @call openDeleteModal  @ arrange.deleteSlot:1031
-  @call openPruneModal  @ renderPaletteActions:862
-  @call openTidyModal  @ renderPaletteActions:868
-  @call paletteTrackLabel  @ renderBody:973
+  @call handleGridMouse  @ renderBody:958
+  @call openCreateModal  @ handleGridMouse:309 arrange.createSlot:1019
+  @call openDeleteModal  @ arrange.deleteSlot:1024
+  @call openPruneModal  @ renderPaletteActions:855
+  @call openTidyModal  @ renderPaletteActions:861
+  @call paletteTrackLabel  @ renderBody:966
   @call peaksFor  @ renderGrid:390
-  @call popBodyStyles  @ renderBody:951,977
-  @call pushBodyStyles  @ renderBody:944
-  @call renderGrid  @ renderBody:966
-  @call renderPaletteActions  @ renderPaletteBody:910
-  @call renderPaletteBody  @ renderBody:974
-  @call renderPaletteList  @ renderPaletteBody:912
-  @call rowLabel  @ renderGrid:604
-  @call slotEntry  @ arrange.deleteSlot:1030
+  @call popBodyStyles  @ renderBody:944,970
+  @call pushBodyStyles  @ renderBody:937
+  @call renderGrid  @ renderBody:959
+  @call renderPaletteActions  @ renderPaletteBody:903
+  @call renderPaletteBody  @ renderBody:967
+  @call renderPaletteList  @ renderPaletteBody:905
+  @call rowLabel  @ renderGrid:588
+  @call slotEntry  @ arrange.deleteSlot:1023
   @call takeWindowSec  @ peaksFor:102 renderGrid:382
   @call trackLabel  @ gridGeom:195
-  @call trimReadout  @ renderStatusBar:1001
+  @call trimReadout  @ renderStatusBar:994
 
 # Unresolved receivers
-  @drop arrange:bindAll  @ <load>:1046
-  @drop arrange:registerAll  @ <load>:1024
+  @drop arrange:bindAll  @ <load>:1039
+  @drop arrange:registerAll  @ <load>:1017
   @drop buf.clear  @ peaksFor:134
   @drop pg.fromScreen  @ handleGridMouse:231
   @drop pg.segment  @ renderGrid:363
   @drop pg.toScreen  @ renderGrid:339,340
   @drop ps.border  @ renderGrid:448,499,514
   @drop ps.fill  @ renderGrid:356,441,498,513,522
-  @drop ps.measure  @ renderGrid:568,581,605,616
+  @drop ps.measure  @ renderGrid:568,581,589,600
   @drop ps.pathArcTo  @ renderGrid:557,560
   @drop ps.pathClear  @ renderGrid:556,562
   @drop ps.pathLineTo  @ renderGrid:558,559
   @drop ps.pathStroke  @ renderGrid:561
-  @drop ps.polyline  @ renderGrid:596
-  @drop ps.popClip  @ renderGrid:515,576,584,619,622
-  @drop ps.pushClip  @ renderGrid:346,512,571,582,614
-  @drop ps.segment  @ renderGrid:365,368,392,405,424,425,537,538,539
-  @drop ps.text  @ renderGrid:574,583,606,617
-  @drop ps.tri  @ renderGrid:595
+  @drop ps.popClip  @ renderGrid:515,576,584,603,606
+  @drop ps.pushClip  @ renderGrid:346,512,571,582,598
+  @drop ps.segment  @ renderGrid:365,368,392,405,424,425,537,538,539,614
+  @drop ps.text  @ renderGrid:574,583,590,601
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -313,7 +310,7 @@
   @reaper time_precise
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_None  @ renderBody:961
+  @field r ChildFlags_None  @ renderBody:954
   @field r Col_TableBorderLight  @ pushBodyStyles:66
   @field r Col_TableBorderStrong  @ pushBodyStyles:67
   @field r Col_TableHeaderBg  @ pushBodyStyles:63
@@ -321,46 +318,46 @@
   @field r Col_TableRowBgAlt  @ pushBodyStyles:65
   @field r Col_Text  @ pushBodyStyles:62
   @field r ImGui_GetBuiltinPath  @ 9
-  @field r Key_Enter  @ modalHost:createSlot:697 drawBaseList:755 modalHost:tidyTrack:843
-  @field r Key_Escape  @ modalHost:createSlot:701 modalHost:tidyTrack:847
-  @field r Key_KeypadEnter  @ modalHost:createSlot:698 drawBaseList:756 modalHost:tidyTrack:844
+  @field r Key_Enter  @ modalHost:createSlot:690 drawBaseList:748 modalHost:tidyTrack:836
+  @field r Key_Escape  @ modalHost:createSlot:694 modalHost:tidyTrack:840
+  @field r Key_KeypadEnter  @ modalHost:createSlot:691 drawBaseList:749 modalHost:tidyTrack:837
   @field r Mod_Ctrl  @ handleGridMouse:265
   @field r Mod_Shift  @ handleGridMouse:234,264
-  @field r SelectableFlags_SpanAllColumns  @ renderPaletteList:890
-  @field r StyleVar_CellPadding  @ modalHost:tidyTrack:794,796
-  @field r StyleVar_FramePadding  @ modalHost:tidyTrack:837
-  @field r StyleVar_ItemSpacing  @ modalHost:tidyTrack:838
-  @field r TableColumnFlags_WidthFixed  @ modalHost:tidyTrack:800,801,802 renderPaletteList:882,883
-  @field r TableColumnFlags_WidthStretch  @ modalHost:tidyTrack:803 renderPaletteList:884
-  @field r WindowFlags_NoNav  @ renderBody:962
-  @field r WindowFlags_NoScrollWithMouse  @ renderBody:963
-  @field r WindowFlags_NoScrollbar  @ renderBody:964
-  @field w acceptCmds  @ focusState:1007,1011
-  @field r add  @ handleGridMouse:304,315 drawBaseList:761
-  @field w add  @ handleGridMouse:272,281 drawBaseList:758
-  @field w align  @ toolbarSegments.render:930
-  @field r arrange  @ 1046
-  @field w arrangeSetBeatPerRow  @ arrange.arrangeSetBeatPerRow:1034
-  @field r assignment  @ drawBaseList:762,763 modalHost:tidyTrack:787,835,848
-  @field w assignment  @ openTidyModal:721
+  @field r SelectableFlags_SpanAllColumns  @ renderPaletteList:883
+  @field r StyleVar_CellPadding  @ modalHost:tidyTrack:787,789
+  @field r StyleVar_FramePadding  @ modalHost:tidyTrack:830
+  @field r StyleVar_ItemSpacing  @ modalHost:tidyTrack:831
+  @field r TableColumnFlags_WidthFixed  @ modalHost:tidyTrack:793,794,795 renderPaletteList:875,876
+  @field r TableColumnFlags_WidthStretch  @ modalHost:tidyTrack:796 renderPaletteList:877
+  @field r WindowFlags_NoNav  @ renderBody:955
+  @field r WindowFlags_NoScrollWithMouse  @ renderBody:956
+  @field r WindowFlags_NoScrollbar  @ renderBody:957
+  @field w acceptCmds  @ focusState:1000,1004
+  @field r add  @ handleGridMouse:304,315 drawBaseList:754
+  @field w add  @ handleGridMouse:272,281 drawBaseList:751
+  @field w align  @ toolbarSegments.render:923
+  @field r arrange  @ 1039
+  @field w arrangeSetBeatPerRow  @ arrange.arrangeSetBeatPerRow:1027
+  @field r assignment  @ drawBaseList:755,756 modalHost:tidyTrack:780,828,841
+  @field w assignment  @ openTidyModal:714
   @field r av  @ 18
   @field r availH  @ renderGrid:346,512
   @field w availH  @ gridGeom:208
-  @field r base  @ modalHost:tidyTrack:819,835
-  @field w base  @ modalHost:tidyTrack:821
-  @field r bases  @ drawBaseList:735,747,761,762,763 modalHost:tidyTrack:791
-  @field w bases  @ openTidyModal:720
-  @field r beatsBuf  @ modalHost:createSlot:694,702
-  @field w beatsBuf  @ openCreateModal:676 modalHost:createSlot:695
+  @field r base  @ modalHost:tidyTrack:812,828
+  @field w base  @ modalHost:tidyTrack:814
+  @field r bases  @ drawBaseList:728,740,754,755,756 modalHost:tidyTrack:784
+  @field w bases  @ openTidyModal:713
+  @field r beatsBuf  @ modalHost:createSlot:687,695
+  @field w beatsBuf  @ openCreateModal:669 modalHost:createSlot:688
   @field r bodyBot  @ handleGridMouse:235
   @field w bodyBot  @ gridGeom:211
   @field r bodyTop  @ handleGridMouse:235
   @field w bodyTop  @ gridGeom:210
-  @field r buf  @ drawBaseList:738,741
-  @field w buf  @ drawBaseList:739 arrange.arrangeSetBeatPerRow:1038
+  @field r buf  @ drawBaseList:731,734
+  @field w buf  @ drawBaseList:732 arrange.arrangeSetBeatPerRow:1031
   @field r building  @ peaksFor:124
   @field w building  @ peaksFor:121,127
-  @field w callback  @ openDeleteModal:655 openPruneModal:664 openCreateModal:677 openTidyModal:723 arrange.arrangeSetBeatPerRow:1039
+  @field w callback  @ openDeleteModal:648 openPruneModal:657 openCreateModal:670 openTidyModal:716 arrange.arrangeSetBeatPerRow:1032
   @field r ceil  @ drainWheel:55
   @field r chan  @ renderGrid:423
   @field r chrome  @ 18
@@ -375,102 +372,102 @@
   @field w cols  @ peaksFor:119
   @field r create  @ handleGridMouse:292,295,306
   @field w create  @ handleGridMouse:277
-  @field w createSlot  @ arrange.createSlot:1025
+  @field w createSlot  @ arrange.createSlot:1018
   @field r ctx  @ 20
-  @field w deleteSlot  @ arrange.deleteSlot:1028
-  @field w digits  @ toolbarSegments.render:930
-  @field w draw  @ renderBody:974
-  @field r drop  @ drawBaseList:762
-  @field w drop  @ drawBaseList:745
+  @field w deleteSlot  @ arrange.deleteSlot:1021
+  @field w digits  @ toolbarSegments.render:923
+  @field w draw  @ renderBody:967
+  @field r drop  @ drawBaseList:755
+  @field w drop  @ drawBaseList:738
   @field r duplicate  @ renderGrid:474
   @field w duplicate  @ handleGridMouse:273
-  @field r editing  @ drawBaseList:737,738,740,741
-  @field w editing  @ drawBaseList:739,743
+  @field r editing  @ drawBaseList:730,731,733,734
+  @field w editing  @ drawBaseList:732,736
   @field r fits  @ handleGridMouse:300 renderGrid:486
   @field r floor  @ drainWheel:55
   @field r font  @ 23
   @field r fontSize  @ 24
-  @field w format  @ toolbarSegments.render:930
-  @field r from  @ drawBaseList:763
-  @field w from  @ drawBaseList:741
+  @field w format  @ toolbarSegments.render:923
+  @field r from  @ drawBaseList:756
+  @field w from  @ drawBaseList:734
   @field r ghosts  @ renderGrid:475,485
   @field r gridR  @ renderGrid:334
   @field w gridR  @ gridGeom:215
-  @field r gridW  @ renderGrid:626
+  @field r gridW  @ renderGrid:619
   @field w gridW  @ gridGeom:216
   @field w group  @ handleGridMouse:272
   @field r gui  @ 18
   @field r gutter  @ handleGridMouse:290,295,310
   @field w gutter  @ handleGridMouse:257
-  @field r gutterR  @ handleGridMouse:236 renderGrid:592
+  @field r gutterR  @ handleGridMouse:236
   @field w gutterR  @ gridGeom:213
-  @field w h  @ renderBody:972
-  @field r headerH  @ renderGrid:613,614,626
+  @field w h  @ renderBody:965
+  @field r headerH  @ renderGrid:597,598,619
   @field w headerH  @ gridGeom:210
-  @field r headerLabels  @ renderGrid:612
+  @field r headerLabels  @ renderGrid:596
   @field w headerLabels  @ gridGeom:209
   @field w headerLines  @ gridGeom:209
-  @field w heading  @ 927
+  @field w heading  @ 920
   @field r hi  @ peaksFor:116,148 renderGrid:391,402
   @field r hiQN  @ handleGridMouse:302 renderGrid:546
-  @field w id  @ 920,927
-  @field r idx  @ slotEntry:636 paletteTrackLabel:644 openDeleteModal:649,651,655 modalHost:tidyTrack:816,819,821,835 renderPaletteActions:862,868 renderPaletteList:889
-  @field r idx  @ renderPaletteList:889,891,895,903 renderPaletteBody:909
-  @field w idx  @ modalHost:tidyTrack:821
-  @field r index  @ drawBaseList:737
-  @field w index  @ drawBaseList:739
+  @field w id  @ 913,920
+  @field r idx  @ slotEntry:629 paletteTrackLabel:637 openDeleteModal:642,644,648 modalHost:tidyTrack:809,812,814,828 renderPaletteActions:855,861 renderPaletteList:882
+  @field r idx  @ renderPaletteList:882,884,888,896 renderPaletteBody:902
+  @field w idx  @ modalHost:tidyTrack:814
+  @field r index  @ drawBaseList:730
+  @field w index  @ drawBaseList:732
   @field r item  @ renderGrid:389,475,479
-  @field r key  @ modalHost:tidyTrack:811
-  @field r kind  @ renderGrid:442,445 renderPaletteActions:858 renderPaletteList:899
-  @field w kind  @ openCreateModal:673 openTidyModal:717
-  @field w label  @ renderBody:973
+  @field r key  @ modalHost:tidyTrack:804
+  @field r kind  @ renderGrid:442,445 renderPaletteActions:851 renderPaletteList:892
+  @field w kind  @ openCreateModal:666 openTidyModal:710
+  @field w label  @ renderBody:966
   @field r lastCol  @ renderGrid:335
   @field w lastCol  @ gridGeom:212
   @field r lengthQN  @ handleGridMouse:308 renderGrid:454,480,486,493
   @field r lo  @ renderGrid:403
   @field w lo  @ peaksFor:148
   @field r loQN  @ handleGridMouse:302 renderGrid:546
-  @field w max  @ toolbarSegments.render:930
+  @field w max  @ toolbarSegments.render:923
   @field w mcol  @ handleGridMouse:281
-  @field w min  @ toolbarSegments.render:930
+  @field w min  @ toolbarSegments.render:923
   @field r modalHost  @ 18
   @field w mode  @ handleGridMouse:272
   @field r moved  @ handleGridMouse:288,290,292,294
   @field w moved  @ handleGridMouse:257,272,277,281,286
-  @field r name  @ trackLabel:171 renderGrid:459,570 paletteTrackLabel:643 openDeleteModal:650 modalHost:tidyTrack:816,827
-  @field r name  @ renderPaletteList:902
+  @field r name  @ trackLabel:171 renderGrid:459,570 paletteTrackLabel:636 openDeleteModal:643 modalHost:tidyTrack:809,820
+  @field r name  @ renderPaletteList:895
   @field w name  @ renderGrid:462
-  @field r nameBuf  @ modalHost:createSlot:691,702
-  @field w nameBuf  @ openCreateModal:675 modalHost:createSlot:692
-  @field r newBase  @ drawBaseList:752,758
-  @field w newBase  @ openTidyModal:722 drawBaseList:753,761
+  @field r nameBuf  @ modalHost:createSlot:684,695
+  @field w nameBuf  @ openCreateModal:668 modalHost:createSlot:685
+  @field r newBase  @ drawBaseList:745,751
+  @field w newBase  @ openTidyModal:715 drawBaseList:746,754
   @field r notes  @ renderGrid:412
   @field r offE  @ renderGrid:418
   @field r offS  @ renderGrid:417
-  @field r originQN  @ renderGrid:451 trimReadout:986
+  @field r originQN  @ renderGrid:451 trimReadout:979
   @field r ox  @ gridGeom:213,215 renderGrid:334
   @field w ox  @ gridGeom:204,208
   @field r oy  @ renderGrid:334
   @field w oy  @ gridGeom:204,208
-  @field r paneLeft  @ handleGridMouse:236 renderGrid:346,512,554
+  @field r paneLeft  @ handleGridMouse:236 renderGrid:346,512,554,614
   @field w paneLeft  @ gridGeom:208
-  @field r paneR  @ renderGrid:508,512
+  @field r paneR  @ renderGrid:508,512,614
   @field w paneR  @ gridGeom:214
-  @field r parked  @ renderPaletteActions:857
+  @field r parked  @ renderPaletteActions:850
   @field r path  @ 12
   @field w path  @ 12
   @field r pg  @ handleGridMouse:224 renderGrid:331
   @field w pg  @ gridGeom:208
   @field r pi  @ renderGrid:557,560
-  @field r preview  @ modalHost:tidyTrack:827,828
-  @field w prompt  @ openDeleteModal:654 openPruneModal:662 arrange.arrangeSetBeatPerRow:1037
+  @field r preview  @ modalHost:tidyTrack:820,821
+  @field w prompt  @ openDeleteModal:647 openPruneModal:655 arrange.arrangeSetBeatPerRow:1030
   @field r qn  @ handleGridMouse:309,312
   @field w qn  @ handleGridMouse:257,271,277,281
   @field r qnHi  @ renderGrid:510
   @field r qnLo  @ renderGrid:509
-  @field r rename  @ drawBaseList:763
-  @field w rename  @ drawBaseList:741
-  @field w render  @ toolbarSegments.render:921,928
+  @field r rename  @ drawBaseList:756
+  @field w rename  @ drawBaseList:734
+  @field w render  @ toolbarSegments.render:914,921
   @field r row  @ handleGridMouse:314
   @field w row  @ handleGridMouse:271,281
   @field r rowH  @ handleGridMouse:262 renderGrid:333
@@ -497,23 +494,23 @@
   @field w srcSec  @ peaksFor:119
   @field r startOffs  @ renderGrid:399
   @field w startOffs  @ peaksFor:120
-  @field r startQN  @ renderGrid:417,418,451,480,486,492,493 trimReadout:986
-  @field w suppressKbd  @ focusState:1007,1010
+  @field r startQN  @ renderGrid:417,418,451,480,486,492,493 trimReadout:979
+  @field w suppressKbd  @ focusState:1000,1003
   @field w sx  @ gridGeom:205
   @field w sy  @ gridGeom:205
-  @field r tailQN  @ renderGrid:454 trimReadout:986
+  @field r tailQN  @ renderGrid:454 trimReadout:979
   @field r take  @ handleGridMouse:269,275,288,294,317,320 renderGrid:382,390
   @field r take  @ renderGrid:475,481,486
   @field w take  @ handleGridMouse:272
   @field r takes  @ handleGridMouse:304,305
   @field r text  @ renderGrid:581,583
   @field w text  @ renderGrid:468
-  @field w title  @ openDeleteModal:653 openPruneModal:661 openCreateModal:674 openTidyModal:718 arrange.arrangeSetBeatPerRow:1036
-  @field r to  @ drawBaseList:763
-  @field w to  @ drawBaseList:741
-  @field w toggleFollowPlay  @ arrange.toggleFollowPlay:1033
-  @field r trackIdx  @ renderGrid:436 modalHost:tidyTrack:787
-  @field w trackIdx  @ openTidyModal:719
+  @field w title  @ openDeleteModal:646 openPruneModal:654 openCreateModal:667 openTidyModal:711 arrange.arrangeSetBeatPerRow:1029
+  @field r to  @ drawBaseList:756
+  @field w to  @ drawBaseList:734
+  @field w toggleFollowPlay  @ arrange.toggleFollowPlay:1026
+  @field r trackIdx  @ renderGrid:436 modalHost:tidyTrack:780
+  @field w trackIdx  @ openTidyModal:712
   @field r ty0  @ renderGrid:574
   @field w ty0  @ renderGrid:463
   @field r ui  @ 24
@@ -525,10 +522,10 @@
   @field w winSec  @ peaksFor:119
   @field r wrap  @ renderGrid:399
   @field w wrap  @ peaksFor:120
-  @field w x  @ renderBody:972
+  @field w x  @ renderBody:965
   @field w x0  @ renderGrid:337
   @field w x1  @ renderGrid:337
   @field r y  @ renderGrid:582,583
-  @field w y  @ renderGrid:468 renderBody:972
+  @field w y  @ renderGrid:468 renderBody:965
   @field w y0  @ renderGrid:337
   @field w y1  @ renderGrid:337

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — The arrange page draws its play head the way the tracker does — a yellow line
+  across the pane at the play row — rather than a triangle in the gutter, so one ink means the same
+  thing on both pages. The REAPER edit cursor loses its triangle altogether: it steers loops and
+  seeks, but the page has its own blinking caret for where you are, and a second marker only
+  competed with it. editCursorQN stays; only its rendering went.
+
 - **2026-08-25** — The tracker's follow toggle reads the bound track rather than the bound slot, so
   the play head carries the tracker across slots as the walk does. It stays entry rather than
   gesture — no loop bracket, no map raise — and turning it on reads the head's placement as an
