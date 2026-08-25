@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — A status segment's declared width is its value box, not the whole cell: the label
+  is measured and the box follows it, so renaming a label moves the value rather than shrinking it.
+  A picker popup pushes its own ink before BeginPopup, since it opens over two grounds of opposite
+  text colour and only the toolbar's styles are ambient.
+
 - **2026-08-25** — Chrome drawn on both bands — segment labels and vertical rules — takes its ink
   from the ambient Col_Text and dims it, rather than from the separator swatch, which is tuned for
   the parchment band and also draws the grids. A lighter inner well is reserved for editable status

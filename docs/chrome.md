@@ -60,6 +60,10 @@ closure: an id, an optional label, a declared pixel width, and a `get` read
 fresh each frame. The renderer owns all the drawing, so a datum the spec
 cannot express either grows the spec or stays in the toolbar.
 
+A declared width is the value box, not the cell: the label is measured and the
+box follows it, so renaming a label cannot shrink the value it stands over. The
+rect the cell records for help spans both.
+
 Widths are declared, so the bar needs neither the pre-measure pass nor the
 width cache the toolbar carries. Each cell is placed by explicit screen
 position — `x` accumulates the declared widths and the separator gaps —
@@ -70,6 +74,48 @@ Inside a cell the label draws through `headingLabel` and the value takes the
 width the label leaves, ellipsis-fitted by `fitLabel`. `headingLabel` dims
 the ambient `Col_Text` rather than a fixed colour, so it reads correctly
 against the toolbar's ink and the status bar's alike.
+
+## Editing a status cell
+
+1. A segment carrying `set` draws as a control rather than as text, and wears a
+   well one zone off the band (`statusBar.well`), so the box marks what can be
+   changed. The `edit` kind selects the control: `number` is a value the pointer
+   writes two ways, `pick` is the shared picker under a cell-width button. The well
+   holds one colour, hovered or not — across a row of adjacent boxes a shade that
+   follows the pointer reads as flicker rather than as affordance.
+
+1. A number cell claims its rect with an `InvisibleButton` and draws the value
+   over it, so the whole cell takes the click and the hover. The wheel over it
+   steps without opening an edit — by `step`, or by halving and doubling where
+   `step = 'x2'`, since a zoom-like field's useful range is multiplicative.
+   Both routes clamp to the declared `min` and `max`.
+
+1. A trackpad reports the wheel in fractions, so notches are tallied against the
+   cell under the pointer and spent whole. Moving to another cell drops the part
+   notch instead of carrying it across.
+
+1. A click swaps the value for an `InputText` filling the same rect, opened with
+   its buffer selected (§ Opening a field with a selection). The swap happens on
+   the click's release: a field appearing under a held button takes the rest of
+   that click as a drag, and drags the selection away. Enter commits
+   through `set`; Esc and any other loss of the field cancel. One edit is open at
+   a time, held in chrome as the cell's id and the buffer, and
+   `statusEditActive()` reports it so a page gates its keys as it does on
+   `pickerIsActive()`.
+
+1. That gate would stick shut if the cell holding the edit stopped drawing — a
+   page switch, or a `visible` turning false. The bar therefore drops an edit
+   whose cell did not draw in the frame just laid out.
+
+1. A picker popup pushes its own ink, since the two bands it opens from carry
+   opposite text colours and only the toolbar's styles are ambient. The values
+   are the ones `pushChromeStyles` holds, so a toolbar picker is unchanged. The
+   push goes before `BeginPopup`, which is where a window's fill is taken.
+
+1. A pick cell hands its rect to `drawPicker`, which draws its own button and
+   owns the popup. The well arrives as that button's fill rather than as a rect
+   behind text, and the popup is placed above, since the bar sits on the window's
+   bottom edge.
 
 ## Vertical separator
 

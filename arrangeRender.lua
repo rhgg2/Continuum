@@ -993,11 +993,11 @@ local function advanceReadout()
 end
 
 local statusSegments = {
-  { id = 'row',        label = 'Row',       width = 65,  get = function() return av:cursorRow()  end, format = '%d' },
-  { id = 'col',        label = 'Col',       width = 65,  get = function() return av:cursorCol()  end, format = '%d' },
-  { id = 'beatPerRow', label = 'Beats/row', width = 100, get = function() return av:beatPerRow() end, format = '%g' },
-  { id = 'advance',    label = 'Advance',   width = 130, get = advanceReadout },
-  { id = 'trim',       label = 'Trim',      width = 150, get = trimReadout,
+  { id = 'row',        label = 'Row',       width = 40,  get = function() return av:cursorRow()  end, format = '%d' },
+  { id = 'col',        label = 'Col',       width = 40,  get = function() return av:cursorCol()  end, format = '%d' },
+  { id = 'beatPerRow', label = 'Beats/row', width = 45,  get = function() return av:beatPerRow() end, format = '%g' },
+  { id = 'advance',    label = 'Advance',   width = 80,  get = advanceReadout },
+  { id = 'trim',       label = 'Trim',      width = 115, get = trimReadout,
     visible = function() return trimReadout() ~= '' end },
   { id = 'replace',    width = 70, get = function() return 'REPLACE' end,
     visible = function() return av:replaceArmed() end },

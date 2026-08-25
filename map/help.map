@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=541  mode=chunk  self=help
+@module help  src=help.lua  loc=543  mode=chunk  self=help
 @deps ctx, chrome, cmgr
 
 # Shapes
@@ -23,74 +23,74 @@
   @state editing, capturing, conflict, hits, conflictHits = nil, nil, nil, nil, nil  @ 27
   @state help = {}  @ 30
   @state dl, lineH, theme, capBg, capLine, boxes  @ 57
-  @state CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc  @ 67
-  @state SEP = '/'  @ 68
-  @state CAPTURE_GLYPH = '\xe2\x80\xa6'  @ 69
-  @state TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9  @ 70   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
-  @state PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4  @ 220
-  @state dismissKeyList  @ 329
+  @state CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc  @ 69
+  @state SEP = '/'  @ 70
+  @state CAPTURE_GLYPH = '\xe2\x80\xa6'  @ 71
+  @state TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9  @ 72   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
+  @state PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4  @ 222
+  @state dismissKeyList  @ 331
 
 # Private functions
   @fn resetEdit()  @ 28
   -- DRAW
-  @fn rectFor(key)  @ 59-63
-  @fn withAlpha(rgba, a)  @ 71
-  @fn tagSide()  @ 74
+  @fn rectFor(key)  @ 59-65
+  @fn withAlpha(rgba, a)  @ 73
+  @fn tagSide()  @ 76
       -- Side of a square edit-tag box: the symbol plus a 2px moat and the 1px border.
-  @fn layoutCluster(keys, withAdd)  @ 78-102
+  @fn layoutCluster(keys, withAdd)  @ 80-104
       -- Lay out a shortcut's chips ('/'-separated, one per binding) into geometry for
       -- drawCluster: total width + each chip's {w, cells}; word runs share one cell, symbols one each.
-  @fn crispBorder(x0, y0, x1, y1, colour)  @ 106-111
+  @fn crispBorder(x0, y0, x1, y1, colour)  @ 108-113
       -- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
       -- drawlist the overlay uses: painter binds to the window drawlist, behind the dim.
-  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 115-136
+  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 117-138
       -- Square edit tag at (cx, cy): fill + 1px border, symbol in a 2px moat (+ as
       -- 1px strips, x as diagonal). `captureHere` highlights; `hit` rect filled here.
-  @fn drawCluster(cluster, x, y, cmd, specs)  @ 140-175
+  @fn drawCluster(cluster, x, y, cmd, specs)  @ 142-177
       -- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
       -- trailing + tag, each with its own hit. See docs/help.md § Editing.
-  @fn layoutBox(group)  @ 179-194
+  @fn layoutBox(group)  @ 181-196
       -- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the
       -- box w/h, sized to the wider of the title vs the shortcut column + widest label.
-  @fn drawBox(box, x, y)  @ 196-207
-  @fn cmdLabel(cmd)  @ 211-218
+  @fn drawBox(box, x, y)  @ 198-209
+  @fn cmdLabel(cmd)  @ 213-220
       -- A command's human label from the current page's manifest, else its raw name (a
       -- victim may live on another scope/page, where no manifest label is to hand).
-  @fn drawConflict(winX, winY, winW, winH)  @ 224-269
+  @fn drawConflict(winX, winY, winW, winH)  @ 226-271
       -- Centred modal for a chord collision. Warn phase offers Cancel/Reassign; recover
       -- phase narrates the victim's loss while pollCapture claims a new chord for it.
-  @fn placePins(pins, winX, winW)  @ 273-306
+  @fn placePins(pins, winX, winW)  @ 275-308
       -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
       -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-  @fn placeFlow(flows)  @ 310-327
+  @fn placeFlow(flows)  @ 312-329
       -- Flow groups fill their grid rect row-major: left to right, wrapping down a row
       -- at the rect's right edge. Each anchor rect carries its own cursor.
-  @fn buildDismissKeys()  @ 330-345
-  @fn anyKeyPressed()  @ 349-356
+  @fn buildDismissKeys()  @ 332-347
+  @fn anyKeyPressed()  @ 351-358
       -- Char queue catches punctuation/layout-specific keys; the explicit list covers
       -- the non-printables (and alphanumerics, since the macOS char queue drops some).
-  @fn insideAnyBox(mouseX, mouseY)  @ 358-364
+  @fn insideAnyBox(mouseX, mouseY)  @ 360-366
   -- EDIT MODE
-  @fn buildSpec(key, mods)  @ 369-376
+  @fn buildSpec(key, mods)  @ 371-378
       -- A pressed non-modifier key plus the live modifier mask, as a cmgr keyspec.
-  @fn rebindWithout(cmd, drop, add)  @ 379-386
+  @fn rebindWithout(cmd, drop, add)  @ 381-388
       -- Rewrites cmd's bindings: drop `drop` (a spec ref, or nil), append `add` (or nil).
-  @fn dropChord(cmd, spec)  @ 390-398
+  @fn dropChord(cmd, spec)  @ 392-400
       -- Drops every binding of cmd whose chord matches spec, then rebinds. The victim's
       -- stored ref isn't the captured one, so match by resolved key+mods, not identity.
-  @fn commitCapture(spec)  @ 402-412
+  @fn commitCapture(spec)  @ 404-414
       -- A captured chord that collides with a reachable command opens the warn prompt;
       -- a free chord binds straight away. See docs/help.md § Editing.
-  @fn reassign()  @ 416-422
+  @fn reassign()  @ 418-424
       -- Reassign: strip the chord from the victim, give it to cmd, then drop the victim
       -- into a recovery capture so it can claim a new chord (Esc leaves it unbound).
-  @fn pollCapture()  @ 424-434
-  @fn hitAt(mouseX, mouseY)  @ 437-445
+  @fn pollCapture()  @ 426-436
+  @fn hitAt(mouseX, mouseY)  @ 439-447
       -- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
-  @fn handleConflict()  @ 449-464
+  @fn handleConflict()  @ 451-466
       -- Warn-phase input: Esc/Cancel abandons untouched, Enter or the Reassign button
       -- commits. Off-button clicks are swallowed (modal), never dismissing the sheet.
-  @fn handleClicks()  @ 466-479
+  @fn handleClicks()  @ 468-481
 
 # Public API (help:*)
   @api help:registerPage(name, groups)  @ 34
@@ -103,190 +103,191 @@
   @api help:beginFrame()  @ 46
   @api help:wasOpenAtFrameStart()  @ 47
   @api help:anchor(key, x, y, w, h)  @ 49-52
-  @api help:draw()  @ 481-539
+  @api help:draw()  @ 483-541
 
 # Uses (outbound edges)
-  @use call    ImGui.CalcTextSize  @ layoutCluster:79,83 drawCluster:141,155,160 layoutBox:188,190 drawConflict:239,242,264
-  @use call    ImGui.DrawList_AddLine  @ drawTag:127,128
-  @use call    ImGui.DrawList_AddRect  @ drawCluster:153 drawBox:198 drawConflict:253,263
-  @use call    ImGui.DrawList_AddRectFilled  @ crispBorder:107,108,109,110 drawTag:119,131,132 drawCluster:152 drawBox:197 drawConflict:252,262 draw:490
-  @use call    ImGui.DrawList_AddText  @ drawCluster:146,156,161 drawBox:200,204 drawConflict:255,257,265
-  @use call    ImGui.GetForegroundDrawList  @ draw:486
-  @use call    ImGui.GetInputQueueCharacter  @ anyKeyPressed:350
-  @use call    ImGui.GetKeyMods  @ pollCapture:427
-  @use call    ImGui.GetMousePos  @ handleConflict:454 handleClicks:469
-  @use call    ImGui.GetTextLineHeight  @ draw:487
-  @use call    ImGui.GetWindowPos  @ draw:488
-  @use call    ImGui.GetWindowSize  @ draw:489
-  @use call    ImGui.IsKeyPressed  @ anyKeyPressed:353 pollCapture:425,429 handleConflict:450,451,452 draw:533
-  @use call    ImGui.IsMouseClicked  @ handleConflict:453 handleClicks:467,468
-  @use call    chrome.colour  @ draw:490,493,494,495,496,497,498,499,500,501,502
+  @use call    ImGui.CalcTextSize  @ layoutCluster:81,85 drawCluster:143,157,162 layoutBox:190,192 drawConflict:241,244,266
+  @use call    ImGui.DrawList_AddLine  @ drawTag:129,130
+  @use call    ImGui.DrawList_AddRect  @ drawCluster:155 drawBox:200 drawConflict:255,265
+  @use call    ImGui.DrawList_AddRectFilled  @ crispBorder:109,110,111,112 drawTag:121,133,134 drawCluster:154 drawBox:199 drawConflict:254,264 draw:492
+  @use call    ImGui.DrawList_AddText  @ drawCluster:148,158,163 drawBox:202,206 drawConflict:257,259,267
+  @use call    ImGui.GetForegroundDrawList  @ draw:488
+  @use call    ImGui.GetInputQueueCharacter  @ anyKeyPressed:352
+  @use call    ImGui.GetKeyMods  @ pollCapture:429
+  @use call    ImGui.GetMousePos  @ handleConflict:456 handleClicks:471
+  @use call    ImGui.GetTextLineHeight  @ draw:489
+  @use call    ImGui.GetWindowPos  @ draw:490
+  @use call    ImGui.GetWindowSize  @ draw:491
+  @use call    ImGui.IsKeyPressed  @ anyKeyPressed:355 pollCapture:427,431 handleConflict:452,453,454 draw:535
+  @use call    ImGui.IsMouseClicked  @ handleConflict:455 handleClicks:469,470
+  @use call    chrome.colour  @ draw:492,495,496,497,498,499,500,501,502,503,504
+  @use call    chrome.statusRects  @ rectFor:63
   @use call    chrome.toolbarRects  @ rectFor:61
-  @use call    cmgr:bindingSite  @ rebindWithout:385 dropChord:397
-  @use call    cmgr:commandAtKey  @ commitCapture:405
-  @use call    cmgr:keyLabel  @ drawConflict:226
-  @use call    cmgr:keyLabelList  @ layoutBox:183
-  @use call    cmgr:keySpec  @ dropChord:391,394
-  @use call    cmgr:keysFor  @ layoutBox:186 rebindWithout:381 dropChord:393
-  @use call    cmgr:rebind  @ rebindWithout:385 dropChord:397
-  @use call    util.add  @ layoutCluster:84,97 drawTag:135 drawCluster:165 layoutBox:185 drawConflict:266 placePins:282,304 placeFlow:323 buildDismissKeys:332,343 buildSpec:373 rebindWithout:382,384 dropChord:395 draw:517,519
+  @use call    cmgr:bindingSite  @ rebindWithout:387 dropChord:399
+  @use call    cmgr:commandAtKey  @ commitCapture:407
+  @use call    cmgr:keyLabel  @ drawConflict:228
+  @use call    cmgr:keyLabelList  @ layoutBox:185
+  @use call    cmgr:keySpec  @ dropChord:393,396
+  @use call    cmgr:keysFor  @ layoutBox:188 rebindWithout:383 dropChord:395
+  @use call    cmgr:rebind  @ rebindWithout:387 dropChord:399
+  @use call    util.add  @ layoutCluster:86,99 drawTag:137 drawCluster:167 layoutBox:187 drawConflict:268 placePins:284,306 placeFlow:325 buildDismissKeys:334,345 buildSpec:375 rebindWithout:384,386 dropChord:397 draw:519,521
   @use require imgui  @ <load>:8
   @use require util  @ <load>:9
 
 # Calls (intra-file)
-  @call anyKeyPressed  @ draw:537
-  @call buildDismissKeys  @ anyKeyPressed:351 pollCapture:426
-  @call buildSpec  @ pollCapture:430
-  @call cmdLabel  @ drawConflict:230,231,234
-  @call commitCapture  @ pollCapture:430
-  @call crispBorder  @ drawTag:120
-  @call drawBox  @ placePins:303 placeFlow:322
-  @call drawCluster  @ drawBox:203
-  @call drawConflict  @ draw:525
-  @call drawTag  @ drawCluster:167,172
-  @call dropChord  @ reassign:418
-  @call handleClicks  @ draw:536
-  @call handleConflict  @ draw:530
-  @call hitAt  @ handleClicks:470
-  @call insideAnyBox  @ handleClicks:476
-  @call layoutBox  @ draw:515
-  @call layoutCluster  @ layoutBox:184
-  @call placeFlow  @ draw:524
-  @call placePins  @ draw:523
-  @call pollCapture  @ draw:532
-  @call reassign  @ handleConflict:463
-  @call rebindWithout  @ commitCapture:409 reassign:419 handleClicks:472
-  @call rectFor  @ draw:513
-  @call resetEdit  @ setPage:35 close:37 toggle:43 handleClicks:477
-  @call tagSide  @ layoutCluster:100 drawTag:116 drawCluster:172
-  @call withAlpha  @ draw:504,505
+  @call anyKeyPressed  @ draw:539
+  @call buildDismissKeys  @ anyKeyPressed:353 pollCapture:428
+  @call buildSpec  @ pollCapture:432
+  @call cmdLabel  @ drawConflict:232,233,236
+  @call commitCapture  @ pollCapture:432
+  @call crispBorder  @ drawTag:122
+  @call drawBox  @ placePins:305 placeFlow:324
+  @call drawCluster  @ drawBox:205
+  @call drawConflict  @ draw:527
+  @call drawTag  @ drawCluster:169,174
+  @call dropChord  @ reassign:420
+  @call handleClicks  @ draw:538
+  @call handleConflict  @ draw:532
+  @call hitAt  @ handleClicks:472
+  @call insideAnyBox  @ handleClicks:478
+  @call layoutBox  @ draw:517
+  @call layoutCluster  @ layoutBox:186
+  @call placeFlow  @ draw:526
+  @call placePins  @ draw:525
+  @call pollCapture  @ draw:534
+  @call reassign  @ handleConflict:465
+  @call rebindWithout  @ commitCapture:411 reassign:421 handleClicks:474
+  @call rectFor  @ draw:515
+  @call resetEdit  @ setPage:35 close:37 toggle:43 handleClicks:479
+  @call tagSide  @ layoutCluster:102 drawTag:118 drawCluster:174
+  @call withAlpha  @ draw:506,507
 
 # Unresolved receivers
-  @drop glyph:match  @ layoutCluster:89
-  @drop key:match  @ rectFor:60
+  @drop glyph:match  @ layoutCluster:91
+  @drop key:match  @ rectFor:60,62
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Key_0  @ buildDismissKeys:333
-  @field r Key_9  @ buildDismissKeys:333
-  @field r Key_A  @ buildDismissKeys:333
-  @field r Key_Apostrophe  @ buildDismissKeys:341
-  @field r Key_Backslash  @ buildDismissKeys:342
-  @field r Key_Backspace  @ buildDismissKeys:337
-  @field r Key_Comma  @ buildDismissKeys:340
-  @field r Key_Delete  @ buildDismissKeys:337
-  @field r Key_DownArrow  @ buildDismissKeys:338
-  @field r Key_End  @ buildDismissKeys:339
-  @field r Key_Enter  @ buildDismissKeys:336 handleConflict:451
-  @field r Key_Equal  @ buildDismissKeys:340
-  @field r Key_Escape  @ buildDismissKeys:336 pollCapture:425,429 handleConflict:450 draw:533
-  @field r Key_F1  @ buildDismissKeys:334
-  @field r Key_F12  @ buildDismissKeys:334
-  @field r Key_GraveAccent  @ buildDismissKeys:342
-  @field r Key_Home  @ buildDismissKeys:339
-  @field r Key_Insert  @ buildDismissKeys:337
-  @field r Key_Keypad0  @ buildDismissKeys:334
-  @field r Key_Keypad9  @ buildDismissKeys:334
-  @field r Key_KeypadEnter  @ buildDismissKeys:336 handleConflict:452
-  @field r Key_KeypadSubtract  @ buildDismissKeys:340
-  @field r Key_LeftArrow  @ buildDismissKeys:338
-  @field r Key_LeftBracket  @ buildDismissKeys:342
-  @field r Key_Minus  @ buildDismissKeys:340
-  @field r Key_PageDown  @ buildDismissKeys:339
-  @field r Key_PageUp  @ buildDismissKeys:339
-  @field r Key_Period  @ buildDismissKeys:341
-  @field r Key_RightArrow  @ buildDismissKeys:338
-  @field r Key_RightBracket  @ buildDismissKeys:342
-  @field r Key_Semicolon  @ buildDismissKeys:341
-  @field r Key_Slash  @ buildDismissKeys:341
-  @field r Key_Space  @ buildDismissKeys:337
-  @field r Key_Tab  @ buildDismissKeys:336
-  @field r Key_UpArrow  @ buildDismissKeys:338
-  @field r Key_Z  @ buildDismissKeys:333
-  @field r Mod_Alt  @ buildSpec:372
-  @field r Mod_Ctrl  @ buildSpec:372
-  @field r Mod_None  @ buildSpec:370
-  @field r Mod_Shift  @ buildSpec:372
-  @field r Mod_Super  @ buildSpec:372
-  @field r add  @ drawCluster:172
-  @field w add  @ hitAt:438 draw:500
-  @field r anchor  @ placeFlow:314,317 draw:513,517
-  @field w anchor  @ draw:517
-  @field r bg  @ drawBox:197 drawConflict:252
-  @field w bg  @ draw:493
-  @field r border  @ drawBox:198 drawConflict:253 draw:505
-  @field w border  @ draw:494
-  @field r box  @ placePins:281,298,303,304 placeFlow:313
-  @field w box  @ draw:517,519
-  @field r cells  @ drawCluster:159
-  @field w cells  @ layoutCluster:97
-  @field r chip  @ draw:504
-  @field w chip  @ hitAt:438 draw:498
-  @field r chips  @ drawCluster:144
-  @field w chips  @ layoutCluster:101
+  @field r Key_0  @ buildDismissKeys:335
+  @field r Key_9  @ buildDismissKeys:335
+  @field r Key_A  @ buildDismissKeys:335
+  @field r Key_Apostrophe  @ buildDismissKeys:343
+  @field r Key_Backslash  @ buildDismissKeys:344
+  @field r Key_Backspace  @ buildDismissKeys:339
+  @field r Key_Comma  @ buildDismissKeys:342
+  @field r Key_Delete  @ buildDismissKeys:339
+  @field r Key_DownArrow  @ buildDismissKeys:340
+  @field r Key_End  @ buildDismissKeys:341
+  @field r Key_Enter  @ buildDismissKeys:338 handleConflict:453
+  @field r Key_Equal  @ buildDismissKeys:342
+  @field r Key_Escape  @ buildDismissKeys:338 pollCapture:427,431 handleConflict:452 draw:535
+  @field r Key_F1  @ buildDismissKeys:336
+  @field r Key_F12  @ buildDismissKeys:336
+  @field r Key_GraveAccent  @ buildDismissKeys:344
+  @field r Key_Home  @ buildDismissKeys:341
+  @field r Key_Insert  @ buildDismissKeys:339
+  @field r Key_Keypad0  @ buildDismissKeys:336
+  @field r Key_Keypad9  @ buildDismissKeys:336
+  @field r Key_KeypadEnter  @ buildDismissKeys:338 handleConflict:454
+  @field r Key_KeypadSubtract  @ buildDismissKeys:342
+  @field r Key_LeftArrow  @ buildDismissKeys:340
+  @field r Key_LeftBracket  @ buildDismissKeys:344
+  @field r Key_Minus  @ buildDismissKeys:342
+  @field r Key_PageDown  @ buildDismissKeys:341
+  @field r Key_PageUp  @ buildDismissKeys:341
+  @field r Key_Period  @ buildDismissKeys:343
+  @field r Key_RightArrow  @ buildDismissKeys:340
+  @field r Key_RightBracket  @ buildDismissKeys:344
+  @field r Key_Semicolon  @ buildDismissKeys:343
+  @field r Key_Slash  @ buildDismissKeys:343
+  @field r Key_Space  @ buildDismissKeys:339
+  @field r Key_Tab  @ buildDismissKeys:338
+  @field r Key_UpArrow  @ buildDismissKeys:340
+  @field r Key_Z  @ buildDismissKeys:335
+  @field r Mod_Alt  @ buildSpec:374
+  @field r Mod_Ctrl  @ buildSpec:374
+  @field r Mod_None  @ buildSpec:372
+  @field r Mod_Shift  @ buildSpec:374
+  @field r Mod_Super  @ buildSpec:374
+  @field r add  @ drawCluster:174
+  @field w add  @ hitAt:440 draw:502
+  @field r anchor  @ placeFlow:316,319 draw:515,519
+  @field w anchor  @ draw:519
+  @field r bg  @ drawBox:199 drawConflict:254
+  @field w bg  @ draw:495
+  @field r border  @ drawBox:200 drawConflict:255 draw:507
+  @field w border  @ draw:496
+  @field r box  @ placePins:283,300,305,306 placeFlow:315
+  @field w box  @ draw:519,521
+  @field r cells  @ drawCluster:161
+  @field w cells  @ layoutCluster:99
+  @field r chip  @ draw:506
+  @field w chip  @ hitAt:440 draw:500
+  @field r chips  @ drawCluster:146
+  @field w chips  @ layoutCluster:103
   @field r chrome  @ 12
-  @field r cluster  @ drawBox:203
-  @field w cluster  @ layoutBox:185
-  @field r cmd  @ drawCluster:143 layoutBox:182,183,186 drawBox:203 cmdLabel:214 drawConflict:231 commitCapture:403 reassign:417 handleClicks:472,473
-  @field r cmd  @ handleClicks:473,474,475
-  @field w cmd  @ drawCluster:165,167,173 layoutBox:186 commitCapture:407 reassign:420 handleClicks:473,474
+  @field r cluster  @ drawBox:205
+  @field w cluster  @ layoutBox:187
+  @field r cmd  @ drawCluster:145 layoutBox:184,185,188 drawBox:205 cmdLabel:216 drawConflict:233 commitCapture:405 reassign:419 handleClicks:474,475
+  @field r cmd  @ handleClicks:475,476,477
+  @field w cmd  @ drawCluster:167,169,175 layoutBox:188 commitCapture:409 reassign:422 handleClicks:475,476
   @field r cmgr  @ 13
-  @field r count  @ placePins:286,287,293
-  @field w count  @ placePins:282,286
+  @field r count  @ placePins:288,289,295
+  @field w count  @ placePins:284,288
   @field r ctx  @ 11
-  @field r h  @ drawBox:197,198 placePins:304 placeFlow:323,325 insideAnyBox:361 hitAt:441 handleConflict:457 draw:519
-  @field w h  @ anchor:51 drawTag:134 drawCluster:165 layoutBox:193 drawConflict:266 placePins:304 placeFlow:323
-  @field r items  @ layoutBox:181 cmdLabel:213
-  @field r key  @ drawCluster:146,161
-  @field w key  @ draw:496
-  @field r keyW  @ drawBox:204
-  @field w keyW  @ layoutBox:193
-  @field r kind  @ drawConflict:266 hitAt:442 handleConflict:458 handleClicks:472,473
-  @field w kind  @ drawCluster:165,167,173 drawConflict:232,266
-  @field r label  @ layoutBox:185,188 drawBox:204 cmdLabel:214 drawConflict:257
-  @field w label  @ layoutBox:185 draw:497
-  @field r phase  @ drawConflict:227 draw:529
-  @field w phase  @ commitCapture:407 reassign:421
-  @field r place  @ draw:516
-  @field r rect  @ placeFlow:313
-  @field w rect  @ draw:517
-  @field r remove  @ drawCluster:167
-  @field w remove  @ hitAt:438 draw:499
-  @field r replace  @ drawCluster:151,173 commitCapture:403 reassign:417
-  @field w replace  @ commitCapture:407 handleClicks:474
-  @field r rowH  @ placeFlow:320,325
-  @field w rowH  @ placeFlow:316,320,325
-  @field r rows  @ drawBox:202
-  @field w rows  @ layoutBox:193
-  @field r spec  @ drawConflict:226 reassign:417 handleClicks:472,474
-  @field w spec  @ drawCluster:165,167 commitCapture:407 reassign:421
-  @field r specs  @ drawBox:203
-  @field w specs  @ layoutBox:186
-  @field r sum  @ placePins:286,287
-  @field w sum  @ placePins:282
-  @field r tag  @ drawTag:119
-  @field w tag  @ draw:501
-  @field r tagBorder  @ drawTag:120
-  @field w tagBorder  @ draw:502
-  @field r text  @ drawCluster:160,161 drawConflict:242,264,265
-  @field w text  @ layoutCluster:84 drawConflict:232
-  @field r title  @ drawTag:120,121 drawCluster:153,156 layoutBox:190,193 drawBox:200 drawConflict:255,265
-  @field w title  @ layoutBox:193 draw:495
-  @field r top  @ placePins:303,304
-  @field w top  @ draw:519
-  @field r value  @ placePins:283,293
-  @field w value  @ placePins:282,287
-  @field r victim  @ drawConflict:230,234 reassign:417
-  @field w victim  @ commitCapture:407 reassign:421
-  @field r w  @ drawTag:134 drawCluster:150,156,161,162,165 drawBox:197,198 placePins:281,298,304 placeFlow:319
-  @field r w  @ placeFlow:319,323,324 insideAnyBox:360 hitAt:440 handleConflict:456
-  @field w w  @ anchor:51 layoutCluster:84,97 drawCluster:165 layoutBox:193 drawConflict:266 placePins:304 placeFlow:323
-  @field r wantX  @ placePins:275,282
-  @field w wantX  @ draw:519
-  @field r width  @ layoutBox:187
-  @field w width  @ layoutCluster:101
-  @field r x  @ drawTag:134 placeFlow:316,319,320,322,323,324 insideAnyBox:360
-  @field r x  @ insideAnyBox:360 hitAt:440 handleConflict:456 draw:519
-  @field w x  @ anchor:51 drawCluster:165 drawConflict:266 placePins:304 placeFlow:316,323,324
-  @field r y  @ drawTag:134 placeFlow:316,320,322,323 insideAnyBox:361 hitAt:441 handleConflict:457
-  @field r y  @ draw:519
-  @field w y  @ anchor:51 drawCluster:165 drawConflict:266 placePins:304 placeFlow:316,323
+  @field r h  @ drawBox:199,200 placePins:306 placeFlow:325,327 insideAnyBox:363 hitAt:443 handleConflict:459 draw:521
+  @field w h  @ anchor:51 drawTag:136 drawCluster:167 layoutBox:195 drawConflict:268 placePins:306 placeFlow:325
+  @field r items  @ layoutBox:183 cmdLabel:215
+  @field r key  @ drawCluster:148,163
+  @field w key  @ draw:498
+  @field r keyW  @ drawBox:206
+  @field w keyW  @ layoutBox:195
+  @field r kind  @ drawConflict:268 hitAt:444 handleConflict:460 handleClicks:474,475
+  @field w kind  @ drawCluster:167,169,175 drawConflict:234,268
+  @field r label  @ layoutBox:187,190 drawBox:206 cmdLabel:216 drawConflict:259
+  @field w label  @ layoutBox:187 draw:499
+  @field r phase  @ drawConflict:229 draw:531
+  @field w phase  @ commitCapture:409 reassign:423
+  @field r place  @ draw:518
+  @field r rect  @ placeFlow:315
+  @field w rect  @ draw:519
+  @field r remove  @ drawCluster:169
+  @field w remove  @ hitAt:440 draw:501
+  @field r replace  @ drawCluster:153,175 commitCapture:405 reassign:419
+  @field w replace  @ commitCapture:409 handleClicks:476
+  @field r rowH  @ placeFlow:322,327
+  @field w rowH  @ placeFlow:318,322,327
+  @field r rows  @ drawBox:204
+  @field w rows  @ layoutBox:195
+  @field r spec  @ drawConflict:228 reassign:419 handleClicks:474,476
+  @field w spec  @ drawCluster:167,169 commitCapture:409 reassign:423
+  @field r specs  @ drawBox:205
+  @field w specs  @ layoutBox:188
+  @field r sum  @ placePins:288,289
+  @field w sum  @ placePins:284
+  @field r tag  @ drawTag:121
+  @field w tag  @ draw:503
+  @field r tagBorder  @ drawTag:122
+  @field w tagBorder  @ draw:504
+  @field r text  @ drawCluster:162,163 drawConflict:244,266,267
+  @field w text  @ layoutCluster:86 drawConflict:234
+  @field r title  @ drawTag:122,123 drawCluster:155,158 layoutBox:192,195 drawBox:202 drawConflict:257,267
+  @field w title  @ layoutBox:195 draw:497
+  @field r top  @ placePins:305,306
+  @field w top  @ draw:521
+  @field r value  @ placePins:285,295
+  @field w value  @ placePins:284,289
+  @field r victim  @ drawConflict:232,236 reassign:419
+  @field w victim  @ commitCapture:409 reassign:423
+  @field r w  @ drawTag:136 drawCluster:152,158,163,164,167 drawBox:199,200 placePins:283,300,306 placeFlow:321
+  @field r w  @ placeFlow:321,325,326 insideAnyBox:362 hitAt:442 handleConflict:458
+  @field w w  @ anchor:51 layoutCluster:86,99 drawCluster:167 layoutBox:195 drawConflict:268 placePins:306 placeFlow:325
+  @field r wantX  @ placePins:277,284
+  @field w wantX  @ draw:521
+  @field r width  @ layoutBox:189
+  @field w width  @ layoutCluster:103
+  @field r x  @ drawTag:136 placeFlow:318,321,322,324,325,326 insideAnyBox:362
+  @field r x  @ insideAnyBox:362 hitAt:442 handleConflict:458 draw:521
+  @field w x  @ anchor:51 drawCluster:167 drawConflict:268 placePins:306 placeFlow:318,325,326
+  @field r y  @ drawTag:136 placeFlow:318,322,324,325 insideAnyBox:363 hitAt:443 handleConflict:459
+  @field r y  @ draw:521
+  @field w y  @ anchor:51 drawCluster:167 drawConflict:268 placePins:306 placeFlow:318,325

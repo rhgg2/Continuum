@@ -59,6 +59,8 @@ local dl, lineH, theme, capBg, capLine, boxes
 local function rectFor(key)
   local toolbarId = key:match('^toolbar%.(.+)$')
   if toolbarId then return chrome.toolbarRects()[toolbarId] end
+  local statusId = key:match('^status%.(.+)$')
+  if statusId then return chrome.statusRects()[statusId] end
   return anchors[key]
 end
 

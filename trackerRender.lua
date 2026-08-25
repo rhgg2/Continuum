@@ -42,36 +42,6 @@ local SWING_PRESET_EXCLUDE  = { identity = true }
 -- 12EDO is the temper floor: shown by name as the active default, hidden from the +preset rows.
 local TEMPER_PRESET_EXCLUDE = { ['12EDO'] = true }
 
--- Hex stays visible when unassigned so `<`/`>` advertise their step.
--- No "Off" row — every slot is real.
-local function drawSampleDropdown()
-  local cur     = cm:get('currentSample')
-  local entries = ds:get('slotEntries') or {}
-  local curName = entries[cur] and entries[cur].name
-  local indices = {}
-  for idx, e in pairs(entries) do
-    if e.path then util.add(indices, idx) end
-  end
-  table.sort(indices)
-  local items = {}
-  for _, idx in ipairs(indices) do
-    util.add(items, {
-      label   = string.format('%02X  %s', idx, entries[idx].name or ''),
-      key     = idx,
-      group   = 1,
-      current = idx == cur,
-    })
-  end
-  chrome.drawPicker {
-    kind        = 'sample',
-    heading     = 'Sample',
-    buttonLabel = string.format('%02X', cur) .. (curName and (' ' .. curName) or ''),
-    width       = 220,
-    items       = items,
-    onPick      = util.atomic('Set sample', function(idx) cm:set('take', 'currentSample', idx) end),
-  }
-end
-
 -- Each render closure reads cm/tv fresh; segments declared once, reused per frame.
 --shape: ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }
 
@@ -131,13 +101,6 @@ local toolbarSegments = {
     end,
   },
   {
-    id = 'rowsPerBeat', heading = 'RPB',
-    render = function()
-      local changed, n = chrome.numberStepper('rpb', cm:get('rowPerBeat'), { min = 1, max = 32, align = 'center' })
-      if changed then tv:setRowPerBeat(n) end
-    end,
-  },
-  {
     id = 'tuning', heading = 'Tuning', pickers = { 'temper' },
     render = function()
       local cur = cm:get('temper')
@@ -178,11 +141,6 @@ local toolbarSegments = {
       ImGui.SameLine(ctx, 0, 8)
       if ImGui.Button(ctx, 'edit##editSwing') then cmgr:invoke('editSwing') end
     end,
-  },
-  {
-    id      = 'sample',
-    visible = function() return cm:get('trackerMode') end,
-    render  = function() drawSampleDropdown() end,
   },
   {
     id = 'loopToItem', heading = 'Loop',
@@ -716,15 +674,47 @@ local function sampleReadout()
   return string.format('%02X', slot) .. (entry and entry.name and (' ' .. entry.name) or '')
 end
 
+-- Hex stays visible when unassigned so `<`/`>` advertise their step.
+-- No "Off" row — every slot is real.
+local function sampleItems()
+  local cur     = cm:get('currentSample')
+  local entries = ds:get('slotEntries') or {}
+  local indices = {}
+  for idx, e in pairs(entries) do
+    if e.path then util.add(indices, idx) end
+  end
+  table.sort(indices)
+  local items = {}
+  for _, idx in ipairs(indices) do
+    util.add(items, {
+      label   = string.format('%02X  %s', idx, entries[idx].name or ''),
+      key     = idx,
+      group   = 1,
+      current = idx == cur,
+    })
+  end
+  return items
+end
+
+-- The cells the keyboard also writes, so a mouse edit lands in the same undo block.
+local setRpb     = function(n) tv:setRowPerBeat(n) end
+local setOctave  = util.atomic('Set octave',  function(n) cm:set('take', 'currentOctave', n) end)
+local setAdvance = util.atomic('Set advance', function(n) cm:set('take', 'advanceBy', n) end)
+local setSample  = util.atomic('Set sample',  function(idx) cm:set('take', 'currentSample', idx) end)
+
 -- Each get reads cm/tv fresh; cells declared once, reused per frame.
 local statusSegments = {
-  { id = 'col',     label = 'Col',     width = 95,  get = cursorColLabel },
-  { id = 'at',      label = 'At',      width = 80,  get = cursorPosition },
-  { id = 'rpb',     label = 'RPB',     width = 55,  get = function() return cm:get('rowPerBeat')    end, format = '%d' },
-  { id = 'octave',  label = 'Octave',  width = 70,  get = function() return cm:get('currentOctave') end, format = '%d' },
-  { id = 'advance', label = 'Advance', width = 80,  get = function() return cm:get('advanceBy')     end, format = '%d' },
-  { id = 'sample',  label = 'Sample',  width = 150, get = sampleReadout,
-    visible = function() return cm:get('trackerMode') end },
+  { id = 'col',     label = 'Col',     width = 50,  get = cursorColLabel },
+  { id = 'at',      label = 'At',      width = 40,  get = cursorPosition },
+  { id = 'rpb',     label = 'RPB',     width = 20,  get = function() return cm:get('rowPerBeat')    end, format = '%d',
+    set = setRpb,     edit = { kind = 'number', min =  1, max = 32 } },
+  { id = 'octave',  label = 'Octave',  width = 20,  get = function() return cm:get('currentOctave') end, format = '%d',
+    set = setOctave,  edit = { kind = 'number', min = -1, max =  9 } },
+  { id = 'advance', label = 'Advance', width = 20,  get = function() return cm:get('advanceBy')     end, format = '%d',
+    set = setAdvance, edit = { kind = 'number', min =  0, max =  9 } },
+  { id = 'sample',  label = 'Sample',  width = 125, get = sampleReadout,
+    visible = function() return cm:get('trackerMode') end,
+    set = setSample,  edit = { kind = 'pick', items = sampleItems } },
 }
 
 ----- Input
@@ -745,7 +735,7 @@ help:registerPage('tracker', {
     { cmd = 'prevTake', label = 'Previous take' },
     { cmd = 'nextTake', label = 'Next take' },
   }},
-  { anchor = 'toolbar.rowsPerBeat', place = 'pin', title = 'Rows / beat', items = {
+  { anchor = 'status.rpb', place = 'pin', title = 'Rows / beat', items = {
     { cmd = 'doubleRPB', label = 'Double' },
     { cmd = 'halveRPB', label = 'Halve' },
     { cmd = 'setRPB', label = 'Set' },
@@ -759,7 +749,7 @@ help:registerPage('tracker', {
     { cmd = 'openSwingPicker', label = 'Pick swing' },
     { cmd = 'editSwing', label = 'Edit swing' },
   }},
-  { anchor = 'toolbar.sample', place = 'pin', title = 'Sample', items = {
+  { anchor = 'status.sample', place = 'pin', title = 'Sample', items = {
     { cmd = 'inputSampleUp', label = 'Sample +' },
     { cmd = 'inputSampleDown', label = 'Sample -' },
   }},
@@ -1896,7 +1886,7 @@ end
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function tr:focusState()
   if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive()
+  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive() or chrome.statusEditActive()
   return {
     suppressKbd    = suppressKbd,
     pageSuppressed = false,

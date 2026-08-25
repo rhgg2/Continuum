@@ -1,0 +1,81 @@
+@spec status_edit_spec  src=tests/specs/status_edit_spec.lua  loc=165  cases=7
+@harness   mk
+
+# Intent
+  Chrome-level pin for the status bar's editable cells: a segment carrying `set` draws as a
+  control rather than text, and both routes into it — the wheel and the InputText — commit
+  through `set` clamped to the declared range. Real chrome over a fake imgui; recipe from
+  picker_create_spec, with the item, wheel and cursor calls a cell makes added.
+
+# Helpers
+  @fn mkChrome(h)  @ 46-49
+  @fn mkBar(harness, value, edit)  @ 52-62
+      -- A one-cell bar over a value the test can watch. `edit` selects the number behaviour.
+
+# Cases
+  @case 'the wheel over a number cell steps by `step` and stops at the declared bounds'  [harness]  @ 66-78
+  @case 'part notches accumulate; the wheel only steps on a whole one'  [harness]  @ 82-91
+  @case 'step='x2' doubles and halves rather than adding'  [harness]  @ 95-107
+  @case 'a display-only cell claims no hit rect; an editable one does'  [harness]  @ 111-121
+  @case 'a cell's declared width is its value box; the label sits to its left'  [harness]  @ 125-133
+  @case 'a click opens the edit; Enter commits the typed value, clamped'  [harness]  @ 137-149
+  @case 'Esc leaves the value alone and closes the edit'  [harness]  @ 153-163
+
+# Fields (r read / w write incl. constructor keys)
+  @field w CalcTextSize  @ 25
+  @field w ColorConvertDouble4ToU32  @ 28
+  @field w ColorConvertU32ToDouble4  @ 27
+  @field w CreateFunctionFromEEL  @ 29
+  @field w GetCursorScreenPos  @ 22
+  @field w GetFrameHeight  @ 23
+  @field w GetMouseWheel  @ 35
+  @field w GetStyleColor  @ 26
+  @field w GetStyleVar  @ 24
+  @field w ImGui_GetBuiltinPath  @ 42
+  @field w InputText  @ 38
+  @field w InvisibleButton  @ 31
+  @field w IsItemActive  @ 33
+  @field w IsItemDeactivated  @ 34
+  @field w IsItemHovered  @ 32
+  @field w IsKeyPressed  @ 36
+  @field r Key_Enter  @ 38,145
+  @field r Key_Escape  @ 159
+  @field w Mod_None  @ 9
+  @field w __index  @ 10
+  @field r at  @ 132
+  @field r clicked  @ 31,60,144,158
+  @field w clicked  @ 15,140,156
+  @field w cm  @ 47,48
+  @field w ctx  @ 48
+  @field w edit  @ 58,119
+  @field w format  @ 55
+  @field w get  @ 56,116,118,130
+  @field r hits  @ 31,115,117,120
+  @field w hits  @ 15
+  @field r hovered  @ 32,60,69,85,98,115,129,140,156
+  @field w hovered  @ 15
+  @field w id  @ 55,116,118,130
+  @field w kind  @ 68,84,97,119,139,155
+  @field w label  @ 55,116,118,130
+  @field w lib  @ 48
+  @field r loaded  @ 41
+  @field w max  @ 68,84,119,139,155
+  @field w min  @ 68,84,97,119,139,155
+  @field w name  @ 66,82,95,111,125,137,153
+  @field r preload  @ 40
+  @field r pressed  @ 36,38
+  @field w pressed  @ 15,60,145,159
+  @field r reaper  @ 42
+  @field w run  @ 67,83,96,112,126,138,154
+  @field w set  @ 57,119
+  @field w step  @ 97
+  @field w synthetic  @ 47
+  @field r text  @ 38
+  @field w text  @ 15,144,158
+  @field w uiSize  @ 48
+  @field r v  @ 56,71,74,77,87,90,100,103,106,143,147,161
+  @field w v  @ 54,57
+  @field r w  @ 132
+  @field r wheel  @ 35,60
+  @field w wheel  @ 15,69,72,75,85,88,98,101,104,115,129
+  @field w width  @ 55,116,118,130

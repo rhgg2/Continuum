@@ -34,6 +34,7 @@ fakeImGui.CalcTextSize          = function() return 7, 13 end
 fakeImGui.BeginPopup            = function() return true end
 fakeImGui.IsWindowAppearing     = function() return true end   -- appearing parks the cursor at row 1
 fakeImGui.CreateFunctionFromEEL = function() return {} end
+fakeImGui.ColorConvertDouble4ToU32 = function() return 0 end   -- the popup pushes its own ink
 fakeImGui.InputText             = function() return true, filterText end
 fakeImGui.IsKeyPressed          = function(_, k) return pressed[k] == true end
 fakeImGui.Separator             = function() body[#body + 1] = { rule = true } end

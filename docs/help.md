@@ -17,6 +17,9 @@ a region landed is the render pass that just drew it. So positions are
   to lay them out. It stashes those rects; `help` reads them by id
   (`toolbar.<id>`). Zero per-page work, and no `chrome → help` edge:
   help pulls from chrome, never the reverse.
+- **Status bar** — `chrome.makeStatusBar` records each cell's rect as it
+  places it, and help reads those by id too (`status.<id>`), the same
+  pull as the toolbar's.
 - **Body** — render code calls `help:anchor(key, x, y, w, h)` for the
   regions it wants documented (currently `body.grid`). The call no-ops
   unless the overlay is open, so it costs nothing in the common case.

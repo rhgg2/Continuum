@@ -566,8 +566,8 @@ local function slotReadout()
 end
 
 local statusSegments = {
-  { id = 'track', label = 'Track', width = 160, get = boundTrackName },
-  { id = 'slot',  label = 'Slot',  width = 150, get = slotReadout },
+  { id = 'track', label = 'Track', width = 120, get = boundTrackName },
+  { id = 'slot',  label = 'Slot',  width = 115, get = slotReadout },
 }
 
 function sr:statusSegments() return statusSegments end

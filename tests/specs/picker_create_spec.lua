@@ -27,6 +27,7 @@ fakeImGui.GetCursorPosY         = function() return 0 end
 fakeImGui.BeginPopup            = function() return true end
 fakeImGui.IsWindowAppearing     = function() return true end
 fakeImGui.CreateFunctionFromEEL = function() return {} end
+fakeImGui.ColorConvertDouble4ToU32 = function() return 0 end   -- the popup pushes its own ink
 fakeImGui.InputText             = function() return true, filterText end
 fakeImGui.IsKeyPressed          = function(_, k) return pressed[k] == true end
 fakeImGui.Selectable            = function() return false end

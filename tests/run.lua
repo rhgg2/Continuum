@@ -27,6 +27,7 @@ local specs = {
   'picker_delete_spec',
   'picker_groups_spec',
   'picker_tiers_spec',
+  'status_edit_spec',
   'cm_poll_undo_spec',
   'pext_store_spec',
   'ps_mirror_spec',

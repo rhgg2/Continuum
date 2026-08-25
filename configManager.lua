@@ -242,6 +242,8 @@ local declarations = {
   { 'colour.chrome.toolbar.selectedRow',   'alt.zone8'         },  -- Selectable/list-row highlight (Col_Header family)
   { 'colour.chrome.statusBar.bg',         'alt.zone5'          },
   { 'colour.chrome.statusBar.text',       'alt.zone10'         },
+  { 'colour.chrome.statusBar.textSelection', 'alt.zone7'       },  -- selection in an open cell: dark, since the band's ink is white (cf. toolbar.textSelection)
+  { 'colour.chrome.statusBar.well',       'alt.zone6'          },  -- editable-cell well: one zone off the band, as a toolbar button sits off its own
   { 'colour.chrome.modal.titleBg',        'alt.zone6'          },  -- modalHost title bar: lift off editor.bg
   -- F1 cheat-sheet overlay (help.lua): blue panel; chips + description ride the
   -- base ramp so the dark shortcut glyphs read on light keycaps.

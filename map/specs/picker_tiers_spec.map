@@ -1,4 +1,4 @@
-@spec picker_tiers_spec  src=tests/specs/picker_tiers_spec.lua  loc=209  cases=8
+@spec picker_tiers_spec  src=tests/specs/picker_tiers_spec.lua  loc=210  cases=8
 @harness   mk
 
 # Intent
@@ -8,27 +8,28 @@
   default nothing states. Recipe from picker_groups_spec, extended with picker_create_spec's Enter.
 
 # Helpers
-  @fn mkChrome(h)  @ 54-57
-  @fn withCatalogue(harness, project, library)  @ 60-63
+  @fn mkChrome(h)  @ 55-58
+  @fn withCatalogue(harness, project, library)  @ 61-64
       -- A catalogue with `wobble` in both tiers -- the case a resolved list could not show.
-  @fn labels(items, tier)  @ 65-69
-  @fn frame(chrome, items, text, opts)  @ 73-84
-  @fn rowsDrawn(drawn)  @ 86-90
+  @fn labels(items, tier)  @ 66-70
+  @fn frame(chrome, items, text, opts)  @ 74-85
+  @fn rowsDrawn(drawn)  @ 87-91
 
 # Cases
-  @case 'both tiers are listed in full, so a name held twice appears in each'  [harness]  @ 96-106
-  @case 'a name held in both tiers draws two rows alike, each under its own id scope'  [harness]  @ 110-122
-  @case 'each row names the tier and the group it was drawn from, and wears no prefix'  [harness]  @ 126-138
-  @case 'a non-exact filter offers to create in either tier, the project one first'  [harness]  @ 144-153
-  @case 'Enter on a typed name creates in the project tier, the cursor resting there'  [harness]  @ 157-166
-  @case 'an exact filter suppresses only its own group\'s create row'  [harness]  @ 170-183
-  @case 'a declared tier with nothing in it still shows, so it can be created into'  [harness]  @ 187-195
-  @case 'the groups survive a filter, there being two create rows to tell apart'  [harness]  @ 199-207
+  @case 'both tiers are listed in full, so a name held twice appears in each'  [harness]  @ 97-107
+  @case 'a name held in both tiers draws two rows alike, each under its own id scope'  [harness]  @ 111-123
+  @case 'each row names the tier and the group it was drawn from, and wears no prefix'  [harness]  @ 127-139
+  @case 'a non-exact filter offers to create in either tier, the project one first'  [harness]  @ 145-154
+  @case 'Enter on a typed name creates in the project tier, the cursor resting there'  [harness]  @ 158-167
+  @case 'an exact filter suppresses only its own group\'s create row'  [harness]  @ 171-184
+  @case 'a declared tier with nothing in it still shows, so it can be created into'  [harness]  @ 188-196
+  @case 'the groups survive a filter, there being two create rows to tell apart'  [harness]  @ 200-208
 
 # Fields (r read / w write incl. constructor keys)
   @field w BeginPopup  @ 34
   @field w Button  @ 25
   @field w CalcTextSize  @ 33
+  @field w ColorConvertDouble4ToU32  @ 37
   @field w CreateFunctionFromEEL  @ 36
   @field w GetContentRegionAvail  @ 30
   @field w GetCursorPosY  @ 29
@@ -37,59 +38,59 @@
   @field w GetItemRectMin  @ 26
   @field w GetStyleVar  @ 28
   @field w GetTextLineHeight  @ 32
-  @field w ImGui_GetBuiltinPath  @ 48
-  @field w InputText  @ 37
-  @field w IsKeyPressed  @ 38
+  @field w ImGui_GetBuiltinPath  @ 49
+  @field w InputText  @ 38
+  @field w IsKeyPressed  @ 39
   @field w IsWindowAppearing  @ 35
-  @field r Key_Enter  @ 76
+  @field r Key_Enter  @ 77
   @field w Mod_None  @ 9
   @field w PopID  @ 24
   @field w PushID  @ 23
-  @field w Selectable  @ 41
-  @field w Separator  @ 39
-  @field w TextDisabled  @ 40
+  @field w Selectable  @ 42
+  @field w Separator  @ 40
+  @field w TextDisabled  @ 41
   @field w __index  @ 10
-  @field r alpha  @ 133,134
-  @field w alpha  @ 98,128
-  @field w buttonLabel  @ 79
-  @field w cm  @ 55,56
-  @field w config  @ 61
-  @field w ctx  @ 56
-  @field r enter  @ 76
-  @field w enter  @ 161,180
-  @field w fxPatches  @ 61,62
-  @field w global  @ 62
-  @field r group  @ 134
-  @field w groups  @ 79
-  @field r heading  @ 88
-  @field w heading  @ 40
-  @field w items  @ 79
-  @field r key  @ 131,164
-  @field w key  @ 80,81,100,114,129,147,160,173,190,202
-  @field w kind  @ 79
-  @field r label  @ 67,136
-  @field w lib  @ 56
-  @field r loaded  @ 47
-  @field w name  @ 96,110,126,144,157,170,187,199
-  @field w onCreate  @ 81
-  @field w onPick  @ 80
-  @field r preload  @ 46
-  @field w project  @ 61
-  @field r reaper  @ 48
-  @field r row  @ 88,117,119
-  @field w row  @ 42
-  @field w rule  @ 39
-  @field w run  @ 97,111,127,145,158,171,188,200
-  @field r scope  @ 120
-  @field w scope  @ 42
-  @field r shelved  @ 135,136
-  @field w shelved  @ 99,128,189
-  @field w synthetic  @ 55
-  @field r tier  @ 67,133,135,165,182
-  @field w tier  @ 80,81
-  @field r tierGroups  @ 79
-  @field w uiSize  @ 56
-  @field r verb  @ 163,181
-  @field w verb  @ 80,81
-  @field w wobble  @ 98,99,113,146,159,172
-  @field w wobbly  @ 146
+  @field r alpha  @ 134,135
+  @field w alpha  @ 99,129
+  @field w buttonLabel  @ 80
+  @field w cm  @ 56,57
+  @field w config  @ 62
+  @field w ctx  @ 57
+  @field r enter  @ 77
+  @field w enter  @ 162,181
+  @field w fxPatches  @ 62,63
+  @field w global  @ 63
+  @field r group  @ 135
+  @field w groups  @ 80
+  @field r heading  @ 89
+  @field w heading  @ 41
+  @field w items  @ 80
+  @field r key  @ 132,165
+  @field w key  @ 81,82,101,115,130,148,161,174,191,203
+  @field w kind  @ 80
+  @field r label  @ 68,137
+  @field w lib  @ 57
+  @field r loaded  @ 48
+  @field w name  @ 97,111,127,145,158,171,188,200
+  @field w onCreate  @ 82
+  @field w onPick  @ 81
+  @field r preload  @ 47
+  @field w project  @ 62
+  @field r reaper  @ 49
+  @field r row  @ 89,118,120
+  @field w row  @ 43
+  @field w rule  @ 40
+  @field w run  @ 98,112,128,146,159,172,189,201
+  @field r scope  @ 121
+  @field w scope  @ 43
+  @field r shelved  @ 136,137
+  @field w shelved  @ 100,129,190
+  @field w synthetic  @ 56
+  @field r tier  @ 68,134,136,166,183
+  @field w tier  @ 81,82
+  @field r tierGroups  @ 80
+  @field w uiSize  @ 57
+  @field r verb  @ 164,182
+  @field w verb  @ 81,82
+  @field w wobble  @ 99,100,114,147,160,173
+  @field w wobbly  @ 147

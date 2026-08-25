@@ -54,8 +54,10 @@ Fixed-width cells laid left-to-right in declared order, separated by
 `chrome.verticalSeparator`, inside the existing footer child. Each cell:
 dimmed label in `headingLabel` style, then the value, run through chrome's
 private `fitLabel` so a long sample name truncates instead of blowing the
-cell. Widths are declared, so no measure pass or width cache — that
-machinery stays toolbar-only.
+cell. The declared width is the value box alone — the label is measured and
+the box follows it, so renaming a label cannot shrink the value it stands
+over. Widths are declared, so no measure pass or width cache — that machinery
+stays toolbar-only.
 
 The band is blue where the toolbar is parchment, and its text sits four ramp
 zones off its ground where the toolbar's text sits seven. Labels and rules
@@ -71,10 +73,12 @@ Cells record their rects (à la `lastToolbarRects`) and expose them as
 ### Edit interaction — uniform across all editable segments
 
 - **display-only** (`set` absent): plain text.
-- **`kind = 'number'`**: renders as text. Click swaps in an `InputText`
-  sized to the cell, content selected; Enter commits through `set`
-  (clamped to min/max), Esc cancels. Mouse-wheel over the cell steps by
-  `step` without entering edit mode. No ± buttons — they'd eat the fixed
+- **`kind = 'number'`**: renders as text. The click swaps in an `InputText`
+  sized to the cell, content selected, on its release — a field appearing
+  under a held button takes the rest of that click as a drag, and drags the
+  selection away. Enter commits through `set` (clamped to min/max), Esc
+  cancels. Mouse-wheel over the cell steps by `step` without entering edit
+  mode, a notch away from the reader lowering the value. No ± buttons — they'd eat the fixed
   width; `chrome.numberStepper` remains a toolbar widget.
   - Integer fields (`octave`, `advance`, `rpb`) step ±1 and commit live
     on wheel — `tv:setRowPerBeat` already absorbs per-click changes in

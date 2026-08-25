@@ -54,6 +54,9 @@ local STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, chrome = chr
               modalHost = modalHost, help = help, facade = facade, lib = lib }
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
+-- The status band pads wider than the toolbar: it sits on the window's bottom
+-- edge, where a cell padded to the toolbar's 4px is awkward to put a pointer on.
+local STATUS_PAD_X, STATUS_PAD_Y = CHROME_PAD_X + 5, 7
 
 local pages, active, previous = {}, nil, nil
 local lastToolbarActive = nil   -- last page measured; a switch re-pins the band height
@@ -252,7 +255,7 @@ local function frame()
     -- toolbarBottom + CHROME_PAD_Y).
     local cursorY     = ImGui.GetCursorPosY(ctx)
     local availW0, availH = ImGui.GetContentRegionAvail(ctx)
-    local footerH     = ImGui.GetFrameHeightWithSpacing(ctx) + 4
+    local footerH     = ImGui.GetFrameHeight(ctx) + STATUS_PAD_Y * 2
     local bodyH       = availH - footerH
 
     ImGui.Indent(ctx, CHROME_PAD_X)
@@ -268,7 +271,7 @@ local function frame()
     ImGui.SetCursorPosY(ctx, cursorY + bodyH)
     ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('statusBar.bg'))
     ImGui.PushStyleColor(ctx, ImGui.Col_Text,    chrome.colour('statusBar.text'))
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X + 4, CHROME_PAD_Y)
+    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, STATUS_PAD_X, STATUS_PAD_Y)
     if ImGui.BeginChild(ctx, '##statusBar', 0, footerH,
                         ImGui.ChildFlags_AlwaysUseWindowPadding,
                         ImGui.WindowFlags_NoScrollbar) then

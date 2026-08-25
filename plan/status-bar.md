@@ -24,6 +24,7 @@ fidelity of its own ImGui fake.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-25 chrome: edit status cells in place, four of the tracker's among them (design/status-bar.md § Edit interaction)
 - 2026-08-25 chrome: lay the status bar out as declared segment cells (§ Page protocol, § Rendering)
 
 ## Now
@@ -32,18 +33,4 @@ fidelity of its own ImGui fake.
 
 ## Queued (current phase; one-liners)
 
-2. **Edit interaction.** A `set` closure makes a cell editable. `kind='number'`
-   renders as text until clicked, then an `InputText` sized to the cell, opened
-   selected via `chrome.selectTo`; Enter commits through `set` clamped to
-   min/max, Esc cancels. The wheel over a cell steps without entering edit — by
-   ±`step`, or double/halve when `step='x2'` (min ¼, `%g` display).
-   `kind='pick'` opens `chrome.drawPicker` with `items()`. `chrome.statusEditActive()`
-   reports the edit state, sibling of `pickerIsActive()`.
-3. **Tracker's editable cells, and the help pins.** Octave, advance and rpb
-   become number cells, dropping the `rowsPerBeat` toolbar segment
-   (`trackerRender.lua:133`); sample becomes a `pick` cell, dropping the toolbar
-   `sample` segment and `drawSampleDropdown`. `tr:focusState()` folds
-   `chrome.statusEditActive()` in beside `pickerIsActive()`. `help.lua`'s
-   `rectFor` (`help.lua:59`) grows the `status.<id>` family next to
-   `toolbar.<id>`, and the tracker manifest's two pins move to `status.rpb` and
-   `status.sample`.
+(empty)

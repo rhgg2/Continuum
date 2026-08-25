@@ -2,7 +2,7 @@
 
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(colour?), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text, dimBy?), dimText(alpha)->u32, screenPainter()->painter}
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(d)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
---shape: chrome (status bar) = { makeStatusBar()->fn(segments), statusRects()->{id->rect} }
+--shape: chrome (status bar) = { makeStatusBar()->fn(segments), statusRects()->{id->rect}, statusEditActive()->bool }
 --shape: libPickerSpec = { key: string, current?: any, excludeOthers?: {name->true}, off?: bool = true }
 --shape: chrome (shared row primitives) = { rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?, groupLabel?: string, current?=bool, tier?='project'|'global'}], groups?: [{key, label?}], onPick: fn(key, tier), onCancel?: fn(), onCreate?: fn(text, group), onDelete?: fn(key, tier), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
@@ -456,15 +456,25 @@ local function fitLabel(text, maxW)
   return text:sub(1, keep) .. '…'
 end
 
---shape: statusSegment = { id: string, label?: string, width: px, get: fn() -> value, format?: string | fn(v) -> string, visible?: fn() -> bool }
--- see docs/chrome.md § Status bar layout
+--shape: statusSegment = { id: string, label?: string, width: px (the value box; the label sits to its left), get: fn() -> value, format?: string | fn(v) -> string, visible?: fn() -> bool, set?: fn(v) — presence makes the cell editable, edit?: numberEdit | pickEdit }
+--shape: numberEdit = { kind = 'number', min?, max?, step? = 1 | 'x2' (halve/double), format? }
+--shape: pickEdit = { kind = 'pick', items: fn() -> pickerItems }
+-- see docs/chrome.md § Status bar layout, § Editing a status cell
 local lastStatusRects = {}
 local STATUS_GAP, STATUS_LABEL_GAP = 8, 6   -- either side of the rule; between label and value
 -- The bar's text sits four ramp zones off its ground, against the toolbar's
 -- seven, so its labels and rules dim less before they stop reading.
 local STATUS_LABEL_DIM, STATUS_RULE_DIM = 0.75, 0.45
+-- The open number edit: the cell's id, the buffer, selectTo's arming count (see
+-- § Opening a field with a selection) and the first-frame focus grab. nil when none is open.
+local statusEdit  = nil
+-- Wheel notches tallied against the cell under the pointer; a trackpad sends fractions.
+local statusWheel = { id = nil, accum = 0 }
 
 function chrome.statusRects() return lastStatusRects end
+
+--contract: true while a status cell holds an open field; gates page keys as pickerIsActive does
+function chrome.statusEditActive() return statusEdit ~= nil end
 
 local function statusText(seg)
   local v = seg.get()
@@ -473,17 +483,133 @@ local function statusText(seg)
   return tostring(v)
 end
 
--- Dimmed label then value inside a cell of exactly `width`: the value takes
--- what the label leaves and ellipsis-fits into it.
-local function drawStatusCell(seg, width)
+-- The buffer a click opens with: the number under its own format, so a cell whose
+-- display carries more than the number still edits as one.
+local function editText(seg)
+  local fmt = seg.edit.format or (type(seg.format) == 'string' and seg.format)
+  return fmt and string.format(fmt, seg.get()) or tostring(seg.get())
+end
+
+local function clampTo(v, edit)
+  if edit.min and v < edit.min then return edit.min end
+  if edit.max and v > edit.max then return edit.max end
+  return v
+end
+
+-- One wheel notch: ±step, or a halving/doubling for the zoom-like fields, whose
+-- useful range is multiplicative.
+local function stepped(v, dir, edit)
+  if edit.step == 'x2' then return clampTo(dir > 0 and v * 2 or v / 2, edit) end
+  return clampTo(v + dir * (edit.step or 1), edit)
+end
+
+-- Whole notches over the hovered cell. Trackpads send fractions, so the part notch is
+-- tallied against the cell it fell on and dropped when the pointer reaches another.
+local function wheelNotches(id)
+  if statusWheel.id ~= id then statusWheel.id, statusWheel.accum = id, 0 end
+  local whole, frac = math.modf(statusWheel.accum + ImGui.GetMouseWheel(ctx))
+  statusWheel.accum = frac
+  return whole
+end
+
+-- An editable cell wears a well one zone off the band, so the box marks what can be
+-- changed rather than decorating the row. One colour, hovered or not: on a row of
+-- adjacent boxes a shade that follows the pointer reads as flicker.
+local function statusWell(x, y, w, h)
+  ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx), x, y, x + w, y + h,
+    chrome.colour('statusBar.well'),
+    ImGui.GetStyleVar(ctx, ImGui.StyleVar_FrameRounding))
+end
+
+-- Resting number cell: the rect takes both the click that opens the edit and the wheel
+-- that steps without one; release timing is explained in docs/chrome.md § Editing a status cell.
+local function numberCell(seg, x, y, w, h)
+  ImGui.SetCursorScreenPos(ctx, x, y)
+  local clicked = ImGui.InvisibleButton(ctx, '##status_' .. seg.id, w, h)
+  local hovered = ImGui.IsItemHovered(ctx)
+  if clicked then
+    local text = editText(seg)
+    statusEdit = { id = seg.id, text = text, selectTo = #text, focus = true }
+  elseif hovered then
+    local notches = wheelNotches(seg.id)
+    if notches ~= 0 then
+      local v, dir = seg.get(), notches > 0 and -1 or 1
+      for _ = 1, math.abs(notches) do v = stepped(v, dir, seg.edit) end
+      seg.set(v)
+    end
+  end
+  statusWell(x, y, w, h)
+  local padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  ImGui.SetCursorScreenPos(ctx, x + padX, y)
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, fitLabel(statusText(seg), w - padX * 2))
+end
+
+-- The open edit, in the rect the well held, so nothing moves on the transition. Enter
+-- commits through `set`; Esc and any other loss of the field cancel.
+local function numberEdit(seg, x, y, w)
+  ImGui.SetCursorScreenPos(ctx, x, y)
+  ImGui.SetNextItemWidth(ctx, w)
+  if statusEdit.focus then ImGui.SetKeyboardFocusHere(ctx); statusEdit.focus = nil end
+  local selFlags, selCb = 0, nil
+  if statusEdit.selectTo then selFlags, selCb = chrome.selectTo(statusEdit.selectTo) end
+  -- The band's ink is white, so the selection goes dark; ImGui's stock blue is a
+  -- translucent wash that all but vanishes on the well.
+  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBg,        chrome.colour('statusBar.well'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_TextSelectedBg, chrome.colour('statusBar.textSelection'))
+  local committed, text = ImGui.InputText(ctx, '##statusEdit_' .. seg.id, statusEdit.text,
+    ImGui.InputTextFlags_EnterReturnsTrue | selFlags, selCb)
+  ImGui.PopStyleColor(ctx, 2)
+  if statusEdit.selectTo and ImGui.IsItemActive(ctx) then statusEdit.selectTo = nil end
+  if committed then
+    local v = tonumber(text)
+    if v then seg.set(clampTo(v, seg.edit)) end
+    statusEdit = nil
+  elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) or ImGui.IsItemDeactivated(ctx) then
+    statusEdit = nil
+  else
+    statusEdit.text = text
+  end
+end
+
+-- A pick cell hands its rect to the picker, which draws its own button: the well arrives
+-- as that button's fill, and the popup grows upward off a bar pinned to the window foot.
+local PICK_ARROW = ' \xe2\x96\xbe'
+local function pickCell(seg, x, y, w)
+  local padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
+  ImGui.SetCursorScreenPos(ctx, x, y)
+  ImGui.PushStyleColor(ctx, ImGui.Col_Button,        chrome.colour('statusBar.well'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, chrome.colour('statusBar.well'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonActive,  chrome.colour('statusBar.well'))
+  chrome.drawPicker{
+    kind        = 'status_' .. seg.id,
+    buttonLabel = fitLabel(statusText(seg), w - padX * 2 - ImGui.CalcTextSize(ctx, PICK_ARROW)),
+    width       = w, placement = 'above',
+    items       = seg.edit.items(),
+    onPick      = function(key) seg.set(key) end,
+  }
+  ImGui.PopStyleColor(ctx, 3)
+end
+
+-- Dimmed label, then the value in a box of exactly `width`, ellipsis-fitted into it. A
+-- `set` closure makes that box a control. Returns the whole cell's width, label included.
+local function drawStatusCell(seg, x, y, h)
   local used = 0
   if seg.label then
+    ImGui.SetCursorScreenPos(ctx, x, y)
     chrome.headingLabel(seg.label, STATUS_LABEL_DIM)
     used = ImGui.CalcTextSize(ctx, seg.label) + STATUS_LABEL_GAP
-    ImGui.SameLine(ctx, 0, STATUS_LABEL_GAP)
   end
-  ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, fitLabel(statusText(seg), width - used))
+  local vx, vw = x + used, seg.width
+  if not seg.set then
+    ImGui.SetCursorScreenPos(ctx, vx, y)
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, fitLabel(statusText(seg), vw))
+  elseif seg.edit.kind == 'pick'                then pickCell(seg, vx, y, vw)
+  elseif statusEdit and statusEdit.id == seg.id then numberEdit(seg, vx, y, vw)
+  else                                               numberCell(seg, vx, y, vw, h)
+  end
+  return used + vw
 end
 
 function chrome.makeStatusBar()
@@ -491,6 +617,10 @@ function chrome.makeStatusBar()
     for k in pairs(lastStatusRects) do lastStatusRects[k] = nil end
     local x0, y0 = ImGui.GetCursorScreenPos(ctx)
     local h, x, first = ImGui.GetFrameHeight(ctx), x0, true
+    local editDrawn = false
+    -- ImGui rings the focused item with the nav cursor. On a row of one-datum cells that
+    -- reads as a stray box around whatever was last clicked, so the bar draws without it.
+    ImGui.PushStyleColor(ctx, ImGui.Col_NavCursor, 0x00000000)
     for _, seg in ipairs(segments) do
       if not seg.visible or seg.visible() then
         if not first then
@@ -498,12 +628,16 @@ function chrome.makeStatusBar()
           chrome.verticalSeparator(chrome.dimText(STATUS_RULE_DIM))
           x = x + STATUS_GAP * 2 + 1
         end
-        ImGui.SetCursorScreenPos(ctx, x, y0)
-        drawStatusCell(seg, seg.width)
-        lastStatusRects[seg.id] = { x = x, y = y0, w = seg.width, h = h }
-        x, first = x + seg.width, false
+        local cellW = drawStatusCell(seg, x, y0, h)
+        if statusEdit and statusEdit.id == seg.id then editDrawn = true end
+        lastStatusRects[seg.id] = { x = x, y = y0, w = cellW, h = h }
+        x, first = x + cellW, false
       end
     end
+    ImGui.PopStyleColor(ctx, 1)
+    -- A page switch or a cell turning invisible takes its open edit with it; else the
+    -- gate on page keys would stay shut with nothing on screen holding it.
+    if statusEdit and not editDrawn then statusEdit = nil end
   end
 end
 
@@ -664,6 +798,30 @@ local DIVIDER_LIFT = 1
 -- 'No maximum' for a size constraint; a zero max is taken literally and collapses the window.
 local FLT_MAX = 3.4028234663852886e38
 
+-- A picker opens from the toolbar or from the status bar, two grounds with opposite ink,
+-- so its popup carries its own; see docs/chrome.md § Editing a status cell for why.
+local POPUP_INK = {
+  PopupBg         = 'toolbar.popupBg',
+  Text            = 'toolbar.text',
+  InputTextCursor = 'toolbar.text',
+  FrameBg         = 'toolbar.button',
+  FrameBgHovered  = 'toolbar.button',
+  FrameBgActive   = 'toolbar.button',
+  Header          = 'toolbar.selectedRow',
+  HeaderHovered   = 'toolbar.selectedRow',
+  HeaderActive    = 'toolbar.selectedRow',
+  TextSelectedBg  = 'toolbar.textSelection',
+}
+
+local function pushPopupInk()
+  local n = 0
+  for slot, name in pairs(POPUP_INK) do
+    ImGui.PushStyleColor(ctx, ImGui['Col_' .. slot], chrome.colour(name))
+    n = n + 1
+  end
+  return n
+end
+
 -- Generic typeahead picker. Enter picks the highlighted match; group
 -- separators show only when filter is empty.
 function chrome.drawPicker(d)
@@ -725,12 +883,14 @@ function chrome.drawPicker(d)
   local spacingX, spacingY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
   local padX, padY         = ImGui.GetStyleVar(ctx, ImGui.StyleVar_WindowPadding)
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, padX + 1 - spacingX / 2, padY)
+  -- The fill is taken at Begin, so the ink goes on before it, not inside the body.
+  local inkPushes = pushPopupInk()
   -- NoNav: kill ImGui's built-in keyboard nav highlight on the popup —
   -- otherwise it draws a second cursor that fights ours and steals
   -- arrow keys / character input from the filter InputText.
   local open = ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav)
   ImGui.PopStyleVar(ctx, 1)
-  if not open then return end
+  if not open then ImGui.PopStyleColor(ctx, inkPushes); return end
   pickerActive = true   -- block page key dispatch this frame so Enter doesn't leak
 
   -- No horizontal item spacing: a Selectable's rect is otherwise extended half a spacing past the
@@ -847,6 +1007,7 @@ function chrome.drawPicker(d)
   end
 
   ImGui.PopStyleVar(ctx, 1)
+  ImGui.PopStyleColor(ctx, inkPushes)
   ImGui.EndPopup(ctx)
 end
 

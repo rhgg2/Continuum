@@ -240,7 +240,7 @@ function er:renderBody(_, w, h, dispatch)
 end
 
 local statusSegments = {
-  { id = 'pane',  label = 'Pane', width = 95,
+  { id = 'pane',  label = 'Pane', width = 60,
     get = function() return pane == 'temper' and 'Temper' or 'Swing' end },
   { id = 'close', width = 95, get = function() return 'Esc returns' end,
     visible = function() return droppedIn end },
