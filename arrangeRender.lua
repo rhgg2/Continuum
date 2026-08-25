@@ -38,7 +38,7 @@ local SLOT_KEY_W, SLOT_KIND_W = 18, 16
 -- Forward decl: runGridMouse (in renderGrid below) calls openCreateModal, defined further down.
 local openCreateModal
 
---shape: press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.
+--shape: press = { qn, row, col, take, mode = 'move'|'resizeHead'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.
 --invariant: drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.
 --invariant: gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
 --invariant: double-click on empty space starts a create press; release opens create modal.
@@ -282,6 +282,22 @@ local function handleGridMouse(tracks)
       end
     end
   end
+  -- Hover feedback: either edge band (and a resize in flight) shows the NS cursor.
+  local function resizeCursor(mode)
+    if mode == 'resizeHead' or mode == 'resizeEnd' then
+      ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_ResizeNS)
+    end
+  end
+  if press then
+    resizeCursor(press.mode)
+  elseif ImGui.IsWindowHovered(ctx) and inBody and not inGutter then
+    local col = math.floor(mcol)
+    if col >= 0 and col < nTracks then
+      local _, mode = av:hitTake(col, myQN, bpr / g.rowH)
+      resizeCursor(mode)
+    end
+  end
+
   if not press then return nil, nil, nil end
   if ImGui.IsMouseDragging(ctx, 0) then press.moved = true end
 
@@ -429,7 +445,7 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
 
   -- Fill + 1px border; name queued for final pass. Focus = slot focus colours, not thicker border.
   -- blocked paints border red: drag candidate overlaps another take.
-  local function drawTakeRect(tk, startQN, lengthQN, focused, blocked)
+  local function drawTakeRect(tk, startQN, lengthQN, headQN, focused, blocked)
     local startRow = av:qnToRow(startQN)
     local endRow   = av:qnToRow(startQN + lengthQN)
     if endRow <= sr or startRow >= sr + visRows then return end
@@ -446,12 +462,10 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
       drawNotes(tk, rx0, rx1, ry0 + 1, ry1)
     end
     ps.border(rect(rx0, ry0, rx1 + 1, ry1 + 1), border)
-    -- Edge marks: an ellipsis where source is elided and the edge is on screen; the head's
-    -- leads the name, the cut's owns the bottom row or folds onto the name; beats: status bar.
-    local headQN  = tk.startQN - tk.originQN
-    -- The tail is the settled one; a resize drag passes a candidate length, and
-    -- whatever it takes off the end the source behind it takes on.
-    local cutQN   = tk.tailQN + (tk.lengthQN - lengthQN)
+    -- Edge marks: an ellipsis where source is elided and on screen; head leads name, cut trails or folds; beats status bar.
+    -- Head, window and cut partition the source: docs/arrangeView.md § Drag geometry: ghost length and fits.
+    local sourceQN = (tk.startQN - tk.originQN) + tk.lengthQN + tk.tailQN
+    local cutQN    = sourceQN - headQN - lengthQN
     local boxRows = math.floor(visBot - visTop)
     local head    = headQN > 1e-6 and startRow >= sr         and '…'
     local cut     = cutQN  > 1e-6 and endRow <= sr + visRows and '…'
@@ -477,13 +491,13 @@ local function renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
   local qnLo, qnHi = av:rowToQN(sr), av:rowToQN(sr + visRows)
   for _, tk in ipairs(av:visibleTakes(sc, lastCol, qnLo, qnHi)) do
     if not moving[tk.item] then
-      drawTakeRect(tk, tk.startQN, tk.lengthQN,
+      drawTakeRect(tk, tk.startQN, tk.lengthQN, tk.startQN - tk.originQN,
                    selected[tk.take] or (lassoCand and lassoCand.set[tk.take]) or false)
     end
   end
   if dragCand then
     for _, gh in ipairs(dragCand.ghosts) do
-      drawTakeRect(gh.take, gh.startQN, gh.lengthQN, true, not dragCand.fits)
+      drawTakeRect(gh.take, gh.startQN, gh.lengthQN, gh.headQN, true, not dragCand.fits)
     end
   end
 

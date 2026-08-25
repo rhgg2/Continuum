@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — Both edges of an arrange take grab under the mouse: a band at the start trims the
+  head, one at the end moves the tail, and each caps at a third of the take so even a one-row take
+  keeps a strip to move by. The head band is MIDI only, am:trimHead refusing audio. A drag ghost
+  carries its own headQN, so head, window and cut partition the source in flight and both edge
+  ellipses follow the edge that actually moved.
+
 - **2026-08-26** — An editable status cell's hit box takes the band's padding above and below it, so
   the footer tiles with no dead strip and a pointer flung at a bar on the window's bottom edge lands
   on the control rather than beside it. The padding is read from the window being drawn into rather

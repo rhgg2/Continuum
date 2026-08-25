@@ -12,7 +12,8 @@ local function mkAv(harness)
   return h, av
 end
 
--- Build an av over a fake project. items: list of {track, name, pos, len?}.
+-- Build an av over a fake project. items: list of {track, name, pos, len?};
+-- an item naming a srcFile lands as audio rather than MIDI.
 -- Tracks are created in first-seen order; beatPerRow is 1 (1 row = 1 QN).
 local function mkArrange(harness, items)
   local h = harness.mk()
@@ -26,7 +27,8 @@ local function mkArrange(harness, items)
   end
   for _, item in ipairs(items) do
     h.reaper:addItem(item.track, { take = item.track .. '/' .. item.name,
-      isMidi = true, pos = item.pos, len = item.len or 1, srcLen = item.srcLen,
+      isMidi = item.srcFile == nil, srcFile = item.srcFile,
+      pos = item.pos, len = item.len or 1, srcLen = item.srcLen,
       takeName = item.takeName, poolGuid = '{' .. item.track .. item.name .. '}' })
   end
   h.reaper:setProjectTracks(order)
@@ -935,6 +937,7 @@ return {
       local press = { qn = 0, take = takeAt(takes, 0), mode = 'move', group = true }
       local cand  = av:dragCandidate(press, 2, true)   -- grab a@0, drag to QN 2 → delta +2
       t.eq(cand.fits, true, 'the block fits at the destination')
+      t.eq(cand.ghosts[1].headQN, 0, 'a move carries its source along, so the head holds')
       av:commitDrag(press, cand)
       local now = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm }):tracksTakes(0)
       t.eq(takeAt(now, 2) ~= nil, true, 'a slid to 2')
@@ -978,6 +981,78 @@ return {
       t.eq(takeAt(now, 4) ~= nil and takeAt(now, 5) ~= nil, true, 'copies at 4 and 5')
       local n = 0; for _ in pairs(av:selectionSet()) do n = n + 1 end
       t.eq(n, 2, 'the selection now holds the two copies')
+    end,
+  },
+
+  -- Edge drags (docs/arrangeView.md § Drag geometry): both edges grab, and a
+  -- head drag walks the start in while the end holds.
+  {
+    name = 'hitTake reports each edge band and the move region between them',
+    run = function(harness)
+      local _, av = mkTrimmable(harness)   -- one take, rows 2..6
+      local qnPerPx = 1 / 20               -- 20px rows, so each band is 0.25 QN
+      local _, head = av:hitTake(0, 2.1, qnPerPx)
+      local _, mid  = av:hitTake(0, 4,   qnPerPx)
+      local _, tail = av:hitTake(0, 5.9, qnPerPx)
+      t.eq(head, 'resizeHead', 'the start edge grabs the head')
+      t.eq(mid,  'move',       'the body between the bands still moves')
+      t.eq(tail, 'resizeEnd',  'the end edge grabs the tail')
+    end,
+  },
+
+  {
+    name = 'an audio take has no head band — its start edge moves',
+    run = function(harness)
+      local _, av = mkArrange(harness, {
+        { track = 'tr1', name = 'a', pos = 2, len = 4, srcFile = '/a.wav' },
+      })
+      local _, mode = av:hitTake(0, 2.1, 1 / 20)
+      t.eq(mode, 'move', 'am:trimHead refuses audio, so the band is not offered')
+    end,
+  },
+
+  {
+    name = 'a head drag walks the start in and holds the end',
+    run = function(harness)
+      local _, av, am = mkTrimmable(harness)
+      local press = { qn = 2, take = am:tracksTakes(0)[1], mode = 'resizeHead' }
+      local cand  = av:dragCandidate(press, 3.2, true)
+      t.eq(cand.ghosts[1].startQN,  3, 'the ghost start snapped to row 3')
+      t.eq(cand.ghosts[1].lengthQN, 3, 'and it renders down to the held end')
+      t.eq(cand.ghosts[1].headQN,   1, 'the ghost carries the head the drag would cut')
+      t.eq(cand.fits, true, 'nothing else starts at row 3')
+      av:commitDrag(press, cand)
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  3, 'the start edge walked in a row')
+      t.eq(tk.lengthQN, 3, 'the end held, so a row less renders')
+      t.eq(tk.startQN - tk.originQN, 1, 'a row of source now sits above the head')
+    end,
+  },
+
+  {
+    name = 'a head drag stops at the origin and one row short of the end',
+    run = function(harness)
+      local _, av, am = mkTrimmable(harness)
+      local take  = am:tracksTakes(0)[1]
+      local up    = av:dragCandidate({ qn = 2, take = take, mode = 'resizeHead' }, 0, true)
+      t.eq(up.ghosts[1].startQN,  2, 'there is no source above the origin to give back')
+      local down  = av:dragCandidate({ qn = 2, take = take, mode = 'resizeHead' }, 9, true)
+      t.eq(down.ghosts[1].startQN,  5, 'the head stops a row short of the end')
+      t.eq(down.ghosts[1].lengthQN, 1, 'a take that rendered nothing would leave the grid')
+    end,
+  },
+
+  {
+    name = 'a tail drag on a trimmed take lands its end where it was dragged',
+    run = function(harness)
+      local _, av, am = mkTrimmable(harness)
+      am:trimHead(am:tracksTakes(0)[1], 2)     -- two rows of head: the take is rows 4..6
+      local press = { qn = 6, take = am:tracksTakes(0)[1], mode = 'resizeEnd' }
+      local cand  = av:dragCandidate(press, 7, true)
+      av:commitDrag(press, cand)
+      local tk = am:tracksTakes(0)[1]
+      t.eq(tk.startQN,  4, 'the head held')
+      t.eq(tk.lengthQN, 3, 'and the end went where the drag put it')
     end,
   },
 

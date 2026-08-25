@@ -309,11 +309,25 @@ REPLACE flag while it stands.
 
 ## Drag geometry: ghost length and fits
 
+Both edges of a take grab. `av:hitTake` answers `resizeHead` inside a
+band at the start, `resizeEnd` inside one at the end, and `move`
+between them. Each band is capped at a third of the take, so even a
+one-row take keeps a strip to grab for a move. Audio gets no head
+band, `am:trimHead` refusing audio.
+
 During a move or duplicate drag the ghost length equals
 `take.naturalLenQN` — the take's full intended extent, ignoring
 downstream truncation by a neighbour — so the in-flight preview shows
-what the take would render to once dropped. During a resize drag the
-ghost grows or shrinks from the current rendered length.
+what the take would render to once dropped. A tail drag grows or
+shrinks the ghost from the current rendered length. A head drag walks
+the start edge with the end held, stopping at the source origin above
+and a row short of the end below.
+
+The commit goes through the two doors the resize keys use
+(`docs/arrangeManager.md` § The take's window): a head drag hands
+`am:trimHead` the absolute head, and a tail drag hands `am:resizeTake`
+a natural length measured from the origin — head plus rendered span,
+not the rendered span alone.
 
 `fits` is false iff another take on the same track starts at the
 candidate `startQN`. Under the natural-length model the only forbidden
@@ -321,8 +335,15 @@ configuration is two takes sharing a start. `exceptItem` excludes the
 dragged take itself (or nothing on `press.duplicate`, where the
 original stays put).
 
+A ghost carries its own `headQN`, the source it would elide above its
+start. A move carries its source along, so the head is the settled
+one; only a head drag changes it. The renderer needs it to place the
+edge ellipses: head, window and cut partition the source, so the cut
+follows from the other two and both marks track the drag in flight.
+
 `dragCandidate` returns a `ghosts` list — one entry for a single drag,
-one per member for a group drag — each `{ take, startQN, lengthQN }`,
+one per member for a group drag — each `{ take, startQN, lengthQN,
+headQN }`,
 plus a single whole-group `fits`. The renderer holds back every moving
 take and repaints the ghosts at the candidate range; a duplicate leaves
 the originals in place and paints the copies on top. A group's `fits`

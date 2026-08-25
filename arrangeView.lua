@@ -761,14 +761,17 @@ function av:clearLoopRange()       am:clearLoopRange() end
 
 ----- Grid mouse — hit-test, in-flight drag geometry, commit
 
---contract: returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.
---contract: end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.
+--contract: returns take, mode='resizeHead'/'resizeEnd' within DRAG_EDGE_PX of an edge, else 'move'.
+--contract: each band clamps to 1/3 of the take so short takes stay movable; qnPerPx scales px→QN.
+--contract: audio carries no head band — am:trimHead refuses audio. nil if no hit.
 function av:hitTake(trackIdx, qn, qnPerPx)
   for _, take in ipairs(am:tracksTakes(trackIdx)) do
     local endQN = take.startQN + take.lengthQN
     if qn >= take.startQN and qn < endQN then
-      local edgeQN = math.min(DRAG_EDGE_PX * qnPerPx, take.lengthQN / 2)
-      return take, (qn >= endQN - edgeQN) and 'resizeEnd' or 'move'
+      local edgeQN = math.min(DRAG_EDGE_PX * qnPerPx, take.lengthQN / 3)
+      if qn >= endQN - edgeQN then return take, 'resizeEnd' end
+      if take.kind == 'midi' and qn < take.startQN + edgeQN then return take, 'resizeHead' end
+      return take, 'move'
     end
   end
   return nil
@@ -786,25 +789,37 @@ local function groupDragCandidate(press, mouseQN, snapped)
   deltaQN = math.max(deltaQN, -minStart)   -- clamp so the earliest member stays ≥ 0
   local ghosts = {}
   for _, take in ipairs(takes) do
-    util.add(ghosts, { take = take, startQN = take.startQN + deltaQN, lengthQN = take.naturalLenQN })
+    util.add(ghosts, { take = take, startQN = take.startQN + deltaQN,
+                       lengthQN = take.naturalLenQN, headQN = take.startQN - take.originQN })
   end
   return { ghosts = ghosts, deltaQN = deltaQN,
            fits = groupFits(takes, deltaQN, not press.duplicate) }
 end
 
---contract: returns { ghosts={{take,startQN,lengthQN},…}, fits }; one ghost per selected member.
+--contract: returns { ghosts={{take,startQN,lengthQN,headQN},…}, fits }; one ghost per member.
+--contract: headQN is the source a ghost would elide above its start; a move carries its own along.
 --contract: fits false iff any ghost's destination start is occupied.
---contract: move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.
+--contract: move/dup ghost = naturalLenQN; a tail resize grows/shrinks from the current rendered
+--contract: length, a head resize from the held end back to the origin.
 function av:dragCandidate(press, mouseQN, snapped)
   if press.group then return groupDragCandidate(press, mouseQN, snapped) end
   local take = press.take
   local bpr  = self:beatPerRow()
   local startQN = take.startQN
+  local headQN  = take.startQN - take.originQN
   local lengthQN
   if press.mode == 'resizeEnd' then
     lengthQN = take.lengthQN + (mouseQN - press.qn)
     if snapped then lengthQN = roundTo(startQN + lengthQN, bpr) - startQN end
     lengthQN = math.max(bpr, lengthQN)
+  elseif press.mode == 'resizeHead' then
+    -- The end holds: the start walks between the source origin and one row short of it.
+    local endQN = take.startQN + take.lengthQN
+    startQN  = take.startQN + (mouseQN - press.qn)
+    if snapped then startQN = roundTo(startQN, bpr) end
+    startQN  = util.clamp(startQN, take.originQN, endQN - bpr)
+    lengthQN = endQN - startQN
+    headQN   = startQN - take.originQN
   else
     startQN  = take.startQN + (mouseQN - press.qn)
     if snapped then startQN = roundTo(startQN, bpr) end
@@ -813,7 +828,7 @@ function av:dragCandidate(press, mouseQN, snapped)
   end
   local exceptItem = press.duplicate and nil or take.item
   return {
-    ghosts = { { take = take, startQN = startQN, lengthQN = lengthQN } },
+    ghosts = { { take = take, startQN = startQN, lengthQN = lengthQN, headQN = headQN } },
     fits   = am:startIsClear(take.trackIdx, startQN, exceptItem),
   }
 end
@@ -867,12 +882,15 @@ function av:commitDrag(press, cand)
   if press.group then return commitGroupDrag(press, cand) end
   local take  = press.take
   local ghost = cand.ghosts[1]
-  local label = press.mode == 'resizeEnd' and 'Resize take'
-             or press.duplicate          and 'Duplicate take'
-             or                              'Move take'
+  local label = press.mode ~= 'move' and 'Resize take'
+             or press.duplicate      and 'Duplicate take'
+             or                          'Move take'
   util.atomic(label, function()
-    if press.mode == 'resizeEnd' then
-      am:resizeTake(take, ghost.lengthQN)
+    if press.mode == 'resizeHead' then
+      am:trimHead(take, ghost.startQN - take.originQN)
+    elseif press.mode == 'resizeEnd' then
+      -- Natural is measured from the source origin, so the head counts towards it.
+      am:resizeTake(take, take.startQN - take.originQN + ghost.lengthQN)
     elseif press.duplicate then
       local copy = am:duplicateTake(take, ghost.startQN)
       if copy then setSelection { copy } end   -- am hands back a bare take handle
