@@ -1,7 +1,7 @@
 # status bar — plan
 
-> source: `design/status-bar.md` — synthesis compiled from there;
-> don't design here.
+> closed 2026-08-25. The model landed in `docs/chrome.md`, `docs/help.md`
+> and `coordinator.lua`; this is the record of the work, not a live plan.
 
 ## Phases
 
