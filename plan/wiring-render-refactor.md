@@ -31,7 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-26 wiring: give wires one renderer and name the seg shape (§ Stage 1)
 
 ## Now
 
@@ -43,13 +43,6 @@ The design doc's line refs have drifted again — they run ~84 high across the
 drawing half of the file. Numbers below are against the current tree
 (`wiringRender.lua`, 2650 loc).
 
-- **`drawWire` and the seg shape.** The `--shape: seg` annotation at
-  `wireSegments` (@899), and one `drawWire(p, seg, opts)` beside it: line at
-  `WIRE_THICK`, `drawWireArrow` on `seg.cx/cy` with
-  `barTip = seg.w ~= nil and seg.toHW == 0 and seg.toHH == 0`, and under
-  `opts.labels` the per-end test and `##wire/…` stem lifted verbatim from
-  @1018–1035. `drawWiresPass` (@1002) becomes a loop that skips
-  `opts.skipEdgeIdx` and calls it.
 - **The draft wire through `drawWire`.** Delete `drawDraftWire` (@1127–1143);
   build its seg at the draw site (@1882) from `wireDraft` and `draftCx/draftCy`
   — ends ordered by `cursorEnd`, kept end at `keptAnchor` or else the kept

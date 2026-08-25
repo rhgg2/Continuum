@@ -896,6 +896,10 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   end
 end
 
+--shape: seg = { w?, sx, sy, ex, ey, offX?, offY?, fromHW?, fromHH?, toHW?, toHH?, cx, cy }
+--   extents nil = trim at node body (wireExits' default), 0 = bare point (bar end,
+--   draft end); w nil = synthetic (draft wire, bus trunk), never labelled.
+
 -- One canvas-local segment per wireView, keyed by index. offX/offY is the
 -- perpendicular displacement from the pair centre line, shared with wireExits
 -- so highlight + label geometry can't drift from the drawn line.
@@ -996,6 +1000,38 @@ local function wireEndHit(segs, mx, my)
   return best
 end
 
+--contract: opts = { name, labels?, placed? }; every wire, real or synthetic, draws through here.
+local function drawWire(p, seg, opts)
+  local w = seg.w
+  local sx, sy = seg.sx, seg.sy
+  local ex, ey = seg.ex, seg.ey
+  local name   = opts.name
+  p.line(sx, sy, ex, ey, name, WIRE_THICK)
+  -- A bus tap's arrow lands on a bar (extent 0); clamp the tip onto it. Synthetic
+  -- segs share that extent but skip the clamp — gate on `seg.w` (nil only for them).
+  local barTip = w ~= nil and seg.toHW == 0 and seg.toHH == 0
+  drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy, barTip)
+  if opts.labels and w.type == 'audio' then
+    local fromD, toD, segLen = wireExits(seg)
+    if fromD then
+      local stem = '##wire/' .. w.from .. ':' .. w.fromPort
+                        .. '->' .. w.to   .. ':' .. w.toPort
+      -- A bus tap's bussed end shares the bus port with every other tap, so its
+      -- number lives once on the trunk (drawBusPass), not repeated per tap.
+      if w.fromPort ~= 1 and not (w.bus and w.bus.bussedEnd == 'from') then
+        drawWireEndLabel(p, sx, sy, ex, ey, fromD,
+          w.fromPort, w.fromPortName, stem .. '/from', name,
+          opts.placed)
+      end
+      if w.toPort ~= 1 and not (w.bus and w.bus.bussedEnd == 'to') then
+        drawWireEndLabel(p, ex, ey, sx, sy, segLen - toD,
+          w.toPort, w.toPortName, stem .. '/to', name,
+          opts.placed)
+      end
+    end
+  end
+end
+
 -- opts.skipEdgeIdx skips the wire being redrafted (the draft line replaces it).
 -- The highlight draws separately after the node pass — nodes overpaint wires
 -- here, so an in-pass highlight would be invisible.
@@ -1006,34 +1042,8 @@ local function drawWiresPass(p, segs, wireViews, opts, placed)
   for i = 1, #wireViews do
     local seg = segs[i]
     if seg and i ~= skip then
-      local w  = seg.w
-      local sx, sy = seg.sx, seg.sy
-      local ex, ey = seg.ex, seg.ey
-      local name = w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
-      p.line(sx, sy, ex, ey, name, WIRE_THICK)
-      -- A bus tap lands its arrowed end on a bar (extent 0); clamp so the tip
-      -- rests on the bar instead of protruding past it.
-      local barTip = seg.toHW == 0 and seg.toHH == 0
-      drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy, barTip)
-      if w.type == 'audio' then
-        local fromD, toD, segLen = wireExits(seg)
-        if fromD then
-          local stem = '##wire/' .. w.from .. ':' .. w.fromPort
-                            .. '->' .. w.to   .. ':' .. w.toPort
-          -- A bus tap's bussed end shares the bus port with every other tap, so its
-          -- number lives once on the trunk (drawBusPass), not repeated per tap.
-          if w.fromPort ~= 1 and not (w.bus and w.bus.bussedEnd == 'from') then
-            drawWireEndLabel(p, sx, sy, ex, ey, fromD,
-              w.fromPort, w.fromPortName, stem .. '/from', name,
-              placedLabels)
-          end
-          if w.toPort ~= 1 and not (w.bus and w.bus.bussedEnd == 'to') then
-            drawWireEndLabel(p, ex, ey, sx, sy, segLen - toD,
-              w.toPort, w.toPortName, stem .. '/to', name,
-              placedLabels)
-          end
-        end
-      end
+      local name = seg.w.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
+      drawWire(p, seg, { name = name, labels = true, placed = placedLabels })
     end
   end
 end

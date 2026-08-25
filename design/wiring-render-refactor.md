@@ -70,7 +70,7 @@ draw function; fold the two outliers (draft wire, bus trunk) into it.
 
 ```lua
 local function drawWire(p, seg, opts)
-  -- opts = { name, labels?, placed?, idStem? }
+  -- opts = { name, labels?, placed? }
   -- line (WIRE_THICK) + arrow centred on seg.cx/cy + per-end port labels
 end
 ```
