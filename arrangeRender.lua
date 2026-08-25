@@ -971,8 +971,10 @@ function ar:renderBody(_, w, h, dispatch)
   if dispatch then dispatch(self:focusState()) end
 end
 
+----- Status bar
+
 -- The beats behind the cursor take's edge marks: the grid says an edge is trimmed,
--- and how much it hides is read back here. Silent over an untrimmed take or empty space.
+-- and how much it hides is read back here. Empty over an untrimmed take or empty space.
 local function trimReadout()
   local tk = av:cursorTake()
   if not tk then return '' end
@@ -980,19 +982,30 @@ local function trimReadout()
   local parts = {}
   if head > 1e-6 then util.add(parts, string.format('%g above', head)) end
   if tail > 1e-6 then util.add(parts, string.format('%g below', tail)) end
-  return #parts > 0 and ('  | Trim: ' .. table.concat(parts, ', ')) or ''
+  return table.concat(parts, ', ')
 end
 
-function ar:renderStatusBar(_)
-  if not ctx then return end
-  -- Length mode names the step it stands in front of, so Ctrl+digit reads back while armed.
-  local step    = cm:get('arrangeAdvanceBy')
-  local advance = cm:get('arrangeAdvanceByLength')
-                  and string.format('take length or %d', step) or tostring(step)
-  ImGui.Text(ctx, string.format(
-    'arrange | row %d  col %d  | %g beats/row | Advance: %s%s%s',
-    av:cursorRow(), av:cursorCol(), av:beatPerRow(), advance, trimReadout(),
-    av:replaceArmed() and '  | REPLACE' or ''))
+-- Length mode names the step it stands in front of, so Ctrl+digit reads back while armed.
+local function advanceReadout()
+  local step = cm:get('arrangeAdvanceBy')
+  return cm:get('arrangeAdvanceByLength')
+     and string.format('take length or %d', step) or tostring(step)
+end
+
+local statusSegments = {
+  { id = 'row',        label = 'Row',       width = 65,  get = function() return av:cursorRow()  end, format = '%d' },
+  { id = 'col',        label = 'Col',       width = 65,  get = function() return av:cursorCol()  end, format = '%d' },
+  { id = 'beatPerRow', label = 'Beats/row', width = 100, get = function() return av:beatPerRow() end, format = '%g' },
+  { id = 'advance',    label = 'Advance',   width = 130, get = advanceReadout },
+  { id = 'trim',       label = 'Trim',      width = 150, get = trimReadout,
+    visible = function() return trimReadout() ~= '' end },
+  { id = 'replace',    width = 70, get = function() return 'REPLACE' end,
+    visible = function() return av:replaceArmed() end },
+}
+
+function ar:statusSegments()
+  if not ctx then return {} end
+  return statusSegments
 end
 
 --contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.

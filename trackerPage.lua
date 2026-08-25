@@ -161,7 +161,7 @@ facade.publish('tracker', {
 ----- Page interface — render delegates to the renderer; the watcher brackets the frame
 
 function tp:toolbarSegments() return tr:toolbarSegments() end
-function tp:renderStatusBar(ctx)   return tr:renderStatusBar(ctx) end
+function tp:statusSegments()       return tr:statusSegments() end
 function tp:focusState()           return tr:focusState() end
 
 --contract: resolve selection, page follow, draw, then snapshot take hash as next frame's baseline

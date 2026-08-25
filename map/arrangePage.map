@@ -64,13 +64,13 @@
   -- Page interface — render delegates to the renderer
   @api ap:toolbarSegments()  @ 85
   @api ap:renderBody(_, w, h, dispatch)  @ 86
-  @api ap:renderStatusBar(ctx)  @ 87
+  @api ap:statusSegments()  @ 87
   @api ap:focusState()  @ 88
 
 # Uses (outbound edges)
   @use call    ar:focusState  @ focusState:88
   @use call    ar:renderBody  @ renderBody:86
-  @use call    ar:renderStatusBar  @ renderStatusBar:87
+  @use call    ar:statusSegments  @ statusSegments:87
   @use call    ar:toolbarSegments  @ toolbarSegments:85
   @use call    av:clearLoopRange  @ arrange.clearLoopRange:76
   @use call    av:cursorCol  @ arrange.currentTrackIdx:42

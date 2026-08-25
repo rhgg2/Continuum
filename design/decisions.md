@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — Chrome drawn on both bands — segment labels and vertical rules — takes its ink
+  from the ambient Col_Text and dims it, rather than from the separator swatch, which is tuned for
+  the parchment band and also draws the grids. A lighter inner well is reserved for editable status
+  cells, so a box marks what can be changed instead of decorating every cell.
+
 - **2026-08-25** — The arrange page draws its play head the way the tracker does — a yellow line
   across the pane at the play row — rather than a triangle in the gutter, so one ink means the same
   thing on both pages. The REAPER edit cursor loses its triangle altogether: it steers loops and

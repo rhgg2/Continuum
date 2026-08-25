@@ -698,35 +698,34 @@ local function drawParamPalette(x, y, h, caretKey, fxAvailable, fxPlan)
   }
 end
 
-local function drawStatusBar()
-  -- ctx and grid.cols are built together in tv:rebuild; an empty grid
-  -- (no take yet on script reopen) means ctx is nil. Match renderBody's
-  -- placeholder guard rather than indexing a nil ctx via barBeatSub.
-  if #tv.grid.cols == 0 then return end
-  local ec = tv:ec()
-  local cursorRow, cursorCol = ec:row(), ec:col()
-  local rowPerBeat    = cm:get('rowPerBeat')
-  local currentOctave = cm:get('currentOctave')
-  local advanceBy     = cm:get('advanceBy')
-  local sampleSuffix = ''
-  if cm:get('trackerMode') then
-    local slot  = cm:get('currentSample')
-    local entry = (ds:get('slotEntries') or {})[slot]
-    local name  = entry and entry.name
-    sampleSuffix = string.format(' | Sample: %02X', slot)
-                .. (name and (' ' .. name) or '')
-  end
-  local col      = tv.grid.cols[cursorCol]
-  local bar, beat, sub = tv:barBeatSub(cursorRow)
-  local colLabel = col and col.label or '?'
+----- Status bar
 
-  -- statusBar is rendered inside its own chrome BeginChild whose outer
-  -- Col_Text push is `statusBar.text`; we just print, no inner push.
-  ImGui.Text(ctx, string.format(
-    '%s | %d:%d.%d/%d | Octave: %d | Advance: %d%s',
-    colLabel, bar, beat, sub, rowPerBeat, currentOctave, advanceBy, sampleSuffix
-  ))
+local function cursorColLabel()
+  local col = tv.grid.cols[tv:ec():col()]
+  return col and col.label or '?'
 end
+
+local function cursorPosition()
+  local bar, beat, sub = tv:barBeatSub(tv:ec():row())
+  return string.format('%d:%d.%d', bar, beat, sub)
+end
+
+local function sampleReadout()
+  local slot  = cm:get('currentSample')
+  local entry = (ds:get('slotEntries') or {})[slot]
+  return string.format('%02X', slot) .. (entry and entry.name and (' ' .. entry.name) or '')
+end
+
+-- Each get reads cm/tv fresh; cells declared once, reused per frame.
+local statusSegments = {
+  { id = 'col',     label = 'Col',     width = 95,  get = cursorColLabel },
+  { id = 'at',      label = 'At',      width = 80,  get = cursorPosition },
+  { id = 'rpb',     label = 'RPB',     width = 55,  get = function() return cm:get('rowPerBeat')    end, format = '%d' },
+  { id = 'octave',  label = 'Octave',  width = 70,  get = function() return cm:get('currentOctave') end, format = '%d' },
+  { id = 'advance', label = 'Advance', width = 80,  get = function() return cm:get('advanceBy')     end, format = '%d' },
+  { id = 'sample',  label = 'Sample',  width = 150, get = sampleReadout,
+    visible = function() return cm:get('trackerMode') end },
+}
 
 ----- Input
 
@@ -1885,8 +1884,11 @@ function tr:renderBody(_, w, h, dispatch)
   tv:tick()
 end
 
-function tr:renderStatusBar(_)
-  drawStatusBar()
+-- ctx and grid.cols are built together in tv:rebuild; an empty grid (no take
+-- yet on script reopen) has no cursor to report, so the bar stays empty.
+function tr:statusSegments()
+  if #tv.grid.cols == 0 then return {} end
+  return statusSegments
 end
 
 -- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).

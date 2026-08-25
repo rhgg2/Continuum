@@ -84,7 +84,7 @@ facade.publish('arrange', {
 ----- Page interface — render delegates to the renderer
 function ap:toolbarSegments() return ar:toolbarSegments() end
 function ap:renderBody(_, w, h, dispatch) return ar:renderBody(_, w, h, dispatch) end
-function ap:renderStatusBar(ctx)   return ar:renderStatusBar(ctx) end
+function ap:statusSegments()       return ar:statusSegments() end
 function ap:focusState()           return ar:focusState() end
 
 return ap

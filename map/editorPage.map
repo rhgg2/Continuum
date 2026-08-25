@@ -24,14 +24,14 @@
   -- Page interface — render delegates to the renderer
   @api ep:toolbarSegments()  @ 38
   @api ep:renderBody(ctx, w, h, dispatch)  @ 39
-  @api ep:renderStatusBar(ctx)  @ 40
+  @api ep:statusSegments()  @ 40
   @api ep:focusState()  @ 41
 
 # Uses (outbound edges)
   @use call    er:edit  @ editor.edit:30
   @use call    er:focusState  @ focusState:41
   @use call    er:renderBody  @ renderBody:39
-  @use call    er:renderStatusBar  @ renderStatusBar:40
+  @use call    er:statusSegments  @ statusSegments:40
   @use call    er:toolbarSegments  @ toolbarSegments:38
   @use call    er:unbind  @ unbind:35
   @use call    facade.publish  @ <load>:29

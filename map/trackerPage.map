@@ -59,7 +59,7 @@
       @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection  @ 94
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
   @api tp:toolbarSegments()  @ 163
-  @api tp:renderStatusBar(ctx)  @ 164
+  @api tp:statusSegments()  @ 164
   @api tp:focusState()  @ 165
   @api tp:renderBody(ctx, w, h, dispatch)  @ 168-173
       @contract  resolve selection, page follow, draw, then snapshot take hash as next frame's baseline  @ 167
@@ -79,7 +79,7 @@
   @use call    tr:focusState  @ focusState:165
   @use call    tr:openTakeProperties  @ tracker.openTakeProperties:140
   @use call    tr:renderBody  @ renderBody:171
-  @use call    tr:renderStatusBar  @ renderStatusBar:164
+  @use call    tr:statusSegments  @ statusSegments:164
   @use call    tr:toolbarSegments  @ toolbarSegments:163
   @use call    tv:currentInstance  @ unbind:80
   @use call    tv:cursorAnchor  @ tracker.cursorAnchor:157

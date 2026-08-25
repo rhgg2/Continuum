@@ -2513,9 +2513,13 @@ function wr:renderBody(_, w, h, dispatch)
   if dispatch then dispatch(self:focusState()) end
 end
 
-function wr:renderStatusBar(_)
-  if not ctx then return end
-  ImGui.Text(ctx, 'wiring')
+local statusSegments = {
+  { id = 'page', width = 80, get = function() return 'wiring' end },
+}
+
+function wr:statusSegments()
+  if not ctx then return {} end
+  return statusSegments
 end
 
 --contract: acceptCmds=false if any picker active, any item active, or modal open at frame start.

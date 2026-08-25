@@ -52,11 +52,36 @@ pending `requestPickerOpen` kind and re-expands a collapsed segment that
 lists the kind in `pickers`, so the request still reaches a `drawPicker`
 that can consume it.
 
+## Status bar layout
+
+`makeStatusBar()` returns a callable that renders a row of `statusSegment`
+tables into the coordinator's footer child. A segment is data, not a render
+closure: an id, an optional label, a declared pixel width, and a `get` read
+fresh each frame. The renderer owns all the drawing, so a datum the spec
+cannot express either grows the spec or stays in the toolbar.
+
+Widths are declared, so the bar needs neither the pre-measure pass nor the
+width cache the toolbar carries. Each cell is placed by explicit screen
+position — `x` accumulates the declared widths and the separator gaps —
+rather than by chaining `SameLine`. The rect is thus exact, and refreshed
+each frame into `lastStatusRects` for `chrome.statusRects()`.
+
+Inside a cell the label draws through `headingLabel` and the value takes the
+width the label leaves, ellipsis-fitted by `fitLabel`. `headingLabel` dims
+the ambient `Col_Text` rather than a fixed colour, so it reads correctly
+against the toolbar's ink and the status bar's alike.
+
 ## Vertical separator
 
 `verticalSeparator` draws a filled 1px rect, not `DrawList_AddLine`: axis-aligned
 rect edges skip ImGui's line anti-aliasing, so the rule stays crisp instead of
 blurring across the pixel boundary.
+
+Its default ink is the `separator` swatch, shared with the tracker's grid
+lines, arrange's table borders and wiring's list frames. Both chrome bands
+pass their own colour instead: `dimText` takes the ambient `Col_Text` and
+dims it, so a rule reads against the ground it is drawn on and the shared
+swatch stays free to serve the grids. `headingLabel` dims the same way.
 
 ## numberStepper
 

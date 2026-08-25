@@ -51,12 +51,19 @@ spec, the spec grows a field or the datum stays in the toolbar.
 ### Rendering
 
 Fixed-width cells laid left-to-right in declared order, separated by
-`chrome.verticalSeparator`, inside the existing footer child (colours
-`statusBar.bg` / `statusBar.text` unchanged). Each cell: dimmed label in
-`headingLabel` style, then the value. Value text runs through
-`chrome.fitLabel` so a long sample name truncates instead of blowing the
+`chrome.verticalSeparator`, inside the existing footer child. Each cell:
+dimmed label in `headingLabel` style, then the value, run through chrome's
+private `fitLabel` so a long sample name truncates instead of blowing the
 cell. Widths are declared, so no measure pass or width cache — that
 machinery stays toolbar-only.
+
+The band is blue where the toolbar is parchment, and its text sits four ramp
+zones off its ground where the toolbar's text sits seven. Labels and rules
+therefore take their ink from the ambient `Col_Text` through
+`chrome.dimText`, each band passing its own dim, rather than from a fixed
+swatch that can suit only one of them. The `separator` swatch itself is left
+alone, since the tracker's grid lines and arrange's table borders draw from
+it too.
 
 Cells record their rects (à la `lastToolbarRects`) and expose them as
 `status.<id>` help anchors.
@@ -78,6 +85,11 @@ Cells record their rects (à la `lastToolbarRects`) and expose them as
 - **`kind = 'pick'`**: click opens `chrome.drawPicker` with
   `items()` — sample keeps its typeahead popup for free.
 
+An editable cell wears a well one zone lighter than the band (`alt.zone6`),
+the relation the toolbar's buttons already hold to theirs. Display cells stay
+flat, so the box marks what can be changed rather than decorating the row.
+The InputText opens into that same rect, so nothing moves on the transition.
+
 ### Focus
 
 An active status edit must stop grid keys firing. Pages already fold
@@ -98,7 +110,7 @@ same one-frame latency the picker gate already has; acceptable.
 | tracker | col label · bar:beat.sub    | octave · advance · rpb (from toolbar) · sample (from toolbar, `pick`) |
 | arrange | row · col · trim · REPLACE  | beats-per-row (from toolbar) · advance |
 | wiring  | page name                   | zoom factor (later) |
-| sample  | track/slot text, one segment| — |
+| sample  | track · slot                | — |
 | editor  | pane text, one segment      | — |
 
 `followPlay` stays in the arrange toolbar — it's a mode toggle, not a

@@ -25,7 +25,7 @@ local function fakePage()
   function p:revealTake(take)    p.calls[#p.calls + 1] = { 'revealTake', take } end
   function p:toolbarSegments() return {} end
   function p:renderBody()        end
-  function p:renderStatusBar()   end
+  function p:statusSegments()    return {} end
   function p:reloadFromReaper()  end
   return p
 end

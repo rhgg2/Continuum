@@ -1,7 +1,8 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
+--shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(colour?), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text, dimBy?), dimText(alpha)->u32, screenPainter()->painter}
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(d)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: chrome (status bar) = { makeStatusBar()->fn(segments), statusRects()->{id->rect} }
 --shape: libPickerSpec = { key: string, current?: any, excludeOthers?: {name->true}, off?: bool = true }
 --shape: chrome (shared row primitives) = { rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?, groupLabel?: string, current?=bool, tier?='project'|'global'}], groups?: [{key, label?}], onPick: fn(key, tier), onCancel?: fn(), onCreate?: fn(text, group), onDelete?: fn(key, tier), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
@@ -146,13 +147,20 @@ function chrome.popChromeWindow()
   chrome.popChromeStyles()
 end
 
+-- The ambient text colour at a fraction of its alpha, so chrome on either band takes its
+-- ink from whichever it sits in, rather than a fixed swatch that can only suit one of them.
+function chrome.dimText(alpha)
+  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(ImGui.GetStyleColor(ctx, ImGui.Col_Text))
+  return ImGui.ColorConvertDouble4ToU32(r, g, b, a * alpha)
+end
+
 -- reaper-imgui has no Separator(Vertical); draw a 1px vertical rule via the window draw
 -- list and reserve a Dummy slot so SameLine works. see docs/chrome.md § Vertical separator
-function chrome.verticalSeparator()
+function chrome.verticalSeparator(colour)
   local x, y = ImGui.GetCursorScreenPos(ctx)
   local h    = ImGui.GetFrameHeight(ctx)
   ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
-    x, y, x + 1, y + h, chrome.colour('separator'))
+    x, y, x + 1, y + h, colour or chrome.colour('separator'))
   ImGui.Dummy(ctx, 1, h)
 end
 
@@ -286,12 +294,10 @@ function chrome.dropdown(id, current, items)
   return picked
 end
 
--- Section label for toolbar segments: bold + uppercase + dimmed so it
--- reads as a heading and not a control. Caller follows with SameLine.
-function chrome.headingLabel(text)
-  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(chrome.colour('toolbar.text'))
-  local dim = ImGui.ColorConvertDouble4ToU32(r, g, b, a * 0.55)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Text, dim)
+-- Section label for toolbar and status segments: dimmed so it reads as a heading, not a
+-- control. Caller follows with SameLine; the dim rides ambient Col_Text so it suits both bands.
+function chrome.headingLabel(text, dimBy)
+  ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.dimText(dimBy or 0.55))
   ImGui.AlignTextToFramePadding(ctx)
   ImGui.Text(ctx, text)
   ImGui.PopStyleColor(ctx, 1)
@@ -305,6 +311,9 @@ local pickerOpenSeed = nil   -- initial filter text for a request-driven open (t
 --shape: toolbarSegment = { id: string, heading?: string (presence = collapsible), render: fn, visible?: fn() -> bool, pickers?: [kind] }
 -- see docs/chrome.md § Toolbar layout
 local lastToolbarRects = {}
+-- The shared `separator` swatch also draws grid lines and table borders; the toolbar's own
+-- rules want more weight than those, so they take the band's ink like the status bar's do.
+local TOOLBAR_RULE_DIM = 0.18
 --invariant: one page draws per frame; cleared at next toolbar() start — no cross-page collision.
 local toolbarWidths = {}
 local toolbarLines  = 1   -- wrapped-row count from the last toolbar() draw
@@ -414,7 +423,7 @@ function chrome.makeToolbar()
           local sepW = 12 + 1 + 12
           if lastEndX + sepW + cachedW <= rightX then
             ImGui.SameLine(ctx, 0, 12)
-            chrome.verticalSeparator()
+            chrome.verticalSeparator(chrome.dimText(TOOLBAR_RULE_DIM))
             ImGui.SameLine(ctx, 0, 12)
           else
             lines = lines + 1   -- segment wrapped to a new row
@@ -429,6 +438,72 @@ function chrome.makeToolbar()
       end
     end
     toolbarLines = lines
+  end
+end
+
+----- Status bar
+
+-- Ellipsis-fit to a fixed width; no horizontal scroll exists. Private: the status cells and
+-- trees fit their own labels, and no caller outside chrome has wanted it.
+local function fitLabel(text, maxW)
+  if ImGui.CalcTextSize(ctx, text) <= maxW then return text end
+  local keep = #text
+  while keep > 1 and ImGui.CalcTextSize(ctx, text:sub(1, keep) .. '…') > maxW do
+    keep = keep - 1
+  end
+  -- don't cut mid utf-8 sequence
+  while keep > 1 and (text:byte(keep + 1) or 0) & 0xC0 == 0x80 do keep = keep - 1 end
+  return text:sub(1, keep) .. '…'
+end
+
+--shape: statusSegment = { id: string, label?: string, width: px, get: fn() -> value, format?: string | fn(v) -> string, visible?: fn() -> bool }
+-- see docs/chrome.md § Status bar layout
+local lastStatusRects = {}
+local STATUS_GAP, STATUS_LABEL_GAP = 8, 6   -- either side of the rule; between label and value
+-- The bar's text sits four ramp zones off its ground, against the toolbar's
+-- seven, so its labels and rules dim less before they stop reading.
+local STATUS_LABEL_DIM, STATUS_RULE_DIM = 0.75, 0.45
+
+function chrome.statusRects() return lastStatusRects end
+
+local function statusText(seg)
+  local v = seg.get()
+  if type(seg.format) == 'function' then return seg.format(v) end
+  if type(seg.format) == 'string'   then return string.format(seg.format, v) end
+  return tostring(v)
+end
+
+-- Dimmed label then value inside a cell of exactly `width`: the value takes
+-- what the label leaves and ellipsis-fits into it.
+local function drawStatusCell(seg, width)
+  local used = 0
+  if seg.label then
+    chrome.headingLabel(seg.label, STATUS_LABEL_DIM)
+    used = ImGui.CalcTextSize(ctx, seg.label) + STATUS_LABEL_GAP
+    ImGui.SameLine(ctx, 0, STATUS_LABEL_GAP)
+  end
+  ImGui.AlignTextToFramePadding(ctx)
+  ImGui.Text(ctx, fitLabel(statusText(seg), width - used))
+end
+
+function chrome.makeStatusBar()
+  return function(segments)
+    for k in pairs(lastStatusRects) do lastStatusRects[k] = nil end
+    local x0, y0 = ImGui.GetCursorScreenPos(ctx)
+    local h, x, first = ImGui.GetFrameHeight(ctx), x0, true
+    for _, seg in ipairs(segments) do
+      if not seg.visible or seg.visible() then
+        if not first then
+          ImGui.SetCursorScreenPos(ctx, x + STATUS_GAP, y0)
+          chrome.verticalSeparator(chrome.dimText(STATUS_RULE_DIM))
+          x = x + STATUS_GAP * 2 + 1
+        end
+        ImGui.SetCursorScreenPos(ctx, x, y0)
+        drawStatusCell(seg, seg.width)
+        lastStatusRects[seg.id] = { x = x, y = y0, w = seg.width, h = h }
+        x, first = x + seg.width, false
+      end
+    end
   end
 end
 
@@ -850,19 +925,6 @@ function chrome.palettePane(spec)
     chrome.popChromeStyles()
   end
   ImGui.EndChild(ctx)
-end
-
--- Ellipsis-fit to a fixed pane width; no horizontal scroll exists. Private: the
--- trees fit their own labels, and no caller outside chrome has wanted it.
-local function fitLabel(text, maxW)
-  if ImGui.CalcTextSize(ctx, text) <= maxW then return text end
-  local keep = #text
-  while keep > 1 and ImGui.CalcTextSize(ctx, text:sub(1, keep) .. '…') > maxW do
-    keep = keep - 1
-  end
-  -- don't cut mid utf-8 sequence
-  while keep > 1 and (text:byte(keep + 1) or 0) & 0xC0 == 0x80 do keep = keep - 1 end
-  return text:sub(1, keep) .. '…'
 end
 
 -- Selectable with hover/active highlight suppressed: only the selected row shows

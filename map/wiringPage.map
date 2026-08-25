@@ -33,7 +33,7 @@
   -- Page interface — render delegates to the renderer
   @api wp:toolbarSegments()  @ 58
   @api wp:renderBody(ctx, w, h, dispatch)  @ 59
-  @api wp:renderStatusBar(ctx)  @ 60
+  @api wp:statusSegments()  @ 60
   @api wp:focusState()  @ 61
 
 # Uses (outbound edges)
@@ -46,7 +46,7 @@
   @use call    wr:closeTransients  @ unbind:49
   @use call    wr:focusState  @ focusState:61
   @use call    wr:renderBody  @ renderBody:59
-  @use call    wr:renderStatusBar  @ renderStatusBar:60
+  @use call    wr:statusSegments  @ statusSegments:60
   @use call    wr:toolbarSegments  @ toolbarSegments:58
   @use call    wv:enableLive  @ enableLive:52
   @use call    wv:syncExternal  @ syncExternal:55

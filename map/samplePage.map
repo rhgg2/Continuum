@@ -36,7 +36,7 @@
   -- Page interface — render delegates to the renderer
   @api sp:toolbarSegments()  @ 66
   @api sp:renderBody(ctx, w, h, dispatch)  @ 67
-  @api sp:renderStatusBar(ctx)  @ 68
+  @api sp:statusSegments()  @ 68
   @api sp:focusState()  @ 69
 
 # Uses (outbound edges)
@@ -46,7 +46,7 @@
   @use call    sr:closeTransients  @ unbind:55
   @use call    sr:focusState  @ focusState:69
   @use call    sr:renderBody  @ renderBody:67
-  @use call    sr:renderStatusBar  @ renderStatusBar:68
+  @use call    sr:statusSegments  @ statusSegments:68
   @use call    sr:toolbarSegments  @ toolbarSegments:66
   @use call    sv:getTrack  @ bind:38
   @use call    sv:listTracks  @ bind:40 listTracks:52

@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=258  mode=chunk  self=er
+@module editorRender  src=editorRender.lua  loc=262  mode=chunk  self=er
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
 # Shapes
   @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onImportFactory(name), onTidy?(), onReloadFactory?(), onReset?(), onDelete(tier,name) }  @ 31
   @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 182
-  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 247
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 251
 
 # Imports
   @require ImGui = 'imgui'  @ 15
@@ -21,6 +21,7 @@
   @state treeOpen = { project = true, global = true }  @ 117
   @state er = {}  @ 163
   @state toolbarSegments = {  @ 183
+  @state statusSegments = {  @ 242
 
 # Private functions
   @fn activePane()  @ 25
@@ -53,6 +54,9 @@
   @held toolbarSegments.render()  @ 204
   @held toolbarSegments.visible()  @ 208
   @held toolbarSegments.render()  @ 209
+  @held statusSegments.get()  @ 244
+  @held statusSegments.get()  @ 245
+  @held statusSegments.visible()  @ 246
 
 # Public API (er:*)
   @api er:edit(lib, name)  @ 169-176
@@ -63,14 +67,14 @@
       -- re-earn the Close affordance by coming through edit() again.
   @api er:toolbarSegments()  @ 213
   @api er:renderBody(_, w, h, dispatch)  @ 215-240
-  @api er:renderStatusBar(_)  @ 242-245
-  @api er:focusState()  @ 248-256
+  @api er:statusSegments()  @ 249
+  @api er:focusState()  @ 252-260
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ libraryTree:141
   @use call    ImGui.Button  @ actionBar:56 toolbarSegments.render:193,209
   @use call    ImGui.GetCursorScreenPos  @ renderBody:231
-  @use call    ImGui.IsAnyItemActive  @ renderBody:222 focusState:254
+  @use call    ImGui.IsAnyItemActive  @ renderBody:222 focusState:258
   @use call    ImGui.IsKeyPressed  @ renderBody:223
   @use call    ImGui.PopFont  @ renderBody:235
   @use call    ImGui.PopID  @ libraryRow:114 libraryTree:145
@@ -81,17 +85,16 @@
   @use call    ImGui.SameLine  @ actionBar:53 libraryTree:143 toolbarSegments.render:197
   @use call    ImGui.Separator  @ libraryTree:138
   @use call    ImGui.SmallButton  @ libraryTree:144
-  @use call    ImGui.Text  @ renderStatusBar:244
   @use call    ImGui.TextDisabled  @ libraryTree:142
   @use call    chrome.colour  @ toolbarSegments.render:190,191
   @use call    chrome.disabledIf  @ actionBar:55
   @use call    chrome.gridWidth  @ renderBody:232
   @use call    chrome.palettePane  @ libraryTree:131
-  @use call    chrome.pickerIsActive  @ focusState:250
+  @use call    chrome.pickerIsActive  @ focusState:254
   @use call    chrome.row  @ libraryTree:134
   @use call    chrome.treeRow  @ libraryRow:111 libraryFolder:123
   @use call    cmgr:invoke  @ onClose:27
-  @use call    modalHost:isOpen  @ renderBody:222 focusState:250
+  @use call    modalHost:isOpen  @ renderBody:222 focusState:254
   @use call    swingEditor:isOpen  @ renderBody:226
   @use call    swingEditor:open  @ edit:174 renderBody:226
   @use call    temperEditor:hasSelection  @ renderBody:227
@@ -129,7 +132,7 @@
   @field r Col_ButtonHovered  @ toolbarSegments.render:191
   @field r ImGui_GetBuiltinPath  @ 11
   @field r Key_Escape  @ renderBody:223
-  @field w acceptCmds  @ focusState:249,254
+  @field w acceptCmds  @ focusState:253,258
   @field r active  @ libraryTree:139
   @field r chrome  @ 18
   @field r cmgr  @ 18
@@ -139,14 +142,15 @@
   @field r dirty  @ projectActions:71
   @field w draw  @ libraryTree:133
   @field r fontSize  @ 19
+  @field w get  @ statusSegments.get:244,245
   @field w global  @ 117
   @field r gui  @ 18
   @field r h  @ libraryTree:132
   @field w h  @ libraryTree:132 renderBody:238
   @field w hasChildren  @ libraryRow:112 libraryFolder:123
-  @field w id  @ libraryRow:111 libraryFolder:123 185,202,207
+  @field w id  @ libraryRow:111 libraryFolder:123 185,202,207,243 statusSegments.get:245
   @field r label  @ libraryTree:132
-  @field w label  @ libraryRow:111 libraryFolder:123 libraryTree:132
+  @field w label  @ libraryRow:111 libraryFolder:123 libraryTree:132 243
   @field r library  @ shadowsSource:45 libraryTree:155
   @field r modalHost  @ 18
   @field r modified  @ libraryTree:149
@@ -157,7 +161,7 @@
   @field r onReset  @ projectActions:71
   @field r onTidy  @ projectActions:78,79
   @field w open  @ libraryFolder:124
-  @field w pageSuppressed  @ focusState:249,253
+  @field w pageSuppressed  @ focusState:253,257
   @field r path  @ 14
   @field w path  @ 14
   @field r project  @ libraryTree:148
@@ -167,7 +171,7 @@
   @field r sel  @ projectActions:64 libraryActions:87 libraryRow:110 libraryFolder:122 libraryTree:135
   @field r selected  @ libraryRow:113 libraryFolder:126
   @field w selected  @ libraryRow:112 libraryFolder:124
-  @field w suppressKbd  @ focusState:249,252
+  @field w suppressKbd  @ focusState:253,256
   @field r swingEditor  @ 18
   @field r synthetic  @ projectActions:66 libraryActions:89
   @field r temperEditor  @ 18
@@ -176,7 +180,8 @@
   @field r ui  @ 19
   @field r uiFont  @ 19
   @field r undeletable  @ projectActions:67 libraryActions:90
-  @field w visible  @ toolbarSegments.visible:203,208
+  @field w visible  @ toolbarSegments.visible:203,208 statusSegments.visible:246
+  @field w width  @ 243 statusSegments.get:245
   @field r x  @ libraryTree:132 renderBody:238
   @field w x  @ libraryTree:132
   @field r y  @ libraryTree:132 renderBody:238

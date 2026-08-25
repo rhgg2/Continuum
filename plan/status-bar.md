@@ -24,12 +24,11 @@ fidelity of its own ImGui fake.
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-25 chrome: lay the status bar out as declared segment cells (§ Page protocol, § Rendering)
 
 ## Now
 
-**Display bar, and the footer swap** — implemented directly, without a brief.
-(design § Page protocol, § Segment spec, § Rendering)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 

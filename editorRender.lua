@@ -239,10 +239,14 @@ function er:renderBody(_, w, h, dispatch)
   libraryTree(desc)
 end
 
-function er:renderStatusBar(_)
-  local tail = droppedIn and ' · Esc returns' or ''
-  ImGui.Text(ctx, ('Editor — %s%s'):format(pane == 'temper' and 'Temper' or 'Swing', tail))
-end
+local statusSegments = {
+  { id = 'pane',  label = 'Pane', width = 95,
+    get = function() return pane == 'temper' and 'Temper' or 'Swing' end },
+  { id = 'close', width = 95, get = function() return 'Esc returns' end,
+    visible = function() return droppedIn end },
+}
+
+function er:statusSegments() return statusSegments end
 
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
 function er:focusState()

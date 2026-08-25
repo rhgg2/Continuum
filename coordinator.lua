@@ -29,7 +29,8 @@ for _, key in ipairs{ 'swings', 'tempers' } do lib.seedIfEmpty(key) end
 
 local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiSize = uiSize, lib = lib })
-local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active page's row
+local toolbar   = chrome.makeToolbar()     -- one shared toolbar; renders the active page's row
+local statusBar = chrome.makeStatusBar()   -- one shared status bar; renders the active page's cells
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
 local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
@@ -271,7 +272,7 @@ local function frame()
     if ImGui.BeginChild(ctx, '##statusBar', 0, footerH,
                         ImGui.ChildFlags_AlwaysUseWindowPadding,
                         ImGui.WindowFlags_NoScrollbar) then
-      page:renderStatusBar(ctx)
+      statusBar(page:statusSegments())
     end
     ImGui.EndChild(ctx)
     ImGui.PopStyleVar(ctx)
@@ -291,7 +292,7 @@ end
 
 ---------- PUBLIC
 
---shape: page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
+--shape: page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), statusSegments(), bind(...), unbind() }
 --contract: register instantiates page; first registered becomes active; returns page handle
 local coord = {}
 

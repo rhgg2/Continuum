@@ -559,14 +559,18 @@ function sr:renderBody(_, w, h, dispatch)
   ImGui.PopStyleColor(ctx, 1)
 end
 
-function sr:renderStatusBar(_)
-  local name = boundTrackName()
-  local slot = cm:get('currentSample')
+local function slotReadout()
+  local slot  = cm:get('currentSample')
   local entry = (ds:get('slotEntries') or {})[slot]
-  local slotName = entry and entry.name
-  ImGui.Text(ctx, string.format('Track: %s | Slot: %02X%s',
-    name, slot, slotName and (' ' .. slotName) or ''))
+  return string.format('%02X', slot) .. (entry and entry.name and (' ' .. entry.name) or '')
 end
+
+local statusSegments = {
+  { id = 'track', label = 'Track', width = 160, get = boundTrackName },
+  { id = 'slot',  label = 'Slot',  width = 150, get = slotReadout },
+}
+
+function sr:statusSegments() return statusSegments end
 
 --contract: clear ephemeral preview/rename/drag state; the controller calls this on unbind
 function sr:closeTransients()

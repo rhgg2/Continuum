@@ -1,4 +1,4 @@
-@module sampleRender  src=sampleRender.lua  loc=625  mode=chunk  self=sr
+@module sampleRender  src=sampleRender.lua  loc=629  mode=chunk  self=sr
 @deps cm, ds, cmgr, chrome, gui, sv
 
 # Invariants & contracts
@@ -43,8 +43,9 @@
   @state pip = { slot = nil, justTriggered = false,  @ 40
   @state toolbarSegments = {  @ 390
   @state sr = {}  @ 441
-  @state sampler = cmgr:scope('sample')  @ 590
-      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])  @ 589
+  @state statusSegments = {  @ 568
+  @state sampler = cmgr:scope('sample')  @ 594
+      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])  @ 593
 
 # Private functions
   @fn revertPreviewInPlace()  @ 44-50
@@ -77,24 +78,25 @@
       @contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)  @ 288
   @fn boundTrackName()  @ 431-437
       -- Bound sampler track's name, for the status bar.
+  @fn slotReadout()  @ 562-566
 
 # Functions held in tables
   @held toolbarSegments.render()  @ 393-411
   @held toolbarSegments.render()  @ 415-426
-  @held sampler.browserPreview()  @ 593-601
-  @held sampler.browserAssign()  @ 602-605
-  @held sampler.slotNext()  @ 606-609
-  @held sampler.slotPrev()  @ 610-613
-  @held sampler.slotRename()  @ 614-620
+  @held sampler.browserPreview()  @ 597-605
+  @held sampler.browserAssign()  @ 606-609
+  @held sampler.slotNext()  @ 610-613
+  @held sampler.slotPrev()  @ 614-617
+  @held sampler.slotRename()  @ 618-624
 
 # Public API (sr:*)
   @api sr:toolbarSegments()  @ 443
   @api sr:renderBody(_, w, h, dispatch)  @ 451-560
-  @api sr:renderStatusBar(_)  @ 562-569
-  @api sr:closeTransients()  @ 572-576
-      @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind  @ 571
-  @api sr:focusState()  @ 579-586
-      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands  @ 578
+  @api sr:statusSegments()  @ 573
+  @api sr:closeTransients()  @ 576-580
+      @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind  @ 575
+  @api sr:focusState()  @ 583-590
+      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands  @ 582
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ drawStrip:370,378
@@ -116,7 +118,7 @@
   @use call    ImGui.InputInt  @ drawStrip:373,381
   @use call    ImGui.InputText  @ drawSlots:250
   @use call    ImGui.InvisibleButton  @ drawStrip:310
-  @use call    ImGui.IsAnyItemActive  @ focusState:584
+  @use call    ImGui.IsAnyItemActive  @ focusState:588
   @use call    ImGui.IsItemActive  @ drawSlots:253 drawStrip:311
   @use call    ImGui.IsItemHovered  @ drawStrip:311
   @use call    ImGui.IsKeyPressed  @ drawFiles:197,201 drawSlots:257
@@ -136,7 +138,7 @@
   @use call    ImGui.TableNextRow  @ drawSlots:235
   @use call    ImGui.TableSetColumnIndex  @ drawSlots:236,242
   @use call    ImGui.TableSetupColumn  @ drawSlots:231,232
-  @use call    ImGui.Text  @ drawStrip:371,379 renderStatusBar:567
+  @use call    ImGui.Text  @ drawStrip:371,379
   @use call    ImGui.TextDisabled  @ drawSlots:241 drawStrip:294,301
   @use call    chrome.checkbox  @ toolbarSegments.render:416,423
   @use call    chrome.colour  @ drawStrip:316,333,338,342,343,344 renderBody:456
@@ -145,36 +147,36 @@
   @use call    chrome.gridWidth  @ renderBody:459
   @use call    chrome.paletteHeader  @ renderBody:479,495
   @use call    chrome.palettePane  @ renderBody:530
-  @use call    chrome.pickerIsActive  @ focusState:581
+  @use call    chrome.pickerIsActive  @ focusState:585
   @use call    chrome.popChromeStyles  @ renderBody:527
   @use call    chrome.pushChromeStyles  @ renderBody:464
   @use call    chrome.rowSelectable  @ drawFiles:210
   @use call    chrome.treeRow  @ drawTree:146
-  @use call    cm:get  @ triggerPreviewInPlace:54 drawFiles:217 drawSlots:228 drawStrip:290 toolbarSegments.render:417,424 renderBody:474,537,551 renderStatusBar:564 sampler.slotNext:607 sampler.slotPrev:611 sampler.slotRename:615
-  @use call    cm:set  @ drawSlots:274 toolbarSegments.render:419,425 sampler.slotNext:608 sampler.slotPrev:612
-  @use call    cmgr:scope  @ <load>:590
-  @use call    ds:get  @ drawSlots:227 drawStrip:291 renderBody:473 renderStatusBar:565 sampler.slotRename:617
+  @use call    cm:get  @ triggerPreviewInPlace:54 drawFiles:217 drawSlots:228 drawStrip:290 toolbarSegments.render:417,424 renderBody:474,537,551 slotReadout:563 sampler.slotNext:611 sampler.slotPrev:615 sampler.slotRename:619
+  @use call    cm:set  @ drawSlots:274 toolbarSegments.render:419,425 sampler.slotNext:612 sampler.slotPrev:616
+  @use call    cmgr:scope  @ <load>:594
+  @use call    ds:get  @ drawSlots:227 drawStrip:291 renderBody:473 slotReadout:564 sampler.slotRename:621
   @use call    fs.join  @ drawTree:142 drawFiles:177,180
   @use call    fs.listAudioFiles  @ drawFiles:179
   @use call    fs.listDirs  @ drawTree:141,143 drawFiles:175
   @use call    fs.parent  @ goUp:162 renderBody:480
   @use call    painter.new  @ renderBody:523
-  @use call    sv:auditionPath  @ drawFiles:218 renderBody:499 sampler.browserPreview:599
+  @use call    sv:auditionPath  @ drawFiles:218 renderBody:499 sampler.browserPreview:603
   @use call    sv:auditionSlot  @ drawSlots:276 drawStrip:386 renderBody:537
   @use call    sv:browseRoot  @ goUp:159 renderBody:452
   @use call    sv:clearCurrentSlot  @ renderBody:535
-  @use call    sv:getBrowserPath  @ triggerPreviewInPlace:59 drawFiles:186,207 renderBody:550 sampler.browserPreview:595
+  @use call    sv:getBrowserPath  @ triggerPreviewInPlace:59 drawFiles:186,207 renderBody:550 sampler.browserPreview:599
   @use call    sv:getCurrentFolder  @ drawTree:140 goUp:160 renderBody:453
-  @use call    sv:getSelectedFile  @ renderBody:472,499 sampler.browserPreview:599
+  @use call    sv:getSelectedFile  @ renderBody:472,499 sampler.browserPreview:603
   @use call    sv:getTrack  @ triggerPreviewInPlace:55 toolbarSegments.render:395 boundTrackName:432
-  @use call    sv:isBrowserFolder  @ sampler.browserPreview:594 sampler.browserAssign:603
+  @use call    sv:isBrowserFolder  @ sampler.browserPreview:598 sampler.browserAssign:607
   @use call    sv:isFolderExpanded  @ drawTree:144
   @use call    sv:isLive  @ renderBody:454
   @use call    sv:listTracks  @ toolbarSegments.render:394 boundTrackName:433
-  @use call    sv:loadSelectedIntoCurrent  @ renderBody:497 sampler.browserAssign:604
+  @use call    sv:loadSelectedIntoCurrent  @ renderBody:497 sampler.browserAssign:608
   @use call    sv:setBrowseRoot  @ drawTree:149 renderBody:482
   @use call    sv:setBrowserItem  @ goUp:164 drawFiles:193,200,204,213
-  @use call    sv:setCurrentFolder  @ drawTree:150 goUp:165 drawFiles:216 sampler.browserPreview:597
+  @use call    sv:setCurrentFolder  @ drawTree:150 goUp:165 drawFiles:216 sampler.browserPreview:601
   @use call    sv:setFolderExpanded  @ drawTree:151
   @use call    sv:setName  @ drawSlots:255
   @use call    sv:setSlotFocus  @ drawSlots:275
@@ -190,26 +192,27 @@
   @use require util  @ <load>:21
 
 # Calls (intra-file)
-  @call boundTrackName  @ renderStatusBar:563
   @call drawFiles  @ renderBody:504
   @call drawSlots  @ renderBody:542
   @call drawStrip  @ renderBody:513
   @call drawTree  @ drawTree:153 renderBody:485
   @call durFor  @ drawFiles:181 drawSlots:268
-  @call goUp  @ drawFiles:215 sampler.browserPreview:596
+  @call goUp  @ drawFiles:215 sampler.browserPreview:600
   @call peakFor  @ drawStrip:300
-  @call revertPreviewInPlace  @ toolbarSegments.render:420 renderBody:553 closeTransients:573
+  @call revertPreviewInPlace  @ toolbarSegments.render:420 renderBody:553 closeTransients:577
   @call sr:focusState  @ renderBody:557
   @call triggerPreviewInPlace  @ drawFiles:217
 
 # Bindings (by name)
-  @bind goUp  @ 592
+  @bind boundTrackName  @ 569
+  @bind goUp  @ 596
+  @bind slotReadout  @ 570
 
 # Unresolved receivers
   @drop buf.clear  @ peakFor:117
   @drop p.segment  @ renderBody:524,525
-  @drop sampler:bindAll  @ <load>:622
-  @drop sampler:registerAll  @ <load>:591
+  @drop sampler:bindAll  @ <load>:626
+  @drop sampler:registerAll  @ <load>:595
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -240,15 +243,15 @@
   @field r TableColumnFlags_WidthFixed  @ drawSlots:231
   @field r TableColumnFlags_WidthStretch  @ drawSlots:232
   @field r WindowFlags_NoNav  @ renderBody:494
-  @field w acceptCmds  @ focusState:580,584
+  @field w acceptCmds  @ focusState:584,588
   @field w allowDouble  @ drawTree:148
-  @field w browserAssign  @ sampler.browserAssign:602
+  @field w browserAssign  @ sampler.browserAssign:606
   @field r browserAtTrigger  @ revertPreviewInPlace:48 renderBody:550
   @field w browserAtTrigger  @ 41 triggerPreviewInPlace:59
-  @field w browserPreview  @ sampler.browserPreview:593
-  @field w browserUp  @ 592
+  @field w browserPreview  @ sampler.browserPreview:597
+  @field w browserUp  @ 596
   @field r buf  @ drawSlots:250,260
-  @field w buf  @ drawSlots:264 sampler.slotRename:619
+  @field w buf  @ drawSlots:264 sampler.slotRename:623
   @field r building  @ peakFor:107
   @field w building  @ peakFor:103,110
   @field w buttonLabel  @ toolbarSegments.render:406
@@ -264,33 +267,34 @@
   @field w draw  @ renderBody:533
   @field r ds  @ 23
   @field r endF  @ drawStrip:306,361
-  @field w endF  @ 37 drawStrip:356,359,363 closeTransients:575
+  @field w endF  @ 37 drawStrip:356,359,363 closeTransients:579
   @field r frames  @ drawStrip:303
   @field w frames  @ peakFor:102
   @field w fs  @ peakFor:101
+  @field w get  @ 569,570
   @field r gui  @ 23
   @field w h  @ renderBody:531
-  @field r handle  @ drawStrip:304,350,354,362,363 closeTransients:575
+  @field r handle  @ drawStrip:304,350,354,362,363 closeTransients:579
   @field w handle  @ 37 drawStrip:351
   @field w hasChildren  @ drawTree:147
   @field w heading  @ 392
   @field r hi  @ peakFor:88,133 drawStrip:317,323,328
-  @field w id  @ drawTree:146 392,414
+  @field w id  @ drawTree:146 392,414,569,570
   @field r isFolder  @ drawFiles:193,200,204,213,216
   @field w isFolder  @ drawFiles:173,176,183
   @field w items  @ toolbarSegments.render:408
   @field r justOpened  @ drawSlots:248,259
-  @field w justOpened  @ drawSlots:260 sampler.slotRename:619
+  @field w justOpened  @ drawSlots:260 sampler.slotRename:623
   @field r justTriggered  @ renderBody:548
   @field w justTriggered  @ 40 revertPreviewInPlace:49 triggerPreviewInPlace:61 renderBody:549
   @field w key  @ toolbarSegments.render:401
   @field w kind  @ toolbarSegments.render:405
-  @field w label  @ drawTree:146 toolbarSegments.render:400 renderBody:532
+  @field w label  @ drawTree:146 toolbarSegments.render:400 renderBody:532 569,570
   @field r lenSec  @ peakFor:118
   @field w lenSec  @ peakFor:102
   @field r lo  @ drawStrip:324,329
   @field w lo  @ peakFor:133
-  @field r name  @ drawFiles:210 drawSlots:267 toolbarSegments.render:399,400 boundTrackName:434 renderStatusBar:566 sampler.slotRename:619
+  @field r name  @ drawFiles:210 drawSlots:267 toolbarSegments.render:399,400 boundTrackName:434 slotReadout:565 sampler.slotRename:623
   @field w name  @ drawFiles:173,176,183
   @field r nch  @ peakFor:116
   @field w nch  @ peakFor:101
@@ -300,26 +304,26 @@
   @field r path  @ drawSlots:268 drawStrip:293,298
   @field w path  @ 18 drawFiles:173,177,183
   @field w render  @ toolbarSegments.render:393,415
-  @field r sample  @ 622
+  @field r sample  @ 626
   @field r selected  @ drawTree:150
   @field w selected  @ drawTree:148
-  @field r slot  @ revertPreviewInPlace:45,46,47 drawSlots:247 drawStrip:304,363 renderBody:547 closeTransients:575
-  @field w slot  @ 37,40 triggerPreviewInPlace:57 drawStrip:352 sampler.slotRename:619
+  @field r slot  @ revertPreviewInPlace:45,46,47 drawSlots:247 drawStrip:304,363 renderBody:547 closeTransients:579
+  @field w slot  @ 37,40 triggerPreviewInPlace:57 drawStrip:352 sampler.slotRename:623
   @field r slotAtTrigger  @ renderBody:551
   @field w slotAtTrigger  @ 41 revertPreviewInPlace:48 triggerPreviewInPlace:60
-  @field w slotNext  @ sampler.slotNext:606
-  @field w slotPrev  @ sampler.slotPrev:610
-  @field w slotRename  @ sampler.slotRename:614
+  @field w slotNext  @ sampler.slotNext:610
+  @field w slotPrev  @ sampler.slotPrev:614
+  @field w slotRename  @ sampler.slotRename:618
   @field r src  @ peakFor:85,108,109,118,119
   @field w src  @ peakFor:101,120
   @field r start  @ drawStrip:305
-  @field r startF  @ drawStrip:305,356,359,361,363 closeTransients:575
+  @field r startF  @ drawStrip:305,356,359,361,363 closeTransients:579
   @field w startF  @ 37
-  @field w suppressKbd  @ focusState:580,583
+  @field w suppressKbd  @ focusState:584,587
   @field r sv  @ 23
   @field r toggled  @ drawTree:151
   @field r track  @ revertPreviewInPlace:46 toolbarSegments.render:399,401,402 boundTrackName:434
   @field w track  @ revertPreviewInPlace:47 triggerPreviewInPlace:58
-  @field w width  @ toolbarSegments.render:407
+  @field w width  @ toolbarSegments.render:407 569,570
   @field w x  @ renderBody:531
   @field w y  @ renderBody:531
