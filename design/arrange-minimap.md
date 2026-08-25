@@ -1,7 +1,7 @@
 # arrange mini-map — navigation from the tracker
 
 > opened: 2026-08-23 · status: in flight — plan/arrange-minimap.md, at
-> phase 5 (the transport driven)
+> phase 6 (travel and chase)
 
 **Draw a mini-map of the arrange view in the tracker palette, marking
 the current instance.**

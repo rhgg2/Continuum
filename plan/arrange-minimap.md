@@ -52,4 +52,31 @@ Notes carried into the phases:
 
 ## Queued (current phase; one-liners)
 
-(empty)
+- **The travel** — the map's second mouse pass, in `drawMapBody`: a
+  click right of the margin the transport gesture claims hit-tests
+  `win.takes` and lands the tracker on the box's instance. The landing
+  is the walk's pair — `tv:nameInstance(take)` for the placement,
+  `tv:selectSlot` for its slot — with `tv:selectTrack` on the track's
+  guid (`arrange().tracks()`) where the box sits on another, since the
+  click crosses tracks as the walk does not. No QN goes with the name:
+  the map has no caret, so the click carries the item alone. The click
+  takes no keyboard focus, and writes nothing to the transport. Spec in
+  `tracker_page_spec`: a box on the bound track names it, a box on
+  another track selects that track and slot, and a click in a gap does
+  nothing.
+- **The chase** — `trackerFollowPlay`, a global cm key beside
+  `trackerLoopToItem`, with `tv:followsPlay`/`tv:setFollowPlay` and a
+  toolbar checkbox beside loop to item. On, the entry branch of
+  `tv:resolveCurrentInstance` reads whatever placement the head is in on
+  the *bound track*, rather than only instances of the bound slot, and
+  lands the walk's pair as the travel does. It stays a non-gesture: no
+  bracket and no map raise, as entry writes nothing today. Off, entry is
+  what it is now; the head in a gap or off the end leaves the tracker
+  where it was either way. The entry read needs a facade
+  `instanceAt(trackIdx, qn)` over the take enumerator, half-open, in
+  `am`, `av` and `arrangePage`. `tv:mapWindow` pages off the play head
+  rather than the instance's start while following, so the head stays on
+  the page through an instance longer than one; the column still centres
+  the bound track. Spec in `tracker_page_spec`: the chase crossing slots
+  and holding the track, the toggle off leaving today's behaviour, the
+  bracket and the raise staying out, and the window's page off the head.
