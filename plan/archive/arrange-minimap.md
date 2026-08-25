@@ -1,7 +1,7 @@
 # Arrange mini-map — plan
 
-> source: `design/arrange-minimap.md` — synthesis compiled from there;
-> don't design here.
+> source: `docs/trackerPage.md`, `docs/trackerRender.md`,
+> `docs/arrangePage.md` — the model the phases below compiled into.
 
 ## Phases
 
@@ -21,9 +21,10 @@
    2026-08-25 in two commits; the model now lives in
    `docs/trackerRender.md` § The mini-map and `docs/trackerPage.md`
    § Loop to item.
-6. **Phase 6 — Travel and chase** (§ The travel, § The chase) — a click
-   on a box travels; the follow toggle has the tracker chase the head.
-   ← in flight
+6. **Phase 6 — Travel and chase** (§ The travel, § The chase) — landed
+   2026-08-25 in two commits; the model now lives in
+   `docs/trackerPage.md` § The travel, § The chase and
+   `docs/trackerRender.md` § The mini-map.
 
 Notes carried into the phases:
 
