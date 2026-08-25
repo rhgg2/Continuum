@@ -130,6 +130,26 @@ return {
   },
 
   {
+    name = 'the arrange facade answers the placement a QN falls in on a track',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 2, srcLen = 2, poolGuid = '{p1}' })
+      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
+                                pos = 2, len = 2, srcLen = 2, poolGuid = '{p2}' })
+      h.reaper:setProjectTracks{ 'tr1' }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      local arrange = captured.facades.arrange
+
+      t.eq(arrange.instanceAt(0, 1).take, 'tr1/t1', 'the placement the QN falls inside')
+      t.eq(arrange.instanceAt(0, 2).take, 'tr1/t2', 'the span is half-open, so a join belongs to the next')
+      t.eq(arrange.instanceAt(0, 8), nil, 'a QN past every placement falls in none')
+      t.eq(arrange.instanceAt(1, 1), nil, 'and a track with no placements answers nothing')
+    end,
+  },
+
+  {
     name = 'focusState before any render returns both bits false',
     run = function(harness)
       local h  = harness.mk()

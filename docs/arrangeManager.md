@@ -442,6 +442,11 @@ way `back` points, else the nearest the other way. Its second return
 says whether the containing case held. It gives nil only where the slot
 has no live instance, its take parked on scratch.
 
+`am:instanceAt(trackIdx, qn)` asks the same question of a track rather
+than of a slot: the instance containing `qn` on that column, its span
+half-open, nil in a gap or off the end. The tracker's chase reads it
+through the arrange facade (`docs/arrangePage.md` § The take enumerator).
+
 At most one instance can contain a position. A pool never spans tracks
 (§ Pools never span tracks), so every instance of a slot sits on one
 track, and relayout caps each item at the gap to its neighbour, so items

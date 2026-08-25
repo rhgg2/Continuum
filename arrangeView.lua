@@ -668,6 +668,7 @@ function av:columnChanRange(c)    return am:columnChanRange(c) end
 function av:visibleTakes(fromCol, toCol, qnLo, qnHi)
   return am:visibleTakes(fromCol, toCol, qnLo, qnHi)
 end
+function av:instanceAt(trackIdx, qn) return am:instanceAt(trackIdx, qn) end
 function av:trackSlots(trackIdx)  return am:trackSlots(trackIdx) end
 function av:takeForSlot(trackIdx, slotIdx) return am:takeForSlot(trackIdx, slotIdx) end
 function av:trackIdxForGuid(guid) return am:trackIdxForGuid(guid) end

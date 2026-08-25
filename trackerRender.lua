@@ -192,6 +192,13 @@ local toolbarSegments = {
     end,
   },
   {
+    id = 'followPlay', heading = 'Follow',
+    render = function()
+      local changed, on = chrome.checkbox('##followPlay', tv:followsPlay())
+      if changed then tv:setFollowPlay(on) end
+    end,
+  },
+  {
     id = 'graph', heading = 'Graph',
     render = function()
       local cv, newVis = chrome.checkbox('##', cm:get('laneStrip.visible'))
@@ -1771,6 +1778,7 @@ tracker:registerAll{
   toggleLoopToItem = function() tv:setLoopToItem(not tv:loopsToItem()) end,
   loopToItemNow    = function() tv:bracketCurrentInstance() end,
   clearLoop        = function() tv:setLoopToItem(false) end,
+  toggleFollowPlay = function() tv:setFollowPlay(not tv:followsPlay()) end,
 
   editNoteFx        = editFx,
   focusParamPalette = focusParams,

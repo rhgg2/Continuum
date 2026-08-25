@@ -508,6 +508,13 @@ function am:visibleTakes(fromCol, toCol, qnLo, qnHi)
 end
 
 --contract: true iff any visible column holds a placed take instance; parked-on-scratch excluded
+--contract: the placement containing qn on trackIdx, half-open; nil in a gap or off the end
+function am:instanceAt(trackIdx, qn)
+  for _, tk in ipairs(am:tracksTakes(trackIdx)) do
+    if qn >= tk.startQN and qn < tk.startQN + tk.lengthQN then return tk end
+  end
+end
+
 function am:hasPlacedTakes()
   for _, takes in pairs(ensureState().takesByCol) do
     if #takes > 0 then return true end

@@ -134,6 +134,14 @@ local function resetArrange()
     end
     return out
   end
+  -- The chase's read: the placement a QN falls in on a track, half-open at both
+  -- ends of the span (arrange_page_spec pins the real one).
+  fakeArrange.instanceAt = function(trackIdx, qn)
+    for _, inst in ipairs(instances()) do
+      if inst.trackIdx == trackIdx
+         and qn >= inst.startQN and qn < inst.startQN + inst.lengthQN then return inst end
+    end
+  end
   fakeArrange.playPositionQN = function() return fakeArrange.playQN   end
   fakeArrange.editCursorQN   = function() return fakeArrange.cursorQN end
   fakeArrange.loopRangeQN    = function() return fakeArrange.loopLo, fakeArrange.loopHi end
@@ -238,6 +246,35 @@ local function mapTracker(harness, inst, trackCount)
   fakeArrange.takeByKey['0:0'] = 'i0'
   fakeArrange.tracksList = trackList(trackCount)
   fakeArrange.instances  = inst and { inst } or {}
+  tp:bindFromSelection()
+  return stack.tv, h, tp
+end
+
+-- A tracker on track 0, bound to 'a0' in its first slot: 'b8' fills the second slot
+-- at QN 8, an audio item lies at 16, and 'c4' sits on the track beside it at 4.
+local function chaseTracker(harness)
+  local h = harness.mk()
+  h.reaper:setProjectTracks{ 'tr1', 'tr2' }
+  local stack
+  local origPublishDebug = fakeFacade.publishDebug
+  fakeFacade.publishDebug = function(_, s) stack = s end
+  h.reaper:addItem('tr1', { take = 'a0', isMidi = true, pos = 0, len = 4, poolGuid = '{p1}' })
+  h.reaper:addItem('tr1', { take = 'b8', isMidi = true, pos = 8, len = 4, poolGuid = '{p2}' })
+  h.reaper:addItem('tr2', { take = 'c4', isMidi = true, pos = 4, len = 4, poolGuid = '{p3}' })
+  local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+  fakeFacade.publishDebug = origPublishDebug
+  fakeArrange.tracksList = trackList(2)
+  fakeArrange.slotsByIdx = {
+    [0] = { { idx = 0, kind = 'midi' }, { idx = 1, kind = 'midi' } },
+    [1] = { { idx = 0, kind = 'midi' } },
+  }
+  fakeArrange.takeByKey = { ['0:0'] = 'a0', ['0:1'] = 'b8', ['1:0'] = 'c4' }
+  fakeArrange.instances = {
+    { take = 'a0',  trackIdx = 0, slotIdx = 0, startQN = 0,  lengthQN = 4 },
+    { take = 'b8',  trackIdx = 0, slotIdx = 1, startQN = 8,  lengthQN = 4 },
+    { take = 'w16', trackIdx = 0, startQN = 16, lengthQN = 4, kind = 'audio' },
+    { take = 'c4',  trackIdx = 1, slotIdx = 0, startQN = 4,  lengthQN = 4 },
+  }
   tp:bindFromSelection()
   return stack.tv, h, tp
 end
@@ -780,6 +817,57 @@ return {
     end,
   },
 
+  -- The chase (docs/trackerPage.md § The chase): with follow on, entry reads the
+  -- bound track rather than the bound slot, and lands the walk's pair.
+  {
+    name = "with follow on, the play head carries the tracker across the bound track's slots",
+    run = function(harness)
+      local tv, h, tp = chaseTracker(harness)
+      tv:setFollowPlay(true)
+      fakeArrange.playQN = 5                       -- inside the placement on the track beside it
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'a0', 'the chase holds the track, so no other track is a stop')
+      fakeArrange.playQN = 9
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'b8', 'the head entering the next slot carries the tracker')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 1, 'and selects the slot it entered')
+      t.eq(h.cm:getAt('project', 'trackerTrack'), '{g0}', 'the track standing')
+      fakeArrange.playQN = 17                      -- inside the audio item
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'b8', 'an audio placement is no stop, so the tracker holds')
+    end,
+  },
+
+  {
+    name = 'with follow off, the head entering another slot leaves the tracker where it was',
+    run = function(harness)
+      local tv, h, tp = chaseTracker(harness)
+      fakeArrange.playQN = 9
+      tp:bindFromSelection()
+      t.eq(tv:currentInstance().take, 'a0', 'entry reads the bound slot alone')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 0, 'and the slot selection holds')
+    end,
+  },
+
+  {
+    name = 'the chase brackets no loop and raises no map tab',
+    run = function(harness)
+      local tv, h, tp = chaseTracker(harness)
+      h.cmgr:push('tracker')
+      tv:setLoopToItem(true)                       -- the loop brackets a0, where the tracker stands
+      h.cmgr:invoke('toggleFollowPlay')
+      t.truthy(tv:followsPlay(), 'the toggle verb turned follow on')
+      h.cmgr:invoke('cursorDown')                  -- spend the raise the bind left standing
+      fakeArrange.calls.loopTo = nil
+      fakeArrange.playQN = 9
+      tp:bindFromSelection()
+      tp:bindFromSelection()                       -- and the frame the rebind settles on
+      t.eq(tv:currentInstance().take, 'b8', 'the chase moved the tracker')
+      t.falsy(fakeArrange.calls.loopTo, 'entry is no gesture, so the loop stays where it was')
+      t.eq(tv:paletteTab(tv:caretKey(), true), 'fx', 'and the map is not raised over the chain')
+    end,
+  },
+
   {
     name = 'a slot change seeks from the outgoing instance, backwards for prevTake',
     run = function(harness)
@@ -1014,6 +1102,20 @@ return {
       t.eq(placed(40, 200):mapWindow(5, 80).qnLo, 0,
            'an instance taller than the page still shows its top')
       t.eq(placed(2, 4):mapWindow(5, 80).qnLo, 0, 'and the window never runs above QN 0')
+    end,
+  },
+
+  {
+    name = 'while following, the map window pages off the play head',
+    run = function(harness)
+      local tv = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                       startQN = 0, lengthQN = 4 }, 3)
+      fakeArrange.playQN = 100
+      t.eq(tv:mapWindow(5, 80).qnLo, 0, 'with follow off the page holds on the instance')
+      tv:setFollowPlay(true)
+      t.eq(tv:mapWindow(5, 80).qnLo, 64, 'following, the head anchors the page it opens')
+      fakeArrange.playQN = nil
+      t.eq(tv:mapWindow(5, 80).qnLo, 0, 'a stopped transport falls back to the instance')
     end,
   },
 
@@ -1255,6 +1357,56 @@ return {
       fakeArrange.playQN = 20                      -- past every instance of the slot
       tp:bindFromSelection()
       t.falsy(stack.tv:playRow(), 'a head in no instance of the slot lights no row')
+    end,
+  },
+
+  {
+    name = 'while following, the grid pages the scroll to hold the play row',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      seedItems(h, { 'i0' }, 16)                   -- sixteen source beats: a sixty-four row grid
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 0, lengthQN = 16 },
+      }
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      local tv = stack.tv
+      tv:setGridSize(8, 16)                        -- sixteen rows to the page, four pages of grid
+      local scrollRow = function() return (select(1, tv:scroll())) end
+
+      fakeArrange.playQN = 10                      -- row 40, two pages down
+      tv:followPlayPage()
+      t.eq(scrollRow(), 0, 'with follow off the head pages nothing')
+
+      tv:setFollowPlay(true)
+      tv:followPlayPage()
+      t.eq(scrollRow(), 32, 'following opens the page the head is on, at its own top')
+
+      fakeArrange.playQN = 1.5                     -- row 6, back on the first page
+      tv:followPlayPage()
+      t.eq(scrollRow(), 0, 'and crossing back opens that one')
+
+      fakeArrange.playQN = 10
+      tv:followPlayPage()
+
+      h.cmgr:invoke('cursorDown')                  -- the caret is near the top, and draws the view back
+      t.eq(scrollRow(), 1, 'a caret move takes the scroll with it')
+      tv:followPlayPage()
+      t.eq(scrollRow(), 1, 'and the head standing on its page does not page over it')
+
+      tv:setGridSize(8, 24)                        -- a page the grid is no whole number of
+      fakeArrange.playQN = nil
+      tv:followPlayPage()                          -- the transport stops, re-arming the follow
+      fakeArrange.playQN = 15                      -- row 60, past the last whole page
+      tv:followPlayPage()
+      t.eq(scrollRow(), 40, 'the last page holds at the foot of the grid')
     end,
   },
 

@@ -167,7 +167,10 @@ The stride is the pane's depth less one bar, and the window is the page that
 stride lands the current instance's start on. So the window holds still while a
 walk moves down it, and a start crossing into the last bar opens the next page
 with that bar at its head. A start is always within a stride of the top, so an
-instance taller than the page needs no case of its own. With the tracker in no
+instance taller than the page needs no case of its own. While the tracker follows
+the play head (`docs/trackerPage.md` § The chase), the head anchors the page in
+the start's place, so it stays on the page through an instance longer than one.
+With the tracker in no
 instance nothing is marked, and the edit cursor QN stands in for the start.
 
 The map's left margin drives the transport, as the arrange page's gutter drives

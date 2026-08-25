@@ -54,6 +54,7 @@ local declarations = {
   -- Drop advance: the fixed arrangeAdvanceBy step, or the placed take's own length.
   { 'arrangeAdvanceByLength', false },
   { 'trackerLoopToItem', false },
+  { 'trackerFollowPlay', false },
   { 'laneStrip.visible',   true },
 
   -- string choice

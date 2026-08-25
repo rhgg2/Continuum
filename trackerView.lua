@@ -249,12 +249,22 @@ function tv:setLoopToItem(on)
   if on then self:bracketCurrentInstance() else arrange().clearLoopRange() end
 end
 
+--contract: the follow toggle; on, play-head entry reads the bound track, not the bound slot
+--contract: turning it on reads the head's placement as an entry, so the chase lands at once
+-- see docs/trackerPage.md § The chase
+function tv:followsPlay() return cm:get('trackerFollowPlay') end
+function tv:setFollowPlay(on)
+  cm:set('global', 'trackerFollowPlay', not not on)
+  if on then playInstanceTake = nil end
+end
+
 --contract: name the placement — the dive, and later again/vary; read at the next resolve
 --contract: qn is the arrange caret, carried by a dive; a naming without one leaves the caret
 function tv:nameInstance(take, qn) namedInstance, divedQN = take, qn end
 
 --contract: per frame — a named instance beats play-head entry beats a slot-change seek, else sticky
 --contract: gesture writes bracket the instance when loop to item is on; entry, stickiness do not
+--contract: following, entry is any stop on the bound track, and selects the slot it lands in
 function tv:resolveCurrentInstance()
   local bound      = tm:currentTake()
   local boundShape = bound and arrange().findTake(bound)
@@ -263,10 +273,13 @@ function tv:resolveCurrentInstance()
     return
   end
 
-  -- Entry, not occupancy: a play head parked inside an instance must not
-  -- overwrite the placement a dive named on the very next frame.
-  local playQN, entered = arrange().playPositionQN(), nil
-  if playQN then
+  -- Entry, not occupancy: a play head parked inside an instance must not overwrite
+  -- the dive's placement on the very next frame; following, see docs/trackerPage.md § The chase.
+  local playQN, entered, enteredSlot = arrange().playPositionQN(), nil, nil
+  if playQN and self:followsPlay() then
+    local tk = arrange().instanceAt(boundShape.trackIdx, playQN)
+    if tk and tk.kind == 'midi' and tk.slotIdx then entered, enteredSlot = tk.take, tk.slotIdx end
+  elseif playQN then
     local inst, contains = arrange().seekInstance(bound, playQN, false)
     if contains then entered = inst.take end
   end
@@ -277,6 +290,7 @@ function tv:resolveCurrentInstance()
     currentInstanceTake, gesture = namedInstance, true
   elseif entered and entered ~= playInstanceTake then
     currentInstanceTake = entered
+    if enteredSlot and enteredSlot ~= boundShape.slotIdx then self:selectSlot(enteredSlot) end
   elseif not (cur and cur.trackIdx == boundShape.trackIdx
                   and cur.slotIdx  == boundShape.slotIdx) then
     local refQN = cur and cur.startQN or arrange().editCursorQN()
@@ -304,6 +318,7 @@ local MAP_PAGE_OVERLAP_QN = 16
 --contract: cols/qnSpan are the pane's measure; the bound column centres and clamps to tracks
 --contract: time pages — the window is the page a stride of qnSpan less a bar lands the start on
 --contract: no instance means no mark, and the edit cursor stands in for the start
+--contract: following, the play head anchors the page in the start's place
 --contract: play head and loop are carried where they meet the window, the loop's ends untrimmed
 function tv:mapWindow(cols, qnSpan)
   local inst   = self:currentInstance()
@@ -311,16 +326,17 @@ function tv:mapWindow(cols, qnSpan)
   local bound  = inst and inst.trackIdx or selectedTrackIdx() or 0
   local colLo  = util.clamp(bound - math.floor((cols - 1) / 2), 0, math.max(0, #tracks - cols))
   local colHi  = math.min(colLo + cols - 1, math.max(0, #tracks - 1))
-  -- The start sits within a stride of the page's top, so it is always on screen and
+  -- The anchor sits within a stride of the page's top, so it is always on screen and
   -- an instance taller than the page needs no case of its own.
-  local startQN = inst and inst.startQN or arrange().editCursorQN()
-  local stride  = qnSpan - MAP_PAGE_OVERLAP_QN
-  local qnLo    = math.max(0, math.floor(startQN / stride) * stride)
-  local qnHi    = qnLo + qnSpan
+  local playQN   = arrange().playPositionQN()
+  local anchorQN = (self:followsPlay() and playQN)
+                or (inst and inst.startQN) or arrange().editCursorQN()
+  local stride   = qnSpan - MAP_PAGE_OVERLAP_QN
+  local qnLo     = math.max(0, math.floor(anchorQN / stride) * stride)
+  local qnHi     = qnLo + qnSpan
 
   -- The transport in the arrangement's terms; the renderer clips the loop's ends to
   -- the pane, so they are handed over as they stand.
-  local playQN = arrange().playPositionQN()
   if playQN and (playQN < qnLo or playQN >= qnHi) then playQN = nil end
   local loopLo, loopHi = arrange().loopRangeQN()
   if loopLo and (loopHi <= qnLo or loopLo >= qnHi) then loopLo, loopHi = nil, nil end
@@ -978,6 +994,23 @@ local followViewport do
   function tv:scroll()
     return scrollRow, scrollCol, lastVisibleFrom(scrollCol)
   end
+end
+
+-- The page the follow last opened: the write goes once per crossing, so a caret
+-- move inside the page holds the view where it put it.
+local followedPage
+
+--contract: no-op unless follow is on and the head has a row; else pages the scroll onto it
+--contract: one write per crossing — a stopped head, or follow off, re-arms the next
+-- see docs/trackerPage.md § The chase
+function tv:followPlayPage()
+  if not (self:followsPlay() and gridHeight > 0) then followedPage = nil; return end
+  local row = self:playRow()
+  if not row then followedPage = nil; return end
+  local page = math.floor(row / gridHeight)
+  if page == followedPage then return end
+  followedPage = page
+  scrollRow = math.min(page * gridHeight, math.max(0, (grid.numRows or 1) - gridHeight))
 end
 
 ----- Editing

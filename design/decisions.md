@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-25** — The tracker's follow toggle reads the bound track rather than the bound slot, so
+  the play head carries the tracker across slots as the walk does. It stays entry rather than
+  gesture — no loop bracket, no map raise — and turning it on reads the head's placement as an
+  entry, so it lands at once rather than waiting on the next crossing. The grid pages once per
+  crossing rather than scrolling continuously, leaving the caret in charge within a page: the move
+  hook draws the view back to the caret, and the follow leaves it there until the head crosses
+  again.
+
 - **2026-08-25** — A click on an arrange mini-map box lands through tv:selectTrack whatever track
   the box sits on, rather than branching on whether it is the bound one: selectTrack already writes
   the slot, so the branch bought nothing, and the travel is then the dive's pair without its QN. A

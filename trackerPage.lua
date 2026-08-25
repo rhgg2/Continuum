@@ -164,9 +164,10 @@ function tp:toolbarSegments() return tr:toolbarSegments() end
 function tp:renderStatusBar(ctx)   return tr:renderStatusBar(ctx) end
 function tp:focusState()           return tr:focusState() end
 
---contract: resolve selection, draw, then snapshot the take hash as next frame's watcher baseline
+--contract: resolve selection, page follow, draw, then snapshot take hash as next frame's baseline
 function tp:renderBody(ctx, w, h, dispatch)
   self:bindFromSelection()
+  tv:followPlayPage()
   tr:renderBody(ctx, w, h, dispatch)
   lastHash = takeHash()
 end

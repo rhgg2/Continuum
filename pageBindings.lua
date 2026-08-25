@@ -99,6 +99,7 @@ pageBindings.tracker = {
   playFromCursor         = { ImGui.Key_F7 },
   loopToItemNow          = { {ImGui.Key_L, ImGui.Mod_Super} },
   toggleLoopToItem       = { {ImGui.Key_L, ImGui.Mod_Ctrl} },
+  toggleFollowPlay       = { {ImGui.Key_P, ImGui.Mod_Ctrl} },
   clearLoop              = { ImGui.Key_Escape },
   openTemperPicker       = { {ImGui.Key_T, ImGui.Mod_Super} },
   openSwingPicker        = { {ImGui.Key_S, ImGui.Mod_Super} },

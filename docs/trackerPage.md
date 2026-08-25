@@ -483,7 +483,9 @@ the dive hands over the instance the arrange cursor sat on — and that
 outranks the rest. Failing that, the play head *entering* an instance of
 the bound slot makes that instance current; entry rather than occupancy,
 so a play head parked inside an instance cannot overwrite what a dive
-named on the next frame. A slot change that names nothing seeks one from
+named on the next frame; with follow on the entry read is the bound
+track's placements rather than the bound slot's (§ The chase). A slot
+change that names nothing seeks one from
 the outgoing instance's start, or from REAPER's edit cursor when there is
 no outgoing instance; `gotoTake(-1)` seeks backwards and every other
 gesture forwards, matching the grid, where time runs down the page.
@@ -519,8 +521,8 @@ so the repeat goes on and the transport moves to the start unless the
 play head is already inside the span. With no current instance it writes
 nothing.
 
-The verb comes in two forms. `loopToItemNow` (Cmd+L) brackets once;
-`toggleLoopToItem` (Ctrl+L) flips `trackerLoopToItem`, a global-tier cm
+The verb comes in two forms. `loopToItemNow` (Ctrl+L) brackets once;
+`toggleLoopToItem` (Cmd+L) flips `trackerLoopToItem`, a global-tier cm
 key beside `arrangeFollowPlay`, and repeats the act as the current
 instance moves. The toolbar carries the toggle as a checkbox.
 
@@ -535,7 +537,7 @@ is the exception: it drops the toggle, so no gesture brackets over it
 
 Turning the toggle on brackets the current instance at once, and
 dropping it clears the loop — however the drop comes, from the
-checkbox, from Ctrl+L, or from `clearLoop` (Esc), whose whole body is
+checkbox, from Cmd+L, or from `clearLoop` (Esc), whose whole body is
 the drop. So Esc is the tracker's release from the loop, as it is the
 arrange page's. The gutter sweep drops the toggle first and writes its
 own range over the clear, which is why the loop it set stands.
@@ -756,6 +758,49 @@ leaves it (§ The walk).
 A box is a stop on the walk's terms: only a MIDI take in a slot. The map
 draws audio items and takes in no slot as well, and a click on one is
 refused, the tracker's selection reaching MIDI slots only.
+
+### The chase
+
+**Follow** has the tracker follow the play head across the bound track.
+It is a global cm key, `trackerFollowPlay`, beside `trackerLoopToItem`,
+carried on the toolbar as a checkbox and on Cmd+P.
+
+1. Off, the default, the play head moves the current instance only by
+   entering another instance of the bound slot (§ The current instance).
+
+1. On, entry into any placement of the bound track carries the tracker
+   there. The landing is the walk's: the placement becomes current, and
+   its slot is selected where it differs from the slot bound. The track
+   holds, as it does on the walk.
+
+1. The read is `instanceAt` on the arrange facade
+   (`docs/arrangePage.md` § The take enumerator), whose span is
+   half-open, so the join between two placements belongs to the one it
+   opens.
+
+1. A stop is the walk's stop, a MIDI take in a slot. The head in a gap,
+   in an audio item, in a placement in no slot, or off the end of the
+   song leaves the tracker where it was.
+
+1. Entry is no gesture, so the chase brackets no loop and raises no map
+   tab, as play-head entry has never done either.
+
+1. Turning follow on reads the head's placement as an entry, so the
+   tracker lands at once rather than waiting on the next crossing.
+
+1. While following, the mini-map's window pages off the play head
+   (`docs/trackerRender.md` § The mini-map).
+
+1. The grid pages with it. `tv:followPlayPage` runs each frame and opens
+   the page the play row falls on, so a placement taller than the grid
+   stays under the head. The scroll pages rather than slides: the head
+   crossing the foot opens the next page at its own top.
+
+1. The write goes once per crossing, leaving the caret in charge within
+   a page — an arrow key draws the view back to the caret through the
+   move hook (`docs/trackerView.md` § Cursor & selection), and the follow
+   leaves it there until the head crosses again. A stopped transport
+   re-arms the next crossing.
 
 ### Deleting the instance
 

@@ -45,6 +45,7 @@ facade.publish('arrange', {
   visibleTakes    = function(fromCol, toCol, qnLo, qnHi)
     return av:visibleTakes(fromCol, toCol, qnLo, qnHi)
   end,
+  instanceAt      = function(trackIdx, qn) return av:instanceAt(trackIdx, qn) end,
   takeForSlot     = function(trackIdx, slotIdx) return av:takeForSlot(trackIdx, slotIdx) end,
   trackIdxForGuid = function(guid)     return av:trackIdxForGuid(guid) end,
   trackHandle     = function(trackIdx) return av:trackHandle(trackIdx) end,

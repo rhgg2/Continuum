@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=174  mode=chunk  self=tp
+@module trackerPage  src=trackerPage.lua  loc=175  mode=chunk  self=tp
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta, lib
 
 # Imports
@@ -61,8 +61,8 @@
   @api tp:toolbarSegments()  @ 163
   @api tp:renderStatusBar(ctx)  @ 164
   @api tp:focusState()  @ 165
-  @api tp:renderBody(ctx, w, h, dispatch)  @ 168-172
-      @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline  @ 167
+  @api tp:renderBody(ctx, w, h, dispatch)  @ 168-173
+      @contract  resolve selection, page follow, draw, then snapshot take hash as next frame's baseline  @ 167
 
 # Uses (outbound edges)
   @use call    cm:get  @ tracker.selectNewTake:131
@@ -78,13 +78,14 @@
   @use call    tm:restoreGuarded  @ tracker.restorePerfFlags:125
   @use call    tr:focusState  @ focusState:165
   @use call    tr:openTakeProperties  @ tracker.openTakeProperties:140
-  @use call    tr:renderBody  @ renderBody:170
+  @use call    tr:renderBody  @ renderBody:171
   @use call    tr:renderStatusBar  @ renderStatusBar:164
   @use call    tr:toolbarSegments  @ toolbarSegments:163
   @use call    tv:currentInstance  @ unbind:80
   @use call    tv:cursorAnchor  @ tracker.cursorAnchor:157
   @use call    tv:cursorQN  @ unbind:80
   @use call    tv:dropGrid  @ dropTake:86
+  @use call    tv:followPlayPage  @ renderBody:170
   @use call    tv:nameInstance  @ tracker.diveTo:121
   @use call    tv:newTakeBelow  @ tracker.selectNewTake:131
   @use call    tv:resolveCurrentInstance  @ bindFromSelection:110
@@ -109,7 +110,7 @@
 # Calls (intra-file)
   @call arrange  @ samplerMode:25 unbind:81 bindFromSelection:97,98
   @call samplerMode  @ bind:73 tracker.reswingTakes:148,152
-  @call takeHash  @ mm:flushed:62 bindFromSelection:107 renderBody:171
+  @call takeHash  @ mm:flushed:62 bindFromSelection:107 renderBody:172
   @call tp:bind  @ bindFromSelection:104 tracker.openTakeProperties:139
   @call tp:bindFromSelection  @ bind:72 renderBody:169
   @call tp:currentTake  @ tracker.openTakeProperties:139
