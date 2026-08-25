@@ -31,6 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: draw the bus trunk through drawWire (§ Stage 1)
 - 2026-08-26 wiring: draw the draft wire through drawWire (§ Stage 1)
 - 2026-08-26 wiring: give wires one renderer and name the seg shape (§ Stage 1)
 
@@ -44,10 +45,6 @@ The design doc's line refs have drifted again — they run ~84 high across the
 drawing half of the file. Numbers below are against the current tree
 (`wiringRender.lua`, 2650 loc).
 
-- **The bus trunk through `drawWire`.** `busSegments` stores the trunk
-  (@1383–1391, carried on the rail @1410) as a seg — extents 0 both ends,
-  `cx/cy` the midpoint, `w` nil. `drawBusPass` (@1422) keeps the bar stroke and
-  the `##bus/…` trunk label, and routes line + arrow through `drawWire`.
 - **One tooltip helper.** `tooltipAt(sx, sy, text)` for the window-pos, chrome
   push and `BeginTooltip` body duplicated between `drawSlot` (@240–252) and
   `drawWireEndLabel` (@885–896). `nodeAtPoint` and `nodeUnderMouse` stay as

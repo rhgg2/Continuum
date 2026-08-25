@@ -1388,14 +1388,18 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
       local hasTaps = tMin <= tMax
       if not hasTaps then tMin, tMax = 0, 0 end
 
+      -- The trunk is a synthetic seg: both ends are bare points (the bar, the node
+      -- face), and no wire owns it, so drawWire neither labels nor clamps its arrow.
       local trunk
       if claimNode then
         local nex, ney = nodeEdgePoint(claimNode, bcx, bcy)
+        trunk = { fromHW = 0, fromHH = 0, toHW = 0, toHH = 0 }
         if bv.claim.dir == 'in' then
-          trunk = { sx = bcx, sy = bcy, ex = nex, ey = ney }
+          trunk.sx, trunk.sy, trunk.ex, trunk.ey = bcx, bcy, nex, ney
         else
-          trunk = { sx = nex, sy = ney, ex = bcx, ey = bcy }
+          trunk.sx, trunk.sy, trunk.ex, trunk.ey = nex, ney, bcx, bcy
         end
+        trunk.cx, trunk.cy = wireMid(trunk)
       end
       -- Bar span: bv.ext (axial offsets from pos) when set, else legacy auto-fit to node breadth;
       -- either floored to cover the taps. see docs § Bus rail geometry
@@ -1433,8 +1437,7 @@ local function drawBusPass(p, busRails, placed)
       local name = 'wiring.port.audio'
       p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, BUS_BAR_THICK)
       local t = r.trunk
-      p.line(t.sx, t.sy, t.ex, t.ey, name, WIRE_THICK)
-      drawWireArrow(p, t.sx, t.sy, t.ex, t.ey, name, (t.sx + t.ex) / 2, (t.sy + t.ey) / 2)
+      drawWire(p, t, { name = name })
       -- Port number once on the trunk (shared collision set with drawWireEndLabel);
       -- every tap shares this port and suppresses its own bussed-end label.
       if r.port and r.port ~= 1 then
