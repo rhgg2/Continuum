@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check Lua comment-hygiene rules — on the git diff (vs HEAD) by default,
-on whole files named as arguments (cleanup mode), or on candidate lines fed
-to `--measure` on stdin (drafting mode).
+"""Check Lua comment-hygiene rules — on the git diff (vs HEAD), narrowed to the
+files named as arguments if any; on whole files with `--all` (cleanup mode); or
+on candidate lines fed to `--measure` on stdin (drafting mode).
 
 Rules (docs/CONVENTIONS.md § Length discipline for annotations):
 - `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars.
@@ -21,7 +21,7 @@ Rules (docs/CONVENTIONS.md § Length discipline for annotations):
   length caps still apply there.
 
 A violation is only flagged when a participating line is in scope: the
-added/modified lines in diff mode, every line in cleanup mode. In diff mode
+added/modified lines in diff mode, every line under `--all`. In diff mode
 pre-existing offences in untouched code are left alone.
 
 `--measure` reads candidate replacement lines on stdin and reports
@@ -48,10 +48,11 @@ MAX_RUN       = 2
 MIN_SPLIT_OVERAGE = 15
 
 
-def diff_added_lines():
-    """Return {file: set(post-image line numbers added/modified)}."""
+def diff_added_lines(paths):
+    """Return {file: set(post-image line numbers added/modified)}, over the named
+    paths as a git pathspec, or every Lua file where none are named."""
     proc = subprocess.run(
-        ['git', 'diff', '--no-color', '-U0', 'HEAD', '--', '*.lua'],
+        ['git', 'diff', '--no-color', '-U0', 'HEAD', '--', *(paths or ['*.lua'])],
         capture_output=True, text=True, check=True,
     )
     added, cur_file, cur_line = {}, None, 0
@@ -70,7 +71,19 @@ def diff_added_lines():
             cur_line += 1
         elif raw.startswith(' '):
             cur_line += 1
+    added.update(whole_file_lines(untracked(paths)))
     return added
+
+
+def untracked(paths):
+    """Files git has never seen, over the same pathspec. `git diff HEAD` omits them,
+    yet every line of a new file is an added line — so diff mode owes them a check."""
+    proc = subprocess.run(
+        ['git', 'ls-files', '--others', '--exclude-standard',
+         '--', *(paths or ['*.lua'])],
+        capture_output=True, text=True, check=True,
+    )
+    return proc.stdout.split()
 
 
 def is_spec(path):
@@ -170,6 +183,16 @@ def check_file(path, added, live_docs):
     return out
 
 
+def note_unchanged(paths, targets):
+    """Name the files the diff never touched: otherwise `clean` reads as a verdict
+    on the whole file, when nothing in it was in scope."""
+    touched = {Path(path).resolve() for path, lines in targets.items() if lines}
+    for path in paths:
+        if Path(path).resolve() not in touched:
+            print(f'{path}: nothing added or modified vs HEAD '
+                  f'— `--all` checks the whole file', file=sys.stderr)
+
+
 def whole_file_lines(paths):
     """{file: every line number} — cleanup mode over explicit paths."""
     targets = {}
@@ -202,10 +225,18 @@ def measure(candidates):
 
 
 def main():
-    paths = sys.argv[1:]
-    if paths and paths[0] == '--measure':
+    args = sys.argv[1:]
+    if args and args[0] == '--measure':
         return measure(sys.stdin.readlines())
-    targets = whole_file_lines(paths) if paths else diff_added_lines()
+    whole = '--all' in args
+    paths = [arg for arg in args if arg != '--all']
+    if whole and not paths:
+        print('--all names the files to check whole; a bare run is diff mode',
+              file=sys.stderr)
+        return 2
+    targets = whole_file_lines(paths) if whole else diff_added_lines(paths)
+    if paths and not whole:
+        note_unchanged(paths, targets)
     live_docs = live_design_docs()
     violations = []
     for path, added in sorted(targets.items()):
