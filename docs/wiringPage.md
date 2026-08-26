@@ -48,8 +48,10 @@ ones it needs:
   until a mode needs a hook.
 
 Either hook clears the gesture by returning false. `frame` is the
-per-frame bundle of mouse, view lists and geometry the hooks read, and
-inject's transients are written back into it.
+canvas's per-frame carrier, built by `beginFrame` and extended by each
+phase that follows: painter, canvas origin, mouse, view lists,
+selection and geometry. The hooks read it, and inject's transients are
+written back into it.
 
 Mousedown resolves the modes it can start in a fixed precedence:
 

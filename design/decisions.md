@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — Stage 3's eight phases fix the order renderCanvas runs in, not the function
+  boundaries it decomposes into. The frame carrier and the head phases land as three functions
+  covering four listed phases: the gesture's inject hook writes over the view lists and the
+  selection reads its result, so the two belong to one gather.
+
 - **2026-08-26** — An inject hook may clear its gesture by returning false, as update does;
   busDraft's preview needs it when the node the draft hangs off has vanished. Folding busDraft into
   the one gesture variable also stops its drop click falling through into the mousedown chain, so

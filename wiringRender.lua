@@ -1838,7 +1838,10 @@ modes.faderDrag = {}
 
 ----- Canvas
 
-local function renderCanvas(w, h)
+--shape: frame = { p, sx, sy, mx, my, lmx, lmy, overCanvas, shiftHeld, nodeViews, nodesById, wireViewsList, busViewsList, selection, segs, busRails, matrixRails, spliceNode?, spliceIdx? }
+-- The frame is the canvas's carrier: each phase reads what its predecessors
+-- left there and writes its own results back. See docs/wiringPage.md.
+local function beginFrame(w, h)
   -- Canvas origin = viewport centre (logical 0,0 in the middle). The painter
   -- carries it, so draw helpers use canvas-local coords and the same transform
   -- maps the mouse back for hit-testing.
@@ -1869,6 +1872,11 @@ local function renderCanvas(w, h)
   -- start the next wire from the just-dropped node without first jiggling.
   if hoverFreeze and ImGui.IsMouseClicked(ctx, 0) then hoverFreeze = nil end
 
+  return { p = p, sx = sx, sy = sy, mx = mx, my = my, lmx = lmx, lmy = lmy,
+           overCanvas = overCanvas, shiftHeld = shiftHeld }
+end
+
+local function gatherViews(frame)
   -- Sources have no body (sourceSegments renders each out-edge as a normal
   -- wire). Drop source nodes from every body pass: draw, drag, band, hit-test.
   local nodeViews = {}
@@ -1879,38 +1887,57 @@ local function renderCanvas(w, h)
   local nodesById = {}
   for _, nv in ipairs(nodeViews) do nodesById[nv.id] = nv end
 
-  -- segs is built once, shared by the draw pass and every hit-test so
-  -- geometry can't drift. Draw order is in docs/wiringPage.md.
-  local wireViewsList = wv:wireViews()
-  local busViewsList  = wv:busViews()
-  local frame = { mx = mx, my = my, lmx = lmx, lmy = lmy, overCanvas = overCanvas,
-                  nodeViews = nodeViews, nodesById = nodesById,
-                  wireViewsList = wireViewsList, busViewsList = busViewsList }
+  frame.nodeViews, frame.nodesById = nodeViews, nodesById
+  frame.wireViewsList = wv:wireViews()
+  frame.busViewsList  = wv:busViews()
+
+  -- inject lays the live gesture's transients over the view lists, so the one
+  -- geometry pass below sees the in-flight state (band writes the selection).
   if gesture then
     local inject = modes[gesture.mode].inject
     if inject and inject(gesture, frame) == false then gesture = nil end
   end
-  local selection = frame.selection or wv:selection()
+  frame.selection = frame.selection or wv:selection()
+end
 
-  local segs = wireSegments(wireViewsList, nodesById)
-  sourceSegments(p, wireViewsList, nodesById, segs)
+local function buildGeometry(frame)
+  -- segs is built once, shared by the draw pass and every hit-test so
+  -- geometry can't drift. Draw order is in docs/wiringPage.md.
+  local segs = wireSegments(frame.wireViewsList, frame.nodesById)
+  sourceSegments(frame.p, frame.wireViewsList, frame.nodesById, segs)
   local busRails = {}
-  busSegments(p, wireViewsList, busViewsList, nodesById, segs, busRails)
+  busSegments(frame.p, frame.wireViewsList, frame.busViewsList, frame.nodesById,
+              segs, busRails)
   local matrixRails = {}
   for _, r in ipairs(busRails) do if r.matrix then matrixRails[r.busId] = r end end
   -- Stamp each seg's visible midpoint once: the arrow, fader, and RMB menu all
   -- anchor here, so a single source keeps draw and hit-test from drifting.
   for _, seg in pairs(segs) do seg.cx, seg.cy = wireMid(seg) end
+  frame.segs, frame.busRails, frame.matrixRails = segs, busRails, matrixRails
 
   -- A lone node dragged over an audio wire's triangle splices into that wire on
   -- release, and the whole wire highlights meanwhile.
-  frame.segs = segs
   if gesture and gesture.mode == 'nodeDrag' then
-    frame.spliceNode = soleDragged(nodeViews, gesture)
+    frame.spliceNode = soleDragged(frame.nodeViews, gesture)
     if frame.spliceNode then
-      frame.spliceIdx = spliceTargetHit(segs, frame.spliceNode, lmx, lmy)
+      frame.spliceIdx = spliceTargetHit(segs, frame.spliceNode, frame.lmx, frame.lmy)
     end
   end
+end
+
+local function renderCanvas(w, h)
+  local frame = beginFrame(w, h)
+  gatherViews(frame)
+  buildGeometry(frame)
+
+  -- Transitional: the phases still inline below read the frame through locals,
+  -- and each of these dissolves as its phase moves out.
+  local p, sx, sy                   = frame.p, frame.sx, frame.sy
+  local mx, my, lmx, lmy            = frame.mx, frame.my, frame.lmx, frame.lmy
+  local overCanvas, shiftHeld       = frame.overCanvas, frame.shiftHeld
+  local nodeViews, nodesById        = frame.nodeViews, frame.nodesById
+  local wireViewsList, selection    = frame.wireViewsList, frame.selection
+  local segs, busRails, matrixRails = frame.segs, frame.busRails, frame.matrixRails
 
   -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
   -- Suppressed during any active gesture so neither fires under a drag.

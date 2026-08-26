@@ -34,10 +34,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: extract the frame carrier and the head phases (§ Stage 3 (1)-(4))
 - 2026-08-26 wiring: document the gesture state machine (§ Docs)
 - 2026-08-26 wiring: move the bus draft into the machine (§ Stage 2)
 - 2026-08-26 wiring: move the wire draft into the machine (§ Stage 2)
-- 2026-08-26 wiring: move the tag, bus and fader drags into the machine (§ Stage 2)
 
 ## Now
 
@@ -45,15 +45,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The frame carrier and the head phases** (§ Stage 3 ①–④) — `frame`
-   becomes the carrier every phase reads and writes, gaining `p`, the canvas
-   origin `sx`/`sy`, `selection`, `segs`, `busRails` and `matrixRails`.
-   Extract `beginFrame` @1842–1870 (origin, painter, bg fill, mouse, shift
-   rising edge, hoverFreeze decay), `gatherViews` @1872–1893 (source-less
-   nodeViews, nodesById, the wire and bus view lists, the `inject` call,
-   selection) and `buildGeometry` @1895–1913 (wireSegments / sourceSegments /
-   busSegments, the midpoint stamp, the splice search). Re-anchor the line in
-   docs/wiringPage.md saying what `frame` carries.
 2. **Hover resolution** (§ Stage 3 ⑤) — `resolveHover(frame)` @1915–2004,
    moved verbatim: wire-end and source-tag hover, the fader drag tick,
    `arrowMidHit`, the fader keep/close ladder, the decayed draft end, the
