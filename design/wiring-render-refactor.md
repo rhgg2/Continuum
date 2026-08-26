@@ -1,7 +1,7 @@
 # wiringRender refactor — one wire renderer, explicit gesture machine
 
 > opened: 2026-06-12 · status: in flight — plan/wiring-render-refactor.md,
-> phase 2 (the gesture machine)
+> phase 3 (the draft modes)
 
 Target: `wiringRender.lua` only (2,661 loc). The line refs below have
 drifted; the live numbers for the phase in flight are in
