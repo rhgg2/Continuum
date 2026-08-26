@@ -27,73 +27,97 @@ local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
 local wr = {}
 
-local NODE_W           = 88
-local NODE_H           = 55
-local CORNER_R         = 5
-local LABEL_PAD        = 4   -- inner horizontal padding for the wrapped name
-local LABEL_MAX_LINES  = 2
-local PORT_SIZE        = 8
-local PORT_GAP         = 6
-local PORT_BAND_OFFSET = 4   -- gap between node edge and the hover-only port row
-local PORT_HIT_PAD     = 4   -- hit area extends this far beyond the visual square on each side
-local PORT_TOOLTIP_GAP = 4   -- pixels between port top and tooltip bottom edge
-local PORTS_PER_ROW    = 5   -- audio rows wrap after this many ports
-local MIDI_SLOT_W      = 13  -- keyboard slot is wider/taller than the audio
-local MIDI_SLOT_H      = 11  -- 8×8 square; intrinsic icon dimensions
-local MIDI_INSET       = 3   -- px between the body-internal midi icon and the node's right edge
-local HANDLE_W         = 13  -- spillover-list chevron, mirrors midi slot envelope
-local HANDLE_H         = 11
-local HANDLE_INSET     = 4   -- slightly more inset than midi so the caret reads as off-edge
-local PORT_ROW_H       = 11  -- tallest slot in the row; defines the shared centreline
-local BADGE_W          = 9  -- M/B toggle chip, mirrors the midi-slot envelope
-local BADGE_H          = 11
-local BADGE_INSET      = 4   -- from the body's top-left corner; clears the centred label
-local BADGE_GAP        = 3
-local BADGE_SIZE       = 9   -- glyph size for the M / B letters
-local LIST_GAP         = 4   -- pixel gap between handle and dropdown list; the list.hitRect extends back across this gap so chevron-to-list traversal has no dead zone
-local CLICK_THRESH     = 4   -- mouseup within this many pixels of mousedown counts as a click, not a drag
-local LIST_ROW_PAD_X   = 8
-local LIST_ROW_PAD_Y   = 1
-local LIST_PAD_Y       = 6   -- extra slack at the list rect's top + bottom, beyond the first/last row's own LIST_ROW_PAD_Y
-local LIST_CORNER_R    = 4
-
-local WIRE_GAP        = 14    -- perpendicular pitch between parallel wires in the same pair-group
-local WIRE_THICK      = 1
-local WIRE_ARROW_LEN  = 9
-local WIRE_ARROW_WID  = 8
-local WIRE_LABEL_SIZE = 10    -- font size for the audio-port-number label (smaller than node labels)
-local WIRE_LABEL_PAD  = 1     -- pixels of clearance between digit and the enclosing bg patch
-local WIRE_LABEL_LEAD = 6     -- gap from node rect edge to label's near edge, measured along wire (consistent across wire angles)
-local WIRE_END_HIT      = 20  -- length of the rewire/delete hit + highlight band at each wire end (canvas px); clamped to 0.4*wirelen so short wires don't overlap
-local WIRE_END_HIT_PERP = 6   -- perpendicular tolerance from the wire centreline for the end-hit
-local WIRE_END_HIGHLIGHT = 3  -- stroke width for the highlight overpaint
-local WIRE_GRAB_DECAY   = 40  -- redraft start-jump absorber: at mousedown the cursor end of the wire stays at its old position; the gap to the cursor decays linearly over this many pixels of travel
-local WIRE_FADER_HIT     = 8   -- screen-px radius around the mid-wire arrow centroid for LMB/RMB hit-test (audio wires only)
-local WIRE_FADER_W       = 20  -- strip / knob / hit-rect width (px); centred on the arrow centroid so it covers the triangle
-local WIRE_FADER_H       = 140 -- strip / hit-rect height (px); centred vertically on the arrow centroid
-local WIRE_FADER_KNOB_H  = 20  -- knob slab height (px); spans the full strip width
-local WIRE_FADER_HIT_PAD = 10  -- px to inflate the visibility hit rect on each side, so the fader stays open through small cursor excursions outside the strip
-local WIRE_FADER_TOP_DB  = 18  -- top of strip = +18 dB; 0 dB at 75% of travel; below ~5% snaps to -inf
-local WIRE_FADER_WHEEL_DB        = 0.5  -- dB per wheel notch (coarse, default)
-local WIRE_FADER_WHEEL_DB_FINE   = 0.1  -- dB per wheel notch with Shift
-local WIRE_FADER_WHEEL_IDLE_FRAMES = 6  -- commit one setEdgeGain after this many wheel-idle frames so a scroll gesture is one undo entry
-
-local STUB_LEN  = 40    -- visible stub length: consumer rect edge to the tag patch's near edge (tag sits further out the bigger its patch)
-local TAG_VIS_H = 0.62  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
-local TAG_MAX_W = (NODE_W - 2 * LABEL_PAD) * WIRE_LABEL_SIZE / wireSize  -- node label width scaled by the font ratio: the tag is a shrunk node box
-local SOURCE_TAG_PAD = 3  -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
-local BUS_TAP_LEN   = 34   -- visible length of a source copy's orthogonal tap off the bar
-local BUS_TAP_GAP   = 22   -- spacing between source-copy taps along the bar
-local BUS_BAR_PAD   = 8    -- bar overhang past its outermost tap
-local BUS_BAR_MIN   = 30   -- shortest hand-sized bar (min gap kept from the fixed far end)
-local BUS_END_ZONE  = 28   -- within this of a bar end → drag that end; the middle third translates
-local BUS_BAR_THICK = 4    -- rail bar stroke width
-local BUS_BAR_HIT   = 10   -- perpendicular tolerance for dropping a rewire onto a bar
--- orient → along-bar axis (a) + tap normal (n); fan taps comb on ±n away from the claim.
-local ORIENT_VEC = {
-  V = { ax = 0, ay = 1, nx = 1, ny = 0 },
-  H = { ax = 1, ay = 0, nx = 0, ny = 1 },
+local UI = {
+  NODE = {
+    W                = 88,
+    H                = 55,
+    ROUND            = 5,
+    LABEL_PAD        = 4,   -- inner horizontal padding for the wrapped name
+    LABEL_ROWS       = 2,
+    SELECTED_STROKE  = 2,
+    SPAWN_PAD        = 24,
+  },
+  PORT = {
+    SIZE        = 8,
+    GAP         = 6,
+    BAND_OFFSET = 4,   -- gap between node edge and the hover-only port row
+    HIT_PAD     = 4,   -- hit area extends this far beyond the visual square on each side
+    TOOLTIP_GAP = 4,   -- pixels between port top and tooltip bottom edge
+    PER_ROW     = 5,   -- audio rows wrap after this many ports
+    ROW_H       = 11,  -- tallest slot in the row; defines the shared centreline
+  },
+  MIDI = {
+    SLOT_W = 13,  -- keyboard slot is wider/taller than the audio
+    SLOT_H = 11,  -- 8×8 square; intrinsic icon dimensions
+    INSET  = 3,   -- px between the body-internal midi icon and the node's right edge
+  },
+  HANDLE = {
+    W     = 13,  -- spillover-list chevron, mirrors midi slot envelope
+    H     = 11,
+    INSET = 4,   -- slightly more inset than midi so the caret reads as off-edge
+  },
+  BADGE = {
+    W     = 9,   -- M/B toggle chip, mirrors the midi-slot envelope
+    H     = 11,
+    INSET = 4,   -- from the body's top-left corner; clears the centred label
+    GAP   = 3,
+    SIZE  = 9,   -- glyph size for the M / B letters
+  },
+  LIST = {
+    GAP       = 4,  -- pixel gap between handle and dropdown list; the list.hitRect extends back across this gap so chevron-to-list traversal has no dead zone
+    ROW_PAD_X = 8,
+    ROW_PAD_Y = 1,
+    PAD_Y     = 6,  -- extra slack at the list rect's top + bottom, beyond the first/last row's own ROW_PAD_Y
+    ROUND  = 4,
+  },
+  WIRE = {
+    GAP           = 14,  -- perpendicular pitch between parallel wires in the same pair-group
+    THICK         = 1,
+    ARROW_LEN     = 9,
+    ARROW_WID     = 8,
+    LABEL_SIZE    = 10,  -- font size for the audio-port-number label (smaller than node labels)
+    LABEL_PAD     = 1,   -- pixels of clearance between digit and the enclosing bg patch
+    LABEL_LEAD    = 6,   -- gap from node rect edge to label's near edge, measured along wire (consistent across wire angles)
+    END_HIT       = 20,  -- length of the rewire/delete hit + highlight band at each wire end (canvas px); clamped to 0.4*wirelen so short wires don't overlap
+    END_HIT_PERP  = 6,   -- perpendicular tolerance from the wire centreline for the end-hit
+    END_HIGHLIGHT = 3,   -- stroke width for the highlight overpaint
+    GRAB_DECAY    = 40,  -- redraft start-jump absorber: at mousedown the cursor end of the wire stays at its old position; the gap to the cursor decays linearly over this many pixels of travel
+  },
+  FADER = {
+    HIT               = 8,    -- screen-px radius around the mid-wire arrow centroid for LMB/RMB hit-test (audio wires only)
+    W                 = 20,   -- strip / knob / hit-rect width (px); centred on the arrow centroid so it covers the triangle
+    H                 = 140,  -- strip / hit-rect height (px); centred vertically on the arrow centroid
+    KNOB_H            = 20,   -- knob slab height (px); spans the full strip width
+    HIT_PAD           = 10,   -- px to inflate the visibility hit rect on each side, so the fader stays open through small cursor excursions outside the strip
+    TOP_DB            = 18,   -- top of strip = +18 dB; 0 dB at 75% of travel; below ~5% snaps to -inf
+    WHEEL_DB          = 0.5,  -- dB per wheel notch (coarse, default)
+    WHEEL_DB_FINE     = 0.1,  -- dB per wheel notch with Shift
+    WHEEL_IDLE_FRAMES = 6,    -- commit one setEdgeGain after this many wheel-idle frames so a scroll gesture is one undo entry
+  },
+  TAG = {
+    STUB_LEN = 40,    -- visible stub length: consumer rect edge to the tag patch's near edge (tag sits further out the bigger its patch)
+    VIS_H    = 0.62,  -- visible glyph band as a fraction of measured line height (trims ascent/descent slack)
+    PAD      = 3,     -- bg-patch padding around the source tag's glyphs (the patch occludes the wire behind them)
+  },
+  BUS = {
+    TAP_LEN   = 34,  -- visible length of a source copy's orthogonal tap off the bar
+    TAP_GAP   = 22,  -- spacing between source-copy taps along the bar
+    BAR_PAD   = 8,   -- bar overhang past its outermost tap
+    BAR_MIN   = 30,  -- shortest hand-sized bar (min gap kept from the fixed far end)
+    END_ZONE  = 28,  -- within this of a bar end → drag that end; the middle third translates
+    BAR_THICK = 4,   -- rail bar stroke width
+    BAR_HIT   = 10,  -- perpendicular tolerance for dropping a rewire onto a bar
+    -- orient -> along-bar axis (a) + tap normal (n); fan taps comb on +/-n away from the claim.
+    ORIENT_VEC = {
+      V = { ax = 0, ay = 1, nx = 1, ny = 0 },
+      H = { ax = 1, ay = 0, nx = 0, ny = 1 },
+    },
+  },
+  CLICK_THRESH = 4,  -- mouseup within this many pixels of mousedown counts as a click, not a drag
 }
+
+-- The tag is a shrunk node box: node-label width scaled by the font ratio.
+UI.TAG.MAX_W = (UI.NODE.W - 2 * UI.NODE.LABEL_PAD) * UI.WIRE.LABEL_SIZE / wireSize
 
 
 ----- Gesture state (page-local; ephemeral, never persisted)
@@ -144,40 +168,35 @@ end
 -- viewport origin at draw and hit-tests use the canvas-local mouse, so one
 -- struct serves both and they can't drift.
 local function nodeBox(nv)
-  local hw, hh = NODE_W / 2, NODE_H / 2
+  local hw, hh = UI.NODE.W / 2, UI.NODE.H / 2
   return rect(nv.pos.x - hw, nv.pos.y - hh, nv.pos.x + hw, nv.pos.y + hh)
 end
 
 ----- Drawing
 
-local SELECTED_INFLATE = 0   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
-local SELECTED_STROKE  = 2
-
--- Accent outline for a node body (selection / hover / error). SELECTED_INFLATE
--- widens the rect so a >0 moat lets the popup bg bleed through the stroke.
+-- Accent outline for a node body (selection / hover / error). 
 local function strokeNodeRect(p, r, name)
-  p.stroke(rect(r.x0 - SELECTED_INFLATE, r.y0 - SELECTED_INFLATE,
-                r.x1 + SELECTED_INFLATE, r.y1 + SELECTED_INFLATE),
-           name, SELECTED_STROKE, CORNER_R)
+  p.stroke(rect(r.x0, r.y0, r.x1, r.y1),
+           name, UI.NODE.SELECTED_STROKE, UI.NODE.ROUND)
 end
 
 local function drawNode(p, nv, isSelected)
   local r = nodeBox(nv)
-  p.fill(r, 'wiring.node.' .. nv.category, CORNER_R)
+  p.fill(r, 'wiring.node.' .. nv.category, UI.NODE.ROUND)
   if isSelected then
     strokeNodeRect(p, r, 'wiring.node.selected')
   end
   -- The wrapLines / CalcTextSize measurements read the pushed font, so the
   -- block push stays; the per-line draws inherit that current font.
   if wireFont then ImGui.PushFont(ctx, wireFont, wireSize) end
-  local lines = painter.wrapLines(nv.label, NODE_W - 2 * LABEL_PAD, LABEL_MAX_LINES,
+  local lines = painter.wrapLines(nv.label, UI.NODE.W - 2 * UI.NODE.LABEL_PAD, UI.NODE.LABEL_ROWS,
                                   function(s) return (ImGui.CalcTextSize(ctx, s)) end)
   local lineH = select(2, ImGui.CalcTextSize(ctx, 'Mg'))
   local blockH = lineH * #lines
-  local yTop = r.y0 + math.floor((NODE_H - blockH) / 2)
+  local yTop = r.y0 + math.floor((UI.NODE.H - blockH) / 2)
   for i, line in ipairs(lines) do
     local tw = ImGui.CalcTextSize(ctx, line)
-    p.text(r.x0 + math.floor((NODE_W - tw) / 2),
+    p.text(r.x0 + math.floor((UI.NODE.W - tw) / 2),
            yTop + (i - 1) * lineH, 'text', line)
   end
   if wireFont then ImGui.PopFont(ctx) end
@@ -238,7 +257,7 @@ local function drawSlot(p, slot, idStem)
   -- InvisibleButton + tooltip are screen-space ImGui widgets, so map the
   -- slot's canvas-local corner back through the painter to anchor them.
   local ssx, ssy = p.toScreen(slot.x, slot.y)
-  local pad = PORT_HIT_PAD
+  local pad = UI.PORT.HIT_PAD
   ImGui.SetCursorScreenPos(ctx, ssx - pad, ssy - pad)
   ImGui.InvisibleButton(ctx, idStem, slot.w + 2 * pad, slot.h + 2 * pad)
   -- AllowWhenBlockedByActiveItem lets target tooltips fire while the
@@ -246,7 +265,7 @@ local function drawSlot(p, slot, idStem)
   local hoverFlags = ImGui.HoveredFlags_ForTooltip
                    | ImGui.HoveredFlags_AllowWhenBlockedByActiveItem
   if slot.name and ImGui.IsItemHovered(ctx, hoverFlags) then
-    tooltipAt(ssx + slot.w / 2, ssy - PORT_TOOLTIP_GAP, slot.name)
+    tooltipAt(ssx + slot.w / 2, ssy - UI.PORT.TOOLTIP_GAP, slot.name)
   end
 end
 
@@ -261,18 +280,18 @@ local function nodeHasFx(nv) return nv.category == 'effect' or nv.category == 'g
 
 local function badgeRects(nv)
   local r   = nodeBox(nv)
-  local top = r.y0 + BADGE_INSET
-  local mx0 = r.x0 + BADGE_INSET
-  local bx0 = mx0 + BADGE_W + BADGE_GAP
-  return rect(mx0, top, mx0 + BADGE_W, top + BADGE_H),
-         rect(bx0, top, bx0 + BADGE_W, top + BADGE_H)
+  local top = r.y0 + UI.BADGE.INSET
+  local mx0 = r.x0 + UI.BADGE.INSET
+  local bx0 = mx0 + UI.BADGE.W + UI.BADGE.GAP
+  return rect(mx0, top, mx0 + UI.BADGE.W, top + UI.BADGE.H),
+         rect(bx0, top, bx0 + UI.BADGE.W, top + UI.BADGE.H)
 end
 
 local function drawBadge(p, r, glyph, fillName)
   p.fill(r, 'wiring.badge.bg', 1)
-  local tw, th = p.measure(glyph, uiFont, BADGE_SIZE)
+  local tw, th = p.measure(glyph, uiFont, UI.BADGE.SIZE)
   p.text(math.ceil((r.x0 + r.x1 - tw) / 2), math.ceil((r.y0 + r.y1 - th) / 2),
-         fillName, glyph, uiFont, BADGE_SIZE)
+         fillName, glyph, uiFont, UI.BADGE.SIZE)
 end
 
 local function drawNodeBadges(p, nv, muted, bypassed)
@@ -292,25 +311,25 @@ end
 ----- Wire-creation gesture helpers
 
 -- By-name dropdown anchored to the handle. Rows are tight-bound (no hit pad)
--- so neighbours don't bleed; hitRect reaches LIST_GAP back so chevron→list has no dead zone.
+-- so neighbours don't bleed; hitRect reaches UI.LIST.GAP back so chevron→list has no dead zone.
 local function layoutList(audio, handle, side)
   if not handle or #audio < 2 then return nil end
   if uiFont then ImGui.PushFont(ctx, uiFont, uiSize) end
   local _, lineH = ImGui.CalcTextSize(ctx, 'Mg')
-  local rowH = math.floor(lineH + 2 * LIST_ROW_PAD_Y)
+  local rowH = math.floor(lineH + 2 * UI.LIST.ROW_PAD_Y)
   local maxW = handle.w
   for _, name in ipairs(audio) do
-    local w = ImGui.CalcTextSize(ctx, name) + 2 * LIST_ROW_PAD_X
+    local w = ImGui.CalcTextSize(ctx, name) + 2 * UI.LIST.ROW_PAD_X
     if w > maxW then maxW = w end
   end
   if uiFont then ImGui.PopFont(ctx) end
   local n        = #audio
   local listX    = handle.x
-  local totalH   = n * rowH + 2 * LIST_PAD_Y
-  local rectY0   = (side == 'bottom') and (handle.y + handle.h + LIST_GAP)
-                                       or (handle.y - LIST_GAP - totalH)
+  local totalH   = n * rowH + 2 * UI.LIST.PAD_Y
+  local rectY0   = (side == 'bottom') and (handle.y + handle.h + UI.LIST.GAP)
+                                       or (handle.y - UI.LIST.GAP - totalH)
   local rectY1   = rectY0 + totalH
-  local rowsY0   = rectY0 + LIST_PAD_Y
+  local rowsY0   = rectY0 + UI.LIST.PAD_Y
   local rows = {}
   for i, name in ipairs(audio) do
     rows[i] = { kind = 'audio', portIdx = i, name = name,
@@ -319,8 +338,8 @@ local function layoutList(audio, handle, side)
   end
   local listRect = rect(listX, rectY0, listX + maxW, rectY1)
   local hitRect = (side == 'bottom')
-                  and rect(listRect.x0, listRect.y0 - LIST_GAP, listRect.x1, listRect.y1)
-                  or  rect(listRect.x0, listRect.y0,            listRect.x1, listRect.y1 + LIST_GAP)
+                  and rect(listRect.x0, listRect.y0 - UI.LIST.GAP, listRect.x1, listRect.y1)
+                  or  rect(listRect.x0, listRect.y0,            listRect.x1, listRect.y1 + UI.LIST.GAP)
   return { rows = rows, rect = listRect, hitRect = hitRect }
 end
 
@@ -339,23 +358,23 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
              or ((my < (by0 + by1) / 2) and 'top' or 'bottom')
   local sign  = (side == 'bottom') and 1 or -1
   local edge  = (side == 'bottom') and by1 or by0
-  local depth = edge + sign * PORT_BAND_OFFSET
+  local depth = edge + sign * UI.PORT.BAND_OFFSET
 
   -- All slots in a given row share the row's horizontal centreline so the
   -- chevron, squares and keyboard read as aligned despite differing heights.
   local function rowCentre(rowIdx)
-    return depth + sign * (rowIdx * (PORT_ROW_H + PORT_BAND_OFFSET)
-                           + PORT_ROW_H / 2)
+    return depth + sign * (rowIdx * (UI.PORT.ROW_H + UI.PORT.BAND_OFFSET)
+                           + UI.PORT.ROW_H / 2)
   end
   local function placeOnRow(slot, rowIdx)
     slot.y = math.floor(rowCentre(rowIdx or 0) - slot.h / 2)
   end
 
-  -- Chip set: ports 2..N when N ≤ PORTS_PER_ROW, plus currently-wired and
-  -- user-pinned ports (chip promotion). Sorted, wrapped at PORTS_PER_ROW/row.
+  -- Chip set: ports 2..N when N ≤ UI.PORT.PER_ROW, plus currently-wired and
+  -- user-pinned ports (chip promotion). Sorted, wrapped at UI.PORT.PER_ROW/row.
   local chipSet = {}
   if showHandle then
-    if nAudio <= PORTS_PER_ROW then
+    if nAudio <= UI.PORT.PER_ROW then
       for i = 2, nAudio do chipSet[i] = true end
     end
     local function union(set)
@@ -373,31 +392,31 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
 
   local handle
   if showHandle then
-    handle = { kind = 'handle', x = bx0 + HANDLE_INSET,
-               w = HANDLE_W, h = HANDLE_H }
+    handle = { kind = 'handle', x = bx0 + UI.HANDLE.INSET,
+               w = UI.HANDLE.W, h = UI.HANDLE.H }
     placeOnRow(handle)
   end
 
   local slots = {}
   local nChips = #chipPorts
   if nChips > 0 then
-    local nRows = math.ceil(nChips / PORTS_PER_ROW)
+    local nRows = math.ceil(nChips / UI.PORT.PER_ROW)
     -- Chips centred between the handle's right edge and the body's right
     -- edge — the right corner is free with midi living on the body.
     local chipL = handle.x + handle.w + 2
-    local chipR = bx1 - MIDI_INSET
+    local chipR = bx1 - UI.MIDI.INSET
     for r = 0, nRows - 1 do
-      local first = r * PORTS_PER_ROW + 1
-      local last  = math.min(first + PORTS_PER_ROW - 1, nChips)
+      local first = r * UI.PORT.PER_ROW + 1
+      local last  = math.min(first + UI.PORT.PER_ROW - 1, nChips)
       local rowN  = last - first + 1
-      local rowW  = rowN * PORT_SIZE + (rowN - 1) * PORT_GAP
+      local rowW  = rowN * UI.PORT.SIZE + (rowN - 1) * UI.PORT.GAP
       local startX = math.floor((chipL + chipR - rowW) / 2)
       for k = 0, rowN - 1 do
         local portIdx = chipPorts[first + k]
         local s = {
           kind = 'audio', portIdx = portIdx, name = audio[portIdx],
-          x = startX + k * (PORT_SIZE + PORT_GAP),
-          w = PORT_SIZE, h = PORT_SIZE,
+          x = startX + k * (UI.PORT.SIZE + UI.PORT.GAP),
+          w = UI.PORT.SIZE, h = UI.PORT.SIZE,
         }
         placeOnRow(s, r)
         util.add(slots, s)
@@ -407,9 +426,9 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
   if showMidi then
     util.add(slots, {
       kind = 'midi', name = midi[1], inBody = true,
-      x = bx1 - MIDI_SLOT_W - MIDI_INSET,
-      y = math.floor((by0 + by1 - MIDI_SLOT_H) / 2),
-      w = MIDI_SLOT_W, h = MIDI_SLOT_H,
+      x = bx1 - UI.MIDI.SLOT_W - UI.MIDI.INSET,
+      y = math.floor((by0 + by1 - UI.MIDI.SLOT_H) / 2),
+      w = UI.MIDI.SLOT_W, h = UI.MIDI.SLOT_H,
     })
   end
 
@@ -419,7 +438,7 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
   local bandRect
   local function extend(s)
     if not s then return end
-    local r = boxRect(s, PORT_HIT_PAD)
+    local r = boxRect(s, UI.PORT.HIT_PAD)
     if not bandRect then bandRect = r else unionRect(bandRect, r) end
   end
   for _, s in ipairs(slots) do
@@ -438,11 +457,11 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
   -- area with list.hitRect only after the chevron has been crossed.
   if bandRect then unionRect(hoverRect, bandRect) end
 
-  -- popup overlaps the body's near edge by 2*CORNER_R so its rounded corners
-  -- hide inside the body — at just CORNER_R the two corner wedges align and
+  -- popup overlaps the body's near edge by 2*UI.NODE.ROUND so its rounded corners
+  -- hide inside the body — at just UI.NODE.ROUND the two corner wedges align and
   -- canvas shows through. Drawn before the node so the body overpaints it.
   local POPUP_PAD     = 1
-  local POPUP_OVERLAP = 2 * CORNER_R
+  local POPUP_OVERLAP = 2 * UI.NODE.ROUND
   local popup
   if bandRect then
     if side == 'bottom' then
@@ -458,7 +477,7 @@ end
 
 local function slotHit(slots, mx, my)
   for _, s in ipairs(slots) do
-    if inRect(mx, my, boxRect(s, PORT_HIT_PAD)) then
+    if inRect(mx, my, boxRect(s, UI.PORT.HIT_PAD)) then
       return s
     end
   end
@@ -661,14 +680,14 @@ end
 
 local function drawList(p, list, highlight)
   local r = list.rect
-  p.fill(r, 'wiring.tooltip.bg', LIST_CORNER_R)
-  p.stroke(r, 'separator', 1, LIST_CORNER_R)
+  p.fill(r, 'wiring.tooltip.bg', UI.LIST.ROUND)
+  p.stroke(r, 'separator', 1, UI.LIST.ROUND)
   for _, row in ipairs(list.rows) do
     if row == highlight then
       p.fill(rect(row.x + 1, row.y, row.x + row.w - 1, row.y + row.h),
              'wiring.node.selected')
     end
-    p.text(row.x + LIST_ROW_PAD_X, row.y + LIST_ROW_PAD_Y,
+    p.text(row.x + UI.LIST.ROW_PAD_X, row.y + UI.LIST.ROW_PAD_Y,
            'text', row.name, uiFont, uiSize)
   end
 end
@@ -679,7 +698,7 @@ end
 local function drawPortRowBg(p, layout)
   local popup = layout.popup
   if not popup then return end
-  p.fill(popup, 'wiring.tooltip.bg', CORNER_R)
+  p.fill(popup, 'wiring.tooltip.bg', UI.NODE.ROUND)
 end
 
 -- Draws the handle and every slot, outlining the one matching pick.slot. Chips
@@ -701,9 +720,8 @@ local function drawPortRow(p, pick, idPrefix)
     -- spec, so identity would miss the midi kbd on a body-hover midi draft.
     if highlight and s.kind == highlight.kind
        and (s.kind ~= 'audio' or s.portIdx == highlight.portIdx) then
-      p.stroke(rect(s.x - SELECTED_INFLATE, s.y - SELECTED_INFLATE,
-                    s.x + s.w + SELECTED_INFLATE, s.y + s.h + SELECTED_INFLATE),
-               'wiring.node.selected', SELECTED_STROKE, 0)
+      p.stroke(rect(s.x, s.y, s.x + s.w, s.y + s.h),
+               'wiring.node.selected', UI.NODE.SELECTED_STROKE, 0)
     end
   end
 end
@@ -748,7 +766,7 @@ end
 -- Perpendicular scalar for slot i (1-based) of n parallel wires:
 -- centred around 0 so a lone wire sits on the centre line.
 local function wireOffset(i, n)
-  return (i - (n + 1) / 2) * WIRE_GAP
+  return (i - (n + 1) / 2) * UI.WIRE.GAP
 end
 
 -- Distances along the (offset) segment where the visible part begins (exits
@@ -761,8 +779,8 @@ local function wireExits(seg)
   local offX, offY = seg.offX or 0, seg.offY or 0
   -- Per-end half-extents: tag-ended wires trim to the glyph box, not the full
   -- node rect. Both default to the node body when unset.
-  local fHW, fHH = seg.fromHW or NODE_W / 2, seg.fromHH or NODE_H / 2
-  local tHW, tHH = seg.toHW   or NODE_W / 2, seg.toHH   or NODE_H / 2
+  local fHW, fHH = seg.fromHW or UI.NODE.W / 2, seg.fromHH or UI.NODE.H / 2
+  local tHW, tHH = seg.toHW   or UI.NODE.W / 2, seg.toHH   or UI.NODE.H / 2
   -- Param along the ray (rdx,rdy) from a point (px,py) inside an axis-
   -- aligned (hw,hh) rect centred at the origin at which the ray exits.
   local function exitParam(rdx, rdy, px, py, hw, hh)
@@ -792,12 +810,12 @@ end
 local function drawWireArrow(p, sx, sy, ex, ey, name, cx, cy, clampToEx)
   local dx, dy = ex - sx, ey - sy
   local len = math.sqrt(dx * dx + dy * dy)
-  if len < WIRE_ARROW_LEN then return end
+  if len < UI.WIRE.ARROW_LEN then return end
   local ux, uy = dx / len, dy / len
   local px, py = -uy, ux
-  local tipDist  = WIRE_ARROW_LEN * 2 / 3
-  local baseDist = WIRE_ARROW_LEN / 3
-  local halfW    = WIRE_ARROW_WID / 2
+  local tipDist  = UI.WIRE.ARROW_LEN * 2 / 3
+  local baseDist = UI.WIRE.ARROW_LEN / 3
+  local halfW    = UI.WIRE.ARROW_WID / 2
   -- Centroid (not tip) on the visible midpoint cx/cy, else the arrow reads
   -- biased forward by L/6.
   local mx = cx or (sx + ex) / 2
@@ -827,16 +845,16 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 1 then return end
   local txt = tostring(portIdx)
-  local tw, th = p.measure(txt, wireFont, WIRE_LABEL_SIZE)
-  local hw = math.ceil(tw / 2) + WIRE_LABEL_PAD
-  local hh = math.ceil(th / 2) + WIRE_LABEL_PAD
+  local tw, th = p.measure(txt, wireFont, UI.WIRE.LABEL_SIZE)
+  local hw = math.ceil(tw / 2) + UI.WIRE.LABEL_PAD
+  local hh = math.ceil(th / 2) + UI.WIRE.LABEL_PAD
   -- Half-extent of the axis-aligned rect projected onto the wire axis:
   -- letting the gap be measured from the projected near edge keeps the
   -- visible LEAD constant whether the wire is horizontal or vertical.
   local proj = (hw * math.abs(dx) + hh * math.abs(dy)) / len
   local ux, uy = dx / len, dy / len
   local maxDist = len * 0.45
-  local labelDist = math.min(maxDist, exitD + WIRE_LABEL_LEAD + proj)
+  local labelDist = math.min(maxDist, exitD + UI.WIRE.LABEL_LEAD + proj)
   -- maxDist keeps ends' labels apart, but on a short wire pulls the digit inside
   -- the node body. Floor just past the face; collision loop still re-caps pairs.
   if labelDist < exitD + proj then labelDist = math.min(exitD + proj, len - proj) end
@@ -872,7 +890,7 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   util.add(placed, { cx = cx, cy = cy, hw = hw, hh = hh })
   p.fill(rect(x0, y0, x1, y1), 'bg')
   p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
-         name, txt, wireFont, WIRE_LABEL_SIZE)
+         name, txt, wireFont, UI.WIRE.LABEL_SIZE)
   -- InvisibleButton + tooltip are screen-space widgets; map the label's
   -- canvas-local box back through the painter to anchor them.
   local btnX, btnY = p.toScreen(x0, y0)
@@ -880,7 +898,7 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   ImGui.SetCursorScreenPos(ctx, btnX, btnY)
   ImGui.InvisibleButton(ctx, idStem, 2 * hw, 2 * hh)
   if portName and ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
-    tooltipAt(tipX, btnY - PORT_TOOLTIP_GAP, portName)
+    tooltipAt(tipX, btnY - UI.PORT.TOOLTIP_GAP, portName)
   end
 end
 
@@ -944,14 +962,14 @@ local function draftSeg(draft, nodesById, cx, cy)
 end
 
 -- End-region endpoints for one side of a wire (canvas-local): from the node-
--- rect exit, WIRE_END_HIT px inward. Capped at 0.4*visible so a short wire's
+-- rect exit, UI.WIRE.END_HIT px inward. Capped at 0.4*visible so a short wire's
 -- two ends don't overlap. nil for sub-pixel / fully-occluded wires.
 local function endRegion(seg, side)
   local fromD, toD, len = wireExits(seg)
   if not fromD then return nil end
   local visible = toD - fromD
   if visible < 2 then return nil end
-  local L = math.min(WIRE_END_HIT, 0.4 * visible)
+  local L = math.min(UI.WIRE.END_HIT, 0.4 * visible)
   local ux, uy = (seg.ex - seg.sx) / len, (seg.ey - seg.sy) / len
   if side == 'from' then
     local x0, y0 = seg.sx + ux * fromD, seg.sy + uy * fromD
@@ -976,7 +994,7 @@ local function pointToSegmentDist(px, py, ax, ay, bx, by)
   return math.sqrt(ex * ex + ey * ey)
 end
 
--- Nearest end-region within WIRE_END_HIT_PERP of the cursor, or nil. Returns
+-- Nearest end-region within UI.WIRE.END_HIT_PERP of the cursor, or nil. Returns
 -- { edgeIdx, side, keptAnchor }: keptAnchor is the OTHER end's node-edge point
 -- (screen), where the redraft pins the wire while the cursor drives this end.
 local function wireEndHit(segs, mx, my)
@@ -989,7 +1007,7 @@ local function wireEndHit(segs, mx, my)
         local ax, ay, bx, by = endRegion(seg, side)
         if ax then
           local d = pointToSegmentDist(mx, my, ax, ay, bx, by)
-          if d <= WIRE_END_HIT_PERP and (not bestDist or d < bestDist) then
+          if d <= UI.WIRE.END_HIT_PERP and (not bestDist or d < bestDist) then
             best = {
               edgeIdx    = i,
               side       = side,
@@ -1012,7 +1030,7 @@ local function drawWire(p, seg, opts)
   local sx, sy = seg.sx, seg.sy
   local ex, ey = seg.ex, seg.ey
   local name   = opts.name
-  p.line(sx, sy, ex, ey, name, WIRE_THICK)
+  p.line(sx, sy, ex, ey, name, UI.WIRE.THICK)
   -- A bus tap's arrow lands on a bar (extent 0); clamp the tip onto it. Synthetic
   -- segs share that extent but skip the clamp — gate on `seg.w` (nil only for them).
   local barTip = w ~= nil and seg.toHW == 0 and seg.toHH == 0
@@ -1060,10 +1078,10 @@ local function drawWireEndHighlight(p, segs, hover)
   if not seg then return end
   local ax, ay, bx, by = endRegion(seg, hover.side)
   if not ax then return end
-  p.line(ax, ay, bx, by, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
+  p.line(ax, ay, bx, by, 'wiring.node.selected', UI.WIRE.END_HIGHLIGHT)
 end
 
--- Cursor-end position with the grab-offset decayed over WIRE_GRAB_DECAY px,
+-- Cursor-end position with the grab-offset decayed over UI.WIRE.GRAB_DECAY px,
 -- ratcheting on furthest travel. See docs/wiringPage.md (the wire end leads
 -- the cursor) for why this point, not the cursor, drives hit-testing.
 local function computeDraftEnd(draft, mx, my)
@@ -1071,7 +1089,7 @@ local function computeDraftEnd(draft, mx, my)
   local tdx, tdy = mx - draft.mx0, my - draft.my0
   local travel = math.sqrt(tdx * tdx + tdy * tdy)
   draft.maxTravel = math.max(draft.maxTravel or 0, travel)
-  local decay = math.max(0, 1 - draft.maxTravel / WIRE_GRAB_DECAY)
+  local decay = math.max(0, 1 - draft.maxTravel / UI.WIRE.GRAB_DECAY)
   return mx + draft.grabDx * decay, my + draft.grabDy * decay
 end
 
@@ -1084,7 +1102,7 @@ local function dbFromP(p)
   if p <  0.25 then return 100 * (p - 0.25) - 40   end
   if p <  0.50 then return 112 * (p - 0.50) - 12   end
   if p <  0.75 then return  48 * (p - 0.75)        end
-  return (WIRE_FADER_TOP_DB / 0.25) * (p - 0.75)
+  return (UI.FADER.TOP_DB / 0.25) * (p - 0.75)
 end
 
 local function pFromDb(db)
@@ -1092,7 +1110,7 @@ local function pFromDb(db)
   if db <  -40 then return 0.25 + (db + 40) / 100 end
   if db <  -12 then return 0.50 + (db + 12) / 112 end
   if db <    0 then return 0.75 + db / 48          end
-  return 0.75 + db * 0.25 / WIRE_FADER_TOP_DB
+  return 0.75 + db * 0.25 / UI.FADER.TOP_DB
 end
 
 local function linToDb(lin) if lin <= 0 then return -math.huge end; return 20 * math.log(lin, 10) end
@@ -1103,7 +1121,7 @@ local function arrowMidHit(segs, mx, my)
     if seg.w.type == 'audio' then
       local cx, cy = seg.cx, seg.cy
       local dx, dy = mx - cx, my - cy
-      if dx*dx + dy*dy <= WIRE_FADER_HIT * WIRE_FADER_HIT then
+      if dx*dx + dy*dy <= UI.FADER.HIT * UI.FADER.HIT then
         return i, cx, cy
       end
     end
@@ -1111,12 +1129,12 @@ local function arrowMidHit(segs, mx, my)
 end
 
 local function faderRectAt(ax, ay)
-  local hw, hh = WIRE_FADER_W / 2, WIRE_FADER_H / 2
+  local hw, hh = UI.FADER.W / 2, UI.FADER.H / 2
   return ax - hw, ay - hh, ax + hw, ay + hh
 end
 
 local function pixelYToLin(my, stripY0)
-  local p = 1 - (my - stripY0) / WIRE_FADER_H
+  local p = 1 - (my - stripY0) / UI.FADER.H
   if p < 0 then p = 0 elseif p > 1 then p = 1 end
   return dbToLin(dbFromP(p))
 end
@@ -1126,11 +1144,11 @@ local function drawFader(p, f)
   p.fill(r, 'bg')
   p.stroke(r, 'wiring.port.audio', 1, 1)
   -- Unity tick: faint horizontal line where 0 dB sits on the strip.
-  local unityY = r.y0 + (1 - pFromDb(0)) * WIRE_FADER_H
+  local unityY = r.y0 + (1 - pFromDb(0)) * UI.FADER.H
   p.line(r.x0, unityY, r.x1, unityY, 'wiring.port.audio', 1)
   local pos    = pFromDb(linToDb(f.currentLin))
-  local indY   = r.y0 + (1 - pos) * WIRE_FADER_H
-  local kHalfH = WIRE_FADER_KNOB_H / 2
+  local indY   = r.y0 + (1 - pos) * UI.FADER.H
+  local kHalfH = UI.FADER.KNOB_H / 2
   p.fill(rect(r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH), 'wiring.node.selected', 1)
   p.stroke(rect(r.x0+1, indY - kHalfH, r.x1-1, indY + kHalfH), 'bg', 1, 1)
   local db  = linToDb(f.currentLin)
@@ -1139,22 +1157,22 @@ local function drawFader(p, f)
 end
 
 local function drawTagAt(p, cx, cy, label)
-  local tw, th = p.measure(label, wireFont, WIRE_LABEL_SIZE)
+  local tw, th = p.measure(label, wireFont, UI.WIRE.LABEL_SIZE)
   p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2), 'wiring.source.label',
-         label, wireFont, WIRE_LABEL_SIZE)
+         label, wireFont, UI.WIRE.LABEL_SIZE)
 end
 
 -- Wrapped label + patch half-extents at the wire-label font. One source of truth
--- for draw, wire-trim, and grab-hit. TAG_VIS_H trims ascent/descent so the box hugs the glyphs.
+-- for draw, wire-trim, and grab-hit. UI.TAG.VIS_H trims ascent/descent so the box hugs the glyphs.
 local function sourceTagLayout(p, label)
-  local function widthOf(s) return (p.measure(s, wireFont, WIRE_LABEL_SIZE)) end
-  local lines  = painter.wrapLines(label, TAG_MAX_W, LABEL_MAX_LINES, widthOf)
-  local lineH  = select(2, p.measure('Mg', wireFont, WIRE_LABEL_SIZE))
+  local function widthOf(s) return (p.measure(s, wireFont, UI.WIRE.LABEL_SIZE)) end
+  local lines  = painter.wrapLines(label, UI.TAG.MAX_W, UI.NODE.LABEL_ROWS, widthOf)
+  local lineH  = select(2, p.measure('Mg', wireFont, UI.WIRE.LABEL_SIZE))
   local maxW   = 0
   for _, ln in ipairs(lines) do maxW = math.max(maxW, widthOf(ln)) end
   local blockH = lineH * #lines
-  local hw = math.ceil(maxW / 2) + SOURCE_TAG_PAD
-  local hh = math.ceil((blockH - lineH * (1 - TAG_VIS_H)) / 2) + SOURCE_TAG_PAD
+  local hw = math.ceil(maxW / 2) + UI.TAG.PAD
+  local hh = math.ceil((blockH - lineH * (1 - UI.TAG.VIS_H)) / 2) + UI.TAG.PAD
   return lines, hw, hh, lineH
 end
 
@@ -1164,9 +1182,9 @@ local function drawSourceTag(p, cx, cy, label)
   p.fill(rect(cx - hw, cy - hh, cx + hw, cy + hh), 'bg')
   local yTop = cy - lineH * #lines / 2
   for i, ln in ipairs(lines) do
-    local tw = p.measure(ln, wireFont, WIRE_LABEL_SIZE)
+    local tw = p.measure(ln, wireFont, UI.WIRE.LABEL_SIZE)
     p.text(math.floor(cx - tw / 2), math.floor(yTop + (i - 1) * lineH),
-           'wiring.source.label', ln, wireFont, WIRE_LABEL_SIZE)
+           'wiring.source.label', ln, wireFont, UI.WIRE.LABEL_SIZE)
   end
 end
 
@@ -1215,7 +1233,7 @@ local function sourceSegments(p, wireViews, nodesById, segs)
     end
   end
   local mxp, myp = wv:masterPos()
-  local hw, hh   = NODE_W / 2, NODE_H / 2
+  local hw, hh   = UI.NODE.W / 2, UI.NODE.H / 2
   for _, consumerId in ipairs(order) do
     local consumer = nodesById[consumerId]
     if consumer then
@@ -1233,10 +1251,10 @@ local function sourceSegments(p, wireViews, nodesById, segs)
           fy = consumer.pos.y + w.fromOffset.y
         else
           -- Push the tag out past its own patch, so the visible stub (consumer
-          -- edge to patch edge) is STUB_LEN whatever the label's size.
+          -- edge to patch edge) is UI.TAG.STUB_LEN whatever the label's size.
           local tagExit = math.min((ux ~= 0) and tagHW / math.abs(ux) or math.huge,
                                    (uy ~= 0) and tagHH / math.abs(uy) or math.huge)
-          local radial = exitDist + STUB_LEN + tagExit
+          local radial = exitDist + UI.TAG.STUB_LEN + tagExit
           local s = wireOffset(i, #grp)
           fx = consumer.pos.x + perpX * s + ux * radial
           fy = consumer.pos.y + perpY * s + uy * radial
@@ -1257,8 +1275,8 @@ end
 local function nodeEdgePoint(nv, fromX, fromY)
   local dx, dy = fromX - nv.pos.x, fromY - nv.pos.y
   local sc = math.huge
-  if dx ~= 0 then sc = (NODE_W / 2) / math.abs(dx) end
-  if dy ~= 0 then sc = math.min(sc, (NODE_H / 2) / math.abs(dy)) end
+  if dx ~= 0 then sc = (UI.NODE.W / 2) / math.abs(dx) end
+  if dy ~= 0 then sc = math.min(sc, (UI.NODE.H / 2) / math.abs(dy)) end
   if sc == math.huge then sc = 0 end
   return nv.pos.x + dx * sc, nv.pos.y + dy * sc
 end
@@ -1290,7 +1308,7 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
         local far   = nodesById[farId]
         local bv    = busById[w.bus.busId]
         if far and bv then
-          local ov = ORIENT_VEC[bv.orient] or ORIENT_VEC.V
+          local ov = UI.BUS.ORIENT_VEC[bv.orient] or UI.BUS.ORIENT_VEC.V
           local busNode = bv.matrix and nodesById[bv.id]
           local bcx = busNode and busNode.pos.x or bv.pos.x
           local bcy = busNode and busNode.pos.y or bv.pos.y
@@ -1313,7 +1331,7 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
     -- anchor = the consumer body custom source-tag offsets are relative to.
     local anchor    = claimNode or busNode
     if anchor then
-      local ov = ORIENT_VEC[bv.orient] or ORIENT_VEC.V
+      local ov = UI.BUS.ORIENT_VEC[bv.orient] or UI.BUS.ORIENT_VEC.V
       -- A matrix bar centres on the live nodeView pos, so it follows an in-flight drag.
       local bcx, bcy
       if busNode then bcx, bcy = busNode.pos.x, busNode.pos.y
@@ -1340,7 +1358,7 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
         local far   = nodesById[farId]
         local sx, sy, fhw, fhh
         if far then
-          local off = (farSlot[w] or 0) * BUS_TAP_GAP
+          local off = (farSlot[w] or 0) * UI.BUS.TAP_GAP
           sx = far.pos.x + ov.ax * off
           sy = far.pos.y + ov.ay * off
         else
@@ -1351,9 +1369,9 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
             sx = anchor.pos.x + w.fromOffset.x
             sy = anchor.pos.y + w.fromOffset.y
           else
-            local t   = (si - (sourceN - 1) / 2) * BUS_TAP_GAP
+            local t   = (si - (sourceN - 1) / 2) * UI.BUS.TAP_GAP
             si = si + 1
-            local out = BUS_TAP_LEN + ((nxs ~= 0) and thw or thh)
+            local out = UI.BUS.TAP_LEN + ((nxs ~= 0) and thw or thh)
             sx = bcx + ov.ax * t + nxs * out
             sy = bcy + ov.ay * t + nys * out
           end
@@ -1395,13 +1413,13 @@ local function busSegments(p, wireViews, busViews, nodesById, segs, busRails)
       if bv.ext then
         lo, hi = bv.ext.lo, bv.ext.hi
         if hasTaps then
-          lo = math.min(lo, tMin - BUS_BAR_PAD)
-          hi = math.max(hi, tMax + BUS_BAR_PAD)
+          lo = math.min(lo, tMin - UI.BUS.BAR_PAD)
+          hi = math.max(hi, tMax + UI.BUS.BAR_PAD)
         end
       else
-        local alongHalf = (ov.ax ~= 0) and NODE_W / 2 or NODE_H / 2
-        lo = math.min(tMin, -alongHalf) - BUS_BAR_PAD
-        hi = math.max(tMax,  alongHalf) + BUS_BAR_PAD
+        local alongHalf = (ov.ax ~= 0) and UI.NODE.W / 2 or UI.NODE.H / 2
+        lo = math.min(tMin, -alongHalf) - UI.BUS.BAR_PAD
+        hi = math.max(tMax,  alongHalf) + UI.BUS.BAR_PAD
       end
       local cax = bcx * ov.ax + bcy * ov.ay
       util.add(busRails, {
@@ -1423,7 +1441,7 @@ local function drawBusPass(p, busRails, placed)
   for _, r in ipairs(busRails) do
     if not r.matrix then
       local name = 'wiring.port.audio'
-      p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, BUS_BAR_THICK)
+      p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, name, UI.BUS.BAR_THICK)
       local t = r.trunk
       drawWire(p, t, { name = name })
       -- Port number once on the trunk (shared collision set with drawWireEndLabel);
@@ -1442,12 +1460,12 @@ end
 -- A matrix buss's node-pass body: the bar itself, geometry from busSegments'
 -- rail so bar and taps can't drift. Selection strokes a slab around the bar.
 local function drawBusBar(p, r, isSelected)
-  p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, 'wiring.port.audio', BUS_BAR_THICK)
+  p.line(r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1, 'wiring.port.audio', UI.BUS.BAR_THICK)
   if isSelected then
-    local pad = BUS_BAR_THICK
+    local pad = UI.BUS.BAR_THICK
     p.stroke(rect(math.min(r.bar.x0, r.bar.x1) - pad, math.min(r.bar.y0, r.bar.y1) - pad,
                   math.max(r.bar.x0, r.bar.x1) + pad, math.max(r.bar.y0, r.bar.y1) + pad),
-             'wiring.node.selected', SELECTED_STROKE, 0)
+             'wiring.node.selected', UI.NODE.SELECTED_STROKE, 0)
   end
 end
 
@@ -1479,7 +1497,7 @@ local function busBarHit(busRails, draft, mx, my)
   local wantDir = (draft.cursorEnd == 'to') and 'in' or 'out'
   for _, r in ipairs(busRails) do
     if (r.matrix or r.dir == wantDir) and r.node and not draft.forbidden[r.node.id]
-       and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
+       and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= UI.BUS.BAR_HIT then
       return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar }
     end
   end
@@ -1489,7 +1507,7 @@ end
 -- target the drop side uses. Every tap shares port 1, so the draft kept-port is 1.
 local function busBarSource(busRails, mx, my)
   for _, r in ipairs(busRails) do
-    if r.node and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
+    if r.node and pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= UI.BUS.BAR_HIT then
       local ax, ay = closestPointOnSegment(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1)
       return { nv = r.node, slot = { kind = 'audio', portIdx = r.port }, viaBar = r.bar,
                anchor = { x = ax, y = ay } }
@@ -1500,7 +1518,7 @@ end
 -- Any buss bar under the cursor — the RMB hit that opens the bar's delete menu.
 local function busBarAt(busRails, mx, my)
   for _, r in ipairs(busRails) do
-    if pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= BUS_BAR_HIT then
+    if pointToSegmentDist(mx, my, r.bar.x0, r.bar.y0, r.bar.x1, r.bar.y1) <= UI.BUS.BAR_HIT then
       return r
     end
   end
@@ -1509,13 +1527,13 @@ end
 -- Buss-bar move/resize: middle-third grab translates; near-end grab resizes that end (floored at its
 -- tap), handing off to the far end once the cursor crosses past it. Perp motion always slides.
 local function makeBusDrag(rail, mx, my)
-  local ov = ORIENT_VEC[rail.node.orient] or ORIENT_VEC.V
+  local ov = UI.BUS.ORIENT_VEC[rail.node.orient] or UI.BUS.ORIENT_VEC.V
   local px, py = rail.node.pos.x, rail.node.pos.y
   local b0 = rail.bar.x0 * ov.ax + rail.bar.y0 * ov.ay
   local b1 = rail.bar.x1 * ov.ax + rail.bar.y1 * ov.ay
   local aLo, aHi = math.min(b0, b1), math.max(b0, b1)
   local grabAxial = mx * ov.ax + my * ov.ay
-  local zone = math.min(BUS_END_ZONE, (aHi - aLo) / 3)
+  local zone = math.min(UI.BUS.END_ZONE, (aHi - aLo) / 3)
   local grip, active = 'move', nil
   if grabAxial >= aHi - zone then grip, active = 'resize', 'hi'
   elseif grabAxial <= aLo + zone then grip, active = 'resize', 'lo' end
@@ -1545,12 +1563,12 @@ local function busDragApply(bd, mx, my)
   if bd.active == 'lo' and qa > bd.aHi then bd.active = 'hi'
   elseif bd.active == 'hi' and qa < bd.aLo then bd.active = 'lo' end
   if bd.active == 'lo' then
-    local v = math.min(qa, bd.aHi - BUS_BAR_MIN)
-    if bd.tapLo then v = math.min(v, bd.tapLo - BUS_BAR_PAD) end
+    local v = math.min(qa, bd.aHi - UI.BUS.BAR_MIN)
+    if bd.tapLo then v = math.min(v, bd.tapLo - UI.BUS.BAR_PAD) end
     bd.aLo = v
   else
-    local v = math.max(qa, bd.aLo + BUS_BAR_MIN)
-    if bd.tapHi then v = math.max(v, bd.tapHi + BUS_BAR_PAD) end
+    local v = math.max(qa, bd.aLo + UI.BUS.BAR_MIN)
+    if bd.tapHi then v = math.max(v, bd.tapHi + UI.BUS.BAR_PAD) end
     bd.aHi = v
   end
 end
@@ -1707,8 +1725,8 @@ modes.wireDraft = {
     if ImGui.IsMouseDown(ctx, 0) then return end
     local targetHit = frame.targetHit
     local moved = g.fromPalette
-               or math.abs(frame.lmx - g.mx0) >= CLICK_THRESH
-               or math.abs(frame.lmy - g.my0) >= CLICK_THRESH
+               or math.abs(frame.lmx - g.mx0) >= UI.CLICK_THRESH
+               or math.abs(frame.lmy - g.my0) >= UI.CLICK_THRESH
     if moved then
       if dropEligible(g, targetHit) then
         local slot = targetHit.slot
@@ -1764,8 +1782,8 @@ modes.tagDrag = {
     if ImGui.IsMouseDown(ctx, 0) then return end
     local seg      = frame.segs[g.edgeIdx]
     local consumer = seg and frame.nodesById[seg.w.to]
-    local moved = math.abs(frame.lmx - g.mx0) >= CLICK_THRESH
-               or math.abs(frame.lmy - g.my0) >= CLICK_THRESH
+    local moved = math.abs(frame.lmx - g.mx0) >= UI.CLICK_THRESH
+               or math.abs(frame.lmy - g.my0) >= UI.CLICK_THRESH
     if moved and consumer then
       wv:setSourceTagPos(seg.w,
         { x = seg.sx - consumer.pos.x, y = seg.sy - consumer.pos.y })
@@ -1823,8 +1841,8 @@ modes.busDrag = {
   end,
   update = function(g, frame)
     if ImGui.IsMouseDown(ctx, 0) then return end
-    if math.abs(frame.lmx - g.mx0) >= CLICK_THRESH
-       or math.abs(frame.lmy - g.my0) >= CLICK_THRESH then
+    if math.abs(frame.lmx - g.mx0) >= UI.CLICK_THRESH
+       or math.abs(frame.lmy - g.my0) >= UI.CLICK_THRESH then
       local x, y, lo, hi = busDragPos(g)
       wv:moveBus(g.busId, { x = x, y = y }, { lo = lo, hi = hi })
     end
@@ -2044,7 +2062,7 @@ local function drawCanvas(frame)
   -- the dragged body itself overpaint it, so the highlight reads as a wire.
   if frame.spliceIdx then
     local seg = frame.segs[frame.spliceIdx]
-    p.line(seg.sx, seg.sy, seg.ex, seg.ey, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
+    p.line(seg.sx, seg.sy, seg.ex, seg.ey, 'wiring.node.selected', UI.WIRE.END_HIGHLIGHT)
   end
   for i = 1, #frame.wireViewsList do
     local seg = frame.segs[i]
@@ -2085,11 +2103,11 @@ local function drawCanvas(frame)
   drawWireEndHighlight(p, frame.segs, frame.wireEndHover)
   if frame.targetHit and frame.targetHit.viaBar then
     local b = frame.targetHit.viaBar
-    p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
+    p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', UI.BUS.BAR_THICK + 2)
   end
   if frame.sourceHit and frame.sourceHit.viaBar then
     local b = frame.sourceHit.viaBar
-    p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
+    p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', UI.BUS.BAR_THICK + 2)
   end
 
   if fader then drawFader(p, fader) end
@@ -2129,7 +2147,7 @@ local function faderInput(frame)
   if arrowLmbClicked then
     local seg = frame.segs[arrowHitIdx]
     local x0, y0, x1, y1 = faderRectAt(seg.cx, seg.cy)
-    local pad = WIRE_FADER_HIT_PAD
+    local pad = UI.FADER.HIT_PAD
     local cur = wv:edgeGain(arrowHitIdx)
     fader = {
       edgeIdx      = arrowHitIdx,
@@ -2145,7 +2163,7 @@ local function faderInput(frame)
     if reaper.JS_Mouse_SetPosition then
       local knobP = pFromDb(linToDb(cur))
       local knobImX, knobImY = frame.p.toScreen((x0 + x1) / 2,
-                                                y0 + (1 - knobP) * WIRE_FADER_H)
+                                                y0 + (1 - knobP) * UI.FADER.H)
       local osMx, osMy = reaper.GetMousePosition()
       local os       = reaper.GetOS()
       local yFlip    = (os:find('OSX') or os:find('macOS')) and -1 or 1
@@ -2180,10 +2198,10 @@ local function faderInput(frame)
   if fader and not faderDragging() then
     local wheelV = select(1, ImGui.GetMouseWheel(ctx))
     if wheelV ~= 0 and inStrip() then
-      local step = frame.shiftHeld and WIRE_FADER_WHEEL_DB_FINE or WIRE_FADER_WHEEL_DB
+      local step = frame.shiftHeld and UI.FADER.WHEEL_DB_FINE or UI.FADER.WHEEL_DB
       local db   = linToDb(fader.currentLin)
       if db == -math.huge then db = -60 end
-      db = math.min(WIRE_FADER_TOP_DB, db + wheelV * step)
+      db = math.min(UI.FADER.TOP_DB, db + wheelV * step)
       local lin = (db <= -60) and 0 or dbToLin(db)
       fader.currentLin = lin
       pokeOrSet(fader.edgeIdx, lin)
@@ -2191,7 +2209,7 @@ local function faderInput(frame)
       fader.wheelIdleFrames = 0
     elseif fader.wheelPending then
       fader.wheelIdleFrames = (fader.wheelIdleFrames or 0) + 1
-      if fader.wheelIdleFrames > WIRE_FADER_WHEEL_IDLE_FRAMES then
+      if fader.wheelIdleFrames > UI.FADER.WHEEL_IDLE_FRAMES then
         wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
         fader.wheelPending = false
       end
@@ -2678,17 +2696,16 @@ end
 -- Place an auto-spawned source on the master→cursor ray, pushed past the
 -- generator far enough that the two body rects don't collide. Degenerate
 -- (cursor on master): horizontal offset.
-local SOURCE_PAD = 24
 local function sourcePosFor(genX, genY)
   local mxp, myp = wv:masterPos()
   local dx, dy = genX - mxp, genY - myp
   local len = math.sqrt(dx * dx + dy * dy)
-  if len < 1 then return genX + NODE_W + SOURCE_PAD, genY end
+  if len < 1 then return genX + UI.NODE.W + UI.NODE.SPAWN_PAD, genY end
   local ux, uy = dx / len, dy / len
-  local tx = (ux == 0) and math.huge or (NODE_W / 2 / math.abs(ux))
-  local ty = (uy == 0) and math.huge or (NODE_H / 2 / math.abs(uy))
+  local tx = (ux == 0) and math.huge or (UI.NODE.W / 2 / math.abs(ux))
+  local ty = (uy == 0) and math.huge or (UI.NODE.H / 2 / math.abs(uy))
   local exit = math.min(tx, ty)
-  local sep  = 2 * exit + SOURCE_PAD
+  local sep  = 2 * exit + UI.NODE.SPAWN_PAD
   return genX + ux * sep, genY + uy * sep
 end
 

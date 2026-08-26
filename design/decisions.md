@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — wiringRender's design constants sit in one tiered table, `UI.NODE.W` and
+  `UI.FADER.TOP_DB`, rather than 64 main-chunk locals. Lua caps a function at 200 locals and the
+  chunk was on that ceiling; the table frees 63 registers. Nesting stops at one level, so FADER is
+  a tier beside WIRE rather than under it, and the tiers double as the file's vocabulary.
+
 - **2026-08-27** — A canvas phase whose helpers are private to it is declared `local name do ... end`,
   with the helpers inside the block. wiringRender's main chunk sits on Lua's 200-local ceiling, and the
   block releases the helpers' registers at its end, so the phase costs one local rather than seven.
