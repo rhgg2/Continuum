@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A canvas phase whose helpers are private to it is declared `local name do ... end`,
+  with the helpers inside the block. wiringRender's main chunk sits on Lua's 200-local ceiling, and the
+  block releases the helpers' registers at its end, so the phase costs one local rather than seven.
+
 - **2026-08-26** — A canvas phase that produces a gate for a later phase returns it, rather than
   writing it to the frame. The frame carries what several phases read; faderConsumed has one reader,
   so it passes as a value.

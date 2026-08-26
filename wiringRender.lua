@@ -2201,6 +2201,191 @@ local function faderInput(frame)
   return arrowLmbClicked or faderClicked or faderDblClicked
 end
 
+local beginGesture do
+  -- Double-click a node body: sampler dives to the sample page, other fx floats
+  -- its FX window; true when a node was hit, so the press below never drags.
+  local function diveOnDoubleClick(frame)
+    if gesture or frame.shiftHeld or fader or not frame.overCanvas
+       or not ImGui.IsMouseDoubleClicked(ctx, 0) then return false end
+    local hit = nodeUnderMouse(frame.nodeViews, frame.lmx, frame.lmy)
+    if not hit then return false end
+    if badgeHit(hit, frame.lmx, frame.lmy) then  -- a badge double-click already toggled once; never dive
+    elseif hit.activate == 'sampler' then
+      local track = wv:samplerTrack(hit.id)
+      if track then cmgr:invoke('diveToSampler', track) end
+    elseif hit.activate == 'fx' then
+      wv:openFxWindow(hit.id)
+    end
+    return true
+  end
+
+  local function toggleBadge(nv, badge)
+    if badge == 'mute' then wv:setMuted(nv.id, not wv:muted(nv.id))
+    else                    wv:setBypassed(nv.id, not wv:bypassed(nv.id)) end
+  end
+
+  -- Shift-hover press on a port: a new wire, cursor on the 'to' end. nil when
+  -- on a chevron or between list rows: click consumed, no wire, no body-drag.
+  local function draftFromPort(frame, sourceHit)
+    local lmx, lmy = frame.lmx, frame.lmy
+    local slot = sourceHit.slot
+    if not slot then return nil end
+    -- Pin the port → a chip materialises in the band; rebind slot to it so the
+    -- wire anchors at the chip (near the body), not the list row, and persists.
+    if sourceHit.list and slot.kind == 'audio' and slot.portIdx >= 2 then
+      local nv = sourceHit.nv
+      pinned[nv.id] = pinned[nv.id] or {}
+      pinned[nv.id][slot.portIdx] = true
+      local relaid = layoutPortRow(nv, 'out', lmx, lmy, nil, sourceHit.layout.side)
+      slot = findLayoutSlot(relaid, 'audio', slot.portIdx) or slot
+    end
+    -- defaultSlot has no screen rect → keptAnchor nil → draft falls back to node centre.
+    -- Buss source has no chip; its bar grab point is carried as anchor instead.
+    local keptAnchor
+    if slot.x then
+      keptAnchor = { x = slot.x + slot.w / 2, y = slot.y + slot.h / 2 }
+    elseif sourceHit.anchor then
+      keptAnchor = sourceHit.anchor
+    end
+    local base = {
+      mode       = 'wireDraft',
+      cursorEnd  = 'to',
+      keptId     = sourceHit.nv.id,
+      keptSide   = sourceHit.layout and sourceHit.layout.side,
+      keptAnchor = keptAnchor,
+      forbidden  = wv:ancestorsOf(sourceHit.nv.id),
+      mx0 = lmx, my0 = lmy,
+      fromList   = sourceHit.list ~= nil,
+    }
+    if slot.kind == 'midi' then
+      base.type = 'midi'
+    else
+      base.type, base.keptPort = 'audio', slot.portIdx
+    end
+    return base
+  end
+
+  -- Press on a hovered wire end: redraft that end, the other end kept.
+  local function draftFromEnd(frame, hover)
+    local lmx, lmy    = frame.lmx, frame.lmy
+    local seg         = frame.segs[hover.edgeIdx]
+    local wire        = seg.w
+    local keptIsTo    = (hover.side == 'from')
+    local keptId      = keptIsTo and wire.to or wire.from
+    local grabbedId   = keptIsTo and wire.from or wire.to
+    local grabbedPort = (wire.type == 'audio')
+                          and (keptIsTo and wire.fromPort or wire.toPort) or nil
+    -- grabDx/grabDy = gap to the mouse, decayed over travel so the end doesn't
+    -- snap to it. Non-body ports anchor at the chip; a body-centre anchor retargets to port 1.
+    local endX = keptIsTo and seg.sx or seg.ex
+    local endY = keptIsTo and seg.sy or seg.ey
+    if grabbedPort and grabbedPort > 1 then
+      local grabbedNV = frame.nodesById[grabbedId]
+      if grabbedNV then
+        local layout = layoutPortRow(grabbedNV, keptIsTo and 'out' or 'in',
+                                     lmx, lmy, 'audio')
+        local chip = findLayoutSlot(layout, 'audio', grabbedPort)
+        if chip and chip.x then
+          endX = chip.x + chip.w / 2
+          endY = chip.y + chip.h / 2
+        end
+      end
+    end
+    return {
+      mode       = 'wireDraft',
+      type       = wire.type,
+      cursorEnd  = hover.side,
+      keptId     = keptId,
+      keptPort   = (wire.type == 'audio')
+                     and (keptIsTo and wire.toPort or wire.fromPort) or nil,
+      keptAnchor = hover.keptAnchor,
+      forbidden  = keptIsTo
+                     and wv:descendantsOf(keptId)
+                     or  wv:ancestorsOf(keptId),
+      mx0 = lmx, my0 = lmy,
+      grabDx = endX - lmx, grabDy = endY - lmy,
+      fromList   = false,
+      edgeIdx    = hover.edgeIdx,
+      -- Node+port the end was attached to; while the decayed end stays in
+      -- this node's bbox the wire is pinned there and mouseup is a no-op.
+      originalTargetId = grabbedId,
+      originalPort     = grabbedPort,
+    }
+  end
+
+  local function dragSourceTag(frame)
+    local seg = frame.segs[frame.tagHover]
+    return { mode = 'tagDrag', edgeIdx = frame.tagHover,
+             mx0 = frame.lmx, my0 = frame.lmy, sx0 = seg.sx, sy0 = seg.sy }
+  end
+
+  -- Nothing claimed the press: a buss bar grabs into resize (busDrag), a node
+  -- body drags, or empty canvas bands — nodeUnderMouse skips busses, so a covered node wins.
+  local function grabBodyOrBand(frame)
+    local lmx, lmy = frame.lmx, frame.lmy
+    local bodyHit  = nodeUnderMouse(frame.nodeViews, lmx, lmy)
+    local rail     = not bodyHit and busBarAt(frame.busRails, lmx, lmy)
+    if rail then return makeBusDrag(rail, lmx, lmy) end
+    if not bodyHit then return { mode = 'band', mx0 = lmx, my0 = lmy } end
+    local starts = {}
+    if frame.selection[bodyHit.id] then
+      for _, nv in ipairs(frame.nodeViews) do
+        if frame.selection[nv.id] then starts[nv.id] = { x = nv.pos.x, y = nv.pos.y } end
+      end
+    else
+      starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
+    end
+    return { mode = 'nodeDrag', mx0 = lmx, my0 = lmy, starts = starts }
+  end
+
+  -- The idle → mode transition: mousedown starts the mode by precedence
+  -- (docs/wiringPage.md); a live gesture instead ticks its update hook, clearing itself on false.
+  function beginGesture(frame, faderConsumed)
+    if diveOnDoubleClick(frame) then return end
+    if not faderConsumed and not gesture and frame.overCanvas
+       and ImGui.IsMouseClicked(ctx, 0) then
+      -- Any click closes the spillover. The pre-click sourceHit (list still open)
+      -- drives dispatch here.
+      listOpenId = nil
+      -- An M/B badge click toggles output-mute / bypass on the fx node and wins
+      -- over the body-drag it sits on; shift (wire mode) suppresses it.
+      local badgeNode = not frame.shiftHeld
+                        and nodeUnderMouse(frame.nodeViews, frame.lmx, frame.lmy)
+      local badge     = badgeNode and badgeHit(badgeNode, frame.lmx, frame.lmy)
+      if     badge              then toggleBadge(badgeNode, badge)
+      elseif frame.sourceHit    then gesture = draftFromPort(frame, frame.sourceHit)
+      elseif frame.wireEndHover then gesture = draftFromEnd(frame, frame.wireEndHover)
+      elseif frame.tagHover     then gesture = dragSourceTag(frame)
+      else                           gesture = grabBodyOrBand(frame)
+      end
+    elseif gesture then
+      local update = modes[gesture.mode].update
+      if update and update(gesture, frame) == false then gesture = nil end
+    end
+  end
+end
+
+-- RMB precedence: triangle → per-wire menu; node body / buss bar → node
+-- menu; empty canvas → FX picker (same code path as the N-key shortcut).
+local function rmbDispatch(frame)
+  if gesture or not frame.overCanvas or not ImGui.IsMouseClicked(ctx, 1) then return end
+  if frame.arrowHitIdx and not wireMenu and not fader then
+    local seg = frame.segs[frame.arrowHitIdx]
+    wireMenu = { edgeIdx = frame.arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
+    ImGui.OpenPopup(ctx, '##wiringWireMenu')
+  else
+    local bodyHit = nodeUnderMouse(frame.nodeViews, frame.lmx, frame.lmy)
+    local barHit  = not bodyHit and busBarAt(frame.busRails, frame.lmx, frame.lmy)
+    local menuId  = bodyHit and bodyHit.id or barHit and barHit.busId
+    if menuId and not nodeMenu then
+      nodeMenu = { nodeId = menuId, anchorX = frame.lmx, anchorY = frame.lmy }
+      ImGui.OpenPopup(ctx, '##wiringNodeMenu')
+    else
+      openFxPicker(frame.lmx, frame.lmy, { x = frame.mx, y = frame.my })
+    end
+  end
+end
+
 local function renderCanvas(w, h)
   local frame = beginFrame(w, h)
   gatherViews(frame)
@@ -2208,16 +2393,11 @@ local function renderCanvas(w, h)
   resolveHover(frame)
   drawCanvas(frame)
 
-  -- Transitional: the phases still inline below read the frame through locals,
+  -- Transitional: the popups still inline below read the frame through locals,
   -- and each of these dissolves as its phase moves out.
   local p, sx, sy                = frame.p, frame.sx, frame.sy
   local mx, my, lmx, lmy         = frame.mx, frame.my, frame.lmx, frame.lmy
-  local overCanvas, shiftHeld    = frame.overCanvas, frame.shiftHeld
-  local nodeViews, nodesById     = frame.nodeViews, frame.nodesById
-  local wireViewsList, selection = frame.wireViewsList, frame.selection
-  local segs, busRails           = frame.segs, frame.busRails
-  local wireEndHover, tagHover   = frame.wireEndHover, frame.tagHover
-  local arrowHitIdx, sourceHit   = frame.arrowHitIdx, frame.sourceHit
+  local nodesById, wireViewsList = frame.nodesById, frame.wireViewsList
 
   -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
   -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
@@ -2227,176 +2407,9 @@ local function renderCanvas(w, h)
   end
 
   local faderConsumed = faderInput(frame)
+  beginGesture(frame, faderConsumed)
 
-  -- Double-click a node body: sampler dives to sample page, other fx floats
-  -- its FX window. dblConsumed blocks this press from starting a drag.
-  local dblConsumed = false
-  if not gesture and not shiftHeld and not fader and overCanvas
-     and ImGui.IsMouseDoubleClicked(ctx, 0) then
-    local hit = nodeUnderMouse(nodeViews, lmx, lmy)
-    if hit then
-      dblConsumed = true  -- a node was hit: never fall through to a body-drag
-      if badgeHit(hit, lmx, lmy) then       -- a badge double-click already toggled once; never dive
-      elseif hit.activate == 'sampler' then
-        local track = wv:samplerTrack(hit.id)
-        if track then cmgr:invoke('diveToSampler', track) end
-      elseif hit.activate == 'fx' then
-        wv:openFxWindow(hit.id)
-      end
-    end
-  end
-
-  -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
-  -- body-drag > band.
-  if not faderConsumed and not dblConsumed and not gesture
-      and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
-    -- Any click closes the spillover. The pre-click sourceHit (list still open)
-    -- drives dispatch here.
-    listOpenId = nil
-    -- An M/B badge click toggles output-mute / bypass on the fx node and wins
-    -- over the body-drag it sits on; shift (wire mode) suppresses it.
-    local badgeNode = not shiftHeld and nodeUnderMouse(nodeViews, lmx, lmy)
-    local badge     = badgeNode and badgeHit(badgeNode, lmx, lmy)
-    if badge then
-      if badge == 'mute' then wv:setMuted(badgeNode.id, not wv:muted(badgeNode.id))
-      else                    wv:setBypassed(badgeNode.id, not wv:bypassed(badgeNode.id)) end
-    elseif sourceHit then
-      local slot = sourceHit.slot
-      if slot then
-        -- Pin the port → a chip materialises in the band; rebind slot to it so
-        -- the wire anchors at the chip (near the body), not the far-off list
-        -- row, and the chip persists for later gestures.
-
-        if sourceHit.list and slot.kind == 'audio' and slot.portIdx >= 2 then
-          local nv = sourceHit.nv
-          pinned[nv.id] = pinned[nv.id] or {}
-          pinned[nv.id][slot.portIdx] = true
-          local relaid = layoutPortRow(nv, 'out', lmx, lmy, nil,
-                                       sourceHit.layout.side)
-          slot = findLayoutSlot(relaid, 'audio', slot.portIdx) or slot
-        end
-        -- defaultSlot has no screen rect → keptAnchor nil → draft falls back to node centre.
-        -- Buss source has no chip; its bar grab point is carried as anchor instead.
-        local keptAnchor
-        if slot.x then
-          keptAnchor = { x = slot.x + slot.w / 2, y = slot.y + slot.h / 2 }
-        elseif sourceHit.anchor then
-          keptAnchor = sourceHit.anchor
-        end
-        local base = {
-          mode       = 'wireDraft',
-          cursorEnd  = 'to',
-          keptId     = sourceHit.nv.id,
-          keptSide   = sourceHit.layout and sourceHit.layout.side,
-          keptAnchor = keptAnchor,
-          forbidden  = wv:ancestorsOf(sourceHit.nv.id),
-          mx0 = lmx, my0 = lmy,
-          fromList   = sourceHit.list ~= nil,
-        }
-        if slot.kind == 'midi' then
-          base.type = 'midi'
-        else
-          base.type, base.keptPort = 'audio', slot.portIdx
-        end
-        gesture = base
-      end
-      -- slot=nil: cursor on chevron or between list rows; consume the
-      -- click (no wire start, no body-drag fall-through).
-    elseif wireEndHover then
-      local seg      = segs[wireEndHover.edgeIdx]
-      local wire     = seg.w
-      local keptIsTo = (wireEndHover.side == 'from')
-      local keptId   = keptIsTo and wire.to or wire.from
-      local grabbedId   = keptIsTo and wire.from or wire.to
-      local grabbedPort = (wire.type == 'audio')
-                            and (keptIsTo and wire.fromPort or wire.toPort) or nil
-      -- grabDx/grabDy = gap to the mouse, decayed over travel so the end
-      -- doesn't snap to the cursor. Anchor non-body ports at the chip centre,
-      -- not the body — a body-centre anchor retargets the redraft to port 1.
-      local endX = keptIsTo and seg.sx or seg.ex
-      local endY = keptIsTo and seg.sy or seg.ey
-      if grabbedPort and grabbedPort > 1 then
-        local grabbedNV = nodesById[grabbedId]
-        if grabbedNV then
-          local layout = layoutPortRow(grabbedNV,
-                                       keptIsTo and 'out' or 'in',
-                                       lmx, lmy, 'audio')
-          local chip = findLayoutSlot(layout, 'audio', grabbedPort)
-          if chip and chip.x then
-            endX = chip.x + chip.w / 2
-            endY = chip.y + chip.h / 2
-          end
-        end
-      end
-      gesture = {
-        mode       = 'wireDraft',
-        type       = wire.type,
-        cursorEnd  = wireEndHover.side,
-        keptId     = keptId,
-        keptPort   = (wire.type == 'audio')
-                       and (keptIsTo and wire.toPort or wire.fromPort) or nil,
-        keptAnchor = wireEndHover.keptAnchor,
-        forbidden  = keptIsTo
-                       and wv:descendantsOf(keptId)
-                       or  wv:ancestorsOf(keptId),
-        mx0 = lmx, my0 = lmy,
-        grabDx = endX - lmx, grabDy = endY - lmy,
-        fromList   = false,
-        edgeIdx    = wireEndHover.edgeIdx,
-        -- Node+port the end was attached to; while the decayed end stays in
-        -- this node's bbox the wire is pinned there and mouseup is a no-op.
-        originalTargetId = grabbedId,
-        originalPort     = grabbedPort,
-      }
-    elseif tagHover then
-      local seg = segs[tagHover]
-      gesture = { mode = 'tagDrag', edgeIdx = tagHover,
-                  mx0 = lmx, my0 = lmy, sx0 = seg.sx, sy0 = seg.sy }
-    else
-      -- A buss bar grabs into its own resize gesture (busDrag); a real node under
-      -- a bar still wins (nodeUnderMouse skips busses, so bodyHit is never one).
-      local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
-      local rail    = not bodyHit and busBarAt(busRails, lmx, lmy)
-      if rail then
-        gesture = makeBusDrag(rail, lmx, lmy)
-      elseif bodyHit then
-        local starts = {}
-        if selection[bodyHit.id] then
-          for _, nv in ipairs(nodeViews) do
-            if selection[nv.id] then starts[nv.id] = { x = nv.pos.x, y = nv.pos.y } end
-          end
-        else
-          starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
-        end
-        gesture = { mode = 'nodeDrag', mx0 = lmx, my0 = lmy, starts = starts }
-      else
-        gesture = { mode = 'band', mx0 = lmx, my0 = lmy }
-      end
-    end
-  elseif gesture then
-    local update = modes[gesture.mode].update
-    if update and update(gesture, frame) == false then gesture = nil end
-  end
-
-  -- RMB precedence: triangle → per-wire menu; node body / buss bar → node
-  -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
-  if not gesture and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
-    if arrowHitIdx and not wireMenu and not fader then
-      local seg = segs[arrowHitIdx]
-      wireMenu = { edgeIdx = arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
-      ImGui.OpenPopup(ctx, '##wiringWireMenu')
-    else
-      local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
-      local barHit  = not bodyHit and busBarAt(busRails, lmx, lmy)
-      local menuId  = bodyHit and bodyHit.id or barHit and barHit.busId
-      if menuId and not nodeMenu then
-        nodeMenu = { nodeId = menuId, anchorX = lmx, anchorY = lmy }
-        ImGui.OpenPopup(ctx, '##wiringNodeMenu')
-      else
-        openFxPicker(lmx, lmy, { x = mx, y = my })
-      end
-    end
-  end
+  rmbDispatch(frame)
 
   -- Wire menu: ImGui popup centred on the cursor; closes on cursor-leave of
   -- the window rect (and on click-outside, ImGui's default).

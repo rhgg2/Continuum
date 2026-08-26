@@ -34,21 +34,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 wiring: extract the gesture transition and RMB dispatch (§ Stage 3 ⑦)
 - 2026-08-26 wiring: extract the fader input phase (§ Stage 3 ⑦)
 - 2026-08-26 wiring: extract the canvas draw pass (§ Stage 3 (6))
 - 2026-08-26 wiring: extract the hover resolution phase (§ Stage 3 ⑤)
-- 2026-08-26 wiring: extract the frame carrier and the head phases (§ Stage 3 (1)-(4))
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-5. **The gesture transition and RMB** (§ Stage 3 ⑦) — `beginGesture(frame)`
-   @2189–2319: the idle→mode precedence chain (badge > shift-hover >
-   wire-end > tag > bar > body > band) with the `gesture update` dispatch on
-   its else arm, plus the double-click dive @2171–2187 and
-   `rmbDispatch(frame)` @2321–2339.
 6. **The popups** (§ Stage 3 ⑧) — `renderWireMenu(frame)` and
    `renderNodeMenu(frame)` @2341–2415, and the fx-picker shell @2417–2437 if
    the shared skeleton covers it: one helper taking a body callback if the
