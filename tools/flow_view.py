@@ -38,42 +38,54 @@ PAGE = r"""<!doctype html>
 <meta charset="utf-8">
 <title>Continuum flow</title>
 <style>
+/* Palette and type from ~/.emacs.d/etc/markdown.css, the theme's HTML face.
+   Copied rather than linked: the page has to stand alone, with no network and
+   no files beside it. When the palette moves, this moves by hand. */
 :root {
-  --bg:#1b1d23; --fg:#d6d9df; --dim:#6d7480; --rule:#2c3038;
-  --kw:#c98bdb; --st:#9ecb8a; --cm:#697082; --nu:#e0a468; --hd:#7fb3d5;
+  --bg:#e0dcd2; --bg-recess:#cac6b5; --bg-raised:#f2f0e9;
+  --ink:#434230; --ink-1:#575542; --ink-2:#716d5b; --faint:#888477;
+  --rule:#a9a389; --selection:#b7c7d8;
+  --blue:#0077bd; --violet:#666abd; --cyan:#008079; --green:#697900;
+  --yellow:#906d00; --orange:#c74811; --magenta:#ce317e; --salmon:#9d6357;
 }
 * { box-sizing:border-box }
-body { margin:0; background:var(--bg); color:var(--fg);
-       font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace }
-header { position:sticky; top:0; z-index:9; background:var(--bg);
+body { margin:0; background:var(--bg); color:var(--ink);
+       font:13px/1.55 "Source Code Pro",ui-monospace,SFMono-Regular,Menlo,monospace }
+::selection { background:var(--selection) }
+/* The chrome is prose, not source: the header takes the theme's sans so its
+   controls read as labels rather than as one more line of code. */
+header { position:sticky; top:0; z-index:9; background:var(--bg-raised);
          border-bottom:1px solid var(--rule); padding:10px 14px;
+         font-family:"Fira Sans",system-ui,sans-serif;
          display:flex; gap:12px; align-items:center; flex-wrap:wrap }
-input { background:#22252c; border:1px solid var(--rule); color:var(--fg);
+input { background:var(--bg); border:1px solid var(--rule); color:var(--ink);
         padding:5px 9px; border-radius:4px; font:inherit; width:340px }
-input[type=checkbox] { width:auto }
-button { background:#262a32; border:1px solid var(--rule); color:var(--fg);
+input[type=checkbox] { width:auto; accent-color:var(--cyan) }
+button { background:var(--bg); border:1px solid var(--rule); color:var(--ink-1);
          font:inherit; padding:3px 9px; border-radius:4px; cursor:pointer }
-button:hover { background:#323742 }
+button:hover { background:var(--bg-recess); color:var(--ink) }
 #depth, #blocks { display:inline-flex; gap:4px; align-items:center }
-#hits { position:absolute; top:46px; left:14px; background:#22252c;
+#hits { position:absolute; top:46px; left:14px; background:var(--bg-raised);
         border:1px solid var(--rule); border-radius:4px; max-height:60vh;
+        box-shadow:0 3px 10px rgba(67,66,48,.20);
         overflow:auto; display:none; z-index:20; min-width:520px }
 #hits div { padding:4px 10px; cursor:pointer; white-space:nowrap }
-#hits div:hover, #hits div.on { background:#323742 }
+#hits div:hover, #hits div.on { background:var(--bg-recess) }
 #main { padding:14px 18px 60vh }
 .decl { margin:0 }
-.dh { color:var(--hd); padding:3px 0 5px; border-bottom:1px solid var(--rule);
+.dh { color:var(--blue); padding:3px 0 5px; border-bottom:1px solid var(--rule);
       margin-bottom:5px; display:flex; gap:10px; align-items:baseline }
-.dh .loc { color:var(--dim); font-size:12px }
-.dh .kind { color:var(--dim) }
+.dh b { font-weight:600 }
+.dh .loc { color:var(--faint); font-size:12px }
+.dh .kind { color:var(--faint) }
 .ln { display:flex; align-items:flex-start }
-.ln:hover { background:#20232a }
-.no { color:var(--dim); text-align:right; width:52px; flex:none;
+.ln:hover { background:var(--bg-raised) }
+.no { color:var(--faint); text-align:right; width:52px; flex:none;
       padding-right:10px; user-select:none; cursor:pointer }
-.wf { width:12px; flex:none; color:#5b6472; user-select:none }
+.wf { width:12px; flex:none; color:var(--rule); user-select:none }
 .ln.wrapped .wf::after { content:'\21a9' }
-.fold { width:14px; flex:none; color:var(--dim); cursor:pointer; user-select:none }
-.fold.on { color:var(--fg) }
+.fold { width:14px; flex:none; color:var(--rule); cursor:pointer; user-select:none }
+.fold.on { color:var(--ink-1) }
 /* Hanging indent: the first visual line keeps the source's own indentation and
    every continuation sits at a fixed offset, so a wrap never reads as a
    statement at that nesting level. min-width:0 is what lets the flex item
@@ -82,11 +94,13 @@ code { white-space:pre-wrap; overflow-wrap:break-word; flex:1 1 auto; min-width:
        padding-left:5ch; text-indent:-5ch }
 body.nowrap code { white-space:pre; overflow-wrap:normal; padding-left:0; text-indent:0 }
 body.nowrap .wf::after { content:'' }
-.chip { color:#8fb8d8; cursor:pointer; margin-left:10px; border-bottom:1px dotted #46586b;
+.chip { color:var(--blue); cursor:pointer; margin-left:10px;
+        border-bottom:1px dotted var(--rule);
         white-space:nowrap; user-select:none; flex:none; align-self:flex-start }
-.chip:hover { color:#cfe6f7 }
-.chip.ext { color:var(--dim); cursor:default; border-bottom:1px dotted #3a3f49 }
-.chip.cyc { color:#c8a06a; }
+.chip:hover { border-bottom-color:var(--blue) }
+.chip.ext { color:var(--faint); cursor:default; border-bottom:1px dotted var(--bg-recess) }
+.chip.cyc { color:var(--orange); }
+.chip.cyc:hover { border-bottom-color:var(--orange) }
 /* Hiding a definition takes its comment block and its expansion with it: the
    nest is a sibling the row owns, and left behind it would read as belonging to
    the line above. */
@@ -98,14 +112,17 @@ body.noperf .perf { display:none }
 body.noperf .ln.perfline { display:none }
 /* A call is clickable where it is written. The chip on the right still works
    and still carries what the name cannot -- (external), the cycle mark. */
-.cn { cursor:pointer; border-bottom:1px dotted #46586b }
-.cn:hover { color:#cfe6f7 }
-.nest { margin:3px 0 5px 62px; border-left:2px solid #39414e;
-        padding-left:10px; background:#1e2128 }
+.cn { cursor:pointer; border-bottom:1px dotted var(--rule) }
+.cn:hover { color:var(--blue); border-bottom-color:var(--blue) }
+.nest { margin:3px 0 5px 62px; border-left:2px solid var(--rule);
+        padding-left:10px; background:var(--bg-raised) }
 .nest > .decl > .dh { border-bottom:1px dotted var(--rule) }
 .hid { display:none }
-.kw{color:var(--kw)} .st{color:var(--st)} .cm{color:var(--cm)} .nu{color:var(--nu)}
-.note { color:var(--dim); padding:2px 0 0 62px; font-size:12px }
+/* Token roles as the theme gives the same tokens in the buffer. */
+.kw{color:var(--green); font-weight:600} .st{color:var(--cyan)}
+.cm{color:var(--ink-2)} .nu{color:var(--magenta)}
+code .cm { font-style:italic }
+.note { color:var(--faint); padding:2px 0 0 62px; font-size:12px }
 </style>
 <header>
   <input id="q" placeholder="root at…  (module or function name)" autocomplete="off">
