@@ -45,4 +45,38 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 3 complete once the item above lands.)
+1. **The frame carrier and the head phases** (§ Stage 3 ①–④) — `frame`
+   becomes the carrier every phase reads and writes, gaining `p`, the canvas
+   origin `sx`/`sy`, `selection`, `segs`, `busRails` and `matrixRails`.
+   Extract `beginFrame` @1842–1870 (origin, painter, bg fill, mouse, shift
+   rising edge, hoverFreeze decay), `gatherViews` @1872–1893 (source-less
+   nodeViews, nodesById, the wire and bus view lists, the `inject` call,
+   selection) and `buildGeometry` @1895–1913 (wireSegments / sourceSegments /
+   busSegments, the midpoint stamp, the splice search). Re-anchor the line in
+   docs/wiringPage.md saying what `frame` carries.
+2. **Hover resolution** (§ Stage 3 ⑤) — `resolveHover(frame)` @1915–2004,
+   moved verbatim: wire-end and source-tag hover, the fader drag tick,
+   `arrowMidHit`, the fader keep/close ladder, the decayed draft end, the
+   source / target / sticky / draft-source hits, and the one-overlay-per-node
+   dedup. Internal order is load-bearing — the fader tick sits between the two
+   hover passes. `frame` gains `wireEndHover`, `tagHover`, `arrowHitIdx`,
+   `draft`, the four hits and `overlays`.
+3. **The draw pass** (§ Stage 3 ⑥) — `drawCanvas(frame)` @2006–2076 in the
+   documented z-order, ending on the `wv:setHover` publication. The band
+   overlay @2439–2446 stays at the tail, since the popups sit between it and
+   the rest of the draw.
+4. **Fader input** (§ Stage 3 ⑦) — `faderInput(frame)` @2085–2169: the
+   triangle LMB open with the OS cursor warp, the double-click unity reset,
+   the in-strip click, and the wheel debounce; it returns `faderConsumed` for
+   the mousedown gate. The Esc dispatch @2078–2083 stays in the sequencing.
+5. **The gesture transition and RMB** (§ Stage 3 ⑦) — `beginGesture(frame)`
+   @2189–2319: the idle→mode precedence chain (badge > shift-hover >
+   wire-end > tag > bar > body > band) with the `gesture update` dispatch on
+   its else arm, plus the double-click dive @2171–2187 and
+   `rmbDispatch(frame)` @2321–2339.
+6. **The popups** (§ Stage 3 ⑧) — `renderWireMenu(frame)` and
+   `renderNodeMenu(frame)` @2341–2415, and the fx-picker shell @2417–2437 if
+   the shared skeleton covers it: one helper taking a body callback if the
+   anchor + chrome push + close-on-cursor-leave parameterises cleanly, two
+   siblings if not. This is the item that lands renderCanvas at its ~150-line
+   sequencing target.

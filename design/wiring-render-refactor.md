@@ -1,9 +1,9 @@
 # wiringRender refactor — one wire renderer, explicit gesture machine
 
 > opened: 2026-06-12 · status: in flight — plan/wiring-render-refactor.md,
-> phase 3 (the draft modes)
+> phase 4 (decompose renderCanvas)
 
-Target: `wiringRender.lua` only (2,661 loc). The line refs below have
+Target: `wiringRender.lua` only (2,715 loc). The line refs below have
 drifted; the live numbers for the phase in flight are in
 plan/wiring-render-refactor.md § Queued, and anything else re-locates by
 the quoted comments.
@@ -12,17 +12,14 @@ the quoted comments.
 
 Two structural complaints, one file:
 
-1. **Wires must have exactly one renderer.** Today the line/arrow/label
-   trio is emitted from three sites that can drift independently:
-   `drawWiresPass` (@1086), `drawDraftWire` (@1211, hand-rolled line +
-   arrow, no shared midpoint), and `drawBusPass` (@1506, hand-rolled
-   trunk line + arrow + label).
-2. **Gesture modes need a real state machine.** Seven nullable
-   variables (`drag`, `band`, `wireDraft`, `tagDrag`, `busDraft`,
-   `busDrag`, `fader.dragging`) are documented as "at most one live at
-   a time" but enforced by five hand-maintained guard chains
-   (@1820, @1840, @2067, @2096, @2299), and each mode's
-   arm/tick/commit/cancel is smeared across non-adjacent blocks of the
+1. **Wires must have exactly one renderer.** The line/arrow/label trio was
+   emitted from three sites that could drift independently: the wire pass,
+   the draft wire, and the buss trunk.
+2. **Gesture modes need a real state machine.** Seven nullable variables
+   (`drag`, `band`, `wireDraft`, `tagDrag`, `busDraft`, `busDrag`,
+   `fader.dragging`) were documented as "at most one live at a time" but
+   enforced by five hand-maintained guard chains, and each mode's
+   arm/tick/commit/cancel was smeared across non-adjacent blocks of the
    730-line `renderCanvas`.
 
 ## Non-goals / ground rules
@@ -43,13 +40,12 @@ Two structural complaints, one file:
   ≤2 lines inline. `.map` files regenerate via the post-edit hook —
   never hand-edit them.
 - Existing transient-mutation tricks are load-bearing, not bugs: node
-  drag overrides cached `nv.pos` in place (@1748), busDraft appends a
-  synthetic `@busDraft` busView to the (already fresh) busViews list
-  and stamps `.bus` onto cached wireViews (@1765), tagDrag writes a
-  transient `fromOffset` (@1788). All three deliberately feed the
-  single geometry pass so preview and committed frames coincide
-  (docs/wiringPage.md § Bus creation). Preserve the trick; just
-  relocate it.
+  drag overrides cached `nv.pos` in place, busDraft appends a synthetic
+  `@busDraft` busView and stamps `.bus` onto cached wireViews, tagDrag
+  writes a transient `fromOffset` — the three `inject` hooks. All three
+  deliberately feed the single geometry pass so preview and committed
+  frames coincide (docs/wiringPage.md § Buss gestures). Preserve the
+  trick; just relocate it.
 
 ## Stage 1 — one wire renderer
 
@@ -59,150 +55,9 @@ docs/wiringPage.md § Canvas draw order, and the seg shape is the
 
 ## Stage 2 — explicit gesture state machine
 
-### Data
-
-```lua
--- The one live gesture; nil = idle. Payload fields are today's per-mode
--- table contents, unchanged (shapes documented at the old decls @104–109).
-local gesture = nil
--- gesture.mode ∈ 'nodeDrag' | 'band' | 'wireDraft' | 'tagDrag'
---              | 'busDraft' | 'busDrag' | 'faderDrag'
-
--- modes[mode] = {
---   inject = fn(g, frame),  -- pre-geometry transients (runs before wireSegments)
---                           -- return false to clear
---   update = fn(g, frame),  -- post-hover tick + mouseup commit; return false to clear
---   escCancels = true,      -- Esc clears the gesture; only the draft modes bind it
--- }
-```
-
-`frame` carries what the blocks already close over: `p`, `lmx`, `lmy`,
-`mx`, `my`, `overCanvas`, `shiftHeld`, `nodeViews`, `nodesById`,
-`wireViewsList`, `busViewsList`, `segs`, `busRails`, plus per-frame
-hover results where the update hooks need them (`targetHit`,
-`draftCx/draftCy`). Build it incrementally — geometry fields get
-attached after the geometry pass.
-
-One `inject` call site serves every mode, immediately before the
-geometry pass. The frame also carries results back: `band` writes
-`frame.selection`, and the splice search writes `frame.spliceIdx` /
-`frame.spliceNode` for the draw and the nodeDrag commit to share.
-
-`drag` is renamed `nodeDrag` (the only rename); all other mode names
-keep their current variable names to minimise diff noise.
-
-### Relocation map
-
-Move each block verbatim into its mode handler; do not rewrite logic.
-
-| Mode | arm (idle → mode) | inject (pre-geometry) | update (tick + mouseup) |
-|---|---|---|---|
-| nodeDrag | body-hit in mousedown chain @2205–2214 | pos override @1748–1754 | commit `moveNodes` @2279–2286 |
-| band | empty-canvas mousedown @2216 | selection preview @1740–1744 | commit/clear selection @2287–2295 |
-| wireDraft | shift-hover source @2109–2147; wire-end redraft @2150–2194; palette row drag (in `renderPalette`) | — | decayed end @1873–1876 (feeds hover), commit ladder @2219–2261 |
-| tagDrag | tag mousedown @2195–2197 | transient `fromOffset` @1788–1795 | commit `setSourceTagPos` @2262–2271 |
-| busDraft | node-menu `Selectable` @2372 | synthetic busView + wire stamping @1765–1785 | Esc @1974–1975; click-drop `insertBus` @2085–2092 |
-| busDrag | bar grab `makeBusDrag` @2202–2204 | live pos/ext @1798–1806 | mouseup commit `moveBus` @2272–2278 |
-| faderDrag | arrow LMB @1980–2011; in-strip click @2025–2036 | — | poke-per-frame + release commit @1828–1838 |
-
-Notes per mode:
-
-- **wireDraft**: the palette arm lives in `renderPalette`, outside
-  `renderCanvas` — `gesture` is file-scope, so the palette sets it
-  directly, exactly as it sets `wireDraft` today. The commit ladder's
-  subtleties must survive intact: `fromPalette` counts as moved;
-  CLICK_THRESH click-vs-drag split; `sameAsOrigin` no-op (no undo
-  burn); empty-canvas delete judged by the *decayed end*
-  (`nodeAtPoint`), not the cursor; `hoverFreeze` set only on moved
-  drops; click-without-drag on a list row pins the chip + sets
-  `sticky`. The draft draw call and the palette floating tag
-  (@1926, @1936–1938) stay in the draw phase, gated on
-  `gesture.mode == 'wireDraft'`.
-- **band**: the band rect overlay (@2416–2423) is one stroke — keep it
-  inline in the draw sequence, gated on the mode, rather than adding a
-  draw hook to the machine for one user.
-- **bus is two modes, not the old `busOverlay`/`armBus` pair** — the
-  doc predated a rewrite, and neither `busOverlay` nor `armBus` exists
-  in the current file. The two real bus gestures are:
-  - **busDraft** (node-menu creation): a menu `Selectable` (@2372)
-    arms it; its `inject` glues a synthetic `@busDraft` busView to the
-    cursor and stamps `.bus` onto the wires the claimed port owns
-    (@1765–1785); it commits on the next left click via `wv:insertBus`
-    (@2085–2092) or cancels on Esc (@1974–1975).
-  - **busDrag** (bar move/resize): grabbing a bar arms `makeBusDrag`
-    (@2202–2204); its `inject` feeds the in-flight pos+ext into the
-    geometry pass (@1798–1806, mirroring tagDrag); mouseup commits
-    `wv:moveBus` past CLICK_THRESH (@2272–2278).
-
-  They are independent gestures — do not fold either into the other,
-  and note that in the mousedown chain the bar grab (@2202) only fires
-  when no real node is under the cursor (`nodeUnderMouse` skips busses).
-- **faderDrag vs the fader overlay**: split along the real seam. The
-  `fader` table (edgeIdx, rect, hitRect, currentLin, valueAtClick,
-  wheelPending, wheelIdleFrames) stays a plain file-local *overlay* —
-  it coexists with idle hovering, and its open/keep/close logic
-  (@1845–1869), wheel debounce (@2039–2062), double-click reset
-  (@2013–2021) and draw (@1952) are overlay concerns, untouched. Only
-  `fader.dragging` becomes `gesture = { mode = 'faderDrag' }`; the
-  fader table drops its `dragging` flag.
-
-### Guard rewrites
-
-Each chain becomes `not gesture` plus its genuinely orthogonal axes:
-
-- @1820 (wire-end + tag hover): `not gesture and not shiftHeld`
-- @1840 (arrowMidHit): `not gesture and not shiftHeld` (the old chain's
-  `not (fader and fader.dragging)` folds in — faderDrag is a gesture now)
-- @2067 (double-click): `not gesture and not shiftHeld and not fader
-  and overCanvas` (fader here is the *overlay* — a visible fader
-  swallows double-click)
-- @2096 (LMB mousedown): `not gesture and not faderConsumed and not
-  dblConsumed and overCanvas` — this is the idle→mode transition
-  function; the precedence chain inside (badge > shift-hover source >
-  wire-end redraft > tag > bar → busDrag / body → nodeDrag > band)
-  stays one readable if/elseif.
-- @2299 (RMB): `not gesture and overCanvas`
-
-Frame ordering is load-bearing — preserve it: fader open/keep/close and
-click handling run before the double-click check, which runs before the
-LMB mousedown chain (`faderConsumed` / `dblConsumed` exist precisely to
-sequence these). `overCanvas` gates press-*starts* only; mouseup
-commits must run even off-canvas, as today.
-
-### Esc and lifecycle
-
-- The two Esc blocks @1969–1976 collapse to one dispatch keyed on the
-  mode's `escCancels`. Only wireDraft and busDraft declare it, and
-  neither has teardown beyond the clear, so the flag is declarative
-  rather than a hook; a mode that later needs teardown can grow one.
-  busDrag has no Esc binding — don't invent one. Keep the existing
-  comment about the wiring-scope `wiringClearSelection` Esc binding and
-  keep the check at the same point in the frame.
-- `wr:closeTransients()` (@2525–2528) simplifies to `gesture = nil`
-  plus the existing hover/overlay resets (`shiftWas`, `listOpenId`,
-  `sticky`, `engagedId`, `hoverFreeze`, `fader`, `wireMenu`). Flag one
-  real behaviour change rather than hide it: closeTransients today
-  clears `busDrag` but *not* `busDraft` (@2526), so `gesture = nil`
-  will now also drop an in-flight busDraft on unbind. That is almost
-  certainly correct (a half-placed bus bar shouldn't survive a page
-  switch), but it is a change — call it out in the final report.
-
-### Explicitly NOT modes
-
-Hover bookkeeping (`engagedId`, `listOpenId`, `pinned`, `sticky`,
-`hoverFreeze`, `shiftWas`) and popup state (`wireMenu`, `nodeMenu`,
-`fxPicker`, `paletteSource`) coexist with gestures and are cleared by
-their own rules. Leave them as file-locals.
-
-### Docs
-
-Rewrite docs/wiringPage.md § "The gesture state machine" to describe
-the explicit machine: the `gesture` variable, the mode list (including
-the busDraft/busDrag split), the inject/update/escCancels phases, and the
-unchanged mousedown precedence. The per-mode semantics prose (forbidden
-sets, decayed end, hoverFreeze, pinning) is still accurate — keep it,
-re-anchored to the mode names. Update the `--shape:` comment block at
-the old state decls (@104–120).
+Landed 2026-08-26 in five commits; the model is now docs/wiringPage.md
+§ The gesture state machine, and each mode's payload shape sits at its
+entry in the `modes` table.
 
 ## Stage 3 — decompose renderCanvas
 
@@ -216,15 +71,15 @@ sequencing, phases named in order:
    midpoint stamp
 5. hover resolution (wireEndHover, tagHover, arrowHitIdx, fader
    keep/close, sourceHit/targetHit/stickyHit/draftSourceHit, overlay
-   dedup @1896–1906)
+   dedup)
 6. draw passes in the documented z-order (docs/wiringPage.md § Canvas
    draw order — order is normative)
 7. input: fader clicks, double-click, idle mousedown transition,
    `gesture update`, RMB dispatch
 8. popups: extract `renderWireMenu` / `renderNodeMenu` — they share the
-   anchor + chrome push + close-on-cursor-leave skeleton (@2319–2392),
-   so one parameterised popup helper taking a body callback is right
-   if it falls out cleanly; two siblings are acceptable if the
+   anchor + chrome push + close-on-cursor-leave skeleton, so one
+   parameterised popup helper taking a body callback is right if it
+   falls out cleanly; two siblings are acceptable if the
    parameterisation gets awkward.
 
 ## Manual verification checklist (Richard, per stage)
