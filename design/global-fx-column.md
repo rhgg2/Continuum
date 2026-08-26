@@ -1,6 +1,7 @@
 # Global fx — one chain, expanded into every channel
 
-> opened: 2026-08-23 · status: working design; not started
+> opened: 2026-08-23 · status: in flight — plan/global-fx-column.md, phase 1
+> (the master channel surface)
 
 **A master channel 0 carries the tracker's global fx column. The
 rebuild expands each of its regions into all sixteen channels.**
