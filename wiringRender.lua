@@ -218,6 +218,20 @@ local function drawHandle(p, handle, side)
   end
 end
 
+-- Chrome-styled tooltip, anchored by its bottom centre at screen (sx, sy).
+-- Callers do their own hover test: the flags differ between the sites.
+local function tooltipAt(sx, sy, text)
+  ImGui.SetNextWindowPos(ctx, sx, sy, ImGui.Cond_Always, 0.5, 1.0)
+  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
+  if ImGui.BeginTooltip(ctx) then
+    ImGui.Text(ctx, text)
+    ImGui.EndTooltip(ctx)
+  end
+  ImGui.PopStyleVar(ctx, 1)
+  ImGui.PopStyleColor(ctx, 1)
+end
+
 -- A port-row slot: audio square or keyboard icon, an InvisibleButton (padded
 -- so the hit area beats the visual), and a tooltip. The InvisibleButton
 -- advances the layout cursor; renderCanvas's trailing Dummy restores it.
@@ -238,17 +252,7 @@ local function drawSlot(p, slot, idStem)
   local hoverFlags = ImGui.HoveredFlags_ForTooltip
                    | ImGui.HoveredFlags_AllowWhenBlockedByActiveItem
   if slot.name and ImGui.IsItemHovered(ctx, hoverFlags) then
-    ImGui.SetNextWindowPos(ctx,
-      ssx + slot.w / 2, ssy - PORT_TOOLTIP_GAP,
-      ImGui.Cond_Always, 0.5, 1.0)
-    ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
-    if ImGui.BeginTooltip(ctx) then
-      ImGui.Text(ctx, slot.name)
-      ImGui.EndTooltip(ctx)
-    end
-    ImGui.PopStyleVar(ctx, 1)
-    ImGui.PopStyleColor(ctx, 1)
+    tooltipAt(ssx + slot.w / 2, ssy - PORT_TOOLTIP_GAP, slot.name)
   end
 end
 
@@ -883,16 +887,7 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   ImGui.SetCursorScreenPos(ctx, btnX, btnY)
   ImGui.InvisibleButton(ctx, idStem, 2 * hw, 2 * hh)
   if portName and ImGui.IsItemHovered(ctx, ImGui.HoveredFlags_ForTooltip) then
-    ImGui.SetNextWindowPos(ctx, tipX, btnY - PORT_TOOLTIP_GAP,
-      ImGui.Cond_Always, 0.5, 1.0)
-    ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
-    if ImGui.BeginTooltip(ctx) then
-      ImGui.Text(ctx, portName)
-      ImGui.EndTooltip(ctx)
-    end
-    ImGui.PopStyleVar(ctx, 1)
-    ImGui.PopStyleColor(ctx, 1)
+    tooltipAt(tipX, btnY - PORT_TOOLTIP_GAP, portName)
   end
 end
 
