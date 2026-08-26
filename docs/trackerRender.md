@@ -251,6 +251,18 @@ so nudging the step row carries the residual with it rather than quantising it
 away, and nudging the cents row past half a step re-reads as the step above with a
 negative residual. Ctrl steps a period on the one row and ten cents on the other.
 
+**A choice can hold a state no arrow lands on.** Left/Right step a choice row
+through its options and write the one field. An option marked `arrival` is
+stepped over: it names a state its stage reaches by some other gesture — the
+LFO's `Custom`, which editing the curve sets — so it shows in the row and in the
+dropdown without sitting on the ladder, where a stray arrow would re-seed a curve
+someone drew. Picking one outright *is* that re-seed, and it carries a `rewrite`
+restating the whole stage through `tv:replaceFxStage` rather than writing a
+field, the same route the Dest picker takes. A pattern field opens the same way:
+`generators.customise` hands the editor the body the stage would sound (an LFO on
+a named wave draws its own), and the commit, not the opening, is what writes the
+restated stage — so an editor closed on Esc leaves the wave standing.
+
 **One axis navigates, the other edits.** `stripCursor = {stage, param}` (param 0
 = header) still keys the caret, but the whole chain flattens to a single column
 (`chainRows`): **Up/Down** walk header → fields → the next stage's header as one

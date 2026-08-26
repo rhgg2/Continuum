@@ -3490,6 +3490,8 @@ function tv:clipboard() return clipboard end
 ----- Accessors for trackerPage
 
 function tv:rowPerBar()      return rowPerBar end
+-- The take's ticks per QN (a global REAPER setting): the renderer draws no body without it.
+function tv:resolution()     return resolution end
 function tv:takeName()       return tm:name() end
 function tv:activeTemper()   return ctx:activeTemper() end
 function tv:cellWidth()      local t = ctx:activeTemper(); return t and t.cellWidth or 3 end

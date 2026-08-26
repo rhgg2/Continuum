@@ -117,7 +117,7 @@ claimed target at one logical ppq, samples it at every visible row of every
 claimed column, and the draw arm prefers it to the interpolation ghost — which
 describes the authored curve alone, and inside a producer's window that curve
 has been parked out of the way. Sampling is per row rather than bucketed by
-seat: a curve has no onsets to bucket, and a 1/4-QN sine seated at the cc grid
+seat: a curve has no onsets to bucket, and a 1/4-QN LFO seated at the cc grid
 step would show its zero crossings and nothing else.
 
 **10** The overlay lands only in columns the channel already carries, and a

@@ -4,6 +4,24 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Test-only generator kinds register into the production registry from
+  tests/fixtures/testKinds.lua, and `sine` lives on there as the continuous-augment stand-in the fx
+  plumbing specs use. Keying those specs on a production kind makes every change to it a spec edit,
+  on assertions that were never about it; a fixture kind keeps the registry itself as the seam under
+  test.
+
+- **2026-08-27** — A generator body is sized in beats of the take that asks for it, never in ticks.
+  REAPER's ticks-per-QN is a global setting rather than the project's, so a wave seeded at a fixed
+  960 opened the curve editor on a fourteenth of a beat in a 12288-ppq session. The reset a saw
+  needs stays one tick wide in the body, and the tiling holds emitted breakpoints a tick apart when
+  a fast period squeezes the cycle below one -- the squeeze is the tiler's problem, not the wave's.
+
+- **2026-08-27** — The sine generator folds into the LFO as a wave param. A named wave (sine,
+  triangle, square, saw) stores no body and expands from a seed the kind draws for itself; editing
+  the curve is what stamps that seed and flips the stage to custom, so exactly one of the two is
+  authoritative and the wave row says which. Storing wave and body side by side was the alternative,
+  and leaves two shapes with a claim on what sounds.
+
 - **2026-08-27** — A canvas popup opens from its own render function rather than from the input that
   fills its slot: ImGui keys a popup's id to the window current when OpenPopup runs, and the N-key
   command runs in the page body, outside the canvas child where the popup begins. The add-FX picker

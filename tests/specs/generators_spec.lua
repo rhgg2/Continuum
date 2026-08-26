@@ -58,7 +58,7 @@ return {
   {
     name = 'glyphOf resolves off the registry, and falls back for a kind the registry has lost',
     run = function()
-      t.eq(generators.glyphOf('sine'), '∿', 'a registered kind draws as its own glyph')
+      t.eq(generators.glyphOf('sine'), '~', 'a registered kind draws as its own glyph')
       t.eq(generators.glyphOf('nosuchkind'), '?', 'an unregistered kind draws as unknown')
     end,
   },
@@ -327,20 +327,21 @@ return {
     end,
   },
 
-  ----- sine: one gesture, either domain -- cents on pb, cc steps on a controller
+  ----- lfo: one gesture, either domain -- cents on pb, cc steps on a controller
 
   {
-    name = 'sine on a cc dest tiles the window with extrema in cc steps, anchored 0 at both ends',
+    name = 'a sine-wave lfo on a cc dest tiles the window with extrema in cc steps, 0 at both ends',
     run = function()
-      -- res 240, period 1/2 QN -> cycle 120 ticks; extrema at period/4 = 30, then every 60.
-      -- The body never learns which dest it serves: depth arrives already in the target's units.
-      local out = expand('sine', { window = { 0, 240 } },
-                         { kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 }, { resolution = 240 })
+      -- res 240, period 1/2 QN -> cycle 120 ticks; the sine's extrema at period/4 = 30, then every 60.
+      -- The body never learns which dest it serves: scale arrives already in the target's units.
+      local out = expand('lfo', { window = { 0, 240 } },
+                         { kind = 'lfo', wave = 'sine', period = { 1, 2 }, scale = 32, dest = 10 },
+                         { resolution = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       local d = out.delta
       t.eq(d[1].ppq, 0);    t.eq(d[1].val, 0,   'anchored at centre (0) at the window start')
-      t.eq(d[2].ppq, 30);   t.eq(d[2].val, 32,  'first extreme is +depth cc steps')
-      t.eq(d[3].ppq, 90);   t.eq(d[3].val, -32, 'next extreme is -depth')
+      t.eq(d[2].ppq, 30);   t.eq(d[2].val, 32,  'first extreme is +scale cc steps')
+      t.eq(d[3].ppq, 90);   t.eq(d[3].val, -32, 'next extreme is -scale')
       t.eq(d[2].shape, 'slow', 'extrema bridged by slow (half-cosine)')
       t.eq(d[#d].ppq, 240); t.eq(d[#d].val, 0,  're-centres to 0 at the window end')
     end,
@@ -604,6 +605,153 @@ return {
       local lengthless = expand('lfo', { window = { 0, 240 } },
         util.assign({}, base, { pattern = { kind = 'curve', points = { { ppq = 0, val = 0 } } } }), { resolution = 240 })
       t.eq(#lengthless.delta, 0, 'no lengthPpq -> no cycle to tile')
+    end,
+  },
+
+  ----- lfo waves: a named wave is the body the kind expands; custom is the body you edited
+
+  {
+    name = 'every wave draws a loop-closed normalized body, and all but square open at rest',
+    run = function()
+      for _, wave in ipairs{ 'sine', 'triangle', 'square', 'sawUp', 'sawDown' } do
+        local body = generators.waveBody(wave, 240)
+        local points = body.points
+        t.eq(body.kind, 'curve', wave .. ': a curve body, as the pattern editor holds one')
+        t.eq(body.domain, 'normalized', wave .. ': normalized -- scale maps it into the dest')
+        t.eq(points[1].ppq, 0, wave .. ': the body opens at phase 0')
+        t.eq(points[#points].ppq, body.lengthPpq, wave .. ': and closes on the loop boundary')
+        t.eq(points[1].val, points[#points].val, wave .. ': loop-closed -- tiling it leaves no step')
+        if wave ~= 'square' then
+          t.eq(points[1].val, 0, wave .. ': opens at rest, so the window start does not jump')
+        end
+      end
+    end,
+  },
+
+  {
+    name = 'the sine wave is four slow-bridged extrema; the triangle is the same points ridden linearly',
+    run = function()
+      local sine, tri = generators.waveBody('sine', 240), generators.waveBody('triangle', 240)
+      local L = sine.lengthPpq
+      t.deepEq(sine.points, { { ppq = 0, val = 0, shape = 'slow' },
+                              { ppq = L / 4, val = 1, shape = 'slow' },
+                              { ppq = 3 * L / 4, val = -1, shape = 'slow' },
+                              { ppq = L, val = 0, shape = 'slow' } },
+               'half-cosine between extrema IS the sine -- no intermediate points to carry')
+      for i, p in ipairs(tri.points) do
+        t.eq(p.ppq, sine.points[i].ppq, 'the triangle turns where the sine peaks')
+        t.eq(p.shape, 'linear', 'and rides straight between the turns')
+      end
+    end,
+  },
+
+  {
+    name = 'a saw resets mid-body, so its cycle starts and ends at rest',
+    run = function()
+      local saw = generators.waveBody('sawUp', 240)
+      local L   = saw.lengthPpq
+      t.deepEq(saw.points, { { ppq = 0, val = 0, shape = 'linear' },
+                             { ppq = L / 2 - 1, val = 1, shape = 'linear' },
+                             { ppq = L / 2, val = -1, shape = 'linear' },
+                             { ppq = L, val = 0, shape = 'linear' } },
+               'the ramp is phase-shifted a half cycle: the drop lands inside, not on the edge')
+      local down = generators.waveBody('sawDown', 240)
+      t.eq(down.points[2].val, -1, 'sawDown falls where sawUp rises')
+      t.eq(down.points[3].val, 1,  'and resets upward')
+    end,
+  },
+
+  {
+    name = 'a wave body is four beats of the take that asked for it, never a fixed tick count',
+    run = function()
+      -- Ticks per QN is a global REAPER setting: 960 in one project, 12288 in the next. A body sized
+      -- in ticks opens the curve editor on a fraction of a beat wherever the two disagree.
+      for _, resolution in ipairs{ 240, 960, 12288 } do
+        t.eq(generators.waveBody('sawUp', resolution).lengthPpq, 4 * resolution,
+             'four beats of this take, whatever a beat costs here')
+      end
+    end,
+  },
+
+  {
+    name = 'a cycle squeezed below the tick still emits its breakpoints a tick apart',
+    run = function()
+      -- A saw's reset is one tick of a 4-beat body; at 1/8 QN it stretches by 1/32, which would put
+      -- the peak and the drop on the same ppq and lose the reset altogether.
+      local d = expand('lfo', { window = { 0, 12288 } },
+        { kind = 'lfo', wave = 'sawUp', period = { 1, 8 }, scale = 100 }, { resolution = 12288 }).delta
+      t.truthy(#d > 8, 'a bar of 1/8-QN cycles emits a breakpoint stream (non-vacuous)')
+      for i = 2, #d do
+        t.truthy(d[i].ppq - d[i - 1].ppq >= 1, 'no two breakpoints collapse onto one ppq')
+      end
+      local peaks = 0
+      for _, bp in ipairs(d) do if bp.val == 100 then peaks = peaks + 1 end end
+      t.truthy(peaks >= 8, 'and every cycle keeps its peak -- the reset survives the squeeze')
+    end,
+  },
+
+  {
+    name = 'a named wave is what the lfo expands -- a stored body is dormant until custom',
+    run = function()
+      -- res 240, period 1 QN: the wave stretches onto a 240-tick cycle, extrema at 60 and 180.
+      local params = { kind = 'lfo', wave = 'sine', period = { 1, 1 }, scale = 100, pattern = triangle() }
+      local d = expand('lfo', { window = { 0, 240 } }, params, { resolution = 240 }).delta
+      t.eq(#d, 4, 'the sine wave emits its own four breakpoints, not the stored triangle\'s five')
+      t.eq(d[2].ppq, 60);  t.eq(d[2].val, 100,  'the wave peaks a quarter cycle in')
+      t.eq(d[3].ppq, 180); t.eq(d[3].val, -100, 'and troughs three quarters in')
+
+      params.wave = 'custom'
+      local custom = expand('lfo', { window = { 0, 240 } }, params, { resolution = 240 }).delta
+      t.eq(#custom, 5, 'custom hands the stored body back the tiling')
+    end,
+  },
+
+  {
+    name = 'onset ramps the whole displacement in from rest over its QN, offset included',
+    run = function()
+      local d = expand('lfo', { window = { 0, 240 } },
+        { kind = 'lfo', wave = 'sine', period = { 1, 1 }, scale = 100, onset = 1 },
+        { resolution = 240 }).delta
+      t.eq(d[2].val, 25,  'a quarter through a 1-QN ramp-in, the peak reaches a quarter of scale')
+      t.eq(d[3].val, -75, 'three quarters through, three quarters of it')
+
+      local held = expand('lfo', { window = { 0, 240 } },
+        { kind = 'lfo', wave = 'sine', period = { 1, 1 }, offset = 64, scale = 0, onset = 1 },
+        { resolution = 240 }).delta
+      t.eq(held[2].val, 16, 'the offset fades in too -- the stage arrives from the dest\'s rest, not from a perch')
+    end,
+  },
+
+  {
+    name = 'customise stamps the wave onto the body and flips the stage to custom',
+    run = function()
+      local entry = { kind = 'lfo', wave = 'square', period = { 1, 4 }, scale = 50 }
+      local out   = generators.customise(entry, 240)
+      t.eq(out.wave, 'custom', 'the body is the truth from here')
+      t.eq(out.scale, 50, 'the rest of the stage rides across')
+      t.deepEq(out.pattern.points, generators.waveBody('square', 240).points, 'seeded from the wave it left')
+      t.eq(entry.wave, 'square', 'and the entry it was handed is untouched')
+
+      local already = { kind = 'lfo', wave = 'custom', pattern = triangle() }
+      t.eq(generators.customise(already, 240), already, 'an edited body is handed straight back, never restamped')
+      local noWave = { kind = 'retrig', period = { 1, 4 } }
+      t.eq(generators.customise(noWave, 240), noWave, 'a kind with no wave has nothing to stamp')
+    end,
+  },
+
+  {
+    name = 'custom is an arrival: the wave ladder steps over it, and its own pick re-seeds',
+    run = function()
+      local wave
+      for _, fd in ipairs(generators.kinds.lfo.fields) do if fd.field == 'wave' then wave = fd end end
+      local last = wave.options[#wave.options]
+      t.eq(last.v, 'custom', 'custom closes the ladder')
+      t.truthy(last.arrival, 'and an arrow steps over it -- editing the curve is how a stage gets there')
+      t.eq(last.rewrite, generators.customise, 'picking it outright is the deliberate re-seed')
+      for i = 1, #wave.options - 1 do
+        t.falsy(wave.options[i].arrival, 'every named wave is a place an arrow can land')
+      end
+      t.eq(generators.seed('lfo').wave, 'sine', 'a fresh lfo opens on the sine wave')
     end,
   },
 

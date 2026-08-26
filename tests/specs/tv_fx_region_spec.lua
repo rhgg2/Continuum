@@ -12,7 +12,7 @@ local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete 
 local trill200 = { { kind = 'trill', period = { 1, 4 }, cents = 200 } }
 local trill130 = { { kind = 'trill', period = { 1, 4 }, cents = 130 } }
 
--- ∿ A V: three stages, one short of the default 240-ppq window's four rows
+-- ~ A V: three stages, one short of the default 240-ppq window's four rows
 -- Three voices stamped on each trigger: a chain that emits polyphony, so its derived
 -- notes pack into lanes above the channel's one authored column.
 local chord3 = { { kind = 'chordStamp', pattern = { kind = 'notes', specs = {
@@ -110,7 +110,7 @@ return {
       t.truthy(col, 'an fx column exists on the region channel')
       local cell = col.cells[0]
       t.truthy(cell and cell.uuid == 'fxr-1', 'the badge cell at the window start carries the region uuid')
-      t.eq(col.tails[1].stack[0].glyph, '∿', "the badge shows the primary kind's glyph, resolved at mint")
+      t.eq(col.tails[1].stack[0].glyph, '~', "the badge shows the primary kind's glyph, resolved at mint")
       t.eq(#col.tails, 1, 'one tail bracket spans the window')
       t.eq(col.tails[1].endRow, h.vm:ppqToRow(240, 1), 'the tail runs to the window end')
     end,
@@ -124,7 +124,7 @@ return {
       injectRegion(h, { fx = chain3 })
       local col   = fxColFor(h, 1)
       local stack = col.tails[1].stack
-      t.eq(stack[0].glyph, '∿', 'stage one stays on the badge row')
+      t.eq(stack[0].glyph, '~', 'stage one stays on the badge row')
       t.eq(stack[1].glyph, 'A', 'stage two takes the row below')
       t.eq(stack[2].glyph, 'V', 'stage three the row below that')
       t.falsy(stack[3], "the window's fourth row is past the end of a three-stage chain")
@@ -155,7 +155,7 @@ return {
       injectRegion(h, { fx = chain3, endppq = 120 })   -- two rows for three stages
       local col   = fxColFor(h, 1)
       local stack = col.tails[1].stack
-      t.eq(stack[0].glyph, '∿', 'stage one still draws on the badge row')
+      t.eq(stack[0].glyph, '~', 'stage one still draws on the badge row')
       t.eq(stack[1].glyph, '…', 'the last drawable row gives its glyph to the clip mark')
       t.truthy(col.tails[1].clipped, 'the tail records that the chain overran')
     end,

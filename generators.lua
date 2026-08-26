@@ -206,31 +206,6 @@ local function chordStamp(stream, host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
---contract: sine -> delta breakpoints in the dest's own units; depth at 1/period QN, unit-naive
---contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
---contract: a terminal 0 at window end eases the last extremum back -- shape, not reset (tm closes)
-local function sine(stream, host, params, ctx)
-  local startL, endL = stream.window[1], stream.window[2]
-  local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
-  local depth  = params.depth or 0
-  local onset  = (params.onset or 0) * ctx.resolution          -- ramp-in, ticks
-
-  -- Extrema-only breakpoints; 'slow' bridges each pair as a half-cosine. Anchored at 0 both ends: the
-  -- terminal 0 is the half-cosine ease off the last extremum, not the re-centre (tm closes the window).
-  local delta = { { ppq = startL, val = 0, shape = 'slow' } }
-  local k  = 0
-  local at = startL + period / 4
-  while at < endL do
-    local gain = onset > 0 and math.min(1, (at - startL) / onset) or 1
-    local sign = k % 2 == 0 and 1 or -1
-    util.add(delta, { ppq = at, val = sign * gain * depth, shape = 'slow' })
-    k  = k + 1
-    at = startL + period / 4 + k * period / 2
-  end
-  util.add(delta, { ppq = endL, val = 0, shape = 'slow' })
-  return { notes = {}, delta = delta }
-end
-
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN (tm closes the window)
 --contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (channel untouched)
@@ -265,6 +240,48 @@ local function slide(stream, host, params, ctx)
   return { notes = {}, delta = delta }
 end
 
+----- LFO waves
+
+-- A named wave is a seed body in the same normalized domain the curve editor authors, so choosing
+-- one and drawing one are the same act at different distances. see docs/generators.md § Waves
+
+-- One cycle's authored span, in QN, not ticks (docs/generators.md § Waves ¶2 has why). The period
+-- stretches the body regardless -- this only fixes the grid a custom curve is edited on.
+local WAVE_QN = 4
+
+-- Each wave's turning points over a cycle of L: {ppq, val, shape}, sine/triangle sharing turns but
+-- riding 'slow' vs 'linear'; saws phase-shift the ramp so the reset lands inside. see docs/generators.md § Waves
+local WAVE_TURNS = {
+  sine     = function(L) return { { 0, 0, 'slow' }, { L / 4, 1, 'slow' }, { 3 * L / 4, -1, 'slow' }, { L, 0, 'slow' } } end,
+  triangle = function(L) return { { 0, 0, 'linear' }, { L / 4, 1, 'linear' }, { 3 * L / 4, -1, 'linear' }, { L, 0, 'linear' } } end,
+  square   = function(L) return { { 0, 1, 'step' }, { L / 2, -1, 'step' }, { L, 1, 'step' } } end,
+  -- The peak sits one tick before the drop -- the narrowest a reset can be authored, since two
+  -- breakpoints can't share a ppq. see docs/generators.md § Waves ¶6
+  sawUp    = function(L) return { { 0, 0, 'linear' }, { L / 2 - 1, 1, 'linear' }, { L / 2, -1, 'linear' }, { L, 0, 'linear' } } end,
+  sawDown  = function(L) return { { 0, 0, 'linear' }, { L / 2 - 1, -1, 'linear' }, { L / 2, 1, 'linear' }, { L, 0, 'linear' } } end,
+}
+
+--contract: waveBody draws a wave as a loop-closed normalized curve body -- editable as any other
+--contract: the body spans WAVE_QN beats of the take's resolution, never a fixed tick count
+function generators.waveBody(wave, resolution)
+  local L     = WAVE_QN * resolution
+  local turns = WAVE_TURNS[wave] or error('unknown lfo wave: ' .. tostring(wave))
+  local points = {}
+  for _, turn in ipairs(turns(L)) do
+    util.add(points, { ppq = util.round(turn[1]), val = turn[2], shape = turn[3] })
+  end
+  return { kind = 'curve', domain = 'normalized', display = 'bipolar', lengthPpq = L, points = points }
+end
+
+-- Editing a named wave's curve stamps its points and flips the stage to custom, so exactly one
+-- body is authoritative; custom (or no wave at all) is handed back untouched. see docs/generators.md § Waves
+function generators.customise(entry, resolution)
+  if entry.wave == nil or entry.wave == 'custom' then return entry end
+  local out = util.assign({}, entry)
+  out.wave, out.pattern = 'custom', generators.waveBody(entry.wave, resolution)
+  return out
+end
+
 -- Linear-interpolated normalized value at authored ppq `a`; points ascend in ppq, edges clamp flat.
 local function curveAt(points, a)
   if a <= points[1].ppq then return points[1].val end
@@ -279,10 +296,13 @@ local function curveAt(points, a)
 end
 
 --contract: lfo tiles a normalized curve at 1/period QN, offset + scale map each val, unit-naive
+--contract: a named wave is the body expanded; 'custom' (or no wave) reads the stored one
 --contract: breakpoints are a displacement from the dest's rest, which the augment fold lays them on
 --contract: each cycle stretches the body lengthPpq -> period ticks; both window edges seeded
+--contract: onset QN ramps the whole displacement in from rest, linearly from the window start
 local function lfo(stream, host, params, ctx)
-  local body   = params.pattern
+  local named  = params.wave and params.wave ~= 'custom'
+  local body   = named and generators.waveBody(params.wave, ctx.resolution) or params.pattern
   local loop   = body and body.lengthPpq
   local points = body and body.points
   if not (loop and loop > 0 and points and #points > 0) then return { notes = {}, delta = {} } end
@@ -290,24 +310,36 @@ local function lfo(stream, host, params, ctx)
   local period  = periodTicks(params.period, ctx.resolution)
   local stretch = period / loop
   local offset, amp = params.offset or 0, params.scale or 0
-  local function val(norm) return util.round(offset + amp * norm) end
+  local onset = (params.onset or 0) * ctx.resolution      -- ramp-in, ticks
+  -- The ramp lifts the whole displacement, offset included: the stage arrives from the dest's own
+  -- rest rather than snapping to a perch and wobbling there.
+  local function val(norm, at)
+    local gain = onset > 0 and math.min(1, (at - startL) / onset) or 1
+    return util.round(gain * (offset + amp * norm))
+  end
 
   -- Seed startL (phase 0); tile interior cycles, skipping the ppq==loop endpoint (owned by the next
   -- cycle's phase 0, or by the endL seed) so a loop-closed curve emits no duplicate boundary breakpoint.
-  local delta = { { ppq = startL, val = val(curveAt(points, 0)),
+  local delta = { { ppq = startL, val = val(curveAt(points, 0), startL),
                     shape = points[1].shape, tension = points[1].tension } }
-  local base = startL
+  local base, lastAt = startL, startL
   while base < endL do
     for _, p in ipairs(points) do
-      local at = base + p.ppq * stretch
-      if at > startL and at < endL and p.ppq < loop then
-        util.add(delta, { ppq = at, val = val(p.val), shape = p.shape, tension = p.tension })
+      local raw = base + p.ppq * stretch
+      if raw > startL and raw < endL and p.ppq < loop then
+        -- A cycle squeezed below the tick would collapse a saw's one-tick reset onto its neighbour.
+        -- Hold breakpoints a tick apart instead: the shape survives. see docs/generators.md § Waves ¶6
+        local at = math.max(raw, lastAt + 1)
+        if at < endL then
+          util.add(delta, { ppq = at, val = val(p.val, at), shape = p.shape, tension = p.tension })
+          lastAt = at
+        end
       end
     end
     base = base + period
   end
   local phaseEnd = ((endL - startL) % period) / stretch   -- authored ppq at the window's trailing edge
-  util.add(delta, { ppq = endL, val = val(curveAt(points, phaseEnd)), shape = 'linear' })
+  util.add(delta, { ppq = endL, val = val(curveAt(points, phaseEnd), endL), shape = 'linear' })
   return { notes = {}, delta = delta }
 end
 
@@ -341,6 +373,12 @@ end
 local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
                   { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
                   { l = '1/8', v = { 1, 8 } } }
+-- The wave ladder. `Custom` is an `arrival` -- reached by editing the curve, not arrowed to -- and
+-- picking it outright fires `rewrite` to re-seed the stage. see docs/generators.md § Waves ¶3
+local WAVES = { { l = 'Sine',     v = 'sine' },   { l = 'Triangle', v = 'triangle' },
+                { l = 'Square',   v = 'square' }, { l = 'Saw Up',   v = 'sawUp' },
+                { l = 'Saw Down', v = 'sawDown' },
+                { l = 'Custom',   v = 'custom', arrival = true, rewrite = generators.customise } }
 local SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }
 local DIR_OPTIONS   = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l = 'Up/Down', v = 'updown' } }
 local VEL_PATTERNS  = { { l = '> .',     v = { 100, 55 } },
@@ -387,16 +425,6 @@ generators.kinds = {
       { field = 'pattern', label = 'Chord', widget = 'pattern', kind = 'notes', poly = true },
     },
   },
-  sine = {
-    expand = sine, mode = 'augment', dest = 'pb', dests = 'any', label = 'Sine', glyph = '∿',
-    defaults = { period = { 1, 2 }, onset = 1 },
-    fields = {
-      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10,
-        quantity = 'magnitude', frac = 0.15 },   -- 30 cents on pb, 9 steps on a bipolar cc
-      { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
-    },
-  },
   slide = {
     expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Slide', glyph = '/',
     defaults = { over = { 1, 2 }, target = 'next' },
@@ -416,16 +444,19 @@ generators.kinds = {
     },
   },
   lfo = {
-    expand = lfo, mode = 'augment', dest = 'pb', dests = 'any', label = 'Curve LFO', glyph = '~',
-    defaults = { period = { 1, 4 },
-                 pattern = { kind = 'curve', domain = 'normalized', display = 'bipolar', points = {} } },
+    expand = lfo, mode = 'augment', dest = 'pb', dests = 'any', label = 'LFO', glyph = '∿',
+    defaults = { wave = 'sine', period = { 1, 4 }, onset = 0 },
     fields = {
+      { field = 'wave',    label = 'Wave',   widget = 'choice', options = WAVES },
+      -- Always open to edit: a named wave hands the editor its own seed body, and the edit is what
+      -- makes that body the truth.
       { field = 'pattern', label = 'Curve',  widget = 'pattern', kind = 'curve' },
       { field = 'period',  label = 'Period', widget = 'choice', options = PERIODS },
       { field = 'offset',  label = 'Offset', widget = 'int', base = 1, coarse = 8,
         quantity = 'magnitude', signed = true, frac = 0 },     -- the whole cycle's displacement from rest
       { field = 'scale',   label = 'Scale',  widget = 'int', base = 1, coarse = 8,
         quantity = 'magnitude', signed = true, frac = 0.5 },   -- amplitude; a negative mirrors the curve
+      { field = 'onset',   label = 'Onset',  widget = 'int', base = 1, coarse = 4, min = 0, max = 16 },   -- QN ramp-in
     },
   },
 }
@@ -437,7 +468,7 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fx palette offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'sine', 'slide', 'lfo' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'lfo', 'slide' }
 
 -- One glyph per kind: a letter shapes notes, a wave mark paints a continuous stream. '?' is a
 -- kind the registry has lost. see docs/generators.md § Conventions

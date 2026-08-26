@@ -1211,11 +1211,19 @@ local function patternSummary(body)
 end
 
 local function launchPattern(host, index, fd, entry)
+  -- A named wave opens the editor on its own seed body; the edit, not the opening, makes it the
+  -- truth, so a stage flips to custom on first commit. see docs/trackerRender.md § FX chain — palette tab
+  local stage = generators.customise(entry, tv:resolution())
   -- Stamp the field's label as a display-only header hint (readback strips it, so it never
   -- persists); deepClone keeps the stored body + its points array unmutated.
-  local body = util.deepClone(entry[fd.field] or emptyBody(fd.kind))
+  local body = util.deepClone(stage[fd.field] or emptyBody(fd.kind))
   body.label = fd.label
-  pe:launch(body, function(newBody) tv:setFxField(host, index, fd.field, newBody) end, fd.poly)
+  pe:launch(body, function(newBody)
+    if stage == entry then return tv:setFxField(host, index, fd.field, newBody) end
+    local edited = util.assign({}, stage)
+    edited[fd.field] = newBody
+    tv:replaceFxStage(host, index, edited)
+  end, fd.poly)
 end
 
 -- The Dest row's picker: bare `CC 74` labels -- there is no controller-name table in the repo,
@@ -1230,14 +1238,30 @@ local function destItems(entry)
   return items
 end
 
+-- The option an arrow lands on, stepping over any marked `arrival` -- a state its stage reaches by
+-- some other gesture (the LFO's Custom, which editing the curve sets). Nothing either side: stay put.
+local function steppedOption(fd, value, right)
+  local from, step = choiceIndex(fd, value), right and 1 or -1
+  local i = from + step
+  while fd.options[i] and fd.options[i].arrival do i = i + step end
+  return fd.options[i] or fd.options[from]
+end
+
+-- Picking an option usually writes one field; one carrying `rewrite` restates the whole stage
+-- instead, by the route the Dest picker takes. see docs/trackerRender.md § FX chain — palette tab
+local function pickChoice(host, index, entry, fd, option)
+  if not option.rewrite then return tv:setFxField(host, index, fd.field, option.v) end
+  local stage = option.rewrite(entry, tv:resolution())   -- already in the picked state -> handed back as itself
+  if stage ~= entry then tv:replaceFxStage(host, index, stage) end
+end
+
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
 local function adjustRow(uuid, rw, right, mods)
   local fd, value = rw.fd, rw.entry[rw.fd.field]
   if fd.widget == 'dest' then          -- no scalar to nudge; arrowing opens the picker
     chrome.requestPickerOpen('fxDest_' .. rw.index)
   elseif fd.widget == 'choice' then
-    local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
-    tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
+    pickChoice(uuid, rw.index, rw.entry, fd, steppedOption(fd, value, right))
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local note   = tv:noteByUuid(uuid)
@@ -1277,7 +1301,7 @@ local function fxFieldWidget(host, row, width)
     }
   elseif fd.widget == 'choice' then
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
-    if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v) end
+    if pick then pickChoice(host, index, entry, fd, fd.options[pick]) end
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local note   = tv:noteByUuid(host)
@@ -1291,7 +1315,9 @@ local function fxFieldWidget(host, row, width)
       if rv then tv:setFxField(host, index, fd.field, tuning.ladderCents(temper, note, n, residual)) end
     end
   elseif fd.widget == 'pattern' then
-    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id, width) then launchPattern(host, index, fd, entry) end
+    -- Summarise what the editor would open on -- for a named wave, the body it would be handed.
+    local shown = patternSummary(generators.customise(entry, tv:resolution())[fd.field])
+    if ImGui.Button(ctx, shown .. '##' .. id, width) then launchPattern(host, index, fd, entry) end
   else
     local min, max = generators.fieldRange(fd, generators.destOf(entry))
     local rv, n = chrome.numberStepper(id, value or 0, { width = stepBoxW, min = min, max = max })

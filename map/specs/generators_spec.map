@@ -1,6 +1,6 @@
-@spec generators_spec  src=tests/specs/generators_spec.lua  loc=702  cases=51
+@spec generators_spec  src=tests/specs/generators_spec.lua  loc=850  cases=60
 @exercises generators (generators)
-@surface   generators.glyphOf, generators.labelOf, generators.fieldsFor, generators.parksNotes, generators.parkWindows, generators.continuousTargets, generators.chainDestType, generators.destOf, generators.retarget, generators.fieldRange, generators.thinCurve
+@surface   generators.glyphOf, generators.labelOf, generators.fieldsFor, generators.parksNotes, generators.parkWindows, generators.continuousTargets, generators.chainDestType, generators.destOf, generators.retarget, generators.fieldRange, generators.waveBody, generators.customise, generators.seed, generators.thinCurve
 
 # Intent
   generators.lua: slide glide-in envelope.
@@ -43,32 +43,41 @@
   @case 'fieldRange spans both ways for a signed magnitude, one way for an unsigned one'  [pure]  @ 300-306
   @case 'retarget carries a signed magnitude across with its sign intact'  [pure]  @ 310-316
   @case 'parkWindows follows the dest param, not the registry (a retargeted pb kind parks cc)'  [pure]  @ 320-327
-  @case 'sine on a cc dest tiles the window with extrema in cc steps, anchored 0 at both ends'  [pure]  @ 333-346
-  @case 'velPattern cycles its percent pattern per distinct onset; a chord shares one step'  [pure]  @ 352-367
-  @case 'velPattern walks onset order regardless of input order, clamping vel to 1..127'  [pure]  @ 371-381
-  @case 'ostinato tracks the sounding pitch across the region, not just the first note'  [pure]  @ 387-399
-  @case 'ostinato rests when no region note sounds at the gate onset'  [pure]  @ 403-412
-  @case 'ostinato emits one gated note per sounding voice (a chord -> multiple lanes)'  [pure]  @ 416-427
-  @case 'chord-stamp rebases the pattern chord onto each member; lane-1 note lands on the trigger'  [pure]  @ 433-450
-  @case 'chord-stamp moves every voice by the cents from its root to the trigger'  [pure]  @ 454-474
-  @case 'chord-stamp fires a chord on every region member (all lanes are triggers)'  [pure]  @ 478-494
-  @case 'chord-stamp with no lane-1 note in the pattern is inert (no root to rebase from)'  [pure]  @ 498-508
-  @case 'chord-stamp voices name the trigger\'s step plus their own interval from the root'  [pure]  @ 512-527
-  @case 'the kinds that copy a pitch copy the intent standing beside it'  [pure]  @ 533-545
-  @case 'lfo tiles the curve at 1/period QN, mapping each val by offset + scale, edges seeded'  [pure]  @ 551-568
-  @case 'lfo maps norm in whatever units the dest counts in -- cents on pb'  [pure]  @ 572-581
-  @case 'lfo does not clamp -- the body holds no dest knowledge, and the cc seat clamps'  [pure]  @ 585-594
-  @case 'lfo with an empty or lengthless curve is inert (no delta)'  [pure]  @ 598-607
-  @case 'thinCurve returns a degenerate curve verbatim -- endpoints are never candidates'  [pure]  @ 613-620
-  @case 'thinCurve collapses a collinear linear run to its endpoints'  [pure]  @ 624-631
-  @case 'thinCurve drops a spike whose vertical error only meets the tolerance'  [pure]  @ 635-639
-  @case 'thinCurve keeps a spike whose vertical error exceeds the tolerance'  [pure]  @ 643-646
-  @case 'thinCurve keeps a stepped run whole, collinear though its points are'  [pure]  @ 650-654
-  @case 'thinCurve rides a curved point through with its tension intact'  [pure]  @ 658-664
-  @case 'thinCurve lets a non-linear point pin its successor as well as itself'  [pure]  @ 668-673
-  @case 'thinCurve treats a missing shape as non-linear -- under-thin over silently ramping'  [pure]  @ 677-681
-  @case 'thinCurve keeps a stack of coincident points -- a zero-width span has no chord'  [pure]  @ 685-689
-  @case 'thinCurve gives a dual-point pair no special protection'  [pure]  @ 693-699
+  @case 'a sine-wave lfo on a cc dest tiles the window with extrema in cc steps, 0 at both ends'  [pure]  @ 333-347
+  @case 'velPattern cycles its percent pattern per distinct onset; a chord shares one step'  [pure]  @ 353-368
+  @case 'velPattern walks onset order regardless of input order, clamping vel to 1..127'  [pure]  @ 372-382
+  @case 'ostinato tracks the sounding pitch across the region, not just the first note'  [pure]  @ 388-400
+  @case 'ostinato rests when no region note sounds at the gate onset'  [pure]  @ 404-413
+  @case 'ostinato emits one gated note per sounding voice (a chord -> multiple lanes)'  [pure]  @ 417-428
+  @case 'chord-stamp rebases the pattern chord onto each member; lane-1 note lands on the trigger'  [pure]  @ 434-451
+  @case 'chord-stamp moves every voice by the cents from its root to the trigger'  [pure]  @ 455-475
+  @case 'chord-stamp fires a chord on every region member (all lanes are triggers)'  [pure]  @ 479-495
+  @case 'chord-stamp with no lane-1 note in the pattern is inert (no root to rebase from)'  [pure]  @ 499-509
+  @case 'chord-stamp voices name the trigger\'s step plus their own interval from the root'  [pure]  @ 513-528
+  @case 'the kinds that copy a pitch copy the intent standing beside it'  [pure]  @ 534-546
+  @case 'lfo tiles the curve at 1/period QN, mapping each val by offset + scale, edges seeded'  [pure]  @ 552-569
+  @case 'lfo maps norm in whatever units the dest counts in -- cents on pb'  [pure]  @ 573-582
+  @case 'lfo does not clamp -- the body holds no dest knowledge, and the cc seat clamps'  [pure]  @ 586-595
+  @case 'lfo with an empty or lengthless curve is inert (no delta)'  [pure]  @ 599-608
+  @case 'every wave draws a loop-closed normalized body, and all but square open at rest'  [pure]  @ 614-628
+  @case 'the sine wave is four slow-bridged extrema; the triangle is the same points ridden linearly'  [pure]  @ 632-645
+  @case 'a saw resets mid-body, so its cycle starts and ends at rest'  [pure]  @ 649-661
+  @case 'a wave body is four beats of the take that asked for it, never a fixed tick count'  [pure]  @ 665-673
+  @case 'a cycle squeezed below the tick still emits its breakpoints a tick apart'  [pure]  @ 677-690
+  @case 'a named wave is what the lfo expands -- a stored body is dormant until custom'  [pure]  @ 694-706
+  @case 'onset ramps the whole displacement in from rest over its QN, offset included'  [pure]  @ 710-722
+  @case 'customise stamps the wave onto the body and flips the stage to custom'  [pure]  @ 726-739
+  @case 'custom is an arrival: the wave ladder steps over it, and its own pick re-seeds'  [pure]  @ 743-755
+  @case 'thinCurve returns a degenerate curve verbatim -- endpoints are never candidates'  [pure]  @ 761-768
+  @case 'thinCurve collapses a collinear linear run to its endpoints'  [pure]  @ 772-779
+  @case 'thinCurve drops a spike whose vertical error only meets the tolerance'  [pure]  @ 783-787
+  @case 'thinCurve keeps a spike whose vertical error exceeds the tolerance'  [pure]  @ 791-794
+  @case 'thinCurve keeps a stepped run whole, collinear though its points are'  [pure]  @ 798-802
+  @case 'thinCurve rides a curved point through with its tension intact'  [pure]  @ 806-812
+  @case 'thinCurve lets a non-linear point pin its successor as well as itself'  [pure]  @ 816-821
+  @case 'thinCurve treats a missing shape as non-linear -- under-thin over silently ramping'  [pure]  @ 825-829
+  @case 'thinCurve keeps a stack of coincident points -- a zero-width span has no chord'  [pure]  @ 833-837
+  @case 'thinCurve gives a dual-point pair no special protection'  [pure]  @ 841-847
 
 # Uses (outbound edges)
   @use call generators.glyphOf  @ 61,62
@@ -81,112 +90,136 @@
   @use call generators.destOf  @ 262,263,264
   @use call generators.retarget  @ 283,292,294,312,314
   @use call generators.fieldRange  @ 302,305
-  @use call generators.thinCurve  @ 615,617,619,627,638,645,653,661,671,680,688,697,698
+  @use call generators.waveBody  @ 617,634,651,658,670,732
+  @use call generators.customise  @ 729,736,738
+  @use call generators.seed  @ 754
+  @use call generators.thinCurve  @ 763,765,767,775,786,793,801,809,819,828,836,845,846
 
 # Fields (r read / w write incl. constructor keys)
+  @field r arrival  @ 749,752
   @field w bypass  @ 232,235,238,249,251
   @field w cc  @ 223,325
   @field w ccrep  @ 213,220
   @field w cents  @ 119,148,165,180,193
   @field w chan  @ 215,216,217,218,222,223,224,235,236,323,325
-  @field r delta  @ 90,104,112,121,129,137,149,340,361,558,577,579
-  @field r delta  @ 590,592,603,606
+  @field r customise  @ 750
+  @field r delta  @ 90,104,112,121,129,137,149,341,362,559,578,580
+  @field r delta  @ 591,593,604,607,682,698,704,714,720
   @field r depth  @ 285,293,295
-  @field w depth  @ 283,292,294,338
+  @field w depth  @ 283,292,294
   @field r dest  @ 284
   @field w dest  @ 213,246,263,283,294,323,338
-  @field r detune  @ 155,166,168,426,468,473
-  @field w detune  @ 18,89,103,136,147,164,178,192,355,356,357,358
-  @field w detune  @ 374,375,390,391,406,419,420,442,459,460,461,465
-  @field w detune  @ 486,487,504,515,516,517,521,537
-  @field w dir  @ 541
+  @field r detune  @ 155,166,168,427,469,474
+  @field w detune  @ 18,89,103,136,147,164,178,192,356,357,358,359
+  @field w detune  @ 375,376,391,392,407,420,421,443,460,461,462,466
+  @field w detune  @ 487,488,505,516,517,518,522,538
+  @field w dir  @ 542
+  @field r domain  @ 620
   @field w domain  @ 24
-  @field r endppq  @ 153,449
-  @field w endppq  @ 215,216,217,222,223,224,235,236,323,325,355,356
-  @field w endppq  @ 357,358,374,375,390,391,393,406,408,419,420,422
-  @field w endppq  @ 437,438,439,442,459,460,461,465,482,483,486,487
-  @field w endppq  @ 501,504,515,516,517,521,537
+  @field r endppq  @ 153,450
+  @field w endppq  @ 215,216,217,222,223,224,235,236,323,325,356,357
+  @field w endppq  @ 358,359,375,376,391,392,394,407,409,420,421,423
+  @field w endppq  @ 438,439,440,443,460,461,462,466,483,484,487,488
+  @field w endppq  @ 502,505,516,517,518,522,538
   @field w evType  @ 222,223,224,236,325
-  @field r field  @ 272,275,276
-  @field r fields  @ 274
+  @field r field  @ 272,275,276,746
+  @field r fields  @ 274,746
   @field w fx  @ 204,205,206,215,216,217,218,232,235,323
   @field r glyph  @ 50,51,52,53
   @field w id  @ 222,223,224,236
-  @field r intentCents  @ 182,194,195,524,539,541,543
-  @field w intentCents  @ 178,521,537
+  @field r intentCents  @ 182,194,195,525,540,542,544
+  @field w intentCents  @ 178,522,538
+  @field r kind  @ 619
   @field w kind  @ 20,24,78,119,148,165,180,193,204,205,215,216
   @field w kind  @ 217,232,235,238,247,249,251,262,263,264,271
-  @field w kind  @ 275,276,283,292,294,312,314,323,338,360,377,393
-  @field w kind  @ 394,408,409,422,423,436,444,458,467,481,489,500
-  @field w kind  @ 506,514,523,539,541,543,555,575,588,600,602,605
-  @field r kinds  @ 9,49,69,213,220,246,253,274
+  @field w kind  @ 275,276,283,292,294,312,314,323,338,361,378,394
+  @field w kind  @ 395,409,410,423,424,437,445,459,468,482,490,501
+  @field w kind  @ 507,515,524,540,542,544,556,576,589,601,603,606
+  @field w kind  @ 682,697,713,719,728,735,737
+  @field r kinds  @ 9,49,69,213,220,246,253,274,746
   @field r label  @ 69
-  @field w lane  @ 437,438,439,459,460,461,482,483,501,515,516,517
-  @field w lengthPpq  @ 24,393,408,422,602
+  @field w lane  @ 438,439,440,460,461,462,483,484,502,516,517,518
+  @field r lengthPpq  @ 622,635,652,670
+  @field w lengthPpq  @ 24,394,409,423,603
+  @field r lfo  @ 746
   @field w mode  @ 213,246
   @field w name  @ 46,59,67,76,86,101,109,117,126,134,144,161
   @field w name  @ 173,189,202,211,230,244,260,269,281,290,300,310
-  @field w name  @ 320,333,352,371,387,403,416,433,454,478,498,512
-  @field w name  @ 533,551,572,585,598,613,624,635,643,650,658,668
-  @field w name  @ 677,685,693
+  @field w name  @ 320,333,353,372,388,404,417,434,455,479,499,513
+  @field w name  @ 534,552,573,586,599,614,632,649,665,677,694,710
+  @field w name  @ 726,743,761,772,783,791,798,806,816,825,833,841
   @field w nextSameLaneNote  @ 15
-  @field r notes  @ 91,150,151,166,167,168,181,194,195,339,363,365
-  @field r notes  @ 366,378,379,380,395,396,398,410,411,424
-  @field r notes  @ 425,426,445,446,448,449,469,470
-  @field r notes  @ 470,471,472,473,490,491,492,493
-  @field r notes  @ 507,524,539,541,543,557
-  @field w notes  @ 18,147,164,177,192,354,373,389,405,418,441,464
-  @field w notes  @ 485,503,520,536
-  @field w offset  @ 555,575,588,600
-  @field w onset  @ 292
+  @field r notes  @ 91,150,151,166,167,168,181,194,195,340,364,366
+  @field r notes  @ 367,379,380,381,396,397,399,411,412,425
+  @field r notes  @ 426,427,446,447,449,450,470,471
+  @field r notes  @ 471,472,473,474,491,492,493,494
+  @field r notes  @ 508,525,540,542,544,558
+  @field w notes  @ 18,147,164,177,192,355,374,390,406,419,442,465
+  @field w notes  @ 486,504,521,537
+  @field w offset  @ 556,576,589,601,719
+  @field w onset  @ 292,713,719
+  @field r options  @ 747,751,752
   @field w over  @ 20,119
-  @field w pattern  @ 360,377,394,409,423,444,467,489,506,523,543,555
-  @field w pattern  @ 575,588,602,605
+  @field r pattern  @ 732
+  @field w pattern  @ 361,378,395,410,424,445,468,490,507,524,544,556
+  @field w pattern  @ 576,589,603,606,697,735
   @field w pb  @ 238
   @field w pbRangeCents  @ 14
   @field w pbrep  @ 246,253
-  @field w period  @ 148,165,180,193,283,292,294,338,539,541,555,575
-  @field w period  @ 588,600
-  @field r pitch  @ 154,167,365,396,425,446
-  @field r pitch  @ 446,468,472,492,493
-  @field w pitch  @ 18,89,103,111,136,147,164,178,192,355,356,357
-  @field w pitch  @ 358,374,375,390,391,406,419,420,437,438,439,442
-  @field w pitch  @ 459,460,461,465,482,483,486,487,501,504,515,516
-  @field w pitch  @ 517,521,537
-  @field w points  @ 24,602,605
-  @field r ppq  @ 92,93,95,152,341,342,343,345,378
-  @field r ppq  @ 378,411,449,491,559,560,564,579
-  @field w ppq  @ 25,26,27,36,355,356,357,358,374,375
-  @field w ppq  @ 390,391,393,406,408,419,420,422,437,438,439,442
-  @field w ppq  @ 459,460,461,465,482,483,486,487,501,504,515,516
-  @field w ppq  @ 517,521,537,605,679
+  @field w period  @ 148,165,180,193,283,292,294,338,540,542,556,576
+  @field w period  @ 589,601,682,697,713,719,728,737
+  @field r pitch  @ 154,167,366,397,426,447
+  @field r pitch  @ 447,469,473,493,494
+  @field w pitch  @ 18,89,103,111,136,147,164,178,192,356,357,358
+  @field w pitch  @ 359,375,376,391,392,407,420,421,438,439,440,443
+  @field w pitch  @ 460,461,462,466,483,484,487,488,502,505,516,517
+  @field w pitch  @ 518,522,538
+  @field r points  @ 618,636,641,642,653,659,660,732
+  @field w points  @ 24,603,606
+  @field r ppq  @ 92,93,95,152,342,343,344,346,379
+  @field r ppq  @ 379,412,450,492,560,561,565,580,621,622,642
+  @field r ppq  @ 642,685,700,701
+  @field w ppq  @ 25,26,27,36,356,357,358,359,375,376
+  @field w ppq  @ 391,392,394,407,409,420,421,423,438,439,440,443
+  @field w ppq  @ 460,461,462,466,483,484,487,488,502,505,516,517
+  @field w ppq  @ 518,522,538,606,636,637,638,639,653,654,655,656
+  @field w ppq  @ 827
   @field w quantity  @ 302,305
-  @field w resolution  @ 14,146,163,175,191,338,535,556,576,589,602,605
+  @field w resolution  @ 14,146,163,175,191,339,536,557,577,590,603,606
+  @field w resolution  @ 682,698,704,714,720
+  @field r rewrite  @ 750
   @field w run  @ 47,60,68,77,87,102,110,118,127,135,145,162
   @field w run  @ 174,190,203,212,231,245,261,270,282,291,301,311
-  @field w run  @ 321,334,353,372,388,404,417,434,455,479,499,513
-  @field w run  @ 534,552,573,586,599,614,625,636,644,651,659,669
-  @field w run  @ 678,686,694
-  @field r scale  @ 313,315
-  @field w scale  @ 312,314,555,575,588,600
-  @field r shape  @ 94,344
-  @field w shape  @ 25,26,27,36
+  @field w run  @ 321,334,354,373,389,405,418,435,456,480,500,514
+  @field w run  @ 535,553,574,587,600,615,633,650,666,678,695,711
+  @field w run  @ 727,744,762,773,784,792,799,807,817,826,834,842
+  @field r scale  @ 313,315,731
+  @field w scale  @ 312,314,338,556,576,589,601,682,697,713,719,728
+  @field r shape  @ 94,345,643
+  @field w shape  @ 25,26,27,36,636,637,638,639,653,654
+  @field w shape  @ 655,656
   @field w signed  @ 302
   @field r sine  @ 69,274
-  @field w specs  @ 393,408,422,436,458,481,500,514
+  @field w specs  @ 394,409,423,437,459,482,501,515
   @field w startppq  @ 215,216,217,222,223,224,235,236,323,325
   @field w target  @ 20,119
-  @field r tension  @ 663
+  @field r tension  @ 811
   @field w tension  @ 36
   @field w uuid  @ 215,216,217,235
-  @field r val  @ 92,93,95,104,112,121,341,342,343,345,559,560
-  @field r val  @ 563,564,577,579,590,592
-  @field w val  @ 25,26,27,36,605,679
-  @field r vel  @ 156,363,366,379,380,398,448
-  @field w vel  @ 18,147,164,178,192,355,356,357,358,374,375,390
-  @field w vel  @ 391,393,406,408,419,420,422,437,438,439,442,459
-  @field w vel  @ 460,461,465,482,483,486,487,501,504,515,516,517
-  @field w vel  @ 521,537
+  @field r v  @ 748
+  @field r val  @ 92,93,95,104,112,121,342,343,344,346,560,561
+  @field r val  @ 564,565,578,580,591,593,623,625,659,660,688
+  @field r val  @ 700,701,715,716,721
+  @field w val  @ 25,26,27,36,606,636,637,638,639,653
+  @field w val  @ 654,655,656,827
+  @field r vel  @ 156,364,367,380,381,399,449
+  @field w vel  @ 18,147,164,178,192,356,357,358,359,375,376,391
+  @field w vel  @ 392,394,407,409,420,421,423,438,439,440,443,460
+  @field w vel  @ 461,462,466,483,484,487,488,502,505,516,517,518
+  @field w vel  @ 522,538
+  @field r wave  @ 730,733,754
+  @field w wave  @ 338,682,697,703,713,719,728,735
   @field r widget  @ 273
-  @field w window  @ 18,147,164,177,192,337,354,373,389,405,418,441
-  @field w window  @ 464,485,503,520,536,554,574,587,601,604
+  @field w window  @ 18,147,164,177,192,337,355,374,390,406,419,442
+  @field w window  @ 465,486,504,521,537,555,575,588,602,605,681,698
+  @field w window  @ 704,712,718

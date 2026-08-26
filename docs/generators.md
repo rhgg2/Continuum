@@ -6,7 +6,7 @@ is pure and holds no state of its own; the passes that run it and reconcile
 what it produces are tm's, and `docs/trackerManager.md` describes those.
 
 Four words carry the model. A **kind** is an entry in the `generators.kinds`
-registry — retrig, arp, sine, slide. A **stage** is one kind with its params,
+registry — retrig, arp, lfo, slide. A **stage** is one kind with its params,
 as it sits in an fx list. A **chain** is the ordered list of stages on one
 host. A **host** is the region or note the chain hangs on, and its **window**
 is the span that chain owns.
@@ -95,7 +95,7 @@ the one real use, being keyed on the original note record's identity.
 
 **5** `mode` is the **fold** — replace overwrites the stream's dest channel,
 augment adds to it — and belongs to the kind. `dest` is chosen per entry from
-the kind's domain profile, so one dest-blind sine serves pb and every cc
+the kind's domain profile, so one dest-blind LFO serves pb and every cc
 rather than one kind per wire, and a param expressed as a magnitude scales
 into whatever wire it lands on. The two stay independent axes, which is what
 makes continuous-replace and discrete-augment both expressible.
@@ -129,6 +129,59 @@ strum is `[arp, humanize]`, a gated arp is `[arp, densityGate]` — so the
 registry stays small and expressivity comes from the series. This is
 generators-as-config one level up: a kind is data when its body is arithmetic
 over ctx ops, and a chain is composition as data.
+
+## Waves
+
+**1** The LFO has two faces and one shape. A **named wave** — sine,
+triangle, square, saw — expands from a seed body the kind draws for
+itself; **custom** is a body you edited, stored on the stage. The wave
+says which of the two is authoritative, so nothing downstream has to ask.
+
+**2** The seed and the edited body are the same thing: a loop-closed
+curve in the normalized domain, its points at the turns, spanning four
+beats of the take that asked for it. Ticks per QN is a global REAPER
+setting rather than the project's, so a body sized in ticks is a bar
+long in one session and a fraction of a beat in the next — which is
+visible immediately, the curve editor opening on a sliver. Choosing a
+wave and drawing one are then the same act at two distances, and one
+tiling serves both. A named wave stores no body at all, so the curve editor
+opens it on the seed — and the **edit**, not the opening, is what makes
+that body the truth. A stage flips on its first commit, and an editor
+closed on Esc leaves the wave standing.
+
+**3** `Custom` therefore sits in the wave list without being a rung of
+it: an arrow steps over it, since walking a ladder is no way to arrive
+at a state that means "what I drew". Picking it outright is the one
+deliberate re-seed, stamping the wave the stage was on.
+
+**4** Which is also why a round trip through a named wave discards hand
+edits. That is the price of one owner. Keeping the edited body dormant
+behind the named wave instead leaves two shapes with a claim on what
+sounds, and no way to see from the stage which one has it.
+
+**5** Every wave but the square opens and closes at rest, so tiling one
+leaves no step at either window edge. A saw ramping -1 to +1 would open
+at full displacement, so its ramp is phase-shifted a half cycle and the
+reset lands inside the body rather than on the boundary. The square's
+edge step is the wave itself and stays.
+
+**6** That reset is one tick wide, the narrowest two breakpoints can
+stand apart, and the **tiling** keeps them a tick apart however far the
+period squeezes the cycle. The body could have been authored to survive
+the squeeze instead — a peak held for a sixty-fourth of the cycle — and
+every saw would wear a flat top in the editor to pay for a case that
+only arises at a fast period on a fine-ticked take. The squeeze is the
+tiler's problem, not the wave's.
+
+**7** The sine is four breakpoints, because `slow` is the half-cosine
+and between extrema that *is* the sine. It reaches the wire as those
+four and sums exactly — what § Offline continuous realisation ¶5 asks
+for, and what a sampled sine would forfeit.
+
+**8** `onset` ramps the whole displacement in from the dest's rest,
+`offset` included. A stage that snapped to its offset and wobbled there
+would step the wire at the window edge, which is the edge that ¶5 is
+about.
 
 ## Output
 
@@ -279,7 +332,7 @@ authored, and a summed curve's are themselves derived.
 
 **5** **The rule is about sums, not about curves.** Sampling every curved
 segment, whether or not a second curve was there to sum against, sent a lone
-sine to the wire as some thirty linear breakpoints where ten `slow` ones say
+sine wave to the wire as some thirty linear breakpoints where ten `slow` ones say
 the same thing exactly. A curve that is the only thing moving across a
 segment *is* its own sum plus a held constant, and interpolation is affine in
 the endpoint values, so that offset shifts the curve and leaves its shape and
@@ -534,7 +587,7 @@ reaches it — is `docs/oddities.md`'s.
   which is what lets one kind serve every target.
 - **The glyph set divides by what a kind touches** — a letter for one that
   shapes notes (`R` `T` `A` `O` `C` `V`), a wave mark for one that paints a
-  continuous stream (`∿` sine, `/` slide, `~` lfo). Case would have drawn the
+  continuous stream (`∿` lfo, `/` slide). Case would have drawn the
   same distinction and lost it: at one cell a letter against a squiggle
   survives where upper against lower does not.
 - **A kind resolves through the registry's own accessors**, never by indexing

@@ -29,6 +29,9 @@ require('tuning')
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
+-- Test-only generator kinds (`sine`), registered into the registry for every spec in the run.
+require('fixtures.testKinds')
+
 -- Internal util.instantiate('midiManager', …) (e.g. trackerPage) gets the real
 -- mm too, so the whole graph runs one implementation.
 util._stubs['midiManager'] = function(deps) return newRealMM(deps and deps.take) end
