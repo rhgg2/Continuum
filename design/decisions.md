@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A canvas popup opens from its own render function rather than from the input that
+  fills its slot: ImGui keys a popup's id to the window current when OpenPopup runs, and the N-key
+  command runs in the page body, outside the canvas child where the popup begins. The add-FX picker
+  drops its node at the cursor clamped into the visible canvas, and anchors the popup on that same
+  point, so a cursor over the palette or off the window still spawns a node in view.
+
 - **2026-08-27** — wiringRender's design constants sit in one tiered table, `UI.NODE.W` and
   `UI.FADER.TOP_DB`, rather than 64 main-chunk locals. Lua caps a function at 200 locals and the
   chunk was on that ceiling; the table frees 63 registers. Nesting stops at one level, so FADER is

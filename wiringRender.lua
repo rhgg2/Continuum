@@ -131,18 +131,19 @@ local engagedId  = nil  -- node holding hover priority, probed before the per-no
 local hoverFreeze = nil  -- { x, y } | nil — suppresses shift-hover until the cursor moves
 local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible post-click
 local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, wheelPending?, wheelIdleFrames? }
-local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
-local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
 local paletteSource = nil  -- nodeId the palette del button acts on; cleared when the row vanishes
-local fxPicker = nil  -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
 
--- Last canvas origin, captured at the top of renderCanvas. Lets openFxPicker
--- (called from the N-key dispatch path, which runs after renderCanvas exits)
--- recover logical mouse coords from screen-space GetMousePos.
-local canvasOrigin = { ox = 0, oy = 0 }
+-- The canvas popups. A slot holds a popup's live state while open: RMB
+-- dispatch and openFxPicker fill it, popupShell clears it when ImGui closes it.
+--shape: popups = { wire = { edgeIdx, anchorX, anchorY }, node = { nodeId, anchorX, anchorY }, fx = { x, y, sx, sy, anchorSX, anchorSY, buf, cursor, items, needsOpen? } }
+local popups = {}
 
--- Forward decls: renderCanvas's RMB handler opens the FX picker and its render
--- block draws it; both are defined below alongside the wiring-scope commands.
+-- Canvas centre/half-extents, captured at the top of renderCanvas so openFxPicker
+-- can recover mouse coords and clamp on-screen after renderCanvas exits (N-key path).
+local canvasOrigin = { ox = 0, oy = 0, hw = 0, hh = 0 }
+
+-- Forward decls: RMB dispatch and the N-key command fill the picker slot;
+-- renderFxPickerPopup opens and draws it, with the wiring-scope commands below.
 local openFxPicker, renderFxPicker
 
 ----- Pixel geometry (page-owned)
@@ -174,7 +175,7 @@ end
 
 ----- Drawing
 
--- Accent outline for a node body (selection / hover / error). 
+-- Accent outline for a node body (selection / hover / error).
 local function strokeNodeRect(p, r, name)
   p.stroke(rect(r.x0, r.y0, r.x1, r.y1),
            name, UI.NODE.SELECTED_STROKE, UI.NODE.ROUND)
@@ -1866,6 +1867,7 @@ local function beginFrame(w, h)
   local sx, sy = ImGui.GetCursorScreenPos(ctx)
   local ox, oy = sx + math.floor(w / 2), sy + math.floor(h / 2)
   canvasOrigin.ox, canvasOrigin.oy = ox, oy
+  canvasOrigin.hw, canvasOrigin.hh = math.floor(w / 2), math.floor(h / 2)
   local p = painter.new(ctx, chrome, { ox = ox, oy = oy }, 'wiring')
   local vx0, vy0 = p.fromScreen(sx, sy)
   local vx1, vy1 = p.fromScreen(sx + w, sy + h)
@@ -2142,7 +2144,7 @@ local function faderInput(frame)
 
   -- LMB on the triangle opens at the current value, warps the OS cursor to
   -- the knob, and the faderDrag gesture suppresses the in-strip jump-set below.
-  local arrowLmbClicked = arrowHitIdx and not fader and not wireMenu
+  local arrowLmbClicked = arrowHitIdx and not fader and not popups.wire
     and ImGui.IsMouseClicked(ctx, 0)
   if arrowLmbClicked then
     local seg = frame.segs[arrowHitIdx]
@@ -2387,21 +2389,117 @@ end
 -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
 local function rmbDispatch(frame)
   if gesture or not frame.overCanvas or not ImGui.IsMouseClicked(ctx, 1) then return end
-  if frame.arrowHitIdx and not wireMenu and not fader then
+  if frame.arrowHitIdx and not popups.wire and not fader then
     local seg = frame.segs[frame.arrowHitIdx]
-    wireMenu = { edgeIdx = frame.arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
+    popups.wire = { edgeIdx = frame.arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
     ImGui.OpenPopup(ctx, '##wiringWireMenu')
   else
     local bodyHit = nodeUnderMouse(frame.nodeViews, frame.lmx, frame.lmy)
     local barHit  = not bodyHit and busBarAt(frame.busRails, frame.lmx, frame.lmy)
     local menuId  = bodyHit and bodyHit.id or barHit and barHit.busId
-    if menuId and not nodeMenu then
-      nodeMenu = { nodeId = menuId, anchorX = frame.lmx, anchorY = frame.lmy }
+    if menuId and not popups.node then
+      popups.node = { nodeId = menuId, anchorX = frame.lmx, anchorY = frame.lmy }
       ImGui.OpenPopup(ctx, '##wiringNodeMenu')
     else
-      openFxPicker(frame.lmx, frame.lmy, { x = frame.mx, y = frame.my })
+      openFxPicker()
     end
   end
+end
+
+----- Popups
+
+-- Every canvas popup: the chrome frame, the ImGui popup keyed by id, and the
+-- slot dropped when ImGui reports it closed. The caller positions the window.
+local function popupShell(slot, id, flags, body)
+  chrome.pushChromeWindow()
+  ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
+  if ImGui.BeginPopup(ctx, id, flags) then
+    body()
+    ImGui.EndPopup(ctx)
+  else
+    popups[slot] = nil
+  end
+  ImGui.PopStyleColor(ctx, 1)
+  chrome.popChromeWindow()
+end
+
+-- Both menus close when the cursor leaves the window rect (also on click-outside,
+-- ImGui's default), skipped until layout settles so the first frame's size contains it.
+local function closeOnCursorLeave(mx, my)
+  if ImGui.IsWindowAppearing(ctx) then return end
+  local wx, wy = ImGui.GetWindowPos(ctx)
+  local ww, wh = ImGui.GetWindowSize(ctx)
+  if not (mx >= wx and mx <= wx + ww and my >= wy and my <= wy + wh) then
+    ImGui.CloseCurrentPopup(ctx)
+  end
+end
+
+-- Wire menu: centred on the triangle it was opened from.
+local function renderWireMenu(frame)
+  local menu = popups.wire
+  if not menu then return end
+  local screenX, screenY = frame.p.toScreen(menu.anchorX, menu.anchorY)
+  ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0.5, 0.5)
+  popupShell('wire', '##wiringWireMenu', nil, function()
+    local wire = frame.wireViewsList[menu.edgeIdx]
+    local changed, v = chrome.checkbox('Primary', wire and wire.primary or false)
+    if changed then wv:setEdgePrimary(menu.edgeIdx, v) end
+    closeOnCursorLeave(frame.mx, frame.my)
+  end)
+end
+
+-- Node menu: anchored at the cursor. Deletes the node or buss, rotates a buss,
+-- and arms a busDraft per bussable port.
+local function renderNodeMenu(frame)
+  local menu = popups.node
+  if not menu then return end
+  local screenX, screenY = frame.p.toScreen(menu.anchorX, menu.anchorY)
+  ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0, 0)
+  popupShell('node', '##wiringNodeMenu', nil, function()
+    local menuNode = frame.nodesById[menu.nodeId]
+    local isBus = menuNode and menuNode.category == 'bus'
+    if ImGui.Selectable(ctx, isBus and 'Delete buss' or 'Delete node') then
+      if isBus then wv:deleteBus(menu.nodeId)
+      else          wv:deleteNode(menu.nodeId) end
+      ImGui.CloseCurrentPopup(ctx)
+    end
+    if isBus and ImGui.Selectable(ctx, 'Rotate buss') then
+      wv:rotateBus(menu.nodeId)
+      ImGui.CloseCurrentPopup(ctx)
+    end
+    if menuNode and not isBus then
+      for _, dir in ipairs({ 'in', 'out' }) do
+        for _, port in ipairs(bussablePorts(menuNode, dir, frame.wireViewsList)) do
+          local label = 'Buss ' .. dir .. ' ' .. port
+          for _, o in ipairs({ { 'H', 'horizontal' }, { 'V', 'vertical' } }) do
+            if ImGui.Selectable(ctx, label .. ' (' .. o[2] .. ')') then
+              gesture = { mode = 'busDraft', nodeId = menu.nodeId,
+                          dir = dir, port = port, orient = o[1] }
+              ImGui.CloseCurrentPopup(ctx)
+            end
+          end
+        end
+      end
+    end
+    closeOnCursorLeave(frame.mx, frame.my)
+  end)
+end
+
+-- FX picker: cursor-anchored and non-modal, so there is no background dim and
+-- click-outside closes it.
+local function renderFxPickerPopup()
+  local pck = popups.fx
+  if not pck then return end
+  -- Opened here, not at the call site: a popup id is taken against the current
+  -- window, and the N-key route runs in the page body, outside the canvas child.
+  if pck.needsOpen then
+    ImGui.OpenPopup(ctx, '##wiringFxPicker')
+    pck.needsOpen = nil
+  end
+  ImGui.SetNextWindowPos(ctx, pck.anchorSX, pck.anchorSY, ImGui.Cond_Appearing, 0, 0)
+  popupShell('fx', '##wiringFxPicker', ImGui.WindowFlags_NoNav, function()
+    renderFxPicker(pck)
+  end)
 end
 
 local function renderCanvas(w, h)
@@ -2410,12 +2508,6 @@ local function renderCanvas(w, h)
   buildGeometry(frame)
   resolveHover(frame)
   drawCanvas(frame)
-
-  -- Transitional: the popups still inline below read the frame through locals,
-  -- and each of these dissolves as its phase moves out.
-  local p, sx, sy                = frame.p, frame.sx, frame.sy
-  local mx, my, lmx, lmy         = frame.mx, frame.my, frame.lmx, frame.lmy
-  local nodesById, wireViewsList = frame.nodesById, frame.wireViewsList
 
   -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
   -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
@@ -2429,107 +2521,14 @@ local function renderCanvas(w, h)
 
   rmbDispatch(frame)
 
-  -- Wire menu: ImGui popup centred on the cursor; closes on cursor-leave of
-  -- the window rect (and on click-outside, ImGui's default).
-  if wireMenu then
-    local screenX, screenY = p.toScreen(wireMenu.anchorX, wireMenu.anchorY)
-    ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0.5, 0.5)
-    chrome.pushChromeWindow()
-    ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
-    if ImGui.BeginPopup(ctx, '##wiringWireMenu') then
-      local wire = wireViewsList[wireMenu.edgeIdx]
-      local changed, v = chrome.checkbox('Primary', wire and wire.primary or false)
-      if changed then wv:setEdgePrimary(wireMenu.edgeIdx, v) end
-      -- Skip close-on-leave until the layout has settled, otherwise the
-      -- first-frame default size doesn't yet contain the cursor.
-      if not ImGui.IsWindowAppearing(ctx) then
-        local wx, wy = ImGui.GetWindowPos(ctx)
-        local ww, wh = ImGui.GetWindowSize(ctx)
-        if not (mx >= wx and mx <= wx + ww and my >= wy and my <= wy + wh) then
-          ImGui.CloseCurrentPopup(ctx)
-        end
-      end
-      ImGui.EndPopup(ctx)
-    else
-      wireMenu = nil
-    end
-    ImGui.PopStyleColor(ctx, 1)
-    chrome.popChromeWindow()
-  end
-
-  -- Node menu: mirrors the wire menu — cursor-anchored popup, closes on
-  -- cursor-leave of the window rect (and click-outside, ImGui's default).
-  if nodeMenu then
-    local screenX, screenY = p.toScreen(nodeMenu.anchorX, nodeMenu.anchorY)
-    ImGui.SetNextWindowPos(ctx, screenX, screenY, ImGui.Cond_Appearing, 0, 0)
-    chrome.pushChromeWindow()
-    ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
-    if ImGui.BeginPopup(ctx, '##wiringNodeMenu') then
-      local menuNode = nodesById[nodeMenu.nodeId]
-      local isBus = menuNode and menuNode.category == 'bus'
-      if ImGui.Selectable(ctx, isBus and 'Delete buss' or 'Delete node') then
-        if isBus then wv:deleteBus(nodeMenu.nodeId)
-        else          wv:deleteNode(nodeMenu.nodeId) end
-        ImGui.CloseCurrentPopup(ctx)
-      end
-      if isBus and ImGui.Selectable(ctx, 'Rotate buss') then
-        wv:rotateBus(nodeMenu.nodeId)
-        ImGui.CloseCurrentPopup(ctx)
-      end
-      if menuNode and not isBus then
-        for _, dir in ipairs({ 'in', 'out' }) do
-          for _, port in ipairs(bussablePorts(menuNode, dir, wireViewsList)) do
-            local label = 'Buss ' .. dir .. ' ' .. port
-            for _, o in ipairs({ { 'H', 'horizontal' }, { 'V', 'vertical' } }) do
-              if ImGui.Selectable(ctx, label .. ' (' .. o[2] .. ')') then
-                gesture = { mode = 'busDraft', nodeId = nodeMenu.nodeId,
-                            dir = dir, port = port, orient = o[1] }
-                ImGui.CloseCurrentPopup(ctx)
-              end
-            end
-          end
-        end
-      end
-      if not ImGui.IsWindowAppearing(ctx) then
-        local wx, wy = ImGui.GetWindowPos(ctx)
-        local ww, wh = ImGui.GetWindowSize(ctx)
-        if not (mx >= wx and mx <= wx + ww and my >= wy and my <= wy + wh) then
-          ImGui.CloseCurrentPopup(ctx)
-        end
-      end
-      ImGui.EndPopup(ctx)
-    else
-      nodeMenu = nil
-    end
-    ImGui.PopStyleColor(ctx, 1)
-    chrome.popChromeWindow()
-  end
-
-  -- FX picker: cursor-anchored (RMB) or viewport-centred (N-key) non-modal
-  -- popup. Non-modal means no background dim and click-outside closes it.
-  if fxPicker then
-    if fxPicker.anchorSX then
-      ImGui.SetNextWindowPos(ctx, fxPicker.anchorSX, fxPicker.anchorSY,
-                             ImGui.Cond_Appearing, 0, 0)
-    else
-      local cx, cy = ImGui.Viewport_GetCenter(ImGui.GetWindowViewport(ctx))
-      ImGui.SetNextWindowPos(ctx, cx, cy, ImGui.Cond_Appearing, 0.5, 0.5)
-    end
-    chrome.pushChromeWindow()
-    ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
-    if ImGui.BeginPopup(ctx, '##wiringFxPicker', ImGui.WindowFlags_NoNav) then
-      renderFxPicker(fxPicker)
-      ImGui.EndPopup(ctx)
-    else
-      fxPicker = nil
-    end
-    ImGui.PopStyleColor(ctx, 1)
-    chrome.popChromeWindow()
-  end
+  renderWireMenu(frame)
+  renderNodeMenu(frame)
+  renderFxPickerPopup()
 
   -- Band overlay: drawn last so it floats over nodes and hover affordances.
   if gesture and gesture.mode == 'band' then
-    local bx0, by0, bx1, by1 = gesture.mx0, gesture.my0, lmx, lmy
+    local p = frame.p
+    local bx0, by0, bx1, by1 = gesture.mx0, gesture.my0, frame.lmx, frame.lmy
     if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
     if by0 > by1 then by0, by1 = by1, by0 end
     p.fill(rect(bx0, by0, bx1, by1), 'band.fill')
@@ -2538,7 +2537,7 @@ local function renderCanvas(w, h)
 
   -- Port InvisibleButtons moved the layout cursor; rewind so the sizing Dummy
   -- reserves from the canvas origin.
-  ImGui.SetCursorScreenPos(ctx, sx, sy)
+  ImGui.SetCursorScreenPos(ctx, frame.sx, frame.sy)
   ImGui.Dummy(ctx, w, h)
 end
 
@@ -2640,7 +2639,7 @@ function wr:toolbarSegments() return {} end
 function wr:closeTransients()
   gesture, shiftWas = nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
-  fader, wireMenu = nil, nil
+  fader, popups.wire = nil, nil
 end
 
 --contract: body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.
@@ -2686,7 +2685,7 @@ function wr:focusState()
     suppressKbd = pa,
     acceptCmds  = (not pa)
                   and not ImGui.IsAnyItemActive(ctx)
-                  and not fxPicker
+                  and not popups.fx
                   and not modalHost:wasOpenAtFrameStart(),
   }
 end
@@ -2709,30 +2708,38 @@ local function sourcePosFor(genX, genY)
   return genX + ux * sep, genY + uy * sep
 end
 
--- anchor (optional) = { x, y } screen coords for the popup; nil → viewport-centred.
-openFxPicker = function(x, y, anchor)
-  if x == nil then
-    local mx, my = ImGui.GetMousePos(ctx)
-    x, y = mx - canvasOrigin.ox, my - canvasOrigin.oy
-  end
+-- Where the picker drops its node: the cursor, clamped inside the visible canvas
+-- with room for a node body — else a cursor over the palette or off-window lands out of view.
+local function spawnPos()
+  local o = canvasOrigin
+  local padX = UI.NODE.W / 2 + UI.NODE.SPAWN_PAD
+  local padY = UI.NODE.H / 2 + UI.NODE.SPAWN_PAD
+  local msx, msy = ImGui.GetMousePos(ctx)
+  return util.clamp(msx - o.ox, -o.hw + padX, o.hw - padX),
+         util.clamp(msy - o.oy, -o.hh + padY, o.hh - padY)
+end
+
+-- Both routes in (RMB, N key) read the cursor: the node lands under it and the
+-- popup anchors where the node lands, so the two agree even off-canvas.
+openFxPicker = function()
+  local x, y = spawnPos()
   local sx, sy = sourcePosFor(x, y)
   -- listInstalledFX is memoised below wv — copy before prepending the synthetic entry
   local items = { { name = 'Buss (vertical)',   bus = true, orient = 'V' },
                   { name = 'Buss (horizontal)', bus = true, orient = 'H' } }
   for _, fx in ipairs(wv:listInstalledFX()) do util.add(items, fx) end
-  fxPicker = {
+  popups.fx = {
     x = x, y = y, sx = sx, sy = sy,
-    anchorSX = anchor and anchor.x, anchorSY = anchor and anchor.y,
-    buf = '', cursor = 1, items = items,
+    anchorSX = x + canvasOrigin.ox, anchorSY = y + canvasOrigin.oy,
+    buf = '', cursor = 1, items = items, needsOpen = true,
   }
-  ImGui.OpenPopup(ctx, '##wiringFxPicker')
 end
 
 -- Defer the gesture so the picker's close paints before the live
 -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
 local function commitFx(pck, fx)
   ImGui.CloseCurrentPopup(ctx)
-  fxPicker = nil
+  popups.fx = nil
   reaper.defer(function()
     if fx.bus then
       wv:addBusNode(pck.x, pck.y, fx.orient)
@@ -2781,7 +2788,7 @@ renderFxPicker = function(pck)
 
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     ImGui.CloseCurrentPopup(ctx)
-    fxPicker = nil
+    popups.fx = nil
   elseif entered and matches[cursor] then
     commitFx(pck, matches[cursor])
   else

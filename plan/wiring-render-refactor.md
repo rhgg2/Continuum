@@ -34,19 +34,13 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 wiring: extract the canvas popups and fix the N-key picker (§ Stage 3 ⑧)
 - 2026-08-27 wiring: extract the gesture transition and RMB dispatch (§ Stage 3 ⑦)
 - 2026-08-26 wiring: extract the fader input phase (§ Stage 3 ⑦)
 - 2026-08-26 wiring: extract the canvas draw pass (§ Stage 3 (6))
-- 2026-08-26 wiring: extract the hover resolution phase (§ Stage 3 ⑤)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-6. **The popups** (§ Stage 3 ⑧) — `renderWireMenu(frame)` and
-   `renderNodeMenu(frame)` @2341–2415, and the fx-picker shell @2417–2437 if
-   the shared skeleton covers it: one helper taking a body callback if the
-   anchor + chrome push + close-on-cursor-leave parameterises cleanly, two
-   siblings if not. This is the item that lands renderCanvas at its ~150-line
-   sequencing target.
