@@ -313,3 +313,32 @@ perpendicular motion always slides. Release writes `pos` + `ext` via
 `wv:moveBus`. **RMB** on a bar or bus-node body opens the node menu — *Delete
 buss* (`wv:deleteBus`: node, incident edges, record, one Undo) and *Rotate buss*
 (`wv:rotateBus`: flips V↔H).
+
+## Exercising the page by hand
+
+No spec covers the renderer, so a change to it is checked by walking the
+page. This is that walk — every gesture the canvas supports.
+
+- **Wire create** — shift-hover a body, a chip, the keyboard icon and a
+  palette row; drag to a body, a chip and the keyboard. A cycle-blocked
+  target offers no affordance.
+- **Redraft** — move either end. Dropping on empty canvas deletes the
+  wire; dropping back on the original target is a no-op, and leaves no
+  undo entry. A short click on a wire end does nothing destructive.
+- **Palette** — drag a row out to a floating tag and drop it, audio and
+  midi both; add and delete a source.
+- **Buss** — create from the node menu and from the single-port hover
+  path; Esc and a backdrop click cancel either. Move and resize a bar,
+  rewire onto it, remove it. A trunk's port label is right for a port
+  other than 1.
+- **Source tags** — drag a star tag and a bussed tag; default fan
+  placement is unchanged.
+- **Fader** — click the triangle (the cursor warps to the knob), click
+  and drag in the strip, wheel coarse and fine (one undo entry),
+  double-click to unity, leave to close.
+- **Nodes** — drag one and drag a selection; band-select; a click on
+  empty canvas clears it; double-click dives to the sampler or floats
+  the FX window.
+- **Menus and keys** — RMB the triangle (primary toggle), a node (delete
+  and buss items) and empty canvas (FX picker); the N-key picker; Esc at
+  every gesture point.
