@@ -26,6 +26,34 @@ take and never re-keys cm, so switching to or from wiring leaves the
 tracker take and the sampler track untouched. There is no per-take
 wiring state to save or restore — the graph is project-scoped.
 
+## The canvas frame
+
+`renderCanvas` sequences eight phases in a fixed order, each handed
+one `frame` table — the state it reads and updates. The order matters,
+since every phase needs what the one before it left.
+
+1. **`beginFrame`** — canvas origin, painter, mouse in canvas coords, the
+   shift edge, hoverFreeze decay.
+2. **`gatherViews`** — node views (sources dropped; they have no body),
+   wire and buss views, selection, `nodesById`.
+3. **`gesture inject`** — the live gesture writes its in-flight state over
+   those lists, before any geometry is built from them.
+4. **`buildGeometry`** — `wireSegments` / `sourceSegments` /
+   `busSegments`, and the arrow midpoints. One pass over the injected
+   lists, so a preview and the frame that commits it cannot disagree.
+5. **`resolveHover`** — what the cursor is over: wire ends, source tags,
+   the arrow, fader keep/close, drop targets, and the overlays that
+   follow.
+6. **`drawCanvas`** — every visible pass, in the z-order of *Canvas draw
+   order*.
+7. **Input** — Esc cancel, `faderInput`, then `beginGesture`, which both
+   starts a mode on an idle mousedown and ticks a live gesture's
+   `update`, and finally `rmbDispatch`. Input runs after the draw
+   because it decides on the hover the draw has just made visible, so a
+   gesture armed here first shows a frame later.
+8. **Popups** — the wire menu, the node menu and the FX picker, each
+   through `popupShell`. The band overlay draws after all three.
+
 ## The gesture state machine
 
 Editing flows through one page-local variable, `gesture` — nil when
@@ -47,11 +75,9 @@ ones it needs:
   declare it, and neither has teardown beyond the clear, so a flag serves
   until a mode needs a hook.
 
-Either hook clears the gesture by returning false. `frame` is the
-canvas's per-frame carrier, built by `beginFrame` and extended by each
-phase that follows: painter, canvas origin, mouse, view lists,
-selection, geometry and hover. The hooks read it, and inject's transients are
-written back into it.
+Either hook clears the gesture by returning false. Both are handed the
+frame carrier (*The canvas frame*): inject's transients are written back
+into it, and update reads the hover the phase before it resolved.
 
 Mousedown resolves the modes it can start in a fixed precedence:
 
