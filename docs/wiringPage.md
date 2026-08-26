@@ -175,9 +175,17 @@ The canvas is a strict z-stack, and several effects depend on the order:
 6. **Fader, error overlay, then the overlay pass** (body outline + port row
    + spillover list per engaged node).
 
-Wire geometry (`segs`) is built once and shared by the draw pass and every
-hit-test, so highlight and label placement can never drift from the drawn
-line.
+Wire geometry is built once as a table of **segs** — one per wire, each
+carrying its endpoints, the per-end extents that trim the line against a
+node body, and the midpoint the arrow sits on. The draw pass and every
+hit-test read that one table, so highlight and label placement cannot
+drift from the drawn line.
+
+Every wire draws through `drawWire`, fed one seg. A real wire's seg
+carries its wireView, which decides the line colour and the port labels
+at each end. The draft wire and a buss trunk are **synthetic** segs with
+no wireView: they draw untrimmed and unlabelled, and the trunk's port
+label is placed separately, on the trunk near the node.
 
 ## M / B badges
 

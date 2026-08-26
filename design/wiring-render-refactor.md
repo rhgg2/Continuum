@@ -1,11 +1,12 @@
 # wiringRender refactor — one wire renderer, explicit gesture machine
 
 > opened: 2026-06-12 · status: in flight — plan/wiring-render-refactor.md,
-> phase 1 (one wire renderer)
+> phase 2 (the gesture machine)
 
-Target: `wiringRender.lua` only (2,687 loc). Line refs below were
-re-grounded against the current file (sha 217c1f8) on 2026-07-16; if
-they drift again, re-locate by the quoted comments.
+Target: `wiringRender.lua` only (2,661 loc). The line refs below have
+drifted; the live numbers for the phase in flight are in
+plan/wiring-render-refactor.md § Queued, and anything else re-locates by
+the quoted comments.
 
 ## Goal
 
@@ -52,83 +53,9 @@ Two structural complaints, one file:
 
 ## Stage 1 — one wire renderer
 
-`segs` already unifies more than it looks: star wires
-(`wireSegments`), source stubs (`sourceSegments`), and bus taps
-(`busSegments`) all write the same seg shape into one table that
-`drawWiresPass` draws. Formalise that shape and give it exactly one
-draw function; fold the two outliers (draft wire, bus trunk) into it.
-
-### The seg shape
-
-```lua
---shape: seg = { w?, sx, sy, ex, ey, offX?, offY?, fromHW?, fromHH?, toHW?, toHH?, cx, cy }
---   extents nil → trim at node body (wireExits default); 0 → bare point (bar end,
---   draft ends); w nil → synthetic seg (draft wire, bus trunk) — never labelled.
-```
-
-### The renderer
-
-```lua
-local function drawWire(p, seg, opts)
-  -- opts = { name, labels?, placed? }
-  -- line (WIRE_THICK) + arrow centred on seg.cx/cy + per-end port labels
-end
-```
-
-- Line + `drawWireArrow(p, sx, sy, ex, ey, name, seg.cx, seg.cy,
-  barTip)`, where `barTip = seg.w ~= nil and seg.toHW == 0 and seg.toHH
-  == 0`. **The `seg.w ~= nil` guard is load-bearing.** `drawWiresPass`
-  today clamps the arrow onto a bar via `toHW == 0 and toHH == 0`
-  (@1100–1101), but the draft wire (@1226) and bus trunk (@1513) draw
-  their arrow *unclamped*. Both synthetic segs get extents 0 at both
-  ends (below), so an extents-only `barTip` would newly clamp them and
-  shift the arrow ~1–2px. Gating on `seg.w` — nil for every synthetic
-  seg — keeps the draft and trunk arrows exactly where they are today.
-- When `opts.labels`: the per-end decision currently inline in
-  `drawWiresPass` (@1102–1119) moves inside — label an end iff
-  `w.type == 'audio'`, port ≠ 1, and that end is not the wire's bussed
-  end (`w.bus.bussedEnd`). Keep the `exitD` / `segLen - toD` arithmetic
-  and the `##wire/...` id stem exactly as-is.
-
-### Call-site conversions
-
-1. **`drawWiresPass`** becomes a thin loop: skip `opts.skipEdgeIdx`
-   (the redrafted wire — keep this), derive `name` from `w.type`, call
-   `drawWire` with labels on and the shared `placed` set.
-2. **Draft wire** — delete `drawDraftWire`. Build a transient seg per
-   frame: ends ordered by `draft.cursorEnd` (kept end at `keptAnchor`,
-   falling back to the kept node's centre; cursor end at the decayed
-   `draftCx/draftCy`), **extents 0 at both ends, cx/cy = geometric
-   midpoint of the full segment**. That reproduces today's pixels
-   exactly: the current draft draws untrimmed with the arrow at the raw
-   midpoint (drawWireArrow with no cx/cy → `(sx+ex)/2`), and the kept
-   end is overpainted by the node body anyway (z-order step 4). Labels
-   off, `w == nil` so the barTip clamp never fires. Draw it in the same
-   z slot (above sleeves, below nodes — @1926).
-3. **Bus trunk** — `busSegments` already computes trunk endpoints
-   (@1467–1475, stored on the rail @1491–1499); store them as a seg
-   (extents 0 both ends, cx/cy = midpoint, matching the explicit
-   midpoint the current call passes, and `w == nil` so no clamp).
-   `drawBusPass` keeps the bar stroke and the trunk's *label* call —
-   the trunk label is genuinely different placement (exitD 0, on the
-   trunk near the node, `##bus/...` stem, shared `placed` set) so it
-   stays an explicit `drawWireEndLabel` call (@1516–1522) — but its
-   line + arrow go through `drawWire`.
-
-### Small dedupes in the same pass
-
-- Extract the verbatim-duplicated tooltip block (`SetNextWindowPos` +
-  PopupBg push + `BeginTooltip` … pops) shared by `drawSlot`
-  (@324–336) and `drawWireEndLabel` (@969–980) into one helper. Only
-  the anchor position and the text differ, so `tooltipAt(sx, sy, text)`
-  captures the shared body.
-- `nodeAtPoint` (@1676) and `nodeUnderMouse` (@1666) are **not**
-  identical any more — `nodeUnderMouse` skips bus-category nodes
-  (`nv.category ~= 'bus'`), `nodeAtPoint` does not, and the mousedown
-  chain relies on the difference (@2199–2200: "a real node under a bar
-  still wins"). Do not merge them. If the duplication still grates,
-  parameterise the bus-skip (`nodeAtPoint(nvs, x, y, skipBus)`) rather
-  than collapsing the two behaviours into one.
+Landed 2026-08-26 in four commits; the model is now
+docs/wiringPage.md § Canvas draw order, and the seg shape is the
+`--shape:` annotation above `wireSegments`.
 
 ## Stage 2 — explicit gesture state machine
 

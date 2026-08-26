@@ -15,7 +15,7 @@ order, then stop.
 ## 2. Comment hygiene
 
 If there are any `.lua` files dirty in the tree, run `python3 tools/comment_hygiene.py`
-from the repo root.  It flags:
+from the repo root. It flags:
 
 - `--invariant:`/`--contract:`/`--emits:`/`--reaper:` lines >100 chars;
 - `--shape:` lines >400 chars; 

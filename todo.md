@@ -7,6 +7,7 @@
 - MIDI PDC alignment at a merge — verify pdc_midi=1 if MIDI-vs-audio
   skew shows up. 
 - component auto-stack / snap to grid / autolayout
+- drag samples to tracker page
 - fx containers as first class entities
 - containers with holes (wiring macros)
   - gainstage
