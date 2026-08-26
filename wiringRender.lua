@@ -1832,13 +1832,13 @@ modes.busDrag = {
   end,
 }
 
--- No hooks: the poke-per-frame and release commit stay inline with the fader
--- overlay, between the two hover passes their result feeds.
+-- No hooks: the poke-per-frame and release commit run in resolveHover, between
+-- the two hover passes their result feeds.
 modes.faderDrag = {}
 
 ----- Canvas
 
---shape: frame = { p, sx, sy, mx, my, lmx, lmy, overCanvas, shiftHeld, nodeViews, nodesById, wireViewsList, busViewsList, selection, segs, busRails, matrixRails, spliceNode?, spliceIdx? }
+--shape: frame = { p, sx, sy, mx, my, lmx, lmy, overCanvas, shiftHeld, nodeViews, nodesById, wireViewsList, busViewsList, selection, segs, busRails, matrixRails, spliceNode?, spliceIdx?, wireEndHover?, tagHover?, arrowHitIdx?, draft?, draftCx?, draftCy?, sourceHit?, targetHit?, overlays }
 -- The frame is the canvas's carrier: each phase reads what its predecessors
 -- left there and writes its own results back. See docs/wiringPage.md.
 local function beginFrame(w, h)
@@ -1925,54 +1925,31 @@ local function buildGeometry(frame)
   end
 end
 
-local function renderCanvas(w, h)
-  local frame = beginFrame(w, h)
-  gatherViews(frame)
-  buildGeometry(frame)
-
-  -- Transitional: the phases still inline below read the frame through locals,
-  -- and each of these dissolves as its phase moves out.
-  local p, sx, sy                   = frame.p, frame.sx, frame.sy
-  local mx, my, lmx, lmy            = frame.mx, frame.my, frame.lmx, frame.lmy
-  local overCanvas, shiftHeld       = frame.overCanvas, frame.shiftHeld
-  local nodeViews, nodesById        = frame.nodeViews, frame.nodesById
-  local wireViewsList, selection    = frame.wireViewsList, frame.selection
-  local segs, busRails, matrixRails = frame.segs, frame.busRails, frame.matrixRails
-
-  -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
-  -- Suppressed during any active gesture so neither fires under a drag.
-  local wireEndHover, tagHover
-  if not gesture and not shiftHeld then
-    wireEndHover = wireEndHit(segs, lmx, lmy)
-    tagHover     = sourceTagHit(p, segs, wireViewsList, lmx, lmy)
-  end
-
-  -- Tick a live fader drag: poke per frame, commit one setEdgeGain on
-  -- release if the value moved from where the click set it.
-  if fader and faderDragging() then
-    local lin = pixelYToLin(lmy, fader.rect.y0)
-    fader.currentLin = lin
-    wv:pokeEdgeGain(fader.edgeIdx, lin)
-    if not ImGui.IsMouseDown(ctx, 0) then
-      if fader.currentLin ~= fader.valueAtClick then
-        wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
-      end
-      gesture = nil
+-- Tick a live fader drag: poke per frame, commit one setEdgeGain on
+-- release if the value moved from where the click set it.
+local function tickFaderDrag(frame)
+  if not (fader and faderDragging()) then return end
+  local lin = pixelYToLin(frame.lmy, fader.rect.y0)
+  fader.currentLin = lin
+  wv:pokeEdgeGain(fader.edgeIdx, lin)
+  if not ImGui.IsMouseDown(ctx, 0) then
+    if fader.currentLin ~= fader.valueAtClick then
+      wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
     end
+    gesture = nil
   end
-  local arrowHitIdx
-  if not gesture and not shiftHeld then
-    arrowHitIdx = arrowMidHit(segs, lmx, lmy)
-  end
-  -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
-  -- Opening is click-driven (below): this block only keeps / closes.
+end
+
+-- Fader visibility: drag overrides, triangle anchors, hitRect persists.
+-- Opening is click-driven (the input phase): this only keeps / closes.
+local function keepOrCloseFader(frame)
   local stillVisible = false
   if fader then
     if faderDragging() then
       stillVisible = true
-    elseif arrowHitIdx == fader.edgeIdx then
+    elseif frame.arrowHitIdx == fader.edgeIdx then
       stillVisible = true
-    elseif inRect(lmx, lmy, fader.hitRect) then
+    elseif inRect(frame.lmx, frame.lmy, fader.hitRect) then
       stillVisible = true
     end
   end
@@ -1986,35 +1963,57 @@ local function renderCanvas(w, h)
     end
     fader = nil
   end
-  if fader and wireEndHover and wireEndHover.edgeIdx == fader.edgeIdx then
-    wireEndHover = nil
+  if fader and frame.wireEndHover
+     and frame.wireEndHover.edgeIdx == fader.edgeIdx then
+    frame.wireEndHover = nil
   end
+end
+
+-- What the cursor is over this frame, and the overlays that follow from it.
+-- The fader calls sit between the hover passes: the tick can end a drag that the arrow pass then re-hovers.
+local function resolveHover(frame)
+  -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
+  -- Suppressed during any active gesture so neither fires under a drag.
+  if not gesture and not frame.shiftHeld then
+    frame.wireEndHover = wireEndHit(frame.segs, frame.lmx, frame.lmy)
+    frame.tagHover     = sourceTagHit(frame.p, frame.segs, frame.wireViewsList,
+                                      frame.lmx, frame.lmy)
+  end
+
+  tickFaderDrag(frame)
+
+  if not gesture and not frame.shiftHeld then
+    frame.arrowHitIdx = arrowMidHit(frame.segs, frame.lmx, frame.lmy)
+  end
+  keepOrCloseFader(frame)
 
   -- The decayed wire end (not the cursor) drives the draft visual and the
   -- hit / eligibility checks below — see docs/wiringPage.md.
   local draft = wireDrafting()
-  local draftCx, draftCy
+  frame.draft = draft
   if draft then
-    draftCx, draftCy = computeDraftEnd(draft, lmx, lmy)
+    frame.draftCx, frame.draftCy = computeDraftEnd(draft, frame.lmx, frame.lmy)
   end
 
   -- Source-side hover while shift held; target-side while a draft is live.
   -- dropTargetHit filters cycle-blocked nodes; commit also needs a concrete slot.
-  local sourceHit, targetHit, stickyHit, draftSourceHit
+  local stickyHit, draftSourceHit
   if draft then
-    targetHit      = dropTargetHit(nodeViews, draftCx, draftCy, draft)
-    draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy, draft)
+    -- wireDraft's commit hook judges its drop by these, not by the cursor.
+    frame.targetHit = dropTargetHit(frame.nodeViews,
+                                    frame.draftCx, frame.draftCy, draft)
+    draftSourceHit  = draftSourceHoverHit(frame.nodeViews,
+                                          frame.draftCx, frame.draftCy, draft)
     -- A bar hit (fat target for the bussed port) wins over a node-port hit.
-    targetHit      = busBarHit(busRails, draft, draftCx, draftCy) or targetHit
-  elseif shiftHeld and not hoverFreeze then
-    sourceHit = busBarSource(busRails, lmx, lmy)
-             or shiftHoverHit(nodeViews, lmx, lmy)
+    frame.targetHit = busBarHit(frame.busRails, draft, frame.draftCx, frame.draftCy)
+                      or frame.targetHit
+  elseif frame.shiftHeld and not hoverFreeze then
+    frame.sourceHit = busBarSource(frame.busRails, frame.lmx, frame.lmy)
+                   or shiftHoverHit(frame.nodeViews, frame.lmx, frame.lmy)
   end
-  if shiftHeld then
-    stickyHit = stickyHoverHit(nodeViews)
+  if frame.shiftHeld then
+    stickyHit = stickyHoverHit(frame.nodeViews)
   end
-  -- The draft's commit hook judges its drop by these, not by the cursor.
-  frame.draftCx, frame.draftCy, frame.targetHit = draftCx, draftCy, targetHit
 
   -- One overlay per node id; cursor-driven picks (source/target) beat the
   -- persistent draft-source and sticky ones.
@@ -2025,10 +2024,31 @@ local function renderCanvas(w, h)
     util.add(overlays, pick)
     frontIds[pick.nv.id] = true
   end
-  add(sourceHit)
-  add(targetHit)
+  add(frame.sourceHit)
+  add(frame.targetHit)
   add(draftSourceHit)
   add(stickyHit)
+  frame.overlays = overlays
+end
+
+local function renderCanvas(w, h)
+  local frame = beginFrame(w, h)
+  gatherViews(frame)
+  buildGeometry(frame)
+  resolveHover(frame)
+
+  -- Transitional: the phases still inline below read the frame through locals,
+  -- and each of these dissolves as its phase moves out.
+  local p, sx, sy                   = frame.p, frame.sx, frame.sy
+  local mx, my, lmx, lmy            = frame.mx, frame.my, frame.lmx, frame.lmy
+  local overCanvas, shiftHeld       = frame.overCanvas, frame.shiftHeld
+  local nodeViews, nodesById        = frame.nodeViews, frame.nodesById
+  local wireViewsList, selection    = frame.wireViewsList, frame.selection
+  local segs, busRails, matrixRails = frame.segs, frame.busRails, frame.matrixRails
+  local wireEndHover, tagHover      = frame.wireEndHover, frame.tagHover
+  local arrowHitIdx, overlays       = frame.arrowHitIdx, frame.overlays
+  local sourceHit, targetHit        = frame.sourceHit, frame.targetHit
+  local draft, draftCx, draftCy     = frame.draft, frame.draftCx, frame.draftCy
 
   -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < nodes.
   local placedLabels = {}

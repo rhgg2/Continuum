@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — The wiring canvas frame carries what crosses a phase boundary, not everything a
+  phase computes. Hover resolution's sticky and draft-source hits are consumed by its own overlay
+  dedup, so they stay locals while sourceHit and targetHit go on the frame.
+
 - **2026-08-26** — Stage 3's eight phases fix the order renderCanvas runs in, not the function
   boundaries it decomposes into. The frame carrier and the head phases land as three functions
   covering four listed phases: the gesture's inject hook writes over the view lists and the

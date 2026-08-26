@@ -50,7 +50,7 @@ ones it needs:
 Either hook clears the gesture by returning false. `frame` is the
 canvas's per-frame carrier, built by `beginFrame` and extended by each
 phase that follows: painter, canvas origin, mouse, view lists,
-selection and geometry. The hooks read it, and inject's transients are
+selection, geometry and hover. The hooks read it, and inject's transients are
 written back into it.
 
 Mousedown resolves the modes it can start in a fixed precedence:

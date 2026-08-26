@@ -34,24 +34,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: extract the hover resolution phase (§ Stage 3 ⑤)
 - 2026-08-26 wiring: extract the frame carrier and the head phases (§ Stage 3 (1)-(4))
 - 2026-08-26 wiring: document the gesture state machine (§ Docs)
 - 2026-08-26 wiring: move the bus draft into the machine (§ Stage 2)
-- 2026-08-26 wiring: move the wire draft into the machine (§ Stage 2)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-2. **Hover resolution** (§ Stage 3 ⑤) — `resolveHover(frame)` @1915–2004,
-   moved verbatim: wire-end and source-tag hover, the fader drag tick,
-   `arrowMidHit`, the fader keep/close ladder, the decayed draft end, the
-   source / target / sticky / draft-source hits, and the one-overlay-per-node
-   dedup. Internal order is load-bearing — the fader tick sits between the two
-   hover passes. `frame` gains `wireEndHover`, `tagHover`, `arrowHitIdx`,
-   `draft`, the four hits and `overlays`.
 3. **The draw pass** (§ Stage 3 ⑥) — `drawCanvas(frame)` @2006–2076 in the
    documented z-order, ending on the `wv:setHover` publication. The band
    overlay @2439–2446 stays at the tail, since the popups sit between it and
