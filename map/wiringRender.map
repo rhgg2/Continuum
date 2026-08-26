@@ -1,4 +1,4 @@
-@module wiringRender  src=wiringRender.lua  loc=2706  mode=chunk  self=wr
+@module wiringRender  src=wiringRender.lua  loc=2723  mode=chunk  self=wr
 @deps cmgr, chrome, gui, modalHost, wv, facade
 
 # Invariants & contracts
@@ -10,8 +10,8 @@
   @contract  wiringPage (the controller) owns the stack (rm/wm/wv) and hands this renderer wv only  @ 8
 
 # Shapes
-  @shape  returns { slots, handle, bandRect, list, hoverRect, side, popup } (all canvas-local).  @ 331
-  @shape  seg = { w?, sx, sy, ex, ey, offX?, offY?, fromHW?, fromHH?, toHW?, toHH?, cx, cy }  @ 891
+  @shape  returns { slots, handle, bandRect, list, hoverRect, side, popup } (all canvas-local).  @ 330
+  @shape  seg = { w?, sx, sy, ex, ey, offX?, offY?, fromHW?, fromHH?, toHW?, toHH?, cx, cy }  @ 889
 
 # Imports
   @require util = 'util'  @ 10
@@ -87,518 +87,520 @@
   @state BUS_BAR_HIT = 10  @ 91   -- perpendicular tolerance for dropping a rewire onto a bar
   @state ORIENT_VEC = {  @ 93
   @state gesture = nil  @ 103   -- the one live gesture, nil = idle; payload shapes and hooks at `modes`
-  @state wireDraft = nil  @ 104   -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
-  @state busDraft = nil  @ 105   -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
-  @state shiftWas = false  @ 106
-  @state pinned = {}  @ 107   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
-  @state listOpenId = nil  @ 108   -- node whose spillover list is engaged (chevron-gated)
-  @state engagedId = nil  @ 109   -- node holding hover priority, probed before the per-node scan
-  @state hoverFreeze = nil  @ 110   -- { x, y } | nil — suppresses shift-hover until the cursor moves
-  @state sticky = nil  @ 111   -- { nodeId, side } — pinned node's port row, kept visible post-click
-  @state fader = nil  @ 112   -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, wheelPending?, wheelIdleFrames? }
-  @state wireMenu = nil  @ 113   -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
-  @state nodeMenu = nil  @ 114   -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
-  @state paletteSource = nil  @ 115   -- nodeId the palette del button acts on; cleared when the row vanishes
-  @state fxPicker = nil  @ 116   -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
-  @state canvasOrigin = { ox = 0, oy = 0 }  @ 121
-  @state SELECTED_INFLATE = 0  @ 156   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
-  @state SELECTED_STROKE = 2  @ 157
-  @state modes = {}  @ 1659
-  @state statusSegments = {  @ 2572
-  @state SOURCE_PAD = 24  @ 2599
-  @state wiring = cmgr:scope('wiring')  @ 2699
+  @state busDraft = nil  @ 104   -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
+  @state shiftWas = false  @ 105
+  @state pinned = {}  @ 106   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
+  @state listOpenId = nil  @ 107   -- node whose spillover list is engaged (chevron-gated)
+  @state engagedId = nil  @ 108   -- node holding hover priority, probed before the per-node scan
+  @state hoverFreeze = nil  @ 109   -- { x, y } | nil — suppresses shift-hover until the cursor moves
+  @state sticky = nil  @ 110   -- { nodeId, side } — pinned node's port row, kept visible post-click
+  @state fader = nil  @ 111   -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, wheelPending?, wheelIdleFrames? }
+  @state wireMenu = nil  @ 112   -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
+  @state nodeMenu = nil  @ 113   -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
+  @state paletteSource = nil  @ 114   -- nodeId the palette del button acts on; cleared when the row vanishes
+  @state fxPicker = nil  @ 115   -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
+  @state canvasOrigin = { ox = 0, oy = 0 }  @ 120
+  @state SELECTED_INFLATE = 0  @ 155   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
+  @state SELECTED_STROKE = 2  @ 156
+  @state modes = {}  @ 1662
+  @state statusSegments = {  @ 2589
+  @state SOURCE_PAD = 24  @ 2616
+  @state wiring = cmgr:scope('wiring')  @ 2716
 
 # Private functions
   -- Gesture state (page-local; ephemeral, never persisted)
   -- Pixel geometry (page-owned)
-  @fn rect(x0, y0, x1, y1)  @ 131
+  @fn rect(x0, y0, x1, y1)  @ 130
       -- One axis-aligned rect struct shared by every hit test and fill, so the
       -- two can't drift; boxRect lifts an {x,y,w,h} slot/row into one.
-  @fn inRect(px, py, r)  @ 132-134
-  @fn boxRect(b, pad)  @ 135-138
-  @fn unionRect(acc, r)  @ 139-144
-  @fn nodeBox(nv)  @ 149-152
+  @fn inRect(px, py, r)  @ 131-133
+  @fn boxRect(b, pad)  @ 134-137
+  @fn unionRect(acc, r)  @ 138-143
+  @fn nodeBox(nv)  @ 148-151
       -- Node body as a canvas-local rect centred on pos. The painter adds the
       -- viewport origin at draw and hit-tests use the canvas-local mouse, so one
       -- struct serves both and they can't drift.
   -- Drawing
-  @fn strokeNodeRect(p, r, name)  @ 161-165
+  @fn strokeNodeRect(p, r, name)  @ 160-164
       -- Accent outline for a node body (selection / hover / error). SELECTED_INFLATE
       -- widens the rect so a >0 moat lets the popup bg bleed through the stroke.
-  @fn drawNode(p, nv, isSelected)  @ 167-187
-  @fn drawKeyboardIcon(p, x, y)  @ 191-204
+  @fn drawNode(p, nv, isSelected)  @ 166-186
+  @fn drawKeyboardIcon(p, x, y)  @ 190-203
       -- Piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys, 2 filled
       -- black keys over the C-D and D-E gaps. Hard to read off the geometry alone.
-  @fn drawHandle(p, handle, side)  @ 208-216
+  @fn drawHandle(p, handle, side)  @ 207-215
       -- Spillover-list chevron, pointing the way the dropdown opens (down on the
       -- bottom face, up on top). Sized like a chip so it shares the row centreline.
-  @fn tooltipAt(sx, sy, text)  @ 220-230
+  @fn tooltipAt(sx, sy, text)  @ 219-229
       -- Chrome-styled tooltip, anchored by its bottom centre at screen (sx, sy).
       -- Callers do their own hover test: the flags differ between the sites.
-  @fn drawSlot(p, slot, idStem)  @ 235-254
+  @fn drawSlot(p, slot, idStem)  @ 234-253
       -- A port-row slot: audio square or keyboard icon, an InvisibleButton (padded
       -- so the hit area beats the visual), and a tooltip. The InvisibleButton
       -- advances the layout cursor; renderCanvas's trailing Dummy restores it.
-  @fn drawBodyOutline(p, nv)  @ 256-258
+  @fn drawBodyOutline(p, nv)  @ 255-257
   -- M / B badges: output-mute + bypass toggles on fx nodes (effect/generator), top-left corner.
-  @fn nodeHasFx(nv)  @ 263
-  @fn badgeRects(nv)  @ 265-272
-  @fn drawBadge(p, r, glyph, fillName)  @ 274-279
-  @fn drawNodeBadges(p, nv, muted, bypassed)  @ 281-285
-  @fn badgeHit(nv, mx, my)  @ 288-293
+  @fn nodeHasFx(nv)  @ 262
+  @fn badgeRects(nv)  @ 264-271
+  @fn drawBadge(p, r, glyph, fillName)  @ 273-278
+  @fn drawNodeBadges(p, nv, muted, bypassed)  @ 280-284
+  @fn badgeHit(nv, mx, my)  @ 287-292
       -- 'mute' | 'bypass' | nil for a click at (mx,my) on an fx-backed node.
   -- Wire-creation gesture helpers
-  @fn layoutList(audio, handle, side)  @ 299-328
+  @fn layoutList(audio, handle, side)  @ 298-327
       -- By-name dropdown anchored to the handle. Rows are tight-bound (no hit pad)
       -- so neighbours don't bleed; hitRect reaches LIST_GAP back so chevron→list has no dead zone.
-  @fn layoutPortRow(nv, dir, mx, my, keep, forceSide)  @ 332-460
-      @contract  face = forceSide, else derived from my; keep hides the mismatched kind during target hover.  @ 330
-  @fn slotHit(slots, mx, my)  @ 462-468
-  @fn rowHit(rows, mx, my)  @ 472-478
+  @fn layoutPortRow(nv, dir, mx, my, keep, forceSide)  @ 331-459
+      @contract  face = forceSide, else derived from my; keep hides the mismatched kind during target hover.  @ 329
+  @fn slotHit(slots, mx, my)  @ 461-467
+  @fn rowHit(rows, mx, my)  @ 471-477
       -- Tight hit-test for list rows (no pad — rows are full-height boxes
       -- packed back-to-back, so padding would overlap into the neighbour).
-  @fn defaultSlot(nv, dir, keep)  @ 482-491
+  @fn defaultSlot(nv, dir, keep)  @ 481-490
       -- Default slot for body-only hover: audio port 1, else the keyboard. `keep`
       -- biases it for target hover — a midi draft defaults to the keyboard.
-  @fn onChevron(handle, mx, my)  @ 494-496
+  @fn onChevron(handle, mx, my)  @ 493-495
       -- Cursor over the chevron's visible bounds (no pad — popup gating is tight).
-  @fn pickHovered(nv, layout, mx, my, dir, keep)  @ 500-513
+  @fn pickHovered(nv, layout, mx, my, dir, keep)  @ 499-512
       -- Hover lookup over body + band only (list engagement is chevron-gated in
       -- engagedHover). A non-nil .list on the pick means "chevron hit, open the list".
-  @fn stillEngaged(layout, mx, my)  @ 515-520
-  @fn engagedHover(nodeViews, mx, my, cfg)  @ 525-570
+  @fn stillEngaged(layout, mx, my)  @ 514-519
+  @fn engagedHover(nodeViews, mx, my, cfg)  @ 524-569
       -- Engaged-priority hover scan shared by source-side (shift) and target-side
       -- (draft) drafting: the engaged node is probed before the forward scan so a
       -- neighbour's overlapping hoverRect can't steal an open popout mid-gesture.
-  @fn shiftHoverHit(nodeViews, mx, my)  @ 575-593
+  @fn shiftHoverHit(nodeViews, mx, my)  @ 574-592
       -- Source-side hover (shift, no draft). onConsume drops sticky when hover
       -- returns to the pinned node so the overlays don't double up; narrowOnMidi
       -- re-lays-out midi-only so the in-body keyboard stands alone.
-  @fn stickyHoverHit(nodeViews)  @ 597-607
+  @fn stickyHoverHit(nodeViews)  @ 596-606
       -- Port-row overlay for the sticky (pinned) node. Cursor-independent: uses the
       -- side stored at pin-time so it doesn't flip top/bottom as the cursor moves.
-  @fn findLayoutSlot(layout, slotKind, portIdx)  @ 609-616
-  @fn draftSourceHoverHit(nodeViews, mx, my)  @ 620-643
-      -- Forward-draft only: keeps the source node's port row visible during the
-      -- click-hold (else the popout flashes off when wireDraft is set, back at
-      -- mouseup). Redrafts skip it; in the band gap the kept-slot highlight clears.
-  @fn dropTargetHit(nodeViews, mx, my, draft)  @ 648-656
+  @fn findLayoutSlot(layout, slotKind, portIdx)  @ 608-615
+  @fn draftSourceHoverHit(nodeViews, mx, my, draft)  @ 618-641
+      -- Forward-draft only: keeps the source node's port row visible during the click-hold
+      -- (else the popout flashes off when the draft arms). Redrafts skip it; in the band gap the kept-slot highlight clears.
+  @fn dropTargetHit(nodeViews, mx, my, draft)  @ 646-654
       -- Target-side hover (draft in flight). dir follows cursorEnd ('to' seeks
       -- in-ports on destinations, 'from' out-ports on sources); forbidden
       -- (cycle-blocked) nodes are ineligible, so they neither engage nor display.
-  @fn dropEligible(draft, target)  @ 660-664
+  @fn dropEligible(draft, target)  @ 658-662
       -- Commit-eligibility (mouseup only); also requires a concrete slot. The visual
       -- overlay is gated separately on forbidden-only, so the list still opens mid-hover.
-  @fn drawList(p, list, highlight)  @ 666-678
-  @fn drawPortRowBg(p, layout)  @ 683-687
+  @fn drawList(p, list, highlight)  @ 664-676
+  @fn drawPortRowBg(p, layout)  @ 681-685
       -- Pale rounded bg for the port-row overlay, overlapping the body's near edge
       -- so the body's near corners read as filled, not canvas. Drawn BEFORE the
       -- node so the body overpaints the overlap.
-  @fn drawPortRow(p, pick, idPrefix)  @ 691-713
+  @fn drawPortRow(p, pick, idPrefix)  @ 689-711
       -- Draws the handle and every slot, outlining the one matching pick.slot. Chips
       -- stay visible with the list open (it extends perpendicular) so the port→row map holds.
   -- Wire drawing
-  @fn wireGroups(wireViews)  @ 720-750
+  @fn wireGroups(wireViews)  @ 718-748
       -- Group wires by unordered pair. canonA/canonB fix the sorted pair direction
       -- so every wire in the group shares one perpendicular axis regardless of its
       -- own direction. (Within-group sort order is set below.)
-  @fn wireOffset(i, n)  @ 754-756
+  @fn wireOffset(i, n)  @ 752-754
       -- Perpendicular scalar for slot i (1-based) of n parallel wires:
       -- centred around 0 so a lone wire sits on the centre line.
-  @fn wireExits(seg)  @ 761-785
+  @fn wireExits(seg)  @ 759-783
       -- Distances along the (offset) segment where the visible part begins (exits
       -- the source rect) and ends (enters the target), plus length. Parallel-wire
       -- offsets make the two exits asymmetric. nil for sub-pixel segments.
-  @fn wireMid(seg)  @ 789-794
+  @fn wireMid(seg)  @ 787-792
       -- Centre of the visible span (between the two node exits), where the arrow,
       -- fader, and menu anchor. Asymmetric extents shift it off the geometric centre.
-  @fn drawWireArrow(p, sx, sy, ex, ey, name, cx, cy, clampToEx)  @ 796-824
-  @fn drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idStem, name, placed)  @ 829-889
+  @fn drawWireArrow(p, sx, sy, ex, ey, name, cx, cy, clampToEx)  @ 794-822
+  @fn drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idStem, name, placed)  @ 827-887
       -- Port-number label: a bg patch (occludes the wire behind the digit), pushed
       -- clear of labels already `placed` this frame and capped at len*0.45 so it
       -- can't collide with the other end's. Replaces the old per-group alternation.
-  @fn wireSegments(wireViews, nodesById)  @ 898-930
+  @fn wireSegments(wireViews, nodesById)  @ 896-928
       -- One canvas-local segment per wireView, keyed by index. offX/offY is the
       -- perpendicular displacement from the pair centre line, shared with wireExits
       -- so highlight + label geometry can't drift from the drawn line.
-  @fn draftSeg(draft, nodesById, cx, cy)  @ 934-948
+  @fn draftSeg(draft, nodesById, cx, cy)  @ 932-946
       -- The in-flight draft as a seg. Kept end anchors at keptAnchor or the kept
       -- node's centre; nil if neither (a palette draft draws only as a floating tag).
-  @fn endRegion(seg, side)  @ 953-966
+  @fn endRegion(seg, side)  @ 951-964
       -- End-region endpoints for one side of a wire (canvas-local): from the node-
       -- rect exit, WIRE_END_HIT px inward. Capped at 0.4*visible so a short wire's
       -- two ends don't overlap. nil for sub-pixel / fully-occluded wires.
-  @fn closestPointOnSegment(px, py, ax, ay, bx, by)  @ 968-975
-  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 977-981
-  @fn wireEndHit(segs, mx, my)  @ 986-1011
+  @fn closestPointOnSegment(px, py, ax, ay, bx, by)  @ 966-973
+  @fn pointToSegmentDist(px, py, ax, ay, bx, by)  @ 975-979
+  @fn wireEndHit(segs, mx, my)  @ 984-1009
       -- Nearest end-region within WIRE_END_HIT_PERP of the cursor, or nil. Returns
       -- { edgeIdx, side, keptAnchor }: keptAnchor is the OTHER end's node-edge point
       -- (screen), where the redraft pins the wire while the cursor drives this end.
-  @fn drawWire(p, seg, opts)  @ 1014-1043
-      @contract  opts = { name, labels?, placed? }; every wire, real or synthetic, draws through here.  @ 1013
-  @fn drawWiresPass(p, segs, wireViews, opts, placed)  @ 1048-1059
+  @fn drawWire(p, seg, opts)  @ 1012-1041
+      @contract  opts = { name, labels?, placed? }; every wire, real or synthetic, draws through here.  @ 1011
+  @fn drawWiresPass(p, segs, wireViews, opts, placed)  @ 1046-1057
       -- opts.skipEdgeIdx skips the wire being redrafted (the draft line replaces it).
       -- The highlight draws separately after the node pass — nodes overpaint wires
       -- here, so an in-pass highlight would be invisible.
-  @fn drawWireEndHighlight(p, segs, hover)  @ 1061-1068
-  @fn computeDraftEnd(draft, mx, my)  @ 1073-1080
+  @fn drawWireEndHighlight(p, segs, hover)  @ 1059-1066
+  @fn computeDraftEnd(draft, mx, my)  @ 1071-1078
       -- Cursor-end position with the grab-offset decayed over WIRE_GRAB_DECAY px,
       -- ratcheting on furthest travel. See docs/wiringPage.md (the wire end leads
       -- the cursor) for why this point, not the cursor, drives hit-testing.
   -- Mid-wire fader (audio wires only)
-  @fn dbFromP(p)  @ 1086-1092
+  @fn dbFromP(p)  @ 1084-1090
       -- Industry-shaped fader law: finest resolution near unity, coarser low,
       -- hard floor below p=0.05. (p: 0=bottom, 1=top.)
-  @fn pFromDb(db)  @ 1094-1100
-  @fn linToDb(lin)  @ 1102
-  @fn dbToLin(db)  @ 1103
-  @fn arrowMidHit(segs, mx, my)  @ 1105-1115
-  @fn faderRectAt(ax, ay)  @ 1117-1120
-  @fn pixelYToLin(my, stripY0)  @ 1122-1126
-  @fn drawFader(p, f)  @ 1128-1143
-  @fn drawTagAt(p, cx, cy, label)  @ 1145-1149
-  @fn sourceTagLayout(p, label)  @ 1153-1163
+  @fn pFromDb(db)  @ 1092-1098
+  @fn linToDb(lin)  @ 1100
+  @fn dbToLin(db)  @ 1101
+  @fn arrowMidHit(segs, mx, my)  @ 1103-1113
+  @fn faderRectAt(ax, ay)  @ 1115-1118
+  @fn pixelYToLin(my, stripY0)  @ 1120-1124
+  @fn drawFader(p, f)  @ 1126-1141
+  @fn drawTagAt(p, cx, cy, label)  @ 1143-1147
+  @fn sourceTagLayout(p, label)  @ 1151-1161
       -- Wrapped label + patch half-extents at the wire-label font. One source of truth
       -- for draw, wire-trim, and grab-hit. TAG_VIS_H trims ascent/descent so the box hugs the glyphs.
-  @fn drawSourceTag(p, cx, cy, label)  @ 1166-1175
+  @fn drawSourceTag(p, cx, cy, label)  @ 1164-1173
       -- Track name at a source edge's source end; bg patch occludes the wire behind it.
-  @fn leastOccupiedDir(consumer, consumerId, wireViews, nodesById, mxp, myp)  @ 1179-1207
+  @fn leastOccupiedDir(consumer, consumerId, wireViews, nodesById, mxp, myp)  @ 1177-1205
       -- Unit direction toward the consumer-boundary sector least crowded by incident wires,
       -- so the default source-tag fan lands in open space. Away-from-master when nothing touches it.
-  @fn sourceSegments(p, wireViews, nodesById, segs)  @ 1211-1257
+  @fn sourceSegments(p, wireViews, nodesById, segs)  @ 1209-1255
       -- Source-origin edges have no body: synthesise their from-endpoint as a fanned stub
       -- off the consumer, into the least-occupied boundary sector, written as normal wires.
-  @fn nodeEdgePoint(nv, fromX, fromY)  @ 1261-1268
+  @fn nodeEdgePoint(nv, fromX, fromY)  @ 1259-1266
       -- Trunk endpoint on the claimed node's edge: where the bar-centre→node-centre
       -- ray exits the body rect (the node fill occludes any overshoot regardless).
-  @fn busSegments(p, wireViews, busViews, nodesById, segs, busRails)  @ 1272-1422
+  @fn busSegments(p, wireViews, busViews, nodesById, segs, busRails)  @ 1270-1420
       -- Bussed edges render as a rail (bar + comb taps + for fans one arrowed trunk).
       -- Bar at busView's own pos/orient; a matrix bar doubles as the bus node's body.
-  @fn drawBusPass(p, busRails, placed)  @ 1426-1444
+  @fn drawBusPass(p, busRails, placed)  @ 1424-1442
       -- Fan rails: bar + the one arrowed trunk, drawn over the tap landings (the bar
       -- occludes them like a source tag's patch). A matrix bar draws in the node pass.
-  @fn drawBusBar(p, r, isSelected)  @ 1448-1456
+  @fn drawBusBar(p, r, isSelected)  @ 1446-1454
       -- A matrix buss's node-pass body: the bar itself, geometry from busSegments'
       -- rail so bar and taps can't drift. Selection strokes a slab around the bar.
-  @fn bussablePorts(nv, dir, wireViews)  @ 1460-1477
+  @fn bussablePorts(nv, dir, wireViews)  @ 1458-1475
       -- Audio ports in `dir` (in/out) that carry ≥1 wire and aren't already routed through a
       -- buss — the ports the node menu offers to buss. Ascending port order.
-  @fn busBarHit(busRails, draft, mx, my)  @ 1481-1490
+  @fn busBarHit(busRails, draft, mx, my)  @ 1479-1488
       -- A bus bar is a fat drop target during a rewire: a fan bar takes a draft whose
       -- grabbed end matches its dir (to→in, from→out); a matrix bar takes either end.
-  @fn busBarSource(busRails, mx, my)  @ 1494-1502
+  @fn busBarSource(busRails, mx, my)  @ 1492-1500
       -- Shift-hover source from a buss: the bar is the out-wire origin, the same fat
       -- target the drop side uses. Every tap shares port 1, so the draft kept-port is 1.
-  @fn busBarAt(busRails, mx, my)  @ 1505-1511
+  @fn busBarAt(busRails, mx, my)  @ 1503-1509
       -- Any buss bar under the cursor — the RMB hit that opens the bar's delete menu.
-  @fn makeBusDrag(rail, mx, my)  @ 1515-1535
+  @fn makeBusDrag(rail, mx, my)  @ 1513-1533
       -- Buss-bar move/resize: middle-third grab translates; near-end grab resizes that end (floored at its
       -- tap), handing off to the far end once the cursor crosses past it. Perp motion always slides.
-  @fn busDragApply(bd, mx, my)  @ 1538-1560
+  @fn busDragApply(bd, mx, my)  @ 1536-1558
       -- Advance the in-flight bar by this frame's cursor (mutates bd).
-  @fn busDragPos(bd)  @ 1564-1569
+  @fn busDragPos(bd)  @ 1562-1567
       -- (pos.x, pos.y, ext.lo, ext.hi) from the bar's current absolute ends, re-based
       -- onto the fixed pos.axial so ext alone carries the change.
-  @fn sourceTagHit(p, segs, wireViews, mx, my)  @ 1572-1582
+  @fn sourceTagHit(p, segs, wireViews, mx, my)  @ 1570-1580
       -- The source tag's grab box: cursor inside the bg-patch rect at its centre.
-  @fn nodeUnderMouse(nodeViews, mx, my)  @ 1586-1592
+  @fn nodeUnderMouse(nodeViews, mx, my)  @ 1584-1590
       -- Node under the mouse by un-inflated body rect (not the inflated port-reveal
       -- rect) — used to start a drag. nil over empty canvas or a port band.
-  @fn nodeAtPoint(nodeViews, px, py)  @ 1596-1602
+  @fn nodeAtPoint(nodeViews, px, py)  @ 1594-1600
       -- nodeUnderMouse keyed to an arbitrary screen point (the decayed draft
       -- wire end, typically) rather than the live cursor.
-  @fn nodesInBand(nodeViews, bx0, by0, bx1, by1)  @ 1606-1617
+  @fn nodesInBand(nodeViews, bx0, by0, bx1, by1)  @ 1604-1615
       -- Node ids whose body rect (un-inflated — port bands aren't selectable)
       -- intersects the band. Empty set if nothing caught.
-  @fn soleDragged(nodeViews, d)  @ 1620-1626
+  @fn soleDragged(nodeViews, d)  @ 1618-1624
       -- The one node a drag carries, as its nodeView; nil when it carries a selection.
-  @fn spliceTargetHit(segs, nv, mx, my)  @ 1630-1643
+  @fn spliceTargetHit(segs, nv, mx, my)  @ 1628-1641
       -- Splice-on-drop target: among the audio triangles the dragged body covers, the
       -- nearest spliceable one to the cursor. See docs/wiringPage.md § Splice on drop.
   -- Gesture machine
-  @fn busy()  @ 1648-1650
-      -- Transitional: the modes still outside the machine gate the guard chains too.
-  @fn faderDragging()  @ 1653-1655
+  @fn busy()  @ 1646-1648
+      -- Transitional: busDraft is still outside the machine and gates the guard chains too.
+  @fn faderDragging()  @ 1651-1653
       -- The fader overlay coexists with idle hovering; only its drag is a gesture.
+  @fn wireDrafting()  @ 1656-1658
+      -- The live draft payload, or nil: the hover and draw blocks read its fields.
   -- Canvas
-  @fn renderCanvas(w, h)  @ 1761-2444
-  @fn pushBodyStyles()  @ 2446-2448
-  @fn popBodyStyles()  @ 2449
+  @fn renderCanvas(w, h)  @ 1813-2460
+  @fn pushBodyStyles()  @ 2462-2464
+  @fn popBodyStyles()  @ 2465
   -- Palette pane
-  @fn openAddSourceModal()  @ 2455-2464
+  @fn openAddSourceModal()  @ 2471-2480
       -- Hand-drawn header so its band matches the canvas's by construction: both panes
       -- share renderBody's `oy`, so the divider aligns across PANE_GAP without measuring.
-  @fn deleteSourceGuarded(nodeId, label)  @ 2468-2477
+  @fn deleteSourceGuarded(nodeId, label)  @ 2484-2493
       -- Delete tries unforced first; a take-bearing track comes back refused with a
       -- count, which opens a confirm that re-issues the delete with force.
-  @fn renderPaletteActions(focused)  @ 2479-2487
-  @fn renderPaletteList(sources)  @ 2489-2517
-  @fn renderPaletteBody()  @ 2519-2533
+  @fn renderPaletteActions(focused)  @ 2495-2503
+  @fn renderPaletteList(sources)  @ 2505-2534
+  @fn renderPaletteBody()  @ 2536-2550
   -- Wiring scope
-  @fn sourcePosFor(genX, genY)  @ 2600-2611
-  @fn openFxPicker(x, y, anchor)  @ 2614-2630
+  @fn sourcePosFor(genX, genY)  @ 2617-2628
+  @fn openFxPicker(x, y, anchor)  @ 2631-2647
       -- anchor (optional) = { x, y } screen coords for the popup; nil → viewport-centred.
-  @fn commitFx(pck, fx)  @ 2634-2653
+  @fn commitFx(pck, fx)  @ 2651-2670
       -- Defer the gesture so the picker's close paints before the live
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
-  @fn renderFxPicker(pck)  @ 2655-2697
+  @fn renderFxPicker(pck)  @ 2672-2714
 
 # Functions held in tables
-  @held nodeDrag.inject(g, frame)  @ 1663-1671
-  @held nodeDrag.update(g, frame)  @ 1672-1684
-  @held band.inject(g, frame)  @ 1689-1693
-  @held band.update(g, frame)  @ 1694-1703
-  @held tagDrag.inject(g, frame)  @ 1708-1717
-  @held tagDrag.update(g, frame)  @ 1718-1729
-  @held busDrag.inject(g, frame)  @ 1734-1743
-  @held busDrag.update(g, frame)  @ 1744-1752
-  @held statusSegments.get()  @ 2573
-  @held wiring.wiringClearSelection()  @ 2702
+  @held nodeDrag.inject(g, frame)  @ 1666-1674
+  @held nodeDrag.update(g, frame)  @ 1675-1687
+  @held band.inject(g, frame)  @ 1692-1696
+  @held band.update(g, frame)  @ 1697-1706
+  @held wireDraft.update(g, frame)  @ 1713-1755
+  @held tagDrag.inject(g, frame)  @ 1760-1769
+  @held tagDrag.update(g, frame)  @ 1770-1781
+  @held busDrag.inject(g, frame)  @ 1786-1795
+  @held busDrag.update(g, frame)  @ 1796-1804
+  @held statusSegments.get()  @ 2590
+  @held wiring.wiringClearSelection()  @ 2719
 
 # Public API (wr:*)
-  @api wr:toolbarSegments()  @ 2537
-  @api wr:closeTransients()  @ 2540-2544
-      @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.  @ 2539
-  @api wr:renderBody(_, w, h, dispatch)  @ 2547-2570
-      @contract  body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.  @ 2546
-  @api wr:statusSegments()  @ 2576-2579
-  @api wr:focusState()  @ 2582-2592
-      @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.  @ 2581
+  @api wr:toolbarSegments()  @ 2554
+  @api wr:closeTransients()  @ 2557-2561
+      @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.  @ 2556
+  @api wr:renderBody(_, w, h, dispatch)  @ 2564-2587
+      @contract  body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.  @ 2563
+  @api wr:statusSegments()  @ 2593-2596
+  @api wr:focusState()  @ 2599-2609
+      @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.  @ 2598
 
 # Uses (outbound edges)
-  @use call    ImGui.BeginChild  @ renderBody:2553 renderFxPicker:2689
-  @use call    ImGui.BeginPopup  @ renderCanvas:2341,2369,2421
-  @use call    ImGui.BeginTooltip  @ tooltipAt:224
-  @use call    ImGui.Button  @ renderPaletteActions:2480,2483
-  @use call    ImGui.CalcTextSize  @ drawNode:177,178,182 layoutList:302,306
-  @use call    ImGui.CloseCurrentPopup  @ renderCanvas:2351,2375,2379,2388,2398 commitFx:2635 renderFxPicker:2684
-  @use call    ImGui.Dummy  @ renderCanvas:2443
-  @use call    ImGui.EndChild  @ renderBody:2560 renderFxPicker:2695
-  @use call    ImGui.EndPopup  @ renderCanvas:2354,2401,2423
-  @use call    ImGui.EndTooltip  @ tooltipAt:226
-  @use call    ImGui.GetCursorScreenPos  @ renderCanvas:1765 renderBody:2551
-  @use call    ImGui.GetKeyMods  @ renderCanvas:1778
-  @use call    ImGui.GetMousePos  @ renderCanvas:1773 openFxPicker:2616
-  @use call    ImGui.GetMouseWheel  @ renderCanvas:2090
-  @use call    ImGui.GetStyleVar  @ renderPaletteList:2492
-  @use call    ImGui.GetWindowPos  @ renderCanvas:2348,2395
-  @use call    ImGui.GetWindowSize  @ renderCanvas:2349,2396
-  @use call    ImGui.GetWindowViewport  @ renderCanvas:2416
-  @use call    ImGui.Indent  @ renderPaletteList:2493
-  @use call    ImGui.InputText  @ renderFxPicker:2659
-  @use call    ImGui.InvisibleButton  @ drawSlot:246 drawWireEndLabel:885
-  @use call    ImGui.IsAnyItemActive  @ focusState:2588
-  @use call    ImGui.IsItemActive  @ renderPaletteList:2505
-  @use call    ImGui.IsItemHovered  @ drawSlot:251 drawWireEndLabel:886
-  @use call    ImGui.IsKeyPressed  @ renderCanvas:2019,2022 renderFxPicker:2661,2662,2676,2677,2683
-  @use call    ImGui.IsMouseClicked  @ renderCanvas:1790,2029,2074,2132,2144,2316
-  @use call    ImGui.IsMouseDoubleClicked  @ renderCanvas:2064,2116
-  @use call    ImGui.IsMouseDown  @ nodeDrag.update:1673 band.update:1695 tagDrag.update:1719 busDrag.update:1745 renderCanvas:1871,2266
-  @use call    ImGui.IsMouseDragging  @ renderPaletteList:2506
-  @use call    ImGui.IsWindowAppearing  @ renderCanvas:2347,2394 renderFxPicker:2656,2672
-  @use call    ImGui.IsWindowHovered  @ renderCanvas:1777
-  @use call    ImGui.OpenPopup  @ renderCanvas:2320,2327 openFxPicker:2629
-  @use call    ImGui.PopFont  @ drawNode:186 layoutList:309
-  @use call    ImGui.PopStyleColor  @ tooltipAt:229 renderCanvas:2358,2405,2427 popBodyStyles:2449
-  @use call    ImGui.PopStyleVar  @ tooltipAt:228
-  @use call    ImGui.PushFont  @ drawNode:175 layoutList:301
-  @use call    ImGui.PushStyleColor  @ tooltipAt:222 renderCanvas:2340,2368,2420 pushBodyStyles:2447
-  @use call    ImGui.PushStyleVar  @ tooltipAt:223
-  @use call    ImGui.SameLine  @ renderPaletteActions:2481
-  @use call    ImGui.Selectable  @ renderCanvas:2372,2377,2386 renderPaletteList:2500 renderFxPicker:2692
-  @use call    ImGui.Separator  @ renderPaletteBody:2531 renderFxPicker:2663
-  @use call    ImGui.SetCursorScreenPos  @ drawSlot:245 drawWireEndLabel:884 renderCanvas:2442
-  @use call    ImGui.SetKeyboardFocusHere  @ renderFxPicker:2656
-  @use call    ImGui.SetNextItemWidth  @ renderFxPicker:2657
-  @use call    ImGui.SetNextWindowPos  @ tooltipAt:221 renderCanvas:2338,2366,2413,2417
-  @use call    ImGui.Text  @ tooltipAt:225
-  @use call    ImGui.TextDisabled  @ renderPaletteList:2495
-  @use call    ImGui.Unindent  @ renderPaletteList:2496,2516
-  @use call    ImGui.Viewport_GetCenter  @ renderCanvas:2416
-  @use call    chrome.checkbox  @ renderCanvas:2343
-  @use call    chrome.colour  @ tooltipAt:222 renderCanvas:2340,2368,2420 pushBodyStyles:2447
-  @use call    chrome.disabledIf  @ renderPaletteActions:2482
-  @use call    chrome.gridWidth  @ renderBody:2552
-  @use call    chrome.palettePane  @ renderBody:2562
-  @use call    chrome.pickerIsActive  @ focusState:2584
-  @use call    chrome.popChromeWindow  @ renderCanvas:2359,2406,2428
-  @use call    chrome.pushChromeWindow  @ renderCanvas:2339,2367,2419
-  @use call    cmgr:invoke  @ renderCanvas:2123
-  @use call    cmgr:scope  @ <load>:2699
-  @use call    facade.get  @ commitFx:2644,2645
-  @use call    modalHost:openConfirm  @ deleteSourceGuarded:2471
-  @use call    modalHost:openPrompt  @ openAddSourceModal:2456
-  @use call    modalHost:wasOpenAtFrameStart  @ focusState:2590
-  @use call    painter.new  @ renderCanvas:1768
-  @use call    painter.wrapLines  @ drawNode:176 sourceTagLayout:1155
-  @use call    util.add  @ layoutPortRow:374,406,411 wireGroups:730,732 drawWireEndLabel:876 leastOccupiedDir:1182 sourceSegments:1217,1218 busSegments:1279,1305,1411 bussablePorts:1474 renderCanvas:1796,1811,1937 renderPaletteBody:2523 openFxPicker:2623 renderFxPicker:2669
-  @use call    util.key  @ wireGroups:725
-  @use call    wv:addBusNode  @ commitFx:2639
-  @use call    wv:addFx  @ commitFx:2641
-  @use call    wv:addSource  @ openAddSourceModal:2461
-  @use call    wv:addWire  @ renderCanvas:2285
-  @use call    wv:ancestorsOf  @ renderCanvas:2183,2231 renderPaletteList:2510
-  @use call    wv:busViews  @ renderCanvas:1805
-  @use call    wv:bypassed  @ renderCanvas:1978,2154
-  @use call    wv:deleteBus  @ renderCanvas:2373
-  @use call    wv:deleteNode  @ renderCanvas:2374
-  @use call    wv:deleteSource  @ deleteSourceGuarded:2469,2475
-  @use call    wv:descendantsOf  @ renderCanvas:2230
-  @use call    wv:edgeGain  @ renderCanvas:1896,2034,2078
-  @use call    wv:insertBus  @ renderCanvas:2136
-  @use call    wv:listInstalledFX  @ openFxPicker:2623
-  @use call    wv:masterPos  @ sourceSegments:1221 sourcePosFor:2601
-  @use call    wv:moveBus  @ busDrag.update:1749
-  @use call    wv:moveNodes  @ nodeDrag.update:1681
-  @use call    wv:muted  @ renderCanvas:1978,2153
-  @use call    wv:nodeViews  @ renderCanvas:1795 renderPaletteBody:2521
-  @use call    wv:openFxWindow  @ renderCanvas:2125
-  @use call    wv:pokeEdgeGain  @ renderCanvas:1870,2043,2081,2098
-  @use call    wv:removeWireAt  @ renderCanvas:2296
-  @use call    wv:rewireEdgeEnd  @ renderCanvas:2282
-  @use call    wv:rotateBus  @ renderCanvas:2378
-  @use call    wv:samplerTrack  @ renderCanvas:2122
-  @use call    wv:selection  @ renderCanvas:1835
-  @use call    wv:setBypassed  @ renderCanvas:2154
-  @use call    wv:setEdgeGain  @ renderCanvas:1873,1900,2044,2068,2082,2099,2106
-  @use call    wv:setEdgePrimary  @ renderCanvas:2344
-  @use call    wv:setHover  @ renderCanvas:2014
-  @use call    wv:setMuted  @ renderCanvas:2153
-  @use call    wv:setSelection  @ band.update:1697,1699 renderCanvas:1782 wiring.wiringClearSelection:2702
-  @use call    wv:setSourceTagPos  @ tagDrag.update:1725
-  @use call    wv:spliceIntoEdge  @ nodeDrag.update:1677
-  @use call    wv:spliceable  @ spliceTargetHit:1637
-  @use call    wv:wireViews  @ renderCanvas:1804
-  @use call    wv:wiredPorts  @ layoutPortRow:370
+  @use call    ImGui.BeginChild  @ renderBody:2570 renderFxPicker:2706
+  @use call    ImGui.BeginPopup  @ renderCanvas:2357,2385,2437
+  @use call    ImGui.BeginTooltip  @ tooltipAt:223
+  @use call    ImGui.Button  @ renderPaletteActions:2496,2499
+  @use call    ImGui.CalcTextSize  @ drawNode:176,177,181 layoutList:301,305
+  @use call    ImGui.CloseCurrentPopup  @ renderCanvas:2367,2391,2395,2404,2414 commitFx:2652 renderFxPicker:2701
+  @use call    ImGui.Dummy  @ renderCanvas:2459
+  @use call    ImGui.EndChild  @ renderBody:2577 renderFxPicker:2712
+  @use call    ImGui.EndPopup  @ renderCanvas:2370,2417,2439
+  @use call    ImGui.EndTooltip  @ tooltipAt:225
+  @use call    ImGui.GetCursorScreenPos  @ renderCanvas:1817 renderBody:2568
+  @use call    ImGui.GetKeyMods  @ renderCanvas:1830
+  @use call    ImGui.GetMousePos  @ renderCanvas:1825 openFxPicker:2633
+  @use call    ImGui.GetMouseWheel  @ renderCanvas:2147
+  @use call    ImGui.GetStyleVar  @ renderPaletteList:2508
+  @use call    ImGui.GetWindowPos  @ renderCanvas:2364,2411
+  @use call    ImGui.GetWindowSize  @ renderCanvas:2365,2412
+  @use call    ImGui.GetWindowViewport  @ renderCanvas:2432
+  @use call    ImGui.Indent  @ renderPaletteList:2509
+  @use call    ImGui.InputText  @ renderFxPicker:2676
+  @use call    ImGui.InvisibleButton  @ drawSlot:245 drawWireEndLabel:883
+  @use call    ImGui.IsAnyItemActive  @ focusState:2605
+  @use call    ImGui.IsItemActive  @ renderPaletteList:2521
+  @use call    ImGui.IsItemHovered  @ drawSlot:250 drawWireEndLabel:884
+  @use call    ImGui.IsKeyPressed  @ renderCanvas:2076,2079 renderFxPicker:2678,2679,2693,2694,2700
+  @use call    ImGui.IsMouseClicked  @ renderCanvas:1842,2086,2131,2189,2201,2332
+  @use call    ImGui.IsMouseDoubleClicked  @ renderCanvas:2121,2173
+  @use call    ImGui.IsMouseDown  @ nodeDrag.update:1676 band.update:1698 wireDraft.update:1714 tagDrag.update:1771 busDrag.update:1797 renderCanvas:1924
+  @use call    ImGui.IsMouseDragging  @ renderPaletteList:2522
+  @use call    ImGui.IsWindowAppearing  @ renderCanvas:2363,2410 renderFxPicker:2673,2689
+  @use call    ImGui.IsWindowHovered  @ renderCanvas:1829
+  @use call    ImGui.OpenPopup  @ renderCanvas:2336,2343 openFxPicker:2646
+  @use call    ImGui.PopFont  @ drawNode:185 layoutList:308
+  @use call    ImGui.PopStyleColor  @ tooltipAt:228 renderCanvas:2374,2421,2443 popBodyStyles:2465
+  @use call    ImGui.PopStyleVar  @ tooltipAt:227
+  @use call    ImGui.PushFont  @ drawNode:174 layoutList:300
+  @use call    ImGui.PushStyleColor  @ tooltipAt:221 renderCanvas:2356,2384,2436 pushBodyStyles:2463
+  @use call    ImGui.PushStyleVar  @ tooltipAt:222
+  @use call    ImGui.SameLine  @ renderPaletteActions:2497
+  @use call    ImGui.Selectable  @ renderCanvas:2388,2393,2402 renderPaletteList:2516 renderFxPicker:2709
+  @use call    ImGui.Separator  @ renderPaletteBody:2548 renderFxPicker:2680
+  @use call    ImGui.SetCursorScreenPos  @ drawSlot:244 drawWireEndLabel:882 renderCanvas:2458
+  @use call    ImGui.SetKeyboardFocusHere  @ renderFxPicker:2673
+  @use call    ImGui.SetNextItemWidth  @ renderFxPicker:2674
+  @use call    ImGui.SetNextWindowPos  @ tooltipAt:220 renderCanvas:2354,2382,2429,2433
+  @use call    ImGui.Text  @ tooltipAt:224
+  @use call    ImGui.TextDisabled  @ renderPaletteList:2511
+  @use call    ImGui.Unindent  @ renderPaletteList:2512,2533
+  @use call    ImGui.Viewport_GetCenter  @ renderCanvas:2432
+  @use call    chrome.checkbox  @ renderCanvas:2359
+  @use call    chrome.colour  @ tooltipAt:221 renderCanvas:2356,2384,2436 pushBodyStyles:2463
+  @use call    chrome.disabledIf  @ renderPaletteActions:2498
+  @use call    chrome.gridWidth  @ renderBody:2569
+  @use call    chrome.palettePane  @ renderBody:2579
+  @use call    chrome.pickerIsActive  @ focusState:2601
+  @use call    chrome.popChromeWindow  @ renderCanvas:2375,2422,2444
+  @use call    chrome.pushChromeWindow  @ renderCanvas:2355,2383,2435
+  @use call    cmgr:invoke  @ renderCanvas:2180
+  @use call    cmgr:scope  @ <load>:2716
+  @use call    facade.get  @ commitFx:2661,2662
+  @use call    modalHost:openConfirm  @ deleteSourceGuarded:2487
+  @use call    modalHost:openPrompt  @ openAddSourceModal:2472
+  @use call    modalHost:wasOpenAtFrameStart  @ focusState:2607
+  @use call    painter.new  @ renderCanvas:1820
+  @use call    painter.wrapLines  @ drawNode:175 sourceTagLayout:1153
+  @use call    util.add  @ layoutPortRow:373,405,410 wireGroups:728,730 drawWireEndLabel:874 leastOccupiedDir:1180 sourceSegments:1215,1216 busSegments:1277,1303,1409 bussablePorts:1472 renderCanvas:1848,1863,1993 renderPaletteBody:2540 openFxPicker:2640 renderFxPicker:2686
+  @use call    util.key  @ wireGroups:723
+  @use call    wv:addBusNode  @ commitFx:2656
+  @use call    wv:addFx  @ commitFx:2658
+  @use call    wv:addSource  @ openAddSourceModal:2477
+  @use call    wv:addWire  @ wireDraft.update:1732
+  @use call    wv:ancestorsOf  @ renderCanvas:2241,2290 renderPaletteList:2527
+  @use call    wv:busViews  @ renderCanvas:1857
+  @use call    wv:bypassed  @ renderCanvas:2034,2211
+  @use call    wv:deleteBus  @ renderCanvas:2389
+  @use call    wv:deleteNode  @ renderCanvas:2390
+  @use call    wv:deleteSource  @ deleteSourceGuarded:2485,2491
+  @use call    wv:descendantsOf  @ renderCanvas:2289
+  @use call    wv:edgeGain  @ renderCanvas:1949,2091,2135
+  @use call    wv:insertBus  @ renderCanvas:2193
+  @use call    wv:listInstalledFX  @ openFxPicker:2640
+  @use call    wv:masterPos  @ sourceSegments:1219 sourcePosFor:2618
+  @use call    wv:moveBus  @ busDrag.update:1801
+  @use call    wv:moveNodes  @ nodeDrag.update:1684
+  @use call    wv:muted  @ renderCanvas:2034,2210
+  @use call    wv:nodeViews  @ renderCanvas:1847 renderPaletteBody:2538
+  @use call    wv:openFxWindow  @ renderCanvas:2182
+  @use call    wv:pokeEdgeGain  @ renderCanvas:1923,2100,2138,2155
+  @use call    wv:removeWireAt  @ wireDraft.update:1743
+  @use call    wv:rewireEdgeEnd  @ wireDraft.update:1730
+  @use call    wv:rotateBus  @ renderCanvas:2394
+  @use call    wv:samplerTrack  @ renderCanvas:2179
+  @use call    wv:selection  @ renderCanvas:1888
+  @use call    wv:setBypassed  @ renderCanvas:2211
+  @use call    wv:setEdgeGain  @ renderCanvas:1926,1953,2101,2125,2139,2156,2163
+  @use call    wv:setEdgePrimary  @ renderCanvas:2360
+  @use call    wv:setHover  @ renderCanvas:2070
+  @use call    wv:setMuted  @ renderCanvas:2210
+  @use call    wv:setSelection  @ band.update:1700,1702 renderCanvas:1834 wiring.wiringClearSelection:2719
+  @use call    wv:setSourceTagPos  @ tagDrag.update:1777
+  @use call    wv:spliceIntoEdge  @ nodeDrag.update:1680
+  @use call    wv:spliceable  @ spliceTargetHit:1635
+  @use call    wv:wireViews  @ renderCanvas:1856
+  @use call    wv:wiredPorts  @ layoutPortRow:369
   @use require imgui  @ <load>:16
   @use require painter  @ <load>:17
   @use require util  @ <load>:10
 
 # Calls (intra-file)
-  @call arrowMidHit  @ renderCanvas:1880
-  @call badgeHit  @ renderCanvas:2120,2151
-  @call badgeRects  @ drawNodeBadges:282 badgeHit:290
-  @call boxRect  @ drawSlot:237 layoutPortRow:425 slotHit:464 rowHit:474 onChevron:495 drawPortRow:699
-  @call busBarAt  @ renderCanvas:2249,2323
-  @call busBarHit  @ renderCanvas:1922
-  @call busBarSource  @ renderCanvas:1924
-  @call busDragApply  @ busDrag.inject:1736
-  @call busDragPos  @ busDrag.inject:1737 busDrag.update:1748
-  @call busSegments  @ renderCanvas:1840
-  @call bussablePorts  @ renderCanvas:2383
-  @call busy  @ renderCanvas:1860,1879,2115,2143,2316
-  @call closestPointOnSegment  @ pointToSegmentDist:978 busBarSource:1497
-  @call commitFx  @ renderFxPicker:2687,2692
-  @call computeDraftEnd  @ renderCanvas:1912
-  @call dbFromP  @ pixelYToLin:1125
-  @call dbToLin  @ pixelYToLin:1125 renderCanvas:2096
-  @call defaultSlot  @ pickHovered:509 stickyHoverHit:603
-  @call deleteSourceGuarded  @ renderPaletteActions:2484
-  @call draftSeg  @ renderCanvas:1970
-  @call draftSourceHoverHit  @ renderCanvas:1920
-  @call drawBadge  @ drawNodeBadges:283,284
-  @call drawBodyOutline  @ renderCanvas:2008
-  @call drawBusBar  @ renderCanvas:1966
-  @call drawBusPass  @ renderCanvas:1961
-  @call drawFader  @ renderCanvas:2000
-  @call drawHandle  @ drawPortRow:693
-  @call drawKeyboardIcon  @ drawSlot:239 drawPortRow:700
-  @call drawList  @ renderCanvas:2011
-  @call drawNode  @ renderCanvas:1977
-  @call drawNodeBadges  @ renderCanvas:1978
-  @call drawPortRow  @ renderCanvas:2010
-  @call drawPortRowBg  @ renderCanvas:1968
-  @call drawSlot  @ drawPortRow:702
-  @call drawSourceTag  @ renderCanvas:1958
-  @call drawTagAt  @ renderCanvas:1985
-  @call drawWire  @ drawWiresPass:1056 drawBusPass:1432 renderCanvas:1973
-  @call drawWireArrow  @ drawWire:1023
-  @call drawWireEndHighlight  @ renderCanvas:1990
-  @call drawWireEndLabel  @ drawWire:1032,1037 drawBusPass:1439
-  @call drawWiresPass  @ renderCanvas:1947
-  @call dropEligible  @ renderCanvas:2271
-  @call dropTargetHit  @ renderCanvas:1919
-  @call endRegion  @ wireEndHit:993 drawWireEndHighlight:1065
-  @call engagedHover  @ shiftHoverHit:582 dropTargetHit:649
-  @call faderDragging  @ renderCanvas:1867,1886,1895,2063,2073,2089
-  @call faderRectAt  @ renderCanvas:2032
-  @call findLayoutSlot  @ draftSourceHoverHit:636 renderCanvas:2168,2215
-  @call inRect  @ badgeHit:291,292 slotHit:464 rowHit:474 onChevron:495 pickHovered:501 stillEngaged:519 engagedHover:539 draftSourceHoverHit:627,628 sourceTagHit:1577 nodeUnderMouse:1588
-  @call inRect  @ nodeAtPoint:1598 spliceTargetHit:1634 renderCanvas:1890,2065,2075,2091
-  @call layoutList  @ layoutPortRow:436
-  @call layoutPortRow  @ engagedHover:551,565 shiftHoverHit:578 stickyHoverHit:602 draftSourceHoverHit:625 renderCanvas:2166,2212
-  @call leastOccupiedDir  @ sourceSegments:1227
-  @call linToDb  @ drawFader:1135,1140 renderCanvas:2049,2093
-  @call makeBusDrag  @ renderCanvas:2251
-  @call nodeAtPoint  @ renderCanvas:2293
-  @call nodeBox  @ drawNode:168 drawBodyOutline:257 badgeRects:266 layoutPortRow:333 engagedHover:539 draftSourceHoverHit:628 nodeUnderMouse:1588 nodeAtPoint:1598 nodesInBand:1611 spliceTargetHit:1631
-  @call nodeEdgePoint  @ busSegments:1387
-  @call nodeHasFx  @ badgeHit:289 renderCanvas:1978
-  @call nodeUnderMouse  @ renderCanvas:2117,2150,2248,2322
-  @call nodesInBand  @ band.inject:1692 band.update:1699
-  @call onChevron  @ pickHovered:506 stillEngaged:518 draftSourceHoverHit:630
-  @call openAddSourceModal  @ renderPaletteActions:2480
-  @call openFxPicker  @ renderCanvas:2329
-  @call pFromDb  @ drawFader:1133,1135 renderCanvas:2049
-  @call pickHovered  @ engagedHover:556,566
-  @call pixelYToLin  @ renderCanvas:1868,2077
-  @call pointToSegmentDist  @ wireEndHit:995 busBarHit:1486 busBarSource:1496 busBarAt:1507
-  @call popBodyStyles  @ renderBody:2568
-  @call pushBodyStyles  @ renderBody:2549
-  @call rect  @ boxRect:137 nodeBox:151 strokeNodeRect:162 drawKeyboardIcon:197,202 badgeRects:270,271 layoutList:323,325,326 layoutPortRow:438,452
-  @call rect  @ layoutPortRow:454 drawList:672 drawPortRow:708 drawWireEndLabel:877 drawFader:1138,1139 drawSourceTag:1168 drawBusBar:1452 sourceTagHit:1577 renderCanvas:1771,2037,2038
-  @call rect  @ renderCanvas:2436,2437
-  @call renderCanvas  @ renderBody:2558
-  @call renderFxPicker  @ renderCanvas:2422
-  @call renderPaletteActions  @ renderPaletteBody:2530
-  @call renderPaletteList  @ renderPaletteBody:2532
-  @call rowHit  @ engagedHover:554
-  @call shiftHoverHit  @ renderCanvas:1925
-  @call slotHit  @ pickHovered:502 draftSourceHoverHit:629
-  @call soleDragged  @ renderCanvas:1851
-  @call sourcePosFor  @ openFxPicker:2619
-  @call sourceSegments  @ renderCanvas:1838
-  @call sourceTagHit  @ renderCanvas:1862
-  @call sourceTagLayout  @ drawSourceTag:1167 sourceSegments:1232 busSegments:1351 sourceTagHit:1576
-  @call spliceTargetHit  @ renderCanvas:1853
-  @call stickyHoverHit  @ renderCanvas:1928
-  @call stillEngaged  @ engagedHover:552
-  @call strokeNodeRect  @ drawNode:171 drawBodyOutline:257
-  @call tooltipAt  @ drawSlot:252 drawWireEndLabel:887
-  @call unionRect  @ layoutPortRow:426,442
-  @call wireEndHit  @ renderCanvas:1861
-  @call wireExits  @ wireMid:790 endRegion:954 drawWire:1025
-  @call wireGroups  @ wireSegments:902
-  @call wireMid  @ draftSeg:946 busSegments:1394 renderCanvas:1845
-  @call wireOffset  @ wireSegments:915 sourceSegments:1244
-  @call wireSegments  @ renderCanvas:1837
-  @call wr:focusState  @ renderBody:2569
+  @call arrowMidHit  @ renderCanvas:1933
+  @call badgeHit  @ renderCanvas:2177,2208
+  @call badgeRects  @ drawNodeBadges:281 badgeHit:289
+  @call boxRect  @ drawSlot:236 layoutPortRow:424 slotHit:463 rowHit:473 onChevron:494 drawPortRow:697
+  @call busBarAt  @ renderCanvas:2308,2339
+  @call busBarHit  @ renderCanvas:1976
+  @call busBarSource  @ renderCanvas:1978
+  @call busDragApply  @ busDrag.inject:1788
+  @call busDragPos  @ busDrag.inject:1789 busDrag.update:1800
+  @call busSegments  @ renderCanvas:1893
+  @call bussablePorts  @ renderCanvas:2399
+  @call busy  @ renderCanvas:1913,1932,2172,2200,2332
+  @call closestPointOnSegment  @ pointToSegmentDist:976 busBarSource:1495
+  @call commitFx  @ renderFxPicker:2704,2709
+  @call computeDraftEnd  @ renderCanvas:1966
+  @call dbFromP  @ pixelYToLin:1123
+  @call dbToLin  @ pixelYToLin:1123 renderCanvas:2153
+  @call defaultSlot  @ pickHovered:508 stickyHoverHit:602
+  @call deleteSourceGuarded  @ renderPaletteActions:2500
+  @call draftSeg  @ renderCanvas:2026
+  @call draftSourceHoverHit  @ renderCanvas:1974
+  @call drawBadge  @ drawNodeBadges:282,283
+  @call drawBodyOutline  @ renderCanvas:2064
+  @call drawBusBar  @ renderCanvas:2022
+  @call drawBusPass  @ renderCanvas:2017
+  @call drawFader  @ renderCanvas:2056
+  @call drawHandle  @ drawPortRow:691
+  @call drawKeyboardIcon  @ drawSlot:238 drawPortRow:698
+  @call drawList  @ renderCanvas:2067
+  @call drawNode  @ renderCanvas:2033
+  @call drawNodeBadges  @ renderCanvas:2034
+  @call drawPortRow  @ renderCanvas:2066
+  @call drawPortRowBg  @ renderCanvas:2024
+  @call drawSlot  @ drawPortRow:700
+  @call drawSourceTag  @ renderCanvas:2014
+  @call drawTagAt  @ renderCanvas:2041
+  @call drawWire  @ drawWiresPass:1054 drawBusPass:1430 renderCanvas:2029
+  @call drawWireArrow  @ drawWire:1021
+  @call drawWireEndHighlight  @ renderCanvas:2046
+  @call drawWireEndLabel  @ drawWire:1030,1035 drawBusPass:1437
+  @call drawWiresPass  @ renderCanvas:2003
+  @call dropEligible  @ wireDraft.update:1720
+  @call dropTargetHit  @ renderCanvas:1973
+  @call endRegion  @ wireEndHit:991 drawWireEndHighlight:1063
+  @call engagedHover  @ shiftHoverHit:581 dropTargetHit:647
+  @call faderDragging  @ renderCanvas:1920,1939,1948,2120,2130,2146
+  @call faderRectAt  @ renderCanvas:2089
+  @call findLayoutSlot  @ draftSourceHoverHit:634 renderCanvas:2225,2273
+  @call inRect  @ badgeHit:290,291 slotHit:463 rowHit:473 onChevron:494 pickHovered:500 stillEngaged:518 engagedHover:538 draftSourceHoverHit:625,626 sourceTagHit:1575 nodeUnderMouse:1586
+  @call inRect  @ nodeAtPoint:1596 spliceTargetHit:1632 renderCanvas:1943,2122,2132,2148
+  @call layoutList  @ layoutPortRow:435
+  @call layoutPortRow  @ engagedHover:550,564 shiftHoverHit:577 stickyHoverHit:601 draftSourceHoverHit:623 renderCanvas:2223,2270
+  @call leastOccupiedDir  @ sourceSegments:1225
+  @call linToDb  @ drawFader:1133,1138 renderCanvas:2106,2150
+  @call makeBusDrag  @ renderCanvas:2310
+  @call nodeAtPoint  @ wireDraft.update:1740
+  @call nodeBox  @ drawNode:167 drawBodyOutline:256 badgeRects:265 layoutPortRow:332 engagedHover:538 draftSourceHoverHit:626 nodeUnderMouse:1586 nodeAtPoint:1596 nodesInBand:1609 spliceTargetHit:1629
+  @call nodeEdgePoint  @ busSegments:1385
+  @call nodeHasFx  @ badgeHit:288 renderCanvas:2034
+  @call nodeUnderMouse  @ renderCanvas:2174,2207,2307,2338
+  @call nodesInBand  @ band.inject:1695 band.update:1702
+  @call onChevron  @ pickHovered:505 stillEngaged:517 draftSourceHoverHit:628
+  @call openAddSourceModal  @ renderPaletteActions:2496
+  @call openFxPicker  @ renderCanvas:2345
+  @call pFromDb  @ drawFader:1131,1133 renderCanvas:2106
+  @call pickHovered  @ engagedHover:555,565
+  @call pixelYToLin  @ renderCanvas:1921,2134
+  @call pointToSegmentDist  @ wireEndHit:993 busBarHit:1484 busBarSource:1494 busBarAt:1505
+  @call popBodyStyles  @ renderBody:2585
+  @call pushBodyStyles  @ renderBody:2566
+  @call rect  @ boxRect:136 nodeBox:150 strokeNodeRect:161 drawKeyboardIcon:196,201 badgeRects:269,270 layoutList:322,324,325 layoutPortRow:437,451
+  @call rect  @ layoutPortRow:453 drawList:670 drawPortRow:706 drawWireEndLabel:875 drawFader:1136,1137 drawSourceTag:1166 drawBusBar:1450 sourceTagHit:1575 renderCanvas:1823,2094,2095
+  @call rect  @ renderCanvas:2452,2453
+  @call renderCanvas  @ renderBody:2575
+  @call renderFxPicker  @ renderCanvas:2438
+  @call renderPaletteActions  @ renderPaletteBody:2547
+  @call renderPaletteList  @ renderPaletteBody:2549
+  @call rowHit  @ engagedHover:553
+  @call shiftHoverHit  @ renderCanvas:1979
+  @call slotHit  @ pickHovered:501 draftSourceHoverHit:627
+  @call soleDragged  @ renderCanvas:1904
+  @call sourcePosFor  @ openFxPicker:2636
+  @call sourceSegments  @ renderCanvas:1891
+  @call sourceTagHit  @ renderCanvas:1915
+  @call sourceTagLayout  @ drawSourceTag:1165 sourceSegments:1230 busSegments:1349 sourceTagHit:1574
+  @call spliceTargetHit  @ renderCanvas:1906
+  @call stickyHoverHit  @ renderCanvas:1982
+  @call stillEngaged  @ engagedHover:551
+  @call strokeNodeRect  @ drawNode:170 drawBodyOutline:256
+  @call tooltipAt  @ drawSlot:251 drawWireEndLabel:885
+  @call unionRect  @ layoutPortRow:425,441
+  @call wireDrafting  @ renderCanvas:1963
+  @call wireEndHit  @ renderCanvas:1914
+  @call wireExits  @ wireMid:788 endRegion:952 drawWire:1023
+  @call wireGroups  @ wireSegments:900
+  @call wireMid  @ draftSeg:944 busSegments:1392 renderCanvas:1898
+  @call wireOffset  @ wireSegments:913 sourceSegments:1242
+  @call wireSegments  @ renderCanvas:1890
+  @call wr:focusState  @ renderBody:2586
 
 # Bindings (by name)
-  @bind openFxPicker  @ 2701
-  @bind renderPaletteBody  @ renderBody:2565
+  @bind openFxPicker  @ 2718
+  @bind renderPaletteBody  @ renderBody:2582
 
 # Unresolved receivers
-  @drop arrange.dropSlot  @ commitFx:2648
-  @drop arrange.hasPlacedTakes  @ commitFx:2646
-  @drop arrange.trackIdxForGuid  @ commitFx:2647
-  @drop buf:lower  @ renderFxPicker:2665
-  @drop cfg.eligible  @ engagedHover:550,564
-  @drop cfg.onConsume  @ engagedHover:530
-  @drop cfg.refine  @ engagedHover:534
-  @drop name:lower  @ renderFxPicker:2668
-  @drop p.border  @ renderCanvas:2437
-  @drop p.fill  @ drawNode:169 drawKeyboardIcon:202 drawSlot:237 drawBadge:275 drawList:668,672 drawPortRowBg:686 drawPortRow:699 drawWireEndLabel:877 drawFader:1130,1138 drawSourceTag:1168
-  @drop p.fill  @ renderCanvas:1771,2436
-  @drop p.fromScreen  @ renderCanvas:1769,1770,1774
-  @drop p.line  @ drawWire:1019 drawWireEndHighlight:1067 drawFader:1134 drawBusPass:1430 drawBusBar:1449 renderCanvas:1953,1993,1997
-  @drop p.measure  @ drawBadge:276 drawWireEndLabel:834 drawTagAt:1146 sourceTagLayout:1154,1156 drawSourceTag:1171
-  @drop p.stroke  @ strokeNodeRect:162 drawKeyboardIcon:197 drawList:669 drawPortRow:708 drawFader:1131,1139 drawBusBar:1452
-  @drop p.text  @ drawNode:183 drawBadge:277 drawList:675 drawWireEndLabel:878 drawFader:1142 drawTagAt:1147 drawSourceTag:1172
-  @drop p.toScreen  @ drawSlot:243 drawWireEndLabel:882,883 renderCanvas:2050,2337,2365
-  @drop p.tri  @ drawHandle:212,214 drawWireArrow:823
-  @drop wiring:bindAll  @ <load>:2704
-  @drop wiring:registerAll  @ <load>:2700
+  @drop arrange.dropSlot  @ commitFx:2665
+  @drop arrange.hasPlacedTakes  @ commitFx:2663
+  @drop arrange.trackIdxForGuid  @ commitFx:2664
+  @drop buf:lower  @ renderFxPicker:2682
+  @drop cfg.eligible  @ engagedHover:549,563
+  @drop cfg.onConsume  @ engagedHover:529
+  @drop cfg.refine  @ engagedHover:533
+  @drop name:lower  @ renderFxPicker:2685
+  @drop p.border  @ renderCanvas:2453
+  @drop p.fill  @ drawNode:168 drawKeyboardIcon:201 drawSlot:236 drawBadge:274 drawList:666,670 drawPortRowBg:684 drawPortRow:697 drawWireEndLabel:875 drawFader:1128,1136 drawSourceTag:1166
+  @drop p.fill  @ renderCanvas:1823,2452
+  @drop p.fromScreen  @ renderCanvas:1821,1822,1826
+  @drop p.line  @ drawWire:1017 drawWireEndHighlight:1065 drawFader:1132 drawBusPass:1428 drawBusBar:1447 renderCanvas:2009,2049,2053
+  @drop p.measure  @ drawBadge:275 drawWireEndLabel:832 drawTagAt:1144 sourceTagLayout:1152,1154 drawSourceTag:1169
+  @drop p.stroke  @ strokeNodeRect:161 drawKeyboardIcon:196 drawList:667 drawPortRow:706 drawFader:1129,1137 drawBusBar:1450
+  @drop p.text  @ drawNode:182 drawBadge:276 drawList:673 drawWireEndLabel:876 drawFader:1140 drawTagAt:1145 drawSourceTag:1170
+  @drop p.toScreen  @ drawSlot:242 drawWireEndLabel:880,881 renderCanvas:2107,2353,2381
+  @drop p.tri  @ drawHandle:211,213 drawWireArrow:821
+  @drop wiring:bindAll  @ <load>:2721
+  @drop wiring:registerAll  @ <load>:2717
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -609,395 +611,406 @@
   @reaper defer
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_None  @ renderBody:2554 renderFxPicker:2690
-  @field r Col_Border  @ renderCanvas:2340,2368,2420
-  @field r Col_PopupBg  @ tooltipAt:222
-  @field r Col_Text  @ pushBodyStyles:2447
-  @field r Cond_Always  @ tooltipAt:221
-  @field r Cond_Appearing  @ renderCanvas:2338,2366,2414,2417
+  @field r ChildFlags_None  @ renderBody:2571 renderFxPicker:2707
+  @field r Col_Border  @ renderCanvas:2356,2384,2436
+  @field r Col_PopupBg  @ tooltipAt:221
+  @field r Col_Text  @ pushBodyStyles:2463
+  @field r Cond_Always  @ tooltipAt:220
+  @field r Cond_Appearing  @ renderCanvas:2354,2382,2430,2433
   @field w H  @ 95
-  @field r HoveredFlags_AllowWhenBlockedByActiveItem  @ drawSlot:250
-  @field r HoveredFlags_ForTooltip  @ drawSlot:249 drawWireEndLabel:886
+  @field r HoveredFlags_AllowWhenBlockedByActiveItem  @ drawSlot:249
+  @field r HoveredFlags_ForTooltip  @ drawSlot:248 drawWireEndLabel:884
   @field r ImGui_GetBuiltinPath  @ 12
-  @field r JS_Mouse_SetPosition  @ renderCanvas:2048
-  @field r Key_DownArrow  @ renderFxPicker:2676
-  @field r Key_Enter  @ renderFxPicker:2661
-  @field r Key_Escape  @ renderCanvas:2019,2022 renderFxPicker:2683
-  @field r Key_KeypadEnter  @ renderFxPicker:2662
-  @field r Key_UpArrow  @ renderFxPicker:2677
-  @field r Mod_Shift  @ renderCanvas:1778
-  @field r StyleVar_FramePadding  @ renderPaletteList:2492
-  @field r StyleVar_WindowPadding  @ tooltipAt:223
-  @field r V  @ busSegments:1297,1320 makeBusDrag:1516
+  @field r JS_Mouse_SetPosition  @ renderCanvas:2105
+  @field r Key_DownArrow  @ renderFxPicker:2693
+  @field r Key_Enter  @ renderFxPicker:2678
+  @field r Key_Escape  @ renderCanvas:2076,2079 renderFxPicker:2700
+  @field r Key_KeypadEnter  @ renderFxPicker:2679
+  @field r Key_UpArrow  @ renderFxPicker:2694
+  @field r Mod_Shift  @ renderCanvas:1830
+  @field r StyleVar_FramePadding  @ renderPaletteList:2508
+  @field r StyleVar_WindowPadding  @ tooltipAt:222
+  @field r V  @ busSegments:1295,1318 makeBusDrag:1514
   @field w V  @ 94
-  @field r WindowFlags_NoNav  @ renderCanvas:2421 renderBody:2555 renderFxPicker:2690
-  @field r WindowFlags_NoScrollWithMouse  @ renderBody:2557
-  @field r WindowFlags_NoScrollbar  @ renderBody:2556
-  @field r aHi  @ busDragApply:1549,1552 busDragPos:1568
-  @field w aHi  @ makeBusDrag:1531 busDragApply:1544,1558
-  @field r aHi0  @ busDragApply:1544
-  @field w aHi0  @ makeBusDrag:1531
-  @field r aLo  @ busDragApply:1544,1550,1556 busDragPos:1568
-  @field w aLo  @ makeBusDrag:1531 busDragApply:1554
-  @field r aLo0  @ busDragApply:1544
-  @field w aLo0  @ makeBusDrag:1531
-  @field w acceptCmds  @ focusState:2583,2587
-  @field r activate  @ renderCanvas:2121,2124
-  @field r active  @ busDragApply:1549,1550,1551
-  @field w active  @ makeBusDrag:1528 busDragApply:1549,1550
-  @field r anchor  @ renderCanvas:2175,2176
-  @field w anchor  @ busBarSource:1499
-  @field r anchorSX  @ renderCanvas:2412,2413
-  @field w anchorSX  @ openFxPicker:2626
-  @field r anchorSY  @ renderCanvas:2413
-  @field w anchorSY  @ openFxPicker:2626
-  @field r anchorX  @ renderCanvas:2337,2365
-  @field w anchorX  @ renderCanvas:2319,2326
-  @field r anchorY  @ renderCanvas:2337,2365
-  @field w anchorY  @ renderCanvas:2319,2326
-  @field r audio  @ layoutPortRow:335 defaultSlot:483 shiftHoverHit:586 stickyHoverHit:601 drawBusPass:1436
-  @field r ax  @ busSegments:1348,1361,1367,1368,1406,1410,1412,1413 makeBusDrag:1518,1519,1521,1529
-  @field r ax  @ busDragApply:1540 busDragPos:1566
+  @field r WindowFlags_NoNav  @ renderCanvas:2437 renderBody:2572 renderFxPicker:2707
+  @field r WindowFlags_NoScrollWithMouse  @ renderBody:2574
+  @field r WindowFlags_NoScrollbar  @ renderBody:2573
+  @field r aHi  @ busDragApply:1547,1550 busDragPos:1566
+  @field w aHi  @ makeBusDrag:1529 busDragApply:1542,1556
+  @field r aHi0  @ busDragApply:1542
+  @field w aHi0  @ makeBusDrag:1529
+  @field r aLo  @ busDragApply:1542,1548,1554 busDragPos:1566
+  @field w aLo  @ makeBusDrag:1529 busDragApply:1552
+  @field r aLo0  @ busDragApply:1542
+  @field w aLo0  @ makeBusDrag:1529
+  @field w acceptCmds  @ focusState:2600,2604
+  @field r activate  @ renderCanvas:2178,2181
+  @field r active  @ busDragApply:1547,1548,1549
+  @field w active  @ makeBusDrag:1526 busDragApply:1547,1548
+  @field r anchor  @ renderCanvas:2232,2233
+  @field w anchor  @ busBarSource:1497
+  @field r anchorSX  @ renderCanvas:2428,2429
+  @field w anchorSX  @ openFxPicker:2643
+  @field r anchorSY  @ renderCanvas:2429
+  @field w anchorSY  @ openFxPicker:2643
+  @field r anchorX  @ renderCanvas:2353,2381
+  @field w anchorX  @ renderCanvas:2335,2342
+  @field r anchorY  @ renderCanvas:2353,2381
+  @field w anchorY  @ renderCanvas:2335,2342
+  @field r audio  @ layoutPortRow:334 defaultSlot:482 shiftHoverHit:585 stickyHoverHit:600 drawBusPass:1434
+  @field r ax  @ busSegments:1346,1359,1365,1366,1404,1408,1410,1411 makeBusDrag:1516,1517,1519,1527
+  @field r ax  @ busDragApply:1538 busDragPos:1564
   @field w ax  @ 94,95
-  @field r ay  @ busSegments:1349,1362,1367,1368,1410,1412,1413 makeBusDrag:1518,1519,1521,1529 busDragApply:1540
-  @field r ay  @ busDragPos:1567
+  @field r ay  @ busSegments:1347,1360,1365,1366,1408,1410,1411 makeBusDrag:1516,1517,1519,1527 busDragApply:1538
+  @field r ay  @ busDragPos:1565
   @field w ay  @ 94,95
-  @field w band  @ 1688
-  @field w bandRect  @ layoutPortRow:458
-  @field r bar  @ drawBusPass:1430 drawBusBar:1449,1452
-  @field r bar  @ drawBusBar:1453 busBarHit:1486,1487 busBarSource:1496
-  @field r bar  @ busBarSource:1496,1497,1498 busBarAt:1507 makeBusDrag:1518
-  @field r bar  @ makeBusDrag:1519
-  @field w bar  @ busSegments:1412
-  @field r buf  @ renderFxPicker:2658
-  @field w buf  @ openAddSourceModal:2459 openFxPicker:2627 renderFxPicker:2660
-  @field r bus  @ wireSegments:914 drawWire:1031,1036 sourceSegments:1215 busSegments:1276,1277,1278,1292,1293,1295
-  @field r bus  @ busSegments:1337,1343,1371 bussablePorts:1466,1469 renderCanvas:1816 commitFx:2638
-  @field w bus  @ renderCanvas:1821 openFxPicker:2621,2622
-  @field w busDrag  @ 1733
-  @field r busId  @ busSegments:1277,1278,1295 drawBusPass:1440 makeBusDrag:1528 busDrag.inject:1738,1741 busDrag.update:1749 renderCanvas:1842,2324
-  @field w busId  @ busSegments:1415 makeBusDrag:1528 renderCanvas:1821
-  @field r busViewsList  @ busDrag.inject:1740
-  @field w busViewsList  @ renderCanvas:1830
-  @field r bussedEnd  @ drawWire:1031,1036 busSegments:1293,1337,1343,1371 bussablePorts:1466,1469
-  @field w bussedEnd  @ renderCanvas:1821
-  @field w callback  @ openAddSourceModal:2460 deleteSourceGuarded:2475
-  @field r canonA  @ wireSegments:905
-  @field w canonA  @ wireGroups:728
-  @field r canonB  @ wireSegments:905
-  @field w canonB  @ wireGroups:728
-  @field r category  @ drawNode:169 nodeHasFx:263 shiftHoverHit:586 draftSourceHoverHit:624 dropTargetHit:654 drawPortRow:694 nodeUnderMouse:1588 renderCanvas:1796,1965,1976,2371
-  @field r category  @ renderPaletteBody:2522
+  @field w band  @ 1691
+  @field w bandRect  @ layoutPortRow:457
+  @field r bar  @ drawBusPass:1428 drawBusBar:1447,1450
+  @field r bar  @ drawBusBar:1451 busBarHit:1484,1485 busBarSource:1494
+  @field r bar  @ busBarSource:1494,1495,1496 busBarAt:1505 makeBusDrag:1516
+  @field r bar  @ makeBusDrag:1517
+  @field w bar  @ busSegments:1410
+  @field r buf  @ renderFxPicker:2675
+  @field w buf  @ openAddSourceModal:2475 openFxPicker:2644 renderFxPicker:2677
+  @field r bus  @ wireSegments:912 drawWire:1029,1034 sourceSegments:1213 busSegments:1274,1275,1276,1290,1291,1293
+  @field r bus  @ busSegments:1335,1341,1369 bussablePorts:1464,1467 renderCanvas:1868 commitFx:2655
+  @field w bus  @ renderCanvas:1873 openFxPicker:2638,2639
+  @field w busDrag  @ 1785
+  @field r busId  @ busSegments:1275,1276,1293 drawBusPass:1438 makeBusDrag:1526 busDrag.inject:1790,1793 busDrag.update:1801 renderCanvas:1895,2340
+  @field w busId  @ busSegments:1413 makeBusDrag:1526 renderCanvas:1873
+  @field r busViewsList  @ busDrag.inject:1792
+  @field w busViewsList  @ renderCanvas:1883
+  @field r bussedEnd  @ drawWire:1029,1034 busSegments:1291,1335,1341,1369 bussablePorts:1464,1467
+  @field w bussedEnd  @ renderCanvas:1873
+  @field w callback  @ openAddSourceModal:2476 deleteSourceGuarded:2491
+  @field r canonA  @ wireSegments:903
+  @field w canonA  @ wireGroups:726
+  @field r canonB  @ wireSegments:903
+  @field w canonB  @ wireGroups:726
+  @field r category  @ drawNode:168 nodeHasFx:262 shiftHoverHit:585 draftSourceHoverHit:622 dropTargetHit:652 drawPortRow:692 nodeUnderMouse:1586 renderCanvas:1848,2021,2032,2387
+  @field r category  @ renderPaletteBody:2539
   @field r chrome  @ 20
-  @field r claim  @ busSegments:1315,1389,1416
-  @field w claim  @ renderCanvas:1812
+  @field r claim  @ busSegments:1313,1387,1414
+  @field w claim  @ renderCanvas:1864
   @field r cmgr  @ 20
   @field r ctx  @ 22
-  @field r currentLin  @ drawFader:1135,1140 renderCanvas:1872,1873,1900,2093,2106
-  @field w currentLin  @ renderCanvas:1869,1896,2039,2067,2079,2097
-  @field r cursor  @ renderFxPicker:2674
-  @field w cursor  @ openFxPicker:2627 renderFxPicker:2672,2681
-  @field r cursorEnd  @ dropTargetHit:650 draftSeg:941 busBarHit:1483 renderCanvas:2282
-  @field w cursorEnd  @ renderCanvas:2179,2224 renderPaletteList:2508
-  @field r cx  @ drawWireEndLabel:862,868 draftSeg:946 drawWire:1023 arrowMidHit:1108 busSegments:1394 spliceTargetHit:1634,1635 nodeDrag.update:1677 renderCanvas:1845,2032,2319
-  @field w cx  @ drawWireEndLabel:876
-  @field r cy  @ drawWireEndLabel:863,869 drawWire:1023 arrowMidHit:1108 spliceTargetHit:1634,1635 nodeDrag.update:1677 renderCanvas:2032,2319
-  @field w cy  @ drawWireEndLabel:876 draftSeg:946 busSegments:1394 renderCanvas:1845
-  @field r dir  @ engagedHover:526 busSegments:1389,1416 drawBusPass:1436,1437,1438 busBarHit:1485 renderCanvas:1813,1814,2137
-  @field w dir  @ shiftHoverHit:583 dropTargetHit:650 busSegments:1416 renderCanvas:1813,2137,2387
-  @field w draw  @ renderBody:2565
-  @field r edgeIdx  @ draftSourceHoverHit:621 drawWireEndHighlight:1063 tagDrag.inject:1711 tagDrag.update:1720 renderCanvas:1870,1873,1888,1896,1900,1904,1948
-  @field r edgeIdx  @ renderCanvas:2068,2078,2081,2082,2098,2099,2106,2197,2235,2274,2281,2282
-  @field r edgeIdx  @ renderCanvas:2292,2296,2342,2344
-  @field w edgeIdx  @ wireEndHit:998 renderCanvas:2036,2235,2243,2319
-  @field r eligible  @ engagedHover:550
-  @field w eligible  @ shiftHoverHit:585 dropTargetHit:654
-  @field r ex  @ wireExits:762 wireMid:791,793 draftSeg:942,944 endRegion:959 wireEndHit:1001 drawWire:1017 busSegments:1390,1392 drawBusPass:1437,1438
-  @field r ex  @ renderCanvas:1953,2207
-  @field w ex  @ wireSegments:921 sourceSegments:1251 busSegments:1372,1375
-  @field r ext  @ busSegments:1399,1400
-  @field w ext  @ busDrag.inject:1741
-  @field r ey  @ wireExits:762 wireMid:791,793 endRegion:959 wireEndHit:1001 drawWire:1017 drawBusPass:1437,1438 renderCanvas:1953,2208
-  @field w ey  @ wireSegments:921 draftSeg:942,944 sourceSegments:1251 busSegments:1372,1375,1390,1392
+  @field r currentLin  @ drawFader:1133,1138 renderCanvas:1925,1926,1953,2150,2163
+  @field w currentLin  @ renderCanvas:1922,1949,2096,2124,2136,2154
+  @field r cursor  @ renderFxPicker:2691
+  @field w cursor  @ openFxPicker:2644 renderFxPicker:2689,2698
+  @field r cursorEnd  @ dropTargetHit:648 draftSeg:939 busBarHit:1481 wireDraft.update:1730
+  @field w cursorEnd  @ renderCanvas:2237,2283 renderPaletteList:2525
+  @field r cx  @ drawWireEndLabel:860,866 draftSeg:944 drawWire:1021 arrowMidHit:1106 busSegments:1392 spliceTargetHit:1632,1633 nodeDrag.update:1680 renderCanvas:1898,2089,2335
+  @field w cx  @ drawWireEndLabel:874
+  @field r cy  @ drawWireEndLabel:861,867 drawWire:1021 arrowMidHit:1106 spliceTargetHit:1632,1633 nodeDrag.update:1680 renderCanvas:2089,2335
+  @field w cy  @ drawWireEndLabel:874 draftSeg:944 busSegments:1392 renderCanvas:1898
+  @field r dir  @ engagedHover:525 busSegments:1387,1414 drawBusPass:1434,1435,1436 busBarHit:1483 renderCanvas:1865,1866,2194
+  @field w dir  @ shiftHoverHit:582 dropTargetHit:648 busSegments:1414 renderCanvas:1865,2194,2403
+  @field r draftCx  @ wireDraft.update:1740 renderCanvas:1985
+  @field r draftCy  @ wireDraft.update:1740 renderCanvas:1985
+  @field w draw  @ renderBody:2582
+  @field r edgeIdx  @ draftSourceHoverHit:619 drawWireEndHighlight:1061 wireDraft.update:1723,1729,1730,1739,1743 tagDrag.inject:1763 tagDrag.update:1772 renderCanvas:1923,1926,1941
+  @field r edgeIdx  @ renderCanvas:1949,1953,1957,2004,2125,2135,2138,2139,2155,2156,2163
+  @field r edgeIdx  @ renderCanvas:2255,2294,2358,2360
+  @field w edgeIdx  @ wireEndHit:996 renderCanvas:2093,2294,2302,2335
+  @field r eligible  @ engagedHover:549
+  @field w eligible  @ shiftHoverHit:584 dropTargetHit:652
+  @field r escCancels  @ renderCanvas:2075
+  @field w escCancels  @ 1712
+  @field r ex  @ wireExits:760 wireMid:789,791 draftSeg:940,942 endRegion:957 wireEndHit:999 drawWire:1015 busSegments:1388,1390 drawBusPass:1435,1436
+  @field r ex  @ renderCanvas:2009,2265
+  @field w ex  @ wireSegments:919 sourceSegments:1249 busSegments:1370,1373
+  @field r ext  @ busSegments:1397,1398
+  @field w ext  @ busDrag.inject:1793
+  @field r ey  @ wireExits:760 wireMid:789,791 endRegion:957 wireEndHit:999 drawWire:1015 drawBusPass:1435,1436 renderCanvas:2009,2266
+  @field w ey  @ wireSegments:919 draftSeg:940,942 sourceSegments:1249 busSegments:1370,1373,1388,1390
   @field r facade  @ 20
-  @field w faderDrag  @ 1757
+  @field w faderDrag  @ 1809
   @field r fontSize  @ 24,26
-  @field r forbidden  @ dropTargetHit:654 dropEligible:663 busBarHit:1485
-  @field w forbidden  @ renderCanvas:2183,2229 renderPaletteList:2510
-  @field r from  @ wireGroups:723 wireSegments:913 drawWire:1027 leastOccupiedDir:1185,1186 busSegments:1293,1337,1343 bussablePorts:1467 renderCanvas:1819,2200,2201
-  @field w from  @ renderCanvas:2287
-  @field r fromHH  @ wireExits:768
-  @field w fromHH  @ draftSeg:940 sourceSegments:1252 busSegments:1373,1376,1388
-  @field r fromHW  @ wireExits:768
-  @field w fromHW  @ draftSeg:940 sourceSegments:1252 busSegments:1373,1376,1388
-  @field r fromKind  @ wireEndHit:992 sourceSegments:1215 sourceTagHit:1575 renderCanvas:1957
-  @field r fromLabel  @ sourceSegments:1232 busSegments:1351 sourceTagHit:1576 renderCanvas:1958
-  @field r fromList  @ renderCanvas:2299
-  @field w fromList  @ renderCanvas:2185,2234
-  @field r fromOffset  @ leastOccupiedDir:1189,1190 sourceSegments:1234,1236,1237 busSegments:1353,1355,1356
-  @field w fromOffset  @ tagDrag.inject:1714
-  @field r fromPalette  @ renderCanvas:1984,2267
-  @field w fromPalette  @ renderPaletteList:2511
-  @field r fromPort  @ wireGroups:737,745 drawWire:1027,1031,1033 bussablePorts:1468,1469 renderCanvas:1819,2203
-  @field r fromPort  @ renderCanvas:2227
-  @field w fromPort  @ renderCanvas:2287
-  @field r fromPortName  @ drawWire:1033
-  @field w get  @ statusSegments.get:2573
-  @field r grabAxial  @ busDragApply:1543
-  @field w grabAxial  @ makeBusDrag:1532
-  @field r grabDx  @ computeDraftEnd:1074,1079
-  @field w grabDx  @ renderCanvas:2233
-  @field r grabDy  @ computeDraftEnd:1079
-  @field w grabDy  @ renderCanvas:2233
-  @field r grabPerp  @ busDragApply:1541
-  @field w grabPerp  @ makeBusDrag:1530
-  @field r grip  @ busDragApply:1542
-  @field w grip  @ makeBusDrag:1528
+  @field r forbidden  @ dropTargetHit:652 dropEligible:661 busBarHit:1483
+  @field w forbidden  @ renderCanvas:2241,2288 renderPaletteList:2527
+  @field r from  @ wireGroups:721 wireSegments:911 drawWire:1025 leastOccupiedDir:1183,1184 busSegments:1291,1335,1341 bussablePorts:1465 renderCanvas:1871,2258,2259
+  @field w from  @ wireDraft.update:1734
+  @field r fromHH  @ wireExits:766
+  @field w fromHH  @ draftSeg:938 sourceSegments:1250 busSegments:1371,1374,1386
+  @field r fromHW  @ wireExits:766
+  @field w fromHW  @ draftSeg:938 sourceSegments:1250 busSegments:1371,1374,1386
+  @field r fromKind  @ wireEndHit:990 sourceSegments:1213 sourceTagHit:1573 renderCanvas:2013
+  @field r fromLabel  @ sourceSegments:1230 busSegments:1349 sourceTagHit:1574 renderCanvas:2014
+  @field r fromList  @ wireDraft.update:1746
+  @field w fromList  @ renderCanvas:2243,2293
+  @field r fromOffset  @ leastOccupiedDir:1187,1188 sourceSegments:1232,1234,1235 busSegments:1351,1353,1354
+  @field w fromOffset  @ tagDrag.inject:1766
+  @field r fromPalette  @ wireDraft.update:1716 renderCanvas:2040
+  @field w fromPalette  @ renderPaletteList:2528
+  @field r fromPort  @ wireGroups:735,743 drawWire:1025,1029,1031 bussablePorts:1466,1467 renderCanvas:1871,2261
+  @field r fromPort  @ renderCanvas:2286
+  @field w fromPort  @ wireDraft.update:1734
+  @field r fromPortName  @ drawWire:1031
+  @field w get  @ statusSegments.get:2590
+  @field r grabAxial  @ busDragApply:1541
+  @field w grabAxial  @ makeBusDrag:1530
+  @field r grabDx  @ computeDraftEnd:1072,1077
+  @field w grabDx  @ renderCanvas:2292
+  @field r grabDy  @ computeDraftEnd:1077
+  @field w grabDy  @ renderCanvas:2292
+  @field r grabPerp  @ busDragApply:1539
+  @field w grabPerp  @ makeBusDrag:1528
+  @field r grip  @ busDragApply:1540
+  @field w grip  @ makeBusDrag:1526
   @field r gui  @ 20
-  @field r h  @ boxRect:137 drawHandle:209 drawSlot:246 layoutList:313 layoutPortRow:354 drawList:672 drawPortRow:709 renderCanvas:2174,2218
-  @field w h  @ layoutList:321 layoutPortRow:380,403,415 renderBody:2563
-  @field r handle  @ pickHovered:506 stillEngaged:518 draftSourceHoverHit:630 drawPortRow:693
-  @field w handle  @ layoutPortRow:458
-  @field r hh  @ drawWireEndLabel:863,869
-  @field w hh  @ drawWireEndLabel:876
-  @field r hi  @ busSegments:1400
-  @field w hi  @ busDrag.inject:1741 busDrag.update:1749
-  @field r hitRect  @ stillEngaged:519 renderCanvas:1890
-  @field w hitRect  @ layoutList:327 renderCanvas:2038
-  @field r hoverRect  @ pickHovered:501 draftSourceHoverHit:627
-  @field w hoverRect  @ layoutPortRow:459
-  @field r huge  @ wireExits:775,776 drawWireEndLabel:851,853,870 dbFromP:1087 pFromDb:1095 linToDb:1102 dbToLin:1103 drawFader:1141 sourceSegments:1229,1230
-  @field r huge  @ sourceSegments:1241,1242 nodeEdgePoint:1263,1266 busSegments:1341 renderCanvas:2094 sourcePosFor:2606,2607
-  @field r hw  @ drawWireEndLabel:862,868
-  @field w hw  @ drawWireEndLabel:876
-  @field r id  @ layoutPortRow:370,371 engagedHover:528,529,549,552 shiftHoverHit:590 stickyHoverHit:600 draftSourceHoverHit:623 dropTargetHit:654 dropEligible:663 busSegments:1288
-  @field r id  @ busSegments:1298,1316,1333,1415 bussablePorts:1464,1467 busBarHit:1485 nodesInBand:1613 soleDragged:1624 spliceTargetHit:1637 nodeDrag.inject:1668 nodeDrag.update:1677
-  @field r id  @ busDrag.inject:1741 renderCanvas:1800,1936,1938,1965,1966,1976,1977,1978,2010,2014
-  @field r id  @ renderCanvas:2015,2122,2125,2153,2154,2164,2165,2180,2183
-  @field r id  @ renderCanvas:2254,2256,2259,2275,2283,2288,2324 renderPaletteActions:2484 renderPaletteList:2500,2501
-  @field r id  @ renderPaletteList:2509,2510 renderPaletteBody:2524
-  @field w id  @ renderCanvas:1811,2283 statusSegments.get:2573
-  @field r ident  @ commitFx:2641
-  @field w ident  @ commitFx:2641
-  @field r inBody  @ layoutPortRow:429 drawPortRow:696
-  @field w inBody  @ layoutPortRow:412
-  @field r inject  @ renderCanvas:1832
-  @field w inject  @ nodeDrag.inject:1663 band.inject:1689 tagDrag.inject:1708 busDrag.inject:1734
-  @field r ins  @ layoutPortRow:335,336 defaultSlot:483,484 drawBusPass:1436
-  @field r items  @ renderFxPicker:2667
-  @field w items  @ openFxPicker:2627
-  @field r keep  @ engagedHover:526
-  @field w keep  @ shiftHoverHit:583 dropTargetHit:651
-  @field r keptAnchor  @ draftSeg:935 renderCanvas:2228
-  @field w keptAnchor  @ wireEndHit:1000 renderCanvas:2182,2228
-  @field r keptId  @ draftSourceHoverHit:623 draftSeg:936 renderCanvas:2287,2303,2304,2305
-  @field w keptId  @ renderCanvas:2180,2225 renderPaletteList:2509
-  @field r keptLabel  @ renderCanvas:1985
-  @field w keptLabel  @ renderPaletteList:2512
-  @field r keptPort  @ draftSourceHoverHit:636,638 renderCanvas:2287,2300,2304
-  @field w keptPort  @ renderCanvas:2190,2226
-  @field r keptSide  @ draftSourceHoverHit:626 renderCanvas:2305
-  @field w keptSide  @ renderCanvas:2181
-  @field r kind  @ drawSlot:236 shiftHoverHit:577 findLayoutSlot:611 drawPortRow:706,707 renderCanvas:2007,2162,2187,2273,2276,2286
-  @field w kind  @ layoutList:319 layoutPortRow:379,401,412 defaultSlot:486,489 draftSourceHoverHit:638 busBarHit:1487 busBarSource:1498
-  @field r label  @ drawNode:176 renderPaletteActions:2484 renderPaletteList:2500,2512
-  @field w label  @ renderBody:2564
-  @field r labels  @ drawWire:1024
-  @field w labels  @ drawWiresPass:1056
-  @field r layout  @ drawPortRow:692 renderCanvas:1968,2167,2181
-  @field w layout  @ pickHovered:504,507,511 engagedHover:553 shiftHoverHit:578 stickyHoverHit:603 draftSourceHoverHit:632,640
-  @field r list  @ pickHovered:507 stillEngaged:516 engagedHover:528,553,554 renderCanvas:2011,2162,2185
-  @field w list  @ layoutPortRow:458 pickHovered:507 engagedHover:553
-  @field r lmx  @ nodeDrag.inject:1666 nodeDrag.update:1674 band.inject:1692 band.update:1696,1700 tagDrag.inject:1714 tagDrag.update:1722 busDrag.inject:1736 busDrag.update:1746
-  @field w lmx  @ renderCanvas:1829
-  @field r lmy  @ nodeDrag.inject:1666 nodeDrag.update:1674 band.inject:1692 band.update:1696,1700 tagDrag.inject:1715 tagDrag.update:1723 busDrag.inject:1736 busDrag.update:1747
-  @field w lmy  @ renderCanvas:1829
-  @field r lo  @ busSegments:1400
-  @field w lo  @ busDrag.inject:1741 busDrag.update:1749
-  @field r matrix  @ busSegments:1298,1316,1414 drawBusPass:1428 busBarHit:1485 renderCanvas:1842
-  @field w matrix  @ busSegments:1414
-  @field r maxTravel  @ computeDraftEnd:1077,1078
-  @field w maxTravel  @ computeDraftEnd:1077
-  @field r midi  @ layoutPortRow:336 defaultSlot:484 shiftHoverHit:586 stickyHoverHit:601
+  @field r h  @ boxRect:136 drawHandle:208 drawSlot:245 layoutList:312 layoutPortRow:353 drawList:670 drawPortRow:707 renderCanvas:2231,2276
+  @field w h  @ layoutList:320 layoutPortRow:379,402,414 renderBody:2580
+  @field r handle  @ pickHovered:505 stillEngaged:517 draftSourceHoverHit:628 drawPortRow:691
+  @field w handle  @ layoutPortRow:457
+  @field r hh  @ drawWireEndLabel:861,867
+  @field w hh  @ drawWireEndLabel:874
+  @field r hi  @ busSegments:1398
+  @field w hi  @ busDrag.inject:1793 busDrag.update:1801
+  @field r hitRect  @ stillEngaged:518 renderCanvas:1943
+  @field w hitRect  @ layoutList:326 renderCanvas:2095
+  @field r hoverRect  @ pickHovered:500 draftSourceHoverHit:625
+  @field w hoverRect  @ layoutPortRow:458
+  @field r huge  @ wireExits:773,774 drawWireEndLabel:849,851,868 dbFromP:1085 pFromDb:1093 linToDb:1100 dbToLin:1101 drawFader:1139 sourceSegments:1227,1228
+  @field r huge  @ sourceSegments:1239,1240 nodeEdgePoint:1261,1264 busSegments:1339 renderCanvas:2151 sourcePosFor:2623,2624
+  @field r hw  @ drawWireEndLabel:860,866
+  @field w hw  @ drawWireEndLabel:874
+  @field r id  @ layoutPortRow:369,370 engagedHover:527,528,548,551 shiftHoverHit:589 stickyHoverHit:599 draftSourceHoverHit:621 dropTargetHit:652 dropEligible:661 busSegments:1286
+  @field r id  @ busSegments:1296,1314,1331,1413 bussablePorts:1462,1465 busBarHit:1483 nodesInBand:1611 soleDragged:1622 spliceTargetHit:1635 nodeDrag.inject:1671 nodeDrag.update:1680
+  @field r id  @ wireDraft.update:1724,1730,1735 busDrag.inject:1793 renderCanvas:1852,1992,1994,2021,2022,2032,2033,2034
+  @field r id  @ renderCanvas:2034,2066,2070,2071,2179,2182,2210,2211,2221
+  @field r id  @ renderCanvas:2222,2238,2241,2313,2315,2318,2340 renderPaletteActions:2500 renderPaletteList:2516,2517
+  @field r id  @ renderPaletteList:2526,2527 renderPaletteBody:2541
+  @field w id  @ wireDraft.update:1730 renderCanvas:1863 statusSegments.get:2590
+  @field r ident  @ commitFx:2658
+  @field w ident  @ commitFx:2658
+  @field r inBody  @ layoutPortRow:428 drawPortRow:694
+  @field w inBody  @ layoutPortRow:411
+  @field r inject  @ renderCanvas:1885
+  @field w inject  @ nodeDrag.inject:1666 band.inject:1692 tagDrag.inject:1760 busDrag.inject:1786
+  @field r ins  @ layoutPortRow:334,335 defaultSlot:482,483 drawBusPass:1434
+  @field r items  @ renderFxPicker:2684
+  @field w items  @ openFxPicker:2644
+  @field r keep  @ engagedHover:525
+  @field w keep  @ shiftHoverHit:582 dropTargetHit:649
+  @field r keptAnchor  @ draftSeg:933 renderCanvas:2287
+  @field w keptAnchor  @ wireEndHit:998 renderCanvas:2240,2287
+  @field r keptId  @ draftSourceHoverHit:621 draftSeg:934 wireDraft.update:1734,1749,1750,1751
+  @field w keptId  @ renderCanvas:2238,2284 renderPaletteList:2526
+  @field r keptLabel  @ renderCanvas:2041
+  @field w keptLabel  @ renderPaletteList:2529
+  @field r keptPort  @ draftSourceHoverHit:634,636 wireDraft.update:1734,1746,1750
+  @field w keptPort  @ renderCanvas:2248,2285
+  @field r keptSide  @ draftSourceHoverHit:624 wireDraft.update:1751
+  @field w keptSide  @ renderCanvas:2239
+  @field r kind  @ drawSlot:235 shiftHoverHit:576 findLayoutSlot:610 drawPortRow:704,705 wireDraft.update:1722,1725,1733 renderCanvas:2063,2219,2245
+  @field w kind  @ layoutList:318 layoutPortRow:378,400,411 defaultSlot:485,488 draftSourceHoverHit:636 busBarHit:1485 busBarSource:1496
+  @field r label  @ drawNode:175 renderPaletteActions:2500 renderPaletteList:2516,2529
+  @field w label  @ renderBody:2581
+  @field r labels  @ drawWire:1022
+  @field w labels  @ drawWiresPass:1054
+  @field r layout  @ drawPortRow:690 renderCanvas:2024,2224,2239
+  @field w layout  @ pickHovered:503,506,510 engagedHover:552 shiftHoverHit:577 stickyHoverHit:602 draftSourceHoverHit:630,638
+  @field r list  @ pickHovered:506 stillEngaged:515 engagedHover:527,552,553 renderCanvas:2067,2219,2243
+  @field w list  @ layoutPortRow:457 pickHovered:506 engagedHover:552
+  @field r lmx  @ nodeDrag.inject:1669 nodeDrag.update:1677 band.inject:1695 band.update:1699,1703 wireDraft.update:1717 tagDrag.inject:1766 tagDrag.update:1774 busDrag.inject:1788 busDrag.update:1798
+  @field w lmx  @ renderCanvas:1881
+  @field r lmy  @ nodeDrag.inject:1669 nodeDrag.update:1677 band.inject:1695 band.update:1699,1703 wireDraft.update:1718 tagDrag.inject:1767 tagDrag.update:1775 busDrag.inject:1788 busDrag.update:1799
+  @field w lmy  @ renderCanvas:1881
+  @field r lo  @ busSegments:1398
+  @field w lo  @ busDrag.inject:1793 busDrag.update:1801
+  @field r matrix  @ busSegments:1296,1314,1412 drawBusPass:1426 busBarHit:1483 renderCanvas:1895
+  @field w matrix  @ busSegments:1412
+  @field r maxTravel  @ computeDraftEnd:1075,1076
+  @field w maxTravel  @ computeDraftEnd:1075
+  @field r midi  @ layoutPortRow:335 defaultSlot:483 shiftHoverHit:585 stickyHoverHit:600
   @field r modalHost  @ 20
-  @field r mode  @ faderDragging:1654 renderCanvas:1832,1850,2310,2432
-  @field w mode  @ makeBusDrag:1527 renderCanvas:2042,2080,2243,2261,2263
-  @field r mx0  @ computeDraftEnd:1075 nodeDrag.inject:1666 nodeDrag.update:1674 band.inject:1692 band.update:1696,1700 tagDrag.inject:1714 tagDrag.update:1722 busDrag.update:1746 renderCanvas:2268,2433
-  @field w mx0  @ makeBusDrag:1533 renderCanvas:2184,2232,2244,2261,2263
-  @field r my0  @ computeDraftEnd:1075 nodeDrag.inject:1666 nodeDrag.update:1674 band.inject:1692 band.update:1696,1700 tagDrag.inject:1715 tagDrag.update:1723 busDrag.update:1747 renderCanvas:2269,2433
-  @field w my0  @ makeBusDrag:1533 renderCanvas:2184,2232,2244,2261,2263
-  @field r name  @ drawSlot:251,252 drawList:676 drawWire:1018 commitFx:2641 renderFxPicker:2668,2692
-  @field w name  @ layoutList:319 layoutPortRow:401,412 defaultSlot:486,489 drawWiresPass:1056 drawBusPass:1432 renderCanvas:1973 openAddSourceModal:2461 openFxPicker:2621,2622 commitFx:2641
-  @field r node  @ busSegments:1315 drawBusPass:1436 busBarHit:1485,1487 busBarSource:1496,1498 makeBusDrag:1516,1517
-  @field w node  @ busSegments:1415 renderCanvas:1812,2137
-  @field w nodeDrag  @ 1662
-  @field r nodeId  @ shiftHoverHit:590 stickyHoverHit:600 renderCanvas:1809,1812,1818,1819,2135,2137,2370,2373,2374,2378
-  @field r nodeId  @ renderCanvas:2387
-  @field w nodeId  @ renderCanvas:2305,2326,2387
-  @field r nodeViews  @ nodeDrag.inject:1667 band.inject:1692 band.update:1699
-  @field w nodeViews  @ renderCanvas:1829
-  @field r nodesById  @ tagDrag.inject:1712 tagDrag.update:1721 busDrag.inject:1738
-  @field w nodesById  @ renderCanvas:1829
-  @field r nv  @ engagedHover:528,529 shiftHoverHit:590 dropEligible:663 drawPortRow:694 renderCanvas:1936,1938,2008,2010,2014,2015,2163
-  @field r nv  @ renderCanvas:2180,2183,2275,2283,2288
-  @field w nv  @ pickHovered:504,507,511 engagedHover:553 stickyHoverHit:603 draftSourceHoverHit:632,640 busBarHit:1487 busBarSource:1498
-  @field r nx  @ busSegments:1301,1329,1332 makeBusDrag:1529,1530 busDragApply:1541 busDragPos:1566
+  @field r mode  @ faderDragging:1652 wireDrafting:1657 renderCanvas:1885,1903,2075,2326,2448
+  @field w mode  @ makeBusDrag:1525 renderCanvas:2099,2137,2236,2281,2302,2320,2322 renderPaletteList:2524
+  @field r mx  @ wireDraft.update:1745
+  @field w mx  @ renderCanvas:1881
+  @field r mx0  @ computeDraftEnd:1073 nodeDrag.inject:1669 nodeDrag.update:1677 band.inject:1695 band.update:1699,1703 wireDraft.update:1717 tagDrag.inject:1766 tagDrag.update:1774 busDrag.update:1798 renderCanvas:2449
+  @field w mx0  @ makeBusDrag:1531 renderCanvas:2242,2291,2303,2320,2322
+  @field r my  @ wireDraft.update:1745
+  @field w my  @ renderCanvas:1881
+  @field r my0  @ computeDraftEnd:1073 nodeDrag.inject:1669 nodeDrag.update:1677 band.inject:1695 band.update:1699,1703 wireDraft.update:1718 tagDrag.inject:1767 tagDrag.update:1775 busDrag.update:1799 renderCanvas:2449
+  @field w my0  @ makeBusDrag:1531 renderCanvas:2242,2291,2303,2320,2322
+  @field r name  @ drawSlot:250,251 drawList:674 drawWire:1016 commitFx:2658 renderFxPicker:2685,2709
+  @field w name  @ layoutList:318 layoutPortRow:400,411 defaultSlot:485,488 drawWiresPass:1054 drawBusPass:1430 renderCanvas:2029 openAddSourceModal:2477 openFxPicker:2638,2639 commitFx:2658
+  @field r node  @ busSegments:1313 drawBusPass:1434 busBarHit:1483,1485 busBarSource:1494,1496 makeBusDrag:1514,1515
+  @field w node  @ busSegments:1413 renderCanvas:1864,2194
+  @field w nodeDrag  @ 1665
+  @field r nodeId  @ shiftHoverHit:589 stickyHoverHit:599 renderCanvas:1861,1864,1870,1871,2192,2194,2386,2389,2390,2394
+  @field r nodeId  @ renderCanvas:2403
+  @field w nodeId  @ wireDraft.update:1751 renderCanvas:2342,2403
+  @field r nodeViews  @ nodeDrag.inject:1670 band.inject:1695 band.update:1702 wireDraft.update:1740
+  @field w nodeViews  @ renderCanvas:1882
+  @field r nodesById  @ tagDrag.inject:1764 tagDrag.update:1773 busDrag.inject:1790
+  @field w nodesById  @ renderCanvas:1882
+  @field r nv  @ engagedHover:527,528 shiftHoverHit:589 dropEligible:661 drawPortRow:692 wireDraft.update:1724,1730,1735 renderCanvas:1992,1994,2064,2066
+  @field r nv  @ renderCanvas:2070,2071,2220,2238,2241
+  @field w nv  @ pickHovered:503,506,510 engagedHover:552 stickyHoverHit:602 draftSourceHoverHit:630,638 busBarHit:1485 busBarSource:1496
+  @field r nx  @ busSegments:1299,1327,1330 makeBusDrag:1527,1528 busDragApply:1539 busDragPos:1564
   @field w nx  @ 94,95
-  @field r ny  @ busSegments:1301,1329,1332 makeBusDrag:1529,1530 busDragApply:1541 busDragPos:1567
+  @field r ny  @ busSegments:1299,1327,1330 makeBusDrag:1527,1528 busDragApply:1539 busDragPos:1565
   @field w ny  @ 94,95
-  @field r offX  @ wireExits:765
-  @field w offX  @ wireSegments:922
-  @field r offY  @ wireExits:765
-  @field w offY  @ wireSegments:922
-  @field r onConsume  @ engagedHover:530
-  @field w onConsume  @ shiftHoverHit:589
-  @field r orient  @ busSegments:1297,1302,1320 makeBusDrag:1516 renderCanvas:1811,2136 commitFx:2639
-  @field w orient  @ renderCanvas:1811,2136,2387 openFxPicker:2621,2622
-  @field r originalPort  @ renderCanvas:2277
-  @field w originalPort  @ renderCanvas:2239
-  @field r originalTargetId  @ renderCanvas:2275
-  @field w originalTargetId  @ renderCanvas:2238
-  @field r outs  @ layoutPortRow:335,336 defaultSlot:483,484 shiftHoverHit:586 stickyHoverHit:601 drawBusPass:1436
-  @field r ov  @ busDragApply:1539 busDragPos:1565
-  @field w ov  @ makeBusDrag:1528
-  @field r ox  @ renderCanvas:1767 openFxPicker:2617
-  @field w ox  @ 121 renderCanvas:1768
-  @field r oy  @ openFxPicker:2617
-  @field w oy  @ 121 renderCanvas:1767,1768
+  @field r offX  @ wireExits:763
+  @field w offX  @ wireSegments:920
+  @field r offY  @ wireExits:763
+  @field w offY  @ wireSegments:920
+  @field r onConsume  @ engagedHover:529
+  @field w onConsume  @ shiftHoverHit:588
+  @field r orient  @ busSegments:1295,1300,1318 makeBusDrag:1514 renderCanvas:1863,2193 commitFx:2656
+  @field w orient  @ renderCanvas:1863,2193,2403 openFxPicker:2638,2639
+  @field r originalPort  @ wireDraft.update:1725
+  @field w originalPort  @ renderCanvas:2298
+  @field r originalTargetId  @ wireDraft.update:1724
+  @field w originalTargetId  @ renderCanvas:2297
+  @field r outs  @ layoutPortRow:334,335 defaultSlot:482,483 shiftHoverHit:585 stickyHoverHit:600 drawBusPass:1434
+  @field r ov  @ busDragApply:1537 busDragPos:1563
+  @field w ov  @ makeBusDrag:1526
+  @field r ox  @ renderCanvas:1819 openFxPicker:2634
+  @field w ox  @ 120 renderCanvas:1820
+  @field r oy  @ openFxPicker:2634
+  @field w oy  @ 120 renderCanvas:1819,1820
   @field r path  @ 15
   @field w path  @ 15
-  @field r perp  @ busDragPos:1566,1567
-  @field w perp  @ makeBusDrag:1530 busDragApply:1541
-  @field r pi  @ leastOccupiedDir:1200,1203
-  @field r placed  @ drawWire:1034,1039
-  @field w placed  @ drawWiresPass:1056
-  @field r popup  @ drawPortRowBg:684
-  @field w popup  @ layoutPortRow:459
-  @field r port  @ busSegments:1416 drawBusPass:1435,1439,1440 busBarHit:1487 busBarSource:1498 renderCanvas:1812,1818,1819,2137
-  @field w port  @ busSegments:1416 renderCanvas:1812,2137,2283,2387
-  @field r portIdx  @ findLayoutSlot:612 drawPortRow:707 renderCanvas:2162,2165,2168,2190,2273
-  @field w portIdx  @ layoutList:319 layoutPortRow:401 defaultSlot:486 draftSourceHoverHit:638 busBarHit:1487 busBarSource:1498
-  @field r pos  @ nodeBox:151 wireSegments:907,920,921
-  @field r pos  @ draftSeg:938,939 leastOccupiedDir:1188,1194 sourceSegments:1236,1237,1245,1246
-  @field r pos  @ sourceSegments:1251 nodeEdgePoint:1262,1267 busSegments:1299,1300,1301
-  @field r pos  @ busSegments:1323,1324,1329,1348,1349,1355,1356 makeBusDrag:1517
-  @field r pos  @ nodeDrag.inject:1669 tagDrag.inject:1714,1715 tagDrag.update:1726 busDrag.inject:1739 renderCanvas:2256,2259
-  @field w pos  @ renderCanvas:1811,2136
-  @field r posAxial  @ busDragPos:1566,1567,1568
-  @field w posAxial  @ makeBusDrag:1529
-  @field r posPerp  @ busDragApply:1541
-  @field w posPerp  @ makeBusDrag:1529
-  @field r primary  @ renderCanvas:2343
-  @field w prompt  @ openAddSourceModal:2458 deleteSourceGuarded:2473
-  @field r rect  @ drawList:667 drawFader:1129 renderCanvas:1868,2065,2075,2077,2091
-  @field w rect  @ layoutList:327 renderCanvas:2037
-  @field r refine  @ engagedHover:534
-  @field w refine  @ shiftHoverHit:588
-  @field r rows  @ engagedHover:554 drawList:670
-  @field w rows  @ layoutList:327
-  @field r segs  @ nodeDrag.update:1676 tagDrag.update:1720
-  @field w segs  @ renderCanvas:1849
-  @field r selection  @ renderCanvas:1835
-  @field w selection  @ band.inject:1692
-  @field r side  @ stickyHoverHit:602 drawPortRow:693 drawWireEndHighlight:1065 renderCanvas:2167,2181,2199,2224
-  @field w side  @ layoutPortRow:459 wireEndHit:999 renderCanvas:2305
-  @field r skipEdgeIdx  @ drawWiresPass:1050
-  @field w skipEdgeIdx  @ renderCanvas:1948
-  @field r slot  @ engagedHover:538 shiftHoverHit:577 dropEligible:662 drawPortRow:692 renderCanvas:2007,2011,2156,2272
-  @field w slot  @ pickHovered:504,507,511 engagedHover:540,554 stickyHoverHit:603 draftSourceHoverHit:632,640 busBarHit:1487 busBarSource:1498
-  @field r slots  @ pickHovered:502 findLayoutSlot:610 draftSourceHoverHit:629 drawPortRow:695
-  @field w slots  @ layoutPortRow:458
-  @field w sourcePos  @ commitFx:2642
-  @field r spliceIdx  @ nodeDrag.update:1675,1676,1677 renderCanvas:1951,1952
-  @field w spliceIdx  @ renderCanvas:1853
-  @field r spliceNode  @ nodeDrag.update:1677 renderCanvas:1852,1853
-  @field w spliceNode  @ renderCanvas:1851
-  @field r starts  @ soleDragged:1621,1622 nodeDrag.inject:1668 nodeDrag.update:1680
-  @field w starts  @ renderCanvas:2261
-  @field w suppressKbd  @ focusState:2583,2586
-  @field r sx  @ wireExits:762 wireMid:791,793 draftSeg:942,944 endRegion:959,961,964 wireEndHit:1002 drawWire:1016 busSegments:1390
-  @field r sx  @ busSegments:1392 drawBusPass:1437,1438 sourceTagHit:1577 tagDrag.update:1726 renderCanvas:1953,1958,2207,2244 commitFx:2642
-  @field w sx  @ wireSegments:920 sourceSegments:1250 busSegments:1372,1375 openFxPicker:2625
-  @field r sx0  @ tagDrag.inject:1714
-  @field w sx0  @ renderCanvas:2244
-  @field r sy  @ wireExits:762 wireMid:791,793 draftSeg:942,944 endRegion:959,961,964 wireEndHit:1002 drawWire:1016 busSegments:1390
-  @field r sy  @ busSegments:1392 drawBusPass:1437,1438 sourceTagHit:1577 tagDrag.update:1726 renderCanvas:1953,1958,2208,2244 commitFx:2642
-  @field w sy  @ wireSegments:920 sourceSegments:1250 busSegments:1372,1375 openFxPicker:2625
-  @field r sy0  @ tagDrag.inject:1715
-  @field w sy0  @ renderCanvas:2244
-  @field w tagDrag  @ 1707
-  @field r tapHi  @ makeBusDrag:1532 busDragApply:1557
-  @field w tapHi  @ busSegments:1418 makeBusDrag:1532
-  @field r tapLo  @ makeBusDrag:1532 busDragApply:1553
-  @field w tapLo  @ busSegments:1417 makeBusDrag:1532
-  @field w title  @ openAddSourceModal:2457 deleteSourceGuarded:2472
-  @field r to  @ wireGroups:723 wireSegments:913 drawWire:1028 leastOccupiedDir:1185,1186,1189 sourceSegments:1216,1217 busSegments:1293,1337,1343
-  @field r to  @ bussablePorts:1464 tagDrag.inject:1712 tagDrag.update:1721 renderCanvas:1818,2200,2201
-  @field w to  @ renderCanvas:2288
-  @field r toHH  @ wireExits:769 drawWire:1022
-  @field w toHH  @ draftSeg:940 busSegments:1373,1376,1388
-  @field r toHW  @ wireExits:769 drawWire:1022
-  @field w toHW  @ draftSeg:940 busSegments:1373,1376,1388
-  @field r toPort  @ wireGroups:737,746 drawWire:1028,1036,1038 bussablePorts:1465,1466 renderCanvas:1818,2203,2227
-  @field w toPort  @ renderCanvas:2289
-  @field r toPortName  @ drawWire:1038
-  @field r trunk  @ drawBusPass:1431
-  @field w trunk  @ busSegments:1414
-  @field r type  @ draftSourceHoverHit:626,636,638 dropTargetHit:651 wireGroups:741,742 drawWire:1024 drawWiresPass:1055 arrowMidHit:1107 bussablePorts:1463
-  @field r type  @ busBarHit:1482 spliceTargetHit:1634 renderCanvas:1816,1972,2190,2202,2223,2226,2286,2299
-  @field w type  @ renderCanvas:2188,2223,2286
+  @field r perp  @ busDragPos:1564,1565
+  @field w perp  @ makeBusDrag:1528 busDragApply:1539
+  @field r pi  @ leastOccupiedDir:1198,1201
+  @field r placed  @ drawWire:1032,1037
+  @field w placed  @ drawWiresPass:1054
+  @field r popup  @ drawPortRowBg:682
+  @field w popup  @ layoutPortRow:458
+  @field r port  @ busSegments:1414 drawBusPass:1433,1437,1438 busBarHit:1485 busBarSource:1496 renderCanvas:1864,1870,1871,2194
+  @field w port  @ busSegments:1414 wireDraft.update:1730 renderCanvas:1864,2194,2403
+  @field r portIdx  @ findLayoutSlot:611 drawPortRow:705 wireDraft.update:1722 renderCanvas:2219,2222,2225,2248
+  @field w portIdx  @ layoutList:318 layoutPortRow:400 defaultSlot:485 draftSourceHoverHit:636 busBarHit:1485 busBarSource:1496
+  @field r pos  @ nodeBox:150 wireSegments:905,918,919
+  @field r pos  @ draftSeg:936,937 leastOccupiedDir:1186,1192 sourceSegments:1234,1235,1243,1244
+  @field r pos  @ sourceSegments:1249 nodeEdgePoint:1260,1265 busSegments:1297,1298,1299
+  @field r pos  @ busSegments:1321,1322,1327,1346,1347,1353,1354 makeBusDrag:1515
+  @field r pos  @ nodeDrag.inject:1672 tagDrag.inject:1766,1767 tagDrag.update:1778 busDrag.inject:1791 renderCanvas:2315,2318
+  @field w pos  @ renderCanvas:1863,2193
+  @field r posAxial  @ busDragPos:1564,1565,1566
+  @field w posAxial  @ makeBusDrag:1527
+  @field r posPerp  @ busDragApply:1539
+  @field w posPerp  @ makeBusDrag:1527
+  @field r primary  @ renderCanvas:2359
+  @field w prompt  @ openAddSourceModal:2474 deleteSourceGuarded:2489
+  @field r rect  @ drawList:665 drawFader:1127 renderCanvas:1921,2122,2132,2134,2148
+  @field w rect  @ layoutList:326 renderCanvas:2094
+  @field r refine  @ engagedHover:533
+  @field w refine  @ shiftHoverHit:587
+  @field r rows  @ engagedHover:553 drawList:668
+  @field w rows  @ layoutList:326
+  @field r segs  @ nodeDrag.update:1679 tagDrag.update:1772
+  @field w segs  @ renderCanvas:1902
+  @field r selection  @ renderCanvas:1888
+  @field w selection  @ band.inject:1695
+  @field r side  @ stickyHoverHit:601 drawPortRow:691 drawWireEndHighlight:1063 renderCanvas:2224,2239,2257,2283
+  @field w side  @ layoutPortRow:458 wireEndHit:997 wireDraft.update:1751
+  @field r skipEdgeIdx  @ drawWiresPass:1048
+  @field w skipEdgeIdx  @ renderCanvas:2004
+  @field r slot  @ engagedHover:537 shiftHoverHit:576 dropEligible:660 drawPortRow:690 wireDraft.update:1721 renderCanvas:2063,2067,2213
+  @field w slot  @ pickHovered:503,506,510 engagedHover:539,553 stickyHoverHit:602 draftSourceHoverHit:630,638 busBarHit:1485 busBarSource:1496
+  @field r slots  @ pickHovered:501 findLayoutSlot:609 draftSourceHoverHit:627 drawPortRow:693
+  @field w slots  @ layoutPortRow:457
+  @field w sourcePos  @ commitFx:2659
+  @field r spliceIdx  @ nodeDrag.update:1678,1679,1680 renderCanvas:2007,2008
+  @field w spliceIdx  @ renderCanvas:1906
+  @field r spliceNode  @ nodeDrag.update:1680 renderCanvas:1905,1906
+  @field w spliceNode  @ renderCanvas:1904
+  @field r starts  @ soleDragged:1619,1620 nodeDrag.inject:1671 nodeDrag.update:1683
+  @field w starts  @ renderCanvas:2320
+  @field w suppressKbd  @ focusState:2600,2603
+  @field r sx  @ wireExits:760 wireMid:789,791 draftSeg:940,942 endRegion:957,959,962 wireEndHit:1000 drawWire:1014 busSegments:1388
+  @field r sx  @ busSegments:1390 drawBusPass:1435,1436 sourceTagHit:1575 tagDrag.update:1778 renderCanvas:2009,2014,2265,2303 commitFx:2659
+  @field w sx  @ wireSegments:918 sourceSegments:1248 busSegments:1370,1373 openFxPicker:2642
+  @field r sx0  @ tagDrag.inject:1766
+  @field w sx0  @ renderCanvas:2303
+  @field r sy  @ wireExits:760 wireMid:789,791 draftSeg:940,942 endRegion:957,959,962 wireEndHit:1000 drawWire:1014 busSegments:1388
+  @field r sy  @ busSegments:1390 drawBusPass:1435,1436 sourceTagHit:1575 tagDrag.update:1778 renderCanvas:2009,2014,2266,2303 commitFx:2659
+  @field w sy  @ wireSegments:918 sourceSegments:1248 busSegments:1370,1373 openFxPicker:2642
+  @field r sy0  @ tagDrag.inject:1767
+  @field w sy0  @ renderCanvas:2303
+  @field w tagDrag  @ 1759
+  @field r tapHi  @ makeBusDrag:1530 busDragApply:1555
+  @field w tapHi  @ busSegments:1416 makeBusDrag:1530
+  @field r tapLo  @ makeBusDrag:1530 busDragApply:1551
+  @field w tapLo  @ busSegments:1415 makeBusDrag:1530
+  @field r targetHit  @ wireDraft.update:1715
+  @field w targetHit  @ renderCanvas:1985
+  @field w title  @ openAddSourceModal:2473 deleteSourceGuarded:2488
+  @field r to  @ wireGroups:721 wireSegments:911 drawWire:1026 leastOccupiedDir:1183,1184,1187 sourceSegments:1214,1215 busSegments:1291,1335,1341
+  @field r to  @ bussablePorts:1462 tagDrag.inject:1764 tagDrag.update:1773 renderCanvas:1870,2258,2259
+  @field w to  @ wireDraft.update:1735
+  @field r toHH  @ wireExits:767 drawWire:1020
+  @field w toHH  @ draftSeg:938 busSegments:1371,1374,1386
+  @field r toHW  @ wireExits:767 drawWire:1020
+  @field w toHW  @ draftSeg:938 busSegments:1371,1374,1386
+  @field r toPort  @ wireGroups:735,744 drawWire:1026,1034,1036 bussablePorts:1463,1464 renderCanvas:1870,2261,2286
+  @field w toPort  @ wireDraft.update:1736
+  @field r toPortName  @ drawWire:1036
+  @field r trunk  @ drawBusPass:1429
+  @field w trunk  @ busSegments:1412
+  @field r type  @ draftSourceHoverHit:624,634,636 dropTargetHit:649 wireGroups:739,740 drawWire:1022 drawWiresPass:1053 arrowMidHit:1105 bussablePorts:1461
+  @field r type  @ busBarHit:1480 spliceTargetHit:1632 wireDraft.update:1733,1746 renderCanvas:1868,2028,2248,2260,2282,2285
+  @field w type  @ wireDraft.update:1733 renderCanvas:2246,2282
   @field r ui  @ 26
   @field r uiFont  @ 25
-  @field r update  @ renderCanvas:2310
-  @field w update  @ nodeDrag.update:1672 band.update:1694 tagDrag.update:1718 busDrag.update:1744
-  @field r valueAtClick  @ renderCanvas:1872
-  @field w valueAtClick  @ renderCanvas:2040,2078
-  @field r viaBar  @ renderCanvas:1936,1991,1992,1995,1996
-  @field w viaBar  @ busBarHit:1487 busBarSource:1498
-  @field r w  @ boxRect:137 drawHandle:209 drawSlot:246,252 layoutList:304 layoutPortRow:390 drawList:672 drawPortRow:709 wireEndHit:992 drawWire:1015 drawWiresPass:1055 arrowMidHit:1107
-  @field r w  @ sourceTagHit:1575,1576 spliceTargetHit:1634 tagDrag.update:1721,1725 renderCanvas:1957,1958,2174,2198,2217
-  @field w w  @ layoutList:321 layoutPortRow:380,403,415 wireSegments:919 sourceSegments:1249 busSegments:1372,1375
-  @field r wheelIdleFrames  @ renderCanvas:2104,2105
-  @field w wheelIdleFrames  @ renderCanvas:2102,2104
-  @field r wheelPending  @ renderCanvas:1895,1899,2103
-  @field w wheelPending  @ renderCanvas:2101,2107
-  @field w width  @ statusSegments.get:2573
+  @field r update  @ renderCanvas:2326
+  @field w update  @ nodeDrag.update:1675 band.update:1697 wireDraft.update:1713 tagDrag.update:1770 busDrag.update:1796
+  @field r valueAtClick  @ renderCanvas:1925
+  @field w valueAtClick  @ renderCanvas:2097,2135
+  @field r viaBar  @ renderCanvas:1992,2047,2048,2051,2052
+  @field w viaBar  @ busBarHit:1485 busBarSource:1496
+  @field r w  @ boxRect:136 drawHandle:208 drawSlot:245,251 layoutList:303 layoutPortRow:389 drawList:670 drawPortRow:707 wireEndHit:990 drawWire:1013 drawWiresPass:1053 arrowMidHit:1105
+  @field r w  @ sourceTagHit:1573,1574 spliceTargetHit:1632 tagDrag.update:1773,1777 renderCanvas:2013,2014,2231,2256,2275
+  @field w w  @ layoutList:320 layoutPortRow:379,402,414 wireSegments:917 sourceSegments:1247 busSegments:1370,1373
+  @field r wheelIdleFrames  @ renderCanvas:2161,2162
+  @field w wheelIdleFrames  @ renderCanvas:2159,2161
+  @field r wheelPending  @ renderCanvas:1948,1952,2160
+  @field w wheelPending  @ renderCanvas:2158,2164
+  @field w width  @ statusSegments.get:2590
   @field r wire  @ 24
+  @field w wireDraft  @ 1711
   @field r wireFont  @ 23
-  @field r wireViewsList  @ tagDrag.inject:1711
-  @field w wireViewsList  @ renderCanvas:1830
-  @field r wires  @ wireGroups:732,740 wireSegments:911,912
-  @field w wires  @ wireGroups:728
-  @field r wiring  @ 2704
-  @field w wiringAddFx  @ 2701
-  @field w wiringClearSelection  @ wiring.wiringClearSelection:2702
+  @field r wireViewsList  @ tagDrag.inject:1763
+  @field w wireViewsList  @ renderCanvas:1883
+  @field r wires  @ wireGroups:730,738 wireSegments:909,910
+  @field w wires  @ wireGroups:726
+  @field r wiring  @ 2721
+  @field w wiringAddFx  @ 2718
+  @field w wiringClearSelection  @ wiring.wiringClearSelection:2719
   @field r wv  @ 20
-  @field r x  @ boxRect:137 nodeBox:151 drawHandle:209 drawSlot:239,243 layoutList:311 layoutPortRow:390 engagedHover:538 drawList:672
-  @field r x  @ drawList:675 drawPortRow:700,708,709 wireSegments:907,920,921 draftSeg:938 leastOccupiedDir:1188
-  @field r x  @ leastOccupiedDir:1190,1194 sourceSegments:1236,1245,1251 nodeEdgePoint:1262,1267 busSegments:1299,1301,1323
-  @field r x  @ busSegments:1324,1329,1348,1355 makeBusDrag:1517 nodeDrag.inject:1669 nodeDrag.update:1680 tagDrag.inject:1714 tagDrag.update:1726 busDrag.inject:1739
-  @field r x  @ renderCanvas:1785,2007,2173,2174,2216,2217,2256,2259 openFxPicker:2626 commitFx:2639,2641
-  @field w x  @ layoutList:320 layoutPortRow:379,402,413 wireEndHit:1001,1002 busBarSource:1499 nodeDrag.update:1677,1680 tagDrag.inject:1714 tagDrag.update:1726 busDrag.update:1749
-  @field w x  @ renderCanvas:1811,2136,2174,2256,2259,2298,2329 renderBody:2563 openFxPicker:2625 commitFx:2642
-  @field r x0  @ inRect:133 unionRect:140 strokeNodeRect:162 drawNode:183 badgeRects:268 drawBadge:277 layoutList:325,326 layoutPortRow:334 drawFader:1134
-  @field r x0  @ drawFader:1138,1139 drawBusPass:1430 drawBusBar:1449,1452,1453 busBarHit:1486 busBarSource:1496,1497 busBarAt:1507 makeBusDrag:1518 nodesInBand:1612
-  @field r x0  @ renderCanvas:1993,1997
-  @field w x0  @ rect:131 unionRect:140 busSegments:1412
-  @field r x1  @ inRect:133 unionRect:142 strokeNodeRect:163 drawBadge:277 layoutList:325,326 layoutPortRow:334 drawFader:1134,1138,1139
-  @field r x1  @ drawFader:1142 drawBusPass:1430 drawBusBar:1449,1452,1453 busBarHit:1486 busBarSource:1496,1497 busBarAt:1507 makeBusDrag:1519 nodesInBand:1612 renderCanvas:1993
-  @field r x1  @ renderCanvas:1997
-  @field w x1  @ rect:131 unionRect:142 busSegments:1413
-  @field r y  @ boxRect:137 nodeBox:151 drawHandle:209 drawSlot:239,243 layoutList:313,314 drawList:672,675
-  @field r y  @ drawPortRow:700,708,709 wireSegments:907,920,921 draftSeg:939 leastOccupiedDir:1188,1190
-  @field r y  @ leastOccupiedDir:1194 sourceSegments:1237,1246,1251 nodeEdgePoint:1262,1267 busSegments:1300,1301,1323,1324
-  @field r y  @ busSegments:1329,1349,1356 makeBusDrag:1517 nodeDrag.inject:1669 nodeDrag.update:1680 tagDrag.inject:1715 tagDrag.update:1726 renderCanvas:1785,2174,2218
-  @field r y  @ renderCanvas:2256,2259 openFxPicker:2626 commitFx:2639,2641
-  @field w y  @ layoutList:320 layoutPortRow:354,414 wireEndHit:1001,1002 busBarSource:1499 nodeDrag.inject:1669 nodeDrag.update:1677,1680 tagDrag.inject:1715 tagDrag.update:1726 busDrag.inject:1739
-  @field w y  @ busDrag.update:1749 renderCanvas:1811,2136,2174,2256,2259,2298,2329 renderBody:2563 openFxPicker:2625 commitFx:2642
-  @field r y0  @ inRect:133 unionRect:141 strokeNodeRect:162 drawNode:180 badgeRects:267 drawBadge:277 layoutList:325,326 layoutPortRow:334,454
-  @field r y0  @ drawFader:1133,1136 drawBusPass:1430 drawBusBar:1449,1452,1453 busBarHit:1486 busBarSource:1496,1497 busBarAt:1507 makeBusDrag:1518 nodesInBand:1612
-  @field r y0  @ renderCanvas:1868,1993,1997,2077
-  @field w y0  @ rect:131 unionRect:141 busSegments:1412
-  @field r y1  @ inRect:133 unionRect:143 strokeNodeRect:163 drawBadge:277 layoutList:325,326 layoutPortRow:334,452 drawBusPass:1430 drawBusBar:1449
-  @field r y1  @ drawBusBar:1452,1453 busBarHit:1486 busBarSource:1496,1497 busBarAt:1507 makeBusDrag:1519 nodesInBand:1612 renderCanvas:1993,1997
-  @field w y1  @ rect:131 unionRect:143 busSegments:1413
+  @field r x  @ boxRect:136 nodeBox:150 drawHandle:208 drawSlot:238,242 layoutList:310 layoutPortRow:389 engagedHover:537 drawList:670
+  @field r x  @ drawList:673 drawPortRow:698,706,707 wireSegments:905,918,919 draftSeg:936 leastOccupiedDir:1186
+  @field r x  @ leastOccupiedDir:1188,1192 sourceSegments:1234,1243,1249 nodeEdgePoint:1260,1265 busSegments:1297,1299,1321
+  @field r x  @ busSegments:1322,1327,1346,1353 makeBusDrag:1515 nodeDrag.inject:1672 nodeDrag.update:1683 tagDrag.inject:1766 tagDrag.update:1778 busDrag.inject:1791
+  @field r x  @ renderCanvas:1837,2063,2230,2231,2274,2275,2315,2318 openFxPicker:2643 commitFx:2656,2658
+  @field w x  @ layoutList:319 layoutPortRow:378,401,412 wireEndHit:999,1000 busBarSource:1497 nodeDrag.update:1680,1683 wireDraft.update:1745 tagDrag.inject:1766 tagDrag.update:1778
+  @field w x  @ busDrag.update:1801 renderCanvas:1863,2193,2231,2315,2318,2345 renderBody:2580 openFxPicker:2642 commitFx:2659
+  @field r x0  @ inRect:132 unionRect:139 strokeNodeRect:161 drawNode:182 badgeRects:267 drawBadge:276 layoutList:324,325 layoutPortRow:333 drawFader:1132
+  @field r x0  @ drawFader:1136,1137 drawBusPass:1428 drawBusBar:1447,1450,1451 busBarHit:1484 busBarSource:1494,1495 busBarAt:1505 makeBusDrag:1516 nodesInBand:1610
+  @field r x0  @ renderCanvas:2049,2053
+  @field w x0  @ rect:130 unionRect:139 busSegments:1410
+  @field r x1  @ inRect:132 unionRect:141 strokeNodeRect:162 drawBadge:276 layoutList:324,325 layoutPortRow:333 drawFader:1132,1136,1137
+  @field r x1  @ drawFader:1140 drawBusPass:1428 drawBusBar:1447,1450,1451 busBarHit:1484 busBarSource:1494,1495 busBarAt:1505 makeBusDrag:1517 nodesInBand:1610 renderCanvas:2049
+  @field r x1  @ renderCanvas:2053
+  @field w x1  @ rect:130 unionRect:141 busSegments:1411
+  @field r y  @ boxRect:136 nodeBox:150 drawHandle:208 drawSlot:238,242 layoutList:312,313 drawList:670,673
+  @field r y  @ drawPortRow:698,706,707 wireSegments:905,918,919 draftSeg:937 leastOccupiedDir:1186,1188
+  @field r y  @ leastOccupiedDir:1192 sourceSegments:1235,1244,1249 nodeEdgePoint:1260,1265 busSegments:1298,1299,1321,1322
+  @field r y  @ busSegments:1327,1347,1354 makeBusDrag:1515 nodeDrag.inject:1672 nodeDrag.update:1683 tagDrag.inject:1767 tagDrag.update:1778 renderCanvas:1837,2231,2276
+  @field r y  @ renderCanvas:2315,2318 openFxPicker:2643 commitFx:2656,2658
+  @field w y  @ layoutList:319 layoutPortRow:353,413 wireEndHit:999,1000 busBarSource:1497 nodeDrag.inject:1672 nodeDrag.update:1680,1683 wireDraft.update:1745 tagDrag.inject:1767 tagDrag.update:1778
+  @field w y  @ busDrag.inject:1791 busDrag.update:1801 renderCanvas:1863,2193,2231,2315,2318,2345 renderBody:2580 openFxPicker:2642 commitFx:2659
+  @field r y0  @ inRect:132 unionRect:140 strokeNodeRect:161 drawNode:179 badgeRects:266 drawBadge:276 layoutList:324,325 layoutPortRow:333,453
+  @field r y0  @ drawFader:1131,1134 drawBusPass:1428 drawBusBar:1447,1450,1451 busBarHit:1484 busBarSource:1494,1495 busBarAt:1505 makeBusDrag:1516 nodesInBand:1610
+  @field r y0  @ renderCanvas:1921,2049,2053,2134
+  @field w y0  @ rect:130 unionRect:140 busSegments:1410
+  @field r y1  @ inRect:132 unionRect:142 strokeNodeRect:162 drawBadge:276 layoutList:324,325 layoutPortRow:333,451 drawBusPass:1428 drawBusBar:1447
+  @field r y1  @ drawBusBar:1450,1451 busBarHit:1484 busBarSource:1494,1495 busBarAt:1505 makeBusDrag:1517 nodesInBand:1610 renderCanvas:2049,2053
+  @field w y1  @ rect:130 unionRect:142 busSegments:1411

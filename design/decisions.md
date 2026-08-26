@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — A wiring gesture mode declares `escCancels = true` rather than carrying a
+  `cancel` hook. Both draft modes cancel by clearing and do nothing else, so a hook would be an
+  empty closure; a mode that later needs teardown can grow one.
+
 - **2026-08-26** — A fader drag counts as a live gesture in the wiring guard chains, so a
   neighbouring wire end no longer highlights under the strip and RMB no longer opens a menu
   mid-drag. The alternative, excluding faderDrag from the chains, keeps a mode that is a gesture

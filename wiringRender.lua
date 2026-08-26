@@ -101,7 +101,6 @@ local ORIENT_VEC = {
 -- captures, forbidden-set and sticky/pin semantics — is the model in
 -- docs/wiringPage.md. The shapes below are the only at-site reference.
 local gesture   = nil  -- the one live gesture, nil = idle; payload shapes and hooks at `modes`
-local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
 local busDraft   = nil  -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
@@ -614,16 +613,15 @@ local function findLayoutSlot(layout, slotKind, portIdx)
     end
   end
 end
--- Forward-draft only: keeps the source node's port row visible during the
--- click-hold (else the popout flashes off when wireDraft is set, back at
--- mouseup). Redrafts skip it; in the band gap the kept-slot highlight clears.
-local function draftSourceHoverHit(nodeViews, mx, my)
-  if not wireDraft or wireDraft.edgeIdx then return nil end
+-- Forward-draft only: keeps the source node's port row visible during the click-hold
+-- (else the popout flashes off when the draft arms). Redrafts skip it; in the band gap the kept-slot highlight clears.
+local function draftSourceHoverHit(nodeViews, mx, my, draft)
+  if draft.edgeIdx then return nil end
   for _, nv in ipairs(nodeViews) do
-    if nv.id == wireDraft.keptId then
+    if nv.id == draft.keptId then
       if nv.category == 'bus' then return nil end  -- bar is its source handle
       local layout = layoutPortRow(nv, 'out', mx, my,
-                                   wireDraft.type, wireDraft.keptSide)
+                                   draft.type, draft.keptSide)
       local inBand = inRect(mx, my, layout.hoverRect)
                  and not inRect(mx, my, nodeBox(nv))
                  and not slotHit(layout.slots, mx, my)
@@ -633,9 +631,9 @@ local function draftSourceHoverHit(nodeViews, mx, my)
       end
       -- Body-default port 1 has no chip, so synthesise a default-slot spec
       -- so the source still reads as engaged (body outline carries the mark).
-      local slot = findLayoutSlot(layout, wireDraft.type, wireDraft.keptPort)
+      local slot = findLayoutSlot(layout, draft.type, draft.keptPort)
       if not slot then
-        slot = { kind = wireDraft.type, portIdx = wireDraft.keptPort }
+        slot = { kind = draft.type, portIdx = draft.keptPort }
       end
       return { nv = nv, layout = layout, slot = slot }
     end
@@ -1644,9 +1642,9 @@ end
 
 ----- Gesture machine
 
--- Transitional: the modes still outside the machine gate the guard chains too.
+-- Transitional: busDraft is still outside the machine and gates the guard chains too.
 local function busy()
-  return gesture or wireDraft or busDraft
+  return gesture or busDraft
 end
 
 -- The fader overlay coexists with idle hovering; only its drag is a gesture.
@@ -1654,8 +1652,13 @@ local function faderDragging()
   return gesture and gesture.mode == 'faderDrag'
 end
 
+-- The live draft payload, or nil: the hover and draw blocks read its fields.
+local function wireDrafting()
+  return gesture and gesture.mode == 'wireDraft' and gesture or nil
+end
+
 -- `frame` carries the mouse, view lists and geometry the hooks read; inject(g, frame)
--- feeds transients to the geometry pass, update(g, frame) ticks/commits (false clears the gesture).
+-- feeds transients to the geometry pass, update(g, frame) ticks/commits (false clears the gesture); escCancels means Esc clears it outright.
 local modes = {}
 
 -- { mx0, my0, starts = { [id] = {x,y}, … } }
@@ -1699,6 +1702,55 @@ modes.band = {
       wv:setSelection(nodesInBand(frame.nodeViews,
                                   g.mx0, g.my0, frame.lmx, frame.lmy))
     end
+    return false
+  end,
+}
+
+-- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden,
+--   mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? } — the in-flight wire
+modes.wireDraft = {
+  escCancels = true,
+  update = function(g, frame)
+    if ImGui.IsMouseDown(ctx, 0) then return end
+    local targetHit = frame.targetHit
+    local moved = g.fromPalette
+               or math.abs(frame.lmx - g.mx0) >= CLICK_THRESH
+               or math.abs(frame.lmy - g.my0) >= CLICK_THRESH
+    if moved then
+      if dropEligible(g, targetHit) then
+        local slot = targetHit.slot
+        local port = (slot.kind == 'audio') and slot.portIdx or nil
+        local sameAsOrigin = g.edgeIdx
+                             and targetHit.nv.id == g.originalTargetId
+                             and (slot.kind ~= 'audio' or port == g.originalPort)
+        if sameAsOrigin then
+          -- Rewiring to the same node + port the wire already had: no-op,
+          -- skip the mutation so we don't burn an undo entry on it.
+        elseif g.edgeIdx then
+          wv:rewireEdgeEnd(g.edgeIdx, g.cursorEnd, { id = targetHit.nv.id, port = port })
+        else
+          wv:addWire{
+            type = g.type or slot.kind,
+            from = g.keptId, fromPort = g.keptPort,
+            to   = targetHit.nv.id,
+            toPort = port,
+          }
+        end
+      elseif g.edgeIdx
+             and not nodeAtPoint(frame.nodeViews, frame.draftCx, frame.draftCy) then
+        -- Redraft onto empty canvas (judged by the wire end) deletes the wire.
+        -- Ineligible-target drops fall through to cancel below.
+        wv:removeWireAt(g.edgeIdx)
+      end
+      hoverFreeze = { x = frame.mx, y = frame.my }
+    elseif g.fromList and g.type == 'audio' and g.keptPort and g.keptPort >= 2 then
+      -- Click-without-drag on a list row pins the port as a chip; sticky keeps
+      -- the row visible until shift-release or hover returns here.
+      pinned[g.keptId] = pinned[g.keptId] or {}
+      pinned[g.keptId][g.keptPort] = true
+      sticky = { nodeId = g.keptId, side = g.keptSide }
+    end
+    listOpenId = nil   -- close any target-side spillover that was open
     return false
   end,
 }
@@ -1826,7 +1878,8 @@ local function renderCanvas(w, h)
       busDraft = nil
     end
   end
-  local frame = { lmx = lmx, lmy = lmy, nodeViews = nodeViews, nodesById = nodesById,
+  local frame = { mx = mx, my = my, lmx = lmx, lmy = lmy,
+                  nodeViews = nodeViews, nodesById = nodesById,
                   wireViewsList = wireViewsList, busViewsList = busViewsList }
   if gesture then
     local inject = modes[gesture.mode].inject
@@ -1907,19 +1960,20 @@ local function renderCanvas(w, h)
 
   -- The decayed wire end (not the cursor) drives the draft visual and the
   -- hit / eligibility checks below — see docs/wiringPage.md.
+  local draft = wireDrafting()
   local draftCx, draftCy
-  if wireDraft then
-    draftCx, draftCy = computeDraftEnd(wireDraft, lmx, lmy)
+  if draft then
+    draftCx, draftCy = computeDraftEnd(draft, lmx, lmy)
   end
 
   -- Source-side hover while shift held; target-side while a draft is live.
   -- dropTargetHit filters cycle-blocked nodes; commit also needs a concrete slot.
   local sourceHit, targetHit, stickyHit, draftSourceHit
-  if wireDraft then
-    targetHit      = dropTargetHit(nodeViews, draftCx, draftCy, wireDraft)
-    draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy)
+  if draft then
+    targetHit      = dropTargetHit(nodeViews, draftCx, draftCy, draft)
+    draftSourceHit = draftSourceHoverHit(nodeViews, draftCx, draftCy, draft)
     -- A bar hit (fat target for the bussed port) wins over a node-port hit.
-    targetHit      = busBarHit(busRails, wireDraft, draftCx, draftCy) or targetHit
+    targetHit      = busBarHit(busRails, draft, draftCx, draftCy) or targetHit
   elseif shiftHeld and not hoverFreeze then
     sourceHit = busBarSource(busRails, lmx, lmy)
              or shiftHoverHit(nodeViews, lmx, lmy)
@@ -1927,6 +1981,8 @@ local function renderCanvas(w, h)
   if shiftHeld then
     stickyHit = stickyHoverHit(nodeViews)
   end
+  -- The draft's commit hook judges its drop by these, not by the cursor.
+  frame.draftCx, frame.draftCy, frame.targetHit = draftCx, draftCy, targetHit
 
   -- One overlay per node id; cursor-driven picks (source/target) beat the
   -- persistent draft-source and sticky ones.
@@ -1945,7 +2001,7 @@ local function renderCanvas(w, h)
   -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < nodes.
   local placedLabels = {}
   drawWiresPass(p, segs, wireViewsList,
-    { skipEdgeIdx = wireDraft and wireDraft.edgeIdx }, placedLabels)
+    { skipEdgeIdx = draft and draft.edgeIdx }, placedLabels)
   -- In the wire layer, not over the node pass: the bodies at the wire's ends and
   -- the dragged body itself overpaint it, so the highlight reads as a wire.
   if frame.spliceIdx then
@@ -1967,9 +2023,9 @@ local function renderCanvas(w, h)
   end
   for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
   -- The draft wire (draw order in docs/wiringPage.md).
-  local dSeg = wireDraft and draftSeg(wireDraft, nodesById, draftCx, draftCy)
+  local dSeg = draft and draftSeg(draft, nodesById, draftCx, draftCy)
   if dSeg then
-    local name = wireDraft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
+    local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
     drawWire(p, dSeg, { name = name })
   end
   for _, nv in ipairs(nodeViews) do
@@ -1981,8 +2037,8 @@ local function renderCanvas(w, h)
 
   -- A palette drag carries a floating source tag at the cursor (on top of
   -- nodes) — it commits to a stub on drop. The wire-type is undecided here.
-  if wireDraft and wireDraft.fromPalette then
-    drawTagAt(p, draftCx, draftCy, wireDraft.keptLabel)
+  if draft and draft.fromPalette then
+    drawTagAt(p, draftCx, draftCy, draft.keptLabel)
   end
 
   -- After the node pass: nodes overpaint wires, so an in-pass highlight (and
@@ -2016,8 +2072,9 @@ local function renderCanvas(w, h)
 
   -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
   -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
-  if wireDraft and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-    wireDraft = nil
+  if gesture and modes[gesture.mode].escCancels
+     and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    gesture = nil
   end
   if busDraft and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     busDraft = nil
@@ -2130,11 +2187,11 @@ local function renderCanvas(w, h)
   -- Bus-creation gesture (node-menu launched): the bar is glued to the cursor; a
   -- left click drops it where the cursor sits and re-points the port's wires through it.
   if busDraft and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
-    local draft = busDraft
+    local dropped = busDraft
     busDraft = nil
-    if nodesById[draft.nodeId] then
-      wv:insertBus{ pos = { x = lmx, y = lmy }, orient = draft.orient,
-                    node = draft.nodeId, port = draft.port, dir = draft.dir }
+    if nodesById[dropped.nodeId] then
+      wv:insertBus{ pos = { x = lmx, y = lmy }, orient = dropped.orient,
+                    node = dropped.nodeId, port = dropped.port, dir = dropped.dir }
     end
   end
 
@@ -2176,6 +2233,7 @@ local function renderCanvas(w, h)
           keptAnchor = sourceHit.anchor
         end
         local base = {
+          mode       = 'wireDraft',
           cursorEnd  = 'to',
           keptId     = sourceHit.nv.id,
           keptSide   = sourceHit.layout and sourceHit.layout.side,
@@ -2189,7 +2247,7 @@ local function renderCanvas(w, h)
         else
           base.type, base.keptPort = 'audio', slot.portIdx
         end
-        wireDraft = base
+        gesture = base
       end
       -- slot=nil: cursor on chevron or between list rows; consume the
       -- click (no wire start, no body-drag fall-through).
@@ -2219,7 +2277,8 @@ local function renderCanvas(w, h)
           end
         end
       end
-      wireDraft = {
+      gesture = {
+        mode       = 'wireDraft',
         type       = wire.type,
         cursorEnd  = wireEndHover.side,
         keptId     = keptId,
@@ -2263,49 +2322,6 @@ local function renderCanvas(w, h)
         gesture = { mode = 'band', mx0 = lmx, my0 = lmy }
       end
     end
-  elseif wireDraft and not ImGui.IsMouseDown(ctx, 0) then
-    local moved = wireDraft.fromPalette
-               or math.abs(lmx - wireDraft.mx0) >= CLICK_THRESH
-               or math.abs(lmy - wireDraft.my0) >= CLICK_THRESH
-    if moved then
-      if dropEligible(wireDraft, targetHit) then
-        local slot = targetHit.slot
-        local port = (slot.kind == 'audio') and slot.portIdx or nil
-        local sameAsOrigin = wireDraft.edgeIdx
-                             and targetHit.nv.id == wireDraft.originalTargetId
-                             and (slot.kind ~= 'audio'
-                                  or port == wireDraft.originalPort)
-        if sameAsOrigin then
-          -- Rewiring to the same node + port the wire already had: no-op,
-          -- skip the mutation so we don't burn an undo entry on it.
-        elseif wireDraft.edgeIdx then
-          wv:rewireEdgeEnd(wireDraft.edgeIdx, wireDraft.cursorEnd,
-                           { id = targetHit.nv.id, port = port })
-        else
-          wv:addWire{
-            type = wireDraft.type or slot.kind,
-            from = wireDraft.keptId, fromPort = wireDraft.keptPort,
-            to   = targetHit.nv.id,
-            toPort = port,
-          }
-        end
-      elseif wireDraft.edgeIdx
-             and not nodeAtPoint(nodeViews, draftCx, draftCy) then
-        -- Redraft onto empty canvas (judged by the wire end) deletes the wire.
-        -- Ineligible-target drops fall through to cancel below.
-        wv:removeWireAt(wireDraft.edgeIdx)
-      end
-      hoverFreeze = { x = mx, y = my }
-    elseif wireDraft.fromList and wireDraft.type == 'audio'
-           and wireDraft.keptPort and wireDraft.keptPort >= 2 then
-      -- Click-without-drag on a list row pins the port as a chip; sticky keeps
-      -- the row visible until shift-release or hover returns here.
-      pinned[wireDraft.keptId] = pinned[wireDraft.keptId] or {}
-      pinned[wireDraft.keptId][wireDraft.keptPort] = true
-      sticky = { nodeId = wireDraft.keptId, side = wireDraft.keptSide }
-    end
-    wireDraft  = nil
-    listOpenId = nil   -- close any target-side spillover that was open
   elseif gesture then
     local update = modes[gesture.mode].update
     if update and update(gesture, frame) == false then gesture = nil end
@@ -2502,9 +2518,10 @@ local function renderPaletteList(sources)
     end
     -- Drag a palette row to start a type-agnostic forward draft; the drop
     -- port's kind (audio|midi) decides the edge type. See docs/wiringPage.md.
-    if not wireDraft and ImGui.IsItemActive(ctx)
+    if not gesture and ImGui.IsItemActive(ctx)
        and ImGui.IsMouseDragging(ctx, 0) then
-      wireDraft = {
+      gesture = {
+        mode        = 'wireDraft',
         cursorEnd   = 'to',
         keptId      = src.id,
         forbidden   = wv:ancestorsOf(src.id),
@@ -2538,7 +2555,7 @@ function wr:toolbarSegments() return {} end
 
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()
-  gesture, wireDraft, shiftWas = nil, nil, false
+  gesture, shiftWas = nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
   fader, wireMenu = nil, nil
 end

@@ -71,7 +71,7 @@ local gesture = nil
 -- modes[mode] = {
 --   inject = fn(g, frame),  -- pre-geometry transients (runs before wireSegments)
 --   update = fn(g, frame),  -- post-hover tick + mouseup commit; return false to clear
---   cancel = fn(g),         -- Esc, only for modes that bind it
+--   escCancels = true,      -- Esc clears the gesture; only the draft modes bind it
 -- }
 ```
 
@@ -170,12 +170,13 @@ commits must run even off-canvas, as today.
 
 ### Esc and lifecycle
 
-- Esc blocks @1969–1976 become `cancel` hooks. Only two modes bind Esc
-  today: wireDraft (@1971–1972) and busDraft (@1974–1975), both a
-  simple `cancel = clear`. busDrag has no Esc binding — don't invent
-  one. Keep the existing comment about the wiring-scope
-  `wiringClearSelection` Esc binding and keep the check at the same
-  point in the frame.
+- The two Esc blocks @1969–1976 collapse to one dispatch keyed on the
+  mode's `escCancels`. Only wireDraft and busDraft declare it, and
+  neither has teardown beyond the clear, so the flag is declarative
+  rather than a hook; a mode that later needs teardown can grow one.
+  busDrag has no Esc binding — don't invent one. Keep the existing
+  comment about the wiring-scope `wiringClearSelection` Esc binding and
+  keep the check at the same point in the frame.
 - `wr:closeTransients()` (@2525–2528) simplifies to `gesture = nil`
   plus the existing hover/overlay resets (`shiftWas`, `listOpenId`,
   `sticky`, `engagedId`, `hoverFreeze`, `fader`, `wireMenu`). Flag one
@@ -196,7 +197,7 @@ their own rules. Leave them as file-locals.
 
 Rewrite docs/wiringPage.md § "The gesture state machine" to describe
 the explicit machine: the `gesture` variable, the mode list (including
-the busDraft/busDrag split), the inject/update/cancel phases, and the
+the busDraft/busDrag split), the inject/update/escCancels phases, and the
 unchanged mousedown precedence. The per-mode semantics prose (forbidden
 sets, decayed end, hoverFreeze, pinning) is still accurate — keep it,
 re-anchored to the mode names. Update the `--shape:` comment block at
