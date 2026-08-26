@@ -2031,58 +2031,45 @@ local function resolveHover(frame)
   frame.overlays = overlays
 end
 
-local function renderCanvas(w, h)
-  local frame = beginFrame(w, h)
-  gatherViews(frame)
-  buildGeometry(frame)
-  resolveHover(frame)
-
-  -- Transitional: the phases still inline below read the frame through locals,
-  -- and each of these dissolves as its phase moves out.
-  local p, sx, sy                   = frame.p, frame.sx, frame.sy
-  local mx, my, lmx, lmy            = frame.mx, frame.my, frame.lmx, frame.lmy
-  local overCanvas, shiftHeld       = frame.overCanvas, frame.shiftHeld
-  local nodeViews, nodesById        = frame.nodeViews, frame.nodesById
-  local wireViewsList, selection    = frame.wireViewsList, frame.selection
-  local segs, busRails, matrixRails = frame.segs, frame.busRails, frame.matrixRails
-  local wireEndHover, tagHover      = frame.wireEndHover, frame.tagHover
-  local arrowHitIdx, overlays       = frame.arrowHitIdx, frame.overlays
-  local sourceHit, targetHit        = frame.sourceHit, frame.targetHit
-  local draft, draftCx, draftCy     = frame.draft, frame.draftCx, frame.draftCy
+-- Every visible pass, in the documented z-order (docs/wiringPage.md § Canvas
+-- draw order). The band overlay is the exception — it draws after the popups.
+local function drawCanvas(frame)
+  local p, draft = frame.p, frame.draft
 
   -- z-stack (docs/wiringPage.md): wires < source tags < sleeves < draft < nodes.
   local placedLabels = {}
-  drawWiresPass(p, segs, wireViewsList,
+  drawWiresPass(p, frame.segs, frame.wireViewsList,
     { skipEdgeIdx = draft and draft.edgeIdx }, placedLabels)
   -- In the wire layer, not over the node pass: the bodies at the wire's ends and
   -- the dragged body itself overpaint it, so the highlight reads as a wire.
   if frame.spliceIdx then
-    local seg = segs[frame.spliceIdx]
+    local seg = frame.segs[frame.spliceIdx]
     p.line(seg.sx, seg.sy, seg.ex, seg.ey, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
   end
-  for i = 1, #wireViewsList do
-    local seg = segs[i]
+  for i = 1, #frame.wireViewsList do
+    local seg = frame.segs[i]
     if seg and seg.w.fromKind == 'source' then
       drawSourceTag(p, seg.sx, seg.sy, seg.w.fromLabel or 'source')
     end
   end
-  drawBusPass(p, busRails, placedLabels)
+  drawBusPass(p, frame.busRails, placedLabels)
   -- Matrix bars render with the fan rails, behind every node: a buss bar is a
   -- backdrop its consumers sit on, not a body that occludes them.
-  for _, nv in ipairs(nodeViews) do
-    local rail = nv.category == 'bus' and matrixRails[nv.id]
-    if rail then drawBusBar(p, rail, selection[nv.id]) end
+  for _, nv in ipairs(frame.nodeViews) do
+    local rail = nv.category == 'bus' and frame.matrixRails[nv.id]
+    if rail then drawBusBar(p, rail, frame.selection[nv.id]) end
   end
-  for _, pick in ipairs(overlays) do drawPortRowBg(p, pick.layout) end
+  for _, pick in ipairs(frame.overlays) do drawPortRowBg(p, pick.layout) end
   -- The draft wire (draw order in docs/wiringPage.md).
-  local dSeg = draft and draftSeg(draft, nodesById, draftCx, draftCy)
+  local dSeg = draft and draftSeg(draft, frame.nodesById,
+                                  frame.draftCx, frame.draftCy)
   if dSeg then
     local name = draft.type == 'midi' and 'wiring.port.midi' or 'wiring.port.audio'
     drawWire(p, dSeg, { name = name })
   end
-  for _, nv in ipairs(nodeViews) do
-    if not (nv.category == 'bus' and matrixRails[nv.id]) then
-      drawNode(p, nv, selection[nv.id])
+  for _, nv in ipairs(frame.nodeViews) do
+    if not (nv.category == 'bus' and frame.matrixRails[nv.id]) then
+      drawNode(p, nv, frame.selection[nv.id])
       if nodeHasFx(nv) then drawNodeBadges(p, nv, wv:muted(nv.id), wv:bypassed(nv.id)) end
     end
   end
@@ -2090,18 +2077,18 @@ local function renderCanvas(w, h)
   -- A palette drag carries a floating source tag at the cursor (on top of
   -- nodes) — it commits to a stub on drop. The wire-type is undecided here.
   if draft and draft.fromPalette then
-    drawTagAt(p, draftCx, draftCy, draft.keptLabel)
+    drawTagAt(p, frame.draftCx, frame.draftCy, draft.keptLabel)
   end
 
   -- After the node pass: nodes overpaint wires, so an in-pass highlight (and
   -- its AA spill onto the body corner) would be clipped.
-  drawWireEndHighlight(p, segs, wireEndHover)
-  if targetHit and targetHit.viaBar then
-    local b = targetHit.viaBar
+  drawWireEndHighlight(p, frame.segs, frame.wireEndHover)
+  if frame.targetHit and frame.targetHit.viaBar then
+    local b = frame.targetHit.viaBar
     p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
   end
-  if sourceHit and sourceHit.viaBar then
-    local b = sourceHit.viaBar
+  if frame.sourceHit and frame.sourceHit.viaBar then
+    local b = frame.sourceHit.viaBar
     p.line(b.x0, b.y0, b.x1, b.y1, 'wiring.node.selected', BUS_BAR_THICK + 2)
   end
 
@@ -2109,7 +2096,7 @@ local function renderCanvas(w, h)
 
   -- Overlay pass per engaged node. idPrefix is nv.id-keyed so InvisibleButtons
   -- stay unique across simultaneous overlays.
-  for _, pick in ipairs(overlays) do
+  for _, pick in ipairs(frame.overlays) do
     -- Body outline only for a body-default audio slot (no chip to carry the
     -- mark). Chevron hits and midi (the kbd self-highlights) leave it unmarked.
     if pick.slot and not pick.slot.x and pick.slot.kind ~= 'midi' then
@@ -2119,8 +2106,27 @@ local function renderCanvas(w, h)
     if pick.list then drawList(p, pick.list, pick.slot) end
   end
 
-  wv:setHover((sourceHit and sourceHit.nv.id)
-              or (targetHit and targetHit.nv.id) or nil)
+  wv:setHover((frame.sourceHit and frame.sourceHit.nv.id)
+              or (frame.targetHit and frame.targetHit.nv.id) or nil)
+end
+
+local function renderCanvas(w, h)
+  local frame = beginFrame(w, h)
+  gatherViews(frame)
+  buildGeometry(frame)
+  resolveHover(frame)
+  drawCanvas(frame)
+
+  -- Transitional: the phases still inline below read the frame through locals,
+  -- and each of these dissolves as its phase moves out.
+  local p, sx, sy                = frame.p, frame.sx, frame.sy
+  local mx, my, lmx, lmy         = frame.mx, frame.my, frame.lmx, frame.lmy
+  local overCanvas, shiftHeld    = frame.overCanvas, frame.shiftHeld
+  local nodeViews, nodesById     = frame.nodeViews, frame.nodesById
+  local wireViewsList, selection = frame.wireViewsList, frame.selection
+  local segs, busRails           = frame.segs, frame.busRails
+  local wireEndHover, tagHover   = frame.wireEndHover, frame.tagHover
+  local arrowHitIdx, sourceHit   = frame.arrowHitIdx, frame.sourceHit
 
   -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
   -- wiringClearSelection (also bound to Esc) doesn't run on the same key.

@@ -34,20 +34,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: extract the canvas draw pass (§ Stage 3 (6))
 - 2026-08-26 wiring: extract the hover resolution phase (§ Stage 3 ⑤)
 - 2026-08-26 wiring: extract the frame carrier and the head phases (§ Stage 3 (1)-(4))
 - 2026-08-26 wiring: document the gesture state machine (§ Docs)
-- 2026-08-26 wiring: move the bus draft into the machine (§ Stage 2)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-3. **The draw pass** (§ Stage 3 ⑥) — `drawCanvas(frame)` @2006–2076 in the
-   documented z-order, ending on the `wv:setHover` publication. The band
-   overlay @2439–2446 stays at the tail, since the popups sit between it and
-   the rest of the draw.
 4. **Fader input** (§ Stage 3 ⑦) — `faderInput(frame)` @2085–2169: the
    triangle LMB open with the OS cursor warp, the double-click unity reset,
    the in-strip click, and the wheel debounce; it returns `faderConsumed` for

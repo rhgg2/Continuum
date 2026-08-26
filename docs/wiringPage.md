@@ -218,6 +218,10 @@ The canvas is a strict z-stack, and several effects depend on the order:
 6. **Fader, error overlay, then the overlay pass** (body outline + port row
    + spillover list per engaged node).
 
+`drawCanvas` runs the whole stack in this order, as one phase of the
+canvas frame. The band overlay is the exception: it draws over the
+popups, which follow the draw, so `renderCanvas` keeps it.
+
 Wire geometry is built once as a table of **segs** — one per wire, each
 carrying its endpoints, the per-end extents that trim the line against a
 node body, and the midpoint the arrow sits on. The draw pass and every
