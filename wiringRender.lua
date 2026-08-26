@@ -2110,6 +2110,97 @@ local function drawCanvas(frame)
               or (frame.targetHit and frame.targetHit.nv.id) or nil)
 end
 
+-- Fader click/wheel input: the triangle opens it, an in-strip click jumps and
+-- drags, the wheel steps in dB. Returns whether the press was consumed.
+local function faderInput(frame)
+  local lmx, lmy   = frame.lmx, frame.lmy
+  local arrowHitIdx = frame.arrowHitIdx
+  -- pokeEdgeGain nudges a live CU and returns false when the edge has none yet;
+  -- setEdgeGain then materialises one.
+  local function pokeOrSet(edgeIdx, lin)
+    if not wv:pokeEdgeGain(edgeIdx, lin) then wv:setEdgeGain(edgeIdx, lin) end
+  end
+  local function inStrip() return inRect(lmx, lmy, fader.rect) end
+
+  -- LMB on the triangle opens at the current value, warps the OS cursor to
+  -- the knob, and the faderDrag gesture suppresses the in-strip jump-set below.
+  local arrowLmbClicked = arrowHitIdx and not fader and not wireMenu
+    and ImGui.IsMouseClicked(ctx, 0)
+  if arrowLmbClicked then
+    local seg = frame.segs[arrowHitIdx]
+    local x0, y0, x1, y1 = faderRectAt(seg.cx, seg.cy)
+    local pad = WIRE_FADER_HIT_PAD
+    local cur = wv:edgeGain(arrowHitIdx)
+    fader = {
+      edgeIdx      = arrowHitIdx,
+      rect         = rect(x0, y0, x1, y1),
+      hitRect      = rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad),
+      currentLin   = cur,
+      valueAtClick = cur,
+    }
+    gesture = { mode = 'faderDrag' }
+    pokeOrSet(arrowHitIdx, cur)
+    -- Warp the OS cursor onto the knob. The OS↔ImGui delta at the click
+    -- moment converts; macOS's bottom-up screen y needs the vertical flip.
+    if reaper.JS_Mouse_SetPosition then
+      local knobP = pFromDb(linToDb(cur))
+      local knobImX, knobImY = frame.p.toScreen((x0 + x1) / 2,
+                                                y0 + (1 - knobP) * WIRE_FADER_H)
+      local osMx, osMy = reaper.GetMousePosition()
+      local os       = reaper.GetOS()
+      local yFlip    = (os:find('OSX') or os:find('macOS')) and -1 or 1
+      reaper.JS_Mouse_SetPosition(
+        math.floor(osMx + (knobImX - frame.mx) + 0.5),
+        math.floor(osMy + yFlip * (knobImY - frame.my) + 0.5))
+    end
+  end
+
+  -- Before the click branch: a double-click also raises IsMouseClicked, which
+  -- would otherwise jump the fader to the second press's y.
+  local faderDblClicked = fader and not faderDragging()
+    and ImGui.IsMouseDoubleClicked(ctx, 0) and inStrip()
+  if faderDblClicked then
+    fader.currentLin = 1.0
+    wv:setEdgeGain(fader.edgeIdx, 1.0)
+  end
+
+  -- In-strip click owns the mouse: jump the value and start a drag.
+  local faderClicked = fader and not faderDragging() and not faderDblClicked
+    and ImGui.IsMouseClicked(ctx, 0) and inStrip()
+  if faderClicked then
+    local clickLin = pixelYToLin(lmy, fader.rect.y0)
+    fader.valueAtClick = wv:edgeGain(fader.edgeIdx)
+    fader.currentLin   = clickLin
+    gesture = { mode = 'faderDrag' }
+    pokeOrSet(fader.edgeIdx, clickLin)
+  end
+
+  -- Debounce to one setEdgeGain per scroll gesture so undo coalesces;
+  -- keepOrCloseFader commits if the cursor leaves before the window elapses.
+  if fader and not faderDragging() then
+    local wheelV = select(1, ImGui.GetMouseWheel(ctx))
+    if wheelV ~= 0 and inStrip() then
+      local step = frame.shiftHeld and WIRE_FADER_WHEEL_DB_FINE or WIRE_FADER_WHEEL_DB
+      local db   = linToDb(fader.currentLin)
+      if db == -math.huge then db = -60 end
+      db = math.min(WIRE_FADER_TOP_DB, db + wheelV * step)
+      local lin = (db <= -60) and 0 or dbToLin(db)
+      fader.currentLin = lin
+      pokeOrSet(fader.edgeIdx, lin)
+      fader.wheelPending    = true
+      fader.wheelIdleFrames = 0
+    elseif fader.wheelPending then
+      fader.wheelIdleFrames = (fader.wheelIdleFrames or 0) + 1
+      if fader.wheelIdleFrames > WIRE_FADER_WHEEL_IDLE_FRAMES then
+        wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
+        fader.wheelPending = false
+      end
+    end
+  end
+
+  return arrowLmbClicked or faderClicked or faderDblClicked
+end
+
 local function renderCanvas(w, h)
   local frame = beginFrame(w, h)
   gatherViews(frame)
@@ -2135,91 +2226,7 @@ local function renderCanvas(w, h)
     gesture = nil
   end
 
-  -- LMB on the triangle opens at the current value, warps the OS cursor to
-  -- the knob, and the faderDrag gesture suppresses the in-strip jump-set below.
-  local arrowLmbClicked = arrowHitIdx and not fader and not wireMenu
-    and ImGui.IsMouseClicked(ctx, 0)
-  if arrowLmbClicked then
-    local seg = segs[arrowHitIdx]
-    local x0, y0, x1, y1 = faderRectAt(seg.cx, seg.cy)
-    local pad = WIRE_FADER_HIT_PAD
-    local cur = wv:edgeGain(arrowHitIdx)
-    fader = {
-      edgeIdx      = arrowHitIdx,
-      rect         = rect(x0, y0, x1, y1),
-      hitRect      = rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad),
-      currentLin   = cur,
-      valueAtClick = cur,
-    }
-    gesture = { mode = 'faderDrag' }
-    if not wv:pokeEdgeGain(arrowHitIdx, cur) then
-      wv:setEdgeGain(arrowHitIdx, cur)
-    end
-    -- Warp the OS cursor onto the knob. The OS↔ImGui delta at the click
-    -- moment converts; macOS's bottom-up screen y needs the vertical flip.
-    if reaper.JS_Mouse_SetPosition then
-      local knobP = pFromDb(linToDb(cur))
-      local knobImX, knobImY = p.toScreen((x0 + x1) / 2,
-                                          y0 + (1 - knobP) * WIRE_FADER_H)
-      local osMx, osMy = reaper.GetMousePosition()
-      local os       = reaper.GetOS()
-      local yFlip    = (os:find('OSX') or os:find('macOS')) and -1 or 1
-      reaper.JS_Mouse_SetPosition(
-        math.floor(osMx + (knobImX - mx) + 0.5),
-        math.floor(osMy + yFlip * (knobImY - my) + 0.5))
-    end
-  end
-
-  -- Before the click branch: a double-click also raises IsMouseClicked, which
-  -- would otherwise jump the fader to the second press's y.
-  local faderDblClicked = fader and not faderDragging()
-    and ImGui.IsMouseDoubleClicked(ctx, 0)
-    and inRect(lmx, lmy, fader.rect)
-  if faderDblClicked then
-    fader.currentLin = 1.0
-    wv:setEdgeGain(fader.edgeIdx, 1.0)
-  end
-
-  -- In-strip click owns the mouse: jump the value, start a drag, and
-  -- materialise the CU (setEdgeGain) if it doesn't exist yet.
-  local faderClicked = fader and not faderDragging() and not faderDblClicked
-    and ImGui.IsMouseClicked(ctx, 0)
-    and inRect(lmx, lmy, fader.rect)
-  if faderClicked then
-    local clickLin = pixelYToLin(lmy, fader.rect.y0)
-    fader.valueAtClick = wv:edgeGain(fader.edgeIdx)
-    fader.currentLin   = clickLin
-    gesture = { mode = 'faderDrag' }
-    if not wv:pokeEdgeGain(fader.edgeIdx, clickLin) then
-      wv:setEdgeGain(fader.edgeIdx, clickLin)
-    end
-  end
-  local faderConsumed = arrowLmbClicked or faderClicked or faderDblClicked
-
-  -- Debounce to one setEdgeGain per scroll gesture so undo coalesces; the
-  -- close-branch above commits if the cursor leaves before the window elapses.
-  if fader and not faderDragging() then
-    local wheelV = select(1, ImGui.GetMouseWheel(ctx))
-    if wheelV ~= 0 and inRect(lmx, lmy, fader.rect) then
-      local step = shiftHeld and WIRE_FADER_WHEEL_DB_FINE or WIRE_FADER_WHEEL_DB
-      local db   = linToDb(fader.currentLin)
-      if db == -math.huge then db = -60 end
-      db = math.min(WIRE_FADER_TOP_DB, db + wheelV * step)
-      local lin = (db <= -60) and 0 or dbToLin(db)
-      fader.currentLin = lin
-      if not wv:pokeEdgeGain(fader.edgeIdx, lin) then
-        wv:setEdgeGain(fader.edgeIdx, lin)
-      end
-      fader.wheelPending    = true
-      fader.wheelIdleFrames = 0
-    elseif fader.wheelPending then
-      fader.wheelIdleFrames = (fader.wheelIdleFrames or 0) + 1
-      if fader.wheelIdleFrames > WIRE_FADER_WHEEL_IDLE_FRAMES then
-        wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
-        fader.wheelPending = false
-      end
-    end
-  end
+  local faderConsumed = faderInput(frame)
 
   -- Double-click a node body: sampler dives to sample page, other fx floats
   -- its FX window. dblConsumed blocks this press from starting a drag.

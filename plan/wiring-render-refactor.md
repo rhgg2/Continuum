@@ -34,20 +34,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: extract the fader input phase (§ Stage 3 ⑦)
 - 2026-08-26 wiring: extract the canvas draw pass (§ Stage 3 (6))
 - 2026-08-26 wiring: extract the hover resolution phase (§ Stage 3 ⑤)
 - 2026-08-26 wiring: extract the frame carrier and the head phases (§ Stage 3 (1)-(4))
-- 2026-08-26 wiring: document the gesture state machine (§ Docs)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-4. **Fader input** (§ Stage 3 ⑦) — `faderInput(frame)` @2085–2169: the
-   triangle LMB open with the OS cursor warp, the double-click unity reset,
-   the in-strip click, and the wheel debounce; it returns `faderConsumed` for
-   the mousedown gate. The Esc dispatch @2078–2083 stays in the sequencing.
 5. **The gesture transition and RMB** (§ Stage 3 ⑦) — `beginGesture(frame)`
    @2189–2319: the idle→mode precedence chain (badge > shift-hover >
    wire-end > tag > bar > body > band) with the `gesture update` dispatch on
