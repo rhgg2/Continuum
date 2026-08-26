@@ -1,7 +1,8 @@
 # wiringRender refactor — plan
 
-> source: `design/wiring-render-refactor.md` — synthesis compiled from
-> there; don't design here.
+> closed 2026-08-27. The model landed in `docs/wiringPage.md` and in the
+> `--shape:` annotations of `wiringRender.lua`; this is the record of the
+> work, not a live plan.
 
 ## Phases
 
@@ -18,15 +19,15 @@
    `closeTransients`, and docs/wiringPage.md. Landed 2026-08-26, 3 commits.
 4. **Phase 4 — Decompose renderCanvas** (§ Stage 3) — the eight named phases
    under ~150 lines of sequencing, plus `renderWireMenu` / `renderNodeMenu`.
-   ← in flight
+   Landed 2026-08-27, 7 commits.
 
 ## Standing constraints
 
 - Behaviour-preserving throughout; when the faithful port and the nicer
   version differ, port faithfully and flag the niceness in the report.
 - No renderer specs. Verification is the full suite green (load/syntax
-  breakage) plus Richard walking the checklist at the foot of the design
-  doc after every phase.
+  breakage) plus Richard walking the checklist after every phase (now
+  `docs/wiringPage.md`).
 - Phases 2 and 3 are the design doc's single stage 2, split for context.
   Between them the guard chains read through one transitional helper
   (`local function busy() return gesture or wireDraft or busDraft end`),
@@ -44,3 +45,5 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+(empty)
