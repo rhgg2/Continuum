@@ -33,10 +33,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: move the bus draft into the machine (§ Stage 2)
 - 2026-08-26 wiring: move the wire draft into the machine (§ Stage 2)
 - 2026-08-26 wiring: move the tag, bus and fader drags into the machine (§ Stage 2)
 - 2026-08-26 wiring: give gestures one state machine, with nodeDrag and band (§ Stage 2)
-- 2026-08-26 wiring: extract one tooltip helper (§ Stage 1)
 
 ## Now
 
@@ -44,15 +44,6 @@
 
 ## Queued (current phase; one-liners)
 
-2. **busDraft into the machine, and `busy()` retired** (§ Stage 2 Relocation
-   map, § Guard rewrites, § Esc and lifecycle) — `modes.busDraft`, armed by the
-   node-menu `Selectable` @2387, with the synthetic `@busDraft` busView and
-   wire stamping @1808–1826 as `inject`, the click-drop `wv:insertBus` @2132 as
-   `update`, and the Esc clear @2022 as `escCancels`. With both drafts inside, the
-   five guard chains @1860, @1879, @2115, @2143, @2316 become `not gesture`
-   plus their orthogonal axes, `busy()` goes, and `closeTransients` @2541
-   collapses to `gesture = nil` — which now also drops an in-flight busDraft on
-   unbind, so report the change.
 3. **Document the machine** (§ Docs) — rewrite docs/wiringPage.md § The gesture
    state machine around the `gesture` variable, the seven modes with the
    busDraft / busDrag split, the inject / update / escCancels phases and the

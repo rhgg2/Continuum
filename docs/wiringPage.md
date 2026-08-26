@@ -243,8 +243,8 @@ Creation has three entries, all landing the same `kind='bus'` node:
 - **Picker** — a synthetic *Buss* entry in the add-FX picker drops an unwired bar
   at the cursor (`wv:addBusNode`).
 - **Node menu, per port** — for each audio port carrying an un-bussed wire
-  (`bussablePorts`), a *Buss in/out N (horizontal|vertical)* entry arms
-  `busDraft {nodeId, dir, port, orient}`. The bar is then glued to the cursor and
+  (`bussablePorts`), a *Buss in/out N (horizontal|vertical)* entry arms the
+  `busDraft` gesture (`{nodeId, dir, port, orient}`). The bar is then glued to the cursor and
   a canvas click drops it (`wv:insertBus` — mint the node and re-point that
   port's edges through it, audio-identical under the splice); Esc cancels. While
   armed, a synthetic claim-shaped busView is injected and the wires it would own

@@ -101,7 +101,6 @@ local ORIENT_VEC = {
 -- captures, forbidden-set and sticky/pin semantics — is the model in
 -- docs/wiringPage.md. The shapes below are the only at-site reference.
 local gesture   = nil  -- the one live gesture, nil = idle; payload shapes and hooks at `modes`
-local busDraft   = nil  -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
@@ -1642,11 +1641,6 @@ end
 
 ----- Gesture machine
 
--- Transitional: busDraft is still outside the machine and gates the guard chains too.
-local function busy()
-  return gesture or busDraft
-end
-
 -- The fader overlay coexists with idle hovering; only its drag is a gesture.
 local function faderDragging()
   return gesture and gesture.mode == 'faderDrag'
@@ -1658,7 +1652,7 @@ local function wireDrafting()
 end
 
 -- `frame` carries the mouse, view lists and geometry the hooks read; inject(g, frame)
--- feeds transients to the geometry pass, update(g, frame) ticks/commits (false clears the gesture); escCancels means Esc clears it outright.
+-- feeds transients to the geometry pass, update(g, frame) ticks/commits; either clears the gesture by returning false, and escCancels means Esc clears it outright.
 local modes = {}
 
 -- { mx0, my0, starts = { [id] = {x,y}, … } }
@@ -1781,6 +1775,41 @@ modes.tagDrag = {
   end,
 }
 
+-- { nodeId, dir, port, orient } — node-menu buss; the bar is glued to the cursor, a click drops it
+modes.busDraft = {
+  escCancels = true,
+  inject = function(g, frame)
+    -- Live preview: a synthetic fan busView glued to the cursor so the rail
+    -- render draws it, then stamp the wires its claim would own.
+    local nv = frame.nodesById[g.nodeId]
+    if not nv then return false end
+    util.add(frame.busViewsList,
+             { id = '@busDraft', pos = { x = frame.lmx, y = frame.lmy }, orient = g.orient,
+               claim = { node = g.nodeId, port = g.port, dir = g.dir } })
+    local toEnd = g.dir == 'in'
+    for _, wView in ipairs(frame.wireViewsList) do
+      if not wView.bus and wView.type == 'audio' then
+        local claims
+        if toEnd then claims = wView.to == g.nodeId and wView.toPort == g.port
+        else          claims = wView.from == g.nodeId and wView.fromPort == g.port end
+        if claims then
+          wView.bus = { busId = '@busDraft', bussedEnd = toEnd and 'to' or 'from' }
+        end
+      end
+    end
+  end,
+  update = function(g, frame)
+    -- A left click drops the bar where the cursor sits and re-points the
+    -- port's wires through it.
+    if not (frame.overCanvas and ImGui.IsMouseClicked(ctx, 0)) then return end
+    if frame.nodesById[g.nodeId] then
+      wv:insertBus{ pos = { x = frame.lmx, y = frame.lmy }, orient = g.orient,
+                    node = g.nodeId, port = g.port, dir = g.dir }
+    end
+    return false
+  end,
+}
+
 -- { busId, ov, grip, active, posAxial, posPerp, aLo, aHi, tap*, mx0, my0, … } — built by makeBusDrag
 modes.busDrag = {
   inject = function(g, frame)
@@ -1855,35 +1884,12 @@ local function renderCanvas(w, h)
   -- geometry can't drift. Draw order is in docs/wiringPage.md.
   local wireViewsList = wv:wireViews()
   local busViewsList  = wv:busViews()
-  -- Live bus-creation preview: the bar is glued to the cursor; inject a synthetic fan
-  -- busView so the rail render draws it, then stamp the wires its claim would own.
-  if busDraft then
-    local nv = nodesById[busDraft.nodeId]
-    if nv then
-      util.add(busViewsList, { id = '@busDraft', pos = { x = lmx, y = lmy }, orient = busDraft.orient,
-                               claim = { node = busDraft.nodeId, port = busDraft.port,
-                                         dir = busDraft.dir } })
-      local toEnd = busDraft.dir == 'in'
-      for _, wView in ipairs(wireViewsList) do
-        if not wView.bus and wView.type == 'audio' then
-          local claims
-          if toEnd then claims = wView.to == busDraft.nodeId and wView.toPort == busDraft.port
-          else          claims = wView.from == busDraft.nodeId and wView.fromPort == busDraft.port end
-          if claims then
-            wView.bus = { busId = '@busDraft', bussedEnd = toEnd and 'to' or 'from' }
-          end
-        end
-      end
-    else
-      busDraft = nil
-    end
-  end
-  local frame = { mx = mx, my = my, lmx = lmx, lmy = lmy,
+  local frame = { mx = mx, my = my, lmx = lmx, lmy = lmy, overCanvas = overCanvas,
                   nodeViews = nodeViews, nodesById = nodesById,
                   wireViewsList = wireViewsList, busViewsList = busViewsList }
   if gesture then
     local inject = modes[gesture.mode].inject
-    if inject then inject(gesture, frame) end
+    if inject and inject(gesture, frame) == false then gesture = nil end
   end
   local selection = frame.selection or wv:selection()
 
@@ -1910,7 +1916,7 @@ local function renderCanvas(w, h)
   -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
   -- Suppressed during any active gesture so neither fires under a drag.
   local wireEndHover, tagHover
-  if not busy() and not shiftHeld then
+  if not gesture and not shiftHeld then
     wireEndHover = wireEndHit(segs, lmx, lmy)
     tagHover     = sourceTagHit(p, segs, wireViewsList, lmx, lmy)
   end
@@ -1929,7 +1935,7 @@ local function renderCanvas(w, h)
     end
   end
   local arrowHitIdx
-  if not busy() and not shiftHeld then
+  if not gesture and not shiftHeld then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
@@ -2076,9 +2082,6 @@ local function renderCanvas(w, h)
      and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     gesture = nil
   end
-  if busDraft and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-    busDraft = nil
-  end
 
   -- LMB on the triangle opens at the current value, warps the OS cursor to
   -- the knob, and the faderDrag gesture suppresses the in-strip jump-set below.
@@ -2169,7 +2172,7 @@ local function renderCanvas(w, h)
   -- Double-click a node body: sampler dives to sample page, other fx floats
   -- its FX window. dblConsumed blocks this press from starting a drag.
   local dblConsumed = false
-  if not busy() and not shiftHeld and not fader and overCanvas
+  if not gesture and not shiftHeld and not fader and overCanvas
      and ImGui.IsMouseDoubleClicked(ctx, 0) then
     local hit = nodeUnderMouse(nodeViews, lmx, lmy)
     if hit then
@@ -2184,20 +2187,9 @@ local function renderCanvas(w, h)
     end
   end
 
-  -- Bus-creation gesture (node-menu launched): the bar is glued to the cursor; a
-  -- left click drops it where the cursor sits and re-points the port's wires through it.
-  if busDraft and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
-    local dropped = busDraft
-    busDraft = nil
-    if nodesById[dropped.nodeId] then
-      wv:insertBus{ pos = { x = lmx, y = lmy }, orient = dropped.orient,
-                    node = dropped.nodeId, port = dropped.port, dir = dropped.dir }
-    end
-  end
-
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
-  if not faderConsumed and not dblConsumed and not busy()
+  if not faderConsumed and not dblConsumed and not gesture
       and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
@@ -2329,7 +2321,7 @@ local function renderCanvas(w, h)
 
   -- RMB precedence: triangle → per-wire menu; node body / buss bar → node
   -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
-  if not busy() and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
+  if not gesture and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
       wireMenu = { edgeIdx = arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
@@ -2400,7 +2392,8 @@ local function renderCanvas(w, h)
             local label = 'Buss ' .. dir .. ' ' .. port
             for _, o in ipairs({ { 'H', 'horizontal' }, { 'V', 'vertical' } }) do
               if ImGui.Selectable(ctx, label .. ' (' .. o[2] .. ')') then
-                busDraft = { nodeId = nodeMenu.nodeId, dir = dir, port = port, orient = o[1] }
+                gesture = { mode = 'busDraft', nodeId = nodeMenu.nodeId,
+                            dir = dir, port = port, orient = o[1] }
                 ImGui.CloseCurrentPopup(ctx)
               end
             end

@@ -70,6 +70,7 @@ local gesture = nil
 
 -- modes[mode] = {
 --   inject = fn(g, frame),  -- pre-geometry transients (runs before wireSegments)
+--                           -- return false to clear
 --   update = fn(g, frame),  -- post-hover tick + mouseup commit; return false to clear
 --   escCancels = true,      -- Esc clears the gesture; only the draft modes bind it
 -- }

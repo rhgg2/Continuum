@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — An inject hook may clear its gesture by returning false, as update does;
+  busDraft's preview needs it when the node the draft hangs off has vanished. Folding busDraft into
+  the one gesture variable also stops its drop click falling through into the mousedown chain, so
+  dropping a bus no longer arms a band or a node drag on the same press.
+
 - **2026-08-26** — A wiring gesture mode declares `escCancels = true` rather than carrying a
   `cancel` hook. Both draft modes cancel by clearing and do nothing else, so a hook would be an
   empty closure; a mode that later needs teardown can grow one.
