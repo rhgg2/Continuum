@@ -21,15 +21,19 @@ in full, and any relevant related material linked from there.
 
 Split the implementation work into phases. Each phase should be
 approximately 2-4 commits of <150k context size. One phase is totally
-acceptable.
+acceptable. It's ok to make an informed guess on sizing, and leave the
+thorough understanding of the code base to the implementation steps.
 
 ## 3. Write the file and update the current stack
 
 Write `plan/<slug>.md` to the skeleton below, and push the new
 filename onto the top of `plan/CURRENT`, so it becomes the current
-plan. Stage the new plan and the CURRENT edit as one `apply_patches`
-call, then stop and point at `/plan-next`. Name the plan you pushed in
-front of, if there was one.
+plan. Update the new plan's design document to say that it is in
+flight; if you pushed in front of an existing plan, update that design
+document to say that it is parked.
+
+Stage the plan, design and CURRENT edits as one `apply_patches` call,
+then stop and point at `/plan-next`. 
 
 ```markdown
 # <programme> — plan

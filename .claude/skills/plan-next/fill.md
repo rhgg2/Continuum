@@ -24,7 +24,8 @@ from it without re-reading the whole doc.
 
 Each commit should be landable in <150k context, but don't get too
 granular: an item that's 2-5 lines of production code is likely too
-small.
+small. It's ok to make an informed guess on sizing, and leave the
+thorough understanding of the code base to the implementation steps.
    
 If the split exposes a decision the design doc leaves open, settle it
 with me before writing the queue; `/commit` records it.
