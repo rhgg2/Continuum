@@ -28,12 +28,42 @@ wiring state to save or restore — the graph is project-scoped.
 
 ## The gesture state machine
 
-Editing flows through page-local, ephemeral gesture state (never
-persisted). At most one gesture is live at a time, and mousedown
-resolves them in a fixed precedence:
+Editing flows through one page-local variable, `gesture` — nil when
+idle, otherwise a table carrying its `mode` and that mode's payload. The
+state is ephemeral, never persisted, and at most one gesture is live at
+a time.
 
-> **shift-hover (new wire) > wire-end-hover (redraft) > body-hit (drag)
-> > empty canvas (band).**
+A parallel `modes` table holds the hooks, and a mode declares only the
+ones it needs:
+
+- **`inject(g, frame)`** runs before the frame's geometry pass and writes
+  the gesture's in-flight state over the view lists — a dragged node's
+  pos, a dragged tag's offset, a synthetic buss bar. One geometry pass
+  then serves both the preview and the frame that commits it, so the two
+  cannot drift.
+- **`update(g, frame)`** runs after hover resolution, where the drop target
+  is known: it ticks the gesture and commits it on mouseup.
+- **`escCancels`** binds Esc to dropping the gesture. Only the two drafts
+  declare it, and neither has teardown beyond the clear, so a flag serves
+  until a mode needs a hook.
+
+Either hook clears the gesture by returning false. `frame` is the
+per-frame bundle of mouse, view lists and geometry the hooks read, and
+inject's transients are written back into it.
+
+Mousedown resolves the modes it can start in a fixed precedence:
+
+> **shift-hover (new wire) > wire-end-hover (redraft) > source tag >
+> node body (drag) > buss bar > empty canvas (band).**
+
+A node body under a bar still wins, so the bar catches only the presses
+no node claims. An M/B badge click and a click on a chevron or between
+list rows both sit ahead of the chain and consume the press without
+starting anything. While a gesture is live, wire-end, source-tag and
+triangle hover are all suppressed, so nothing under the cursor competes
+with the drag.
+
+The seven modes:
 
 - **`nodeDrag`** — mousedown on a node body. Maps every node under the drag
   (the grabbed one alone if unselected, else the whole selection) to its
@@ -62,8 +92,19 @@ resolves them in a fixed precedence:
   `forbidden` is consulted at hover time (cycle-blocked targets get no
   visual encouragement) and again at the mouseup commit. Cleared on
   commit / delete / cancel / Esc.
+- **`tagDrag`** — mousedown on a source's tag. The tag follows the cursor,
+  and mouseup past the click threshold writes its position as an offset
+  from the consumer node it hangs off.
+- **`busDraft`** — a bar glued to the cursor, armed from the node menu and
+  dropped by a canvas click (*Buss gestures*).
+- **`busDrag`** — move or resize a committed bar (*Buss gestures*).
+- **`faderDrag`** — the mid-wire fader's knob drag. It declares no hooks:
+  the per-frame poke and the release commit stay inline with the fader
+  overlay, between the two hover passes their result feeds. Its role in
+  the machine is only to mark a gesture live.
 
-Two non-drag gestures sit outside the precedence chain:
+Two inputs resolve at the canvas but hold no state, so they are not
+modes:
 
 - **Double-click a node body** dives: a Continuum Sampler node opens the
   sample page bound to its track (via `diveToSampler`); any other fx node

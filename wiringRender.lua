@@ -97,10 +97,9 @@ local ORIENT_VEC = {
 
 
 ----- Gesture state (page-local; ephemeral, never persisted)
--- The gesture state machine — mousedown precedence, what each table
--- captures, forbidden-set and sticky/pin semantics — is the model in
--- docs/wiringPage.md. The shapes below are the only at-site reference.
-local gesture   = nil  -- the one live gesture, nil = idle; payload shapes and hooks at `modes`
+-- The gesture state machine — precedence, mode hooks and forbidden/sticky
+-- semantics live in docs/wiringPage.md; payload shapes sit at `modes` below.
+local gesture   = nil  -- the one live gesture, nil = idle
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)

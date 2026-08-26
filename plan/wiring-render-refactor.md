@@ -15,9 +15,10 @@
 3. **Phase 3 — The draft modes, guards and docs** (§ Stage 2 Relocation map,
    § Guard rewrites, § Esc and lifecycle, § Docs) — wireDraft and busDraft with
    their commit ladders, the five guard chains rewritten to `not gesture`,
-   `closeTransients`, and docs/wiringPage.md. ← in flight
+   `closeTransients`, and docs/wiringPage.md. Landed 2026-08-26, 3 commits.
 4. **Phase 4 — Decompose renderCanvas** (§ Stage 3) — the eight named phases
    under ~150 lines of sequencing, plus `renderWireMenu` / `renderNodeMenu`.
+   ← in flight
 
 ## Standing constraints
 
@@ -33,10 +34,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: document the gesture state machine (§ Docs)
 - 2026-08-26 wiring: move the bus draft into the machine (§ Stage 2)
 - 2026-08-26 wiring: move the wire draft into the machine (§ Stage 2)
 - 2026-08-26 wiring: move the tag, bus and fader drags into the machine (§ Stage 2)
-- 2026-08-26 wiring: give gestures one state machine, with nodeDrag and band (§ Stage 2)
 
 ## Now
 
@@ -44,9 +45,4 @@
 
 ## Queued (current phase; one-liners)
 
-3. **Document the machine** (§ Docs) — rewrite docs/wiringPage.md § The gesture
-   state machine around the `gesture` variable, the seven modes with the
-   busDraft / busDrag split, the inject / update / escCancels phases and the
-   unchanged mousedown precedence, keeping the per-mode semantics prose
-   re-anchored to mode names. Refresh the `--shape:` block at the state decls
-   @99–105.
+(empty — phase 3 complete once the item above lands.)
