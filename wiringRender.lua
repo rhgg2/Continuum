@@ -102,16 +102,14 @@ local ORIENT_VEC = {
 -- docs/wiringPage.md. The shapes below are the only at-site reference.
 local gesture   = nil  -- the one live gesture, nil = idle; payload shapes and hooks at `modes`
 local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
-local tagDrag   = nil  -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
 local busDraft   = nil  -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
-local busDrag    = nil  -- { busId, ov, posAxial, posPerp, extLo, extHi, nearIsHi, tap*, … } — live buss-bar move/resize
 local shiftWas  = false
 local pinned     = {}   -- pinned[nodeId][portIdx] = true (promoted to a standing chip)
 local listOpenId = nil  -- node whose spillover list is engaged (chevron-gated)
 local engagedId  = nil  -- node holding hover priority, probed before the per-node scan
 local hoverFreeze = nil  -- { x, y } | nil — suppresses shift-hover until the cursor moves
 local sticky = nil  -- { nodeId, side } — pinned node's port row, kept visible post-click
-local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, dragging?, wheelPending?, wheelIdleFrames? }
+local fader = nil  -- { edgeIdx, rect={x0,y0,x1,y1}, hitRect, currentLin, valueAtClick?, wheelPending?, wheelIdleFrames? }
 local wireMenu = nil  -- { edgeIdx, anchorX, anchorY } — set on RMB-on-triangle; cleared when BeginPopup returns false
 local nodeMenu = nil  -- { nodeId, anchorX, anchorY } — set on RMB on a node body or buss bar; cleared when BeginPopup returns false
 local paletteSource = nil  -- nodeId the palette del button acts on; cleared when the row vanishes
@@ -1522,11 +1520,12 @@ local function makeBusDrag(rail, mx, my)
   local aLo, aHi = math.min(b0, b1), math.max(b0, b1)
   local grabAxial = mx * ov.ax + my * ov.ay
   local zone = math.min(BUS_END_ZONE, (aHi - aLo) / 3)
-  local mode, active = 'move', nil
-  if grabAxial >= aHi - zone then mode, active = 'resize', 'hi'
-  elseif grabAxial <= aLo + zone then mode, active = 'resize', 'lo' end
+  local grip, active = 'move', nil
+  if grabAxial >= aHi - zone then grip, active = 'resize', 'hi'
+  elseif grabAxial <= aLo + zone then grip, active = 'resize', 'lo' end
   return {
-    busId = rail.busId, ov = ov, mode = mode, active = active,
+    mode = 'busDrag',
+    busId = rail.busId, ov = ov, grip = grip, active = active,
     posAxial = px * ov.ax + py * ov.ay, posPerp = px * ov.nx + py * ov.ny,
     perp = px * ov.nx + py * ov.ny, grabPerp = mx * ov.nx + my * ov.ny,
     aLo = aLo, aHi = aHi, aLo0 = aLo, aHi0 = aHi,
@@ -1540,7 +1539,7 @@ local function busDragApply(bd, mx, my)
   local ov = bd.ov
   local qa = mx * ov.ax + my * ov.ay
   bd.perp = bd.posPerp + (mx * ov.nx + my * ov.ny) - bd.grabPerp
-  if bd.mode == 'move' then
+  if bd.grip == 'move' then
     local d = qa - bd.grabAxial
     bd.aLo, bd.aHi = bd.aLo0 + d, bd.aHi0 + d
     return
@@ -1647,7 +1646,12 @@ end
 
 -- Transitional: the modes still outside the machine gate the guard chains too.
 local function busy()
-  return gesture or wireDraft or tagDrag or busDraft or busDrag
+  return gesture or wireDraft or busDraft
+end
+
+-- The fader overlay coexists with idle hovering; only its drag is a gesture.
+local function faderDragging()
+  return gesture and gesture.mode == 'faderDrag'
 end
 
 -- `frame` carries the mouse, view lists and geometry the hooks read; inject(g, frame)
@@ -1698,6 +1702,59 @@ modes.band = {
     return false
   end,
 }
+
+-- { edgeIdx, mx0, my0, sx0, sy0 } — a source edge's tag dragged to a custom canvas pos
+modes.tagDrag = {
+  inject = function(g, frame)
+    -- A transient fromOffset (mirroring how node drag mutates pos), so the one
+    -- geometry pass handles both star and bus tooth.
+    local wire = frame.wireViewsList[g.edgeIdx]
+    local consumer = wire and frame.nodesById[wire.to]
+    if consumer then
+      wire.fromOffset = { x = g.sx0 + (frame.lmx - g.mx0) - consumer.pos.x,
+                          y = g.sy0 + (frame.lmy - g.my0) - consumer.pos.y }
+    end
+  end,
+  update = function(g, frame)
+    if ImGui.IsMouseDown(ctx, 0) then return end
+    local seg      = frame.segs[g.edgeIdx]
+    local consumer = seg and frame.nodesById[seg.w.to]
+    local moved = math.abs(frame.lmx - g.mx0) >= CLICK_THRESH
+               or math.abs(frame.lmy - g.my0) >= CLICK_THRESH
+    if moved and consumer then
+      wv:setSourceTagPos(seg.w,
+        { x = seg.sx - consumer.pos.x, y = seg.sy - consumer.pos.y })
+    end
+    return false
+  end,
+}
+
+-- { busId, ov, grip, active, posAxial, posPerp, aLo, aHi, tap*, mx0, my0, … } — built by makeBusDrag
+modes.busDrag = {
+  inject = function(g, frame)
+    -- The in-flight pos + extent feed the geometry pass (mirroring tagDrag).
+    busDragApply(g, frame.lmx, frame.lmy)
+    local x, y, lo, hi = busDragPos(g)
+    local node = frame.nodesById[g.busId]
+    if node then node.pos.x, node.pos.y = x, y end
+    for _, bv in ipairs(frame.busViewsList) do
+      if bv.id == g.busId then bv.ext = { lo = lo, hi = hi } end
+    end
+  end,
+  update = function(g, frame)
+    if ImGui.IsMouseDown(ctx, 0) then return end
+    if math.abs(frame.lmx - g.mx0) >= CLICK_THRESH
+       or math.abs(frame.lmy - g.my0) >= CLICK_THRESH then
+      local x, y, lo, hi = busDragPos(g)
+      wv:moveBus(g.busId, { x = x, y = y }, { lo = lo, hi = hi })
+    end
+    return false
+  end,
+}
+
+-- No hooks: the poke-per-frame and release commit stay inline with the fader
+-- overlay, between the two hover passes their result feeds.
+modes.faderDrag = {}
 
 ----- Canvas
 
@@ -1769,28 +1826,8 @@ local function renderCanvas(w, h)
       busDraft = nil
     end
   end
-  -- Tag drag feeds a transient fromOffset (mirroring how node drag mutates pos),
-  -- so the one geometry pass below handles both star and bus tooth. mouseup commits.
-  if tagDrag then
-    local wire = wireViewsList[tagDrag.edgeIdx]
-    local consumer = wire and nodesById[wire.to]
-    if consumer then
-      wire.fromOffset = { x = tagDrag.sx0 + (lmx - tagDrag.mx0) - consumer.pos.x,
-                          y = tagDrag.sy0 + (lmy - tagDrag.my0) - consumer.pos.y }
-    end
-  end
-  -- Live buss-bar move feeds the in-flight pos + extent into the geometry pass
-  -- (mirroring tagDrag); mouseup commits via wv:moveBus.
-  if busDrag then
-    busDragApply(busDrag, lmx, lmy)
-    local x, y, lo, hi = busDragPos(busDrag)
-    local node = nodesById[busDrag.busId]
-    if node then node.pos.x, node.pos.y = x, y end
-    for _, bv in ipairs(busViewsList) do
-      if bv.id == busDrag.busId then bv.ext = { lo = lo, hi = hi } end
-    end
-  end
-  local frame = { lmx = lmx, lmy = lmy, nodeViews = nodeViews }
+  local frame = { lmx = lmx, lmy = lmy, nodeViews = nodeViews, nodesById = nodesById,
+                  wireViewsList = wireViewsList, busViewsList = busViewsList }
   if gesture then
     local inject = modes[gesture.mode].inject
     if inject then inject(gesture, frame) end
@@ -1827,7 +1864,7 @@ local function renderCanvas(w, h)
 
   -- Tick a live fader drag: poke per frame, commit one setEdgeGain on
   -- release if the value moved from where the click set it.
-  if fader and fader.dragging then
+  if fader and faderDragging() then
     local lin = pixelYToLin(lmy, fader.rect.y0)
     fader.currentLin = lin
     wv:pokeEdgeGain(fader.edgeIdx, lin)
@@ -1835,18 +1872,18 @@ local function renderCanvas(w, h)
       if fader.currentLin ~= fader.valueAtClick then
         wv:setEdgeGain(fader.edgeIdx, fader.currentLin)
       end
-      fader.dragging = false
+      gesture = nil
     end
   end
   local arrowHitIdx
-  if not busy() and not shiftHeld and not (fader and fader.dragging) then
+  if not busy() and not shiftHeld then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
   -- Opening is click-driven (below): this block only keeps / closes.
   local stillVisible = false
   if fader then
-    if fader.dragging then
+    if faderDragging() then
       stillVisible = true
     elseif arrowHitIdx == fader.edgeIdx then
       stillVisible = true
@@ -1855,7 +1892,7 @@ local function renderCanvas(w, h)
     end
   end
   if stillVisible then
-    if not fader.dragging and not fader.wheelPending then
+    if not faderDragging() and not fader.wheelPending then
       fader.currentLin = wv:edgeGain(fader.edgeIdx)
     end
   else
@@ -1987,7 +2024,7 @@ local function renderCanvas(w, h)
   end
 
   -- LMB on the triangle opens at the current value, warps the OS cursor to
-  -- the knob, and dragging=true suppresses the in-strip jump-set below.
+  -- the knob, and the faderDrag gesture suppresses the in-strip jump-set below.
   local arrowLmbClicked = arrowHitIdx and not fader and not wireMenu
     and ImGui.IsMouseClicked(ctx, 0)
   if arrowLmbClicked then
@@ -2001,8 +2038,8 @@ local function renderCanvas(w, h)
       hitRect      = rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad),
       currentLin   = cur,
       valueAtClick = cur,
-      dragging     = true,
     }
+    gesture = { mode = 'faderDrag' }
     if not wv:pokeEdgeGain(arrowHitIdx, cur) then
       wv:setEdgeGain(arrowHitIdx, cur)
     end
@@ -2023,7 +2060,7 @@ local function renderCanvas(w, h)
 
   -- Before the click branch: a double-click also raises IsMouseClicked, which
   -- would otherwise jump the fader to the second press's y.
-  local faderDblClicked = fader and not fader.dragging
+  local faderDblClicked = fader and not faderDragging()
     and ImGui.IsMouseDoubleClicked(ctx, 0)
     and inRect(lmx, lmy, fader.rect)
   if faderDblClicked then
@@ -2033,14 +2070,14 @@ local function renderCanvas(w, h)
 
   -- In-strip click owns the mouse: jump the value, start a drag, and
   -- materialise the CU (setEdgeGain) if it doesn't exist yet.
-  local faderClicked = fader and not fader.dragging and not faderDblClicked
+  local faderClicked = fader and not faderDragging() and not faderDblClicked
     and ImGui.IsMouseClicked(ctx, 0)
     and inRect(lmx, lmy, fader.rect)
   if faderClicked then
     local clickLin = pixelYToLin(lmy, fader.rect.y0)
     fader.valueAtClick = wv:edgeGain(fader.edgeIdx)
     fader.currentLin   = clickLin
-    fader.dragging     = true
+    gesture = { mode = 'faderDrag' }
     if not wv:pokeEdgeGain(fader.edgeIdx, clickLin) then
       wv:setEdgeGain(fader.edgeIdx, clickLin)
     end
@@ -2049,7 +2086,7 @@ local function renderCanvas(w, h)
 
   -- Debounce to one setEdgeGain per scroll gesture so undo coalesces; the
   -- close-branch above commits if the cursor leaves before the window elapses.
-  if fader and not fader.dragging then
+  if fader and not faderDragging() then
     local wheelV = select(1, ImGui.GetMouseWheel(ctx))
     if wheelV ~= 0 and inRect(lmx, lmy, fader.rect) then
       local step = shiftHeld and WIRE_FADER_WHEEL_DB_FINE or WIRE_FADER_WHEEL_DB
@@ -2203,14 +2240,15 @@ local function renderCanvas(w, h)
       }
     elseif tagHover then
       local seg = segs[tagHover]
-      tagDrag = { edgeIdx = tagHover, mx0 = lmx, my0 = lmy, sx0 = seg.sx, sy0 = seg.sy }
+      gesture = { mode = 'tagDrag', edgeIdx = tagHover,
+                  mx0 = lmx, my0 = lmy, sx0 = seg.sx, sy0 = seg.sy }
     else
       -- A buss bar grabs into its own resize gesture (busDrag); a real node under
       -- a bar still wins (nodeUnderMouse skips busses, so bodyHit is never one).
       local bodyHit = nodeUnderMouse(nodeViews, lmx, lmy)
       local rail    = not bodyHit and busBarAt(busRails, lmx, lmy)
       if rail then
-        busDrag = makeBusDrag(rail, lmx, lmy)
+        gesture = makeBusDrag(rail, lmx, lmy)
       elseif bodyHit then
         local starts = {}
         if selection[bodyHit.id] then
@@ -2268,23 +2306,6 @@ local function renderCanvas(w, h)
     end
     wireDraft  = nil
     listOpenId = nil   -- close any target-side spillover that was open
-  elseif tagDrag and not ImGui.IsMouseDown(ctx, 0) then
-    local seg      = segs[tagDrag.edgeIdx]
-    local consumer = seg and nodesById[seg.w.to]
-    local moved = math.abs(lmx - tagDrag.mx0) >= CLICK_THRESH
-               or math.abs(lmy - tagDrag.my0) >= CLICK_THRESH
-    if moved and consumer then
-      wv:setSourceTagPos(seg.w,
-        { x = seg.sx - consumer.pos.x, y = seg.sy - consumer.pos.y })
-    end
-    tagDrag = nil
-  elseif busDrag and not ImGui.IsMouseDown(ctx, 0) then
-    if math.abs(lmx - busDrag.mx0) >= CLICK_THRESH
-       or math.abs(lmy - busDrag.my0) >= CLICK_THRESH then
-      local x, y, lo, hi = busDragPos(busDrag)
-      wv:moveBus(busDrag.busId, { x = x, y = y }, { lo = lo, hi = hi })
-    end
-    busDrag = nil
   elseif gesture then
     local update = modes[gesture.mode].update
     if update and update(gesture, frame) == false then gesture = nil end
@@ -2517,7 +2538,7 @@ function wr:toolbarSegments() return {} end
 
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()
-  gesture, wireDraft, tagDrag, busDrag, shiftWas = nil, nil, nil, nil, false
+  gesture, wireDraft, shiftWas = nil, nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
   fader, wireMenu = nil, nil
 end

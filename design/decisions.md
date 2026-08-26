@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-26** — A fader drag counts as a live gesture in the wiring guard chains, so a
+  neighbouring wire end no longer highlights under the strip and RMB no longer opens a menu
+  mid-drag. The alternative, excluding faderDrag from the chains, keeps a mode that is a gesture
+  everywhere except where the code asks whether one is live.
+
 - **2026-08-26** — The wiring gesture hooks read a frame table rather than closing over
   renderCanvas: one inject call site sits immediately before the geometry pass, and the frame
   carries results back out — band writes the previewed selection, the splice search writes the
