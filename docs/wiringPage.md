@@ -28,14 +28,14 @@ wiring state to save or restore — the graph is project-scoped.
 
 ## The gesture state machine
 
-Editing flows through a handful of page-local, ephemeral state tables
-(never persisted). At most one is live at a time, and mousedown resolves
-them in a fixed precedence:
+Editing flows through page-local, ephemeral gesture state (never
+persisted). At most one gesture is live at a time, and mousedown
+resolves them in a fixed precedence:
 
 > **shift-hover (new wire) > wire-end-hover (redraft) > body-hit (drag)
 > > empty canvas (band).**
 
-- **`drag`** — mousedown on a node body. Maps every node under the drag
+- **`nodeDrag`** — mousedown on a node body. Maps every node under the drag
   (the grabbed one alone if unselected, else the whole selection) to its
   origin pos; each redraws at `start + (mouse − mouseStart)` while the
   button is held. Mouseup commits the set in one `moveNodes` — one

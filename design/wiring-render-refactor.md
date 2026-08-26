@@ -69,18 +69,23 @@ local gesture = nil
 --              | 'busDraft' | 'busDrag' | 'faderDrag'
 
 -- modes[mode] = {
---   inject = fn(g, fr),  -- pre-geometry transients (runs before wireSegments)
---   update = fn(g, fr),  -- post-hover tick + mouseup commit; return false to clear
---   cancel = fn(g),      -- Esc, only for modes that bind it
+--   inject = fn(g, frame),  -- pre-geometry transients (runs before wireSegments)
+--   update = fn(g, frame),  -- post-hover tick + mouseup commit; return false to clear
+--   cancel = fn(g),         -- Esc, only for modes that bind it
 -- }
 ```
 
-`fr` (frame) carries what the blocks already close over: `p`, `lmx`,
-`lmy`, `mx`, `my`, `overCanvas`, `shiftHeld`, `nodeViews`, `nodesById`,
+`frame` carries what the blocks already close over: `p`, `lmx`, `lmy`,
+`mx`, `my`, `overCanvas`, `shiftHeld`, `nodeViews`, `nodesById`,
 `wireViewsList`, `busViewsList`, `segs`, `busRails`, plus per-frame
 hover results where the update hooks need them (`targetHit`,
 `draftCx/draftCy`). Build it incrementally — geometry fields get
 attached after the geometry pass.
+
+One `inject` call site serves every mode, immediately before the
+geometry pass. The frame also carries results back: `band` writes
+`frame.selection`, and the splice search writes `frame.spliceIdx` /
+`frame.spliceNode` for the draw and the nodeDrag commit to share.
 
 `drag` is renamed `nodeDrag` (the only rename); all other mode names
 keep their current variable names to minimise diff noise.

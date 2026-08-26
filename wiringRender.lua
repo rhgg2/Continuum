@@ -96,12 +96,11 @@ local ORIENT_VEC = {
 }
 
 
------ Drag / band state (page-local; ephemeral, never persisted)
+----- Gesture state (page-local; ephemeral, never persisted)
 -- The gesture state machine — mousedown precedence, what each table
 -- captures, forbidden-set and sticky/pin semantics — is the model in
 -- docs/wiringPage.md. The shapes below are the only at-site reference.
-local drag      = nil  -- { mx0, my0, starts = { [id] = {x,y}, … } }
-local band      = nil  -- { mx0, my0 } — current corner is GetMousePos
+local gesture   = nil  -- the one live gesture, nil = idle; payload shapes and hooks at `modes`
 local wireDraft = nil  -- { type?, cursorEnd='to'|'from', keptId, keptPort?, keptSide?, keptAnchor?, forbidden, mx0, my0, fromList, edgeIdx?, fromPalette?, keptLabel? }
 local tagDrag   = nil  -- { edgeIdx, mx0, my0, sx0, sy0 } — dragging a source edge's tag to a custom canvas pos
 local busDraft   = nil  -- { nodeId, dir, port, orient } — node-menu buss; bar glued to the cursor, a click drops it
@@ -1644,6 +1643,64 @@ local function spliceTargetHit(segs, nv, mx, my)
   return best
 end
 
+----- Gesture machine
+
+-- Transitional: the modes still outside the machine gate the guard chains too.
+local function busy()
+  return gesture or wireDraft or tagDrag or busDraft or busDrag
+end
+
+-- `frame` carries the mouse, view lists and geometry the hooks read; inject(g, frame)
+-- feeds transients to the geometry pass, update(g, frame) ticks/commits (false clears the gesture).
+local modes = {}
+
+-- { mx0, my0, starts = { [id] = {x,y}, … } }
+modes.nodeDrag = {
+  inject = function(g, frame)
+    -- Override each dragged node's pos so all geometry below sees the
+    -- in-flight positions.
+    local dx, dy = frame.lmx - g.mx0, frame.lmy - g.my0
+    for _, nv in ipairs(frame.nodeViews) do
+      local s = g.starts[nv.id]
+      if s then nv.pos.x, nv.pos.y = s.x + dx, s.y + dy end
+    end
+  end,
+  update = function(g, frame)
+    if ImGui.IsMouseDown(ctx, 0) then return end
+    local dx, dy = frame.lmx - g.mx0, frame.lmy - g.my0
+    if frame.spliceIdx then
+      local seg = frame.segs[frame.spliceIdx]
+      wv:spliceIntoEdge(frame.spliceIdx, frame.spliceNode.id, { x = seg.cx, y = seg.cy })
+    elseif dx ~= 0 or dy ~= 0 then
+      local moves = {}
+      for id, s in pairs(g.starts) do moves[id] = { x = s.x + dx, y = s.y + dy } end
+      wv:moveNodes(moves)
+    end
+    return false
+  end,
+}
+
+-- { mx0, my0 } — the far corner is the live cursor
+modes.band = {
+  inject = function(g, frame)
+    -- Preview the selection: nodes the rect intersects render selected
+    -- already, matching what mouseup commits.
+    frame.selection = nodesInBand(frame.nodeViews, g.mx0, g.my0, frame.lmx, frame.lmy)
+  end,
+  update = function(g, frame)
+    if ImGui.IsMouseDown(ctx, 0) then return end
+    if frame.lmx == g.mx0 and frame.lmy == g.my0 then
+      wv:setSelection{}                                        -- empty-canvas click
+    else
+      wv:setSelection(nodesInBand(frame.nodeViews,
+                                  g.mx0, g.my0, frame.lmx, frame.lmy))
+    end
+    return false
+  end,
+}
+
+----- Canvas
+
 local function renderCanvas(w, h)
   -- Canvas origin = viewport centre (logical 0,0 in the middle). The painter
   -- carries it, so draw helpers use canvas-local coords and the same transform
@@ -1680,25 +1737,6 @@ local function renderCanvas(w, h)
   local nodeViews = {}
   for _, nv in ipairs(wv:nodeViews()) do
     if nv.category ~= 'source' then util.add(nodeViews, nv) end
-  end
-
-  -- While a band is live, preview the selection: nodes its rect intersects
-  -- render selected already, matching what mouseup commits.
-  local selection
-  if band then
-    selection = nodesInBand(nodeViews, band.mx0, band.my0, lmx, lmy)
-  else
-    selection = wv:selection()
-  end
-
-  -- While a drag is live, override each dragged node's pos so all geometry
-  -- below sees the in-flight positions.
-  if drag then
-    local dx, dy = lmx - drag.mx0, lmy - drag.my0
-    for _, nv in ipairs(nodeViews) do
-      local s = drag.starts[nv.id]
-      if s then nv.pos.x, nv.pos.y = s.x + dx, s.y + dy end
-    end
   end
 
   local nodesById = {}
@@ -1752,6 +1790,13 @@ local function renderCanvas(w, h)
       if bv.id == busDrag.busId then bv.ext = { lo = lo, hi = hi } end
     end
   end
+  local frame = { lmx = lmx, lmy = lmy, nodeViews = nodeViews }
+  if gesture then
+    local inject = modes[gesture.mode].inject
+    if inject then inject(gesture, frame) end
+  end
+  local selection = frame.selection or wv:selection()
+
   local segs = wireSegments(wireViewsList, nodesById)
   sourceSegments(p, wireViewsList, nodesById, segs)
   local busRails = {}
@@ -1764,17 +1809,18 @@ local function renderCanvas(w, h)
 
   -- A lone node dragged over an audio wire's triangle splices into that wire on
   -- release, and the whole wire highlights meanwhile.
-  local spliceIdx, spliceNode
-  if drag then
-    spliceNode = soleDragged(nodeViews, drag)
-    if spliceNode then spliceIdx = spliceTargetHit(segs, spliceNode, lmx, lmy) end
+  frame.segs = segs
+  if gesture and gesture.mode == 'nodeDrag' then
+    frame.spliceNode = soleDragged(nodeViews, gesture)
+    if frame.spliceNode then
+      frame.spliceIdx = spliceTargetHit(segs, frame.spliceNode, lmx, lmy)
+    end
   end
 
   -- Wire-end + source-tag hover: mouse near a wire's end-region or a source tag.
   -- Suppressed during any active gesture so neither fires under a drag.
   local wireEndHover, tagHover
-  if not drag and not band and not wireDraft and not shiftHeld and not tagDrag
-     and not busDraft and not busDrag then
+  if not busy() and not shiftHeld then
     wireEndHover = wireEndHit(segs, lmx, lmy)
     tagHover     = sourceTagHit(p, segs, wireViewsList, lmx, lmy)
   end
@@ -1793,9 +1839,7 @@ local function renderCanvas(w, h)
     end
   end
   local arrowHitIdx
-  if not drag and not band and not wireDraft and not shiftHeld
-     and not tagDrag and not (fader and fader.dragging)
-     and not busDraft and not busDrag then
+  if not busy() and not shiftHeld and not (fader and fader.dragging) then
     arrowHitIdx = arrowMidHit(segs, lmx, lmy)
   end
   -- Fader visibility: drag overrides, triangle anchors, hitRect persists.
@@ -1867,8 +1911,8 @@ local function renderCanvas(w, h)
     { skipEdgeIdx = wireDraft and wireDraft.edgeIdx }, placedLabels)
   -- In the wire layer, not over the node pass: the bodies at the wire's ends and
   -- the dragged body itself overpaint it, so the highlight reads as a wire.
-  if spliceIdx then
-    local seg = segs[spliceIdx]
+  if frame.spliceIdx then
+    local seg = segs[frame.spliceIdx]
     p.line(seg.sx, seg.sy, seg.ex, seg.ey, 'wiring.node.selected', WIRE_END_HIGHLIGHT)
   end
   for i = 1, #wireViewsList do
@@ -2031,8 +2075,7 @@ local function renderCanvas(w, h)
   -- Double-click a node body: sampler dives to sample page, other fx floats
   -- its FX window. dblConsumed blocks this press from starting a drag.
   local dblConsumed = false
-  if not shiftHeld and not wireDraft and not fader and overCanvas
-     and not busDraft
+  if not busy() and not shiftHeld and not fader and overCanvas
      and ImGui.IsMouseDoubleClicked(ctx, 0) then
     local hit = nodeUnderMouse(nodeViews, lmx, lmy)
     if hit then
@@ -2060,8 +2103,7 @@ local function renderCanvas(w, h)
 
   -- Mousedown precedence (docs/wiringPage.md): shift-hover > wire-end >
   -- body-drag > band.
-  if not faderConsumed and not dblConsumed and not drag and not band
-      and not wireDraft and not tagDrag and not busDraft and not busDrag
+  if not faderConsumed and not dblConsumed and not busy()
       and overCanvas and ImGui.IsMouseClicked(ctx, 0) then
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
@@ -2178,9 +2220,9 @@ local function renderCanvas(w, h)
         else
           starts[bodyHit.id] = { x = bodyHit.pos.x, y = bodyHit.pos.y }
         end
-        drag = { mx0 = lmx, my0 = lmy, starts = starts }
+        gesture = { mode = 'nodeDrag', mx0 = lmx, my0 = lmy, starts = starts }
       else
-        band = { mx0 = lmx, my0 = lmy }
+        gesture = { mode = 'band', mx0 = lmx, my0 = lmy }
       end
     end
   elseif wireDraft and not ImGui.IsMouseDown(ctx, 0) then
@@ -2243,32 +2285,14 @@ local function renderCanvas(w, h)
       wv:moveBus(busDrag.busId, { x = x, y = y }, { lo = lo, hi = hi })
     end
     busDrag = nil
-  elseif drag and not ImGui.IsMouseDown(ctx, 0) then
-    local dx, dy = lmx - drag.mx0, lmy - drag.my0
-    if spliceIdx then
-      local seg = segs[spliceIdx]
-      wv:spliceIntoEdge(spliceIdx, spliceNode.id, { x = seg.cx, y = seg.cy })
-    elseif dx ~= 0 or dy ~= 0 then
-      local moves = {}
-      for id, s in pairs(drag.starts) do moves[id] = { x = s.x + dx, y = s.y + dy } end
-      wv:moveNodes(moves)
-    end
-    drag = nil
-  elseif band and not ImGui.IsMouseDown(ctx, 0) then
-    if lmx == band.mx0 and lmy == band.my0 then
-      wv:setSelection{}                                        -- empty-canvas click
-    else
-      wv:setSelection(nodesInBand(nodeViews,
-                                  band.mx0, band.my0, lmx, lmy))
-    end
-    band = nil
+  elseif gesture then
+    local update = modes[gesture.mode].update
+    if update and update(gesture, frame) == false then gesture = nil end
   end
 
   -- RMB precedence: triangle → per-wire menu; node body / buss bar → node
   -- menu; empty canvas → FX picker (same code path as the N-key shortcut).
-  if not drag and not band and not wireDraft and not tagDrag
-      and not busDraft and not busDrag
-      and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
+  if not busy() and overCanvas and ImGui.IsMouseClicked(ctx, 1) then
     if arrowHitIdx and not wireMenu and not fader then
       local seg = segs[arrowHitIdx]
       wireMenu = { edgeIdx = arrowHitIdx, anchorX = seg.cx, anchorY = seg.cy }
@@ -2384,8 +2408,8 @@ local function renderCanvas(w, h)
   end
 
   -- Band overlay: drawn last so it floats over nodes and hover affordances.
-  if band then
-    local bx0, by0, bx1, by1 = band.mx0, band.my0, lmx, lmy
+  if gesture and gesture.mode == 'band' then
+    local bx0, by0, bx1, by1 = gesture.mx0, gesture.my0, lmx, lmy
     if bx0 > bx1 then bx0, bx1 = bx1, bx0 end
     if by0 > by1 then by0, by1 = by1, by0 end
     p.fill(rect(bx0, by0, bx1, by1), 'band.fill')
@@ -2493,7 +2517,7 @@ function wr:toolbarSegments() return {} end
 
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()
-  drag, band, wireDraft, tagDrag, busDrag, shiftWas = nil, nil, nil, nil, nil, false
+  gesture, wireDraft, tagDrag, busDrag, shiftWas = nil, nil, nil, nil, false
   listOpenId, sticky, engagedId, hoverFreeze = nil, nil, nil, nil
   fader, wireMenu = nil, nil
 end

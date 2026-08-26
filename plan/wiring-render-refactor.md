@@ -33,10 +33,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-26 wiring: give gestures one state machine, with nodeDrag and band (§ Stage 2)
 - 2026-08-26 wiring: extract one tooltip helper (§ Stage 1)
 - 2026-08-26 wiring: draw the bus trunk through drawWire (§ Stage 1)
 - 2026-08-26 wiring: draw the draft wire through drawWire (§ Stage 1)
-- 2026-08-26 wiring: give wires one renderer and name the seg shape (§ Stage 1)
 
 ## Now
 
@@ -48,22 +48,6 @@ The design doc's stage-2 line refs are stale — they run 30–55 high. Numbers
 below are against the current tree (`wiringRender.lua`, 2661 loc, with
 `renderCanvas` at 1647).
 
-1. **The `gesture` variable, its mode table, and nodeDrag + band inside it.**
-   Add `local gesture = nil` beside the mode locals (@99–128) and a
-   `modes[mode] = { inject, update, cancel }` table; `inject(g, fr)` runs
-   before the geometry pass (where today's transient blocks sit, @1685–1755),
-   `update(g, fr)` runs in the input if/elseif chain (@2186–2265) and returns
-   false to clear the gesture. `fr` carries what those blocks close over —
-   `p`, `lmx/lmy`, `nodeViews`, `nodesById`, `wireViewsList`, `busViewsList`,
-   `segs`, `busRails`, plus the geometry-derived fields attached after the
-   pass. A transitional `local function busy() return gesture or wireDraft or
-   busDraft end` replaces the variable lists in the five guard chains (@1776,
-   @1796, @2034, @2063, @2269); @1796 keeps its separate
-   `not (fader and fader.dragging)` clause for now. `drag` becomes mode
-   `nodeDrag` (arm @2176–2182, pos override @1694–1706, splice read
-   @1768–1771, `moveNodes` commit @2246–2256); `band` becomes mode `band`
-   (arm @2183, selection preview @1685–1692, commit @2257–2264), with the
-   band rect overlay (@2387–2393) left inline, gated on the mode.
 2. **tagDrag, busDrag and faderDrag into the machine.** tagDrag: transient
    `fromOffset` @1734–1743, arm @2164, `setSourceTagPos` commit @2229–2238.
    busDrag: live pos/ext @1745–1755, arm @2166–2171, `moveBus` commit
