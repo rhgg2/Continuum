@@ -48,9 +48,6 @@ function sp:setTrack(track)
   if track then sv:setTrack(track) end
 end
 
---contract: listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
-function sp:listTracks() return sv:listTracks() end
-
 --contract: unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
 function sp:unbind() sr:closeTransients() end
 

@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=71  mode=chunk  self=sp
+@module samplePage  src=samplePage.lua  loc=68  mode=chunk  self=sp
 @deps cm, ds, cmgr, chrome, gui, facade
 
 # Imports
@@ -17,7 +17,7 @@
   @state sp = {}  @ 28
 
 # Functions held in tables
-  @held sample.setTrack(track)  @ 63
+  @held sample.setTrack(track)  @ 60
 
 # Public API (sp:*)
   -- Page lifecycle (track ops on sv, JSFX poll on sm)
@@ -27,29 +27,27 @@
       @contract  bind re-keys cm to the page's track on every activation (seeds a default on the first)  @ 34
   @api sp:setTrack(track)  @ 47-49
       @contract  setTrack re-keys cm to the given track via sv; the sample facade and the picker drive it  @ 46
-  @api sp:listTracks()  @ 52
-      @contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation  @ 51
-  @api sp:unbind()  @ 55
-      @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track  @ 54
-  @api sp:tick()  @ 58-61
-      @contract  tick runs every frame regardless of active page; watchPath then sm:tick  @ 57
+  @api sp:unbind()  @ 52
+      @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track  @ 51
+  @api sp:tick()  @ 55-58
+      @contract  tick runs every frame regardless of active page; watchPath then sm:tick  @ 54
   -- Page interface — render delegates to the renderer
-  @api sp:toolbarSegments()  @ 66
-  @api sp:renderBody(ctx, w, h, dispatch)  @ 67
-  @api sp:statusSegments()  @ 68
-  @api sp:focusState()  @ 69
+  @api sp:toolbarSegments()  @ 63
+  @api sp:renderBody(ctx, w, h, dispatch)  @ 64
+  @api sp:statusSegments()  @ 65
+  @api sp:focusState()  @ 66
 
 # Uses (outbound edges)
-  @use call    facade.publish  @ <load>:63
-  @use call    sm:tick  @ tick:60
-  @use call    sm:watchPath  @ tick:59
-  @use call    sr:closeTransients  @ unbind:55
-  @use call    sr:focusState  @ focusState:69
-  @use call    sr:renderBody  @ renderBody:67
-  @use call    sr:statusSegments  @ statusSegments:68
-  @use call    sr:toolbarSegments  @ toolbarSegments:66
+  @use call    facade.publish  @ <load>:60
+  @use call    sm:tick  @ tick:57
+  @use call    sm:watchPath  @ tick:56
+  @use call    sr:closeTransients  @ unbind:52
+  @use call    sr:focusState  @ focusState:66
+  @use call    sr:renderBody  @ renderBody:64
+  @use call    sr:statusSegments  @ statusSegments:65
+  @use call    sr:toolbarSegments  @ toolbarSegments:63
   @use call    sv:getTrack  @ bind:38
-  @use call    sv:listTracks  @ bind:40 listTracks:52
+  @use call    sv:listTracks  @ bind:40
   @use call    sv:setTrack  @ bind:43 setTrack:48
   @use call    util.instantiate  @ <load>:23,24,25
   @use require fs  @ <load>:11
@@ -59,7 +57,7 @@
   @use require util  @ <load>:12
 
 # Calls (intra-file)
-  @call sp:setTrack  @ sample.setTrack:63
+  @call sp:setTrack  @ sample.setTrack:60
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -80,7 +78,7 @@
   @field w fileOps  @ 23
   @field r gui  @ 19
   @field w gui  @ 26
-  @field w setTrack  @ sample.setTrack:63
+  @field w setTrack  @ sample.setTrack:60
   @field w sm  @ 24
   @field w sv  @ 26
   @field r track  @ bind:41
