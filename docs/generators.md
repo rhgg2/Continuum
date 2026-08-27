@@ -581,7 +581,9 @@ reaches it — is `docs/oddities.md`'s.
 
 ## Conventions
 
-- **Periods are QN** per the `periodQN` convention — a scalar or `{num, den}`.
+- **Periods are QN** per the `periodQN` convention — a scalar or `{num, den}`,
+  and any fraction at all, not only what the ladder under the arrows names.
+  See `docs/trackerRender.md` § A period is a fraction.
 - **pb values are cents; cc values are the controller's own 7-bit numbers.**
   A param declared as a magnitude scales into whichever wire its dest names,
   which is what lets one kind serve every target.

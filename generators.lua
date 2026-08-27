@@ -369,10 +369,9 @@ end
 -- One entry per kind: the realisation fn (`expand`) plus all metadata a kind ships with. see
 -- docs/generators.md § The chain
 
--- Shared QN-fraction period ladder; every periodic kind tempo-syncs the same way.
-local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
-                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
-                  { l = '1/8', v = { 1, 8 } } }
+-- Every periodic kind tempo-syncs the same way, on the `period` widget: `timing.periodLadder`
+-- under the arrows, any fraction under the box. see docs/trackerRender.md § A period is a fraction
+
 -- The wave ladder. `Custom` is an `arrival` -- reached by editing the curve, not arrowed to -- and
 -- picking it outright fires `rewrite` to re-seed the stage. see docs/generators.md § Waves ¶3
 local WAVES = { { l = 'Sine',     v = 'sine' },   { l = 'Triangle', v = 'triangle' },
@@ -390,7 +389,7 @@ generators.kinds = {
     expand = retrig, mode = 'replace', dest = 'note', label = 'Retrig', glyph = 'R',
     defaults = { period = { 1, 4 }, ramp = 0 },
     fields = {
-      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'period', label = 'Period', widget = 'period' },
       { field = 'ramp',   label = 'Ramp',   widget = 'int', base = 1, coarse = 10, min = -127, max = 127 },
     },
   },
@@ -398,7 +397,7 @@ generators.kinds = {
     expand = trill, mode = 'replace', dest = 'note', label = 'Trill', glyph = 'T',
     defaults = { period = { 1, 4 }, cents = 200 },
     fields = {
-      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'period', label = 'Period', widget = 'period' },
       -- cents demand, edited as a step ladder from the host's written step -- a slide's field
       { field = 'cents',  label = 'Interval', widget = 'stepInterval' },
     },
@@ -407,7 +406,7 @@ generators.kinds = {
     expand = arp, mode = 'replace', dest = 'note', label = 'Arp', glyph = 'A',
     defaults = { period = { 1, 4 }, dir = 'up' },
     fields = {
-      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'period', label = 'Period', widget = 'period' },
       { field = 'dir',    label = 'Dir',    widget = 'choice', options = DIR_OPTIONS },
     },
   },
@@ -426,10 +425,10 @@ generators.kinds = {
     },
   },
   slide = {
-    expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Slide', glyph = '/',
+    expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Portamento', glyph = '/',
     defaults = { over = { 1, 2 }, target = 'next' },
     fields = {
-      { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
+      { field = 'over',   label = 'Glide',    widget = 'period' },
       { field = 'target', label = 'To',       widget = 'choice', options = SLIDE_TARGETS },
       -- cents demand, edited as a step ladder from the host's written step; fixed slide only.
       { field = 'cents',  label = 'Interval', widget = 'stepInterval',
@@ -451,7 +450,7 @@ generators.kinds = {
       -- Always open to edit: a named wave hands the editor its own seed body, and the edit is what
       -- makes that body the truth.
       { field = 'pattern', label = 'Curve',  widget = 'pattern', kind = 'curve' },
-      { field = 'period',  label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'period',  label = 'Period', widget = 'period' },
       { field = 'offset',  label = 'Offset', widget = 'int', base = 1, coarse = 8,
         quantity = 'magnitude', signed = true, frac = 0 },     -- the whole cycle's displacement from rest
       { field = 'scale',   label = 'Scale',  widget = 'int', base = 1, coarse = 8,

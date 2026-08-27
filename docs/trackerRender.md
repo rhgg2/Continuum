@@ -263,6 +263,23 @@ field, the same route the Dest picker takes. A pattern field opens the same way:
 a named wave draws its own), and the commit, not the opening, is what writes the
 restated stage — so an editor closed on Esc leaves the wave standing.
 
+**A period is a fraction.** A Period row carries its own widget rather than a
+choice, because a choice can hold only what its list names. `timing.periodLadder`
+is the fast path -- every base with its dotted and triplet, long to short -- and
+Left/Right walk it by *magnitude* rather than by list position, so a period the
+ladder never names still steps from where it sits instead of snapping to the top.
+Ctrl halves or doubles, landing on the nearest entry, which crosses the twenty-entry
+ladder in a few strokes. The value itself is a text box over `timing.parsePeriod`:
+type `7/19` or `7/4`, and it commits when the text parses and reverts when it
+doesn't. Enter on the row hands it the caret, and while it holds the caret the
+strip's own keys stand down under the `IsAnyItemActive` gate, so Left/Right move
+through the text and not the ladder. The Enter that *closes* the box needs a
+swallow of its own: keys run after the draw that closed it, so the live press-edge
+would land on the row and reopen the box it just committed -- `patternEditor`'s
+`swallowInput` problem, arrived at from the other end. Nothing typed joins the
+ladder: the ladder is a navigation surface, and an entry accreted per stray
+keystroke would be paid for by every later Left/Right.
+
 **One axis navigates, the other edits.** `stripCursor = {stage, param}` (param 0
 = header) still keys the caret, but the whole chain flattens to a single column
 (`chainRows`): **Up/Down** walk header → fields → the next stage's header as one

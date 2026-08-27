@@ -4,6 +4,18 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Generator periods stay tempo-synced; a millisecond period was considered and
+  dropped. It wants a seconds-per-QN in the fx ctx, whose invariant admits resolution, pbRangeCents
+  and nextSameLaneNote alone, and the expansion would then go stale on a tempo change that triggers
+  no rebuild. The widget was the cheap half of the ask and the ctx the expensive half, so the widget
+  landed alone.
+
+- **2026-08-27** — A period is any fraction, typed in place, over a ladder the arrows walk by
+  magnitude rather than by list position. The choice widget reads an unmatched value as its first
+  option, so 7/19 displayed as 1/2 and arrowed from there; comparing QN lets an off-ladder period
+  step from where it sits. Nothing typed joins the ladder, which is a navigation surface an accreted
+  entry would tax on every later arrow.
+
 - **2026-08-27** — A global fx chain expands onto the channels in use rather than all sixteen. A
   channel is in use when it carries an authored note, when the park stash holds a note taken out of
   it, or when it has a pb or cc lane of its own; derived output is no evidence, since a channel

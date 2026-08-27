@@ -160,6 +160,88 @@ function timing.periodQN(period)
   error('timing: bad period ' .. tostring(period))
 end
 
+-- A period in lowest terms, so a typed 6/8 and the ladder's 3/4 are one value --
+-- the widget matches by equality, and an unreduced twin would read as off-ladder.
+local function reducedPeriod(num, den)
+  local g = util.gcd(num, den)
+  return { num // g, den // g }
+end
+
+-- Past this a period is finer than any density the strip can mean, and one stray
+-- keystroke would expand into hundreds of thousands of events.
+local PERIOD_TERM_MAX = 999
+
+-- The Period ladder: every base with its dotted (×3/2), triplet (×2/3), long to short.
+-- see docs/trackerRender.md § A period is a fraction
+timing.periodLadder = {} do
+  local ladder = timing.periodLadder
+  for _, den in ipairs{ 1, 2, 4, 8, 16, 32 } do
+    util.add(ladder, reducedPeriod(1, den))         -- plain
+    util.add(ladder, reducedPeriod(3, 2 * den))     -- dotted
+    util.add(ladder, reducedPeriod(2, 3 * den))     -- triplet
+  end
+  util.add(ladder, { 2, 1 })
+  util.add(ladder, { 4, 1 })
+  table.sort(ladder, function(a, b) return a[1] / a[2] > b[1] / b[2] end)
+end
+
+--contract: period -> its bare-fraction text; a whole QN drops the denominator
+function timing.formatPeriod(period)
+  if type(period) == 'number' then return ('%g'):format(period) end
+  if period[2] == 1 then return tostring(period[1]) end
+  return period[1] .. '/' .. period[2]
+end
+
+--contract: text -> a reduced {num,den}, or nil where it names no period
+function timing.parsePeriod(text)
+  if type(text) ~= 'string' then return nil end
+  local num, den = text:match('^%s*(%d+)%s*/%s*(%d+)%s*$')
+  if not num then num, den = text:match('^%s*(%d+)%s*$'), '1' end
+  if not num then return nil end
+  num, den = tonumber(num), tonumber(den)
+  if num < 1 or den < 1 or num > PERIOD_TERM_MAX or den > PERIOD_TERM_MAX then return nil end
+  return reducedPeriod(num, den)
+end
+
+-- The ladder descends: shortening takes the first entry below the current QN, lengthening the
+-- last one above it. Comparing QN, not list position, lets an off-ladder period enter between neighbours.
+local function stepFine(ladder, cur, dir)
+  if dir > 0 then
+    for _, p in ipairs(ladder) do
+      if timing.periodQN(p) < cur then return p end
+    end
+    return nil
+  end
+  local above
+  for _, p in ipairs(ladder) do
+    if timing.periodQN(p) <= cur then return above end
+    above = p
+  end
+  return above
+end
+
+-- Coarse aims at half or double and takes the nearest entry, measured as a ratio since the ladder
+-- is geometric. Candidates are restricted to the arrow's side, so a coarse step can't double back.
+local function stepCoarse(ladder, cur, dir)
+  local target = dir > 0 and cur / 2 or cur * 2
+  local best, bestErr
+  for _, p in ipairs(ladder) do
+    local v = timing.periodQN(p)
+    if (dir > 0 and v < cur) or (dir < 0 and v > cur) then
+      local err = v > target and v / target or target / v
+      if not bestErr or err < bestErr then best, bestErr = p, err end
+    end
+  end
+  return best
+end
+
+--contract: ladder entry one step from `period`; dir 1 shortens, coarse halves/doubles, nil at end
+function timing.steppedPeriod(ladder, period, dir, coarse)
+  local cur = timing.periodQN(period)
+  if coarse then return stepCoarse(ladder, cur, dir) end
+  return stepFine(ladder, cur, dir)
+end
+
 -- Uses internal tile periods (period × pulsesPerCycle), so the result is
 -- the realised repeat rate, not the user-period.
 function timing.compositePeriodQN(composite)

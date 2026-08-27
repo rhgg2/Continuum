@@ -7,6 +7,7 @@
 --invariant: writes go through tv or cmgr commands; page never reaches into tm
 local util    = require 'util'
 local tuning  = require 'tuning'
+local timing  = require 'timing'
 local generators = require 'generators'
 
 if not reaper.ImGui_GetBuiltinPath then
@@ -1255,6 +1256,33 @@ local function pickChoice(host, index, entry, fd, option)
   if stage ~= entry then tv:replaceFxStage(host, index, stage) end
 end
 
+-- Period rows: the ladder is a fast path, not a fence. see docs/trackerRender.md § A period is a fraction
+local periodEdit       -- { id, buf } while a Period box holds the caret; nil otherwise
+local periodFocusReq   -- id of the box the keyboard asked for, consumed by the next draw
+local periodSwallow    -- one-shot: drop the strip's next key pass, so the Enter that closed a box isn't re-read as Enter on its row
+
+local function rowId(row) return 'fx_' .. row.index .. '_' .. row.fd.field .. '_' .. row.part end
+
+-- The tokenBox discipline (temperEditor): show the buffer while focused, commit on deactivate only
+-- where the text parses. Unparsable input reverts next frame rather than clearing the field.
+local function periodBox(host, row, width)
+  local id    = rowId(row)
+  local shown = (periodEdit and periodEdit.id == id) and periodEdit.buf
+                or timing.formatPeriod(row.entry[row.fd.field])
+  if periodFocusReq == id then ImGui.SetKeyboardFocusHere(ctx); periodFocusReq = nil end
+  ImGui.SetNextItemWidth(ctx, width)
+  local rv, buf = ImGui.InputText(ctx, '##' .. id, shown, ImGui.InputTextFlags_AutoSelectAll)
+  -- Arm on activation, not on the first keystroke: a box reached and left untyped must still hold
+  -- the strip's arrows, or Left/Right would step the ladder out from under the caret.
+  if ImGui.IsItemActivated(ctx) then periodEdit = { id = id, buf = shown } end
+  if rv and periodEdit then periodEdit.buf = buf end
+  if ImGui.IsItemDeactivatedAfterEdit(ctx) and periodEdit then
+    local period = timing.parsePeriod(periodEdit.buf)
+    if period then tv:setFxField(host, row.index, row.fd.field, period) end
+  end
+  if ImGui.IsItemDeactivated(ctx) then periodEdit, periodSwallow = nil, true end
+end
+
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
 local function adjustRow(uuid, rw, right, mods)
   local fd, value = rw.fd, rw.entry[rw.fd.field]
@@ -1262,6 +1290,10 @@ local function adjustRow(uuid, rw, right, mods)
     chrome.requestPickerOpen('fxDest_' .. rw.index)
   elseif fd.widget == 'choice' then
     pickChoice(uuid, rw.index, rw.entry, fd, steppedOption(fd, value, right))
+  elseif fd.widget == 'period' then   -- by magnitude, so an off-ladder period steps from where it sits
+    local coarse  = (mods & ImGui.Mod_Ctrl) ~= 0
+    local stepped = timing.steppedPeriod(timing.periodLadder, value, right and 1 or -1, coarse)
+    if stepped then tv:setFxField(uuid, rw.index, fd.field, stepped) end
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local note   = tv:noteByUuid(uuid)
@@ -1289,7 +1321,7 @@ end
 local function fxFieldWidget(host, row, width)
   local fd, entry, index = row.fd, row.entry, row.index
   local value   = entry[fd.field]
-  local id      = 'fx_' .. index .. '_' .. fd.field .. '_' .. row.part
+  local id      = rowId(row)
   -- numberStepper's width sizes its input box only; its -/+ buttons add 2×(innerSpacing + frameH).
   local stepBoxW = width - 2 * (ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing) + ImGui.GetFrameHeight(ctx))
   if fd.widget == 'dest' then
@@ -1302,6 +1334,8 @@ local function fxFieldWidget(host, row, width)
   elseif fd.widget == 'choice' then
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
     if pick then pickChoice(host, index, entry, fd, fd.options[pick]) end
+  elseif fd.widget == 'period' then
+    periodBox(host, row, width)
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local note   = tv:noteByUuid(host)
@@ -1409,6 +1443,7 @@ local stripPlan do
   -- 1D grammar: Up/Down walk rows, Left/Right edit or open a picker, Super+Up/Down reorder.
   -- Enter/Super+X/Super+R/Esc — see docs/trackerRender.md § FX chain — palette tab.
   local function handleFxChainKeys(plan)
+    if periodSwallow then periodSwallow = false; return end
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
     local mods  = ImGui.GetKeyMods(ctx)
     local super = (mods & ImGui.Mod_Super) ~= 0
@@ -1431,9 +1466,10 @@ local stripPlan do
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
       if cur.param == 0 then                                -- header/add row: open the kind picker (mirrors ←→)
         chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
-      else                                                  -- field row: pattern opens its editor, plain values inert
+      else                                                  -- field row: pattern opens its editor, a period takes the caret, plain values inert
         local rw = col.fields[cur.param]
-        if rw.fd.widget == 'pattern' then launchPattern(plan.host, rw.index, rw.fd, rw.entry) end
+        if     rw.fd.widget == 'pattern' then launchPattern(plan.host, rw.index, rw.fd, rw.entry)
+        elseif rw.fd.widget == 'period'  then periodFocusReq = rowId(rw) end
       end
     elseif super and (up or down) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, up and -1 or 1) then cur.stage = cur.stage + (up and -1 or 1) end

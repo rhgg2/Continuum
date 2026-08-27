@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=693  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=692  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }  @ 6
@@ -17,7 +17,7 @@
   @contract  breakpoints are a displacement from the dest's rest, which the augment fold lays them on  @ 300
   @contract  each cycle stretches the body lengthPpq -> period ticks; both window edges seeded  @ 301
   @contract  onset QN ramps the whole displacement in from rest, linearly from the window start  @ 302
-  @contract  dest is a per-entry param; registry dest is only its seed + note-vs-continuous marker  @ 489
+  @contract  dest is a per-entry param; registry dest is only its seed + note-vs-continuous marker  @ 488
 
 # Shapes
   @shape  stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq,[intentCents]},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }  @ 8
@@ -25,8 +25,8 @@
   @shape  kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, glyph, defaults, fields }  @ 14
   @shape  field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', signed?, frac? }  @ 15
   @shape  fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, rpb=rowsPerBeat, root?=midiPitch, specs?={ {lane,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }  @ 19
-  @shape  destProfile = { unit, rest, bipolar, magScale } -- continuous dests only ('pb' | cc number)  @ 490
-  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, id, startppq, endppq}, ... } (cc on cc windows only)  @ 616
+  @shape  destProfile = { unit, rest, bipolar, magScale } -- continuous dests only ('pb' | cc number)  @ 489
+  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, id, startppq, endppq}, ... } (cc on cc windows only)  @ 615
 
 # Imports
   @const util = 'util'  @ 23
@@ -36,13 +36,12 @@
   @const generators = {}  @ 26
   @const WAVE_QN = 4  @ 250
   @const WAVE_TURNS = {  @ 254
-  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 373
-  @const WAVES = { { l = 'Sine',     v = 'sine' },   { l = 'Triangle', v =...  @ 378
-  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 382
-  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 383
-  @const VEL_PATTERNS = { { l = '> .',     v = { 100, 55 } },  @ 384
-  @const PB_REFERENCE = 200  @ 494
-  @const DEST_FIELD = { field = 'dest', label = 'Dest', widget = 'dest' }  @ 538
+  @const WAVES = { { l = 'Sine',     v = 'sine' },   { l = 'Triangle', v =...  @ 377
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 381
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 382
+  @const VEL_PATTERNS = { { l = '> .',     v = { 100, 55 } },  @ 383
+  @const PB_REFERENCE = 200  @ 493
+  @const DEST_FIELD = { field = 'dest', label = 'Dest', widget = 'dest' }  @ 537
 
 # Private functions
   @fn periodTicks(period, resolution)  @ 28-31
@@ -91,7 +90,7 @@
   -- Dest: a per-entry target, and what each target's numbers mean
   -- Region park predicate + windows
   -- Curve thinning (freeze to group)
-  @fn ridesLinear(p)  @ 645
+  @fn ridesLinear(p)  @ 644
       -- A shape governs the segment to its *right*, so a point is safe to lose only if it and its
       -- predecessor both ride linearly; a missing shape counts as non-linear.
 
@@ -101,7 +100,7 @@
   @held WAVE_TURNS.square(L)  @ 257
   @held WAVE_TURNS.sawUp(L)  @ 260
   @held WAVE_TURNS.sawDown(L)  @ 261
-  @held fields.when(e)  @ 436
+  @held fields.when(e)  @ 435
 
 # Public API (generators.*)
   @api generators.waveBody(wave, resolution)  @ 266-274
@@ -110,57 +109,57 @@
   @api generators.customise(entry, resolution)  @ 278-283
       -- Editing a named wave's curve stamps its points and flips the stage to custom, so exactly one
       -- body is authoritative; custom (or no wave at all) is handed back untouched. see docs/generators.md § Waves
-  @api generators.glyphOf(kind)  @ 475-478
+  @api generators.glyphOf(kind)  @ 474-477
       -- One glyph per kind: a letter shapes notes, a wave mark paints a continuous stream. '?' is a
       -- kind the registry has lost. see docs/generators.md § Conventions
-  @api generators.labelOf(kind)  @ 482-485
+  @api generators.labelOf(kind)  @ 481-484
       -- One label per kind, and the one place a kind resolves to a name. A lost kind keeps its own
       -- name in the mark: `? arp` says which stage went missing where a bare `?` would not.
-  @api generators.destOf(params)  @ 496-499
-  @api generators.destProfile(dest)  @ 503-510
+  @api generators.destOf(params)  @ 495-498
+  @api generators.destProfile(dest)  @ 502-509
       -- Polarity is the controller's own, and its default rest says it: one resting mid-scale swings
       -- both ways, one at a rail only runs inward.
-  @api generators.restFor(dest)  @ 514-516
+  @api generators.restFor(dest)  @ 513-515
       -- The resting base a continuous augment sums onto when the target carries no authored automation.
       -- Named despite being one line: the per-chain seed and per-channel fold must agree on this value.
-  @api generators.destsFor(kind)  @ 519-526
+  @api generators.destsFor(kind)  @ 518-525
       -- Every dest a kind can serve. Fewer than two is no choice at all, and earns no Dest row.
-  @api generators.fieldRange(fd, dest)  @ 530-536
+  @api generators.fieldRange(fd, dest)  @ 529-535
       -- A field's bounds in the target's own units: a magnitude spans rest outwards as far as the dest
       -- swings -- both ways if signed; anything else is fixed-unit and carries its bounds on the descriptor.
-  @api generators.fieldsFor(entry)  @ 542-552
+  @api generators.fieldsFor(entry)  @ 541-551
       -- The rows a stage shows: a synthesised Dest row where the kind can serve more than one target,
       -- then the kind's own fields. Synthesised once here rather than repeated per registry entry.
-  @api generators.seed(kind)  @ 556-566
+  @api generators.seed(kind)  @ 555-565
       -- A kind's default entry: the dest it seeds from, its fixed-unit defaults, and every quantity field
       -- resolved against that dest -- so one `frac` declaration reads correctly wherever it lands.
-  @api generators.retarget(entry, dest)  @ 570-580
+  @api generators.retarget(entry, dest)  @ 569-579
       -- Point an entry at another dest, carrying its magnitudes over as the same proportion of the new
       -- target's swing. Equal references (CC 10 -> CC 8, both resting at 64) leave every value untouched.
-  @api generators.parksNotes(region)  @ 586-591
+  @api generators.parksNotes(region)  @ 585-590
       -- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
       -- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
-  @api generators.continuousTargets(fx)  @ 595-602
+  @api generators.continuousTargets(fx)  @ 594-601
       -- Continuous targets a chain touches: set keyed 'pb' | <cc number>, empty for a pure-note
       -- chain -- phase 5's per-target scopes key off it.
-  @api generators.chainDestType(fx, target)  @ 606-614
+  @api generators.chainDestType(fx, target)  @ 605-613
       -- The fold mode a chain presents for one continuous target: replace if any live stage targeting it
       -- replaces, else augment -- a bypassed stage never counts, so it can't paint an overlapping chain's curve. see docs/generators.md § The chain
-  @api generators.parkWindows(regions)  @ 619-639
+  @api generators.parkWindows(regions)  @ 618-638
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
-  @api generators.thinCurve(points, tol)  @ 651-691
+  @api generators.thinCurve(points, tol)  @ 650-690
       -- Douglas-Peucker, measuring vertical deviation rather than perpendicular distance: perpendicular
       -- would need a ticks-per-cent aspect ratio, under which "tolerance in cents" means nothing.
-      @contract  returns a new array of the input point tables themselves -- selects, never invents  @ 649
-      @contract  tol bounds vertical error in the curve's own value unit; > tol keeps, == tol collapses  @ 650
+      @contract  returns a new array of the input point tables themselves -- selects, never invents  @ 648
+      @contract  tol bounds vertical error in the curve's own value unit; > tol keeps, == tol collapses  @ 649
 
 # Uses (outbound edges)
   @use call    tuning.placeCents  @ displaced:44
-  @use call    util.add  @ retrig:64 trill:92 playingAt:109 arp:143 ostinato:170 chordStamp:201 slide:236 waveBody:271 lfo:334,342 velPattern:350,360 destsFor:524 fieldsFor:550 parkWindows:622 thinCurve:663,688
-  @use call    util.assign  @ customise:280 seed:558 retarget:573
+  @use call    util.add  @ retrig:64 trill:92 playingAt:109 arp:143 ostinato:170 chordStamp:201 slide:236 waveBody:271 lfo:334,342 velPattern:350,360 destsFor:523 fieldsFor:549 parkWindows:621 thinCurve:662,687
+  @use call    util.assign  @ customise:280 seed:557 retarget:572
   @use call    util.clamp  @ velPattern:361
-  @use call    util.round  @ waveBody:271 lfo:318 velPattern:361 seed:562 retarget:577
+  @use call    util.round  @ waveBody:271 lfo:318 velPattern:361 seed:561 retarget:576
   @use require tuning  @ <load>:24
   @use require util  @ <load>:23
 
@@ -168,189 +167,189 @@
   @call arpIndex  @ arp:142
   @call curveAt  @ lfo:323,342
   @call displaced  @ trill:86 chordStamp:198
-  @call generators.destOf  @ retarget:571 parksNotes:588 continuousTargets:598 chainDestType:609 parkWindows:631
-  @call generators.destProfile  @ restFor:515 fieldRange:532 retarget:571,572
-  @call generators.destsFor  @ fieldsFor:548
-  @call generators.fieldRange  @ seed:561
-  @call generators.parksNotes  @ parkWindows:629
+  @call generators.destOf  @ retarget:570 parksNotes:587 continuousTargets:597 chainDestType:608 parkWindows:630
+  @call generators.destProfile  @ restFor:514 fieldRange:531 retarget:570,571
+  @call generators.destsFor  @ fieldsFor:547
+  @call generators.fieldRange  @ seed:560
+  @call generators.parksNotes  @ parkWindows:628
   @call generators.waveBody  @ customise:281 lfo:305
   @call inherited  @ trill:87 chordStamp:203
   @call interval  @ chordStamp:196,203 slide:220
   @call periodTicks  @ retrig:57 trill:80 arp:134 slide:231 lfo:310
   @call playingAt  @ arp:140 ostinato:169
-  @call ridesLinear  @ thinCurve:655
+  @call ridesLinear  @ thinCurve:654
 
 # Bindings (by name)
-  @bind arp  @ 407
-  @bind chordStamp  @ 422
-  @bind lfo  @ 447
-  @bind ostinato  @ 415
-  @bind retrig  @ 390
-  @bind slide  @ 429
-  @bind trill  @ 398
-  @bind velPattern  @ 440
+  @bind arp  @ 406
+  @bind chordStamp  @ 421
+  @bind lfo  @ 446
+  @bind ostinato  @ 414
+  @bind retrig  @ 389
+  @bind slide  @ 428
+  @bind trill  @ 397
+  @bind velPattern  @ 439
 
 # Unresolved receivers
   @drop ctx.nextSameLaneNote  @ slide:218
 
 # Fields (r read / w write incl. constructor keys)
-  @field w arp  @ 406
-  @field w arrival  @ 381
-  @field w base  @ 394,455,457,459
-  @field w bipolar  @ destProfile:504,508
-  @field r bypass  @ chainDestType:609
-  @field w cc  @ parkWindows:622
-  @field r ccDefaultRest  @ 467 destProfile:506
-  @field w ccDefaultRest  @ 466
+  @field w arp  @ 405
+  @field w arrival  @ 380
+  @field w base  @ 393,454,456,458
+  @field w bipolar  @ destProfile:503,507
+  @field r bypass  @ chainDestType:608
+  @field w cc  @ parkWindows:621
+  @field r ccDefaultRest  @ 466 destProfile:505
+  @field w ccDefaultRest  @ 465
   @field r cents  @ trill:85 slide:222
-  @field w cents  @ 399
-  @field w chainDestType  @ chainDestType:606
-  @field r chan  @ parkWindows:622
-  @field w chan  @ parkWindows:622
-  @field w chordStamp  @ 421
-  @field w coarse  @ 394,455,457,459
-  @field w continuousTargets  @ continuousTargets:595
-  @field r customise  @ 381
+  @field w cents  @ 398
+  @field w chainDestType  @ chainDestType:605
+  @field r chan  @ parkWindows:621
+  @field w chan  @ parkWindows:621
+  @field w chordStamp  @ 420
+  @field w coarse  @ 393,454,456,458
+  @field w continuousTargets  @ continuousTargets:594
+  @field r customise  @ 380
   @field w customise  @ customise:278
-  @field r defaults  @ seed:558
-  @field w defaults  @ 391,399,408,416,423,430,441,448
+  @field r defaults  @ seed:557
+  @field w defaults  @ 390,398,407,415,422,429,440,447
   @field w delta  @ retrig:59,74 trill:82,102 arp:152 ostinato:160,177 chordStamp:188,193,206 slide:219,226
   @field w delta  @ slide:240 lfo:308,343 velPattern:364
-  @field r dest  @ destOf:498 seed:558,561
-  @field w dest  @ 390,398,407,415,422,429,440,447 seed:558 retarget:574
-  @field w destOf  @ destOf:496
-  @field w destProfile  @ destProfile:503
-  @field r dests  @ destsFor:520
-  @field w dests  @ 429,447
-  @field w destsFor  @ destsFor:519
+  @field r dest  @ destOf:497 seed:557,560
+  @field w dest  @ 389,397,406,414,421,428,439,446 seed:557 retarget:573
+  @field w destOf  @ destOf:495
+  @field w destProfile  @ destProfile:502
+  @field r dests  @ destsFor:519
+  @field w dests  @ 428,446
+  @field w destsFor  @ destsFor:518
   @field r detune  @ interval:38 displaced:44 retrig:69 trill:97 playingAt:112 arp:145 ostinato:171 velPattern:353,362
   @field w detune  @ retrig:69 trill:97 arp:145 ostinato:171 chordStamp:202 velPattern:362
   @field r dir  @ arp:135
-  @field w dir  @ 408
+  @field w dir  @ 407
   @field w display  @ waveBody:273
   @field w domain  @ waveBody:273
-  @field r endppq  @ playingAt:109 ostinato:168 chordStamp:201 velPattern:360 parkWindows:624
-  @field w endppq  @ retrig:66 trill:94 arp:144 ostinato:170 chordStamp:201 velPattern:360 parkWindows:624
-  @field w evType  @ parkWindows:622
-  @field w expand  @ 390,398,407,415,422,429,440,447
-  @field r field  @ seed:562 retarget:577
-  @field w field  @ 393,394,401,403,410,411,418,425,432,433,435,443
-  @field w field  @ 450,453,454,455,457,459,538
-  @field w fieldRange  @ fieldRange:530
-  @field r fields  @ fieldsFor:547 seed:559 retarget:576
-  @field w fields  @ 392,400,409,417,424,431,442,449
-  @field w fieldsFor  @ fieldsFor:542
-  @field r first  @ thinCurve:684
-  @field w first  @ thinCurve:663
-  @field r frac  @ seed:560,562
-  @field w frac  @ 456,458
-  @field r fx  @ parksNotes:587 parkWindows:630
-  @field r glyph  @ glyphOf:477
-  @field w glyph  @ 390,398,407,415,422,429,440,447
-  @field w glyphOf  @ glyphOf:475
-  @field r huge  @ thinCurve:676
-  @field w id  @ parkWindows:623
+  @field r endppq  @ playingAt:109 ostinato:168 chordStamp:201 velPattern:360 parkWindows:623
+  @field w endppq  @ retrig:66 trill:94 arp:144 ostinato:170 chordStamp:201 velPattern:360 parkWindows:623
+  @field w evType  @ parkWindows:621
+  @field w expand  @ 389,397,406,414,421,428,439,446
+  @field r field  @ seed:561 retarget:576
+  @field w field  @ 392,393,400,402,409,410,417,424,431,432,434,442
+  @field w field  @ 449,452,453,454,456,458,537
+  @field w fieldRange  @ fieldRange:529
+  @field r fields  @ fieldsFor:546 seed:558 retarget:575
+  @field w fields  @ 391,399,408,416,423,430,441,448
+  @field w fieldsFor  @ fieldsFor:541
+  @field r first  @ thinCurve:683
+  @field w first  @ thinCurve:662
+  @field r frac  @ seed:559,561
+  @field w frac  @ 455,457
+  @field r fx  @ parksNotes:586 parkWindows:629
+  @field r glyph  @ glyphOf:476
+  @field w glyph  @ 389,397,406,414,421,428,439,446
+  @field w glyphOf  @ glyphOf:474
+  @field r huge  @ thinCurve:675
+  @field w id  @ parkWindows:622
   @field r intentCents  @ inherited:50 retrig:70 trill:98 arp:146 ostinato:171 velPattern:362
   @field w intentCents  @ retrig:70 trill:98 arp:146 ostinato:171 chordStamp:203 velPattern:362
-  @field r kind  @ destOf:497 fieldsFor:545,548 retarget:576 parksNotes:588 continuousTargets:598 chainDestType:608 parkWindows:631
-  @field w kind  @ waveBody:273 416,418,423,425,453 seed:558
-  @field r kinds  @ glyphOf:476 labelOf:483 destOf:497 destsFor:520 fieldsFor:545 seed:557 retarget:576 parksNotes:588 continuousTargets:598 chainDestType:608 parkWindows:631
-  @field w kinds  @ 388
-  @field w l  @ 373,374,375,378,379,380,381,382
-  @field w l  @ 382,383,384,385,386
-  @field r label  @ labelOf:484
-  @field w label  @ 390,393,394,398,401,403,407,410,411,415,418,422
-  @field w label  @ 425,429,432,433,435,440,443,447,450,453,454,455
-  @field w label  @ 457,459,538
-  @field w labelOf  @ labelOf:482
+  @field r kind  @ destOf:496 fieldsFor:544,547 retarget:575 parksNotes:587 continuousTargets:597 chainDestType:607 parkWindows:630
+  @field w kind  @ waveBody:273 415,417,422,424,452 seed:557
+  @field r kinds  @ glyphOf:475 labelOf:482 destOf:496 destsFor:519 fieldsFor:544 seed:556 retarget:575 parksNotes:587 continuousTargets:597 chainDestType:607 parkWindows:630
+  @field w kinds  @ 387
+  @field w l  @ 377,378,379,380,381,382,383
+  @field w l  @ 384,385
+  @field r label  @ labelOf:483
+  @field w label  @ 389,392,393,397,400,402,406,409,410,414,417,421
+  @field w label  @ 424,428,431,432,434,439,442,446,449,452,453,454
+  @field w label  @ 456,458,537
+  @field w labelOf  @ labelOf:481
   @field r lane  @ chordStamp:191
-  @field r last  @ thinCurve:684
-  @field w last  @ thinCurve:663
+  @field r last  @ thinCurve:683
+  @field w last  @ thinCurve:662
   @field r lengthPpq  @ ostinato:159 lfo:306
   @field w lengthPpq  @ waveBody:273
-  @field w lfo  @ 446
-  @field r magScale  @ fieldRange:532 retarget:571,572
-  @field w magScale  @ destProfile:504,509
-  @field r max  @ fieldRange:535
-  @field w max  @ 394,459
-  @field r min  @ fieldRange:535
-  @field w min  @ 394,459
-  @field w modalOrder  @ 471
-  @field r mode  @ chainDestType:609
-  @field w mode  @ 390,398,407,415,422,429,440,447
+  @field w lfo  @ 445
+  @field r magScale  @ fieldRange:531 retarget:570,571
+  @field w magScale  @ destProfile:503,508
+  @field r max  @ fieldRange:534
+  @field w max  @ 393,458
+  @field r min  @ fieldRange:534
+  @field w min  @ 393,458
+  @field w modalOrder  @ 470
+  @field r mode  @ chainDestType:608
+  @field w mode  @ 389,397,406,414,421,428,439,446
   @field r nextSameLaneNote  @ slide:218
-  @field r noteHost  @ parkWindows:629
+  @field r noteHost  @ parkWindows:628
   @field r notes  @ retrig:58 trill:81 arp:140 ostinato:169 chordStamp:195 slide:214 velPattern:350
   @field w notes  @ retrig:59,74 trill:82,102 arp:152 ostinato:160,177 chordStamp:188,193,206 slide:219,226
   @field w notes  @ slide:240 lfo:308,343 velPattern:364
   @field r offset  @ lfo:312
   @field r onset  @ lfo:313
-  @field w onset  @ 448
-  @field w options  @ 393,401,410,411,432,433,443,450,454
-  @field w ostinato  @ 414
+  @field w onset  @ 447
+  @field w options  @ 410,432,442,449
+  @field w ostinato  @ 413
   @field r over  @ slide:231
-  @field w over  @ 430
-  @field w parkWindows  @ parkWindows:619
-  @field w parksNotes  @ parksNotes:586
+  @field w over  @ 429
+  @field w parkWindows  @ parkWindows:618
+  @field w parksNotes  @ parksNotes:585
   @field r pattern  @ ostinato:158 chordStamp:187 lfo:305 velPattern:355
-  @field w pattern  @ customise:281 416,423,441
+  @field w pattern  @ customise:281 415,422,440
   @field r pbRangeCents  @ slide:224
   @field r period  @ retrig:57 trill:80 arp:134 lfo:310
-  @field w period  @ 391,399,408,448
+  @field w period  @ 390,398,407,447
   @field r pitch  @ interval:38 displaced:44 retrig:67 trill:95 playingAt:112 arp:145 ostinato:170 velPattern:353,360
   @field w pitch  @ retrig:67 trill:95 arp:145 ostinato:170 chordStamp:202 velPattern:360
   @field r points  @ lfo:307
   @field w points  @ waveBody:273
-  @field w poly  @ 425
+  @field w poly  @ 424
   @field r ppq  @ playingAt:109 ostinato:166 chordStamp:191,201 curveAt:287,290,291,292 lfo:328,329
-  @field r ppq  @ velPattern:352,358,360 thinCurve:670,675
+  @field r ppq  @ velPattern:352,358,360 thinCurve:669,674
   @field w ppq  @ retrig:65 trill:93 arp:144 ostinato:170 chordStamp:201 slide:236 waveBody:271 lfo:323,334,342 velPattern:360
-  @field r quantity  @ fieldRange:531 retarget:577
-  @field w quantity  @ 456,458
+  @field r quantity  @ fieldRange:530 retarget:576
+  @field w quantity  @ 455,457
   @field r ramp  @ retrig:60
-  @field w ramp  @ 391
+  @field w ramp  @ 390
   @field r resolution  @ retrig:57 trill:80 arp:134 slide:230,231 lfo:305,310,313
-  @field r rest  @ restFor:515
-  @field w rest  @ destProfile:504,508
-  @field w restFor  @ restFor:514
-  @field w retarget  @ retarget:570
-  @field w retrig  @ 389
-  @field w rewrite  @ 381
+  @field r rest  @ restFor:514
+  @field w rest  @ destProfile:503,507
+  @field w restFor  @ restFor:513
+  @field w retarget  @ retarget:569
+  @field w retrig  @ 388
+  @field w rewrite  @ 380
   @field w sawDown  @ WAVE_TURNS.sawDown:261
   @field w sawUp  @ WAVE_TURNS.sawUp:260
   @field r scale  @ lfo:312
-  @field w seed  @ seed:556
-  @field r shape  @ lfo:324,334 ridesLinear:645
+  @field w seed  @ seed:555
+  @field r shape  @ lfo:324,334 ridesLinear:644
   @field w shape  @ slide:236 waveBody:271 lfo:324,334,342
-  @field r signed  @ fieldRange:533
-  @field w signed  @ 456,458
+  @field r signed  @ fieldRange:532
+  @field w signed  @ 455,457
   @field w sine  @ WAVE_TURNS.sine:255
-  @field w slide  @ 428
+  @field w slide  @ 427
   @field r specs  @ ostinato:165 chordStamp:187
-  @field w specs  @ 416,423
+  @field w specs  @ 415,422
   @field w square  @ WAVE_TURNS.square:257
-  @field r startppq  @ parkWindows:624
-  @field w startppq  @ parkWindows:624
-  @field r target  @ slide:216 fields.when:436
-  @field w target  @ 430
+  @field r startppq  @ parkWindows:623
+  @field w startppq  @ parkWindows:623
+  @field r target  @ slide:216 fields.when:435
+  @field w target  @ 429
   @field r tension  @ lfo:324,334
   @field w tension  @ lfo:324,334
-  @field w thinCurve  @ thinCurve:651
+  @field w thinCurve  @ thinCurve:650
   @field w triangle  @ WAVE_TURNS.triangle:256
-  @field w trill  @ 397
-  @field w unit  @ destProfile:504,508
-  @field r uuid  @ parkWindows:623
-  @field w v  @ 373,374,375,378,379,380,381,382
-  @field w v  @ 382,383,384,385,386
-  @field r val  @ curveAt:287,292,295 lfo:334 thinCurve:675
+  @field w trill  @ 396
+  @field w unit  @ destProfile:503,507
+  @field r uuid  @ parkWindows:622
+  @field w v  @ 377,378,379,380,381,382,383
+  @field w v  @ 384,385
+  @field r val  @ curveAt:287,292,295 lfo:334 thinCurve:674
   @field w val  @ slide:236 waveBody:271 lfo:323,334,342
   @field r vel  @ retrig:68 trill:96 arp:145 ostinato:170 chordStamp:202 velPattern:361
   @field w vel  @ retrig:68 trill:96 arp:145 ostinato:170 chordStamp:202 velPattern:361
-  @field w velPattern  @ 439
+  @field w velPattern  @ 438
   @field r wave  @ customise:279,281 lfo:304,305
-  @field w wave  @ 448
+  @field w wave  @ 447
   @field w waveBody  @ waveBody:266
-  @field w when  @ fields.when:436
-  @field w widget  @ 393,394,401,403,410,411,418,425,432,433,435,443
-  @field w widget  @ 450,453,454,455,457,459,538
+  @field w when  @ fields.when:435
+  @field w widget  @ 392,393,400,402,409,410,417,424,431,432,434,442
+  @field w widget  @ 449,452,453,454,456,458,537
   @field r window  @ retrig:56 trill:79 arp:133 ostinato:161 slide:213 lfo:309

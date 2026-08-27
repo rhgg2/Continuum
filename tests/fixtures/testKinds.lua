@@ -38,17 +38,13 @@ local function sine(stream, host, params, ctx)
   return { notes = {}, delta = delta }
 end
 
-local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
-                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
-                  { l = '1/8', v = { 1, 8 } } }
-
 generators.kinds.sine = {
   -- '~' rather than the LFO's own wave mark: the glyph-uniqueness invariant covers the whole registry,
   -- fixtures included, and a stand-in must not be the kind it stands in for.
   expand = sine, mode = 'augment', dest = 'pb', dests = 'any', label = 'Sine', glyph = '~',
   defaults = { period = { 1, 2 }, onset = 1 },
   fields = {
-    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+    { field = 'period', label = 'Period', widget = 'period' },
     { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10,
       quantity = 'magnitude', frac = 0.15 },
     { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4, min = 0, max = 16 },

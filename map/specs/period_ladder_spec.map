@@ -1,0 +1,36 @@
+@spec period_ladder_spec  src=tests/specs/period_ladder_spec.lua  loc=114  cases=11
+@exercises timing (timing)
+@surface   timing.periodQN, timing.formatPeriod, timing.parsePeriod, timing.steppedPeriod
+
+# Intent
+  Pin the period ladder's entry and stepping arithmetic: the fx strip's Period
+  widget writes {num,den} through parsePeriod and reads it back through
+  formatPeriod, and its arrows walk the ladder by magnitude.
+
+# Helpers
+  @fn qn(p)  @ 11
+      -- QN of a ladder entry, for the ordering assertions.
+
+# Cases
+  @case 'ladder runs long to short, strictly descending'  [pure]  @ 15-23
+  @case 'ladder carries each base with its dotted and triplet'  [pure]  @ 26-33
+  @case 'formatPeriod writes bare fractions, whole QN without a denominator'  [pure]  @ 37-43
+  @case 'parsePeriod takes integers and fractions'  [pure]  @ 47-53
+  @case 'parsePeriod reduces, so a typed period matches its ladder entry'  [pure]  @ 56-60
+  @case 'parsePeriod rejects what it cannot mean'  [pure]  @ 63-72
+  @case 'stepping walks the ladder, right toward shorter'  [pure]  @ 76-80
+  @case 'an off-ladder period enters between its neighbours, not at the top'  [pure]  @ 83-88
+  @case 'stepping past either end stays put'  [pure]  @ 91-95
+  @case 'coarse halves or doubles, landing on the nearest entry'  [pure]  @ 98-105
+  @case 'coarse at the end still moves, so the arrow is never inert'  [pure]  @ 108-112
+
+# Uses (outbound edges)
+  @use call timing.periodQN  @ 11
+  @use call timing.formatPeriod  @ 21,29,39,40,41,42
+  @use call timing.parsePeriod  @ 49,50,51,52,58,59,65,66,67,68,69,70,71
+  @use call timing.steppedPeriod  @ 78,79,86,87,93,94,100,101,102,104,110,111
+
+# Fields (r read / w write incl. constructor keys)
+  @field w name  @ 15,26,37,47,56,63,76,83,91,98,108
+  @field r periodLadder  @ 8
+  @field w run  @ 16,27,38,48,57,64,77,84,92,99,109

@@ -157,6 +157,7 @@ local specs = {
   'gm_swing_spec',
   'gm_delay_propagate_spec',
   'timing_period_spec',
+  'period_ladder_spec',
   'timing_atoms_spec',
   'timing_composite_spec',
   'vm_grid_spec',
