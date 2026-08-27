@@ -731,7 +731,7 @@ end
 local function expandedUuid(uuid, chan) return util.key(uuid, chan) end
 
 -- inUse is channelsInUse's set, taken from the same head snapshot: a channel outside it runs no
--- producer, so a chain reaches nothing the document never used. see design/global-fx-column.md § Expansion
+-- producer, so a chain reaches nothing the document never used; second return is the stored globals, whose own uuids the union answers for. see design/global-fx-column.md § Expansion
 local function expandGlobals(regions, inUse)
   local channelRegions, globals = {}, {}
   for _, region in ipairs(regions or {}) do
@@ -747,7 +747,7 @@ local function expandGlobals(regions, inUse)
       end
     end
   end
-  return channelRegions
+  return channelRegions, globals
 end
 
 --shape: producerCensus -> { { uuid, chan, startppq, endppq, fx, noteHost? }, ... }
@@ -1742,7 +1742,7 @@ local fxNotesByProducer = {}
 
 -- Continuous targets producers claim, census-sourced (so the emission gate can't blink one out), each
 -- carrying the raw spans it claims them over. Rebuild output, both replaced wholesale.
---shape: fxTargetsByProducer[uuid] = { pb = { {startRaw, endRaw}, ... }, [ccNum] = { ... } } -- merged, ascending
+--shape: fxTargetsByProducer[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
 local fxTargetsByProducer = {}
 
 -- The originals each producer's chain parked, keyed by producer uuid; cells by reference, minted
@@ -1788,13 +1788,13 @@ local function buildFreezeMaps(census, windows)
 end
 
 -- The continuous half of the same window set: which pb/cc targets each channel's chains own, and over
--- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see docs/trackerManager.md § Realisation by producer
+-- what, logical framed. Census-sourced, so a kept producer still claims its target. see docs/trackerManager.md § Realisation by producer
 local function buildFxTargets(windows)
   local byProducer = {}
   for _, w in ipairs(windows) do
     if w.evType ~= 'note' then
       local target = w.evType == 'pb' and 'pb' or w.cc
-      local span   = { tm:fromLogical(w.chan, w.startppq, 0), tm:fromLogical(w.chan, w.endppq, 0) }
+      local span   = { w.startppq, w.endppq }
       local ownTargets = byProducer[w.id] or {}
       util.bucket(ownTargets, target, span)
       byProducer[w.id] = ownTargets
@@ -1808,18 +1808,45 @@ end
 
 -- One producer's whole output in one place, gathered at the tail where the census has settled: the
 -- passes above each key their share by producer uuid, and the ghost overlay draws exactly one entry.
---shape: fxRealisationByUuid[uuid] = { uuid, chan, notes, targets, parked }
---   targets' spans are raw; notes and parked are the built lists by reference
+--shape: fxRealisationByUuid[uuid] = { uuid, chans, notes, targets, parked }
+--   targets' spans are logical; notes and parked are the built lists by reference
 local fxRealisationByUuid = {}
 
-local function buildFxRealisation(census)
+-- A stored global region runs no producer of its own, so its uuid answers with the union of the ones
+-- it expanded into: their notes, their claimed targets, the cells they parked. see design/global-fx-column.md § Realisation on the master strip
+local function unionRealisation(uuid, byUuid)
+  local union = { uuid = uuid, chans = {}, notes = {}, targets = {}, parked = {} }
+  for chan = 1, 16 do
+    local part = byUuid[expandedUuid(uuid, chan)]
+    if part then
+      util.add(union.chans, chan)
+      for _, note in ipairs(part.notes)  do util.add(union.notes, note) end
+      for _, cell in ipairs(part.parked) do util.add(union.parked, cell) end
+      for target, spans in pairs(part.targets) do
+        for _, span in ipairs(spans) do util.bucket(union.targets, target, span) end
+      end
+    end
+  end
+  -- Each channel's list arrives in its own onset order; the union restores one order across them all.
+  table.sort(union.notes, function(a, b)
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    return a.chan < b.chan
+  end)
+  -- The expanded producers claim one span each over the same logical window, so the merge collapses
+  -- them back to the stored region's own.
+  for target, spans in pairs(union.targets) do union.targets[target] = mergeSpans(spans) end
+  return union
+end
+
+local function buildFxRealisation(census, globals)
   local out = {}
   for _, p in ipairs(census) do
-    out[p.uuid] = { uuid = p.uuid, chan = p.chan,
+    out[p.uuid] = { uuid = p.uuid, chans = { p.chan },
                     notes   = (fxNotesByProducer[p.chan] or {})[p.uuid] or {},
                     targets = fxTargetsByProducer[p.uuid] or {},
                     parked  = fxParkedByProducer[p.uuid] or {} }
   end
+  for _, region in ipairs(globals or {}) do out[region.uuid] = unionRealisation(region.uuid, out) end
   fxRealisationByUuid = out
 end
 
@@ -2043,25 +2070,28 @@ function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true 
 -- A clone per call: gm:markGroup stores the rect by reference and tm replaces its map each rebuild.
 function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r and util.deepClone(r) end
 --contract: everything uuid's producer realised this rebuild; nil if uuid runs no chain
+--contract: a stored global uuid answers with the union of the producers it expanded into
 --contract: notes = its derived onsets, logical-onset order (a ghost is one row: no tail rides)
---contract: parked = the originals it stands in for; targets = its claimed pb/cc spans, raw framed
+--contract: parked = originals it stands in for; targets = its claimed pb/cc spans, logical framed
+--contract: chans = the channels it realises on, ascending -- one for an ordinary producer
 --invariant: read-only; tm rebuilds the map each pass
 function tm:fxRealisation(uuid)
   return uuid and fxRealisationByUuid[uuid] or nil
 end
 --contract: the producer's realised value on target at ppqL; nil outside the spans it claimed
+--contract: chan is the channel to read on -- a global chain realises on each of the ones it reaches
 --contract: cents-minus-detune for pb, the value itself for cc; interpolated between seats
 --invariant: read off the take, so a kept producer's curve stands where a re-run one's does
-function tm:fxCurveAt(uuid, target, ppqL)
+function tm:fxCurveAt(uuid, chan, target, ppqL)
   local realisation = fxRealisationByUuid[uuid]
   local spans = realisation and realisation.targets[target]
   if not spans then return nil end
-  local chan = realisation.chan
-  local ppq, inside = tm:fromLogical(chan, ppqL, 0), false
+  local inside = false
   for _, span in ipairs(spans) do
-    if ppq >= span[1] and ppq < span[2] then inside = true; break end
+    if ppqL >= span[1] and ppqL < span[2] then inside = true; break end
   end
   if not inside then return nil end
+  local ppq = tm:fromLogical(chan, ppqL, 0)
   -- Inside a window every event on the target is realisation: the authored curve parked to make way
   -- for it. So the seats are the take's own stream, read where it lies.
   local index = rawIndexFor(chan)
@@ -5038,7 +5068,8 @@ local function rebuildPipeline(didReload)
     paramAutomation = ds:get('paramAutomation'),
   }
   -- The expansion's channel set comes off the snapshot's own keys, so it is settled before any stage runs.
-  sources.fxRegions = expandGlobals(ds:get('fxRegions'), channelsInUse(sources))
+  local globalRegions
+  sources.fxRegions, globalRegions = expandGlobals(ds:get('fxRegions'), channelsInUse(sources))
 
   perf.start('internals'); local external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
@@ -5092,7 +5123,7 @@ local function rebuildPipeline(didReload)
   -- the previous rebuild's note lanes. Sibling maps, one site.
   perf.start('freezeMaps'); buildFreezeMaps(settledCensus, settledWindows); perf.stop('freezeMaps')
   buildFxTargets(settledWindows)
-  buildFxRealisation(settledCensus)   -- last: it gathers what the passes above each keyed by producer
+  buildFxRealisation(settledCensus, globalRegions)   -- last: it gathers what the passes above each keyed by producer
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation

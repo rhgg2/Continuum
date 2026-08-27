@@ -11,7 +11,7 @@
   @fn pbSeatsOf(dump, chan)  @ 8-17
   @fn vibHost(chan)  @ 19-22
   @fn plainNote(chan, ppq)  @ 24-27
-  @fn curveAt(h, uuid, target, ppqs)  @ 30-34
+  @fn curveAt(h, uuid, chan, target, ppqs)  @ 30-34
       -- The chain's realised curve sampled at each of a row's ppqs, as the ghost display reads it.
   @fn hostUuid(h, chan)  @ 37-41
       -- A note carrying fx is its own producer, and an augment chain leaves it on the take.

@@ -78,7 +78,9 @@ by what; a surface lighting every chain in view at once answers that question
 for none of them. So the gate is the chain the caret's own event runs,
 resolved through `tm:fxRealisation`, and a cell running none answers nil.
 Sibling collisions are read by moving the caret onto the sibling, which is
-also how you would ask which chain to edit.
+also how you would ask which chain to edit. The caret on the master strip names
+a chain running no producer of its own, and tm answers it with the union of the
+ones it expanded into, so the overlay's own reading is unchanged.
 
 **5** The filtering is not done at read time. A `derived == host` test in the
 draw loop would answer the question and leave the walks it answers from in
@@ -114,7 +116,8 @@ real cell outranking one.
 
 **9** The continuous half asks `tm:fxCurveAt` what the chain realises on one
 claimed target at one logical ppq, samples it at every visible row of every
-claimed column, and the draw arm prefers it to the interpolation ghost — which
+claimed column on every channel the chain reaches, and the draw arm prefers it
+to the interpolation ghost — which
 describes the authored curve alone, and inside a producer's window that curve
 has been parked out of the way. Sampling is per row rather than bucketed by
 seat: a curve has no onsets to bucket, and a 1/4-QN LFO seated at the cc grid

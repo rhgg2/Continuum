@@ -1,6 +1,6 @@
-@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=313  cases=15
+@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=386  cases=17
 @exercises dataStore (h.ds), trackerManager (h.tm), trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), clipboard (h.clipboard)
-@surface   ds:assign, tm:rebuild, vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, vm:addExtraCol, vm:toggleChannelMute, vm:toggleChannelSolo, vm:isChannelMuted, vm:isChannelSoloed, vm:isChannelEffectivelyMuted, ec:col, vm:setPaletteParam, vm:automateParam, vm:paramBinding, tm:freezeEligible, tm:freezeRegion, fm:dump, vm:rebuild, ec:extendTo, clipboard:collect, ec:selClear, clipboard:pasteClip, ec:selectChannel, vm:fxHostForEdit, vm:scroll, tm:addEvent, tm:flush
+@surface   ds:assign, tm:rebuild, vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, vm:addExtraCol, vm:toggleChannelMute, vm:toggleChannelSolo, vm:isChannelMuted, vm:isChannelSoloed, vm:isChannelEffectivelyMuted, ec:col, vm:setPaletteParam, vm:automateParam, vm:paramBinding, tm:freezeEligible, tm:freezeRegion, fm:dump, vm:rebuild, ec:extendTo, clipboard:collect, ec:selClear, clipboard:pasteClip, ec:selectChannel, vm:fxHostForEdit, vm:scroll, tm:addEvent, tm:flush, vm:ghostOverlay
 @harness   mk, r._state.projectTracks, r._state.projectItems
 
 # Intent
@@ -9,104 +9,119 @@
   regions on it run on every MIDI channel. see docs/trackerView.md § Addressing a chain
 
 # Helpers
-  @fn injectGlobals(h, list)  @ 11-20
+  @fn injectGlobals(h, list)  @ 12-21
       -- Global regions are ordinary stored regions at chan 0; each entry overrides the defaults,
       -- and the uuid is positional ('fxr-1', 'fxr-2', ...), as tv_fx_region_spec does for channels.
-  @fn colsOn(h, chan)  @ 22-28
+  @fn colIdx(h, chan, type, cc)  @ 24-30
+      -- The grid index of a channel's column of one type: lane 1 for a note column, cc number for a cc.
+  @fn colsOn(h, chan)  @ 32-38
 
 # Cases
-  @case 'an empty document opens with the master fx strip as column 1'  [harness]  @ 35-50
-  @case 'the strip sits left of channel 1'  [harness]  @ 54-62
-  @case 'a global region renders in the master strip and on no MIDI channel'  [harness]  @ 68-83
-  @case 'overlapping global regions pack into sibling columns on channel 0'  [harness]  @ 87-100
-  @case 'hide refuses on the master strip'  [harness]  @ 106-119
-  @case 'add-column refuses on the master strip'  [harness]  @ 123-137
-  @case 'mute and solo refuse on the master strip'  [harness]  @ 141-155
-  @case 'parameter automation refuses on the master strip'  [harness]  @ 159-174
-  @case 'freeze refuses a global region'  [harness]  @ 178-191
-  @case 'paste drops a region rebased onto the master channel'  [harness]  @ 196-222
-  @case 'channel select stands, and a selection on the strip mints a global region'  [harness]  @ 228-241
-  @case 'the caret opens on channel 1 lane 1, not on the strip'  [harness]  @ 247-259
-  @case 'the strip stands through the first rebuild, before the pane has a width'  [harness]  @ 265-270
-  @case 'a take swap brings the scroll home, so the strip stands left of the caret'  [harness]  @ 274-284
-  @case 'a global region runs its chain on every MIDI channel in use'  [harness]  @ 293-310
+  @case 'an empty document opens with the master fx strip as column 1'  [harness]  @ 45-60
+  @case 'the strip sits left of channel 1'  [harness]  @ 64-72
+  @case 'a global region renders in the master strip and on no MIDI channel'  [harness]  @ 78-93
+  @case 'overlapping global regions pack into sibling columns on channel 0'  [harness]  @ 97-110
+  @case 'hide refuses on the master strip'  [harness]  @ 116-129
+  @case 'add-column refuses on the master strip'  [harness]  @ 133-147
+  @case 'mute and solo refuse on the master strip'  [harness]  @ 151-165
+  @case 'parameter automation refuses on the master strip'  [harness]  @ 169-184
+  @case 'freeze refuses a global region'  [harness]  @ 188-201
+  @case 'paste drops a region rebased onto the master channel'  [harness]  @ 206-232
+  @case 'channel select stands, and a selection on the strip mints a global region'  [harness]  @ 238-251
+  @case 'the caret opens on channel 1 lane 1, not on the strip'  [harness]  @ 257-269
+  @case 'the strip stands through the first rebuild, before the pane has a width'  [harness]  @ 275-280
+  @case 'a take swap brings the scroll home, so the strip stands left of the caret'  [harness]  @ 284-294
+  @case 'a global region runs its chain on every MIDI channel in use'  [harness]  @ 303-320
+  @case 'the caret on a global badge ghosts the chain on every channel it reaches'  [harness]  @ 329-354
+  @case 'a global chain lights its curve on the target column of each channel it reaches'  [harness]  @ 360-383
 
 # Uses (outbound edges)
-  @use call ds:assign  @ 18,200
-  @use call tm:rebuild  @ 19,202
-  @use call vm:setGridSize  @ 38,57,71,90,109,126,144,165,181,199,231,250,277,296
-  @use call ec:setPos  @ 113,130,166,209,215,232,251,278
-  @use call vm:hideExtraCol  @ 114
-  @use call ds:get  @ 118,135,151,152,172,187,219,238
-  @use call vm:addExtraCol  @ 131,132,133
-  @use call vm:toggleChannelMute  @ 146
-  @use call vm:toggleChannelSolo  @ 147
-  @use call vm:isChannelMuted  @ 149
-  @use call vm:isChannelSoloed  @ 150
-  @use call vm:isChannelEffectivelyMuted  @ 154
-  @use call ec:col  @ 167,216,234,254,255,268,283
-  @use call vm:setPaletteParam  @ 169
-  @use call vm:automateParam  @ 170
-  @use call vm:paramBinding  @ 173
-  @use call tm:freezeEligible  @ 184
-  @use call tm:freezeRegion  @ 185
-  @use call fm:dump  @ 190,305
-  @use call vm:rebuild  @ 203,252,281
-  @use call ec:extendTo  @ 210
-  @use call clipboard:collect  @ 211
-  @use call ec:selClear  @ 214
-  @use call clipboard:pasteClip  @ 217
-  @use call ec:selectChannel  @ 233
-  @use call vm:fxHostForEdit  @ 236
-  @use call vm:scroll  @ 269,279,282
-  @use call tm:addEvent  @ 298
-  @use call tm:flush  @ 301
+  @use call ds:assign  @ 19,210
+  @use call tm:rebuild  @ 20,212
+  @use call vm:setGridSize  @ 48,67,81,100,119,136,154,175,191,209,241,260,287,306,332,364
+  @use call ec:setPos  @ 123,140,176,219,225,242,261,288,340,372
+  @use call vm:hideExtraCol  @ 124
+  @use call ds:get  @ 128,145,161,162,182,197,229,248
+  @use call vm:addExtraCol  @ 141,142,143
+  @use call vm:toggleChannelMute  @ 156
+  @use call vm:toggleChannelSolo  @ 157
+  @use call vm:isChannelMuted  @ 159
+  @use call vm:isChannelSoloed  @ 160
+  @use call vm:isChannelEffectivelyMuted  @ 164
+  @use call ec:col  @ 177,226,244,264,265,278,293
+  @use call vm:setPaletteParam  @ 179
+  @use call vm:automateParam  @ 180
+  @use call vm:paramBinding  @ 183
+  @use call tm:freezeEligible  @ 194
+  @use call tm:freezeRegion  @ 195
+  @use call fm:dump  @ 200,315
+  @use call vm:rebuild  @ 213,262,291
+  @use call ec:extendTo  @ 220
+  @use call clipboard:collect  @ 221
+  @use call ec:selClear  @ 224
+  @use call clipboard:pasteClip  @ 227
+  @use call ec:selectChannel  @ 243
+  @use call vm:fxHostForEdit  @ 246
+  @use call vm:scroll  @ 279,289,292
+  @use call tm:addEvent  @ 308,334,366
+  @use call tm:flush  @ 311,337,369
+  @use call vm:ghostOverlay  @ 341,373
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _state  @ 163,164
-  @field r ccs  @ 305
-  @field r cells  @ 75,95,96
-  @field r chan  @ 189,221,240,305
-  @field w chan  @ 14,201,298
-  @field r chanFirstCol  @ 59,60,98
-  @field r chanLastCol  @ 60,98
-  @field r cols  @ 24,40,46,49,78,111,112,116,117,128,129,136
-  @field r cols  @ 167,206,216,254,278,283
-  @field w delay  @ 299
+  @field r _state  @ 173,174
+  @field r cc  @ 28
+  @field r ccs  @ 315
+  @field r cells  @ 85,105,106
+  @field r chan  @ 199,231,250,315,345
+  @field w chan  @ 15,211,308,334,366
+  @field r chanFirstCol  @ 69,70,108
+  @field r chanLastCol  @ 70,108
+  @field r cols  @ 25,34,50,56,59,88,121,122,126,127,138,139
+  @field r cols  @ 146,177,216,226,264,288,293
+  @field w data  @ 362
+  @field w delay  @ 309,335,367
   @field w depth  @ 7
-  @field w detune  @ 299
-  @field w endppq  @ 14,201,298
-  @field w evType  @ 298
-  @field w fx  @ 14,201
-  @field w fxGuid  @ 169
-  @field r fxRegions  @ 212
-  @field r glyph  @ 76
-  @field r grid  @ 24,40,44,46,49,58,78,98,111,112,116
-  @field r grid  @ 117,128,129,136,167,206,216,254,278,283
-  @field w kind  @ 7
-  @field w label  @ 169
-  @field r lane  @ 258
-  @field w lane  @ 299
-  @field r lane1Col  @ 44
-  @field r midiChan  @ 25,42,48,79,97,111,117,128,167,207,216,257
-  @field w name  @ 35,54,68,87,106,123,141,159,178,196,228,247
-  @field w name  @ 265,274,293
-  @field r notes  @ 190
+  @field w detune  @ 309,335,367
+  @field w dir  @ 8
+  @field w endppq  @ 15,211,308,334,366
+  @field w evType  @ 308,334,366
+  @field w extraColumns  @ 362
+  @field w fx  @ 15,211,338,370
+  @field w fxGuid  @ 179
+  @field r fxRegions  @ 222
+  @field r glyph  @ 86
+  @field r grid  @ 25,34,50,54,56,59,68,88,108,121,122
+  @field r grid  @ 126,127,138,139,146,177,216,226,264,288,293
+  @field r hidden  @ 345
+  @field w kind  @ 7,8
+  @field w label  @ 179
+  @field r lane  @ 27,268
+  @field w lane  @ 309,335,367
+  @field r lane1Col  @ 54
+  @field r midiChan  @ 26,35,52,58,89,107,121,127,138,177,217,226
+  @field r midiChan  @ 267
+  @field w name  @ 45,64,78,97,116,133,151,169,188,206,238,257
+  @field w name  @ 275,284,303,329,360
+  @field r notes  @ 200,347
+  @field w notes  @ 362,363
   @field w onset  @ 7
-  @field w param  @ 169
-  @field w period  @ 7
-  @field w pitch  @ 298
-  @field w ppq  @ 298
-  @field w projectItems  @ 164
-  @field w projectTracks  @ 163
-  @field w run  @ 36,55,69,88,107,124,142,160,179,197,229,248
-  @field w run  @ 266,275,294
-  @field r stack  @ 76
-  @field w startppq  @ 14,201
-  @field r tails  @ 76
-  @field w takes  @ 164
-  @field w trackGuid  @ 169
-  @field r type  @ 41,47,80,207,256,283
-  @field r uuid  @ 75,95,96,239
-  @field w uuid  @ 14,201
-  @field w vel  @ 299
+  @field w param  @ 179
+  @field w pb  @ 362,363
+  @field w period  @ 7,8
+  @field r pitch  @ 349
+  @field w pitch  @ 308,334,366
+  @field w ppq  @ 308,334,366
+  @field w projectItems  @ 174
+  @field w projectTracks  @ 173
+  @field w run  @ 46,65,79,98,117,134,152,170,189,207,239,258
+  @field w run  @ 276,285,304,330,361
+  @field r stack  @ 86
+  @field w startppq  @ 15,211
+  @field r tails  @ 86
+  @field w takes  @ 174
+  @field w trackGuid  @ 179
+  @field r type  @ 26,51,57,90,217,266,293
+  @field r uuid  @ 85,105,106,249
+  @field w uuid  @ 15,211
+  @field r values  @ 373
+  @field w vel  @ 309,335,367

@@ -1200,7 +1200,22 @@ targets exactly as a region does, so a note carrying an lfo ghosts into the cc
 column it modulates, wherever the channel carries one.
 
 **4** `tm:fxCurveAt` is the sampling half — what one chain realises on one
-claimed target at one logical ppq, called once per row per frame.
+claimed target at one logical ppq, called once per row per frame. The channel
+it reads on comes in as an argument rather than off the entry, since one chain
+can realise on sixteen of them.
+
+**5** A stored global region runs no producer of its own (§ Channel & column
+model), so its uuid answers with the union
+of the producers it expanded into — their derived notes, their claimed targets
+and the cells they parked. The entry therefore names the channels it realises
+on rather than one channel, and each note in it carries the channel of the
+producer that emitted it.
+
+**6** The claimed spans are logical, not raw. Each expanded producer claims its
+target over the same logical window, so the union merges back to the stored
+region's own span, while raw spans would be as many different intervals as
+there are channels under per-channel swing. The conversion to raw happens at
+the sample point, where the take is read.
 
 ## Muting
 

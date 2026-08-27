@@ -3826,7 +3826,7 @@ end
 -- the viewport, and both move without a rebuild. Nothing enters col.cells, so no ghost edits.
 --contract: per-frame overlay for the chain the caret addresses: notes to ghost, cells to suppress
 --contract: the gate is fxHostAtCursor -- a cell that runs no chain of its own answers nil
---contract: the window is the viewport's rows, resolved on the producer's own channel
+--contract: the window is the viewport's rows, resolved on the channel each ghost lands on
 -- The readout column a chain's off-step ghosts need, taken from a lane that reserves none of its own
 -- and given back after; nothing the cursor holds moves as it comes and goes. see docs/trackerView.md § Ghost sampling
 do
@@ -3861,7 +3861,7 @@ do
 end
 
 --contract: notes[colIndex][row] = tm's record by reference; note columns only; first onset wins
---contract: values[colIndex][row] = { val }; the producer's claimed targets only
+--contract: values[colIndex][row] = { val }; the claimed targets, on every channel the chain reaches
 --contract: hidden[cell] = true for every plain original this chain parked; a host cell never hides
 --invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
 --invariant: the overlay lands in the columns that exist; a claim materialises none of its own
@@ -3872,7 +3872,7 @@ function tv:ghostOverlay()
   local top, bot      = scrollRow, scrollRow + gridHeight + 1
   local notes, values = {}, {}
   for _, n in ipairs(fx.notes) do
-    local row = ppqRowOf(n.ppq, fx.chan)
+    local row = ppqRowOf(n.ppq, n.chan)
     if row >= top and row < bot then   -- half-open: bot is already the viewport's row of slack
       local _, x = colFor(n)
       if x then
@@ -3884,14 +3884,16 @@ function tv:ghostOverlay()
   -- A curve has no onsets to bucket, so it is sampled at each row: what the chain realises there.
   -- A locator record stands in for the column's own event, what colFor addresses. see docs/trackerView.md § Ghost sampling
   for target in pairs(fx.targets) do
-    local _, x = colFor(target == 'pb' and { evType = 'pb', chan = fx.chan }
-                                        or { evType = 'cc', chan = fx.chan, cc = target })
-    if x then
-      for row = top, bot do
-        local val = tm:fxCurveAt(fx.uuid, target, ctx:rowToPPQ(row, fx.chan))
-        if val then
-          values[x] = values[x] or {}
-          values[x][row] = { val = util.round(val) }
+    for _, chan in ipairs(fx.chans) do
+      local _, x = colFor(target == 'pb' and { evType = 'pb', chan = chan }
+                                          or { evType = 'cc', chan = chan, cc = target })
+      if x then
+        for row = top, bot do
+          local val = tm:fxCurveAt(fx.uuid, chan, target, ctx:rowToPPQ(row, chan))
+          if val then
+            values[x] = values[x] or {}
+            values[x][row] = { val = util.round(val) }
+          end
         end
       end
     end

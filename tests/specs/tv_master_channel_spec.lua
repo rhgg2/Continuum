@@ -5,6 +5,7 @@ local t    = require('support')
 local util = require('util')
 
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
+local arpUp  = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete: derives onsets, parks the original
 
 -- Global regions are ordinary stored regions at chan 0; each entry overrides the defaults,
 -- and the uuid is positional ('fxr-1', 'fxr-2', ...), as tv_fx_region_spec does for channels.
@@ -17,6 +18,15 @@ local function injectGlobals(h, list)
   end
   h.ds:assign('fxRegions', regions)
   h.tm:rebuild()
+end
+
+-- The grid index of a channel's column of one type: lane 1 for a note column, cc number for a cc.
+local function colIdx(h, chan, type, cc)
+  for i, col in ipairs(h.vm.grid.cols) do
+    if col.midiChan == chan and col.type == type
+       and (type ~= 'note' or (col.lane or 1) == 1)
+       and (type ~= 'cc' or col.cc == cc) then return i end
+  end
 end
 
 local function colsOn(h, chan)
@@ -307,6 +317,69 @@ return {
       table.sort(reached)
       t.deepEq(reached, { 3, 11 }, 'the sine seats a pb curve on the channels carrying notes')
       t.falsy(chans[0], 'and channel 0 carries no wire of its own')
+    end,
+  },
+
+  ----- What the strip shows
+
+  {
+    -- A global region runs no producer of its own, so its realisation is the union of the ones it
+    -- expanded into, and a ghost lands on the channel of the producer that emitted it.
+    -- see design/global-fx-column.md § Realisation on the master strip
+    name = 'the caret on a global badge ghosts the chain on every channel it reaches',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      for _, chan in ipairs{ 3, 11 } do
+        h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
+                       vel = 100, detune = 0, delay = 0, lane = 1 }
+      end
+      h.tm:flush()
+      injectGlobals(h, { { fx = arpUp } })
+
+      h.ec:setPos(0, colIdx(h, 0, 'fx'), 1)
+      local overlay = h.vm:ghostOverlay()
+      t.truthy(overlay, 'the badge under the caret has a realisation of its own to show')
+
+      local suppressed = {}
+      for cell in pairs(overlay.hidden) do suppressed[cell.chan] = true end
+      for _, chan in ipairs{ 3, 11 } do
+        local ghosts = overlay.notes[colIdx(h, chan, 'note')] or {}
+        local pitches = {}
+        for row = 0, 4 do util.add(pitches, ghosts[row] and ghosts[row].pitch or false) end
+        t.deepEq(pitches, { 60, 60, 60, 60, false },
+          'channel ' .. chan .. ' carries four ghosts, on the rows its own producer derived')
+        t.truthy(suppressed[chan], 'and the original the chain parked there is hidden under them')
+      end
+    end,
+  },
+
+  {
+    -- The union's claimed targets are the chain's, and the sampling asks for one channel at a time:
+    -- every channel reached lights the column it carries. see design/global-fx-column.md § Realisation on the master strip
+    name = 'a global chain lights its curve on the target column of each channel it reaches',
+    run = function(harness)
+      local h = harness.mk{ data = { extraColumns = { [3]  = { notes = 1, pb = true },
+                                                     [11] = { notes = 1, pb = true } } } }
+      h.vm:setGridSize(80, 40)
+      for _, chan in ipairs{ 3, 11 } do
+        h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
+                       vel = 100, detune = 0, delay = 0, lane = 1 }
+      end
+      h.tm:flush()
+      injectGlobals(h, { { fx = sine30 } })
+
+      h.ec:setPos(0, colIdx(h, 0, 'fx'), 1)
+      local values = (h.vm:ghostOverlay() or {}).values
+      t.truthy(values, 'the badge under the caret has a curve to show')
+      for _, chan in ipairs{ 3, 11 } do
+        local pbIdx = colIdx(h, chan, 'pb')
+        t.truthy(pbIdx, 'fixture check: channel ' .. chan .. ' carries a pb column of its own')
+        local rows = {}
+        for row = 0, 6 do if (values[pbIdx] or {})[row] then util.add(rows, row) end end
+        t.deepEq(rows, { 0, 1, 2, 3 }, 'the curve lights channel ' .. chan .. ' over the region\'s window')
+        t.eq(values[colIdx(h, chan, 'note')], nil, 'and the note column beside it takes no values')
+      end
     end,
   },
 

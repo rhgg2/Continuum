@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A stored global region runs no producer of its own, so its uuid answers with the
+  union of the producers it expanded into, and a realisation entry names the channels it realises on
+  rather than one channel. A claimed target span is logical rather than raw, so the union merges
+  back to the stored region's own span instead of holding one interval per channel's swing;
+  tm:fxCurveAt therefore takes the channel it reads on as an argument, and converts at the sample
+  point.
+
 - **2026-08-27** — Generator periods stay tempo-synced; a millisecond period was considered and
   dropped. It wants a seconds-per-QN in the fx ctx, whose invariant admits resolution, pbRangeCents
   and nextSameLaneNote alone, and the expansion would then go stale on a tempo change that triggers

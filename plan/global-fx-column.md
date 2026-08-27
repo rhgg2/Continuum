@@ -19,10 +19,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 tm: a global region realises as the union of its producers (§ Realisation on the master strip)
 - 2026-08-27 tm: expand a global region onto the channels in use (§ Expansion)
 - 2026-08-27 tm: expand a global region into a producer on every channel (§ Expansion, § An edit reaches sixteen channels)
 - 2026-08-27 tv: channel 0 refuses mute, solo, automation and freeze (§ What channel 0 refuses)
-- 2026-08-27 tv: master channel strip, an fx-only channel 0 left of channel 1 (§ The master channel, § The master channel is always addressable)
 
 ## Now
 
@@ -30,9 +30,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The master strip's realisation** — `tm:fxRealisation` answers a stored
-   global uuid with the union of its producers' entries — derived notes,
-   claimed targets, parked cells — and `tv:ghostOverlay` takes each ghost's
-   channel from the note that carries it rather than from the entry. Spec: with
-   the caret on a global badge, the overlay ghosts in the columns of every
-   channel the chain reaches, and the rows follow each channel's own swing.
+(empty)

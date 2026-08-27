@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1951  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1947  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
@@ -14,7 +14,7 @@
   @shape  ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }  @ 47
   @shape  plan item = {kind='heading',text} | {kind='fx',row,open} | {kind='section',row,text} | {kind='param',row,prm}  @ 245
   @shape  mapPress = { qn, moved } — nil when no button is down over the map's margin; moved flips at the drag threshold.  @ 520
-  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 1939
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 1935
 
 # Imports
   @require util = 'util'  @ 8
@@ -60,7 +60,7 @@
   @state periodEdit  @ 1260   -- { id, buf } while a Period box holds the caret; nil otherwise
   @state periodFocusReq  @ 1261   -- id of the box the keyboard asked for, consumed by the next draw
   @state periodSwallow  @ 1262   -- one-shot: drop the strip's next key pass, so the Enter that closed a box isn't re-read as Enter on its row
-  @state tracker = cmgr:scope('tracker')  @ 1784
+  @state tracker = cmgr:scope('tracker')  @ 1780
 
 # Private functions
   @fn arrange()  @ 26
@@ -199,49 +199,49 @@
   @fn cancelStrip()  @ 1438-1441
       -- Revert the chain to its keyboard-entry baseline, then request exit. Shared by the strip's own
       -- Esc, the cancel button, and the add-slot picker's Esc (which aborts a still-empty gesture).
-  @fn handleFxChainKeys(plan)  @ 1445-1499
+  @fn handleFxChainKeys(plan)  @ 1445-1495
       -- 1D grammar: Up/Down walk rows, Left/Right edit or open a picker, Super+Up/Down reorder.
       -- Enter/Super+X/Super+R/Esc — see docs/trackerRender.md § FX chain — palette tab.
-  @fn headerActions(plan)  @ 1503-1528
+  @fn headerActions(plan)  @ 1499-1524
       -- clear and freeze need no keyboard session, so both stay live regardless of focus; commit/cancel end
       -- the session, so they gate on strip focus (mouse parity for Super+X/Esc) — nothing to end unfocused.
-  @fn catalogueRow(plan)  @ 1532-1561
+  @fn catalogueRow(plan)  @ 1528-1557
       -- The catalogue's own row under the action row, both directions: `save` into whichever tier you
       -- pick, `load` back onto the host, minting one where `save` refuses to. See docs/trackerRender.md § FX chain.
-  @fn rowHighlight(active)  @ 1565-1572
+  @fn rowHighlight(active)  @ 1561-1568
       -- Fill behind the keyboard cursor's row (replacing the old ▸): drawn before the row content so it
       -- sits underneath; spans the current indent to the value column's left edge (not the margin).
-  @fn kindItems(currentKind)  @ 1575-1581
+  @fn kindItems(currentKind)  @ 1571-1577
       -- Picker items for every fx kind; flags the caller's current kind (nil on the add slot).
-  @fn drawAddChainStage(host, onCursor)  @ 1584-1593
+  @fn drawAddChainStage(host, onCursor)  @ 1580-1589
       -- The add-stage picker, drawn as the chain's terminal row so the cursor can arrow onto it.
-  @fn enterStrip(host, stage, param)  @ 1597-1602
+  @fn enterStrip(host, stage, param)  @ 1593-1598
       -- Take strip focus and move the selection chip to (stage, param), snapshotting on entry.
       -- Label click enters; a value-widget edit doesn't — see docs/trackerRender.md § FX chain — palette tab.
-  @fn clickToCursor(host, stage, param)  @ 1603-1605
-  @fn withDim(dim, fn)  @ 1609-1613
+  @fn clickToCursor(host, stage, param)  @ 1599-1601
+  @fn withDim(dim, fn)  @ 1605-1609
       -- A bypassed stage dims its *labels* only. BeginDisabled would block the mouse while the keyboard
       -- path (adjustRow → tv:setFxField) sailed past it, and the A/B gesture wants the stage editable.
-  @fn drawBypassBadge(host, col)  @ 1617-1622
+  @fn drawBypassBadge(host, col)  @ 1613-1618
       -- Per-stage bypass, riding the header cluster beside `del`. Idle it inherits the row's text
       -- colour; lit it borrows the wiring page's bypass tint so the two bypasses read alike.
-  @fn drawChainStage(host, col, onStage, cur, isFirst, isLast)  @ 1626-1665
+  @fn drawChainStage(host, col, onStage, cur, isFirst, isLast)  @ 1622-1661
       -- One stage as tree rows: heading (swap-picker) with ↑/↓ reorder + del, then a field per row —
       -- label left, value column flush right. Cursor row highlights while the strip holds focus.
-  @fn drawFlowMarker()  @ 1670-1681
-  @fn drawFxChainBody(plan)  @ 1685-1703
+  @fn drawFlowMarker()  @ 1666-1677
+  @fn drawFxChainBody(plan)  @ 1681-1699
       -- Drawn inside the palette child (the tab header + chrome styles are already pushed): the action
       -- row, then each stage top-to-bottom with a ↓ between, ending on the add row.
-  @fn editFx()  @ 1707-1724
+  @fn editFx()  @ 1703-1720
       -- Super+X enters the fx session (a selection mints its region, the caret pins); the session claims
       -- the fx tab so entry always lands keyboard focus there. Mouse entry is hostless (see stripPlan).
-  @fn openNewTakeModal()  @ 1729-1743
+  @fn openNewTakeModal()  @ 1725-1739
       -- New take from the tracker: name + length modal, mint a parked slot, select it.
       -- Length seeds from / persists to the project-tier newTakeBeats config.
-  @fn focusParams()  @ 1766-1769
+  @fn focusParams()  @ 1762-1765
       -- Super-R toggles the parameters tab: park it over an auto-shown chain and land on the find box, or,
       -- if already parked, drop the override back to the auto chain. Super-X (editFx) is the mirror, owning fx.
-  @fn deleteBoundSlot()  @ 1773-1782
+  @fn deleteBoundSlot()  @ 1769-1778
       -- Ctrl+Delete forever-deletes the bound slot — every instance across the arrange and
       -- the parked copy — so it stands behind a confirm, as the arrange page's does.
 
@@ -262,135 +262,135 @@
   @held items.get()  @ 703
   @held items.set(v)  @ 704
   @held gridPane.inputAllowed()  @ 1178
-  @held tracker.setRPB()  @ 1787-1791
-  @held tracker.takeProperties()  @ 1793
-  @held tracker.duplicateBelow()  @ 1795
-  @held tracker.prevVariant()  @ 1796
-  @held tracker.nextVariant()  @ 1797
-  @held tracker.prevTrack()  @ 1800
-  @held tracker.nextTrack()  @ 1801
-  @held tracker.prevTake()  @ 1802
-  @held tracker.nextTake()  @ 1803
-  @held tracker.prevInstance()  @ 1804
-  @held tracker.nextInstance()  @ 1805
-  @held tracker.deleteInstance()  @ 1806
-  @held tracker.addNoteLane()  @ 1808
-  @held tracker.openTemperPicker()  @ 1817
-  @held tracker.openSwingPicker()  @ 1818
-  @held tracker.toggleLoopToItem()  @ 1820
-  @held tracker.loopToItemNow()  @ 1821
-  @held tracker.clearLoop()  @ 1822
-  @held tracker.toggleFollowPlay()  @ 1823
-  @held tracker.pinMap()  @ 1827
+  @held tracker.setRPB()  @ 1783-1787
+  @held tracker.takeProperties()  @ 1789
+  @held tracker.duplicateBelow()  @ 1791
+  @held tracker.prevVariant()  @ 1792
+  @held tracker.nextVariant()  @ 1793
+  @held tracker.prevTrack()  @ 1796
+  @held tracker.nextTrack()  @ 1797
+  @held tracker.prevTake()  @ 1798
+  @held tracker.nextTake()  @ 1799
+  @held tracker.prevInstance()  @ 1800
+  @held tracker.nextInstance()  @ 1801
+  @held tracker.deleteInstance()  @ 1802
+  @held tracker.addNoteLane()  @ 1804
+  @held tracker.openTemperPicker()  @ 1813
+  @held tracker.openSwingPicker()  @ 1814
+  @held tracker.toggleLoopToItem()  @ 1816
+  @held tracker.loopToItemNow()  @ 1817
+  @held tracker.clearLoop()  @ 1818
+  @held tracker.toggleFollowPlay()  @ 1819
+  @held tracker.pinMap()  @ 1823
 
 # Handlers registered
   @handler modalHost:takeProps(s, close)  @ 865-919
   @handler modalHost:retune(s, close)  @ 957-1078
-  @handler modalHost:newTake(s, close)  @ 1745-1762
+  @handler modalHost:newTake(s, close)  @ 1741-1758
 
 # Public API (tr:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tr:openTakeProperties()  @ 1850-1877
+  @api tr:openTakeProperties()  @ 1846-1873
       -- Shared by the tracker's takeProperties command and arrange's, which binds tm first.
       -- see docs/trackerPage.md § Take properties
   -- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
-  @api tr:toolbarSegments()  @ 1881
-  @api tr:renderBody(_, w, h, dispatch)  @ 1883-1928
-  @api tr:statusSegments()  @ 1932-1935
+  @api tr:toolbarSegments()  @ 1877
+  @api tr:renderBody(_, w, h, dispatch)  @ 1879-1924
+  @api tr:statusSegments()  @ 1928-1931
       -- ctx and grid.cols are built together in tv:rebuild; an empty grid (no take
       -- yet on script reopen) has no cursor to report, so the bar stays empty.
-  @api tr:focusState()  @ 1940-1948
+  @api tr:focusState()  @ 1936-1944
       -- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
       -- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ modalHost:retune:973,1002 drawChainStage:1658
+  @use call    ImGui.AlignTextToFramePadding  @ modalHost:retune:973,1002 drawChainStage:1654
   @use call    ImGui.Attach  @ drawTree:461
-  @use call    ImGui.Button  @ toolbarSegments.render:116,143 paletteActions:171,175 modalHost:takeProps:903,904,911,915 modalHost:retune:1065,1069 fxFieldWidget:1354 headerActions:1504,1510,1517,1524,1526 drawBypassBadge:1620 drawChainStage:1643,1647,1652 modalHost:newTake:1754,1758
-  @use call    ImGui.CalcTextSize  @ drawTree:453,454 modalHost:retune:968,1062 drawFlowMarker:1673
+  @use call    ImGui.Button  @ toolbarSegments.render:116,143 paletteActions:171,175 modalHost:takeProps:903,904,911,915 modalHost:retune:1065,1069 fxFieldWidget:1354 headerActions:1500,1506,1513,1520,1522 drawBypassBadge:1616 drawChainStage:1639,1643,1648 modalHost:newTake:1750,1754
+  @use call    ImGui.CalcTextSize  @ drawTree:453,454 modalHost:retune:968,1062 drawFlowMarker:1669
   @use call    ImGui.CreateListClipper  @ drawTree:460
-  @use call    ImGui.DrawList_AddRectFilled  @ renderBody:1905
-  @use call    ImGui.Dummy  @ drawFlowMarker:1680 drawFxChainBody:1693
-  @use call    ImGui.GetContentRegionAvail  @ drawTreeItem:394 drawMapBody:525 modalHost:retune:1064 rowHighlight:1568 drawChainStage:1630,1657 drawFlowMarker:1672 drawFxChainBody:1692
-  @use call    ImGui.GetCursorPosX  @ modalHost:retune:965 drawChainStage:1630,1657
-  @use call    ImGui.GetCursorScreenPos  @ drawMapBody:528 rowHighlight:1567 drawFlowMarker:1671 renderBody:1895
-  @use call    ImGui.GetFrameHeight  @ fxFieldWidget:1326 rowHighlight:1570 drawChainStage:1627
+  @use call    ImGui.DrawList_AddRectFilled  @ renderBody:1901
+  @use call    ImGui.Dummy  @ drawFlowMarker:1676 drawFxChainBody:1689
+  @use call    ImGui.GetContentRegionAvail  @ drawTreeItem:394 drawMapBody:525 modalHost:retune:1064 rowHighlight:1564 drawChainStage:1626,1653 drawFlowMarker:1668 drawFxChainBody:1688
+  @use call    ImGui.GetCursorPosX  @ modalHost:retune:965 drawChainStage:1626,1653
+  @use call    ImGui.GetCursorScreenPos  @ drawMapBody:528 rowHighlight:1563 drawFlowMarker:1667 renderBody:1891
+  @use call    ImGui.GetFrameHeight  @ fxFieldWidget:1326 rowHighlight:1566 drawChainStage:1623
   @use call    ImGui.GetInputQueueCharacter  @ typedChar:1432
   @use call    ImGui.GetItemRectMax  @ scrollFollow:378
   @use call    ImGui.GetItemRectMin  @ scrollFollow:377
-  @use call    ImGui.GetKeyMods  @ handlePaletteKeys:319,322,357 drawMapBody:550 modalHost:takeProps:878 handleFxChainKeys:1452
-  @use call    ImGui.GetMousePos  @ drawMapBody:544 renderBody:1917
+  @use call    ImGui.GetKeyMods  @ handlePaletteKeys:319,322,357 drawMapBody:550 modalHost:takeProps:878 handleFxChainKeys:1448
+  @use call    ImGui.GetMousePos  @ drawMapBody:544 renderBody:1913
   @use call    ImGui.GetScrollY  @ scrollFollow:381
   @use call    ImGui.GetStyleVar  @ drawTree:452 modalHost:retune:971,1060,1061 fxFieldWidget:1326
-  @use call    ImGui.GetWindowDrawList  @ renderBody:1905
+  @use call    ImGui.GetWindowDrawList  @ renderBody:1901
   @use call    ImGui.GetWindowHeight  @ scrollFollow:380
   @use call    ImGui.GetWindowPos  @ scrollFollow:379
-  @use call    ImGui.Indent  @ drawChainStage:1655
-  @use call    ImGui.InputText  @ modalHost:takeProps:891,900 periodBox:1274 modalHost:newTake:1749,1752
+  @use call    ImGui.Indent  @ drawChainStage:1651
+  @use call    ImGui.InputText  @ modalHost:takeProps:891,900 periodBox:1274 modalHost:newTake:1745,1748
   @use call    ImGui.InputTextWithHint  @ paletteFindBox:201
   @use call    ImGui.InvisibleButton  @ drawParamsBody:497
-  @use call    ImGui.IsAnyItemActive  @ drawFxChainBody:1700 focusState:1946
+  @use call    ImGui.IsAnyItemActive  @ drawFxChainBody:1696 focusState:1942
   @use call    ImGui.IsItemActivated  @ periodBox:1277
   @use call    ImGui.IsItemActive  @ paletteFindBox:203
-  @use call    ImGui.IsItemClicked  @ clickToCursor:1604
+  @use call    ImGui.IsItemClicked  @ clickToCursor:1600
   @use call    ImGui.IsItemDeactivated  @ periodBox:1283
   @use call    ImGui.IsItemDeactivatedAfterEdit  @ periodBox:1279
-  @use call    ImGui.IsKeyPressed  @ handlePaletteKeys:307 modalHost:takeProps:878,912,913,916 modalHost:retune:1066,1067,1070 handleFxChainKeys:1451 modalHost:newTake:1755,1756,1759
-  @use call    ImGui.IsMouseClicked  @ drawParamsBody:507 drawMapBody:546,582 renderBody:1916
+  @use call    ImGui.IsKeyPressed  @ handlePaletteKeys:307 modalHost:takeProps:878,912,913,916 modalHost:retune:1066,1067,1070 handleFxChainKeys:1447 modalHost:newTake:1751,1752,1755
+  @use call    ImGui.IsMouseClicked  @ drawParamsBody:507 drawMapBody:546,582 renderBody:1912
   @use call    ImGui.IsMouseDragging  @ drawMapBody:551
   @use call    ImGui.IsMouseReleased  @ drawMapBody:555
-  @use call    ImGui.IsWindowAppearing  @ modalHost:takeProps:888 modalHost:retune:960 modalHost:newTake:1746
-  @use call    ImGui.IsWindowFocused  @ renderBody:1913
+  @use call    ImGui.IsWindowAppearing  @ modalHost:takeProps:888 modalHost:retune:960 modalHost:newTake:1742
+  @use call    ImGui.IsWindowFocused  @ renderBody:1909
   @use call    ImGui.IsWindowHovered  @ drawParamsBody:507 drawMapBody:546,582
   @use call    ImGui.ListClipper_Begin  @ drawTree:463
   @use call    ImGui.ListClipper_End  @ drawTree:474
   @use call    ImGui.ListClipper_GetDisplayRange  @ drawTree:469
   @use call    ImGui.ListClipper_IncludeItemByIndex  @ drawTree:466
   @use call    ImGui.ListClipper_Step  @ drawTree:468
-  @use call    ImGui.PopFont  @ renderBody:1892
+  @use call    ImGui.PopFont  @ renderBody:1888
   @use call    ImGui.PopID  @ modalHost:takeProps:901
-  @use call    ImGui.PopStyleColor  @ withDim:1612 drawBypassBadge:1621 renderBody:1891
-  @use call    ImGui.PushFont  @ renderBody:1888
+  @use call    ImGui.PopStyleColor  @ withDim:1608 drawBypassBadge:1617 renderBody:1887
+  @use call    ImGui.PushFont  @ renderBody:1884
   @use call    ImGui.PushID  @ modalHost:takeProps:899
-  @use call    ImGui.PushStyleColor  @ withDim:1610 drawBypassBadge:1618 renderBody:1889
+  @use call    ImGui.PushStyleColor  @ withDim:1606 drawBypassBadge:1614 renderBody:1885
   @use call    ImGui.RadioButton  @ modalHost:takeProps:908
-  @use call    ImGui.SameLine  @ toolbarSegments.render:115,131,142 paletteActions:173 drawTreeItem:410,412 modalHost:takeProps:903,904,907,914 modalHost:retune:974,979,999,1002,1003,1068 headerActions:1505,1515,1522,1525 catalogueRow:1544 drawChainStage:1641,1645,1649,1651,1661 modalHost:newTake:1757
-  @use call    ImGui.Separator  @ drawParamsBody:490 drawFxChainBody:1691
-  @use call    ImGui.SetCursorPosX  @ modalHost:retune:1064 drawChainStage:1641,1661
-  @use call    ImGui.SetKeyboardFocusHere  @ paletteFindBox:200 drawParamsBody:495 modalHost:takeProps:896 periodBox:1272 modalHost:newTake:1748
+  @use call    ImGui.SameLine  @ toolbarSegments.render:115,131,142 paletteActions:173 drawTreeItem:410,412 modalHost:takeProps:903,904,907,914 modalHost:retune:974,979,999,1002,1003,1068 headerActions:1501,1511,1518,1521 catalogueRow:1540 drawChainStage:1637,1641,1645,1647,1657 modalHost:newTake:1753
+  @use call    ImGui.Separator  @ drawParamsBody:490 drawFxChainBody:1687
+  @use call    ImGui.SetCursorPosX  @ modalHost:retune:1064 drawChainStage:1637,1657
+  @use call    ImGui.SetKeyboardFocusHere  @ paletteFindBox:200 drawParamsBody:495 modalHost:takeProps:896 periodBox:1272 modalHost:newTake:1744
   @use call    ImGui.SetNextItemWidth  @ paletteFindBox:199 modalHost:retune:1023,1032,1042,1051 periodBox:1273
   @use call    ImGui.SetScrollY  @ scrollFollow:382,383
   @use call    ImGui.SliderDouble  @ modalHost:retune:1024,1033,1043,1052
   @use call    ImGui.SmallButton  @ drawTreeItem:411,413
-  @use call    ImGui.Text  @ modalHost:takeProps:890,894 modalHost:retune:973,1002 drawChainStage:1659 modalHost:newTake:1747,1751 renderBody:1890
+  @use call    ImGui.Text  @ modalHost:takeProps:890,894 modalHost:retune:973,1002 drawChainStage:1655 modalHost:newTake:1743,1747 renderBody:1886
   @use call    ImGui.TextDisabled  @ drawTree:448
-  @use call    ImGui.Unindent  @ drawChainStage:1663
-  @use call    chrome.colour  @ withDim:1610 drawBypassBadge:1618 renderBody:1889,1906
-  @use call    chrome.disabledIf  @ toolbarSegments.render:132 paletteActions:170,174 modalHost:retune:995,1005,1015,1031,1041 headerActions:1509,1516,1523 catalogueRow:1536,1547 drawChainStage:1642,1646
-  @use call    chrome.drawPicker  @ toolbarSegments.render:82,97,108,123,134 modalHost:retune:989,1006 fxFieldWidget:1329 catalogueRow:1537,1548 drawAddChainStage:1586 drawChainStage:1632
+  @use call    ImGui.Unindent  @ drawChainStage:1659
+  @use call    chrome.colour  @ withDim:1606 drawBypassBadge:1614 renderBody:1885,1902
+  @use call    chrome.disabledIf  @ toolbarSegments.render:132 paletteActions:170,174 modalHost:retune:995,1005,1015,1031,1041 headerActions:1505,1512,1519 catalogueRow:1532,1543 drawChainStage:1638,1642
+  @use call    chrome.drawPicker  @ toolbarSegments.render:82,97,108,123,134 modalHost:retune:989,1006 fxFieldWidget:1329 catalogueRow:1533,1544 drawAddChainStage:1582 drawChainStage:1628
   @use call    chrome.dropdown  @ fxFieldWidget:1335
-  @use call    chrome.gridWidth  @ renderBody:1896
+  @use call    chrome.gridWidth  @ renderBody:1892
   @use call    chrome.libPicker  @ toolbarSegments.render:112,127,138 retuneTargetItems:926
   @use call    chrome.numberStepper  @ modalHost:retune:1017 fxFieldWidget:1344,1348,1357
   @use call    chrome.palettePane  @ drawParamPalette:627
-  @use call    chrome.pickerIsActive  @ modalHost:retune:1058 drawFxChainBody:1700 focusState:1942
+  @use call    chrome.pickerIsActive  @ modalHost:retune:1058 drawFxChainBody:1696 focusState:1938
   @use call    chrome.radio  @ modalHost:retune:980,1000
-  @use call    chrome.requestPickerOpen  @ adjustRow:1290 handleFxChainKeys:1472,1487,1496 editFx:1719 tracker.openTemperPicker:1817 tracker.openSwingPicker:1818
-  @use call    chrome.screenPainter  @ drawMapBody:524 drawFxChainBody:1686
+  @use call    chrome.requestPickerOpen  @ adjustRow:1290 handleFxChainKeys:1468,1483,1492 editFx:1715 tracker.openTemperPicker:1813 tracker.openSwingPicker:1814
+  @use call    chrome.screenPainter  @ drawMapBody:524 drawFxChainBody:1682
   @use call    chrome.slotFill  @ drawMapBody:590
-  @use call    chrome.statusEditActive  @ focusState:1942
-  @use call    chrome.tierPicker  @ catalogueRow:1534
+  @use call    chrome.statusEditActive  @ focusState:1938
+  @use call    chrome.tierPicker  @ catalogueRow:1530
   @use call    chrome.treeHeading  @ drawTreeItem:388,390
   @use call    chrome.treeRow  @ drawTreeItem:397,421
-  @use call    cm:get  @ toolbarSegments.render:107 sampleReadout:652 sampleItems:660 statusSegments.get:689,691,693 statusSegments.visible:696 items.get:703 modalHost:takeProps:869 retuneTargetItems:924 openNewTakeModal:1736,1738 openTakeProperties:1851
+  @use call    cm:get  @ toolbarSegments.render:107 sampleReadout:652 sampleItems:660 statusSegments.get:689,691,693 statusSegments.visible:696 items.get:703 modalHost:takeProps:869 retuneTargetItems:924 openNewTakeModal:1732,1734 openTakeProperties:1847
   @use call    cm:getAt  @ openRetuneModal:1106,1107,1113
-  @use call    cm:set  @ setOctave:681 setAdvance:682 setSample:683 items.set:704 openNewTakeModal:1739
-  @use call    cmgr:doAfter  @ <load>:1830
+  @use call    cm:set  @ setOctave:681 setAdvance:682 setSample:683 items.set:704 openNewTakeModal:1735
+  @use call    cmgr:doAfter  @ <load>:1826
   @use call    cmgr:invoke  @ toolbarSegments.render:116,143
   @use call    cmgr:keySpec  @ modalHost:takeProps:877
   @use call    cmgr:keysFor  @ modalHost:takeProps:883,884
-  @use call    cmgr:scope  @ <load>:712,1784,1837
+  @use call    cmgr:scope  @ <load>:712,1780,1833
   @use call    ds:get  @ toolbarSegments.render:122,133 sampleReadout:653 sampleItems:661
   @use call    facade.get  @ arrange:26
   @use call    generators.customise  @ launchPattern:1217 fxFieldWidget:1353
@@ -398,21 +398,21 @@
   @use call    generators.destsFor  @ destItems:1235
   @use call    generators.fieldRange  @ adjustRow:1313 fxFieldWidget:1356
   @use call    generators.fieldsFor  @ stripColumns:1392
-  @use call    generators.labelOf  @ stripColumns:1401 kindItems:1578
+  @use call    generators.labelOf  @ stripColumns:1401 kindItems:1574
   @use call    generators.retarget  @ fxFieldWidget:1332
-  @use call    generators.seed  @ drawAddChainStage:1589 drawChainStage:1637
-  @use call    gridPane:draw  @ renderBody:1903
-  @use call    gridPane:geom  @ renderBody:1909
-  @use call    gridPane:handleKeys  @ renderBody:1921
-  @use call    gridPane:handleMouse  @ renderBody:1915
-  @use call    help:anchor  @ renderBody:1910
+  @use call    generators.seed  @ drawAddChainStage:1585 drawChainStage:1633
+  @use call    gridPane:draw  @ renderBody:1899
+  @use call    gridPane:geom  @ renderBody:1905
+  @use call    gridPane:handleKeys  @ renderBody:1917
+  @use call    gridPane:handleMouse  @ renderBody:1911
+  @use call    help:anchor  @ renderBody:1906
   @use call    help:registerPage  @ <load>:717
-  @use call    help:wasOpenAtFrameStart  @ renderBody:1915,1921
-  @use call    modalHost:isOpen  @ drawFxChainBody:1699 focusState:1942
-  @use call    modalHost:open  @ openRetuneModal:1108 openNewTakeModal:1732 openTakeProperties:1854
+  @use call    help:wasOpenAtFrameStart  @ renderBody:1911,1917
+  @use call    modalHost:isOpen  @ drawFxChainBody:1695 focusState:1938
+  @use call    modalHost:open  @ openRetuneModal:1108 openNewTakeModal:1728 openTakeProperties:1850
   @use call    modalHost:openConfirm  @ removeAutomation:153 openConfirm:856 offerWiden:1087
   @use call    modalHost:openPrompt  @ openPrompt:852
-  @use call    modalHost:registerKind  @ <load>:865,957,1745
+  @use call    modalHost:registerKind  @ <load>:865,957,1741
   @use call    pe:launch  @ launchPattern:1222
   @use call    timing.formatPeriod  @ periodBox:1271
   @use call    timing.parsePeriod  @ periodBox:1280
@@ -421,42 +421,42 @@
   @use call    tuning.ladderCents  @ adjustRow:1307 fxFieldWidget:1345,1349
   @use call    tuning.stepLadder  @ adjustRow:1305 fxFieldWidget:1342
   @use call    tv:activeTemper  @ modalHost:retune:961 offerWiden:1085 openRetuneModal:1105 slideTemper:1199
-  @use call    tv:addExtraCol  @ addColumn:1156 tracker.addNoteLane:1808
-  @use call    tv:addFxStage  @ drawAddChainStage:1589
-  @use call    tv:applyTakeProperties  @ openTakeProperties:1869,1873
+  @use call    tv:addExtraCol  @ addColumn:1156 tracker.addNoteLane:1804
+  @use call    tv:addFxStage  @ drawAddChainStage:1585
+  @use call    tv:applyTakeProperties  @ openTakeProperties:1865,1869
   @use call    tv:armLearn  @ handlePaletteKeys:358 drawTreeItem:414
   @use call    tv:automateParam  @ paletteActions:171 handlePaletteKeys:364 drawTreeItem:431
   @use call    tv:barBeatSub  @ cursorPosition:647
-  @use call    tv:bracketCurrentInstance  @ tracker.loopToItemNow:1821
+  @use call    tv:bracketCurrentInstance  @ tracker.loopToItemNow:1817
   @use call    tv:caretKey  @ caretKeyNow:196
-  @use call    tv:clearTabOverride  @ handlePaletteKeys:323 focusParams:1767
-  @use call    tv:currentSlotIdx  @ currentSlotLabel:60 toolbarSegments.render:92 deleteBoundSlot:1774
-  @use call    tv:currentTrackIdx  @ currentTrackLabel:51 currentSlotLabel:61 toolbarSegments.render:77,94 openNewTakeModal:1730 deleteBoundSlot:1774
-  @use call    tv:deleteFxPatch  @ catalogueRow:1558
-  @use call    tv:deleteInstance  @ tracker.deleteInstance:1806
-  @use call    tv:duplicateBelow  @ tracker.duplicateBelow:1795
-  @use call    tv:ec  @ cursorChan:69 paletteActions:168 cursorColLabel:642 cursorPosition:647 openRetuneModal:1111 scopedAction:1129 removeOrHideCol:1164 1831
-  @use call    tv:followsPlay  @ items.get:702 tracker.toggleFollowPlay:1823
-  @use call    tv:freezeMode  @ headerActions:1508
-  @use call    tv:freezeRegion  @ headerActions:1511
-  @use call    tv:freezeToGroup  @ headerActions:1518
+  @use call    tv:clearTabOverride  @ handlePaletteKeys:323 focusParams:1763
+  @use call    tv:currentSlotIdx  @ currentSlotLabel:60 toolbarSegments.render:92 deleteBoundSlot:1770
+  @use call    tv:currentTrackIdx  @ currentTrackLabel:51 currentSlotLabel:61 toolbarSegments.render:77,94 openNewTakeModal:1726 deleteBoundSlot:1770
+  @use call    tv:deleteFxPatch  @ catalogueRow:1554
+  @use call    tv:deleteInstance  @ tracker.deleteInstance:1802
+  @use call    tv:duplicateBelow  @ tracker.duplicateBelow:1791
+  @use call    tv:ec  @ cursorChan:69 paletteActions:168 cursorColLabel:642 cursorPosition:647 openRetuneModal:1111 scopedAction:1129 removeOrHideCol:1164 1827
+  @use call    tv:followsPlay  @ items.get:702 tracker.toggleFollowPlay:1819
+  @use call    tv:freezeMode  @ headerActions:1504
+  @use call    tv:freezeRegion  @ headerActions:1507
+  @use call    tv:freezeToGroup  @ headerActions:1514
   @use call    tv:fxHostAtCursor  @ stripPlan:1412
-  @use call    tv:fxHostForEdit  @ catalogueRow:1554 drawAddChainStage:1589 editFx:1709
-  @use call    tv:gotoTake  @ tracker.prevTake:1802 tracker.nextTake:1803
-  @use call    tv:gotoTrack  @ tracker.prevTrack:1800 tracker.nextTrack:1801
+  @use call    tv:fxHostForEdit  @ catalogueRow:1550 drawAddChainStage:1585 editFx:1705
+  @use call    tv:gotoTake  @ tracker.prevTake:1798 tracker.nextTake:1799
+  @use call    tv:gotoTrack  @ tracker.prevTrack:1796 tracker.nextTrack:1797
   @use call    tv:hideExtraCol  @ removeOrHideCol:1167
   @use call    tv:learnFxGuid  @ handlePaletteKeys:359 drawTreeItem:407
   @use call    tv:listParams  @ buildPlan:255,258
-  @use call    tv:loadFxPatch  @ catalogueRow:1555
-  @use call    tv:loopsToItem  @ items.get:701 tracker.toggleLoopToItem:1820
+  @use call    tv:loadFxPatch  @ catalogueRow:1551
+  @use call    tv:loopsToItem  @ items.get:701 tracker.toggleLoopToItem:1816
   @use call    tv:mapLoopCand  @ drawMapBody:553
-  @use call    tv:mapPinned  @ tracker.pinMap:1827
+  @use call    tv:mapPinned  @ tracker.pinMap:1823
   @use call    tv:mapWindow  @ drawMapBody:536
-  @use call    tv:moveFxStage  @ handleFxChainKeys:1479 drawChainStage:1643,1647
-  @use call    tv:newTakeBelow  @ openNewTakeModal:1740
+  @use call    tv:moveFxStage  @ handleFxChainKeys:1475 drawChainStage:1639,1643
+  @use call    tv:newTakeBelow  @ openNewTakeModal:1736
   @use call    tv:noteByUuid  @ adjustRow:1299 fxFieldWidget:1341
-  @use call    tv:noteFx  @ stripPlan:1414 catalogueRow:1533 drawAddChainStage:1591 enterStrip:1598 editFx:1711
-  @use call    tv:overrideTab  @ handlePaletteKeys:320 drawParamPalette:630 handleFxChainKeys:1457 editFx:1708 focusParams:1768
+  @use call    tv:noteFx  @ stripPlan:1414 catalogueRow:1529 drawAddChainStage:1587 enterStrip:1594 editFx:1707
+  @use call    tv:overrideTab  @ handlePaletteKeys:320 drawParamPalette:630 handleFxChainKeys:1453 editFx:1704 focusParams:1764
   @use call    tv:paletteCursor  @ handlePaletteKeys:327 drawTree:451
   @use call    tv:paletteExpanded  @ buildPlan:253
   @use call    tv:paletteFilter  @ paletteFindBox:201 handlePaletteKeys:331 drawTree:448,455 drawParamsBody:499,500
@@ -466,46 +466,46 @@
   @use call    tv:paramTargets  @ drawParamsBody:499
   @use call    tv:pickTake  @ toolbarSegments.render:100
   @use call    tv:pickTrack  @ toolbarSegments.render:85
-  @use call    tv:pollLearn  @ renderBody:1913
-  @use call    tv:pruneEmptyRegion  @ renderBody:1900,1923
-  @use call    tv:removeFxStage  @ handleFxChainKeys:1493 drawChainStage:1652
-  @use call    tv:replaceFxStage  @ launchPattern:1226 pickChoice:1256 fxFieldWidget:1332 drawChainStage:1637
+  @use call    tv:pollLearn  @ renderBody:1909
+  @use call    tv:pruneEmptyRegion  @ renderBody:1896,1919
+  @use call    tv:removeFxStage  @ handleFxChainKeys:1489 drawChainStage:1648
+  @use call    tv:replaceFxStage  @ launchPattern:1226 pickChoice:1256 fxFieldWidget:1332 drawChainStage:1633
   @use call    tv:resolution  @ launchPattern:1217 pickChoice:1255 fxFieldWidget:1353
   @use call    tv:retune  @ runRetune:1098
-  @use call    tv:saveFxPatch  @ catalogueRow:1540,1541
+  @use call    tv:saveFxPatch  @ catalogueRow:1536,1537
   @use call    tv:setColSwingSlot  @ pickColSwing:38
   @use call    tv:setEditCursorQN  @ drawMapBody:557
-  @use call    tv:setFollowPlay  @ items.get:702 tracker.toggleFollowPlay:1823
-  @use call    tv:setFxBypass  @ handleFxChainKeys:1481 drawBypassBadge:1620
+  @use call    tv:setFollowPlay  @ items.get:702 tracker.toggleFollowPlay:1819
+  @use call    tv:setFxBypass  @ handleFxChainKeys:1477 drawBypassBadge:1616
   @use call    tv:setFxExpanded  @ handlePaletteKeys:339,343,359,368 drawTreeItem:405
   @use call    tv:setFxField  @ launchPattern:1223 pickChoice:1254 periodBox:1281 adjustRow:1296,1303,1306,1315 fxFieldWidget:1345,1349,1358
   @use call    tv:setLoopRangeQN  @ drawMapBody:556
-  @use call    tv:setLoopToItem  @ items.get:701 tracker.toggleLoopToItem:1820 tracker.clearLoop:1822
-  @use call    tv:setMapPinned  @ tracker.pinMap:1827
-  @use call    tv:setNoteFx  @ cancelStrip:1439 headerActions:1504
+  @use call    tv:setLoopToItem  @ items.get:701 tracker.toggleLoopToItem:1816 tracker.clearLoop:1818
+  @use call    tv:setMapPinned  @ tracker.pinMap:1823
+  @use call    tv:setNoteFx  @ cancelStrip:1439 headerActions:1500
   @use call    tv:setPaletteCursor  @ handlePaletteKeys:328,354,365 drawTreeItem:402,426
   @use call    tv:setPaletteFilter  @ paletteFindBox:202 handlePaletteKeys:316,365
   @use call    tv:setPaletteParam  @ selectParam:300 drawTreeItem:427
-  @use call    tv:setRowPerBeat  @ setRpb:680 tracker.setRPB:1789
-  @use call    tv:setStripCursor  @ handleFxChainKeys:1466,1498 catalogueRow:1555 enterStrip:1600 drawFxChainBody:1687 editFx:1718,1721
+  @use call    tv:setRowPerBeat  @ setRpb:680 tracker.setRPB:1785
+  @use call    tv:setStripCursor  @ handleFxChainKeys:1462,1494 catalogueRow:1551 enterStrip:1596 drawFxChainBody:1683 editFx:1714,1717
   @use call    tv:setSwingSlot  @ pickSwing:37
   @use call    tv:setTemperSlot  @ pickTemper:36
   @use call    tv:showDelay  @ addColumn:1153
   @use call    tv:showFx  @ drawTreeItem:411
-  @use call    tv:stepInstance  @ tracker.prevInstance:1804 tracker.nextInstance:1805
-  @use call    tv:stepVariant  @ tracker.prevVariant:1796 tracker.nextVariant:1797
-  @use call    tv:stripCursor  @ clampCursor:1423 editFx:1720
-  @use call    tv:tabOverride  @ focusParams:1767 renderBody:1897
-  @use call    tv:takeName  @ openTakeProperties:1853
-  @use call    tv:tick  @ renderBody:1927
+  @use call    tv:stepInstance  @ tracker.prevInstance:1800 tracker.nextInstance:1801
+  @use call    tv:stepVariant  @ tracker.prevVariant:1792 tracker.nextVariant:1793
+  @use call    tv:stripCursor  @ clampCursor:1423 editFx:1716
+  @use call    tv:tabOverride  @ focusParams:1763 renderBody:1893
+  @use call    tv:takeName  @ openTakeProperties:1849
+  @use call    tv:tick  @ renderBody:1923
   @use call    tv:travelTo  @ drawMapBody:595
   @use call    tv:unautomateParam  @ removeAutomation:157,160
-  @use call    tv:wireGroupLifetime  @ <load>:1842
-  @use call    util.add  @ toolbarSegments.render:80,95 emitParams:223,225,229,231,236,238 buildPlan:260,268,270 navRows:283,285 sampleItems:664,669 retuneTargetItems:927 retuneKeyItems:941 offerWiden:1086 destItems:1236 chainRows:1376,1377 stripColumns:1394,1396,1400 stripPlan:1418 kindItems:1578
+  @use call    tv:wireGroupLifetime  @ <load>:1838
+  @use call    util.add  @ toolbarSegments.render:80,95 emitParams:223,225,229,231,236,238 buildPlan:260,268,270 navRows:283,285 sampleItems:664,669 retuneTargetItems:927 retuneKeyItems:941 offerWiden:1086 destItems:1236 chainRows:1376,1377 stripColumns:1394,1396,1400 stripPlan:1418 kindItems:1574
   @use call    util.assign  @ launchPattern:1224
-  @use call    util.atomic  @ <load>:36,37,38,681,682,683,1097 openNewTakeModal:1737 deleteBoundSlot:1777
-  @use call    util.clamp  @ adjustRow:1314 clampCursor:1424,1426 handleFxChainKeys:1464,1484
-  @use call    util.deepClone  @ launchPattern:1220 enterStrip:1598 editFx:1713
+  @use call    util.atomic  @ <load>:36,37,38,681,682,683,1097 openNewTakeModal:1733 deleteBoundSlot:1773
+  @use call    util.clamp  @ adjustRow:1314 clampCursor:1424,1426 handleFxChainKeys:1460,1480
+  @use call    util.deepClone  @ launchPattern:1220 enterStrip:1594 editFx:1709
   @use call    util.deepEq  @ choiceIndex:1190
   @use call    util.instantiate  @ <load>:1176
   @use call    util.oneOf  @ addColumn:1154
@@ -517,47 +517,47 @@
   @use require util  @ <load>:8
 
 # Calls (intra-file)
-  @call adjustRow  @ handleFxChainKeys:1489,1491
-  @call arrange  @ currentTrackLabel:52 slotLabel:58 currentSlotLabel:61 toolbarSegments.render:79,94 openNewTakeModal:1731 deleteBoundSlot:1778
+  @call adjustRow  @ handleFxChainKeys:1485,1487
+  @call arrange  @ currentTrackLabel:52 slotLabel:58 currentSlotLabel:61 toolbarSegments.render:79,94 openNewTakeModal:1727 deleteBoundSlot:1774
   @call buildPlan  @ drawParamsBody:499
-  @call cancelStrip  @ handleFxChainKeys:1454 headerActions:1526 drawAddChainStage:1591
-  @call caretKeyNow  @ handlePaletteKeys:320 handleFxChainKeys:1457 editFx:1708 focusParams:1767,1768 renderBody:1897,1912
-  @call catalogueRow  @ drawFxChainBody:1690
-  @call chainRows  @ handleFxChainKeys:1483
+  @call cancelStrip  @ handleFxChainKeys:1450 headerActions:1522 drawAddChainStage:1587
+  @call caretKeyNow  @ handlePaletteKeys:320 handleFxChainKeys:1453 editFx:1704 focusParams:1763,1764 renderBody:1893,1908
+  @call catalogueRow  @ drawFxChainBody:1686
+  @call chainRows  @ handleFxChainKeys:1479
   @call choiceIndex  @ steppedOption:1245 fxFieldWidget:1335
   @call choiceLabels  @ fxFieldWidget:1335
-  @call clampCursor  @ handleFxChainKeys:1460 drawFxChainBody:1687
-  @call clickToCursor  @ drawChainStage:1660
-  @call currentSlotLabel  @ toolbarSegments.render:99 deleteBoundSlot:1781
+  @call clampCursor  @ handleFxChainKeys:1456 drawFxChainBody:1683
+  @call clickToCursor  @ drawChainStage:1656
+  @call currentSlotLabel  @ toolbarSegments.render:99 deleteBoundSlot:1777
   @call currentTrackLabel  @ toolbarSegments.render:84
   @call cursorChan  @ toolbarSegments.render:130
   @call destItems  @ fxFieldWidget:1331
   @call destLabel  @ destItems:1236 fxFieldWidget:1330
-  @call drawAddChainStage  @ drawFxChainBody:1696
-  @call drawBypassBadge  @ drawChainStage:1650
-  @call drawChainStage  @ drawFxChainBody:1697
-  @call drawFlowMarker  @ drawFxChainBody:1695
+  @call drawAddChainStage  @ drawFxChainBody:1692
+  @call drawBypassBadge  @ drawChainStage:1646
+  @call drawChainStage  @ drawFxChainBody:1693
+  @call drawFlowMarker  @ drawFxChainBody:1691
   @call drawFxChainBody  @ drawParamPalette:632
   @call drawMapBody  @ drawParamPalette:633
-  @call drawParamPalette  @ renderBody:1912
+  @call drawParamPalette  @ renderBody:1908
   @call drawParamsBody  @ drawParamPalette:634
   @call drawTree  @ drawParamsBody:501
   @call drawTreeItem  @ drawTree:471
   @call emitParams  @ buildPlan:271
   @call emptyBody  @ launchPattern:1220
-  @call enterStrip  @ clickToCursor:1604 drawFxChainBody:1688
+  @call enterStrip  @ clickToCursor:1600 drawFxChainBody:1684
   @call floorToCell  @ drawMapBody:557
-  @call fxFieldWidget  @ drawChainStage:1662
-  @call handleFxChainKeys  @ drawFxChainBody:1701
+  @call fxFieldWidget  @ drawChainStage:1658
+  @call handleFxChainKeys  @ drawFxChainBody:1697
   @call handlePaletteKeys  @ drawParamsBody:500
-  @call headerActions  @ drawFxChainBody:1689
-  @call kindItems  @ drawAddChainStage:1587 drawChainStage:1636
-  @call launchPattern  @ adjustRow:1310 fxFieldWidget:1354 handleFxChainKeys:1475
+  @call headerActions  @ drawFxChainBody:1685
+  @call kindItems  @ drawAddChainStage:1583 drawChainStage:1632
+  @call launchPattern  @ adjustRow:1310 fxFieldWidget:1354 handleFxChainKeys:1471
   @call navIndex  @ handlePaletteKeys:327
   @call navRows  @ drawParamsBody:500
   @call offerWiden  @ runRetune:1099
-  @call openConfirm  @ scopedAction:1130 deleteBoundSlot:1776 openTakeProperties:1867
-  @call openPrompt  @ addColumn:1149 tracker.setRPB:1788
+  @call openConfirm  @ scopedAction:1130 deleteBoundSlot:1772 openTakeProperties:1863
+  @call openPrompt  @ addColumn:1149 tracker.setRPB:1784
   @call paletteActions  @ drawParamsBody:488
   @call paletteFindBox  @ drawParamsBody:489
   @call paramRange  @ clampCursor:1425
@@ -569,11 +569,11 @@
   @call removeAutomation  @ paletteActions:175 removeOrHideCol:1166
   @call retuneKeyItems  @ modalHost:retune:1009
   @call retuneTargetItems  @ modalHost:retune:992
-  @call rowHighlight  @ drawAddChainStage:1585 drawChainStage:1629,1656
-  @call rowId  @ periodBox:1269 fxFieldWidget:1324 handleFxChainKeys:1476
-  @call rowIndexOf  @ handleFxChainKeys:1484
+  @call rowHighlight  @ drawAddChainStage:1581 drawChainStage:1625,1652
+  @call rowId  @ periodBox:1269 fxFieldWidget:1324 handleFxChainKeys:1472
+  @call rowIndexOf  @ handleFxChainKeys:1480
   @call runRetune  @ offerWiden:1091
-  @call scopedAction  @ <load>:1812,1813
+  @call scopedAction  @ <load>:1808,1809
   @call scrollFollow  @ drawTreeItem:400,424
   @call selectParam  @ handlePaletteKeys:355,364
   @call slideTemper  @ adjustRow:1298 fxFieldWidget:1340
@@ -581,25 +581,25 @@
   @call stepLabel  @ retuneKeyItems:941 modalHost:retune:1008 offerWiden:1086
   @call steppedOption  @ adjustRow:1292
   @call stripColumns  @ stripPlan:1417
-  @call stripPlan  @ renderBody:1898
-  @call tr:focusState  @ gridPane.inputAllowed:1178 renderBody:1887,1920
-  @call tr:openTakeProperties  @ tracker.takeProperties:1793
+  @call stripPlan  @ renderBody:1894
+  @call tr:focusState  @ gridPane.inputAllowed:1178 renderBody:1883,1916
+  @call tr:openTakeProperties  @ tracker.takeProperties:1789
   @call trackLabel  @ currentTrackLabel:53 toolbarSegments.render:80
-  @call typedChar  @ handleFxChainKeys:1495
-  @call withDim  @ drawChainStage:1631,1659
+  @call typedChar  @ handleFxChainKeys:1491
+  @call withDim  @ drawChainStage:1627,1655
 
 # Bindings (by name)
-  @bind addColumn  @ 1809
+  @bind addColumn  @ 1805
   @bind cursorColLabel  @ 687
   @bind cursorPosition  @ 688
-  @bind deleteBoundSlot  @ 1798
-  @bind editFx  @ 1825
-  @bind focusParams  @ 1826
-  @bind openNewTakeModal  @ 1794
-  @bind openRetuneModal  @ 1815
+  @bind deleteBoundSlot  @ 1794
+  @bind editFx  @ 1821
+  @bind focusParams  @ 1822
+  @bind openNewTakeModal  @ 1790
+  @bind openRetuneModal  @ 1811
   @bind pickSwing  @ toolbarSegments.render:128
   @bind pickTemper  @ toolbarSegments.render:113
-  @bind removeOrHideCol  @ 1810
+  @bind removeOrHideCol  @ 1806
   @bind resolveColType  @ addColumn:1158
   @bind runRetune  @ openRetuneModal:1120
   @bind sampleItems  @ 697
@@ -620,10 +620,10 @@
   @drop p.pathStroke  @ drawMapBody:610
   @drop p.segment  @ drawMapBody:572,575,618
   @drop s:lower  @ resolveColType:1137
-  @drop stripPaint.fill  @ rowHighlight:1569
-  @drop stripPaint.segment  @ drawFlowMarker:1677,1678
-  @drop stripPaint.text  @ drawFlowMarker:1679
-  @drop tracker:registerAll  @ <load>:1786
+  @drop stripPaint.fill  @ rowHighlight:1565
+  @drop stripPaint.segment  @ drawFlowMarker:1673,1674
+  @drop stripPaint.text  @ drawFlowMarker:1675
+  @drop tracker:registerAll  @ <load>:1782
   @drop typeStr:lower  @ addColumn:1150
 
 # REAPER API surface
@@ -631,42 +631,42 @@
   @reaper MB
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Col_Text  @ withDim:1610 drawBypassBadge:1618 renderBody:1889
-  @field r FocusedFlags_AnyWindow  @ renderBody:1913
+  @field r Col_Text  @ withDim:1606 drawBypassBadge:1614 renderBody:1885
+  @field r FocusedFlags_AnyWindow  @ renderBody:1909
   @field r ImGui_GetBuiltinPath  @ 13
   @field r InputTextFlags_AutoSelectAll  @ periodBox:1274
-  @field r Key_B  @ handleFxChainKeys:1480
-  @field r Key_Backspace  @ handleFxChainKeys:1492
-  @field r Key_Delete  @ handleFxChainKeys:1492
-  @field r Key_DownArrow  @ handlePaletteKeys:333 handleFxChainKeys:1468
-  @field r Key_Enter  @ handlePaletteKeys:361 modalHost:takeProps:912 modalHost:retune:1066 handleFxChainKeys:1470 modalHost:newTake:1755
-  @field r Key_Equal  @ handleFxChainKeys:1490,1491
-  @field r Key_Escape  @ handlePaletteKeys:313 modalHost:takeProps:916 modalHost:retune:1070 handleFxChainKeys:1454 modalHost:newTake:1759
-  @field r Key_KeypadEnter  @ handlePaletteKeys:361 modalHost:takeProps:913 modalHost:retune:1067 handleFxChainKeys:1470 modalHost:newTake:1756
+  @field r Key_B  @ handleFxChainKeys:1476
+  @field r Key_Backspace  @ handleFxChainKeys:1488
+  @field r Key_Delete  @ handleFxChainKeys:1488
+  @field r Key_DownArrow  @ handlePaletteKeys:333 handleFxChainKeys:1464
+  @field r Key_Enter  @ handlePaletteKeys:361 modalHost:takeProps:912 modalHost:retune:1066 handleFxChainKeys:1466 modalHost:newTake:1751
+  @field r Key_Equal  @ handleFxChainKeys:1486,1487
+  @field r Key_Escape  @ handlePaletteKeys:313 modalHost:takeProps:916 modalHost:retune:1070 handleFxChainKeys:1450 modalHost:newTake:1755
+  @field r Key_KeypadEnter  @ handlePaletteKeys:361 modalHost:takeProps:913 modalHost:retune:1067 handleFxChainKeys:1466 modalHost:newTake:1752
   @field r Key_L  @ handlePaletteKeys:357
-  @field r Key_LeftArrow  @ handlePaletteKeys:341 handleFxChainKeys:1469
-  @field r Key_Minus  @ handleFxChainKeys:1490
+  @field r Key_LeftArrow  @ handlePaletteKeys:341 handleFxChainKeys:1465
+  @field r Key_Minus  @ handleFxChainKeys:1486
   @field r Key_PageDown  @ handlePaletteKeys:335
   @field r Key_PageUp  @ handlePaletteKeys:336
-  @field r Key_R  @ handlePaletteKeys:322 handleFxChainKeys:1456
-  @field r Key_RightArrow  @ handlePaletteKeys:337 handleFxChainKeys:1469
-  @field r Key_Tab  @ handlePaletteKeys:308 handleFxChainKeys:1462
-  @field r Key_UpArrow  @ handlePaletteKeys:334 handleFxChainKeys:1468
-  @field r Key_X  @ handlePaletteKeys:319 handleFxChainKeys:1455
+  @field r Key_R  @ handlePaletteKeys:322 handleFxChainKeys:1452
+  @field r Key_RightArrow  @ handlePaletteKeys:337 handleFxChainKeys:1465
+  @field r Key_Tab  @ handlePaletteKeys:308 handleFxChainKeys:1458
+  @field r Key_UpArrow  @ handlePaletteKeys:334 handleFxChainKeys:1464
+  @field r Key_X  @ handlePaletteKeys:319 handleFxChainKeys:1451
   @field r Mod_Ctrl  @ adjustRow:1294,1301,1312
-  @field r Mod_Shift  @ drawMapBody:550 handleFxChainKeys:1463
-  @field r Mod_Super  @ handlePaletteKeys:319,322,357 handleFxChainKeys:1453
-  @field r REMOVE  @ cancelStrip:1439 headerActions:1504
+  @field r Mod_Shift  @ drawMapBody:550 handleFxChainKeys:1459
+  @field r Mod_Super  @ handlePaletteKeys:319,322,357 handleFxChainKeys:1449
+  @field r REMOVE  @ cancelStrip:1439 headerActions:1500
   @field r SelectableFlags_AllowOverlap  @ drawTreeItem:399
   @field r SliderFlags_Logarithmic  @ modalHost:retune:1025,1034
   @field r StyleVar_FramePadding  @ drawTree:452 modalHost:retune:1061
   @field r StyleVar_ItemInnerSpacing  @ fxFieldWidget:1326
   @field r StyleVar_ItemSpacing  @ modalHost:retune:971,1060
   @field r acceptCmds  @ gridPane.inputAllowed:1178
-  @field w acceptCmds  @ focusState:1941,1946
+  @field w acceptCmds  @ focusState:1937,1942
   @field w activeTab  @ drawParamPalette:629
-  @field w addNoteLane  @ tracker.addNoteLane:1808
-  @field w addTypedCol  @ 1809
+  @field w addNoteLane  @ tracker.addNoteLane:1804
+  @field w addTypedCol  @ 1805
   @field w allowDouble  @ drawTreeItem:423
   @field r ambient  @ modalHost:retune:1043,1076
   @field w ambient  @ modalHost:retune:1044,1076 openRetuneModal:1119
@@ -674,24 +674,24 @@
   @field w anchor  @ 815,819,825,837
   @field r arrival  @ steppedOption:1247
   @field r base  @ adjustRow:1312
-  @field w beats  @ openTakeProperties:1869,1873
-  @field r beatsBuf  @ modalHost:takeProps:867,900,917 modalHost:newTake:1752,1760
-  @field w beatsBuf  @ modalHost:takeProps:870,902 openNewTakeModal:1736 modalHost:newTake:1753 openTakeProperties:1858
+  @field w beats  @ openTakeProperties:1865,1869
+  @field r beatsBuf  @ modalHost:takeProps:867,900,917 modalHost:newTake:1748,1756
+  @field w beatsBuf  @ modalHost:takeProps:870,902 openNewTakeModal:1732 modalHost:newTake:1749 openTakeProperties:1854
   @field r beatsGen  @ modalHost:takeProps:871,899
-  @field w beatsGen  @ modalHost:takeProps:871 openTakeProperties:1859
+  @field w beatsGen  @ modalHost:takeProps:871 openTakeProperties:1855
   @field r buf  @ periodBox:1270,1280
   @field w buf  @ periodBox:1277,1278
-  @field w buttonLabel  @ toolbarSegments.render:84,99,110,125,136 modalHost:retune:991,1008 fxFieldWidget:1330 catalogueRow:1538,1549 drawAddChainStage:1587 drawChainStage:1633
-  @field r bypass  @ stripColumns:1400 handleFxChainKeys:1481 drawBypassBadge:1618,1620,1621 drawChainStage:1631,1659
+  @field w buttonLabel  @ toolbarSegments.render:84,99,110,125,136 modalHost:retune:991,1008 fxFieldWidget:1330 catalogueRow:1534,1545 drawAddChainStage:1583 drawChainStage:1629
+  @field r bypass  @ stripColumns:1400 handleFxChainKeys:1477 drawBypassBadge:1614,1616,1617 drawChainStage:1627,1655
   @field w bypass  @ stripColumns:1400
-  @field w callback  @ removeAutomation:157 openPrompt:852 openConfirm:856 offerWiden:1091 openRetuneModal:1120 openNewTakeModal:1737 openTakeProperties:1861
+  @field w callback  @ removeAutomation:157 openPrompt:852 openConfirm:856 offerWiden:1091 openRetuneModal:1120 openNewTakeModal:1733 openTakeProperties:1857
   @field r cc  @ paletteActions:169 removeOrHideCol:1165
-  @field r cellH  @ renderBody:1910
+  @field r cellH  @ renderBody:1906
   @field r cents  @ retuneKeyItems:940 openRetuneModal:1115 adjustRow:1307 fxFieldWidget:1347
   @field w chordEntry  @ 1177
   @field r chrome  @ 22
   @field w chrome  @ 1177
-  @field w clearLoop  @ tracker.clearLoop:1822
+  @field w clearLoop  @ tracker.clearLoop:1818
   @field r cm  @ 22
   @field w cm  @ 1177
   @field w cmd  @ 719,720,723,724,727,728,729,730,733,734,737,738
@@ -709,40 +709,40 @@
   @field r colHi  @ drawMapBody:564,574
   @field r colLo  @ drawMapBody:537,574
   @field r colourIdx  @ drawMapBody:590
-  @field r cols  @ cursorChan:69 paletteActions:168 cursorColLabel:642 removeOrHideCol:1164 handleFxChainKeys:1459 drawFxChainBody:1687,1694,1697 renderBody:1886 statusSegments:1933
+  @field r cols  @ cursorChan:69 paletteActions:168 cursorColLabel:642 removeOrHideCol:1164 handleFxChainKeys:1455 drawFxChainBody:1683,1690,1693 renderBody:1882 statusSegments:1929
   @field w cols  @ stripPlan:1419
-  @field w commandHeld  @ renderBody:1920
+  @field w commandHeld  @ renderBody:1916
   @field r ctx  @ 30
   @field r current  @ drawMapBody:590
-  @field w current  @ toolbarSegments.render:80,95,112,127,138 sampleItems:673 retuneTargetItems:926 retuneKeyItems:941 destItems:1237 kindItems:1578
-  @field w deleteBoundSlot  @ 1798
-  @field w deleteInstance  @ tracker.deleteInstance:1806
+  @field w current  @ toolbarSegments.render:80,95,112,127,138 sampleItems:673 retuneTargetItems:926 retuneKeyItems:941 destItems:1237 kindItems:1574
+  @field w deleteBoundSlot  @ 1794
+  @field w deleteInstance  @ tracker.deleteInstance:1802
   @field r doubleClicked  @ drawTreeItem:425,431
   @field w draw  @ drawParamPalette:631
   @field r ds  @ 22
-  @field w duplicateBelow  @ tracker.duplicateBelow:1795
+  @field w duplicateBelow  @ tracker.duplicateBelow:1791
   @field w edit  @ 690,692,694,697,700
-  @field w editNoteFx  @ 1825
-  @field r entry  @ periodBox:1271 adjustRow:1288,1292,1310,1313 fxFieldWidget:1322 handleFxChainKeys:1475
+  @field w editNoteFx  @ 1821
+  @field r entry  @ periodBox:1271 adjustRow:1288,1292,1310,1313 fxFieldWidget:1322 handleFxChainKeys:1471
   @field w entry  @ stripColumns:1394,1396
   @field r events  @ removeAutomation:152,156
   @field w excludeOthers  @ toolbarSegments.render:112,127,138
   @field r facade  @ 22
   @field r facility  @ modalHost:retune:1000,1005,1031,1041,1074
   @field w facility  @ modalHost:retune:1000,1074 openRetuneModal:1114
-  @field r fd  @ rowId:1264 periodBox:1271,1281 adjustRow:1288 fxFieldWidget:1322 handleFxChainKeys:1475,1476
+  @field r fd  @ rowId:1264 periodBox:1271,1281 adjustRow:1288 fxFieldWidget:1322 handleFxChainKeys:1471,1472
   @field w fd  @ stripColumns:1394,1396
   @field r field  @ launchPattern:1220,1223,1225 pickChoice:1254 rowId:1264 periodBox:1271,1281 adjustRow:1288,1296,1303,1306,1315
   @field r field  @ fxFieldWidget:1323,1345,1349,1353,1358
-  @field r fields  @ chainRows:1377 paramRange:1407 handleFxChainKeys:1465,1474,1489,1491 drawChainStage:1654
+  @field r fields  @ chainRows:1377 paramRange:1407 handleFxChainKeys:1461,1470,1485,1487 drawChainStage:1650
   @field w fields  @ stripColumns:1401 stripPlan:1418
   @field w flags  @ drawTreeItem:399
-  @field w flat  @ drawAddChainStage:1587 drawChainStage:1633
-  @field w focusParamPalette  @ 1826
-  @field r fontSize  @ renderBody:1888
+  @field w flat  @ drawAddChainStage:1583 drawChainStage:1629
+  @field w focusParamPalette  @ 1822
+  @field r fontSize  @ renderBody:1884
   @field w format  @ statusSegments.get:689,691,693 fxFieldWidget:1344
   @field r fx  @ cancelStrip:1439
-  @field w fx  @ enterStrip:1598 editFx:1713
+  @field w fx  @ enterStrip:1594 editFx:1709
   @field r fxGuid  @ buildPlan:253,255,258 navRows:283,285 navIndex:295 selectParam:300 handlePaletteKeys:328,339,343,354
   @field r fxGuid  @ handlePaletteKeys:359,368 drawTreeItem:393,397,402,405,407,411,413,419
   @field r fxGuid  @ drawTreeItem:421,426,427 planIndexOfCursor:440,441
@@ -750,9 +750,9 @@
   @field r generator  @ buildPlan:250
   @field w get  @ 687,688,695 statusSegments.get:689,691,693 items.get:701,702,703
   @field r global  @ toolbarSegments.render:122
-  @field r grid  @ cursorChan:69 paletteActions:168 cursorColLabel:642 removeOrHideCol:1164 openTakeProperties:1852 renderBody:1886 statusSegments:1933
+  @field r grid  @ cursorChan:69 paletteActions:168 cursorColLabel:642 removeOrHideCol:1164 openTakeProperties:1848 renderBody:1882 statusSegments:1929
   @field w group  @ toolbarSegments.render:80,95 sampleItems:672 destItems:1237
-  @field w groups  @ catalogueRow:1539,1550
+  @field w groups  @ catalogueRow:1535,1546
   @field r gui  @ 22
   @field w gui  @ 1177
   @field w gutter  @ drawTreeItem:390
@@ -761,13 +761,13 @@
   @field w harmonicLock  @ modalHost:retune:1026,1075 openRetuneModal:1117
   @field w hasChildren  @ drawTreeItem:398,422
   @field w heading  @ 75,90,105,120 toolbarSegments.render:124,135
-  @field r height  @ renderBody:1910
+  @field r height  @ renderBody:1906
   @field r help  @ 22
   @field r hiQN  @ drawMapBody:556,600
-  @field w hideExtraCol  @ 1810
-  @field r host  @ cancelStrip:1439 handleFxChainKeys:1475,1479,1481,1489,1491,1493 headerActions:1504,1508,1511
-  @field r host  @ headerActions:1512,1518,1519 catalogueRow:1533,1540,1541,1554 drawFxChainBody:1688,1696,1697
-  @field w host  @ stripPlan:1419 enterStrip:1598 editFx:1713
+  @field w hideExtraCol  @ 1806
+  @field r host  @ cancelStrip:1439 handleFxChainKeys:1471,1475,1477,1485,1487,1489 headerActions:1500,1504,1507
+  @field r host  @ headerActions:1508,1514,1515 catalogueRow:1529,1536,1537,1550 drawFxChainBody:1684,1692,1693
+  @field w host  @ stripPlan:1419 enterStrip:1594 editFx:1709
   @field r id  @ periodBox:1270
   @field w id  @ 75,90,105,120,687,688,695 drawTreeItem:397,421 statusSegments.get:689,691,693
   @field w id  @ 700 periodBox:1277
@@ -775,28 +775,28 @@
   @field r idx  @ trackLabel:49 currentTrackLabel:53 slotLabel:58 currentSlotLabel:62 toolbarSegments.render:80,95
   @field w indent  @ drawTreeItem:422
   @field r index  @ emitParams:220,221 navRows:285 selectParam:301 drawTreeItem:419,421,426,428 planIndexOfCursor:441 rowId:1264 periodBox:1281
-  @field r index  @ adjustRow:1290,1292,1296,1303,1306,1310,1315 fxFieldWidget:1322 handleFxChainKeys:1472,1475,1479,1481
-  @field r index  @ handleFxChainKeys:1487,1493,1496 drawBypassBadge:1620 drawChainStage:1633,1637,1643,1647,1652
-  @field r index  @ drawChainStage:1652,1660
+  @field r index  @ adjustRow:1290,1292,1296,1303,1306,1310,1315 fxFieldWidget:1322 handleFxChainKeys:1468,1471,1475,1477
+  @field r index  @ handleFxChainKeys:1483,1489,1492 drawBypassBadge:1616 drawChainStage:1629,1633,1639,1643,1648
+  @field r index  @ drawChainStage:1648,1656
   @field w index  @ stripColumns:1394,1396,1400
   @field w inputAllowed  @ gridPane.inputAllowed:1178
-  @field r isAdd  @ handleFxChainKeys:1472,1478,1480,1487,1493,1494,1496 drawFxChainBody:1696
+  @field r isAdd  @ handleFxChainKeys:1468,1474,1476,1483,1489,1490,1492 drawFxChainBody:1692
   @field w isAdd  @ stripPlan:1418
   @field r item  @ handlePaletteKeys:339,343,368
   @field w item  @ navRows:283,285
   @field w items  @ toolbarSegments.render:85,100,112,127,138 697,700,718,722,726,732,736
   @field w items  @ 740,744,749,763,785,800,807,815,819,825,837 modalHost:retune:992
-  @field w items  @ modalHost:retune:1009 fxFieldWidget:1331 catalogueRow:1539,1550 drawAddChainStage:1587 drawChainStage:1636
+  @field w items  @ modalHost:retune:1009 fxFieldWidget:1331 catalogueRow:1535,1546 drawAddChainStage:1583 drawChainStage:1632
   @field r key  @ retuneTargetItems:927 modalHost:retune:1008,1009,1073
   @field w key  @ toolbarSegments.render:80,95,112,127,138 482,483,484 sampleItems:671 retuneTargetItems:926 retuneKeyItems:941 modalHost:retune:1010
-  @field w key  @ modalHost:retune:1073 openRetuneModal:1115 destItems:1236 catalogueRow:1534 kindItems:1578
+  @field w key  @ modalHost:retune:1073 openRetuneModal:1115 destItems:1236 catalogueRow:1530 kindItems:1574
   @field r kind  @ navRows:282,284 drawTreeItem:387,389,391 planIndexOfCursor:440,441 patternSummary:1210 launchPattern:1220 destItems:1235 stripColumns:1400,1401
-  @field r kind  @ drawChainStage:1636
+  @field r kind  @ drawChainStage:1632
   @field w kind  @ toolbarSegments.render:83,98,109,124,135 emitParams:231,236,238 buildPlan:268,270 690,692
-  @field w kind  @ 694,697,700 modalHost:retune:990,1007 openRetuneModal:1109 emptyBody:1204,1205 fxFieldWidget:1330 stripColumns:1400 catalogueRow:1538,1549
-  @field w kind  @ drawAddChainStage:1587 drawChainStage:1633 openNewTakeModal:1733 openTakeProperties:1855
+  @field w kind  @ 694,697,700 modalHost:retune:990,1007 openRetuneModal:1109 emptyBody:1204,1205 fxFieldWidget:1330 stripColumns:1400 catalogueRow:1534,1545
+  @field w kind  @ drawAddChainStage:1583 drawChainStage:1629 openNewTakeModal:1729 openTakeProperties:1851
   @field r l  @ choiceLabels:1194 fxFieldWidget:1335
-  @field r label  @ cursorColLabel:643 launchPattern:1221 stripColumns:1394 drawChainStage:1633,1659
+  @field r label  @ cursorColLabel:643 launchPattern:1221 stripColumns:1394 drawChainStage:1629,1655
   @field w label  @ toolbarSegments.render:80,95 selectParam:301 drawTreeItem:397,421,428 482,483,484,687,688 sampleItems:670
   @field w label  @ statusSegments.get:689,691,693 695,719,720,723,724,727 items.get:701,702,703
   @field w label  @ 728,729,730,733,734,737,738,741,742,745,746,747
@@ -807,56 +807,56 @@
   @field w label  @ 804,805,808,809,810,811,812,813,816,817,820,821
   @field w label  @ 822,823,826,827,828,829,830,831,832,833,834,835
   @field w label  @ 838,839,840,841,842,843,844,845 retuneKeyItems:941 launchPattern:1221 destItems:1236 stripColumns:1394
-  @field w label  @ stripColumns:1396,1401 kindItems:1578
+  @field w label  @ stripColumns:1396,1401 kindItems:1574
   @field r learn  @ drawTreeItem:395,409
   @field w learn  @ drawTree:454
   @field r lengthQN  @ drawMapBody:587
   @field r loQN  @ drawMapBody:556,600
   @field r loopHiQN  @ drawMapBody:599
   @field r loopLoQN  @ drawMapBody:599
-  @field w loopToItemNow  @ tracker.loopToItemNow:1821
+  @field w loopToItemNow  @ tracker.loopToItemNow:1817
   @field w max  @ 690,692,694 modalHost:retune:1017 fxFieldWidget:1348,1357
-  @field w maxWidth  @ drawChainStage:1635
+  @field w maxWidth  @ drawChainStage:1631
   @field w mergeTiers  @ retuneTargetItems:924
   @field r midiChan  @ cursorChan:70 paletteActions:169 removeOrHideCol:1165
   @field w min  @ 690,692,694 modalHost:retune:1017 fxFieldWidget:1348,1357
-  @field w minWidth  @ drawChainStage:1635
+  @field w minWidth  @ drawChainStage:1631
   @field r modalHost  @ 22
   @field r modalOrder  @ 1185
   @field r mode  @ modalHost:takeProps:908,917
-  @field w mode  @ modalHost:takeProps:908 openTakeProperties:1860,1869,1873
+  @field w mode  @ modalHost:takeProps:908 openTakeProperties:1856,1865,1869
   @field r moved  @ drawMapBody:552
   @field w moved  @ drawMapBody:547,551
   @field r name  @ trackLabel:49 slotLabel:58 buildPlan:259 selectParam:301 drawTreeItem:397,421,428 sampleReadout:654
   @field r name  @ sampleItems:670
-  @field w name  @ openTakeProperties:1869,1873
-  @field r nameBuf  @ modalHost:takeProps:891,917 modalHost:newTake:1749,1760
-  @field w nameBuf  @ modalHost:takeProps:892 openNewTakeModal:1735 modalHost:newTake:1750 openTakeProperties:1857
-  @field w newTakeBelow  @ 1794
-  @field w nextInstance  @ tracker.nextInstance:1805
-  @field w nextTake  @ tracker.nextTake:1803
-  @field w nextTrack  @ tracker.nextTrack:1801
-  @field w nextVariant  @ tracker.nextVariant:1797
-  @field r numRows  @ openTakeProperties:1852
-  @field w onCancel  @ drawAddChainStage:1591
+  @field w name  @ openTakeProperties:1865,1869
+  @field r nameBuf  @ modalHost:takeProps:891,917 modalHost:newTake:1745,1756
+  @field w nameBuf  @ modalHost:takeProps:892 openNewTakeModal:1731 modalHost:newTake:1746 openTakeProperties:1853
+  @field w newTakeBelow  @ 1790
+  @field w nextInstance  @ tracker.nextInstance:1801
+  @field w nextTake  @ tracker.nextTake:1799
+  @field w nextTrack  @ tracker.nextTrack:1797
+  @field w nextVariant  @ tracker.nextVariant:1793
+  @field r numRows  @ openTakeProperties:1848
+  @field w onCancel  @ drawAddChainStage:1587
   @field w onChord  @ openPrompt:852
-  @field w onCreate  @ catalogueRow:1541
-  @field w onDelete  @ catalogueRow:1558
-  @field w onPick  @ toolbarSegments.render:85,100,113,128,139 modalHost:retune:993,1010 fxFieldWidget:1332 catalogueRow:1540,1553 drawAddChainStage:1589 drawChainStage:1637
+  @field w onCreate  @ catalogueRow:1537
+  @field w onDelete  @ catalogueRow:1554
+  @field w onPick  @ toolbarSegments.render:85,100,113,128,139 modalHost:retune:993,1010 fxFieldWidget:1332 catalogueRow:1536,1549 drawAddChainStage:1585 drawChainStage:1633
   @field w onTab  @ drawParamPalette:630
   @field r open  @ handlePaletteKeys:339,343,368 drawTreeItem:398,405
   @field w open  @ buildPlan:270 drawTreeItem:398
-  @field w openSwingPicker  @ tracker.openSwingPicker:1818
-  @field w openTemperPicker  @ tracker.openTemperPicker:1817
+  @field w openSwingPicker  @ tracker.openSwingPicker:1814
+  @field w openTemperPicker  @ tracker.openTemperPicker:1813
   @field r options  @ choiceIndex:1190 choiceLabels:1194 steppedOption:1247,1248 fxFieldWidget:1335,1336
-  @field r originX  @ renderBody:1910
-  @field r originY  @ renderBody:1910
-  @field w pageSuppressed  @ focusState:1941,1945
+  @field r originX  @ renderBody:1906
+  @field r originY  @ renderBody:1906
+  @field w pageSuppressed  @ focusState:1937,1941
   @field r param  @ navIndex:295 handlePaletteKeys:328,339,343,344,346,354,355,362 drawTreeItem:393,419
-  @field r param  @ planIndexOfCursor:440,441 rowIndexOf:1382 clampCursor:1426 handleFxChainKeys:1471,1474,1485,1486,1489,1491
-  @field r param  @ handleFxChainKeys:1494 drawChainStage:1629,1656 drawFxChainBody:1688
+  @field r param  @ planIndexOfCursor:440,441 rowIndexOf:1382 clampCursor:1426 handleFxChainKeys:1467,1470,1481,1482,1485,1487
+  @field r param  @ handleFxChainKeys:1490 drawChainStage:1625,1652 drawFxChainBody:1684
   @field w param  @ navRows:283,285 selectParam:301 handlePaletteKeys:328,354 drawTreeItem:402,426,428 chainRows:1376,1377 clampCursor:1423,1426
-  @field w param  @ handleFxChainKeys:1465,1485 catalogueRow:1555 enterStrip:1600 editFx:1718,1721
+  @field w param  @ handleFxChainKeys:1461,1481 catalogueRow:1551 enterStrip:1596 editFx:1714,1717
   @field r part  @ rowId:1264 adjustRow:1302 fxFieldWidget:1343
   @field w part  @ stripColumns:1394,1396
   @field r path  @ 16 sampleItems:664
@@ -865,7 +865,7 @@
   @field r periodLadder  @ adjustRow:1295
   @field r pi  @ drawMapBody:606,609
   @field w pickers  @ 105,120
-  @field w pinMap  @ tracker.pinMap:1827
+  @field w pinMap  @ tracker.pinMap:1823
   @field w place  @ 718,722,726,732,736,740,744,749,763,785,800,807
   @field w place  @ 815,819,825,837
   @field r playQN  @ drawMapBody:616,617
@@ -873,10 +873,10 @@
   @field w points  @ emptyBody:1204
   @field r poly  @ launchPattern:1227
   @field r presets  @ slideTemper:1199
-  @field w prevInstance  @ tracker.prevInstance:1804
-  @field w prevTake  @ tracker.prevTake:1802
-  @field w prevTrack  @ tracker.prevTrack:1800
-  @field w prevVariant  @ tracker.prevVariant:1796
+  @field w prevInstance  @ tracker.prevInstance:1800
+  @field w prevTake  @ tracker.prevTake:1798
+  @field w prevTrack  @ tracker.prevTrack:1796
+  @field w prevVariant  @ tracker.prevVariant:1792
   @field r prm  @ navRows:285,286 selectParam:301 drawTreeItem:419,421,426,428 planIndexOfCursor:441
   @field w prm  @ emitParams:231,238 navRows:286
   @field w prompt  @ removeAutomation:155 openPrompt:852 openConfirm:856 offerWiden:1089
@@ -886,15 +886,15 @@
   @field w qn  @ drawMapBody:547
   @field r qnHi  @ drawMapBody:565
   @field r qnLo  @ drawMapBody:538,539,565
-  @field w quantize  @ 1812
-  @field w quantizeKeepRealised  @ 1813
+  @field w quantize  @ 1808
+  @field w quantizeKeepRealised  @ 1809
   @field r refocusBeats  @ modalHost:takeProps:895
   @field w refocusBeats  @ modalHost:takeProps:872,897
-  @field r region  @ 1837
+  @field r region  @ 1833
   @field w render  @ toolbarSegments.render:76,91,106,121
   @field w reserve  @ drawTreeItem:399
   @field w resolve  @ openPrompt:852
-  @field w retune  @ 1815
+  @field w retune  @ 1811
   @field r rewrite  @ pickChoice:1254
   @field r row  @ navRows:283,285,286 selectParam:300 handlePaletteKeys:358,359 drawTreeItem:392,418 planIndexOfCursor:440,441
   @field w row  @ emitParams:231,236,238 buildPlan:270 navRows:283,286
@@ -904,34 +904,34 @@
   @field r selected  @ drawTreeItem:401,425
   @field w selected  @ drawTreeItem:398,422
   @field w set  @ 690,692,694,697 items.get:701,702 items.set:704
-  @field w setRPB  @ tracker.setRPB:1787
+  @field w setRPB  @ tracker.setRPB:1783
   @field r show  @ drawTreeItem:395,410
   @field w show  @ drawTree:453
   @field r sonoritySize  @ modalHost:retune:1017,1075
   @field w sonoritySize  @ modalHost:retune:1018,1075 openRetuneModal:1116
   @field r specs  @ patternSummary:1211
   @field w specs  @ emptyBody:1205
-  @field r stage  @ rowIndexOf:1382 clampCursor:1424,1425 handleFxChainKeys:1461,1464,1465,1479,1485 drawFxChainBody:1688,1696
-  @field r stage  @ drawFxChainBody:1697
-  @field w stage  @ chainRows:1376,1377 clampCursor:1423,1424 handleFxChainKeys:1464,1479 catalogueRow:1555 enterStrip:1600 editFx:1718,1721
+  @field r stage  @ rowIndexOf:1382 clampCursor:1424,1425 handleFxChainKeys:1457,1460,1461,1475,1481 drawFxChainBody:1684,1692
+  @field r stage  @ drawFxChainBody:1693
+  @field w stage  @ chainRows:1376,1377 clampCursor:1423,1424 handleFxChainKeys:1460,1475 catalogueRow:1551 enterStrip:1596 editFx:1714,1717
   @field r startQN  @ drawMapBody:586,587
   @field r stepNames  @ stepLabel:934
   @field r strength  @ modalHost:retune:1052,1072
   @field w strength  @ modalHost:retune:1053,1072 openRetuneModal:1112
-  @field w suppressKbd  @ focusState:1941,1944
+  @field w suppressKbd  @ focusState:1937,1940
   @field w tabs  @ drawParamPalette:629
   @field r take  @ drawMapBody:590
-  @field w takeProperties  @ tracker.takeProperties:1793
+  @field w takeProperties  @ tracker.takeProperties:1789
   @field r takes  @ drawMapBody:584
   @field r target  @ modalHost:retune:991,992,995,1015,1073 offerWiden:1090
   @field w target  @ modalHost:retune:993,1073 openRetuneModal:1113
   @field r text  @ drawTreeItem:388,390
   @field w text  @ emitParams:236 buildPlan:268 drawTreeItem:388,390
-  @field r tierGroups  @ catalogueRow:1539,1550
+  @field r tierGroups  @ catalogueRow:1535,1546
   @field w title  @ removeAutomation:154 718,722,726,732,736,740,744,749,763,785,800
-  @field w title  @ 807,815,819,825,837 openPrompt:852 openConfirm:856 offerWiden:1088 openRetuneModal:1110 openNewTakeModal:1734 openTakeProperties:1856
-  @field w toggleFollowPlay  @ tracker.toggleFollowPlay:1823
-  @field w toggleLoopToItem  @ tracker.toggleLoopToItem:1820
+  @field w title  @ 807,815,819,825,837 openPrompt:852 openConfirm:856 offerWiden:1088 openRetuneModal:1110 openNewTakeModal:1730 openTakeProperties:1852
+  @field w toggleFollowPlay  @ tracker.toggleFollowPlay:1819
+  @field w toggleLoopToItem  @ tracker.toggleLoopToItem:1816
   @field r toggled  @ drawTreeItem:405
   @field r trackGuid  @ buildPlan:255,258 selectParam:300 drawTreeItem:427
   @field w trackGuid  @ selectParam:300 drawTreeItem:427
@@ -940,18 +940,18 @@
   @field r tv  @ 22
   @field w tv  @ 1177
   @field r type  @ paletteActions:169 removeOrHideCol:1165
-  @field r ui  @ renderBody:1888
+  @field r ui  @ renderBody:1884
   @field r uiFont  @ 30
   @field r v  @ choiceIndex:1190 pickChoice:1254
   @field w visible  @ statusSegments.visible:696
   @field r when  @ stripColumns:1393
-  @field r widget  @ adjustRow:1289,1291,1293,1297,1309 fxFieldWidget:1327,1334,1337,1339,1351 stripColumns:1395 handleFxChainKeys:1475
-  @field r widget  @ handleFxChainKeys:1476
+  @field r widget  @ adjustRow:1289,1291,1293,1297,1309 fxFieldWidget:1327,1334,1337,1339,1351 stripColumns:1395 handleFxChainKeys:1471
+  @field r widget  @ handleFxChainKeys:1472
   @field w width  @ toolbarSegments.render:85,100,111,126,137 687,688,695 statusSegments.get:689,691,693 modalHost:retune:990
   @field w width  @ modalHost:retune:1007 fxFieldWidget:1330,1344,1348,1357
   @field w x  @ drawParamPalette:628
-  @field w x0  @ drawMapBody:570,589,591 rowHighlight:1569
-  @field w x1  @ drawMapBody:570,589,591 rowHighlight:1570
+  @field w x0  @ drawMapBody:570,589,591 rowHighlight:1565
+  @field w x1  @ drawMapBody:570,589,591 rowHighlight:1566
   @field w y  @ drawParamPalette:628
-  @field w y0  @ drawMapBody:570,589,591 rowHighlight:1569
-  @field w y1  @ drawMapBody:570,589,591 rowHighlight:1570
+  @field w y0  @ drawMapBody:570,589,591 rowHighlight:1565
+  @field w y1  @ drawMapBody:570,589,591 rowHighlight:1566
