@@ -1,0 +1,109 @@
+---
+name: coding
+description: House dialect and test design. Dropped in by hand when discussion turns into code.
+disable-model-invocation: true
+---
+
+"The time for talking is over: now is the time to code" - and these
+are the house guidelines for doing so.
+
+## Dialect
+
+The repo is closures-over-state, not objects-with-methods, and it has
+no OO furniture: no underscore-prefixed "private" names, no
+`setmetatable` inheritance or metatable-as-class, no `ClassName`
+UpperCamelCase for modules or constructors.
+
+Things are scoped tightly, with private helpers wrapped in `local fn
+do ... end`.
+
+Registry tables are one line per entry. The `registerAll{...}` command
+table is a scannable verb → `{fn, undoDesc}` map, so multi-line bodies
+are extracted to a named `local function` rather than inlining a
+closure that breaks the alignment.
+
+Tables crossing a pass boundary get role-named fields (`xLo`/`xHi`,
+`chanLeft`, `pitchWidth`, `viewRows`) rather than bare coordinates.
+
+Section banners: `----- Name`. Major: `----------- PUBLIC`.
+
+## util.lua
+
+The idioms that recur in the code.
+
+- `util.add(t, v)` for `t[#t+1] = v`
+- `util.bucket(t, k, v)` appends `v` to a table under `t[k]`, creating
+  it if `nil`.
+- `util.assign(t1, t2)` merges keys of `t2` into `t1`; clear a key with
+  the sentinel `util.REMOVE`.
+- `util.clone(src, exclude)` (shallow) and `util.deepClone` (deep).
+- `util.deepEq(t1, t2)`.
+- `util.key(...)` builds an opaque NUL-joined compound key; also
+  `util.keys(t)` for the key list of a table.
+- For ppq-sorted dense tables: `util.seek` for the event before/after a
+  ppq, `util.between` for a half-open window, `util.insertSorted` to
+  splice without a re-sort.
+- `util.isNote(e)` is the note/CC test.
+- Scalars: `util.clamp`, `util.round(n, to)`.
+- `util.installHooks(owner)` installs the subscribe/unsubscribe/forward
+  protocol on `owner` and returns its `fire`.
+- `util.atomic(label, fn)` wraps a call as one REAPER undo block.
+- `util.instantiate(name, deps)` runs a factory module, and is the test
+  seam via `util._stubs`.
+- Persistence: `util.serialise`/`unserialise` for the escaped P_EXT wire
+  form, `util.prettySerialise`/`prettyUnserialise` for a hand-editable
+  Lua literal.
+
+## Tests
+
+`mcp__continuum_tests__lua_test_run`. Specs live in `tests/specs/` and
+register in `tests/run.lua`. `docs/tests.md` holds the mechanism —
+what the harness builds, what fakeReaper guarantees, where the seams
+are.
+
+Bugfixes go red-first; refactors pin the invariant. For a new feature,
+stub the function so the red comes from an assertion rather than a nil
+call — an unstubbed red aborts every test before any assertion runs,
+so it tells you nothing about what they check.
+
+## Tests with teeth
+
+A good test fails if and only if the thing it names breaks. One which
+cannot fail is **tautological**, and a false green, and one which
+fails for unrelated reasons is **brittle**, and leads to test churn.
+Some principles:
+
+1. A second computation beats a literal. A constant in an assertion is
+  brittle. If the expected value can be produced by another route, use
+  that route as the oracle: `read(compile(g)) == g`, a gated rebuild
+  against a forced one, incremental adds against a bulk load,
+  `unserialise(serialise(x)) == x`.
+
+1. Compare under the coarsest relation the contract fixes. A `deepEq`
+   against a whole record asserts everything the record happens to
+   contain, so one added field breaks every test that ever looked at
+   one. Coarsening may drop fields, but a tolerance or a predicate
+   does the same work: assert `err.code == 'unknown_from'` rather than
+   the message rendered from it, since copy edits are not defects. The
+   relation states what the invariant is over, which the test would
+   otherwise leave implicit.
+
+1. Guard against the vacuous pass. An assertion over a batch may be
+   tautological if the batch is empty, and a comparison tautological
+   when both sides are nil. Guard against this by asserting the
+   non-triviality as a precondition.
+
+1. Teeth are directional. "Would this fail if I broke it" needs
+   qualifying with "which way?". A single test may not catch every
+   mode of failure; a well-designed spec group will.
+   `mcp__continuum_perturb__spec_perturb` gives you a precise answer.
+
+1. Seed through the production path. This is the best hedge against
+   brittleness; `tm:addEvent` follows the production representation
+   when it moves and applies the correct substrate.
+
+1. A literal that must exist owns its regeneration. Sometimes the real
+   behaviour is the only oracle, and brittleness is the price to be
+   paid. Best practice in this case is to ensure that the test
+   includes the mechanism for regenerating its ground truth, so that
+   hand-patching is not necessary.
