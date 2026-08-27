@@ -1,7 +1,8 @@
 # Global fx column — plan
 
-> source: `design/global-fx-column.md` — synthesis compiled from there;
-> don't design here.
+> source: the model now lives in `docs/trackerView.md`,
+> `docs/trackerManager.md` and `docs/trackerRender.md`; the design doc it
+> was compiled from is gone.
 
 ## Phases
 
@@ -14,9 +15,11 @@
    strip ghosts what they realise. Landed 2026-08-27 in 3 commits; the model now
    lives in `docs/trackerManager.md` § Channel & column model and § Realisation
    by producer ¶¶ 5-6.
-3. **Phase 3 — Explode** (§ Explode) — a verb that persists the expansion in
-   place of the channel-0 region. Freeze keeps refusing on the master strip, so
-   the explode is the route to freezing a global chain.  ← in flight
+3. **Phase 3 — Explode** — a verb that persists the expansion in place of the
+   channel-0 region. Freeze keeps refusing on the master strip, so the explode
+   is the route to freezing a global chain. Landed 2026-08-27 in 2 commits; the
+   model now lives in `docs/trackerView.md` § Addressing a chain ¶ 10 and
+   `docs/trackerManager.md` § Channel & column model.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -27,8 +30,11 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+(empty — closed 2026-08-27, all three phases landed. One thing the programme
+leaves open, recorded in `docs/oddities.md` § A global region copied off the
+master strip is demoted or lost: what a copied global region means, which the
+clipboard's channel delta cannot express either way.)
 
 ## Queued (current phase; one-liners)
 
-(empty)
+(empty — every phase has landed.)
