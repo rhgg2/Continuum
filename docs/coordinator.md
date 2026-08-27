@@ -24,7 +24,7 @@ Hence the `cm:pollUndo()` at the head of `reloadAfterExternalMutation`. Any call
 
 ## Error surface
 
-Errors in the defer loop propagate to the same `xpcall` frame in `continuum.lua` that started the loop, because each iteration is a new closure passed to `defer` rather than a tail call. The handler in `continuum.lua` prints the traceback and schedules a no-op defer to cleanly exit the loop.
+Errors in the defer loop do not reach the `xpcall` in `continuum.lua` that started it: `reaper.defer` drops the surrounding handler. `coord:run` takes that handler and holds it, and each scheduled frame calls `xpcall(frame, errHandler)` itself. The handler prints the traceback and schedules a no-op defer to cleanly exit the loop.
 
 ## Toolbar band height
 

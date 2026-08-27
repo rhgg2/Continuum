@@ -1,7 +1,7 @@
 -- See docs/continuum.md for the model.
 
---invariant: entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
---invariant: module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last
+--invariant: entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the shared singletons, enters the render loop via coord:run
+--invariant: construction order is ps → cm/ds/eventMeta → cmgr → coord → pages; each page instantiates its own manager column
 
 do
   local script_path = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]
