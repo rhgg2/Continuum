@@ -1,16 +1,19 @@
--- Every command declared once: the label it shows under, and the keys that
--- reach it. see docs/commandManager.md § Manifest
+-- Every command declared once, in the order it reads: the label it shows
+-- under, and the keys that reach it. see docs/commandManager.md § Manifest
 
---shape: { scope = { command = { label = 'Play / pause', keys = { keyspec, ... }? } } }
+--shape: { scope = { entry, ... } }
+--shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path? }
 
-if not reaper.ImGui_GetBuiltinPath then
-  return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
-end
-package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
-local ImGui = require 'imgui' '0.10'
-local util  = require 'util'
+local util = require 'util'
 
 local manifest = {}
+
+-- Keys are the binding tokens of docs/commandManager.md § Binding tokens, and
+-- installManifest turns them into keyspecs. A single chord needs no list.
+local function command(name, label, keys, path)
+  return { name = name, label = label,
+           keys = type(keys) == 'string' and { keys } or keys, path = path }
+end
 
 ----- global (bodies in continuum's Main, except toggleHelp, which is coordinator's)
 
@@ -18,27 +21,27 @@ local manifest = {}
 -- programmatically (toolbar click, dive, editor exit): label, no keys.
 
 manifest.global = {
-  play            = { label = 'Play' },
-  playPause       = { label = 'Play / pause',      keys = { ImGui.Key_Space } },
-  stop            = { label = 'Stop',              keys = { ImGui.Key_F8 } },
-  undo            = { label = 'Undo',              keys = { {ImGui.Key_Z, ImGui.Mod_Ctrl} } },
-  redo            = { label = 'Redo',              keys = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  switchPage      = { label = 'Go to page' },
-  switchToArrange = { label = 'Arrange page',      keys = { ImGui.Key_F2 } },
-  switchToWiring  = { label = 'Wiring page',       keys = { ImGui.Key_F3 } },
-  switchToTracker = { label = 'Tracker page',      keys = { ImGui.Key_F4 } },
-  switchToSample  = { label = 'Sampler page',      keys = { ImGui.Key_F9 } },
-  switchToEditor  = { label = 'Editor page',       keys = { ImGui.Key_F10 } },
-  editTuning      = { label = 'Edit tuning' },
-  editSwing       = { label = 'Edit swing' },
-  closeEditor     = { label = 'Close editor' },
-  diveToSampler   = { label = 'Dive to sampler' },
-  togglePage      = { label = 'Switch page' },
-  quit            = { label = 'Quit',              keys = { {ImGui.Key_Q, ImGui.Mod_Ctrl} } },
-  beginPrefix     = { label = 'Numeric prefix',    keys = { {ImGui.Key_U, ImGui.Mod_Super} } },
-  toggleFxWindows = { label = 'Toggle FX windows', keys = { ImGui.Key_F11 } },
-  toggleProfiler  = { label = 'Toggle profiler',   keys = { {ImGui.Key_P, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  toggleHelp      = { label = 'This help',         keys = { ImGui.Key_F1 } },
+  command('play',             'Play'),
+  command('playPause',        'Play / pause',        'Space'),
+  command('stop',             'Stop',                'F8'),
+  command('undo',             'Undo',                'Ctrl+Z'),
+  command('redo',             'Redo',                'Ctrl+Shift+Z'),
+  command('switchPage',       'Go to page'),
+  command('switchToArrange',  'Arrange page',        'F2'),
+  command('switchToWiring',   'Wiring page',         'F3'),
+  command('switchToTracker',  'Tracker page',        'F4'),
+  command('switchToSample',   'Sampler page',        'F9'),
+  command('switchToEditor',   'Editor page',         'F10'),
+  command('editTuning',       'Edit tuning'),
+  command('editSwing',        'Edit swing'),
+  command('closeEditor',      'Close editor'),
+  command('diveToSampler',    'Dive to sampler'),
+  command('togglePage',       'Switch page'),
+  command('quit',             'Quit',                'Ctrl+Q'),
+  command('beginPrefix',      'Numeric prefix',      'Super+U'),
+  command('toggleFxWindows',  'Toggle FX windows',   'F11'),
+  command('toggleProfiler',   'Toggle profiler',     'Ctrl+Shift+P'),
+  command('toggleHelp',       'This help',           'F1'),
 }
 
 ----- tracker (bodies in trackerView + trackerRender; editCursor's and clipboard's
@@ -48,117 +51,116 @@ manifest.global = {
 -- is Backspace, and Key_Delete (\xe2\x8c\xa6) needs Fn.
 
 manifest.tracker = {
-  cursorUp             = { label = 'Up',                        keys = { ImGui.Key_UpArrow, {ImGui.Key_P, ImGui.Mod_Super} } },
-  cursorDown           = { label = 'Down',                      keys = { ImGui.Key_DownArrow, {ImGui.Key_N, ImGui.Mod_Super} } },
-  cursorLeft           = { label = 'Left',                      keys = { ImGui.Key_LeftArrow, {ImGui.Key_B, ImGui.Mod_Super} } },
-  cursorRight          = { label = 'Right',                     keys = { ImGui.Key_RightArrow, {ImGui.Key_F, ImGui.Mod_Super} } },
-  prevTrack            = { label = 'Previous track',            keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Alt} } },
-  nextTrack            = { label = 'Next track',                keys = { {ImGui.Key_RightArrow, ImGui.Mod_Alt} } },
-  prevTake             = { label = 'Previous take',             keys = { {ImGui.Key_Comma, ImGui.Mod_Alt} } },
-  nextTake             = { label = 'Next take',                 keys = { {ImGui.Key_Period, ImGui.Mod_Alt} } },
-  prevInstance         = { label = 'Previous instance',         keys = { {ImGui.Key_UpArrow, ImGui.Mod_Alt} } },
-  nextInstance         = { label = 'Next instance',             keys = { {ImGui.Key_DownArrow, ImGui.Mod_Alt} } },
-  goTop                = { label = 'Top',                       keys = { ImGui.Key_Home, {ImGui.Key_Comma, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  goBottom             = { label = 'Bottom',                    keys = { ImGui.Key_End, {ImGui.Key_Period, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  goLeft               = { label = 'First column',              keys = { {ImGui.Key_A, ImGui.Mod_Super} } },
-  goRight              = { label = 'Last filled column',        keys = { {ImGui.Key_E, ImGui.Mod_Super} } },
-  pageUp               = { label = 'Page up',                   keys = { ImGui.Key_PageUp, {ImGui.Key_V, ImGui.Mod_Shift, ImGui.Mod_Super} } },
-  pageDown             = { label = 'Page down',                 keys = { ImGui.Key_PageDown, {ImGui.Key_V, ImGui.Mod_Super} } },
-  colLeft              = { label = 'Column left',               keys = { {ImGui.Key_Tab, ImGui.Mod_Shift} } },
-  colRight             = { label = 'Column right',              keys = { ImGui.Key_Tab } },
-  channelLeft          = { label = 'Channel left',              keys = { {ImGui.Key_B, ImGui.Mod_Ctrl} } },
-  channelRight         = { label = 'Channel right',             keys = { {ImGui.Key_F, ImGui.Mod_Ctrl} } },
-  noteOff              = { label = 'Note off',                  keys = { ImGui.Key_1 } },
-  shrinkNote           = { label = 'Shrink note',               keys = { {ImGui.Key_UpArrow, ImGui.Mod_Super, ImGui.Mod_Shift} } },
-  growNote             = { label = 'Grow note',                 keys = { {ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift} } },
-  nudgeBack            = { label = 'Push back',                 keys = { {ImGui.Key_UpArrow, ImGui.Mod_Super} } },
-  nudgeForward         = { label = 'Push forward',              keys = { {ImGui.Key_DownArrow, ImGui.Mod_Super} } },
-  eventShiftLeft       = { label = 'Push left',                 keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Super} } },
-  eventShiftRight      = { label = 'Push right',                keys = { {ImGui.Key_RightArrow, ImGui.Mod_Super} } },
-  insertRow            = { label = 'Insert row (all columns)',  keys = { {ImGui.Key_DownArrow, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  insertRowCol         = { label = 'Insert row in column',      keys = { {ImGui.Key_DownArrow, ImGui.Mod_Ctrl} } },
-  deleteRowCol         = { label = 'Delete row in column',      keys = { {ImGui.Key_UpArrow, ImGui.Mod_Ctrl} } },
-  deleteRow            = { label = 'Delete row (all columns)',  keys = { {ImGui.Key_UpArrow, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  addNoteLane          = { label = 'Add note lane',             keys = { {ImGui.Key_RightArrow, ImGui.Mod_Ctrl} } },
-  addTypedCol          = { label = 'Add cc/pb/at/pc column',    keys = { {ImGui.Key_RightArrow, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  hideExtraCol         = { label = 'Remove column',             keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Ctrl} } },
-  delete               = { label = 'Clear cell',                keys = { ImGui.Key_Period } },
-  interpolate          = { label = 'Interpolate',               keys = { {ImGui.Key_I, ImGui.Mod_Ctrl} } },
-  selectUp             = { label = 'Select up',                 keys = { {ImGui.Key_UpArrow, ImGui.Mod_Shift} } },
-  selectDown           = { label = 'Select down',               keys = { {ImGui.Key_DownArrow, ImGui.Mod_Shift} } },
-  selectLeft           = { label = 'Select left',               keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Shift} } },
-  selectRight          = { label = 'Select right',              keys = { {ImGui.Key_RightArrow, ImGui.Mod_Shift} } },
-  cycleBlock           = { label = 'Cycle selection H',         keys = { {ImGui.Key_O, ImGui.Mod_Super} } },
-  cycleVBlock          = { label = 'Cycle selection V',         keys = { {ImGui.Key_Space, ImGui.Mod_Super} } },
-  swapBlockEnds        = { label = 'Swap block ends',           keys = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} } },
-  selectClear          = { label = 'Clear selection',           keys = { {ImGui.Key_G, ImGui.Mod_Super} } },
-  selectAll            = { label = 'Select all',                keys = { {ImGui.Key_A, ImGui.Mod_Ctrl} } },
-  cut                  = { label = 'Cut',                       keys = { {ImGui.Key_W, ImGui.Mod_Super}, {ImGui.Key_X, ImGui.Mod_Ctrl} } },
-  copy                 = { label = 'Copy',                      keys = { {ImGui.Key_W, ImGui.Mod_Ctrl}, {ImGui.Key_C, ImGui.Mod_Ctrl} } },
-  paste                = { label = 'Paste',                     keys = { {ImGui.Key_Y, ImGui.Mod_Super}, {ImGui.Key_V, ImGui.Mod_Ctrl} } },
-  duplicateDown        = { label = 'Duplicate',                 keys = { {ImGui.Key_D, ImGui.Mod_Ctrl} } },
-  deleteSel            = { label = 'Delete selection',          keys = { ImGui.Key_Delete, ImGui.Key_Backspace } },
-  nudgeCoarseUp        = { label = 'Nudge val ++',              keys = { {ImGui.Key_Equal, ImGui.Mod_Ctrl} } },
-  nudgeCoarseDown      = { label = 'Nudge val --',              keys = { {ImGui.Key_Minus, ImGui.Mod_Ctrl} } },
-  nudgeFineUp          = { label = 'Nudge val +',               keys = { {ImGui.Key_Equal, ImGui.Mod_Shift} } },
-  nudgeFineDown        = { label = 'Nudge val -',               keys = { {ImGui.Key_Minus, ImGui.Mod_Shift} } },
-  scaleHalf            = { label = 'Scale \xc3\x97\xc2\xbd',    keys = { {ImGui.Key_9, ImGui.Mod_Shift} } },  -- '('
-  scaleDouble          = { label = 'Scale \xc3\x972',           keys = { {ImGui.Key_0, ImGui.Mod_Shift} } },  -- ')'
-  doubleRPB            = { label = 'Double',                    keys = { {ImGui.Key_Equal, ImGui.Mod_Super} } },
-  halveRPB             = { label = 'Halve',                     keys = { {ImGui.Key_Minus, ImGui.Mod_Super} } },
-  incRPB               = { label = 'Rows / beat +1',            keys = { {ImGui.Key_Equal, ImGui.Mod_Super, ImGui.Mod_Shift} } },
-  decRPB               = { label = 'Rows / beat -1',            keys = { {ImGui.Key_Minus, ImGui.Mod_Super, ImGui.Mod_Shift} } },
-  setRPB               = { label = 'Set',                       keys = { {ImGui.Key_Z, ImGui.Mod_Super} } },
-  takeProperties       = { label = 'Take properties',           keys = { {ImGui.Key_P, ImGui.Mod_Alt} } },
-  newTakeBelow         = { label = 'New take',                  keys = { {ImGui.Key_Enter, ImGui.Mod_Alt} } },
-  duplicateBelow       = { label = 'Duplicate',                 keys = { {ImGui.Key_DownArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  deleteInstance       = { label = 'Delete instance',           keys = { {ImGui.Key_UpArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  prevVariant          = { label = 'Previous variant',          keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  nextVariant          = { label = 'Next variant / vary',       keys = { {ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  deleteBoundSlot      = { label = 'Delete take + instances',   keys = { {ImGui.Key_Delete, ImGui.Mod_Ctrl},
-                                                                         {ImGui.Key_Backspace, ImGui.Mod_Ctrl} } },
-  matchGridToCursor    = { label = 'Match',                     keys = { {ImGui.Key_M, ImGui.Mod_Super} } },
-  groupDuplicate       = { label = 'Duplicate group',           keys = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  groupPaste           = { label = 'Paste group',               keys = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  groupLocalToggle     = { label = 'Toggle local',              keys = { {ImGui.Key_Backslash, ImGui.Mod_Shift} } },
-  regionArm            = { label = 'Region mode',               keys = { ImGui.Key_Backslash } },
-  groupInstPrev        = { label = 'Prev instance',             keys = { ImGui.Key_LeftBracket } },
-  groupInstNext        = { label = 'Next instance',             keys = { ImGui.Key_RightBracket } },
-  inputOctaveUp        = { label = 'Octave +',                  keys = { {ImGui.Key_8, ImGui.Mod_Shift} } },
-  inputOctaveDown      = { label = 'Octave -',                  keys = { {ImGui.Key_7, ImGui.Mod_Shift} } },
-  inputSampleUp        = { label = 'Sample +',                  keys = { {ImGui.Key_Period, ImGui.Mod_Shift} } },  -- '>'
-  inputSampleDown      = { label = 'Sample -',                  keys = { {ImGui.Key_Comma, ImGui.Mod_Shift} } },  -- '<'
-  playFromTop          = { label = 'Play from top',             keys = { ImGui.Key_F6 } },
-  playFromCursor       = { label = 'Play from cursor',          keys = { ImGui.Key_F7 } },
-  loopToItemNow        = { label = 'Loop to item',              keys = { {ImGui.Key_L, ImGui.Mod_Super} } },
-  toggleLoopToItem     = { label = 'Loop to item on each move', keys = { {ImGui.Key_L, ImGui.Mod_Ctrl} } },
-  toggleFollowPlay     = { label = 'Follow play',               keys = { {ImGui.Key_P, ImGui.Mod_Ctrl} } },
-  clearLoop            = { label = 'Clear loop',                keys = { ImGui.Key_Escape } },
-  openTemperPicker     = { label = 'Pick tuning',               keys = { {ImGui.Key_T, ImGui.Mod_Super} } },
-  openSwingPicker      = { label = 'Pick swing',                keys = { {ImGui.Key_S, ImGui.Mod_Super} } },
-  quantize             = { label = 'Quantize',                  keys = { {ImGui.Key_K, ImGui.Mod_Ctrl} } },
-  quantizeKeepRealised = { label = 'Quantize (keep realised)',  keys = { {ImGui.Key_K, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  retune               = { label = 'Retune',                    keys = { {ImGui.Key_T, ImGui.Mod_Ctrl} } },
-  editNoteFx           = { label = 'Edit note FX',              keys = { {ImGui.Key_X, ImGui.Mod_Super} } },
-  freezeFxRegion       = { label = 'Freeze / explode FX',       keys = { {ImGui.Key_E, ImGui.Mod_Ctrl} } },
-  freezeFxGroup        = { label = 'Freeze FX to group',        keys = { {ImGui.Key_E, ImGui.Mod_Ctrl, ImGui.Mod_Shift} } },
-  focusParamPalette    = { label = 'Focus param palette',       keys = { {ImGui.Key_R, ImGui.Mod_Super} } },
-  pinMap               = { label = 'Pin the arrange map',       keys = { {ImGui.Key_M, ImGui.Mod_Alt} } },
-  returnToArrange      = { label = 'Back to arrange',           keys = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } },
+  command('cursorUp',              'Up',                          { 'Up', 'Super+P' }),
+  command('cursorDown',            'Down',                        { 'Down', 'Super+N' }),
+  command('cursorLeft',            'Left',                        { 'Left', 'Super+B' }),
+  command('cursorRight',           'Right',                       { 'Right', 'Super+F' }),
+  command('prevTrack',             'Previous track',              'Alt+Left'),
+  command('nextTrack',             'Next track',                  'Alt+Right'),
+  command('prevTake',              'Previous take',               'Alt+Comma'),
+  command('nextTake',              'Next take',                   'Alt+Period'),
+  command('prevInstance',          'Previous instance',           'Alt+Up'),
+  command('nextInstance',          'Next instance',               'Alt+Down'),
+  command('goTop',                 'Top',                         { 'Home', 'Ctrl+Shift+Comma' }),
+  command('goBottom',              'Bottom',                      { 'End', 'Ctrl+Shift+Period' }),
+  command('goLeft',                'First column',                'Super+A'),
+  command('goRight',               'Last filled column',          'Super+E'),
+  command('pageUp',                'Page up',                     { 'PageUp', 'Shift+Super+V' }),
+  command('pageDown',              'Page down',                   { 'PageDown', 'Super+V' }),
+  command('colLeft',               'Column left',                 'Shift+Tab'),
+  command('colRight',              'Column right',                'Tab'),
+  command('channelLeft',           'Channel left',                'Ctrl+B'),
+  command('channelRight',          'Channel right',               'Ctrl+F'),
+  command('noteOff',               'Note off',                    '1'),
+  command('shrinkNote',            'Shrink note',                 'Shift+Super+Up'),
+  command('growNote',              'Grow note',                   'Shift+Super+Down'),
+  command('nudgeBack',             'Push back',                   'Super+Up'),
+  command('nudgeForward',          'Push forward',                'Super+Down'),
+  command('eventShiftLeft',        'Push left',                   'Super+Left'),
+  command('eventShiftRight',       'Push right',                  'Super+Right'),
+  command('insertRow',             'Insert row (all columns)',    'Ctrl+Shift+Down'),
+  command('insertRowCol',          'Insert row in column',        'Ctrl+Down'),
+  command('deleteRowCol',          'Delete row in column',        'Ctrl+Up'),
+  command('deleteRow',             'Delete row (all columns)',    'Ctrl+Shift+Up'),
+  command('addNoteLane',           'Add note lane',               'Ctrl+Right'),
+  command('addTypedCol',           'Add cc/pb/at/pc column',      'Ctrl+Shift+Right'),
+  command('hideExtraCol',          'Remove column',               'Ctrl+Left'),
+  command('delete',                'Clear cell',                  'Period'),
+  command('interpolate',           'Interpolate',                 'Ctrl+I'),
+  command('selectUp',              'Select up',                   'Shift+Up'),
+  command('selectDown',            'Select down',                 'Shift+Down'),
+  command('selectLeft',            'Select left',                 'Shift+Left'),
+  command('selectRight',           'Select right',                'Shift+Right'),
+  command('cycleBlock',            'Cycle selection H',           'Super+O'),
+  command('cycleVBlock',           'Cycle selection V',           'Super+Space'),
+  command('swapBlockEnds',         'Swap block ends',             'Ctrl+Grave'),
+  command('selectClear',           'Clear selection',             'Super+G'),
+  command('selectAll',             'Select all',                  'Ctrl+A'),
+  command('cut',                   'Cut',                         { 'Super+W', 'Ctrl+X' }),
+  command('copy',                  'Copy',                        { 'Ctrl+W', 'Ctrl+C' }),
+  command('paste',                 'Paste',                       { 'Super+Y', 'Ctrl+V' }),
+  command('duplicateDown',         'Duplicate',                   'Ctrl+D'),
+  command('deleteSel',             'Delete selection',            { 'Delete', 'Backspace' }),
+  command('nudgeCoarseUp',         'Nudge val ++',                'Ctrl+Equal'),
+  command('nudgeCoarseDown',       'Nudge val --',                'Ctrl+Minus'),
+  command('nudgeFineUp',           'Nudge val +',                 'Shift+Equal'),
+  command('nudgeFineDown',         'Nudge val -',                 'Shift+Minus'),
+  command('scaleHalf',             'Scale \xc3\x97\xc2\xbd',      'Shift+9'),  -- '('
+  command('scaleDouble',           'Scale \xc3\x972',             'Shift+0'),  -- ')'
+  command('doubleRPB',             'Double',                      'Super+Equal'),
+  command('halveRPB',              'Halve',                       'Super+Minus'),
+  command('incRPB',                'Rows / beat +1',              'Shift+Super+Equal'),
+  command('decRPB',                'Rows / beat -1',              'Shift+Super+Minus'),
+  command('setRPB',                'Set',                         'Super+Z'),
+  command('takeProperties',        'Take properties',             'Alt+P'),
+  command('newTakeBelow',          'New take',                    'Alt+Enter'),
+  command('duplicateBelow',        'Duplicate',                   'Shift+Alt+Down'),
+  command('deleteInstance',        'Delete instance',             'Shift+Alt+Up'),
+  command('prevVariant',           'Previous variant',            'Shift+Alt+Left'),
+  command('nextVariant',           'Next variant / vary',         'Shift+Alt+Right'),
+  command('deleteBoundSlot',       'Delete take + instances',     { 'Ctrl+Delete', 'Ctrl+Backspace' }),
+  command('matchGridToCursor',     'Match',                       'Super+M'),
+  command('groupDuplicate',        'Duplicate group',             'Ctrl+Shift+D'),
+  command('groupPaste',            'Paste group',                 'Ctrl+Shift+V'),
+  command('groupLocalToggle',      'Toggle local',                'Shift+Backslash'),
+  command('regionArm',             'Region mode',                 'Backslash'),
+  command('groupInstPrev',         'Prev instance',               'LeftBracket'),
+  command('groupInstNext',         'Next instance',               'RightBracket'),
+  command('inputOctaveUp',         'Octave +',                    'Shift+8'),
+  command('inputOctaveDown',       'Octave -',                    'Shift+7'),
+  command('inputSampleUp',         'Sample +',                    'Shift+Period'),  -- '>'
+  command('inputSampleDown',       'Sample -',                    'Shift+Comma'),  -- '<'
+  command('playFromTop',           'Play from top',               'F6'),
+  command('playFromCursor',        'Play from cursor',            'F7'),
+  command('loopToItemNow',         'Loop to item',                'Super+L'),
+  command('toggleLoopToItem',      'Loop to item on each move',   'Ctrl+L'),
+  command('toggleFollowPlay',      'Follow play',                 'Ctrl+P'),
+  command('clearLoop',             'Clear loop',                  'Escape'),
+  command('openTemperPicker',      'Pick tuning',                 'Super+T'),
+  command('openSwingPicker',       'Pick swing',                  'Super+S'),
+  command('quantize',              'Quantize',                    'Ctrl+K'),
+  command('quantizeKeepRealised',  'Quantize (keep realised)',    'Ctrl+Shift+K'),
+  command('retune',                'Retune',                      'Ctrl+T'),
+  command('editNoteFx',            'Edit note FX',                'Super+X'),
+  command('freezeFxRegion',        'Freeze / explode FX',         'Ctrl+E'),
+  command('freezeFxGroup',         'Freeze FX to group',          'Ctrl+Shift+E'),
+  command('focusParamPalette',     'Focus param palette',         'Super+R'),
+  command('pinMap',                'Pin the arrange map',         'Alt+M'),
+  command('returnToArrange',       'Back to arrange',             { 'Enter', 'KeypadEnter' }),
 }
 
 -- Universal-argument digit prefixes: Ctrl+0..9 arm advBy0..advBy9.
 for i = 0, 9 do
-  manifest.tracker['advBy' .. i] = { label = 'Advance by ' .. i, keys = { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} } }
+  util.add(manifest.tracker, command('advBy' .. i, 'Advance by ' .. i, 'Ctrl+' .. i))
 end
 
 ----- region (overlay within the tracker page; bodies + springLoaded config on ec)
 
 manifest.region = {
-  regionExit        = { label = 'Leave region mode',             keys = { ImGui.Key_Escape, ImGui.Key_Enter, ImGui.Key_KeypadEnter } },
-  regionBail        = { label = 'Leave region, clear selection', keys = { {ImGui.Key_G, ImGui.Mod_Super} } },
-  regionPaintExtend = { label = 'Add column to region',          keys = { ImGui.Key_Equal } },
-  regionPaintShrink = { label = 'Drop column from region',       keys = { ImGui.Key_Minus } },
+  command('regionExit',         'Leave region mode',               { 'Escape', 'Enter', 'KeypadEnter' }),
+  command('regionBail',         'Leave region, clear selection',   'Super+G'),
+  command('regionPaintExtend',  'Add column to region',            'Equal'),
+  command('regionPaintShrink',  'Drop column from region',         'Minus'),
 }
 
 ----- arrange (bodies in arrangeView + arrangeRender)
@@ -167,87 +169,85 @@ manifest.region = {
 -- names: cmgr.commands is flat, so a shared name would clobber the other gate.
 
 manifest.arrange = {
-  arrangeCursorUp       = { label = 'Up',                     keys = { ImGui.Key_UpArrow    } },
-  arrangeCursorDown     = { label = 'Down',                   keys = { ImGui.Key_DownArrow  } },
-  arrangeCursorLeft     = { label = 'Left',                   keys = { ImGui.Key_LeftArrow  } },
-  arrangeCursorRight    = { label = 'Right',                  keys = { ImGui.Key_RightArrow } },
-  arrangePageUp         = { label = 'Page up',                keys = { ImGui.Key_PageUp     } },
-  arrangePageDown       = { label = 'Page down',              keys = { ImGui.Key_PageDown   } },
-  arrangeHome           = { label = 'Top',                    keys = { ImGui.Key_Home       } },
-  arrangeEnd            = { label = 'End of project',         keys = { ImGui.Key_End        } },
-  arrangeNextDrop       = { label = 'Next take edge',         keys = { {ImGui.Key_DownArrow, ImGui.Mod_Alt} } },
-  arrangePrevDrop       = { label = 'Previous take edge',     keys = { {ImGui.Key_UpArrow, ImGui.Mod_Alt} } },
-  arrangeSelectUp       = { label = 'Select up',              keys = { {ImGui.Key_UpArrow, ImGui.Mod_Shift} } },
-  arrangeSelectDown     = { label = 'Select down',            keys = { {ImGui.Key_DownArrow, ImGui.Mod_Shift} } },
-  arrangeSelectLeft     = { label = 'Select left',            keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Shift} } },
-  arrangeSelectRight    = { label = 'Select right',           keys = { {ImGui.Key_RightArrow, ImGui.Mod_Shift} } },
-  arrangeClearSelection = { label = 'Clear selection',        keys = { {ImGui.Key_G, ImGui.Mod_Super} } },
-  createSlot            = { label = 'New slot',               keys = { {ImGui.Key_Enter, ImGui.Mod_Super} } },
-  deleteSlot            = { label = 'Delete slot',            keys = { {ImGui.Key_Delete, ImGui.Mod_Ctrl},
-                                                                      {ImGui.Key_Backspace, ImGui.Mod_Ctrl} } },
-  arrangeNudgeBack      = { label = 'Nudge take back',        keys = { {ImGui.Key_UpArrow, ImGui.Mod_Super} } },
-  arrangeNudgeForward   = { label = 'Nudge take forward',     keys = { {ImGui.Key_DownArrow, ImGui.Mod_Super} } },
-  arrangeEdgeUp         = { label = 'Move edge up',           keys = { {ImGui.Key_UpArrow, ImGui.Mod_Super, ImGui.Mod_Shift} } },
-  arrangeEdgeDown       = { label = 'Move edge down',         keys = { {ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift} } },
-  arrangeSplit          = { label = 'Split take',             keys = { {ImGui.Key_S, ImGui.Mod_Ctrl} } },
-  arrangeDeleteTake     = { label = 'Delete take',            keys = { ImGui.Key_Delete, ImGui.Key_Backspace } },
-  arrangeDeleteAdvance  = { label = 'Delete take, advance',   keys = { ImGui.Key_Period } },
-  arrangeDeleteRetreat  = { label = 'Delete take, retreat',   keys = { {ImGui.Key_UpArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  arrangeDive           = { label = 'Dive to tracker',        keys = { ImGui.Key_Enter } },
-  arrangeTakeProperties = { label = 'Take properties',        keys = { {ImGui.Key_Backspace, ImGui.Mod_Super} } },
-  arrangeDuplicateBelow = { label = 'Duplicate take',         keys = { {ImGui.Key_D, ImGui.Mod_Ctrl},
-                                                                      {ImGui.Key_DownArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  arrangePrevVariant    = { label = 'Previous variant',       keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
-  arrangeNextVariant    = { label = 'Next variant',           keys = { {ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
+  command('arrangeCursorUp',        'Up',                       'Up'),
+  command('arrangeCursorDown',      'Down',                     'Down'),
+  command('arrangeCursorLeft',      'Left',                     'Left'),
+  command('arrangeCursorRight',     'Right',                    'Right'),
+  command('arrangePageUp',          'Page up',                  'PageUp'),
+  command('arrangePageDown',        'Page down',                'PageDown'),
+  command('arrangeHome',            'Top',                      'Home'),
+  command('arrangeEnd',             'End of project',           'End'),
+  command('arrangeNextDrop',        'Next take edge',           'Alt+Down'),
+  command('arrangePrevDrop',        'Previous take edge',       'Alt+Up'),
+  command('arrangeSelectUp',        'Select up',                'Shift+Up'),
+  command('arrangeSelectDown',      'Select down',              'Shift+Down'),
+  command('arrangeSelectLeft',      'Select left',              'Shift+Left'),
+  command('arrangeSelectRight',     'Select right',             'Shift+Right'),
+  command('arrangeClearSelection',  'Clear selection',          'Super+G'),
+  command('createSlot',             'New slot',                 'Super+Enter'),
+  command('deleteSlot',             'Delete slot',              { 'Ctrl+Delete', 'Ctrl+Backspace' }),
+  command('arrangeNudgeBack',       'Nudge take back',          'Super+Up'),
+  command('arrangeNudgeForward',    'Nudge take forward',       'Super+Down'),
+  command('arrangeEdgeUp',          'Move edge up',             'Shift+Super+Up'),
+  command('arrangeEdgeDown',        'Move edge down',           'Shift+Super+Down'),
+  command('arrangeSplit',           'Split take',               'Ctrl+S'),
+  command('arrangeDeleteTake',      'Delete take',              { 'Delete', 'Backspace' }),
+  command('arrangeDeleteAdvance',   'Delete take, advance',     'Period'),
+  command('arrangeDeleteRetreat',   'Delete take, retreat',     'Shift+Alt+Up'),
+  command('arrangeDive',            'Dive to tracker',          'Enter'),
+  command('arrangeTakeProperties',  'Take properties',          'Super+Backspace'),
+  command('arrangeDuplicateBelow',  'Duplicate take',           { 'Ctrl+D', 'Shift+Alt+Down' }),
+  command('arrangePrevVariant',     'Previous variant',         'Shift+Alt+Left'),
+  command('arrangeNextVariant',     'Next variant',             'Shift+Alt+Right'),
   -- Shadows the global universal-argument prefix, which no arrange command reads.
-  arrangeReplaceMode    = { label = 'Replace mode',           keys = { {ImGui.Key_U, ImGui.Mod_Super} } },
-  arrangeAdvanceMode    = { label = 'Advance by take length', keys = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} } },
-  arrangeSetLoopStart   = { label = 'Set loop start',         keys = { {ImGui.Key_B, ImGui.Mod_Super} } },
-  arrangeSetLoopEnd     = { label = 'Set loop end',           keys = { {ImGui.Key_E, ImGui.Mod_Super} } },
-  arrangeLoopToItem     = { label = 'Loop to take',           keys = { {ImGui.Key_L, ImGui.Mod_Super} } },
-  arrangeClearLoop      = { label = 'Clear loop',             keys = { ImGui.Key_Escape } },
-  arrangeFollowPlay     = { label = 'Follow play',            keys = { {ImGui.Key_F, ImGui.Mod_Super} } },
-  arrangePlayFromCursor = { label = 'Play from cursor',       keys = { ImGui.Key_F6 } },
-  arrangeZoomIn         = { label = 'Zoom in',                keys = { {ImGui.Key_Equal, ImGui.Mod_Super} } },
-  arrangeZoomOut        = { label = 'Zoom out',               keys = { {ImGui.Key_Minus, ImGui.Mod_Super} } },
+  command('arrangeReplaceMode',     'Replace mode',             'Super+U'),
+  command('arrangeAdvanceMode',     'Advance by take length',   'Ctrl+Grave'),
+  command('arrangeSetLoopStart',    'Set loop start',           'Super+B'),
+  command('arrangeSetLoopEnd',      'Set loop end',             'Super+E'),
+  command('arrangeLoopToItem',      'Loop to take',             'Super+L'),
+  command('arrangeClearLoop',       'Clear loop',               'Escape'),
+  command('arrangeFollowPlay',      'Follow play',              'Super+F'),
+  command('arrangePlayFromCursor',  'Play from cursor',         'F6'),
+  command('arrangeZoomIn',          'Zoom in',                  'Super+Equal'),
+  command('arrangeZoomOut',         'Zoom out',                 'Super+Minus'),
 }
 
--- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
--- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
+-- Place-command tokens: 0..9 → digit keys, 10..35 → letters, 36..61 →
+-- Shift+letter.
 local function placeKey(slotIdx)
-  if slotIdx < 10 then return { ImGui.Key_0 + slotIdx } end
-  if slotIdx < 36 then return { ImGui.Key_A + (slotIdx - 10) } end
-  return { ImGui.Key_A + (slotIdx - 36), ImGui.Mod_Shift }
+  if slotIdx < 10 then return tostring(slotIdx) end
+  if slotIdx < 36 then return string.char(65 + slotIdx - 10) end
+  return 'Shift+' .. string.char(65 + slotIdx - 36)
 end
 
 -- Slot key = util.toBase62(i); matches arrangeView's drop-command registration.
 for i = 0, 61 do
   local key = util.toBase62(i)
-  manifest.arrange['drop' .. key] = { label = 'Place slot ' .. key, keys = { placeKey(i) } }
+  util.add(manifest.arrange, command('drop' .. key, 'Place slot ' .. key, placeKey(i)))
 end
 
 -- Universal-argument digit prefixes, project-wide rather than tracker's take-tier.
 for i = 0, 9 do
-  manifest.arrange['arrangeAdvanceBy' .. i] =
-    { label = 'Advance by ' .. i, keys = { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} } }
+  util.add(manifest.arrange,
+           command('arrangeAdvanceBy' .. i, 'Advance by ' .. i, 'Ctrl+' .. i))
 end
 
 ----- sample (bodies + the slot-clamp invariant in sampleRender)
 
 manifest.sample = {
-  browserUp      = { label = 'Up a folder',     keys = { {ImGui.Key_UpArrow,    ImGui.Mod_Ctrl } } },
-  browserPreview = { label = 'Open / audition', keys = { {ImGui.Key_DownArrow,  ImGui.Mod_Ctrl } } },
-  browserAssign  = { label = 'Load into slot',  keys = { {ImGui.Key_RightArrow, ImGui.Mod_Ctrl } } },
-  slotNext       = { label = 'Next slot',       keys = { {ImGui.Key_Period,     ImGui.Mod_Shift} } },
-  slotPrev       = { label = 'Previous slot',   keys = { {ImGui.Key_Comma,      ImGui.Mod_Shift} } },
-  slotRename     = { label = 'Rename slot',     keys = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } },
+  command('browserUp',       'Up a folder',       'Ctrl+Up'),
+  command('browserPreview',  'Open / audition',   'Ctrl+Down'),
+  command('browserAssign',   'Load into slot',    'Ctrl+Right'),
+  command('slotNext',        'Next slot',         'Shift+Period'),
+  command('slotPrev',        'Previous slot',     'Shift+Comma'),
+  command('slotRename',      'Rename slot',       { 'Enter', 'KeypadEnter' }),
 }
 
 ----- wiring (bodies in wiringRender)
 
 manifest.wiring = {
-  wiringAddFx          = { label = 'Add FX',          keys = { ImGui.Key_N      } },
-  wiringClearSelection = { label = 'Clear selection', keys = { ImGui.Key_Escape } },
+  command('wiringAddFx',           'Add FX',            'N'),
+  command('wiringClearSelection',  'Clear selection',   'Escape'),
 }
 
 return manifest

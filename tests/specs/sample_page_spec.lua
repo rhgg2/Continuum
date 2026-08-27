@@ -6,10 +6,7 @@
 
 local t = require('support')
 
-local n = 0
-local fakeImGui = setmetatable({ Mod_None = 0 }, {
-  __index = function(tbl, k) n = n + 1; rawset(tbl, k, n); return n end,
-})
+local fakeImGui = t.imgui()
 package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
@@ -37,12 +34,12 @@ return {
 
       local manifest = require('manifest')
       t.truthy(manifest.sample, 'the sample scope declares a manifest')
-      h.cmgr:installManifest{ sample = manifest.sample }
+      h.cmgr:installManifest({ sample = manifest.sample }, fakeImGui)
 
       local scope, declared = h.cmgr:scope('sample'), {}
-      for name, entry in pairs(scope.manifest) do
-        declared[name] = true
-        t.truthy(entry.label, name .. ' carries a label')
+      for _, entry in ipairs(scope.manifest) do
+        declared[entry.name] = true
+        t.truthy(entry.label, entry.name .. ' carries a label')
       end
       t.deepEq(scope.registered, declared, 'declarations and registrations correspond')
     end,

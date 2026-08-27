@@ -1,4 +1,4 @@
-@spec patternEditor_modal_spec  src=tests/specs/patternEditor_modal_spec.lua  loc=159  cases=4
+@spec patternEditor_modal_spec  src=tests/specs/patternEditor_modal_spec.lua  loc=156  cases=4
 @exercises scratch (scratch)
 @surface   scratch.track
 @harness   mk, reaper.GetMediaItemTake_Track, reaper.CountTrackMediaItems
@@ -11,76 +11,75 @@
   against a controllable imgui; no grid draw.
 
 # Helpers
-  @fn setKeys(keys, mods)  @ 37-40
-  @fn newModalHost()  @ 46-51
+  @fn setKeys(keys, mods)  @ 34-37
+  @fn newModalHost()  @ 43-48
       -- Capture the open state so a test can invoke onClose the way modalHost would.
-  @fn loadPE(deps)  @ 53-59
-  @fn noop()  @ 75
-  @fn withEditor(harness)  @ 77-82
+  @fn loadPE(deps)  @ 50-56
+  @fn noop()  @ 72
+  @fn withEditor(harness)  @ 74-79
 
 # Cases
-  @case 'launch mints a checkout and raises the modal; onClose sweeps it'  [harness]  @ 86-100
-  @case 'a whitelisted key dispatches on the mini cmgr; an excluded chord is inert'  [harness]  @ 104-118
-  @case 'the chord gesture is gated off the pattern surface'  [harness]  @ 122-145
-  @case 'an unconsumed Esc closes the modal'  [harness]  @ 149-157
+  @case 'launch mints a checkout and raises the modal; onClose sweeps it'  [harness]  @ 83-97
+  @case 'a whitelisted key dispatches on the mini cmgr; an excluded chord is inert'  [harness]  @ 101-115
+  @case 'the chord gesture is gated off the pattern surface'  [harness]  @ 119-142
+  @case 'an unconsumed Esc closes the modal'  [harness]  @ 146-154
 
 # Uses (outbound edges)
-  @use call scratch.track  @ 89
+  @use call scratch.track  @ 86
 
 # Fields (r read / w write incl. constructor keys)
-  @field w CalcTextSize  @ 34
-  @field w GetKeyMods  @ 21
-  @field w GetStyleVar  @ 35
-  @field w GetWindowViewport  @ 28
-  @field r ImGui_GetBuiltinPath  @ 18
-  @field w ImGui_GetBuiltinPath  @ 18
-  @field w IsAnyItemActive  @ 27
-  @field w IsKeyDown  @ 23
-  @field w IsKeyPressed  @ 22
-  @field w IsMouseClicked  @ 24
-  @field w IsMouseDown  @ 25
-  @field w IsWindowHovered  @ 26
-  @field r Key_A  @ 131
-  @field r Key_Escape  @ 154
-  @field r Key_Period  @ 116
-  @field r Key_X  @ 112
-  @field r Mod_None  @ 116,135,154
-  @field w Mod_None  @ 15
-  @field r Mod_Shift  @ 142
-  @field r Mod_Super  @ 112
-  @field w PopFont  @ 33
-  @field w PushFont  @ 32
-  @field w Viewport_GetWorkSize  @ 29
-  @field w __index  @ 16,42
-  @field w chrome  @ 80
-  @field r consumed  @ 113,117
-  @field w ctx  @ 43
-  @field w delay  @ 70,71
-  @field w detune  @ 70,71
-  @field w endppq  @ 70,71
-  @field w facade  @ 80
-  @field w font  @ 43
-  @field w fontSize  @ 43
-  @field w get  @ 61
-  @field w gui  @ 80
-  @field r kind  @ 94
-  @field w kind  @ 68
-  @field r kinds  @ 48
-  @field w kinds  @ 47
-  @field w lane  @ 70,71
-  @field r last  @ 94,97
-  @field w last  @ 47,49
-  @field w lengthPpq  @ 68
-  @field r loaded  @ 56
-  @field w modalHost  @ 80
-  @field w name  @ 86,104,122,149
-  @field w ownerTrack  @ 63
-  @field w pitch  @ 70,71
-  @field w ppq  @ 70,71
-  @field r preload  @ 54
-  @field r reaper  @ 18
-  @field w run  @ 87,105,123,150
-  @field w specs  @ 69
-  @field w ui  @ 43
-  @field w uiFont  @ 43
-  @field w vel  @ 70,71
+  @field w CalcTextSize  @ 31
+  @field w GetKeyMods  @ 18
+  @field w GetStyleVar  @ 32
+  @field w GetWindowViewport  @ 25
+  @field r ImGui_GetBuiltinPath  @ 15
+  @field w ImGui_GetBuiltinPath  @ 15
+  @field w IsAnyItemActive  @ 24
+  @field w IsKeyDown  @ 20
+  @field w IsKeyPressed  @ 19
+  @field w IsMouseClicked  @ 21
+  @field w IsMouseDown  @ 22
+  @field w IsWindowHovered  @ 23
+  @field r Key_A  @ 128
+  @field r Key_Escape  @ 151
+  @field r Key_Period  @ 113
+  @field r Key_X  @ 109
+  @field r Mod_None  @ 113,132,151
+  @field r Mod_Shift  @ 139
+  @field r Mod_Super  @ 109
+  @field w PopFont  @ 30
+  @field w PushFont  @ 29
+  @field w Viewport_GetWorkSize  @ 26
+  @field w __index  @ 39
+  @field w chrome  @ 77
+  @field r consumed  @ 110,114
+  @field w ctx  @ 40
+  @field w delay  @ 67,68
+  @field w detune  @ 67,68
+  @field w endppq  @ 67,68
+  @field w facade  @ 77
+  @field w font  @ 40
+  @field w fontSize  @ 40
+  @field w get  @ 58
+  @field w gui  @ 77
+  @field r kind  @ 91
+  @field w kind  @ 65
+  @field r kinds  @ 45
+  @field w kinds  @ 44
+  @field w lane  @ 67,68
+  @field r last  @ 91,94
+  @field w last  @ 44,46
+  @field w lengthPpq  @ 65
+  @field r loaded  @ 53
+  @field w modalHost  @ 77
+  @field w name  @ 83,101,119,146
+  @field w ownerTrack  @ 60
+  @field w pitch  @ 67,68
+  @field w ppq  @ 67,68
+  @field r preload  @ 51
+  @field r reaper  @ 15
+  @field w run  @ 84,102,120,147
+  @field w specs  @ 66
+  @field w ui  @ 40
+  @field w uiFont  @ 40
+  @field w vel  @ 67,68

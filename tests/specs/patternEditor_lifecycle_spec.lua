@@ -5,12 +5,9 @@ local t       = require('support')
 local util    = require('util')
 local scratch = require('scratch')
 
--- patternEditor pulls imgui/keyDispatch/manifest/gridPane at load; stub imgui (auto-viv
--- ids), hand it chrome/gui/modalHost, and re-require per test so ids stay order-independent.
-local nextId = 0
-local fakeImGui = setmetatable({ Mod_None = 0 }, {
-  __index = function(tbl, k) nextId = nextId + 1; rawset(tbl, k, nextId); return nextId end,
-})
+-- patternEditor pulls imgui/keyDispatch/manifest/gridPane at load; stub imgui, hand
+-- it chrome/gui/modalHost, and re-require per test so ids stay order-independent.
+local fakeImGui = t.imgui()
 _G.reaper.ImGui_GetBuiltinPath = _G.reaper.ImGui_GetBuiltinPath or function() return '/stub' end
 
 local fakeChrome    = setmetatable({}, { __index = function() return function() end end })

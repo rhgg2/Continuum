@@ -8,6 +8,27 @@ local util = require('util')
 -- real class-key shape without hardcoding the separator.
 M.key = util.key
 
+-- A stand-in for the ImGui table, for specs that load a module requiring it.
+-- Key and modifier constants are explicit, because cmgr's token tables walk
+-- Key_A + i and Key_0 + i; everything else a module reaches for (flags, style
+-- vars, functions) auto-vivifies to a distinct number.
+function M.imgui()
+  local img = { Mod_None = 0, Mod_Ctrl = 1, Mod_Shift = 2, Mod_Alt = 4, Mod_Super = 8 }
+  for i = 0, 25 do img['Key_' .. string.char(65 + i)] = 100 + i end
+  for i = 0, 9  do img['Key_' .. i]         = 200 + i end
+  for i = 0, 9  do img['Key_Keypad' .. i]   = 300 + i end
+  for i = 1, 12 do img['Key_F' .. i]        = 400 + i end
+  local named = { 'Space', 'Enter', 'KeypadEnter', 'Escape', 'Tab', 'Backspace', 'Delete',
+    'Insert', 'Home', 'End', 'PageUp', 'PageDown', 'UpArrow', 'DownArrow', 'LeftArrow',
+    'RightArrow', 'Comma', 'Period', 'Slash', 'Semicolon', 'Apostrophe', 'Minus', 'Equal',
+    'LeftBracket', 'RightBracket', 'GraveAccent', 'Backslash', 'KeypadSubtract' }
+  for i, name in ipairs(named) do img['Key_' .. name] = 500 + i end
+  local n = 1000
+  return setmetatable(img, {
+    __index = function(tbl, k) n = n + 1; rawset(tbl, k, n); return n end,
+  })
+end
+
 local function repr(v, depth)
   depth = depth or 0
   if depth > 4 then return '...' end

@@ -9,12 +9,9 @@ local util    = require('util')
 local scratch = require('scratch')
 
 -- Controllable imgui: the walk reads IsKeyPressed/IsKeyDown/GetKeyMods; mouse and
--- hover read false so handleMouse no-ops headless. Auto-viv assigns a stable id to
--- every Key_/Mod_ on first touch, so the manifest and the test share ids by identity.
-local nextId = 100
-local fakeImGui = setmetatable({ Mod_None = 0 }, {
-  __index = function(tbl, k) nextId = nextId + 1; rawset(tbl, k, nextId); return nextId end,
-})
+-- hover read false so handleMouse no-ops headless. The manifest's tokens resolve
+-- against this same table, so it and the test share ids by identity.
+local fakeImGui = t.imgui()
 _G.reaper.ImGui_GetBuiltinPath = _G.reaper.ImGui_GetBuiltinPath or function() return '/stub' end
 
 local pressed, down, curMods = {}, {}, 0

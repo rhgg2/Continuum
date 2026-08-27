@@ -59,17 +59,39 @@ After registration vm applies `wrap` calls for cross-cutting behaviour
 (see below). rm installs the default keymap at construction; users
 will eventually layer overrides on top.
 
+## Binding tokens
+
+1. A **token** is a chord written as stable ASCII — `Ctrl+Shift+Z`,
+   `Super+P`, `Up`, `Space`. The modifiers come first in
+   `Ctrl+Shift+Alt+Super` order, and the key last.
+
+1. A token names an ImGui modifier rather than a platform's glyph, so it
+   carries no macOS inversion: `Ctrl+Z` is ⌘Z on a Mac and Ctrl+Z
+   elsewhere, exactly as the keyspec it parses to. `keyLabel` renders the
+   platform's glyphs; the token stays ASCII.
+
+1. `specForToken` parses one and `tokenForSpec` prints one. The manifest
+   declares its keys as tokens and a persisted override stores them, so a
+   declaration and an override spell a chord the same way.
+
 ## Manifest
 
 1. A scope's **manifest** declares every command that scope registers.
    Each **entry** names one command and carries a **label** for display,
-   and its **keys** as an array of keyspecs where the command has any.
-   `manifest.lua` holds one such table per scope.
+   and its **keys** as binding tokens where the command has any.
+   `manifest.lua` holds one such list per scope, each entry built by its
+   local `command` helper.
 
-1. `installManifest(manifest)` writes each entry's keys into its scope's
-   keymap and hangs the scope's entries off the scope as `scope.manifest`.
-   It runs from continuum's wiring before `loadOverrides`, so a persisted
-   rebinding still wins over the declared default.
+1. A scope's entries are a list, so the order a command is declared in is
+   a fact the declaration carries, and a consumer reading the scope reads
+   that order.
+
+1. `installManifest(manifest, ImGui)` parses each entry's tokens into
+   keyspecs, writes them into its scope's keymap, and hangs the scope's
+   entries off the scope as `scope.manifest`. A token that does not parse
+   raises, naming the command. It runs from continuum's wiring before
+   `loadOverrides`, so a persisted rebinding still wins over the declared
+   default.
 
 1. A command resolves to exactly one entry. Two scopes declaring the same
    name raises at install, since the flat namespace gives that name one

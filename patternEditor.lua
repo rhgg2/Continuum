@@ -82,15 +82,18 @@ local EDIT_COMMANDS = {
   'scaleHalf', 'scaleDouble', 'doubleRPB', 'halveRPB', 'incRPB', 'decRPB',
 }
 
--- Keys come from the tracker manifest, so the subset is the page's own chords.
+-- Keys come from the tracker manifest: edit commands above, the Ctrl+digit
+-- advBy series (auto-step), and the lane pair (unbound until a poly editor opens).
 local miniScope = cmgr:scope('tracker')
-for _, name in ipairs(EDIT_COMMANDS) do
-  miniScope:bind(name, manifest.tracker[name].keys)
+local wanted    = { addNoteLane = true, hideExtraCol = true }
+for _, name in ipairs(EDIT_COMMANDS) do wanted[name] = true end
+for i = 0, 9 do wanted['advBy' .. i] = true end
+
+local subset = {}
+for _, entry in ipairs(manifest.tracker) do
+  if wanted[entry.name] then util.add(subset, entry) end
 end
--- Ctrl+digit advBy0..9 arm the auto-step; bind the generated series alongside the edit subset.
-for i = 0, 9 do
-  miniScope:bind('advBy' .. i, manifest.tracker['advBy' .. i].keys)
-end
+cmgr:installManifest({ tracker = subset }, ImGui)
 cmgr:loadOverrides(ImGui)   -- user rebinds (global tier) apply to the mini editor too
 cmgr:push(miniScope)        -- single-purpose cmgr: the tracker scope stays active for its life
 
@@ -99,11 +102,14 @@ cmgr:push(miniScope)        -- single-purpose cmgr: the tracker scope stays acti
 miniScope:register('addNoteLane',  function() tv:addExtraCol('note') end)
 miniScope:register('hideExtraCol', function() tv:hideExtraCol() end)
 
--- Lane editing is poly-only: bind the two commands' keys (Ctrl+Right/Ctrl+Left) while a poly note
--- editor is open, clear them otherwise, so a mono editor's arrows never add or drop a lane.
+-- Lane editing is poly-only: bind the pair's keys (Ctrl+Right/Left) while a poly editor
+-- is open, clear otherwise; held from the installed keymap so a rebind rides along.
+local laneKeys = { addNoteLane  = cmgr:keysFor('addNoteLane'),
+                   hideExtraCol = cmgr:keysFor('hideExtraCol') }
+
 local function setLaneCommands(on)
-  miniScope:bind('addNoteLane',  on and manifest.tracker.addNoteLane.keys  or nil)
-  miniScope:bind('hideExtraCol', on and manifest.tracker.hideExtraCol.keys or nil)
+  miniScope:bind('addNoteLane',  on and laneKeys.addNoteLane  or nil)
+  miniScope:bind('hideExtraCol', on and laneKeys.hideExtraCol or nil)
 end
 
 ----- Materialise the stored body onto the bound checkout take

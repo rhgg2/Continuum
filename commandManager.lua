@@ -136,22 +136,34 @@ function cmgr:bindAll(tbl)        global:bindAll(tbl)     end
 -- Declaration of what a command is called and what reaches it; the keymap is
 -- installed from it. see docs/commandManager.md § Manifest
 
---shape: manifest = { [scopeName] = { [commandName] = entry } }
---shape: entry = { label = 'Play / pause', keys = { keyspec, ... }? }
+--shape: manifest = { [scopeName] = { entry, ... } }
+--shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path? }
 --invariant: a command resolves to exactly one entry — two scopes declaring it raises
+--invariant: a scope's entries are a list, so the order they are declared in is the order they read
 
---contract: writes each entry's keys into its scope's keymap and hangs scope.manifest
-function cmgr:installManifest(manifest)
+--contract: parses each entry's tokens into its scope's keymap and hangs scope.manifest
+function cmgr:installManifest(manifest, ImGui)
   local declaredBy = {}
   for scopeName, entries in pairs(manifest) do
     local scope = self:scope(scopeName)
-    for name, entry in pairs(entries) do
+    for _, entry in ipairs(entries) do
+      local name = entry.name
       if declaredBy[name] then
         error('manifest: ' .. name .. ' is declared by both ' .. declaredBy[name] .. ' and ' .. scopeName)
       end
       declaredBy[name] = scopeName
       self.entries[name] = entry
-      if entry.keys then scope.keymap[name] = entry.keys end
+      if entry.keys then
+        -- A token that fails here is a typo in the declaration, not a user's
+        -- stray config: raise rather than drop the binding the way overrides do.
+        local specs = {}
+        for _, token in ipairs(entry.keys) do
+          local spec, err = self:specForToken(token, ImGui)
+          if not spec then error('manifest: ' .. name .. ' — ' .. err) end
+          util.add(specs, spec)
+        end
+        scope.keymap[name] = specs
+      end
     end
     scope.manifest = entries
   end
@@ -174,14 +186,16 @@ function cmgr:auditManifests()
         error('manifest: ' .. scopeName .. ' registers ' .. name .. ' but declares no manifest')
       end
     else
-      for name in pairs(scope.manifest) do
-        if not scope.registered[name] then
-          error('manifest: ' .. scopeName .. ' declares ' .. name .. ', which ' ..
-                (self.commands[name] and 'another scope registers' or 'no scope registers'))
+      local declared = {}
+      for _, entry in ipairs(scope.manifest) do
+        declared[entry.name] = true
+        if not scope.registered[entry.name] then
+          error('manifest: ' .. scopeName .. ' declares ' .. entry.name .. ', which ' ..
+                (self.commands[entry.name] and 'another scope registers' or 'no scope registers'))
         end
       end
       for name in pairs(scope.registered) do
-        if not scope.manifest[name] then
+        if not declared[name] then
           error('manifest: ' .. scopeName .. ' registers ' .. name .. ', which its manifest does not declare')
         end
       end

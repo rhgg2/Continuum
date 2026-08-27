@@ -7,18 +7,15 @@
 
 local t = require('support')
 
-local n = 0
-local fakeImGui = setmetatable({ Mod_None = 0,
-  PushFont = function() end, PopFont = function() end,
-  PushStyleColor = function() end, PopStyleColor = function() end }, {
-  __index = function(tbl, k) n = n + 1; rawset(tbl, k, n); return n end,
-})
+local fakeImGui = t.imgui()
+fakeImGui.PushFont,       fakeImGui.PopFont       = function() end, function() end
+fakeImGui.PushStyleColor, fakeImGui.PopStyleColor = function() end, function() end
 package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
 -- Earlier specs (patternEditor_*) rebind imgui to their own auto-viv fake (PushFont
 -- resolves to a number); drop that cache + imgui-capturing modules so our preload rebinds.
-for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'gridPane', 'curveEditor', 'painter' }) do
+for _, m in ipairs({ 'imgui', 'keyDispatch', 'gridPane', 'curveEditor', 'painter' }) do
   package.loaded[m] = nil
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
@@ -295,13 +292,13 @@ return {
       local manifest = require('manifest')
       t.truthy(manifest.tracker, 'the tracker scope declares a manifest')
       t.truthy(manifest.region,  'the region scope declares a manifest')
-      h.cmgr:installManifest{ tracker = manifest.tracker, region = manifest.region }
+      h.cmgr:installManifest({ tracker = manifest.tracker, region = manifest.region }, fakeImGui)
 
       for _, scopeName in ipairs({ 'tracker', 'region' }) do
         local scope, declared = h.cmgr:scope(scopeName), {}
-        for name, entry in pairs(scope.manifest) do
-          declared[name] = true
-          t.truthy(entry.label, name .. ' carries a label')
+        for _, entry in ipairs(scope.manifest) do
+          declared[entry.name] = true
+          t.truthy(entry.label, entry.name .. ' carries a label')
         end
         t.deepEq(scope.registered, declared, scopeName .. ' declares what it registers')
       end
@@ -316,7 +313,7 @@ return {
       local h, groupsByPage = harness.mk(), {}
       local recorder = { registerPage = function(_, name, groups) groupsByPage[name] = groups end }
       newTrackerPage(h.cm, h.ds, h.cmgr, nil, {}, recorder)
-      h.cmgr:installManifest(require('manifest'))
+      h.cmgr:installManifest(require('manifest'), fakeImGui)
 
       t.truthy(groupsByPage.tracker, 'the page registers its F1 groups')
       local seen = 0

@@ -1,41 +1,51 @@
-@spec cmgr_manifest_spec  src=tests/specs/cmgr_manifest_spec.lua  loc=106  cases=7
+@spec cmgr_manifest_spec  src=tests/specs/cmgr_manifest_spec.lua  loc=141  cases=9
 
 # Intent
-  The manifest declares each command once, carrying its label and its keys.
-  Pins that install writes those keys into the declaring scope's keymap, that
-  a keyless entry binds nothing, that a name declared twice raises, and that
-  the load-time audit raises in both directions, and on a scope that registers
-  a command while declaring no manifest at all.
+  The manifest declares each command once, in the order it reads, carrying its
+  label and its keys as binding tokens. Pins that install parses those tokens
+  into the declaring scope's keymap, that a keyless entry binds nothing, that
+  declaration order survives, that a name declared twice raises, that a token
+  which does not parse raises, and that the load-time audit raises in both
+  directions, and on a scope that registers a command while declaring no
+  manifest at all.
 
 # Helpers
-  @fn fresh()  @ 12
-      -- Keyspecs are opaque to everything under test here, so plain strings stand
-      -- in for ImGui key constants.
-  @fn noop()  @ 14
+  @fn fresh()  @ 16
+  @fn noop()  @ 18
 
 # Cases
-  @case 'install writes each entry\'s keys into its own scope\'s keymap'  [pure]  @ 18-30
-  @case 'an entry with no keys binds nothing'  [pure]  @ 34-40
-  @case 'a command declared by two scopes raises at install'  [pure]  @ 44-55
-  @case 'audit is quiet when entries and registrations correspond'  [pure]  @ 59-69
-  @case 'audit raises on a scope that registers but declares no manifest'  [pure]  @ 73-81
-  @case 'audit raises on an entry no scope registers'  [pure]  @ 85-92
-  @case 'audit raises on a registered command its scope does not declare'  [pure]  @ 96-104
+  @case 'install parses each entry\'s tokens into its own scope\'s keymap'  [pure]  @ 22-34
+  @case 'an entry with no keys binds nothing'  [pure]  @ 38-44
+  @case 'the scope is a list, so declaration order survives install'  [pure]  @ 48-60
+  @case 'a token that does not parse raises, naming the command'  [pure]  @ 64-75
+  @case 'a command declared by two scopes raises at install'  [pure]  @ 79-90
+  @case 'audit is quiet when entries and registrations correspond'  [pure]  @ 94-104
+  @case 'audit raises on a scope that registers but declares no manifest'  [pure]  @ 108-116
+  @case 'audit raises on an entry no scope registers'  [pure]  @ 120-127
+  @case 'audit raises on a registered command its scope does not declare'  [pure]  @ 131-139
 
 # Fields (r read / w write incl. constructor keys)
-  @field w cursorUp  @ 22,25,63,66
-  @field w global  @ 24,38,49,65,88,100
-  @field w keys  @ 24,25,65
-  @field w label  @ 24,25,38,49,50,65,66,88,100
-  @field w name  @ 18,34,44,59,73,85,96
-  @field w phantom  @ 88
-  @field r playPause  @ 27
-  @field w playPause  @ 21,24
-  @field w quit  @ 62,65,99,100
-  @field w run  @ 19,35,45,60,74,86,97
-  @field w slotNext  @ 76
-  @field r switchPage  @ 39
-  @field w switchPage  @ 37,38
-  @field w toggleFollowPlay  @ 49,50
-  @field w toggleProfiler  @ 99
-  @field w tracker  @ 25,50,66
+  @field r Key_P  @ 33
+  @field r Key_Space  @ 31
+  @field r Key_UpArrow  @ 33
+  @field r Mod_Super  @ 33
+  @field w cursorUp  @ 26,98
+  @field w global  @ 28,42,52,68,84,100,123,135
+  @field w keys  @ 28,29,69,100
+  @field w label  @ 28,29,42,53,54,55,69,84,85,100,101,123
+  @field w label  @ 135
+  @field r manifest  @ 58
+  @field r name  @ 58
+  @field w name  @ 22,28,29,38,42,48,53,54,55,64,69,79
+  @field w name  @ 84,85,94,100,101,108,120,123,131,135
+  @field r playPause  @ 31
+  @field w playPause  @ 25
+  @field w quit  @ 51,97,134
+  @field w redo  @ 51
+  @field w run  @ 23,39,49,65,80,95,109,121,132
+  @field w slotNext  @ 111
+  @field r switchPage  @ 43
+  @field w switchPage  @ 41
+  @field w toggleProfiler  @ 134
+  @field w tracker  @ 29,85,101
+  @field w undo  @ 51

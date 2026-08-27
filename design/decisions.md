@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — The manifest declares its commands as an ordered list rather than a table keyed
+  by name, so the order a command is declared in is a fact the declaration carries, and a consumer
+  that groups commands reads that order rather than holding a list of its own. Keys are declared as
+  binding tokens — the stable ASCII form a persisted rebinding already stores — so a declaration and
+  an override spell a chord the same way, and manifest.lua needs no ImGui import.
+
 - **2026-08-27** — A cheat-sheet group names its commands alone, and the label each row renders
   under is the command's manifest entry, read through cmgr:entry. The lookup returns the entry
   rather than the label, since the menu will want the same command's path from it. It raises on a

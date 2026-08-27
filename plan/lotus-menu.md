@@ -14,7 +14,10 @@
 2. **Phase 2 — The rest of the surface** (§ The manifest 4, § Three
    consumers) — arrange with its two loop-minted families, sampler and
    wiring; `pageBindings.lua` retired; the cheat-sheet's labels read from
-   the entries instead of its own items table.  ← in flight
+   the entries instead of its own items table. Then the declaration
+   becomes ordered and carries its cheat-sheet group, so the sheet holds
+   no command list of its own, and the other three pages reach it.
+   ← in flight
 3. **Phase 3 — The tree** (§ Fluent and pathed, § The surface, § The tree,
    § The top level, § What load asserts 2–3) — the group table with its
    letters and descriptions, a path on every pathed entry, the surface as
@@ -33,10 +36,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 cmgr: declare the manifest as ordered lists of token-keyed entries (§ The manifest)
 - 2026-08-27 cmgr: the cheat-sheet reads its labels from the entries (§ Three consumers)
 - 2026-08-27 cmgr: declare the sampler and wiring scopes, retire pageBindings (§ The manifest)
 - 2026-08-27 cmgr: declare the arrange scope in a manifest (§ The manifest)
-- 2026-08-27 cmgr: declare the tracker and region scopes in a manifest (§ The manifest)
 
 ## Now
 
@@ -44,10 +47,21 @@
 
 ## Queued (current phase; one-liners)
 
+- **The group moves onto the entry.** An entry declares which
+  cheat-sheet group it belongs to; `trackerRender` keeps only the
+  placement of a named group — which anchor, and pin or flow — and
+  `help` partitions the reachable surface by group name instead of
+  reading lists of command names. Settle how the group is declared: a
+  section marker in the list, or an argument to `command`.
+
 - **The cheat-sheet reaches the other pages.** `arrangeRender`,
   `sampleRender` and `wiringRender` take `help`, anchor their body rect
-  and register their groups; arrange and wiring gain tracker's
+  and place the groups worth pinning; arrange and wiring gain tracker's
   `wasOpenAtFrameStart` guard over the mouse reads that bypass
-  dispatch. Settle first whether help owns one universal group over the
-  page-switcher segment, rather than four pages each repeating
-  tracker's Global block.
+  dispatch. With grouping declared, no page writes a command list.
+
+- **A generated family renders as one row.** `drop0`–`dropZ` and
+  `advBy0`–`advBy9` collapse to one row showing the first and last
+  chords. A rebind there captures a single chord and rewrites the
+  family from its modifier mask, so the family's key is customisable
+  without ten edits.
