@@ -18,7 +18,7 @@ package.preload['imgui'] = function()
 end
 -- Earlier specs (patternEditor_*) rebind imgui to their own auto-viv fake (PushFont
 -- resolves to a number); drop that cache + imgui-capturing modules so our preload rebinds.
-for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'gridPane', 'curveEditor', 'painter' }) do
+for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'gridPane', 'curveEditor', 'painter' }) do
   package.loaded[m] = nil
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
@@ -280,6 +280,33 @@ local function chaseTracker(harness)
 end
 
 return {
+  {
+    -- The load-time check of docs/commandManager.md § Manifest, run against the
+    -- page's own registrations: what the tracker and region scopes register and
+    -- what manifest.lua declares are the same set, and every entry has a label.
+    name = 'the manifest declares every command the tracker page registers',
+    run = function(harness)
+      local h = harness.mk()
+      newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      -- continuum's wiring registers this one (its body needs coord); stand it
+      -- in so the audit reads both ways.
+      h.cmgr:scope('tracker'):register('returnToArrange', function() end)
+
+      local manifest = require('manifest')
+      t.truthy(manifest.tracker, 'the tracker scope declares a manifest')
+      t.truthy(manifest.region,  'the region scope declares a manifest')
+      h.cmgr:installManifest{ tracker = manifest.tracker, region = manifest.region }
+      h.cmgr:auditManifests()
+
+      for _, scopeName in ipairs({ 'tracker', 'region' }) do
+        local scope = h.cmgr:scope(scopeName)
+        for name in pairs(scope.registered) do
+          t.truthy(scope.manifest[name].label, name .. ' carries a label')
+        end
+      end
+    end,
+  },
+
   {
     name = "bind(take) drives cm:setContext via the page's own tm:bindTake",
     run = function(harness)

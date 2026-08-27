@@ -45,7 +45,7 @@ local fakeModalHost = { registerKind = function() end, open = function() end }
 
 local function loadPE(deps)
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
-  for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'curveEditor', 'painter' }) do
+  for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'curveEditor', 'painter' }) do
     package.loaded[m] = nil
   end
   return util.instantiate('patternEditor', deps)

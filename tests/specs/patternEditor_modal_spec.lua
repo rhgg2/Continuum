@@ -10,7 +10,7 @@ local scratch = require('scratch')
 
 -- Controllable imgui: the walk reads IsKeyPressed/IsKeyDown/GetKeyMods; mouse and
 -- hover read false so handleMouse no-ops headless. Auto-viv assigns a stable id to
--- every Key_/Mod_ on first touch, so pageBindings and the test share ids by identity.
+-- every Key_/Mod_ on first touch, so the manifest and the test share ids by identity.
 local nextId = 100
 local fakeImGui = setmetatable({ Mod_None = 0 }, {
   __index = function(tbl, k) nextId = nextId + 1; rawset(tbl, k, nextId); return nextId end,
@@ -52,7 +52,7 @@ end
 
 local function loadPE(deps)
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
-  for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'curveEditor', 'painter' }) do
+  for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'curveEditor', 'painter' }) do
     package.loaded[m] = nil
   end
   return util.instantiate('patternEditor', deps)

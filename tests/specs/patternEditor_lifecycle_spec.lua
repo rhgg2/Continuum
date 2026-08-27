@@ -5,7 +5,7 @@ local t       = require('support')
 local util    = require('util')
 local scratch = require('scratch')
 
--- patternEditor pulls imgui/keyDispatch/pageBindings/gridPane at load; stub imgui (auto-viv
+-- patternEditor pulls imgui/keyDispatch/manifest/gridPane at load; stub imgui (auto-viv
 -- ids), hand it chrome/gui/modalHost, and re-require per test so ids stay order-independent.
 local nextId = 0
 local fakeImGui = setmetatable({ Mod_None = 0 }, {
@@ -19,7 +19,7 @@ local fakeModalHost = { registerKind = function() end, open = function() end }
 
 local function loadPE(deps)
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
-  for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'curveEditor', 'painter' }) do
+  for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'curveEditor', 'painter' }) do
     package.loaded[m] = nil
   end
   return util.instantiate('patternEditor', deps)

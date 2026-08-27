@@ -80,8 +80,12 @@ will eventually layer overrides on top.
    omits. It runs at the end of wiring, once every command has its body.
 
 1. A scope with no manifest is passed over by the audit, so scopes move
-   from `pageBindings.lua` to the manifest one at a time. Only the global
-   scope has moved so far.
+   from `pageBindings.lua` to the manifest one at a time. The global,
+   tracker and region scopes have moved so far.
+
+1. A command family minted in a loop declares its entries in that loop,
+   labels included: the tracker's `advBy0`–`advBy9` are ten entries, so
+   no command is registered outside a manifest.
 
 ## Scope stack
 

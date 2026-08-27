@@ -20,7 +20,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui        = require 'imgui' '0.10'
 local keyDispatch  = require 'keyDispatch'
-local pageBindings = require 'pageBindings'
+local manifest     = require 'manifest'
 
 local facade, chrome, gui, modalHost, hostDs =
   (...).facade, (...).chrome, (...).gui, (...).modalHost, (...).hostDs
@@ -82,14 +82,14 @@ local EDIT_COMMANDS = {
   'scaleHalf', 'scaleDouble', 'doubleRPB', 'halveRPB', 'incRPB', 'decRPB',
 }
 
+-- Keys come from the tracker manifest, so the subset is the page's own chords.
 local miniScope = cmgr:scope('tracker')
 for _, name in ipairs(EDIT_COMMANDS) do
-  local keys = pageBindings.tracker[name]
-  if keys then miniScope:bind(name, keys) end
+  miniScope:bind(name, manifest.tracker[name].keys)
 end
 -- Ctrl+digit advBy0..9 arm the auto-step; bind the generated series alongside the edit subset.
 for i = 0, 9 do
-  miniScope:bind('advBy' .. i, pageBindings.tracker['advBy' .. i])
+  miniScope:bind('advBy' .. i, manifest.tracker['advBy' .. i].keys)
 end
 cmgr:loadOverrides(ImGui)   -- user rebinds (global tier) apply to the mini editor too
 cmgr:push(miniScope)        -- single-purpose cmgr: the tracker scope stays active for its life
@@ -102,8 +102,8 @@ miniScope:register('hideExtraCol', function() tv:hideExtraCol() end)
 -- Lane editing is poly-only: bind the two commands' keys (Ctrl+Right/Ctrl+Left) while a poly note
 -- editor is open, clear them otherwise, so a mono editor's arrows never add or drop a lane.
 local function setLaneCommands(on)
-  miniScope:bind('addNoteLane',  on and pageBindings.tracker.addNoteLane  or nil)
-  miniScope:bind('hideExtraCol', on and pageBindings.tracker.hideExtraCol or nil)
+  miniScope:bind('addNoteLane',  on and manifest.tracker.addNoteLane.keys  or nil)
+  miniScope:bind('hideExtraCol', on and manifest.tracker.hideExtraCol.keys or nil)
 end
 
 ----- Materialise the stored body onto the bound checkout take

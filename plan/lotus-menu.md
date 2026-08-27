@@ -31,6 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 cmgr: declare the tracker and region scopes in a manifest (§ The manifest)
 - 2026-08-27 cmgr: declare the global scope's commands in a manifest (§ The manifest)
 
 ## Now
@@ -38,13 +39,3 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The tracker and region scopes.** The hundred and ten entries the two
-   scopes register — trackerView's thirty-nine and its `advBy0`–`advBy9`
-   loop, trackerRender's twenty-nine, editCursor's twenty-five and its
-   region four, clipboard's two, continuum's `returnToArrange` — moved from
-   `pageBindings.tracker` and `.region`, which are deleted. Labels come
-   from the help manifest where it carries one and are minted where it does
-   not; the ten commands with no key today get an entry with no `keys`. The
-   pattern editor reads its `EDIT_COMMANDS` subset out of the manifest.
-   `docs/commandManager.md` gains the manifest section.

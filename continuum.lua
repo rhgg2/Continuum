@@ -173,15 +173,13 @@ local function Main()
   -- Enter on the tracker scope returns to the arrange page — the inverse
   -- of arrange's Tab/Enter dive. Tracker-scoped, not root: each page owns
   -- what Enter does (arrange dives, tracker returns).
-  local trackerScope = cmgr:scope('tracker')
-  trackerScope:registerAll{ returnToArrange = function() coord:returnToArrange() end }
-  trackerScope:bindAll{ returnToArrange = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } }
+  cmgr:scope('tracker'):registerAll{ returnToArrange = function() coord:returnToArrange() end }
 
   -- Overlay persisted user rebindings on top of the code defaults above.
   cmgr:loadOverrides(ImGui)
 
   -- Wiring is done: every declared scope's entries and registrations must
-  -- now correspond. Scopes still using pageBindings declare no manifest.
+  -- now correspond. Scopes still on pageBindings declare no manifest.
   cmgr:auditManifests()
 
   coord:run(err_handler)

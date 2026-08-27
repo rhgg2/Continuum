@@ -712,10 +712,6 @@ local statusSegments = {
 
 ----- Input
 
--- Tracker-scope bindings live in pageBindings (every page keymap in one place);
--- the fx-pattern mini cmgr binds a filtered subset. Globals bind on root in Main().
-cmgr:scope('tracker'):bindAll(require('pageBindings').tracker)
-
 ----- F1 help manifest — toolbar callouts pinned to their segments, plus a
 ----- flowed panel of grid/global bindings packed over the grid body.
 
@@ -1839,12 +1835,6 @@ tracker:registerAll{
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
-
------ Region overlay keymap
-
--- Overlay + verb bodies live on ec. Page wires only the \ entry and overlay-only keys
--- (exit/bail/paint); move/size/stamp/delete redirect off tracker commands, no keys needed.
-cmgr:scope('region'):bindAll(require('pageBindings').region)
 
 -- Group quick-verb bodies + lifetime live on trackerView; install the
 -- copy snapshot + clear-on-mutation sweep now that every tracker command

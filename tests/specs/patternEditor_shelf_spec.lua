@@ -73,7 +73,7 @@ local fakeGridPane = setmetatable({}, { __index = function() return function() r
 
 local function loadPE(deps)
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
-  for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'curveEditor', 'painter' }) do
+  for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'curveEditor', 'painter' }) do
     package.loaded[m] = nil
   end
   util._stubs.gridPane = function() return fakeGridPane end

@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — The pattern editor's editing subset stays a list in patternEditor.lua and takes
+  only its keys from the tracker manifest, rather than each entry flagging its membership. A flag
+  would make the subset a fourth consumer of the entry, where the design admits three — bindAll, the
+  cheat-sheet and the menu.
+
 - **2026-08-27** — The manifest installs once from continuum's wiring rather than per render module
   at load, so the declared keys are in place before persisted overrides overlay them. The audit
   passes over a scope that declares no manifest, so the surface migrates one scope at a time.

@@ -19,7 +19,7 @@
   @require scratch = 'scratch'  @ 15
   @require ImGui = 'imgui'  @ 21
   @require keyDispatch = 'keyDispatch'  @ 22
-  @require pageBindings = 'pageBindings'  @ 23
+  @require manifest = 'manifest'  @ 23
 
 # Constructed sub-instances
   @construct ps        = util.instantiate('pextStore')  @ 35
@@ -46,7 +46,7 @@
   @state swallowInput = false  @ 54   -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
   @state pendingAction  @ 55   -- 'commit'|'cancel'|{save=name}|{load=name} set by a toolbar widget in draw; handleInput drains it next
   @state EDIT_COMMANDS = {  @ 73
-  @state miniScope = cmgr:scope('tracker')  @ 85
+  @state miniScope = cmgr:scope('tracker')  @ 86
   @state CURVE_CC = 1  @ 126
   @state modalChrome  @ 380
   @state launchRows  @ 382
@@ -161,7 +161,7 @@
   @use call    cm:set  @ open:241,252,259,271
   @use call    cmgr:loadOverrides  @ <load>:94
   @use call    cmgr:push  @ <load>:95
-  @use call    cmgr:scope  @ <load>:85
+  @use call    cmgr:scope  @ <load>:86
   @use call    ds:assign  @ open:261,262,278
   @use call    eventMeta:dropPool  @ close:293
   @use call    gridPane:cellHeight  @ launch:503
@@ -202,8 +202,8 @@
   @use require groupManager  @ <load>:41
   @use require imgui  @ <load>:21
   @use require keyDispatch  @ <load>:22
+  @use require manifest  @ <load>:23
   @use require midiManager  @ <load>:39
-  @use require pageBindings  @ <load>:23
   @use require pextStore  @ <load>:35
   @use require scratch  @ <load>:15
   @use require trackerManager  @ <load>:40
@@ -314,6 +314,7 @@
   @field w intentCents  @ materialiseNotes:120 readbackBody:181
   @field w items  @ drawSave:364 drawLoad:372
   @field w key  @ shelfItems:357
+  @field r keys  @ 88,92 setLaneCommands:105,106
   @field r kind  @ readbackBody:156 open:245,248 shelfMatches:330,331 draw:428 launch:494,506
   @field w kind  @ readbackBody:169,197 drawSave:364 drawLoad:372 launch:507
   @field r label  @ curveDisplay:132,134
@@ -370,7 +371,7 @@
   @field w tension  @ materialiseCurve:142,145 readbackBody:161,166
   @field w title  @ launch:507
   @field w tm  @ 41,44
-  @field r tracker  @ 87,92 setLaneCommands:105,106
+  @field r tracker  @ 88,92 setLaneCommands:105,106
   @field w tv  @ 65
   @field r ui  @ launch:503,504
   @field r val  @ materialiseCurve:142,145 readbackBody:161,165
