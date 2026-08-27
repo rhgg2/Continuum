@@ -232,4 +232,22 @@ for i = 0, 9 do
     { label = 'Advance by ' .. i, keys = { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} } }
 end
 
+----- sample (bodies + the slot-clamp invariant in sampleRender)
+
+manifest.sample = {
+  browserUp      = { label = 'Up a folder',     keys = { {ImGui.Key_UpArrow,    ImGui.Mod_Ctrl } } },
+  browserPreview = { label = 'Open / audition', keys = { {ImGui.Key_DownArrow,  ImGui.Mod_Ctrl } } },
+  browserAssign  = { label = 'Load into slot',  keys = { {ImGui.Key_RightArrow, ImGui.Mod_Ctrl } } },
+  slotNext       = { label = 'Next slot',       keys = { {ImGui.Key_Period,     ImGui.Mod_Shift} } },
+  slotPrev       = { label = 'Previous slot',   keys = { {ImGui.Key_Comma,      ImGui.Mod_Shift} } },
+  slotRename     = { label = 'Rename slot',     keys = { ImGui.Key_Enter, ImGui.Key_KeypadEnter } },
+}
+
+----- wiring (bodies in wiringRender)
+
+manifest.wiring = {
+  wiringAddFx          = { label = 'Add FX',          keys = { ImGui.Key_N      } },
+  wiringClearSelection = { label = 'Clear selection', keys = { ImGui.Key_Escape } },
+}
+
 return manifest

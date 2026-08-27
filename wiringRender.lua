@@ -2807,6 +2807,5 @@ wiring:registerAll{
   wiringAddFx          = openFxPicker,
   wiringClearSelection = function() wv:setSelection{} end,
 }
-wiring:bindAll(require('pageBindings').wiring)
 
 return wr

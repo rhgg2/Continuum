@@ -156,10 +156,15 @@ function cmgr:installManifest(manifest)
 end
 
 --contract: a declared scope's entries and its registrations must correspond, both ways
---contract: a scope with no manifest is passed over
+--contract: a scope that registers a command while declaring no manifest raises
 function cmgr:auditManifests()
   for scopeName, scope in pairs(self.scopes) do
-    if scope.manifest then
+    if not scope.manifest then
+      local name = next(scope.registered)
+      if name then
+        error('manifest: ' .. scopeName .. ' registers ' .. name .. ' but declares no manifest')
+      end
+    else
       for name in pairs(scope.manifest) do
         if not scope.registered[name] then
           error('manifest: ' .. scopeName .. ' declares ' .. name .. ', which ' ..

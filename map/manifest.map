@@ -1,4 +1,4 @@
-@module manifest  src=manifest.lua  loc=235  mode=chunk
+@module manifest  src=manifest.lua  loc=253  mode=chunk
 
 # Shapes
   @shape  { scope = { command = { label = 'Play / pause', keys = { keyspec, ... }? } } }  @ 4
@@ -44,16 +44,16 @@
   @field r Key_Backslash  @ 123,124
   @field r Key_Backspace  @ 100,119,187,193,197
   @field r Key_C  @ 97
-  @field r Key_Comma  @ 57,61,130
+  @field r Key_Comma  @ 57,61,130,242
   @field r Key_D  @ 99,121,198
   @field r Key_Delete  @ 100,118,186,193
   @field r Key_DownArrow  @ 52,60,73,75,78,79,88,114,171,178,181,189
-  @field r Key_DownArrow  @ 191,199
+  @field r Key_DownArrow  @ 191,199,239
   @field r Key_E  @ 64,143,144,206
   @field r Key_End  @ 62,177
-  @field r Key_Enter  @ 113,147,158,185,196
+  @field r Key_Enter  @ 113,147,158,185,196,243
   @field r Key_Equal  @ 101,103,107,109,160,211
-  @field r Key_Escape  @ 136,158,208
+  @field r Key_Escape  @ 136,158,208,250
   @field r Key_F  @ 54,70,209
   @field r Key_F1  @ 41
   @field r Key_F10  @ 31
@@ -70,21 +70,21 @@
   @field r Key_Home  @ 61,176
   @field r Key_I  @ 86
   @field r Key_K  @ 139,140
-  @field r Key_KeypadEnter  @ 147,158
+  @field r Key_KeypadEnter  @ 147,158,243
   @field r Key_L  @ 133,134,207
   @field r Key_LeftArrow  @ 53,55,76,84,89,116,172,182,200
   @field r Key_LeftBracket  @ 125
   @field r Key_M  @ 120,146
   @field r Key_Minus  @ 102,104,108,110,161,212
-  @field r Key_N  @ 52
+  @field r Key_N  @ 52,249
   @field r Key_O  @ 91
   @field r Key_P  @ 40,51,112,135
   @field r Key_PageDown  @ 66,175
   @field r Key_PageUp  @ 65,174
-  @field r Key_Period  @ 58,62,85,129,194
+  @field r Key_Period  @ 58,62,85,129,194,241
   @field r Key_Q  @ 37
   @field r Key_R  @ 145
-  @field r Key_RightArrow  @ 54,56,77,82,83,90,117,173,183,201
+  @field r Key_RightArrow  @ 54,56,77,82,83,90,117,173,183,201,240
   @field r Key_RightBracket  @ 126
   @field r Key_S  @ 138,192
   @field r Key_Space  @ 22,92
@@ -92,7 +92,7 @@
   @field r Key_Tab  @ 67,68
   @field r Key_U  @ 38,203
   @field r Key_UpArrow  @ 51,59,72,74,80,81,87,115,170,179,180,188
-  @field r Key_UpArrow  @ 190,195
+  @field r Key_UpArrow  @ 190,195,238
   @field r Key_V  @ 65,66,98,122
   @field r Key_W  @ 96,97
   @field r Key_X  @ 96,142
@@ -103,11 +103,11 @@
   @field r Mod_Ctrl  @ 24,25,37,40,61,62,69,70,78,79,80,81
   @field r Mod_Ctrl  @ 82,83,84,86,93,95,96,97,98,99,101
   @field r Mod_Ctrl  @ 102,118,119,121,122,134,135,139,140,141,143,144
-  @field r Mod_Ctrl  @ 152,186,187,192,198,204,232
+  @field r Mod_Ctrl  @ 152,186,187,192,198,204,232,238,239,240
   @field r Mod_Shift  @ 25,40,61,62,65,67,72,73,78,81,83,87
   @field r Mod_Shift  @ 88,89,90,103,104,105,106,109,110,114,115,116
   @field r Mod_Shift  @ 117,121,122,123,127,128,129,130,140,144,180,181
-  @field r Mod_Shift  @ 182,183,190,191,195,199,200,201 placeKey:220
+  @field r Mod_Shift  @ 182,183,190,191,195,199,200,201,241,242 placeKey:220
   @field r Mod_Super  @ 38,51,52,53,54,63,64,65,66,72,73,74
   @field r Mod_Super  @ 75,76,77,91,92,94,96,98,107,108,109,110
   @field r Mod_Super  @ 111,120,133,137,138,142,145,159,184,185,188,189
@@ -155,6 +155,9 @@
   @field w arrangeZoomIn  @ 211
   @field w arrangeZoomOut  @ 212
   @field w beginPrefix  @ 38
+  @field w browserAssign  @ 240
+  @field w browserPreview  @ 239
+  @field w browserUp  @ 238
   @field w channelLeft  @ 69
   @field w channelRight  @ 70
   @field w clearLoop  @ 136
@@ -224,7 +227,7 @@
   @field w keys  @ 175,176,177,178,179,180,181,182,183,184,185,186
   @field w keys  @ 188,189,190,191,192,193,194,195,196,197,198,200
   @field w keys  @ 201,203,204,205,206,207,208,209,210,211,212,226
-  @field w keys  @ 232
+  @field w keys  @ 232,238,239,240,241,242,243,249,250
   @field w label  @ 21,22,23,24,25,26,27,28,29,30,31,32
   @field w label  @ 33,34,35,36,37,38,39,40,41,51,52,53
   @field w label  @ 54,55,56,57,58,59,60,61,62,63,64,65
@@ -238,7 +241,8 @@
   @field w label  @ 160,161,170,171,172,173,174,175,176,177,178,179
   @field w label  @ 180,181,182,183,184,185,186,188,189,190,191,192
   @field w label  @ 193,194,195,196,197,198,200,201,203,204,205,206
-  @field w label  @ 207,208,209,210,211,212,226,232
+  @field w label  @ 207,208,209,210,211,212,226,232,238,239,240,241
+  @field w label  @ 242,243,249,250
   @field w loopToItemNow  @ 133
   @field w matchGridToCursor  @ 120
   @field w newTakeBelow  @ 113
@@ -281,6 +285,7 @@
   @field w regionPaintShrink  @ 161
   @field w retune  @ 141
   @field w returnToArrange  @ 147
+  @field w sample  @ 237
   @field w scaleDouble  @ 106
   @field w scaleHalf  @ 105
   @field w selectAll  @ 95
@@ -291,6 +296,9 @@
   @field w selectUp  @ 87
   @field w setRPB  @ 111
   @field w shrinkNote  @ 72
+  @field w slotNext  @ 241
+  @field w slotPrev  @ 242
+  @field w slotRename  @ 243
   @field w stop  @ 23
   @field w swapBlockEnds  @ 93
   @field w switchPage  @ 26
@@ -309,3 +317,6 @@
   @field r tracker  @ 152
   @field w tracker  @ 50
   @field w undo  @ 24
+  @field w wiring  @ 248
+  @field w wiringAddFx  @ 249
+  @field w wiringClearSelection  @ 250

@@ -79,9 +79,10 @@ will eventually layer overrides on top.
    scope does not register raises, as does a registration its manifest
    omits. It runs at the end of wiring, once every command has its body.
 
-1. A scope with no manifest is passed over by the audit, so scopes move
-   from `pageBindings.lua` to the manifest one at a time. The global,
-   tracker, region and arrange scopes have moved so far.
+1. Every scope that registers a command declares a manifest, and a
+   registration under a scope with none raises. A scope that registers
+   nothing declares nothing: `arrangeSelect` and `arrangeReplace` only
+   redirect keys, so the audit passes over them.
 
 1. A command family minted in a loop declares its entries in that loop,
    labels included: the tracker's `advBy0`–`advBy9` are ten entries, so

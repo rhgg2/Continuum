@@ -33,6 +33,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 cmgr: declare the sampler and wiring scopes, retire pageBindings (§ The manifest)
 - 2026-08-27 cmgr: declare the arrange scope in a manifest (§ The manifest)
 - 2026-08-27 cmgr: declare the tracker and region scopes in a manifest (§ The manifest)
 - 2026-08-27 cmgr: declare the global scope's commands in a manifest (§ The manifest)
@@ -42,15 +43,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **Sampler and wiring, and `pageBindings.lua` retired.**
-  `manifest.sample` (6 entries, sampleRender.lua:595) and
-  `manifest.wiring` (2, wiringRender.lua:2806) with labels; both
-  `bindAll` calls and the file itself go. With no scope left undeclared,
-  `auditManifests` turns strict: a scope that registers a command but
-  declares no manifest raises, which is § What load asserts 1 read whole.
-  Docs lose the "one at a time" clause. Spec: `cmgr_manifest_spec` pins
-  the new raise.
 
 - **The cheat-sheet reads labels from the entries.** cmgr grows a
   label lookup over the installed manifests; help's items collapse

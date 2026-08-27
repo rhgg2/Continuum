@@ -1,4 +1,4 @@
-@module wiringRender  src=wiringRender.lua  loc=2812  mode=chunk  self=wr
+@module wiringRender  src=wiringRender.lua  loc=2811  mode=chunk  self=wr
 @deps cmgr, chrome, gui, modalHost, wv, facade
 
 # Invariants & contracts
@@ -615,7 +615,6 @@
   @drop p.text  @ drawNode:200 drawBadge:294 drawList:691 drawWireEndLabel:893 drawFader:1157 drawTagAt:1162 drawSourceTag:1187
   @drop p.toScreen  @ drawSlot:260 drawWireEndLabel:897,898 faderInput:2167 renderWireMenu:2441 renderNodeMenu:2456
   @drop p.tri  @ drawHandle:229,231 drawWireArrow:838
-  @drop wiring:bindAll  @ <load>:2810
   @drop wiring:registerAll  @ <load>:2806
 
 # REAPER API surface
@@ -1154,7 +1153,6 @@
   @field w wireViewsList  @ gatherViews:1911
   @field r wires  @ wireGroups:747,755 wireSegments:926,927
   @field w wires  @ wireGroups:743
-  @field r wiring  @ 2810
   @field w wiringAddFx  @ 2807
   @field w wiringClearSelection  @ wiring.wiringClearSelection:2808
   @field r wv  @ 20

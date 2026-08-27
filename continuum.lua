@@ -178,8 +178,8 @@ local function Main()
   -- Overlay persisted user rebindings on top of the code defaults above.
   cmgr:loadOverrides(ImGui)
 
-  -- Wiring is done: every declared scope's entries and registrations must
-  -- now correspond. Scopes still on pageBindings declare no manifest.
+  -- Wiring is done: every scope's entries and registrations must now
+  -- correspond, and a scope that registers a command must declare a manifest.
   cmgr:auditManifests()
 
   coord:run(err_handler)

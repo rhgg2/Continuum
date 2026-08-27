@@ -590,7 +590,9 @@ function sr:focusState()
 end
 
 
---invariant: sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
+--invariant: browserPreview descends a folder or auditions a file
+--invariant: browserAssign loads the file into the current slot
+--invariant: slotNext/Prev clamp to [0, N_SLOTS-1]
 local sampler = cmgr:scope('sample')
 sampler:registerAll {
   browserUp      = goUp,
@@ -623,7 +625,6 @@ sampler:registerAll {
     rename = { slot = idx, buf = (entry and entry.name) or '', justOpened = true }
   end,
 }
-sampler:bindAll(require('pageBindings').sample)
 
 return sr
 

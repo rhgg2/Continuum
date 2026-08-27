@@ -183,12 +183,13 @@ return {
       local manifest = require('manifest')
       t.truthy(manifest.arrange, 'the arrange scope declares a manifest')
       h.cmgr:installManifest{ arrange = manifest.arrange }
-      h.cmgr:auditManifests()
 
-      local scope = h.cmgr:scope('arrange')
-      for name in pairs(scope.registered) do
-        t.truthy(scope.manifest[name].label, name .. ' carries a label')
+      local scope, declared = h.cmgr:scope('arrange'), {}
+      for name, entry in pairs(scope.manifest) do
+        declared[name] = true
+        t.truthy(entry.label, name .. ' carries a label')
       end
+      t.deepEq(scope.registered, declared, 'declarations and registrations correspond')
     end,
   },
 

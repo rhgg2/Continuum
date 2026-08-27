@@ -296,13 +296,14 @@ return {
       t.truthy(manifest.tracker, 'the tracker scope declares a manifest')
       t.truthy(manifest.region,  'the region scope declares a manifest')
       h.cmgr:installManifest{ tracker = manifest.tracker, region = manifest.region }
-      h.cmgr:auditManifests()
 
       for _, scopeName in ipairs({ 'tracker', 'region' }) do
-        local scope = h.cmgr:scope(scopeName)
-        for name in pairs(scope.registered) do
-          t.truthy(scope.manifest[name].label, name .. ' carries a label')
+        local scope, declared = h.cmgr:scope(scopeName), {}
+        for name, entry in pairs(scope.manifest) do
+          declared[name] = true
+          t.truthy(entry.label, name .. ' carries a label')
         end
+        t.deepEq(scope.registered, declared, scopeName .. ' declares what it registers')
       end
     end,
   },

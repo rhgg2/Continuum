@@ -95,8 +95,9 @@ coordinator, binds the global commands, and enters the defer loop.
 1. `cmgr:loadOverrides` then overlays the persisted user rebindings,
    so a rebinding beats the declared default.
 
-1. `cmgr:auditManifests` closes the wiring: every declared scope's
-   entries and registrations must now correspond.
+1. `cmgr:auditManifests` closes the wiring: every scope's entries and
+   registrations must now correspond, and a scope that registers a
+   command must declare a manifest.
 
 1. ImGui delivers keys only while Continuum holds focus, which a
    floating FX window takes away. `toggleFxWindows` is therefore also

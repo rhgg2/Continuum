@@ -1,8 +1,8 @@
 -- The manifest declares each command once, carrying its label and its keys.
 -- Pins that install writes those keys into the declaring scope's keymap, that
 -- a keyless entry binds nothing, that a name declared twice raises, and that
--- the load-time audit raises in both directions while passing over a scope
--- the manifest does not declare.
+-- the load-time audit raises in both directions, and on a scope that registers
+-- a command while declaring no manifest at all.
 
 local t    = require('support')
 local util = require('util')
@@ -60,10 +60,24 @@ return {
     run = function()
       local mgr = fresh()
       mgr:registerAll{ quit = noop }
-      -- Undeclared scope: its registrations are nobody's business yet.
       mgr:scope('tracker'):registerAll{ cursorUp = noop }
-      mgr:installManifest{ global = { quit = { label = 'Quit', keys = { 'Ctrl+Q' } } } }
+      mgr:installManifest{
+        global  = { quit     = { label = 'Quit', keys = { 'Ctrl+Q' } } },
+        tracker = { cursorUp = { label = 'Up' } },
+      }
       mgr:auditManifests()
+    end,
+  },
+
+  {
+    name = 'audit raises on a scope that registers but declares no manifest',
+    run = function()
+      local mgr = fresh()
+      mgr:scope('sample'):registerAll{ slotNext = noop }
+      local ok, err = pcall(function() mgr:auditManifests() end)
+      t.eq(ok, false, 'an undeclared scope should raise')
+      t.truthy(tostring(err):find('sample', 1, true), 'names the scope')
+      t.truthy(tostring(err):find('slotNext', 1, true), 'names the command')
     end,
   },
 

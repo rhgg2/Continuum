@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — The page specs compare their own scope's declared and registered sets, rather
+  than calling cmgr:auditManifests as they did. The audit is now strict — a scope that registers a
+  command must declare a manifest — so a whole-tree audit inside a page spec trips on the tracker
+  scope the harness always builds and the spec never declares. cmgr_manifest_spec still pins the
+  audit itself; wiring has no page spec, so its correspondence rests on the load-time check alone.
+
 - **2026-08-27** — A command name belongs to one scope. Arrange's follow-play command was registered
   as toggleFollowPlay, the name the tracker scope already held; cmgr.commands being flat, the
   tracker page's later registration took both the body and the gate, and Cmd+F on the arrange page

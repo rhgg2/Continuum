@@ -1,4 +1,6 @@
-@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=73  cases=4
+@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=95  cases=5
+@exercises commandManager (h.cmgr)
+@surface   cmgr:installManifest, cmgr:scope
 @harness   mk
 
 # Intent
@@ -12,16 +14,21 @@
   @fn newSamplePage(cm, cmgr, chrome, gui)  @ 23-26
 
 # Cases
-  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 30-38
-  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 41-49
-  @case 'focusState before any render returns both bits false'  [harness]  @ 52-59
-  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 62-71
+  @case 'the manifest declares every command the sample page registers'  [harness]  @ 33-48
+  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 52-60
+  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 63-71
+  @case 'focusState before any render returns both bits false'  [harness]  @ 74-81
+  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 84-93
+
+# Uses (outbound edges)
+  @use call cmgr:installManifest  @ 40
+  @use call cmgr:scope  @ 42
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 16
   @field w Mod_None  @ 10
   @field w __index  @ 11
-  @field r acceptCmds  @ 58
+  @field r acceptCmds  @ 80
   @field w chrome  @ 25
   @field w cm  @ 25
   @field w cmgr  @ 25
@@ -29,10 +36,15 @@
   @field w facade  @ 25
   @field w get  @ 21
   @field w gui  @ 25
-  @field w name  @ 30,41,52,62
+  @field r label  @ 45
+  @field r manifest  @ 43
+  @field w name  @ 33,52,63,74,84
   @field r preload  @ 13
   @field w publish  @ 20
   @field r reaper  @ 16
-  @field w run  @ 31,42,53,63
-  @field w setTrack  @ 35,46,68
-  @field r suppressKbd  @ 57
+  @field r registered  @ 47
+  @field w run  @ 34,53,64,75,85
+  @field r sample  @ 39,40
+  @field w sample  @ 40
+  @field w setTrack  @ 57,68,90
+  @field r suppressKbd  @ 79

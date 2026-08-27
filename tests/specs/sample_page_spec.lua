@@ -27,6 +27,28 @@ end
 
 return {
   {
+    -- The load-time check of docs/commandManager.md § Manifest, run against the
+    -- page's own registrations: what the sample scope registers and what
+    -- manifest.lua declares are the same set, and every entry has a label.
+    name = 'the manifest declares every command the sample page registers',
+    run = function(harness)
+      local h = harness.mk()
+      newSamplePage(h.cm, h.cmgr, nil, {})
+
+      local manifest = require('manifest')
+      t.truthy(manifest.sample, 'the sample scope declares a manifest')
+      h.cmgr:installManifest{ sample = manifest.sample }
+
+      local scope, declared = h.cmgr:scope('sample'), {}
+      for name, entry in pairs(scope.manifest) do
+        declared[name] = true
+        t.truthy(entry.label, name .. ' carries a label')
+      end
+      t.deepEq(scope.registered, declared, 'declarations and registrations correspond')
+    end,
+  },
+
+  {
     name = "setTrack(track) re-keys cm to that track via the page's own sv",
     run = function(harness)
       local h  = harness.mk()
