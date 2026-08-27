@@ -7,21 +7,20 @@ leave when they are no longer current.
 
 ## Generators and fx
 
-### A slide into a parked successor arrives late
+### A host window overruns a parked successor
 
-> **gap** · tm · 2026-08-04
+> **gap** · tm · 2026-08-04, restated 2026-08-27
 
 `ctx.nextSameLaneNote` reads lane occupancy as column ∪ parked, so a
-slide aimed at a parked note finds the right target — itself the fix
-for a wider gap where a parked host got no successor at all and
-`[trill, slide]` realised the trill alone. The host's *window* clip
-does not: `hostWindowEnd` asks `nextLaneOnset` of the column alone
-(`trackerManager.lua:709`), so a host whose authored ceiling runs past
-the parked cell glides across the whole tail and arrives after the
-note it aimed at. Where the ceiling ends at the successor — the
-ordinary case — the glide is exact. Closing it means unioning that
-clip too, and the clip governs every kind's window rather than
-slide's, so it is its own change.
+stage aimed at a parked note finds it. The *window* clip does not:
+`hostWindowEnd` asks `nextLaneOnset` of the column alone
+(`trackerManager.lua:715`), so a host whose authored ceiling runs past a
+parked cell owns a window longer than it sounds, and every kind on it
+realises across the whole tail. Portamento no longer shows it — a glide
+anchors on its successor's onset rather than on the window's end — but a
+retrig hosted there still tiles past the note it should have stopped at.
+Closing it means unioning that clip too, and the clip governs every
+kind's window rather than any one kind's, so it is its own change.
 
 ### A member straddling the window edge is parked whole
 

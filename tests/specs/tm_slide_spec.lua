@@ -178,23 +178,25 @@ return {
   ----- Lane occupancy is column + parked: an off-take cell is a target like any other
 
   {
-    name = 'a self-parked host still slides: [trill, slide] resolves its successor off-take',
+    name = 'a self-parked host still slides: [trill, slide] slurs the trill and glides out of its last tile',
     run = function(harness)
       local h = harness.mk()
       -- trill is discrete-replace, so it parks its own host; slide shares the chain and must
-      -- still resolve the lane successor from off-take.
+      -- still resolve the lane successor from off-take. The trill's tiles abut, so the glide reads
+      -- them as its own line -- every alternation is slurred, and the last one aims at the successor.
       -- see docs/oddities.md § A slide into a parked successor arrives late
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
                       fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 },
-                             { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
+                             { kind = 'slide', over = { 1, 2 }, place = 'away' } } })
       h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
                       detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
       t.eq(#h.tm:getChannel(1).parked, 1, 'the trill parked its own host (non-vacuous)')
       local arrival = pbSeatAt(h.fm:dump(), 1, 225)
       t.truthy(arrival, 'the chain seats a glide at all -- an off-take host is still a slide host')
-      t.eq(arrival.val, centsToRaw(100), 'and it finds the +100c lane successor')
+      t.eq(arrival.val, centsToRaw(-100),
+        'the last tile alternated up to 62, so the +100c successor is a semitone down from it')
     end,
   },
 
@@ -222,21 +224,47 @@ return {
   },
 
   {
-    name = 'a region-hosted slide has no lane to resolve: no delta, no fault',
+    name = 'a region glides between its own lane-1 members, and never out of itself',
     run = function(harness)
       local h = harness.mk()
-      -- A region's members span lanes, so `next same-lane` has no subject; the pb is channel-wide
-      -- either way. The contract is the no-next one -- an empty delta, not a rebuild fault.
-      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 120, chan = 1, pitch = 60, vel = 100,
-                      detune = 0, delay = 0, lane = 1 })
-      h.tm:flush()
-      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 360, chan = 1, pitch = 64, vel = 100,
-                      detune = 0, delay = 0, lane = 1 })
-      h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 0, endppq = 120,
-                                   fx = { { kind = 'slide', over = { 1, 2 }, target = 'next' } } } })
+      -- Three abutting notes, the region covering the first two. The pair inside it glides; the
+      -- third note is past the window, so the region has nothing to reach it with.
+      for _, n in ipairs{ { 0, 60 }, { 120, 62 }, { 240, 64 } } do
+        h.tm:addEvent({ evType = 'note', ppq = n[1], endppq = n[1] + 120, chan = 1, pitch = n[2],
+                        vel = 100, detune = 0, delay = 0, lane = 1 })
+        h.tm:flush()
+      end
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'slide', over = { 1, 2 }, place = 'in' } } } })
       h.tm:rebuild(); h.tm:flush()
-      t.eq(#pbSeatsOf(h.fm:dump(), 1), 0, 'no lane, no target, no seats -- and no index fault')
+      t.eq(pbSeatAt(h.fm:dump(), 1, 120).val, centsToRaw(-200),
+        'the second member enters on the first\'s pitch -- a whole tone below its own')
+      t.eq(pbSeatAt(h.fm:dump(), 1, 225).val, centsToRaw(0),
+        'and the region closes at centre: the third note is past its window, so nothing glides out')
+    end,
+  },
+
+  {
+    name = 'a glide arrives at its successor, not at the end of whatever window its host owns',
+    run = function(harness)
+      local h = harness.mk()
+      -- The host's authored ceiling (480) runs well past its successor (240), and hostWindowEnd
+      -- clips only against the column -- so a parked successor leaves the window overrunning.
+      -- The anchor is the successor's onset regardless, which is what closed the old late arrival.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'slide', over = { 1, 2 }, place = 'away' } } })
+      h.tm:flush()
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 360, chan = 1, pitch = 61, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 240, endppq = 360,
+                                   fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
+      h.tm:rebuild(); h.tm:flush()
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the region parked the successor off-take (non-vacuous)')
+      local dump = h.fm:dump()
+      t.eq(pbSeatAt(dump, 1, 239).val, centsToRaw(100), 'arrives a tick before the successor it aims at')
+      t.eq(pbSeatAt(dump, 1, 240).val, centsToRaw(0),   'and hands the channel back on its onset')
     end,
   },
 

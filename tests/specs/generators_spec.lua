@@ -9,15 +9,35 @@ local function expand(kind, hostRec, params, ctx)
   return generators.kinds[kind].expand(hostRec, hostRec, params, ctx)
 end
 
--- A slide host (pitch 60) and a ctx supplying the next same-lane note + pb ceiling.
+-- A note host: its own note on a lane, and a ctx resolving the successor past the window end.
+-- An `endppq` short of that onset is the gap that gates the glide.
 local function slideCtx(nextNote, pbRangeCents)
   return { resolution = 240, pbRangeCents = pbRangeCents or 200,
            nextSameLaneNote = function() return nextNote end }
 end
-local function slideHost(detune)
-  return { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = detune or 0 } } }
+local function noteHost(endppq)
+  return { window = { 0, 240 }, lane = 1,
+           notes = { { pitch = 60, vel = 100, detune = 0, ppq = 0, endppq = endppq or 240 } } }
 end
-local slideP = { kind = 'slide', over = { 1, 2 }, target = 'next' }
+-- A region owns no lane of its own; its members carry theirs.
+local function regionHost(notes)
+  return { window = { 0, 720 }, notes = notes }
+end
+local function member(ppq, endppq, pitch, lane)
+  return { ppq = ppq, endppq = endppq, pitch = pitch, vel = 100, detune = 0, lane = lane }
+end
+-- Three lane-1 members abutting across the region: 60 -> 62 -> 64, a whole tone apiece.
+local function abutting()
+  return { member(0, 240, 60, 1), member(240, 480, 62, 1), member(480, 720, 64, 1) }
+end
+local slideP = { kind = 'slide', over = { 1, 2 }, per = 'note', place = 'in', shape = 'slow' }
+local function withP(overrides) return util.assign(util.clone(slideP), overrides) end
+-- A delta read positionally as {ppq, val, shape} -- how a glide reads whole.
+local function curve(delta)
+  local out = {}
+  for i, p in ipairs(delta) do out[i] = { p.ppq, p.val, p.shape } end
+  return out
+end
 
 -- A loop-closed triangle in the normalized domain (-1 .. +1 .. -1), one QN long.
 local function triangle()
@@ -80,27 +100,40 @@ return {
     end,
   },
 
-  ----- slide: glide-in envelope
+  ----- slide (portamento): abutting pairs, glided either side of the successor's onset
 
   {
-    name = 'slide glides in: flat hold, slur to the interval, then hand off to tm\'s close',
+    name = 'a note host glides away: its anchor is the window end, so in has nowhere to depart from',
     run = function()
-      -- res 240, over 1/2 QN: snap 15 -> arrive 225, glideStart 225-120 = 105.
-      local out = expand('slide', slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
-      local d = out.delta
+      -- res 240, over 1/2 QN = 120 ticks; snap 15 puts the last authorable tick at 225.
+      local out = expand('slide', noteHost(), slideP, slideCtx{ pitch = 62, detune = 0, ppq = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
-      t.eq(d[1].ppq, 0);   t.eq(d[1].val, 0, 'starts flat at centre')
-      t.eq(d[2].ppq, 105); t.eq(d[2].val, 0, 'slur begins after the flat hold')
-      t.eq(d[2].shape, 'slow', 'slur eases (slow / half-cosine)')
-      t.eq(d[3].ppq, 225); t.eq(d[3].val, 200, 'arrives at the +200c interval before the handoff')
-      t.eq(#d, 3, 'and stops -- tm closes the window, so the generator authors no handoff of its own')
+      t.deepEq(curve(out.delta), { { 0, 0, 'step' }, { 105, 0, 'slow' }, { 225, 200, 'step' } },
+        'flat hold, slur to the interval, and tm closes the window -- no handoff of its own')
+    end,
+  },
+
+  {
+    name = "a gap gates the glide: a note's tail must reach its successor's onset",
+    run = function()
+      local out = expand('slide', noteHost(200), slideP, slideCtx{ pitch = 62, detune = 0, ppq = 240 })
+      t.eq(#out.delta, 0, 'ending 40 ticks short of the onset is a gap, and a gap is not a portamento')
+    end,
+  },
+
+  {
+    name = "an overrunning tail still abuts (a note host's endppq is its unclipped authored ceiling)",
+    run = function()
+      local nxt = { pitch = 62, detune = 0, ppq = 240 }
+      t.eq(#expand('slide', noteHost(480), slideP, slideCtx(nxt)).delta, 3, 'reaching past the onset is no gap')
+      t.eq(#expand('slide', noteHost(util.OPEN), slideP, slideCtx(nxt)).delta, 3, 'and an open tail reaches everything')
     end,
   },
 
   {
     name = 'slide interval includes detune (the microtonal offset rides in detune, not pitch)',
     run = function()
-      local out = expand('slide', slideHost(0), slideP, slideCtx{ pitch = 60, detune = 50 })
+      local out = expand('slide', noteHost(), slideP, slideCtx{ pitch = 60, detune = 50, ppq = 240 })
       t.eq(out.delta[3].val, 50, 'a same-pitch note 50c sharp yields a 50c slide')
     end,
   },
@@ -108,33 +141,117 @@ return {
   {
     name = 'slide clamps the target to ctx.pbRangeCents (a pb can only bend so far)',
     run = function()
-      local out = expand('slide', slideHost(), slideP, slideCtx({ pitch = 72 }, 200))
+      local out = expand('slide', noteHost(), slideP, slideCtx({ pitch = 72, detune = 0, ppq = 240 }, 200))
       t.eq(out.delta[3].val, 200, 'a 1200c interval clamps to the 200c pb ceiling')
     end,
   },
 
   {
-    name = "slide.target='fixed' is a fixed-cents bend (cents demand, no next-note lookup)",
+    name = 'no successor, or a unison one, yields no delta (the channel is left untouched)',
     run = function()
-      local out = expand('slide', slideHost(), { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 150 },
-                         slideCtx(nil))
-      t.eq(out.delta[3].val, 150, 'fixed cents ignores the next-note resolution')
+      t.eq(#expand('slide', noteHost(), slideP, slideCtx(nil)).delta, 0, 'no next note: nothing to slide to')
+      t.eq(#expand('slide', noteHost(), slideP, slideCtx{ pitch = 60, detune = 0, ppq = 240 }).delta, 0,
+           'gliding to the same pitch is a no-op')
     end,
   },
 
   {
-    name = "slide.target='next' with no following note yields no delta (carrier untouched)",
+    name = 'a region glides in at each abutting pair: depart on the onset, arrive a glide later',
     run = function()
-      local out = expand('slide', slideHost(), slideP, slideCtx(nil))
-      t.eq(#out.delta, 0, 'no next note: nothing to slide to')
+      local out = expand('slide', regionHost(abutting()), slideP, slideCtx(nil))
+      t.deepEq(curve(out.delta), { { 0, 0, 'step' },
+        { 240, -200, 'slow' }, { 360, 0, 'step' },
+        { 480, -200, 'slow' }, { 600, 0, 'step' } },
+        'each successor enters on the pitch before it and glides onto its own over 120 ticks')
     end,
   },
 
   {
-    name = 'slide to a unison next note yields no delta (zero interval)',
+    name = 'a region glides away when asked: arrive a tick before the onset, re-centre on it',
     run = function()
-      local out = expand('slide', slideHost(), slideP, slideCtx{ pitch = 60, detune = 0 })
-      t.eq(#out.delta, 0, 'gliding to the same pitch is a no-op')
+      local out = expand('slide', regionHost(abutting()), withP{ place = 'away' }, slideCtx(nil))
+      t.deepEq(curve(out.delta), { { 0, 0, 'step' },
+        { 119, 0, 'slow' }, { 239, 200, 'step' }, { 240, 0, 'step' },
+        { 359, 0, 'slow' }, { 479, 200, 'step' }, { 480, 0, 'step' } },
+        'the departing note carries the bend and hands the channel back on the anchor')
+    end,
+  },
+
+  {
+    name = 'a region never glides out of itself -- its last member has no successor to reach',
+    run = function()
+      -- ctx resolves a successor as it would for a note host; a region has no lane, so it is not asked.
+      local out = expand('slide', regionHost(abutting()), slideP, slideCtx{ pitch = 72, detune = 0, ppq = 720 })
+      t.eq(#out.delta, 5, 'two glides for three members, not three')
+    end,
+  },
+
+  {
+    name = 'a gap inside a region gates that pair alone',
+    run = function()
+      local notes = abutting()
+      notes[1].endppq = 200                       -- 40 ticks short of the second member's onset
+      local out = expand('slide', regionHost(notes), slideP, slideCtx(nil))
+      t.deepEq(curve(out.delta), { { 0, 0, 'step' }, { 480, -200, 'slow' }, { 600, 0, 'step' } },
+        'the second pair still glides -- one gap silences one glide, not the region')
+    end,
+  },
+
+  {
+    name = "a region glides its lane-1 voice; a chord's upper lanes are not the monophonic line",
+    run = function()
+      local notes = abutting()
+      util.add(notes, member(0, 240, 64, 2))      -- a third above the first member, on lane 2
+      util.add(notes, member(240, 480, 67, 2))
+      local out = expand('slide', regionHost(notes), slideP, slideCtx(nil))
+      t.deepEq(curve(out.delta), { { 0, 0, 'step' },
+        { 240, -200, 'slow' }, { 360, 0, 'step' },
+        { 480, -200, 'slow' }, { 600, 0, 'step' } },
+        'the lane-2 voices contribute nothing -- one channel carries one glide')
+    end,
+  },
+
+  {
+    name = 'a derived note carries no lane yet, so it counts as the monophonic line',
+    run = function()
+      -- [arp, slide]: the arp's output is allocated lanes after expansion, so its notes have none.
+      local notes = abutting()
+      for _, n in ipairs(notes) do n.lane = nil end
+      local out = expand('slide', regionHost(notes), slideP, slideCtx(nil))
+      t.eq(#out.delta, 5, 'a laneless stream is glided, not skipped')
+    end,
+  },
+
+  {
+    name = 'per=octave reads the same fraction as a rate: one octave takes `over`',
+    run = function()
+      -- 1 QN per octave, a 200c interval: 240 * 200/1200 = 40 ticks.
+      local out = expand('slide', regionHost(abutting()), withP{ over = 1, per = 'octave' }, slideCtx(nil))
+      t.deepEq(curve(out.delta), { { 0, 0, 'step' },
+        { 240, -200, 'slow' }, { 280, 0, 'step' },
+        { 480, -200, 'slow' }, { 520, 0, 'step' } },
+        'a whole tone is a sixth of an octave, so it takes a sixth of the time')
+    end,
+  },
+
+  {
+    name = 'the glide shape rides the breakpoint the glide opens on (a shape governs its right)',
+    run = function()
+      local out = expand('slide', regionHost(abutting()), withP{ shape = 'fast-start' }, slideCtx(nil))
+      t.eq(out.delta[2].shape, 'fast-start', 'the departure carries it')
+      t.eq(out.delta[3].shape, 'step',       'and the arrival holds until the next departure')
+    end,
+  },
+
+  {
+    name = 'consecutive glides meeting on one tick fold into one breakpoint (two cannot share a ppq)',
+    run = function()
+      -- 2 QN of glide over 1 QN notes: every glide runs the whole note, so each opens where the
+      -- one before it came to rest.
+      local out = expand('slide', regionHost(abutting()), withP{ over = 2, place = 'away' }, slideCtx(nil))
+      t.deepEq(curve(out.delta), { { 0, 0, 'slow' }, { 239, 200, 'step' }, { 240, 0, 'slow' },
+                                  { 479, 200, 'step' }, { 480, 0, 'step' } },
+        "the later breakpoint's shape governs the segment they meet on, and both rest at centre")
     end,
   },
 

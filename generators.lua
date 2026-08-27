@@ -5,7 +5,7 @@
 
 --invariant: pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
---shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq,[intentCents]},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
+--shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq,[lane],[intentCents]},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote -- no notation among them
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
@@ -206,37 +206,79 @@ local function chordStamp(stream, host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
---contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN (tm closes the window)
---contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
---contract: no next note or unison target -> empty delta (channel untouched)
+-- The monophonic sequence a host presents, in ppq order. see docs/generators.md § Portamento ¶5-6
+local function glideSequence(stream, host, ctx)
+  local seq = {}
+  for _, note in ipairs(stream.notes) do
+    if stream.lane or (note.lane or 1) == 1 then util.add(seq, note) end
+  end
+  table.sort(seq, function(a, b) return a.ppq < b.ppq end)
+  -- The successor is keyed on the original host note's identity, so it reads host, not the folded stream.
+  local beyond = stream.lane and ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)
+  if beyond then util.add(seq, beyond) end
+  return seq
+end
+
+-- How long a glide runs: `over` QN outright, or that much per octave of the interval it crosses --
+-- one stored fraction read as a duration or as a rate.
+local function glideTicks(params, target, resolution)
+  local span = periodTicks(params.over, resolution)
+  if params.per == 'octave' then span = span * math.abs(target) / 1200 end
+  return math.max(1, util.round(span))
+end
+
+--contract: portamento glides each abutting pair of the host's monophonic line -> lane-1 pb-delta
+--contract: abutment is exact -- the tail must reach the successor's onset, else the pair is silent
+--contract: the anchor is the successor's onset; 'in' departs on it, 'away' arrives a tick before it
+--contract: an anchor outside the window can only be placed away; a note host's successor always is
+--contract: glide spans `over` QN, or that per octave when per='octave'; pb-range clamps the target
+--contract: a gap, a unison target, or no successor at all -> that pair contributes nothing
 local function slide(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
-  local h = stream.notes[1]
-  local target
-  if params.target == 'next' then
-    -- keyed on the original host note's identity, so it reads host, not the folded stream
-    local nxt = ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)
-    if not nxt then return { notes = {}, delta = {} } end
-    target = interval(h, nxt)
-  else
-    target = params.cents or 0
+  local seq   = glideSequence(stream, host, ctx)
+  local shape = params.shape or 'slow'
+  -- snap keeps the arrival (target) and the handoff (0) on distinct wire ppqs, and holds the stage's
+  -- own material below tm's closing tick. see docs/generators.md § Route-by-window
+  local close = endL - math.max(1, ctx.resolution / 16)
+
+  local points = {}
+  local function at(ppq, val, sh) util.add(points, { ppq = ppq, val = val, shape = sh }) end
+  for i = 1, #seq - 1 do
+    local a, b   = seq[i], seq[i + 1]
+    local anchor = b.ppq
+    local target = interval(a, b)
+    if ctx.pbRangeCents then target = util.clamp(target, -ctx.pbRangeCents, ctx.pbRangeCents) end
+    -- Exact abutment: a region member arrives pre-clipped to its successor's onset, a note host's
+    -- endppq is its unclipped authored ceiling, and util.OPEN reaches everything.
+    if a.endppq >= anchor and target ~= 0 then
+      local span = glideTicks(params, target, ctx.resolution)
+      if anchor < endL and params.place == 'in' then
+        -- The successor enters on the pitch before it and glides onto its own.
+        local arrive = math.min(anchor + span, math.min(b.endppq, endL) - 1, close)
+        if arrive > anchor then at(anchor, -target, shape); at(arrive, 0, 'step') end
+      else
+        -- The departing note carries the bend and hands the channel back on the anchor -- or, where
+        -- the anchor is the window's own edge, leaves the handback to tm's close.
+        local arrive = math.min(anchor - 1, close)
+        local begin  = math.max(arrive - span, a.ppq, startL)
+        if arrive > begin then
+          at(begin, 0, shape)
+          at(arrive, target, 'step')
+          if anchor < endL then at(anchor, 0, 'step') end
+        end
+      end
+    end
   end
-  local maxBend = ctx.pbRangeCents
-  if maxBend then target = math.max(-maxBend, math.min(maxBend, target)) end
-  if target == 0 then return { notes = {}, delta = {} } end
+  if #points == 0 then return { notes = {}, delta = {} } end
 
-  -- snap keeps the arrival (target) and the handoff (0) on distinct wire ppqs --
-  -- the seat reconcile keys on ppq. see docs/generators.md § pb and cc
-  local snap   = math.max(1, ctx.resolution / 16)
-  local over   = periodTicks(params.over, ctx.resolution)
-  local arrive = math.max(startL, endL - snap)
-  local glideStart = math.max(startL, arrive - over)
-
-  local delta = {}
-  local function bp(ppq, val, shape) util.add(delta, { ppq = ppq, val = val, shape = shape }) end
-  bp(startL, 0, glideStart > startL and 'step' or 'slow')   -- hold true pitch until the slur
-  if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
-  bp(arrive, target, 'step')                                -- arrived; hold to tm's close at endL-1
+  local delta = { { ppq = startL, val = 0, shape = 'step' } }   -- hold true pitch until the first glide
+  for _, point in ipairs(points) do
+    local last = delta[#delta]
+    -- Two breakpoints cannot share a ppq, and a glide long enough opens on the tick the one before
+    -- it came to rest: the later shape governs the segment they meet on, and both rest at centre.
+    if last.ppq == point.ppq then last.val, last.shape = point.val, point.shape
+    else util.add(delta, point) end
+  end
   return { notes = {}, delta = delta }
 end
 
@@ -378,7 +420,12 @@ local WAVES = { { l = 'Sine',     v = 'sine' },   { l = 'Triangle', v = 'triangl
                 { l = 'Square',   v = 'square' }, { l = 'Saw Up',   v = 'sawUp' },
                 { l = 'Saw Down', v = 'sawDown' },
                 { l = 'Custom',   v = 'custom', arrival = true, rewrite = generators.customise } }
-local SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }
+-- One stored fraction, two readings: how long a glide takes, or how long an octave of it takes.
+local GLIDE_PER     = { { l = 'Note', v = 'note' }, { l = 'Octave', v = 'octave' } }
+local GLIDE_PLACES  = { { l = 'In', v = 'in' }, { l = 'Away', v = 'away' } }
+-- REAPER's envelope shapes, less step (no glide) and bezier (its tension has no integer widget).
+local GLIDE_SHAPES  = { { l = 'Linear', v = 'linear' },         { l = 'Ease',     v = 'slow' },
+                        { l = 'Fast Start', v = 'fast-start' }, { l = 'Fast End', v = 'fast-end' } }
 local DIR_OPTIONS   = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l = 'Up/Down', v = 'updown' } }
 local VEL_PATTERNS  = { { l = '> .',     v = { 100, 55 } },
                         { l = '> . .',   v = { 100, 55, 70 } },
@@ -426,13 +473,12 @@ generators.kinds = {
   },
   slide = {
     expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Portamento', glyph = '/',
-    defaults = { over = { 1, 2 }, target = 'next' },
+    defaults = { over = { 1, 2 }, per = 'note', place = 'in', shape = 'slow' },
     fields = {
-      { field = 'over',   label = 'Glide',    widget = 'period' },
-      { field = 'target', label = 'To',       widget = 'choice', options = SLIDE_TARGETS },
-      -- cents demand, edited as a step ladder from the host's written step; fixed slide only.
-      { field = 'cents',  label = 'Interval', widget = 'stepInterval',
-        when = function(e) return e.target == 'fixed' end },
+      { field = 'over',  label = 'Glide', widget = 'period' },
+      { field = 'per',   label = 'Per',   widget = 'choice', options = GLIDE_PER },
+      { field = 'place', label = 'Place', widget = 'choice', options = GLIDE_PLACES },
+      { field = 'shape', label = 'Shape', widget = 'choice', options = GLIDE_SHAPES },
     },
   },
   velPattern = {

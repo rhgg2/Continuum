@@ -243,7 +243,7 @@ which draws a `? kind` heading with no field rows rather than faulting.
 value column (the tree's selection fill, replacing the old ▸ marker).
 
 **An interval takes two rows.** The `Interval` field's stored value is a cents
-demand -- a trill's alternation, a fixed slide's target -- read as a step ladder
+demand -- a trill's alternation -- read as a step ladder
 against the step the host note was written on, or against the notation's unison
 where the host is a region and has no pitch of its own: the first row counts whole
 steps, the second holds the cents no count reaches. Both rows write the one value,

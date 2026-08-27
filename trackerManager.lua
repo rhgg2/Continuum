@@ -637,8 +637,10 @@ local function eachWindowNote(chan, startL, endL, fn)
 end
 local function membersOf(chan, startL, endL)
   local out = {}
-  eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
-    util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi }))
+  -- The lane rides along: a monophonic stage (portamento) glides the lane-1 voice alone, and a
+  -- member's column is the only place that is knowable.
+  eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi, evt)
+    util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi, lane = laneIdx }))
   end)
   return out
 end

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Portamento anchors each glide on its successor's onset rather than sizing it from
+  the host's window end. A glide sized from the window arrives wherever the window closes, which is
+  not the successor where a host overruns a parked note; an onset costs nothing to read and cannot
+  drift. Abutment gates the glide — a gap is a rest, and nothing slurs across a rest — so
+  target='fixed', an ungated tail bend sharing the name, was dropped rather than gated into a second
+  mode.
+
 - **2026-08-27** — Freeze keeps refusing on the master channel rather than exploding a global chain
   itself. It would have to freeze sixteen producers, each with its own eligibility refusals, so
   partial failure would be the normal case and explode's all-or-nothing would not survive it. The

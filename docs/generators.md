@@ -183,6 +183,60 @@ for, and what a sampled sine would forfeit.
 would step the wire at the window edge, which is the edge that ¶5 is
 about.
 
+## Portamento
+
+**1** A glide is a **relation between two notes** rather than a property
+of one, and the relation is legato: a note glides to its successor
+exactly when its tail reaches that successor's onset. Nothing slurs
+across a rest. So abutment is the gate and it is exact — the tracker
+writes note-offs on rows, so a note meant to be held ends on the onset of
+what follows and a note meant to be short does not.
+
+**2** Every glide has one **anchor**: the successor's onset. The pb
+crosses a step of the interval there, and the glide is that step spread
+to one side of it — `in` departs on the anchor and arrives a glide later,
+`away` arrives a tick before it and hands the channel back on it. Both
+sound continuous, and they differ in whether the arrival or the departure
+is the thing on the beat. `in` is the default, being what a synth's
+portamento does.
+
+**3** The anchor is a position rather than a duration, which is what
+keeps a glide honest about **where** it lands. A glide sized from the
+window's own end arrives wherever the window happens to close, and that
+is not always the successor: a host whose authored ceiling runs past a
+parked note owns a window longer than it sounds. Reading the onset costs
+nothing and cannot drift.
+
+**4** An anchor **outside** the window can only be placed away, a
+departure needing room past it to author into and the window being all
+the stage owns. A note host's successor is always outside — its window
+ends there — so a note host glides away whatever it was asked for, and
+the rule saying so is about the window rather than about the host kind.
+
+**5** The line a glide runs along is the host's **monophonic** one, pb
+being channel-wide: a region takes its lane-1 voice, and a chord's upper
+lanes contribute nothing. A note host is its own membership on whatever
+lane it sits.
+
+**6** That line is read off the **stream**, so an earlier stage's output
+glides as readily as authored notes — `[arp, slide]` slurs the arp,
+`[trill, slide]` slurs the alternations. It falls out of § The chain ¶3
+rather than being arranged for. A derived note carries no lane, lanes
+being allocated after expansion, so a folded stream reads as the line
+entire.
+
+**7** A region never glides **out** of itself. It could — an abutting
+note past the window end would take its glide inside the span the region
+owns — but a region's business is what it covers, and reaching past it
+would make an fx legible outside its own window in the way §
+Route-by-window ¶7 rules out.
+
+**8** One fraction, two readings. `over` is how long a glide takes, or
+how long an **octave** of one takes, and `per` says which. Constant time
+and constant speed are the two things a glide can hold fixed, and they
+are the same number seen from either end, so they share a field rather
+than earning one each.
+
 ## Output
 
 **1** A stage's output is the **total realisation within its window** — every
@@ -576,8 +630,8 @@ input PA maps to which output note is undefined. Reading PAs as an input
 stream is defined; rebinding them is not.
 
 **2** Limits of the model are this section's subject. Behaviour that merely
-surprises — a slide arriving late, a chain drawn nowhere until the caret
-reaches it — is `docs/oddities.md`'s.
+surprises — a chain drawn nowhere until the caret reaches it, a member
+straddling a window edge parked whole — is `docs/oddities.md`'s.
 
 ## Conventions
 

@@ -219,31 +219,25 @@ return {
       local h = harness.mk()
       addHost(h, { { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 } })
       local uuid = hostUuid(h)
-      h.vm:addFxStage(uuid, { kind = 'slide', over = { 1, 2 }, target = 'next' })
+      h.vm:addFxStage(uuid, { kind = 'slide', over = { 1, 2 }, place = 'in' })
       local k = byKind(h.vm:noteFx(uuid))
       t.truthy(k.sine and k.slide, 'sine and slide co-resident -- both sum offline into pb seats')
-      t.eq(k.slide.target, 'next', 'slide seeded with target=next')
+      t.eq(k.slide.place, 'in', 'slide seeded with the placement it was given')
       h.vm:setFxField(uuid, 2, 'over', { 1, 4 })
       t.eq(h.vm:noteFx(uuid)[2].over[2], 4, 'over cycled via the generic field writer')
     end,
   },
 
   {
-    name = "slide target='fixed' bends by its cents demand; 'next' needs a following note",
+    name = 'a lone slide host has no successor to abut, so it seats nothing',
     run = function(harness)
       local h = harness.mk()
-      addHost(h, { { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 200 } }, 1)
-      local uuid = hostUuid(h)
-      local function pbSeatCount()
-        local n = 0
-        for _, c in ipairs(h.fm:dump().ccs) do
-          if c.evType == 'pb' then n = n + 1 end
-        end
-        return n
+      addHost(h, { { kind = 'slide', over = { 1, 2 }, place = 'in' } }, 1)
+      local n = 0
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' then n = n + 1 end
       end
-      t.truthy(pbSeatCount() >= 3, 'a fixed slide seats a pb stream with no next-note lookup')
-      h.vm:setFxField(uuid, 1, 'target', 'next')
-      t.eq(pbSeatCount(), 0, "target='next' with no following note yields no seats")
+      t.eq(n, 0, 'portamento is a relation between two notes, and there is only one')
     end,
   },
 

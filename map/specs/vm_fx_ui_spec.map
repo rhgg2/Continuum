@@ -1,4 +1,4 @@
-@spec vm_fx_ui_spec  src=tests/specs/vm_fx_ui_spec.lua  loc=374  cases=19
+@spec vm_fx_ui_spec  src=tests/specs/vm_fx_ui_spec.lua  loc=368  cases=19
 @exercises trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec)
 @surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, vm:setGridSize, ec:setPos, vm:fxHostAtCursor, vm:setNoteFx, vm:setFxField, vm:noteFx, vm:addFxStage, vm:removeFxStage, vm:moveFxStage, vm:setFxBypass, vm:fxHostForEdit
 @harness   mk
@@ -29,79 +29,78 @@
   @case 'setFxBypass demotes a stage to the identity; unbypass restores it'  [harness]  @ 187-200
   @case 'addFxStage appends a second stage of an existing kind (duplicates allowed)'  [harness]  @ 204-213
   @case 'addFxStage seeds slide alongside sine (continuous kinds coexist)'  [harness]  @ 217-228
-  @case 'slide target='fixed' bends by its cents demand; 'next' needs a following note'  [harness]  @ 232-247
-  @case 'setFxField writes sine depth and onset'  [harness]  @ 251-261
-  @case 'a sine entry on a lane-1 host seats a pb stream'  [harness]  @ 265-276
-  @case 'authoring fx reconciles the CC node (pa:apply on every setNoteFx)'  [harness]  @ 280-293
-  @case 'a parked host cell routes to the parked backing at its onset row only'  [harness]  @ 297-311
-  @case 'note-host augment: cc cells under the window tag parked (route to the off-take base)'  [harness]  @ 315-341
-  @case 'each chain verb mints one labelled undo point'  [harness]  @ 347-372
+  @case 'a lone slide host has no successor to abut, so it seats nothing'  [harness]  @ 232-241
+  @case 'setFxField writes sine depth and onset'  [harness]  @ 245-255
+  @case 'a sine entry on a lane-1 host seats a pb stream'  [harness]  @ 259-270
+  @case 'authoring fx reconciles the CC node (pa:apply on every setNoteFx)'  [harness]  @ 274-287
+  @case 'a parked host cell routes to the parked backing at its onset row only'  [harness]  @ 291-305
+  @case 'note-host augment: cc cells under the window tag parked (route to the off-take base)'  [harness]  @ 309-335
+  @case 'each chain verb mints one labelled undo point'  [harness]  @ 341-366
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 9,45,67,69,326
-  @use call tm:flush  @ 11,47,70,326
+  @use call tm:addEvent  @ 9,45,67,69,320
+  @use call tm:flush  @ 11,47,70,320
   @use call tm:getChannel  @ 23
-  @use call fm:dump  @ 25,30,117,239,272
-  @use call vm:setGridSize  @ 48,71,84,98,112,131,191,301,328,351
-  @use call ec:setPos  @ 51,54,56,74,306
-  @use call vm:fxHostAtCursor  @ 52,55,57,75,307
-  @use call vm:setNoteFx  @ 86,88,270,287,291
-  @use call vm:setFxField  @ 101,114,133,226,245,256,257,289,364
-  @use call vm:noteFx  @ 102,115,134,147,161,165,177,195,198,210,223,227,258,309
-  @use call vm:addFxStage  @ 146,209,222,363
-  @use call vm:removeFxStage  @ 160,164,366
+  @use call fm:dump  @ 25,30,117,237,266
+  @use call vm:setGridSize  @ 48,71,84,98,112,131,191,295,322,345
+  @use call ec:setPos  @ 51,54,56,74,300
+  @use call vm:fxHostAtCursor  @ 52,55,57,75,301
+  @use call vm:setNoteFx  @ 86,88,264,281,285
+  @use call vm:setFxField  @ 101,114,133,226,250,251,283,358
+  @use call vm:noteFx  @ 102,115,134,147,161,165,177,195,198,210,223,227,252,303
+  @use call vm:addFxStage  @ 146,209,222,357
+  @use call vm:removeFxStage  @ 160,164,360
   @use call vm:moveFxStage  @ 176,180
-  @use call vm:setFxBypass  @ 194,197,365
-  @use call vm:fxHostForEdit  @ 310
+  @use call vm:setFxBypass  @ 194,197,359
+  @use call vm:fxHostForEdit  @ 304
 
 # Fields (r read / w write incl. constructor keys)
-  @field r REMOVE  @ 88,291
-  @field r Undo_BeginBlock  @ 356,368
-  @field w Undo_BeginBlock  @ 357
-  @field r Undo_EndBlock  @ 356
-  @field w Undo_EndBlock  @ 358,368
-  @field w apply  @ 286
+  @field r REMOVE  @ 88,285
+  @field r Undo_BeginBlock  @ 350,362
+  @field w Undo_BeginBlock  @ 351
+  @field r Undo_EndBlock  @ 350
+  @field w Undo_EndBlock  @ 352,362
+  @field w apply  @ 280
   @field r bypass  @ 195,198
-  @field r cc  @ 332
-  @field w cc  @ 326
-  @field w ccCap  @ 318,340
-  @field r ccs  @ 239,272
-  @field r cellKind  @ 304,305,335,339
-  @field w cents  @ 235
-  @field w chan  @ 9,45,67,69,326
-  @field r cols  @ 15,50,73,303,331,335,339
-  @field w defaults  @ 324
+  @field r cc  @ 326
+  @field w cc  @ 320
+  @field w ccCap  @ 312,334
+  @field r ccs  @ 237,266
+  @field r cellKind  @ 298,299,329,333
+  @field w chan  @ 9,45,67,69,320
+  @field r cols  @ 15,50,73,297,325,329,333
+  @field w defaults  @ 318
   @field w delay  @ 10,46,68
-  @field w delta  @ 319
-  @field r depth  @ 149,259
-  @field w depth  @ 146,158,220,254,270,287
+  @field w delta  @ 313
+  @field r depth  @ 149,253
+  @field w depth  @ 146,158,220,248,264,281
   @field r derived  @ 25,31,118
-  @field w dest  @ 324
+  @field w dest  @ 318
   @field w detune  @ 10,46,68
   @field w dir  @ 173
   @field r endRow  @ 54,56,74
   @field w endppq  @ 9,45,67
-  @field r evType  @ 240,273
-  @field w evType  @ 9,45,67,69,326
-  @field w expand  @ 319
-  @field w fields  @ 324
+  @field r evType  @ 238,267
+  @field w evType  @ 9,45,67,69,320
+  @field w expand  @ 313
+  @field w fields  @ 318
   @field w fx  @ 10
-  @field r grid  @ 15,50,73,303,331,335,339
+  @field r grid  @ 15,50,73,297,325,329,333
   @field r kind  @ 37,163,178,179
   @field w kind  @ 86,97,111,129,130,144,146,157,158,173,174,190
-  @field w kind  @ 207,209,220,222,235,254,270,287,300,327,363
-  @field r kinds  @ 318,340
-  @field w label  @ 324
+  @field w kind  @ 207,209,220,222,235,248,264,281,294,321,357
+  @field r kinds  @ 312,334
+  @field w label  @ 318
   @field r lane  @ 16
   @field w lane  @ 10,46,68,69
-  @field r midiChan  @ 16,332
-  @field w mode  @ 324
+  @field r midiChan  @ 16,326
+  @field w mode  @ 318
   @field w name  @ 42,64,80,94,108,126,141,154,170,187,204,217
-  @field w name  @ 232,251,265,280,297,315,347
+  @field w name  @ 232,245,259,274,291,309,341
   @field r notes  @ 25,30,117
-  @field w notes  @ 319
-  @field r onset  @ 260
-  @field w onset  @ 146,158,220,254,270,287
+  @field w notes  @ 313
+  @field r onset  @ 254
+  @field w onset  @ 146,158,220,248,264,281
   @field r over  @ 227
   @field w over  @ 222,235
   @field r parked  @ 23
@@ -109,25 +108,25 @@
   @field w pattern  @ 174,207,209
   @field r period  @ 102
   @field w period  @ 86,97,111,129,130,144,146,157,158,173,190,220
-  @field w period  @ 254,270,287,300,363
+  @field w period  @ 248,264,281,294,357
   @field w pitch  @ 9,45,67,69
-  @field w ppq  @ 9,45,67,69,320,321,322,326
+  @field r place  @ 225
+  @field w place  @ 222,235
+  @field w ppq  @ 9,45,67,69,314,315,316,320
   @field r ramp  @ 115,135,136
-  @field w ramp  @ 86,97,111,129,130,144,157,190,300,363
+  @field w ramp  @ 86,97,111,129,130,144,157,190,294,357
   @field r retrig  @ 148
   @field w rpb  @ 69
   @field w run  @ 43,65,81,95,109,127,142,155,171,188,205,218
-  @field w run  @ 233,252,266,281,298,316,348
-  @field w shape  @ 320,321,322
+  @field w run  @ 233,246,260,275,292,310,342
+  @field w shape  @ 314,315,316
   @field r sine  @ 148,149,224
   @field r slide  @ 224,225
   @field r startRow  @ 51
   @field r tails  @ 50,73
-  @field r target  @ 225
-  @field w target  @ 222,235
-  @field r type  @ 16,332
+  @field r type  @ 16,326
   @field r uuid  @ 24,25
-  @field w val  @ 320,321,322,326
+  @field w val  @ 314,315,316,320
   @field r vel  @ 118
   @field w vel  @ 10,46,68,69
-  @field r window  @ 320,322
+  @field r window  @ 314,316
