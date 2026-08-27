@@ -1,0 +1,39 @@
+@spec cmgr_manifest_spec  src=tests/specs/cmgr_manifest_spec.lua  loc=92  cases=6
+
+# Intent
+  The manifest declares each command once, carrying its label and its keys.
+  Pins that install writes those keys into the declaring scope's keymap, that
+  a keyless entry binds nothing, that a name declared twice raises, and that
+  the load-time audit raises in both directions while passing over a scope
+  the manifest does not declare.
+
+# Helpers
+  @fn fresh()  @ 12
+      -- Keyspecs are opaque to everything under test here, so plain strings stand
+      -- in for ImGui key constants.
+  @fn noop()  @ 14
+
+# Cases
+  @case 'install writes each entry\'s keys into its own scope\'s keymap'  [pure]  @ 18-30
+  @case 'an entry with no keys binds nothing'  [pure]  @ 34-40
+  @case 'a command declared by two scopes raises at install'  [pure]  @ 44-55
+  @case 'audit is quiet when entries and registrations correspond'  [pure]  @ 59-67
+  @case 'audit raises on an entry no scope registers'  [pure]  @ 71-78
+  @case 'audit raises on a registered command its scope does not declare'  [pure]  @ 82-90
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cursorUp  @ 22,25,64
+  @field w global  @ 24,38,49,65,74,86
+  @field w keys  @ 24,25,65
+  @field w label  @ 24,25,38,49,50,65,74,86
+  @field w name  @ 18,34,44,59,71,82
+  @field w phantom  @ 74
+  @field r playPause  @ 27
+  @field w playPause  @ 21,24
+  @field w quit  @ 62,65,85,86
+  @field w run  @ 19,35,45,60,72,83
+  @field r switchPage  @ 39
+  @field w switchPage  @ 37,38
+  @field w toggleFollowPlay  @ 49,50
+  @field w toggleProfiler  @ 85
+  @field w tracker  @ 25,50

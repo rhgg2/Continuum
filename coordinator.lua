@@ -37,10 +37,9 @@ local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
 -- Live-REAPER eval bridge — assigned after coord (its env captures coord). See docs/bridge.md.
 local bridge
 
--- F1 toggles the keybinding cheat-sheet (root scope, so every page picks it
--- up). Held off while a modal owns input — the overlay would cover the dialog.
+-- F1 (bound in manifest.lua) toggles the keybinding cheat-sheet on the root
+-- scope. Held off while a modal owns input — the overlay would cover it.
 cmgr:register('toggleHelp', function() if not modalHost:isOpen() then help:toggle() end end)
-cmgr:bind('toggleHelp', { ImGui.Key_F1 })
 
 -- see docs/coordinator.md § Façade registry
 local facades, debugHandles = {}, {}

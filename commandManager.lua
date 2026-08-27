@@ -76,7 +76,7 @@ end
 
 ----- Scope
 
---shape: scope = { keymap={}, registered={}, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
+--shape: scope = { keymap={}, registered={}, manifest?, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
 local function newScope(scopeName)
   local s = { keymap = {}, registered = {}, name = scopeName }
 
@@ -130,6 +130,50 @@ function cmgr:rootKeymap() return global.keymap end
 
 function cmgr:bind(name, keys)    global:bind(name, keys) end
 function cmgr:bindAll(tbl)        global:bindAll(tbl)     end
+
+----- Manifest
+-- Declaration of what a command is called and what reaches it; the keymap is
+-- installed from it. see docs/commandManager.md § Manifest
+
+--shape: manifest = { [scopeName] = { [commandName] = entry } }
+--shape: entry = { label = 'Play / pause', keys = { keyspec, ... }? }
+--invariant: a command resolves to exactly one entry — two scopes declaring it raises
+
+--contract: writes each entry's keys into its scope's keymap and hangs scope.manifest
+function cmgr:installManifest(manifest)
+  local declaredBy = {}
+  for scopeName, entries in pairs(manifest) do
+    local scope = self:scope(scopeName)
+    for name, entry in pairs(entries) do
+      if declaredBy[name] then
+        error('manifest: ' .. name .. ' is declared by both ' .. declaredBy[name] .. ' and ' .. scopeName)
+      end
+      declaredBy[name] = scopeName
+      if entry.keys then scope.keymap[name] = entry.keys end
+    end
+    scope.manifest = entries
+  end
+end
+
+--contract: a declared scope's entries and its registrations must correspond, both ways
+--contract: a scope with no manifest is passed over
+function cmgr:auditManifests()
+  for scopeName, scope in pairs(self.scopes) do
+    if scope.manifest then
+      for name in pairs(scope.manifest) do
+        if not scope.registered[name] then
+          error('manifest: ' .. scopeName .. ' declares ' .. name .. ', which ' ..
+                (self.commands[name] and 'another scope registers' or 'no scope registers'))
+        end
+      end
+      for name in pairs(scope.registered) do
+        if not scope.manifest[name] then
+          error('manifest: ' .. scopeName .. ' registers ' .. name .. ', which its manifest does not declare')
+        end
+      end
+    end
+  end
+end
 
 --contract: wrap is a no-op if name has no registered command; wrappers stack (compose outward)
 function cmgr:wrap(name, wrapper)

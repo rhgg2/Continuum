@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — The manifest installs once from continuum's wiring rather than per render module
+  at load, so the declared keys are in place before persisted overrides overlay them. The audit
+  passes over a scope that declares no manifest, so the surface migrates one scope at a time.
+
 - **2026-08-27** — Explode and freeze share one chord, Ctrl+E, with the caret's host picking the
   arm: freeze refuses on the master strip and explode refuses off it, so at most one is ever live
   and a second binding would only ever be dead. The eligibility gate sits in tv, composed from the

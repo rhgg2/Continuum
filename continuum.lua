@@ -162,21 +162,9 @@ local function Main()
     toggleFxWindows = toggleAllFxWindows,
     toggleProfiler  = function() perf.toggle() end,
   }
-  cmgr:bindAll{
-    playPause       = { ImGui.Key_Space },
-    stop            = { ImGui.Key_F8    },
-    undo            = { {ImGui.Key_Z, ImGui.Mod_Ctrl} },
-    redo            = { {ImGui.Key_Z, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-    switchToArrange = { ImGui.Key_F2 },
-    switchToWiring  = { ImGui.Key_F3 },
-    switchToTracker = { ImGui.Key_F4 },
-    switchToSample  = { ImGui.Key_F9 },
-    switchToEditor  = { ImGui.Key_F10 },
-    quit            = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
-    beginPrefix     = { {ImGui.Key_U, ImGui.Mod_Super} },
-    toggleFxWindows = { ImGui.Key_F11 },
-    toggleProfiler  = { {ImGui.Key_P, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-  }
+  -- Labels and keys are declared per scope in manifest.lua; install writes the
+  -- keys into each declared scope's keymap.
+  cmgr:installManifest(require 'manifest')
 
   -- ImGui only delivers keys while Continuum holds focus; the REAPER-keymap
   -- bridge (see coordinator § External commands) covers the floating-FX case.
@@ -191,6 +179,10 @@ local function Main()
 
   -- Overlay persisted user rebindings on top of the code defaults above.
   cmgr:loadOverrides(ImGui)
+
+  -- Wiring is done: every declared scope's entries and registrations must
+  -- now correspond. Scopes still using pageBindings declare no manifest.
+  cmgr:auditManifests()
 
   coord:run(err_handler)
 end

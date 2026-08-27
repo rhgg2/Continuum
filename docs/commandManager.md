@@ -59,6 +59,30 @@ After registration vm applies `wrap` calls for cross-cutting behaviour
 (see below). rm installs the default keymap at construction; users
 will eventually layer overrides on top.
 
+## Manifest
+
+1. A scope's **manifest** declares every command that scope registers.
+   Each **entry** names one command and carries a **label** for display,
+   and its **keys** as an array of keyspecs where the command has any.
+   `manifest.lua` holds one such table per scope.
+
+1. `installManifest(manifest)` writes each entry's keys into its scope's
+   keymap and hangs the scope's entries off the scope as `scope.manifest`.
+   It runs from continuum's wiring before `loadOverrides`, so a persisted
+   rebinding still wins over the declared default.
+
+1. A command resolves to exactly one entry. Two scopes declaring the same
+   name raises at install, since the flat namespace gives that name one
+   body and one gate.
+
+1. `auditManifests()` checks each declared scope both ways: an entry the
+   scope does not register raises, as does a registration its manifest
+   omits. It runs at the end of wiring, once every command has its body.
+
+1. A scope with no manifest is passed over by the audit, so scopes move
+   from `pageBindings.lua` to the manifest one at a time. Only the global
+   scope has moved so far.
+
 ## Scope stack
 
 Scopes form a stack. The `'global'` scope sits at the bottom (pushed

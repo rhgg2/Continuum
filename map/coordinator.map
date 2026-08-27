@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=377  mode=chunk  self=coord
+@module coordinator  src=coordinator.lua  loc=376  mode=chunk  self=coord
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
@@ -7,7 +7,7 @@
   @invariant  each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall  @ 5
 
 # Shapes
-  @shape  page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), statusSegments(), bind(...), unbind() }  @ 298
+  @shape  page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), statusSegments(), bind(...), unbind() }  @ 297
 
 # Imports
   @require util = 'util'  @ 7
@@ -21,137 +21,136 @@
   @construct modalHost = util.instantiate('modalHost')  @ 34
   @construct help      = util.instantiate('help')  @ 35
   @construct masterMix = util.instantiate('masterMix')  @ 36
-  @construct bridge    = util.instantiate('bridge')  @ 370
+  @construct bridge    = util.instantiate('bridge')  @ 369
 
 # Private state
   @state ctx, uiFont = gui.ctx, gui.uiFont  @ 19
   @state uiSize = gui.fontSize.ui  @ 20
   @state toolbar = chrome.makeToolbar()  @ 32   -- one shared toolbar; renders the active page's row
   @state statusBar = chrome.makeStatusBar()  @ 33   -- one shared status bar; renders the active page's cells
-  @state facades, debugHandles = {}, {}  @ 46
-  @state facade = {  @ 47
-  @state STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, c...  @ 53
-  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 56
-  @state STATUS_PAD_X, STATUS_PAD_Y = CHROME_PAD_X + 5, 7  @ 59
-  @state pages, active, previous = {}, nil, nil  @ 61
-  @state lastToolbarActive = nil  @ 62   -- last page measured; a switch re-pins the band height
-  @state bootSettled = false  @ 63   -- latched once boot transients (fonts, window width) settle
-  @state bootFrames = 0  @ 64
-  @state lastAvailW = nil  @ 65
-  @state quitting = false  @ 66
-  @state errHandler = nil  @ 67
-  @state focusFrames = 0  @ 68   -- >0: re-focus our window this many frames, counting down
-  @state fxFloatOpen = false  @ 69   -- an FX float window was open at the last poll
-  @state weHadFocus = false  @ 70   -- our window held focus at the end of the last frame
-  @state myHwnd  @ 71   -- our OS window HWND, captured via js while we hold focus
-  @state jsFocus = reaper.JS_Window_GetForeground ~= nil  @ 72   -- js_ReaScriptAPI present
-  @state switcherSeg = { id = 'switcher', render = drawSwitcher }  @ 110
-  @state externalCommands = {}  @ 125   -- list of { extKey, command }
-  @state coord = {}  @ 300
-      @contract  register instantiates page; first registered becomes active; returns page handle  @ 299
+  @state facades, debugHandles = {}, {}  @ 45
+  @state facade = {  @ 46
+  @state STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, c...  @ 52
+  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 55
+  @state STATUS_PAD_X, STATUS_PAD_Y = CHROME_PAD_X + 5, 7  @ 58
+  @state pages, active, previous = {}, nil, nil  @ 60
+  @state lastToolbarActive = nil  @ 61   -- last page measured; a switch re-pins the band height
+  @state bootSettled = false  @ 62   -- latched once boot transients (fonts, window width) settle
+  @state bootFrames = 0  @ 63
+  @state lastAvailW = nil  @ 64
+  @state quitting = false  @ 65
+  @state errHandler = nil  @ 66
+  @state focusFrames = 0  @ 67   -- >0: re-focus our window this many frames, counting down
+  @state fxFloatOpen = false  @ 68   -- an FX float window was open at the last poll
+  @state weHadFocus = false  @ 69   -- our window held focus at the end of the last frame
+  @state myHwnd  @ 70   -- our OS window HWND, captured via js while we hold focus
+  @state jsFocus = reaper.JS_Window_GetForeground ~= nil  @ 71   -- js_ReaScriptAPI present
+  @state switcherSeg = { id = 'switcher', render = drawSwitcher }  @ 109
+  @state externalCommands = {}  @ 124   -- list of { extKey, command }
+  @state coord = {}  @ 299
+      @contract  register instantiates page; first registered becomes active; returns page handle  @ 298
 
 # Private functions
   -- Coordinator
-  @fn tick()  @ 77-82
-      @contract  tick() runs once per frame before the page draws; no selection bus here  @ 76
-  @fn drawSwitcher()  @ 84-106
-  @fn dispatch(state)  @ 112-119
+  @fn tick()  @ 76-81
+      @contract  tick() runs once per frame before the page draws; no selection bus here  @ 75
+  @fn drawSwitcher()  @ 83-105
+  @fn dispatch(state)  @ 111-118
   -- External commands (REAPER-keymap bridge)
-  @fn pollExternalCommands()  @ 127-134
-  @fn anyFxFloating()  @ 138-150
+  @fn pollExternalCommands()  @ 126-133
+  @fn anyFxFloating()  @ 137-149
       -- Any floating FX window open across master + tracks. The poll in frame() reads
       -- its open→closed edge (X button or F11) to reclaim OS focus from REAPER.
-  @fn frame()  @ 152-294
+  @fn frame()  @ 151-293
 
 # Functions held in tables
-  @held facade.publish(name, iface)  @ 48
-  @held facade.get(name)  @ 49
-  @held facade.publishDebug(name, stack)  @ 51
-  @held env.facade(name)  @ 373
-  @held env.page(name)  @ 374
+  @held facade.publish(name, iface)  @ 47
+  @held facade.get(name)  @ 48
+  @held facade.publishDebug(name, stack)  @ 50
+  @held env.facade(name)  @ 372
+  @held env.page(name)  @ 373
 
 # Handlers registered
   @handler cmgr:toggleHelp()  @ 42
 
 # Public API (coord:*)
-  @api coord:register(name, moduleName, extra)  @ 302-307
-  @api coord:setActive(name)  @ 311-324
-      @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming  @ 309
-      @contract  tracker's no-arg bind resolves its stored selection; renderBody keeps it current  @ 310
-  @api coord:returnToArrange()  @ 327-330
-      @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.  @ 326
-  @api coord:getFacade(name)  @ 333
-      @contract  resolve a published page facade by name; the contents are owned by the publishing page  @ 332
-  @api coord:previousPage()  @ 336
-      @contract  the page active immediately before the current one; closeEditor returns here  @ 335
-  @api coord:togglePage()  @ 340-348
+  @api coord:register(name, moduleName, extra)  @ 301-306
+  @api coord:setActive(name)  @ 310-323
+      @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming  @ 308
+      @contract  tracker's no-arg bind resolves its stored selection; renderBody keeps it current  @ 309
+  @api coord:returnToArrange()  @ 326-329
+      @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.  @ 325
+  @api coord:getFacade(name)  @ 332
+      @contract  resolve a published page facade by name; the contents are owned by the publishing page  @ 331
+  @api coord:previousPage()  @ 335
+      @contract  the page active immediately before the current one; closeEditor returns here  @ 334
+  @api coord:togglePage()  @ 339-347
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 352-357
-      @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.  @ 350
-      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame  @ 351
-  @api coord:onExternalCommand(extKey, command)  @ 360-362
-      @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands  @ 359
-  @api coord:quit()  @ 364
-  @api coord:run(handler)  @ 366
-      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs  @ 365
+  @api coord:reloadAfterExternalMutation()  @ 351-356
+      @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.  @ 349
+      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame  @ 350
+  @api coord:onExternalCommand(extKey, command)  @ 359-361
+      @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands  @ 358
+  @api coord:quit()  @ 363
+  @api coord:run(handler)  @ 365
+      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs  @ 364
 
 # Uses (outbound edges)
-  @use call    ImGui.Begin  @ frame:179
-  @use call    ImGui.BeginChild  @ frame:223,244,275
-  @use call    ImGui.Button  @ drawSwitcher:92
-  @use call    ImGui.End  @ frame:288
-  @use call    ImGui.EndChild  @ frame:228,249,280
-  @use call    ImGui.GetContentRegionAvail  @ frame:198,257
-  @use call    ImGui.GetCursorPosY  @ frame:256,262
-  @use call    ImGui.GetCursorScreenPos  @ frame:220
-  @use call    ImGui.GetFrameHeight  @ frame:234,258
-  @use call    ImGui.GetStyleVar  @ frame:236
-  @use call    ImGui.Indent  @ frame:261
-  @use call    ImGui.IsWindowFocused  @ frame:191
-  @use call    ImGui.PopFont  @ frame:291
-  @use call    ImGui.PopStyleColor  @ drawSwitcher:95 frame:251,282,290
-  @use call    ImGui.PopStyleVar  @ frame:185,212,229,235,250,281
-  @use call    ImGui.PushFont  @ frame:166
-  @use call    ImGui.PushStyleColor  @ drawSwitcher:89,90 frame:167,168,169,170,171,241,272,273
-  @use call    ImGui.PushStyleVar  @ frame:173,208,221,222,233,242,274
-  @use call    ImGui.SameLine  @ drawSwitcher:98,100,102,104
-  @use call    ImGui.SetCursorPosY  @ frame:262,271
-  @use call    ImGui.SetCursorScreenPos  @ frame:230
-  @use call    ImGui.SetNextWindowContentSize  @ frame:243
-  @use call    ImGui.SetNextWindowFocus  @ frame:175
-  @use call    ImGui.SetScrollX  @ frame:189
-  @use call    ImGui.SetScrollY  @ frame:189
-  @use call    ImGui.Unindent  @ frame:267
-  @use call    bridge:tick  @ tick:81
-  @use call    chrome.colour  @ drawSwitcher:89,90 frame:167,168,169,170,171,241,272,273
+  @use call    ImGui.Begin  @ frame:178
+  @use call    ImGui.BeginChild  @ frame:222,243,274
+  @use call    ImGui.Button  @ drawSwitcher:91
+  @use call    ImGui.End  @ frame:287
+  @use call    ImGui.EndChild  @ frame:227,248,279
+  @use call    ImGui.GetContentRegionAvail  @ frame:197,256
+  @use call    ImGui.GetCursorPosY  @ frame:255,261
+  @use call    ImGui.GetCursorScreenPos  @ frame:219
+  @use call    ImGui.GetFrameHeight  @ frame:233,257
+  @use call    ImGui.GetStyleVar  @ frame:235
+  @use call    ImGui.Indent  @ frame:260
+  @use call    ImGui.IsWindowFocused  @ frame:190
+  @use call    ImGui.PopFont  @ frame:290
+  @use call    ImGui.PopStyleColor  @ drawSwitcher:94 frame:250,281,289
+  @use call    ImGui.PopStyleVar  @ frame:184,211,228,234,249,280
+  @use call    ImGui.PushFont  @ frame:165
+  @use call    ImGui.PushStyleColor  @ drawSwitcher:88,89 frame:166,167,168,169,170,240,271,272
+  @use call    ImGui.PushStyleVar  @ frame:172,207,220,221,232,241,273
+  @use call    ImGui.SameLine  @ drawSwitcher:97,99,101,103
+  @use call    ImGui.SetCursorPosY  @ frame:261,270
+  @use call    ImGui.SetCursorScreenPos  @ frame:229
+  @use call    ImGui.SetNextWindowContentSize  @ frame:242
+  @use call    ImGui.SetNextWindowFocus  @ frame:174
+  @use call    ImGui.SetScrollX  @ frame:188
+  @use call    ImGui.SetScrollY  @ frame:188
+  @use call    ImGui.Unindent  @ frame:266
+  @use call    bridge:tick  @ tick:80
+  @use call    chrome.colour  @ drawSwitcher:88,89 frame:166,167,168,169,170,240,271,272
   @use call    chrome.makeStatusBar  @ <load>:33
   @use call    chrome.makeToolbar  @ <load>:32
-  @use call    chrome.popChromeStyles  @ frame:213
-  @use call    chrome.pushChromeStyles  @ frame:207
-  @use call    chrome.resetPickerActive  @ frame:240
-  @use call    chrome.resetToolbar  @ setActive:316
-  @use call    chrome.toolbarLineCount  @ frame:237
-  @use call    cm:pollUndo  @ frame:153 reloadAfterExternalMutation:353
-  @use call    cmgr:bind  @ <load>:43
-  @use call    cmgr:invoke  @ drawSwitcher:93 pollExternalCommands:131
-  @use call    cmgr:pop  @ setActive:317
-  @use call    cmgr:push  @ setActive:321
+  @use call    chrome.popChromeStyles  @ frame:212
+  @use call    chrome.pushChromeStyles  @ frame:206
+  @use call    chrome.resetPickerActive  @ frame:239
+  @use call    chrome.resetToolbar  @ setActive:315
+  @use call    chrome.toolbarLineCount  @ frame:236
+  @use call    cm:pollUndo  @ frame:152 reloadAfterExternalMutation:352
+  @use call    cmgr:invoke  @ drawSwitcher:92 pollExternalCommands:130
+  @use call    cmgr:pop  @ setActive:316
+  @use call    cmgr:push  @ setActive:320
   @use call    cmgr:register  @ <load>:42
-  @use call    help:beginFrame  @ frame:163
-  @use call    help:draw  @ frame:285
-  @use call    help:isOpen  @ dispatch:115
-  @use call    help:setPage  @ setActive:320
+  @use call    help:beginFrame  @ frame:162
+  @use call    help:draw  @ frame:284
+  @use call    help:isOpen  @ dispatch:114
+  @use call    help:setPage  @ setActive:319
   @use call    help:toggle  @ cmgr:toggleHelp:42
-  @use call    keyDispatch.dispatchKeys  @ dispatch:118
+  @use call    keyDispatch.dispatchKeys  @ dispatch:117
   @use call    lib.seedIfEmpty  @ <load>:28
-  @use call    modalHost:draw  @ frame:286
+  @use call    modalHost:draw  @ frame:285
   @use call    modalHost:isOpen  @ cmgr:toggleHelp:42
-  @use call    modalHost:tick  @ tick:78
-  @use call    util.add  @ frame:210 onExternalCommand:361
-  @use call    util.assign  @ register:303
-  @use call    util.instantiate  @ <load>:24,30,34,35,36,370 register:303
-  @use require bridge  @ <load>:370
+  @use call    modalHost:tick  @ tick:77
+  @use call    util.add  @ frame:209 onExternalCommand:360
+  @use call    util.assign  @ register:302
+  @use call    util.instantiate  @ <load>:24,30,34,35,36,369 register:302
+  @use require bridge  @ <load>:369
   @use require chrome  @ <load>:30
   @use require help  @ <load>:35
   @use require imgui  @ <load>:15
@@ -163,26 +162,26 @@
   @use require util  @ <load>:7
 
 # Calls (intra-file)
-  @call anyFxFloating  @ frame:158
-  @call coord:getFacade  @ env.facade:373
-  @call coord:setActive  @ register:305 returnToArrange:329 togglePage:346
-  @call frame  @ run:366
-  @call pollExternalCommands  @ frame:154
-  @call tick  @ frame:162
+  @call anyFxFloating  @ frame:157
+  @call coord:getFacade  @ env.facade:372
+  @call coord:setActive  @ register:304 returnToArrange:328 togglePage:345
+  @call frame  @ run:365
+  @call pollExternalCommands  @ frame:153
+  @call tick  @ frame:161
 
 # Bindings (by name)
-  @bind dispatch  @ frame:266
-  @bind drawSwitcher  @ 110
-  @bind frame  @ frame:293
+  @bind dispatch  @ frame:265
+  @bind drawSwitcher  @ 109
+  @bind frame  @ frame:292
 
 # Unresolved receivers
-  @drop facade.get  @ getFacade:333
-  @drop page:renderBody  @ frame:263
-  @drop page:statusSegments  @ frame:278
-  @drop page:toolbarSegments  @ frame:210
-  @drop sample:tick  @ tick:79
-  @drop tracker:reloadFromReaper  @ reloadAfterExternalMutation:355
-  @drop wiring:syncExternal  @ tick:80
+  @drop facade.get  @ getFacade:332
+  @drop page:renderBody  @ frame:262
+  @drop page:statusSegments  @ frame:277
+  @drop page:toolbarSegments  @ frame:209
+  @drop sample:tick  @ tick:78
+  @drop tracker:reloadFromReaper  @ reloadAfterExternalMutation:354
+  @drop wiring:syncExternal  @ tick:79
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -197,78 +196,77 @@
   @reaper defer
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_AlwaysUseWindowPadding  @ frame:224,245,276
-  @field r ChildFlags_AutoResizeY  @ frame:224,245
-  @field r Col_Button  @ drawSwitcher:89
-  @field r Col_ButtonHovered  @ drawSwitcher:90
-  @field r Col_ChildBg  @ frame:241,272
-  @field r Col_ScrollbarBg  @ frame:170
-  @field r Col_ScrollbarGrab  @ frame:171
-  @field r Col_Text  @ frame:273
-  @field r Col_TitleBg  @ frame:168
-  @field r Col_TitleBgActive  @ frame:169
-  @field r Col_WindowBg  @ frame:167
-  @field r FocusedFlags_RootAndChildWindows  @ frame:191
+  @field r ChildFlags_AlwaysUseWindowPadding  @ frame:223,244,275
+  @field r ChildFlags_AutoResizeY  @ frame:223,244
+  @field r Col_Button  @ drawSwitcher:88
+  @field r Col_ButtonHovered  @ drawSwitcher:89
+  @field r Col_ChildBg  @ frame:240,271
+  @field r Col_ScrollbarBg  @ frame:169
+  @field r Col_ScrollbarGrab  @ frame:170
+  @field r Col_Text  @ frame:272
+  @field r Col_TitleBg  @ frame:167
+  @field r Col_TitleBgActive  @ frame:168
+  @field r Col_WindowBg  @ frame:166
+  @field r FocusedFlags_RootAndChildWindows  @ frame:190
   @field r ImGui_GetBuiltinPath  @ 10
-  @field r JS_Window_GetForeground  @ 72
-  @field r Key_F1  @ 43
-  @field r StyleVar_Alpha  @ frame:221
-  @field r StyleVar_FramePadding  @ frame:208,233
-  @field r StyleVar_ItemSpacing  @ frame:236
-  @field r StyleVar_WindowPadding  @ frame:173,222,242,274
-  @field r WindowFlags_NoDocking  @ frame:182
-  @field r WindowFlags_NoMove  @ frame:184
-  @field r WindowFlags_NoNav  @ frame:183,225,246
-  @field r WindowFlags_NoScrollWithMouse  @ frame:181
-  @field r WindowFlags_NoScrollbar  @ frame:180,225,246,277
-  @field w acceptCmds  @ dispatch:116
-  @field r arrange  @ returnToArrange:328
-  @field w chrome  @ 34,35,36,53
+  @field r JS_Window_GetForeground  @ 71
+  @field r StyleVar_Alpha  @ frame:220
+  @field r StyleVar_FramePadding  @ frame:207,232
+  @field r StyleVar_ItemSpacing  @ frame:235
+  @field r StyleVar_WindowPadding  @ frame:172,221,241,273
+  @field r WindowFlags_NoDocking  @ frame:181
+  @field r WindowFlags_NoMove  @ frame:183
+  @field r WindowFlags_NoNav  @ frame:182,224,245
+  @field r WindowFlags_NoScrollWithMouse  @ frame:180
+  @field r WindowFlags_NoScrollbar  @ frame:179,224,245,276
+  @field w acceptCmds  @ dispatch:115
+  @field r arrange  @ returnToArrange:327
+  @field w chrome  @ 34,35,36,52
   @field r cm  @ 18
-  @field w cm  @ 25,31,53,372
+  @field w cm  @ 25,31,52,371
   @field r cmgr  @ 18
-  @field w cmgr  @ 35,53,372
-  @field r command  @ pollExternalCommands:131
-  @field w command  @ onExternalCommand:361
-  @field w coord  @ 372
+  @field w cmgr  @ 35,52,371
+  @field r command  @ pollExternalCommands:130
+  @field w command  @ onExternalCommand:360
+  @field w coord  @ 371
   @field r ctx  @ 19
   @field w ctx  @ 31,34,35,36
   @field r ds  @ 18
-  @field w ds  @ 53,372
-  @field w env  @ 370
+  @field w ds  @ 52,371
+  @field w env  @ 369
   @field r eventMeta  @ 18
-  @field w eventMeta  @ 53,372
-  @field r extKey  @ pollExternalCommands:129,130
-  @field w extKey  @ onExternalCommand:361
-  @field w facade  @ 54 env.facade:373
+  @field w eventMeta  @ 52,371
+  @field r extKey  @ pollExternalCommands:128,129
+  @field w extKey  @ onExternalCommand:360
+  @field w facade  @ 53 env.facade:372
   @field r fontSize  @ 20
-  @field w get  @ facade.get:49
+  @field w get  @ facade.get:48
   @field r gui  @ 18
-  @field w gui  @ 53
-  @field w help  @ 54
-  @field w id  @ 110
+  @field w gui  @ 52
+  @field w help  @ 53
+  @field w id  @ 109
   @field w identity  @ 25
-  @field w lib  @ 31,54
+  @field w lib  @ 31,53
   @field w libraryForm  @ 26
-  @field w modalHost  @ 54
-  @field w page  @ env.page:374
-  @field w pageSuppressed  @ dispatch:116
+  @field w modalHost  @ 53
+  @field w page  @ env.page:373
+  @field w pageSuppressed  @ dispatch:115
   @field r path  @ 14
   @field w path  @ 14
-  @field w publish  @ facade.publish:48
-  @field w publishDebug  @ facade.publishDebug:51
-  @field w reaper  @ 371
-  @field w render  @ 110
-  @field r sample  @ tick:79
-  @field r segment  @ frame:209
-  @field w suppressKbd  @ dispatch:116
+  @field w publish  @ facade.publish:47
+  @field w publishDebug  @ facade.publishDebug:50
+  @field w reaper  @ 370
+  @field w render  @ 109
+  @field r sample  @ tick:78
+  @field r segment  @ frame:208
+  @field w suppressKbd  @ dispatch:115
   @field w swings  @ 25
   @field w synthetic  @ 25
   @field w tempers  @ 25,26
-  @field r tracker  @ reloadAfterExternalMutation:354,355
+  @field r tracker  @ reloadAfterExternalMutation:353,354
   @field r ui  @ 20
   @field r uiFont  @ 19
   @field w uiSize  @ 31
   @field r unrooted  @ 26
-  @field w util  @ 371
-  @field r wiring  @ tick:80
+  @field w util  @ 370
+  @field r wiring  @ tick:79

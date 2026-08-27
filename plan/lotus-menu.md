@@ -31,7 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-27 cmgr: declare the global scope's commands in a manifest (§ The manifest)
 
 ## Now
 
@@ -39,16 +39,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **`manifest.lua`, and the global scope declared in it.** An entry is
-   `{ label, keys, path? }` under a command's name, grouped by scope;
-   `cmgr:installManifest` writes the keys into each scope's keymap and
-   `cmgr:entry(name)` serves the consumers. `cmgr:auditManifests()` raises
-   both ways — a scope's entry naming no registered command, and a command
-   registered on a scope the manifest declares but does not list — and runs
-   from continuum at the end of wiring, passing over scopes the manifest
-   does not yet declare. Continuum's twenty global commands and
-   coordinator's `toggleHelp` move across, and the `cmgr:bindAll` block
-   that held their keys goes.
 1. **The tracker and region scopes.** The hundred and ten entries the two
    scopes register — trackerView's thirty-nine and its `advBy0`–`advBy9`
    loop, trackerRender's twenty-nine, editCursor's twenty-five and its
