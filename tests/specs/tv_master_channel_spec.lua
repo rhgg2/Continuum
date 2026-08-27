@@ -299,7 +299,7 @@ return {
   {
     -- The head snapshot expands a global region into one producer per channel in use, so a chain
     -- authored on the strip sounds on each of them and nowhere else.
-    -- see design/global-fx-column.md § Expansion
+    -- see docs/trackerManager.md § Channel & column model
     name = 'a global region runs its chain on every MIDI channel in use',
     run = function(harness)
       local h = harness.mk()
@@ -325,7 +325,7 @@ return {
   {
     -- A global region runs no producer of its own, so its realisation is the union of the ones it
     -- expanded into, and a ghost lands on the channel of the producer that emitted it.
-    -- see design/global-fx-column.md § Realisation on the master strip
+    -- see docs/trackerManager.md § Realisation by producer
     name = 'the caret on a global badge ghosts the chain on every channel it reaches',
     run = function(harness)
       local h = harness.mk()
@@ -356,7 +356,7 @@ return {
 
   {
     -- The union's claimed targets are the chain's, and the sampling asks for one channel at a time:
-    -- every channel reached lights the column it carries. see design/global-fx-column.md § Realisation on the master strip
+    -- every channel reached lights the column it carries. see docs/trackerManager.md § Realisation by producer
     name = 'a global chain lights its curve on the target column of each channel it reaches',
     run = function(harness)
       local h = harness.mk{ data = { extraColumns = { [3]  = { notes = 1, pb = true },

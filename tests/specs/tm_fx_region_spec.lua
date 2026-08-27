@@ -147,7 +147,7 @@ local function derivedNotes(h)
 end
 
 -- The identity an expanded producer carries: its stored region's uuid, qualified by the channel it
--- landed on. see design/global-fx-column.md § Derived identity is stable
+-- landed on. see docs/trackerManager.md § Channel & column model
 local function expanded(uuid, chan) return util.key(uuid, chan) end
 
 -- The notes one producer put on one channel, sorted by onset then lane. A global region's producers
@@ -206,7 +206,7 @@ local function wirePbs(h, chan, fromPpq, toPpq)
 end
 
 -- The channels carrying any pb at all, ascending. A continuous chain emits with or without material,
--- so this is the set a global one reached. see design/global-fx-column.md § Expansion
+-- so this is the set a global one reached. see docs/trackerManager.md § Channel & column model
 local function pbChans(h)
   local seen, out = {}, {}
   for _, c in ipairs(h.fm:dump().ccs) do
@@ -2447,7 +2447,7 @@ return {
 
   {
     -- A chan-0 region is stored once and runs sixteen times: the head snapshot the pipeline takes
-    -- replaces it with one ordinary region per channel. see design/global-fx-column.md § Expansion
+    -- replaces it with one ordinary region per channel. see docs/trackerManager.md § Channel & column model
     name = 'global region: one stored region runs a chain on every channel it reaches',
     run = function(harness)
       local h = harness.mk()
@@ -2466,7 +2466,7 @@ return {
 
   {
     -- A continuous chain needs no material, so an expansion onto all sixteen would author a curve on
-    -- every channel the document never used. see design/global-fx-column.md § Expansion
+    -- every channel the document never used. see docs/trackerManager.md § Channel & column model
     name = 'global region: the chain reaches the channels in use and no others',
     run = function(harness)
       local h = harness.mk()
@@ -2481,7 +2481,7 @@ return {
 
   {
     -- The set is read off the head snapshot, so it follows the document from one pass to the next.
-    -- see design/global-fx-column.md § Expansion
+    -- see docs/trackerManager.md § Channel & column model
     name = 'global region: a channel emptied of its notes drops out of the chain',
     run = function(harness)
       local h = harness.mk()
@@ -2503,7 +2503,7 @@ return {
 
   {
     -- A lane is content enough: a channel automating a curve of its own runs the chain, notes or no
-    -- notes. see design/global-fx-column.md § Expansion
+    -- notes. see docs/trackerManager.md § Channel & column model
     name = 'global region: a pb lane with no notes keeps its channel in the chain',
     run = function(harness)
       local h = harness.mk()
@@ -2519,7 +2519,7 @@ return {
   {
     -- A replace chain parks the very notes that put its channel in use, so the stash counts as content:
     -- were it not read, the chain would take its own material off the take and lose the channel on the
-    -- next pass. see design/global-fx-column.md § Expansion
+    -- next pass. see docs/trackerManager.md § Channel & column model
     name = 'global region: a channel whose notes the chain parked stays in the chain',
     run = function(harness)
       local h = harness.mk()
@@ -2538,7 +2538,7 @@ return {
   {
     -- Derived output is no evidence of use. A stamp needs no material, so it can put notes on a channel
     -- that authored none; were those read as content, the chain would hold its own channel in the set
-    -- for good. see design/global-fx-column.md § Expansion
+    -- for good. see docs/trackerManager.md § Channel & column model
     name = 'global region: a channel left with derived notes alone drops out of the chain',
     run = function(harness)
       local h = harness.mk()
@@ -2567,7 +2567,7 @@ return {
 
   {
     -- The persisted window set is the seat-recognition baseline, so an expanded producer's identity
-    -- has to survive a rebuild unchanged. see design/global-fx-column.md § Derived identity is stable
+    -- has to survive a rebuild unchanged. see docs/trackerManager.md § Channel & column model
     name = 'global region: a producer per channel in use, with stable derived identities',
     run = function(harness)
       local h = harness.mk()
@@ -2595,7 +2595,7 @@ return {
   {
     -- Storage order is precedence among chains overlapping on one channel, and the expansion emits a
     -- channel's own regions before the producers expanded onto it, whatever order storage holds them
-    -- in. see design/global-fx-column.md § Precedence
+    -- in. see docs/trackerManager.md § Channel & column model
     name = 'global region: a global chain packs after a channel region stored before it',
     run = function(harness)
       local h = harness.mk()
@@ -2627,7 +2627,7 @@ return {
   {
     -- The stored region carries the intent, so the edit arrives on channel 0; dirt seeded there
     -- reaches no derivation and the pass falls to the rebuild(∅) gate.
-    -- see design/global-fx-column.md § An edit reaches sixteen channels
+    -- see docs/trackerManager.md § Channel & column model
     name = 'global region: editing the region re-derives every channel it reaches',
     run = function(harness)
       local h = harness.mk()

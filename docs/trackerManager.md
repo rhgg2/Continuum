@@ -30,8 +30,10 @@ An fx region stored at channel 0 names no MIDI channel of its own: it is authore
 a view surface meant for every channel at once (`docs/trackerView.md` § Addressing a
 chain). The rebuild expands it, at the head snapshot of document keys its passes read,
 into one ordinary region per channel in use, carrying its span and its chain, each
-identified by the stored uuid qualified by the channel it lands on. Every pass below
-the snapshot therefore sees per-channel producers only.
+identified by the stored uuid qualified by the channel it lands on. That qualified uuid
+is opaque and never split back apart: the window store and the park stash carry it, so
+seat recognition matches on it unchanged (`docs/generators.md` § Route-by-window). Every
+pass below the snapshot therefore sees per-channel producers only.
 
 A channel is in use when it carries an authored note, when the park stash holds a note
 taken out of it, or when it has a pb or cc lane of its own. Derived output is no
@@ -39,9 +41,11 @@ evidence of use: a chain emits its curve with or without material, so a channel 
 in on the strength of a chain's own output would stay in the set for good.
 
 Expansion appends those producers after all the stored channel regions, so a channel's
-own chains take precedence over a global one on it. The stored region holds the intent,
-so editing it seeds derivation dirt on all sixteen channels at once — wider than the set
-in use, so a channel that has just left it gets a pass to clear what the chain left there.
+own chains take precedence over a global one on it; among globals it is their storage
+order, which the master strip shows as their column order. The stored region holds the
+intent, so editing it seeds derivation dirt on all sixteen channels at once — wider than
+the set in use, so a channel that has just left it gets a pass to clear what the chain
+left there.
 
 ## Lane identity
 

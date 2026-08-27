@@ -9,13 +9,14 @@
    an always-present fx strip, and the channel-naming gestures refuse on it.
    Landed 2026-08-27 in 2 commits; the model now lives in `docs/trackerView.md`
    § Addressing a chain ¶¶ 8-9.
-2. **Phase 2 — Expansion** (§ Expansion, § An edit reaches sixteen channels,
-   § Derived identity is stable, § Precedence, § Realisation on the master
-   strip) — the head snapshot expands each global region into a producer on
-   every channel in use, an edit seeds dirt on all sixteen, and the strip
-   ghosts what they realise.  ← in flight
+2. **Phase 2 — Expansion** — the head snapshot expands each global region into a
+   producer on every channel in use, an edit seeds dirt on all sixteen, and the
+   strip ghosts what they realise. Landed 2026-08-27 in 3 commits; the model now
+   lives in `docs/trackerManager.md` § Channel & column model and § Realisation
+   by producer ¶¶ 5-6.
 3. **Phase 3 — Explode** (§ Explode) — a verb that persists the expansion in
-   place of the channel-0 region, and freeze routed through it.
+   place of the channel-0 region. Freeze keeps refusing on the master strip, so
+   the explode is the route to freezing a global chain.  ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -30,4 +31,17 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+- **tm: explode a global region onto the channels it reaches.**
+  `tm:explodeRegion(uuid)` flushes first, as `freezeRegion` does, then replaces
+  the stored chan-0 region with one ordinary region per channel in use, each
+  keeping the expanded uuid (`util.key(parent, chan)`) so nothing re-derives and
+  parked cells keep their identity; dirt on all sixteen, one flush. A non-global
+  uuid is a silent refusal. Spec in `tm_fx_region_spec`: derived notes, park
+  stash and fx windows come through the explode unchanged, a channel out of use
+  gets no region, and no region is left on channel 0.
+- **tv: the explode gesture on the master strip.** `tv:explodeRegion` under
+  `util.atomic('Explode FX region')`, a command bound in `pageBindings` that
+  addresses `tv:fxHostAtCursor()`, and a button on the fx strip beside freeze's;
+  both refuse off channel 0. `docs/trackerView.md` § Addressing a chain states
+  the freeze route: explode, then freeze one of the sixteen. Spec in
+  `tv_master_channel_spec`.

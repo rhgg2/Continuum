@@ -194,7 +194,7 @@ local function seedRegionEdit(newRegions)
   if not derivedInputs then dirtyChan(); return end
   local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
   local function trigger(r)
-    -- A chan-0 region's edit dirties all sixteen channels -- wider than the set in use on purpose. see design/global-fx-column.md § An edit reaches sixteen channels
+    -- A chan-0 region's edit dirties all sixteen channels -- wider than the set in use on purpose. see docs/trackerManager.md § Channel & column model
     -- Each seed sits at that channel's own raw ppq, since swing resolves per channel.
     local first, last = r.chan, r.chan
     if r.chan == 0 then first, last = 1, 16 end
@@ -727,18 +727,18 @@ local function offTakeEnd(spec)
 end
 
 -- A global (chan 0) region is stored once and expands into one ordinary region per channel it reaches,
--- carrying its span and chain; the uuid is opaque and never split back apart. see design/global-fx-column.md § Expansion
+-- carrying its span and chain; the uuid is opaque and never split back apart. see docs/trackerManager.md § Channel & column model
 local function expandedUuid(uuid, chan) return util.key(uuid, chan) end
 
 -- inUse is channelsInUse's set, taken from the same head snapshot: a channel outside it runs no
--- producer, so a chain reaches nothing the document never used; second return is the stored globals, whose own uuids the union answers for. see design/global-fx-column.md § Expansion
+-- producer, so a chain reaches nothing the document never used; second return is the stored globals, whose own uuids the union answers for. see docs/trackerManager.md § Channel & column model
 local function expandGlobals(regions, inUse)
   local channelRegions, globals = {}, {}
   for _, region in ipairs(regions or {}) do
     util.add(region.chan == 0 and globals or channelRegions, region)
   end
   -- Appended after every stored region, so each channel's own regions come first in storage order and
-  -- a global chain takes last precedence there. see design/global-fx-column.md § Precedence
+  -- a global chain takes last precedence there. see docs/trackerManager.md § Channel & column model
   for _, region in ipairs(globals) do
     for chan = 1, 16 do
       if inUse[chan] then
@@ -1813,7 +1813,7 @@ end
 local fxRealisationByUuid = {}
 
 -- A stored global region runs no producer of its own, so its uuid answers with the union of the ones
--- it expanded into: their notes, their claimed targets, the cells they parked. see design/global-fx-column.md § Realisation on the master strip
+-- it expanded into: their notes, their claimed targets, the cells they parked. see docs/trackerManager.md § Realisation by producer
 local function unionRealisation(uuid, byUuid)
   local union = { uuid = uuid, chans = {}, notes = {}, targets = {}, parked = {} }
   for chan = 1, 16 do
@@ -5034,7 +5034,7 @@ local rebuilding = false
 local mmReloaded = false
 
 -- The channels a global chain reaches: those carrying an authored note, a note the park stash holds
--- off the take, or a pb/cc lane of their own. Derived output is no evidence -- it never leaves the set. see design/global-fx-column.md § Expansion
+-- off the take, or a pb/cc lane of their own. Derived output is no evidence -- it never leaves the set. see docs/trackerManager.md § Channel & column model
 local function channelsInUse(sources)
   local inUse = {}
   for chan = 1, 16 do

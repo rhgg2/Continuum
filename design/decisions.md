@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Freeze keeps refusing on the master channel rather than exploding a global chain
+  itself. It would have to freeze sixteen producers, each with its own eligibility refusals, so
+  partial failure would be the normal case and explode's all-or-nothing would not survive it. The
+  route is to explode first, then freeze one of the sixteen.
+
 - **2026-08-27** — A stored global region runs no producer of its own, so its uuid answers with the
   union of the producers it expanded into, and a realisation entry names the channels it realises on
   rather than one channel. A claimed target span is logical rather than raw, so the union merges

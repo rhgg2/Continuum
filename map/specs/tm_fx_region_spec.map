@@ -44,7 +44,7 @@
       -- uuid. Sorted by onset then lane; identity swing, so ppq == the logical step time.
   @fn expanded(uuid, chan)  @ 151
       -- The identity an expanded producer carries: its stored region's uuid, qualified by the channel it
-      -- landed on. see design/global-fx-column.md § Derived identity is stable
+      -- landed on. see docs/trackerManager.md § Channel & column model
   @fn derivedFor(h, chan, uuid)  @ 155-167
       -- The notes one producer put on one channel, sorted by onset then lane. A global region's producers
       -- differ per channel, so the read names both.
@@ -60,7 +60,7 @@
       -- seat helpers above key on a live window, and freeze is the verb that takes the window away.
   @fn pbChans(h)  @ 210-217
       -- The channels carrying any pb at all, ascending. A continuous chain emits with or without material,
-      -- so this is the set a global one reached. see design/global-fx-column.md § Expansion
+      -- so this is the set a global one reached. see docs/trackerManager.md § Channel & column model
   @fn denseRamp()  @ 223-236
   @fn edgePair()  @ 241-254
       -- A pb-replace stage seating distinguishable values on the window's last two ticks, so both compete for
