@@ -1,7 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
 > opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 2
-> (the rest of the surface); the entry has landed
+> (the rest of the surface)
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
@@ -12,17 +12,16 @@ from the one declaration.**
 
 ## The manifest
 
-1. The manifest and its entries have landed: `docs/commandManager.md`
-   § Manifest carries the per-scope table, the label and keys an entry
-   holds, the loop-minted family, and what install does.
+1. Every command is declared once, in the manifest of the scope that
+   registers it — see `docs/commandManager.md` § Manifest.
 
 1. An entry also carries an optional **path** — the menu segments that
    reach it. Keys and path are independent, and either may be absent. A
    command with keys alone is reached by its chord, one with a path
    alone through the menu, one with both either way.
 
-1. An entry carries no rendering. Where a command's group sits on
-   screen, and how its chord prints, belong to the consumers.
+1. An entry carries its cheat-sheet group and no rendering. Where that
+   group sits on screen, and how a chord prints, belong to the consumers.
 
 ## Three consumers
 
@@ -31,10 +30,10 @@ from the one declaration.**
    cheat-sheet (`docs/help.md`) takes labels and grouping; the menu takes
    labels and paths. No consumer reads another's output.
 
-1. The cheat-sheet groups entries positionally, as `docs/help.md`
-   § What's where describes; the menu groups them by path. The two
-   partitions differ because they serve different acts — browsing a
-   static map, and typing a path — and a command with no path appears in
+1. The cheat-sheet groups entries by the group each entry declares, as
+   `docs/help.md` § What's where describes; the menu groups them by path.
+   The two partitions differ because they serve different acts — browsing
+   a static map, and typing a path — and a command with no path appears in
    one and not the other.
 
 ## Fluent and pathed
@@ -58,7 +57,7 @@ from the one declaration.**
 
 1. Manifests hang off `cmgr` scopes. A page's **surface** is the union of
    the manifests of the scopes on the stack, so global commands appear on
-   every page.
+   every page — see `docs/commandManager.md` § Surface.
 
 1. Reachability decides what the menu offers, by the predicate
    `docs/commandManager.md` § Scope stack already defines: a modal scope
@@ -180,7 +179,7 @@ from the one declaration.**
 
 ## What load asserts
 
-1. Every registered command resolves to exactly one entry — landed:
+1. Every registered command resolves to exactly one entry — see
    `docs/commandManager.md` § Manifest.
 
 1. Letters are unique within a level. A collision raises, naming both

@@ -32,12 +32,18 @@ empty grid, a hidden segment) simply has no callout.
 
 The binding strings are never stored — `cmgr:keyLabels(cmd)` resolves
 them live against the current scope stack, so the overlay can't drift
-from the actual keymap. A page registers *grouping* alone
-(`help:registerPage(name, groups)`), co-located with the render module
-that owns the layout: each group names its commands, and the label a row
-renders under is the command's manifest entry (`docs/commandManager.md`
-§ Manifest). So a label is declared once, and a group naming a command no
-scope declares raises rather than drawing a bare name.
+from the actual keymap. Membership is the manifest's too: every entry
+declares the group it reads in (`docs/commandManager.md` § Manifest), so
+the sheet holds no command list and a label is declared once.
+
+A page registers *placement* alone (`help:registerPage(name, placements)`),
+co-located with the render module that owns the layout. A placement names
+a group and says where its box draws; the box's title is the group's name
+and its rows are the group's entries in declared order. `help` buckets
+the reachable surface (`docs/commandManager.md` § Surface) by group name,
+so a group with no reachable entry draws no box — which is how one page's
+placements ignore another page's commands, and how a modal scope thins
+the sheet.
 
 Each bound shortcut renders in its own keycap chip (`cmgr:keyLabelList`
 feeds them, one chord per chip); a command with several bindings shows

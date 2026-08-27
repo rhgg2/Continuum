@@ -182,9 +182,11 @@ return {
       h.cmgr:installManifest({ arrange = manifest.arrange }, fakeImGui)
 
       local scope, declared = h.cmgr:scope('arrange'), {}
-      for _, entry in ipairs(scope.manifest) do
-        declared[entry.name] = true
-        t.truthy(entry.label, entry.name .. ' carries a label')
+      for _, entries in pairs(scope.manifest) do
+        for _, entry in ipairs(entries) do
+          declared[entry.name] = true
+          t.truthy(entry.label, entry.name .. ' carries a label')
+        end
       end
       t.deepEq(scope.registered, declared, 'declarations and registrations correspond')
     end,

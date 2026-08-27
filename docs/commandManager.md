@@ -79,19 +79,25 @@ will eventually layer overrides on top.
 1. A scope's **manifest** declares every command that scope registers.
    Each **entry** names one command and carries a **label** for display,
    and its **keys** as binding tokens where the command has any.
-   `manifest.lua` holds one such list per scope, each entry built by its
+   `manifest.lua` holds one such table per scope, each entry built by its
    local `command` helper.
 
-1. A scope's entries are a list, so the order a command is declared in is
-   a fact the declaration carries, and a consumer reading the scope reads
-   that order.
+1. A scope's entries are declared under a **group**, the name the
+   cheat-sheet gives the box they read in. The group is the entry's own
+   fact, so no consumer holds a list of command names; where the box
+   draws is the consumer's (`docs/help.md` § What's where).
+
+1. A group's entries are a list, so the order a command is declared in is
+   a fact the declaration carries, and a consumer reading the group reads
+   that order. The groups within a scope are unordered, since a consumer
+   orders the groups it shows itself.
 
 1. `installManifest(manifest, ImGui)` parses each entry's tokens into
-   keyspecs, writes them into its scope's keymap, and hangs the scope's
-   entries off the scope as `scope.manifest`. A token that does not parse
-   raises, naming the command. It runs from continuum's wiring before
-   `loadOverrides`, so a persisted rebinding still wins over the declared
-   default.
+   keyspecs, writes them into its scope's keymap, stamps each entry with
+   the group it was declared under, and hangs the groups off the scope as
+   `scope.manifest`. A token that does not parse raises, naming the
+   command. It runs from continuum's wiring before `loadOverrides`, so a
+   persisted rebinding still wins over the declared default.
 
 1. A command resolves to exactly one entry. Two scopes declaring the same
    name raises at install, since the flat namespace gives that name one
@@ -112,8 +118,8 @@ will eventually layer overrides on top.
    redirect keys, so the audit passes over them.
 
 1. A command family minted in a loop declares its entries in that loop,
-   labels included: the tracker's `advBy0`–`advBy9` are ten entries, so
-   no command is registered outside a manifest.
+   labels included: the tracker's `advBy0`–`advBy9` are ten entries in
+   the group `Advance`, so no command is registered outside a manifest.
 
 ## Scope stack
 
@@ -148,6 +154,20 @@ distinct verbs, one shared key. No name collision; no wrapper hack.
 `mgr:push(scopeOrName)` / `mgr:pop(scopeOrName)` are the only
 mutators. `pop` asserts the popped scope is on top, so an
 out-of-order pop is loud rather than silent.
+
+## Surface
+
+1. The **surface** is what the stack can reach: `mgr:surface()` returns
+   the entries of every scope on the stack, minus the names a modal scope
+   above blocks. It answers the question `invoke` gates on, so a command
+   on the surface is one that would fire.
+
+1. The entries come bottom of stack first, each group's in declaration
+   order, so a group split across scopes reads global first and the page's
+   own commands after.
+
+1. The cheat-sheet is its consumer today: it buckets the surface by group,
+   and a group with no reachable entry draws nothing.
 
 ## Spring-loaded scope
 

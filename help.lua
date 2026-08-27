@@ -1,7 +1,7 @@
 -- See docs/help.md for the model.
 -- F1 cheat-sheet: toolbar groups pin callouts under their segment; body groups flow row-major in the grid rect.
 
---shape: helpGroup = { anchor, title, place='pin'|'flow', items=[commandName] }
+--shape: placement = { group, anchor, place='pin'|'flow' } — where a manifest group's box draws
 --invariant: anchors are frame-scoped — cleared each frame, repopulated by render code only while open
 --invariant: edit state (editing/capturing/conflict) resets on overlay close or page change
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
@@ -12,7 +12,7 @@ local ctx    = (...).ctx
 local chrome = (...).chrome
 local cmgr   = (...).cmgr
 
-local pages   = {}    -- pageName → groups
+local pages   = {}    -- pageName → placements
 local anchors = {}    -- key → { x, y, w, h }
 local current = nil
 local open    = false
@@ -31,7 +31,7 @@ local help = {}
 
 ----------- PUBLIC
 
-function help:registerPage(name, groups) pages[name] = groups end
+function help:registerPage(name, placements) pages[name] = placements end
 function help:setPage(name)              current = name; resetEdit() end
 function help:isOpen()                   return open end
 function help:close()                    open = false; resetEdit() end
@@ -180,24 +180,23 @@ end
 -- a conflict's victim may live on a scope this page never shows.
 local function cmdLabel(cmd) return cmgr:entry(cmd).label end
 
--- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the
--- box w/h, sized to the wider of the title vs the shortcut column + widest label.
-local function layoutBox(group)
+-- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the box
+-- w/h, sized to the wider of title vs the shortcut column + widest label.
+local function layoutBox(title, entries)
   local rows, keyW, labelW = {}, 0, 0
-  for _, cmd in ipairs(group.items) do
-    local editingRow = cmd == editing
-    local label   = cmdLabel(cmd)
-    local labels  = cmgr:keyLabelList(cmd, ImGui)
+  for _, entry in ipairs(entries) do
+    local editingRow = entry.name == editing
+    local labels  = cmgr:keyLabelList(entry.name, ImGui)
     local cluster = layoutCluster(labels or (editingRow and {} or { EM_DASH }), editingRow)
-    util.add(rows, { cluster = cluster, label = label,
-                     cmd = cmd, specs = cmgr:keysFor(cmd) or {} })
+    util.add(rows, { cluster = cluster, label = entry.label,
+                     cmd = entry.name, specs = cmgr:keysFor(entry.name) or {} })
     keyW   = math.max(keyW, cluster.width)
-    labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, label)))
+    labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, entry.label)))
   end
-  local titleW = ImGui.CalcTextSize(ctx, group.title)
+  local titleW = ImGui.CalcTextSize(ctx, title)
   local w = math.max(titleW, keyW + KEY_GAP + labelW) + PAD * 2
   local h = PAD * 2 + lineH * (#rows + 1) + ROW_GAP * #rows
-  return { title = group.title, rows = rows, keyW = keyW, w = w, h = h }
+  return { title = title, rows = rows, keyW = keyW, w = w, h = h }
 end
 
 local function drawBox(box, x, y)
@@ -476,8 +475,8 @@ end
 
 function help:draw()
   if not open then return end
-  local groups = current and pages[current]
-  if not groups then return end
+  local placements = current and pages[current]
+  if not placements then return end
 
   dl    = ImGui.GetForegroundDrawList(ctx)
   lineH = ImGui.GetTextLineHeight(ctx)
@@ -502,15 +501,20 @@ function help:draw()
   boxes   = {}   -- every drawn rect, for the off-box click test below
   hits    = {}   -- per-frame click map (chips, ✕, +); rebuilt by drawCluster
 
+  -- The reachable surface, bucketed by the group each entry declares. A group with
+  -- no reachable member draws no box, so a modal scope or a thin page thins the sheet.
+  local byGroup = {}
+  for _, entry in ipairs(cmgr:surface()) do util.bucket(byGroup, entry.group, entry) end
+
   -- One pass lays out every visible group's box; pins then place collision-avoided
   -- under their segment, flow boxes wrap within their grid rect.
   local pins, flows = {}, {}
-  for _, group in ipairs(groups) do
-    local rect = rectFor(group.anchor)
-    if rect then
-      local box = layoutBox(group)
-      if group.place == 'flow' then
-        util.add(flows, { box = box, rect = rect, anchor = group.anchor })
+  for _, placement in ipairs(placements) do
+    local rect, entries = rectFor(placement.anchor), byGroup[placement.group]
+    if rect and entries then
+      local box = layoutBox(placement.group, entries)
+      if placement.place == 'flow' then
+        util.add(flows, { box = box, rect = rect, anchor = placement.anchor })
       else
         util.add(pins, { box = box, wantX = rect.x, top = rect.y + rect.h + PIN_GAP })
       end

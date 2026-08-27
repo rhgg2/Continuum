@@ -712,73 +712,29 @@ local statusSegments = {
 
 ----- Input
 
------ F1 help groups — toolbar callouts pinned to their segments, plus a
------ flowed panel of grid/global bindings packed over the grid body. A group
------ names its commands; the label each renders under is the manifest entry's.
+----- F1 help placements — toolbar callouts pinned to their segments, plus a
+----- flowed panel of grid/global bindings packed over the grid body. A placement
+----- names a manifest group; the group's entries are its rows, in declared order.
 
 help:registerPage('tracker', {
-  { anchor = 'toolbar.track', place = 'pin', title = 'Track', items = {
-    'prevTrack', 'nextTrack',
-  }},
-  { anchor = 'toolbar.take', place = 'pin', title = 'Take', items = {
-    'prevTake', 'nextTake',
-  }},
-  { anchor = 'status.rpb', place = 'pin', title = 'Rows / beat', items = {
-    'doubleRPB', 'halveRPB', 'setRPB', 'matchGridToCursor',
-  }},
-  { anchor = 'toolbar.tuning', place = 'pin', title = 'Tuning', items = {
-    'openTemperPicker', 'editTuning',
-  }},
-  { anchor = 'toolbar.swing', place = 'pin', title = 'Swing', items = {
-    'openSwingPicker', 'editSwing',
-  }},
-  { anchor = 'status.sample', place = 'pin', title = 'Sample', items = {
-    'inputSampleUp', 'inputSampleDown',
-  }},
-  { anchor = 'status.modes', place = 'pin', title = 'Loop', items = {
-    'loopToItemNow', 'toggleLoopToItem', 'clearLoop',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Movement', items = {
-    'cursorUp', 'cursorDown', 'cursorLeft', 'cursorRight',
-    'colLeft', 'colRight', 'channelLeft', 'channelRight',
-    'goTop', 'goBottom', 'pageUp', 'pageDown',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Editing', items = {
-    'noteOff', 'delete', 'deleteSel', 'interpolate',
-    'nudgeBack', 'nudgeForward', 'eventShiftLeft', 'eventShiftRight',
-    'shrinkNote', 'growNote',
-    'nudgeFineUp', 'nudgeFineDown', 'nudgeCoarseUp', 'nudgeCoarseDown',
-    'scaleHalf', 'scaleDouble',
-    'quantize', 'quantizeKeepRealised', 'retune', 'editNoteFx',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Selection', items = {
-    'selectUp', 'selectDown', 'selectLeft', 'selectRight',
-    'selectClear', 'selectAll',
-    'cycleBlock', 'cycleVBlock', 'swapBlockEnds',
-    'cut', 'copy', 'paste', 'duplicateDown',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Columns & rows', items = {
-    'addNoteLane', 'addTypedCol', 'hideExtraCol', 'insertRowCol', 'deleteRowCol',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Groups & region', items = {
-    'regionArm', 'groupDuplicate', 'groupPaste', 'groupLocalToggle',
-    'groupInstPrev', 'groupInstNext',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Input', items = {
-    'inputOctaveUp', 'inputOctaveDown',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Transport', items = {
-    'playPause', 'playFromTop', 'playFromCursor', 'stop',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Take management', items = {
-    'newTakeBelow', 'duplicateBelow', 'prevVariant', 'nextVariant',
-    'prevInstance', 'nextInstance', 'deleteInstance',
-    'pinMap', 'takeProperties', 'deleteBoundSlot',
-  }},
-  { anchor = 'body.grid', place = 'flow', title = 'Global', items = {
-    'undo', 'redo', 'togglePage', 'returnToArrange',
-    'beginPrefix', 'toggleFxWindows', 'toggleHelp', 'quit',
-  }},
+  { group = 'Track',           anchor = 'toolbar.track',  place = 'pin' },
+  { group = 'Take',            anchor = 'toolbar.take',   place = 'pin' },
+  { group = 'Rows / beat',     anchor = 'status.rpb',     place = 'pin' },
+  { group = 'Tuning',          anchor = 'toolbar.tuning', place = 'pin' },
+  { group = 'Swing',           anchor = 'toolbar.swing',  place = 'pin' },
+  { group = 'Sample',          anchor = 'status.sample',  place = 'pin' },
+  { group = 'Loop',            anchor = 'status.modes',   place = 'pin' },
+  { group = 'Movement',        anchor = 'body.grid',      place = 'flow' },
+  { group = 'Editing',         anchor = 'body.grid',      place = 'flow' },
+  { group = 'Selection',       anchor = 'body.grid',      place = 'flow' },
+  { group = 'Columns & rows',  anchor = 'body.grid',      place = 'flow' },
+  { group = 'Groups & region', anchor = 'body.grid',      place = 'flow' },
+  { group = 'FX',              anchor = 'body.grid',      place = 'flow' },
+  { group = 'Input',           anchor = 'body.grid',      place = 'flow' },
+  { group = 'Transport',       anchor = 'body.grid',      place = 'flow' },
+  { group = 'Take management', anchor = 'body.grid',      place = 'flow' },
+  { group = 'Pages',           anchor = 'body.grid',      place = 'flow' },
+  { group = 'Global',          anchor = 'body.grid',      place = 'flow' },
 })
 
 ----- Modal-driven commands

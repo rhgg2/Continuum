@@ -36,23 +36,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 cmgr: declare each entry under its cheat-sheet group (§ Three consumers)
 - 2026-08-28 cmgr: declare the manifest as ordered lists of token-keyed entries (§ The manifest)
 - 2026-08-27 cmgr: the cheat-sheet reads its labels from the entries (§ Three consumers)
 - 2026-08-27 cmgr: declare the sampler and wiring scopes, retire pageBindings (§ The manifest)
-- 2026-08-27 cmgr: declare the arrange scope in a manifest (§ The manifest)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **The group moves onto the entry.** An entry declares which
-  cheat-sheet group it belongs to; `trackerRender` keeps only the
-  placement of a named group — which anchor, and pin or flow — and
-  `help` partitions the reachable surface by group name instead of
-  reading lists of command names. Settle how the group is declared: a
-  section marker in the list, or an argument to `command`.
 
 - **The cheat-sheet reaches the other pages.** `arrangeRender`,
   `sampleRender` and `wiringRender` take `help`, anchor their body rect

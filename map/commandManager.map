@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=675  mode=chunk  self=cmgr
+@module commandManager  src=commandManager.lua  loc=695  mode=chunk  self=cmgr
 @deps cm
 
 # Invariants & contracts
@@ -14,15 +14,15 @@
   @contract  optional undoDesc wraps fn in util.atomic(undoDesc, fn) so REAPER's undo stack records this command as a labelled block  @ 89
   @contract  registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label  @ 98
   @invariant  a command resolves to exactly one entry — two scopes declaring it raises  @ 141
-  @invariant  a scope's entries are a list, so the order they are declared in is the order they read  @ 142
+  @invariant  a group's entries are a list, so the order they are declared in is the order they read  @ 142
 
 # Shapes
   @shape  keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask  @ 12
   @shape  keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command  @ 13
   @shape  noteChar = { semi = 0..16, octOff = 0..1 }  @ 14
   @shape  scope = { keymap={}, registered={}, manifest?, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }  @ 80
-  @shape  manifest = { [scopeName] = { entry, ... } }  @ 139
-  @shape  entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path? }  @ 140
+  @shape  manifest = { [scopeName] = { [groupName] = { entry, ... } } }  @ 139
+  @shape  entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, group }  @ 140
 
 # Imports
   @require util = 'util'  @ 15
@@ -32,13 +32,13 @@
   @state chars = {}  @ 36
   @state cmgr = {  @ 50
   @state global = newScope('global')  @ 117
-  @state prefixBuf, pendingPrefix = nil, nil  @ 249
-  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 250
-  @state lastCommand, commandSerial = nil, 0  @ 327
-  @state keyNames  @ 443
-  @state shiftGlyph  @ 483
-  @state modOrder, modSep  @ 502
-  @state keyTokens, modTokenList, tokenKeys, modByName  @ 553
+  @state prefixBuf, pendingPrefix = nil, nil  @ 269
+  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 270
+  @state lastCommand, commandSerial = nil, 0  @ 347
+  @state keyNames  @ 463
+  @state shiftGlyph  @ 503
+  @state modOrder, modSep  @ 522
+  @state keyTokens, modTokenList, tokenKeys, modByName  @ 573
 
 # Private functions
   -- Stack reachability
@@ -49,22 +49,22 @@
   -- Manager-level surface
   -- Manifest
   -- Universal-argument prefix
-  @fn clearPrefixState()  @ 252-255
+  @fn clearPrefixState()  @ 272-275
   -- Scopes & stack
-  @fn asScope(s)  @ 307
+  @fn asScope(s)  @ 327
   -- Dispatch
   -- Keymap lookup
-  @fn resolveKeys(name)  @ 361-368
+  @fn resolveKeys(name)  @ 381-388
   -- Binding-edit queries (scope-aware)
   -- Note layout
   -- Key labels (human-readable bindings, for the help overlay)
-  @fn buildKeyNames(ImGui)  @ 444-479
-  @fn buildShiftGlyphs(ImGui)  @ 484-498
-  @fn buildModOrder(ImGui)  @ 503-519
+  @fn buildKeyNames(ImGui)  @ 464-499
+  @fn buildShiftGlyphs(ImGui)  @ 504-518
+  @fn buildModOrder(ImGui)  @ 523-539
   -- Binding tokens (stable ASCII; the on-disk / hand-edit form)
-  @fn buildKeyTokens(ImGui)  @ 555-590
-  @fn buildModTokens(ImGui)  @ 592-599
-  @fn ensureTokenTables(ImGui)  @ 601-607
+  @fn buildKeyTokens(ImGui)  @ 575-610
+  @fn buildModTokens(ImGui)  @ 612-619
+  @fn ensureTokenTables(ImGui)  @ 621-627
 
 # Public API (cmgr:*)
   @api cmgr:register(name, fn, undoDesc)  @ 126
@@ -74,180 +74,185 @@
       @contract  returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)  @ 129
   @api cmgr:bind(name, keys)  @ 132
   @api cmgr:bindAll(tbl)  @ 133
-  @api cmgr:installManifest(manifest, ImGui)  @ 145-170
-      @contract  parses each entry's tokens into its scope's keymap and hangs scope.manifest  @ 144
-  @api cmgr:entry(name)  @ 173-177
-      @contract  raises on a name no manifest declares, so a consumer naming a stale command fails loudly  @ 172
-  @api cmgr:auditManifests()  @ 181-204
-      @contract  a declared scope's entries and its registrations must correspond, both ways  @ 179
-      @contract  a scope that registers a command while declaring no manifest raises  @ 180
-  @api cmgr:wrap(name, wrapper)  @ 207-211
-      @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)  @ 206
-  @api cmgr:doBefore(name, before)  @ 216-224
-      @contract  doBefore/doAfter accept either a single name or an array of names  @ 213
-      @contract  doAfter preserves the original command's return values (the dispatch signal)  @ 214
-      @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires  @ 215
-  @api cmgr:doAfter(name, after)  @ 226-236
-  @api cmgr:beginPrefix()  @ 258
-      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive  @ 257
-  @api cmgr:isPrefixActive()  @ 259
-  @api cmgr:appendPrefix(ch)  @ 261-265
-  @api cmgr:cancelPrefix()  @ 267
-  @api cmgr:finishPrefix()  @ 270-288
-      @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)  @ 269
-  @api cmgr:prefixRational()  @ 291-293
-      @contract  non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.  @ 290
-  @api cmgr:scope(name)  @ 298-305
-      @contract  creates the scope on first request; idempotent thereafter  @ 297
-  @api cmgr:push(s)  @ 310-314
-      @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.  @ 309
-  @api cmgr:pop(s)  @ 317-321
-      @contract  pop(name|scope) asserts the named scope is currently on top; pops it  @ 316
-  @api cmgr:lastCommand()  @ 329
-      @contract  name and serial of the last body run; unknown or gated-out changes neither  @ 328
-  @api cmgr:invoke(name, ...)  @ 334-354
-      @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)  @ 331
-      @contract  always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.  @ 332
-      @contract  spring-loaded scope: redirect[] runs fn in-place; keepAlive[] passes; else onBail()  @ 333
-  @api cmgr:keysFor(name)  @ 370
-  @api cmgr:keychain()  @ 373-390
-      @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk  @ 372
-  @api cmgr:keySpec(spec, ImGui)  @ 393-398
+  @api cmgr:installManifest(manifest, ImGui)  @ 145-173
+      @contract  parses tokens into the keymap, stamps entry.group, sets scope.manifest to the groups  @ 144
+  @api cmgr:entry(name)  @ 176-180
+      @contract  raises on a name no manifest declares, so a consumer naming a stale command fails loudly  @ 175
+  @api cmgr:surface()  @ 185-195
+      -- What a page can reach: the union of scopes-on-stack manifests, filtered by the modal
+      -- rule invoke gates on. Buckets by entry.group; a scope off the stack contributes nothing.
+      @contract  reachable entries, bottom of stack first, each group's entries in declaration order  @ 184
+  @api cmgr:auditManifests()  @ 199-224
+      @contract  a declared scope's entries and its registrations must correspond, both ways  @ 197
+      @contract  a scope that registers a command while declaring no manifest raises  @ 198
+  @api cmgr:wrap(name, wrapper)  @ 227-231
+      @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)  @ 226
+  @api cmgr:doBefore(name, before)  @ 236-244
+      @contract  doBefore/doAfter accept either a single name or an array of names  @ 233
+      @contract  doAfter preserves the original command's return values (the dispatch signal)  @ 234
+      @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires  @ 235
+  @api cmgr:doAfter(name, after)  @ 246-256
+  @api cmgr:beginPrefix()  @ 278
+      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive  @ 277
+  @api cmgr:isPrefixActive()  @ 279
+  @api cmgr:appendPrefix(ch)  @ 281-285
+  @api cmgr:cancelPrefix()  @ 287
+  @api cmgr:finishPrefix()  @ 290-308
+      @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)  @ 289
+  @api cmgr:prefixRational()  @ 311-313
+      @contract  non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.  @ 310
+  @api cmgr:scope(name)  @ 318-325
+      @contract  creates the scope on first request; idempotent thereafter  @ 317
+  @api cmgr:push(s)  @ 330-334
+      @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.  @ 329
+  @api cmgr:pop(s)  @ 337-341
+      @contract  pop(name|scope) asserts the named scope is currently on top; pops it  @ 336
+  @api cmgr:lastCommand()  @ 349
+      @contract  name and serial of the last body run; unknown or gated-out changes neither  @ 348
+  @api cmgr:invoke(name, ...)  @ 354-374
+      @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)  @ 351
+      @contract  always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.  @ 352
+      @contract  spring-loaded scope: redirect[] runs fn in-place; keepAlive[] passes; else onBail()  @ 353
+  @api cmgr:keysFor(name)  @ 390
+  @api cmgr:keychain()  @ 393-410
+      @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk  @ 392
+  @api cmgr:keySpec(spec, ImGui)  @ 413-418
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-  @api cmgr:commandAtKey(spec, exceptName, ImGui)  @ 404-416
-      @contract  reachable command for spec's key (keychain top-down); skips exceptName; nil if free  @ 403
-  @api cmgr:bindingSite(name)  @ 419-426
-      @contract  scope to edit name's binding in: scope currently binding it, else its gate scope  @ 418
-  @api cmgr:noteChars(char)  @ 432-434
+  @api cmgr:commandAtKey(spec, exceptName, ImGui)  @ 424-436
+      @contract  reachable command for spec's key (keychain top-down); skips exceptName; nil if free  @ 423
+  @api cmgr:bindingSite(name)  @ 439-446
+      @contract  scope to edit name's binding in: scope currently binding it, else its gate scope  @ 438
+  @api cmgr:noteChars(char)  @ 452-454
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
-  @api cmgr:keyLabel(spec, ImGui)  @ 521-533
-  @api cmgr:keyLabelList(name, ImGui)  @ 536-542
-      @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound  @ 535
-  @api cmgr:keyLabels(name, ImGui)  @ 545-548
-      @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack  @ 544
-  @api cmgr:tokenForSpec(spec, ImGui)  @ 610-621
-      @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name  @ 609
-  @api cmgr:specForToken(token, ImGui)  @ 624-639
-      @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier  @ 623
+  @api cmgr:keyLabel(spec, ImGui)  @ 541-553
+  @api cmgr:keyLabelList(name, ImGui)  @ 556-562
+      @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound  @ 555
+  @api cmgr:keyLabels(name, ImGui)  @ 565-568
+      @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack  @ 564
+  @api cmgr:tokenForSpec(spec, ImGui)  @ 630-641
+      @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name  @ 629
+  @api cmgr:specForToken(token, ImGui)  @ 644-659
+      @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier  @ 643
   -- Binding overrides (persisted, hand-editable)
-  @api cmgr:loadOverrides(ImGui)  @ 645-660
-      @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings  @ 644
-  @api cmgr:rebind(scopeName, name, specs, ImGui)  @ 663-673
-      @contract  overwrites the scope's binding for name and persists it as tokens (global tier)  @ 662
+  @api cmgr:loadOverrides(ImGui)  @ 665-680
+      @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings  @ 664
+  @api cmgr:rebind(scopeName, name, specs, ImGui)  @ 683-693
+      @contract  overwrites the scope's binding for name and persists it as tokens (global tier)  @ 682
 
 # Uses (outbound edges)
-  @use call    cm:get  @ noteChars:433 loadOverrides:646 rebind:667
-  @use call    cm:set  @ rebind:672
-  @use call    util.add  @ installManifest:163 push:312 keychain:376,384 keyLabel:529,531 keyLabelList:540 tokenForSpec:617,619 specForToken:627,636 loadOverrides:653 rebind:670
+  @use call    cm:get  @ noteChars:453 loadOverrides:666 rebind:687
+  @use call    cm:set  @ rebind:692
+  @use call    util.add  @ installManifest:165 surface:190 push:332 keychain:396,404 keyLabel:549,551 keyLabelList:560 tokenForSpec:637,639 specForToken:647,656 loadOverrides:673 rebind:690
   @use call    util.atomic  @ newScope:92
-  @use call    util.print  @ loadOverrides:654
+  @use call    util.print  @ loadOverrides:674
   @use require util  @ <load>:15
 
 # Calls (intra-file)
-  @call asScope  @ pop:318
-  @call buildKeyNames  @ keyLabel:522
-  @call buildKeyTokens  @ ensureTokenTables:603
-  @call buildModOrder  @ keyLabel:524
-  @call buildModTokens  @ ensureTokenTables:603
-  @call buildShiftGlyphs  @ keyLabel:523
-  @call clearPrefixState  @ cancelPrefix:267 invoke:352
-  @call cmgr:doAfter  @ doAfter:228
-  @call cmgr:doBefore  @ doBefore:218
-  @call cmgr:keyLabel  @ keyLabelList:540
-  @call cmgr:keyLabelList  @ keyLabels:546
-  @call cmgr:keySpec  @ commandAtKey:405,410 keyLabel:525 tokenForSpec:612
-  @call cmgr:keychain  @ commandAtKey:406
-  @call cmgr:keysFor  @ keyLabelList:537
+  @call asScope  @ pop:338
+  @call buildKeyNames  @ keyLabel:542
+  @call buildKeyTokens  @ ensureTokenTables:623
+  @call buildModOrder  @ keyLabel:544
+  @call buildModTokens  @ ensureTokenTables:623
+  @call buildShiftGlyphs  @ keyLabel:543
+  @call clearPrefixState  @ cancelPrefix:287 invoke:372
+  @call cmgr:doAfter  @ doAfter:248
+  @call cmgr:doBefore  @ doBefore:238
+  @call cmgr:keyLabel  @ keyLabelList:560
+  @call cmgr:keyLabelList  @ keyLabels:566
+  @call cmgr:keySpec  @ commandAtKey:425,430 keyLabel:545 tokenForSpec:632
+  @call cmgr:keychain  @ commandAtKey:426
+  @call cmgr:keysFor  @ keyLabelList:557
   @call cmgr:register  @ newScope:101,102
-  @call cmgr:scope  @ installManifest:148 push:311
-  @call cmgr:specForToken  @ installManifest:161 loadOverrides:652
-  @call cmgr:tokenForSpec  @ rebind:670
-  @call cmgr:wrap  @ doBefore:221 doAfter:231
-  @call ensureTokenTables  @ tokenForSpec:611 specForToken:625
-  @call isReachable  @ invoke:348
-  @call newScope  @ <load>:117 scope:301
-  @call resolveKeys  @ keysFor:370
+  @call cmgr:scope  @ installManifest:148 push:331
+  @call cmgr:specForToken  @ installManifest:163 loadOverrides:672
+  @call cmgr:tokenForSpec  @ rebind:690
+  @call cmgr:wrap  @ doBefore:241 doAfter:251
+  @call ensureTokenTables  @ tokenForSpec:631 specForToken:645
+  @call isReachable  @ surface:190 invoke:368
+  @call newScope  @ <load>:117 scope:321
+  @call resolveKeys  @ keysFor:390
 
 # Unresolved receivers
-  @drop buf:match  @ finishPrefix:275,282
+  @drop buf:match  @ finishPrefix:295,302
   @drop global:bind  @ bind:132
   @drop global:bindAll  @ bindAll:133
   @drop global:register  @ register:126
   @drop global:registerAll  @ registerAll:127
-  @drop prefixBuf:find  @ appendPrefix:263
-  @drop spring.onBail  @ invoke:344
-  @drop token:gmatch  @ specForToken:627
+  @drop prefixBuf:find  @ appendPrefix:283
+  @drop spring.onBail  @ invoke:364
+  @drop token:gmatch  @ specForToken:647
 
 # REAPER API surface
   @reaper GetOS
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Key_0  @ buildKeyNames:447 buildShiftGlyphs:487 buildKeyTokens:558
-  @field r Key_A  @ buildKeyNames:446 buildKeyTokens:557
-  @field r Key_Apostrophe  @ buildKeyNames:467 buildShiftGlyphs:492 buildKeyTokens:581
-  @field r Key_Backslash  @ buildKeyNames:469 buildShiftGlyphs:490 buildKeyTokens:587
-  @field r Key_Backspace  @ buildKeyNames:455,474 buildKeyTokens:566
-  @field r Key_Comma  @ buildKeyNames:462 buildShiftGlyphs:493 buildKeyTokens:577
-  @field r Key_Delete  @ buildKeyNames:456,475 buildKeyTokens:567
-  @field r Key_DownArrow  @ buildKeyNames:449 buildKeyTokens:574
-  @field r Key_End  @ buildKeyNames:457,476 buildKeyTokens:570
-  @field r Key_Enter  @ buildKeyNames:451,472 buildKeyTokens:562
-  @field r Key_Equal  @ buildKeyNames:461 buildKeyTokens:583
-  @field r Key_Escape  @ buildKeyNames:452,473 buildKeyTokens:564
-  @field r Key_GraveAccent  @ buildKeyNames:466 buildShiftGlyphs:496 buildKeyTokens:586
-  @field r Key_Home  @ buildKeyNames:457,476 buildKeyTokens:569
-  @field r Key_Insert  @ buildKeyTokens:568
-  @field r Key_Keypad0  @ buildKeyTokens:559
-  @field r Key_KeypadEnter  @ buildKeyNames:451,472 buildKeyTokens:563
-  @field r Key_KeypadSubtract  @ buildKeyTokens:588
-  @field r Key_LeftArrow  @ buildKeyNames:450 buildKeyTokens:575
-  @field r Key_LeftBracket  @ buildKeyNames:464 buildShiftGlyphs:488 buildKeyTokens:584
-  @field r Key_Minus  @ buildKeyNames:460 buildKeyTokens:582
-  @field r Key_PageDown  @ buildKeyNames:458 buildKeyTokens:572
-  @field r Key_PageUp  @ buildKeyNames:458 buildKeyTokens:571
-  @field r Key_Period  @ buildKeyNames:463 buildShiftGlyphs:494 buildKeyTokens:578
-  @field r Key_RightArrow  @ buildKeyNames:450 buildKeyTokens:576
-  @field r Key_RightBracket  @ buildKeyNames:465 buildShiftGlyphs:489 buildKeyTokens:585
-  @field r Key_Semicolon  @ buildKeyNames:468 buildShiftGlyphs:491 buildKeyTokens:580
-  @field r Key_Slash  @ buildKeyNames:459 buildShiftGlyphs:495 buildKeyTokens:579
-  @field r Key_Space  @ buildKeyNames:454 buildKeyTokens:561
-  @field r Key_Tab  @ buildKeyNames:453 buildKeyTokens:565
-  @field r Key_UpArrow  @ buildKeyNames:449 buildKeyTokens:573
-  @field r Mod_Alt  @ buildModOrder:508,515 buildModTokens:596
-  @field r Mod_Ctrl  @ buildModOrder:510,514 buildModTokens:594
-  @field r Mod_None  @ keySpec:394,395
-  @field r Mod_Shift  @ buildModOrder:509,516 keyLabel:526 buildModTokens:595
-  @field r Mod_Super  @ buildModOrder:507,517 buildModTokens:597
+  @field r Key_0  @ buildKeyNames:467 buildShiftGlyphs:507 buildKeyTokens:578
+  @field r Key_A  @ buildKeyNames:466 buildKeyTokens:577
+  @field r Key_Apostrophe  @ buildKeyNames:487 buildShiftGlyphs:512 buildKeyTokens:601
+  @field r Key_Backslash  @ buildKeyNames:489 buildShiftGlyphs:510 buildKeyTokens:607
+  @field r Key_Backspace  @ buildKeyNames:475,494 buildKeyTokens:586
+  @field r Key_Comma  @ buildKeyNames:482 buildShiftGlyphs:513 buildKeyTokens:597
+  @field r Key_Delete  @ buildKeyNames:476,495 buildKeyTokens:587
+  @field r Key_DownArrow  @ buildKeyNames:469 buildKeyTokens:594
+  @field r Key_End  @ buildKeyNames:477,496 buildKeyTokens:590
+  @field r Key_Enter  @ buildKeyNames:471,492 buildKeyTokens:582
+  @field r Key_Equal  @ buildKeyNames:481 buildKeyTokens:603
+  @field r Key_Escape  @ buildKeyNames:472,493 buildKeyTokens:584
+  @field r Key_GraveAccent  @ buildKeyNames:486 buildShiftGlyphs:516 buildKeyTokens:606
+  @field r Key_Home  @ buildKeyNames:477,496 buildKeyTokens:589
+  @field r Key_Insert  @ buildKeyTokens:588
+  @field r Key_Keypad0  @ buildKeyTokens:579
+  @field r Key_KeypadEnter  @ buildKeyNames:471,492 buildKeyTokens:583
+  @field r Key_KeypadSubtract  @ buildKeyTokens:608
+  @field r Key_LeftArrow  @ buildKeyNames:470 buildKeyTokens:595
+  @field r Key_LeftBracket  @ buildKeyNames:484 buildShiftGlyphs:508 buildKeyTokens:604
+  @field r Key_Minus  @ buildKeyNames:480 buildKeyTokens:602
+  @field r Key_PageDown  @ buildKeyNames:478 buildKeyTokens:592
+  @field r Key_PageUp  @ buildKeyNames:478 buildKeyTokens:591
+  @field r Key_Period  @ buildKeyNames:483 buildShiftGlyphs:514 buildKeyTokens:598
+  @field r Key_RightArrow  @ buildKeyNames:470 buildKeyTokens:596
+  @field r Key_RightBracket  @ buildKeyNames:485 buildShiftGlyphs:509 buildKeyTokens:605
+  @field r Key_Semicolon  @ buildKeyNames:488 buildShiftGlyphs:511 buildKeyTokens:600
+  @field r Key_Slash  @ buildKeyNames:479 buildShiftGlyphs:515 buildKeyTokens:599
+  @field r Key_Space  @ buildKeyNames:474 buildKeyTokens:581
+  @field r Key_Tab  @ buildKeyNames:473 buildKeyTokens:585
+  @field r Key_UpArrow  @ buildKeyNames:469 buildKeyTokens:593
+  @field r Mod_Alt  @ buildModOrder:528,535 buildModTokens:616
+  @field r Mod_Ctrl  @ buildModOrder:530,534 buildModTokens:614
+  @field r Mod_None  @ keySpec:414,415
+  @field r Mod_Shift  @ buildModOrder:529,536 keyLabel:546 buildModTokens:615
+  @field r Mod_Super  @ buildModOrder:527,537 buildModTokens:617
   @field w azerty  @ 30
   @field r cm  @ 48
   @field w colemak  @ 22
-  @field r commands  @ newScope:92 auditManifests:194 wrap:208,210 invoke:335
+  @field r commands  @ newScope:92 auditManifests:213 wrap:228,230 invoke:355
   @field w commands  @ 51
   @field w dvorak  @ 26
-  @field r entries  @ installManifest:155 entry:174
+  @field r entries  @ installManifest:157 entry:177
   @field w entries  @ 52
-  @field r gates  @ newScope:93 invoke:343,347 bindingSite:425
+  @field r gates  @ newScope:93 invoke:363,367 bindingSite:445
   @field w gates  @ 53
   @field w global  @ 118
-  @field r keepAlive  @ invoke:343
-  @field r keymap  @ newScope:106,108 120 rootKeymap:130 installManifest:165 resolveKeys:364 keychain:376,381 bindingSite:422 loadOverrides:656 rebind:666
+  @field w group  @ installManifest:156
+  @field r keepAlive  @ invoke:363
+  @field r keymap  @ newScope:106,108 120 rootKeymap:130 installManifest:167 resolveKeys:384 keychain:396,401 bindingSite:442 loadOverrides:676 rebind:686
   @field w keymap  @ newScope:82 120
-  @field r keys  @ installManifest:156,160
+  @field r keys  @ installManifest:158,162
   @field w layouts  @ 56
-  @field r manifest  @ auditManifests:183,190
-  @field w manifest  @ installManifest:168
-  @field r modal  @ isReachable:73 resolveKeys:366 keychain:377 bindingSite:423
-  @field r name  @ installManifest:150 auditManifests:191,192,193,194 bindingSite:422,425
+  @field r manifest  @ surface:188 auditManifests:201,208
+  @field w manifest  @ installManifest:171
+  @field r modal  @ isReachable:73 resolveKeys:386 keychain:397 bindingSite:443
+  @field r name  @ installManifest:151 surface:190 auditManifests:210,211,212,213 bindingSite:442,445
   @field w name  @ newScope:82
-  @field r passthrough  @ isReachable:73 resolveKeys:366 keychain:378 bindingSite:423
+  @field r passthrough  @ isReachable:73 resolveKeys:386 keychain:398 bindingSite:443
   @field w qwerty  @ 18
-  @field r redirect  @ invoke:338
-  @field r registered  @ newScope:91 auditManifests:184,192,197
+  @field r redirect  @ invoke:358
+  @field r registered  @ newScope:91 auditManifests:202,211,217
   @field w registered  @ newScope:82
-  @field r scopes  @ 118 auditManifests:182 scope:299,302 asScope:307 loadOverrides:647 rebind:664
+  @field r scopes  @ 118 auditManifests:200 scope:319,322 asScope:327 loadOverrides:667 rebind:684
   @field w scopes  @ 54
-  @field r springLoaded  @ invoke:337
-  @field r stack  @ isReachable:67,71,72 119 push:312 pop:319,320 invoke:336 resolveKeys:362
-  @field r stack  @ resolveKeys:363 keychain:375,376,377,378,381 bindingSite:420,421
+  @field r springLoaded  @ invoke:357
+  @field r stack  @ isReachable:67,71,72 119 surface:187 push:332 pop:339,340 invoke:356
+  @field r stack  @ resolveKeys:382,383 keychain:395,396,397,398,401 bindingSite:440,441
   @field w stack  @ 55

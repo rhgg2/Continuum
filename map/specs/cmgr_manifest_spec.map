@@ -1,51 +1,70 @@
-@spec cmgr_manifest_spec  src=tests/specs/cmgr_manifest_spec.lua  loc=141  cases=9
+@spec cmgr_manifest_spec  src=tests/specs/cmgr_manifest_spec.lua  loc=201  cases=12
 
 # Intent
-  The manifest declares each command once, in the order it reads, carrying its
-  label and its keys as binding tokens. Pins that install parses those tokens
-  into the declaring scope's keymap, that a keyless entry binds nothing, that
-  declaration order survives, that a name declared twice raises, that a token
-  which does not parse raises, and that the load-time audit raises in both
-  directions, and on a scope that registers a command while declaring no
-  manifest at all.
+  The manifest declares each command once, under the group it reads in, carrying
+  its label and its keys as binding tokens. Pins that install parses those tokens
+  into the declaring scope's keymap, stamps the group onto the entry, that a
+  keyless entry binds nothing, that declaration order survives within a group,
+  that a name declared twice raises, that a token which does not parse raises,
+  that the surface is the reachable scopes' entries, and that the load-time audit
+  raises in both directions, and on a scope that registers a command while
+  declaring no manifest at all.
 
 # Helpers
-  @fn fresh()  @ 16
-  @fn noop()  @ 18
+  @fn fresh()  @ 17
+  @fn noop()  @ 19
 
 # Cases
-  @case 'install parses each entry\'s tokens into its own scope\'s keymap'  [pure]  @ 22-34
-  @case 'an entry with no keys binds nothing'  [pure]  @ 38-44
-  @case 'the scope is a list, so declaration order survives install'  [pure]  @ 48-60
-  @case 'a token that does not parse raises, naming the command'  [pure]  @ 64-75
-  @case 'a command declared by two scopes raises at install'  [pure]  @ 79-90
-  @case 'audit is quiet when entries and registrations correspond'  [pure]  @ 94-104
-  @case 'audit raises on a scope that registers but declares no manifest'  [pure]  @ 108-116
-  @case 'audit raises on an entry no scope registers'  [pure]  @ 120-127
-  @case 'audit raises on a registered command its scope does not declare'  [pure]  @ 131-139
+  @case 'install parses each entry\'s tokens into its own scope\'s keymap'  [pure]  @ 23-35
+  @case 'install stamps the group onto each entry'  [pure]  @ 41-52
+  @case 'an entry with no keys binds nothing'  [pure]  @ 56-62
+  @case 'a group is a list, so declaration order survives install'  [pure]  @ 66-78
+  @case 'the surface is the entries of the scopes on the stack'  [pure]  @ 84-99
+  @case 'a modal scope drops what it does not pass through from the surface'  [pure]  @ 105-120
+  @case 'a token that does not parse raises, naming the command'  [pure]  @ 124-135
+  @case 'a command declared by two scopes raises at install'  [pure]  @ 139-150
+  @case 'audit is quiet when entries and registrations correspond'  [pure]  @ 154-164
+  @case 'audit raises on a scope that registers but declares no manifest'  [pure]  @ 168-176
+  @case 'audit raises on an entry no scope registers'  [pure]  @ 180-187
+  @case 'audit raises on a registered command its scope does not declare'  [pure]  @ 191-199
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Key_P  @ 33
-  @field r Key_Space  @ 31
-  @field r Key_UpArrow  @ 33
-  @field r Mod_Super  @ 33
-  @field w cursorUp  @ 26,98
-  @field w global  @ 28,42,52,68,84,100,123,135
-  @field w keys  @ 28,29,69,100
-  @field w label  @ 28,29,42,53,54,55,69,84,85,100,101,123
-  @field w label  @ 135
-  @field r manifest  @ 58
-  @field r name  @ 58
-  @field w name  @ 22,28,29,38,42,48,53,54,55,64,69,79
-  @field w name  @ 84,85,94,100,101,108,120,123,131,135
-  @field r playPause  @ 31
-  @field w playPause  @ 25
-  @field w quit  @ 51,97,134
-  @field w redo  @ 51
-  @field w run  @ 23,39,49,65,80,95,109,121,132
-  @field w slotNext  @ 111
-  @field r switchPage  @ 43
-  @field w switchPage  @ 41
-  @field w toggleProfiler  @ 134
-  @field w tracker  @ 29,85,101
-  @field w undo  @ 51
+  @field r Global  @ 76
+  @field w Global  @ 70,91,111,128,144,160,183,195
+  @field r Key_P  @ 34
+  @field r Key_Space  @ 32
+  @field r Key_UpArrow  @ 34
+  @field w Loop  @ 145
+  @field w Menu  @ 112
+  @field r Mod_Super  @ 34
+  @field w Movement  @ 30,48,92,161
+  @field w Programmatic  @ 60
+  @field w Slots  @ 93
+  @field w Transport  @ 29,47
+  @field w cursorUp  @ 27,45,88,158
+  @field w global  @ 29,47,60,70,91,111,128,144,160,183,195
+  @field r group  @ 50,51
+  @field w keys  @ 29,30,129,160
+  @field w label  @ 29,30,47,48,60,71,72,73,91,92,93,111
+  @field w label  @ 111,112,129,144,145,160,161,183,195
+  @field r manifest  @ 76
+  @field w menu  @ 112
+  @field w menuEscape  @ 109
+  @field r modal  @ 115
+  @field r name  @ 76,97,118
+  @field w name  @ 23,29,30,41,47,48,56,60,66,71,72,73
+  @field w name  @ 84,91,92,93,105,111,112,124,129,139,144
+  @field w name  @ 145,154,160,161,168,180,183,191,195
+  @field w passthrough  @ 115
+  @field r playPause  @ 32
+  @field w playPause  @ 26,44
+  @field w quit  @ 69,87,108,115,157,194
+  @field w redo  @ 69
+  @field w run  @ 24,42,57,67,85,106,125,140,155,169,181,192
+  @field w sample  @ 93
+  @field w slotNext  @ 89,171
+  @field r switchPage  @ 61
+  @field w switchPage  @ 59
+  @field w toggleProfiler  @ 194
+  @field w tracker  @ 30,48,92,145,161
+  @field w undo  @ 69,108

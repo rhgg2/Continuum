@@ -296,9 +296,11 @@ return {
 
       for _, scopeName in ipairs({ 'tracker', 'region' }) do
         local scope, declared = h.cmgr:scope(scopeName), {}
-        for _, entry in ipairs(scope.manifest) do
-          declared[entry.name] = true
-          t.truthy(entry.label, entry.name .. ' carries a label')
+        for _, entries in pairs(scope.manifest) do
+          for _, entry in ipairs(entries) do
+            declared[entry.name] = true
+            t.truthy(entry.label, entry.name .. ' carries a label')
+          end
         end
         t.deepEq(scope.registered, declared, scopeName .. ' declares what it registers')
       end
@@ -306,24 +308,51 @@ return {
   },
 
   {
-    -- The F1 groups carry command names alone, so a name no manifest declares
-    -- would draw a row with no label.
-    name = 'every command in the page\'s F1 groups resolves to a manifest entry',
+    -- A placement names a group and nothing else, so one no scope declares draws
+    -- no box and says nothing about it.
+    name = 'every group the page places is one some scope declares',
     run = function(harness)
-      local h, groupsByPage = harness.mk(), {}
-      local recorder = { registerPage = function(_, name, groups) groupsByPage[name] = groups end }
+      local h, placementsByPage = harness.mk(), {}
+      local recorder = { registerPage = function(_, name, p) placementsByPage[name] = p end }
       newTrackerPage(h.cm, h.ds, h.cmgr, nil, {}, recorder)
-      h.cmgr:installManifest(require('manifest'), fakeImGui)
 
-      t.truthy(groupsByPage.tracker, 'the page registers its F1 groups')
-      local seen = 0
-      for _, group in ipairs(groupsByPage.tracker) do
-        for _, cmd in ipairs(group.items) do
-          seen = seen + 1
-          t.truthy(h.cmgr:entry(cmd).label, tostring(cmd) .. ' resolves to a labelled entry')
+      local declared = {}
+      for _, groups in pairs(require('manifest')) do
+        for groupName in pairs(groups) do declared[groupName] = true end
+      end
+      local placements = placementsByPage.tracker
+      t.truthy(placements and #placements > 0, 'the page registers its F1 placements')
+      for _, placement in ipairs(placements) do
+        t.truthy(declared[placement.group], placement.group .. ' is a declared group')
+      end
+    end,
+  },
+
+  {
+    -- A bound command in no placed group is reachable only from memory. A keyless
+    -- one has no chord to show, so it earns no row; the advBy family is exempt
+    -- because ten Ctrl+digit entries earn one row, which is a separate piece of work.
+    name = 'every bound command on the tracker page has a place on the cheat-sheet',
+    run = function(harness)
+      local h, placementsByPage = harness.mk(), {}
+      local recorder = { registerPage = function(_, name, p) placementsByPage[name] = p end }
+      newTrackerPage(h.cm, h.ds, h.cmgr, nil, {}, recorder)
+      local manifest = require('manifest')
+
+      local placed = {}
+      for _, placement in ipairs(placementsByPage.tracker) do placed[placement.group] = true end
+
+      local missing = {}
+      for _, scopeName in ipairs({ 'global', 'tracker' }) do
+        for groupName, entries in pairs(manifest[scopeName]) do
+          for _, entry in ipairs(entries) do
+            if entry.keys and not placed[groupName] and not entry.name:match('^advBy%d$') then
+              util.add(missing, entry.name)
+            end
+          end
         end
       end
-      t.truthy(seen > 0, 'the groups hold commands')
+      t.deepEq(missing, {}, 'bound commands the cheat-sheet never shows')
     end,
   },
 

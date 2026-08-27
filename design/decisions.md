@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — The cheat-sheet group a command reads under is declared as the key its entry sits
+  beneath in its scope's manifest, rather than as an argument to the entry or a marker between
+  entries. Membership is then the entry's own fact, carried wherever the entry is read, and a page
+  declares only where a named group draws.
+
 - **2026-08-28** — The manifest declares its commands as an ordered list rather than a table keyed
   by name, so the order a command is declared in is a fact the declaration carries, and a consumer
   that groups commands reads that order rather than holding a list of its own. Keys are declared as

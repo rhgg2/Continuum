@@ -90,8 +90,10 @@ for _, name in ipairs(EDIT_COMMANDS) do wanted[name] = true end
 for i = 0, 9 do wanted['advBy' .. i] = true end
 
 local subset = {}
-for _, entry in ipairs(manifest.tracker) do
-  if wanted[entry.name] then util.add(subset, entry) end
+for groupName, entries in pairs(manifest.tracker) do
+  for _, entry in ipairs(entries) do
+    if wanted[entry.name] then util.bucket(subset, groupName, entry) end
+  end
 end
 cmgr:installManifest({ tracker = subset }, ImGui)
 cmgr:loadOverrides(ImGui)   -- user rebinds (global tier) apply to the mini editor too

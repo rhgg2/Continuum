@@ -1,7 +1,7 @@
-@module manifest  src=manifest.lua  loc=253  mode=chunk
+@module manifest  src=manifest.lua  loc=316  mode=chunk
 
 # Shapes
-  @shape  { scope = { entry, ... } }  @ 4
+  @shape  { scope = { group = { entry, ... } } }  @ 4
   @shape  entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path? }  @ 5
 
 # Imports
@@ -19,43 +19,68 @@
   -- register onto the same scope, returnToArrange's in continuum's Main)
   -- region (overlay within the tracker page; bodies + springLoaded config on ec)
   -- arrange (bodies in arrangeView + arrangeRender)
-  @fn placeKey(slotIdx)  @ 217-221
+  @fn placeKey(slotIdx)  @ 274-278
       -- Place-command tokens: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter.
 
 # Uses (outbound edges)
-  @use call    util.add  @ <load>:154,226,231
-  @use call    util.toBase62  @ <load>:225
+  @use call    util.add  @ <load>:193,283,288
+  @use call    util.toBase62  @ <load>:282
   @use require util  @ <load>:7
 
 # Calls (intra-file)
-  @call command  @ <load>:24,25,26,27,28,29,30,31,32,33,34,35
-  @call command  @ <load>:36,37,38,39,40,41,42,43,44,54,55,56
-  @call command  @ <load>:57,58,59,60,61,62,63,64,65,66,67,68
-  @call command  @ <load>:69,70,71,72,73,74,75,76,77,78,79,80
-  @call command  @ <load>:81,82,83,84,85,86,87,88,89,90,91,92
-  @call command  @ <load>:93,94,95,96,97,98,99,100,101,102,103,104
-  @call command  @ <load>:105,106,107,108,109,110,111,112,113,114,115,116
-  @call command  @ <load>:117,118,119,120,121,122,123,124,125,126,127,128
-  @call command  @ <load>:129,130,131,132,133,134,135,136,137,138,139,140
-  @call command  @ <load>:141,142,143,144,145,146,147,148,149,154,160,161
-  @call command  @ <load>:162,163,172,173,174,175,176,177,178,179,180,181
-  @call command  @ <load>:182,183,184,185,186,187,188,189,190,191,192,193
-  @call command  @ <load>:194,195,196,197,198,199,200,201,203,204,205,206
-  @call command  @ <load>:207,208,209,210,211,212,226,232,238,239,240,241
-  @call command  @ <load>:242,243,249,250
-  @call placeKey  @ <load>:226
+  @call command  @ <load>:22,23,26,27,28,29,30,33,34,36,37,38
+  @call command  @ <load>:39,40,41,42,43,48,49,50,51,63,64,65
+  @call command  @ <load>:66,67,68,69,70,71,72,73,74,75,76,79
+  @call command  @ <load>:80,83,84,87,88,89,90,91,92,93,94,95
+  @call command  @ <load>:96,99,100,101,102,103,104,105,106,107,108,109
+  @call command  @ <load>:110,111,112,113,114,115,116,117,120,121,122,123
+  @call command  @ <load>:124,125,126,127,128,129,130,131,132,135,136,137
+  @call command  @ <load>:138,139,140,141,144,145,146,147,148,149,152,153
+  @call command  @ <load>:154,155,156,157,160,161,162,163,166,167,170,171
+  @call command  @ <load>:174,175,178,179,180,181,183,184,185,193,200,201
+  @call command  @ <load>:202,203,214,215,216,217,218,219,220,221,222,223
+  @call command  @ <load>:226,227,228,229,230,233,234,235,236,237,238,239
+  @call command  @ <load>:240,241,242,243,244,245,246,247,251,252,253,256
+  @call command  @ <load>:257,258,259,262,265,266,283,289,296,297,298,301
+  @call command  @ <load>:302,303,311,312
+  @call placeKey  @ <load>:283
 
 # Fields (r read / w write incl. constructor keys)
-  @field r arrange  @ 226,231
-  @field w arrange  @ 171
-  @field w global  @ 23
+  @field r Advance  @ 193,288
+  @field w Advance  @ 188,269
+  @field w Browser  @ 295
+  @field w Editing  @ 98
+  @field w FX  @ 159
+  @field w Global  @ 35,185
+  @field w Input  @ 165
+  @field w Loop  @ 177,255
+  @field w Modes  @ 249
+  @field w Movement  @ 62,213
+  @field w Pages  @ 25
+  @field w Programmatic  @ 47
+  @field w Region  @ 199
+  @field w Sample  @ 169
+  @field w Selection  @ 119,225
+  @field r Slots  @ 283
+  @field w Slots  @ 268,300
+  @field w Swing  @ 34,184
+  @field w Take  @ 82
+  @field w Takes  @ 232
+  @field w Track  @ 78
+  @field w Transport  @ 21,173,261
+  @field w Tuning  @ 33,183
+  @field w View  @ 264
+  @field w Wiring  @ 310
+  @field r arrange  @ 283,288
+  @field w arrange  @ 212
+  @field w global  @ 20
   @field w keys  @ command:15
   @field w label  @ command:14
   @field w name  @ command:14
   @field w path  @ command:15
-  @field w region  @ 159
-  @field w sample  @ 237
-  @field r tracker  @ 154
-  @field w tracker  @ 53
-  @field w wiring  @ 248
+  @field w region  @ 198
+  @field w sample  @ 294
+  @field r tracker  @ 193
+  @field w tracker  @ 61
+  @field w wiring  @ 309
