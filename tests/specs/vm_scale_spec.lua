@@ -14,7 +14,7 @@ return {
         { ppq = 0,    endppq = 60,   chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
         { ppq = 2400, endppq = 2460, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
       } } }
-      h.ec:setSelection{ row1 = 0, row2 = 40, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 40, col1 = 2, col2 = 2,
                          part1 = 'pitch', part2 = 'pitch' }
       h.vm:scaleSelection(2, 1)
 
@@ -35,7 +35,7 @@ return {
         { ppq = 0,   endppq = 60,  chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
         { ppq = 600, endppq = 660, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
       } } }
-      h.ec:setSelection{ row1 = 0, row2 = 10, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 10, col1 = 2, col2 = 2,
                          part1 = 'pitch', part2 = 'pitch' }
       h.vm:scaleSelection(2, 1)
 

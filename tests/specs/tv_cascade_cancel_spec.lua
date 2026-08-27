@@ -39,14 +39,14 @@ return {
         { ppq = 240, endppq = 300, chan = 1, pitch = 60, vel = 100 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(4, 1, 1)
-      h.ec:extendTo(4, 1, 1)             -- a real 1-row selection (seed)
+      h.ec:setPos(4, 2, 1)
+      h.ec:extendTo(4, 2, 1)             -- a real 1-row selection (seed)
 
       h.cmgr:invoke('duplicateDown')     -- copy at row 5 (ppq 300); run live
       t.truthy(noteAt(h, 300), 'first duplicate placed a copy (cascade seeded)')
 
-      h.ec:selClear(); h.ec:setPos(8, 1, 1)  -- mouse-style move: run survives
-      h.vm:editEvent(h.vm.grid.cols[1], nil, 1, string.byte('z'), false)
+      h.ec:selClear(); h.ec:setPos(8, 2, 1)  -- mouse-style move: run survives
+      h.vm:editEvent(h.vm.grid.cols[2], nil, 1, string.byte('z'), false)
       t.truthy(noteAt(h, 480), 'typed note committed at the cursor (ppq 480)')
 
       local before = pitch60Ppqs(h)

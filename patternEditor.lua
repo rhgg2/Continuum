@@ -41,7 +41,8 @@ local tm        = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds
 local gm        = util.instantiate('groupManager',   { tm = tm, ds = ds })
 local cmgr      = util.instantiate('commandManager', { cm = cm })
 local tv        = util.instantiate('trackerView',
-  { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = nullPa, facade = facade })
+  { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = nullPa, facade = facade,
+    masterChannel = false })
 
 local pe = {}
 local item, poolGuid           -- set between open and close; nil while dormant

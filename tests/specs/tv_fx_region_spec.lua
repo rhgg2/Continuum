@@ -363,7 +363,7 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.tm:rebuild()
-      h.ec:setSelection{ row1 = 0, row2 = 3, col1 = 1, col2 = 1, part1 = 'pitch', part2 = 'pitch' }
+      h.ec:setSelection{ row1 = 0, row2 = 3, col1 = 2, col2 = 2, part1 = 'pitch', part2 = 'pitch' }
       local uuid = h.vm:fxHostForEdit()
       t.truthy(uuid, 'a host uuid is returned')
       local r = (h.ds:get('fxRegions') or {})[1]
@@ -381,7 +381,7 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.tm:rebuild()
-      h.ec:setSelection{ row1 = 0, row2 = 3, col1 = 1, col2 = 1, part1 = 'pitch', part2 = 'pitch' }
+      h.ec:setSelection{ row1 = 0, row2 = 3, col1 = 2, col2 = 2, part1 = 'pitch', part2 = 'pitch' }
       t.falsy(h.vm:fxHostAtCursor(), 'no host off a note, even under a selection')
       t.eq(#(h.ds:get('fxRegions') or {}), 0, 'and no region was minted (unlike fxHostForEdit)')
     end,

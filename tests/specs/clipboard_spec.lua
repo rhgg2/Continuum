@@ -44,7 +44,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       -- Cursor on row 4 (240 ppq @ 4 rpb / res 240), col 1, pitch stop.
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       h.ec:extendTo(h.ec:pos())  -- degenerate 1x1 sel at cursor
 
       local clip = h.clipboard:collect()
@@ -82,7 +82,7 @@ return {
         }},
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 2, col2 = 2,
                           part1 = 'pitch', part2 = 'vel' }
 
       local clip = h.clipboard:collect()
@@ -107,7 +107,7 @@ return {
         }},
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 2, col2 = 2,
                           part1 = '*', part2 = '*' }
 
       local clip = h.clipboard:collect()
@@ -164,13 +164,13 @@ return {
       h.vm:setGridSize(80, 80)
       t.eq(h.fm:dump().notes[1].endppq, 480, 'A realised tail clipped to the blocker')
 
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.ec:extendTo(h.ec:pos())
       local clip = h.clipboard:collect()
       t.eq(clip.events[1].endRow, 16, 'endRow encodes the INTENT ceiling (960/60), not the clip (480/60=8)')
 
       -- Paste far below, into empty space with nothing to clip against.
-      h.ec:setPos(32, 1, 1)
+      h.ec:setPos(32, 2, 1)
       h.clipboard:pasteClip(clip)
 
       local pasted
@@ -201,7 +201,7 @@ return {
       }
       h.vm:setGridSize(80, 80)
 
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.ec:extendTo(h.ec:pos())
       local clip = h.clipboard:collect()
 
@@ -262,12 +262,12 @@ return {
 
       -- Copy the host, paste one row down -- onto its own fxNote grid, the
       -- same-pitch collision that exposed the leaked handle.
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.ec:extendTo(h.ec:pos())
       local clip = h.clipboard:collect()
       t.eq(clip.events[1].uuid, nil, 'the mm handle is stripped from the clip event')
 
-      h.ec:setPos(1, 1, 1)
+      h.ec:setPos(1, 2, 1)
       h.clipboard:pasteClip(clip)
 
       local orig = parkedAt(0)
@@ -298,7 +298,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       -- Select cols 1..3 (each chan's first note col), pitch part.
-      h.ec:setSelection{ row1=0, row2=0, col1=1, col2=3, part1='pitch', part2='pitch' }
+      h.ec:setSelection{ row1=0, row2=0, col1=2, col2=4, part1='pitch', part2='pitch' }
 
       local clip = h.clipboard:collect()
       t.eq(clip.mode,       'multi', 'mode')
@@ -329,7 +329,7 @@ return {
         }},
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1=0, row2=0, col1=1, col2=1, part1='pitch', part2='pitch' }
+      h.ec:setSelection{ row1=0, row2=0, col1=2, col2=2, part1='pitch', part2='pitch' }
 
       local clip = h.clipboard:collect()
       -- Custom fields land in the clip event verbatim.
@@ -337,7 +337,7 @@ return {
       t.eq(clip.events[1].tag,  42,     'tag preserved in clip')
 
       -- Paste at row 8 (ppq 480 @ rpb=4, res=240).
-      h.ec:setPos(8, 1, 1)
+      h.ec:setPos(8, 2, 1)
       h.clipboard:pasteClip(clip)
 
       local pasted
@@ -419,7 +419,7 @@ return {
         }},
       }
       h.vm:setGridSize(80, 80)
-      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 2, col2 = 2,
                           part1 = 'pitch', part2 = 'vel' }
       local clip = h.clipboard:collect()
       t.eq(table.concat(clip.parts, ','), 'pitch,vel', 'sanity: whole-cell span')
@@ -457,7 +457,7 @@ return {
         }},
       }
       h.vm:setGridSize(80, 80)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.ec:extendTo(h.ec:pos())  -- degenerate pitch-only sel
       local clip = h.clipboard:collect()
       t.eq(table.concat(clip.parts, ','), 'pitch', 'sanity: pitch-only')

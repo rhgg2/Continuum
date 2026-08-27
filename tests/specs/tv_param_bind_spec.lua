@@ -29,7 +29,7 @@ return {
       h.reaper._state.projectTracks = { 'take1/track' }
       h.reaper._state.projectItems = { { takes = { 'take1' } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.vm:setPaletteParam{ trackGuid = '{DST}', fxGuid = '{FX-1}', param = 3, label = 'Cutoff' }
       h.vm:automateParam()
 
@@ -66,7 +66,7 @@ return {
       -- usedLanes scans reaper directly, project-wide.
       r:seedMidi('take1', { ccs = { { ppq = 0, chanmsg = 0xB0, chan = 0, msg2 = 119, msg3 = 64 } } })
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.vm:setPaletteParam{ trackGuid = '{DST}', fxGuid = '{FX-1}', param = 3, label = 'Cutoff' }
       h.vm:automateParam()
 

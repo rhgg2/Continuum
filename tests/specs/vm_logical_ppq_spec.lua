@@ -32,8 +32,8 @@ return {
       h.vm:setGridSize(80, 40)
 
       -- C-4 at row 2, col 1, no swing → logical = realised = 120.
-      h.ec:setPos(2, 1, 1)
-      h.vm:editEvent(h.vm.grid.cols[1], nil, 1, string.byte('z'), false)
+      h.ec:setPos(2, 2, 1)
+      h.vm:editEvent(h.vm.grid.cols[2], nil, 1, string.byte('z'), false)
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.truthy(n, 'note authored')
@@ -56,8 +56,8 @@ return {
       h.vm:setGridSize(80, 40)
 
       -- Row 2 = mid-period under c58: logical=120, realised≈139.
-      h.ec:setPos(2, 1, 1)
-      h.vm:editEvent(h.vm.grid.cols[1], nil, 1, string.byte('z'), false)
+      h.ec:setPos(2, 2, 1)
+      h.vm:editEvent(h.vm.grid.cols[2], nil, 1, string.byte('z'), false)
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.ppqL, 120,   'logical pins row 2 (60 * 2)')
@@ -118,9 +118,9 @@ return {
 
       -- Edit delay on the existing note. Note delay is decimal, stops 5..7.
       -- Set first nibble of delay magnitude to 5 → +500 ms-QN = 120 ppq.
-      local cells = h.vm.grid.cols[1].cells
+      local cells = h.vm.grid.cols[2].cells
       local note  = cells[2]
-      h.vm:editEvent(h.vm.grid.cols[1], note, 5, string.byte('5'), false)
+      h.vm:editEvent(h.vm.grid.cols[2], note, 5, string.byte('5'), false)
 
       local n = noteByPitch(h.fm:dump(), 60)
       t.eq(n.ppqL, 120,    'ppqL untouched by delay nudge')
@@ -153,9 +153,9 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      h.ec:setPos(10, 1, 1)             -- on the source note
+      h.ec:setPos(10, 2, 1)             -- on the source note
       h.cmgr:invoke('copy')
-      h.ec:setPos(4, 1, 1)              -- inside long note's tail
+      h.ec:setPos(4, 2, 1)              -- inside long note's tail
       h.cmgr:invoke('paste')
 
       local long = noteByPitch(h.fm:dump(), 60)
@@ -188,10 +188,10 @@ return {
       h.vm:setGridSize(80, 40)
 
       -- Multi-col copy: row 10, cols 1..2 pitch part.
-      h.ec:setSelection{ row1=10, row2=10, col1=1, col2=2,
+      h.ec:setSelection{ row1=10, row2=10, col1=2, col2=3,
                           part1='pitch', part2='pitch' }
       h.cmgr:invoke('copy')
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       h.cmgr:invoke('paste')
 
       local long1 = noteByPitch(h.fm:dump(), 60)
@@ -228,7 +228,7 @@ return {
         config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       h.cmgr:invoke('noteOff')
 
       local n = noteByPitch(h.fm:dump(), 60)
@@ -254,7 +254,7 @@ return {
         config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1)        -- inside the note's tail
+      h.ec:setPos(2, 2, 1)        -- inside the note's tail
       h.cmgr:invoke('insertRow')  -- pushes the spanning tail down by 1 row
 
       local n = noteByPitch(h.fm:dump(), 60)
@@ -339,8 +339,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
       -- Cursor on row 2 (mid-sustain), col 1, vel stop (kind='vel', stop=3).
-      h.ec:setPos(2, 1, 3)
-      h.vm:editEvent(h.vm.grid.cols[1], nil, 3, string.byte('5'), false)
+      h.ec:setPos(2, 2, 3)
+      h.vm:editEvent(h.vm.grid.cols[2], nil, 3, string.byte('5'), false)
 
       local pa
       for _, c in ipairs(h.fm:dump().ccs) do

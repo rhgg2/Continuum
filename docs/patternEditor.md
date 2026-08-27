@@ -126,7 +126,9 @@ what the modal opened on, not the loaded body.
 ## Ownership
 
 Owns `ps`/`cm`/`ds`/`eventMeta` plus the full `mm`/`tm`/`tv`/`cmgr`/`ccm`/`pa`
-stack, wired like the harness `mk` shape. The mini stack never writes a
+stack, wired like the harness `mk` shape, bar two deps it turns off: `tm` takes
+`defaultNoteCols = 0` and `tv` takes `masterChannel = false`, the pattern surface
+being neither a channel grid nor a place fx regions hang. The mini stack never writes a
 project/global config tier — its only outward channel is the `commit`
 callback taken at open. `bind`/`unbind` pass `skipGuard` so the checkout
 on scratch never touches the host's guarded track.

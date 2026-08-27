@@ -29,7 +29,7 @@ return {
         } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(16, 1, 1)            -- B's onset row (960 / 60)
+      h.ec:setPos(16, 2, 1)            -- B's onset row (960 / 60)
       h.cmgr:invoke('nudgeBack')
 
       local b = byPitch(h.fm:dump().notes, 62)
@@ -51,7 +51,7 @@ return {
         } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(16, 1, 1)
+      h.ec:setPos(16, 2, 1)
       h.cmgr:invoke('nudgeBack')
 
       local b = byPitch(h.fm:dump().notes, 62)
@@ -75,7 +75,7 @@ return {
         } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.cmgr:invoke('insertRow')       -- shifts A and B forward by a row
 
       local a = byPitch(h.fm:dump().notes, 60)

@@ -162,9 +162,9 @@ holds moves as the width comes and goes.
 
 ```
 grid.cols         = { <col>, <col>, ... }     -- flat, 1-indexed
-grid.chanFirstCol = { [chan] = i }            -- dense 1..16
+grid.chanFirstCol = { [chan] = i }            -- dense 0..16; 0 is the master channel
 grid.chanLastCol  = { [chan] = i }
-grid.lane1Col     = { [chan] = <col> }        -- first note col per chan
+grid.lane1Col     = { [chan] = <col> }        -- first note col per chan; never set for 0
 grid.numRows      = <integer>
 ```
 
@@ -636,6 +636,9 @@ since the target carries a single plink and a second would silently take
 it over — so re-automating a bound param returns the lane it has, and
 asking for it on another channel is refused.
 
+Both refuse on the master channel (§ Addressing a chain): its only column type is fx,
+and hiding its one column would leave no cell to select a global region in.
+
 The delay sub-column is a display variant of the note column
 (`noteWithDelay` in `STOPS`/`SELGROUPS`), not a separate grid column.
 
@@ -710,6 +713,19 @@ badge's. The clip mark outranks the badge there, because keeping the badge
 would preserve today's reading at exactly the size where it lies — a one-row
 region carrying `[arp, humanize]` showing `A`, which is the misreading the
 stack exists to end. `…` says less and says it truthfully.
+
+**8** Channel 0 is the **master channel**: an fx-only strip standing left of channel 1,
+bannered `Gl` where a MIDI channel reads `Ch n`. It carries the regions stored at
+`chan = 0` and nothing else — no note, cc, pb, pc or at column — and it is their only
+surface, the fx columns of channels 1 to 16 showing nothing of one. Since a region is
+minted from a selection, the strip keeps at least one fx column whether occupied or not,
+and hide and add-column both refuse there rather than leave it with nothing to select in.
+The strip is built in the view: fx columns are derived from `ds:get('fxRegions')` already,
+so channel 0 needs no tm channel and gets none (`docs/trackerManager.md` § Channel &
+column model), and a global region reaches no wire. Column 1 is therefore not where notes
+are typed: a take swap opens the caret on channel 1's first note column, and brings the
+scroll home in front of it, so the strip stands to the caret's left rather than off the
+edge.
 
 ## Note FX stages
 

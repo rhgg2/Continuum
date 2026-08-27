@@ -48,7 +48,7 @@ return {
     name = 'strikes stack lanes at the pinned row; commit advances once',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)   -- row 2 = ppq 120, chan-1 lane-1 pitch stop
+      h.ec:setPos(2, 2, 1)   -- row 2 = ppq 120, chan-1 lane-1 pitch stop
 
       t.truthy(strike(h, 'z'), 'first strike consumed (arms the gesture)')
       t.truthy(strike(h, 'c'), 'second strike consumed')
@@ -69,7 +69,7 @@ return {
     name = 'a re-struck pitch toggles off and frees its lane for reuse',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z'); strike(h, 'c')
 
       t.truthy(strike(h, 'c'), 'toggle strike consumed')
@@ -88,7 +88,7 @@ return {
       local h = mk(harness, {
         { ppq = 120, endppq = 240, chan = 1, pitch = 64, vel = 80, detune = 0, delay = 0 },
       })
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
 
       t.truthy(strike(h, 'c'), 'strike on the existing E consumed')
       t.eq(#h.fm:dump().notes, 1, 'no duplicate onset placed')
@@ -109,7 +109,7 @@ return {
       local h = mk(harness, {
         { ppq = 120, endppq = 240, chan = 1, pitch = 62, vel = 90, detune = 0, delay = 0 },
       })
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')
 
       local n = laneNoteAt(h, 1, 120)
@@ -124,7 +124,7 @@ return {
     name = 'fine nudge retunes the last strike velocity and re-auditions',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')
 
       local base = laneNoteAt(h, 1, 120).vel
@@ -155,7 +155,7 @@ return {
     name = 'backspace deletes the last strike and frees its lane',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z'); strike(h, 'c')
 
       h.vm:chordBackspace()
@@ -177,7 +177,7 @@ return {
     name = 'an emptied gesture commits without advancing',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')
       strike(h, 'z')   -- toggle the only note off
 
@@ -192,7 +192,7 @@ return {
     name = 'a take switch abandons the gesture without advancing',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')
 
       h.vm:rebuild(true)   -- takeChanged: the pinned (row, chan) means nothing now
@@ -219,7 +219,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
 
       t.truthy(strike(h, 'z'), 'strike under the temper consumed')
       t.truthy(laneNoteAt(h, 1, 120), 'snapped note placed')
@@ -234,7 +234,7 @@ return {
     name = 'a live gesture suspends the audition timeout; commit drops the voices',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')
 
       h.reaper:clearCalls()
@@ -252,7 +252,7 @@ return {
     name = 'spread strikes walk channels from home; commit advances once',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
 
       t.truthy(spread(h, 'z'), 'first spread strike consumed (arms the gesture)')
       t.truthy(spread(h, 'c'), 'second spread strike consumed')
@@ -271,7 +271,7 @@ return {
     name = 'plain and spread strikes mix: lanes stack on home, spread walks past it',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')          -- C: chan 1, lane 1
       spread(h, 'c')          -- E: home held, walks to chan 2
       strike(h, 'b')          -- G: stacks chan 1, lane 2
@@ -287,7 +287,7 @@ return {
     name = 'a toggled-off spread pitch frees its channel for reuse',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       spread(h, 'z'); spread(h, 'c')
 
       t.truthy(spread(h, 'z'), 'toggle strike consumed')
@@ -306,7 +306,7 @@ return {
       local h = mk(harness, {
         { ppq = 120, endppq = 240, chan = 2, pitch = 64, vel = 80, detune = 0, delay = 0 },
       })
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       spread(h, 'z')
       t.truthy(spread(h, 'c'), 'strike onto the occupied channel consumed')
 
@@ -320,7 +320,7 @@ return {
     name = 'backspace on a spread member deletes from its own channel',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       spread(h, 'z'); spread(h, 'c')
 
       h.vm:chordBackspace()
@@ -334,7 +334,7 @@ return {
     name = 'shadowed shift commands decline while a gesture is live',
     run = function(harness)
       local h = mk(harness)
-      h.ec:setPos(2, 1, 1)
+      h.ec:setPos(2, 2, 1)
       strike(h, 'z')
 
       t.eq(h.cmgr:invoke('inputSampleUp'), false,

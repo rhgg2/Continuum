@@ -1,6 +1,6 @@
 -- See docs/trackerView.md for the model.
 
---invariant: rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed
+--invariant: rows 0-indexed, cols 1-indexed, channels 0..16 (0 = master, view-only), stops 1-indexed
 --invariant: vm.grid is a live handle; rm reads it each frame
 --invariant: vm.grid is mutated in place on rebuild, never reassigned
 --invariant: rm is pull-only; vm fires no render callbacks
@@ -33,6 +33,10 @@ local perf       = require 'perf'
 
 local tm, cm, ds, cmgr, gm, pa, facade, lib =
   (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade, (...).lib
+
+-- Master channel strip (channel 0, fx-only): on in the main tracker, off for the pattern
+-- editor's checked-out pattern. see docs/trackerView.md § Addressing a chain (item 8)
+local masterChannel = (...).masterChannel ~= false
 
 local function arrange() return facade.get('arrange') end
 
@@ -980,13 +984,17 @@ local followViewport do
                              math.min(cRow, maxScroll))
     end
 
-    scrollCol = util.clamp(scrollCol, 1, #grid.cols)
-    if cCol < scrollCol then
-      scrollCol = cCol
-    elseif cCol > lastVisibleFrom(scrollCol) then
-      while scrollCol < cCol do
-        scrollCol = scrollCol + 1
-        if cCol <= lastVisibleFrom(scrollCol) then break end
+    -- Column follow (skip before gridWidth is set, as the row axis does): with no width,
+    -- lastVisibleFrom sees nothing on screen, so the walk below would chase the caret left.
+    if gridWidth > 0 then
+      scrollCol = util.clamp(scrollCol, 1, #grid.cols)
+      if cCol < scrollCol then
+        scrollCol = cCol
+      elseif cCol > lastVisibleFrom(scrollCol) then
+        while scrollCol < cCol do
+          scrollCol = scrollCol + 1
+          if cCol <= lastVisibleFrom(scrollCol) then break end
+        end
       end
     end
   end
@@ -3938,7 +3946,8 @@ function tv:addExtraCol(type, cc)
   local seen = {}
   for col in ec:eachSelectedCol() do
     local chan = col.midiChan
-    if not seen[chan] then
+    -- The master channel's only column type is fx, so an add finds no home there.
+    if chan ~= 0 and not seen[chan] then
       seen[chan] = true
       -- Absence-default mirrors tm:rebuild's: no entry means one implicit
       -- note col. Seeding 0 here would erase that col on the next rebuild.
@@ -3965,6 +3974,9 @@ function tv:hideExtraCol()
   local col = grid.cols[ec:col()]
   if not col then return end
   local chan = col.midiChan
+  -- The master channel keeps its strip: hiding its last column would leave nowhere to
+  -- select, and so no way to author a global region.
+  if chan == 0 then return end
 
   -- Note col with delay shown: strip the delay first; the column itself
   -- only goes on a subsequent hide.
@@ -4512,7 +4524,30 @@ function tv:rebuild(takeChanged)
       temper     = temper,
     })
 
+    -- One channel's fx columns, in lane order; returns how many it emitted.
+    local function addFxCols(chan)
+      local added = 0
+      for _, regions in ipairs(packRegionLanes(fxByChan[chan] or {})) do
+        local fxCells = {}
+        for _, region in ipairs(regions) do
+          local stages = {}
+          for _, entry in ipairs(region.fx or {}) do
+            util.add(stages, { glyph = generators.glyphOf(entry.kind), bypass = entry.bypass })
+          end
+          if #stages > 0 then
+            util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
+                                uuid = region.uuid, stages = stages })
+          end
+        end
+        if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells); added = added + 1 end
+      end
+      return added
+    end
+
     perf.start('cols')
+    -- Channel 0 is the master channel: fx columns only, always keeping one whether occupied
+    -- or not, so a global region has somewhere to be authored. see docs/trackerView.md § Addressing a chain
+    if masterChannel and addFxCols(0) == 0 then addGridCol(0, 'fx', nil, {}) end
     for chan, channel in tm:channels() do
       local c = channel.columns
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
@@ -4562,20 +4597,7 @@ function tv:rebuild(takeChanged)
         end
         addGridCol(chan, 'cc', n, events)
       end
-      for _, regions in ipairs(packRegionLanes(fxByChan[chan] or {})) do
-        local fxCells = {}
-        for _, region in ipairs(regions) do
-          local stages = {}
-          for _, entry in ipairs(region.fx or {}) do
-            util.add(stages, { glyph = generators.glyphOf(entry.kind), bypass = entry.bypass })
-          end
-          if #stages > 0 then
-            util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
-                                uuid = region.uuid, stages = stages })
-          end
-        end
-        if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
-      end
+      addFxCols(chan)
     end
     perf.stop('cols')
 
@@ -4676,6 +4698,15 @@ function tv:rebuild(takeChanged)
       else gridCol.ghosts = interpolateValues(gridCol) end
     end
     perf.stop('ghosts')
+
+    -- Column 1 is the master strip, not notes: a take swap lands the caret on channel 1's
+    -- first note column and brings scroll home in front of it. see docs/trackerView.md § Addressing a chain
+    if takeChanged and grid.chanFirstCol[1] then
+      scrollCol = 1
+      for ci = grid.chanFirstCol[1], grid.chanLastCol[1] do
+        if grid.cols[ci].type == 'note' then ec:setPos(nil, ci, 1); break end
+      end
+    end
 
     -- Layout changed but no cursor move; re-clamp + re-follow viewport.
     ec:clampPos(); followViewport()

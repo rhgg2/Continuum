@@ -21,6 +21,8 @@ rebuild expands each of its regions into all sixteen channels.**
 
 1. The master channel sits left of channel 1.
 
+1. Its banner reads `Gl`, where a MIDI channel's reads `Ch n`.
+
 ## The master channel is always addressable
 
 1. The master channel always has at least one fx column, occupied or

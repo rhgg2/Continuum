@@ -45,7 +45,7 @@ return {
       local mk = function()
         local h = mkNoteHarness(harness, { delay = 500 },
                                 { noteDelay = { [1] = { [1] = true } } })
-        h.ec:setPos(2, 1, 5)
+        h.ec:setPos(2, 2, 5)
         return h
       end
 
@@ -78,7 +78,7 @@ return {
       local mk = function()
         local h = mkNoteHarness(harness, { vel = 77 })
         -- Cursor on intent row 4, stop 3 (first vel stop, selGrp 2).
-        h.ec:setPos(4, 1, 3)
+        h.ec:setPos(4, 2, 3)
         return h
       end
 
@@ -111,9 +111,9 @@ return {
     name = 'copy/paste round-trip with no selection copies cursor-row note',
     run = function(harness)
       local h = mkNoteHarness(harness, { endppq = 300 })
-      h.ec:setPos(4, 1, 1)  -- pitch stop, on note
+      h.ec:setPos(4, 2, 1)  -- pitch stop, on note
       h.cmgr:invoke('copy')
-      h.ec:setPos(8, 1, 1)  -- ppq 480, empty
+      h.ec:setPos(8, 2, 1)  -- ppq 480, empty
       h.cmgr:invoke('paste')
 
       local notes = h.fm:dump().notes
@@ -141,9 +141,9 @@ return {
       -- at row 4 captures the note; endRow follows source endppq, not
       -- selection.
       local h = mkNoteHarness(harness)
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       h.cmgr:invoke('copy')
-      h.ec:setPos(8, 1, 1)
+      h.ec:setPos(8, 2, 1)
       h.cmgr:invoke('paste')
 
       local pasted
@@ -163,13 +163,13 @@ return {
     run = function(harness)
       local h = mkNoteHarness(harness)
       -- First, copy the note at row 4.
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       h.cmgr:invoke('copy')
       -- Now move to an empty row and copy — should be a no-op.
-      h.ec:setPos(12, 1, 1)
+      h.ec:setPos(12, 2, 1)
       h.cmgr:invoke('copy')
       -- Paste somewhere else. Should paste the row-4 note, not nothing.
-      h.ec:setPos(16, 1, 1)  -- ppq 960
+      h.ec:setPos(16, 2, 1)  -- ppq 960
       h.cmgr:invoke('paste')
 
       local notes = h.fm:dump().notes
@@ -210,7 +210,7 @@ return {
 
       -- No-sel: cursor on row 0 col 1. insertRow shifts every col.
       local h1 = mkScenario()
-      h1.ec:setPos(0, 1, 1)
+      h1.ec:setPos(0, 2, 1)
       h1.cmgr:invoke('insertRow')
       local d1 = h1.fm:dump()
       t.eq(noteAtChan(d1, 1).ppq, 300, 'no-sel insertRow shifts chan-1 note')
@@ -218,7 +218,7 @@ return {
 
       -- 1×1 sel on chan-1 col only: chan-2 note untouched.
       local h2 = mkScenario()
-      h2.ec:setPos(0, 1, 1)
+      h2.ec:setPos(0, 2, 1)
       degenerateSel(h2)
       h2.cmgr:invoke('insertRow')
       local d2 = h2.fm:dump()
@@ -234,7 +234,7 @@ return {
     name = 'duplicateDown with no sel clones cursor-row note to next row',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setPos(4, 1, 1)  -- pitch stop
+      h.ec:setPos(4, 2, 1)  -- pitch stop
       h.cmgr:invoke('duplicateDown')
 
       local notes = h.fm:dump().notes
@@ -261,7 +261,7 @@ return {
     name = 'duplicateDown with 1x1 pitch-part sel clones cursor-row note',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setPos(4, 1, 1)  -- pitch stop
+      h.ec:setPos(4, 2, 1)  -- pitch stop
       degenerateSel(h)
       h.cmgr:invoke('duplicateDown')
 
@@ -300,7 +300,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(4, 1, 3)  -- vel stop on the row-4 note
+      h.ec:setPos(4, 2, 3)  -- vel stop on the row-4 note
       degenerateSel(h)
       h.cmgr:invoke('duplicateDown')
 
@@ -339,8 +339,8 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(5, 1, 1)
-      h.ec:extendTo(6, 1, 1)            -- real 2-row selection, rows 5..6
+      h.ec:setPos(5, 2, 1)
+      h.ec:extendTo(6, 2, 1)            -- real 2-row selection, rows 5..6
       h.cmgr:invoke('duplicateDown')
 
       local _, row2 = h.ec:region()
@@ -356,7 +356,7 @@ return {
     name = 'nudgeForward with no sel advances cursor-row note by 1 row and cursor follows',
     run = function(harness)
       local h = mkNoteHarness(harness)  -- note at ppq 240..360 (rows 4..6)
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       h.cmgr:invoke('nudgeForward')
 
       local n = h.fm:dump().notes[1]
@@ -379,7 +379,7 @@ return {
         { ppq = 120, endppq = 240, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1)  -- on note B's onset row
+      h.ec:setPos(2, 2, 1)  -- on note B's onset row
       h.cmgr:invoke('nudgeBack')
 
       local a, b
@@ -407,7 +407,7 @@ return {
         { ppq = 60, endppq = 120, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(1, 1, 1)  -- on note B's onset row
+      h.ec:setPos(1, 2, 1)  -- on note B's onset row
       h.cmgr:invoke('nudgeBack')
 
       local b
@@ -429,7 +429,7 @@ return {
         { ppq = 0, endppq = 120, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.cmgr:invoke('nudgeBack')
 
       local n = h.fm:dump().notes[1]
@@ -450,7 +450,7 @@ return {
         { ppq = 180, endppq = 240, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1)  -- on A's endRow; cursorNoteBefore picks A
+      h.ec:setPos(2, 2, 1)  -- on A's endRow; cursorNoteBefore picks A
       h.cmgr:invoke('nudgeForward')
 
       local a, b
@@ -476,7 +476,7 @@ return {
         { ppq = 180, endppq = 300, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)  -- on A's onset row
+      h.ec:setPos(0, 2, 1)  -- on A's onset row
       h.cmgr:invoke('nudgeForward')
 
       local a, b
@@ -556,7 +556,7 @@ return {
         { ppq = 180, endppq = 240, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1 = 0, row2 = 2, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 2, col1 = 2, col2 = 2,
                          part1 = 'pitch', part2 = 'pitch' }
       h.cmgr:invoke('nudgeForward')
 
@@ -578,7 +578,7 @@ return {
         { ppq = 120, endppq = 180, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
       } } }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1 = 0, row2 = 2, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 2, col1 = 2, col2 = 2,
                          part1 = 'pitch', part2 = 'pitch' }
       h.cmgr:invoke('nudgeForward')
 
@@ -620,7 +620,7 @@ return {
       t.eq(#ch.columns.notes, 1, 'A and B share a lane in intent space')
       t.eq(#ch.columns.notes[1].events, 2, 'both notes in lane 1')
 
-      h.ec:setPos(0, 1, 1)  -- cursorNoteBefore at row 0 picks A
+      h.ec:setPos(0, 2, 1)  -- cursorNoteBefore at row 0 picks A
       h.cmgr:invoke('growNote')
 
       local a
@@ -668,7 +668,7 @@ return {
       local ch = h.tm:getChannel(1)
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (intents touch at logical 60)')
 
-      h.ec:setPos(0, 1, 1)  -- cursorNoteBefore picks A
+      h.ec:setPos(0, 2, 1)  -- cursorNoteBefore picks A
       h.cmgr:invoke('growNote')
 
       local a
@@ -705,7 +705,7 @@ return {
       local ch = h.tm:getChannel(1)
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (intents touch)')
 
-      h.ec:setPos(0, 1, 1)  -- cursorNoteBefore at row 0 picks A
+      h.ec:setPos(0, 2, 1)  -- cursorNoteBefore at row 0 picks A
       h.cmgr:invoke('growNote')
 
       local a
@@ -750,7 +750,7 @@ return {
       local ch = h.tm:getChannel(1)
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (different pitch, no overlap)')
 
-      h.ec:setPos(0, 1, 1)  -- cursorNoteBefore picks A
+      h.ec:setPos(0, 2, 1)  -- cursorNoteBefore picks A
       h.cmgr:invoke('nudgeForward')
 
       local a
@@ -783,7 +783,7 @@ return {
       local ch = h.tm:getChannel(1)
       t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (overlap within lenient threshold)')
 
-      h.ec:setPos(3, 1, 1)  -- on B's onset row
+      h.ec:setPos(3, 2, 1)  -- on B's onset row
       h.cmgr:invoke('nudgeBack')
 
       local b
@@ -800,7 +800,7 @@ return {
     name = 'nudgeFineUp with no sel on pitch stop raises pitch by 1',
     run = function(harness)
       local h = mkNoteHarness(harness)  -- pitch = 60
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       h.cmgr:invoke('nudgeFineUp')
 
       local n = h.fm:dump().notes[1]
@@ -815,7 +815,7 @@ return {
     name = 'noteOff with no sel truncates the active note to cursor ppq',
     run = function(harness)
       local h = mkNoteHarness(harness)  -- note ppq 240..360
-      h.ec:setPos(5, 1, 1)  -- inside note span, pitch stop
+      h.ec:setPos(5, 2, 1)  -- inside note span, pitch stop
       h.cmgr:invoke('noteOff')
 
       local n = h.fm:dump().notes[1]
@@ -838,7 +838,7 @@ return {
       h.cmgr:invoke('goBottom'); local lastRow = h.ec:row()
       local lastCol = #h.vm.grid.cols
 
-      h.ec:setPos(2, 2, 1)
+      h.ec:setPos(2, 3, 1)
       h.cmgr:invoke('selectAll')
 
       local r1, r2, c1, c2, p1, p2 = h.ec:region()
@@ -862,11 +862,11 @@ return {
       }
       h.vm:setGridSize(80, 40)
       h.cmgr:invoke('goRight')
-      t.eq(h.ec:col(), 3, 'lands on the last non-empty column')
+      t.eq(h.ec:col(), 4, 'lands on the last non-empty column')
 
-      h.ec:setPos(0, 8, 1)   -- right of the content edge
+      h.ec:setPos(0, 9, 1)   -- right of the content edge
       h.cmgr:invoke('goRight')
-      t.eq(h.ec:col(), 3, 'snaps back left onto the content edge')
+      t.eq(h.ec:col(), 4, 'snaps back left onto the content edge')
     end,
   },
 
@@ -886,13 +886,13 @@ return {
     name = 'eachSelectedCol with no selection yields the cursor col as a 1x1 fallback',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setPos(0, 2)
+      h.ec:setPos(0, 3)
       local got = {}
       for col, ci in h.ec:eachSelectedCol() do
         got[#got + 1] = { ci = ci, chan = col.midiChan }
       end
       t.eq(#got, 1,        'exactly the cursor col is yielded')
-      t.eq(got[1].ci, 2,   'yielded ci is the cursor col')
+      t.eq(got[1].ci, 3,   'yielded ci is the cursor col')
     end,
   },
 
@@ -907,15 +907,15 @@ return {
         }},
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1=0, row2=0, col1=1, col2=3, part1='pitch', part2='pitch' }
+      h.ec:setSelection{ row1=0, row2=0, col1=2, col2=4, part1='pitch', part2='pitch' }
 
       local got = {}
       for col, ci in h.ec:eachSelectedCol() do
         got[#got + 1] = { ci = ci, chan = col.midiChan }
       end
       t.eq(#got, 3, 'three cols yielded for a 3-col selection')
-      t.eq(got[1].ci, 1,   'first ci = col1')
-      t.eq(got[3].ci, 3,   'last ci = col2')
+      t.eq(got[1].ci, 2,   'first ci = col1')
+      t.eq(got[3].ci, 4,   'last ci = col2')
       t.eq(got[1].chan, 1, 'first col is chan 1')
       t.eq(got[3].chan, 3, 'last col is chan 3')
     end,
@@ -934,7 +934,7 @@ return {
         }},
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setSelection{ row1=0, row2=0, col1=1, col2=2, part1='pitch', part2='pitch' }  -- chans 1..2
+      h.ec:setSelection{ row1=0, row2=0, col1=2, col2=3, part1='pitch', part2='pitch' }  -- chans 1..2
 
       h.vm:showDelay()
       local nd = h.ds:get('noteDelay')
@@ -953,8 +953,8 @@ return {
     name = 'ec:extendTo with no sel anchors at cursor and grows to target',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setPos(2, 1, 1)
-      h.ec:extendTo(5, 1, 1)
+      h.ec:setPos(2, 2, 1)
+      h.ec:extendTo(5, 2, 1)
       t.truthy(h.ec:hasSelection(), 'sel created')
       local r1, r2 = h.ec:region()
       t.eq(r1, 2, 'sel anchored at original cursor row')
@@ -966,9 +966,9 @@ return {
     name = 'ec:extendTo with active sel preserves anchor, moves the loose end',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setPos(2, 1, 1)
-      h.ec:extendTo(5, 1, 1)   -- anchor=2, end=5
-      h.ec:extendTo(7, 1, 1)   -- second extend should keep anchor=2
+      h.ec:setPos(2, 2, 1)
+      h.ec:extendTo(5, 2, 1)   -- anchor=2, end=5
+      h.ec:extendTo(7, 2, 1)   -- second extend should keep anchor=2
       local r1, r2 = h.ec:region()
       t.eq(r1, 2, 'anchor preserved across second extend')
       t.eq(r2, 7, 'loose end advanced')
@@ -982,10 +982,10 @@ return {
     name = 'ec:pos round-trips ec:setPos in (row, col, stop) order',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setPos(7, 1, 3)
+      h.ec:setPos(7, 2, 3)
       local r, c, s = h.ec:pos()
       t.eq(r, 7, 'row')
-      t.eq(c, 1, 'col')
+      t.eq(c, 2, 'col')
       t.eq(s, 3, 'stop')
     end,
   },
@@ -998,12 +998,12 @@ return {
     name = 'setSelection / region round-trip preserves part',
     run = function(harness)
       local h = mkNoteHarness(harness)
-      h.ec:setSelection{ row1=0, row2=0, col1=1, col2=1, part1='vel', part2='vel' }
+      h.ec:setSelection{ row1=0, row2=0, col1=2, col2=2, part1='vel', part2='vel' }
       local r1, r2, c1, c2, p1, p2 = h.ec:region()
       t.eq(r1, 0,     'row1')
       t.eq(r2, 0,     'row2')
-      t.eq(c1, 1,     'col1')
-      t.eq(c2, 1,     'col2')
+      t.eq(c1, 2,     'col1')
+      t.eq(c2, 2,     'col2')
       t.eq(p1, 'vel', 'part1 emerges as part name')
       t.eq(p2, 'vel', 'part2 emerges as part name')
     end,
@@ -1034,7 +1034,7 @@ return {
       -- Open A clips to B's onset (480) before any authoring.
       t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 480, 'open A clipped to B onset')
 
-      h.ec:setPos(0, 1, 1)  -- cursorNoteBefore at row 0 picks A
+      h.ec:setPos(0, 2, 1)  -- cursorNoteBefore at row 0 picks A
       h.cmgr:invoke('growNote')
 
       local a = noteByPitch(h.fm:dump().notes, 60)

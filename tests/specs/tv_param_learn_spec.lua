@@ -103,7 +103,7 @@ return {
     run = function(harness)
       local h, r, _, dst = mkScenario(harness)
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.vm:armLearn(ROW)
       r._state.lastTouched = { track = dst, fxIdx = 0, param = 2 }
       h.vm:pollLearn(true)

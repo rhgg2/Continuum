@@ -26,6 +26,11 @@ attach to the note column whose voice they modulate (see *PA binding*
 below), appearing as `{ type='pa', pitch, vel, ppq }` entries mixed into
 that column's `events`.
 
+An fx region stored at channel 0 names no MIDI channel, so the rebuild drops it
+from the document keys its passes read and no channel derives from it. Channel 0
+is a view surface alone, where the tracker authors a region meant for every
+channel at once (`docs/trackerView.md` § Addressing a chain).
+
 ## Lane identity
 
 Note columns carry no identity beyond their position among note columns

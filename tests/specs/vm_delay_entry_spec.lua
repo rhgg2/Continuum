@@ -25,8 +25,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(0, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(0, 2, 5)
       h.vm:editEvent(col, col.cells[0], 5, string.byte('5'), false)
 
       local n = h.fm:dump().notes[1]
@@ -53,8 +53,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(0, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(0, 2, 5)
       h.vm:editEvent(col, col.cells[0], 5, string.byte('9'), false)
 
       local n = h.fm:dump().notes[1]
@@ -82,8 +82,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(0, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(0, 2, 5)
       h.vm:editEvent(col, col.cells[0], 5, string.byte('9'), false)
 
       local n = h.fm:dump().notes[1]
@@ -112,9 +112,9 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       local B = col.cells[4]
-      h.ec:setPos(4, 1, 5)
+      h.ec:setPos(4, 2, 5)
       h.vm:editEvent(col, B, 5, string.byte('-'), false)
 
       local dump = h.fm:dump().notes
@@ -146,9 +146,9 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local colB = h.vm.grid.cols[2]
+      local colB = h.vm.grid.cols[3]
       local B = colB.cells[4]
-      h.ec:setPos(4, 2, 5)
+      h.ec:setPos(4, 3, 5)
       h.vm:editEvent(colB, B, 5, string.byte('-'), false)
 
       local dump = h.fm:dump().notes
@@ -185,9 +185,9 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       local B = col.cells[6]
-      h.ec:setPos(6, 1, 5)
+      h.ec:setPos(6, 2, 5)
       h.vm:editEvent(col, B, 5, string.byte('9'), false)
 
       local Bafter
@@ -218,8 +218,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(0, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(0, 2, 5)
       h.vm:editEvent(col, col.cells[0], 5, string.byte('-'), false)
 
       local n = h.fm:dump().notes[1]
@@ -251,8 +251,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(1, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(1, 2, 5)
       h.vm:editEvent(col, col.cells[1], 5, string.byte('5'), false)
 
       local n = h.fm:dump().notes[1]
@@ -287,8 +287,8 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(0, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(0, 2, 5)
       h.vm:editEvent(col, col.cells[0], 5, string.byte('5'), false)  -- A.delay = 500 → A.raw = 120
 
       local col1 = h.tm:getChannel(1).columns.notes[1]

@@ -237,12 +237,13 @@ return {
   },
 
   {
-    -- Empty-take grid shape: one implicit lane-1 note col per channel and
-    -- nothing else. lane1Col is populated for all 16 chans.
-    name = 'empty take: 16 implicit lane-1 note cols, lane1Col covers all chans',
+    -- Empty-take grid shape: the master channel's fx column first, then one
+    -- implicit lane-1 note col per channel and nothing else. lane1Col is
+    -- populated for all 16 chans, and never for the master channel.
+    name = 'empty take: master fx col + 16 implicit lane-1 note cols, lane1Col covers all chans',
     run = function(harness)
       local h = harness.mk()
-      t.eq(#h.vm.grid.cols, 16, 'one col per channel, no extras')
+      t.eq(#h.vm.grid.cols, 17, 'the master fx col, then one col per channel, no extras')
       for chan = 1, 16 do
         local c = h.vm.grid.lane1Col[chan]
         t.truthy(c, 'chan ' .. chan .. ' has a lane-1 col')
@@ -262,7 +263,7 @@ return {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
         },
       }
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       t.eq(col.type, 'note')
       t.falsy(col.showDelay, 'showDelay off by default')
       t.falsy(col.showCents, 'nothing stands off its step, so no readout column')
@@ -281,7 +282,7 @@ return {
         },
         data = { noteDelay = { [1] = { [1] = true } } },
       }
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       t.eq(col.type, 'note')
       t.truthy(col.showDelay, 'showDelay flag derived from ds.noteDelay')
       t.deepEq(col.stopPos, { 0, 2, 4, 5, 7, 8, 9 })
@@ -301,7 +302,7 @@ return {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 20 } },
         },
       }
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       t.truthy(col.showCents, 'the column has a deviation to report')
       t.deepEq(col.stopPos, { 0, 2, 5, 6 })
       t.deepEq(col.partAt,  { 'pitch', 'pitch', 'vel', 'vel' })
@@ -322,7 +323,7 @@ return {
                       detune = 0, intentCents = 6000 } },
         },
       }
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       local evt = col.cells[0]
       local note, octave = h.vm:noteLabel(evt)
       t.eq(note .. octave, 'C-4', 'the cell keeps the name the note was written under')
@@ -361,7 +362,7 @@ return {
         },
         data = { swing = { global = 'x' } },
       }
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       t.truthy(col.cells[5],     'note placed on row 5')
       t.eq(col.offGrid[5], nil,  'note not flagged off-grid')
     end,
@@ -395,7 +396,7 @@ return {
         },
       }
       h.ds:assign('swing', { global = 'c58' })
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       for _, r in ipairs{ 0, 1, 2, 4 } do
         t.truthy(col.cells[r],     'row ' .. r .. ' cell present')
         t.eq(col.offGrid[r], nil,  'row ' .. r .. ' on-grid (logical projection)')
@@ -489,7 +490,7 @@ return {
         },
         config = { take = { rowPerBeat = 5 } },
       }
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       t.truthy(col.cells[12],    'note snaps to row 12')
       t.eq(col.cells[11], nil,   'not floored onto row 11')
       t.eq(col.offGrid[12], nil, 'and not flagged off-grid')

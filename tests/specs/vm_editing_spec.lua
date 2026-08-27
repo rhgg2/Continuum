@@ -15,19 +15,19 @@ return {
       }
       h.vm:setGridSize(80, 40)
       local octStop = 2
-      t.eq(h.vm.grid.cols[1].partAt[octStop], 'pitch', 'stop 2 is the octave digit')
+      t.eq(h.vm.grid.cols[2].partAt[octStop], 'pitch', 'stop 2 is the octave digit')
 
       local function type_(ch)
-        local col = h.vm.grid.cols[1]
-        h.ec:setPos(0, 1, octStop)
+        local col = h.vm.grid.cols[2]
+        h.ec:setPos(0, 2, octStop)
         h.vm:editEvent(col, col.cells[0], octStop, string.byte(ch), false)
-        return h.vm.grid.cols[1].cells[0]
+        return h.vm.grid.cols[2].cells[0]
       end
 
       t.eq(type_('-').pitch, 60, 'octave -4 is off the MIDI range: no-op')
       t.eq(type_('0').pitch, 12, 'octave 0')
       t.eq(type_('-').pitch, 12, 'the arm writes nothing')
-      t.eq(select(2, h.vm:entrySignAt(0, 1)), -1, 'the octave cell is armed negative')
+      t.eq(select(2, h.vm:entrySignAt(0, 2)), -1, 'the octave cell is armed negative')
       t.eq(type_('1').pitch, 0, 'the digit consumed the arm: octave -1')
       t.eq(type_('2').pitch, 0, 'octave -2 is off the MIDI range: no-op')
     end,
@@ -57,7 +57,7 @@ return {
       h.vm:setGridSize(80, 40)
       -- Col 1 is chan-1 lane-1 note col with delay enabled (7 stops,
       -- partAt = {pitch×2, vel×2, delay×3}). Stop 5 → first delay stop.
-      h.ec:setPos(1, 1, 5)
+      h.ec:setPos(1, 2, 5)
       h.cmgr:invoke('delete')
 
       local note = h.fm:dump().notes[1]
@@ -81,7 +81,7 @@ return {
       } } }
       h.vm:setGridSize(80, 40)
 
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.cmgr:invoke('growNote')
 
       local A
@@ -109,7 +109,7 @@ return {
       } } }
       h.vm:setGridSize(80, 40)
 
-      h.ec:setPos(3, 1, 1)   -- ppq 180 = A.endppqC
+      h.ec:setPos(3, 2, 1)   -- ppq 180 = A.endppqC
       h.cmgr:invoke('noteOff')
 
       local A
@@ -138,7 +138,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      h.ec:setPos(3, 1, 1)   -- row 3 = the tail's rendered end row
+      h.ec:setPos(3, 2, 1)   -- row 3 = the tail's rendered end row
       h.cmgr:invoke('noteOff')
 
       local A
@@ -178,14 +178,14 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col2 = h.vm.grid.cols[2]
+      local col2 = h.vm.grid.cols[3]
       t.eq(col2.type, 'note')
       t.eq(col2.midiChan, 1)
       t.eq(col2.lane, 2)
 
       -- Row 8 = ppq 480 (resolution 240, 4 rpb). Stop 1 = note name.
       -- 'z' in colemak = C; currentOctave=4 + octOff=0 → pitch 60.
-      h.ec:setPos(8, 2, 1)
+      h.ec:setPos(8, 3, 1)
       h.vm:editEvent(col2, nil, 1, string.byte('z'), false)
 
       local notes = h.fm:dump().notes
@@ -229,10 +229,10 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local col2 = h.vm.grid.cols[2]
+      local col2 = h.vm.grid.cols[3]
       t.eq(col2.lane, 2)
 
-      h.ec:setPos(1, 2, 1)
+      h.ec:setPos(1, 3, 1)
       h.vm:editEvent(col2, nil, 1, string.byte('z'), false)
 
       local newN
@@ -270,7 +270,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1) -- row 2 = ppq 120 (B), pitch stop
+      h.ec:setPos(2, 2, 1) -- row 2 = ppq 120 (B), pitch stop
       h.cmgr:invoke('delete')
 
       local notes = h.fm:dump().notes
@@ -305,7 +305,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(4, 1, 1) -- row 4 = ppq 240 = B (same pitch as open A)
+      h.ec:setPos(4, 2, 1) -- row 4 = ppq 240 = B (same pitch as open A)
       h.cmgr:invoke('growNote')
 
       local A, B
@@ -336,7 +336,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(4, 1, 3) -- row 4 = ppq 240 (note B), vel stop
+      h.ec:setPos(4, 2, 3) -- row 4 = ppq 240 (note B), vel stop
       h.cmgr:invoke('delete')
 
       local note
@@ -364,7 +364,7 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(2, 1, 1) -- row 2 = ppq 120 (PA cell), pitch stop
+      h.ec:setPos(2, 2, 1) -- row 2 = ppq 120 (PA cell), pitch stop
       h.cmgr:invoke('delete')
 
       local dump = h.fm:dump()
@@ -399,7 +399,7 @@ return {
       h.vm:setGridSize(80, 40)
       -- Selection rows 1..3 (ppq [60, 240)) excludes the host note (row 0)
       -- and includes the PA (row 2).
-      h.ec:setSelection{ row1=1, row2=3, col1=1, col2=1, part1='pitch', part2='pitch' }
+      h.ec:setSelection{ row1=1, row2=3, col1=2, col2=2, part1='pitch', part2='pitch' }
 
       h.cmgr:invoke('deleteSel')
 
@@ -430,7 +430,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       -- Rows 1..3 covers the PA cell (row 2) but not the host note (row 0).
-      h.ec:setSelection{ row1=1, row2=3, col1=1, col2=1, part1='vel', part2='vel' }
+      h.ec:setSelection{ row1=1, row2=3, col1=2, col2=2, part1='vel', part2='vel' }
 
       h.cmgr:invoke('deleteSel')
 
@@ -462,10 +462,10 @@ return {
         },
       }
       h.vm:setGridSize(80, 40)
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
       local pa = col.cells[2]
       t.truthy(pa and pa.evType == 'pa', 'PA cell at row 2')
-      h.ec:setPos(2, 1, 3) -- row 2 = ppq 120 (PA), high vel nibble
+      h.ec:setPos(2, 2, 3) -- row 2 = ppq 120 (PA), high vel nibble
       h.vm:editEvent(col, pa, 3, string.byte('5'), false)
 
       local out
@@ -500,29 +500,29 @@ return {
         data = { swing = { global = 'c58' } },
       }
       h.vm:setGridSize(80, 40)
-      local col = h.vm.grid.cols[1]
+      local col = h.vm.grid.cols[2]
 
       -- Stamp PA at row 1 (off the period boundary under c58).
-      h.ec:setPos(1, 1, 3)
+      h.ec:setPos(1, 2, 3)
       h.vm:editEvent(col, nil, 3, string.byte('5'), false)
 
-      col = h.vm.grid.cols[1]
+      col = h.vm.grid.cols[2]
       local pa = col.cells[1]
       t.truthy(pa and pa.evType == 'pa', 'PA appears at row 1 cell')
       t.eq(col.overflow[1], nil, 'no overflow at row 1')
 
       -- Stamp another PA at row 2.
-      h.ec:setPos(2, 1, 3)
-      h.vm:editEvent(h.vm.grid.cols[1], nil, 3, string.byte('7'), false)
+      h.ec:setPos(2, 2, 3)
+      h.vm:editEvent(h.vm.grid.cols[2], nil, 3, string.byte('7'), false)
 
-      col = h.vm.grid.cols[1]
+      col = h.vm.grid.cols[2]
       t.truthy(col.cells[1] and col.cells[1].evType == 'pa', 'row 1 still PA')
       t.truthy(col.cells[2] and col.cells[2].evType == 'pa', 'row 2 PA')
       t.eq(col.overflow[1], nil, 'no overflow at row 1')
       t.eq(col.overflow[2], nil, 'no overflow at row 2')
 
       -- Delete row 2 PA.
-      h.ec:setPos(2, 1, 3)
+      h.ec:setPos(2, 2, 3)
       h.cmgr:invoke('delete')
 
       local survivors = {}
@@ -532,7 +532,7 @@ return {
       t.eq(#survivors, 1, 'one PA remains after deleting row 2')
 
       -- Delete row 1 PA.
-      h.ec:setPos(1, 1, 3)
+      h.ec:setPos(1, 2, 3)
       h.cmgr:invoke('delete')
       survivors = {}
       for _, c in ipairs(h.fm:dump().ccs) do
@@ -555,7 +555,7 @@ return {
         data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(1, 1, 5)
+      h.ec:setPos(1, 2, 5)
       h.cmgr:invoke('delete')
 
       local note = h.fm:dump().notes[1]

@@ -180,7 +180,7 @@ return {
     name = 'a selection confines the snap to the notes inside it',
     run = function(harness)
       local h = mk(harness, { note(0, 76, 0), note(600, 76, 0) })
-      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+      h.ec:setSelection{ row1 = 0, row2 = 0, col1 = 2, col2 = 2,
                          part1 = 'pitch', part2 = 'pitch' }
       h.vm:retune{ scope = 'selection', strength = 1 }
       local _, d = seat(5, 5)

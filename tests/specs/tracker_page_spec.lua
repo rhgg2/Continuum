@@ -1724,7 +1724,7 @@ return {
       t.eq(fakeModalHost.last.harmonicLock, 1, 'harmonic lock opens at 1')
       t.eq(fakeModalHost.last.purity, 32,      'purity opens at 32')
 
-      stack.tv:ec():setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+      stack.tv:ec():setSelection{ row1 = 0, row2 = 0, col1 = 2, col2 = 2,
                                   part1 = 'pitch', part2 = 'pitch' }
       h.cmgr:invoke('retune')
       t.eq(fakeModalHost.last.scope, 'selection', 'a selection opens on Selection')

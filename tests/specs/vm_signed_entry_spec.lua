@@ -242,11 +242,11 @@ return {
     name = "delay: '-' on zero arms; the digit lands negative",
     run = function(harness)
       local h = mkDelayed(harness, 0)
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(4, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(4, 2, 5)
       h.vm:editEvent(col, col.cells[4], 5, string.byte('-'), false)
       t.eq(h.fm:dump().notes[1].delay, 0, 'arm writes nothing')
-      t.eq(h.vm:entrySignAt(4, 1), 'delay', 'delay cell armed')
+      t.eq(h.vm:entrySignAt(4, 2), 'delay', 'delay cell armed')
       h.vm:editEvent(col, col.cells[4], 5, string.byte('5'), false)
       t.eq(h.fm:dump().notes[1].delay, -500, 'digit consumed the arm')
     end,
@@ -256,8 +256,8 @@ return {
     name = "delay: '-' on a nonzero value flips in place, no advance",
     run = function(harness)
       local h = mkDelayed(harness, 300)
-      local col = h.vm.grid.cols[1]
-      h.ec:setPos(4, 1, 5)
+      local col = h.vm.grid.cols[2]
+      h.ec:setPos(4, 2, 5)
       h.vm:editEvent(col, col.cells[4], 5, string.byte('-'), false)
       t.eq(h.fm:dump().notes[1].delay, -300, 'sign flipped')
       t.eq(h.ec:row(), 4, 'no advance on a sign flip')
@@ -270,9 +270,9 @@ return {
     name = 'inputOctaveUp declines off the pitch part, fires on it',
     run = function(harness)
       local h = mkDelayed(harness, 0)
-      h.ec:setPos(0, 1, 3)   -- vel nibble: Shift+8 must reach digit entry
+      h.ec:setPos(0, 2, 3)   -- vel nibble: Shift+8 must reach digit entry
       t.eq(h.cmgr:invoke('inputOctaveUp'), false, 'declined on a value part')
-      h.ec:setPos(0, 1, 1)   -- pitch part: the command claims the key
+      h.ec:setPos(0, 2, 1)   -- pitch part: the command claims the key
       t.eq(h.cmgr:invoke('inputOctaveUp') ~= false, true, 'fires on the pitch part')
     end,
   },

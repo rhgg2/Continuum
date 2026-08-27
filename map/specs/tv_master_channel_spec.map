@@ -1,0 +1,70 @@
+@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=198  cases=10
+@exercises dataStore (h.ds), trackerManager (h.tm), trackerView (h.vm), editCursor (h.ec), midiManager (h.fm)
+@surface   ds:assign, tm:rebuild, vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, vm:addExtraCol, vm:rebuild, ec:col, vm:scroll, fm:dump
+@harness   mk
+
+# Intent
+  Channel 0 is the master channel: an fx-only strip left of channel 1, always carrying at
+  least one column, so a global region is always addressable. It is view-built and reaches
+  no wire. see design/global-fx-column.md § The master channel
+
+# Helpers
+  @fn injectGlobals(h, list)  @ 11-20
+      -- Global regions are ordinary stored regions at chan 0; each entry overrides the defaults,
+      -- and the uuid is positional ('fxr-1', 'fxr-2', ...), as tv_fx_region_spec does for channels.
+  @fn colsOn(h, chan)  @ 22-28
+
+# Cases
+  @case 'an empty document opens with the master fx strip as column 1'  [harness]  @ 35-50
+  @case 'the strip sits left of channel 1'  [harness]  @ 54-62
+  @case 'a global region renders in the master strip and on no MIDI channel'  [harness]  @ 68-83
+  @case 'overlapping global regions pack into sibling columns on channel 0'  [harness]  @ 87-100
+  @case 'hide refuses on the master strip'  [harness]  @ 106-119
+  @case 'add-column refuses on the master strip'  [harness]  @ 123-137
+  @case 'the caret opens on channel 1 lane 1, not on the strip'  [harness]  @ 143-155
+  @case 'the strip stands through the first rebuild, before the pane has a width'  [harness]  @ 161-166
+  @case 'a take swap brings the scroll home, so the strip stands left of the caret'  [harness]  @ 170-180
+  @case 'a global region reaches no channel'  [harness]  @ 186-195
+
+# Uses (outbound edges)
+  @use call ds:assign  @ 18
+  @use call tm:rebuild  @ 19
+  @use call vm:setGridSize  @ 38,57,71,90,109,126,146,173,189
+  @use call ec:setPos  @ 113,130,147,174
+  @use call vm:hideExtraCol  @ 114
+  @use call ds:get  @ 118,135
+  @use call vm:addExtraCol  @ 131,132,133
+  @use call vm:rebuild  @ 148,177
+  @use call ec:col  @ 150,151,164,179
+  @use call vm:scroll  @ 165,175,178
+  @use call fm:dump  @ 192
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ccs  @ 194
+  @field r cells  @ 75,95,96
+  @field w chan  @ 14
+  @field r chanFirstCol  @ 59,60,98
+  @field r chanLastCol  @ 60,98
+  @field r cols  @ 24,40,46,49,78,111,112,116,117,128,129,136
+  @field r cols  @ 150,174,179
+  @field w depth  @ 7
+  @field w endppq  @ 14
+  @field w fx  @ 14
+  @field r glyph  @ 76
+  @field r grid  @ 24,40,44,46,49,58,78,98,111,112,116
+  @field r grid  @ 117,128,129,136,150,174,179
+  @field w kind  @ 7
+  @field r lane  @ 154
+  @field r lane1Col  @ 44
+  @field r midiChan  @ 25,42,48,79,97,111,117,128,153
+  @field w name  @ 35,54,68,87,106,123,143,161,170,186
+  @field r notes  @ 193
+  @field w onset  @ 7
+  @field w period  @ 7
+  @field w run  @ 36,55,69,88,107,124,144,162,171,187
+  @field r stack  @ 76
+  @field w startppq  @ 14
+  @field r tails  @ 76
+  @field r type  @ 41,47,80,152,179
+  @field r uuid  @ 75,95,96
+  @field w uuid  @ 14

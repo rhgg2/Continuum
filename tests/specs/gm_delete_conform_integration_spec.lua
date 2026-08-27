@@ -14,7 +14,7 @@ local t    = require('support')
 
 local LPR      = 60                        -- resolution 240, rpb 4, denom 4
 local TAKE_LEN = 3840
-local NOTE_COL = 1                          -- chan-1 note column
+local NOTE_COL = 2                          -- chan-1 note column (col 1 is the master fx strip)
 
 local function rect()
   return { ppq = 0, dur = 2 * LPR, chanLo = 1,

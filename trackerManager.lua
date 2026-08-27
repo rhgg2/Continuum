@@ -4976,10 +4976,17 @@ local function rebuildPipeline(didReload)
   -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
   if didReload then perf.start('reload'); reload(); perf.stop('reload') end
 
+  -- Phase 1 of the global fx column: a chan-0 region is a view surface only, reaching no
+  -- channel. Phase 2 expands it into per-channel producers at this seam. see design/global-fx-column.md § Expansion
+  local channelRegions = {}
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    if region.chan ~= 0 then util.add(channelRegions, region) end
+  end
+
   -- One head snapshot of the ds intent keys the pipeline reads; stages take these as params.
   -- Every key is read before any same-pass write, so a head read equals each old use-site value.
   local sources = {
-    fxRegions       = ds:get('fxRegions'),
+    fxRegions       = channelRegions,
     fxParked        = ds:get('fxParked'),
     prevWindows     = ds:get('prevWindows'),
     extraColumns    = ds:get('extraColumns'),

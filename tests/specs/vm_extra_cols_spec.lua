@@ -20,12 +20,12 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      -- chan 1 lane 1 (has the note) is grid.cols[1]; lane 2 (empty) is [2].
-      local laneCol2 = h.vm.grid.cols[2]
-      t.eq(laneCol2.lane, 2,            'grid.cols[2] is chan 1 lane 2')
+      -- chan 1 lane 1 (has the note) is grid.cols[2]; lane 2 (empty) is [2].
+      local laneCol2 = h.vm.grid.cols[3]
+      t.eq(laneCol2.lane, 2,            'grid.cols[3] is chan 1 lane 2')
       t.eq(#laneCol2.events, 0,         'lane 2 is empty')
 
-      h.ec:setPos(0, 2, 1)
+      h.ec:setPos(0, 3, 1)
       h.vm:hideExtraCol()
 
       local extras = h.ds:get('extraColumns')
@@ -59,7 +59,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.vm:hideExtraCol()
 
       local extras = h.ds:get('extraColumns')
@@ -93,11 +93,11 @@ return {
       }
       h.vm:setGridSize(80, 40)
 
-      local laneCol1 = h.vm.grid.cols[1]
-      t.eq(laneCol1.lane, 1,            'grid.cols[1] is chan 1 lane 1')
+      local laneCol1 = h.vm.grid.cols[2]
+      t.eq(laneCol1.lane, 1,            'grid.cols[2] is chan 1 lane 1')
       t.eq(#laneCol1.events, 0,         'lane 1 is empty')
 
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
       h.vm:hideExtraCol()
 
       local extras = h.ds:get('extraColumns')

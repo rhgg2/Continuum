@@ -13,7 +13,7 @@ local function noteH(harness)
                          vel = 100, detune = 0, delay = 0 } } },
   }
   h.vm:setGridSize(80, 40)
-  h.ec:setPos(4, 1, 1)  -- pitch stop on the row-4 note
+  h.ec:setPos(4, 2, 1)  -- pitch stop on the row-4 note
   return h
 end
 
@@ -67,7 +67,7 @@ return {
     run = function(harness)
       local h = noteH(harness)
       h.cmgr:invoke('duplicateDown')   -- seed: copy at row 5
-      h.ec:selClear(); h.ec:setPos(8, 1, 1)  -- what handleMouse does
+      h.ec:selClear(); h.ec:setPos(8, 2, 1)  -- what handleMouse does
       h.cmgr:invoke('duplicateDown')   -- redirect to row 8 (ppq 480)
       h.cmgr:invoke('duplicateDown')   -- no move: stack at row 9 (ppq 540)
       t.deepEq(ppqs(h), { 240, 300, 480, 540 },
@@ -82,8 +82,8 @@ return {
                              vel = 100, detune = 0, delay = 0 } } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(4, 1, 1)
-      h.ec:extendTo(4, 1, 1)           -- a real 1-row selection at row 4
+      h.ec:setPos(4, 2, 1)
+      h.ec:extendTo(4, 2, 1)           -- a real 1-row selection at row 4
       h.cmgr:invoke('duplicateDown')   -- seed: copy at row 5
       h.cmgr:invoke('cursorDown')      -- real cursor move (selClear inside)
       h.cmgr:invoke('cursorDown')
@@ -107,7 +107,7 @@ return {
         } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(4, 1, 1)             -- chan-1 note, row 4
+      h.ec:setPos(4, 2, 1)             -- chan-1 note, row 4
       h.cmgr:invoke('duplicateDown')   -- seed: chan-1 copy at row 5
       h.cmgr:invoke('channelRight')    -- cursor jumps to chan 2
       h.cmgr:invoke('cursorDown')
@@ -140,7 +140,7 @@ return {
     name = 'selection seed re-selects each copy',
     run = function(harness)
       local h = noteH(harness)
-      h.ec:extendTo(4, 1, 1)           -- a real 1-row selection
+      h.ec:extendTo(4, 2, 1)           -- a real 1-row selection
       h.cmgr:invoke('duplicateDown')
       t.eq(h.ec:hasSelection(), true, 'the freshly placed copy is selected')
     end,

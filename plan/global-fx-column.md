@@ -18,21 +18,13 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-27 tv: master channel strip, an fx-only channel 0 left of channel 1 (§ The master channel, § The master channel is always addressable)
 
 ## Now
 
-(empty — run /plan-next to compile the first Queued item.)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The master channel strip** — channel 0 joins the tracker layout left of
-   channel 1, carrying fx columns and nothing else, and always at least one of
-   those, occupied or not. Its fx columns are ordinary; the strip around them is
-   the new part. Hide refuses there, since it would otherwise leave the channel
-   with no column to select in. Spec: an empty document's layout opens with
-   channel 0 at one fx column and no note, cc, pb, pc or at column; hide over it
-   is a no-op.
 
 1. **Channel 0 refuses the channel-naming gestures** — mute, solo, channel
    select, freeze and parameter automation each bind a MIDI channel, which

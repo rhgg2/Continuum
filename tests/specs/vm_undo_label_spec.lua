@@ -70,7 +70,7 @@ return {
       for _, v in ipairs(QUANTIZE_VERBS) do
         local h = offGridTake(harness)
         local labels = collectLabels(h)
-        h.ec:setPos(2, 1, 1)   -- over the note: the selection scopes' region
+        h.ec:setPos(2, 2, 1)   -- over the note: the selection scopes' region
         h.vm[v.verb](h.vm)
 
         t.deepEq(labels, { v.label }, v.verb .. ' opens one block, labelled')

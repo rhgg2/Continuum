@@ -23,7 +23,7 @@ local function mkScenario(harness)
   r:setTrackFX(dst, { { ident = 'VST3:Synth' } })
   r:setFxGuid(dst, 0, '{FX-synth}')
   h.vm:setGridSize(80, 40)
-  h.ec:setPos(0, 1, 1)
+  h.ec:setPos(0, 2, 1)
   return h, r, src, dst
  end
 

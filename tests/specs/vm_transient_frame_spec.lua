@@ -21,7 +21,7 @@ return {
       }
       h.vm:setGridSize(80, 40)
       -- Place cursor on the note (chan 1, lane 1, row 0, stop 1).
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
 
       h.cmgr:invoke('matchGridToCursor')
 
@@ -43,7 +43,7 @@ return {
         config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
-      h.ec:setPos(0, 1, 1)
+      h.ec:setPos(0, 2, 1)
 
       h.cmgr:invoke('matchGridToCursor')
       t.eq(h.cm:getAt('transient', 'rowPerBeat'), 8, 'override active')
@@ -81,7 +81,7 @@ return {
       h.vm:setGridSize(80, 40)
       h.cm:assign('transient', { rowPerBeat = 8 })
       -- Place cursor at row 4 (in rpb=8). Halving expected to land row 2.
-      h.ec:setPos(4, 1, 1)
+      h.ec:setPos(4, 2, 1)
       t.eq(h.ec:row(), 4, 'cursor at row 4 under rpb=8')
 
       h.vm:setRowPerBeat(4)

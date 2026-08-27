@@ -106,6 +106,7 @@ local specs = {
   'tm_column_order_spec',
   'tm_raw_index_order_spec',
   'tv_fx_region_spec',
+  'tv_master_channel_spec',
   'tv_fx_patch_spec',
   'tv_freeze_group_spec',
   'tm_slide_spec',

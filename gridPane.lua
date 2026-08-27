@@ -540,19 +540,23 @@ local function drawTracker()
   -- columns protrude past them and would pull the label off-centre.
   local noteSpan = {}
   for _, col in ipairs(grid.cols) do
-    if col.x and col.type == 'note' then
+    -- The master channel has no note columns, so its banner spans its fx columns instead.
+    local spans = col.type == 'note' or (col.midiChan == 0 and col.type == 'fx')
+    if col.x and spans then
       local span = noteSpan[col.midiChan]
       if span then span.xHi = col.x + col.width - 1
       else noteSpan[col.midiChan] = { xLo = col.x, xHi = col.x + col.width - 1 } end
     end
   end
-  for chan = 1, 16 do
+  for chan = 0, 16 do
     local span = noteSpan[chan]
     if span then
-      local key = tv:isChannelSoloed(chan) and 'solo'
+      -- The master channel neither mutes nor solos: it reaches no wire to mute.
+      local key = chan == 0                and 'tracker.chanHeader'
+               or tv:isChannelSoloed(chan) and 'solo'
                or tv:isChannelMuted(chan)  and 'mute'
                or 'tracker.chanHeader'
-      draw:textCentred(span.xLo, span.xHi, -HEADER, 'Ch ' .. chan, key)
+      draw:textCentred(span.xLo, span.xHi, -HEADER, chan == 0 and 'Gl' or 'Ch ' .. chan, key)
     end
   end
   for _, col in ipairs(grid.cols) do

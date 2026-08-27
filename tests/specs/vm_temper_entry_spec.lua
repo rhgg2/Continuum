@@ -255,7 +255,7 @@ return {
       local letterStop, octStop = pitchStops(col)
 
       -- Place a note: 'z' = C, snaps to a step at some period-cycle octave.
-      h.ec:setPos(0, 1, letterStop)
+      h.ec:setPos(0, 2, letterStop)
       h.vm:editEvent(col, nil, letterStop, string.byte('z'), false)
 
       col = lane1(h)
@@ -264,7 +264,7 @@ return {
 
       -- Type octave 5 into the octave column (cursor on the note's row so
       -- the edit does not repin ppq).
-      h.ec:setPos(0, 1, octStop)
+      h.ec:setPos(0, 2, octStop)
       h.vm:editEvent(col, note, octStop, string.byte('5'), false)
 
       col = lane1(h)
@@ -286,7 +286,7 @@ return {
       local col = lane1(h)
       local letterStop, octStop = pitchStops(col)
 
-      h.ec:setPos(0, 1, letterStop)
+      h.ec:setPos(0, 2, letterStop)
       h.vm:editEvent(col, nil, letterStop, string.byte('z'), false)
 
       col = lane1(h)
@@ -295,7 +295,7 @@ return {
 
       -- Octave 9: a 9/4-period note that high clamps into MIDI range, so
       -- it could not sit on its step — the edit must be a no-op.
-      h.ec:setPos(0, 1, octStop)
+      h.ec:setPos(0, 2, octStop)
       h.vm:editEvent(col, before, octStop, string.byte('9'), false)
 
       col = lane1(h)
@@ -446,13 +446,13 @@ return {
       local col = lane1(h)
       local letterStop = (pitchStops(col))
 
-      h.ec:setPos(0, 1, letterStop)
+      h.ec:setPos(0, 2, letterStop)
       h.vm:editEvent(col, nil, letterStop, string.byte('z'), false)
       local placed = lane1(h).cells[0].pitch
 
       -- Climb with coarse pitch nudges; the cursor stays on the note's row so
       -- each nudge transposes it in place. It saturates near MIDI 127.
-      h.ec:setPos(0, 1, letterStop)
+      h.ec:setPos(0, 2, letterStop)
       for _ = 1, 40 do h.cmgr:invoke('nudgeCoarseUp') end
 
       local note = lane1(h).cells[0]
