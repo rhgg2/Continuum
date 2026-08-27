@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Explode and freeze share one chord, Ctrl+E, with the caret's host picking the
+  arm: freeze refuses on the master strip and explode refuses off it, so at most one is ever live
+  and a second binding would only ever be dead. The eligibility gate sits in tv, composed from the
+  stored region's channel and tm's realisation union, rather than as a second tm predicate beside
+  freezeEligible: both facts are already published, and the button and the keystroke want the same
+  answer before the atomic wrap opens a block.
+
 - **2026-08-27** — A pbRange edit from the tracker status bar writes the track tier, not the take
   tier its neighbouring cells use. The range has to match the pitch-bend range of the synth on the
   track, so two takes played through one synth cannot sensibly disagree; octave and advance sit at

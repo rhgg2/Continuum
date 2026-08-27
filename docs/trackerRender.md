@@ -209,12 +209,15 @@ sibling chains already express that.
 The chain draws
 *inside* the palette child (`drawFxChainBody`; the tab header and chrome styles
 are already pushed) as tree rows echoing the parameters tab: two action rows
-(`clear` / `freeze` / `to group` / `commit` / `cancel`, then the catalogue's
+(`clear` / `freeze` / `to group` / `explode` / `commit` / `cancel`, then the catalogue's
 `save` / `load`), then each stage top-to-bottom — a heading (the
 swap picker, current kind flagged) with `↑`/`↓` reorder, `byp` and `del` aligned to
 the value column's left edge, then one row per field: label left, `fxFieldWidget` in
 a fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
-around the arrow) between stages and a terminal **add** row. Both catalogue
+around the arrow) between stages and a terminal **add** row. `explode`
+(`tv:explodeRegion`) is live only on a global region whose chain reaches a
+channel, exactly where `freeze` and `to group` are both dead
+(`docs/trackerView.md` § Addressing a chain). Both catalogue
 pickers list `fxPatches` through `chrome.tierPicker` under the `Project` and
 `Library` headings, in full and unresolved, so a name held in both tiers draws a
 row under each and a pick carries the tier its row was drawn from. The

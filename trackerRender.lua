@@ -1499,8 +1499,8 @@ local stripPlan do
     tv:setStripCursor(cur)
   end
 
-  -- clear and freeze need no keyboard session, so both stay live regardless of focus; commit/cancel end
-  -- the session, so they gate on strip focus (mouse parity for Super+X/Esc) — nothing to end unfocused.
+  -- clear and the conversions need no keyboard session, so they stay live regardless of focus; commit/cancel
+  -- end the session, so they gate on strip focus (mouse parity for Super+X/Esc) — nothing to end unfocused.
   local function headerActions(plan)
     if ImGui.Button(ctx, 'clear') and plan.host then tv:setNoteFx(plan.host, util.REMOVE) end
     ImGui.SameLine(ctx, 0, 4)
@@ -1517,6 +1517,15 @@ local stripPlan do
     chrome.disabledIf(mode ~= 'group', function()
       if ImGui.Button(ctx, 'to group') then
         tv:freezeToGroup(plan.host)
+        if stripHost == plan.host then stripExitReq = true end
+      end
+    end)
+    ImGui.SameLine(ctx, 0, 4)
+    -- The third conversion, and the strip's own: live where the other two are dead, since freeze
+    -- refuses a global region and explode refuses everything else.
+    chrome.disabledIf(not (plan.host and tv:explodeEligible(plan.host)), function()
+      if ImGui.Button(ctx, 'explode') then
+        tv:explodeRegion(plan.host)
         if stripHost == plan.host then stripExitReq = true end
       end
     end)

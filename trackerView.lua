@@ -2913,10 +2913,12 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
 end
 
 -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
--- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block.
-local function freezeRegionAtCursor()
+-- a one-way conversion acts on what's visible; a refusal runs before util.atomic, opening no undo block.
+local function convertChainAtCursor()
   local uuid = tv:fxHostAtCursor()
-  if uuid and tm:freezeEligible(uuid) then tv:freezeRegion(uuid) end
+  if not uuid then return end
+  if     tv:explodeEligible(uuid) then tv:explodeRegion(uuid)
+  elseif tm:freezeEligible(uuid)  then tv:freezeRegion(uuid) end
 end
 
 -- The group door on the same host. Freeze-to-raw mints no rect, so a group collision is none of its
@@ -3086,6 +3088,19 @@ end
 --contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
 
+--contract: eligible only for a stored global region whose chain reaches a channel; else false
+-- tm:explodeRegion's own two refusals, asked ahead of the atomic wrap rather than inside it: a decline
+-- opens no undo block, and the fx tab's button gates on the same answer.
+function tv:explodeEligible(uuid)
+  local region = uuid and regionByUuid(uuid)
+  if not (region and region.chan == 0) then return false end
+  local realisation = tm:fxRealisation(uuid)
+  return realisation ~= nil and #realisation.chans > 0
+end
+
+--contract: a stored global region; any other uuid is a silent no-op
+function tv:explodeRegion(uuid) return tm:explodeRegion(uuid) end
+
 --contract: nil for a non-producer; 'raw' when a live group's footprint blocks it; else 'group'
 -- Not atomic: the whole point is a decline that opens no undo block.
 function tv:freezeMode(uuid)
@@ -3122,6 +3137,7 @@ tv.replaceFxStage   = util.atomic('Swap FX stage',    tv.replaceFxStage)
 tv.pruneEmptyRegion = util.atomic('Delete FX region', tv.pruneEmptyRegion)
 tv.freezeRegion     = util.atomic('Freeze FX region', tv.freezeRegion)
 tv.freezeToGroup    = util.atomic('Freeze FX to group', tv.freezeToGroup)
+tv.explodeRegion    = util.atomic('Explode FX region', tv.explodeRegion)
 -- A project-tier cm write is undoable but mints no point either, so the catalogue verb wraps alike.
 tv.saveFxPatch      = util.atomic('Save FX patch',     tv.saveFxPatch)
 tv.loadFxPatch      = util.atomic('Load FX patch',     tv.loadFxPatch)
@@ -4357,7 +4373,7 @@ tracker:registerAll{
   groupLocalToggle        = function() gm:setLocalMode(not gm:localMode()) end,
   regionArm               = function() ec:regionArm() end,
   -- No undoDesc: tv.freezeRegion carries its own block, shared with the fx tab's button.
-  freezeFxRegion          = freezeRegionAtCursor,
+  freezeFxRegion          = convertChainAtCursor,
   freezeFxGroup           = freezeGroupAtCursor,
 }
 

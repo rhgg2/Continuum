@@ -20,19 +20,15 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 tv: explode a global region from the master strip (design § Explode)
 - 2026-08-27 tm: explode a global region onto the channels it reaches (§ Explode)
 - 2026-08-27 tm: a global region realises as the union of its producers (§ Realisation on the master strip)
 - 2026-08-27 tm: expand a global region onto the channels in use (§ Expansion)
-- 2026-08-27 tm: expand a global region into a producer on every channel (§ Expansion, § An edit reaches sixteen channels)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- **tv: the explode gesture on the master strip.** `tv:explodeRegion` under
-  `util.atomic('Explode FX region')`, a command bound in `pageBindings` that
-  addresses `tv:fxHostAtCursor()`, and a button on the fx strip beside freeze's;
-  both refuse off channel 0. `docs/trackerView.md` § Addressing a chain states
-  the freeze route: explode, then freeze one of the sixteen. Spec in
-  `tv_master_channel_spec`.
+
+(empty)

@@ -354,6 +354,112 @@ return {
     end,
   },
 
+  ----- Explode: the expansion, persisted
+
+  {
+    -- Freeze refuses on the strip, so the fx-convert chord means explode there: the stored global
+    -- region gives way to the ordinary ones its expansion was already running.
+    -- see docs/trackerView.md § Addressing a chain
+    name = 'the fx-convert chord on a global badge explodes it onto the channels in use',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      for _, chan in ipairs{ 3, 11 } do
+        h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
+                       vel = 100, detune = 0, delay = 0, lane = 1 }
+      end
+      h.tm:flush()
+      injectGlobals(h, { {} })
+      t.truthy(h.vm:explodeEligible('fxr-1'), 'a global chain reaching two channels is eligible')
+
+      -- util.atomic reads reaper.Undo_BeginBlock at call time, so a stub installed after the wrap
+      -- still counts. Outermost blocks only: the conversion's inner ones collapse into the verb's.
+      local depth, blocks = 0, 0
+      local realBegin, realEnd = h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock
+      h.reaper.Undo_BeginBlock = function()
+        if depth == 0 then blocks = blocks + 1 end
+        depth = depth + 1
+      end
+      h.reaper.Undo_EndBlock = function() depth = depth - 1 end
+
+      h.ec:setPos(0, colIdx(h, 0, 'fx'), 1)
+      h.cmgr:invoke('freezeFxRegion')
+      h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock = realBegin, realEnd
+      t.eq(blocks, 1, 'the explode opens exactly one undo block')
+
+      local chans = {}
+      for _, r in ipairs(h.ds:get('fxRegions') or {}) do util.add(chans, r.chan) end
+      table.sort(chans)
+      t.deepEq(chans, { 3, 11 }, 'one stored region per channel reached, and none on channel 0')
+
+      local strip = colsOn(h, 0)
+      t.eq(#strip, 1,          'the strip keeps its column')
+      t.falsy(strip[1].cells[0], 'with no badge left on it')
+
+      local wire = {}
+      for _, c in ipairs(h.fm:dump().ccs) do wire[c.chan] = true end
+      local reached = util.keys(wire)
+      table.sort(reached)
+      t.deepEq(reached, { 3, 11 }, 'and the chain sounds where it sounded before')
+    end,
+  },
+
+  {
+    -- All or nothing: a chain reaching nothing would explode into no region at all, and the chain
+    -- would go with it. The decline comes before the atomic wrap, so no empty undo entry is labelled.
+    name = 'a global chain reaching no channel declines, opening no undo block',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectGlobals(h, { {} })   -- an empty document puts no channel in use
+      t.falsy(h.vm:explodeEligible('fxr-1'), 'so there is nothing to expand into')
+
+      local depth, blocks = 0, 0
+      local realBegin, realEnd = h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock
+      h.reaper.Undo_BeginBlock = function()
+        if depth == 0 then blocks = blocks + 1 end
+        depth = depth + 1
+      end
+      h.reaper.Undo_EndBlock = function() depth = depth - 1 end
+
+      h.ec:setPos(0, colIdx(h, 0, 'fx'), 1)
+      h.cmgr:invoke('freezeFxRegion')
+      h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock = realBegin, realEnd
+
+      t.eq(blocks, 0, 'neither arm runs, and no block opens')
+      local stored = h.ds:get('fxRegions') or {}
+      t.eq(#stored, 1,        'the region stands')
+      t.eq(stored[1].chan, 0, 'on the master channel, chain and all')
+    end,
+  },
+
+  {
+    -- The arms are exclusive: a region on a channel of its own has nothing to expand into, and the
+    -- chord means freeze there, as it did before explode existed.
+    name = 'explode refuses off the master strip, where the chord freezes instead',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
+      h.ds:assign('fxRegions',
+                  { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      t.falsy(h.vm:explodeEligible('fxr-1'), 'a region on a channel of its own is no global')
+
+      h.ec:setPos(0, colIdx(h, 1, 'fx'), 1)
+      h.cmgr:invoke('freezeFxRegion')
+
+      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'the chord froze it: the region is gone')
+      local authored = 0
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if not e.derived then authored = authored + 1 end
+      end
+      t.truthy(authored > 1, 'and the arp output stands as authored notes')
+    end,
+  },
+
   {
     -- The union's claimed targets are the chain's, and the sampling asks for one channel at a time:
     -- every channel reached lights the column it carries. see docs/trackerManager.md § Realisation by producer

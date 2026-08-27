@@ -743,6 +743,15 @@ of its own: it drops any region whose rebased channel falls outside 1 to 16 (§ 
 Channel select stands, selecting the strip's columns rather than binding anything to the
 wire, and clicking the `Gl` banner is the mouse route onto it.
 
+**10** **Explode** is the strip's own verb, and the way through freeze's refusal: it
+replaces a global region with an ordinary region on each channel its chain reaches, which
+is the expansion the rebuild was already running, persisted (`docs/trackerManager.md`
+§ Channel & column model). Freezing a global chain thus means exploding it and freezing
+one of the sixteen. A chain reaching no channel declines, since the explode would leave no
+region at all and take the chain with it. Explode and freeze share one chord, Ctrl+E, and
+the caret's host picks the arm: at most one of them is ever live, freeze refusing on the
+strip and explode refusing off it.
+
 ## Note FX stages
 
 **1** The fx list is an ordered series (`docs/generators.md` § The chain); the
