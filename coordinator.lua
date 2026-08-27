@@ -1,6 +1,6 @@
 -- See docs/coordinator.md for the model.
 
---invariant: owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
+--invariant: holds no domain state — the loop, the window chrome and the facade registry only; each page owns what it renders
 --invariant: no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
 --invariant: each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall
 
@@ -213,7 +213,7 @@ local function frame()
     end
 
     -- Uniform band height: lineCount × standard row height, identical on every page.
-    -- Hidden pass on switch warms widths + line count so frame-1 pins correctly.
+    -- Hidden pass on switch refreshes the line count first. See docs/coordinator.md § Pre-measuring a switch.
     if active ~= lastToolbarActive then
       lastToolbarActive = active
       local sx, sy = ImGui.GetCursorScreenPos(ctx)

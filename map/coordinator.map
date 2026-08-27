@@ -2,7 +2,7 @@
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
-  @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)  @ 3
+  @invariant  holds no domain state — the loop, the window chrome and the facade registry only; each page owns what it renders  @ 3
   @invariant  no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload  @ 4
   @invariant  each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall  @ 5
 

@@ -29,7 +29,7 @@ fix it.
 ## One-row layout
 
 The coordinator pins the toolbar band to `lineCount × rowHeight` and does
-*not* content-fit (see docs/coordinator.md § Toolbar band height), so a
+*not* content-fit (see `docs/coordinator.md § Toolbar band height`), so a
 tall stacked meter would be clipped. The widget is therefore a single
 row: the whole rect is the fader's hit target, and the L/R bars ride its
 top and bottom edges — "bars above and below the slider" inside one row's

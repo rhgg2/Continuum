@@ -1,78 +1,205 @@
 # coordinator
 
-Mediator between the entry point and the two pages. It owns the render loop, the active take, and the active sampler track — state that neither page should poll for independently.
+**The coordinator holds precisely what all pages share**: the render
+loop, the window and its two chrome bands, the singletons every page
+is constructed with, and the registry through which pages read each
+other.
 
-## Take ownership
+## Pages
 
-The tracker page needs a MIDI take to render, but the take isn't known at construction time: REAPER hands it to us via selection events that arrive asynchronously. The coordinator polls `GetSelectedMediaItem` on every tracker-page frame and binds the page only when the take actually changes. Selection of a non-MIDI item or no item is silently ignored — the coordinator is sticky, holding the last valid take rather than resetting the page to an empty state. This is deliberate: working on a MIDI item, clicking elsewhere to check something, then clicking back should not disrupt the edit session.
+1. `register(name, moduleName, extra)` instantiates the page by module
+   name, and returns the handle. The first page registered becomes
+   active.
 
-## Sampler track
+1. `STD` is the affordance set every page is constructed with: `cm`,
+   `ds`, `eventMeta`, `cmgr`, `chrome`, `gui`, `modalHost`, `help`,
+   `facade` and `lib`. A page needing anything else names it in
+   `extra` at the registration site.
 
-The sample page is bound to a specific sampler track. The coordinator holds the reference so `setSamplerTrack` (called by the track picker in samplePage) can re-bind without samplePage holding a self-reference to the coordinator. On first sample-page activation the coordinator seeds the default from `pages.sample:listTracks()`.
+1. A page is anything answering `toolbarSegments`, `renderBody`,
+   `statusSegments`, `bind` and `unbind`.
+
+## Activation
+
+1. `setActive(name)` unbinds the outgoing page, resets the shared
+   toolbar, and pops the outgoing command scope; it then pushes the
+   incoming scope and binds the incoming page. Scope and binding move
+   together.
+
+1. `previousPage` reports the page displaced by the last switch.
+   `returnToArrange` is the tracker's fixed exit, and no-ops when
+   arrange is not registered.
+
+1. `togglePage` cycles tracker → arrange → sample → wiring, skipping
+   any page not registered. The editor is absent from the cycle: it is
+   entered and left by command.
+
+## The frame
+
+1. Each frame runs in a fixed order: poll the undo mirror, poll the
+   external commands, poll the floating-FX set, `tick`, then draw.
+
+1. `tick` is the pre-draw beat for the pages that need one — the modal
+   host, the sample page, wiring's external resync while wiring is
+   active, and the bridge. There is no selection bus.
+
+1. Drawing goes toolbar band, body, status band, then the help overlay
+   and any modal above them. The band layouts belong to chrome — see
+   `docs/chrome.md § Toolbar layout` and `§ Status bar layout`.
+
+1. The body is the window less the two bands, indented by the chrome
+   padding; the status band is pinned to its bottom edge. The
+   parchment gap above the status band is whatever the page did not
+   fill.
+
+1. The window scrolls back to the origin every frame. An active-item
+   drag — the lane strip's curve editor, for instance — otherwise
+   accumulates auto-scroll on the parent window and pushes the grid
+   out of view for the length of the drag.
+
+1. `dispatch`, threaded into `renderBody`, is the route from keys to
+   the command manager. It suppresses everything while the cheat-sheet
+   is open — see `docs/help.md § Input while open`.
+
+## Boot warm-up
+
+1. Content is withheld until four frames have passed and the available
+   width matches the frame before.
+
+1. Both terms are needed: ReaImGui builds its font atlas over the
+   first frames, and the width keeps moving until REAPER has finished
+   placing the window.
+
+1. The gate latches once satisfied and never re-arms.
 
 ## Render loop
 
-The loop is a bare `reaper.defer` chain. Each frame reschedules itself before returning. `coord:quit()` sets a flag that prevents rescheduling; REAPER then reclaims all Lua state on script unload. There is no explicit teardown path — adding one would encode assumptions about destruction order that REAPER does not guarantee.
+1. The loop is a bare `reaper.defer` chain, each frame rescheduling
+   itself before returning.
 
-## Undo mid-frame: resync before reload
+1. `coord:quit()` sets a flag that prevents rescheduling; REAPER then
+   reclaims all Lua state on script unload.
 
-A REAPER undo rewinds two things unevenly. The take's MIDI it rewinds itself; the note metadata (authored tails, uuids) lives in projext, which undo does not touch — it comes back only when `ps:pollUndo` copies it from the scratch mirror. `frame()` polls at the top, so the everyday path is safe: REAPER's own Ctrl-Z lands between frames, metadata is rewound first, and the take-hash watcher then reloads against a coherent pair.
-
-Continuum's own Ctrl-Z does not land between frames. It fires from inside the page's dispatch and reloads the take immediately, which is what `reloadAfterExternalMutation` is for. Without a resync it reloaded a rewound take against un-rewound metadata: the rebuild's tail pass re-derived the note-off from the stale authored ceiling and flushed it back to the take, erasing the undo. Only the tracker page reloads mid-frame, so it was the only page where undo appeared dead (2026-07-13).
-
-Hence the `cm:pollUndo()` at the head of `reloadAfterExternalMutation`. Any caller that mutates the take mid-frame — including the bridge's raw-edit path — inherits the same hazard and the same fix.
+1. There is no explicit teardown path — adding one would encode
+   assumptions about destruction order that REAPER does not guarantee.
 
 ## Error surface
 
-Errors in the defer loop do not reach the `xpcall` in `continuum.lua` that started it: `reaper.defer` drops the surrounding handler. `coord:run` takes that handler and holds it, and each scheduled frame calls `xpcall(frame, errHandler)` itself. The handler prints the traceback and schedules a no-op defer to cleanly exit the loop.
+1. Errors in the defer loop do not reach the `xpcall` in
+   `continuum.lua` that started it: `reaper.defer` drops the
+   surrounding handler.
+
+1. `coord:run` therefore takes that handler and holds it, and each
+   scheduled frame calls `xpcall(frame, errHandler)` itself. A fault
+   on frame 40 thus surfaces the same way as one on frame 1 — see
+   `docs/continuum.md § Error handling` for what the handler does with
+   it.
+
+## Undo mid-frame
+
+1. A mid-frame reload of the take must resync the projext mirror
+   first. Hence the `cm:pollUndo()` at the head of
+   `reloadAfterExternalMutation`, before it delegates to
+   `pages.tracker:reloadFromReaper()`.
+
+1. A REAPER undo rewinds two things unevenly. The take's MIDI it
+   rewinds itself; the note metadata — authored tails, uuids — lives in
+   projext, which undo does not touch. That metadata comes back only
+   when `pollUndo` copies it from the mirror, described in
+   `docs/pextStore.md § The mirror (projext undo)`.
+
+1. `frame()` calls `cm:pollUndo()` at the top, so the everyday path is
+   safe: REAPER's own Ctrl-Z lands between frames, the metadata is
+   rewound first, and the tracker page's take-hash watcher then
+   reloads against a coherent pair.
+
+1. Continuum's own Ctrl-Z does not land between frames. It fires from
+   inside the page's dispatch and reloads the take immediately, which
+   is what `reloadAfterExternalMutation` is for.
+
+1. Any caller mutating the take mid-frame — including the bridge's
+   raw-edit path — inherits the same hazard and the same fix.
+
+## External commands
+
+1. Companion REAPER actions set `ExtState('Continuum', key)`.
+
+1. `onExternalCommand(key, command)` registers the pairing. Each frame
+   consumes any key that is set, deleting it and invoking its command.
+
+1. This is the route for keys that must work while a floating FX
+   window holds focus, where ImGui delivers none — see
+   `docs/continuum.md § Keys`.
+
+## Focus reclaim
+
+1. Closing the last floating FX window leaves focus with REAPER rather
+   than Continuum. While Continuum lacks focus it polls the set of
+   floating FX windows across the master and every track, and reads
+   the open→closed edge as the last one having been dismissed.
+
+1. Reclaiming takes two grabs, held for two frames:
+   `SetNextWindowFocus` before `Begin` for ImGui's internal focus, and
+   `JS_Window_SetForeground` for the OS. The HWND is cached while
+   Continuum holds focus, since `JS_Window_GetForeground` reports
+   someone else's window once it does not.
+
+1. All of this is conditional on js_ReaScriptAPI being present.
+   Without it the poll never runs, and focus stays where REAPER put
+   it.
 
 ## Toolbar band height
 
-The toolbar row (page switcher + the active page's segments) wraps to a
-second line when the window is too narrow to hold it on one row.
+1. The toolbar row wraps when the window is too narrow to hold it; see
+   `docs/chrome.md § Toolbar layout` for how the wrap is decided.
 
-The band height is pinned to `lineCount × canonicalRowHeight`, not left
-to content-fit `AutoResizeY`. Content fitting made the height vary per
-page: a row mixes framed widgets (`FrameHeight`) with `chrome.checkbox`/
-`radio`, which run at zero `FramePadding` plus a +3px nudge — a different
-height — so the tallest widget, and the band with it, shifted with each
-page's widget mix. The canonical row is the standard toolbar frame height
-(page-independent), so every line is exactly one frame tall and the band
-reads identical across pages; wrapping still grows it by whole rows.
-`chrome.toolbar` counts the wrapped lines during layout and exposes the
-count.
+1. The band height is pinned to the standard toolbar frame height ×
+   the line count, plus the spacing between lines.
 
-The line count is read from the *previous* frame's draw, so on the frame
-the wrapped row-count changes — a page switch, or a resize crossing the
-wrap threshold — it would be stale for one frame, clipping the new row and
-jumping the body. On a page switch the coordinator pre-measures: it renders
-the row once into a hidden (`Alpha 0`) throwaway child at the same inner
-width, which warms the segment widths and refreshes the line count, then
-restores the cursor. The hidden child has its own ImGui ID scope, so the
-doubled widgets never collide with the real ones. The switcher is always
-the first segment, so even a page with no toolbar bits of its own (wiring)
-lays out and stays the same height as the rest.
+## Pre-measuring a switch
 
-Width changes deliberately skip the pre-measure. Re-rendering the page's
-segments a second time re-executes any that open a popup (`drawPicker`
-with an open list), beginning that popup twice in one frame — which
-corrupts the window stack and asserts at the next `EndChild`. A resize
-fires every frame and would hit this; a page switch first closes any open
-picker (focus loss), so its second render is side-effect-free. On a width
-change the row still wraps correctly against the current width, so only
-the line count trails one frame.
+1. `chrome.toolbar` counts the wrapped lines during layout, so the
+   count known at the start of a frame is the previous frame's. On the
+   frame the row count changes it is stale, clipping the new row and
+   jumping the body.
+
+1. On a page switch the coordinator therefore renders the row once
+   into a hidden (`Alpha 0`) throwaway child at the same inner width,
+   then restores the cursor. That refreshes the line count before the
+   band height is computed from it.
+
+1. Chrome runs a cold-frame pre-measure of its own, but from inside
+   `toolbar()` — too late for a height computed before the draw.
+
+1. The hidden child has its own ImGui ID scope, so the doubled widgets
+   never collide with the real ones.
+
+1. Width changes deliberately skip the pre-measure. Re-rendering the
+   page's segments would re-execute any that open a popup (e.g.
+   `drawPicker` with an open list) corrupting the window stack and
+   asserting at the next `EndChild`.
+
+1. On a width change the row still wraps correctly against the current
+   width, so only the line count trails a frame.
 
 ## Façade registry
 
-`coord` owns the wiring between pages: each page publishes its own
-domain-state interface and reads peers via the injected façade.
-`STD` is the affordance set every page is constructed with;
-per-page extras merge over it in `register()`. See `docs/pageFacade.md`
-for the full façade contract.
+1. `coord` owns the wiring between pages. Each page calls
+   `facade.publish` with its own interface onto the state it owns, and
+   reads its peers through the same `facade`, handed to it in `STD`.
 
-## Test wiring for newCoord
+1. `getFacade(name)` resolves one by name, and an unpublished name
+   raises.
 
-`register` instantiates the page by module name. In specs, stub each
-module name to the fake page via `util._stubs` (the `instantiate` test
-seam) so `register` exercises its real path. Stubs are cleared
-immediately after the pages are constructed.
+1. `publishDebug` is a second registry, holding raw page stacks for
+   the bridge's eval environment. It is a labelled hole in the
+   layering rule — diagnostics, not a production surface. See
+   `docs/bridge.md § The eval environment`.
+
+## Test wiring
+
+1. `register` instantiates the page by module name, so a spec stubs
+   each module name to a fake page through `util._stubs`, the
+   `instantiate` test seam. `register` then runs its real path.
+
+1. The stubs are cleared as soon as the pages are constructed.

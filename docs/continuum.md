@@ -50,7 +50,7 @@ coordinator, binds the global commands, and enters the defer loop.
 1. Each page instantiates its own manager column, and continuum names
    the module and nothing more. Every page is constructed with the
    coordinator's `STD` affordance set — see `docs/coordinator.md §
-   Façade registry`.
+   Pages`.
 
 ## Global commands
 
@@ -115,17 +115,15 @@ coordinator, binds the global commands, and enters the defer loop.
    script alive rather than letting REAPER unload it the moment the
    handler returns.
 
-1. `reaper.defer` drops the surrounding `xpcall`, so the loop cannot
-   inherit Main's. `coord:run(err_handler)` threads the same handler
-   into the coordinator instead, which schedules each frame as
-   `xpcall(frame, errHandler)` — so a fault on frame 40 surfaces the
-   same way as one on frame 1.
+1. The defer loop cannot inherit that `xpcall`.
+   `coord:run(err_handler)` threads the same handler into the
+   coordinator instead — see `docs/coordinator.md § Error surface`.
 
 ## Shutdown
 
-1. There is no teardown path: `quit` sets a flag that stops the loop
-   rescheduling, and REAPER reclaims the Lua state on unload. See
-   `docs/coordinator.md § Render loop`.
+1. `quit` sets the flag that stops the loop rescheduling. There is no
+   teardown path beyond that — see `docs/coordinator.md § Render
+   loop`.
 
 1. One thing does have to be undone first. `quit` calls the tracker
    façade's `restorePerfFlags`, which re-enables anticipative FX on
