@@ -1,6 +1,6 @@
 -- Channel 0 is the master channel: an fx-only strip left of channel 1, always carrying at
 -- least one column, so a global region is always addressable. It is view-built and reaches
--- no wire. see design/global-fx-column.md § The master channel
+-- no wire. see docs/trackerView.md § Addressing a chain
 local t    = require('support')
 local util = require('util')
 

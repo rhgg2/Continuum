@@ -4,6 +4,18 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A stored global region's uuid resolves to the union of its sixteen expanded
+  producers, so the ghost overlay reads a channel per derived note rather than one per entry.
+  Expansion leaves the stored region with no producer of its own, and the master strip is the
+  chain's only surface: the caret there would otherwise ask what the chain realises and be told
+  nothing.
+
+- **2026-08-27** — A global chain's precedence is realised at expansion rather than as an ordering
+  rule on stored fxRegions. The pipeline's head snapshot emits each channel's own regions in storage
+  order and its expanded producers after them, so one seam holds the truth that a global comes last.
+  The alternative normalises the array at all five region write sites, and buys only that storage
+  reads as the order it claims to be.
+
 - **2026-08-27** — Channel select stands on the master channel, where mute, solo, parameter
   automation and freeze refuse. Selecting a channel names its columns rather than a channel on the
   wire, and clicking the master banner is the mouse route onto the strip -- the only route by which

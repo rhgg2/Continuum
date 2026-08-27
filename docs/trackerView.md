@@ -717,8 +717,8 @@ region carrying `[arp, humanize]` showing `A`, which is the misreading the
 stack exists to end. `…` says less and says it truthfully.
 
 **8** Channel 0 is the **master channel**: an fx-only strip standing left of channel 1,
-bannered `Gl` where a MIDI channel reads `Ch n`. It carries the regions stored at
-`chan = 0` and nothing else — no note, cc, pb, pc or at column — and it is their only
+bannered `Gl` where a MIDI channel reads `Ch n`. It carries the **global regions**, those
+stored at `chan = 0`, and nothing else — no note, cc, pb, pc or at column — and it is their only
 surface, the fx columns of channels 1 to 16 showing nothing of one. Since a region is
 minted from a selection, the strip keeps at least one fx column whether occupied or not,
 and hide and add-column both refuse there rather than leave it with nothing to select in.

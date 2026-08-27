@@ -1,40 +1,15 @@
 # Global fx — one chain, expanded into every channel
 
-> opened: 2026-08-23 · status: in flight — plan/global-fx-column.md, phase 1
-> (the master channel surface)
+> opened: 2026-08-23 · status: in flight — plan/global-fx-column.md, phase 2
+> (expansion)
 
 **A master channel 0 carries the tracker's global fx column. The
 rebuild expands each of its regions into all sixteen channels.**
 
-## The master channel
+## The master channel surface
 
-1. Channel 0 is the **master channel**: it carries fx columns and
-   nothing else. It has no note, cc, pb, pc or at columns. It exists in
-   the view alone and reaches no wire.
-
-1. A **global region** is an fx region stored at `chan = 0`. It carries
-   a chain as any region does, and is ordinary in every other regard.
-
-1. The master channel is a global region's only surface. The fx columns
-   of channels 1 to 16 carry their own regions and show nothing of a
-   global one.
-
-1. The master channel sits left of channel 1.
-
-1. Its banner reads `Gl`, where a MIDI channel's reads `Ch n`.
-
-## The master channel is always addressable
-
-1. The master channel always has at least one fx column, occupied or
-   not.
-
-1. Region creation takes its channel from the column the selection
-   starts in. Channel 1 always has note columns to select in; channel 0
-   has only its fx columns, so one of those must stand before any
-   global region exists.
-
-1. Hide refuses on the master channel, which would otherwise be left
-   with no column to select in.
+1. Landed in phase 1; the model lives in `docs/trackerView.md`
+   § Addressing a chain ¶¶ 8-9.
 
 ## Expansion
 
@@ -67,16 +42,33 @@ rebuild expands each of its regions into all sixteen channels.**
 
 ## Precedence
 
-1. Global regions sort after channel regions in storage, which is the
-   precedence order among chains overlapping on one channel and target
-   (`docs/generators.md` § Multiplicity — pack, sum, layer).
+1. Storage order is the precedence order among chains overlapping on
+   one channel and target (`docs/generators.md` § Multiplicity — pack,
+   sum, layer).
 
-1. An expanded producer keeps its parent's place in that order, after
-   the regions of the channel it lands on.
+1. Expansion emits each channel's own regions in storage order, then
+   the producers expanded onto it. Storage carries no rule of its own
+   about where a global region sits.
 
 1. A global chain therefore comes last: its notes pack after the
    channel's, its augment curves sum on top, and its replace curves
    overwrite theirs.
+
+1. Among globals the order is their storage order, which the master
+   strip shows as their lane order.
+
+## Realisation on the master strip
+
+1. The caret on a region asks what its chain realises
+   (`docs/trackerManager.md` § Realisation by producer), and a global
+   region has no producer of its own.
+
+1. A stored global uuid therefore resolves to the union of its sixteen
+   producers: their derived notes, their claimed targets, and the cells
+   they parked.
+
+1. A ghost lands on the channel of the producer that emitted it, so the
+   overlay reads a channel per note rather than one per entry.
 
 ## The verbs are unchanged
 
@@ -84,30 +76,6 @@ rebuild expands each of its regions into all sixteen channels.**
    global region is one stored region. Minting, rewriting the chain,
    moving and resizing the window, deleting, and adding or editing
    stages all work on channel 0 unchanged.
-
-## What channel 0 refuses
-
-1. The gestures naming a MIDI channel refuse on channel 0: mute and
-   solo, parameter automation, and freeze.
-
-1. Mute and solo refuse because channel 0 reaches no wire to silence.
-   Solo also mutes the channels it is not on, so a solo there would
-   silence all sixteen.
-
-1. Parameter automation binds a channel and a CC lane, and channel 0
-   names neither.
-
-1. Freeze converts a chain into the notes and curves of the channel it
-   runs on, and channel 0 runs on none.
-
-1. Paste refuses by a rule already written. It rebases each region by a
-   channel delta and drops any landing outside 1 to 16
-   (`docs/trackerView.md` § FX regions), and channel 0 is outside that
-   range.
-
-1. Channel select stands. It selects a channel's columns rather than
-   binding anything to the wire, and clicking the master banner is the
-   mouse route onto the strip.
 
 ## Explode
 
