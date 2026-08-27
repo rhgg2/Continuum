@@ -82,6 +82,20 @@ while the region covers it. The spec survives untouched and the chain
 returns when the region moves off, so this is a quirk of coverage
 rather than a loss of data.
 
+### A global region copied off the master strip is demoted or lost
+
+> **gap** · tv · 2026-08-27
+
+A copy records each region's channel as a delta from the rectangle's
+anchor, so a global region travels as a chan-0 region with nothing
+marking what it was. Pasted back on the strip it rebases to channel 0,
+which the paste guard drops (`trackerView.lua:2880`), and the gesture
+says nothing; pasted on a channel column it mints an ordinary region
+there, narrowing a chain that reached all sixteen down to one. Neither
+is a wrong implementation of a decided rule — what a copied global
+*is* was never decided, and the clipboard's channel delta cannot carry
+the answer either way.
+
 ## Pattern editor
 
 ### A mini-editor edit leaves undo points in the host's history

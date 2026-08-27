@@ -42,16 +42,3 @@ rebuild expands each of its regions into all sixteen channels.**
 
 1. An explode is all or nothing: after it there is no global region,
    and every channel the chain reached carries an ordinary one.
-
-## Open
-
-1. Whether a global chain targeting pb or cc materialises that column
-   on a channel in use by its notes alone. A channel's optional columns
-   follow its data, and a global replace chain has a curve to seat with
-   possibly nowhere to seat it.
-
-1. The rebuild cost of a producer per channel in use where one region
-   is stored, which wants measuring.
-
-1. Whether a global region can be copied out of the master channel, and
-   what pasting it onto channels 1 to 16 means.
