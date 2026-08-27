@@ -29,7 +29,7 @@ cross-cutting docs.
 
 Where the model moved, the doc and code annotations move in the same
 commit. Check if a change is needed, and if so, apply it in one
-`apply_patches` call and add the changes to  the scope from step 1.
+`apply_patches` call and add the changes to the scope from step 1.
 
 ## 3. Commit bookkeeping
 

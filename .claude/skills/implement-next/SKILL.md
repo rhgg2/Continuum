@@ -5,7 +5,7 @@ disable-model-invocation: true
 ---
 
 The goal is to fulfil the live implementation brief. This arrives
-arrives injected by hook; no brief means none has been compiled, so
+injected by hook; no brief means none has been compiled, so
 stop and point at `/plan-next`. The hook also names the live plan; if
 the brief's `plan:` line disagrees, stop and clarify the intent.
 

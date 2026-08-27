@@ -35,7 +35,7 @@ With a clear idea of the road ahead, continue to study the code until
 you understand the problem well enough to be able to implement it.
 
 Now comes a fork. You can either write an implementation brief, or
-just implement. To exand on that:
+just implement. To expand on that:
 
 By the time you understand the problem fully, and particularly if you
 run any spikes, you may well have in effect done the implementation
@@ -96,7 +96,7 @@ into:
 - **source** code: partial implementation of production code, or of
 test code which is the subject of the brief itself.
 - **target** code: test-shaped code which forms part of the completion
-parameters of the brief from step 4.
+parameters of the brief.
 
 Stage the brief and the plan-file update as one `apply_patches` call:
 the brief as a create with `overwrite: true`, the item cut from
@@ -125,7 +125,7 @@ Implement as `/implement-next` would: the spec first, verified failing
 production code follows; suite green at the end; the item's own
 evidence demonstrated as observables.
 
-`/implement-next` §5's escalation ladder applies unchanged except at
+`/implement-next` §3's escalation ladder applies unchanged except at
 the design rung, where there is no brief to delete and nothing to
 unwind: return the item to the top of Queued with a one-line note of
 what broke, empty Now, and stop.

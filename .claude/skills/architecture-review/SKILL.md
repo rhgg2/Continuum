@@ -13,20 +13,21 @@ otherwise, run `git log --oneline -400 --name-only --pretty=format: --
 
 search `design/` and `plan/` for relevant live proposals that may bear
 on what you propose. For the history, check also `design/archive/`,
-`design/decisions.md` and `doc/oddities.md`.
+`design/decisions.md` and `docs/oddities.md`.
 
 Also map the call graph using `map_query` with `module=<target>`, and
 `kind='uses'` on the orchestrating function. This gives you real line
 ranges for the next step.
 
-Come to the chat with the target, its size, what `design/** and `plan/**
+Come to the chat with the target, its size, what `design/**` and `plan/**`
 already propose about it, and the main clusters in the subsystem. 
 
 **Done when** I give you the go-ahead for fan-out.
 
 ## 2. Fan out
 
-Launch one `Explore` agent per cluster, in parallel. Each brief asks:
+Launch one `general-purpose` agent per cluster, in parallel. Each brief
+asks:
 
 - what state the cluster owns; 
 - what it reads that another wrote; 
@@ -37,7 +38,7 @@ Ask for `file:line` evidence, and emphasise that "the code is already
 in good shape" is a valid answer. Give each agent one sharp question
 aimed at what its cluster specifically risks.
 
-Once the reports are back
+Once the reports are back:
 
 **Check in.** Give me the candidates, each marked **Strong**, **Worth
 exploring** or **Speculative**, and say which of them rest on a claim
@@ -70,6 +71,6 @@ for the work:
   test it.
 - **Speculative** — noticed and unverified, recorded so it is not lost.
 
-Carry a section for the claims that did not survive step 5, your own
+Carry a section for the claims that did not survive step 3, your own
 included. Stage the whole set as one `apply_patches` call, then stop —
 `/mature` picks a finding up when I am ready.
