@@ -194,8 +194,14 @@ local function seedRegionEdit(newRegions)
   if not derivedInputs then dirtyChan(); return end
   local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
   local function trigger(r)
-    seedDirty(r.chan, { verb = 'region', ppqL = r.startppq,
-                        ppq = tm:fromLogical(r.chan, r.startppq) })
+    -- A chan-0 region expands onto every channel, so its edit dirties all sixteen -- each seed at that
+    -- channel's own raw ppq, since swing resolves per channel. see design/global-fx-column.md § An edit reaches sixteen channels
+    local first, last = r.chan, r.chan
+    if r.chan == 0 then first, last = 1, 16 end
+    for chan = first, last do
+      seedDirty(chan, { verb = 'region', ppqL = r.startppq,
+                        ppq = tm:fromLogical(chan, r.startppq) })
+    end
   end
   local old, seen = {}, {}
   for i, r in ipairs(derivedInputs.fxRegions or {}) do old[key(r)] = { region = r, index = i } end
@@ -718,6 +724,26 @@ end
 local function offTakeEnd(spec)
   return (spec.endppq == nil or spec.endppq == util.OPEN)
          and tm:toLogical(spec.chan, tm:length()) or spec.endppq
+end
+
+-- A global (chan 0) region is stored once and expands into one ordinary region per channel, carrying
+-- its span and chain; the uuid is opaque and never split back apart. see design/global-fx-column.md § Expansion
+local function expandedUuid(uuid, chan) return util.key(uuid, chan) end
+
+local function expandGlobals(regions)
+  local channelRegions, globals = {}, {}
+  for _, region in ipairs(regions or {}) do
+    util.add(region.chan == 0 and globals or channelRegions, region)
+  end
+  -- Appended after every stored region, so each channel's own regions come first in storage order and
+  -- a global chain takes last precedence there. see design/global-fx-column.md § Precedence
+  for _, region in ipairs(globals) do
+    for chan = 1, 16 do
+      util.add(channelRegions, util.assign(util.clone(region),
+                                           { chan = chan, uuid = expandedUuid(region.uuid, chan) }))
+    end
+  end
+  return channelRegions
 end
 
 --shape: producerCensus -> { { uuid, chan, startppq, endppq, fx, noteHost? }, ... }
@@ -1860,8 +1886,8 @@ local function freezeRegion(uuid, toGroup)
   for _, r in ipairs(regions) do
     if r.uuid == uuid then region = r else util.add(keptRegions, r) end
   end
-  -- A global region runs on no channel, so there is nothing to freeze onto. The census this pass
-  -- builds is unfiltered, unlike the rebuild's, so the refusal is stated here.
+  -- A global region runs sixteen producers and is none of them, so no one channel's output is the one
+  -- to freeze. The census this pass builds is unfiltered, unlike the rebuild's, so refusal is stated here.
   if region and region.chan == 0 then return false end
   local stash, keptParked = ds:get('fxParked') or {}, {}
 
@@ -4980,17 +5006,10 @@ local function rebuildPipeline(didReload)
   -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
   if didReload then perf.start('reload'); reload(); perf.stop('reload') end
 
-  -- Phase 1 of the global fx column: a chan-0 region is a view surface only, reaching no
-  -- channel. Phase 2 expands it into per-channel producers at this seam. see design/global-fx-column.md § Expansion
-  local channelRegions = {}
-  for _, region in ipairs(ds:get('fxRegions') or {}) do
-    if region.chan ~= 0 then util.add(channelRegions, region) end
-  end
-
-  -- One head snapshot of the ds intent keys the pipeline reads; stages take these as params.
-  -- Every key is read before any same-pass write, so a head read equals each old use-site value.
+  -- One head snapshot of the ds intent keys the pipeline reads; every key is read before any same-pass
+  -- write. Stages take these as params, with regions already expanded to per-channel producers.
   local sources = {
-    fxRegions       = channelRegions,
+    fxRegions       = expandGlobals(ds:get('fxRegions')),
     fxParked        = ds:get('fxParked'),
     prevWindows     = ds:get('prevWindows'),
     extraColumns    = ds:get('extraColumns'),

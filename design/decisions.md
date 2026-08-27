@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — An expanded producer's identity is its stored region's uuid joined to its channel
+  with util.key. The key is opaque and persists into the window store and the park stash, so nothing
+  splits it back apart: a reader wanting a global region's producers derives the sixteen keys
+  forward.
+
 - **2026-08-27** — A stored global region's uuid resolves to the union of its sixteen expanded
   producers, so the ghost overlay reads a channel per derived note rather than one per entry.
   Expansion leaves the stored region with no producer of its own, and the master strip is the

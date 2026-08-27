@@ -723,18 +723,19 @@ surface, the fx columns of channels 1 to 16 showing nothing of one. Since a regi
 minted from a selection, the strip keeps at least one fx column whether occupied or not,
 and hide and add-column both refuse there rather than leave it with nothing to select in.
 The strip is built in the view: fx columns are derived from `ds:get('fxRegions')` already,
-so channel 0 needs no tm channel and gets none (`docs/trackerManager.md` § Channel &
-column model), and a global region reaches no wire. Column 1 is therefore not where notes
+so channel 0 needs no tm channel and gets none. What the strip holds still sounds, though:
+the rebuild expands a global region into a producer on every MIDI channel
+(`docs/trackerManager.md` § Channel & column model). Column 1 is therefore not where notes
 are typed: a take swap opens the caret on channel 1's first note column, and brings the
 scroll home in front of it, so the strip stands to the caret's left rather than off the
 edge.
 
 **9** The gestures naming a MIDI channel refuse on the master channel: mute and solo,
-parameter automation, and freeze. Mute and solo refuse because channel 0 reaches no wire
-to silence, and because solo mutes the channels it does not name — a solo on the strip
+parameter automation, and freeze. Mute and solo refuse because channel 0 carries no wire
+of its own to silence, and because solo mutes the channels it does not name — a solo on the strip
 would silence all sixteen. A parameter binding names a channel and a cc lane, and the
 strip has neither. Freeze is tm's refusal (`docs/trackerManager.md` § Park window census),
-since a chain there converts to the notes and curves of no channel. Paste needs no guard
+since a chain there realises on sixteen channels and freeze converts one. Paste needs no guard
 of its own: it drops any region whose rebased channel falls outside 1 to 16 (§ FX regions).
 Channel select stands, selecting the strip's columns rather than binding anything to the
 wire, and clicking the `Gl` banner is the mouse route onto it.

@@ -26,10 +26,16 @@ attach to the note column whose voice they modulate (see *PA binding*
 below), appearing as `{ type='pa', pitch, vel, ppq }` entries mixed into
 that column's `events`.
 
-An fx region stored at channel 0 names no MIDI channel, so the rebuild drops it
-from the document keys its passes read and no channel derives from it. Channel 0
-is a view surface alone, where the tracker authors a region meant for every
-channel at once (`docs/trackerView.md` § Addressing a chain).
+An fx region stored at channel 0 names no MIDI channel of its own: it is authored on
+a view surface meant for every channel at once (`docs/trackerView.md` § Addressing a
+chain). The rebuild expands it, at the head snapshot of document keys its passes read,
+into sixteen ordinary regions carrying its span and its chain, one per channel, each
+identified by the stored uuid qualified by the channel it lands on. Every pass below
+the snapshot therefore sees per-channel producers only.
+
+Expansion appends those producers after all the stored channel regions, so a channel's
+own chains take precedence over a global one on it. The stored region holds the intent,
+so editing it seeds derivation dirt on all sixteen channels at once.
 
 ## Lane identity
 
@@ -816,9 +822,9 @@ tested the other way round — its own span against the neighbours' note windows
 predicate is half-open on every target: the pb re-centre seat folds at `endppq - 1`, so abutting
 windows share nothing and are disjoint in fact as well as in the test. Refusal is silent and total
 — false, computed before any gather, so nothing of freeze's own is staged. A region stored on
-channel 0 refuses ahead of all this: it is a view surface running on no channel
-(`docs/trackerView.md` § Addressing a chain), and the census `freezeRegion` builds for itself is
-unfiltered, unlike the rebuild's.
+channel 0 refuses ahead of all this: it runs sixteen producers and is none of them, so no one
+channel's output is the one to convert (§ Channel & column model). The census `freezeRegion`
+builds for itself is unfiltered, unlike the rebuild's, so the refusal is stated at the verb.
 
 All three arms answer *what is committed* — `fxRegions`, the maintained fx-host index, the stash — so
 `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and

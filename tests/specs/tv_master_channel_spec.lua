@@ -1,6 +1,6 @@
 -- Channel 0 is the master channel: an fx-only strip left of channel 1, always carrying at
--- least one column, so a global region is always addressable. It is view-built and reaches
--- no wire. see docs/trackerView.md § Addressing a chain
+-- least one column, so a global region is always addressable. The strip is view-built; the
+-- regions on it run on every MIDI channel. see docs/trackerView.md § Addressing a chain
 local t    = require('support')
 local util = require('util')
 
@@ -284,18 +284,21 @@ return {
     end,
   },
 
-  ----- The wire hears nothing
+  ----- What the wire hears
 
   {
-    name = 'a global region reaches no channel',
+    -- The head snapshot expands a global region into one producer per channel, so a chain authored
+    -- on the strip sounds on all sixteen. see design/global-fx-column.md § Expansion
+    name = 'a global region runs its chain on every MIDI channel',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
-      injectGlobals(h, { {} })   -- tm drops chan-0 regions from the head snapshot
+      injectGlobals(h, { {} })
 
-      local dump = h.fm:dump()
-      t.eq(#dump.notes, 0, 'a global region derives no notes')
-      t.eq(#dump.ccs,   0, 'and no cc or pb output on any channel')
+      local chans = {}
+      for _, c in ipairs(h.fm:dump().ccs) do chans[c.chan] = true end
+      t.eq(#util.keys(chans), 16, 'the sine seats a pb curve on every channel')
+      t.falsy(chans[0], 'and channel 0 carries no wire of its own')
     end,
   },
 

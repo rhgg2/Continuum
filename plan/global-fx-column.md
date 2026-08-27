@@ -19,6 +19,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 tm: expand a global region into a producer on every channel (§ Expansion, § An edit reaches sixteen channels)
 - 2026-08-27 tv: channel 0 refuses mute, solo, automation and freeze (§ What channel 0 refuses)
 - 2026-08-27 tv: master channel strip, an fx-only channel 0 left of channel 1 (§ The master channel, § The master channel is always addressable)
 
@@ -27,22 +28,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **Expansion at the head snapshot** — the pipeline's chan-0 filter
-   (`trackerManager.lua:4985`) becomes an expansion: each global region yields
-   sixteen regions carrying its span and its fx list, one per channel, its uuid
-   qualified by the channel it lands on. A channel's own regions are emitted in
-   storage order and its expanded producers after them, which is what makes a
-   global chain take last precedence. Spec: `producerCensus` and `rebuildFx` see
-   sixteen producers and nothing at chan 0; a derived uuid is the same across two
-   rebuilds and carries into `prevWindows` and `fxParked`; a global chain's notes
-   pack after those of a channel region overlapping it.
-
-1. **A global edit seeds all sixteen** — `seedRegionEdit`'s trigger for a chan-0
-   region fans across channels 1 to 16, each seed carrying that channel's own
-   `fromLogical` ppq, since swing resolves per channel. Spec: an fx-list edit and
-   a window move on a global region each dirty all sixteen channels and reach the
-   rebuild rather than falling to the rebuild(∅) gate.
 
 1. **The master strip's realisation** — `tm:fxRealisation` answers a stored
    global uuid with the union of its sixteen producers' entries — derived notes,

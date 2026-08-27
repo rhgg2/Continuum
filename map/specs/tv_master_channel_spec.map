@@ -1,12 +1,12 @@
-@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=302  cases=15
+@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=305  cases=15
 @exercises dataStore (h.ds), trackerManager (h.tm), trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), clipboard (h.clipboard)
 @surface   ds:assign, tm:rebuild, vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, vm:addExtraCol, vm:toggleChannelMute, vm:toggleChannelSolo, vm:isChannelMuted, vm:isChannelSoloed, vm:isChannelEffectivelyMuted, ec:col, vm:setPaletteParam, vm:automateParam, vm:paramBinding, tm:freezeEligible, tm:freezeRegion, fm:dump, vm:rebuild, ec:extendTo, clipboard:collect, ec:selClear, clipboard:pasteClip, ec:selectChannel, vm:fxHostForEdit, vm:scroll
 @harness   mk, r._state.projectTracks, r._state.projectItems
 
 # Intent
   Channel 0 is the master channel: an fx-only strip left of channel 1, always carrying at
-  least one column, so a global region is always addressable. It is view-built and reaches
-  no wire. see docs/trackerView.md § Addressing a chain
+  least one column, so a global region is always addressable. The strip is view-built; the
+  regions on it run on every MIDI channel. see docs/trackerView.md § Addressing a chain
 
 # Helpers
   @fn injectGlobals(h, list)  @ 11-20
@@ -29,12 +29,12 @@
   @case 'the caret opens on channel 1 lane 1, not on the strip'  [harness]  @ 247-259
   @case 'the strip stands through the first rebuild, before the pane has a width'  [harness]  @ 265-270
   @case 'a take swap brings the scroll home, so the strip stands left of the caret'  [harness]  @ 274-284
-  @case 'a global region reaches no channel'  [harness]  @ 290-299
+  @case 'a global region runs its chain on every MIDI channel'  [harness]  @ 292-302
 
 # Uses (outbound edges)
   @use call ds:assign  @ 18,200
   @use call tm:rebuild  @ 19,202
-  @use call vm:setGridSize  @ 38,57,71,90,109,126,144,165,181,199,231,250,277,293
+  @use call vm:setGridSize  @ 38,57,71,90,109,126,144,165,181,199,231,250,277,295
   @use call ec:setPos  @ 113,130,166,209,215,232,251,278
   @use call vm:hideExtraCol  @ 114
   @use call ds:get  @ 118,135,151,152,172,187,219,238
@@ -50,7 +50,7 @@
   @use call vm:paramBinding  @ 173
   @use call tm:freezeEligible  @ 184
   @use call tm:freezeRegion  @ 185
-  @use call fm:dump  @ 190,296
+  @use call fm:dump  @ 190,299
   @use call vm:rebuild  @ 203,252,281
   @use call ec:extendTo  @ 210
   @use call clipboard:collect  @ 211
@@ -62,9 +62,9 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r _state  @ 163,164
-  @field r ccs  @ 298
+  @field r ccs  @ 299
   @field r cells  @ 75,95,96
-  @field r chan  @ 189,221,240
+  @field r chan  @ 189,221,240,299
   @field w chan  @ 14,201
   @field r chanFirstCol  @ 59,60,98
   @field r chanLastCol  @ 60,98
@@ -84,15 +84,15 @@
   @field r lane1Col  @ 44
   @field r midiChan  @ 25,42,48,79,97,111,117,128,167,207,216,257
   @field w name  @ 35,54,68,87,106,123,141,159,178,196,228,247
-  @field w name  @ 265,274,290
-  @field r notes  @ 190,297
+  @field w name  @ 265,274,292
+  @field r notes  @ 190
   @field w onset  @ 7
   @field w param  @ 169
   @field w period  @ 7
   @field w projectItems  @ 164
   @field w projectTracks  @ 163
   @field w run  @ 36,55,69,88,107,124,142,160,179,197,229,248
-  @field w run  @ 266,275,291
+  @field w run  @ 266,275,293
   @field r stack  @ 76
   @field w startppq  @ 14,201
   @field r tails  @ 76

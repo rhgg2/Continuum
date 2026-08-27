@@ -146,6 +146,26 @@ local function derivedNotes(h)
   return out
 end
 
+-- The identity an expanded producer carries: its stored region's uuid, qualified by the channel it
+-- landed on. see design/global-fx-column.md § Derived identity is stable
+local function expanded(uuid, chan) return util.key(uuid, chan) end
+
+-- The notes one producer put on one channel, sorted by onset then lane. A global region's producers
+-- differ per channel, so the read names both.
+local function derivedFor(h, chan, uuid)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.evType == 'note' and n.chan == chan and n.derived == uuid then
+      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, lane = n.lane }
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    return a.lane < b.lane
+  end)
+  return out
+end
+
 local function field(ns, k) local v = {} for i, n in ipairs(ns) do v[i] = n[k] end return v end
 
 -- The note pitches standing in a channel's note columns -- what the grid shows, as against
@@ -2409,6 +2429,102 @@ return {
         if c.evType == 'pb' and c.chan == 1 then peak = math.max(peak, math.abs(c.val)) end
       end
       t.eq(peak, centsToRaw(30), 'the chain runs once: the sine peaks at its authored depth')
+    end,
+  },
+
+  ----- Global regions: channel 0 expands into a producer on every channel
+
+  {
+    -- A chan-0 region is stored once and runs sixteen times: the head snapshot the pipeline takes
+    -- replaces it with one ordinary region per channel. see design/global-fx-column.md § Expansion
+    name = 'global region: one stored region runs a chain on every channel it reaches',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 1, pitch = 60 })
+      addNote(h, { chan = 7, pitch = 67 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+
+      t.deepEq(field(derivedFor(h, 1, expanded('fxr-g', 1)), 'pitch'), { 60, 60, 60, 60 },
+               'channel 1 runs the global chain over its own member')
+      t.deepEq(field(derivedFor(h, 7, expanded('fxr-g', 7)), 'pitch'), { 67, 67, 67, 67 },
+               'and channel 7 over its own')
+      t.deepEq(authoredPitches(h), {}, 'each channel parks its own chord under the replace chain')
+    end,
+  },
+
+  {
+    -- The persisted window set is the seat-recognition baseline, so an expanded producer's identity
+    -- has to survive a rebuild unchanged. see design/global-fx-column.md § Derived identity is stable
+    name = 'global region: sixteen producers in the window set, with stable derived identities',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+
+      local windows = h.ds:get('prevWindows') or {}
+      t.eq(#windows, 16, 'one note window per expanded producer')
+      local ids, chans = {}, {}
+      for _, w in ipairs(windows) do ids[w.id] = true; chans[w.chan] = true end
+      t.truthy(ids[expanded('fxr-g', 1)] and ids[expanded('fxr-g', 16)],
+               'each stamped with the identity its own channel derives')
+      t.falsy(ids['fxr-g'], 'the stored uuid names no producer of its own')
+      t.falsy(chans[0], 'and nothing runs on channel 0')
+
+      addNote(h, { chan = 2, pitch = 64 })   -- fresh dirt: channel 2 re-derives from the same region
+      h.tm:rebuild()
+      t.deepEq(h.ds:get('prevWindows'), windows, 'a second rebuild derives the same identities')
+    end,
+  },
+
+  {
+    -- Storage order is precedence among chains overlapping on one channel, and the expansion emits a
+    -- channel's own regions before the producers expanded onto it, whatever order storage holds them
+    -- in. see design/global-fx-column.md § Precedence
+    name = 'global region: a global chain packs after a channel region stored before it',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      -- Two note-replace chains, each stamping a pitch of its own: both park the member, so the lane
+      -- each lands on is the order the two producers were emitted in.
+      local function stamp(pitch)
+        return { expand = function(stream)
+                   return { notes = { { ppq = stream.window[1], endppq = stream.window[2],
+                                        pitch = pitch, vel = 100, detune = 0 } }, delta = {} }
+                 end,
+                 mode = 'replace', dest = 'note', label = 'Stamp', defaults = {}, fields = {} }
+      end
+      generators.kinds.stampG, generators.kinds.stampC = stamp(72), stamp(74)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = { { kind = 'stampG' } } },
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'stampC' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.stampG, generators.kinds.stampC = nil, nil
+
+      t.deepEq(field(derivedFor(h, 1, 'fxr-1'), 'lane'), { 1 },
+               "the channel's own chain takes the free lane")
+      t.deepEq(field(derivedFor(h, 1, expanded('fxr-g', 1)), 'lane'), { 2 },
+               'and the global chain packs after it')
+    end,
+  },
+
+  {
+    -- The stored region carries the intent, so the edit arrives on channel 0; dirt seeded there
+    -- reaches no derivation and the pass falls to the rebuild(∅) gate.
+    -- see design/global-fx-column.md § An edit reaches sixteen channels
+    name = 'global region: editing the region re-derives every channel it reaches',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 7, pitch = 67 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      t.eq(#derivedFor(h, 7, expanded('fxr-g', 7)), 4, 'the chain runs the full window on channel 7')
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 120, fx = arpUp } })
+      h.tm:rebuild()
+      t.eq(#derivedFor(h, 7, expanded('fxr-g', 7)), 2, 'and halving its window reaches channel 7 too')
     end,
   },
 
