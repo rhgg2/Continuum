@@ -1,6 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: working design; not started
+> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 1
+> (the entry); nothing landed yet
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
