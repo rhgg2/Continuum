@@ -1,6 +1,6 @@
-@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=305  cases=15
+@spec tv_master_channel_spec  src=tests/specs/tv_master_channel_spec.lua  loc=313  cases=15
 @exercises dataStore (h.ds), trackerManager (h.tm), trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), clipboard (h.clipboard)
-@surface   ds:assign, tm:rebuild, vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, vm:addExtraCol, vm:toggleChannelMute, vm:toggleChannelSolo, vm:isChannelMuted, vm:isChannelSoloed, vm:isChannelEffectivelyMuted, ec:col, vm:setPaletteParam, vm:automateParam, vm:paramBinding, tm:freezeEligible, tm:freezeRegion, fm:dump, vm:rebuild, ec:extendTo, clipboard:collect, ec:selClear, clipboard:pasteClip, ec:selectChannel, vm:fxHostForEdit, vm:scroll
+@surface   ds:assign, tm:rebuild, vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, vm:addExtraCol, vm:toggleChannelMute, vm:toggleChannelSolo, vm:isChannelMuted, vm:isChannelSoloed, vm:isChannelEffectivelyMuted, ec:col, vm:setPaletteParam, vm:automateParam, vm:paramBinding, tm:freezeEligible, tm:freezeRegion, fm:dump, vm:rebuild, ec:extendTo, clipboard:collect, ec:selClear, clipboard:pasteClip, ec:selectChannel, vm:fxHostForEdit, vm:scroll, tm:addEvent, tm:flush
 @harness   mk, r._state.projectTracks, r._state.projectItems
 
 # Intent
@@ -29,12 +29,12 @@
   @case 'the caret opens on channel 1 lane 1, not on the strip'  [harness]  @ 247-259
   @case 'the strip stands through the first rebuild, before the pane has a width'  [harness]  @ 265-270
   @case 'a take swap brings the scroll home, so the strip stands left of the caret'  [harness]  @ 274-284
-  @case 'a global region runs its chain on every MIDI channel'  [harness]  @ 292-302
+  @case 'a global region runs its chain on every MIDI channel in use'  [harness]  @ 293-310
 
 # Uses (outbound edges)
   @use call ds:assign  @ 18,200
   @use call tm:rebuild  @ 19,202
-  @use call vm:setGridSize  @ 38,57,71,90,109,126,144,165,181,199,231,250,277,295
+  @use call vm:setGridSize  @ 38,57,71,90,109,126,144,165,181,199,231,250,277,296
   @use call ec:setPos  @ 113,130,166,209,215,232,251,278
   @use call vm:hideExtraCol  @ 114
   @use call ds:get  @ 118,135,151,152,172,187,219,238
@@ -50,7 +50,7 @@
   @use call vm:paramBinding  @ 173
   @use call tm:freezeEligible  @ 184
   @use call tm:freezeRegion  @ 185
-  @use call fm:dump  @ 190,299
+  @use call fm:dump  @ 190,305
   @use call vm:rebuild  @ 203,252,281
   @use call ec:extendTo  @ 210
   @use call clipboard:collect  @ 211
@@ -59,19 +59,24 @@
   @use call ec:selectChannel  @ 233
   @use call vm:fxHostForEdit  @ 236
   @use call vm:scroll  @ 269,279,282
+  @use call tm:addEvent  @ 298
+  @use call tm:flush  @ 301
 
 # Fields (r read / w write incl. constructor keys)
   @field r _state  @ 163,164
-  @field r ccs  @ 299
+  @field r ccs  @ 305
   @field r cells  @ 75,95,96
-  @field r chan  @ 189,221,240,299
-  @field w chan  @ 14,201
+  @field r chan  @ 189,221,240,305
+  @field w chan  @ 14,201,298
   @field r chanFirstCol  @ 59,60,98
   @field r chanLastCol  @ 60,98
   @field r cols  @ 24,40,46,49,78,111,112,116,117,128,129,136
   @field r cols  @ 167,206,216,254,278,283
+  @field w delay  @ 299
   @field w depth  @ 7
-  @field w endppq  @ 14,201
+  @field w detune  @ 299
+  @field w endppq  @ 14,201,298
+  @field w evType  @ 298
   @field w fx  @ 14,201
   @field w fxGuid  @ 169
   @field r fxRegions  @ 212
@@ -81,18 +86,21 @@
   @field w kind  @ 7
   @field w label  @ 169
   @field r lane  @ 258
+  @field w lane  @ 299
   @field r lane1Col  @ 44
   @field r midiChan  @ 25,42,48,79,97,111,117,128,167,207,216,257
   @field w name  @ 35,54,68,87,106,123,141,159,178,196,228,247
-  @field w name  @ 265,274,292
+  @field w name  @ 265,274,293
   @field r notes  @ 190
   @field w onset  @ 7
   @field w param  @ 169
   @field w period  @ 7
+  @field w pitch  @ 298
+  @field w ppq  @ 298
   @field w projectItems  @ 164
   @field w projectTracks  @ 163
   @field w run  @ 36,55,69,88,107,124,142,160,179,197,229,248
-  @field w run  @ 266,275,293
+  @field w run  @ 266,275,294
   @field r stack  @ 76
   @field w startppq  @ 14,201
   @field r tails  @ 76
@@ -101,3 +109,4 @@
   @field r type  @ 41,47,80,207,256,283
   @field r uuid  @ 75,95,96,239
   @field w uuid  @ 14,201
+  @field w vel  @ 299

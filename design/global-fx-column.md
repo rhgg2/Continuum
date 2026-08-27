@@ -13,11 +13,19 @@ rebuild expands each of its regions into all sixteen channels.**
 
 ## Expansion
 
-1. **Expansion** replaces each global region with sixteen **expanded
-   producers**, one per channel, each an ordinary region carrying the
-   global's span and fx list at its own channel. It runs on the single
-   head snapshot of document keys `rebuildPipeline` takes for its
-   passes.
+1. **Expansion** replaces each global region with one **expanded
+   producer** per channel it reaches, each an ordinary region carrying
+   the global's span and fx list at its own channel. It runs on the
+   single head snapshot of document keys `rebuildPipeline` takes for
+   its passes.
+
+1. A global chain reaches the channels **in use**. A channel is in use
+   when it carries an authored note, when the park stash holds a note
+   taken out of it, or when it has a pb or cc lane of its own.
+
+1. Derived output is no evidence of use. A chain emits a curve with or
+   without material, so a channel counted in on the strength of a
+   chain's own output would stay in the set for good.
 
 1. Both consumers of that snapshot, `producerCensus` and `rebuildFx`,
    therefore see per-channel regions only.
@@ -30,6 +38,10 @@ rebuild expands each of its regions into all sixteen channels.**
 1. Editing a global region therefore seeds derivation dirt on all
    sixteen channels. The region-edit seed keys its triggers by the
    stored region's uuid and fans them across all sixteen.
+
+1. The fan is deliberately wider than the set in use: a channel that
+   has just left it needs the pass that clears what the chain left
+   behind.
 
 ## Derived identity is stable
 
@@ -63,7 +75,7 @@ rebuild expands each of its regions into all sixteen channels.**
    (`docs/trackerManager.md` § Realisation by producer), and a global
    region has no producer of its own.
 
-1. A stored global uuid therefore resolves to the union of its sixteen
+1. A stored global uuid therefore resolves to the union of its
    producers: their derived notes, their claimed targets, and the cells
    they parked.
 
@@ -79,9 +91,9 @@ rebuild expands each of its regions into all sixteen channels.**
 
 ## Explode
 
-1. **Explode** converts a global region into sixteen ordinary
-   per-channel regions. It is the expansion, run once and persisted in
-   place of the region on channel 0.
+1. **Explode** converts a global region into an ordinary region on
+   every channel it reaches. It is the expansion, run once and
+   persisted in place of the region on channel 0.
 
 1. Freezing a global chain therefore means exploding it and then
    freezing one of the sixteen.
@@ -90,17 +102,17 @@ rebuild expands each of its regions into all sixteen channels.**
    per-channel divergence begins with an explode.
 
 1. An explode is all or nothing: after it there is no global region,
-   and all sixteen channels carry ordinary ones.
+   and every channel the chain reached carries an ordinary one.
 
 ## Open
 
 1. Whether a global chain targeting pb or cc materialises that column
-   on a channel carrying none. A channel's optional columns follow its
-   data, and a global replace chain has a curve to seat with possibly
-   nowhere to seat it.
+   on a channel in use by its notes alone. A channel's optional columns
+   follow its data, and a global replace chain has a curve to seat with
+   possibly nowhere to seat it.
 
-1. The rebuild cost of sixteen producers where one region is stored,
-   which wants measuring.
+1. The rebuild cost of a producer per channel in use where one region
+   is stored, which wants measuring.
 
 1. Whether a global region can be copied out of the master channel, and
    what pasting it onto channels 1 to 16 means.

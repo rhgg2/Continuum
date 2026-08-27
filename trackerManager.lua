@@ -194,8 +194,8 @@ local function seedRegionEdit(newRegions)
   if not derivedInputs then dirtyChan(); return end
   local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
   local function trigger(r)
-    -- A chan-0 region expands onto every channel, so its edit dirties all sixteen -- each seed at that
-    -- channel's own raw ppq, since swing resolves per channel. see design/global-fx-column.md § An edit reaches sixteen channels
+    -- A chan-0 region's edit dirties all sixteen channels -- wider than the set in use on purpose. see design/global-fx-column.md § An edit reaches sixteen channels
+    -- Each seed sits at that channel's own raw ppq, since swing resolves per channel.
     local first, last = r.chan, r.chan
     if r.chan == 0 then first, last = 1, 16 end
     for chan = first, last do
@@ -726,11 +726,13 @@ local function offTakeEnd(spec)
          and tm:toLogical(spec.chan, tm:length()) or spec.endppq
 end
 
--- A global (chan 0) region is stored once and expands into one ordinary region per channel, carrying
--- its span and chain; the uuid is opaque and never split back apart. see design/global-fx-column.md § Expansion
+-- A global (chan 0) region is stored once and expands into one ordinary region per channel it reaches,
+-- carrying its span and chain; the uuid is opaque and never split back apart. see design/global-fx-column.md § Expansion
 local function expandedUuid(uuid, chan) return util.key(uuid, chan) end
 
-local function expandGlobals(regions)
+-- inUse is channelsInUse's set, taken from the same head snapshot: a channel outside it runs no
+-- producer, so a chain reaches nothing the document never used. see design/global-fx-column.md § Expansion
+local function expandGlobals(regions, inUse)
   local channelRegions, globals = {}, {}
   for _, region in ipairs(regions or {}) do
     util.add(region.chan == 0 and globals or channelRegions, region)
@@ -739,8 +741,10 @@ local function expandGlobals(regions)
   -- a global chain takes last precedence there. see design/global-fx-column.md § Precedence
   for _, region in ipairs(globals) do
     for chan = 1, 16 do
-      util.add(channelRegions, util.assign(util.clone(region),
-                                           { chan = chan, uuid = expandedUuid(region.uuid, chan) }))
+      if inUse[chan] then
+        util.add(channelRegions, util.assign(util.clone(region),
+                                             { chan = chan, uuid = expandedUuid(region.uuid, chan) }))
+      end
     end
   end
   return channelRegions
@@ -4999,6 +5003,25 @@ local rebuilding = false
 -- incremental index; full-reloads when set, else keeps it. see docs § Incremental index reconciliation
 local mmReloaded = false
 
+-- The channels a global chain reaches: those carrying an authored note, a note the park stash holds
+-- off the take, or a pb/cc lane of their own. Derived output is no evidence -- it never leaves the set. see design/global-fx-column.md § Expansion
+local function channelsInUse(sources)
+  local inUse = {}
+  for chan = 1, 16 do
+    for _, note in ipairs(rawIndexFor(chan).notes) do
+      if not note.derived then inUse[chan] = true; break end
+    end
+  end
+  for _, spec in ipairs(sources.fxParked or {}) do inUse[spec.chan] = true end
+  for chan, want in pairs(sources.extraColumns or {}) do
+    if want.pb or want.at or want.pc or next(want.ccs or {}) then inUse[chan] = true end
+  end
+  for chan, lanes in pairs(sources.paramAutomation or {}) do
+    if next(lanes) then inUse[chan] = true end
+  end
+  return inUse
+end
+
 --contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
 --invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
 local function rebuildPipeline(didReload)
@@ -5009,12 +5032,13 @@ local function rebuildPipeline(didReload)
   -- One head snapshot of the ds intent keys the pipeline reads; every key is read before any same-pass
   -- write. Stages take these as params, with regions already expanded to per-channel producers.
   local sources = {
-    fxRegions       = expandGlobals(ds:get('fxRegions')),
     fxParked        = ds:get('fxParked'),
     prevWindows     = ds:get('prevWindows'),
     extraColumns    = ds:get('extraColumns'),
     paramAutomation = ds:get('paramAutomation'),
   }
+  -- The expansion's channel set comes off the snapshot's own keys, so it is settled before any stage runs.
+  sources.fxRegions = expandGlobals(ds:get('fxRegions'), channelsInUse(sources))
 
   perf.start('internals'); local external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs

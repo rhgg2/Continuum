@@ -205,6 +205,17 @@ local function wirePbs(h, chan, fromPpq, toPpq)
   return out
 end
 
+-- The channels carrying any pb at all, ascending. A continuous chain emits with or without material,
+-- so this is the set a global one reached. see design/global-fx-column.md § Expansion
+local function pbChans(h)
+  local seen, out = {}, {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' then seen[c.chan] = true end
+  end
+  for chan = 1, 16 do if seen[chan] then util.add(out, chan) end end
+  return out
+end
+
 -- A pb-replace stage seating a crowded collinear ramp: RAMP_N breakpoints 4 cents apart, every one
 -- 'linear', so a tolerance of 3 cents may drop the whole interior. sine30 offers the thinner nothing
 -- -- its 'slow' extrema are hard keeps. Registers the kind; the caller clears it after the freeze.
@@ -2454,25 +2465,128 @@ return {
   },
 
   {
+    -- A continuous chain needs no material, so an expansion onto all sixteen would author a curve on
+    -- every channel the document never used. see design/global-fx-column.md § Expansion
+    name = 'global region: the chain reaches the channels in use and no others',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 1, pitch = 60 })
+      addNote(h, { chan = 7, pitch = 67 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = sine30 } })
+      h.tm:rebuild()
+
+      t.deepEq(pbChans(h), { 1, 7 }, 'the sine seats its curve on the two channels carrying notes')
+    end,
+  },
+
+  {
+    -- The set is read off the head snapshot, so it follows the document from one pass to the next.
+    -- see design/global-fx-column.md § Expansion
+    name = 'global region: a channel emptied of its notes drops out of the chain',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 1, pitch = 60 })
+      addNote(h, { chan = 5, pitch = 64 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = sine30 } })
+      h.tm:rebuild()
+      t.deepEq(pbChans(h), { 1, 5 }, 'fixture check: both channels run the chain')
+
+      local authored
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.chan == 5 and not n.derived then authored = n end
+      end
+      h.tm:deleteEvent(authored)
+      h.tm:flush()
+      t.deepEq(pbChans(h), { 1 }, "and the curve leaves with the note that put channel 5 in use")
+    end,
+  },
+
+  {
+    -- A lane is content enough: a channel automating a curve of its own runs the chain, notes or no
+    -- notes. see design/global-fx-column.md § Expansion
+    name = 'global region: a pb lane with no notes keeps its channel in the chain',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 1, pitch = 60 })
+      h.ds:assign('extraColumns', { [9] = { notes = 1, pb = true } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = sine30 } })
+      h.tm:rebuild()
+
+      t.deepEq(pbChans(h), { 1, 9 }, 'channel 9 carries no note, and the lane it was given is enough')
+    end,
+  },
+
+  {
+    -- A replace chain parks the very notes that put its channel in use, so the stash counts as content:
+    -- were it not read, the chain would take its own material off the take and lose the channel on the
+    -- next pass. see design/global-fx-column.md § Expansion
+    name = 'global region: a channel whose notes the chain parked stays in the chain',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 5, pitch = 64 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      t.deepEq(authoredPitches(h), {}, 'fixture check: the arp parks the only note channel 5 had')
+
+      -- A real edit, so the pass re-expands: the take offers nothing on channel 5 to read it back in.
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 120, fx = arpUp } })
+      h.tm:rebuild()
+      t.eq(#derivedFor(h, 5, expanded('fxr-g', 5)), 2, 'the chain still runs on the channel it emptied')
+    end,
+  },
+
+  {
+    -- Derived output is no evidence of use. A stamp needs no material, so it can put notes on a channel
+    -- that authored none; were those read as content, the chain would hold its own channel in the set
+    -- for good. see design/global-fx-column.md § Expansion
+    name = 'global region: a channel left with derived notes alone drops out of the chain',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 1, pitch = 60 })
+      generators.kinds.stampG = {
+        expand = function(stream)
+          return { notes = { { ppq = stream.window[1], endppq = stream.window[2],
+                               pitch = 72, vel = 100, detune = 0 } }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'Stamp', defaults = {}, fields = {},
+      }
+      h.ds:assign('extraColumns', { [9] = { notes = 1, pb = true } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'stampG' } } } })
+      h.tm:rebuild()
+      t.eq(#derivedFor(h, 9, expanded('fxr-g', 9)), 1,
+           'fixture check: the lane puts channel 9 in use, and the stamp runs there over no material')
+
+      h.ds:assign('extraColumns', {})   -- the lane goes, and the stamp's own notes are all that is left
+      h.tm:rebuild()
+      generators.kinds.stampG = nil
+      t.eq(#derivedFor(h, 9, expanded('fxr-g', 9)), 0, 'so the chain leaves the channel with it')
+      t.eq(#derivedFor(h, 1, expanded('fxr-g', 1)), 1, 'while channel 1 keeps the chain its own note earns')
+    end,
+  },
+
+  {
     -- The persisted window set is the seat-recognition baseline, so an expanded producer's identity
     -- has to survive a rebuild unchanged. see design/global-fx-column.md § Derived identity is stable
-    name = 'global region: sixteen producers in the window set, with stable derived identities',
+    name = 'global region: a producer per channel in use, with stable derived identities',
     run = function(harness)
       local h = harness.mk()
       addNote(h)
+      addNote(h, { chan = 2, pitch = 64 })
       h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
 
       local windows = h.ds:get('prevWindows') or {}
-      t.eq(#windows, 16, 'one note window per expanded producer')
+      t.eq(#windows, 2, 'one note window per expanded producer')
       local ids, chans = {}, {}
       for _, w in ipairs(windows) do ids[w.id] = true; chans[w.chan] = true end
-      t.truthy(ids[expanded('fxr-g', 1)] and ids[expanded('fxr-g', 16)],
+      t.truthy(ids[expanded('fxr-g', 1)] and ids[expanded('fxr-g', 2)],
                'each stamped with the identity its own channel derives')
       t.falsy(ids['fxr-g'], 'the stored uuid names no producer of its own')
       t.falsy(chans[0], 'and nothing runs on channel 0')
 
-      addNote(h, { chan = 2, pitch = 64 })   -- fresh dirt: channel 2 re-derives from the same region
+      -- Fresh dirt on a channel already in use: past the region's window, so the set it reaches stands.
+      addNote(h, { chan = 2, pitch = 67, ppq = 240, endppq = 480 })
       h.tm:rebuild()
       t.deepEq(h.ds:get('prevWindows'), windows, 'a second rebuild derives the same identities')
     end,

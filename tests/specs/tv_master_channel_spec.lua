@@ -287,17 +287,25 @@ return {
   ----- What the wire hears
 
   {
-    -- The head snapshot expands a global region into one producer per channel, so a chain authored
-    -- on the strip sounds on all sixteen. see design/global-fx-column.md § Expansion
-    name = 'a global region runs its chain on every MIDI channel',
+    -- The head snapshot expands a global region into one producer per channel in use, so a chain
+    -- authored on the strip sounds on each of them and nowhere else.
+    -- see design/global-fx-column.md § Expansion
+    name = 'a global region runs its chain on every MIDI channel in use',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
+      for _, chan in ipairs{ 3, 11 } do
+        h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
+                       vel = 100, detune = 0, delay = 0, lane = 1 }
+      end
+      h.tm:flush()
       injectGlobals(h, { {} })
 
       local chans = {}
       for _, c in ipairs(h.fm:dump().ccs) do chans[c.chan] = true end
-      t.eq(#util.keys(chans), 16, 'the sine seats a pb curve on every channel')
+      local reached = util.keys(chans)
+      table.sort(reached)
+      t.deepEq(reached, { 3, 11 }, 'the sine seats a pb curve on the channels carrying notes')
       t.falsy(chans[0], 'and channel 0 carries no wire of its own')
     end,
   },

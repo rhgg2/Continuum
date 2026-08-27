@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A global fx chain expands onto the channels in use rather than all sixteen. A
+  channel is in use when it carries an authored note, when the park stash holds a note taken out of
+  it, or when it has a pb or cc lane of its own; derived output is no evidence, since a channel
+  counted in on a chain's own emission would never leave the set. Expanding everywhere authored a
+  curve on every empty channel — 160 pb events on a take holding one note.
+
 - **2026-08-27** — An expanded producer's identity is its stored region's uuid joined to its channel
   with util.key. The key is opaque and persists into the window store and the park stash, so nothing
   splits it back apart: a reader wanting a global region's producers derives the sixteen keys
