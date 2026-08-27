@@ -741,13 +741,17 @@ strip has neither. Freeze is tm's refusal (`docs/trackerManager.md` § Park wind
 since a chain there realises on sixteen channels and freeze converts one. Paste needs no guard
 of its own: it drops any region whose rebased channel falls outside 1 to 16 (§ FX regions).
 Channel select stands, selecting the strip's columns rather than binding anything to the
-wire, and clicking the `Gl` banner is the mouse route onto it.
+wire, and clicking the `Gl` banner is the mouse route onto it. Every other fx verb is
+unchanged there: a verb addresses one stored region by uuid and a global region is one
+stored region, so minting, rewriting the chain, moving and resizing the window, deleting,
+and adding or editing stages all read the strip as they read a channel.
 
 **10** **Explode** is the strip's own verb, and the way through freeze's refusal: it
 replaces a global region with an ordinary region on each channel its chain reaches, which
 is the expansion the rebuild was already running, persisted (`docs/trackerManager.md`
 § Channel & column model). Freezing a global chain thus means exploding it and freezing
-one of the sixteen. A chain reaching no channel declines, since the explode would leave no
+one of the sixteen, and the same holds of any divergence between channels: one stored
+chain speaks for all sixteen until an explode gives each its own. A chain reaching no channel declines, since the explode would leave no
 region at all and take the chain with it. Explode and freeze share one chord, Ctrl+E, and
 the caret's host picks the arm: at most one of them is ever live, freeze refusing on the
 strip and explode refusing off it.
