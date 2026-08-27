@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Explode stores the expansion verbatim, so it seeds no derivation dirt. The
+  producer list the rebuild's passes read is the same before and after -- same channels, same spans,
+  same uuids -- and the one rebuild it forces is for the output maps keyed by the stored region. The
+  channel set comes from that region's realisation union, which is the set the master strip already
+  ghosts, rather than a second read of the channels in use. A chain reaching no channel refuses,
+  since exploding it would leave nothing behind and lose the chain.
+
 - **2026-08-27** — Portamento anchors each glide on its successor's onset rather than sizing it from
   the host's window end. A glide sized from the window arrives wherever the window closes, which is
   not the successor where a host overruns a parked note; an onset costs nothing to read and cannot

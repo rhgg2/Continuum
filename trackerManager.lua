@@ -2063,6 +2063,38 @@ function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
 --contract: members are column events (authored frame, no ppqL) for gm:markGroup, else false
 --contract: the take is settled on return; no part of the conversion is left for the caller's flush
 function tm:freezeToGroup(uuid)       return freezeRegion(uuid, true) end
+--contract: one-way; the stored global gives way to the producers it expanded into, uuids kept
+--contract: false, staging nothing, for a uuid naming anything but a stored chan-0 region
+--contract: false for a chain reaching no channel; the expansion would be empty, losing the chain
+--contract: flushes first, rebuilds once; the producer list is unchanged, so no channel is dirtied
+-- The expansion, persisted: the passes below the head snapshot read the very list they read before,
+-- and the rebuild is for the maps keyed by the stored region. see docs/trackerManager.md § Channel & column model
+function tm:explodeRegion(uuid)
+  tm:flush()
+  local region, channelRegions, otherGlobals = nil, {}, {}
+  for _, r in ipairs(ds:get('fxRegions') or {}) do
+    if r.uuid == uuid then region = r
+    else util.add(r.chan == 0 and otherGlobals or channelRegions, r) end
+  end
+  if not (region and region.chan == 0) then return false end
+  -- The channels the last rebuild expanded onto, which is what the strip ghosts: every expanded
+  -- producer is in its census, emitting or not, so the union answers for the whole set.
+  local realisation = fxRealisationByUuid[uuid]
+  local chans = realisation and realisation.chans or {}
+  if #chans == 0 then return false end
+  local inUse = {}
+  for _, chan in ipairs(chans) do inUse[chan] = true end
+
+  -- Stored where the expansion puts them -- after the channel regions, before any global still
+  -- stored -- so precedence on every channel stands where it stood.
+  local stored = channelRegions
+  for _, r in ipairs(expandGlobals({ region }, inUse)) do util.add(stored, r) end
+  for _, r in ipairs(otherGlobals) do util.add(stored, r) end
+  suppressingRebuild(function() ds:assign('fxRegions', stored) end)
+  tm:requestRebuild()   -- geometry only: nothing to re-derive, and the output maps still want rebuilding
+  tm:flush()
+  return true
+end
 --contract: reads the last rebuild's settled census; staged-not-flushed producers are invisible
 --contract: false for any uuid that is not a live producer; never computes, never stages
 function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true end

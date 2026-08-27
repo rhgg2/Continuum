@@ -20,25 +20,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 tm: explode a global region onto the channels it reaches (§ Explode)
 - 2026-08-27 tm: a global region realises as the union of its producers (§ Realisation on the master strip)
 - 2026-08-27 tm: expand a global region onto the channels in use (§ Expansion)
 - 2026-08-27 tm: expand a global region into a producer on every channel (§ Expansion, § An edit reaches sixteen channels)
-- 2026-08-27 tv: channel 0 refuses mute, solo, automation and freeze (§ What channel 0 refuses)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **tm: explode a global region onto the channels it reaches.**
-  `tm:explodeRegion(uuid)` flushes first, as `freezeRegion` does, then replaces
-  the stored chan-0 region with one ordinary region per channel in use, each
-  keeping the expanded uuid (`util.key(parent, chan)`) so nothing re-derives and
-  parked cells keep their identity; dirt on all sixteen, one flush. A non-global
-  uuid is a silent refusal. Spec in `tm_fx_region_spec`: derived notes, park
-  stash and fx windows come through the explode unchanged, a channel out of use
-  gets no region, and no region is left on channel 0.
 - **tv: the explode gesture on the master strip.** `tv:explodeRegion` under
   `util.atomic('Explode FX region')`, a command bound in `pageBindings` that
   addresses `tv:fxHostAtCursor()`, and a button on the fx strip beside freeze's;

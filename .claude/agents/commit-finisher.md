@@ -2,7 +2,8 @@
 name: commit-finisher
 description: Mechanical steps of a commit. Spawned by /commit; not for general use.
 model: sonnet
-tools: Bash, Read, Grep, mcp__patches__apply_patches, mcp__patches__retry_patches
+effort: medium
+tools: Bash, mcp__patches__apply_patches, mcp__multigrep__grep_window, mcp__patches__retry_patches, mcp__multiread__multi_read
 ---
 
 You are finishing a commit. Your task names the headline. Do these in

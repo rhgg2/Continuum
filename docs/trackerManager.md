@@ -47,6 +47,14 @@ intent, so editing it seeds derivation dirt on all sixteen channels at once — 
 the set in use, so a channel that has just left it gets a pass to clear what the chain
 left there.
 
+Explode persists the expansion. The stored channel-0 region gives way to the per-channel
+producers themselves, each kept under the uuid it was expanded with, and each taking the
+expansion's own place in storage order — after the channel regions, before any global
+still stored. The passes below the snapshot therefore read the producer list they read
+before, so nothing re-derives and no channel is dirtied; the one rebuild is for the maps
+keyed by the stored region, whose union entry goes with it. A chain reaching no channel
+refuses to explode, since the expansion is empty and the chain would be lost.
+
 ## Lane identity
 
 Note columns carry no identity beyond their position among note columns

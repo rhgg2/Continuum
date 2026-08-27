@@ -3046,4 +3046,72 @@ return {
     end,
   },
 
+  ----- Explode: the expansion, persisted in place of the stored global region
+
+  {
+    -- The stored region gives way to the producers the expansion was running, uuids and all, so the
+    -- head snapshot reads the same producer list as before. see docs/trackerManager.md § Channel & column model
+    name = 'explode: the expansion persists in place of the global region',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { chan = 1, pitch = 60 })
+      addNote(h, { chan = 7, pitch = 67 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      local before1     = derivedFor(h, 1, expanded('fxr-g', 1))
+      local before7     = derivedFor(h, 7, expanded('fxr-g', 7))
+      local stashBefore = util.deepClone(h.ds:get('fxParked') or {})
+      local winBefore   = util.deepClone(h.ds:get('prevWindows') or {})
+
+      t.truthy(h.tm:explodeRegion('fxr-g'), 'the explode reports success')
+      local chans, uuids = {}, {}
+      for _, r in ipairs(h.ds:get('fxRegions') or {}) do
+        util.add(chans, r.chan); uuids[r.uuid] = r.chan
+      end
+      t.deepEq(chans, { 1, 7 }, 'one region per channel in use, none for the fourteen out of use, none on channel 0')
+      t.eq(uuids[expanded('fxr-g', 1)], 1, 'each keeps the uuid it was expanded under')
+      t.eq(uuids[expanded('fxr-g', 7)], 7, 'on both channels')
+      t.deepEq(derivedFor(h, 1, expanded('fxr-g', 1)), before1, 'so the derived notes come through unchanged')
+      t.deepEq(derivedFor(h, 7, expanded('fxr-g', 7)), before7, 'on both channels')
+      t.deepEq(h.ds:get('fxParked') or {}, stashBefore, 'the park stash keeps the cells it stood in for')
+      t.deepEq(h.ds:get('prevWindows') or {}, winBefore, 'and the window set the seats are recognized against')
+      t.falsy(h.tm:fxRealisation('fxr-g'), 'the union entry goes with the stored region')
+      t.deepEq(h.tm:fxRealisation(expanded('fxr-g', 7)).chans, { 7 }, 'and each producer answers for itself')
+    end,
+  },
+
+  {
+    -- Explode is the global form's verb alone: an ordinary region names its own channel already, and
+    -- there is nothing to expand it into.
+    name = 'explode: a region on a channel of its own refuses, and so does an unknown uuid',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      injectArp(h)
+      local before = util.deepClone(h.ds:get('fxRegions'))
+
+      t.falsy(h.tm:explodeRegion('fxr-1'), 'a region already on channel 1 is no global')
+      t.falsy(h.tm:explodeRegion('fxr-nope'), 'and a uuid naming no region at all is not one either')
+      t.deepEq(h.ds:get('fxRegions'), before, 'the store is untouched by either refusal')
+      t.eq(#derivedNotes(h), 4, 'and the chain runs as it did')
+    end,
+  },
+
+  {
+    -- All or nothing: exploding a chain that reaches nothing would leave no region behind at all, so
+    -- the chain would be lost to a gesture that only converts.
+    name = 'explode: a chain reaching no channel refuses',
+    run = function(harness)
+      local h = harness.mk()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      t.deepEq(h.tm:fxRealisation('fxr-g').chans, {}, 'fixture check: an empty document puts no channel in use')
+
+      t.falsy(h.tm:explodeRegion('fxr-g'), 'so the explode declines')
+      local stored = h.ds:get('fxRegions') or {}
+      t.eq(#stored, 1, 'and the region stands')
+      t.eq(stored[1].chan, 0, 'on channel 0, where it was authored')
+    end,
+  },
+
 }
