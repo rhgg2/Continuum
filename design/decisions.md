@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A pbRange edit from the tracker status bar writes the track tier, not the take
+  tier its neighbouring cells use. The range has to match the pitch-bend range of the synth on the
+  track, so two takes played through one synth cannot sensibly disagree; octave and advance sit at
+  take because they are per-take editing state. patternEditor's take-tier write stands, since its
+  scratch take carries its own synth.
+
 - **2026-08-27** — Explode stores the expansion verbatim, so it seeds no derivation dirt. The
   producer list the rebuild's passes read is the same before and after -- same channels, same spans,
   same uuids -- and the one rebuild it forces is for the output maps keyed by the stored region. The

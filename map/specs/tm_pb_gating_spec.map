@@ -1,6 +1,6 @@
-@spec tm_pb_gating_spec  src=tests/specs/tm_pb_gating_spec.lua  loc=47  cases=2
-@exercises trackerManager (h.tm), dataStore (h.ds)
-@surface   tm:getChannel, tm:rebuild, ds:assign
+@spec tm_pb_gating_spec  src=tests/specs/tm_pb_gating_spec.lua  loc=80  cases=3
+@exercises midiManager (h.fm), trackerManager (h.tm), configManager (h.cm), dataStore (h.ds)
+@surface   fm:dump, tm:getChannel, tm:rebuild, cm:set, ds:assign
 @harness   mk{seed.ccs}
 
 # Intent
@@ -9,26 +9,43 @@
   The passing suite proves dirty channels stay correct, but nothing else pins the
   reuse itself -- a regression that re-cloned every rebuild would stay green here
   without this spec. see design/incremental-pbs.md § Stage 1b
+  
+  The last test pins the other side of the gate: pbRange is derivation config, so a
+  change must reach every channel and rescale the wire under the new window.
+
+# Helpers
+  @fn centsToRaw(cents, pbRange)  @ 13-15
+  @fn pbByChan(h)  @ 17-23
 
 # Cases
-  @case 'clean rebuild reuses the carried pb column object'  [harness]  @ 12-26
-  @case 'extraColumns edit dirties pb: carried column replaced'  [harness]  @ 30-44
+  @case 'clean rebuild reuses the carried pb column object'  [harness]  @ 28-42
+  @case 'a pbRange change rescales every authored pb, holding its cents'  [harness]  @ 46-59
+  @case 'extraColumns edit dirties pb: carried column replaced'  [harness]  @ 63-77
 
 # Uses (outbound edges)
-  @use call tm:getChannel  @ 18,19,24,25,35,41
-  @use call tm:rebuild  @ 22
-  @use call ds:assign  @ 39
+  @use call fm:dump  @ 19
+  @use call tm:getChannel  @ 34,35,40,41,68,74
+  @use call tm:rebuild  @ 38
+  @use call cm:set  @ 53
+  @use call ds:assign  @ 72
 
 # Fields (r read / w write incl. constructor keys)
-  @field w ccs  @ 14,32
-  @field w chan  @ 15,16,33
-  @field r columns  @ 18,19,24,25,35,41
-  @field w evType  @ 15,16,33
-  @field w name  @ 12,30
-  @field w notes  @ 39
-  @field r pb  @ 18,19,24,25,35,41
-  @field w pb  @ 39
-  @field w ppq  @ 15,16,33
-  @field w run  @ 13,31
-  @field w seed  @ 14,32
-  @field w val  @ 15,16,33
+  @field r ccs  @ 19
+  @field w ccs  @ 30,48,65
+  @field r cents  @ 58
+  @field w cents  @ 49,50
+  @field r chan  @ 20
+  @field w chan  @ 31,32,49,50,66
+  @field r columns  @ 34,35,40,41,68,74
+  @field r evType  @ 20
+  @field w evType  @ 31,32,49,50,66
+  @field w name  @ 28,46,63
+  @field w notes  @ 72
+  @field r pb  @ 34,35,40,41,68,74
+  @field w pb  @ 72
+  @field w ppq  @ 31,32,49,50,66
+  @field w run  @ 29,47,64
+  @field w seed  @ 30,48,65
+  @field w shape  @ 49,50
+  @field r val  @ 56,57
+  @field w val  @ 31,32,49,50,66

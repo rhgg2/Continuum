@@ -314,6 +314,12 @@ tm-specific facts:
   always cents. Conversion to raw happens only on load (`rawToCents`)
   and at flush (`centsToRaw`). The cents window is
   `cm:get('pbRange') * 100` per side.
+- **A window change rescales the wire.** `pbRange` is derivation
+  config, so changing it dirties every channel. Each authored pb
+  re-converts from its `cents` sidecar under the new window: the raw
+  moves and the intent stands. A foreign pb arrives with no sidecar,
+  but the first rebuild after it lands back-derives one and persists
+  it, so from then on it rescales like any other.
 - **Lane-1 drives detune.** Every note has a `detune` field, but
   only lane-1 notes feed the pb-realisation logic — `detuneAt` seeks
   `rawIndex[chan].notes` (which holds every lane) through a lane-1

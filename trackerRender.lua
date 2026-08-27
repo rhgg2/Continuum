@@ -681,6 +681,9 @@ local setRpb     = function(n) tv:setRowPerBeat(n) end
 local setOctave  = util.atomic('Set octave',  function(n) cm:set('take', 'currentOctave', n) end)
 local setAdvance = util.atomic('Set advance', function(n) cm:set('take', 'advanceBy', n) end)
 local setSample  = util.atomic('Set sample',  function(idx) cm:set('take', 'currentSample', idx) end)
+-- Track tier: pbRange must match the pitch-bend range of the synth on the track, so
+-- every take through it shares one window. cm's targeted fire re-derives all channels.
+local setPbRange = util.atomic('Set bend range', function(n) cm:set('track', 'pbRange', n) end)
 
 -- Each get reads cm/tv fresh; cells declared once, reused per frame.
 local statusSegments = {
@@ -692,6 +695,8 @@ local statusSegments = {
     set = setOctave,  edit = { kind = 'number', min = -1, max =  9 } },
   { id = 'advance', label = 'Advance', width = 20,  get = function() return cm:get('advanceBy')     end, format = '%d',
     set = setAdvance, edit = { kind = 'number', min =  0, max =  9 } },
+  { id = 'pbRange', label = 'Bend',    width = 20,  get = function() return cm:get('pbRange')       end, format = '%d',
+    set = setPbRange, edit = { kind = 'number', min =  1, max = 48 } },
   { id = 'sample',  label = 'Sample',  width = 125, get = sampleReadout,
     visible = function() return cm:get('trackerMode') end,
     set = setSample,  edit = { kind = 'pick', items = sampleItems } },

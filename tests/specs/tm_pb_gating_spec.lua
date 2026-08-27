@@ -3,8 +3,24 @@
 -- The passing suite proves dirty channels stay correct, but nothing else pins the
 -- reuse itself -- a regression that re-cloned every rebuild would stay green here
 -- without this spec. see design/incremental-pbs.md § Stage 1b
+--
+-- The last test pins the other side of the gate: pbRange is derivation config, so a
+-- change must reach every channel and rescale the wire under the new window.
 
-local t = require('support')
+local t    = require('support')
+local util = require('util')
+
+local function centsToRaw(cents, pbRange)
+  return util.clamp(util.round(cents * 8192 / (pbRange * 100)), -8192, 8191)
+end
+
+local function pbByChan(h)
+  local out = {}
+  for _, cc in ipairs(h.fm:dump().ccs) do
+    if cc.evType == 'pb' then out[cc.chan] = cc end
+  end
+  return out
+end
 
 return {
 
@@ -23,6 +39,23 @@ return {
 
       t.eq(h.tm:getChannel(1).columns.pb, before1, 'clean chan 1 reuses its pb column object')
       t.eq(h.tm:getChannel(2).columns.pb, before2, 'clean chan 2 reuses its pb column object')
+    end,
+  },
+
+  {
+    name = 'a pbRange change rescales every authored pb, holding its cents',
+    run = function(harness)
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0,    chan = 1, evType = 'pb', val = centsToRaw(100, 2), cents = 100, shape = 'step' },
+        { ppq = 9600, chan = 2, evType = 'pb', val = centsToRaw(-75, 2), cents = -75, shape = 'step' },
+      } } }
+
+      h.cm:set('track', 'pbRange', 4)   -- the window doubles: the same cents need half the raw
+
+      local pbs = pbByChan(h)
+      t.eq(pbs[1].val, centsToRaw(100, 4), 'chan 1 rescales, so 100c still sounds as 100c')
+      t.eq(pbs[2].val, centsToRaw(-75, 4), 'a pb far past every note rescales too')
+      t.eq(pbs[1].cents, 100, 'the sidecar is the intent, and does not move')
     end,
   },
 
