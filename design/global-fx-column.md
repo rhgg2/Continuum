@@ -88,15 +88,26 @@ rebuild expands each of its regions into all sixteen channels.**
 ## What channel 0 refuses
 
 1. The gestures naming a MIDI channel refuse on channel 0: mute and
-   solo, channel select, and freeze.
+   solo, parameter automation, and freeze.
+
+1. Mute and solo refuse because channel 0 reaches no wire to silence.
+   Solo also mutes the channels it is not on, so a solo there would
+   silence all sixteen.
+
+1. Parameter automation binds a channel and a CC lane, and channel 0
+   names neither.
+
+1. Freeze converts a chain into the notes and curves of the channel it
+   runs on, and channel 0 runs on none.
 
 1. Paste refuses by a rule already written. It rebases each region by a
    channel delta and drops any landing outside 1 to 16
    (`docs/trackerView.md` § FX regions), and channel 0 is outside that
    range.
 
-1. Parameter automation refuses too: it binds a channel and a CC lane,
-   and so has no meaning for channel 0.
+1. Channel select stands. It selects a channel's columns rather than
+   binding anything to the wire, and clicking the master banner is the
+   mouse route onto the strip.
 
 ## Explode
 

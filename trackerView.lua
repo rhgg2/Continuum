@@ -866,6 +866,9 @@ local pushMute do
   local effectiveMuted = {}
 
   local function toggleChannelFlag(key, chan)
+    -- The master channel reaches no wire to silence, and solo mutes the channels it does not
+    -- name, so a solo there would silence all sixteen. see docs/trackerView.md § Addressing a chain
+    if chan == 0 then return end
     local s = ds:get(key) or {}
     s[chan] = (not s[chan]) or nil
     ds:assign(key, s)
@@ -4194,6 +4197,8 @@ end
 function tv:automateParam()
   local col = grid.cols[ec:col()]
   if not (col and paletteParam) then return end
+  -- A binding names a channel and a cc lane; the master channel names neither.
+  if col.midiChan == 0 then return end
   local lane = pa:automate(col.midiChan, paletteParam)
   if not lane then return end
   pa:bumpFrecency(paletteParam.trackGuid, paletteParam.fxGuid, paletteParam.param)

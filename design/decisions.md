@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — Channel select stands on the master channel, where mute, solo, parameter
+  automation and freeze refuse. Selecting a channel names its columns rather than a channel on the
+  wire, and clicking the master banner is the mouse route onto the strip -- the only route by which
+  a global region is authored with the mouse, since region creation takes its channel from the
+  column the selection starts in.
+
 - **2026-08-27** — Test-only generator kinds register into the production registry from
   tests/fixtures/testKinds.lua, and `sine` lives on there as the continuous-augment stand-in the fx
   plumbing specs use. Keying those specs on a production kind makes every change to it a spec edit,

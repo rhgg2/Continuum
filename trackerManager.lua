@@ -1860,6 +1860,9 @@ local function freezeRegion(uuid, toGroup)
   for _, r in ipairs(regions) do
     if r.uuid == uuid then region = r else util.add(keptRegions, r) end
   end
+  -- A global region runs on no channel, so there is nothing to freeze onto. The census this pass
+  -- builds is unfiltered, unlike the rebuild's, so the refusal is stated here.
+  if region and region.chan == 0 then return false end
   local stash, keptParked = ds:get('fxParked') or {}, {}
 
   -- The other producer shape: a note carrying its own chain, parked or still on the take, resolves
@@ -1995,6 +1998,7 @@ function tm:deleteParked(evt)         deleteParked(evt)         end
 --contract: any refusal is silent: returns false, stages nothing of its own, raises nothing
 --contract: refuses same-target overlap with a neighbour; abutting counts for pb, not cc/note
 --contract: refuses a covered fx host, or a note-dest host under another producer's note window
+--contract: refuses a global region (chan 0): a view surface, running on no channel
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
 --contract: freezeRegion's conversion plus a bounded thin of each continuous stream, one flush
 --contract: members are column events (authored frame, no ppqL) for gm:markGroup, else false

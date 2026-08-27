@@ -137,6 +137,110 @@ return {
     end,
   },
 
+  {
+    name = 'mute and solo refuse on the master strip',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+
+      h.vm:toggleChannelMute(0)
+      h.vm:toggleChannelSolo(0)
+
+      t.falsy(h.vm:isChannelMuted(0),  'the master channel does not mute')
+      t.falsy(h.vm:isChannelSoloed(0), 'nor solo')
+      t.falsy(h.ds:get('mutedChannels'),  'no mute set is written')
+      t.falsy(h.ds:get('soloedChannels'), 'no solo set either')
+      -- Solo mutes the channels it does not name, so a solo here would silence all sixteen.
+      t.falsy(h.vm:isChannelEffectivelyMuted(3), 'and channel 3 stays audible')
+    end,
+  },
+
+  {
+    name = 'parameter automation refuses on the master strip',
+    run = function(harness)
+      local h = harness.mk()
+      -- pa scans project tracks for bindings and project takes for used cc lanes.
+      h.reaper._state.projectTracks = { 'take1/track' }
+      h.reaper._state.projectItems = { { takes = { 'take1' } } }
+      h.vm:setGridSize(80, 40)
+      h.ec:setPos(0, 1, 1)
+      t.eq(h.vm.grid.cols[h.ec:col()].midiChan, 0, 'the caret column is the master strip')
+
+      h.vm:setPaletteParam{ trackGuid = '{DST}', fxGuid = '{FX-1}', param = 3, label = 'Cutoff' }
+      h.vm:automateParam()
+
+      t.falsy(h.ds:get('paramAutomation'), 'no binding is written')
+      t.falsy(h.vm:paramBinding(0, 119),   'and none stands at channel 0')
+    end,
+  },
+
+  {
+    name = 'freeze refuses a global region',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectGlobals(h, { {} })
+
+      t.falsy(h.tm:freezeEligible('fxr-1'), 'a global region is no producer to freeze')
+      t.falsy(h.tm:freezeRegion('fxr-1'),   'and the conversion refuses outright')
+
+      local regions = h.ds:get('fxRegions') or {}
+      t.eq(#regions, 1,      'the region stands')
+      t.eq(regions[1].chan, 0, 'still on the master channel')
+      t.eq(#h.fm:dump().notes, 0, 'with nothing frozen onto a channel')
+    end,
+  },
+
+  {
+    -- The 1-to-16 rebase rule pasteFxRegions already applies; channel 0 falls outside it.
+    name = 'paste drops a region rebased onto the master channel',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions',
+                  { { uuid = 'fxr-1', chan = 3, startppq = 0, endppq = 240, fx = sine30 } })
+      h.tm:rebuild()
+      h.vm:rebuild()
+
+      local src
+      for i, col in ipairs(h.vm.grid.cols) do
+        if col.midiChan == 3 and col.type == 'fx' then src = i end
+      end
+      h.ec:setPos(0, src, 1)
+      h.ec:extendTo(3, src, 1)
+      local clip = h.clipboard:collect()
+      t.eq(#clip.fxRegions, 1, 'the region rides the clip')
+
+      h.ec:selClear()
+      h.ec:setPos(0, 1, 1)
+      t.eq(h.vm.grid.cols[h.ec:col()].midiChan, 0, 'the caret column is the master strip')
+      h.clipboard:pasteClip(clip)
+
+      local regions = h.ds:get('fxRegions')
+      t.eq(#regions, 1,        'nothing lands: the rebase falls outside 1 to 16')
+      t.eq(regions[1].chan, 3, 'and the copied region stands where it was')
+    end,
+  },
+
+  ----- What it permits
+
+  {
+    name = 'channel select stands, and a selection on the strip mints a global region',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ec:setPos(0, 2, 1)
+      h.ec:selectChannel(0)
+      t.eq(h.ec:col(), 1, 'the banner click lands the caret on the strip')
+
+      local uuid, minted = h.vm:fxHostForEdit()
+      t.truthy(minted, 'the selection mints a fresh region')
+      local region = (h.ds:get('fxRegions') or {})[1]
+      t.eq(region.uuid, uuid, 'stored under the minted uuid')
+      t.eq(region.chan, 0,    'on the master channel')
+    end,
+  },
+
   ----- Where the caret opens
 
   {

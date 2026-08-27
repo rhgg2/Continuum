@@ -494,7 +494,9 @@ note's tail copies past the band, and one starting above and merely passing
 through is skipped. Overlap capture would make fx unlike every other
 column, and clipping to the band is meaningless for a chain. The
 delete-caret still takes the region under the cursor
-(`cursorRegionBefore`), not the onset rule. Paste stacks — regions overlap by design, so unlike cell
+(`cursorRegionBefore`), not the onset rule. A region whose rebased channel falls
+outside 1 to 16 is dropped, which is also what refuses a paste onto the master
+channel (§ Addressing a chain). Paste stacks — regions overlap by design, so unlike cell
 paste there's no destination wipe.
 
 ## Quantize
@@ -726,6 +728,16 @@ column model), and a global region reaches no wire. Column 1 is therefore not wh
 are typed: a take swap opens the caret on channel 1's first note column, and brings the
 scroll home in front of it, so the strip stands to the caret's left rather than off the
 edge.
+
+**9** The gestures naming a MIDI channel refuse on the master channel: mute and solo,
+parameter automation, and freeze. Mute and solo refuse because channel 0 reaches no wire
+to silence, and because solo mutes the channels it does not name — a solo on the strip
+would silence all sixteen. A parameter binding names a channel and a cc lane, and the
+strip has neither. Freeze is tm's refusal (`docs/trackerManager.md` § Park window census),
+since a chain there converts to the notes and curves of no channel. Paste needs no guard
+of its own: it drops any region whose rebased channel falls outside 1 to 16 (§ FX regions).
+Channel select stands, selecting the strip's columns rather than binding anything to the
+wire, and clicking the `Gl` banner is the mouse route onto it.
 
 ## Note FX stages
 

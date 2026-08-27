@@ -18,6 +18,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 tv: channel 0 refuses mute, solo, automation and freeze (§ What channel 0 refuses)
 - 2026-08-27 tv: master channel strip, an fx-only channel 0 left of channel 1 (§ The master channel, § The master channel is always addressable)
 
 ## Now
@@ -26,8 +27,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **Channel 0 refuses the channel-naming gestures** — mute, solo, channel
-   select, freeze and parameter automation each bind a MIDI channel, which
-   channel 0 does not name, so each refuses with the cursor there. Spec: every
-   one of those verbs over channel 0 leaves state unchanged, and paste drops a
-   region rebased onto channel 0 by the 1-to-16 range rule it already applies.
+(empty)

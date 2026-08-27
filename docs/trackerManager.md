@@ -815,7 +815,10 @@ note arm to suppress in the first place — and a note-dest host emits no window
 tested the other way round — its own span against the neighbours' note windows. The overlap
 predicate is half-open on every target: the pb re-centre seat folds at `endppq - 1`, so abutting
 windows share nothing and are disjoint in fact as well as in the test. Refusal is silent and total
-— false, computed before any gather, so nothing of freeze's own is staged.
+— false, computed before any gather, so nothing of freeze's own is staged. A region stored on
+channel 0 refuses ahead of all this: it is a view surface running on no channel
+(`docs/trackerView.md` § Addressing a chain), and the census `freezeRegion` builds for itself is
+unfiltered, unlike the rebuild's.
 
 All three arms answer *what is committed* — `fxRegions`, the maintained fx-host index, the stash — so
 `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
