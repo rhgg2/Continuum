@@ -1,7 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 1
-> (the entry); nothing landed yet
+> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 2
+> (the rest of the surface); the entry has landed
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
@@ -12,21 +12,17 @@ from the one declaration.**
 
 ## The manifest
 
-1. A scope's **manifest** declares every command that scope registers.
-   Each **entry** names one command and carries a **label** for display,
-   its **keys** as `cmgr` keyspecs (`docs/commandManager.md`
-   § Registration lifecycle), and an optional **path** — the menu
-   segments that reach it.
+1. The manifest and its entries have landed: `docs/commandManager.md`
+   § Manifest carries the per-scope table, the label and keys an entry
+   holds, the loop-minted family, and what install does.
 
-1. Keys and path are independent, and either may be absent. A command
-   with keys alone is reached by its chord, one with a path alone
-   through the menu, one with both either way.
+1. An entry also carries an optional **path** — the menu segments that
+   reach it. Keys and path are independent, and either may be absent. A
+   command with keys alone is reached by its chord, one with a path
+   alone through the menu, one with both either way.
 
 1. An entry carries no rendering. Where a command's group sits on
    screen, and how its chord prints, belong to the consumers.
-
-1. A command family minted in a loop writes its entries in that loop, so
-   no command is registered outside a manifest.
 
 ## Three consumers
 
@@ -184,9 +180,8 @@ from the one declaration.**
 
 ## What load asserts
 
-1. Every registered command resolves to exactly one entry. A command
-   registered without one raises, as does an entry naming a command no
-   scope registers.
+1. Every registered command resolves to exactly one entry — landed:
+   `docs/commandManager.md` § Manifest.
 
 1. Letters are unique within a level. A collision raises, naming both
    members.
