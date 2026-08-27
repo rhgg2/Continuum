@@ -75,6 +75,11 @@ will eventually layer overrides on top.
    name raises at install, since the flat namespace gives that name one
    body and one gate.
 
+1. `entry(name)` returns a command's entry, whichever scope declares it,
+   and raises on a name no manifest declares. A consumer reads its
+   labels through it — the F1 cheat-sheet names a rebinding's victim
+   whether or not the victim's page is showing.
+
 1. `auditManifests()` checks each declared scope both ways: an entry the
    scope does not register raises, as does a registration its manifest
    omits. It runs at the end of wiring, once every command has its body.

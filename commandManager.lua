@@ -49,6 +49,7 @@ local cm = (...).cm
 
 local cmgr = {
   commands = {},          -- flat: name → fn (may be a wrap chain)
+  entries  = {},          -- flat: name → its manifest entry
   gates    = {},          -- name → owning scope; absent = ungated (global)
   scopes   = {},
   stack    = {},
@@ -149,10 +150,18 @@ function cmgr:installManifest(manifest)
         error('manifest: ' .. name .. ' is declared by both ' .. declaredBy[name] .. ' and ' .. scopeName)
       end
       declaredBy[name] = scopeName
+      self.entries[name] = entry
       if entry.keys then scope.keymap[name] = entry.keys end
     end
     scope.manifest = entries
   end
+end
+
+--contract: raises on a name no manifest declares, so a consumer naming a stale command fails loudly
+function cmgr:entry(name)
+  local entry = self.entries[name]
+  if not entry then error('manifest: nothing declares ' .. tostring(name)) end
+  return entry
 end
 
 --contract: a declared scope's entries and its registrations must correspond, both ways

@@ -33,10 +33,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 cmgr: the cheat-sheet reads its labels from the entries (§ Three consumers)
 - 2026-08-27 cmgr: declare the sampler and wiring scopes, retire pageBindings (§ The manifest)
 - 2026-08-27 cmgr: declare the arrange scope in a manifest (§ The manifest)
 - 2026-08-27 cmgr: declare the tracker and region scopes in a manifest (§ The manifest)
-- 2026-08-27 cmgr: declare the global scope's commands in a manifest (§ The manifest)
 
 ## Now
 
@@ -44,10 +44,10 @@
 
 ## Queued (current phase; one-liners)
 
-- **The cheat-sheet reads labels from the entries.** cmgr grows a
-  label lookup over the installed manifests; help's items collapse
-  from `{cmd, label}` to `{cmd}` across trackerRender.lua:718-848, and
-  `cmdLabel` (help.lua:213) becomes that lookup, losing its
-  bare-command-name fallback for a command on another scope.
-  `docs/help.md` § What's where stops calling the help registration a
-  manifest. Spec: every help `cmd` resolves to an entry.
+- **The cheat-sheet reaches the other pages.** `arrangeRender`,
+  `sampleRender` and `wiringRender` take `help`, anchor their body rect
+  and register their groups; arrange and wiring gain tracker's
+  `wasOpenAtFrameStart` guard over the mouse reads that bypass
+  dispatch. Settle first whether help owns one universal group over the
+  page-switcher segment, rather than four pages each repeating
+  tracker's Global block.

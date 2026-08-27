@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A cheat-sheet group names its commands alone, and the label each row renders
+  under is the command's manifest entry, read through cmgr:entry. The lookup returns the entry
+  rather than the label, since the menu will want the same command's path from it. It raises on a
+  name no manifest declares, in place of help's fallback to the bare command name for a victim on a
+  scope the page never shows.
+
 - **2026-08-27** — The page specs compare their own scope's declared and registered sets, rather
   than calling cmgr:auditManifests as they did. The audit is now strict — a scope that registers a
   command must declare a manifest — so a whole-tree audit inside a page spec trips on the tracker

@@ -32,9 +32,12 @@ empty grid, a hidden segment) simply has no callout.
 
 The binding strings are never stored — `cmgr:keyLabels(cmd)` resolves
 them live against the current scope stack, so the overlay can't drift
-from the actual keymap. A page's manifest carries only the *grouping*
-and the human labels (`help:registerPage(name, groups)`), co-located with
-the render module that owns both the layout and the bindings.
+from the actual keymap. A page registers *grouping* alone
+(`help:registerPage(name, groups)`), co-located with the render module
+that owns the layout: each group names its commands, and the label a row
+renders under is the command's manifest entry (`docs/commandManager.md`
+§ Manifest). So a label is declared once, and a group naming a command no
+scope declares raises rather than drawing a bare name.
 
 Each bound shortcut renders in its own keycap chip (`cmgr:keyLabelList`
 feeds them, one chord per chip); a command with several bindings shows

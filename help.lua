@@ -1,7 +1,7 @@
 -- See docs/help.md for the model.
 -- F1 cheat-sheet: toolbar groups pin callouts under their segment; body groups flow row-major in the grid rect.
 
---shape: helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }
+--shape: helpGroup = { anchor, title, place='pin'|'flow', items=[commandName] }
 --invariant: anchors are frame-scoped — cleared each frame, repopulated by render code only while open
 --invariant: edit state (editing/capturing/conflict) resets on overlay close or page change
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
@@ -176,18 +176,23 @@ local function drawCluster(cluster, x, y, cmd, specs)
   end
 end
 
+-- A command's human label comes from its manifest entry, wherever it is declared:
+-- a conflict's victim may live on a scope this page never shows.
+local function cmdLabel(cmd) return cmgr:entry(cmd).label end
+
 -- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the
 -- box w/h, sized to the wider of the title vs the shortcut column + widest label.
 local function layoutBox(group)
   local rows, keyW, labelW = {}, 0, 0
-  for _, item in ipairs(group.items) do
-    local editingRow = item.cmd == editing
-    local labels  = cmgr:keyLabelList(item.cmd, ImGui)
+  for _, cmd in ipairs(group.items) do
+    local editingRow = cmd == editing
+    local label   = cmdLabel(cmd)
+    local labels  = cmgr:keyLabelList(cmd, ImGui)
     local cluster = layoutCluster(labels or (editingRow and {} or { EM_DASH }), editingRow)
-    util.add(rows, { cluster = cluster, label = item.label,
-                     cmd = item.cmd, specs = cmgr:keysFor(item.cmd) or {} })
+    util.add(rows, { cluster = cluster, label = label,
+                     cmd = cmd, specs = cmgr:keysFor(cmd) or {} })
     keyW   = math.max(keyW, cluster.width)
-    labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, item.label)))
+    labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, label)))
   end
   local titleW = ImGui.CalcTextSize(ctx, group.title)
   local w = math.max(titleW, keyW + KEY_GAP + labelW) + PAD * 2
@@ -206,17 +211,6 @@ local function drawBox(box, x, y)
     ImGui.DrawList_AddText(dl, x + PAD + box.keyW + KEY_GAP, rowY, theme.label, row.label)
     rowY = rowY + lineH + ROW_GAP
   end
-end
-
--- A command's human label from the current page's manifest, else its raw name (a
--- victim may live on another scope/page, where no manifest label is to hand).
-local function cmdLabel(cmd)
-  for _, group in ipairs(current and pages[current] or {}) do
-    for _, item in ipairs(group.items) do
-      if item.cmd == cmd then return item.label end
-    end
-  end
-  return cmd
 end
 
 local PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4

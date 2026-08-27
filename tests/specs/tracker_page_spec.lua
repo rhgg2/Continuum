@@ -205,10 +205,10 @@ local function seedItems(h, takes, srcLen)
   end
 end
 
-local function newTrackerPage(cm, ds, cmgr, chrome, gui)
+local function newTrackerPage(cm, ds, cmgr, chrome, gui, help)
   fakeModalHost:reset()
   resetArrange()
-  local help = util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
+  help = help or util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
   local lib  = util.instantiate('library',
     { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
   return util.instantiate('trackerPage',
@@ -305,6 +305,28 @@ return {
         end
         t.deepEq(scope.registered, declared, scopeName .. ' declares what it registers')
       end
+    end,
+  },
+
+  {
+    -- The F1 groups carry command names alone, so a name no manifest declares
+    -- would draw a row with no label.
+    name = 'every command in the page\'s F1 groups resolves to a manifest entry',
+    run = function(harness)
+      local h, groupsByPage = harness.mk(), {}
+      local recorder = { registerPage = function(_, name, groups) groupsByPage[name] = groups end }
+      newTrackerPage(h.cm, h.ds, h.cmgr, nil, {}, recorder)
+      h.cmgr:installManifest(require('manifest'))
+
+      t.truthy(groupsByPage.tracker, 'the page registers its F1 groups')
+      local seen = 0
+      for _, group in ipairs(groupsByPage.tracker) do
+        for _, cmd in ipairs(group.items) do
+          seen = seen + 1
+          t.truthy(h.cmgr:entry(cmd).label, tostring(cmd) .. ' resolves to a labelled entry')
+        end
+      end
+      t.truthy(seen > 0, 'the groups hold commands')
     end,
   },
 
