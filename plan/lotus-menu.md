@@ -33,6 +33,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-27 cmgr: declare the arrange scope in a manifest (§ The manifest)
 - 2026-08-27 cmgr: declare the tracker and region scopes in a manifest (§ The manifest)
 - 2026-08-27 cmgr: declare the global scope's commands in a manifest (§ The manifest)
 
@@ -41,18 +42,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **arrange's manifest.** `manifest.arrange` takes all 112 registered
-  names with labels: the 37 of arrangeView's `registerAll`
-  (arrangeView.lua:954), the 3 of arrangeRender's (arrangeRender.lua:1042),
-  and the two families minted in the manifest's own loops —
-  `drop0`–`dropZ` over `util.toBase62` with `placeKey`, and
-  `arrangeAdvanceBy0`–`9`. Keys come across from `pageBindings.arrange`
-  unchanged; `arrange:bindAll` (arrangeRender.lua:1054) and
-  `pageBindings.arrange` go. arrangeView's `replaceCmds` loop mints
-  redirects, not registrations, and stays put. Spec: `arrange_page_spec`
-  gains the tracker commit's assertion — a representative chord resolves
-  through the installed keymap.
 
 - **Sampler and wiring, and `pageBindings.lua` retired.**
   `manifest.sample` (6 entries, sampleRender.lua:595) and
@@ -63,12 +52,10 @@
   Docs lose the "one at a time" clause. Spec: `cmgr_manifest_spec` pins
   the new raise.
 
-- **The cheat-sheet reads labels from the entries.** cmgr grows a label
-  lookup over the installed manifests; help's items collapse from
-  `{cmd, label}` to `{cmd}` across trackerRender.lua:718-848, and
+- **The cheat-sheet reads labels from the entries.** cmgr grows a
+  label lookup over the installed manifests; help's items collapse
+  from `{cmd, label}` to `{cmd}` across trackerRender.lua:718-848, and
   `cmdLabel` (help.lua:213) becomes that lookup, losing its
   bare-command-name fallback for a command on another scope.
-  `insertRowCol` and `deleteRowCol` shorten to `Insert row` /
-  `Delete row` in the manifest, the `(all columns)` pair keeping the
-  fuller labels. `docs/help.md` § What's where stops calling the help
-  registration a manifest. Spec: every help `cmd` resolves to an entry.
+  `docs/help.md` § What's where stops calling the help registration a
+  manifest. Spec: every help `cmd` resolves to an entry.

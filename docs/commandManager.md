@@ -81,7 +81,7 @@ will eventually layer overrides on top.
 
 1. A scope with no manifest is passed over by the audit, so scopes move
    from `pageBindings.lua` to the manifest one at a time. The global,
-   tracker and region scopes have moved so far.
+   tracker, region and arrange scopes have moved so far.
 
 1. A command family minted in a loop declares its entries in that loop,
    labels included: the tracker's `advBy0`–`advBy9` are ten entries, so

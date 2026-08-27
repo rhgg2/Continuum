@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-27** — A command name belongs to one scope. Arrange's follow-play command was registered
+  as toggleFollowPlay, the name the tracker scope already held; cmgr.commands being flat, the
+  tracker page's later registration took both the body and the gate, and Cmd+F on the arrange page
+  reached nothing. It is now arrangeFollowPlay, which the manifest's one-name-one-entry check would
+  have forced in any case.
+
 - **2026-08-27** — The pattern editor's editing subset stays a list in patternEditor.lua and takes
   only its keys from the tracker manifest, rather than each entry flagging its membership. A flag
   would make the subset a fourth consumer of the entry, where the design admits three — bindAll, the

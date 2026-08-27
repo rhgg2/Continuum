@@ -172,6 +172,27 @@ return {
   },
 
   {
+    -- The load-time check of docs/commandManager.md § Manifest, run against the
+    -- page's own registrations: what the arrange scope registers and what
+    -- manifest.lua declares are the same set, and every entry has a label.
+    name = 'the manifest declares every command the arrange page registers',
+    run = function(harness)
+      local h = harness.mk()
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+
+      local manifest = require('manifest')
+      t.truthy(manifest.arrange, 'the arrange scope declares a manifest')
+      h.cmgr:installManifest{ arrange = manifest.arrange }
+      h.cmgr:auditManifests()
+
+      local scope = h.cmgr:scope('arrange')
+      for name in pairs(scope.registered) do
+        t.truthy(scope.manifest[name].label, name .. ' carries a label')
+      end
+    end,
+  },
+
+  {
     name = 'arrange-scope place commands are registered (drop0/dropA/dropZ invokable)',
     run = function(harness)
       local h = harness.mk()

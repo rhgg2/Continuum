@@ -121,7 +121,7 @@
   @held statusSegments.visible()  @ 1015
   @held arrange.createSlot()  @ 1043-1045
   @held arrange.deleteSlot()  @ 1046-1050
-  @held arrange.toggleFollowPlay()  @ 1051
+  @held arrange.arrangeFollowPlay()  @ 1053
 
 # Handlers registered
   @handler modalHost:createSlot(s, close)  @ 694-711
@@ -200,7 +200,7 @@
   @use call    av:deleteSlot  @ openDeleteModal:662
   @use call    av:dragCandidate  @ handleGridMouse:305
   @use call    av:followPlay  @ handleGridMouse:254
-  @use call    av:followsPlay  @ toolbarSegments.render:929 arrange.toggleFollowPlay:1051
+  @use call    av:followsPlay  @ toolbarSegments.render:929 arrange.arrangeFollowPlay:1053
   @use call    av:gutterLoopCand  @ handleGridMouse:307
   @use call    av:hitTake  @ handleGridMouse:262,296
   @use call    av:isSelected  @ handleGridMouse:269
@@ -224,7 +224,7 @@
   @use call    av:setCursor  @ handleGridMouse:330
   @use call    av:setEditCursorQN  @ handleGridMouse:328
   @use call    av:setFocus  @ handleGridMouse:275,336
-  @use call    av:setFollowPlay  @ toolbarSegments.render:930 arrange.toggleFollowPlay:1051
+  @use call    av:setFollowPlay  @ toolbarSegments.render:930 arrange.arrangeFollowPlay:1053
   @use call    av:setGridSize  @ handleGridMouse:227 renderBody:949
   @use call    av:setLoopRangeQN  @ handleGridMouse:318
   @use call    av:setMaxCol  @ handleGridMouse:228
@@ -295,7 +295,6 @@
   @bind trimReadout  @ 1012
 
 # Unresolved receivers
-  @drop arrange:bindAll  @ <load>:1054
   @drop arrange:registerAll  @ <load>:1042
   @drop buf.clear  @ peaksFor:134
   @drop pg.fromScreen  @ handleGridMouse:231
@@ -353,7 +352,7 @@
   @field w acceptCmds  @ focusState:1025,1029
   @field r add  @ handleGridMouse:320,331 drawBaseList:768
   @field w add  @ handleGridMouse:272,281 drawBaseList:765
-  @field r arrange  @ 1054
+  @field w arrangeFollowPlay  @ arrange.arrangeFollowPlay:1053
   @field r assignment  @ drawBaseList:769,770 modalHost:tidyTrack:794,842,855
   @field w assignment  @ openTidyModal:728
   @field r av  @ 18
@@ -528,7 +527,6 @@
   @field w title  @ openDeleteModal:660 openPruneModal:668 openCreateModal:681 openTidyModal:725
   @field r to  @ drawBaseList:770
   @field w to  @ drawBaseList:748
-  @field w toggleFollowPlay  @ arrange.toggleFollowPlay:1051
   @field r trackIdx  @ renderGrid:452 modalHost:tidyTrack:794
   @field w trackIdx  @ openTidyModal:726
   @field r ty0  @ renderGrid:588

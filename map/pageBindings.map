@@ -1,124 +1,43 @@
-@module pageBindings  src=pageBindings.lua  loc=103  mode=chunk
+@module pageBindings  src=pageBindings.lua  loc=32  mode=script  self=pageBindings
 
 # Shapes
-  @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }  @ 7
+  @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }  @ 4
 
 # Imports
-  @require ImGui = 'imgui'  @ 13
-  @require util = 'util'  @ 14
+  @const ImGui = 'imgui'  @ 10
 
-# Private state
-  @state pageBindings = {}  @ 16
-  @state arrange = {  @ 41
-
-# Private functions
-  -- sample (command bodies + slot-clamp invariant in sampleRender)
-  -- wiring
-  -- arrange (command bodies in arrangeRender + arrangeView)
-  @fn placeKey(slotIdx)  @ 89-93
-      -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
-      -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
+# Module-level constants
+  @const pageBindings = {}  @ 12
 
 # Uses (outbound edges)
-  @use call    util.toBase62  @ <load>:96
-  @use require imgui  @ <load>:13
-  @use require util  @ <load>:14
-
-# Calls (intra-file)
-  @call placeKey  @ <load>:96
+  @use require imgui  @ <load>:10
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ImGui_GetBuiltinPath  @ 9
-  @field r Key_0  @ placeKey:90 99
-  @field r Key_A  @ placeKey:91,92
-  @field r Key_B  @ 76
-  @field r Key_Backspace  @ 62,66,68
-  @field r Key_Comma  @ 25
-  @field r Key_D  @ 69
-  @field r Key_Delete  @ 62,65
-  @field r Key_DownArrow  @ 22,43,50,53,58,60,70
-  @field r Key_E  @ 77
-  @field r Key_End  @ 49
-  @field r Key_Enter  @ 26,56,67
-  @field r Key_Equal  @ 83
-  @field r Key_Escape  @ 33,81
-  @field r Key_F  @ 79
-  @field r Key_F6  @ 80
-  @field r Key_G  @ 82
-  @field r Key_GraveAccent  @ 75
-  @field r Key_Home  @ 48
-  @field r Key_KeypadEnter  @ 26
-  @field r Key_L  @ 78
-  @field r Key_LeftArrow  @ 44,54,71
-  @field r Key_Minus  @ 84
-  @field r Key_N  @ 32
-  @field r Key_PageDown  @ 47
-  @field r Key_PageUp  @ 46
-  @field r Key_Period  @ 24,63
-  @field r Key_RightArrow  @ 23,45,55,72
-  @field r Key_S  @ 61
-  @field r Key_U  @ 74
-  @field r Key_UpArrow  @ 21,42,51,52,57,59,64
-  @field r Mod_Alt  @ 50,51,64,70,71,72
-  @field r Mod_Ctrl  @ 21,22,23,61,65,66,69,75,99
-  @field r Mod_Shift  @ 24,25,52,53,54,55,59,60,64,70,71,72
-  @field r Mod_Shift  @ placeKey:92
-  @field r Mod_Super  @ 56,57,58,59,60,68,74,76,77,78,79,82
-  @field r Mod_Super  @ 83,84
-  @field w arrange  @ 101
-  @field w arrangeAdvanceMode  @ 75
-  @field w arrangeClearLoop  @ 81
-  @field w arrangeClearSelection  @ 82
-  @field w arrangeCursorDown  @ 43
-  @field w arrangeCursorLeft  @ 44
-  @field w arrangeCursorRight  @ 45
-  @field w arrangeCursorUp  @ 42
-  @field w arrangeDeleteAdvance  @ 63
-  @field w arrangeDeleteRetreat  @ 64
-  @field w arrangeDeleteTake  @ 62
-  @field w arrangeDive  @ 67
-  @field w arrangeDuplicateBelow  @ 69
-  @field w arrangeEdgeDown  @ 60
-  @field w arrangeEdgeUp  @ 59
-  @field w arrangeEnd  @ 49
-  @field w arrangeHome  @ 48
-  @field w arrangeLoopToItem  @ 78
-  @field w arrangeNextDrop  @ 50
-  @field w arrangeNextVariant  @ 72
-  @field w arrangeNudgeBack  @ 57
-  @field w arrangeNudgeForward  @ 58
-  @field w arrangePageDown  @ 47
-  @field w arrangePageUp  @ 46
-  @field w arrangePlayFromCursor  @ 80
-  @field w arrangePrevDrop  @ 51
-  @field w arrangePrevVariant  @ 71
-  @field w arrangeReplaceMode  @ 74
-  @field w arrangeSelectDown  @ 53
-  @field w arrangeSelectLeft  @ 54
-  @field w arrangeSelectRight  @ 55
-  @field w arrangeSelectUp  @ 52
-  @field w arrangeSetLoopEnd  @ 77
-  @field w arrangeSetLoopStart  @ 76
-  @field w arrangeSplit  @ 61
-  @field w arrangeTakeProperties  @ 68
-  @field w arrangeZoomIn  @ 83
-  @field w arrangeZoomOut  @ 84
-  @field w browserAssign  @ 23
-  @field w browserPreview  @ 22
-  @field w browserUp  @ 21
-  @field w createSlot  @ 56
-  @field w deleteSlot  @ 65
-  @field r path  @ 12
-  @field w path  @ 12
-  @field w sample  @ 20
-  @field w slotNext  @ 24
-  @field w slotPrev  @ 25
-  @field w slotRename  @ 26
-  @field w toggleFollowPlay  @ 79
-  @field w wiring  @ 31
-  @field w wiringAddFx  @ 32
-  @field w wiringClearSelection  @ 33
+  @field r ImGui_GetBuiltinPath  @ 6
+  @field r Key_Comma  @ 21
+  @field r Key_DownArrow  @ 18
+  @field r Key_Enter  @ 22
+  @field r Key_Escape  @ 29
+  @field r Key_KeypadEnter  @ 22
+  @field r Key_N  @ 28
+  @field r Key_Period  @ 20
+  @field r Key_RightArrow  @ 19
+  @field r Key_UpArrow  @ 17
+  @field r Mod_Ctrl  @ 17,18,19
+  @field r Mod_Shift  @ 20,21
+  @field w browserAssign  @ 19
+  @field w browserPreview  @ 18
+  @field w browserUp  @ 17
+  @field r path  @ 9
+  @field w path  @ 9
+  @field w sample  @ 16
+  @field w slotNext  @ 20
+  @field w slotPrev  @ 21
+  @field w slotRename  @ 22
+  @field w wiring  @ 27
+  @field w wiringAddFx  @ 28
+  @field w wiringClearSelection  @ 29

@@ -1048,9 +1048,9 @@ arrange:registerAll {
     local slot     = slotEntry(av:trackSlots(trackIdx), av:cursorSlot())
     if slot then openDeleteModal(trackIdx, slot) end
   end,
-  toggleFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,
+  -- Page-prefixed because the tracker scope registers a toggleFollowPlay of its
+  -- own; cmgr.commands is flat, so the shared name clobbered this one's gate.
+  arrangeFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,
 }
-
-arrange:bindAll(require('pageBindings').arrange)
 
 return ar

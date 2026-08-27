@@ -8,6 +8,7 @@ if not reaper.ImGui_GetBuiltinPath then
 end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
+local util  = require 'util'
 
 local manifest = {}
 
@@ -159,5 +160,76 @@ manifest.region = {
   regionPaintExtend = { label = 'Add column to region',          keys = { ImGui.Key_Equal } },
   regionPaintShrink = { label = 'Drop column from region',       keys = { ImGui.Key_Minus } },
 }
+
+----- arrange (bodies in arrangeView + arrangeRender)
+
+-- Cursor-nav and take-edit commands reuse the tracker scope's keys but not its
+-- names: cmgr.commands is flat, so a shared name would clobber the other gate.
+
+manifest.arrange = {
+  arrangeCursorUp       = { label = 'Up',                     keys = { ImGui.Key_UpArrow    } },
+  arrangeCursorDown     = { label = 'Down',                   keys = { ImGui.Key_DownArrow  } },
+  arrangeCursorLeft     = { label = 'Left',                   keys = { ImGui.Key_LeftArrow  } },
+  arrangeCursorRight    = { label = 'Right',                  keys = { ImGui.Key_RightArrow } },
+  arrangePageUp         = { label = 'Page up',                keys = { ImGui.Key_PageUp     } },
+  arrangePageDown       = { label = 'Page down',              keys = { ImGui.Key_PageDown   } },
+  arrangeHome           = { label = 'Top',                    keys = { ImGui.Key_Home       } },
+  arrangeEnd            = { label = 'End of project',         keys = { ImGui.Key_End        } },
+  arrangeNextDrop       = { label = 'Next take edge',         keys = { {ImGui.Key_DownArrow, ImGui.Mod_Alt} } },
+  arrangePrevDrop       = { label = 'Previous take edge',     keys = { {ImGui.Key_UpArrow, ImGui.Mod_Alt} } },
+  arrangeSelectUp       = { label = 'Select up',              keys = { {ImGui.Key_UpArrow, ImGui.Mod_Shift} } },
+  arrangeSelectDown     = { label = 'Select down',            keys = { {ImGui.Key_DownArrow, ImGui.Mod_Shift} } },
+  arrangeSelectLeft     = { label = 'Select left',            keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Shift} } },
+  arrangeSelectRight    = { label = 'Select right',           keys = { {ImGui.Key_RightArrow, ImGui.Mod_Shift} } },
+  arrangeClearSelection = { label = 'Clear selection',        keys = { {ImGui.Key_G, ImGui.Mod_Super} } },
+  createSlot            = { label = 'New slot',               keys = { {ImGui.Key_Enter, ImGui.Mod_Super} } },
+  deleteSlot            = { label = 'Delete slot',            keys = { {ImGui.Key_Delete, ImGui.Mod_Ctrl},
+                                                                      {ImGui.Key_Backspace, ImGui.Mod_Ctrl} } },
+  arrangeNudgeBack      = { label = 'Nudge take back',        keys = { {ImGui.Key_UpArrow, ImGui.Mod_Super} } },
+  arrangeNudgeForward   = { label = 'Nudge take forward',     keys = { {ImGui.Key_DownArrow, ImGui.Mod_Super} } },
+  arrangeEdgeUp         = { label = 'Move edge up',           keys = { {ImGui.Key_UpArrow, ImGui.Mod_Super, ImGui.Mod_Shift} } },
+  arrangeEdgeDown       = { label = 'Move edge down',         keys = { {ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift} } },
+  arrangeSplit          = { label = 'Split take',             keys = { {ImGui.Key_S, ImGui.Mod_Ctrl} } },
+  arrangeDeleteTake     = { label = 'Delete take',            keys = { ImGui.Key_Delete, ImGui.Key_Backspace } },
+  arrangeDeleteAdvance  = { label = 'Delete take, advance',   keys = { ImGui.Key_Period } },
+  arrangeDeleteRetreat  = { label = 'Delete take, retreat',   keys = { {ImGui.Key_UpArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
+  arrangeDive           = { label = 'Dive to tracker',        keys = { ImGui.Key_Enter } },
+  arrangeTakeProperties = { label = 'Take properties',        keys = { {ImGui.Key_Backspace, ImGui.Mod_Super} } },
+  arrangeDuplicateBelow = { label = 'Duplicate take',         keys = { {ImGui.Key_D, ImGui.Mod_Ctrl},
+                                                                      {ImGui.Key_DownArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
+  arrangePrevVariant    = { label = 'Previous variant',       keys = { {ImGui.Key_LeftArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
+  arrangeNextVariant    = { label = 'Next variant',           keys = { {ImGui.Key_RightArrow, ImGui.Mod_Alt, ImGui.Mod_Shift} } },
+  -- Shadows the global universal-argument prefix, which no arrange command reads.
+  arrangeReplaceMode    = { label = 'Replace mode',           keys = { {ImGui.Key_U, ImGui.Mod_Super} } },
+  arrangeAdvanceMode    = { label = 'Advance by take length', keys = { {ImGui.Key_GraveAccent, ImGui.Mod_Ctrl} } },
+  arrangeSetLoopStart   = { label = 'Set loop start',         keys = { {ImGui.Key_B, ImGui.Mod_Super} } },
+  arrangeSetLoopEnd     = { label = 'Set loop end',           keys = { {ImGui.Key_E, ImGui.Mod_Super} } },
+  arrangeLoopToItem     = { label = 'Loop to take',           keys = { {ImGui.Key_L, ImGui.Mod_Super} } },
+  arrangeClearLoop      = { label = 'Clear loop',             keys = { ImGui.Key_Escape } },
+  arrangeFollowPlay     = { label = 'Follow play',            keys = { {ImGui.Key_F, ImGui.Mod_Super} } },
+  arrangePlayFromCursor = { label = 'Play from cursor',       keys = { ImGui.Key_F6 } },
+  arrangeZoomIn         = { label = 'Zoom in',                keys = { {ImGui.Key_Equal, ImGui.Mod_Super} } },
+  arrangeZoomOut        = { label = 'Zoom out',               keys = { {ImGui.Key_Minus, ImGui.Mod_Super} } },
+}
+
+-- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
+-- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
+local function placeKey(slotIdx)
+  if slotIdx < 10 then return { ImGui.Key_0 + slotIdx } end
+  if slotIdx < 36 then return { ImGui.Key_A + (slotIdx - 10) } end
+  return { ImGui.Key_A + (slotIdx - 36), ImGui.Mod_Shift }
+end
+
+-- Slot key = util.toBase62(i); matches arrangeView's drop-command registration.
+for i = 0, 61 do
+  local key = util.toBase62(i)
+  manifest.arrange['drop' .. key] = { label = 'Place slot ' .. key, keys = { placeKey(i) } }
+end
+
+-- Universal-argument digit prefixes, project-wide rather than tracker's take-tier.
+for i = 0, 9 do
+  manifest.arrange['arrangeAdvanceBy' .. i] =
+    { label = 'Advance by ' .. i, keys = { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} } }
+end
 
 return manifest
