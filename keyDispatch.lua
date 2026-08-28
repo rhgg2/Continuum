@@ -47,15 +47,15 @@ local function handlePrefixCapture(cmgr, ctx)
   return nil
 end
 
--- A scope may declare a letter sink (the lotus menu's walk). A bare letter goes to it,
--- never the keychain; Shift is tolerated since the menu draws uppercase letters.
+-- A scope may declare a letter sink (the lotus menu's walk); a bare letter goes to it, not
+-- the keychain (Shift tolerated). Returns the key taken, since a leaf may close the sink first.
 local function handleLetterCapture(cmgr, ctx)
   local capture = cmgr:letterCapture()
   if not capture then return nil end
   if (ImGui.GetKeyMods(ctx) & ~ImGui.Mod_Shift) ~= 0 then return nil end
   for i = 0, 25 do
     if ImGui.IsKeyPressed(ctx, ImGui.Key_A + i) then
-      capture(string.char(65 + i)); return 'consumed'
+      capture(string.char(65 + i)); return ImGui.Key_A + i
     end
   end
   return nil
@@ -69,6 +69,7 @@ end
 --contract: a captured '/' also opens the menu
 --contract: a captured digit dismisses the top scope, resolving the slash as the bar
 --contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
+--contract: a captured letter comes back in commandHeld, so note entry re-reading the frame skips it
 function keyDispatch.dispatchKeys(state, cmgr, ctx)
   if state.suppressKbd or not state.acceptCmds then
     return { consumed = false, commandHeld = {} }
@@ -77,8 +78,9 @@ function keyDispatch.dispatchKeys(state, cmgr, ctx)
   if cap == 'consumed' then
     return { consumed = true, commandHeld = {} }
   end
-  if handleLetterCapture(cmgr, ctx) == 'consumed' then
-    return { consumed = true, commandHeld = {} }
+  local letterKey = handleLetterCapture(cmgr, ctx)
+  if letterKey then
+    return { consumed = true, commandHeld = { [letterKey] = true } }
   end
   local commandHeld = {}
   local modsNow = ImGui.GetKeyMods(ctx)

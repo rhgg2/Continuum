@@ -96,6 +96,11 @@ is a menu letter rather than a page verb.**
    scope captures letters, and stands off for every key while one
    does.
 
+1. A leaf's letter closes the menu mid-frame, before note entry's pass
+   over that same key stream, so that question answers no while the
+   letter is still pressed. Key dispatch therefore reports the letter
+   it captured as held, which that pass reads per key.
+
 ## A pending prefix
 
 1. `/` is the numeric prefix's rational bar as well as the menu key

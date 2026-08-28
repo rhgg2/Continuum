@@ -1,4 +1,4 @@
-@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=148  cases=3
+@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=150  cases=3
 
 # Intent
   A command is walked to or it is not, and nothing derives which: in the manifest an
@@ -14,31 +14,31 @@
   the eighty-two are not named here. See docs/commandManager.md § Menu tree.
 
 # Helpers
-  @fn rostered()  @ 68-74
+  @fn rostered()  @ 70-76
       -- name -> the scope the roster files it under.
-  @fn declared()  @ 78-88
+  @fn declared()  @ 80-90
       -- Every declared command, paired with the scope declaring it. The tree declares menu
       -- groups rather than commands, so the walk passes it over as installManifest does.
 
 # Cases
-  @case 'every declared command is pathed, generated, or named in the unwalked roster'  [pure]  @ 94-108
-  @case 'every rostered name is declared, and carries no path'  [pure]  @ 114-129
-  @case 'a generated family member carries no path'  [pure]  @ 135-146
+  @case 'every declared command is pathed, generated, or named in the unwalked roster'  [pure]  @ 96-110
+  @case 'every rostered name is declared, and carries no path'  [pure]  @ 116-131
+  @case 'a generated family member carries no path'  [pure]  @ 137-148
 
 # Fields (r read / w write incl. constructor keys)
-  @field w arrange  @ 43
-  @field r entry  @ 99,117,139
-  @field w entry  @ 83
-  @field r family  @ 100,140
+  @field w arrange  @ 45
+  @field r entry  @ 101,119,141
+  @field w entry  @ 85
+  @field r family  @ 102,142
   @field w global  @ 19
-  @field w menu  @ 62
-  @field r name  @ 100,101,103,104,105,117,142
-  @field w name  @ 94,114,135
-  @field r path  @ 100,123,125,142
-  @field w region  @ 40
-  @field w run  @ 95,115,136
-  @field w sample  @ 54
-  @field r scope  @ 104
-  @field w scope  @ 83
-  @field w tracker  @ 24
-  @field w wiring  @ 57
+  @field w menu  @ 64
+  @field r name  @ 102,103,105,106,107,119,144
+  @field w name  @ 96,116,137
+  @field r path  @ 102,125,127,144
+  @field w region  @ 42
+  @field w run  @ 97,117,138
+  @field w sample  @ 56
+  @field r scope  @ 106
+  @field w scope  @ 85
+  @field w tracker  @ 26
+  @field w wiring  @ 59

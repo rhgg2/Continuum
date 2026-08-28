@@ -97,7 +97,7 @@
   @fn readFxChain(track)  @ 404-425
       -- The chunk read serialises the track's whole state (giant-VST presets dominate); its only
       -- unique payload is 4 routing bytes per fx. Read it only when a routing fx GUID is uncached;
-      -- otherwise reuse midiCache. see docs/wiringManager.md § Per-FX MIDI routing.
+      -- otherwise reuse midiCache. see docs/routingManager.md § Read cost.
   -- sends
   @fn sendKind(track, sendIdx)  @ 442-445
       -- A send is midi-only iff its audio source is disabled (I_SRCCHAN == -1);

@@ -88,6 +88,27 @@ return {
   },
 
   {
+    -- A leaf's letter closes the walk inside the capture, so by the time the grid's own
+    -- key pass runs, the sink it gates on is gone while the letter is still pressed. The
+    -- captured key comes back held, which is what that pass consults per key.
+    name = 'a captured letter is reported held, so the same frame\'s note entry skips it',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd   = loadKD()
+      local walk = cmgr:scope('walk')
+      walk.captureLetter = function() cmgr:pop(walk) end   -- a leaf: closes, then invokes
+      cmgr:push(walk)
+
+      setKeys{ pressed = { fakeImGui.Key_A } }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.consumed, true, 'the letter is the walk\'s')
+      t.eq(r.commandHeld[fakeImGui.Key_A], true, 'and comes back held')
+      t.eq(cmgr:letterCapture(), nil, 'though the sink the grid gates on is already gone')
+      t.deepEq(log.fired, {}, 'and the binding the letter carries never fires')
+    end,
+  },
+
+  {
     -- The slash lives two lives: the rational's bar and the menu key. With a prefix open
     -- it leads both, and the key after it says which was meant. A digit continues the
     -- rational and dismisses the walk the slash opened, through the dismissal its scope

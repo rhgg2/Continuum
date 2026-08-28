@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — A leaf's letter closes the menu before it invokes, so note entry's own pass over
+  the key stream finds no sink to stand off from, and reads the letter still pressed as a note. Key
+  dispatch now reports the captured letter in commandHeld, over gating that pass on the frame's
+  consumed flag: commandHeld already says which keys are spoken for, and a walk that took a letter
+  makes the same claim as a binding that fired on it.
+
 - **2026-08-29** — The roster in cmgr_fluent_spec names every command the menu does not walk to, and
   fluency is one reason among several: a click-only route is another, and so is a verb the menu
   reaches by a better path — travel to the editor page asks for a choice of tab, so the menu offers
