@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
-# UserPromptExpansion / PreToolUse(Skill): front-load the reads a command opens
-# with, so the skill starts thinking instead of spending turns fetching what it
-# always fetches.
+# Injected into a skill by the `!`…`` syntax in its SKILL.md: front-loads the
+# reads a command opens with, so the skill starts thinking instead of spending
+# turns fetching what it always fetches.
 #
-# The text becomes additionalContext. Claude Code caps that at 10k chars and
-# spills the overflow to a file, so only ever emit digests here — a full
-# `git diff` blows the cap and buys nothing.
+# Each argument names an emitter; they run in order, separated by a blank line.
+# This used to be a hook registered on both UserPromptExpansion and
+# PreToolUse(Skill), because a skill can arrive by being typed or by being
+# invoked, and the two events name the skill in different fields and want the
+# result in different formats. Injection happens downstream of both, so the
+# adapter is gone and each skill now names the context it wants.
+#
+# A non-zero exit aborts the whole skill invocation — Claude never sees the
+# content — so this script always exits 0, and grep's empty-match 1 must never
+# reach the end.
+#
+# Output past the Bash tool's inline ceiling arrives as a file path plus a
+# preview rather than inline text, so emit digests: a full `git diff` costs the
+# skill its context and buys nothing.
 
 set -uo pipefail
 
 repo="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [[ -d $repo ]] && cd "$repo" || exit 0
-
-# Two events reach this script: UserPromptExpansion when the command is typed as
-# a slash command, and PreToolUse when Claude invokes the same skill himself.
-# They name the skill in different fields and want the result in different
-# formats; everything between is common, so read stdin once and branch at the
-# ends.
-payload=$(cat)
-eventName=$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)
-commandName=$(jq -r '.command_name // .tool_input.skill // empty' <<<"$payload" 2>/dev/null)
 
 # plan/CURRENT is a stack, newest first: the top line is the live plan and the
 # lines under it are parked, waiting for a /plan-close to pop back to them.
@@ -33,7 +35,7 @@ emitLivePlan() {
   planPath="plan/$name"
   [[ -f $planPath ]] || { echo "plan/CURRENT names $name, which does not exist."; return; }
 
-  echo "The live plan ($planPath), injected by hook — it is current, so don't re-read it:"
+  echo "The live plan ($planPath), gathered at invocation — it is current, so don't re-read it:"
   echo
   cat "$planPath"
 }
@@ -47,15 +49,14 @@ emitBrief() {
   local name
   [[ -f $briefPath ]] || { echo "$briefPath is missing — no brief has been compiled."; return; }
   name=$(liveplanName)
-  echo "The implementation brief ($briefPath), injected by hook — it is current, so"
-  echo "don't re-read it. The live plan is plan/${name:-(none)}; the brief's own"
+  echo "The implementation brief ($briefPath), gathered at invocation — it is current,"
+  echo "so don't re-read it. The live plan is plan/${name:-(none)}; the brief's own"
   echo "\`plan:\` line should agree, and a disagreement is worth stopping over."
   echo
   cat "$briefPath"
 }
 
 emitBriefState() {
-  echo
   if [[ -f $briefPath ]]; then
     echo "$briefPath exists — an item is in flight and has not landed:"
     grep -m1 '^# ' "$briefPath" || echo "(no title line)"
@@ -65,7 +66,7 @@ emitBriefState() {
 }
 
 emitPlanShelf() {
-  echo "Plan shelf, injected by hook — it is current, so don't re-list these:"
+  echo "Plan shelf, gathered at invocation — it is current, so don't re-list these:"
   echo
   echo '$ cat plan/CURRENT   (stack, newest first; the top line is live)'
   [[ -f plan/CURRENT ]] && cat plan/CURRENT || echo '(missing)'
@@ -105,9 +106,8 @@ emitPlanLinkage() {
     fi
   done
   [[ -n $problems ]] || return
-  echo
-  echo "Plan/design linkage, checked by hook. These are hand-maintained claims, so"
-  echo "a disagreement means one end has drifted — fix it or ask before proceeding:"
+  echo "Plan/design linkage, checked at invocation. These are hand-maintained claims,"
+  echo "so a disagreement means one end has drifted — fix it or ask before proceeding:"
   echo
   printf '%s' "$problems"
 }
@@ -128,8 +128,7 @@ emitDocsCitations() {
                     line++ }
   ')
   [[ -n $problems ]] || return
-  echo
-  echo "Documentation layering, checked by hook. \`docs/\` cites only \`docs/\` — a"
+  echo "Documentation layering, checked at invocation. \`docs/\` cites only \`docs/\` — a"
   echo "pointer into \`design/\` means the substance is in the wrong file:"
   echo
   printf '%s' "$problems"
@@ -157,14 +156,13 @@ emitDocsOwed() {
                    grep -qx "$stem" <<<"$luaStems" || printf '%s ' "$stem"
                  done)
 
-  echo
-  echo "Docs owed, matched by hook. Code and its documentation are one change, so the"
-  echo "commit is not complete while a doc contradicts what you did:"
+  echo "Docs owed, matched at invocation. Code and its documentation are one change, so"
+  echo "the commit is not complete while a doc contradicts what you did:"
   echo
   if [[ -n $owed ]]; then
     echo "  Named for a module you changed —"
     # Headings are usually enough to tell whether the model moved, but a wide
-    # refactor would blow the context cap with them, and wants the docs read
+    # refactor would blow the output ceiling with them, and wants the docs read
     # whole anyway.
     while IFS= read -r stem; do
       if grep -qx "docs/$stem.md" <<<"$changed"; then
@@ -183,7 +181,7 @@ emitDocsOwed() {
 }
 
 emitTreeState() {
-  echo "Working-tree state, injected by hook — it is current, so don't re-run these:"
+  echo "Working-tree state, gathered at invocation — it is current, so don't re-run these:"
   echo
   echo '$ git status --porcelain'
   git status --porcelain
@@ -192,28 +190,22 @@ emitTreeState() {
   git diff --stat HEAD
 }
 
-# Kept a function rather than inlined into the $( ) below: macOS ships bash 3.2,
-# whose parser reads a case pattern's `)` as closing the command substitution.
-emitContext() {
-  case "$commandName" in
-    plan-next)      emitLivePlan; emitBriefState; emitPlanLinkage ;;
-    implement-next) emitBrief ;;
-    plan-new)       emitPlanShelf; emitPlanLinkage ;;
-    plan-close)     emitLivePlan; emitBriefState; echo; emitPlanShelf; emitPlanLinkage ;;
-    commit)         emitTreeState; emitDocsCitations; emitDocsOwed ;;
+first=yes
+for name in "$@"; do
+  [[ $first == yes ]] || echo
+  first=no
+  case "$name" in
+    live-plan)       emitLivePlan ;;
+    brief)           emitBrief ;;
+    brief-state)     emitBriefState ;;
+    plan-shelf)      emitPlanShelf ;;
+    plan-linkage)    emitPlanLinkage ;;
+    docs-citations)  emitDocsCitations ;;
+    docs-owed)       emitDocsOwed ;;
+    tree-state)      emitTreeState ;;
+    *) echo "gather.sh: no emitter named '$name' — the skill asked for context that"
+       echo "does not exist, which is a typo worth reporting rather than working around." ;;
   esac
-}
-
-context=$(emitContext)
-[[ -n $context ]] || exit 0
-
-# UserPromptExpansion takes plain stdout as context; PreToolUse ignores plain
-# stdout and reads JSON only.
-if [[ $eventName == PreToolUse ]]; then
-  jq -n --arg ctx "$context" \
-    '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: $ctx}}'
-else
-  printf '%s\n' "$context"
-fi
+done
 
 exit 0

@@ -2,7 +2,10 @@
 name: coding
 description: House dialect and test design. Dropped in by hand when discussion turns into code.
 disable-model-invocation: true
+allowed-tools: Bash(python3 ${CLAUDE_PROJECT_DIR}/.claude/context/test-baseline.py)
 ---
+
+!`python3 ${CLAUDE_PROJECT_DIR}/.claude/context/test-baseline.py`
 
 "The time for talking is over: now is the time to code" - and these
 are the house guidelines for doing so.

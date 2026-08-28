@@ -2,7 +2,10 @@
 name: plan-new
 description: Open a new plan and push it onto the CURRENT stack.
 disable-model-invocation: true
+allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh *)
 ---
+
+!`bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh plan-shelf plan-linkage`
 
 Create a new implementation plan for the design doc passed as an
 argument; with no argument, stop and confirm which design doc was
@@ -13,9 +16,9 @@ the plan only the implementation machinery.
 
 ## 1. Gather background
 
-A hook injects `plan/CURRENT`, the stack of current plans, and the
-`plan/`, `plan/archive/` and `design/` listings. Read the design doc
-in full, and any relevant related material linked from there.
+`plan/CURRENT`, the stack of current plans, and the `plan/`,
+`plan/archive/` and `design/` listings are gathered above. Read the
+design doc in full, and any relevant related material linked from there.
 
 ## 2. Split the work
 

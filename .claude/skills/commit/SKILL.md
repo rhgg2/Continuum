@@ -2,13 +2,15 @@
 name: commit
 description: Complete commit bookkeeping and spawn a subagent for the mechanical steps.
 disable-model-invocation: true
+allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh *)
 ---
+
+!`bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh tree-state docs-citations docs-owed`
 
 ## 1. Size the commit and decide the headline
 
-Size up the commit from `git status --porcelain` and `git diff --stat
-HEAD`, injected for you by a hook. Empty status means clean tree,
-so stop. 
+Size up the commit from the `git status --porcelain` and `git diff
+--stat HEAD` gathered above. Empty status means clean tree, so stop. 
 
 Otherwise, check for the changes you expect; for an `/implement-next`
 pass, these include changes to the design document and plan from the
@@ -18,15 +20,15 @@ Scope your commit to the expected files, and nothing more: there may
 be parallel work happening in the tree.
 
 Decide the headline; you have the intent from the session, and the
-injected stat for scope. The format is `<scope>: <headline>`,
+stat above for scope. The format is `<scope>: <headline>`,
 imperative, ≤70 chars, scoped to the affected area (eg `tm: fix
 off-by-one in selection rect`). `config:` is the scope for Claude
 Code's own machinery — skills, hooks, settings, agents, and tools.
 
 ## 2. Docs pass
 
-The hook names the docs related to code you touched, as well as all
-cross-cutting docs.
+The context above names the docs related to code you touched, as well
+as all cross-cutting docs.
 
 Where the model moved, the doc and code annotations move in the same
 commit. Check if a change is needed, and if so, apply it in one

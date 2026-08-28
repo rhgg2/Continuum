@@ -2,12 +2,15 @@
 name: plan-close
 description: Close the live plan and archive its documentation, pop the CURRENT stack.
 disable-model-invocation: true
+allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh *)
 ---
+
+!`bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh live-plan brief-state plan-shelf plan-linkage`
 
 This skill closes out a plan by moving any remaining model from the
 design doc into `docs/`, filing whatever is not model, and deleting
-the doc. The hook injects the live plan, the CURRENT stack and the
-plan and design listings; work from those.
+the doc. The live plan, the CURRENT stack and the plan and design
+listings are gathered above; work from those.
 
 Offer to commit after steps 2, 3 and 4. Do these yourself, `git add`
 then `git commit -m "<headline>"`, no body, scopes as indicated below.
@@ -72,7 +75,8 @@ Then `git rm design/<doc>.md`, safe since nothing cites it by now.
 Now pop `plan/CURRENT` by removing the top line. The next item is now
 live again, so set its design doc `status:` back to `in flight —
 plan/<revived>` in the same batch. An empty CURRENT means no live
-plan; leave the file in place and empty, since the hook reads it.
+plan; leave the file in place and empty, since the context gathering
+reads it.
 
 **Done when** the plan reads as historical record — dated, demoted,
 cited by nothing live — the design doc is gone, and the planning

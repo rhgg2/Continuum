@@ -2,12 +2,15 @@
 name: implement-next
 description: Implement the plan's Now brief.
 disable-model-invocation: true
+allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh *)
 ---
 
-The goal is to fulfil the live implementation brief. This arrives
-injected by hook; no brief means none has been compiled, so
-stop and point at `/plan-next`. The hook also names the live plan; if
-the brief's `plan:` line disagrees, stop and clarify the intent.
+!`bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh brief`
+
+The goal is to fulfil the live implementation brief, gathered above; no
+brief means none has been compiled, so stop and point at `/plan-next`.
+The context also names the live plan; if the brief's `plan:` line
+disagrees, stop and clarify the intent.
 
 ## 1. The implementation
 

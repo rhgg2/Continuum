@@ -2,13 +2,17 @@
 name: plan-next
 description: Split in-flight phases, or compile impl brief for next queued item.
 disable-model-invocation: true
+allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh *)
 ---
+
+!`bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh live-plan brief-state plan-linkage`
 
 ## 1. Orientation
 
 This skill concerns the live plan, and the live implementation brief.
-The plan and the brief's existence arrive injected by hook. A plan
-over the 10k context cap should be read from the given file path.
+The plan and the brief's existence are gathered above. A plan that came
+back as a file path and a preview rather than inline text should be read
+from that path.
 
 The plan file is a working buffer, structured thusly:
 

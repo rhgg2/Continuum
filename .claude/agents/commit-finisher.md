@@ -11,7 +11,8 @@ order, then stop.
 
 ## 1. Context
 
-`git status` and `git diff` to see what's landing.
+! `git status` 
+! `git diff`
 
 ## 2. Comment hygiene
 

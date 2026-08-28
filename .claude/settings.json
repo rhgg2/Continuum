@@ -14,35 +14,7 @@
         ]
       }
     ],
-    "UserPromptExpansion": [
-      {
-        "matcher": "plan-new|plan-next|plan-close|implement-next|commit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-expansion.sh\"",
-            "statusMessage": "Gathering command context..."
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-expansion.sh\"",
-            "statusMessage": "Gathering command context..."
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-baseline.py\"",
-            "statusMessage": "Running the suite for a baseline...",
-            "timeout": 75
-          }
-        ]
-      },
       {
         "matcher": "Bash",
         "hooks": [
