@@ -20,6 +20,8 @@ local unwalked = {
     'playPause', 'stop', 'beginPrefix', 'openMenu',
     -- Reached programmatically: a toolbar click, a dive, the editor's exit.
     'play', 'switchPage', 'closeEditor', 'diveToSampler',
+    -- The menu reaches the editor through its tabs, so we omit the bare switch
+    'switchToEditor',
   },
   tracker = {
     'cursorUp', 'cursorDown', 'cursorLeft', 'cursorRight',

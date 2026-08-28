@@ -41,15 +41,15 @@ manifest.global = {
     command('stop',             'Stop',                'F8'),
   },
   Pages = {
-    command('switchToArrange',  'Arrange page',        'F2',  'Jump/Arrange'),
-    command('switchToWiring',   'Wiring page',         'F3',  'Jump/Wiring'),
-    command('switchToTracker',  'Tracker page',        'F4',  'Jump/Tracker'),
-    command('switchToSample',   'Sampler page',        'F9',  'Jump/Sampler'),
-    command('switchToEditor',   'Editor page',         'F10', 'Jump/Editor'),
+    command('switchToArrange',  'Arrange page',        'F2',  'Navigate/Arrange'),
+    command('switchToWiring',   'Wiring page',         'F3',  'Navigate/Wiring'),
+    command('switchToTracker',  'Tracker page',        'F4',  'Navigate/Tracker'),
+    command('switchToSample',   'Sampler page',        'F9',  'Navigate/Sampler'),
+    command('switchToEditor',   'Editor page',         'F10'),
   },
   -- Both reached from their toolbar segment, which is where the sheet pins them.
-  Tuning = { command('editTuning', 'Edit tuning', nil, 'Tuning/Edit') },
-  Swing  = { command('editSwing',  'Edit swing',  nil, 'Grid/Swing/Edit') },
+  Tuning = { command('editTuning', 'Edit tuning', nil, 'Navigate/Editor/Tuning') },
+  Swing  = { command('editSwing',  'Edit swing',  nil, 'Navigate/Editor/Swing') },
   Global = {
     command('undo',             'Undo',                'Ctrl+Z',       'Edit/Undo'),
     command('redo',             'Redo',                'Ctrl+Shift+Z', 'Edit/Redo'),
@@ -264,7 +264,7 @@ manifest.arrange = {
                                                                                       'Take/Remove/Instance'),
     command('arrangeDeleteAdvance',   'Delete take, advance',     'Period'),
     command('arrangeDeleteRetreat',   'Delete take, retreat',     'Shift+Alt+Up'),
-    command('arrangeDive',            'Dive to tracker',          'Enter',            'Jump/Dive'),
+    command('arrangeDive',            'Dive to tracker',          'Enter',            'Navigate/Dive'),
     command('arrangeTakeProperties',  'Take properties',          'Super+Backspace',  'Take/Properties'),
     command('arrangeDuplicateBelow',  'Duplicate take',           { 'Ctrl+D', 'Shift+Alt+Down' },
                                                                                       'Take/Duplicate'),
@@ -378,7 +378,8 @@ manifest.tree = {
   item('Mirror', nil, 'Mirror groups and freezing'),
   item('FX',     'X', 'Note FX, the wiring graph and the param palette'),
   item('Sample', nil, 'Sampler slots and the file browser'),
-  item('Jump',   nil, 'Travel to a page'),
+  item('Navigate',   nil, 'Travel to a page',
+       item('Editor',  nil, 'Editor page')),
 }
 
 return manifest
