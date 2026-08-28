@@ -21,8 +21,9 @@ a region landed is the render pass that just drew it. So positions are
   places it, and help reads those by id too (`status.<id>`), the same
   pull as the toolbar's.
 - **Body** — render code calls `help:anchor(key, x, y, w, h)` for the
-  regions it wants documented (currently `body.grid`). The call no-ops
-  unless the overlay is open, so it costs nothing in the common case.
+  regions it wants documented (currently `body`, which each page anchors
+  over its own grid, canvas or browser). The call no-ops unless the
+  overlay is open, so it costs nothing in the common case.
 
 Anchors are frame-scoped: `help:beginFrame()` clears them and the same
 frame's render repopulates, so a region that isn't drawn this frame (an
@@ -78,11 +79,12 @@ overlay is dismiss-on-interaction: **any** key, or a mouse-down off the
 callout boxes, closes it — and that gesture is *swallowed*, never reaching
 the page underneath.
 
-Swallowing spans three input surfaces that fire independently: the
-coordinator suppresses command dispatch (`acceptCmds = false`), and the
-tracker page skips its grid `handleMouse` and its note-entry `handleKeys`
-(which read the key stream directly, bypassing dispatch) while
-`help:wasOpenAtFrameStart()`. Dismissal is gated on the open-at-frame-start
+Swallowing spans two input surfaces that fire independently: the
+coordinator suppresses command dispatch (`acceptCmds = false`), and each
+page skips the passes that read the mouse or key stream directly, bypassing
+dispatch, while `help:wasOpenAtFrameStart()` — the tracker's grid mouse and
+note entry, arrange's grid mouse, the wiring canvas's whole input phase, and
+the sampler browser's arrows. Dismissal is gated on the open-at-frame-start
 flag so the F1 press that opens the sheet isn't also read as the keypress
 that closes it. Toolbar and param-palette ImGui widgets behind the overlay
 are *not* blocked — true modality there would need a popup window; the dim

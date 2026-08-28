@@ -43,12 +43,13 @@ local fakeFacade = {
     return {}
   end,
 }
-local function newArrangePage(cm, ds, cmgr, chrome, gui)
+local function newArrangePage(cm, ds, cmgr, chrome, gui, help)
   captured.nav, captured.props, captured.dive, captured.facades = nil, nil, nil, {}
   fakeModalHost.last = nil
   cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
+  help = help or util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
   return util.instantiate('arrangePage',
-    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
+    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, help = help,
       eventMeta = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') }),
       modalHost = fakeModalHost, facade = fakeFacade })
 end
@@ -189,6 +190,57 @@ return {
         end
       end
       t.deepEq(scope.registered, declared, 'declarations and registrations correspond')
+    end,
+  },
+
+  {
+    -- A placement names a group and nothing else, so one no scope declares draws
+    -- no box and says nothing about it.
+    name = 'every group the arrange page places is one some scope declares',
+    run = function(harness)
+      local h, placementsByPage = harness.mk(), {}
+      local recorder = { registerPage = function(_, name, p) placementsByPage[name] = p end }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {}, recorder)
+
+      local declared = {}
+      for _, groups in pairs(require('manifest')) do
+        for groupName in pairs(groups) do declared[groupName] = true end
+      end
+      local placements = placementsByPage.arrange
+      t.truthy(placements and #placements > 0, 'the page registers its F1 placements')
+      for _, placement in ipairs(placements) do
+        t.truthy(declared[placement.group], placement.group .. ' is a declared group')
+      end
+    end,
+  },
+
+  {
+    -- A bound command in no placed group is reachable only from memory. A keyless
+    -- one has no chord to show, so it earns no row; the drop and advance families
+    -- are exempt because a generated family earns one row, which is separate work.
+    name = 'every bound command on the arrange page has a place on the cheat-sheet',
+    run = function(harness)
+      local h, placementsByPage = harness.mk(), {}
+      local recorder = { registerPage = function(_, name, p) placementsByPage[name] = p end }
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {}, recorder)
+      local manifest = require('manifest')
+
+      local placed = {}
+      for _, placement in ipairs(placementsByPage.arrange) do placed[placement.group] = true end
+
+      local missing = {}
+      for _, scopeName in ipairs({ 'global', 'arrange' }) do
+        for groupName, entries in pairs(manifest[scopeName]) do
+          for _, entry in ipairs(entries) do
+            local generated = entry.name:match('^drop%w$')
+                           or entry.name:match('^arrangeAdvanceBy%d$')
+            if entry.keys and not placed[groupName] and not generated then
+              util.add(missing, entry.name)
+            end
+          end
+        end
+      end
+      t.deepEq(missing, {}, 'bound commands the cheat-sheet never shows')
     end,
   },
 

@@ -14,8 +14,8 @@ local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
 --contract: arrangePage (the controller) owns the stack (am/av) and hands this renderer av only
-local cm, cmgr, chrome, gui, modalHost, av =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av
+local cm, cmgr, chrome, gui, modalHost, av, help =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -934,6 +934,23 @@ local toolbarSegments = {
 
 function ar:toolbarSegments() return toolbarSegments end
 
+----- F1 help placements — the modes callout pins under its toolbar checkbox and
+----- the zoom pair under the beats/row cell; the rest flow over the body. A
+----- placement names a manifest group; the group's entries are its rows.
+----- The drop and advance families are unplaced: a family earns one row.
+
+help:registerPage('arrange', {
+  { group = 'Modes',      anchor = 'toolbar.followPlay', place = 'pin'  },
+  { group = 'View',       anchor = 'status.beatPerRow',  place = 'pin'  },
+  { group = 'Movement',   anchor = 'body',               place = 'flow' },
+  { group = 'Selection',  anchor = 'body',               place = 'flow' },
+  { group = 'Takes',      anchor = 'body',               place = 'flow' },
+  { group = 'Loop',       anchor = 'body',               place = 'flow' },
+  { group = 'Transport',  anchor = 'body',               place = 'flow' },
+  { group = 'Pages',      anchor = 'body',               place = 'flow' },
+  { group = 'Global',     anchor = 'body',               place = 'flow' },
+})
+
 --invariant: grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.
 --contract: pushes parchment body palette (coord popped chrome before); palette tables need it.
 --contract: invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
@@ -941,6 +958,9 @@ function ar:renderBody(_, w, h, dispatch)
   if not ctx then return end
 
   pushBodyStyles()
+
+  local ox, oy = ImGui.GetCursorScreenPos(ctx)
+  help:anchor('body', ox, oy, w, h)
 
   local tracks  = av:projectTracks()
   local nTracks = #tracks
@@ -952,8 +972,7 @@ function ar:renderBody(_, w, h, dispatch)
     return
   end
 
-  local ox, oy = ImGui.GetCursorScreenPos(ctx)
-  local gridW  = chrome.gridWidth(w)
+  local gridW = chrome.gridWidth(w)
   -- NoNav suppresses the blue nav rect from Tab/arrow focus; NoScroll*
   -- stop the wheel nudging the child — we route the wheel to the cursor.
   if ImGui.BeginChild(ctx, '##arrangeGrid', gridW, h,
@@ -961,7 +980,12 @@ function ar:renderBody(_, w, h, dispatch)
                       ImGui.WindowFlags_NoNav
                       | ImGui.WindowFlags_NoScrollWithMouse
                       | ImGui.WindowFlags_NoScrollbar) then
-    local dragCand, loopCand, createCand, lassoCand = handleGridMouse(tracks)
+    -- The grid reads the mouse directly, bypassing the dispatcher coord suppresses,
+    -- so the cheat-sheet gates it here. See docs/help.md § Input while open.
+    local dragCand, loopCand, createCand, lassoCand
+    if not help:wasOpenAtFrameStart() then
+      dragCand, loopCand, createCand, lassoCand = handleGridMouse(tracks)
+    end
     renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
   end
   ImGui.EndChild(ctx)

@@ -20,7 +20,8 @@ local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 local util    = require 'util'
 
-local cm, ds, cmgr, chrome, gui, sv = (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).sv
+local cm, ds, cmgr, chrome, gui, sv, help =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).sv, (...).help
 
 local N_SLOTS = 64
 
@@ -194,14 +195,18 @@ local function drawFiles(folder, root)
     selIdx = 1
   end
 
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow)
-      and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
-    local next = items[math.min((selIdx or 0) + 1, #items)]
-    if next then sv:setBrowserItem(next.path, next.isFolder); selMoved = true end
-  elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)
-      and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
-    local prev = items[math.max((selIdx or #items + 1) - 1, 1)]
-    if prev then sv:setBrowserItem(prev.path, prev.isFolder); selMoved = true end
+  -- These arrows are read straight from the key stream, bypassing the dispatcher
+  -- coord suppresses, so the cheat-sheet gates them. See docs/help.md § Input while open.
+  if not help:wasOpenAtFrameStart() then
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow)
+        and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+      local next = items[math.min((selIdx or 0) + 1, #items)]
+      if next then sv:setBrowserItem(next.path, next.isFolder); selMoved = true end
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)
+        and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
+      local prev = items[math.max((selIdx or #items + 1) - 1, 1)]
+      if prev then sv:setBrowserItem(prev.path, prev.isFolder); selMoved = true end
+    end
   end
 
   sel = sv:getBrowserPath()
@@ -427,6 +432,18 @@ local toolbarSegments = {
   },
 }
 
+----- F1 help placements — the slot verbs pin under the status cell they move,
+----- the rest flow over the body. A placement names a manifest group; the
+----- group's entries are its rows, in declared order.
+
+help:registerPage('sample', {
+  { group = 'Slots',     anchor = 'status.slot', place = 'pin'  },
+  { group = 'Browser',   anchor = 'body',        place = 'flow' },
+  { group = 'Transport', anchor = 'body',        place = 'flow' },
+  { group = 'Pages',     anchor = 'body',        place = 'flow' },
+  { group = 'Global',    anchor = 'body',        place = 'flow' },
+})
+
 -- Bound sampler track's name, for the status bar.
 local function boundTrackName()
   local cur = sv:getTrack()
@@ -457,6 +474,7 @@ function sr:renderBody(_, w, h, dispatch)
 
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
+  help:anchor('body', ox, oy, w, h)
 
   chrome.disabledIf(not isLive, function()
   -- Chrome brackets the left content only; the slots palette styles itself

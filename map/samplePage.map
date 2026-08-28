@@ -1,5 +1,5 @@
 @module samplePage  src=samplePage.lua  loc=68  mode=chunk  self=sp
-@deps cm, ds, cmgr, chrome, gui, facade
+@deps cm, ds, cmgr, chrome, gui, facade, help
 
 # Imports
   @require fs = 'fs'  @ 11
@@ -78,6 +78,8 @@
   @field w fileOps  @ 23
   @field r gui  @ 19
   @field w gui  @ 26
+  @field r help  @ 19
+  @field w help  @ 26
   @field w setTrack  @ sample.setTrack:60
   @field w sm  @ 24
   @field w sv  @ 26

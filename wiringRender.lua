@@ -16,8 +16,8 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cmgr, chrome, gui, modalHost, wv, facade =
-  (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade
+local cmgr, chrome, gui, modalHost, wv, facade, help =
+  (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade, (...).help
 
 local ctx      = gui and gui.ctx or nil
 local wireFont = gui and gui.wireFont or nil
@@ -2509,17 +2509,21 @@ local function renderCanvas(w, h)
   resolveHover(frame)
   drawCanvas(frame)
 
-  -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
-  -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
-  if gesture and modes[gesture.mode].escCancels
-     and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-    gesture = nil
+  -- Input reads the mouse/keys directly, bypassing dispatcher coord suppresses,
+  -- so the cheat-sheet gates them together (docs/help.md § Input while open).
+  if not help:wasOpenAtFrameStart() then
+    -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
+    -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
+    if gesture and modes[gesture.mode].escCancels
+       and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+      gesture = nil
+    end
+
+    local faderConsumed = faderInput(frame)
+    beginGesture(frame, faderConsumed)
+
+    rmbDispatch(frame)
   end
-
-  local faderConsumed = faderInput(frame)
-  beginGesture(frame, faderConsumed)
-
-  rmbDispatch(frame)
 
   renderWireMenu(frame)
   renderNodeMenu(frame)
@@ -2635,6 +2639,17 @@ end
 
 function wr:toolbarSegments() return {} end
 
+----- F1 help placements — the page carries no toolbar of its own, so every group
+----- flows over the canvas. A placement names a manifest group; the group's
+----- entries are its rows, in declared order.
+
+help:registerPage('wiring', {
+  { group = 'Wiring',    anchor = 'body', place = 'flow' },
+  { group = 'Transport', anchor = 'body', place = 'flow' },
+  { group = 'Pages',     anchor = 'body', place = 'flow' },
+  { group = 'Global',    anchor = 'body', place = 'flow' },
+})
+
 --contract: clear ephemeral gesture/hover state; the controller calls this on unbind.
 function wr:closeTransients()
   gesture, shiftWas = nil, false
@@ -2649,6 +2664,7 @@ function wr:renderBody(_, w, h, dispatch)
 
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
   local canvasW = chrome.gridWidth(w)
+  help:anchor('body', ox, oy, w, h)
   if ImGui.BeginChild(ctx, '##wiringCanvas', canvasW, h,
                       ImGui.ChildFlags_None,
                       ImGui.WindowFlags_NoNav

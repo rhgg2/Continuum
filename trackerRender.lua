@@ -724,17 +724,17 @@ help:registerPage('tracker', {
   { group = 'Swing',           anchor = 'toolbar.swing',  place = 'pin' },
   { group = 'Sample',          anchor = 'status.sample',  place = 'pin' },
   { group = 'Loop',            anchor = 'status.modes',   place = 'pin' },
-  { group = 'Movement',        anchor = 'body.grid',      place = 'flow' },
-  { group = 'Editing',         anchor = 'body.grid',      place = 'flow' },
-  { group = 'Selection',       anchor = 'body.grid',      place = 'flow' },
-  { group = 'Columns & rows',  anchor = 'body.grid',      place = 'flow' },
-  { group = 'Groups & region', anchor = 'body.grid',      place = 'flow' },
-  { group = 'FX',              anchor = 'body.grid',      place = 'flow' },
-  { group = 'Input',           anchor = 'body.grid',      place = 'flow' },
-  { group = 'Transport',       anchor = 'body.grid',      place = 'flow' },
-  { group = 'Take management', anchor = 'body.grid',      place = 'flow' },
-  { group = 'Pages',           anchor = 'body.grid',      place = 'flow' },
-  { group = 'Global',          anchor = 'body.grid',      place = 'flow' },
+  { group = 'Movement',        anchor = 'body',           place = 'flow' },
+  { group = 'Editing',         anchor = 'body',           place = 'flow' },
+  { group = 'Selection',       anchor = 'body',           place = 'flow' },
+  { group = 'Columns & rows',  anchor = 'body',           place = 'flow' },
+  { group = 'Groups & region', anchor = 'body',           place = 'flow' },
+  { group = 'FX',              anchor = 'body',           place = 'flow' },
+  { group = 'Input',           anchor = 'body',           place = 'flow' },
+  { group = 'Transport',       anchor = 'body',           place = 'flow' },
+  { group = 'Take management', anchor = 'body',           place = 'flow' },
+  { group = 'Pages',           anchor = 'body',           place = 'flow' },
+  { group = 'Global',          anchor = 'body',           place = 'flow' },
 })
 
 ----- Modal-driven commands
@@ -1797,7 +1797,7 @@ function tr:renderBody(_, w, h, dispatch)
   end
   -- Full body width (grid + palette) so the cheat-sheet can flow across both.
   local g = gridPane:geom()
-  help:anchor('body.grid', g.originX, g.originY, ox + w - g.originX, g.height * g.cellH)
+  help:anchor('body', g.originX, g.originY, ox + w - g.originX, g.height * g.cellH)
 
   drawParamPalette(ox + gridW, oy, h, caretKeyNow(), plan ~= nil, plan)
   tv:pollLearn(ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_AnyWindow))

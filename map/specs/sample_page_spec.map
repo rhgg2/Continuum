@@ -1,4 +1,4 @@
-@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=94  cases=5
+@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=141  cases=7
 @exercises commandManager (h.cmgr)
 @surface   cmgr:installManifest, cmgr:scope
 @harness   mk
@@ -11,39 +11,47 @@
   before the first require so the module loads in the pure-Lua harness.
 
 # Helpers
-  @fn newSamplePage(cm, cmgr, chrome, gui)  @ 20-23
+  @fn newSamplePage(cm, cmgr, chrome, gui, help)  @ 20-24
 
 # Cases
-  @case 'the manifest declares every command the sample page registers'  [harness]  @ 30-47
-  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 51-59
-  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 62-70
-  @case 'focusState before any render returns both bits false'  [harness]  @ 73-80
-  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 83-92
+  @case 'the manifest declares every command the sample page registers'  [harness]  @ 31-48
+  @case 'every group the sample page places is one some scope declares'  [harness]  @ 54-69
+  @case 'every bound command on the sample page has a place on the cheat-sheet'  [harness]  @ 75-94
+  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 98-106
+  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 109-117
+  @case 'focusState before any render returns both bits false'  [harness]  @ 120-127
+  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 130-139
 
 # Uses (outbound edges)
-  @use call cmgr:installManifest  @ 37
-  @use call cmgr:scope  @ 39
+  @use call cmgr:installManifest  @ 38
+  @use call cmgr:scope  @ 40
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 13
-  @field r acceptCmds  @ 79
-  @field w chrome  @ 22
-  @field w cm  @ 22
-  @field w cmgr  @ 22
+  @field r acceptCmds  @ 126
+  @field w chrome  @ 21,23
+  @field w cm  @ 23
+  @field w cmgr  @ 21,23
+  @field r ctx  @ 21
+  @field w ctx  @ 21
   @field w currentTake  @ 18
-  @field w facade  @ 22
+  @field w facade  @ 23
   @field w get  @ 18
-  @field w gui  @ 22
-  @field r label  @ 43
-  @field r manifest  @ 40
-  @field r name  @ 42,43
-  @field w name  @ 30,51,62,73,83
+  @field r group  @ 67,83
+  @field w gui  @ 23
+  @field w help  @ 23
+  @field r keys  @ 89
+  @field r label  @ 44
+  @field r manifest  @ 41
+  @field r name  @ 43,44,89
+  @field w name  @ 31,54,75,98,109,120,130
   @field r preload  @ 10
   @field w publish  @ 17
   @field r reaper  @ 13
-  @field r registered  @ 46
-  @field w run  @ 31,52,63,74,84
-  @field r sample  @ 36,37
-  @field w sample  @ 37
-  @field w setTrack  @ 56,67,89
-  @field r suppressKbd  @ 78
+  @field w registerPage  @ 57,78
+  @field r registered  @ 47
+  @field w run  @ 32,55,76,99,110,121,131
+  @field r sample  @ 37,38,64,83
+  @field w sample  @ 38
+  @field w setTrack  @ 103,114,136
+  @field r suppressKbd  @ 125

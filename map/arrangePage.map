@@ -1,5 +1,5 @@
 @module arrangePage  src=arrangePage.lua  loc=90  mode=chunk  self=ap
-@deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta
+@deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta, help
 
 # Imports
   @require util = 'util'  @ 12
@@ -149,6 +149,8 @@
   @field r gui  @ 19
   @field w gui  @ 25
   @field w hasPlacedTakes  @ arrange.hasPlacedTakes:64
+  @field r help  @ 19
+  @field w help  @ 25
   @field w instanceAt  @ arrange.instanceAt:48
   @field w isParkedTake  @ arrange.isParkedTake:65
   @field w keyForSlot  @ arrange.keyForSlot:52

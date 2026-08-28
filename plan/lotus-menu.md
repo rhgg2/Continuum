@@ -36,22 +36,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 help: the cheat-sheet reaches arrange, sampler and wiring (§ Three consumers)
 - 2026-08-28 cmgr: declare each entry under its cheat-sheet group (§ Three consumers)
 - 2026-08-28 cmgr: declare the manifest as ordered lists of token-keyed entries (§ The manifest)
 - 2026-08-27 cmgr: the cheat-sheet reads its labels from the entries (§ Three consumers)
-- 2026-08-27 cmgr: declare the sampler and wiring scopes, retire pageBindings (§ The manifest)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **The cheat-sheet reaches the other pages.** `arrangeRender`,
-  `sampleRender` and `wiringRender` take `help`, anchor their body rect
-  and place the groups worth pinning; arrange and wiring gain tracker's
-  `wasOpenAtFrameStart` guard over the mouse reads that bypass
-  dispatch. With grouping declared, no page writes a command list.
 
 - **A generated family renders as one row.** `drop0`–`dropZ` and
   `advBy0`–`advBy9` collapse to one row showing the first and last

@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — The gesture the cheat-sheet swallows is gated at each page's own direct read of
+  the mouse or key stream, not centrally: only the render knows which of its passes bypass the
+  dispatcher coord suppresses. Each page anchors one body rect under the shared key `body`, so a
+  flowed group places the same way over a grid, a canvas or a file browser.
+
 - **2026-08-28** — The cheat-sheet group a command reads under is declared as the key its entry sits
   beneath in its scope's manifest, rather than as an argument to the entry or a marker between
   entries. Membership is then the entry's own fact, carried wherever the entry is read, and a page
