@@ -58,9 +58,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # surviving copies stay poke-able until the next call without accumulating litter.
 WORKSPACE = Path(tempfile.gettempdir()) / "continuum-perturb"
 
-# `.claude` is excluded so a perturbed tree has no test-baseline.json to write: a
-# baseline recorded from a broken tree would tell the next session a verdict about a
-# tree that never existed. `.git` and `map` are excluded as dead weight.
+# `.git`, `map` and `.claude` are all excluded as dead weight: a perturbed tree is
+# only ever run, never edited or opened as a session.
 EXCLUDES = ("--exclude=.git", "--exclude=map", "--exclude=.claude")
 
 mcp = FastMCP("continuum_perturb")

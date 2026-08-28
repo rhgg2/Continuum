@@ -21,13 +21,11 @@ server (mcp__patches__apply_patches).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -57,7 +55,6 @@ ArgModelBase.model_json_schema = classmethod(
     lambda cls, *a, **kw: _untitled(_base_json_schema(cls, *a, **kw)))
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-BASELINE_PATH = PROJECT_ROOT / ".claude" / "test-baseline.json"
 
 mcp = FastMCP("continuum_tests")
 
@@ -98,38 +95,6 @@ def _parse_failures(stdout: str) -> list[dict]:
         body = re.split(r"\n\d+ passed, \d+ failed", body)[0].rstrip()
         failures.append({"name": name, "body": body})
     return failures
-
-
-def _write_baseline(started: float, n_pass: int, n_fail: int, failures: list[str]) -> None:
-    """Record an unfiltered run for the SessionStart hook to read.
-
-    Stamped with the run's *start* time, not its end: a file edited during the
-    ~20s the suite takes must read as newer than the baseline, or the next
-    session would be told a green result covers an edit it never saw.
-    """
-    try:
-        head = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=str(PROJECT_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=5,
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        head = ""
-
-    payload = {
-        "ts": int(started),
-        "commit": head,
-        "passed": n_pass,
-        "failed": n_fail,
-        "failures": failures,
-        "seconds": round(time.time() - started, 1),
-    }
-    try:
-        BASELINE_PATH.write_text(json.dumps(payload) + "\n", encoding="utf-8")
-    except OSError:
-        pass
 
 
 def _ancestors() -> dict[int, int]:
@@ -372,7 +337,6 @@ def lua_test_run(
     if filter:
         cmd.append(filter)
 
-    started = time.time()
     try:
         proc = subprocess.run(
             cmd,
@@ -394,10 +358,6 @@ def lua_test_run(
 
     n_pass = int(summary_m.group(1))
     n_fail = int(summary_m.group(2))
-
-    # Never from a spike: green about a tree the next session won't have.
-    if filter is None and tree == "main":
-        _write_baseline(started, n_pass, n_fail, _FAIL_LINE.findall(out))
 
     if filter and n_pass + n_fail == 0:
         return f"(filter {filter!r} matched no tests)"

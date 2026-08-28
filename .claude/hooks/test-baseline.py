@@ -1,106 +1,116 @@
 #!/usr/bin/env python3
-"""SessionStart hook: report the last full test run.
+"""PreToolUse(Skill) hook: establish a fresh test baseline when coding begins.
 
-The suite is deterministic and takes ~20s, so a session opening on an untouched
-tree can take the previous run's result instead of re-running to learn the same
-thing. The record is written by the continuum_tests MCP server, unfiltered runs only.
+Fires for the `coding` skill alone — the moment discussion turns into code, and
+the one moment a baseline is worth its fifteen seconds. Every other skill exits
+silently.
 
-The staleness check is the whole job. The baseline holds exactly when no file the
-suite reads has been touched since the run *started*, so anything that stops that
-check from running reports STALE and never green: a false green buys a skipped run
-with a wrong belief, which is worse than having no baseline at all.
+The suite is run, not remembered. This hook used to open the session by reading
+a record of the last run and deciding, from mtimes, whether the tree had moved
+underneath it. That comparison cannot separate an edit in progress from a commit
+landing, so it would report a file as changed and invite the reader to infer
+uncommitted work that was not there. Running asks the only question that matters
+— is this tree green now — and so needs no record, no staleness walk, and no
+trust in either.
 
-Python rather than find(1) on purpose. BSD find — what a hook actually gets —
-cannot parse `-newermt @epoch`; it errors and returns nothing, which is
-indistinguishable from "nothing changed". The first draft of this hook shipped
-that bug and reported green unconditionally. Note also that the Bash tool's shell
-shims `find` to `bfs`, which *does* accept @epoch, so testing the shell form
-interactively will not reproduce what the hook sees.
+Failures are named, and capped: additionalContext is capped at 10k chars, and a
+wholesale red would otherwise spend the budget on a list nobody reads. A session
+opening on a red tree has to know which tests were already failing, or it will
+read them as a regression it introduced.
 """
 
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 
+SKILL = "coding"
+TIMEOUT = 60
+MAX_NAMES = 15
+
 REPO = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-BASELINE = os.path.join(REPO, ".claude", "test-baseline.json")
-TESTS = os.path.join(REPO, "tests")
-SKIP_DIRS = {".git", ".claude", "node_modules", "__pycache__"}
+
+SUMMARY = re.compile(r"^(\d+) passed, (\d+) failed", re.MULTILINE)
+FAIL_LINE = re.compile(r"^  FAIL  (.+)$", re.MULTILINE)
 
 
 def emit(context):
     json.dump(
-        {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}},
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": context}},
         sys.stdout,
     )
     sys.stdout.write("\n")
 
 
-def changed_since(ts):
-    """Paths the suite reads that are newer than ts: any *.lua, plus all of tests/.
+def headCommit():
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
-    Deliberately over-inclusive — a false STALE costs one 20s run, a false green
-    costs the trust that makes the baseline worth having.
-    """
-    changed = []
-    for dirpath, dirnames, filenames in os.walk(REPO):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-        under_tests = dirpath == TESTS or dirpath.startswith(TESTS + os.sep)
-        for name in filenames:
-            if not under_tests and not name.endswith(".lua"):
-                continue
-            path = os.path.join(dirpath, name)
-            try:
-                if os.stat(path).st_mtime > ts:
-                    changed.append(os.path.relpath(path, REPO))
-            except OSError:
-                continue
-    return sorted(changed)
+
+def failureNames(stdout):
+    names = FAIL_LINE.findall(stdout)
+    if not names:
+        return "names not recorded"
+    shown = "; ".join(names[:MAX_NAMES])
+    if len(names) > MAX_NAMES:
+        shown += "; +{} more".format(len(names) - MAX_NAMES)
+    return shown
 
 
 def main():
     try:
-        with open(BASELINE, encoding="utf-8") as fh:
-            record = json.load(fh)
-        ts = float(record["ts"])
-        passed, failed = int(record["passed"]), int(record["failed"])
-    except (OSError, ValueError, KeyError, TypeError):
+        payload = json.load(sys.stdin)
+    except ValueError:
+        return
+    if payload.get("tool_input", {}).get("skill") != SKILL:
         return
 
-    when = time.strftime("%H:%M on %d %b", time.localtime(ts))
-    commit = record.get("commit") or ""
-    if commit:
-        when = "{}, commit {}".format(when, commit)
+    started = time.time()
+    try:
+        proc = subprocess.run(
+            ["lua", "tests/run.lua"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        emit("Test baseline: the suite did not finish within {}s, so this session has "
+             "no baseline. Run it yourself before reading any red as your own.".format(TIMEOUT))
+        return
+    except OSError as err:
+        emit("Test baseline: the suite could not be run ({}), so this session has no "
+             "baseline.".format(err))
+        return
+
+    elapsed = time.time() - started
+    summary = SUMMARY.search(proc.stdout)
+    if not summary:
+        emit("Test baseline: the runner produced no summary (exit {}), so this session "
+             "has no baseline.".format(proc.returncode))
+        return
+
+    passed, failed = int(summary.group(1)), int(summary.group(2))
+    commit = headCommit()
+    stamp = "just now{} in {:.0f}s".format(" on commit " + commit if commit else "", elapsed)
 
     if failed:
-        names = "; ".join(record.get("failures") or []) or "names not recorded"
-        head = "Test baseline: {} passed, {} FAILED at {} — {}.".format(passed, failed, when, names)
+        emit("Test baseline: {} passed, {} FAILED, {} — {}. These were red before you "
+             "started, so do not read them as your own.".format(
+                 passed, failed, stamp, failureNames(proc.stdout)))
     else:
-        head = "Test baseline: {} passed, 0 failed at {}.".format(passed, when)
-
-    try:
-        changed = changed_since(ts)
-    except OSError as err:
-        emit("{} The staleness check could not run ({}), so treat this as STALE and "
-             "run the suite if you need a green starting point.".format(head, err))
-        return
-
-    if not changed:
-        if failed:
-            body = ("Nothing the suite reads has changed since, so this tree is still red "
-                    "as it stands.")
-        else:
-            body = ("Nothing the suite reads has changed since, so the suite is green on this "
-                    "tree as it stands — you do not need to run it to establish a baseline.")
-    else:
-        shown = ", ".join(changed[:3])
-        if len(changed) > 3:
-            shown += ", +{} more".format(len(changed) - 3)
-        body = ("STALE: {} file(s) changed since ({}). The baseline does not cover them — "
-                "run the suite if you need a green starting point.".format(len(changed), shown))
-
-    emit("{} {}".format(head, body))
+        emit("Test baseline: {} passed, 0 failed, {}. This tree is green as it stands, "
+             "so a red from here is yours.".format(passed, stamp))
 
 
 if __name__ == "__main__":

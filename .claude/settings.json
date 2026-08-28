@@ -10,11 +10,6 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-env.sh\""
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-baseline.py\"",
-            "statusMessage": "Reading test baseline..."
           }
         ]
       }
@@ -39,6 +34,12 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-expansion.sh\"",
             "statusMessage": "Gathering command context..."
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-baseline.py\"",
+            "statusMessage": "Running the suite for a baseline...",
+            "timeout": 75
           }
         ]
       },
