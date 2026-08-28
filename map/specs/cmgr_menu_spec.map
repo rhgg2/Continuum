@@ -1,0 +1,47 @@
+@spec cmgr_menu_spec  src=tests/specs/cmgr_menu_spec.lua  loc=118  cases=6
+
+# Intent
+  The menu tree declares the groups a path walks: an ordered list of items, each
+  carrying its title, the letter that reaches it and the line shown while it is
+  highlighted. Pins that install derives a letter from the title and keeps a
+  declared one, that two members of one level sharing a letter raise while the same
+  letter on two levels does not, that a path naming no group raises, that a pathed
+  entry is stamped with the node its path names, and that the real manifest's tree
+  installs, is passed over by the scope walk, and reaches every path declared today.
+
+# Helpers
+  @fn fresh()  @ 14
+  @fn noop()  @ 16
+  @fn node(name, letter, children)  @ 19-21
+      -- One tree node in the shape manifest.lua's `item` builds.
+
+# Cases
+  @case 'install derives a letter from the title, and keeps a declared one'  [pure]  @ 25-32
+  @case 'two groups sharing a letter within a level raise, naming both'  [pure]  @ 38-45
+  @case 'the same letter on two levels is no collision'  [pure]  @ 49-56
+  @case 'a path naming no group raises, naming the command and the segment'  [pure]  @ 60-71
+  @case 'a pathed entry is stamped with the node its path names'  [pure]  @ 77-90
+  @case 'the real manifest declares a tree its paths reach'  [pure]  @ 97-116
+
+# Fields (r read / w write incl. constructor keys)
+  @field w Editing  @ 64
+  @field w Global  @ 81
+  @field r children  @ 55
+  @field w children  @ 20
+  @field w desc  @ 20
+  @field w doubleRPB  @ 80
+  @field r entries  @ 107
+  @field w global  @ 64,81
+  @field w label  @ 65,82,83
+  @field r letter  @ 30,31,54,55
+  @field w letter  @ 20
+  @field r name  @ 112,113,115
+  @field w name  @ 20,25,38,49,60,65,77,82,83,97
+  @field r node  @ 88,89,112,115
+  @field r path  @ 108,112
+  @field w path  @ 65,82,83
+  @field w quantize  @ 63
+  @field w quit  @ 80
+  @field w run  @ 26,39,50,61,78,98
+  @field r scopes  @ 103
+  @field r tree  @ 101,103,104

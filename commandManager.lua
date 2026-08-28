@@ -145,6 +145,8 @@ function cmgr:bindAll(tbl)        global:bindAll(tbl)     end
 function cmgr:installManifest(manifest, ImGui)
   local declaredBy = {}
   for scopeName, groups in pairs(manifest) do
+    -- The tree declares menu groups rather than commands; installTree takes it.
+    if scopeName == 'tree' then goto nextScope end
     local scope = self:scope(scopeName)
     for groupName, entries in pairs(groups) do
       for _, entry in ipairs(entries) do
@@ -169,6 +171,7 @@ function cmgr:installManifest(manifest, ImGui)
       end
     end
     scope.manifest = groups
+    ::nextScope::
   end
 end
 
@@ -220,6 +223,51 @@ function cmgr:auditManifests()
         end
       end
     end
+  end
+end
+
+----- Menu tree
+-- The groups a path walks, declared beside the commands.
+-- see docs/commandManager.md § Menu tree
+
+--shape: node = { name = 'Time', letter = 'T', desc = 'The grid, swing, quantize', children = { node, ... } }
+
+local resolvePath, installLevel
+
+-- The node a path names, walking one level per segment.
+function resolvePath(tree, path, name)
+  local nodes, found = tree, nil
+  for segment in path:gmatch('[^/]+') do
+    found = nil
+    for _, node in ipairs(nodes) do
+      if node.name == segment then found = node end
+    end
+    if not found then error('menu: ' .. name .. ' — no group ' .. segment .. ' in ' .. path) end
+    nodes = found.children
+  end
+  return found
+end
+
+--invariant: a letter identifies its member uniquely within its level, so no choice needs confirming
+function installLevel(nodes, level)
+  local claimedBy = {}
+  for _, node in ipairs(nodes) do
+    node.letter = node.letter or node.name:sub(1, 1):upper()
+    if claimedBy[node.letter] then
+      error('menu: ' .. claimedBy[node.letter] .. ' and ' .. node.name .. ' both take ' ..
+            node.letter .. ' under ' .. level)
+    end
+    claimedBy[node.letter] = node.name
+    installLevel(node.children, node.name)
+  end
+end
+
+--contract: stamps each node's letter and each pathed entry's node; runs after installManifest
+function cmgr:installTree(tree)
+  self.tree = tree
+  installLevel(tree, 'the top level')
+  for name, entry in pairs(self.entries) do
+    if entry.path then entry.node = resolvePath(tree, entry.path, name) end
   end
 end
 

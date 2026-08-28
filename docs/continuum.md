@@ -92,6 +92,10 @@ coordinator, binds the global commands, and enters the defer loop.
 1. `cmgr:installManifest` writes each entry's keys into its scope's
    keymap.
 
+1. `cmgr:installTree` follows, resolving each pathed entry against the
+   menu tree the manifest declares — see `docs/commandManager.md § Menu
+   tree`.
+
 1. `cmgr:loadOverrides` then overlays the persisted user rebindings,
    so a rebinding beats the declared default.
 

@@ -38,22 +38,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 cmgr: declare the menu tree and check it at load (§ The tree)
 - 2026-08-28 help: a generated family reads as one row (§ Fluent and pathed)
 - 2026-08-28 help: the cheat-sheet reaches arrange, sampler and wiring (§ Three consumers)
 - 2026-08-28 cmgr: declare each entry under its cheat-sheet group (§ Three consumers)
-- 2026-08-28 cmgr: declare the manifest as ordered lists of token-keyed entries (§ The manifest)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- cmgr: the menu tree as `manifest.menu`, an ordered list of `item(name,
-  letter, desc, ...children)` holding the twelve top-level groups. Install
-  resolves each entry's `path` string by walking it, raising on a path
-  naming no group and on two groups sharing a letter within a level; the
-  model goes to `docs/commandManager.md` § Menu tree.
 - cmgr: a path on the global and tracker scopes' deliberate verbs, the
   fluent ones left key-only, with the subgroups the split needs added to
   the tree. A leaf's letter comes from its label, with an entry-level

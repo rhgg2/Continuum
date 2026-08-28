@@ -164,7 +164,10 @@ local function Main()
   }
   -- Labels and keys are declared per scope in manifest.lua; install writes the
   -- keys into each declared scope's keymap.
-  cmgr:installManifest(require 'manifest', ImGui)
+  local manifest = require 'manifest'
+  cmgr:installManifest(manifest, ImGui)
+  -- The menu tree resolves every pathed entry, so it installs after the entries.
+  cmgr:installTree(manifest.tree)
 
   -- ImGui only delivers keys while Continuum holds focus; the REAPER-keymap
   -- bridge (see coordinator § External commands) covers the floating-FX case.

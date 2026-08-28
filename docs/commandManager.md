@@ -134,6 +134,33 @@ will eventually layer overrides on top.
    `3`, while the drop family's mask is empty and `drop36` declares its
    base `Shift+A` as it stands.
 
+## Menu tree
+
+1. The **tree** declares the menu's groups, in the order the menu row
+   shows them. `manifest.lua` holds it as `manifest.tree`, built by its
+   local `item` helper; `installManifest` passes that key over, since the
+   tree declares groups rather than commands.
+
+1. A **node** is one group: its title, its **letter**, a one-line
+   description shown while the group is highlighted, and its child nodes.
+   A **level** is one node's children, and the top level is the list
+   itself.
+
+1. A letter defaults to the first character of the title, uppercased, and
+   is declared where two titles within a level collide — Take takes `K` so
+   Tuning may keep `T`. Install stamps the derived letter onto the node, so a
+   consumer reads one field.
+
+1. An entry's **path** is the group titles that reach it, separated by
+   `/` — `Grid/Rows`. It names the level the command reads in, not the
+   command itself. Keys and path are independent, and either may be absent.
+
+1. `installTree(tree)` runs after `installManifest`, whose entries it
+   resolves. It stamps `entry.node` with the node the path names, raising
+   on a segment naming no group in the level it reaches, and on two members
+   of a level sharing a letter. Both checks read the declaration, so a
+   malformed menu raises at load rather than on opening.
+
 ## Scope stack
 
 Scopes form a stack. The `'global'` scope sits at the bottom (pushed

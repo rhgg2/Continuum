@@ -80,14 +80,14 @@ from the one declaration.**
 
 1. A letter identifies its member uniquely within its level. It defaults
    to the first letter of the title, and is declared where two titles
-   collide — Take borrows `K` so Time may keep `T`.
+   collide — Take borrows `K` so Tuning may keep `T`.
 
 ## The top level
 
 1. The top level is twelve groups:
 
    ```
-   File  View  Time  Pitch  Note  Select  Column  taKe  Group  Loop  FX  Help
+   File  Edit  View  Grid  Tuning  Note  taKe  Mirror  Loop  fX  Page  Help
    ```
 
 1. Each holds one remit:
@@ -95,19 +95,19 @@ from the one declaration.**
    | group | remit |
    |---|---|
    | File | REAPER project actions, and leaving Continuum |
-   | View | travel to a page |
-   | Time | the grid, swing, quantize |
-   | Pitch | tuning and retune |
+   | Edit | the block and the clipboard |
+   | View | lanes, typed columns, rows |
+   | Grid | the grid, swing, quantize |
+   | Tuning | tuning and retune |
    | Note | what a note is — length, value, interpolation |
-   | Select | the block and the clipboard |
-   | Column | lanes, typed columns, rows |
    | taKe | take lifecycle and variants |
-   | Group | mirror groups and freezing |
+   | Mirror | mirror groups and freezing |
    | Loop | the loop and playing from a point |
-   | FX | note FX, the param palette, FX windows |
+   | fX | note FX, the param palette, FX windows |
+   | Page | travel to a page |
    | Help | the cheat-sheet |
 
-1. Time and Pitch mirror the model's own two axes — `docs/timing.md` and
+1. Grid and Tuning mirror the model's own two axes — `docs/timing.md` and
    `docs/tuning.md`. Where the menu's cut fights the model's, the verb is
    misnamed or misplaced.
 
@@ -116,8 +116,8 @@ from the one declaration.**
    File's paths leave Continuum; every other path reaches a Continuum
    command.
 
-1. A group descends where it is crowded. Time's rows-per-beat verbs sit
-   one level down, so doubling the grid is `/TRD`.
+1. A group descends where it is crowded. Grid's rows-per-beat verbs sit
+   one level down, so doubling the grid is `/GRD`.
 
 ## Walking a path
 
@@ -145,7 +145,7 @@ from the one declaration.**
    edited.
 
 1. The numeric prefix survives the walk. Opening the menu neither freezes
-   nor clears a pending prefix, so `⌘U 4 /TRS` sets rows-per-beat to 4.
+   nor clears a pending prefix, so `⌘U 4 /GRS` sets rows-per-beat to 4.
    The leaf's invoke consumes it exactly as a chord's would.
 
 ## Where it draws
@@ -168,7 +168,7 @@ from the one declaration.**
 ## Both routes on the cheat-sheet
 
 1. A pathed command's path renders as a chip beside its key chips.
-   Quantize shows its chord and `/TQ`; save shows `/FS` alone.
+   Quantize shows its chord and `/GQ`; save shows `/FS` alone.
 
 1. Paths are learned where keys already are: the cheat-sheet stays the
    one place a command's routes are read.

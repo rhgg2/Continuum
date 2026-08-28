@@ -25,6 +25,12 @@ local function member(family, name, label, mask, base)
   return entry
 end
 
+-- One menu group: its title, the letter that reaches it (derived from the title
+-- where absent), the line shown while it is highlighted, and its child groups.
+local function item(name, letter, desc, ...)
+  return { name = name, letter = letter, desc = desc, children = { ... } }
+end
+
 ----- global (bodies in continuum's Main, except toggleHelp, which is coordinator's)
 
 manifest.global = {
@@ -33,11 +39,11 @@ manifest.global = {
     command('stop',             'Stop',                'F8'),
   },
   Pages = {
-    command('switchToArrange',  'Arrange page',        'F2'),
-    command('switchToWiring',   'Wiring page',         'F3'),
-    command('switchToTracker',  'Tracker page',        'F4'),
-    command('switchToSample',   'Sampler page',        'F9'),
-    command('switchToEditor',   'Editor page',         'F10'),
+    command('switchToArrange',  'Arrange page',        'F2',  'Page'),
+    command('switchToWiring',   'Wiring page',         'F3',  'Page'),
+    command('switchToTracker',  'Tracker page',        'F4',  'Page'),
+    command('switchToSample',   'Sampler page',        'F9',  'Page'),
+    command('switchToEditor',   'Editor page',         'F10', 'Page'),
   },
   -- Both reached from their toolbar segment, which is where the sheet pins them.
   Tuning = { command('editTuning', 'Edit tuning') },
@@ -46,11 +52,11 @@ manifest.global = {
     command('undo',             'Undo',                'Ctrl+Z'),
     command('redo',             'Redo',                'Ctrl+Shift+Z'),
     command('togglePage',       'Switch page'),
-    command('quit',             'Quit',                'Ctrl+Q'),
+    command('quit',             'Quit',                'Ctrl+Q', 'File'),
     command('beginPrefix',      'Numeric prefix',      'Super+U'),
     command('toggleFxWindows',  'Toggle FX windows',   'F11'),
     command('toggleProfiler',   'Toggle profiler',     'Ctrl+Shift+P'),
-    command('toggleHelp',       'This help',           'F1'),
+    command('toggleHelp',       'This help',           'F1', 'Help'),
   },
   -- Reached programmatically — a toolbar click, a dive, the editor's exit — so
   -- they carry a label and no keys, and no page places this group.
@@ -326,6 +332,23 @@ manifest.wiring = {
     command('wiringAddFx',           'Add FX',            'N'),
     command('wiringClearSelection',  'Clear selection',   'Escape'),
   },
+}
+
+----- menu tree (the groups a path walks; see docs/commandManager.md § Menu tree)
+
+manifest.tree = {
+  item('File',   nil, 'REAPER project actions, and leaving Continuum'),
+  item('Edit',   nil, 'The block and the clipboard'),
+  item('View',   nil, 'Lanes, typed columns, rows'),
+  item('Grid',   nil, 'The grid, swing, quantize'),
+  item('Tuning', nil, 'Tuning and retune'),
+  item('Note',   nil, 'What a note is: length, value, interpolation'),
+  item('Take',   'K', 'Take lifecycle and variants'),
+  item('Mirror', nil, 'Mirror groups and freezing'),
+  item('Loop',   nil, 'The loop and playing from a point'),
+  item('FX',     'X', 'Note FX, the param palette, FX windows'),
+  item('Page',   nil, 'Travel to a page'),
+  item('Help',   nil, 'The cheat-sheet'),
 }
 
 return manifest

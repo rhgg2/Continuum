@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — The lotus menu's top level is named for what a command edits rather than for the
+  model's axes: Edit, View, Grid, Tuning, Mirror and Page stand where Select, Column, Time, Pitch,
+  Group and View stood. The tree is declared as manifest.tree beside the commands, and a separate
+  installTree resolves the pathed entries, so the scope table keeps the name menu free for the modal
+  scope the walk will push.
+
 - **2026-08-28** — A figure a spec reads off the relaxation is pinned no finer than sonority.relax's
   tolerance settles it, and an aggregate looser still. Pinning further records where the sweep stops
   rather than what the objective states, and five figures across two specs had drifted into doing

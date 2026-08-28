@@ -20,6 +20,7 @@ local specs = {
   'cmgr_stack_spec',
   'cmgr_overrides_spec',
   'cmgr_manifest_spec',
+  'cmgr_menu_spec',
   'config_schema_spec',
   'library_spec',
   'arrange_tidy_modal_spec',

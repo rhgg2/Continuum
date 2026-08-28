@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=188  mode=chunk
+@module continuum  src=continuum.lua  loc=191  mode=chunk
 
 # Invariants & contracts
   @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the shared singletons, enters the render loop via coord:run  @ 3
@@ -8,6 +8,7 @@
   @require util = 'util'  @ 16
   @require ImGui = 'imgui'  @ 17
   @require perf = 'perf'  @ 18
+  @require manifest = 'manifest'  @ 167
 
 # Constructed sub-instances
   @construct ps        = util.instantiate('pextStore')  @ 74
@@ -21,7 +22,7 @@
   @fn err_handler(err)  @ 22-26
   @fn run(fn)  @ 28-31
   @fn createImGui()  @ 33-68
-  @fn Main()  @ 72-186
+  @fn Main()  @ 72-189
       @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()  @ 70
       @contract  each page owns its cross-page state, exposed through the facade registry coord wires  @ 71
 
@@ -30,20 +31,21 @@
   @use call    ImGui.CreateContext  @ createImGui:34
   @use call    ImGui.CreateFont  @ createImGui:43,50,52
   @use call    ImGui.SetConfigVar  @ createImGui:35,36,40
-  @use call    cmgr:auditManifests  @ Main:183
+  @use call    cmgr:auditManifests  @ Main:186
   @use call    cmgr:beginPrefix  @ Main:161
-  @use call    cmgr:installManifest  @ Main:167
-  @use call    cmgr:loadOverrides  @ Main:179
+  @use call    cmgr:installManifest  @ Main:168
+  @use call    cmgr:installTree  @ Main:170
+  @use call    cmgr:loadOverrides  @ Main:182
   @use call    cmgr:registerAll  @ Main:140
-  @use call    cmgr:scope  @ Main:176
+  @use call    cmgr:scope  @ Main:179
   @use call    coord:getFacade  @ Main:155,156,158,160
-  @use call    coord:onExternalCommand  @ Main:171
+  @use call    coord:onExternalCommand  @ Main:174
   @use call    coord:previousPage  @ Main:157
   @use call    coord:quit  @ Main:160
   @use call    coord:register  @ Main:83,84,85,86,87
   @use call    coord:reloadAfterExternalMutation  @ Main:146,148
-  @use call    coord:returnToArrange  @ Main:176
-  @use call    coord:run  @ Main:185
+  @use call    coord:returnToArrange  @ Main:179
+  @use call    coord:run  @ Main:188
   @use call    coord:setActive  @ Main:149,150,151,152,153,154,155,156,157,158
   @use call    coord:togglePage  @ Main:159
   @use call    perf.toggle  @ Main:163
@@ -55,17 +57,18 @@
   @use require dataStore  @ Main:76
   @use require eventMeta  @ Main:77
   @use require imgui  @ <load>:17
+  @use require manifest  @ Main:167
   @use require perf  @ <load>:18
   @use require pextStore  @ Main:74
   @use require util  @ <load>:16
 
 # Calls (intra-file)
   @call createImGui  @ Main:73
-  @call run  @ <load>:188
+  @call run  @ <load>:191
 
 # Bindings (by name)
-  @bind Main  @ 188
-  @bind err_handler  @ run:30 Main:185
+  @bind Main  @ 191
+  @bind err_handler  @ run:30 Main:188
 
 # Unresolved receivers
   @drop ap:seedCursorFromReaper  @ Main:89
@@ -117,7 +120,7 @@
   @field w ps  @ Main:75,76,77
   @field w quit  @ Main:160
   @field w redo  @ Main:148
-  @field w returnToArrange  @ Main:176
+  @field w returnToArrange  @ Main:179
   @field r source  @ 7
   @field w stop  @ Main:143
   @field w switchPage  @ Main:149
@@ -131,6 +134,7 @@
   @field w toggleProfiler  @ Main:163
   @field r track  @ Main:123
   @field w track  @ Main:114
+  @field r tree  @ Main:170
   @field w ui  @ createImGui:66
   @field w uiFont  @ createImGui:64
   @field w undo  @ Main:144
