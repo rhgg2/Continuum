@@ -1,158 +1,287 @@
 # routingManager
 
-A thin record abstraction over REAPER's audio/MIDI graph. Callers deal in
-`track` / `fx` / `send` records and opaque `id`s; the warts of the
-underlying API stay private.
+**A thin record abstraction over REAPER's audio/MIDI graph.** Callers deal
+in `track` / `fx` / `send` records and opaque `id`s; the underlying API
+stays private.
 
 ## The boundary
 
-routingManager was built ground-up, not relocated from wiringManager. The
-point of the rewrite is the boundary itself: everything REAPER makes ugly —
-`Get/SetMediaTrackInfo` string keys, `TrackFX_*` 0-indexing and GUID
-enumeration, param name→index scans, pin-mapping bit math, the base64
-state-chunk surgery for per-FX MIDI routing, audio-vs-midi send detection,
-the id→track/slot sweep — lives behind the module. A caller never sees a
-guid, slot index, MediaTrack, named-config-parm string, pin-mapping bit, or
-state-chunk byte.
+1. REAPER's routing idioms all stay behind the module:
 
-The surface is modelled on midiManager: clean record shapes and an
-`add`/`assign`/`delete` triad. `assign`-shaped methods dispatch on the
-fields present, so `assignFx{params}`, `assignFx{midi}`, and the
-cross-track move `assignFx{track}` are one method, not three.
+   - `Get/SetMediaTrackInfo` string keys;
+   - `TrackFX_*` 0-indexing and GUID enumeration;
+   - param name→index scans, where an unknown name raises;
+   - pin-mapping bit math;
+   - the base64 state-chunk surgery for per-FX MIDI routing;
+   - audio-vs-midi send detection;
+   - folder-depth arithmetic;
+   - the id→track/slot sweep.
+
+1. Two escape hatches are deliberate. `rm:reaperTrack(id)` and
+   `rm:fxTrack(id)` hand back the raw `MediaTrack` for the reaper
+   operations rm does not model — an item count, a mixer query. No routing
+   op uses them.
+
+1. The surface follows `docs/midiManager.md`: record shapes and an
+   `add`/`assign`/`delete` triad. `assign`-shaped methods dispatch on the
+   fields present, so `assignFx{params}`, `assignFx{midi}`,
+   `assignFx{pinMaps}`, `assignFx{index}` and the cross-track move
+   `assignFx{track}` are all one method.
 
 ## id is the only handle
 
-There is exactly one way to name a thing: its `id`, a track-or-fx GUID
-string. It is opaque (never parsed by callers), stable across reload, and
-guid-backed — which is what lets the module be **stateless**. Nothing is
-minted, numbered, or reset; resolution is a live sweep (`locateTrack` /
-`locateFx`) keyed on the guid, so it survives reordering and project
-reload with no bookkeeping. There is no `load` and no lifecycle.
+1. A track or an fx is named by an `id`, an opaque token stable across
+   reordering and project reload. rm implements this via the REAPER
+   guid.
 
-The one piece of retained state is `installedFx`: REAPER's installed-plugin
-set is fixed for the lifetime of the process, so the first `rm:installedFx()`
-enumerates it and memoises. This is a runtime constant cached, not mutable
-state — it never invalidates.
+1. rm is **stateless**: `locateTrack` and `locateFx` resolve an id by
+   sweeping the live project for its guid, on every call.
 
-## Sends are a track attribute, not an entity
+1. Three tables persist between calls. `installedFxCache` and
+   `paramIdxByIdent` memoise REAPER's installed-plugin set, and a
+   plugin type's param layout. Both are fixed for the life of the
+   process, so neither memo invalidates. `midiCache` caches live
+   project state; see § Read cost.
 
-A send has no stable handle in REAPER: it is addressed by a `(category,
-index)` pair that shifts the moment any send is created or removed. A send
-`id` would therefore be forged, not guid-backed like every other id — and
-that breaks the "exactly one way to name a thing" invariant. A send is also,
-conceptually, the track's output routing, the same kind of thing as
-`mainSend`. So sends live in `track.sends` with no id, and are set wholesale:
-`assignTrack{sends}` carries the *full desired set*, and the module diffs it
-against the live sends internally.
+## Sends are a track attribute
 
-The reconcile is two passes by necessity, not preference. Sends are matched
-by an identity tuple (`sendKey`: destination, kind, channels, position) that
-deliberately **excludes** gain, because gain is the mutable value a match is
-allowed to carry forward. Drops run right-to-left so REAPER's post-remove
-index shift can't invalidate a not-yet-applied index; creates follow. Only
-then, once indices have settled, does a separate pass write `D_VOL` for
-every wanted send — the index a gain belongs to isn't knowable until the
-add/remove churn is done.
+1. A send has no stable address: REAPER names it by a `(category, index)`
+   pair that shifts the moment any send is created or removed.
 
-## Wire-format surgery worth knowing
+1. So a send is part of its source track — the track's output routing, like
+   `mainSend` — and lives in `track.sends` with no id.
 
-Two private corners encode REAPER quirks dense enough to mislead:
+1. `assignTrack{sends}` carries the full desired set, which rm diffs against
+   the live sends.
 
-**Per-FX MIDI routing.** REAPER exposes no ReaScript accessor for a plugin's
-MIDI input bus, output bus, or output-passthrough flag — they live inside
-the `<VST ...>` block of the track's FXCHAIN state chunk. The module patches
-the chunk directly: decode base64 line, mutate one byte, re-encode iff
-changed (a no-op preserves the line byte-for-byte). The output-disable flag
-is the trap — REAPER keeps it in **two** places it reads from separately,
-the trailer flag byte and a mirror at 1-indexed offset `27 + 8 *
-pinChannels` in the wrapper header, so a trailer-only write silently fails
-to take. The byte-level encoding is documented in
-`docs/reaper_midi_routing.md`. `fx.midi` is present (with passthrough
-defaults) for every non-JS fx so callers read routing without a JS-vs-not
-branch; it is nil only for JS fx, which have no routing trailer.
+1. The diff matches on an identity tuple (`sendKey`: destination, kind,
+   channels, position). Gain is absent from it, being the mutable value a
+   match carries forward.
 
-**Pin maps.** A port owns two pins (left/right bit masks across a 64-bit
-space split into lo/hi words); a channel pair is connected when its bit is
-set on the port. Read collapses adjacent set bits back to pair numbers and
-drops zero-mask ports (absent ⇒ disconnected); write is full-replace per fx,
-so a port absent from the supplied map is cleared. The pair/pin/bit
-arithmetic is the only reason this isn't a one-liner.
+1. The first pass drops and creates. Drops go right-to-left, so REAPER's
+   post-remove index shift cannot invalidate an index still to be applied.
 
-## Eager reads, with a lazy escape hatch
+1. The second pass writes `D_VOL` for every wanted send, once the indices
+   have settled.
 
-`rm:tracks()` reads `pinMaps` and `midi` for every fx eagerly, and `midi`
-decodes a state chunk per track. `rm:fx(id)` is the single-fx counterpart —
-the same record for one guid, plus live `params` and the host `trackId` — for
-callers that hold a guid, not a track (wm's snapshot CU read, the sampler
-dive). Bulk reads stay params-free on purpose: reading every fx's params on
-every `tracks()` would be wasteful for fat plugins, so params are a per-fx,
-on-demand cost.
+1. Midi sends on `AUTO_BUS` — 126, a reserved Continuum automation bus — are
+   exempt. paramAutomation propagates CC over it, and rm's callers never
+   declare those sends.
 
-Live fader-drag gain is too hot for the wholesale `assignTrack{sends}` diff,
-so `setSendGain(fromId, toId, gain)` writes one send's `D_VOL` directly,
-addressed by the stable relationship rather than a forged send id. The
-main-send drag rides `assignTrack{mainSend={gain}}` (a partial scalar write),
-and a CU edge rides `assignFx{params}`.
+1. `reconcileSends` keeps them out of the current set, so they are neither
+   matched nor dropped: the set `assignTrack{sends}` carries is the track's
+   wiring sends.
 
-## Metadata and the scratch track
+1. A fader drag writes gain far too often for the wholesale diff, so
+   `rm:setSendGain(srcId, dstId, gain)` writes one send's `D_VOL` directly.
+   The source/destination pair is stable where an index is not.
 
-Every record field REAPER itself backs is *native*; any other key on a
-record is metadata rm persists on the caller's behalf, told apart by a
-per-record-kind native-key set. The two kinds store differently:
+1. The main-send drag rides `assignTrack{mainSend={gain}}`, a partial scalar
+   write; a CU edge (`docs/wiring.md`) rides `assignFx{params}`.
 
-- **Track-meta** rides the track's own `P_EXT` blob — it reverses with
-  native undo for free, so source/master node decoration (`pos`, …) needs
-  nothing more.
-- **Fx-meta** (and bus-meta) has no per-fx channel (`docs/wiring.md §
-  Decoration`), so each is one blob keyed by guid. They are
-  `dataStore` keys at **project** scope (`fxMeta`, `busMeta`), which makes them
-  undoable document data: pextStore mirrors every undoable project slot onto the
-  scratch track's `P_EXT`, and its per-frame poll copies a rewound slot back into
-  projext. rm neither mirrors nor polls — it just reads and writes ds.
+## Folder membership is positional
 
-Writes patch-merge (a partial write never wipes a sibling; `util.REMOVE`
-clears a field), and an all-native write touches no store at all — the
-reconcile hot path stays clean.
+1. REAPER stores folder structure as a per-track depth (`I_FOLDERDEPTH`): 1
+   opens a folder, and a negative closes that many. A track's parent is thus
+   a function of its position in the track list.
+
+1. `readTrack` records `number` and `folderDepth`. `stampParents` then walks
+   the records in order and stamps `parent` from the top of the open-folder
+   stack, so the parent is derived on every read.
+
+1. A track appended while the project ends inside an open folder becomes a
+   child of that folder, and its mainSend retargets to the parent rather
+   than master.
+
+1. So `rm:addTrack` closes any open folder before inserting, and a new track
+   lands top-level.
+
+## Per-FX MIDI routing
+
+1. REAPER exposes no ReaScript accessor for a plugin's MIDI input bus, output
+   bus, or output-passthrough flag. They live inside the `<VST>` / `<AU>` /
+   `<CLAP>` block of the track's FXCHAIN state chunk, whose byte-level
+   encoding is documented in `docs/reaper_midi_routing.md`.
+
+1. The block's base64 content lines concatenate into one decoded stream, and
+   the routing record is that stream's last four bytes. Addressing by stream
+   offset finds it past a variable-length preset name.
+
+1. A write decodes the one line the offset falls in, mutates a byte, and
+   re-encodes, so a no-op preserves the line byte-for-byte.
+
+1. REAPER holds each disable flag twice and reads both copies: the trailer's
+   flag byte, and a mirror in the wrapper header at offset
+   `27 + 8 * pinChannels`. A trailer-only write silently fails to take.
+
+1. `fx.midi` is present for every VST/AU/CLAP fx, defaulting to passthrough
+   when the block carries no trailer, so callers read routing without a
+   per-plugin branch.
+
+1. It is nil for the kinds with no routing record — JS, containers, video —
+   and a midi write to one of those is a no-op.
+
+## Pin maps
+
+1. A port is two pins, left and right, each a bit mask over channels. Channel
+   pair Q occupies bit 2(Q−1) of the left pin and bit 2(Q−1)+1 of the right.
+
+1. REAPER's 128 channels (`docs/DAG.md`) span two 64-bit mapping banks, each
+   returned as a lo/hi word pair, so a pin number carries its bank in a high
+   bit (`BANK2`).
+
+1. Read ORs a port's two pins, collapses adjacent set bits back to pair
+   numbers, and drops zero-mask ports: absent ⇒ disconnected.
+
+1. Write is full-replace per fx, so a port absent from the supplied map is
+   cleared.
+
+## Read cost
+
+1. The reads form a ladder, and picking a rung is a cost decision:
+
+   - `rm:trackLabels()` — id, name and number per track, with no fx, sends
+     or chunk read;
+   - `rm:fxIds(id)` — one track's fx guids and idents, with no record built;
+   - `rm:tracks()` and `rm:track(id)` — full records, pin maps and midi for
+     every fx;
+   - `rm:fx(id)` — the single-fx counterpart, plus the host `trackId`.
+
+1. Params sit off the ladder in `rm:params(id)`, read only when a caller asks
+   for them: a plugin's param list can run to hundreds.
+
+1. Most of that cost is the state chunk. `GetTrackStateChunk` serialises a
+   track's entire state — giant-VST presets dominate it — for a payload of
+   four routing bytes per fx. A giant-VST track measured ~80ms, and ~560ms
+   across a seven-track project.
+
+1. So `midiCache` keys `fx.midi` by guid, and a bulk read touches the chunk
+   only when some routing fx is uncached: at boot, or for an fx added in
+   REAPER outside Continuum.
+
+1. A midi write overlays the changed fields onto the cached entry, which
+   stays warm as a result. A guid that leaves the project is pruned on the
+   next full `rm:tracks`.
+
+1. The cache gates writes as well as reads. `rm:writeChainMidi` batches a
+   whole chain's routing into a single Get/Set, and skips any fx whose midi
+   already matches the cache.
+
+1. One gap is left open: an external hand-edit of an fx's midi bus, through
+   REAPER's pin-mapping submenu, stays stale until that fx changes
+   structurally or the project reopens.
+
+1. `rm:fx(id)` always reads the chunk, and refreshes the cache from what it
+   finds.
+
+## Metadata
+
+1. A record field REAPER itself backs is **native**; any other key on a
+   record is metadata rm persists on the caller's behalf. Each record kind
+   has its own set of native keys, and rm sorts a write by it.
+
+1. **Track-meta** rides the track's own `P_EXT` blob, so it reverses with
+   native undo. Source and master node decoration (`pos`, …) needs nothing
+   more.
+
+1. **Fx-meta** and bus-meta have no per-fx channel (`docs/wiring.md §
+   Decoration — positions only`), so each is one blob keyed by guid, held as
+   a `dataStore` key at project scope (`fxMeta`, `busMeta`).
+
+1. Project scope makes them undoable document data, by way of the
+   project-slot mirror in `docs/pextStore.md`. rm reads and writes ds.
+
+1. Writes patch-merge, so a partial write never wipes a sibling;
+   `util.REMOVE` clears a field.
+
+1. An all-native write touches no store at all, which matters on the
+   reconcile hot path.
+
+1. `rm:meta` and `rm:assignMeta` reach the same stores directly, for callers
+   holding a guid and no record.
 
 ## Mute
 
-`rm:setMuted` silences an fx without touching topology — same plugin, same IO,
-same chain position. The mechanism splits by fx kind, because REAPER FX *replace*
-the channels they output to (an in-place effect plays wet, not wet+dry):
+1. `rm:setMuted` silences an fx without touching topology — same plugin, same
+   IO, same chain position. `rm:muted` reports the flag.
 
-- A **processor** (has audio inputs) is silenced by clearing its live **input**
-  pins. Fed silence, it overwrites its output channels with processed silence.
-  Clearing the *output* instead is useless: the dry input still sits on those
-  channels and `readGraph` — modelling REAPER at `wiringManager.lua` — passes it
-  straight through, so an in-place `1,2→fx→1,2` would leak its input unmuted
-  (output-clear there is bypass, not mute).
-- A **generator** (no audio inputs) ignores input, so it is silenced by clearing
-  its live **output** pins: nothing upstream writes its output pair, so it goes
-  dark.
+1. Clearing a pin disconnects the fx from that channel and leaves whatever
+   else writes the channel untouched. Which side to clear therefore depends
+   on the fx kind.
 
-The cleared side is recorded as `muteSide`. Either way the trap is the same:
-`readGraph` reconstructs every audio edge by threading pins, so a cleared side
-reads back **identical to an unwired one** — the pins are the wire's only durable
-record ("read is the store"). So mute can't just clear pins. The real pinout for
-the cleared side is **stashed in fx-meta** (`muteStash`, beside `muted`/`muteSide`)
-and `applyMuteReport` swaps it back into every read (`rm:fx`/`tracks`/`track`), so
-the snapshot — hence the differ and `readGraph` — sees the real wiring. Two
-consequences fall out for free: reconcile is a no-op on a muted fx (target ==
-reported snapshot, no `setPinMaps` op), and the mute round-trips a save/reload
-like any other fx-meta. A pin write that *does* arrive while muted (a rewire, the
-pin-grow re-assert) is diverted by `divertIfMuted` to the stash with the cleared
-side kept dark, so it never relights the fx.
+1. A **processor** has audio inputs and is silenced by clearing them. Fed
+   silence, it overwrites its output channels with processed silence, REAPER
+   FX replacing the channels they output to: an in-place effect plays wet,
+   not wet+dry.
 
-Bypass (`rm:setBypassed`) is the unrelated REAPER-native enable: pass-through,
-not in the snapshot, never read or written by reconcile.
+1. A processor's output channels carry its own dry input, so clearing that
+   side would leave the fx audible.
+
+1. A **generator** has no audio inputs, so it is silenced by clearing its
+   output pins: nothing else writes those channels.
+
+1. The cleared side is recorded as `muteSide`.
+
+## The mute stash
+
+1. `readGraph` (`docs/wiringManager.md`) reconstructs every audio edge by
+   threading pins, so a cleared side reads back identical to an unwired one.
+   Pins are the wire's only durable record
+   (`docs/wiringManager.md § Read is the store`).
+
+1. So the real pinout for the cleared side is stashed in fx-meta as
+   `muteStash`, beside `muted` and `muteSide`.
+
+1. `applyMuteReport` swaps the stash back into every read (`rm:fx`,
+   `rm:tracks`, `rm:track`), so the snapshot — hence the differ and
+   `readGraph` — sees the real wiring.
+
+1. Reconcile is therefore a no-op on a muted fx: the target equals the
+   reported snapshot, and no `setPinMaps` op is emitted.
+
+1. The mute also round-trips a save and reload like any other fx-meta.
+
+1. Every pin write passes through `divertIfMuted` — the transactional
+   `assignFx{pinMaps}` and the undo-free `rm:rewritePins` alike. A rewire or
+   a pin-grow re-assert arriving while muted lands in the stash, and the
+   cleared side stays silent.
+
+## Bypass
+
+1. Bypass (`rm:setBypassed` / `rm:bypassed`) is REAPER's own enable flag:
+   pass-through, and absent from the snapshot, so reconcile leaves it alone.
+
+## Transactions
+
+1. `rm:transaction(label, fn)` brackets a batch of writes in a REAPER undo
+   block, and suppresses UI refresh across it.
+
+1. Inside that block, rm's chunk reads and writes all pass `isundo=false`:
+   with the block already open, the per-call undo caching would be redundant.
+
+1. The flag has to agree across every chunk call, for REAPER's own caches to
+   stay consistent.
+
+1. `rm:rewritePins` stands outside. It repairs a pin map REAPER stamped over
+   during a same-cycle channel-count grow (`docs/wiringManager.md § Pin
+   re-assert after grow`).
+
+1. That repair should not surface as a user-visible undo step.
 
 ## Relationship to wiringManager
 
-The wm rewire has landed. `wm:snapshot()` is `rm:tracks()` plus wm's
-ownership/trackKey overlay; `wm:applyOps()` is one `rm:transaction`
-dispatching to rm's add/assign/delete methods; the graph-mutation
-`reaper.*` cluster (state-chunk surgery, pin-bit math, send read/write) now
-lives only here. The owned-block contiguity and CU policy stay in wm,
-expressed over rm methods (see `docs/wiringManager.md § The reaper seam`
-for the small reaper residue wm keeps). The canonical encoding reference
-for per-FX MIDI routing is `docs/reaper_midi_routing.md`.
+1. wm holds no graph-mutation `reaper.*` calls of its own.
+
+1. `wm:snapshot()` is `rm:tracks()` plus wm's overlay of ownership and
+   `trackKey`.
+
+1. `wm:applyOps()` is one `rm:transaction`, dispatching to rm's
+   add/assign/delete methods.
+
+1. The state-chunk surgery, pin-bit math and send read/write live only in rm.
+   paramAutomation's CC bus is the one graph write rm does not own (§ Sends
+   are a track attribute).
+
+1. The owned-block contiguity and CU policy stay in wm, expressed over rm
+   methods. `docs/wiringManager.md § The reaper seam` covers the small reaper
+   residue wm keeps.

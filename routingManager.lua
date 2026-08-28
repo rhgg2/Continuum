@@ -141,11 +141,11 @@ end
 ----------- per-fx midi routing
 
 -- No ReaScript API for per-FX in/out bus + output-passthrough; patch the track
--- state chunk directly. See docs/wiringManager.md § Per-FX MIDI routing.
+-- state chunk directly. See docs/routingManager.md § Per-FX MIDI routing.
 
 --invariant: midiCache[fxGuid]=midi; serves reads, gates no-op writes, pruned when fx leaves
 -- An external midi-bus hand-edit (pin-mapping submenu) goes stale until the fx changes structurally or
--- the project reopens; the giant-VST chunk read is too costly to repeat. See docs § Per-FX MIDI routing.
+-- the project reopens; the giant-VST chunk read is too costly to repeat. See docs/routingManager.md § Read cost.
 local midiCache = {}
 
 local function pruneMidiCache(tracks)
@@ -400,7 +400,7 @@ end
 
 -- The chunk read serialises the track's whole state (giant-VST presets dominate); its only
 -- unique payload is 4 routing bytes per fx. Read it only when a routing fx GUID is uncached;
--- otherwise reuse midiCache. see docs/wiringManager.md § Per-FX MIDI routing.
+-- otherwise reuse midiCache. see docs/routingManager.md § Read cost.
 local function readFxChain(track)
   local out, routingFx, needChunk = {}, {}, false
   for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
@@ -544,7 +544,7 @@ end
 ----------- metadata
 
 -- Native = REAPER-backed; any other record key is metadata rm persists.
--- See docs/routingManager.md § Metadata and the scratch track.
+-- See docs/routingManager.md § Metadata.
 local TRACK_NATIVE = {
   id = true, name = true, isMaster = true, nchan = true,
   mainSend = true, fx = true, sends = true, hidden = true, defaults = true,

@@ -269,7 +269,8 @@ hit-tested manually like the body gestures (`badgeHit`), not via an
 `InvisibleButton`: a plain click toggles through `wv` and takes precedence over
 the body-drag it sits on, while `shiftHeld` (wire mode) suppresses them and a
 double-click on a badge is swallowed before the dive. Mute is graph-invisible
-(rm preserves the wire underneath, see `docs/routingManager.md § Mute`), so the
+(rm preserves the wire underneath, see
+`docs/routingManager.md § The mute stash`), so the
 toggle fires no `wiringChanged` and the next frame just re-reads the state.
 
 ## Buss bars
