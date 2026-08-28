@@ -68,8 +68,9 @@ Landed — see `docs/commandManager.md` § The top level.
    (`docs/commandManager.md` § Prefix capture).
 
 1. A letter descends. A group's letter opens that group; a leaf's letter
-   invokes its command and closes the menu. Nothing confirms a choice,
-   because each letter is unique within its level.
+   closes the menu and invokes its command, in that order, so the command is
+   gated by the ordinary stack. Nothing confirms a choice, because each letter
+   is unique within its level.
 
 1. Esc pops one level, and closes the menu from the top. The menu holds
    its own path and unwinds it, so one scope covers the whole walk.
@@ -82,9 +83,14 @@ Landed — see `docs/commandManager.md` § The top level.
 1. The open menu is a modal scope. Page and grid keys are blocked, so a
    letter always means a menu letter.
 
-1. Passthrough keeps the transport live. Play, stop and panic reach their
-   commands with the menu open, because Continuum is played while it is
-   edited.
+1. Passthrough keeps the transport and the page switchers live. Play, stop
+   and travel to a page reach their commands with the menu open, because
+   Continuum is played while it is edited and travel is not a menu letter.
+
+1. The menu reads its surface off the stack as it opens, since its own
+   modality would otherwise hide the commands it walks to. Closing a page
+   switch's outgoing menu is the coordinator's, so the two scopes unwind in
+   order — see `docs/menu.md` § A modal scope.
 
 1. The numeric prefix survives the walk. Opening the menu neither freezes
    nor clears a pending prefix, so `⌘U 4 /VRS` sets rows-per-beat to 4.

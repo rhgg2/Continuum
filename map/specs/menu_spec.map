@@ -1,0 +1,40 @@
+@spec menu_spec  src=tests/specs/menu_spec.lua  loc=101  cases=4
+@exercises commandManager (mgr), menu (menu)
+@surface   mgr:installManifest, mgr:register, mgr:scope, mgr:push, menu:isOpen, mgr:invoke, mgr:keysFor
+
+# Intent
+  The lotus menu as a scope. Opening pushes a modal cmgr scope, so a letter typed during
+  the walk cannot reach a page verb, and closing pops it. What survives the walk is
+  declared by group: the transport, because Continuum is played while it is edited, and
+  the page switchers, because travel is not a menu letter. The set is built from the
+  stack at the moment the menu opens, so the tracker's own transport verbs pass through
+  while the tracker is showing. The close verb is registered on the menu's own scope, so
+  the gate is its own guard — Esc reaches it only while the menu is up, and the open verb
+  is blocked by the scope it pushed. See design/lotus-menu.md § What stays live.
+
+# Helpers
+  @fn fixture()  @ 18-32
+      -- A cmgr carrying the real manifest, stub bodies for the verbs the cases invoke, and the
+      -- menu built over it, with the tracker page on the stack. Each body logs its name, so a
+      -- gated-out invoke reads as silence rather than as a return value.
+
+# Cases
+  @case 'opening pushes the menu scope over the page, and closing pops it'  [pure]  @ 36-49
+  @case 'a page verb is blocked while the menu is open, and live again after'  [pure]  @ 55-69
+  @case 'the transport and the page switchers stay live through the walk'  [pure]  @ 75-86
+  @case 'each verb is guarded by the scope it is registered on'  [pure]  @ 90-99
+
+# Uses (outbound edges)
+  @use call mgr:installManifest  @ 22
+  @use call mgr:register  @ 24
+  @use call mgr:scope  @ 27,43,48
+  @use call mgr:push  @ 30
+  @use call menu:isOpen  @ 39,42,47
+  @use call mgr:invoke  @ 41,46,58,61,62,66,67,78,81,93,96,97
+  @use call mgr:keysFor  @ 64,85
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cmgr  @ 29
+  @field w name  @ 36,55,75,90
+  @field w run  @ 37,56,76,91
+  @field r stack  @ 43,44,48,94,98

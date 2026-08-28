@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — The menu reads the surface it walks off the stack as it opens, rather than
+  passing every pathed command through its own modal scope. What it offers is then fixed for the
+  walk, and what the modality blocks stays exactly the keys a letter would collide with. The page
+  switchers pass through, so the coordinator closes the menu before a switch pops the page's scope.
+
 - **2026-08-28** — The fluent/pathed split is pinned by a roster in a spec rather than by a flag on
   the entry. The manifest already declares the classification by omitting a path, and the roster is
   the second witness that makes the omission deliberate: a command is pathed or rostered, and one

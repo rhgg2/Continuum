@@ -1,0 +1,53 @@
+@module menu  src=menu.lua  loc=53  mode=chunk  self=menu
+@deps cmgr
+
+# Invariants & contracts
+  @invariant  the menu's scope is modal, so a walk key never reaches a page verb  @ 4
+
+# Private state
+  @state LIVE_GROUPS = { Transport = true, Pages = true }  @ 10
+  @state scope = cmgr:scope('menu')  @ 12
+  @state open = false  @ 15
+  @state path = {}  @ 16
+  @state menu = {}  @ 18
+
+# Private functions
+  @fn livePassthrough()  @ 22-28
+      -- Read off the stack before the menu's own scope goes on it. switchPage is the toolbar
+      -- switcher's own verb, which a click reaches and no live group declares.
+
+# Handlers registered
+  @handler cmgr:openMenu()  @ 50
+  @handler scope:closeMenu()  @ 51
+
+# Public API (menu:*)
+  @api menu:isOpen()  @ 32
+  @api menu:path()  @ 35
+      @contract  the segments walked so far, empty at the top level; the menu owns it and unwinds it  @ 34
+  @api menu:open()  @ 37-42
+  @api menu:close()  @ 44-48
+
+# Uses (outbound edges)
+  @use call cmgr:pop  @ close:47
+  @use call cmgr:push  @ open:41
+  @use call cmgr:register  @ <load>:50
+  @use call cmgr:scope  @ <load>:12
+  @use call cmgr:surface  @ livePassthrough:24
+
+# Calls (intra-file)
+  @call livePassthrough  @ open:39
+  @call menu:close  @ scope:closeMenu:51
+  @call menu:open  @ cmgr:openMenu:50
+
+# Unresolved receivers
+  @drop scope:register  @ <load>:51
+
+# Fields (r read / w write incl. constructor keys)
+  @field w Pages  @ 10
+  @field w Transport  @ 10
+  @field r cmgr  @ 6
+  @field r group  @ livePassthrough:25
+  @field w modal  @ 13
+  @field r name  @ livePassthrough:25
+  @field w passthrough  @ open:39
+  @field w switchPage  @ livePassthrough:23

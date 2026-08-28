@@ -65,6 +65,28 @@ return {
   },
 
   {
+    -- The menu's scope sits above the page's, and a switch pops the page's, so the menu
+    -- comes off the stack first or the pop finds the wrong scope on top. Travel passes
+    -- through the walk, so an open menu is one keystroke from a switch.
+    name = 'a page switch closes an open menu before it swaps the page scope',
+    run = function(harness)
+      local h = harness.mk()
+      local tracker, arrange = fakePage(), fakePage()
+      local coord = newCoord(h, { { 'arrange', arrange }, { 'tracker', tracker } })
+
+      local depth = #h.cmgr.stack
+      h.cmgr:invoke('openMenu')
+      coord:setActive('tracker')
+
+      t.eq(h.cmgr.stack[#h.cmgr.stack], h.cmgr:scope('tracker'), 'the incoming page scope is on top')
+      t.eq(#h.cmgr.stack, depth, 'the stack is as deep as it was before the menu opened')
+      for _, scope in ipairs(h.cmgr.stack) do
+        t.truthy(scope ~= h.cmgr:scope('menu'), 'and the menu scope is off it')
+      end
+    end,
+  },
+
+  {
     name = 'returnToArrange unbinds the tracker and rebinds arrange (no reveal)',
     run = function(harness)
       local h = harness.mk()

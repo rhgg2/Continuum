@@ -57,6 +57,7 @@ manifest.global = {
     command('beginPrefix',      'Numeric prefix',      'Super+U'),
     command('toggleFxWindows',  'Toggle FX windows',   'F11',          'View/FX'),
     command('toggleProfiler',   'Toggle profiler',     'Ctrl+Shift+P', 'File/Profiler'),
+    command('openMenu',         'Menu',                'Slash'),
     command('toggleHelp',       'This help',           'F1',           'Help'),
   },
   -- Reached programmatically — a toolbar click, a dive, the editor's exit — so
@@ -343,6 +344,14 @@ manifest.wiring = {
   Wiring = {
     command('wiringAddFx',           'Add FX',            'N',       'FX/Add'),
     command('wiringClearSelection',  'Clear selection',   'Escape'),
+  },
+}
+
+----- menu (bodies in menu.lua; no page places this group, so the sheet never draws it)
+
+manifest.menu = {
+  Menu = {
+    command('closeMenu',             'Close menu',        'Escape'),
   },
 }
 

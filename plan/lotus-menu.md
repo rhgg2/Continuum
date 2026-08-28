@@ -40,10 +40,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 menu: the walk's modal scope, and the verbs that open and close it (§ What stays live)
 - 2026-08-28 cmgr: pin the fluent/pathed split with a roster spec (§ Fluent and pathed)
 - 2026-08-28 cmgr: a path on every deliberate arrange, sampler and wiring verb (§ Fluent and pathed)
 - 2026-08-28 cmgr: a path on every deliberate global and tracker verb (§ Fluent and pathed)
-- 2026-08-28 cmgr: declare the menu tree and check it at load (§ The tree)
 
 ## Now
 
@@ -51,17 +51,9 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The scope and the open verb.** `menu.lua` owns a cmgr scope with
-   `modal = true` — cmgr's first — whose passthrough set is every entry
-   declared under a `Transport` group on the stack, so playPause and stop
-   stay live. `openMenu` is bound to `/` in global and `closeMenu` to Esc;
-   the menu holds its own path, empty here. Coordinator constructs it
-   beside `help` and it exposes `isOpen()`; nothing draws yet. Spec: the
-   scope pushes and pops, a tracker key is blocked while it is open, and a
-   transport key is not.
 2. **The live level.** `menu:level()` returns the members of the node the
    path names, ordered: the node's child nodes from `cmgr.tree`, and the
-   entries of `cmgr:surface()` whose stamped `node` is that node. Each
+   entries of the surface the menu snapshotted at open whose stamped `node` is that node. Each
    member carries its letter, its title, and a group's description or a
    leaf's label. The empty path gives the top level. Spec: the tracker's
    top level holds Grid but not Sample, the sampler's the reverse, and

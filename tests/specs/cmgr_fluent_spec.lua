@@ -16,7 +16,7 @@ local manifest = require('manifest')
 -- Scope by scope, in the order manifest.lua declares them.
 local fluent = {
   global = {
-    'playPause', 'stop', 'beginPrefix',
+    'playPause', 'stop', 'beginPrefix', 'openMenu',
     -- Reached programmatically: a toolbar click, a dive, the editor's exit.
     'play', 'switchPage', 'closeEditor', 'diveToSampler',
   },
@@ -55,6 +55,10 @@ local fluent = {
   },
   wiring = {
     'wiringClearSelection',
+  },
+  -- Opening and closing the menu are the walk's own verbs, so neither is walked to.
+  menu = {
+    'closeMenu',
   },
 }
 

@@ -26,6 +26,10 @@ other.
    incoming scope and binds the incoming page. Scope and binding move
    together.
 
+1. An open menu closes first, since its scope sits above the page's
+   and travel reaches its command through the walk (`docs/menu.md`
+   § A modal scope).
+
 1. `previousPage` reports the page displaced by the last switch.
    `returnToArrange` is the tracker's fixed exit, and no-ops when
    arrange is not registered.

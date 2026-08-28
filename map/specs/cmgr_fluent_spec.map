@@ -1,4 +1,4 @@
-@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=142  cases=3
+@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=146  cases=3
 
 # Intent
   A command is fluent or pathed, and the split is a judgement about how the command is
@@ -13,30 +13,31 @@
   See design/lotus-menu.md § Fluent and pathed.
 
 # Helpers
-  @fn rostered()  @ 62-68
+  @fn rostered()  @ 66-72
       -- name -> the scope the roster files it under.
-  @fn declared()  @ 72-82
+  @fn declared()  @ 76-86
       -- Every declared command, paired with the scope declaring it. The tree declares menu
       -- groups rather than commands, so the walk passes it over as installManifest does.
 
 # Cases
-  @case 'every declared command is pathed, generated, or named in the fluent roster'  [pure]  @ 88-102
-  @case 'every rostered name is declared, and carries no path'  [pure]  @ 108-123
-  @case 'a generated family member carries no path'  [pure]  @ 129-140
+  @case 'every declared command is pathed, generated, or named in the fluent roster'  [pure]  @ 92-106
+  @case 'every rostered name is declared, and carries no path'  [pure]  @ 112-127
+  @case 'a generated family member carries no path'  [pure]  @ 133-144
 
 # Fields (r read / w write incl. constructor keys)
   @field w arrange  @ 42
-  @field r entry  @ 93,111,133
-  @field w entry  @ 77
-  @field r family  @ 94,134
+  @field r entry  @ 97,115,137
+  @field w entry  @ 81
+  @field r family  @ 98,138
   @field w global  @ 18
-  @field r name  @ 94,95,97,98,99,111,136
-  @field w name  @ 88,108,129
-  @field r path  @ 94,117,119,136
+  @field w menu  @ 60
+  @field r name  @ 98,99,101,102,103,115,140
+  @field w name  @ 92,112,133
+  @field r path  @ 98,121,123,140
   @field w region  @ 39
-  @field w run  @ 89,109,130
+  @field w run  @ 93,113,134
   @field w sample  @ 53
-  @field r scope  @ 98
-  @field w scope  @ 77
+  @field r scope  @ 102
+  @field w scope  @ 81
   @field w tracker  @ 23
   @field w wiring  @ 56

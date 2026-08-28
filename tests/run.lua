@@ -22,6 +22,7 @@ local specs = {
   'cmgr_manifest_spec',
   'cmgr_menu_spec',
   'cmgr_fluent_spec',
+  'menu_spec',
   'config_schema_spec',
   'library_spec',
   'arrange_tidy_modal_spec',

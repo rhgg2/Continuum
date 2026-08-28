@@ -33,6 +33,7 @@ local toolbar   = chrome.makeToolbar()     -- one shared toolbar; renders the ac
 local statusBar = chrome.makeStatusBar()   -- one shared status bar; renders the active page's cells
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
+local menu      = util.instantiate('menu', { cmgr = cmgr })
 local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
 -- Live-REAPER eval bridge — assigned after coord (its env captures coord). See docs/bridge.md.
 local bridge
@@ -309,6 +310,9 @@ end
 --contract: tracker's no-arg bind resolves its stored selection; renderBody keeps it current
 function coord:setActive(name)
   if active == name then return true end
+  -- The menu's scope sits above the page's, and travel passes through the walk: it comes
+  -- off the stack before the page's does. See docs/menu.md § A modal scope.
+  menu:close()
   previous = active
   if active and pages[active] then
     pages[active]:unbind()

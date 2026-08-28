@@ -215,8 +215,8 @@ Scopes form a stack. The `'global'` scope sits at the bottom (pushed
 at module load, never popped); `mgr.keymap` aliases its keymap so
 unscoped binds land there. Above it: the active page scope (`tracker`
 or `sample`), pushed by `coord:setActive` and popped on page switch.
-Above that: optional overlay scopes (`region` today; letter-chord
-menus later).
+Above that: optional overlay scopes — `region`, and the menu, the one
+modal scope in production (`docs/menu.md`).
 
 A scope's `register(name, fn)` writes `mgr.commands[name] = fn` and
 records `mgr.gates[name] = scope`. At `invoke` time the gate is
