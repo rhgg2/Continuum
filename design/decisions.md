@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — Eleven mechanisms across the input path encode "this keystroke is already spoken
+  for", each rediscovered at the site that needed it, and five of them are one bug: a reader ran
+  after a claimant that had no way to claim. One queue, filled from the named-key range at the top
+  of the frame and drained by claim, replaces them. The drain order stays the call order; a
+  two-phase frame draining in scope-stack order was rejected, since it buys three focus flags for a
+  restructured frame across every page. A modal owns the queue for its frame rather than emptying
+  the fill, because modalHost and help draw after the page body and a plain claimant there would be
+  asked last.
+
 - **2026-08-29** — A leaf's letter closes the menu before it invokes, so note entry's own pass over
   the key stream finds no sink to stand off from, and reads the letter still pressed as a note. Key
   dispatch now reports the captured letter in commandHeld, over gating that pass on the frame's
