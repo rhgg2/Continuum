@@ -17,6 +17,9 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
 
 1. A document is a statement of the current model.
 
+1. It says nothing about what the model is not, or what it does not
+   do.
+
 1. It reads linearly, with each part following logically from its
    predecessor, and cross-references only other project docs.
    
