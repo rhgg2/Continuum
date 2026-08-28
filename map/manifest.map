@@ -1,8 +1,8 @@
-@module manifest  src=manifest.lua  loc=354  mode=chunk
+@module manifest  src=manifest.lua  loc=363  mode=chunk
 
 # Shapes
   @shape  { scope = { group = { entry, ... } } }  @ 4
-  @shape  entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, family?, base? }  @ 5
+  @shape  entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, letter?, family?, base? }  @ 5
   @shape  family = { label = 'Place slot', members = { entry, ... } } -- one cheat-sheet row  @ 6
 
 # Imports
@@ -10,18 +10,17 @@
 
 # Private state
   @state manifest = {}  @ 10
-  @state trackerAdvance = { label = 'Advance by 0-9', members = {} }  @ 207
-  @state slotFamily = { label = 'Place slot', members = {} }  @ 299
-  @state arrangeAdvance = { label = 'Advance by 0-9', members = {} }  @ 307
+  @state trackerAdvance = { label = 'Advance by 0-9', members = {} }  @ 209
+  @state slotFamily = { label = 'Place slot', members = {} }  @ 301
+  @state arrangeAdvance = { label = 'Advance by 0-9', members = {} }  @ 309
 
 # Private functions
-  @fn command(name, label, keys, path)  @ 14-17
-      -- Keys are the binding tokens of docs/commandManager.md § Binding tokens, and
-      -- installManifest turns them into keyspecs. A single chord needs no list.
-  @fn member(family, name, label, mask, base)  @ 21-26
+  @fn command(name, label, keys, path, letter)  @ 16-19
+      -- The path's last segment titles the command in the menu; letter overrides it.
+  @fn member(family, name, label, mask, base)  @ 23-28
       -- One member of a generated family: the family table is shared, and `base` is the
       -- member's unmasked token, which a family rebind re-masks. See docs/commandManager.md § Manifest.
-  @fn item(name, letter, desc, ...)  @ 30-32
+  @fn item(name, letter, desc, ...)  @ 32-34
       -- One menu group: its title, the letter that reaches it (derived from the title
       -- where absent), the line shown while it is highlighted, and its child groups.
   -- global (bodies in continuum's Main, except toggleHelp, which is coordinator's)
@@ -29,78 +28,79 @@
   -- register onto the same scope, returnToArrange's in continuum's Main)
   -- region (overlay within the tracker page; bodies + springLoaded config on ec)
   -- arrange (bodies in arrangeView + arrangeRender)
-  @fn placeKey(slotIdx)  @ 291-295
+  @fn placeKey(slotIdx)  @ 293-297
       -- Place-command tokens: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter.
 
 # Uses (outbound edges)
-  @use call    util.add  @ member:24 <load>:209,302,309
-  @use call    util.toBase62  @ <load>:301
+  @use call    util.add  @ member:26 <load>:211,304,311
+  @use call    util.toBase62  @ <load>:303
   @use require util  @ <load>:8
 
 # Calls (intra-file)
-  @call command  @ member:22 <load>:38,39,42,43,44,45,46,49,50,52,53
-  @call command  @ <load>:54,55,56,57,58,59,64,65,66,67,79,80
-  @call command  @ <load>:81,82,83,84,85,86,87,88,89,90,91,92
-  @call command  @ <load>:95,96,99,100,103,104,105,106,107,108,109,110
-  @call command  @ <load>:111,112,115,116,117,118,119,120,121,122,123,124
-  @call command  @ <load>:125,126,127,128,129,130,131,132,133,136,137,138
-  @call command  @ <load>:139,140,141,142,143,144,145,146,147,148,151,152
-  @call command  @ <load>:153,154,155,156,157,160,161,162,163,164,165,168
-  @call command  @ <load>:169,170,171,172,173,176,177,178,179,182,183,186
-  @call command  @ <load>:187,190,191,194,195,196,197,199,200,201,217,218
-  @call command  @ <load>:219,220,231,232,233,234,235,236,237,238,239,240
-  @call command  @ <load>:243,244,245,246,247,250,251,252,253,254,255,256
-  @call command  @ <load>:257,258,259,260,261,262,263,264,268,269,270,273
-  @call command  @ <load>:274,275,276,279,282,283,317,318,319,322,323,324
-  @call command  @ <load>:332,333
-  @call item  @ <load>:340,341,342,343,344,345,346,347,348,349,350,351
-  @call member  @ <load>:210,303,310
-  @call placeKey  @ <load>:303
+  @call command  @ member:24 <load>:40,41,44,45,46,47,48,51,52,54,55
+  @call command  @ <load>:56,57,58,59,60,65,66,67,68,80,81,82
+  @call command  @ <load>:83,84,85,86,87,88,89,90,91,92,93,96
+  @call command  @ <load>:97,100,101,104,105,106,107,108,109,110,111,112
+  @call command  @ <load>:114,117,118,119,120,121,122,123,124,125,126,127
+  @call command  @ <load>:128,129,130,131,132,133,134,135,138,139,140,141
+  @call command  @ <load>:142,143,144,145,146,147,148,149,150,153,154,155
+  @call command  @ <load>:156,157,158,159,162,163,164,165,166,167,170,171
+  @call command  @ <load>:172,173,174,175,178,179,180,181,184,185,188,189
+  @call command  @ <load>:192,193,196,197,198,199,201,202,203,219,220,221
+  @call command  @ <load>:222,233,234,235,236,237,238,239,240,241,242,245
+  @call command  @ <load>:246,247,248,249,252,253,254,255,256,257,258,259
+  @call command  @ <load>:260,261,262,263,264,265,266,270,271,272,275,276
+  @call command  @ <load>:277,278,281,284,285,319,320,321,324,325,326,334
+  @call command  @ <load>:335
+  @call item  @ <load>:342,343,344,345,346,347,348,349,350,351,352,353
+  @call item  @ <load>:354,355,356,357,358,359,360
+  @call member  @ <load>:212,305,312
+  @call placeKey  @ <load>:305
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Advance  @ 209,309
-  @field w Advance  @ 202,286
-  @field w Browser  @ 316
-  @field w Editing  @ 114
-  @field w FX  @ 175
-  @field w Global  @ 51,201
-  @field w Input  @ 181
-  @field w Loop  @ 193,272
-  @field w Modes  @ 266
-  @field w Movement  @ 78,230
-  @field w Pages  @ 41
-  @field w Programmatic  @ 63
-  @field w Region  @ 216
-  @field w Sample  @ 185
-  @field w Selection  @ 135,242
-  @field r Slots  @ 302
-  @field w Slots  @ 285,321
-  @field w Swing  @ 50,200
-  @field w Take  @ 98
-  @field w Takes  @ 249
-  @field w Track  @ 94
-  @field w Transport  @ 37,189,278
-  @field w Tuning  @ 49,199
-  @field w View  @ 281
-  @field w Wiring  @ 331
-  @field r arrange  @ 302,309
-  @field w arrange  @ 229
-  @field w base  @ member:23
-  @field w children  @ item:31
-  @field w desc  @ item:31
-  @field r family  @ member:23
-  @field w global  @ 36
-  @field w keys  @ command:16
-  @field w label  @ command:15 207,299,307
-  @field w letter  @ item:31
-  @field r members  @ member:24
-  @field w members  @ 207,299,307
-  @field w name  @ command:15 item:31
-  @field w path  @ command:16
-  @field w region  @ 215
-  @field w sample  @ 315
-  @field r tracker  @ 209
-  @field w tracker  @ 77
-  @field w tree  @ 339
-  @field w wiring  @ 330
+  @field r Advance  @ 211,311
+  @field w Advance  @ 204,288
+  @field w Browser  @ 318
+  @field w Editing  @ 116
+  @field w FX  @ 177
+  @field w Global  @ 53,203
+  @field w Input  @ 183
+  @field w Loop  @ 195,274
+  @field w Modes  @ 268
+  @field w Movement  @ 79,232
+  @field w Pages  @ 43
+  @field w Programmatic  @ 64
+  @field w Region  @ 218
+  @field w Sample  @ 187
+  @field w Selection  @ 137,244
+  @field r Slots  @ 304
+  @field w Slots  @ 287,323
+  @field w Swing  @ 52,202
+  @field w Take  @ 99
+  @field w Takes  @ 251
+  @field w Track  @ 95
+  @field w Transport  @ 39,191,280
+  @field w Tuning  @ 51,201
+  @field w View  @ 283
+  @field w Wiring  @ 333
+  @field r arrange  @ 304,311
+  @field w arrange  @ 231
+  @field w base  @ member:25
+  @field w children  @ item:33
+  @field w desc  @ item:33
+  @field r family  @ member:25
+  @field w global  @ 38
+  @field w keys  @ command:18
+  @field w label  @ command:17 209,301,309
+  @field w letter  @ command:17 item:33
+  @field r members  @ member:26
+  @field w members  @ 209,301,309
+  @field w name  @ command:17 item:33
+  @field w path  @ command:17
+  @field w region  @ 217
+  @field w sample  @ 317
+  @field r tracker  @ 211
+  @field w tracker  @ 78
+  @field w tree  @ 341
+  @field w wiring  @ 332

@@ -334,18 +334,6 @@ function coord:getFacade(name) return facade.get(name) end
 --contract: the page active immediately before the current one; closeEditor returns here
 function coord:previousPage() return previous end
 
--- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
--- are skipped; with ≥1 track every page activates.
-function coord:togglePage()
-  local order = { 'tracker', 'arrange', 'sample', 'wiring' }
-  local idx
-  for i, name in ipairs(order) do if name == active then idx = i; break end end
-  for step = 1, #order do
-    local next = order[((idx or 0) + step - 1) % #order + 1]
-    if pages[next] and self:setActive(next) then return end
-  end
-end
-
 --contract: invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
 --invariant: mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame
 function coord:reloadAfterExternalMutation()

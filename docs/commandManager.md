@@ -151,15 +151,26 @@ will eventually layer overrides on top.
    Tuning may keep `T`. Install stamps the derived letter onto the node, so a
    consumer reads one field.
 
-1. An entry's **path** is the group titles that reach it, separated by
-   `/` — `Grid/Rows`. It names the level the command reads in, not the
-   command itself. Keys and path are independent, and either may be absent.
+1. An entry's **path** is the segments that reach it, separated by `/` —
+   `View/Rows/Double`. Every segment but the last names a group; the last is
+   the entry's **title**, the word the menu shows it under. A one-segment path
+   is a leaf of the top level. Keys and path are independent, and either may
+   be absent.
+
+1. A leaf's letter derives from the first character of its title, and an entry
+   declares `letter` where that collides — `Edit/Cut` takes X beside
+   `Edit/Copy`. Groups and leaves are members of a level alike, since a letter
+   typed there reaches either.
 
 1. `installTree(tree)` runs after `installManifest`, whose entries it
-   resolves. It stamps `entry.node` with the node the path names, raising
-   on a segment naming no group in the level it reaches, and on two members
-   of a level sharing a letter. Both checks read the declaration, so a
-   malformed menu raises at load rather than on opening.
+   resolves. It stamps each entry's title, letter and `node` — the group whose
+   level the command reads in, and nil at the top level — raising on a segment
+   naming no group in the level it reaches.
+
+1. The letter check runs over global's leaves paired with one scope's at a
+   time, since two page scopes are never on the stack together and a letter
+   they share is two menus rather than a collision. Both checks read the
+   declaration, so a malformed menu raises at load rather than on opening.
 
 ## Scope stack
 

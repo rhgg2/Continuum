@@ -16,9 +16,10 @@ from the one declaration.**
    registers it — see `docs/commandManager.md` § Manifest.
 
 1. An entry also carries an optional **path** — the menu segments that
-   reach it. Keys and path are independent, and either may be absent. A
-   command with keys alone is reached by its chord, one with a path
-   alone through the menu, one with both either way.
+   reach it, the last of which is its title in the menu. Keys and path are
+   independent, and either may be absent. A command with keys alone is
+   reached by its chord, one with a path alone through the menu, one with
+   both either way.
 
 1. An entry carries its cheat-sheet group and no rendering — see
    `docs/commandManager.md` § Manifest.
@@ -82,42 +83,49 @@ from the one declaration.**
    to the first letter of the title, and is declared where two titles
    collide — Take borrows `K` so Tuning may keep `T`.
 
+1. A level holds groups and leaves alike, and one namespace of letters
+   covers both. A leaf's title is its path's last segment, so a command
+   reads as one word in the menu where the cheat-sheet gives it a phrase.
+
 ## The top level
 
-1. The top level is twelve groups:
+1. The top level is twelve groups and one leaf:
 
    ```
-   File  Edit  View  Grid  Tuning  Note  taKe  Mirror  Loop  fX  Page  Help
+   File  Edit  View  Play  Column  Row  Grid  Tuning  taKe  Mirror  fX  Jump  Help
    ```
 
-1. Each holds one remit:
+1. Each group holds one remit:
 
    | group | remit |
    |---|---|
-   | File | REAPER project actions, and leaving Continuum |
+   | File | REAPER project actions, the profiler, and leaving Continuum |
    | Edit | the block and the clipboard |
-   | View | lanes, typed columns, rows |
-   | Grid | the grid, swing, quantize |
+   | View | panels, the arrange map, rows per beat |
+   | Play | playing, following, and the loop |
+   | Column | adding and removing columns |
+   | Row | inserting and deleting rows |
+   | Grid | quantize, scale and swing |
    | Tuning | tuning and retune |
-   | Note | what a note is — length, value, interpolation |
    | taKe | take lifecycle and variants |
    | Mirror | mirror groups and freezing |
-   | Loop | the loop and playing from a point |
-   | fX | note FX, the param palette, FX windows |
-   | Page | travel to a page |
-   | Help | the cheat-sheet |
+   | fX | note FX and the param palette |
+   | Jump | travel to a page |
+
+1. Help is a leaf rather than a group, so `/H` opens the cheat-sheet.
 
 1. Grid and Tuning mirror the model's own two axes — `docs/timing.md` and
-   `docs/tuning.md`. Where the menu's cut fights the model's, the verb is
-   misnamed or misplaced.
+   `docs/tuning.md` — for the verbs that edit the take. Rows per beat is
+   View's, since it changes how the take is shown. Where the menu's cut
+   fights the model's, the verb is misnamed or misplaced.
 
 1. File's bodies are REAPER actions run through `Main_OnCommand`, and
    REAPER owns their undo. Quit closes Continuum, not REAPER. Only
    File's paths leave Continuum; every other path reaches a Continuum
    command.
 
-1. A group descends where it is crowded. Grid's rows-per-beat verbs sit
-   one level down, so doubling the grid is `/GRD`.
+1. A group descends where it is crowded. View's rows-per-beat verbs sit
+   one level down, so doubling the grid is `/VR=`.
 
 ## Walking a path
 
@@ -145,7 +153,7 @@ from the one declaration.**
    edited.
 
 1. The numeric prefix survives the walk. Opening the menu neither freezes
-   nor clears a pending prefix, so `⌘U 4 /GRS` sets rows-per-beat to 4.
+   nor clears a pending prefix, so `⌘U 4 /VRS` sets rows-per-beat to 4.
    The leaf's invoke consumes it exactly as a chord's would.
 
 ## Where it draws
@@ -181,8 +189,9 @@ from the one declaration.**
 1. Every registered command resolves to exactly one entry — see
    `docs/commandManager.md` § Manifest.
 
-1. Letters are unique within a level. A collision raises, naming both
-   members.
+1. Letters are unique within a level, over its groups and leaves alike. A
+   collision raises, naming both members. The check pairs global's leaves
+   with one scope's at a time, since two page scopes never stack together.
 
 1. Both checks run at load, against the declaration rather than a walk,
    so a malformed menu never opens.

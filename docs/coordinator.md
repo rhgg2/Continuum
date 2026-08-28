@@ -30,10 +30,6 @@ other.
    `returnToArrange` is the tracker's fixed exit, and no-ops when
    arrange is not registered.
 
-1. `togglePage` cycles tracker → arrange → sample → wiring, skipping
-   any page not registered. The editor is absent from the cycle: it is
-   entered and left by command.
-
 ## The frame
 
 1. Each frame runs in a fixed order: poll the undo mirror, poll the

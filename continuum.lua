@@ -156,7 +156,6 @@ local function Main()
     editSwing       = function() coord:getFacade('editor').edit('swing');  coord:setActive('editor') end,
     closeEditor     = function() coord:setActive(coord:previousPage() or 'tracker') end,
     diveToSampler   = function(_, track) coord:getFacade('sample').setTrack(track); coord:setActive('sample') end,
-    togglePage      = function() coord:togglePage()         end,
     quit            = function() coord:getFacade('tracker').restorePerfFlags(); coord:quit()               end,
     beginPrefix     = function() cmgr:beginPrefix()         end,
     toggleFxWindows = toggleAllFxWindows,

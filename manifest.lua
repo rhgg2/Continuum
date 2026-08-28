@@ -1,8 +1,8 @@
--- Every command declared once, in the order it reads: label, keys, and cheat-sheet group.
--- see docs/commandManager.md § Manifest
+-- Every command declared once, in the order it reads: label, keys, menu path and cheat-sheet group.
+-- see docs/commandManager.md §§ Manifest, Menu tree
 
 --shape: { scope = { group = { entry, ... } } }
---shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, family?, base? }
+--shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, letter?, family?, base? }
 --shape: family = { label = 'Place slot', members = { entry, ... } } -- one cheat-sheet row
 
 local util = require 'util'
@@ -11,9 +11,11 @@ local manifest = {}
 
 -- Keys are the binding tokens of docs/commandManager.md § Binding tokens, and
 -- installManifest turns them into keyspecs. A single chord needs no list.
-local function command(name, label, keys, path)
-  return { name = name, label = label,
-           keys = type(keys) == 'string' and { keys } or keys, path = path }
+
+-- The path's last segment titles the command in the menu; letter overrides it.
+local function command(name, label, keys, path, letter)
+  return { name = name, label = label, path = path, letter = letter,
+           keys = type(keys) == 'string' and { keys } or keys }
 end
 
 -- One member of a generated family: the family table is shared, and `base` is the
@@ -39,24 +41,23 @@ manifest.global = {
     command('stop',             'Stop',                'F8'),
   },
   Pages = {
-    command('switchToArrange',  'Arrange page',        'F2',  'Page'),
-    command('switchToWiring',   'Wiring page',         'F3',  'Page'),
-    command('switchToTracker',  'Tracker page',        'F4',  'Page'),
-    command('switchToSample',   'Sampler page',        'F9',  'Page'),
-    command('switchToEditor',   'Editor page',         'F10', 'Page'),
+    command('switchToArrange',  'Arrange page',        'F2',  'Jump/Arrange'),
+    command('switchToWiring',   'Wiring page',         'F3',  'Jump/Wiring'),
+    command('switchToTracker',  'Tracker page',        'F4',  'Jump/Tracker'),
+    command('switchToSample',   'Sampler page',        'F9',  'Jump/Sampler'),
+    command('switchToEditor',   'Editor page',         'F10', 'Jump/Editor'),
   },
   -- Both reached from their toolbar segment, which is where the sheet pins them.
-  Tuning = { command('editTuning', 'Edit tuning') },
-  Swing  = { command('editSwing',  'Edit swing') },
+  Tuning = { command('editTuning', 'Edit tuning', nil, 'Tuning/Edit') },
+  Swing  = { command('editSwing',  'Edit swing',  nil, 'Grid/Swing/Edit') },
   Global = {
-    command('undo',             'Undo',                'Ctrl+Z'),
-    command('redo',             'Redo',                'Ctrl+Shift+Z'),
-    command('togglePage',       'Switch page'),
-    command('quit',             'Quit',                'Ctrl+Q', 'File'),
+    command('undo',             'Undo',                'Ctrl+Z',       'Edit/Undo'),
+    command('redo',             'Redo',                'Ctrl+Shift+Z', 'Edit/Redo'),
+    command('quit',             'Quit',                'Ctrl+Q',       'File/Quit'),
     command('beginPrefix',      'Numeric prefix',      'Super+U'),
-    command('toggleFxWindows',  'Toggle FX windows',   'F11'),
-    command('toggleProfiler',   'Toggle profiler',     'Ctrl+Shift+P'),
-    command('toggleHelp',       'This help',           'F1', 'Help'),
+    command('toggleFxWindows',  'Toggle FX windows',   'F11',          'View/FX'),
+    command('toggleProfiler',   'Toggle profiler',     'Ctrl+Shift+P', 'File/Profiler'),
+    command('toggleHelp',       'This help',           'F1',           'Help'),
   },
   -- Reached programmatically — a toolbar click, a dive, the editor's exit — so
   -- they carry a label and no keys, and no page places this group.
@@ -102,14 +103,15 @@ manifest.tracker = {
   ['Take management'] = {
     command('prevInstance',          'Previous instance',           'Alt+Up'),
     command('nextInstance',          'Next instance',               'Alt+Down'),
-    command('takeProperties',        'Take properties',             'Alt+P'),
-    command('newTakeBelow',          'New take',                    'Alt+Enter'),
-    command('duplicateBelow',        'Duplicate',                   'Shift+Alt+Down'),
-    command('deleteInstance',        'Delete instance',             'Shift+Alt+Up'),
-    command('prevVariant',           'Previous variant',            'Shift+Alt+Left'),
-    command('nextVariant',           'Next variant / vary',         'Shift+Alt+Right'),
-    command('deleteBoundSlot',       'Delete take + instances',     { 'Ctrl+Delete', 'Ctrl+Backspace' }),
-    command('pinMap',                'Pin the arrange map',         'Alt+M'),
+    command('takeProperties',        'Take properties',             'Alt+P',            'Take/Properties'),
+    command('newTakeBelow',          'New take',                    'Alt+Enter',        'Take/New'),
+    command('duplicateBelow',        'Duplicate',                   'Shift+Alt+Down',   'Take/Duplicate'),
+    command('deleteInstance',        'Delete instance',             'Shift+Alt+Up',     'Take/Remove/Instance'),
+    command('prevVariant',           'Previous variant',            'Shift+Alt+Left',   'Take/Variant/Previous'),
+    command('nextVariant',           'Next variant / vary',         'Shift+Alt+Right',  'Take/Variant/Next'),
+    command('deleteBoundSlot',       'Delete take + instances',     { 'Ctrl+Delete', 'Ctrl+Backspace' },
+                                                                                        'Take/Remove/Take + instances'),
+    command('pinMap',                'Pin the arrange map',         'Alt+M',            'View/Map'),
   },
   Editing = {
     command('noteOff',               'Note off',                    '1'),
@@ -121,16 +123,16 @@ manifest.tracker = {
     command('eventShiftRight',       'Push right',                  'Super+Right'),
     command('delete',                'Clear cell',                  'Period'),
     command('deleteSel',             'Delete selection',            { 'Delete', 'Backspace' }),
-    command('interpolate',           'Interpolate',                 'Ctrl+I'),
+    command('interpolate',           'Interpolate',                 'Ctrl+I',           'Edit/Interpolate'),
     command('nudgeCoarseUp',         'Nudge val ++',                'Ctrl+Equal'),
     command('nudgeCoarseDown',       'Nudge val --',                'Ctrl+Minus'),
     command('nudgeFineUp',           'Nudge val +',                 'Shift+Equal'),
     command('nudgeFineDown',         'Nudge val -',                 'Shift+Minus'),
-    command('scaleHalf',             'Scale \xc3\x97\xc2\xbd',      'Shift+9'),  -- '('
-    command('scaleDouble',           'Scale \xc3\x972',             'Shift+0'),  -- ')'
-    command('quantize',              'Quantize',                    'Ctrl+K'),
-    command('quantizeKeepRealised',  'Quantize (keep realised)',    'Ctrl+Shift+K'),
-    command('retune',                'Retune',                      'Ctrl+T'),
+    command('scaleHalf',             'Scale \xc3\x97\xc2\xbd',      'Shift+9',          'Grid/Scale/Halve'),   -- '('
+    command('scaleDouble',           'Scale \xc3\x972',             'Shift+0',          'Grid/Scale/Double'),  -- ')'
+    command('quantize',              'Quantize',                    'Ctrl+K',           'Grid/Quantize'),
+    command('quantizeKeepRealised',  'Quantize (keep realised)',    'Ctrl+Shift+K',     'Grid/Keep'),
+    command('retune',                'Retune',                      'Ctrl+T',           'Tuning/Retune'),
   },
   Selection = {
     command('selectUp',              'Select up',                   'Shift+Up'),
@@ -141,42 +143,42 @@ manifest.tracker = {
     command('cycleVBlock',           'Cycle selection V',           'Super+Space'),
     command('swapBlockEnds',         'Swap block ends',             'Ctrl+Grave'),
     command('selectClear',           'Clear selection',             'Super+G'),
-    command('selectAll',             'Select all',                  'Ctrl+A'),
-    command('cut',                   'Cut',                         { 'Super+W', 'Ctrl+X' }),
-    command('copy',                  'Copy',                        { 'Ctrl+W', 'Ctrl+C' }),
-    command('paste',                 'Paste',                       { 'Super+Y', 'Ctrl+V' }),
-    command('duplicateDown',         'Duplicate',                   'Ctrl+D'),
+    command('selectAll',             'Select all',                  'Ctrl+A',           'Edit/All'),
+    command('cut',                   'Cut',                         { 'Super+W', 'Ctrl+X' }, 'Edit/Cut', 'X'),
+    command('copy',                  'Copy',                        { 'Ctrl+W', 'Ctrl+C' },  'Edit/Copy'),
+    command('paste',                 'Paste',                       { 'Super+Y', 'Ctrl+V' }, 'Edit/Paste'),
+    command('duplicateDown',         'Duplicate',                   'Ctrl+D',           'Edit/Duplicate'),
   },
   ['Columns & rows'] = {
-    command('insertRow',             'Insert row (all columns)',    'Ctrl+Shift+Down'),
-    command('insertRowCol',          'Insert row in column',        'Ctrl+Down'),
-    command('deleteRowCol',          'Delete row in column',        'Ctrl+Up'),
-    command('deleteRow',             'Delete row (all columns)',    'Ctrl+Shift+Up'),
-    command('addNoteLane',           'Add note lane',               'Ctrl+Right'),
-    command('addTypedCol',           'Add cc/pb/at/pc column',      'Ctrl+Shift+Right'),
-    command('hideExtraCol',          'Remove column',               'Ctrl+Left'),
+    command('insertRow',             'Insert row (all columns)',    'Ctrl+Shift+Down',  'Row/Global/Insert'),
+    command('insertRowCol',          'Insert row in column',        'Ctrl+Down',        'Row/Insert'),
+    command('deleteRowCol',          'Delete row in column',        'Ctrl+Up',          'Row/Delete'),
+    command('deleteRow',             'Delete row (all columns)',    'Ctrl+Shift+Up',    'Row/Global/Delete'),
+    command('addNoteLane',           'Add note lane',               'Ctrl+Right',       'Column/Note'),
+    command('addTypedCol',           'Add cc/pb/at/pc column',      'Ctrl+Shift+Right', 'Column/Continuous'),
+    command('hideExtraCol',          'Remove column',               'Ctrl+Left',        'Column/Delete'),
   },
   ['Rows / beat'] = {
-    command('doubleRPB',             'Double',                      'Super+Equal'),
-    command('halveRPB',              'Halve',                       'Super+Minus'),
+    command('doubleRPB',             'Double',                      'Super+Equal',      'View/Rows/Double', '='),
+    command('halveRPB',              'Halve',                       'Super+Minus',      'View/Rows/Halve',  '-'),
     command('incRPB',                'Rows / beat +1',              'Shift+Super+Equal'),
     command('decRPB',                'Rows / beat -1',              'Shift+Super+Minus'),
-    command('setRPB',                'Set',                         'Super+Z'),
-    command('matchGridToCursor',     'Match',                       'Super+M'),
+    command('setRPB',                'Set',                         'Super+Z',          'View/Rows/Set'),
+    command('matchGridToCursor',     'Match',                       'Super+M',          'View/Rows/Match'),
   },
   ['Groups & region'] = {
-    command('groupDuplicate',        'Duplicate group',             'Ctrl+Shift+D'),
-    command('groupPaste',            'Paste group',                 'Ctrl+Shift+V'),
-    command('groupLocalToggle',      'Toggle local',                'Shift+Backslash'),
-    command('regionArm',             'Region mode',                 'Backslash'),
+    command('groupDuplicate',        'Duplicate group',             'Ctrl+Shift+D',     'Mirror/Duplicate'),
+    command('groupPaste',            'Paste group',                 'Ctrl+Shift+V',     'Mirror/Paste'),
+    command('groupLocalToggle',      'Toggle local',                'Shift+Backslash',  'Mirror/Local'),
+    command('regionArm',             'Region mode',                 'Backslash',        'Mirror/Region'),
     command('groupInstPrev',         'Prev instance',               'LeftBracket'),
     command('groupInstNext',         'Next instance',               'RightBracket'),
   },
   FX = {
-    command('editNoteFx',            'Edit note FX',                'Super+X'),
-    command('freezeFxRegion',        'Freeze / explode FX',         'Ctrl+E'),
-    command('freezeFxGroup',         'Freeze FX to group',          'Ctrl+Shift+E'),
-    command('focusParamPalette',     'Focus param palette',         'Super+R'),
+    command('editNoteFx',            'Edit note FX',                'Super+X',          'FX/Editor'),
+    command('freezeFxRegion',        'Freeze / explode FX',         'Ctrl+E',           'FX/Freeze'),
+    command('freezeFxGroup',         'Freeze FX to group',          'Ctrl+Shift+E',     'FX/Group'),
+    command('focusParamPalette',     'Focus param palette',         'Super+R',          'View/Parameters'),
   },
   Input = {
     command('inputOctaveUp',         'Octave +',                    'Shift+8'),
@@ -187,17 +189,17 @@ manifest.tracker = {
     command('inputSampleDown',       'Sample -',                    'Shift+Comma'),  -- '<'
   },
   Transport = {
-    command('playFromTop',           'Play from top',               'F6'),
-    command('playFromCursor',        'Play from cursor',            'F7'),
+    command('playFromTop',           'Play from top',               'F6',               'Play/Item'),
+    command('playFromCursor',        'Play from cursor',            'F7',               'Play/Cursor'),
   },
   Loop = {
-    command('loopToItemNow',         'Loop to item',                'Super+L'),
-    command('toggleLoopToItem',      'Loop to item on each move',   'Ctrl+L'),
-    command('toggleFollowPlay',      'Follow play',                 'Ctrl+P'),
-    command('clearLoop',             'Clear loop',                  'Escape'),
+    command('loopToItemNow',         'Loop to item',                'Super+L',          'Play/Loop/Item'),
+    command('toggleLoopToItem',      'Loop to item on each move',   'Ctrl+L',           'Play/Loop/Always'),
+    command('toggleFollowPlay',      'Follow play',                 'Ctrl+P',           'Play/Follow'),
+    command('clearLoop',             'Clear loop',                  'Escape',           'Play/Loop/Clear'),
   },
-  Tuning = { command('openTemperPicker', 'Pick tuning',             'Super+T') },
-  Swing  = { command('openSwingPicker',  'Pick swing',              'Super+S') },
+  Tuning = { command('openTemperPicker', 'Pick tuning',             'Super+T',          'Tuning/Pick') },
+  Swing  = { command('openSwingPicker',  'Pick swing',              'Super+S',          'Grid/Swing/Pick') },
   Global = { command('returnToArrange',  'Back to arrange',         { 'Enter', 'KeypadEnter' }) },
   Advance = {},
 }
@@ -339,16 +341,23 @@ manifest.wiring = {
 manifest.tree = {
   item('File',   nil, 'REAPER project actions, and leaving Continuum'),
   item('Edit',   nil, 'The block and the clipboard'),
-  item('View',   nil, 'Lanes, typed columns, rows'),
-  item('Grid',   nil, 'The grid, swing, quantize'),
+  item('View',   nil, 'Panels, the arrange map, rows per beat',
+       item('Rows',    nil, 'How many rows a beat holds')),
+  item('Play',   nil, 'Playing, following, and the loop',
+       item('Loop',    nil, 'The loop and what clears it')),
+  item('Column', nil, 'Adding and removing columns'),
+  item('Row',    nil, 'Inserting and deleting rows',
+       item('Global',  nil, 'Rows across every column at once')),
+  item('Grid',   nil, 'Quantize, scale and swing',
+       item('Scale',   nil, 'Stretch the block in time'),
+       item('Swing',   'W', 'The swing the take is played with')),
   item('Tuning', nil, 'Tuning and retune'),
-  item('Note',   nil, 'What a note is: length, value, interpolation'),
-  item('Take',   'K', 'Take lifecycle and variants'),
+  item('Take',   'K', 'Take lifecycle and variants',
+       item('Variant', nil, 'Step through a take\'s variants'),
+       item('Remove',  nil, 'Delete a take or one instance')),
   item('Mirror', nil, 'Mirror groups and freezing'),
-  item('Loop',   nil, 'The loop and playing from a point'),
-  item('FX',     'X', 'Note FX, the param palette, FX windows'),
-  item('Page',   nil, 'Travel to a page'),
-  item('Help',   nil, 'The cheat-sheet'),
+  item('FX',     'X', 'Note FX and the param palette'),
+  item('Jump',   nil, 'Travel to a page'),
 }
 
 return manifest

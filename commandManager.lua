@@ -230,44 +230,98 @@ end
 -- The groups a path walks, declared beside the commands.
 -- see docs/commandManager.md § Menu tree
 
---shape: node = { name = 'Time', letter = 'T', desc = 'The grid, swing, quantize', children = { node, ... } }
+--shape: node = { name = 'Grid', letter = 'G', desc = 'The grid, swing, quantize', children = { node, ... } }
 
-local resolvePath, installLevel
+local segments, resolveParent, stampLetters, claim, claimLevel, checkLetters
 
--- The node a path names, walking one level per segment.
-function resolvePath(tree, path, name)
-  local nodes, found = tree, nil
-  for segment in path:gmatch('[^/]+') do
-    found = nil
-    for _, node in ipairs(nodes) do
-      if node.name == segment then found = node end
-    end
-    if not found then error('menu: ' .. name .. ' — no group ' .. segment .. ' in ' .. path) end
-    nodes = found.children
-  end
-  return found
+function segments(path)
+  local parts = {}
+  for segment in path:gmatch('[^/]+') do util.add(parts, segment) end
+  return parts
 end
 
---invariant: a letter identifies its member uniquely within its level, so no choice needs confirming
-function installLevel(nodes, level)
-  local claimedBy = {}
+-- The node whose level a leaf reads in: every segment but the last names a group, so
+-- a one-segment path resolves to nil and reads at the top level.
+function resolveParent(tree, parts, name)
+  local nodes, parent = tree, nil
+  for index = 1, #parts - 1 do
+    local found
+    for _, node in ipairs(nodes) do
+      if node.name == parts[index] then found = node end
+    end
+    if not found then
+      error('menu: ' .. name .. ' — no group ' .. parts[index] .. ' in ' .. table.concat(parts, '/'))
+    end
+    parent, nodes = found, found.children
+  end
+  return parent
+end
+
+function stampLetters(nodes)
   for _, node in ipairs(nodes) do
     node.letter = node.letter or node.name:sub(1, 1):upper()
-    if claimedBy[node.letter] then
-      error('menu: ' .. claimedBy[node.letter] .. ' and ' .. node.name .. ' both take ' ..
-            node.letter .. ' under ' .. level)
-    end
-    claimedBy[node.letter] = node.name
-    installLevel(node.children, node.name)
+    stampLetters(node.children)
   end
 end
 
---contract: stamps each node's letter and each pathed entry's node; runs after installManifest
+-- A level is keyed by the list its groups sit in — the tree itself at the top, a
+-- node's children below — since its leaves live in the manifest rather than the tree.
+function claim(claimed, level, letter, title, where)
+  local taken = claimed[level] or {}
+  claimed[level] = taken
+  if taken[letter] then
+    error('menu: ' .. taken[letter] .. ' and ' .. title .. ' both take ' ..
+          letter .. ' under ' .. where)
+  end
+  taken[letter] = title
+end
+
+function claimLevel(claimed, nodes, where)
+  for _, node in ipairs(nodes) do
+    claim(claimed, nodes, node.letter, node.name, where)
+    claimLevel(claimed, node.children, node.name)
+  end
+end
+
+--invariant: a letter identifies its member uniquely within its level, groups and leaves alike
+function checkLetters(tree, entries)
+  local claimed = {}
+  claimLevel(claimed, tree, 'the top level')
+  table.sort(entries, function(entryA, entryB) return entryA.name < entryB.name end)
+  for _, entry in ipairs(entries) do
+    claim(claimed, entry.node and entry.node.children or tree, entry.letter, entry.title,
+          entry.node and entry.node.name or 'the top level')
+  end
+end
+
+local function collectPathed(out, scope)
+  for _, entries in pairs(scope.manifest or {}) do
+    for _, entry in ipairs(entries) do
+      if entry.path then util.add(out, entry) end
+    end
+  end
+  return out
+end
+
+--contract: stamps node letters, each pathed entry's title/letter/node; runs after installManifest
 function cmgr:installTree(tree)
   self.tree = tree
-  installLevel(tree, 'the top level')
+  stampLetters(tree)
   for name, entry in pairs(self.entries) do
-    if entry.path then entry.node = resolvePath(tree, entry.path, name) end
+    if entry.path then
+      local parts  = segments(entry.path)
+      entry.title  = parts[#parts]
+      entry.letter = entry.letter or entry.title:sub(1, 1):upper()
+      entry.node   = resolveParent(tree, parts, name)
+    end
+  end
+  -- Each scope is checked over global's leaves rather than against the manifest whole:
+  -- two page scopes are never on the stack together, so a shared letter is two menus.
+  checkLetters(tree, collectPathed({}, global))
+  for scopeName, scope in pairs(self.scopes) do
+    if scopeName ~= 'global' then
+      checkLetters(tree, collectPathed(collectPathed({}, global), scope))
+    end
   end
 end
 

@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — A menu path names its leaf, not just the level it reads in: every segment but the
+  last names a group, and the last is the command's title in the menu and the source of its letter.
+  One declaration therefore carries the level, the word shown and the key that takes it, and the
+  cheat-sheet's phrase stays free to differ from the menu's one word. Groups and leaves share one
+  namespace of letters per level, and the load check pairs global's leaves with one scope's at a
+  time, since two page scopes are never on the stack together and a letter they share is two menus
+  rather than a collision.
+
 - **2026-08-28** — The lotus menu's top level is named for what a command edits rather than for the
   model's axes: Edit, View, Grid, Tuning, Mirror and Page stand where Select, Column, Time, Pitch,
   Group and View stood. The tree is declared as manifest.tree beside the commands, and a separate

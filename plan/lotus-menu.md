@@ -38,21 +38,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 cmgr: a path on every deliberate global and tracker verb (§ Fluent and pathed)
 - 2026-08-28 cmgr: declare the menu tree and check it at load (§ The tree)
 - 2026-08-28 help: a generated family reads as one row (§ Fluent and pathed)
 - 2026-08-28 help: the cheat-sheet reaches arrange, sampler and wiring (§ Three consumers)
-- 2026-08-28 cmgr: declare each entry under its cheat-sheet group (§ Three consumers)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- cmgr: a path on the global and tracker scopes' deliberate verbs, the
-  fluent ones left key-only, with the subgroups the split needs added to
-  the tree. A leaf's letter comes from its label, with an entry-level
-  `letter` where a level collides, and the collision check covers a
-  level's groups and leaves alike.
 - cmgr: the same pass over arrange, region, sampler and wiring, with their
   subgroups, finishing the surface.
 - cmgr: the fluent roster — a spec naming every key-only command and

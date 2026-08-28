@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=376  mode=chunk  self=coord
+@module coordinator  src=coordinator.lua  loc=364  mode=chunk  self=coord
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
@@ -21,7 +21,7 @@
   @construct modalHost = util.instantiate('modalHost')  @ 34
   @construct help      = util.instantiate('help')  @ 35
   @construct masterMix = util.instantiate('masterMix')  @ 36
-  @construct bridge    = util.instantiate('bridge')  @ 369
+  @construct bridge    = util.instantiate('bridge')  @ 357
 
 # Private state
   @state ctx, uiFont = gui.ctx, gui.uiFont  @ 19
@@ -67,8 +67,8 @@
   @held facade.publish(name, iface)  @ 47
   @held facade.get(name)  @ 48
   @held facade.publishDebug(name, stack)  @ 50
-  @held env.facade(name)  @ 372
-  @held env.page(name)  @ 373
+  @held env.facade(name)  @ 360
+  @held env.page(name)  @ 361
 
 # Handlers registered
   @handler cmgr:toggleHelp()  @ 42
@@ -84,17 +84,14 @@
       @contract  resolve a published page facade by name; the contents are owned by the publishing page  @ 331
   @api coord:previousPage()  @ 335
       @contract  the page active immediately before the current one; closeEditor returns here  @ 334
-  @api coord:togglePage()  @ 339-347
-      -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
-      -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 351-356
-      @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.  @ 349
-      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame  @ 350
-  @api coord:onExternalCommand(extKey, command)  @ 359-361
-      @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands  @ 358
-  @api coord:quit()  @ 363
-  @api coord:run(handler)  @ 365
-      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs  @ 364
+  @api coord:reloadAfterExternalMutation()  @ 339-344
+      @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.  @ 337
+      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame  @ 338
+  @api coord:onExternalCommand(extKey, command)  @ 347-349
+      @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands  @ 346
+  @api coord:quit()  @ 351
+  @api coord:run(handler)  @ 353
+      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs  @ 352
 
 # Uses (outbound edges)
   @use call    ImGui.Begin  @ frame:178
@@ -132,7 +129,7 @@
   @use call    chrome.resetPickerActive  @ frame:239
   @use call    chrome.resetToolbar  @ setActive:315
   @use call    chrome.toolbarLineCount  @ frame:236
-  @use call    cm:pollUndo  @ frame:152 reloadAfterExternalMutation:352
+  @use call    cm:pollUndo  @ frame:152 reloadAfterExternalMutation:340
   @use call    cmgr:invoke  @ drawSwitcher:92 pollExternalCommands:130
   @use call    cmgr:pop  @ setActive:316
   @use call    cmgr:push  @ setActive:320
@@ -147,10 +144,10 @@
   @use call    modalHost:draw  @ frame:285
   @use call    modalHost:isOpen  @ cmgr:toggleHelp:42
   @use call    modalHost:tick  @ tick:77
-  @use call    util.add  @ frame:209 onExternalCommand:360
+  @use call    util.add  @ frame:209 onExternalCommand:348
   @use call    util.assign  @ register:302
-  @use call    util.instantiate  @ <load>:24,30,34,35,36,369 register:302
-  @use require bridge  @ <load>:369
+  @use call    util.instantiate  @ <load>:24,30,34,35,36,357 register:302
+  @use require bridge  @ <load>:357
   @use require chrome  @ <load>:30
   @use require help  @ <load>:35
   @use require imgui  @ <load>:15
@@ -163,9 +160,9 @@
 
 # Calls (intra-file)
   @call anyFxFloating  @ frame:157
-  @call coord:getFacade  @ env.facade:372
-  @call coord:setActive  @ register:304 returnToArrange:328 togglePage:345
-  @call frame  @ run:365
+  @call coord:getFacade  @ env.facade:360
+  @call coord:setActive  @ register:304 returnToArrange:328
+  @call frame  @ run:353
   @call pollExternalCommands  @ frame:153
   @call tick  @ frame:161
 
@@ -180,7 +177,7 @@
   @drop page:statusSegments  @ frame:277
   @drop page:toolbarSegments  @ frame:209
   @drop sample:tick  @ tick:78
-  @drop tracker:reloadFromReaper  @ reloadAfterExternalMutation:354
+  @drop tracker:reloadFromReaper  @ reloadAfterExternalMutation:342
   @drop wiring:syncExternal  @ tick:79
 
 # REAPER API surface
@@ -223,22 +220,22 @@
   @field r arrange  @ returnToArrange:327
   @field w chrome  @ 34,35,36,52
   @field r cm  @ 18
-  @field w cm  @ 25,31,52,371
+  @field w cm  @ 25,31,52,359
   @field r cmgr  @ 18
-  @field w cmgr  @ 35,52,371
+  @field w cmgr  @ 35,52,359
   @field r command  @ pollExternalCommands:130
-  @field w command  @ onExternalCommand:360
-  @field w coord  @ 371
+  @field w command  @ onExternalCommand:348
+  @field w coord  @ 359
   @field r ctx  @ 19
   @field w ctx  @ 31,34,35,36
   @field r ds  @ 18
-  @field w ds  @ 52,371
-  @field w env  @ 369
+  @field w ds  @ 52,359
+  @field w env  @ 357
   @field r eventMeta  @ 18
-  @field w eventMeta  @ 52,371
+  @field w eventMeta  @ 52,359
   @field r extKey  @ pollExternalCommands:128,129
-  @field w extKey  @ onExternalCommand:360
-  @field w facade  @ 53 env.facade:372
+  @field w extKey  @ onExternalCommand:348
+  @field w facade  @ 53 env.facade:360
   @field r fontSize  @ 20
   @field w get  @ facade.get:48
   @field r gui  @ 18
@@ -249,13 +246,13 @@
   @field w lib  @ 31,53
   @field w libraryForm  @ 26
   @field w modalHost  @ 53
-  @field w page  @ env.page:373
+  @field w page  @ env.page:361
   @field w pageSuppressed  @ dispatch:115
   @field r path  @ 14
   @field w path  @ 14
   @field w publish  @ facade.publish:47
   @field w publishDebug  @ facade.publishDebug:50
-  @field w reaper  @ 370
+  @field w reaper  @ 358
   @field w render  @ 109
   @field r sample  @ tick:78
   @field r segment  @ frame:208
@@ -263,10 +260,10 @@
   @field w swings  @ 25
   @field w synthetic  @ 25
   @field w tempers  @ 25,26
-  @field r tracker  @ reloadAfterExternalMutation:353,354
+  @field r tracker  @ reloadAfterExternalMutation:341,342
   @field r ui  @ 20
   @field r uiFont  @ 19
   @field w uiSize  @ 31
   @field r unrooted  @ 26
-  @field w util  @ 370
+  @field w util  @ 358
   @field r wiring  @ tick:79
