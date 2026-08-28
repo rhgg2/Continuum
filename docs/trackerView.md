@@ -6,48 +6,19 @@ selection / clipboard, and exposes the editing command surface. Produces
 
 ## viewContext
 
-A pure, throwaway snapshot built once per `vm:rebuild`. Binds
-`length`, `numRows`, `rowPerBeat`, `ppqPerRow` (the logical row
-width — fractional in odd `(rpb, denom)` combinations), `timeSigs`,
-`temper`. Every method is a function of the bound state plus its args —
-no callbacks, no mutation. Throw it away and rebuild a new one; there
-is no migration.
+1. `vm:rebuild` builds a **view context** — the snapshot of row and
+   temperament coordinates the grid is projected through, described in
+   `docs/viewContext.md`. vm holds the only reference, and forwards
+   its surface.
 
-Two responsibilities:
+1. vm computes the constructor inputs: `length` and `numRows` from the
+   take, `ppqPerRow` as `logPerRow(rpb, denom, res)` left unrounded,
+   `timeSigs` from tm, and the temper from cm.
 
-- **Row ↔ PPQ projection.** `ppqToRow(ppqI)` is `ppqI / ppqPerRow`
-  (saturating at 0 and `numRows`); `rowToPPQ` is the integer-rounded
-  inverse. `ppqPerRow()` exposes the bound logical row width so callers
-  (e.g. clipboard paste) can compute the logical ppq at the destination row. The
-  `chan` argument is retained on the call signature but unused at this
-  layer — column-level swing transforms happen above, when events are
-  written into / read out of the column tree.
-- **Temperament lenses.** `noteLabel(evt)` spells `(pitch, detune)` as the
-  parts of a cell label under the bound temperament; `noteDeviation(evt)`
-  reports in cents how far off its step the note sits, which the cell draws
-  as a readout beside the name. Both are nil if no temperament
-  is active. (Pure coordinate queries — see `docs/tuning.md` for the
-  underlying model.)
-
-Row placement and off-grid follow the swing-boundary model in
-`docs/timing.md`:
-
-```
-displayRow(e) = round(ppqToRow_c(e.ppq))                  -- under current swing
-offGrid(e)    = rowToPPQ_c(displayRow(e)) ≠ e.ppq
-```
-
-The unrounded-`ppqPerRow` invariant (round-trip exactness, off-grid as
-clean integer compare) is owned by timing.md; vm's stake is the
-display consequence — a swing slot change correctly surfaces
-previously-on-grid events as off-grid, because their realised ppq
-sits at the old grid's swung position and no longer matches
-`rowToPPQ_c(N)` under the new swing.
-
-The tv surface carries no `ppqL`: `evt.ppq` *is* the authoring stamp at
-this layer. mm keeps the `ppqL` sidecar — the canonical stamp that
-survives swing changes, which tm's stale-swing reseat rederives raw from
-when a channel is marked stale — but it never reaches the columns.
+1. Positions reaching vm are in the logical frame, where swing is
+   absent (`docs/timing.md § Frame ownership`). So `evt.ppq` is the
+   authoring stamp at this layer, and no `ppqL` sidecar reaches the
+   columns.
 
 ## Ghost sampling
 

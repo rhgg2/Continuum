@@ -363,8 +363,8 @@ fake-pb absorber".
   without pre-rounding. Under non-divisor `rpb` (e.g. 7) the rounded
   form would seed ε that compounds through swing inversion; with
   floats, `rowToPPQ` / `ppqToRow` are mutually exact (single round
-  only at the column-projection step) and on-grid tests collapse to a
-  clean integer compare against `evt.ppq`.
+  only at the column-projection step), and on-grid is a tolerance
+  against that rounding (`docs/viewContext.md § On the grid`).
 
 ## Conventions for `timing.lua`
 

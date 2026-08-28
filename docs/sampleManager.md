@@ -48,7 +48,7 @@ prefix state.
 ## Ownership of audio bytes
 
 `assign` copies every assigned file into `<projectMedia>/Continuum/`
-under `<stem>-<rand8>.<ext>`, where the hex tail is a content
+under `<stem>-<hash>.<ext>`, where the hex tail is a content
 fingerprint (`fs.hashFile`). The original is never referenced after
 assignment — Continuum owns the bytes, which matters for forthcoming
 destructive editing. Originals are not modified.
@@ -196,11 +196,7 @@ selected slot without disturbing persistent state.
 
 ## Dependency injection
 
-`newSampleManager(fileOps)` takes one collaborator:
-
-- `fileOps` — `{ copy(src,dst) → bool, move(src,dst) → bool, mkdir(dir) → () }`.
-
-cm is supplied per call rather than at construction, so the same sm
-can serve multiple cm contexts (e.g. multi-track rehydrate). Tests
-pass call-recording stubs; production wires the real
-`io.open`/`os.rename`/`reaper.RecursiveCreateDirectory`.
+`util.instantiate('sampleManager', { fileOps, cm, ds })` binds all
+three collaborators at construction. `fileOps` is the filesystem seam
+described in `docs/fs.md § fileOps`; production passes `fs.fileOps`,
+and `slot_store_spec` a call-recording stub, against a real ds.

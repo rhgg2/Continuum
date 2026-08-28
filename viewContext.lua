@@ -22,7 +22,7 @@ local ctx        = {}
 function ctx:activeTemper() return temper end
 
 -- Tolerance for "on the temper"; gap below this is %.14g serialisation dust.
--- see docs/viewContext.md § ON_TEMPER_EPS
+-- see docs/viewContext.md § On the temper
 local ON_TEMPER_EPS = 1e-6
 
 -- Both lenses take the step from the intent a note carries, so a note the solve

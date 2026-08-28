@@ -1,29 +1,44 @@
 # fs
 
-Pure filesystem helpers. The single layer that talks to
-`reaper.Enumerate*` and the IO API; UI/view code routes through here.
+Directory listing, path handling, and the reading, hashing and copying
+of files.
+
+## Stance
+
+1. fs is the only module that touches `reaper.Enumerate*` and
+   filesystem IO. It holds no state and knows nothing of Continuum's
+   model; UI and view code reach the disk through it.
+
+1. `listDirs` and `listAudioFiles` sort case-insensitively, so the
+   browser orders entries as Finder and Explorer do. `listDirs` hides
+   dotfile entries.
+
+1. fs performs no normalisation: `join` concatenates and `parent`
+   strips a component, neither resolving `..`. Callers hold canonical
+   paths.
 
 ## Content fingerprint
 
-`fs.hashFile` returns an 8-char hex digest computed from the file's
-size and its first/last 4 KB only. A 30 MB sample hashes in
-microseconds, where reading the whole file would block the render loop.
+1. `fs.hashFile` digests a file's size together with its first and
+   last 4 KB. The cost is therefore independent of file size — a 30 MB
+   sample hashes in microseconds, so the render loop can take one
+   during a frame.
 
-Two distinct audio files that collide in size *and* both endpoints is
-vanishingly unlikely under normal use, so the digest is good enough
-for "is this the same file?" dedup against the slot store. It is
-**not** a cryptographic hash — do not use it as one.
+1. sampleManager identifies a sample by its digest, so a file already
+   copied into the project is recognised and not copied again
+   (`docs/sampleManager.md`). Two audio files that collide in size and
+   in both endpoints collide here.
 
-The hash is FNV-1a over `<size>\0 <head> <tail>`, masked to 32 bits.
+1. The digest is persisted: it names the copy on disk, as
+   `Continuum/<stem>-<hash>.<ext>`, and cm holds that path. Changing
+   how it is computed orphans every sample already copied.
 
-## Sort order
+## fileOps
 
-`listDirs` / `listAudioFiles` sort case-insensitively so the browser
-matches user expectations from Finder/Explorer. Dotfile-prefixed
-entries (`.git`, `.DS_Store`, …) are hidden from `listDirs`.
+1. `fs.fileOps` bundles the write side — `copy`, `move`, `mkdir` —
+   with `exists` and `hash`, as one table a caller takes as a
+   dependency.
 
-## Path joining
-
-`fs.join` is concatenative — no normalisation, no `..` resolution. It
-inserts `'/'` between components unless the left side already ends in
-a separator. Callers pass canonical paths.
+1. samplePage passes it to sampleManager, which reaches the disk
+   through nothing else. `tests/specs/slot_store_spec.lua` passes a
+   call-recording stub in its place.
