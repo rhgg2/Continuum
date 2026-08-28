@@ -11,18 +11,20 @@
    tracker and region scopes moved across from `pageBindings`. — landed
    2026-08-27, two commits; the model now lives in
    `docs/commandManager.md` § Manifest.
-2. **Phase 2 — The rest of the surface** (§ The manifest 4, § Three
-   consumers) — arrange with its two loop-minted families, sampler and
-   wiring; `pageBindings.lua` retired; the cheat-sheet's labels read from
-   the entries instead of its own items table. Then the declaration
-   becomes ordered and carries its cheat-sheet group, so the sheet holds
-   no command list of its own, and the other three pages reach it.
-   ← in flight
-3. **Phase 3 — The tree** (§ Fluent and pathed, § The surface, § The tree,
-   § The top level, § What load asserts 2–3) — the group table with its
-   letters and descriptions, a path on every pathed entry, the surface as
-   the union of the reachable scopes, the letter-uniqueness check, and the
-   spec that pins the fluent/pathed split.
+2. **Phase 2 — The rest of the surface** (§ The manifest, § Three
+   consumers, § The surface) — arrange with its two loop-minted families,
+   sampler and wiring; `pageBindings.lua` retired; the cheat-sheet's
+   labels read from the entries instead of its own items table. Then the
+   declaration becomes ordered and carries its cheat-sheet group, so the
+   sheet holds no command list of its own, and the other three pages reach
+   it. — landed 2026-08-28, four commits; the model now lives in
+   `docs/commandManager.md` §§ Manifest and Surface, and `docs/help.md`
+   § A generated family.
+3. **Phase 3 — The tree** (§ Fluent and pathed, § The tree, § The top
+   level, § What load asserts 2–3) — the tree table with its letters and
+   descriptions, a path on every pathed entry across the surface, the
+   letter-uniqueness check, and the spec that pins the fluent/pathed
+   split. ← in flight
 4. **Phase 4 — The walk** (§ Walking a path, § What stays live) — the menu
    as a modal scope (cmgr's first production use of `modal`/`passthrough`),
    `/` to open, a letter to descend or invoke, Esc to unwind, arrows and
@@ -47,4 +49,18 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — the phase's last item is in flight.)
+- cmgr: the menu tree as `manifest.menu`, an ordered list of `item(name,
+  letter, desc, ...children)` holding the twelve top-level groups. Install
+  resolves each entry's `path` string by walking it, raising on a path
+  naming no group and on two groups sharing a letter within a level; the
+  model goes to `docs/commandManager.md` § Menu tree.
+- cmgr: a path on the global and tracker scopes' deliberate verbs, the
+  fluent ones left key-only, with the subgroups the split needs added to
+  the tree. A leaf's letter comes from its label, with an entry-level
+  `letter` where a level collides, and the collision check covers a
+  level's groups and leaves alike.
+- cmgr: the same pass over arrange, region, sampler and wiring, with their
+  subgroups, finishing the surface.
+- cmgr: the fluent roster — a spec naming every key-only command and
+  asserting the roster partitions the manifest with the pathed entries, so
+  a new command fails the spec until it is classified.

@@ -92,6 +92,12 @@ will eventually layer overrides on top.
    that order. The groups within a scope are unordered, since a consumer
    orders the groups it shows itself.
 
+1. A **consumer** is a surface reading the manifest for its own slice, and
+   it never reads another consumer's output: `bindAll` takes each entry's
+   name and keys, the cheat-sheet its label and group (`docs/help.md`
+   § What's where). An entry carries no rendering, so how a chord prints
+   and where a box draws stay with the consumer.
+
 1. `installManifest(manifest, ImGui)` parses each entry's tokens into
    keyspecs, writes them into its scope's keymap, stamps each entry with
    the group it was declared under, and hangs the groups off the scope as

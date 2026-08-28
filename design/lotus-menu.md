@@ -1,7 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 2
-> (the rest of the surface)
+> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 3
+> (the tree)
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
@@ -20,15 +20,14 @@ from the one declaration.**
    command with keys alone is reached by its chord, one with a path
    alone through the menu, one with both either way.
 
-1. An entry carries its cheat-sheet group and no rendering. Where that
-   group sits on screen, and how a chord prints, belong to the consumers.
+1. An entry carries its cheat-sheet group and no rendering — see
+   `docs/commandManager.md` § Manifest.
 
 ## Three consumers
 
-1. A **consumer** is a surface reading the manifest, and there are
-   three. `cmgr:bindAll` takes each command's name and keys; the F1
-   cheat-sheet (`docs/help.md`) takes labels and grouping; the menu takes
-   labels and paths. No consumer reads another's output.
+1. A consumer reads its own slice of the manifest — see
+   `docs/commandManager.md` § Manifest. The menu is the third, taking
+   labels and paths.
 
 1. The cheat-sheet groups entries by the group each entry declares, as
    `docs/help.md` § What's where describes; the menu groups them by path.
