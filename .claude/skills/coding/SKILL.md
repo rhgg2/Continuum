@@ -84,44 +84,43 @@ stub the function so the red comes from an assertion rather than a nil
 call — an unstubbed red aborts every test before any assertion runs,
 so it tells you nothing about what they check.
 
-## Tests with teeth
+## Writing good tests
 
 A good test fails if and only if the thing it names breaks. One which
 cannot fail is **tautological**, and a false green, and one which
 fails for unrelated reasons is **brittle**, and leads to test churn.
-Some principles:
 
-1. A second computation beats a literal. A constant in an assertion is
-  brittle. If the expected value can be produced by another route, use
-  that route as the oracle: `read(compile(g)) == g`, a gated rebuild
-  against a forced one, incremental adds against a bulk load,
-  `unserialise(serialise(x)) == x`.
+To avoid tautology:
 
-1. Compare under the coarsest relation the contract fixes. A `deepEq`
-   against a whole record asserts everything the record happens to
-   contain, so one added field breaks every test that ever looked at
-   one. Coarsening may drop fields, but a tolerance or a predicate
-   does the same work: assert `err.code == 'unknown_from'` rather than
-   the message rendered from it, since copy edits are not defects. The
-   relation states what the invariant is over, which the test would
-   otherwise leave implicit.
-
-1. Guard against the vacuous pass. An assertion over a batch may be
+1. Guard against vacuous tests. An assertion over a batch may be
    tautological if the batch is empty, and a comparison tautological
    when both sides are nil. Guard against this by asserting the
    non-triviality as a precondition.
 
-1. Teeth are directional. "Would this fail if I broke it" needs
-   qualifying with "which way?". A single test may not catch every
-   mode of failure; a well-designed spec group will.
+1. Perturbation-test. A single test may not catch every mode of
+   failure; a well-designed spec group will.
    `mcp__continuum_perturb__spec_perturb` gives you a precise answer.
 
-1. Seed through the production path. This is the best hedge against
-   brittleness; `tm:addEvent` follows the production representation
-   when it moves and applies the correct substrate.
+To avoid brittleness:
 
-1. A literal that must exist owns its regeneration. Sometimes the real
-   behaviour is the only oracle, and brittleness is the price to be
-   paid. Best practice in this case is to ensure that the test
-   includes the mechanism for regenerating its ground truth, so that
-   hand-patching is not necessary.
+1. Prefer second computations to literals. A constant in an assertion
+   is brittle. If the expected value can be produced by another route,
+   use that as an oracle.
+
+1. Compare under the coarsest relation the contract fixes. A `deepEq`
+   against a whole record is brittle if only one field is relevant.
+   Tolerances or predicates may do the same work, and also help to
+   clarify what the test contract actually is.
+
+1. Seed through the production path. For example, add notes via
+   `tm:addEvent`, which follows the production representation when it
+   moves and applies the correct substrate.
+
+1. Perturbation-test. Change constants or literals which should have
+   no bearing on the property under test, and check nothing goes red.
+   Again, apply `mcp__continuum_perturb__spec_perturb`.
+
+Sometimes, brittleness is unavoidable: the real behaviour is the only
+oracle. Best practice in this case is to ensure that the test includes
+the mechanism for regenerating its ground truth, so that hand-patching
+is not necessary.

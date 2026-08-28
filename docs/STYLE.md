@@ -18,7 +18,7 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
 1. A document is a statement of the current model.
 
 1. It says nothing about what the model is not, or what it does not
-   do.
+   do; the exception is the "Open" section of a design doc.
 
 1. It reads linearly, with each part following logically from its
    predecessor, and cross-references only other project docs.
@@ -50,7 +50,7 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
    starts with its central claim, and the support follows.
 
 1. Within a section, one idea per paragraph; an idea needing more than
-   a couple of sentences is two ideas. 
+   a couple of sentences should be two ideas. 
    
 1. Paragraphs within sections are numbered; use markdown autonumbering
    (1., 1., 1.) so that reordering is free. 
@@ -82,8 +82,7 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
 1. Avoid coined compounds: *content-reconciled*,
    *park-then-recognise*, *fill-recognition*.
 
-1. Avoid sentences closing by restating itself on *rather than*: *the
-   reference is the page rather than the music*.
+1. Avoid *A rather than B*, and *it's A, not B*.
 
 1. Prefer plain constructions to elevated ones. Avoid cleft
    constructions and Latinate absolutes. If it sounds like the King
