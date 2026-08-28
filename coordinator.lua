@@ -35,6 +35,7 @@ local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
 local menu      = util.instantiate('menu', { cmgr = cmgr })
 local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
+local keyQueue  = util.instantiate('keyQueue', { ctx = ctx })
 -- Live-REAPER eval bridge — assigned after coord (its env captures coord). See docs/bridge.md.
 local bridge
 
@@ -51,7 +52,7 @@ local facade  = {
   publishDebug = function(name, stack) debugHandles[name] = stack end,
 }
 local STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, chrome = chrome, gui = gui,
-              modalHost = modalHost, help = help, facade = facade, lib = lib }
+              modalHost = modalHost, help = help, keyQueue = keyQueue, facade = facade, lib = lib }
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 -- The status band pads wider than the toolbar: it sits on the window's bottom
@@ -164,7 +165,17 @@ local function anyFxFloating()
   return false
 end
 
+-- The four readers that take the whole keyboard, in precedence. Read before the frame
+-- draws anything, so each answers for the state the presses arrived in.
+local function keyboardOwner()
+  if help:isOpen()             then return 'help'       end
+  if modalHost:isOpen()        then return 'modal'      end
+  if chrome.pickerIsActive()   then return 'picker'     end
+  if chrome.statusEditActive() then return 'statusEdit' end
+end
+
 local function frame()
+  keyQueue:fill(keyboardOwner())
   cm:pollUndo()
   pollExternalCommands()
   -- While we lack focus, watch the floating-FX set: its open→closed edge means

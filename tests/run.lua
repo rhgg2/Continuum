@@ -21,6 +21,7 @@ local specs = {
   'cmgr_overrides_spec',
   'cmgr_manifest_spec',
   'cmgr_menu_spec',
+  'keyQueue_spec',
   'cmgr_fluent_spec',
   'menu_spec',
   'config_schema_spec',

@@ -34,16 +34,11 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-29 keyQueue: read the frame's key presses into a claimable queue (phase 1)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-1. **The module.** `keyQueue` holds a frame of entries and answers
-   `take`, `takeAny`, `held` and `mods`; the fill enumerates the shim's
-   key constants once at load and runs before any drawing. Spec: a
-   taken press is gone for the next reader, an omitted mask means
-   `Mod_None`, an owned queue declines every take but the owner's, and
-   `held` answers whoever owns it.
+

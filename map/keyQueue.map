@@ -1,0 +1,62 @@
+@module keyQueue  src=keyQueue.lua  loc=87  mode=chunk  self=keyQueue
+@deps ctx
+
+# Invariants & contracts
+  @invariant  one keyQueue per coordinator; each fill replaces the last frame's entries  @ 4
+  @contract  take/takeAny remove what they return, so a claimed press is gone for every later reader  @ 6
+  @contract  an owner named at the fill holds the frame; take/takeAny answer nil to others  @ 7
+  @contract  held/mods read ImGui live, and answer the same whoever owns the queue  @ 8
+
+# Shapes
+  @shape  entry = { key: imguiKey, mods: modMask, repeated: bool }  @ 5
+
+# Imports
+  @require ImGui = 'imgui'  @ 10
+  @require util = 'util'  @ 11
+
+# Private state
+  @state OWNERS = { help = true, modal = true, picker = true, statusEdit = ...  @ 16
+  @state KEYS = {}  @ 20
+  @state entries, owner = {}, nil  @ 38
+  @state keyQueue = {}  @ 53
+
+# Private functions
+  @fn checked(name)  @ 42-47
+      -- A name is one of the four owners or nobody; anything else is a typo, which would
+      -- otherwise read as a key that quietly does nothing.
+  @fn claimable(claimant)  @ 49-51
+
+# Public API (keyQueue:*)
+  @api keyQueue:fill(ownerNow)  @ 57-68
+  @api keyQueue:take(key, mods, claimant)  @ 70-77
+  @api keyQueue:takeAny(claimant)  @ 79-82
+  @api keyQueue:held(key)  @ 84
+  @api keyQueue:mods()  @ 85
+
+# Uses (outbound edges)
+  @use call    ImGui.GetKeyMods  @ fill:59 mods:85
+  @use call    ImGui.IsKeyDown  @ held:84
+  @use call    ImGui.IsKeyPressed  @ fill:62,65
+  @use call    util.add  @ <load>:32 fill:63
+  @use require imgui  @ <load>:10
+  @use require util  @ <load>:11
+
+# Calls (intra-file)
+  @call checked  @ claimable:50 fill:58
+  @call claimable  @ take:71 takeAny:80
+
+# Unresolved receivers
+  @drop name:sub  @ <load>:30
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Mod_None  @ take:72
+  @field r ctx  @ 13
+  @field w help  @ 16
+  @field r key  @ take:74
+  @field w key  @ fill:63
+  @field w modal  @ 16
+  @field r mods  @ take:74
+  @field w mods  @ fill:64
+  @field w picker  @ 16
+  @field w repeated  @ fill:65
+  @field w statusEdit  @ 16

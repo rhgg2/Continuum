@@ -1,5 +1,8 @@
 # keyQueue — design
 
+> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 1
+> (the queue)
+
 **Every key press Continuum acts on is read once, at the top of the
 frame, into a queue; a reader claims what it acts on, and a claimed
 press is gone.**
@@ -10,7 +13,7 @@ press is gone.**
    key constant, the modifier mask as the fill read it, and whether
    ImGui reports the press as an autorepeat.
 
-1. **keyQueue** is a single instance, built in `continuum.lua` and
+1. **keyQueue** is a single instance, built in `coordinator.lua` and
    threaded into the pages beside `chrome` and `modalHost`. It holds
    one frame's entries, and each frame's fill replaces the last.
 
@@ -64,6 +67,10 @@ press is gone.**
 1. Four readers own, in this precedence: the cheat sheet while it was
    open at frame start, an open modal, an open picker, and a status
    cell holding an open field.
+
+1. A claim names its claimant: `take` and `takeAny` take one as a last
+   argument, which the four owners pass and every other reader omits. A
+   name outside the four raises.
 
 1. Unowned is the ordinary case. A text field active at the end of the
    previous frame then claims the presses a field consumes — the

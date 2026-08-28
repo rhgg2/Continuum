@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — Ownership of the key queue is a name the fill records, and a claim names itself:
+  take and takeAny accept a claimant, which the four owning readers pass and every other reader
+  omits. A handle the fill hands the owner was rejected, since the readers hold the queue as a
+  module-scope dependency and would each need one delivered per frame. A claimant outside the four
+  raises, because a typo would otherwise read as a key that quietly does nothing. The coordinator
+  settles the precedence at the fill already, though nothing drains yet, so the composition each
+  page's focusState builds today has one home to move to.
+
 - **2026-08-29** — Eleven mechanisms across the input path encode "this keystroke is already spoken
   for", each rediscovered at the site that needed it, and five of them are one bug: a reader ran
   after a claimant that had no way to claim. One queue, filled from the named-key range at the top

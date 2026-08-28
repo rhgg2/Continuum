@@ -13,7 +13,7 @@ other.
 
 1. `STD` is the affordance set every page is constructed with: `cm`,
    `ds`, `eventMeta`, `cmgr`, `chrome`, `gui`, `modalHost`, `help`,
-   `facade` and `lib`. A page needing anything else names it in
+   `keyQueue`, `facade` and `lib`. A page needing anything else names it in
    `extra` at the registration site.
 
 1. A page is anything answering `toolbarSegments`, `renderBody`,
@@ -36,8 +36,16 @@ other.
 
 ## The frame
 
-1. Each frame runs in a fixed order: poll the undo mirror, poll the
-   external commands, poll the floating-FX set, `tick`, then draw.
+1. Each frame runs in a fixed order: fill the key queue, poll the undo
+   mirror, poll the external commands, poll the floating-FX set,
+   `tick`, then draw.
+
+1. The key queue fills before anything is drawn, so what a reader
+   claims is what arrived.
+
+1. The fill settles which reader owns the keyboard for the frame: the
+   cheat sheet, an open modal, an open picker, and a status cell
+   holding an open field, in that precedence.
 
 1. `tick` is the pre-draw beat for the pages that need one — the modal
    host, the sample page, wiring's external resync while wiring is

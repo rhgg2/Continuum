@@ -1,6 +1,6 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 4
+> opened: 2026-08-25 · status: parked — plan/lotus-menu.md, phase 4
 > (the walk)
 
 **Every command is declared once, in a per-scope manifest carrying its

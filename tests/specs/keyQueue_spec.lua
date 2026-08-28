@@ -1,0 +1,188 @@
+-- keyQueue holds one frame's key presses. The fill polls every key constant the ImGui shim
+-- carries, less the mouse and the modifier keys, and a claim removes what it returns -- so a
+-- press one reader acts on is gone for the next. These pin the enumeration and its cost (the
+-- second call separating a fresh press from an autorepeat is paid only for a key that answered),
+-- the exact modifier match with Mod_None standing in for an omitted mask, ownership declining
+-- every claimant but the owner, and held/mods reading live state under an owner.
+
+local t    = require('support')
+local util = require('util')
+
+local ctx = {}
+local img = t.imgui()
+
+-- The keys the fill drops, written onto the fake before keyQueue enumerates it so the
+-- exclusions have something to exclude. The enumeration test reads this same list back.
+local EXCLUDED = { 'MouseLeft', 'MouseRight', 'MouseWheelX', 'MouseWheelY',
+                   'LeftCtrl',  'LeftShift',  'LeftAlt',     'LeftSuper',
+                   'RightCtrl', 'RightShift', 'RightAlt',    'RightSuper' }
+for i, name in ipairs(EXCLUDED) do img['Key_' .. name] = 900 + i end
+
+-- Fake key state. pressed[key] is 'fresh' or 'repeat'; every IsKeyPressed call is logged, so a
+-- test can assert what the fill asked for as well as what it made of the answers.
+local pressed, down, curMods, polled = {}, {}, 0, {}
+
+function img.GetKeyMods()      return curMods         end
+function img.IsKeyDown(_, key) return down[key] == true end
+function img.IsKeyPressed(_, key, withRepeat)
+  util.add(polled, { key = key, withRepeat = withRepeat })
+  if withRepeat then return pressed[key] ~= nil end
+  return pressed[key] == 'fresh'
+end
+
+package.preload['imgui'] = function() return function() return img end end
+
+local function newQueue()
+  pressed, down, curMods, polled = {}, {}, 0, {}
+  return util.instantiate('keyQueue', { ctx = ctx })
+end
+
+local function nameOf(value)
+  for name, v in pairs(img) do if v == value then return name end end
+  return tostring(value)
+end
+
+-- The keys the fill asked about, and the keys it should have asked about.
+local function polledKeys()
+  local seen = {}
+  for _, call in ipairs(polled) do if call.withRepeat then seen[call.key] = true end end
+  return seen
+end
+
+local function shimKeys()
+  local excluded = {}
+  for _, name in ipairs(EXCLUDED) do excluded['Key_' .. name] = true end
+  local want = {}
+  for name, value in pairs(img) do
+    if type(name) == 'string' and name:sub(1, 4) == 'Key_' and not excluded[name] then
+      want[value] = name
+    end
+  end
+  return want
+end
+
+return {
+  {
+    name = 'the fill polls every key constant on the shim, less the mouse and modifier keys',
+    run = function()
+      local q = newQueue()
+      q:fill()
+      local seen, want = polledKeys(), shimKeys()
+      t.truthy(next(want), 'the fake shim carries key constants to enumerate')
+      local missing, extra = {}, {}
+      for value, name in pairs(want) do if not seen[value] then util.add(missing, name) end end
+      for value in pairs(seen)        do if not want[value] then util.add(extra, nameOf(value)) end end
+      t.deepEq(missing, {}, 'every key constant is polled')
+      t.deepEq(extra,   {}, 'and nothing else is')
+    end,
+  },
+
+  {
+    name = 'a press queues an entry carrying the frame modifiers, and a claim removes it',
+    run = function()
+      local q = newQueue()
+      pressed[img.Key_A] = 'fresh'
+      q:fill()
+      local entry = q:take(img.Key_A)
+      t.truthy(entry, 'the press is in the queue')
+      t.eq(entry.key,  img.Key_A,    'the entry names the key')
+      t.eq(entry.mods, img.Mod_None, 'and carries the mask the fill read')
+      t.falsy(entry.repeated,        'a first strike is no autorepeat')
+      t.eq(q:take(img.Key_A), nil, 'the claim removed it')
+      t.eq(q:takeAny(),       nil, 'so takeAny finds nothing either')
+    end,
+  },
+
+  {
+    name = "each fill replaces the last frame's entries",
+    run = function()
+      local q = newQueue()
+      pressed[img.Key_A] = 'fresh'
+      q:fill()
+      pressed[img.Key_A] = nil
+      q:fill()
+      t.eq(q:take(img.Key_A), nil, 'a press nobody claimed does not outlive its frame')
+    end,
+  },
+
+  {
+    name = 'take matches the modifier mask exactly, an omitted mask meaning Mod_None',
+    run = function()
+      local q = newQueue()
+      curMods = img.Mod_Ctrl
+      pressed[img.Key_A] = 'fresh'
+      q:fill()
+      t.eq(q:take(img.Key_A), nil, 'a bare take declines a chord')
+      t.eq(q:take(img.Key_A, img.Mod_Ctrl | img.Mod_Shift), nil, 'and a wider mask misses it')
+      t.truthy(q:take(img.Key_A, img.Mod_Ctrl), 'the mask the fill read claims it')
+    end,
+  },
+
+  {
+    name = 'autorepeat rides on the entry, and only a key that answered costs the second call',
+    run = function()
+      local q = newQueue()
+      pressed[img.Key_A] = 'repeat'
+      pressed[img.Key_B] = 'fresh'
+      q:fill()
+      local a, b = q:take(img.Key_A), q:take(img.Key_B)
+      t.truthy(a and b, 'both presses queued')
+      t.truthy(a.repeated, 'a key held past the delay reads as repeated')
+      t.falsy(b.repeated,  'a first strike does not')
+      local separated = 0
+      for _, call in ipairs(polled) do
+        if call.withRepeat == false then separated = separated + 1 end
+      end
+      t.eq(separated, 2, 'the fresh/repeat question is asked once per pressed key')
+    end,
+  },
+
+  {
+    name = 'takeAny claims the queue in key order',
+    run = function()
+      local q = newQueue()
+      pressed[img.Key_A], pressed[img.Key_B] = 'fresh', 'fresh'
+      q:fill()
+      local lo, hi = math.min(img.Key_A, img.Key_B), math.max(img.Key_A, img.Key_B)
+      local first = q:takeAny()
+      t.truthy(first, 'the queue holds both presses')
+      t.eq(first.key,       lo,  'the lower key constant comes first')
+      t.eq(q:takeAny().key, hi,  'then the higher')
+      t.eq(q:takeAny(),     nil, 'and the queue is empty')
+    end,
+  },
+
+  {
+    name = 'an owned queue declines every claimant but the owner',
+    run = function()
+      local q = newQueue()
+      pressed[img.Key_A] = 'fresh'
+      q:fill('modal')
+      t.eq(q:take(img.Key_A),               nil, 'an unnamed reader is declined')
+      t.eq(q:takeAny(),                     nil, 'and so is a bare takeAny')
+      t.eq(q:take(img.Key_A, nil, 'picker'), nil, 'as is another owner')
+      t.truthy(q:take(img.Key_A, nil, 'modal'), 'the owner claims it')
+      t.falsy(pcall(function() q:fill('jazz') end),
+              'an owner outside the four raises')
+      t.falsy(pcall(function() q:take(img.Key_A, nil, 'jazz') end),
+              'as does a claim made under one')
+    end,
+  },
+
+  {
+    name = 'held and mods read live state, whoever owns the queue',
+    run = function()
+      local q = newQueue()
+      down[img.Key_A], curMods = true, img.Mod_Shift
+      pressed[img.Key_A] = 'fresh'
+      q:fill('modal')
+      t.truthy(q:held(img.Key_A), 'a key that is down answers under an owner')
+      t.falsy(q:held(img.Key_B),  'one that is not, does not')
+      curMods = img.Mod_Alt
+      t.eq(q:mods(), img.Mod_Alt, 'mods reads the mask now, not the one the fill stamped')
+      local entry = q:take(img.Key_A, img.Mod_Shift, 'modal')
+      t.truthy(entry, 'the entry is still there to claim')
+      t.eq(entry.mods, img.Mod_Shift, 'and keeps the stamp the fill gave it')
+    end,
+  },
+}
