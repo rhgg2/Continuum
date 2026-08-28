@@ -1,7 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 3
-> (the tree)
+> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 4
+> (the walk)
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
@@ -15,11 +15,8 @@ from the one declaration.**
 1. Every command is declared once, in the manifest of the scope that
    registers it — see `docs/commandManager.md` § Manifest.
 
-1. An entry also carries an optional **path** — the menu segments that
-   reach it, the last of which is its title in the menu. Keys and path are
-   independent, and either may be absent. A command with keys alone is
-   reached by its chord, one with a path alone through the menu, one with
-   both either way.
+1. An entry also carries an optional **path** — see
+   `docs/commandManager.md` § Menu tree.
 
 1. An entry carries its cheat-sheet group and no rendering — see
    `docs/commandManager.md` § Manifest.
@@ -38,29 +35,7 @@ from the one declaration.**
 
 ## Fluent and pathed
 
-1. A command pressed repeatedly is **fluent**: cursor motion, nudge,
-   push, extending a selection, clearing a cell. A fluent entry carries
-   keys and no path.
-
-1. A command chosen deliberately is **pathed**: quantize, retune, take
-   properties, save. A pathed entry carries a path, and keys only where
-   the command is common enough to earn one.
-
-1. A **generated family** — `drop0`–`dropZ`, `advBy0`–`advBy9` — is
-   fluent by construction. Its members are a parameterised keyboard
-   alphabet, reached by the key that names the index.
-
-1. A mode that only reinterprets a fluent stream is fluent itself. Arrange's
-   replace and advance modes are armed within a placement gesture, and what
-   they modify is the drop family.
-
-1. Nothing derives the classification, which says how a command is used
-   rather than what it does. It is therefore declared.
-
-1. A **roster** spec names the key-only commands and asserts the roster
-   partitions the manifest with the pathed entries. A command declared with
-   neither a path nor a roster line fails it, so the split stays a judgement
-   somebody made — see `docs/commandManager.md` § Menu tree.
+Landed — see `docs/commandManager.md` § Menu tree.
 
 ## The surface
 
@@ -80,66 +55,11 @@ from the one declaration.**
 
 ## The tree
 
-1. The menu **tree** follows from the paths: grouping the paths of the
-   live surface yields it. A **level** is one step along a path, and the
-   entries sharing a prefix at that step are its members.
-
-1. The groups are declared in their own table. Each **group** carries its
-   title, its **letter**, and a one-line description, shown while the
-   group is highlighted.
-
-1. A letter identifies its member uniquely within its level. It defaults
-   to the first letter of the title, and is declared where two titles
-   collide — Take borrows `K` so Tuning may keep `T`.
-
-1. A level holds groups and leaves alike, and one namespace of letters
-   covers both. A leaf's title is its path's last segment, so a command
-   reads as one word in the menu where the cheat-sheet gives it a phrase.
+Landed — see `docs/commandManager.md` § Menu tree.
 
 ## The top level
 
-1. The top level is thirteen groups and one leaf:
-
-   ```
-   File  Edit  View  Play  Column  Row  Grid  Tuning  taKe  Mirror  fX  Sample  Jump  Help
-   ```
-
-1. Each group holds one remit:
-
-   | group | remit |
-   |---|---|
-   | File | REAPER project actions, the profiler, and leaving Continuum |
-   | Edit | the block and the clipboard |
-   | View | panels, the arrange map, rows per beat |
-   | Play | playing, following, and the loop |
-   | Column | adding and removing columns |
-   | Row | inserting and deleting rows |
-   | Grid | quantize, scale and swing |
-   | Tuning | tuning and retune |
-   | taKe | take lifecycle and variants |
-   | Mirror | mirror groups and freezing |
-   | fX | note FX, the wiring graph and the param palette |
-   | Sample | the sampler's slots and its file browser |
-   | Jump | travel to a page |
-
-1. Help is a leaf rather than a group, so `/H` opens the cheat-sheet.
-
-1. Sample's members are the sampler page's own, so the group opens there and
-   nowhere else. A group appears where its members are reachable, as § The
-   surface has it, so the top level varies by page.
-
-1. Grid and Tuning mirror the model's own two axes — `docs/timing.md` and
-   `docs/tuning.md` — for the verbs that edit the take. Rows per beat is
-   View's, since it changes how the take is shown. Where the menu's cut
-   fights the model's, the verb is misnamed or misplaced.
-
-1. File's bodies are REAPER actions run through `Main_OnCommand`, and
-   REAPER owns their undo. Quit closes Continuum, not REAPER. Only
-   File's paths leave Continuum; every other path reaches a Continuum
-   command.
-
-1. A group descends where it is crowded. View's rows-per-beat verbs sit
-   one level down, so doubling the grid is `/VR=`.
+Landed — see `docs/commandManager.md` § The top level.
 
 ## Walking a path
 
@@ -203,12 +123,8 @@ from the one declaration.**
 1. Every registered command resolves to exactly one entry — see
    `docs/commandManager.md` § Manifest.
 
-1. Letters are unique within a level, over its groups and leaves alike. A
-   collision raises, naming both members. The check pairs global's leaves
-   with one scope's at a time, since two page scopes never stack together.
-
-1. Both checks run at load, against the declaration rather than a walk,
-   so a malformed menu never opens.
+1. Letters are unique within a level, and both checks run at load — see
+   `docs/commandManager.md` § Menu tree.
 
 ## Open
 

@@ -271,7 +271,7 @@ manifest.arrange = {
     command('arrangeNextVariant',     'Next variant',             'Shift+Alt+Right',  'Take/Variant/Next'),
   },
   -- Replace and advance are fluent: each reinterprets the drop that follows it, and
-  -- the drops are fluent by construction. See design/lotus-menu.md § Fluent and pathed.
+  -- the drops are fluent by construction. See docs/commandManager.md § Menu tree.
   Modes = {
     -- Shadows the global universal-argument prefix, which no arrange command reads.
     command('arrangeReplaceMode',     'Replace mode',             'Super+U'),

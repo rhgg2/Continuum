@@ -158,8 +158,14 @@ will eventually layer overrides on top.
    be absent.
 
 1. A command with keys and no path is **fluent** — pressed repeatedly, and
-   reached by its chord rather than through the menu. Nothing derives the
-   classification, which says how a command is used rather than what it does.
+   reached by its chord rather than through the menu. A command chosen
+   deliberately is **pathed**: it carries a path, and keys only where it is
+   common enough to earn one. Nothing derives the classification, which says
+   how a command is used rather than what it does.
+
+1. A mode that only reinterprets a fluent stream is fluent itself. Arrange's
+   replace and advance modes are armed within a placement gesture, and what
+   they modify is the drop family.
 
 1. `tests/specs/cmgr_fluent_spec.lua` names the fluent commands, and asserts
    that roster partitions the manifest with the pathed entries. A command
@@ -180,6 +186,28 @@ will eventually layer overrides on top.
    time, since two page scopes are never on the stack together and a letter
    they share is two menus rather than a collision. Both checks read the
    declaration, so a malformed menu raises at load rather than on opening.
+
+## The top level
+
+1. The top level is thirteen groups and one leaf, each group declared with
+   the one-line description shown while it is highlighted. Help is a leaf, so
+   its letter opens the cheat-sheet rather than a level.
+
+1. Grid and Tuning mirror the model's own two axes — `docs/timing.md` and
+   `docs/tuning.md` — for the verbs that edit the take. Rows per beat is
+   View's, since it changes how the take is shown. Where the menu's cut fights
+   the model's, the verb is misnamed or misplaced.
+
+1. A group descends where it is crowded, so View's rows-per-beat verbs sit one
+   level down at `View/Rows`.
+
+1. A group's members are the entries whose paths name it, so a group holds
+   nothing where its members are out of reach (§ Surface). Sample's members are
+   the sampler page's own.
+
+1. File's bodies are REAPER actions run through `Main_OnCommand`, and REAPER
+   owns their undo. Quit closes Continuum, not REAPER. Only File's paths leave
+   Continuum; every other path reaches a Continuum command.
 
 ## Scope stack
 
