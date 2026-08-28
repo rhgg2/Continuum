@@ -33,6 +33,26 @@ local function fixture(page)
   return mgr, menu, log
 end
 
+-- One tree node in the shape manifest.lua's `item` builds.
+local function node(name, children)
+  return { name = name, desc = name .. ' commands', children = children or {} }
+end
+
+-- A synthetic surface for the rules a level obeys whatever is declared: one global verb two
+-- levels down, one page verb at the top. The real manifest carries no witness for these, so
+-- re-cutting a path there moves nothing here.
+local function synthetic()
+  local mgr = util.instantiate('commandManager', {})
+  mgr:register('editSwing', function() end)
+  mgr:scope('page'):register('addColumn', function() end)
+  mgr:installManifest({
+    global = { Swing  = { { name = 'editSwing', label = 'Edit swing', path = 'Grid/Swing/Edit' } } },
+    page   = { Column = { { name = 'addColumn', label = 'Add column', path = 'Column/Add'     } } },
+  }, img)
+  mgr:installTree{ node('Grid', { node('Swing') }), node('Column') }
+  return mgr, util.instantiate('menu', { cmgr = mgr })
+end
+
 local function titles(members)
   local out = {}
   for _, m in ipairs(members) do util.add(out, m.title or m.name) end
@@ -138,11 +158,32 @@ return {
   },
 
   {
-    -- Reachability decides what a level holds: a group whose members are all off the
-    -- stack is no member of it, and one reached only through a child survives. On the
-    -- sampler Grid holds no verb of its own, and keeps Swing on the strength of the
-    -- global command that opens the swing editor.
-    name = 'a level omits what the stack cannot reach, a group included',
+    -- Occupancy, over a surface of the spec's own: a group is a member of its level where
+    -- it or any descendant holds a reachable entry. Grid holds no verb of its own here and
+    -- stands on the global two levels down, while Column waits for the page that declares
+    -- it.
+    name = 'a group is a member where it or a descendant holds a reachable entry',
+    run = function()
+      local mgr, menu = synthetic()
+      mgr:invoke('openMenu')
+      t.deepEq(titles(menu:level()), { 'Grid' }, 'with the page off the stack the global verb\'s group stands alone')
+      menu:press('G')
+      t.deepEq(titles(menu:level()), { 'Swing' }, 'Grid keeps the child that holds the verb')
+      menu:press('S')
+      t.deepEq(titles(menu:level()), { 'Edit' }, 'whose own level holds the leaf')
+
+      menu:close()
+      mgr:push('page')
+      mgr:invoke('openMenu')
+      t.deepEq(titles(menu:level()), { 'Grid', 'Column' },
+               'and the page\'s group joins the level while the page is on the stack')
+    end,
+  },
+
+  {
+    -- Reachability over the real declaration: what one page offers is what the scopes on
+    -- the stack declare, so each page reaches its own groups and none of the others'.
+    name = 'a level omits what the stack cannot reach',
     run = function()
       local mgr, menu = fixture('sample')
       mgr:invoke('openMenu')
@@ -150,12 +191,6 @@ return {
       t.truthy(named(top, 'Sample'), 'the sampler reaches its own group')
       t.eq(named(top, 'Column'), nil, 'and not the column verbs, which the tracker declares')
       t.eq(named(top, 'Mirror'), nil, 'nor the mirror verbs')
-
-      local grid = named(top, 'Grid')
-      t.truthy(grid, 'Grid survives on a descendant the sampler can reach')
-      menu:press(grid.letter)
-      t.deepEq(titles(menu:level()), { 'Swing' },
-               'holding the child global keeps, and not Scale, whose verbs are the tracker\'s')
 
       local other, tracker = fixture('tracker')
       other:invoke('openMenu')

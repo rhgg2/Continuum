@@ -1,43 +1,44 @@
-@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=147  cases=3
+@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=148  cases=3
 
 # Intent
-  A command is fluent or pathed, and the split is a judgement about how the command is
-  used rather than what it does, so nothing derives it. In the manifest a fluent command
-  shows only as one with no path, which reads the same as an oversight. The roster below
-  is the second witness: it names every command the menu does not reach, and the cases
-  assert that it partitions the manifest with the pathed entries. A command added without
-  a path and without a roster line therefore fails, naming itself.
+  A command is walked to or it is not, and nothing derives which: in the manifest an
+  unwalked command shows only as one with no path, which reads the same as an oversight.
+  The roster below is the second witness. It names every command the menu does not walk
+  to, and the cases assert that it partitions the manifest with the pathed entries, so a
+  command added without a path and without a roster line fails, naming itself.
   
-  A generated family is fluent by construction — its members are a parameterised keyboard
-  alphabet — so membership is the classification and the eighty-two are not named here.
-  See design/lotus-menu.md § Fluent and pathed.
+  Fluency is the usual reason for a line: the verb is a reflex, pressed repeatedly and
+  reached by its chord. The others are a command reached by a click or a dive, and one the
+  menu walks to through another verb. A generated family is fluent by construction, its
+  members being a parameterised keyboard alphabet, so membership is the classification and
+  the eighty-two are not named here. See docs/commandManager.md § Menu tree.
 
 # Helpers
-  @fn rostered()  @ 67-73
+  @fn rostered()  @ 68-74
       -- name -> the scope the roster files it under.
-  @fn declared()  @ 77-87
+  @fn declared()  @ 78-88
       -- Every declared command, paired with the scope declaring it. The tree declares menu
       -- groups rather than commands, so the walk passes it over as installManifest does.
 
 # Cases
-  @case 'every declared command is pathed, generated, or named in the fluent roster'  [pure]  @ 93-107
-  @case 'every rostered name is declared, and carries no path'  [pure]  @ 113-128
-  @case 'a generated family member carries no path'  [pure]  @ 134-145
+  @case 'every declared command is pathed, generated, or named in the unwalked roster'  [pure]  @ 94-108
+  @case 'every rostered name is declared, and carries no path'  [pure]  @ 114-129
+  @case 'a generated family member carries no path'  [pure]  @ 135-146
 
 # Fields (r read / w write incl. constructor keys)
-  @field w arrange  @ 42
-  @field r entry  @ 98,116,138
-  @field w entry  @ 82
-  @field r family  @ 99,139
-  @field w global  @ 18
-  @field w menu  @ 61
-  @field r name  @ 99,100,102,103,104,116,141
-  @field w name  @ 93,113,134
-  @field r path  @ 99,122,124,141
-  @field w region  @ 39
-  @field w run  @ 94,114,135
-  @field w sample  @ 53
-  @field r scope  @ 103
-  @field w scope  @ 82
-  @field w tracker  @ 23
-  @field w wiring  @ 56
+  @field w arrange  @ 43
+  @field r entry  @ 99,117,139
+  @field w entry  @ 83
+  @field r family  @ 100,140
+  @field w global  @ 19
+  @field w menu  @ 62
+  @field r name  @ 100,101,103,104,105,117,142
+  @field w name  @ 94,114,135
+  @field r path  @ 100,123,125,142
+  @field w region  @ 40
+  @field w run  @ 95,115,136
+  @field w sample  @ 54
+  @field r scope  @ 104
+  @field w scope  @ 83
+  @field w tracker  @ 24
+  @field w wiring  @ 57

@@ -1,20 +1,21 @@
--- A command is fluent or pathed, and the split is a judgement about how the command is
--- used rather than what it does, so nothing derives it. In the manifest a fluent command
--- shows only as one with no path, which reads the same as an oversight. The roster below
--- is the second witness: it names every command the menu does not reach, and the cases
--- assert that it partitions the manifest with the pathed entries. A command added without
--- a path and without a roster line therefore fails, naming itself.
+-- A command is walked to or it is not, and nothing derives which: in the manifest an
+-- unwalked command shows only as one with no path, which reads the same as an oversight.
+-- The roster below is the second witness. It names every command the menu does not walk
+-- to, and the cases assert that it partitions the manifest with the pathed entries, so a
+-- command added without a path and without a roster line fails, naming itself.
 --
--- A generated family is fluent by construction — its members are a parameterised keyboard
--- alphabet — so membership is the classification and the eighty-two are not named here.
--- See design/lotus-menu.md § Fluent and pathed.
+-- Fluency is the usual reason for a line: the verb is a reflex, pressed repeatedly and
+-- reached by its chord. The others are a command reached by a click or a dive, and one the
+-- menu walks to through another verb. A generated family is fluent by construction, its
+-- members being a parameterised keyboard alphabet, so membership is the classification and
+-- the eighty-two are not named here. See docs/commandManager.md § Menu tree.
 
 local t        = require('support')
 local util     = require('util')
 local manifest = require('manifest')
 
 -- Scope by scope, in the order manifest.lua declares them.
-local fluent = {
+local unwalked = {
   global = {
     'playPause', 'stop', 'beginPrefix', 'openMenu',
     -- Reached programmatically: a toolbar click, a dive, the editor's exit.
@@ -66,7 +67,7 @@ local fluent = {
 -- name -> the scope the roster files it under.
 local function rostered()
   local out = {}
-  for scope, names in pairs(fluent) do
+  for scope, names in pairs(unwalked) do
     for _, name in ipairs(names) do out[name] = scope end
   end
   return out
@@ -90,15 +91,15 @@ return {
   {
     -- Forward: the manifest is covered. A new command lands in none of the three
     -- buckets until someone decides which it belongs in.
-    name = 'every declared command is pathed, generated, or named in the fluent roster',
+    name = 'every declared command is pathed, generated, or named in the unwalked roster',
     run = function()
       local roster, all = rostered(), declared()
       t.truthy(#all > 200, 'the manifest declares the whole surface')
       for _, item in ipairs(all) do
         local entry = item.entry
         t.truthy(entry.path or entry.family or roster[entry.name],
-                 entry.name .. ' carries no path and the fluent roster does not name it' ..
-                 ' — classify it, see design/lotus-menu.md § Fluent and pathed')
+                 entry.name .. ' carries no path and the unwalked roster does not name it' ..
+                 ' — classify it, see docs/commandManager.md § Menu tree')
         if roster[entry.name] then
           t.eq(roster[entry.name], item.scope,
                entry.name .. ' is rostered under the scope that declares it')
@@ -114,17 +115,17 @@ return {
     run = function()
       local byName, count = {}, 0
       for _, item in ipairs(declared()) do byName[item.entry.name] = item.entry end
-      for _, names in pairs(fluent) do
+      for _, names in pairs(unwalked) do
         for _, name in ipairs(names) do
           count = count + 1
           local entry = byName[name]
-          t.truthy(entry, name .. ' is rostered as fluent, but no manifest declares it')
+          t.truthy(entry, name .. ' is rostered as unwalked, but no manifest declares it')
           t.falsy(entry and entry.path,
-                  name .. ' is rostered as fluent, yet declares the menu path ' ..
+                  name .. ' is rostered as unwalked, yet declares the menu path ' ..
                   tostring(entry and entry.path))
         end
       end
-      t.truthy(count > 50, 'the roster names the fluent surface')
+      t.truthy(count > 50, 'the roster names the unwalked surface')
     end,
   },
 

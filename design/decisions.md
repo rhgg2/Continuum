@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The roster in cmgr_fluent_spec names every command the menu does not walk to, and
+  fluency is one reason among several: a click-only route is another, and so is a verb the menu
+  reaches by a better path — travel to the editor page asks for a choice of tab, so the menu offers
+  the tabs and F10 keeps the bare switch. A claim about a mechanism takes a witness the spec builds:
+  the occupancy rule for a level now runs on a synthetic two-node tree, so re-cutting a path in the
+  real manifest moves nothing, while the cases about what a page offers keep the real declaration.
+
 - **2026-08-29** — The slash typed into a numeric prefix leads two lives, so it appends to the
   buffer and opens the menu at once, and the key after it says which was meant: a digit continues
   the rational and dismisses the walk, a letter walks. finishPrefix drops a trailing slash for every

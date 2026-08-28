@@ -167,10 +167,13 @@ will eventually layer overrides on top.
    replace and advance modes are armed within a placement gesture, and what
    they modify is the drop family.
 
-1. `tests/specs/cmgr_fluent_spec.lua` names the fluent commands, and asserts
-   that roster partitions the manifest with the pathed entries. A command
-   declared with neither a path nor a roster line fails it; a family minted in
-   a loop is exempt, its members being fluent by construction.
+1. `tests/specs/cmgr_fluent_spec.lua` names every command the menu does not
+   walk to, and asserts that roster partitions the manifest with the pathed
+   entries. Fluency is the usual reason for a line; a command reached by a
+   click or a dive, and one the menu walks to through another verb, are named
+   there too. A command declared with neither a path nor a roster line fails
+   it; a family minted in a loop is exempt, its members being fluent by
+   construction.
 
 1. A leaf's letter derives from the first character of its title, and an entry
    declares `letter` where that collides — `Edit/Cut` takes X beside
