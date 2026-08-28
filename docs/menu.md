@@ -10,9 +10,10 @@ is a menu letter rather than a page verb.**
    declaring `modal = true` (`docs/commandManager.md` § Scope stack).
    Opening pushes it over the active page's scope; closing pops it.
 
-1. The menu holds the path walked so far, empty at the top level, and
-   clears it at each open and close. The path is the menu's own state,
-   so one scope covers a walk of any depth.
+1. The menu holds the path walked so far as the nodes descended into,
+   empty at the top level, and clears it at each open and close. The
+   path is the menu's own state, so one scope covers a walk of any
+   depth.
 
 1. `openMenu` is declared in global and registered ungated, since `/`
    opens the menu from any page. `closeMenu` is declared in the menu's
@@ -40,3 +41,31 @@ is a menu letter rather than a page verb.**
 1. Everything else is blocked while the menu is open, by key and by
    name alike: the grid verbs, undo, and the F1 cheat-sheet, which
    would cover the menu it was opened over.
+
+## The level
+
+1. `menu:level()` returns the members of the node the path names: the
+   node's child groups, then the entries stamped with that node
+   (`docs/commandManager.md` § Menu tree). The empty path gives the top
+   level, whose leaves are the one-segment paths.
+
+1. A member carries the letter that reaches it, the title it reads
+   under, and the line shown while it is highlighted — a group's
+   description, a leaf's cheat-sheet label. A group also carries its
+   node and a leaf its entry, so a letter descends or invokes from what
+   the member holds.
+
+1. Groups come in the order the tree declares them, and leaves by
+   title. The surface unions the scopes on the stack, whose groups the
+   manifest orders one by one, so a level of leaves drawn from two
+   scopes takes its order here.
+
+1. A group is a member where it or a descendant holds a reachable
+   entry. On the sampler, Grid holds Swing alone, on the strength of
+   the global verb that opens the swing editor, and Column is no member
+   of the top level at all.
+
+1. The level reads the surface the menu snapshotted as it opened, so
+   what a walk reaches is what the page could reach when `/` was
+   pressed. A closed menu holds an empty surface, and so an empty
+   level.

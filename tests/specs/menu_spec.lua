@@ -15,11 +15,13 @@ local img = t.imgui()
 -- A cmgr carrying the real manifest, stub bodies for the verbs the cases invoke, and the
 -- menu built over it, with the tracker page on the stack. Each body logs its name, so a
 -- gated-out invoke reads as silence rather than as a return value.
-local function fixture()
+local function fixture(page)
   local log = {}
   local function logger(name) return function() util.add(log, name) end end
-  local mgr = util.instantiate('commandManager', {})
-  mgr:installManifest(require('manifest'), img)
+  local mgr      = util.instantiate('commandManager', {})
+  local manifest = require('manifest')
+  mgr:installManifest(manifest, img)
+  mgr:installTree(manifest.tree)
   for _, name in ipairs{ 'playPause', 'switchToArrange', 'switchPage' } do
     mgr:register(name, logger(name))
   end
@@ -27,15 +29,25 @@ local function fixture()
     mgr:scope('tracker'):register(name, logger(name))
   end
   local menu = util.instantiate('menu', { cmgr = mgr })
-  mgr:push('tracker')
+  mgr:push(page)
   return mgr, menu, log
+end
+
+local function titles(members)
+  local out = {}
+  for _, m in ipairs(members) do util.add(out, m.title or m.name) end
+  return out
+end
+
+local function named(members, title)
+  for _, m in ipairs(members) do if m.title == title then return m end end
 end
 
 return {
   {
     name = 'opening pushes the menu scope over the page, and closing pops it',
     run = function()
-      local mgr, menu = fixture()
+      local mgr, menu = fixture('tracker')
       t.eq(menu:isOpen(), false, 'the menu starts closed')
 
       mgr:invoke('openMenu')
@@ -54,7 +66,7 @@ return {
     -- verbs it walks to are unreachable by key and by name alike.
     name = 'a page verb is blocked while the menu is open, and live again after',
     run = function()
-      local mgr, _, log = fixture()
+      local mgr, _, log = fixture('tracker')
       mgr:invoke('quantize')
       t.deepEq(log, { 'quantize' }, 'the page verb fires with the page on top')
 
@@ -74,7 +86,7 @@ return {
     -- tracker's own transport verbs, which only a page scope declares.
     name = 'the transport and the page switchers stay live through the walk',
     run = function()
-      local mgr, _, log = fixture()
+      local mgr, _, log = fixture('tracker')
       mgr:invoke('openMenu')
 
       for _, name in ipairs{ 'playPause', 'playFromCursor', 'switchToArrange', 'switchPage' } do
@@ -89,13 +101,116 @@ return {
   {
     name = 'each verb is guarded by the scope it is registered on',
     run = function()
-      local mgr = fixture()
+      local mgr = fixture('tracker')
       mgr:invoke('closeMenu')
       t.eq(#mgr.stack, 2, 'close does nothing while the menu is closed')
 
       mgr:invoke('openMenu')
       mgr:invoke('openMenu')
       t.eq(#mgr.stack, 3, 'and open is blocked by the scope it pushed')
+    end,
+  },
+
+  {
+    -- A level is what the menu offers at the node the path names. Its members are the
+    -- node's child groups and the entries stamped with it, and each carries the letter
+    -- that reaches it, the title it reads under, and a line of description.
+    name = 'the top level holds the reachable groups and the leaves of one-segment paths',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      local top = menu:level()
+      t.truthy(#top > 6, 'the tracker offers a row of groups')
+
+      local grid = named(top, 'Grid')
+      t.truthy(grid, 'the grid verbs are the tracker\'s to reach')
+      t.eq(grid.node, mgr.tree[7], 'a group member carries the tree\'s own node')
+      t.eq(grid.node.name, 'Grid', 'which is the one the title names')
+      t.eq(grid.letter, grid.node.letter, 'the letter that descends into it')
+      t.eq(grid.desc,   grid.node.desc,   'and the line shown while it is highlighted')
+
+      local help = named(top, 'Help')
+      t.truthy(help, 'the one-segment path is a leaf of the top level')
+      t.eq(help.entry, mgr:entry('toggleHelp'), 'a leaf member carries the entry its letter invokes')
+      t.eq(help.letter, 'H', 'reached by the letter its title gives')
+      t.eq(help.desc, mgr:entry('toggleHelp').label, 'and reading under its cheat-sheet label')
+    end,
+  },
+
+  {
+    -- Reachability decides what a level holds: a group whose members are all off the
+    -- stack is no member of it, and one reached only through a child survives. On the
+    -- sampler Grid holds no verb of its own, and keeps Swing on the strength of the
+    -- global command that opens the swing editor.
+    name = 'a level omits what the stack cannot reach, a group included',
+    run = function()
+      local mgr, menu = fixture('sample')
+      mgr:invoke('openMenu')
+      local top = menu:level()
+      t.truthy(named(top, 'Sample'), 'the sampler reaches its own group')
+      t.eq(named(top, 'Column'), nil, 'and not the column verbs, which the tracker declares')
+      t.eq(named(top, 'Mirror'), nil, 'nor the mirror verbs')
+
+      local grid = named(top, 'Grid')
+      t.truthy(grid, 'Grid survives on a descendant the sampler can reach')
+      util.add(menu:path(), grid.node)   -- the letter that descends lands with the walk
+      t.deepEq(titles(menu:level()), { 'Swing' },
+               'holding the child global keeps, and not Scale, whose verbs are the tracker\'s')
+
+      local other, tracker = fixture('tracker')
+      other:invoke('openMenu')
+      t.truthy(named(tracker:level(), 'Column'), 'the tracker reaches what the sampler does not')
+      t.eq(named(tracker:level(), 'Sample'), nil, 'and not the sampler\'s own group')
+    end,
+  },
+
+  {
+    -- The order a level reads in: its groups as the tree declares them, then its leaves
+    -- by title, since the surface unions two scopes and the manifest fixes no order
+    -- across them.
+    name = 'a level lists its groups in tree order, then its leaves by title',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      local grid = named(menu:level(), 'Grid')
+      util.add(menu:path(), grid.node)
+
+      local members, groups, leaves, lastGroup, firstLeaf = menu:level(), {}, {}, 0, nil
+      for i, m in ipairs(members) do
+        if m.node then util.add(groups, m.title); lastGroup = i
+        else           util.add(leaves, m.title); firstLeaf = firstLeaf or i end
+      end
+      t.truthy(#groups > 1 and #leaves > 1, 'the grid level holds groups and leaves alike')
+      t.truthy(lastGroup < firstLeaf, 'every group comes before every leaf')
+
+      local declared = {}
+      for _, child in ipairs(grid.node.children) do util.add(declared, child.name) end
+      t.deepEq(groups, declared, 'the groups read in the order the tree declares them')
+
+      local sorted = util.clone(leaves)
+      table.sort(sorted)
+      t.deepEq(leaves, sorted, 'and the leaves by title')
+    end,
+  },
+
+  {
+    -- Why the surface is snapshotted: the menu's own modality hides all but the
+    -- passthrough set, so a level read live would hold nothing to walk to.
+    name = 'the level is read from the surface the menu snapshotted as it opened',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      local grid, liveUnderGrid = named(menu:level(), 'Grid'), false
+      t.truthy(grid, 'the level offers the grid verbs')
+      local live = mgr:surface()
+      t.truthy(#live > 0, 'the transport and the page switchers stay on the live surface')
+      for _, entry in ipairs(live) do
+        if entry.node == grid.node then liveUnderGrid = true end
+      end
+      t.eq(liveUnderGrid, false, 'while the modality hides the grid verbs from it')
+
+      mgr:invoke('closeMenu')
+      t.deepEq(menu:level(), {}, 'and a closed menu holds no level')
     end,
   },
 }

@@ -1,53 +1,81 @@
-@module menu  src=menu.lua  loc=53  mode=chunk  self=menu
+@module menu  src=menu.lua  loc=97  mode=chunk  self=menu
 @deps cmgr
 
-# Invariants & contracts
-  @invariant  the menu's scope is modal, so a walk key never reaches a page verb  @ 4
+# Shapes
+  @shape  member = { letter, title, desc, node? , entry? }  -- a group carries its node, a leaf its entry  @ 17
+
+# Imports
+  @require util = 'util'  @ 6
+      @invariant  the menu's scope is modal, so a walk key never reaches a page verb  @ 4
 
 # Private state
-  @state LIVE_GROUPS = { Transport = true, Pages = true }  @ 10
-  @state scope = cmgr:scope('menu')  @ 12
-  @state open = false  @ 15
-  @state path = {}  @ 16
-  @state menu = {}  @ 18
+  @state LIVE_GROUPS = { Transport = true, Pages = true }  @ 12
+  @state scope = cmgr:scope('menu')  @ 14
+  @state open = false  @ 19
+  @state path = {}  @ 20   -- the nodes descended into
+  @state surface = {}  @ 21   -- the entries the menu snapshotted as it opened
+  @state menu = {}  @ 23
 
 # Private functions
-  @fn livePassthrough()  @ 22-28
-      -- Read off the stack before the menu's own scope goes on it. switchPage is the toolbar
-      -- switcher's own verb, which a click reaches and no live group declares.
+  @fn livePassthrough()  @ 27-33
+      -- switchPage is the toolbar switcher's own verb, which a click reaches and no live
+      -- group declares.
+  @fn occupied(node)  @ 37-45
+      -- A group is worth a letter where it or a descendant holds a reachable entry, so a
+      -- level omits the groups whose members this page cannot reach.
 
 # Handlers registered
-  @handler cmgr:openMenu()  @ 50
-  @handler scope:closeMenu()  @ 51
+  @handler cmgr:openMenu()  @ 94
+  @handler scope:closeMenu()  @ 95
 
 # Public API (menu:*)
-  @api menu:isOpen()  @ 32
-  @api menu:path()  @ 35
-      @contract  the segments walked so far, empty at the top level; the menu owns it and unwinds it  @ 34
-  @api menu:open()  @ 37-42
-  @api menu:close()  @ 44-48
+  @api menu:isOpen()  @ 49
+  @api menu:path()  @ 52
+      @contract  the nodes descended into, empty at the top level; the menu owns it and unwinds it  @ 51
+  @api menu:level()  @ 55-76
+      @contract  the members of the node the path names — groups in tree order, then leaves by title  @ 54
+  @api menu:open()  @ 80-86
+      -- The surface is read before the menu's own scope goes on the stack: its modality would
+      -- otherwise hide everything the walk reaches.
+  @api menu:close()  @ 88-92
 
 # Uses (outbound edges)
-  @use call cmgr:pop  @ close:47
-  @use call cmgr:push  @ open:41
-  @use call cmgr:register  @ <load>:50
-  @use call cmgr:scope  @ <load>:12
-  @use call cmgr:surface  @ livePassthrough:24
+  @use call    cmgr:pop  @ close:91
+  @use call    cmgr:push  @ open:85
+  @use call    cmgr:register  @ <load>:94
+  @use call    cmgr:scope  @ <load>:14
+  @use call    cmgr:surface  @ open:82
+  @use call    util.add  @ level:60,68,72
+  @use require util  @ <load>:6
 
 # Calls (intra-file)
-  @call livePassthrough  @ open:39
-  @call menu:close  @ scope:closeMenu:51
-  @call menu:open  @ cmgr:openMenu:50
+  @call livePassthrough  @ open:83
+  @call menu:close  @ scope:closeMenu:95
+  @call menu:open  @ cmgr:openMenu:94
+  @call occupied  @ occupied:42 level:59
 
 # Unresolved receivers
-  @drop scope:register  @ <load>:51
+  @drop scope:register  @ <load>:95
 
 # Fields (r read / w write incl. constructor keys)
-  @field w Pages  @ 10
-  @field w Transport  @ 10
-  @field r cmgr  @ 6
-  @field r group  @ livePassthrough:25
-  @field w modal  @ 13
-  @field r name  @ livePassthrough:25
-  @field w passthrough  @ open:39
-  @field w switchPage  @ livePassthrough:23
+  @field w Pages  @ 12
+  @field w Transport  @ 12
+  @field r children  @ occupied:41 level:58
+  @field r cmgr  @ 8
+  @field r desc  @ level:61
+  @field w desc  @ level:61,73
+  @field w entry  @ level:73
+  @field r group  @ livePassthrough:30
+  @field r label  @ level:73
+  @field r letter  @ level:60,72
+  @field w letter  @ level:60,72
+  @field w modal  @ 15
+  @field r name  @ livePassthrough:30 level:60
+  @field r node  @ occupied:39 level:68
+  @field w node  @ level:61
+  @field w passthrough  @ open:83
+  @field r path  @ level:68
+  @field w switchPage  @ livePassthrough:28
+  @field r title  @ level:70,72
+  @field w title  @ level:60,72
+  @field r tree  @ level:58

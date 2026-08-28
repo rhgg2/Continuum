@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — A group is a member of its level where it or any descendant holds a reachable
+  entry, so the sampler's Grid survives on the global swing verb alone while Column drops out. A
+  level's leaves read by title: the surface unions the scopes on the stack, whose cheat-sheet groups
+  the manifest orders one at a time, so declaration order fixes nothing across them. The path holds
+  the nodes descended into rather than segment strings, which makes the level a lookup. Region mode
+  changes no level, contrary to the design: it is spring-loaded rather than modal, and / is neither
+  redirected nor kept alive, so opening the menu leaves the mode.
+
 - **2026-08-28** — The menu reads the surface it walks off the stack as it opens, rather than
   passing every pathed command through its own modal scope. What it offers is then fixed for the
   walk, and what the modality blocks stays exactly the keys a letter would collide with. The page

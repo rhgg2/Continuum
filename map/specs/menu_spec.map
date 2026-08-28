@@ -1,6 +1,6 @@
-@spec menu_spec  src=tests/specs/menu_spec.lua  loc=101  cases=4
+@spec menu_spec  src=tests/specs/menu_spec.lua  loc=216  cases=8
 @exercises commandManager (mgr), menu (menu)
-@surface   mgr:installManifest, mgr:register, mgr:scope, mgr:push, menu:isOpen, mgr:invoke, mgr:keysFor
+@surface   mgr:installManifest, mgr:installTree, mgr:register, mgr:scope, mgr:push, menu:isOpen, mgr:invoke, mgr:keysFor, menu:level, mgr:entry, menu:path, mgr:surface
 
 # Intent
   The lotus menu as a scope. Opening pushes a modal cmgr scope, so a letter typed during
@@ -13,28 +13,48 @@
   is blocked by the scope it pushed. See design/lotus-menu.md § What stays live.
 
 # Helpers
-  @fn fixture()  @ 18-32
+  @fn fixture(page)  @ 18-34
       -- A cmgr carrying the real manifest, stub bodies for the verbs the cases invoke, and the
       -- menu built over it, with the tracker page on the stack. Each body logs its name, so a
       -- gated-out invoke reads as silence rather than as a return value.
+  @fn titles(members)  @ 36-40
+  @fn named(members, title)  @ 42-44
 
 # Cases
-  @case 'opening pushes the menu scope over the page, and closing pops it'  [pure]  @ 36-49
-  @case 'a page verb is blocked while the menu is open, and live again after'  [pure]  @ 55-69
-  @case 'the transport and the page switchers stay live through the walk'  [pure]  @ 75-86
-  @case 'each verb is guarded by the scope it is registered on'  [pure]  @ 90-99
+  @case 'opening pushes the menu scope over the page, and closing pops it'  [pure]  @ 48-61
+  @case 'a page verb is blocked while the menu is open, and live again after'  [pure]  @ 67-81
+  @case 'the transport and the page switchers stay live through the walk'  [pure]  @ 87-98
+  @case 'each verb is guarded by the scope it is registered on'  [pure]  @ 102-111
+  @case 'the top level holds the reachable groups and the leaves of one-segment paths'  [pure]  @ 118-137
+  @case 'a level omits what the stack cannot reach, a group included'  [pure]  @ 145-164
+  @case 'a level lists its groups in tree order, then its leaves by title'  [pure]  @ 171-193
+  @case 'the level is read from the surface the menu snapshotted as it opened'  [pure]  @ 199-214
 
 # Uses (outbound edges)
-  @use call mgr:installManifest  @ 22
-  @use call mgr:register  @ 24
-  @use call mgr:scope  @ 27,43,48
-  @use call mgr:push  @ 30
-  @use call menu:isOpen  @ 39,42,47
-  @use call mgr:invoke  @ 41,46,58,61,62,66,67,78,81,93,96,97
-  @use call mgr:keysFor  @ 64,85
+  @use call mgr:installManifest  @ 23
+  @use call mgr:installTree  @ 24
+  @use call mgr:register  @ 26
+  @use call mgr:scope  @ 29,55,60
+  @use call mgr:push  @ 32
+  @use call menu:isOpen  @ 51,54,59
+  @use call mgr:invoke  @ 53,58,70,73,74,78,79,90,93,105,108,109,121,148,174,202,212
+  @use call mgr:keysFor  @ 76,97
+  @use call menu:level  @ 122,149,157,175,178,203,213
+  @use call mgr:entry  @ 134,136
+  @use call menu:path  @ 156,176
+  @use call mgr:surface  @ 205
 
 # Fields (r read / w write incl. constructor keys)
-  @field w cmgr  @ 29
-  @field w name  @ 36,55,75,90
-  @field w run  @ 37,56,76,91
-  @field r stack  @ 43,44,48,94,98
+  @field r children  @ 187
+  @field w cmgr  @ 31
+  @field r desc  @ 130,136
+  @field r entry  @ 134
+  @field r label  @ 136
+  @field r letter  @ 129,135
+  @field r name  @ 38,128,187
+  @field w name  @ 48,67,87,102,118,145,171,199
+  @field r node  @ 127,128,129,130,156,176,180,187,208
+  @field w run  @ 49,68,88,103,119,146,172,200
+  @field r stack  @ 55,56,60,106,110
+  @field r title  @ 38,43,180,181
+  @field r tree  @ 24,127

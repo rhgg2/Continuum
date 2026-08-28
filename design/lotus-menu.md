@@ -46,8 +46,9 @@ Landed — see `docs/commandManager.md` § Menu tree.
 1. Reachability decides what the menu offers, by the predicate
    `docs/commandManager.md` § Scope stack already defines: a modal scope
    above an entry's own scope hides it unless the entry is in that
-   scope's passthrough set. Pushing region mode therefore changes the
-   menu.
+   scope's passthrough set. Region mode is spring-loaded rather than
+   modal, and `/` is neither redirected nor kept alive, so opening the
+   menu leaves the mode and walks the page's own surface.
 
 1. The menu reaches no scope that is off the stack. Travelling to a page
    is a global command and works from anywhere; that page's own verbs

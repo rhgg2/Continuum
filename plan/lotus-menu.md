@@ -29,40 +29,36 @@
 4. **Phase 4 — The walk** (§ Walking a path, § What stays live) — the menu
    as a modal scope (cmgr's first production use of `modal`/`passthrough`),
    `/` to open, a letter to descend or invoke, Esc to unwind, arrows and
-   Enter for the highlight, transport passed through, prefix surviving.
-   ← in flight
-5. **Phase 5 — The row** (§ Where it draws) — the menu row over the body's
-   last row, the lookahead panel drawn upward from the highlight on the
-   cheat-sheet's box renderer, and what a thin page or a narrow window does.
+   Enter for the highlight, transport passed through, prefix surviving. The
+   letters land with a plain row, so the walk is used from the keyboard
+   before the prefix and the highlight are cut. ← in flight
+5. **Phase 5 — The row** (§ Where it draws) — the row's own geometry over
+   the plain line phase 4 draws, the lookahead panel drawn upward from the
+   highlight on the cheat-sheet's box renderer, and what a thin page or a
+   narrow window does.
 6. **Phase 6 — Both routes** (§ Both routes on the cheat-sheet) — a pathed
    command's path as a chip beside its key chips, rendered from the entry
    and the group letters.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 menu: the level a path names, read off the surface at open (§ The surface)
 - 2026-08-28 menu: the walk's modal scope, and the verbs that open and close it (§ What stays live)
 - 2026-08-28 cmgr: pin the fluent/pathed split with a roster spec (§ Fluent and pathed)
 - 2026-08-28 cmgr: a path on every deliberate arrange, sampler and wiring verb (§ Fluent and pathed)
-- 2026-08-28 cmgr: a path on every deliberate global and tracker verb (§ Fluent and pathed)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-2. **The live level.** `menu:level()` returns the members of the node the
-   path names, ordered: the node's child nodes from `cmgr.tree`, and the
-   entries of the surface the menu snapshotted at open whose stamped `node` is that node. Each
-   member carries its letter, its title, and a group's description or a
-   leaf's label. The empty path gives the top level. Spec: the tracker's
-   top level holds Grid but not Sample, the sampler's the reverse, and
-   pushing region mode changes what a level holds.
-3. **Letters walk it.** A letter is captured in `keyDispatch` ahead of the
-   keychain walk, as prefix digits already are, and only while the menu is
-   open. A group's letter descends, a leaf's invokes the command and closes
-   the menu, Esc pops one level and closes from the top, and an unmatched
-   letter is consumed and ignored. Spec: `/GQ` from the tracker invokes
+3. **Letters walk it, and the level is drawn.** A letter is captured in
+   `keyDispatch` ahead of the keychain walk, as prefix digits already are,
+   and only while the menu is open. A group's letter descends, a leaf's
+   invokes the command and closes the menu, Esc pops one level and closes
+   from the top, and an unmatched letter is consumed and ignored. The level
+   draws as one line of letters and titles over the body's last row, plain
+   enough to be thrown away by phase 5. Spec: `/GQ` from the tracker invokes
    quantize and closes; `/G` then Esc twice is closed again.
 4. **The prefix survives.** `/` with a prefix pending appends to the buffer
    as today and opens the menu; the next key resolves which it was — a
@@ -76,4 +72,5 @@
    takes it — descending on a group, invoking on a leaf — and Left is Esc's
    unwind. It is the field Phase 5's lookahead panel reads. Spec: the
    highlight wraps within a level, and Enter on a leaf invokes what its
-   letter would.
+   letter would. Re-cut this against the row in use, since seeing the level
+   may change what the highlight has to do.
