@@ -356,9 +356,10 @@ end
 
 ----- The relaxation
 
--- A ten-thousandth of a cent is far under hearing and the sweeps converge geometrically,
--- so the cap is a guard and not a schedule: an iterate that reaches it is already there.
+-- A displacement settles good to about a hundredth of a cent, under a third of one step of
+-- pitch bend, so nothing should read a figure off it any finer. The cap guards, not schedules.
 local TOLERANCE, SWEEPS = 1e-4, 1000
+local abs = math.abs -- the sweep calls it repeatedly
 
 -- Where each spring would stand its two strands, given the other: i a delta below j, j a
 -- delta above i, gathered for the strands that sweep since a held strand reads only its neighbours' ties, pre-summed since they stand still while the sweeps run.
@@ -405,8 +406,8 @@ end
 -- One strand's optimum with its neighbours held: what its springs ask of it against its
 -- rest, the two dials weighting them and the fifty both are charged over dividing out.
 local function settle(ties, displacement, strength, stiffness, rest)
-  local count, seats = ties.count, ties.delta
-  for k = 1, count do seats = seats + ties.weights[k] * displacement[ties[k]] end
+  local count, seats, weights = ties.count, ties.delta, ties.weights
+  for k = 1, count do seats = seats + weights[k] * displacement[ties[k]] end
   if count == 0 then return rest end -- a strand no spring ties, settling at its rest
 
   return (stiffness * seats + strength * rest) / (stiffness * ties.weight + strength)
@@ -422,7 +423,7 @@ function sonority.relax(ties, strength, stiffness, start, rest, free)
     local worst = 0
     for _, index in ipairs(free) do
       local settled = settle(ties[index], displacement, strength, stiffness, rest[index])
-      local moved   = math.abs(settled - displacement[index])
+      local moved   = abs(settled - displacement[index])
       if moved > worst then worst = moved end
       displacement[index] = settled
     end

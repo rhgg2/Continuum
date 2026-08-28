@@ -255,6 +255,14 @@ offered to an excluded strand — is `design/adaptive-tuning.md`.
    and the weights they carry, since the strands a sweep holds stay
    fixed while it runs.
 
+1. Stepping a strand past that mean rather than onto it settles in the
+   same place and halves the sweeps a cold start takes, at a factor near
+   1.55 — though a strand no spring ties reaches its rest in the one
+   step, and must take that step whole rather than overshoot it. It is
+   not taken: the solve warm-starts, so its sweeps open near the answer
+   with little left to accelerate, and the factor costs a retune more
+   than it saves.
+
 ## The candidates
 
 1. A sonority's spellings are enumerated by a **beam** over joins: a

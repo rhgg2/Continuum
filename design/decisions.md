@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — A figure a spec reads off the relaxation is pinned no finer than sonority.relax's
+  tolerance settles it, and an aggregate looser still. Pinning further records where the sweep stops
+  rather than what the objective states, and five figures across two specs had drifted into doing
+  exactly that. Over-relaxation was measured and refused: at 1.55 it halves the sweeps a cold start
+  takes, but the solve warm-starts, so a retune pays the extra multiply without the saving.
+  Tightening the tolerance instead was refused for the same reason -- the sweep already settles a
+  displacement inside a third of a pitch-bend step, so no accuracy bought there can reach the
+  output, and the cost falls on the user.
+
 - **2026-08-28** — A generated family rebinds as one. A captured chord's modifiers re-mask every
   member over its own unmasked base token, so the base is declared beside the member rather than
   inferred as a common prefix. The family takes a mask only where every chord it would claim is
