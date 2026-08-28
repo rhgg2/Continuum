@@ -57,6 +57,11 @@ from the one declaration.**
 1. Nothing derives the classification, which says how a command is used
    rather than what it does. It is therefore declared.
 
+1. A **roster** spec names the key-only commands and asserts the roster
+   partitions the manifest with the pathed entries. A command declared with
+   neither a path nor a roster line fails it, so the split stays a judgement
+   somebody made — see `docs/commandManager.md` § Menu tree.
+
 ## The surface
 
 1. Manifests hang off `cmgr` scopes. A page's **surface** is the union of
@@ -206,10 +211,6 @@ from the one declaration.**
    so a malformed menu never opens.
 
 ## Open
-
-- **The classification.** Around 200 commands split fluent from pathed,
-  and only a judgement per command settles it. The split is worth making
-  visible in a spec, so that changing it later is deliberate.
 
 - **The footer band.** The status bar has landed there (`docs/chrome.md`
   § Status bar layout), so the band's geometry is settled and the

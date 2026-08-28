@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — The fluent/pathed split is pinned by a roster in a spec rather than by a flag on
+  the entry. The manifest already declares the classification by omitting a path, and the roster is
+  the second witness that makes the omission deliberate: a command is pathed or rostered, and one
+  that is neither fails, naming itself. The four commands reached programmatically are rostered too,
+  so the rule stays two-sided; a family minted in a loop is exempt, its members being fluent by
+  construction.
+
 - **2026-08-28** — Arrange's slots are takes rather than columns, so its Take level mirrors
   tracker's word for word and both pages reach take properties by /KP. Replace and advance modes
   stay fluent, since each reinterprets the drop that follows it, and the drops are fluent by

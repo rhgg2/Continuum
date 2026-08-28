@@ -157,6 +157,15 @@ will eventually layer overrides on top.
    is a leaf of the top level. Keys and path are independent, and either may
    be absent.
 
+1. A command with keys and no path is **fluent** — pressed repeatedly, and
+   reached by its chord rather than through the menu. Nothing derives the
+   classification, which says how a command is used rather than what it does.
+
+1. `tests/specs/cmgr_fluent_spec.lua` names the fluent commands, and asserts
+   that roster partitions the manifest with the pathed entries. A command
+   declared with neither a path nor a roster line fails it; a family minted in
+   a loop is exempt, its members being fluent by construction.
+
 1. A leaf's letter derives from the first character of its title, and an entry
    declares `letter` where that collides — `Edit/Cut` takes X beside
    `Edit/Copy`. Groups and leaves are members of a level alike, since a letter

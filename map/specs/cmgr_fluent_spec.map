@@ -1,0 +1,42 @@
+@spec cmgr_fluent_spec  src=tests/specs/cmgr_fluent_spec.lua  loc=142  cases=3
+
+# Intent
+  A command is fluent or pathed, and the split is a judgement about how the command is
+  used rather than what it does, so nothing derives it. In the manifest a fluent command
+  shows only as one with no path, which reads the same as an oversight. The roster below
+  is the second witness: it names every command the menu does not reach, and the cases
+  assert that it partitions the manifest with the pathed entries. A command added without
+  a path and without a roster line therefore fails, naming itself.
+  
+  A generated family is fluent by construction — its members are a parameterised keyboard
+  alphabet — so membership is the classification and the eighty-two are not named here.
+  See design/lotus-menu.md § Fluent and pathed.
+
+# Helpers
+  @fn rostered()  @ 62-68
+      -- name -> the scope the roster files it under.
+  @fn declared()  @ 72-82
+      -- Every declared command, paired with the scope declaring it. The tree declares menu
+      -- groups rather than commands, so the walk passes it over as installManifest does.
+
+# Cases
+  @case 'every declared command is pathed, generated, or named in the fluent roster'  [pure]  @ 88-102
+  @case 'every rostered name is declared, and carries no path'  [pure]  @ 108-123
+  @case 'a generated family member carries no path'  [pure]  @ 129-140
+
+# Fields (r read / w write incl. constructor keys)
+  @field w arrange  @ 42
+  @field r entry  @ 93,111,133
+  @field w entry  @ 77
+  @field r family  @ 94,134
+  @field w global  @ 18
+  @field r name  @ 94,95,97,98,99,111,136
+  @field w name  @ 88,108,129
+  @field r path  @ 94,117,119,136
+  @field w region  @ 39
+  @field w run  @ 89,109,130
+  @field w sample  @ 53
+  @field r scope  @ 98
+  @field w scope  @ 77
+  @field w tracker  @ 23
+  @field w wiring  @ 56
