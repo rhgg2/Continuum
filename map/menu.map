@@ -1,4 +1,4 @@
-@module menu  src=menu.lua  loc=127  mode=chunk  self=menu
+@module menu  src=menu.lua  loc=132  mode=chunk  self=menu
 @deps cmgr
 
 # Shapes
@@ -26,11 +26,12 @@
       -- level omits the groups whose members this page cannot reach.
 
 # Functions held in tables
-  @held scope.captureLetter(letter)  @ 122
+  @held scope.captureLetter(letter)  @ 125
+  @held scope.dismiss()  @ 127
 
 # Handlers registered
-  @handler cmgr:openMenu()  @ 124
-  @handler scope:menuBack()  @ 125
+  @handler cmgr:openMenu()  @ 129
+  @handler scope:menuBack()  @ 130
 
 # Public API (menu:*)
   @api menu:isOpen()  @ 50
@@ -38,47 +39,49 @@
       @contract  the nodes descended into, empty at the top level; the menu owns it and unwinds it  @ 52
   @api menu:level()  @ 56-77
       @contract  the members of the node the path names — groups in tree order, then leaves by title  @ 55
-  @api menu:press(letter)  @ 82-97
+  @api menu:press(letter)  @ 82-100
       @contract  the member the letter names  @ 79
       @contract  a group's letter descends  @ 80
       @contract  a leaf's letter closes the menu and invokes; unmatched is dropped  @ 81
-  @api menu:back()  @ 100-102
-      @contract  pops one level, and closes the menu from the top  @ 99
-  @api menu:open()  @ 106-112
+  @api menu:back()  @ 103-105
+      @contract  pops one level, and closes the menu from the top  @ 102
+  @api menu:open()  @ 109-115
       -- The surface is read before the menu's own scope goes on the stack: its modality would
       -- otherwise hide everything the walk reaches.
-  @api menu:close()  @ 114-118
+  @api menu:close()  @ 117-121
 
 # Uses (outbound edges)
-  @use call    cmgr:invoke  @ press:95
-  @use call    cmgr:pop  @ close:117
-  @use call    cmgr:push  @ open:111
-  @use call    cmgr:register  @ <load>:124
+  @use call    cmgr:finishPrefix  @ press:97
+  @use call    cmgr:invoke  @ press:98
+  @use call    cmgr:pop  @ close:120
+  @use call    cmgr:push  @ open:114
+  @use call    cmgr:register  @ <load>:129
   @use call    cmgr:scope  @ <load>:15
-  @use call    cmgr:surface  @ open:108
+  @use call    cmgr:surface  @ open:111
   @use call    util.add  @ level:61,69,73 press:89
   @use require util  @ <load>:7
 
 # Calls (intra-file)
-  @call livePassthrough  @ open:109
-  @call menu:back  @ scope:menuBack:125
-  @call menu:close  @ press:94 back:101
+  @call livePassthrough  @ open:112
+  @call menu:back  @ scope:menuBack:130
+  @call menu:close  @ press:94 back:104 scope.dismiss:127
   @call menu:level  @ press:84
-  @call menu:open  @ cmgr:openMenu:124
-  @call menu:press  @ scope.captureLetter:122
+  @call menu:open  @ cmgr:openMenu:129
+  @call menu:press  @ scope.captureLetter:125
   @call occupied  @ occupied:43 level:60
 
 # Unresolved receivers
-  @drop scope:register  @ <load>:125
+  @drop scope:register  @ <load>:130
 
 # Fields (r read / w write incl. constructor keys)
   @field w Pages  @ 13
   @field w Transport  @ 13
-  @field w captureLetter  @ scope.captureLetter:122
+  @field w captureLetter  @ scope.captureLetter:125
   @field r children  @ occupied:42 level:59
   @field r cmgr  @ 9
   @field r desc  @ level:62
   @field w desc  @ level:62,74
+  @field w dismiss  @ scope.dismiss:127
   @field r entry  @ press:93
   @field w entry  @ level:74
   @field r group  @ livePassthrough:31
@@ -89,7 +92,7 @@
   @field r name  @ livePassthrough:31 level:61 press:93
   @field r node  @ occupied:40 level:69 press:88,89
   @field w node  @ level:62
-  @field w passthrough  @ open:109
+  @field w passthrough  @ open:112
   @field r path  @ level:69
   @field w switchPage  @ livePassthrough:29
   @field r title  @ level:71,73

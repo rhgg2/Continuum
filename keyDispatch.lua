@@ -27,11 +27,19 @@ local function handlePrefixCapture(cmgr, ctx)
   local mods = ImGui.GetKeyMods(ctx)
   for d = 0, 9 do
     if ImGui.IsKeyPressed(ctx, ImGui.Key_0 + d) and isDigitMods(mods) then
-      cmgr:appendPrefix(tostring(d)); return 'consumed'
+      cmgr:appendPrefix(tostring(d))
+      -- A digit is no menu letter, so it reads a preceding '/' as the rational's bar and
+      -- dismisses the walk that slash opened.
+      local dismiss = cmgr:dismissal()
+      if dismiss then dismiss() end
+      return 'consumed'
     end
   end
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Slash) and isDigitMods(mods) then
-    cmgr:appendPrefix('/'); return 'consumed'
+    -- The slash is the bar and the menu key alike: it does both, and the next key says which.
+    cmgr:appendPrefix('/')
+    cmgr:invoke('openMenu')
+    return 'consumed'
   end
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     cmgr:cancelPrefix(); return 'consumed'
@@ -58,6 +66,8 @@ end
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
 --contract: first-hit wins; false declines, releases the key, and lets the page char queue see it
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+--contract: a captured '/' also opens the menu
+--contract: a captured digit dismisses the top scope, resolving the slash as the bar
 --contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
 function keyDispatch.dispatchKeys(state, cmgr, ctx)
   if state.suppressKbd or not state.acceptCmds then

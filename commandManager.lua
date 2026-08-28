@@ -388,12 +388,15 @@ end
 
 function cmgr:cancelPrefix() clearPrefixState() end
 
---contract: empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
+--contract: empty or unparseable buffer → nil pending value; integer N stored as (N/1)
+--contract: a trailing '/' is dropped, so an unfinished rational reads as its numerator
 function cmgr:finishPrefix()
   local buf = prefixBuf
   prefixBuf = nil
   pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
-  if not buf or buf == '' then return nil end
+  if not buf then return nil end
+  buf = buf:gsub('/$', '')
+  if buf == '' then return nil end
   local num, den = buf:match('^(%d+)/(%d+)$')
   if num then
     local n, d = tonumber(num), tonumber(den)
@@ -447,6 +450,13 @@ end
 function cmgr:letterCapture()
   local top = self.stack[#self.stack]
   return top and top.captureLetter
+end
+
+--contract: the top scope's dismissal, if it declares one
+--contract: key dispatch calls it on a prefix digit, which is no letter of any walk
+function cmgr:dismissal()
+  local top = self.stack[#self.stack]
+  return top and top.dismiss
 end
 
 ----- Dispatch

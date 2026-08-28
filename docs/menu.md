@@ -95,3 +95,18 @@ is a menu letter rather than a page verb.**
    key stream directly rather than through cmgr, so it asks whether a
    scope captures letters, and stands off for every key while one
    does.
+
+## A pending prefix
+
+1. `/` is the numeric prefix's rational bar as well as the menu key
+   (`docs/commandManager.md` § Prefix capture). With a prefix pending it
+   does both: the buffer takes the slash, and the menu opens over it.
+
+1. The key after it resolves which was meant. A digit continues the
+   rational, and key dispatch calls the dismissal the menu's scope
+   declares, which closes the walk from any depth. A letter walks.
+
+1. The walk freezes nothing. A leaf calls `finishPrefix` immediately
+   before its invoke, where the keychain walk calls it too, so `⌘U 4
+   /VRS` sets rows per beat to 4. A walk abandoned leaves the buffer
+   open where it stood.

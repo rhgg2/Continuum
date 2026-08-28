@@ -92,6 +92,9 @@ function menu:press(letter)
     -- rather than blocked by the menu's own modality.
     local name = hit.entry.name
     self:close()
+    -- And freeze the prefix here, as the keychain walk does immediately before its invoke,
+    -- so a prefix typed before the walk reaches the leaf.
+    cmgr:finishPrefix()
     cmgr:invoke(name)
   end
 end
@@ -120,6 +123,8 @@ end
 -- Key dispatch offers a bare letter to the top scope's sink, so the walk takes its letters
 -- before the keychain sees them. See docs/commandManager.md § Scope stack.
 scope.captureLetter = function(letter) menu:press(letter) end
+-- A prefix digit is the dismissal: it resolves a '/' typed into the buffer as the bar.
+scope.dismiss       = function() menu:close() end
 
 cmgr:register('openMenu',   function() menu:open()  end)
 scope:register('menuBack',  function() menu:back()  end)

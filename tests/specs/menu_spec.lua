@@ -260,6 +260,43 @@ return {
   },
 
   {
+    -- The slash is the rational's bar and the menu key at once, so a prefix pending when
+    -- the menu opens is neither frozen nor cleared. The leaf freezes it instead, exactly
+    -- where a chord's key would: ⌘U 4 / V R S sets rows per beat to 4.
+    name = 'a pending prefix survives the walk, and the leaf takes it',
+    run = function()
+      local mgr, menu, log = fixture('tracker')
+      local seen
+      mgr:scope('tracker'):register('setRPB', function(n) util.add(log, 'setRPB'); seen = n end)
+
+      mgr:beginPrefix(); mgr:appendPrefix('4'); mgr:appendPrefix('/')
+      mgr:invoke('openMenu')
+      t.eq(mgr:isPrefixActive(), true, 'opening the menu neither freezes nor clears the buffer')
+
+      for _, letter in ipairs{ 'V', 'R', 'S' } do menu:press(letter) end
+      t.deepEq(log, { 'setRPB' }, 'the leaf the path names ran')
+      t.eq(seen, 4, 'taking the pending prefix as its first argument')
+      t.eq(mgr:isPrefixActive(), false, 'and the buffer is spent')
+    end,
+  },
+
+  {
+    -- The digit's route back out: a digit typed after the slash means the rational, so key
+    -- dispatch calls the dismissal the menu's scope declares beside its letter sink.
+    name = 'the scope declares a dismissal that closes the walk outright',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      menu:press('G')
+      t.eq(#menu:path(), 1, 'a walk one level down')
+
+      mgr:scope('menu').dismiss()
+      t.eq(menu:isOpen(), false, 'the dismissal closes it from any depth')
+      t.eq(mgr.stack[#mgr.stack], mgr:scope('tracker'), 'and the page scope is back on top')
+    end,
+  },
+
+  {
     -- How a letter arrives: the menu's scope declares the sink key dispatch offers a bare
     -- letter to, and the sink is the top scope's alone, so nothing captures a letter until
     -- the menu is open. See docs/commandManager.md § Scope stack.

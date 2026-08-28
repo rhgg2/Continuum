@@ -88,6 +88,66 @@ return {
   },
 
   {
+    -- The slash lives two lives: the rational's bar and the menu key. With a prefix open
+    -- it leads both, and the key after it says which was meant. A digit continues the
+    -- rational and dismisses the walk the slash opened, through the dismissal its scope
+    -- declares beside the letter sink.
+    name = 'a slash during prefix entry appends and opens the walk; a digit takes it back',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd, dismissed = loadKD(), 0
+      local walk = cmgr:scope('walk')
+      walk.captureLetter = function() end
+      walk.dismiss       = function() dismissed = dismissed + 1; cmgr:pop(walk) end
+      cmgr:registerAll{ openMenu = function() util.add(log.fired, 'openMenu'); cmgr:push(walk) end }
+
+      cmgr:beginPrefix()
+      setKeys{ pressed = { fakeImGui.Key_3 } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(dismissed, 0, 'a digit with no walk up dismisses nothing')
+
+      setKeys{ pressed = { fakeImGui.Key_Slash } }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.consumed, true, 'the slash is consumed by prefix capture')
+      t.deepEq(log.fired, { 'openMenu' }, 'and opens the walk on its way through')
+      t.eq(cmgr:isPrefixActive(), true, 'while the buffer stays open')
+
+      setKeys{ pressed = { fakeImGui.Key_2 } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(dismissed, 1, 'the digit resolves the slash as a bar, and dismisses the walk')
+      t.eq(cmgr:finishPrefix(), 1.5, 'leaving the rational the two digits typed')
+    end,
+  },
+
+  {
+    -- The other reading: a letter after the slash is a menu letter, and goes to the sink
+    -- with the buffer untouched. The walk freezes nothing, so the prefix is still pending
+    -- when the leaf it reaches invokes.
+    name = 'a letter after the slash walks, and leaves the prefix for the leaf to freeze',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd, seen  = loadKD(), {}
+      local walk = cmgr:scope('walk')
+      walk.captureLetter = function(letter) util.add(seen, letter) end
+      cmgr:registerAll{ openMenu = function() cmgr:push(walk) end }
+
+      cmgr:beginPrefix()
+      setKeys{ pressed = { fakeImGui.Key_4 } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      setKeys{ pressed = { fakeImGui.Key_Slash } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+
+      setKeys{ pressed = { fakeImGui.Key_A } }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.consumed, true, 'the letter is the walk\'s')
+      t.deepEq(seen, { 'A' }, 'and reaches the sink')
+      t.deepEq(log.fired, {}, 'never the binding it would otherwise fire')
+      t.eq(cmgr:isPrefixActive(), true, 'the walk leaves the buffer unfrozen')
+      t.eq(cmgr:finishPrefix(), 4, 'holding the numerator the leaf will take')
+    end,
+  },
+
+  {
     name = 'a pressed bound key fires its command, consumes, and reports as held',
     run = function()
       local cmgr, log = freshCmgr()

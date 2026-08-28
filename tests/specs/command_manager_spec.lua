@@ -245,6 +245,22 @@ return {
   },
 
   {
+    -- A slash is typed before its denominator, so a buffer left at `4/` holds an
+    -- unfinished rational. It reads as its numerator, which is what the lotus menu's leaf
+    -- takes when the slash turned out to be the menu key rather than the bar.
+    name = 'prefix: an unfinished rational reads as its numerator',
+    run = function()
+      local mgr = newCommandManager(nil)
+      local seen
+      mgr:register('probe', function(p) seen = p end)
+      mgr:beginPrefix(); mgr:appendPrefix('4'); mgr:appendPrefix('/')
+      t.eq(mgr:finishPrefix(), 4, 'the trailing slash is dropped before the parse')
+      mgr:invoke('probe')
+      t.eq(seen, 4, 'and the numerator reaches the command')
+    end,
+  },
+
+  {
     name = 'prefix: prefixRational returns (n, d) for an integer inside invoke',
     run = function()
       local mgr = newCommandManager(nil)

@@ -42,23 +42,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 menu: a pending prefix survives the walk, and the leaf takes it (§ What stays live)
 - 2026-08-28 menu: letters walk the tree, and the level draws over the body (§ Walking a path)
 - 2026-08-28 menu: the level a path names, read off the surface at open (§ The surface)
 - 2026-08-28 menu: the walk's modal scope, and the verbs that open and close it (§ What stays live)
-- 2026-08-28 cmgr: pin the fluent/pathed split with a roster spec (§ Fluent and pathed)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-4. **The prefix survives.** `/` with a prefix pending appends to the buffer
-   as today and opens the menu; the next key resolves which it was — a
-   digit continues the rational and closes the menu, a letter drops the
-   trailing slash, finishes the prefix and walks. Opening the menu neither
-   freezes nor clears the prefix, and the leaf's invoke consumes it as a
-   chord's would. Spec: `⌘U 3 / 2` still reaches `prefixRational`, and
-   `⌘U 4 /VRS` invokes setRPB with 4.
 5. **The highlight.** The menu holds a highlight index into the current
    level, reset on every descent and unwind. Up and Down move it, Enter
    takes it — descending on a group, invoking on a leaf — and Left is Esc's

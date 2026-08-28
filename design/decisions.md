@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The slash typed into a numeric prefix leads two lives, so it appends to the
+  buffer and opens the menu at once, and the key after it says which was meant: a digit continues
+  the rational and dismisses the walk, a letter walks. finishPrefix drops a trailing slash for every
+  caller, so an unfinished rational reads as its numerator and the leaf takes the prefix through the
+  same freeze the keychain walk uses. The dismissal is a field on the scope beside its letter sink;
+  invoking a no-op command gated on the menu's scope was rejected, since invoke bails a
+  spring-loaded scope on any command it does not own, and a digit typed in region mode would disarm
+  the mode.
+
 - **2026-08-28** — A letter reaches the lotus menu through a sink the scope declares. Key dispatch
   offers a bare or Shift letter to the top scope's captureLetter ahead of the keychain walk, so the
   letter reaches no binding. The stack already answers what a key may reach, so key dispatch stays

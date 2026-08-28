@@ -239,7 +239,9 @@ A scope can also declare `captureLetter`, a sink for a plain letter
 key. `mgr:letterCapture()` returns the top scope's, and key dispatch
 offers a bare or Shift letter to it ahead of the keychain walk, so the
 letter reaches no binding. The lotus menu's walk is its consumer
-(`docs/menu.md`).
+(`docs/menu.md`). A scope pairs the sink with `dismiss`, returned by
+`mgr:dismissal()`, which key dispatch calls on a prefix digit — a digit
+is no letter of any walk.
 
 The same key may bind different verbs in different scopes — region's
 Delete fires `regionDrop`; tracker's Delete fires `deleteSel`. Two
@@ -327,6 +329,14 @@ Bare digit keys therefore stay free for ordinary commands in any scope;
 they collide with prefix entry only just after Super-U. There is no
 letter-chord support — vim-style two-key entry (`gr`, `gg`) would need
 new machinery.
+
+The `/` in that alphabet is the rational's bar and the lotus menu's key
+at once, so a captured `/` invokes `openMenu` as well as appending, and
+the key after it resolves which was meant: a digit continues the
+rational and calls the top scope's dismissal, a letter walks the menu.
+`finishPrefix` drops a trailing `/` before parsing, so a buffer left at
+`4/` reads as 4 — the numerator a walk carries to its leaf
+(`docs/menu.md` § A pending prefix).
 
 ## Wrapping
 
