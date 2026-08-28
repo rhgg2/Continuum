@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — Arrange's slots are takes rather than columns, so its Take level mirrors
+  tracker's word for word and both pages reach take properties by /KP. Replace and advance modes
+  stay fluent, since each reinterprets the drop that follows it, and the drops are fluent by
+  construction. The sampler's load and rename head a Sample group of their own, which opens on that
+  page alone; region's four verbs are all fluent, so region mode leaves the global menu standing.
+
 - **2026-08-28** — A menu path names its leaf, not just the level it reads in: every segment but the
   last names a group, and the last is the command's title in the menu and the source of its letter.
   One declaration therefore carries the level, the word shown and the key that takes it, and the

@@ -50,6 +50,10 @@ from the one declaration.**
    fluent by construction. Its members are a parameterised keyboard
    alphabet, reached by the key that names the index.
 
+1. A mode that only reinterprets a fluent stream is fluent itself. Arrange's
+   replace and advance modes are armed within a placement gesture, and what
+   they modify is the drop family.
+
 1. Nothing derives the classification, which says how a command is used
    rather than what it does. It is therefore declared.
 
@@ -89,10 +93,10 @@ from the one declaration.**
 
 ## The top level
 
-1. The top level is twelve groups and one leaf:
+1. The top level is thirteen groups and one leaf:
 
    ```
-   File  Edit  View  Play  Column  Row  Grid  Tuning  taKe  Mirror  fX  Jump  Help
+   File  Edit  View  Play  Column  Row  Grid  Tuning  taKe  Mirror  fX  Sample  Jump  Help
    ```
 
 1. Each group holds one remit:
@@ -109,10 +113,15 @@ from the one declaration.**
    | Tuning | tuning and retune |
    | taKe | take lifecycle and variants |
    | Mirror | mirror groups and freezing |
-   | fX | note FX and the param palette |
+   | fX | note FX, the wiring graph and the param palette |
+   | Sample | the sampler's slots and its file browser |
    | Jump | travel to a page |
 
 1. Help is a leaf rather than a group, so `/H` opens the cheat-sheet.
+
+1. Sample's members are the sampler page's own, so the group opens there and
+   nowhere else. A group appears where its members are reachable, as § The
+   surface has it, so the top level varies by page.
 
 1. Grid and Tuning mirror the model's own two axes — `docs/timing.md` and
    `docs/tuning.md` — for the verbs that edit the take. Rows per beat is
@@ -211,9 +220,9 @@ from the one declaration.**
   same way, and whether a re-cut persists as tokens the way binding
   overrides do, is not settled.
 
-- **Thin pages.** The sampler, wiring and editor surfaces carry few
-  pathed verbs. Whether File, View and Help alone earn a menu row there
-  is not settled.
+- **The editor's row.** The sampler declares two pathed verbs and wiring
+  one, so both pages earn a row of their own. The editor declares none, and
+  whether the global paths alone earn it a row is not settled.
 
 - **A narrow window.** Twelve titles fit a comfortable width. What the
   row does when they do not — truncate, wrap, or scroll — is not

@@ -214,6 +214,8 @@ end
 
 ----- region (overlay within the tracker page; bodies + springLoaded config on ec)
 
+-- Every region verb is fluent: leaving the mode and painting a column either way are
+-- reflexes, so the scope carries no path and the menu it leaves is global's.
 manifest.region = {
   Region = {
     command('regionExit',         'Leave region mode',               { 'Escape', 'Enter', 'KeypadEnter' }),
@@ -249,40 +251,45 @@ manifest.arrange = {
     command('arrangeClearSelection',  'Clear selection',          'Super+G'),
   },
   Takes = {
-    command('createSlot',             'New slot',                 'Super+Enter'),
-    command('deleteSlot',             'Delete slot',              { 'Ctrl+Delete', 'Ctrl+Backspace' }),
+    command('createSlot',             'New slot',                 'Super+Enter',      'Take/New'),
+    command('deleteSlot',             'Delete slot',              { 'Ctrl+Delete', 'Ctrl+Backspace' },
+                                                                                      'Take/Remove/Take + instances'),
     command('arrangeNudgeBack',       'Nudge take back',          'Super+Up'),
     command('arrangeNudgeForward',    'Nudge take forward',       'Super+Down'),
     command('arrangeEdgeUp',          'Move edge up',             'Shift+Super+Up'),
     command('arrangeEdgeDown',        'Move edge down',           'Shift+Super+Down'),
-    command('arrangeSplit',           'Split take',               'Ctrl+S'),
-    command('arrangeDeleteTake',      'Delete take',              { 'Delete', 'Backspace' }),
+    command('arrangeSplit',           'Split take',               'Ctrl+S',           'Take/Split'),
+    command('arrangeDeleteTake',      'Delete take',              { 'Delete', 'Backspace' },
+                                                                                      'Take/Remove/Instance'),
     command('arrangeDeleteAdvance',   'Delete take, advance',     'Period'),
     command('arrangeDeleteRetreat',   'Delete take, retreat',     'Shift+Alt+Up'),
-    command('arrangeDive',            'Dive to tracker',          'Enter'),
-    command('arrangeTakeProperties',  'Take properties',          'Super+Backspace'),
-    command('arrangeDuplicateBelow',  'Duplicate take',           { 'Ctrl+D', 'Shift+Alt+Down' }),
-    command('arrangePrevVariant',     'Previous variant',         'Shift+Alt+Left'),
-    command('arrangeNextVariant',     'Next variant',             'Shift+Alt+Right'),
+    command('arrangeDive',            'Dive to tracker',          'Enter',            'Jump/Dive'),
+    command('arrangeTakeProperties',  'Take properties',          'Super+Backspace',  'Take/Properties'),
+    command('arrangeDuplicateBelow',  'Duplicate take',           { 'Ctrl+D', 'Shift+Alt+Down' },
+                                                                                      'Take/Duplicate'),
+    command('arrangePrevVariant',     'Previous variant',         'Shift+Alt+Left',   'Take/Variant/Previous'),
+    command('arrangeNextVariant',     'Next variant',             'Shift+Alt+Right',  'Take/Variant/Next'),
   },
+  -- Replace and advance are fluent: each reinterprets the drop that follows it, and
+  -- the drops are fluent by construction. See design/lotus-menu.md § Fluent and pathed.
   Modes = {
     -- Shadows the global universal-argument prefix, which no arrange command reads.
     command('arrangeReplaceMode',     'Replace mode',             'Super+U'),
     command('arrangeAdvanceMode',     'Advance by take length',   'Ctrl+Grave'),
-    command('arrangeFollowPlay',      'Follow play',              'Super+F'),
+    command('arrangeFollowPlay',      'Follow play',              'Super+F',          'Play/Follow'),
   },
   Loop = {
-    command('arrangeSetLoopStart',    'Set loop start',           'Super+B'),
-    command('arrangeSetLoopEnd',      'Set loop end',             'Super+E'),
-    command('arrangeLoopToItem',      'Loop to take',             'Super+L'),
-    command('arrangeClearLoop',       'Clear loop',               'Escape'),
+    command('arrangeSetLoopStart',    'Set loop start',           'Super+B',          'Play/Loop/Start'),
+    command('arrangeSetLoopEnd',      'Set loop end',             'Super+E',          'Play/Loop/End'),
+    command('arrangeLoopToItem',      'Loop to take',             'Super+L',          'Play/Loop/Take'),
+    command('arrangeClearLoop',       'Clear loop',               'Escape',           'Play/Loop/Clear'),
   },
   Transport = {
-    command('arrangePlayFromCursor',  'Play from cursor',         'F6'),
+    command('arrangePlayFromCursor',  'Play from cursor',         'F6',               'Play/Cursor'),
   },
   View = {
-    command('arrangeZoomIn',          'Zoom in',                  'Super+Equal'),
-    command('arrangeZoomOut',         'Zoom out',                 'Super+Minus'),
+    command('arrangeZoomIn',          'Zoom in',                  'Super+Equal',      'View/Zoom/In'),
+    command('arrangeZoomOut',         'Zoom out',                 'Super+Minus',      'View/Zoom/Out'),
   },
   Slots   = {},
   Advance = {},
@@ -314,16 +321,19 @@ end
 
 ----- sample (bodies + the slot-clamp invariant in sampleRender)
 
+-- The two deliberate verbs head the Sample group, which no other scope declares into,
+-- so it opens on this page alone.
+
 manifest.sample = {
   Browser = {
     command('browserUp',       'Up a folder',       'Ctrl+Up'),
     command('browserPreview',  'Open / audition',   'Ctrl+Down'),
-    command('browserAssign',   'Load into slot',    'Ctrl+Right'),
+    command('browserAssign',   'Load into slot',    'Ctrl+Right',   'Sample/Load'),
   },
   Slots = {
     command('slotNext',        'Next slot',         'Shift+Period'),
     command('slotPrev',        'Previous slot',     'Shift+Comma'),
-    command('slotRename',      'Rename slot',       { 'Enter', 'KeypadEnter' }),
+    command('slotRename',      'Rename slot',       { 'Enter', 'KeypadEnter' }, 'Sample/Rename'),
   },
 }
 
@@ -331,7 +341,7 @@ manifest.sample = {
 
 manifest.wiring = {
   Wiring = {
-    command('wiringAddFx',           'Add FX',            'N'),
+    command('wiringAddFx',           'Add FX',            'N',       'FX/Add'),
     command('wiringClearSelection',  'Clear selection',   'Escape'),
   },
 }
@@ -342,7 +352,8 @@ manifest.tree = {
   item('File',   nil, 'REAPER project actions, and leaving Continuum'),
   item('Edit',   nil, 'The block and the clipboard'),
   item('View',   nil, 'Panels, the arrange map, rows per beat',
-       item('Rows',    nil, 'How many rows a beat holds')),
+       item('Rows',    nil, 'How many rows a beat holds'),
+       item('Zoom',    nil, 'How much time a row spans')),
   item('Play',   nil, 'Playing, following, and the loop',
        item('Loop',    nil, 'The loop and what clears it')),
   item('Column', nil, 'Adding and removing columns'),
@@ -356,7 +367,8 @@ manifest.tree = {
        item('Variant', nil, 'Step through a take\'s variants'),
        item('Remove',  nil, 'Delete a take or one instance')),
   item('Mirror', nil, 'Mirror groups and freezing'),
-  item('FX',     'X', 'Note FX and the param palette'),
+  item('FX',     'X', 'Note FX, the wiring graph and the param palette'),
+  item('Sample', nil, 'Sampler slots and the file browser'),
   item('Jump',   nil, 'Travel to a page'),
 }
 

@@ -187,6 +187,17 @@ return {
       t.truthy(top > 0, 'and at least one leaf sits at the top level')
       t.eq(mgr:entry('switchToTracker').node.name, 'Jump', 'travel to a page is under Jump')
       t.eq(mgr:entry('quantize').letter, 'Q', 'quantize is reached by Q under Grid')
+
+      -- The real page pair the synthetic case above stands for: tracker and arrange
+      -- both title their take properties Properties, and never stack together.
+      local props = mgr:entry('arrangeTakeProperties')
+      t.eq(props.node and props.node.name, 'Take', 'arrange reads take properties under Take too')
+      t.eq(props.letter, mgr:entry('takeProperties').letter, 'and by the letter tracker uses')
+
+      -- A group whose members one page alone declares, so the menu row it heads is
+      -- the sampler's own.
+      local assign = mgr:entry('browserAssign')
+      t.eq(assign.node and assign.node.name, 'Sample', 'loading a sample reads under Sample')
     end,
   },
 }

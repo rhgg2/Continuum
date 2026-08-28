@@ -1,4 +1,4 @@
-@spec cmgr_menu_spec  src=tests/specs/cmgr_menu_spec.lua  loc=192  cases=9
+@spec cmgr_menu_spec  src=tests/specs/cmgr_menu_spec.lua  loc=203  cases=9
 
 # Intent
   The menu tree declares the groups a path walks, and a path names its leaf: every
@@ -25,7 +25,7 @@
   @case 'two page scopes may reuse a letter, while a collision with global raises'  [pure]  @ 103-124
   @case 'a path naming no group raises, naming the command and the segment'  [pure]  @ 128-139
   @case 'a pathed entry is stamped with the node it reads under'  [pure]  @ 145-159
-  @case 'the real manifest declares a tree its paths reach'  [pure]  @ 166-190
+  @case 'the real manifest declares a tree its paths reach'  [pure]  @ 166-201
 
 # Fields (r read / w write incl. constructor keys)
   @field w Editing  @ 90,132
@@ -43,12 +43,12 @@
   @field r entries  @ 176
   @field w global  @ 43,74,90,117,132,149
   @field w label  @ 44,45,75,91,108,110,117,118,133,150,151
-  @field r letter  @ 31,32,49,50,95,96,113,157,189
+  @field r letter  @ 31,32,49,50,95,96,113,157,189,195
   @field w letter  @ 21,45,150
-  @field r name  @ 182,183,184,188
+  @field r name  @ 182,183,184,188,194,200
   @field w name  @ 21,26,39,44,45,57,70,75,86,91,103,107
   @field w name  @ 109,117,118,128,133,145,150,151,166
-  @field r node  @ 156,158,182,188
+  @field r node  @ 156,158,182,188,194,200
   @field r path  @ 177,181,184
   @field w path  @ 44,45,75,91,108,110,117,118,133,150,151
   @field w quantize  @ 131
