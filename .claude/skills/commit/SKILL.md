@@ -20,7 +20,8 @@ be parallel work happening in the tree.
 Decide the headline; you have the intent from the session, and the
 injected stat for scope. The format is `<scope>: <headline>`,
 imperative, ≤70 chars, scoped to the affected area (eg `tm: fix
-off-by-one in selection rect`).
+off-by-one in selection rect`). `config:` is the scope for Claude
+Code's own machinery — skills, hooks, settings, agents, and tools.
 
 ## 2. Docs pass
 

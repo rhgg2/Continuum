@@ -37,30 +37,21 @@ Two critical concepts in the tracker stack:
   (channel-wide stream). The view layer never touches pb directly.
   See `docs/tuning.md`.
 
-## Documentation layers
+## Documentation, design and planning
 
-`--KIND:` annotations in source carry single-line invariants,
-contracts, shapes, emitted signals and REAPER touchpoints. They are
-one-liners, capped short (except `--shape`); `docs/CONVENTIONS.md` has
-the full details.
+The only durable documentation for this project is in `docs/`. It
+states the current model, and non-local information that forces the
+code's shape.
 
-Rationale that wouldn't fit in a line live in `docs/<file>.md` with a
-one-line pointer at the site (`-- see docs/<file>.md § <section>`).
-The docs hold non-local information that forces the code's shape, but
-not design discussions.
-
-Ongoing work larger than a couple of commits has a design doc in
-`design/` and a plan in `plan/`: the design doc holds the model being
-proposed, without justifications; the plan holds the machinery —
-phases, what landed, what's next.
-
-`docs/` is the only permanent layer, and the others drain into it as
-work progresses; thus, only point into `docs/`.
+Ongoing work larger than a couple of commits has ephemeral
+documentation: a design doc in `design/` and a plan in `plan/`. The
+design doc holds the model being proposed, without justifications; the
+plan holds the machinery of phases, what landed and what's next.
 
 Docs, design docs and the decisions log share the register of
 `docs/STYLE.md`.
 
-## Navigating the code
+## Tooling
 
 `map/<module>.map` and `map/specs/<spec>.map` are symbol maps,
 regenerated on every edit. Besides direct reading, the maps can be
@@ -74,9 +65,3 @@ Use `mcp__reaper_docs__reaper_doc_lookup` for ReaScript/ReaImGui APIs.
 Continuum instance. Undoable edits route through mm/tm with an
 `undo_label`. `docs/bridge-cookbook.md` has the recipes,
 `docs/bridge.md` the model.
-
-## Commits
-
-`config:` is the scope for Claude Code's own machinery — skills,
-hooks, settings, agents, and tools whose only consumer is a skill
-(e.g. `tools/comment_hygiene.py`).

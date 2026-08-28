@@ -27,6 +27,24 @@ Tables crossing a pass boundary get role-named fields (`xLo`/`xHi`,
 
 Section banners: `----- Name`. Major: `----------- PUBLIC`.
 
+## Comments
+
+1. `--KIND:` annotations in source carry single-line invariants,
+   contracts, shapes, emitted signals and REAPER touchpoints. 
+
+1. `--invariant:`, `--contract:`, `--emits:`, `--reaper:`: one line,
+   capped at 100 chars, aim for 90.
+
+1. `--shape:` describes the shape of a table: field names, types, and
+   nesting, but not prose; capped at 400 chars.
+
+1. For specs under `tests/`, the file header and the preamble above each
+   case are the documentation, and can run as long as they need to.
+
+1. Other comment runs cap at 2 lines. Anything longer belongs in
+   `docs/<file>.md` with a one-line pointer at the site (`-- see
+   docs/<file>.md § <section>`).
+
 ## util.lua
 
 The idioms that recur in the code.
