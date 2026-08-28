@@ -1132,6 +1132,7 @@ end
 -- commandHeld gates note entry per key: a key bound to both a command and note
 -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
 --contract: no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip
+--contract: no-op while a scope captures letters -- the menu's walk owns the keyboard, note entry included
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 --contract: a note key typed while armed exits region mode then enters (execute-through)
@@ -1145,7 +1146,9 @@ function gridPane:handleKeys(kr)
   if tv:chordActive()  and shiftGone then tv:chordCommit()  end
   if tv:digitsActive() and shiftGone then tv:digitsCommit() end
 
-  if not inputAllowed() then return end
+  -- A scope owning the letters (the menu's walk) owns the whole keyboard: the grid types
+  -- nothing while it is up. See docs/commandManager.md § Scope stack.
+  if not inputAllowed() or cmgr:letterCapture() then return end
   -- Backspace deletes the last chord note, or steps the value gesture back one
   -- place (restore-to-retype). The two gestures are never live together.
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Backspace, false) then

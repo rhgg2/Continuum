@@ -2,6 +2,7 @@
 -- The lotus menu: a typed path to every deliberate verb.
 
 --invariant: the menu's scope is modal, so a walk key never reaches a page verb
+--invariant: a letter typed with the menu open goes to the scope's sink, before the keychain
 
 local util = require 'util'
 
@@ -75,6 +76,31 @@ function menu:level()
   return members
 end
 
+--contract: the member the letter names
+--contract: a group's letter descends
+--contract: a leaf's letter closes the menu and invokes; unmatched is dropped
+function menu:press(letter)
+  local hit
+  for _, member in ipairs(self:level()) do
+    if member.letter == letter then hit = member end
+  end
+  if not hit then return end
+  if hit.node then
+    util.add(path, hit.node)
+  else
+    -- Close first, so the leaf's command is gated by the stack the menu was walked over
+    -- rather than blocked by the menu's own modality.
+    local name = hit.entry.name
+    self:close()
+    cmgr:invoke(name)
+  end
+end
+
+--contract: pops one level, and closes the menu from the top
+function menu:back()
+  if #path == 0 then self:close() else path[#path] = nil end
+end
+
 -- The surface is read before the menu's own scope goes on the stack: its modality would
 -- otherwise hide everything the walk reaches.
 function menu:open()
@@ -91,7 +117,11 @@ function menu:close()
   cmgr:pop(scope)
 end
 
+-- Key dispatch offers a bare letter to the top scope's sink, so the walk takes its letters
+-- before the keychain sees them. See docs/commandManager.md § Scope stack.
+scope.captureLetter = function(letter) menu:press(letter) end
+
 cmgr:register('openMenu',   function() menu:open()  end)
-scope:register('closeMenu', function() menu:close() end)
+scope:register('menuBack',  function() menu:back()  end)
 
 return menu

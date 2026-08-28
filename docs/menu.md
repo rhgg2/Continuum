@@ -16,7 +16,7 @@ is a menu letter rather than a page verb.**
    depth.
 
 1. `openMenu` is declared in global and registered ungated, since `/`
-   opens the menu from any page. `closeMenu` is declared in the menu's
+   opens the menu from any page. `menuBack` is declared in the menu's
    own manifest and registered on its scope, so the gate is its own
    guard: Esc reaches it only while the menu is up, where it shadows
    the Esc bindings of the scopes below. The scope it pushed likewise
@@ -69,3 +69,29 @@ is a menu letter rather than a page verb.**
    what a walk reaches is what the page could reach when `/` was
    pressed. A closed menu holds an empty surface, and so an empty
    level.
+
+## The walk
+
+1. A letter reaches the menu through the sink its scope declares
+   (`docs/commandManager.md` § Scope stack). Key dispatch offers a bare
+   letter to that sink ahead of the keychain walk, so a letter typed
+   during the walk is the menu's, matched or not.
+
+1. A group's letter descends: the node goes on the path, and the level
+   becomes that node's. A leaf's letter closes the menu and then
+   invokes its command, in that order, so the command is gated by the
+   stack the menu was walked over.
+
+1. `menuBack` pops one level, and closes the menu from the top. Esc
+   and Super-G both reach it, the second being the bail gesture the
+   pages bind, which the menu's scope shadows for the length of the
+   walk.
+
+1. The coordinator draws the level as one line of letters and titles
+   over the body's last row, on the foreground draw list, so opening
+   the menu moves no grid row.
+
+1. The grid types nothing while the walk is up. Note entry reads the
+   key stream directly rather than through cmgr, so it asks whether a
+   scope captures letters, and stands off for every key while one
+   does.

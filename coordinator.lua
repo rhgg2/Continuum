@@ -118,6 +118,21 @@ local function dispatch(state)
   return keyDispatch.dispatchKeys(state, cmgr, ctx)
 end
 
+-- The open menu's level, as one line of letters and titles over the body's last row.
+-- Phase 5 gives the row its own geometry — see design/lotus-menu.md § Where it draws.
+local function drawMenuRow(x, bottom, width)
+  local parts = {}
+  for _, member in ipairs(menu:level()) do
+    util.add(parts, member.letter .. ' ' .. member.title)
+  end
+  local dl    = ImGui.GetForegroundDrawList(ctx)
+  local lineH = ImGui.GetTextLineHeight(ctx)
+  local top   = bottom - lineH - STATUS_PAD_Y * 2
+  ImGui.DrawList_AddRectFilled(dl, x, top, x + width, bottom, chrome.colour('statusBar.bg'))
+  ImGui.DrawList_AddText(dl, x + STATUS_PAD_X, top + STATUS_PAD_Y,
+                         chrome.colour('statusBar.text'), table.concat(parts, '   '))
+end
+
 ----- External commands (REAPER-keymap bridge)
 
 -- Companion REAPER actions set ExtState('Continuum', key); consumed each frame
@@ -260,11 +275,11 @@ local function frame()
 
     ImGui.Indent(ctx, CHROME_PAD_X)
     ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + CHROME_PAD_Y)
-    page:renderBody(ctx,
-      availW0 - CHROME_PAD_X * 2,
-      bodyH   - CHROME_PAD_Y,
-      dispatch)
+    local bodyX, bodyY   = ImGui.GetCursorScreenPos(ctx)
+    local bodyW, bodyPaneH = availW0 - CHROME_PAD_X * 2, bodyH - CHROME_PAD_Y
+    page:renderBody(ctx, bodyW, bodyPaneH, dispatch)
     ImGui.Unindent(ctx, CHROME_PAD_X)
+    if menu:isOpen() then drawMenuRow(bodyX, bodyY + bodyPaneH, bodyW) end
 
     -- Status band pinned to (toolbarBottom + bodyH); the parchment
     -- gap above is the leftover.

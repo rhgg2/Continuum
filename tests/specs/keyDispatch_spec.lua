@@ -57,6 +57,37 @@ end
 
 return {
   {
+    -- The lotus menu's letters: while the top scope declares a letter sink, a bare letter
+    -- goes to it and never reaches the keychain, whether or not the sink does anything
+    -- with it. Shift is tolerated, since the menu draws its letters uppercase; any other
+    -- modifier is a chord, and dispatches as one.
+    name = 'a scope capturing letters takes them ahead of the keychain walk',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd, seen  = loadKD(), {}
+      setKeys{ pressed = { fakeImGui.Key_A } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.deepEq(log.fired, { 'alpha' }, 'with no sink on the stack the letter is an ordinary binding')
+
+      cmgr:scope('walk').captureLetter = function(letter) util.add(seen, letter) end
+      cmgr:push('walk')
+      setKeys{ pressed = { fakeImGui.Key_A } }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.consumed, true, 'the captured letter consumes the frame')
+      t.deepEq(seen, { 'A' }, 'and reaches the sink as a letter')
+      t.deepEq(log.fired, { 'alpha' }, 'while the command it binds stays unfired')
+
+      setKeys{ pressed = { fakeImGui.Key_B }, mods = fakeImGui.Mod_Shift }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.deepEq(seen, { 'A', 'B' }, 'Shift is tolerated')
+
+      setKeys{ pressed = { fakeImGui.Key_B }, mods = fakeImGui.Mod_Ctrl }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.deepEq(seen, { 'A', 'B' }, 'and a chord is no menu letter')
+    end,
+  },
+
+  {
     name = 'a pressed bound key fires its command, consumes, and reports as held',
     run = function()
       local cmgr, log = freshCmgr()

@@ -42,24 +42,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 menu: letters walk the tree, and the level draws over the body (§ Walking a path)
 - 2026-08-28 menu: the level a path names, read off the surface at open (§ The surface)
 - 2026-08-28 menu: the walk's modal scope, and the verbs that open and close it (§ What stays live)
 - 2026-08-28 cmgr: pin the fluent/pathed split with a roster spec (§ Fluent and pathed)
-- 2026-08-28 cmgr: a path on every deliberate arrange, sampler and wiring verb (§ Fluent and pathed)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-3. **Letters walk it, and the level is drawn.** A letter is captured in
-   `keyDispatch` ahead of the keychain walk, as prefix digits already are,
-   and only while the menu is open. A group's letter descends, a leaf's
-   invokes the command and closes the menu, Esc pops one level and closes
-   from the top, and an unmatched letter is consumed and ignored. The level
-   draws as one line of letters and titles over the body's last row, plain
-   enough to be thrown away by phase 5. Spec: `/GQ` from the tracker invokes
-   quantize and closes; `/G` then Esc twice is closed again.
 4. **The prefix survives.** `/` with a prefix pending appends to the buffer
    as today and opens the menu; the next key resolves which it was — a
    digit continues the rational and closes the menu, a letter drops the

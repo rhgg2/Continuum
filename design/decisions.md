@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — A letter reaches the lotus menu through a sink the scope declares. Key dispatch
+  offers a bare or Shift letter to the top scope's captureLetter ahead of the keychain walk, so the
+  letter reaches no binding. The stack already answers what a key may reach, so key dispatch stays
+  ignorant of the menu, and the mini tracker's own cmgr declares no sink.
+
 - **2026-08-28** — A group is a member of its level where it or any descendant holds a reachable
   entry, so the sampler's Grid survives on the global swing verb alone while Column drops out. A
   level's leaves read by title: the surface unions the scopes on the stack, whose cheat-sheet groups

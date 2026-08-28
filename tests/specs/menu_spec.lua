@@ -55,7 +55,7 @@ return {
       t.eq(mgr.stack[#mgr.stack], mgr:scope('menu'), 'its scope is on top')
       t.eq(#mgr.stack, 3, 'above global and the page')
 
-      mgr:invoke('closeMenu')
+      mgr:invoke('menuBack')
       t.eq(menu:isOpen(), false, 'Esc closes it')
       t.eq(mgr.stack[#mgr.stack], mgr:scope('tracker'), 'the page scope is back on top')
     end,
@@ -75,7 +75,7 @@ return {
       t.deepEq(log, { 'quantize' }, 'the modal scope blocks it')
       t.eq(mgr:keysFor('quantize'), nil, 'and no chord reaches it either')
 
-      mgr:invoke('closeMenu')
+      mgr:invoke('menuBack')
       mgr:invoke('quantize')
       t.deepEq(log, { 'quantize', 'quantize' }, 'the block lasts exactly as long as the walk')
     end,
@@ -102,7 +102,7 @@ return {
     name = 'each verb is guarded by the scope it is registered on',
     run = function()
       local mgr = fixture('tracker')
-      mgr:invoke('closeMenu')
+      mgr:invoke('menuBack')
       t.eq(#mgr.stack, 2, 'close does nothing while the menu is closed')
 
       mgr:invoke('openMenu')
@@ -153,7 +153,7 @@ return {
 
       local grid = named(top, 'Grid')
       t.truthy(grid, 'Grid survives on a descendant the sampler can reach')
-      util.add(menu:path(), grid.node)   -- the letter that descends lands with the walk
+      menu:press(grid.letter)
       t.deepEq(titles(menu:level()), { 'Swing' },
                'holding the child global keeps, and not Scale, whose verbs are the tracker\'s')
 
@@ -173,7 +173,7 @@ return {
       local mgr, menu = fixture('tracker')
       mgr:invoke('openMenu')
       local grid = named(menu:level(), 'Grid')
-      util.add(menu:path(), grid.node)
+      menu:press(grid.letter)
 
       local members, groups, leaves, lastGroup, firstLeaf = menu:level(), {}, {}, 0, nil
       for i, m in ipairs(members) do
@@ -209,8 +209,74 @@ return {
       end
       t.eq(liveUnderGrid, false, 'while the modality hides the grid verbs from it')
 
-      mgr:invoke('closeMenu')
+      mgr:invoke('menuBack')
       t.deepEq(menu:level(), {}, 'and a closed menu holds no level')
+    end,
+  },
+
+  {
+    -- The walk itself: a group's letter descends, a leaf's closes the menu and then
+    -- invokes, and a letter no member takes is dropped. /GQ is the tracker's quantize.
+    -- The close precedes the invoke, so the command is gated by the ordinary stack — a
+    -- leaf invoked from inside the walk would reach nothing, and the log would be empty.
+    name = 'a letter descends into a group, and invokes a leaf',
+    run = function()
+      local mgr, menu, log = fixture('tracker')
+      mgr:invoke('openMenu')
+
+      menu:press('G')
+      t.deepEq(titles(menu:path()), { 'Grid' }, 'the group letter descends into it')
+      menu:press('Z')
+      t.deepEq(titles(menu:path()), { 'Grid' }, 'a letter no member takes is dropped')
+
+      menu:press('Q')
+      t.deepEq(log, { 'quantize' }, 'the leaf letter invokes its command')
+      t.eq(menu:isOpen(), false, 'and the menu is closed behind it')
+    end,
+  },
+
+  {
+    -- Esc unwinds the path the menu holds, one level at a time, and closes from the top.
+    -- One scope covers a walk of any depth, so the unwind is the menu's own bookkeeping.
+    name = 'Esc pops one level, and closes the menu from the top',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      menu:press('G')
+      menu:press('S')
+      t.deepEq(titles(menu:path()), { 'Grid', 'Scale' }, 'two levels down')
+
+      mgr:invoke('menuBack')
+      t.deepEq(titles(menu:path()), { 'Grid' }, 'Esc pops one level')
+      t.eq(menu:isOpen(), true, 'and leaves the menu up')
+
+      mgr:invoke('menuBack')
+      t.deepEq(titles(menu:path()), {}, 'the second pop is back at the top level')
+      t.eq(menu:isOpen(), true, 'still up')
+
+      mgr:invoke('menuBack')
+      t.eq(menu:isOpen(), false, 'and Esc from the top closes the menu')
+    end,
+  },
+
+  {
+    -- How a letter arrives: the menu's scope declares the sink key dispatch offers a bare
+    -- letter to, and the sink is the top scope's alone, so nothing captures a letter until
+    -- the menu is open. See docs/commandManager.md § Scope stack.
+    name = 'the open menu is what captures a letter',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      t.eq(mgr:letterCapture(), nil, 'with the page on top no scope captures letters')
+
+      mgr:invoke('openMenu')
+      local capture = mgr:letterCapture()
+      t.truthy(capture, 'the open menu takes them')
+      capture('G')
+      t.deepEq(titles(menu:path()), { 'Grid' }, 'and hands each one to the walk')
+
+      mgr:invoke('menuBack')
+      mgr:invoke('menuBack')
+      t.eq(mgr:letterCapture(), nil, 'a closed menu captures nothing again')
     end,
   },
 }

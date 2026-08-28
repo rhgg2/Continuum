@@ -56,9 +56,10 @@ local fluent = {
   wiring = {
     'wiringClearSelection',
   },
-  -- Opening and closing the menu are the walk's own verbs, so neither is walked to.
+  -- Opening the menu and stepping back out are the walk's own verbs, so neither is
+  -- walked to.
   menu = {
-    'closeMenu',
+    'menuBack',
   },
 }
 

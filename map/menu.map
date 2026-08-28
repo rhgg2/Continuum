@@ -1,81 +1,97 @@
-@module menu  src=menu.lua  loc=97  mode=chunk  self=menu
+@module menu  src=menu.lua  loc=127  mode=chunk  self=menu
 @deps cmgr
 
 # Shapes
-  @shape  member = { letter, title, desc, node? , entry? }  -- a group carries its node, a leaf its entry  @ 17
+  @shape  member = { letter, title, desc, node? , entry? }  -- a group carries its node, a leaf its entry  @ 18
 
 # Imports
-  @require util = 'util'  @ 6
+  @require util = 'util'  @ 7
       @invariant  the menu's scope is modal, so a walk key never reaches a page verb  @ 4
+      @invariant  a letter typed with the menu open goes to the scope's sink, before the keychain  @ 5
 
 # Private state
-  @state LIVE_GROUPS = { Transport = true, Pages = true }  @ 12
-  @state scope = cmgr:scope('menu')  @ 14
-  @state open = false  @ 19
-  @state path = {}  @ 20   -- the nodes descended into
-  @state surface = {}  @ 21   -- the entries the menu snapshotted as it opened
-  @state menu = {}  @ 23
+  @state LIVE_GROUPS = { Transport = true, Pages = true }  @ 13
+  @state scope = cmgr:scope('menu')  @ 15
+  @state open = false  @ 20
+  @state path = {}  @ 21   -- the nodes descended into
+  @state surface = {}  @ 22   -- the entries the menu snapshotted as it opened
+  @state menu = {}  @ 24
 
 # Private functions
-  @fn livePassthrough()  @ 27-33
+  @fn livePassthrough()  @ 28-34
       -- switchPage is the toolbar switcher's own verb, which a click reaches and no live
       -- group declares.
-  @fn occupied(node)  @ 37-45
+  @fn occupied(node)  @ 38-46
       -- A group is worth a letter where it or a descendant holds a reachable entry, so a
       -- level omits the groups whose members this page cannot reach.
 
+# Functions held in tables
+  @held scope.captureLetter(letter)  @ 122
+
 # Handlers registered
-  @handler cmgr:openMenu()  @ 94
-  @handler scope:closeMenu()  @ 95
+  @handler cmgr:openMenu()  @ 124
+  @handler scope:menuBack()  @ 125
 
 # Public API (menu:*)
-  @api menu:isOpen()  @ 49
-  @api menu:path()  @ 52
-      @contract  the nodes descended into, empty at the top level; the menu owns it and unwinds it  @ 51
-  @api menu:level()  @ 55-76
-      @contract  the members of the node the path names — groups in tree order, then leaves by title  @ 54
-  @api menu:open()  @ 80-86
+  @api menu:isOpen()  @ 50
+  @api menu:path()  @ 53
+      @contract  the nodes descended into, empty at the top level; the menu owns it and unwinds it  @ 52
+  @api menu:level()  @ 56-77
+      @contract  the members of the node the path names — groups in tree order, then leaves by title  @ 55
+  @api menu:press(letter)  @ 82-97
+      @contract  the member the letter names  @ 79
+      @contract  a group's letter descends  @ 80
+      @contract  a leaf's letter closes the menu and invokes; unmatched is dropped  @ 81
+  @api menu:back()  @ 100-102
+      @contract  pops one level, and closes the menu from the top  @ 99
+  @api menu:open()  @ 106-112
       -- The surface is read before the menu's own scope goes on the stack: its modality would
       -- otherwise hide everything the walk reaches.
-  @api menu:close()  @ 88-92
+  @api menu:close()  @ 114-118
 
 # Uses (outbound edges)
-  @use call    cmgr:pop  @ close:91
-  @use call    cmgr:push  @ open:85
-  @use call    cmgr:register  @ <load>:94
-  @use call    cmgr:scope  @ <load>:14
-  @use call    cmgr:surface  @ open:82
-  @use call    util.add  @ level:60,68,72
-  @use require util  @ <load>:6
+  @use call    cmgr:invoke  @ press:95
+  @use call    cmgr:pop  @ close:117
+  @use call    cmgr:push  @ open:111
+  @use call    cmgr:register  @ <load>:124
+  @use call    cmgr:scope  @ <load>:15
+  @use call    cmgr:surface  @ open:108
+  @use call    util.add  @ level:61,69,73 press:89
+  @use require util  @ <load>:7
 
 # Calls (intra-file)
-  @call livePassthrough  @ open:83
-  @call menu:close  @ scope:closeMenu:95
-  @call menu:open  @ cmgr:openMenu:94
-  @call occupied  @ occupied:42 level:59
+  @call livePassthrough  @ open:109
+  @call menu:back  @ scope:menuBack:125
+  @call menu:close  @ press:94 back:101
+  @call menu:level  @ press:84
+  @call menu:open  @ cmgr:openMenu:124
+  @call menu:press  @ scope.captureLetter:122
+  @call occupied  @ occupied:43 level:60
 
 # Unresolved receivers
-  @drop scope:register  @ <load>:95
+  @drop scope:register  @ <load>:125
 
 # Fields (r read / w write incl. constructor keys)
-  @field w Pages  @ 12
-  @field w Transport  @ 12
-  @field r children  @ occupied:41 level:58
-  @field r cmgr  @ 8
-  @field r desc  @ level:61
-  @field w desc  @ level:61,73
-  @field w entry  @ level:73
-  @field r group  @ livePassthrough:30
-  @field r label  @ level:73
-  @field r letter  @ level:60,72
-  @field w letter  @ level:60,72
-  @field w modal  @ 15
-  @field r name  @ livePassthrough:30 level:60
-  @field r node  @ occupied:39 level:68
-  @field w node  @ level:61
-  @field w passthrough  @ open:83
-  @field r path  @ level:68
-  @field w switchPage  @ livePassthrough:28
-  @field r title  @ level:70,72
-  @field w title  @ level:60,72
-  @field r tree  @ level:58
+  @field w Pages  @ 13
+  @field w Transport  @ 13
+  @field w captureLetter  @ scope.captureLetter:122
+  @field r children  @ occupied:42 level:59
+  @field r cmgr  @ 9
+  @field r desc  @ level:62
+  @field w desc  @ level:62,74
+  @field r entry  @ press:93
+  @field w entry  @ level:74
+  @field r group  @ livePassthrough:31
+  @field r label  @ level:74
+  @field r letter  @ level:61,73 press:85
+  @field w letter  @ level:61,73
+  @field w modal  @ 16
+  @field r name  @ livePassthrough:31 level:61 press:93
+  @field r node  @ occupied:40 level:69 press:88,89
+  @field w node  @ level:62
+  @field w passthrough  @ open:109
+  @field r path  @ level:69
+  @field w switchPage  @ livePassthrough:29
+  @field r title  @ level:71,73
+  @field w title  @ level:61,73
+  @field r tree  @ level:59

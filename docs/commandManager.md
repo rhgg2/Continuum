@@ -235,6 +235,12 @@ both honour this. The gate on `invoke` honours the same rule, so
 the two paths agree: a key that doesn't dispatch in a given mode
 will also not invoke its command.
 
+A scope can also declare `captureLetter`, a sink for a plain letter
+key. `mgr:letterCapture()` returns the top scope's, and key dispatch
+offers a bare or Shift letter to it ahead of the keychain walk, so the
+letter reaches no binding. The lotus menu's walk is its consumer
+(`docs/menu.md`).
+
 The same key may bind different verbs in different scopes — region's
 Delete fires `regionDrop`; tracker's Delete fires `deleteSel`. Two
 distinct verbs, one shared key. No name collision; no wrapper hack.

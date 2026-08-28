@@ -351,7 +351,7 @@ manifest.wiring = {
 
 manifest.menu = {
   Menu = {
-    command('closeMenu',             'Close menu',        'Escape'),
+    command('menuBack',              'Back',              { 'Escape', 'Super+G' }),
   },
 }
 

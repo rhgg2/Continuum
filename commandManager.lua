@@ -77,7 +77,7 @@ end
 
 ----- Scope
 
---shape: scope = { keymap={}, registered={}, manifest?, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
+--shape: scope = { keymap={}, registered={}, manifest?, modal?, passthrough?, captureLetter?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
 local function newScope(scopeName)
   local s = { keymap = {}, registered = {}, name = scopeName }
 
@@ -440,6 +440,13 @@ function cmgr:pop(s)
   s = asScope(s)
   assert(self.stack[#self.stack] == s, 'cmgr:pop — scope is not on top of the stack')
   self.stack[#self.stack] = nil
+end
+
+--contract: the top scope's letter sink, if it declares one
+--contract: key dispatch offers it a bare letter ahead of the keychain walk
+function cmgr:letterCapture()
+  local top = self.stack[#self.stack]
+  return top and top.captureLetter
 end
 
 ----- Dispatch

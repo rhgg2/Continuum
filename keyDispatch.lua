@@ -39,17 +39,35 @@ local function handlePrefixCapture(cmgr, ctx)
   return nil
 end
 
+-- A scope may declare a letter sink (the lotus menu's walk). A bare letter goes to it,
+-- never the keychain; Shift is tolerated since the menu draws uppercase letters.
+local function handleLetterCapture(cmgr, ctx)
+  local capture = cmgr:letterCapture()
+  if not capture then return nil end
+  if (ImGui.GetKeyMods(ctx) & ~ImGui.Mod_Shift) ~= 0 then return nil end
+  for i = 0, 25 do
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_A + i) then
+      capture(string.char(65 + i)); return 'consumed'
+    end
+  end
+  return nil
+end
+
 --shape: dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord
 --contract: returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
 --contract: first-hit wins; false declines, releases the key, and lets the page char queue see it
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+--contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
 function keyDispatch.dispatchKeys(state, cmgr, ctx)
   if state.suppressKbd or not state.acceptCmds then
     return { consumed = false, commandHeld = {} }
   end
   local cap = handlePrefixCapture(cmgr, ctx)
   if cap == 'consumed' then
+    return { consumed = true, commandHeld = {} }
+  end
+  if handleLetterCapture(cmgr, ctx) == 'consumed' then
     return { consumed = true, commandHeld = {} }
   end
   local commandHeld = {}

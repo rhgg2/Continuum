@@ -1,6 +1,6 @@
-@spec menu_spec  src=tests/specs/menu_spec.lua  loc=216  cases=8
+@spec menu_spec  src=tests/specs/menu_spec.lua  loc=282  cases=11
 @exercises commandManager (mgr), menu (menu)
-@surface   mgr:installManifest, mgr:installTree, mgr:register, mgr:scope, mgr:push, menu:isOpen, mgr:invoke, mgr:keysFor, menu:level, mgr:entry, menu:path, mgr:surface
+@surface   mgr:installManifest, mgr:installTree, mgr:register, mgr:scope, mgr:push, menu:isOpen, mgr:invoke, mgr:keysFor, menu:level, mgr:entry, menu:press, mgr:surface, menu:path, mgr:letterCapture
 
 # Intent
   The lotus menu as a scope. Opening pushes a modal cmgr scope, so a letter typed during
@@ -29,6 +29,9 @@
   @case 'a level omits what the stack cannot reach, a group included'  [pure]  @ 145-164
   @case 'a level lists its groups in tree order, then its leaves by title'  [pure]  @ 171-193
   @case 'the level is read from the surface the menu snapshotted as it opened'  [pure]  @ 199-214
+  @case 'a letter descends into a group, and invokes a leaf'  [pure]  @ 222-235
+  @case 'Esc pops one level, and closes the menu from the top'  [pure]  @ 241-259
+  @case 'the open menu is what captures a letter'  [pure]  @ 266-280
 
 # Uses (outbound edges)
   @use call mgr:installManifest  @ 23
@@ -36,13 +39,15 @@
   @use call mgr:register  @ 26
   @use call mgr:scope  @ 29,55,60
   @use call mgr:push  @ 32
-  @use call menu:isOpen  @ 51,54,59
-  @use call mgr:invoke  @ 53,58,70,73,74,78,79,90,93,105,108,109,121,148,174,202,212
+  @use call menu:isOpen  @ 51,54,59,234,251,255,258
+  @use call mgr:invoke  @ 53,58,70,73,74,78,79,90,93,105,108,109,121,148,174,202,212,225,244,249,253,257,271,277,278
   @use call mgr:keysFor  @ 76,97
   @use call menu:level  @ 122,149,157,175,178,203,213
   @use call mgr:entry  @ 134,136
-  @use call menu:path  @ 156,176
+  @use call menu:press  @ 156,176,227,229,232,245,246
   @use call mgr:surface  @ 205
+  @use call menu:path  @ 228,230,247,250,254,275
+  @use call mgr:letterCapture  @ 269,272,279
 
 # Fields (r read / w write incl. constructor keys)
   @field r children  @ 187
@@ -50,11 +55,11 @@
   @field r desc  @ 130,136
   @field r entry  @ 134
   @field r label  @ 136
-  @field r letter  @ 129,135
+  @field r letter  @ 129,135,156,176
   @field r name  @ 38,128,187
-  @field w name  @ 48,67,87,102,118,145,171,199
-  @field r node  @ 127,128,129,130,156,176,180,187,208
-  @field w run  @ 49,68,88,103,119,146,172,200
+  @field w name  @ 48,67,87,102,118,145,171,199,222,241,266
+  @field r node  @ 127,128,129,130,180,187,208
+  @field w run  @ 49,68,88,103,119,146,172,200,223,242,267
   @field r stack  @ 55,56,60,106,110
   @field r title  @ 38,43,180,181
   @field r tree  @ 24,127
