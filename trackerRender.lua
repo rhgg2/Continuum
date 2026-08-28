@@ -733,6 +733,7 @@ help:registerPage('tracker', {
   { group = 'Input',           anchor = 'body',           place = 'flow' },
   { group = 'Transport',       anchor = 'body',           place = 'flow' },
   { group = 'Take management', anchor = 'body',           place = 'flow' },
+  { group = 'Advance',         anchor = 'body',           place = 'flow' },
   { group = 'Pages',           anchor = 'body',           place = 'flow' },
   { group = 'Global',          anchor = 'body',           place = 'flow' },
 })

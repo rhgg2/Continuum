@@ -2,7 +2,8 @@
 -- see docs/commandManager.md § Manifest
 
 --shape: { scope = { group = { entry, ... } } }
---shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path? }
+--shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, family?, base? }
+--shape: family = { label = 'Place slot', members = { entry, ... } } -- one cheat-sheet row
 
 local util = require 'util'
 
@@ -13,6 +14,15 @@ local manifest = {}
 local function command(name, label, keys, path)
   return { name = name, label = label,
            keys = type(keys) == 'string' and { keys } or keys, path = path }
+end
+
+-- One member of a generated family: the family table is shared, and `base` is the
+-- member's unmasked token, which a family rebind re-masks. See docs/commandManager.md § Manifest.
+local function member(family, name, label, mask, base)
+  local entry = command(name, label, mask .. base)
+  entry.family, entry.base = family, base
+  util.add(family.members, entry)
+  return entry
 end
 
 ----- global (bodies in continuum's Main, except toggleHelp, which is coordinator's)
@@ -183,14 +193,15 @@ manifest.tracker = {
   Tuning = { command('openTemperPicker', 'Pick tuning',             'Super+T') },
   Swing  = { command('openSwingPicker',  'Pick swing',              'Super+S') },
   Global = { command('returnToArrange',  'Back to arrange',         { 'Enter', 'KeypadEnter' }) },
-  -- Ten Ctrl+digit entries the sheet does not place: the family earns one row,
-  -- which is its own piece of work.
   Advance = {},
 }
 
--- Universal-argument digit prefixes: Ctrl+0..9 arm advBy0..advBy9.
+-- Universal-argument digit prefixes: Ctrl+0..9 arm advBy0..advBy9. The ten read as
+-- one cheat-sheet row and rebind together from one captured chord's mask.
+local trackerAdvance = { label = 'Advance by 0-9', members = {} }
 for i = 0, 9 do
-  util.add(manifest.tracker.Advance, command('advBy' .. i, 'Advance by ' .. i, 'Ctrl+' .. i))
+  util.add(manifest.tracker.Advance,
+           member(trackerAdvance, 'advBy' .. i, 'Advance by ' .. i, 'Ctrl+', tostring(i)))
 end
 
 ----- region (overlay within the tracker page; bodies + springLoaded config on ec)
@@ -277,16 +288,20 @@ local function placeKey(slotIdx)
   return 'Shift+' .. string.char(65 + slotIdx - 36)
 end
 
--- Slot key = util.toBase62(i); matches arrangeView's drop-command registration.
+-- Slot key = util.toBase62(i); matches arrangeView's drop-command registration. The
+-- sixty-two are unmasked, so a captured mask lands over the place keys as declared.
+local slotFamily = { label = 'Place slot', members = {} }
 for i = 0, 61 do
   local key = util.toBase62(i)
-  util.add(manifest.arrange.Slots, command('drop' .. key, 'Place slot ' .. key, placeKey(i)))
+  util.add(manifest.arrange.Slots,
+           member(slotFamily, 'drop' .. key, 'Place slot ' .. key, '', placeKey(i)))
 end
 
 -- Universal-argument digit prefixes, project-wide rather than tracker's take-tier.
+local arrangeAdvance = { label = 'Advance by 0-9', members = {} }
 for i = 0, 9 do
   util.add(manifest.arrange.Advance,
-           command('arrangeAdvanceBy' .. i, 'Advance by ' .. i, 'Ctrl+' .. i))
+           member(arrangeAdvance, 'arrangeAdvanceBy' .. i, 'Advance by ' .. i, 'Ctrl+', tostring(i)))
 end
 
 ----- sample (bodies + the slot-clamp invariant in sampleRender)

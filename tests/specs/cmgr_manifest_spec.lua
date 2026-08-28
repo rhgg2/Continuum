@@ -121,6 +121,44 @@ return {
   },
 
   {
+    -- Every generated family in the real manifest: its members share a group, and
+    -- each member's declared chord is its own base token under one common mask.
+    -- That mask is what a family rebind replaces, so a base which does not
+    -- re-derive its declared chord would rebind the family onto the wrong keys.
+    name = 'a declared family shares a group and one mask over its bases',
+    run = function()
+      local mgr = fresh()
+      mgr:installManifest(require('manifest'), img)
+      local families = {}
+      for _, scope in pairs(mgr.scopes) do
+        for _, entries in pairs(scope.manifest or {}) do
+          for _, entry in ipairs(entries) do
+            if entry.family then util.bucket(families, entry.family, entry) end
+          end
+        end
+      end
+      t.truthy(next(families), 'the manifest declares at least one family')
+      for family, members in pairs(families) do
+        t.truthy(#members > 1, family.label .. ' has more than one member')
+        t.eq(#members, #family.members, family.label .. ' lists every member it stamps')
+        local group, mask, shared
+        for _, entry in ipairs(members) do
+          t.eq(#entry.keys, 1, entry.name .. ' declares one chord')
+          local key,     mods  = mgr:keySpec(mgr:specForToken(entry.keys[1], img), img)
+          local baseKey, bmods = mgr:keySpec(mgr:specForToken(entry.base, img), img)
+          group = group or entry.group
+          mask  = mask  or (mods & ~bmods)
+          t.eq(entry.group, group, entry.name .. ' reads in its family\'s group')
+          t.eq(key, baseKey, entry.name .. ' is declared on its base key')
+          t.eq(mods, mask | bmods, entry.name .. ' carries the family mask over its base')
+          shared = (shared or ~0) & bmods
+        end
+        t.eq(shared, 0, family.label .. ' declares its mask, not the bases\' common modifier')
+      end
+    end,
+  },
+
+  {
     name = 'a token that does not parse raises, naming the command',
     run = function()
       local mgr = fresh()

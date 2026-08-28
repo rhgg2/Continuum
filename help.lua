@@ -68,6 +68,7 @@ end
 -- symbol glyphs are floored to a square (so , . ` read as keys), word labels stay natural.
 local CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc
 local SEP = '/'
+local FAMILY_SEP = '\xe2\x80\x93'   -- – (between a generated family's first and last chord)
 local CAPTURE_GLYPH = '\xe2\x80\xa6'   -- … (chip cue while capturing a replacement)
 local TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
 local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
@@ -75,10 +76,11 @@ local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
 -- Side of a square edit-tag box: the symbol plus a 2px moat and the 1px border.
 local function tagSide() return TAG_SYM + (TAG_PAD + 1) * 2 end
 
--- Lay out a shortcut's chips ('/'-separated, one per binding) into geometry for
+-- Lay out a shortcut's chips (separator-joined, one per binding) into geometry for
 -- drawCluster: total width + each chip's {w, cells}; word runs share one cell, symbols one each.
-local function layoutCluster(keys, withAdd)
-  local sepW, chips, total = ImGui.CalcTextSize(ctx, SEP), {}, 0
+local function layoutCluster(keys, withAdd, sep)
+  sep = sep or SEP
+  local sepW, chips, total = ImGui.CalcTextSize(ctx, sep), {}, 0
   for index, chord in ipairs(keys) do
     local cells, chipW, run = {}, CHIP_PADX_OUTER * 2, nil
     local function cell(text)
@@ -100,7 +102,7 @@ local function layoutCluster(keys, withAdd)
     total = total + chipW + (index > 1 and SEP_GAP * 2 + sepW or 0)
   end
   if withAdd then total = total + ADD_GAP + tagSide() end   -- room for the trailing + tag
-  return { width = total, chips = chips }
+  return { width = total, chips = chips, sep = sep }
 end
 
 -- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
@@ -139,18 +141,22 @@ end
 
 -- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
 -- trailing + tag, each with its own hit. See docs/help.md § Editing.
-local function drawCluster(cluster, x, y, cmd, specs)
-  local sepW, cursorX = ImGui.CalcTextSize(ctx, SEP), x
-  local isEditing = cmd == editing
-  local isCapture = capturing ~= nil and capturing.cmd == cmd
+local function drawCluster(row, x, y)
+  local cluster, cmd, family = row.cluster, row.cmd, row.family
+  local sepW, cursorX = ImGui.CalcTextSize(ctx, cluster.sep), x
+  local isEditing = cmd ~= nil and cmd == editing
+  local isCapture = capturing ~= nil
+                    and ((family ~= nil and capturing.family == family)
+                         or (cmd ~= nil and capturing.cmd == cmd))
   for index, chip in ipairs(cluster.chips) do
     if index > 1 then
-      ImGui.DrawList_AddText(dl, cursorX + SEP_GAP, y, theme.key, SEP)
+      ImGui.DrawList_AddText(dl, cursorX + SEP_GAP, y, theme.key, cluster.sep)
       cursorX = cursorX + SEP_GAP * 2 + sepW
     end
-    local spec = specs[index]
+    local spec = row.specs and row.specs[index]
     local x2   = cursorX + chip.w
-    local captureHere = isCapture and spec ~= nil and spec == capturing.replace
+    -- A family captures for the whole row, so both its chips show the cue.
+    local captureHere = isCapture and (family ~= nil or (spec ~= nil and spec == capturing.replace))
     ImGui.DrawList_AddRectFilled(dl, cursorX, y, x2, y + lineH, capBg, CHIP_R)
     ImGui.DrawList_AddRect(dl, cursorX, y, x2, y + lineH, captureHere and theme.title or capLine, CHIP_R)
     if captureHere then
@@ -164,7 +170,8 @@ local function drawCluster(cluster, x, y, cmd, specs)
         glyphX = glyphX + cell.w
       end
     end
-    util.add(hits, { x = cursorX, y = y, w = chip.w, h = lineH, kind = 'chip', cmd = cmd, spec = spec })
+    util.add(hits, { x = cursorX, y = y, w = chip.w, h = lineH, kind = 'chip',
+                     cmd = cmd, spec = spec, family = family })
     if isEditing and spec ~= nil then
       drawTag(x2+2, y, 'x', theme.remove, false, { kind = 'remove', cmd = cmd, spec = spec })
     end
@@ -180,18 +187,45 @@ end
 -- a conflict's victim may live on a scope this page never shows.
 local function cmdLabel(cmd) return cmgr:entry(cmd).label end
 
+-- A command's first chord, or an em dash where an override left it unbound.
+local function chordOf(name)
+  local labels = cmgr:keyLabelList(name, ImGui)
+  return labels and labels[1] or EM_DASH
+end
+
+-- A generated family reads as one row: its own label, and its first and last member's
+-- chords with a dash between. See docs/help.md § A generated family.
+local function familyRow(family)
+  local members = family.members
+  local chords  = { chordOf(members[1].name), chordOf(members[#members].name) }
+  return { cluster = layoutCluster(chords, false, FAMILY_SEP),
+           label = family.label, family = family }
+end
+
+local function commandRow(entry)
+  local editingRow = entry.name == editing
+  local labels     = cmgr:keyLabelList(entry.name, ImGui)
+  return { cluster = layoutCluster(labels or (editingRow and {} or { EM_DASH }), editingRow),
+           label = entry.label, cmd = entry.name, specs = cmgr:keysFor(entry.name) or {} }
+end
+
 -- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the box
 -- w/h, sized to the wider of title vs the shortcut column + widest label.
 local function layoutBox(title, entries)
-  local rows, keyW, labelW = {}, 0, 0
+  local rows, keyW, labelW, collapsed = {}, 0, 0, {}
   for _, entry in ipairs(entries) do
-    local editingRow = entry.name == editing
-    local labels  = cmgr:keyLabelList(entry.name, ImGui)
-    local cluster = layoutCluster(labels or (editingRow and {} or { EM_DASH }), editingRow)
-    util.add(rows, { cluster = cluster, label = entry.label,
-                     cmd = entry.name, specs = cmgr:keysFor(entry.name) or {} })
-    keyW   = math.max(keyW, cluster.width)
-    labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, entry.label)))
+    local family = entry.family
+    local row
+    if not family then
+      row = commandRow(entry)
+    elseif not collapsed[family] then
+      row, collapsed[family] = familyRow(family), true
+    end
+    if row then
+      util.add(rows, row)
+      keyW   = math.max(keyW, row.cluster.width)
+      labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, row.label)))
+    end
   end
   local titleW = ImGui.CalcTextSize(ctx, title)
   local w = math.max(titleW, keyW + KEY_GAP + labelW) + PAD * 2
@@ -206,7 +240,7 @@ local function drawBox(box, x, y)
   ImGui.DrawList_AddText(dl, x + PAD, rowY, theme.title, box.title)
   rowY = rowY + lineH + ROW_GAP
   for _, row in ipairs(box.rows) do
-    drawCluster(row.cluster, x + PAD, rowY, row.cmd, row.specs)
+    drawCluster(row, x + PAD, rowY)
     ImGui.DrawList_AddText(dl, x + PAD + box.keyW + KEY_GAP, rowY, theme.label, row.label)
     rowY = rowY + lineH + ROW_GAP
   end
@@ -214,17 +248,20 @@ end
 
 local PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4
 
--- Centred modal for a chord collision. Warn phase offers Cancel/Reassign; recover
--- phase narrates the victim's loss while pollCapture claims a new chord for it.
+-- Centred modal for a chord collision: warn offers Cancel/Reassign, refuse reports the
+-- chord blocking a family's mask, recover narrates the loss while pollCapture reclaims.
 local function drawConflict(winX, winY, winW, winH)
   conflictHits = {}
   local chord = cmgr:keyLabel(conflict.spec, ImGui)
-  local warn  = conflict.phase == 'warn'
   local line1, line2, buttons
-  if warn then
+  if conflict.phase == 'warn' then
     line1   = chord .. '  is  ' .. cmdLabel(conflict.victim)
     line2   = 'Reassign to ' .. cmdLabel(conflict.cmd) .. '?'
     buttons = { { kind = 'cancel', text = 'Cancel' }, { kind = 'reassign', text = 'Reassign' } }
+  elseif conflict.phase == 'refuse' then
+    line1   = chord .. '  is  ' .. cmdLabel(conflict.victim)
+    line2   = conflict.family.label .. ' needs every chord of the mask free'
+    buttons = { { kind = 'cancel', text = 'OK' } }
   else
     line1   = cmdLabel(conflict.victim) .. '  lost  ' .. chord
     line2   = 'Press a new chord  ' .. EM_DASH .. '  Esc leaves it unbound'
@@ -392,11 +429,21 @@ local function dropChord(cmd, spec)
   cmgr:rebind(cmgr:bindingSite(cmd), cmd, kept, ImGui)
 end
 
+-- A family takes the captured chord's modifier mask, and only where every chord it
+-- would claim is free. See docs/help.md § A generated family.
+local function commitFamily(family, spec)
+  local _, mods       = cmgr:keySpec(spec, ImGui)
+  local victim, taken = cmgr:familyVictim(family, mods, ImGui)
+  if victim then conflict = { phase = 'refuse', family = family, victim = victim, spec = taken }
+  else           cmgr:rebindFamily(family, mods, ImGui) end
+end
+
 -- A captured chord that collides with a reachable command opens the warn prompt;
--- a free chord binds straight away. See docs/help.md § Editing.
+-- a free chord binds straight away. See docs/help.md § Editing bindings.
 local function commitCapture(spec)
-  local cmd, replace = capturing.cmd, capturing.replace
+  local cmd, family, replace = capturing.cmd, capturing.family, capturing.replace
   capturing = nil
+  if family then return commitFamily(family, spec) end
   local victim = cmgr:commandAtKey(spec, cmd, ImGui)
   if victim then
     conflict = { phase = 'warn', cmd = cmd, victim = victim, spec = spec, replace = replace }
@@ -458,13 +505,20 @@ local function handleConflict()
   if accept then reassign() end
 end
 
+-- The refusal prompt is an acknowledgement: any key or click clears it, and the
+-- gesture is swallowed rather than dismissing the sheet.
+local function handleRefusal()
+  if ImGui.IsMouseClicked(ctx, 0) or anyKeyPressed() then conflict = nil end
+end
+
 local function handleClicks()
   if not (ImGui.IsMouseClicked(ctx, 0) or ImGui.IsMouseClicked(ctx, 1)
           or ImGui.IsMouseClicked(ctx, 2)) then return end
   local mouseX, mouseY = ImGui.GetMousePos(ctx)
   local hit = hitAt(mouseX, mouseY)
   if hit then
-    if     hit.kind == 'remove' then rebindWithout(hit.cmd, hit.spec)
+    if     hit.family           then editing, capturing = nil, { family = hit.family }
+    elseif hit.kind == 'remove' then rebindWithout(hit.cmd, hit.spec)
     elseif hit.kind == 'add'    then editing, capturing = hit.cmd, { cmd = hit.cmd }
     elseif editing == hit.cmd   then capturing = { cmd = hit.cmd, replace = hit.spec }
     else                             editing = hit.cmd end
@@ -528,6 +582,8 @@ function help:draw()
   -- steps out); else any key / off-box click dismisses. See docs/help.md § Editing.
   if conflict and conflict.phase == 'warn' then
     handleConflict()
+  elseif conflict and conflict.phase == 'refuse' then
+    handleRefusal()
   elseif capturing then
     pollCapture()
   elseif editing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then

@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=695  mode=chunk  self=cmgr
+@module commandManager  src=commandManager.lua  loc=736  mode=chunk  self=cmgr
 @deps cm
 
 # Invariants & contracts
@@ -65,6 +65,10 @@
   @fn buildKeyTokens(ImGui)  @ 575-610
   @fn buildModTokens(ImGui)  @ 612-619
   @fn ensureTokenTables(ImGui)  @ 621-627
+  -- Binding overrides (persisted, hand-editable)
+  -- Generated families
+  @fn familySpecs(self, family, mods, ImGui)  @ 700-712
+      -- (name, spec) per member: its base token under mods, the base's own modifiers kept.
 
 # Public API (cmgr:*)
   @api cmgr:register(name, fn, undoDesc)  @ 126
@@ -134,17 +138,22 @@
       @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name  @ 629
   @api cmgr:specForToken(token, ImGui)  @ 644-659
       @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier  @ 643
-  -- Binding overrides (persisted, hand-editable)
   @api cmgr:loadOverrides(ImGui)  @ 665-680
       @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings  @ 664
   @api cmgr:rebind(scopeName, name, specs, ImGui)  @ 683-693
       @contract  overwrites the scope's binding for name and persists it as tokens (global tier)  @ 682
+  @api cmgr:familyVictim(family, mods, ImGui)  @ 716-727
+      @contract  (victim, spec) for the first proposed chord already spoken for; nil if the mask is free  @ 714
+      @invariant  a family's own members are never victims — a rebind vacates their chords wholesale  @ 715
+  @api cmgr:rebindFamily(family, mods, ImGui)  @ 730-734
+      @contract  rewrites every member to its base token under mods, one binding each, live + persisted  @ 729
 
 # Uses (outbound edges)
   @use call    cm:get  @ noteChars:453 loadOverrides:666 rebind:687
   @use call    cm:set  @ rebind:692
-  @use call    util.add  @ installManifest:165 surface:190 push:332 keychain:396,404 keyLabel:549,551 keyLabelList:560 tokenForSpec:637,639 specForToken:647,656 loadOverrides:673 rebind:690
+  @use call    util.add  @ installManifest:165 surface:190 push:332 keychain:396,404 keyLabel:549,551 keyLabelList:560 tokenForSpec:637,639 specForToken:647,656 loadOverrides:673 rebind:690 familySpecs:707,709
   @use call    util.atomic  @ newScope:92
+  @use call    util.key  @ familyVictim:720
   @use call    util.print  @ loadOverrides:674
   @use require util  @ <load>:15
 
@@ -156,19 +165,23 @@
   @call buildModTokens  @ ensureTokenTables:623
   @call buildShiftGlyphs  @ keyLabel:543
   @call clearPrefixState  @ cancelPrefix:287 invoke:372
+  @call cmgr:bindingSite  @ rebindFamily:732
+  @call cmgr:commandAtKey  @ familyVictim:723
   @call cmgr:doAfter  @ doAfter:248
   @call cmgr:doBefore  @ doBefore:238
   @call cmgr:keyLabel  @ keyLabelList:560
   @call cmgr:keyLabelList  @ keyLabels:566
-  @call cmgr:keySpec  @ commandAtKey:425,430 keyLabel:545 tokenForSpec:632
+  @call cmgr:keySpec  @ commandAtKey:425,430 keyLabel:545 tokenForSpec:632 familySpecs:704 familyVictim:719
   @call cmgr:keychain  @ commandAtKey:426
   @call cmgr:keysFor  @ keyLabelList:557
+  @call cmgr:rebind  @ rebindFamily:732
   @call cmgr:register  @ newScope:101,102
   @call cmgr:scope  @ installManifest:148 push:331
-  @call cmgr:specForToken  @ installManifest:163 loadOverrides:672
+  @call cmgr:specForToken  @ installManifest:163 loadOverrides:672 familySpecs:704
   @call cmgr:tokenForSpec  @ rebind:690
   @call cmgr:wrap  @ doBefore:241 doAfter:251
-  @call ensureTokenTables  @ tokenForSpec:631 specForToken:645
+  @call ensureTokenTables  @ tokenForSpec:631 specForToken:645 familySpecs:701
+  @call familySpecs  @ familyVictim:718 rebindFamily:731
   @call isReachable  @ surface:190 invoke:368
   @call newScope  @ <load>:117 scope:321
   @call resolveKeys  @ keysFor:390
@@ -224,13 +237,15 @@
   @field r Mod_Shift  @ buildModOrder:529,536 keyLabel:546 buildModTokens:615
   @field r Mod_Super  @ buildModOrder:527,537 buildModTokens:617
   @field w azerty  @ 30
+  @field r base  @ familySpecs:704
   @field r cm  @ 48
   @field w colemak  @ 22
   @field r commands  @ newScope:92 auditManifests:213 wrap:228,230 invoke:355
   @field w commands  @ 51
   @field w dvorak  @ 26
-  @field r entries  @ installManifest:157 entry:177
+  @field r entries  @ installManifest:157 entry:177 familyVictim:724
   @field w entries  @ 52
+  @field r family  @ familyVictim:725
   @field r gates  @ newScope:93 invoke:363,367 bindingSite:445
   @field w gates  @ 53
   @field w global  @ 118
@@ -242,9 +257,11 @@
   @field w layouts  @ 56
   @field r manifest  @ surface:188 auditManifests:201,208
   @field w manifest  @ installManifest:171
+  @field r members  @ familySpecs:703
   @field r modal  @ isReachable:73 resolveKeys:386 keychain:397 bindingSite:443
-  @field r name  @ installManifest:151 surface:190 auditManifests:210,211,212,213 bindingSite:442,445
-  @field w name  @ newScope:82
+  @field r name  @ installManifest:151 surface:190 auditManifests:210,211,212,213 bindingSite:442,445 familySpecs:709 familyVictim:722,723 rebindFamily:732
+  @field r name  @ rebindFamily:732
+  @field w name  @ newScope:82 familySpecs:709
   @field r passthrough  @ isReachable:73 resolveKeys:386 keychain:398 bindingSite:443
   @field w qwerty  @ 18
   @field r redirect  @ invoke:358
@@ -252,6 +269,8 @@
   @field w registered  @ newScope:82
   @field r scopes  @ 118 auditManifests:200 scope:319,322 asScope:327 loadOverrides:667 rebind:684
   @field w scopes  @ 54
+  @field r spec  @ familyVictim:719,721,723,725 rebindFamily:732
+  @field w spec  @ familySpecs:709
   @field r springLoaded  @ invoke:357
   @field r stack  @ isReachable:67,71,72 119 surface:187 push:332 pop:339,340 invoke:356
   @field r stack  @ resolveKeys:382,383 keychain:395,396,397,398,401 bindingSite:440,441

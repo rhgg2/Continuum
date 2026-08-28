@@ -121,6 +121,13 @@ will eventually layer overrides on top.
    labels included: the tracker's `advBy0`–`advBy9` are ten entries in
    the group `Advance`, so no command is registered outside a manifest.
 
+1. A **family** is the table those entries share. It carries the label
+   the family reads under and its **members** in declaration order. Each
+   member also carries its **base**, the unmasked token its declared
+   chord is the masked form of: `advBy3` declares `Ctrl+3` over the base
+   `3`, while the drop family's mask is empty and `drop36` declares its
+   base `Shift+A` as it stands.
+
 ## Scope stack
 
 Scopes form a stack. The `'global'` scope sits at the bottom (pushed
@@ -281,6 +288,14 @@ would this chord clobber?" — used by the help overlay before a rebind.
 `bindingSite(name)` answers "which scope do I edit this command's binding
 in?" Both walk the same stack reachability that `invoke`/`keychain` use,
 so a hidden lower binding is neither a conflict nor an edit site.
+
+A generated family is edited whole. `rebindFamily(family, mods, ImGui)`
+rewrites every member to its base token under `mods`, keeping whatever
+modifiers the base itself carries. `familyVictim(family, mods, ImGui)`
+names the first chord that mask would claim from elsewhere, counting a
+chord two members would come to share; the family's own current chords
+are not in the way, since the rebind vacates them. A mask naming a
+victim is refused rather than rebinding part of the family.
 
 ## Conventions
 

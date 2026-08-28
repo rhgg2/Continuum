@@ -692,4 +692,45 @@ function cmgr:rebind(scopeName, name, specs, ImGui)
   cm:set('global', 'keyBindings', overrides)
 end
 
+----- Generated families
+-- A family's members rebind as one: a captured chord's modifiers re-mask every
+-- member's base token. see docs/commandManager.md § Manifest
+
+-- (name, spec) per member: its base token under mods, the base's own modifiers kept.
+local function familySpecs(self, family, mods, ImGui)
+  ensureTokenTables(ImGui)
+  local out = {}
+  for _, entry in ipairs(family.members) do
+    local key, own = self:keySpec(self:specForToken(entry.base, ImGui), ImGui)
+    local spec, all = { key }, mods | own
+    for _, mod in ipairs(modTokenList) do
+      if (all & mod[1]) ~= 0 then util.add(spec, mod[1]) end
+    end
+    util.add(out, { name = entry.name, spec = #spec > 1 and spec or key })
+  end
+  return out
+end
+
+--contract: (victim, spec) for the first proposed chord already spoken for; nil if the mask is free
+--invariant: a family's own members are never victims — a rebind vacates their chords wholesale
+function cmgr:familyVictim(family, mods, ImGui)
+  local claimed = {}
+  for _, item in ipairs(familySpecs(self, family, mods, ImGui)) do
+    local key, keyMods = self:keySpec(item.spec, ImGui)
+    local chord = util.key(key, keyMods)
+    if claimed[chord] then return claimed[chord], item.spec end
+    claimed[chord] = item.name
+    local victim = self:commandAtKey(item.spec, item.name, ImGui)
+    local entry  = victim and self.entries[victim]
+    if victim and not (entry and entry.family == family) then return victim, item.spec end
+  end
+end
+
+--contract: rewrites every member to its base token under mods, one binding each, live + persisted
+function cmgr:rebindFamily(family, mods, ImGui)
+  for _, item in ipairs(familySpecs(self, family, mods, ImGui)) do
+    self:rebind(self:bindingSite(item.name), item.name, { item.spec }, ImGui)
+  end
+end
+
 return cmgr

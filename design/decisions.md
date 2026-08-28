@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-28** — A generated family rebinds as one. A captured chord's modifiers re-mask every
+  member over its own unmasked base token, so the base is declared beside the member rather than
+  inferred as a common prefix. The family takes a mask only where every chord it would claim is
+  free: a collision refuses the whole capture, since rebinding part of a family would leave two
+  names on one chord in one scope, which dispatch resolves arbitrarily.
+
 - **2026-08-28** — The gesture the cheat-sheet swallows is gated at each page's own direct read of
   the mouse or key stream, not centrally: only the render knows which of its passes bypass the
   dispatcher coord suppresses. Each page anchors one body rect under the shared key `body`, so a

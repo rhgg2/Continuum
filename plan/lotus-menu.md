@@ -36,10 +36,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-28 help: a generated family reads as one row (§ Fluent and pathed)
 - 2026-08-28 help: the cheat-sheet reaches arrange, sampler and wiring (§ Three consumers)
 - 2026-08-28 cmgr: declare each entry under its cheat-sheet group (§ Three consumers)
 - 2026-08-28 cmgr: declare the manifest as ordered lists of token-keyed entries (§ The manifest)
-- 2026-08-27 cmgr: the cheat-sheet reads its labels from the entries (§ Three consumers)
 
 ## Now
 
@@ -47,8 +47,4 @@
 
 ## Queued (current phase; one-liners)
 
-- **A generated family renders as one row.** `drop0`–`dropZ` and
-  `advBy0`–`advBy9` collapse to one row showing the first and last
-  chords. A rebind there captures a single chord and rewrites the
-  family from its modifier mask, so the family's key is customisable
-  without ten edits.
+(empty — the phase's last item is in flight.)

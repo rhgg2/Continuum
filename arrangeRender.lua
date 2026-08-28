@@ -937,7 +937,7 @@ function ar:toolbarSegments() return toolbarSegments end
 ----- F1 help placements — the modes callout pins under its toolbar checkbox and
 ----- the zoom pair under the beats/row cell; the rest flow over the body. A
 ----- placement names a manifest group; the group's entries are its rows.
------ The drop and advance families are unplaced: a family earns one row.
+----- The drop and advance families each collapse to a single row.
 
 help:registerPage('arrange', {
   { group = 'Modes',      anchor = 'toolbar.followPlay', place = 'pin'  },
@@ -945,6 +945,8 @@ help:registerPage('arrange', {
   { group = 'Movement',   anchor = 'body',               place = 'flow' },
   { group = 'Selection',  anchor = 'body',               place = 'flow' },
   { group = 'Takes',      anchor = 'body',               place = 'flow' },
+  { group = 'Slots',      anchor = 'body',               place = 'flow' },
+  { group = 'Advance',    anchor = 'body',               place = 'flow' },
   { group = 'Loop',       anchor = 'body',               place = 'flow' },
   { group = 'Transport',  anchor = 'body',               place = 'flow' },
   { group = 'Pages',      anchor = 'body',               place = 'flow' },

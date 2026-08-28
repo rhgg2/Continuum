@@ -40,7 +40,8 @@ the sheet holds no command list and a label is declared once.
 A page registers *placement* alone (`help:registerPage(name, placements)`),
 co-located with the render module that owns the layout. A placement names
 a group and says where its box draws; the box's title is the group's name
-and its rows are the group's entries in declared order. `help` buckets
+and its rows are the group's entries in declared order, a generated family
+collapsed to one row (§ A generated family). `help` buckets
 the reachable surface (`docs/commandManager.md` § Surface) by group name,
 so a group with no reachable entry draws no box — which is how one page's
 placements ignore another page's commands, and how a modal scope thins
@@ -70,6 +71,23 @@ cumulative width turns "no overlap, left-to-right" into "the reduced
 positions must be non-decreasing", which pool-adjacent-violators solves
 optimally in one pass. A single rigid shift then nudges the whole run
 on-screen if an end pokes past the window edge.
+
+## A generated family
+
+The entries of a generated family (`docs/commandManager.md` § Manifest)
+collapse to one row. The row reads the family's label, and its first and
+last member's chords with a dash between — `⌘0 – ⌘9` for the tracker's ten
+advance-by-digit commands, `0 – ⇧Z` for arrange's sixty-two place-slot
+commands. A group holding a family therefore fits a box like any other.
+
+The row's only edit is its mask. Clicking either chip captures one chord,
+whose modifiers re-mask every member over its own base token, so a family
+moves off `Ctrl` in a single gesture. There is no ✕ or `+`: a member holds
+one chord, and the family is bound or it is not.
+
+A mask is taken whole or not at all. Where any chord it would claim is
+already spoken for, the sheet names that chord and its holder and rebinds
+nothing; any key or click clears the prompt.
 
 ## Input while open
 

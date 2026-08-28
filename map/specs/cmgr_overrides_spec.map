@@ -1,4 +1,4 @@
-@spec cmgr_overrides_spec  src=tests/specs/cmgr_overrides_spec.lua  loc=134  cases=6
+@spec cmgr_overrides_spec  src=tests/specs/cmgr_overrides_spec.lua  loc=217  cases=10
 
 # Intent
   commandManager binding overrides (step 0): the token codec and the
@@ -8,47 +8,69 @@
 
 # Helpers
   @fn newCommandManager(cm)  @ 9-11
-  @fn fakeCm(initial)  @ 34-45
+  @fn fakeCm(initial)  @ 35-46
       -- Deep-copy at the boundary mirrors the real configManager contract, so a test
       -- can't accidentally rely on aliasing cm's internal state.
+  @fn installFamily(mgr)  @ 51-60
+      -- A generated family as manifest.lua declares one: members sharing a family table,
+      -- each carrying the unmasked token its declared chord is masked from. The bases
+      -- mirror the drop family's -- bare digits, a bare letter, then a Shift+letter.
+  @fn chordOf(mgr, name)  @ 63-67
+      -- The single chord a family member holds, as (key, mods).
 
 # Cases
-  @case 'token codec round-trips bare / modified / multi-mod / keypad / punctuation'  [pure]  @ 49-65
-  @case 'specForToken reports unknown key and unknown modifier'  [pure]  @ 69-76
-  @case 'rebind updates the live keymap and persists tokens'  [pure]  @ 80-90
-  @case 'rebind to an empty list explicitly unbinds and persists the empty array'  [pure]  @ 94-101
-  @case 'loadOverrides re-applies persisted tokens onto a fresh manager'  [pure]  @ 105-118
-  @case 'loadOverrides skips malformed tokens, keeps the good ones, tolerates unknown scopes'  [pure]  @ 122-132
+  @case 'token codec round-trips bare / modified / multi-mod / keypad / punctuation'  [pure]  @ 71-87
+  @case 'specForToken reports unknown key and unknown modifier'  [pure]  @ 91-98
+  @case 'rebind updates the live keymap and persists tokens'  [pure]  @ 102-112
+  @case 'rebind to an empty list explicitly unbinds and persists the empty array'  [pure]  @ 116-123
+  @case 'rebindFamily re-masks every member from its base token'  [pure]  @ 130-145
+  @case 'familyVictim is silent when the whole mask is free'  [pure]  @ 151-157
+  @case 'familyVictim names the command holding one of the proposed chords'  [pure]  @ 161-170
+  @case 'familyVictim catches two members collapsing onto one chord'  [pure]  @ 176-184
+  @case 'loadOverrides re-applies persisted tokens onto a fresh manager'  [pure]  @ 188-201
+  @case 'loadOverrides skips malformed tokens, keeps the good ones, tolerates unknown scopes'  [pure]  @ 205-215
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Key_0  @ 19
-  @field r Key_A  @ 19,27,28
-  @field r Key_Comma  @ 64
+  @field r Key_0  @ 19,29,137
+  @field r Key_1  @ 165,169
+  @field w Key_1  @ 29
+  @field r Key_A  @ 19,27,28,139,183
+  @field r Key_Comma  @ 86
   @field w Key_Keypad0  @ 19
-  @field r Key_KeypadEnter  @ 63
-  @field r Key_Space  @ 60
+  @field r Key_KeypadEnter  @ 85
+  @field r Key_Space  @ 82
   @field w Key_Y  @ 28
-  @field r Key_Z  @ 61,62,84,88,109,117
+  @field r Key_Z  @ 83,84,106,110,192,200
   @field w Key_Z  @ 27
+  @field r Mod_Alt  @ 135,137,140,155,165,166,169
   @field w Mod_Alt  @ 18
-  @field r Mod_Ctrl  @ 61,62,84,88,109,117
+  @field r Mod_Ctrl  @ 83,84,106,110,192,200
   @field w Mod_Ctrl  @ 18
+  @field r Mod_None  @ 156
   @field w Mod_None  @ 18
-  @field r Mod_Shift  @ 62
+  @field r Mod_Shift  @ 84,140,180,183
   @field w Mod_Shift  @ 18
   @field w Mod_Super  @ 18
-  @field r _store  @ 89,100
-  @field w _store  @ 43
+  @field w Slots  @ 58
+  @field r _store  @ 111,122,142
+  @field w _store  @ 44
+  @field w base  @ 55
   @field w cm  @ 10
-  @field w foo  @ 125
-  @field w get  @ 41
-  @field r global  @ 89,100
-  @field w global  @ 126
-  @field r keyBindings  @ 89,100
-  @field w keyBindings  @ 39
-  @field w name  @ 49,69,80,94,105,122
-  @field w nonsuch  @ 125
-  @field w run  @ 50,70,81,95,106,123
-  @field w set  @ 42
-  @field r undo  @ 89,100
-  @field w undo  @ 126
+  @field w family  @ 55
+  @field w foo  @ 208
+  @field w get  @ 42
+  @field r global  @ 111,122,142
+  @field w global  @ 58,209
+  @field r keyBindings  @ 111,122,142
+  @field w keyBindings  @ 40
+  @field w keys  @ 55
+  @field w label  @ 52,54
+  @field r members  @ 56
+  @field w members  @ 52
+  @field w name  @ 54,71,91,102,116,130,151,161,176,188,205
+  @field w nonsuch  @ 208
+  @field w run  @ 72,92,103,117,131,152,162,177,189,206
+  @field w set  @ 43
+  @field r slot3  @ 142
+  @field r undo  @ 111,122
+  @field w undo  @ 209
