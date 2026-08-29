@@ -42,6 +42,8 @@ local function runChunk(chunk, opts)
       if i == 0 and fileExists(dir .. '/' .. reqName) then return reqName end
     end,
     time_precise = function() return 0 end,
+    get_action_context = function() return false, 'continuum.lua', 0, 55840 end,
+    ReverseNamedCommandLookup = function(id) return 'RS' .. id end,
   }
   if opts.reaper then opts.reaper(reaper) end
   local saved = _G.reaper; _G.reaper = reaper
@@ -172,6 +174,8 @@ return {
           if i == 0 and fileExists(dir .. '/req-1.lua') then return 'req-1.lua' end
         end,
         time_precise = function() return 0 end,
+        get_action_context = function() return false, 'continuum.lua', 0, 55840 end,
+        ReverseNamedCommandLookup = function(id) return 'RS' .. id end,
       }
       local bridge = util.instantiate('bridge', { spoolDir = dir, env = {} })
       bridge:tick()
@@ -180,11 +184,58 @@ return {
     end,
   },
   {
+    name = "enabling records our named command id, which is all the launcher gets",
+    run = function()
+      local _, dir = runChunk('return 1')
+      t.eq(readFile(dir .. '/action.id'), '_RS55840',
+           'named id (underscore-prefixed, NamedCommandLookup-ready), not the per-session number')
+    end,
+  },
+  {
+    name = "reload() relaunches on the NEXT tick, once, after the response is written",
+    run = function()
+      local dir = tmpDir()
+      writeFile(dir .. '/req-1.lua', 'return reload()')
+      local rec = {}
+      local saved = _G.reaper
+      _G.reaper = {
+        EnumerateFiles = function(_, i)
+          if i == 0 and fileExists(dir .. '/req-1.lua') then return 'req-1.lua' end
+        end,
+        time_precise       = function() return 123.5 end,
+        get_action_context = function() return false, 'continuum.lua', 0, 55840 end,
+        ReverseNamedCommandLookup = function(id) return 'RS' .. id end,
+        set_action_options = function(flag) rec.flag = flag end,
+        Main_OnCommand     = function(cmdId) rec.cmdId = cmdId end,
+      }
+      local bridge = util.instantiate('bridge', { spoolDir = dir, env = {} })
+
+      bridge:tick()
+      t.falsy(rec.cmdId, 'no relaunch on the tick that runs the chunk')
+      t.eq(parseRes(readFile(dir .. '/res-1.txt')).value, '123.5',
+           'ack carries this instance bootTime, so the caller can tell the restart happened')
+
+      bridge:tick()
+      t.eq(rec.cmdId, 55840, 'relaunches our own action')
+      t.eq(rec.flag, 3, 'auto-terminate when re-launched (1) + re-launch afterwards (2)')
+
+      rec.cmdId = nil
+      bridge:tick()
+      t.falsy(rec.cmdId, 'flag cleared: a failed relaunch does not re-fire every frame')
+      _G.reaper = saved
+    end,
+  },
+  {
     name = "tick over an empty spool writes nothing and does not error",
     run = function()
       local dir = tmpDir()
       local saved = _G.reaper
-      _G.reaper = { EnumerateFiles = function() return nil end, time_precise = function() return 0 end }
+      _G.reaper = {
+        EnumerateFiles = function() return nil end,
+        time_precise = function() return 0 end,
+        get_action_context = function() return false, 'continuum.lua', 0, 55840 end,
+        ReverseNamedCommandLookup = function(id) return 'RS' .. id end,
+      }
       local bridge = util.instantiate('bridge', { spoolDir = dir, env = {} })
       bridge:tick(); bridge:tick()
       _G.reaper = saved

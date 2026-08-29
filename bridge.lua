@@ -5,6 +5,8 @@
 --invariant: request file is read then deleted BEFORE execute, so a mid-chunk crash cannot replay it
 --invariant: chunk env = deps.env over a _G fallback (stdlib+reaper); chunk global writes stay in env
 --invariant: dormant until the spool dir exists (re-stat ~60 frames); once enabled, stays enabled
+--invariant: reload() only flags; the relaunch runs on the NEXT tick, after the response is on disk
+--invariant: records our named command id in spool/action.id — the launcher's only way to find it
 --reaper: EnumerateFiles caches per-dir; each scan invalidates with idx -1, else stale/deleted reqs linger
 --shape: response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"
 
@@ -30,6 +32,15 @@ env.print = function(...)
   for i = 1, select('#', ...) do parts[i] = tostring((select(i, ...))) end
   util.add(printBuf, table.concat(parts, '\t'))
 end
+
+-- REAPER's clock runs from app start, so bootTime differs across instances and tells
+-- a caller's post-reload ping which instance answered it.
+local bootTime = reaper.time_precise and reaper.time_precise() or os.clock()
+local pendingReload = false
+env.bootTime = bootTime
+-- Relaunching tears this Lua state down mid-call, so reload() must not do it inside
+-- the chunk: it flags, and tick() relaunches once the response file is written.
+env.reload = function() pendingReload = true; return bootTime end
 
 ----- Small IO
 
@@ -194,6 +205,23 @@ local function scanOnce()
   writeAtomic(join('res-' .. id .. '.txt'), formatResponse(execute(code)))
 end
 
+----- Reload
+
+-- Re-invoking our own action restarts the script; flag 1 auto-terminates the
+-- running instance, flag 2 re-launches it. See docs/bridge.md § Reload.
+local function relaunch()
+  local _, _, _, cmdId = reaper.get_action_context()
+  reaper.set_action_options(1 | 2)
+  reaper.Main_OnCommand(cmdId, 0)   -- does not return: this state is terminated
+end
+
+-- continuum_launcher.lua starts Continuum when nothing is running, so it
+-- cannot ask a live instance which action that is. See docs/bridge.md § Spawning.
+local function recordAction()
+  local named = reaper.ReverseNamedCommandLookup(select(4, reaper.get_action_context()))
+  if named then writeAtomic(join('action.id'), '_' .. named) end
+end
+
 ----------- PUBLIC
 
 -- Enable-gate: the MCP server creating the spool dir switches the bridge on.
@@ -201,11 +229,14 @@ local bridge = {}
 local enabled, cooldown = false, 0
 
 function bridge:tick()
+  -- Cleared first: a relaunch that fails must not re-raise on every frame forever.
+  if pendingReload then pendingReload = false; relaunch(); return end
   if not enabled then
     if cooldown > 0 then cooldown = cooldown - 1; return end
     cooldown = 60
     if not dirExists(spoolDir) then return end
     enabled = true
+    recordAction()
   end
   scanOnce()
 end

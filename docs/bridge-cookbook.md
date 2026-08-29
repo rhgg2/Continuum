@@ -392,6 +392,18 @@ from the take. That reload finalises the pending undo capture *empty*,
 so `undo_label` is silently dropped on this path — which is exactly why
 anything undoable goes through `tm`/`mm` instead.
 
+## Reloading Continuum after a source edit
+
+Edited source doesn't reach the running instance until it restarts:
+`mcp__reaper__reaper_reload` does that and returns once the new
+instance answers (a few seconds), or reports that nothing came back —
+which means a load error, visible in REAPER's console. Live UI state is
+lost; the project is re-read.
+
+With nothing running it starts an instance instead, via the launcher
+REAPER's `__startup.lua` keeps alive. Either way, Continuum is up and
+on current source when the call returns.
+
 ## Gotchas
 
 - **Address by uuid; `loc` is not a handle.** A `loc` indexes mm's

@@ -64,4 +64,5 @@ Use `mcp__reaper_docs__reaper_doc_lookup` for ReaScript/ReaImGui APIs.
 `mcp__reaper__reaper_eval` runs a Lua chunk inside the running
 Continuum instance. Undoable edits route through mm/tm with an
 `undo_label`. `docs/bridge-cookbook.md` has the recipes,
-`docs/bridge.md` the model.
+`docs/bridge.md` the model. `mcp__reaper__reaper_reload` ensures a
+fresh, running instance of Continuum with the tree's code.

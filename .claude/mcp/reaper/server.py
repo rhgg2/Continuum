@@ -5,7 +5,7 @@
 # ///
 """Reaper eval bridge MCP server.
 
-One tool: reaper_eval. Writes a Lua chunk to a spool dir that bridge.lua —
+Two tools: reaper_eval and reaper_reload. Eval writes a Lua chunk to a spool dir that bridge.lua —
 running inside the live Continuum instance's defer loop — executes, then
 returns the rendered result. This closes the fake/real gap for REAPER-specific
 behaviour (playback stranding, take round-trips, API layout quirks) that
@@ -56,12 +56,59 @@ def _sweep() -> None:
     """Delete every spool file. Startup only — clears orphans from a prior server
     run or timed-out calls. Never mid-request: a global delete would race the
     uuid-keyed files of concurrent calls (the client dispatches parallel tool
-    uses), which is the exact bug uuid keying exists to prevent."""
+    uses), which is the exact bug uuid keying exists to prevent.
+
+    action.id is spared: it is durable state (the bridge records Continuum's named
+    command id there), and it is needed precisely when no instance is running to
+    write it again."""
     for p in SPOOL.glob("*"):
+        if p.name == "action.id":
+            continue
         try:
             p.unlink()
         except OSError:
             pass
+
+
+def _spool(code: str, timeout_s: float) -> Optional[str]:
+    """Write one request, wait for its response, return it verbatim. None on timeout.
+
+    uuid-keyed files: each call touches only its own req/res, so concurrent calls
+    (the client dispatches parallel tool uses) never collide. The bridge serialises
+    execution one req per frame; each res-<id> matches its req-<id>."""
+    req_id = uuid.uuid4().hex[:8]
+    req = SPOOL / f"req-{req_id}.lua"
+    res = SPOOL / f"res-{req_id}.txt"
+    tmp = SPOOL / f"req-{req_id}.lua.tmp"
+
+    tmp.write_text(code, encoding="utf-8")
+    tmp.replace(req)  # atomic; the .tmp name can't match the bridge's req glob
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if res.exists():
+            out = res.read_text(encoding="utf-8", errors="replace")
+            res.unlink(missing_ok=True)
+            req.unlink(missing_ok=True)  # bridge already removed it pre-execute
+            return out
+        time.sleep(0.05)
+
+    req.unlink(missing_ok=True)
+    return None
+
+
+def _spawn() -> None:
+    """Ask the startup launcher to start Continuum. The marker carries the request time;
+    the launcher ignores stale ones, so a marker left behind by a closed REAPER is not
+    an instruction days later."""
+    tmp = SPOOL / "spawn.marker.tmp"
+    tmp.write_text(str(int(time.time())), encoding="utf-8")
+    tmp.replace(SPOOL / "spawn.marker")
+
+
+def _value(response: str) -> str:
+    """The response's rendered value section."""
+    return response.partition("--- value ---\n")[2].partition("\n--- print ---")[0]
 
 
 def _build_request(code: str, undo_label: Optional[str], depth: Optional[int]) -> str:
@@ -120,32 +167,54 @@ def reaper_eval(
       section (rendered return value, or error message + traceback), and a
       `--- print ---` section. Or a timeout message if nothing answered.
     """
-    # uuid-keyed files: each call touches only its own req/res, so concurrent calls
-    # (the client dispatches parallel tool uses) never collide. The bridge serialises
-    # execution one req per frame; each res-<id> matches its req-<id>.
-    req_id = uuid.uuid4().hex[:8]
-    req = SPOOL / f"req-{req_id}.lua"
-    res = SPOOL / f"res-{req_id}.txt"
-    tmp = SPOOL / f"req-{req_id}.lua.tmp"
+    out = _spool(_build_request(code, undo_label, depth), timeout_s)
+    if out is None:
+        return (
+            f"no response after {timeout_s:g}s — is Continuum running in REAPER? "
+            "The bridge ticks from Continuum's defer loop; if REAPER is open but "
+            "Continuum isn't running, nothing polls the spool dir."
+        )
+    return out
 
-    tmp.write_text(_build_request(code, undo_label, depth), encoding="utf-8")
-    tmp.replace(req)  # atomic; the .tmp name can't match the bridge's req glob
 
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if res.exists():
-            out = res.read_text(encoding="utf-8", errors="replace")
-            res.unlink(missing_ok=True)
-            req.unlink(missing_ok=True)  # bridge already removed it pre-execute
-            return out
-        time.sleep(0.05)
+@mcp.tool(structured_output=False)
+def reaper_reload(timeout_s: float = 20) -> str:
+    """Restart Continuum so edited source takes effect — or start it if it isn't running.
 
-    req.unlink(missing_ok=True)
-    return (
-        f"no response after {timeout_s:g}s — is Continuum running in REAPER? "
-        "The bridge ticks from Continuum's defer loop; if REAPER is open but "
-        "Continuum isn't running, nothing polls the spool dir."
-    )
+    Returns when Continuum is up and its bridge answering, not merely when the restart
+    was asked for. Live UI state is lost; the new instance re-reads the project.
+
+    A syntax or load error in edited source kills the new instance at startup: nothing
+    answers, and this returns a timeout naming that cause. Check REAPER's console.
+    """
+    started = time.monotonic()
+    ack = _spool("return reload()", 5)
+    if ack is None:
+        # Nothing is running to reload, so ask REAPER's startup launcher to start one.
+        _spawn()
+        pong = _spool("return bootTime", max(1.0, timeout_s - (time.monotonic() - started)))
+        if pong is None:
+            return (f"nothing answered within {timeout_s:g}s, before or after asking the "
+                    "launcher to start Continuum. Is REAPER running, and is __startup.lua "
+                    "installed? See docs/bridge.md § Spawning.")
+        return (f"nothing was running — started Continuum, up after "
+                f"{time.monotonic() - started:.1f}s")
+    if not ack.startswith("status: ok"):
+        return "the bridge refused the reload:\n" + ack
+
+    # One ping, not a poll: the old instance relaunches on its next tick without
+    # scanning again, so this request survives the restart and the new instance's
+    # first tick answers it. bootTime differs per instance, so an unchanged one means
+    # the old instance is still running and the relaunch silently failed.
+    remaining = max(1.0, timeout_s - (time.monotonic() - started))
+    pong = _spool("return bootTime", remaining)
+    if pong is None:
+        return (f"reload requested, but nothing answered within {timeout_s:g}s — the new "
+                "instance likely died at load. Check REAPER's console for the error.")
+    if _value(pong) == _value(ack):
+        return ("reload requested, but the same instance answered — the relaunch did not "
+                "happen. Restart Continuum by hand.\n" + pong)
+    return f"reloaded — Continuum back up after {time.monotonic() - started:.1f}s"
 
 
 if __name__ == "__main__":

@@ -102,6 +102,54 @@ the chunk's undo capture just the same. The tool description's safety
 contract therefore steers anything that must be undoable through
 mm/tm.
 
+## Reload
+
+`reaper_reload` restarts the whole instance, which is how an edit to
+Continuum's source reaches the running program: every ReaScript run
+gets a fresh Lua state, so re-invoking the action re-reads every
+module. `set_action_options(1|2)` makes a re-launch of an
+already-running script terminate it and start it again, and
+`get_action_context` still names our own action from inside a deferred
+frame — so the bridge finds the action itself, with nothing wired from
+`continuum.lua`.
+
+The relaunch tears the Lua state down mid-call, so it cannot happen
+inside the chunk. `reload()` sets a flag and returns; `tick()`
+relaunches on the *next* frame, by which time the response file is on
+disk and the requester has its ack.
+
+The waiting is the server's half. After the ack it leaves a second
+request in the spool, which the old instance never scans — its next
+tick relaunches instead — and the new instance answers on its first
+tick. So the tool returns when Continuum is back up, not when the
+restart was asked for; silence means the new instance died at load.
+That ping returns `bootTime`, REAPER-clock at bridge construction, and
+an unchanged value means the old instance answered: a relaunch that
+silently failed, otherwise indistinguishable from success.
+
+## Spawning
+
+Reload needs a live instance to receive it, and nothing inside REAPER
+polls the spool when Continuum isn't running. So `continuum_launcher.lua`
+is a second, tiny script instance — started from REAPER's
+`__startup.lua`, outliving every Continuum instance — which polls about
+once a second for `spool/spawn.marker` and re-invokes Continuum's
+action. Launching is all it does: it reads no project state and writes
+nothing. Idle cost is one stat a second for as long as REAPER is open.
+
+Two files carry what it cannot know. `spawn.marker` holds the request's
+epoch seconds, so a marker planted while REAPER was closed starts
+Continuum on the next launch, but is discarded after a minute rather
+than firing as an instruction from days ago. `spool/action.id` holds
+Continuum's *named* command id, recorded by the bridge whenever it
+enables: the numeric id is per-session, and the launcher has to know
+what to start at the one moment when no instance exists to ask. The MCP
+server's spool sweep spares that file for the same reason.
+
+So `reaper_reload` means "a fresh Continuum is running when this
+returns": it restarts a live instance, or, when nothing answers, plants
+a marker and waits for the launcher's instance to come up.
+
 ## Hazards
 
 - **File-eval is an execution surface.** Anything that can write to

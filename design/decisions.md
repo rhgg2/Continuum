@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — Reloading Continuum is a relaunch of its own ReaScript action, since a fresh Lua
+  state is what re-reads edited source. reload() only flags the restart and returns, so the response
+  file is on disk before the state is torn down. Starting an instance when none is running cannot go
+  through the bridge at all, because nothing polls the spool then: a separate launcher script, kept
+  alive by REAPER's __startup.lua, watches for a spawn marker and re-invokes the named command id
+  the bridge records in spool/action.id. REAPER's web interface was rejected for that job, since it
+  puts an HTTP listener in front of every action and the bridge's file transport rests on there
+  being none.
+
 - **2026-08-29** — The pattern editor claims Esc and Enter at Mod_None, so a modified Esc no longer
   cancels the modal. A reader names the mask it acts on, and the queue answers only for that mask.
 

@@ -1,0 +1,46 @@
+@module continuum_launcher  src=continuum_launcher.lua  loc=45  mode=script
+
+# Invariants & contracts
+  @invariant  launching is ALL it does — it never reads or writes project state  @ 4
+  @invariant  marker deleted before the launch, so a failed start cannot re-fire every poll  @ 5
+  @invariant  a marker older than STALE_S is discarded — a days-old request isn't an instruction now  @ 6
+
+# Shapes
+  @shape  spool/spawn.marker holds one integer, os.time() at the moment of the request  @ 7
+
+# Module-level constants
+  @const POLL_FRAMES = 30  @ 9   -- ~1s; the spawn path is human-paced, not frame-paced
+  @const STALE_S = 60  @ 10
+  @const here = debug.getinfo(1, 'S').source:match('^@?(.*[/\\])') or './'  @ 12
+  @const spoolDir = here .. '.claude/mcp/reaper/spool'  @ 13
+  @const marker = spoolDir .. '/spawn.marker'  @ 14
+  @const actionId = spoolDir .. '/action.id'  @ 15
+  @const countdown = 0  @ 31
+
+# Private functions
+  @fn readAll(path)  @ 17-20
+  @fn launch()  @ 24-29
+      -- The bridge records the named command id whenever Continuum runs with the spool
+      -- present; absent it, Continuum has never run in dev mode and there is nothing to start.
+  @fn poll()  @ 32-43
+
+# Calls (intra-file)
+  @call launch  @ poll:39
+  @call poll  @ <load>:45
+  @call readAll  @ launch:25 poll:36
+
+# Bindings (by name)
+  @bind poll  @ poll:42
+
+# Unresolved receivers
+  @drop f:close  @ readAll:19
+  @drop f:read  @ readAll:19
+  @drop source:match  @ <load>:12
+
+# REAPER API surface
+  @reaper NamedCommandLookup
+  @reaper Main_OnCommand
+  @reaper defer
+
+# Fields (r read / w write incl. constructor keys)
+  @field r source  @ 12
