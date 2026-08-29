@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=525  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=523  mode=chunk  self=pe
 @deps facade, chrome, gui, modalHost, hostDs, keyQueue
 
 # Invariants & contracts
@@ -113,7 +113,7 @@
 # Handlers registered
   @handler miniScope:addNoteLane()  @ 104
   @handler miniScope:hideExtraCol()  @ 105
-  @handler modalHost:patternEditor(_, close)  @ 491-494
+  @handler modalHost:patternEditor(_, close)  @ 489-492
 
 # Public API (pe:*)
   @api pe:open(body, commit, poly)  @ 234-293
@@ -127,11 +127,11 @@
   @api pe:currentTake()  @ 309
   @api pe:draw()  @ 418-459
       @contract  draw pass -- toolbar row, grid fills the region below; popup sizes to fit  @ 417
-  @api pe:handleInput(close)  @ 463-489
-      @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits  @ 461
-      @contract  returns the dispatch result kr = { consumed, commandHeld }  @ 462
-  @api pe:launch(body, commit, poly)  @ 497-523
-      @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it  @ 496
+  @api pe:handleInput(close)  @ 463-487
+      @contract  input pass -- mouse, dispatch against mini cmgr, note entry  @ 461
+      @contract  an Esc the walk left cancels, Enter commits  @ 462
+  @api pe:launch(body, commit, poly)  @ 495-521
+      @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it  @ 494
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ drawToolbar:401
@@ -140,23 +140,22 @@
   @use call    ImGui.Dummy  @ draw:420,458
   @use call    ImGui.GetContentRegionAvail  @ draw:423
   @use call    ImGui.GetCursorScreenPos  @ draw:422
-  @use call    ImGui.GetStyleVar  @ launch:510,511
+  @use call    ImGui.GetStyleVar  @ launch:508,509
   @use call    ImGui.GetWindowDrawList  @ draw:435
   @use call    ImGui.GetWindowSize  @ draw:429
-  @use call    ImGui.GetWindowViewport  @ launch:500
+  @use call    ImGui.GetWindowViewport  @ launch:498
   @use call    ImGui.IsAnyItemActive  @ acceptInput:60
-  @use call    ImGui.IsKeyPressed  @ handleInput:481,483,484
   @use call    ImGui.PopStyleVar  @ drawToolbar:414
   @use call    ImGui.PushStyleVar  @ drawToolbar:400
   @use call    ImGui.SameLine  @ drawToolbar:403,406,408,410,412
   @use call    ImGui.SetCursorScreenPos  @ draw:448,457
   @use call    ImGui.SetWindowSize  @ draw:431
-  @use call    ImGui.Viewport_GetWorkSize  @ launch:500
+  @use call    ImGui.Viewport_GetWorkSize  @ launch:498
   @use call    chrome.colour  @ draw:435
   @use call    chrome.drawPicker  @ drawSave:372 drawLoad:380
   @use call    chrome.headingLabel  @ drawToolbar:402
   @use call    chrome.numberStepper  @ drawToolbar:404
-  @use call    chrome.pickerIsActive  @ acceptInput:61 handleInput:480
+  @use call    chrome.pickerIsActive  @ acceptInput:61 handleInput:479
   @use call    chrome.verticalSeparator  @ drawToolbar:406,410
   @use call    cm:get  @ materialiseNotes:122 materialiseCurve:146 readbackBody:178,206 drawToolbar:404
   @use call    cm:set  @ open:249,260,267,279
@@ -167,22 +166,23 @@
   @use call    cmgr:scope  @ <load>:87
   @use call    ds:assign  @ open:269,270,286
   @use call    eventMeta:dropPool  @ close:301
-  @use call    gridPane:cellHeight  @ launch:512
+  @use call    gridPane:cellHeight  @ launch:510
   @use call    gridPane:cellWidth  @ draw:443
   @use call    gridPane:draw  @ draw:449,452
   @use call    gridPane:drawCurveEditor  @ draw:450
-  @use call    gridPane:handleKeys  @ handleInput:477
+  @use call    gridPane:handleKeys  @ handleInput:476
   @use call    gridPane:handleMouse  @ handleInput:474
-  @use call    gridPane:heightForRows  @ draw:431 launch:517
+  @use call    gridPane:heightForRows  @ draw:431 launch:515
   @use call    gridPane:naturalWidth  @ draw:444
   @use call    hostDs:assign  @ saveShelf:320 deleteShelf:326
   @use call    hostDs:get  @ shelf:315
   @use call    keyDispatch.dispatchKeys  @ handleInput:476
+  @use call    keyQueue:take  @ handleInput:480,482,483
   @use call    mm:poolGuid  @ open:241
   @use call    mm:resolution  @ open:242
   @use call    mm:setLength  @ open:254
-  @use call    modalHost:open  @ launch:516
-  @use call    modalHost:registerKind  @ <load>:491
+  @use call    modalHost:open  @ launch:514
+  @use call    modalHost:registerKind  @ <load>:489
   @use call    scratch.track  @ open:238 close:303
   @use call    tm:addEvent  @ materialiseNotes:124 materialiseCurve:149,152
   @use call    tm:bindTake  @ open:240 close:302
@@ -217,7 +217,7 @@
 
 # Calls (intra-file)
   @call acceptInput  @ handleInput:475
-  @call cancel  @ handleInput:468,482
+  @call cancel  @ handleInput:468,481
   @call curveDisplay  @ open:270
   @call deleteShelf  @ handleInput:470
   @call drawLoad  @ drawToolbar:413
@@ -227,10 +227,10 @@
   @call materialiseCurve  @ open:277
   @call materialiseNotes  @ open:288
   @call maxLane  @ shelfMatches:340
-  @call pe:close  @ loadShelf:350 launch:521
-  @call pe:draw  @ modalHost:patternEditor:492
-  @call pe:handleInput  @ modalHost:patternEditor:493
-  @call pe:open  @ loadShelf:351 launch:498
+  @call pe:close  @ loadShelf:350 launch:519
+  @call pe:draw  @ modalHost:patternEditor:490
+  @call pe:handleInput  @ modalHost:patternEditor:491
+  @call pe:open  @ loadShelf:351 launch:496
   @call readbackBody  @ writeThrough:213 saveShelf:319 loadShelf:353
   @call saveShelf  @ handleInput:469
   @call setLaneCommands  @ open:287 close:300
@@ -255,13 +255,13 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 17
-  @field r Key_Enter  @ handleInput:483
-  @field r Key_Escape  @ handleInput:481
-  @field r Key_KeypadEnter  @ handleInput:484
+  @field r Key_Enter  @ handleInput:482
+  @field r Key_Escape  @ handleInput:480
+  @field r Key_KeypadEnter  @ handleInput:483
   @field r OPEN  @ readbackBody:185
-  @field r StyleVar_FramePadding  @ drawToolbar:400 launch:511
-  @field r StyleVar_WindowPadding  @ launch:510
-  @field r WindowFlags_NoNav  @ launch:520
+  @field r StyleVar_FramePadding  @ drawToolbar:400 launch:509
+  @field r StyleVar_WindowPadding  @ launch:508
+  @field r WindowFlags_NoNav  @ launch:518
   @field w acceptCmds  @ 394 handleInput:475
   @field r addNoteLane  @ setLaneCommands:113
   @field w addNoteLane  @ 88,109
@@ -281,9 +281,6 @@
   @field w cm  @ 40,42,44,65
   @field w cmgr  @ 44,65
   @field r columns  @ readbackBody:163
-  @field w commandHeld  @ handleInput:464,472
-  @field r consumed  @ handleInput:480
-  @field w consumed  @ handleInput:464,472
   @field r ctx  @ 27
   @field w defaultNoteCols  @ 40
   @field r delay  @ materialiseNotes:127 readbackBody:188
@@ -306,10 +303,10 @@
   @field r events  @ readbackBody:168,172,183
   @field r facade  @ 26
   @field w facade  @ 44
-  @field w flags  @ launch:520
-  @field r fontSize  @ launch:512,513
+  @field w flags  @ launch:518
+  @field r fontSize  @ launch:510,511
   @field w gm  @ 44
-  @field r grid  @ launch:504
+  @field r grid  @ launch:502
   @field r gui  @ 26
   @field w gui  @ 65
   @field w h  @ draw:450
@@ -322,8 +319,8 @@
   @field w items  @ drawSave:372 drawLoad:380
   @field w key  @ shelfItems:365
   @field r keyQueue  @ 26
-  @field r kind  @ readbackBody:164 open:253,256 shelfMatches:338,339 draw:437 launch:503,515
-  @field w kind  @ readbackBody:177,205 drawSave:372 drawLoad:380 launch:516
+  @field r kind  @ readbackBody:164 open:253,256 shelfMatches:338,339 draw:437 launch:501,513
+  @field w kind  @ readbackBody:177,205 drawSave:372 drawLoad:380 launch:514
   @field r label  @ curveDisplay:140,142
   @field w label  @ curveDisplay:140,142 shelfItems:365
   @field r lane  @ materialiseNotes:127 readbackBody:202 open:284 maxLane:331
@@ -341,8 +338,8 @@
   @field w normalized  @ curveDisplay:142
   @field r notes  @ readbackBody:181
   @field w notes  @ open:264,266,286
-  @field r numRows  @ launch:504
-  @field w onClose  @ launch:521
+  @field r numRows  @ launch:502
+  @field w onClose  @ launch:519
   @field w onCreate  @ drawSave:374
   @field w onDelete  @ drawLoad:382
   @field w onPick  @ drawSave:373 drawLoad:381
@@ -369,7 +366,7 @@
   @field w save  @ drawSave:373,374
   @field r shape  @ materialiseCurve:150,153 readbackBody:169,174
   @field w shape  @ materialiseCurve:150,153 readbackBody:169,174 open:274,275
-  @field w size  @ launch:517
+  @field w size  @ launch:515
   @field w skipGuard  @ open:240 close:302
   @field r specs  @ open:284,288 maxLane:331
   @field w specs  @ readbackBody:206
@@ -377,12 +374,12 @@
   @field w take  @ 39
   @field r tension  @ materialiseCurve:150,153 readbackBody:169,174
   @field w tension  @ materialiseCurve:150,153 readbackBody:169,174
-  @field w title  @ launch:516
+  @field w title  @ launch:514
   @field w tm  @ 41,44
   @field r tracker  @ 93
   @field w tracker  @ 98
   @field w tv  @ 65
-  @field r ui  @ launch:512,513
+  @field r ui  @ launch:510,511
   @field r val  @ materialiseCurve:150,153 readbackBody:169,173
   @field w val  @ materialiseCurve:150,153 readbackBody:169,173 open:274,275
   @field r vel  @ materialiseNotes:126 readbackBody:187

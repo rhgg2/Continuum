@@ -1808,8 +1808,8 @@ function tr:renderBody(_, w, h, dispatch)
     local mx, my = ImGui.GetMousePos(ctx)
     if mx >= ox and mx < ox + gridW and my >= oy and my < oy + h then stripExitReq = true end
   end
-  local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
-  if not help:wasOpenAtFrameStart() then gridPane:handleKeys(kr) end
+  local commandHeld = dispatch and dispatch(self:focusState()) or {}
+  if not help:wasOpenAtFrameStart() then gridPane:handleKeys(commandHeld) end
   if stripExitReq then   -- exit after this frame's dispatch saw us focused; prune a husk left empty
     if stripHost then tv:pruneEmptyRegion(stripHost) end
     stripFocus, stripExitReq, stripSnapshot, stripHost = false, false, nil, nil

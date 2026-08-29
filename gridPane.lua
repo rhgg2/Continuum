@@ -1138,7 +1138,7 @@ end
 --contract: a note key typed while armed exits region mode then enters (execute-through)
 --contract: Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk
 --contract: Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits
-function gridPane:handleKeys(kr)
+function gridPane:handleKeys(commandHeld)
   local modsNow = ImGui.GetKeyMods(ctx)
   -- Poll-based commit: catches the release wherever it lands (focus loss,
   -- modal open). Bit-test — extra modifiers must not read as a release.
@@ -1156,7 +1156,6 @@ function gridPane:handleKeys(kr)
     elseif tv:digitsActive() then tv:digitsBackspace() end
   end
   local ec = tv:ec()
-  local commandHeld = kr.commandHeld
 
   local shiftHeld  = modsNow == ImGui.Mod_Shift
   local spreadHeld = modsNow == (ImGui.Mod_Shift | ImGui.Mod_Alt)

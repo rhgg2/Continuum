@@ -25,6 +25,17 @@ local fakeImGui = setmetatable({ Mod_None = 0 }, {
 })
 _G.reaper.ImGui_GetBuiltinPath = _G.reaper.ImGui_GetBuiltinPath or function() return '/stub' end
 
+-- keyQueue enumerates the Key_* names the shim table holds, once, as it loads; the metatable
+-- above mints them on touch, so mint every key a reader here can act on before that.
+for i = 0, 25 do local _ = fakeImGui['Key_' .. string.char(65 + i)] end
+for i = 0, 9  do local _, _ = fakeImGui['Key_' .. i], fakeImGui['Key_Keypad' .. i] end
+for _, name in ipairs({ 'Enter', 'KeypadEnter', 'Escape', 'Backspace', 'Delete', 'Space',
+                        'Period', 'Comma', 'Slash', 'Minus', 'Equal' }) do
+  local _ = fakeImGui['Key_' .. name]
+end
+
+local kq   -- the frame's queue, rebuilt per loadPE and refilled per setKeys
+
 local pressed, down, curMods = {}, {}, 0
 fakeImGui.GetKeyMods      = function() return curMods end
 fakeImGui.IsKeyPressed    = function(_, k) return pressed[k] == true end
@@ -34,9 +45,12 @@ fakeImGui.IsMouseDown     = function() return false end
 fakeImGui.IsWindowHovered = function() return false end
 fakeImGui.IsAnyItemActive = function() return false end   -- no toolbar widget active headless
 
+-- The mini editor runs inside the modal the fill records as owner, and claims under that
+-- name, so the queue each pass reads is filled as one. See docs/keyQueue.md § Ownership.
 local function setKeys(keys, mods)
   pressed, down, curMods = {}, {}, mods or 0
   for _, k in ipairs(keys or {}) do pressed[k] = true; down[k] = true end
+  kq:fill('modal')
 end
 
 local fakeChrome    = setmetatable({}, { __index = function() return function() end end })
@@ -48,6 +62,8 @@ local function loadPE(deps)
   for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'curveEditor', 'painter' }) do
     package.loaded[m] = nil
   end
+  kq = util.instantiate('keyQueue', { ctx = fakeGui.ctx })
+  deps.keyQueue = kq
   return util.instantiate('patternEditor', deps)
 end
 

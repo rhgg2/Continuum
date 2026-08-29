@@ -4,6 +4,9 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The pattern editor claims Esc and Enter at Mod_None, so a modified Esc no longer
+  cancels the modal. A reader names the mask it acts on, and the queue answers only for that mask.
+
 - **2026-08-29** — The key dispatcher claims for whoever hosts it. `keyDispatch` reads a claimant
   off the focus state it is given, so the mini pattern editor, which draws inside the modal the fill
   recorded as owner, captures presses the coordinator's own dispatch may not. Ownership is part of

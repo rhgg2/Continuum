@@ -25,6 +25,10 @@ press is gone.**
 1. `keyQueue:takeAny(claimant)` claims and returns the first unclaimed
    entry, for a reader that acts on any press at all.
 
+1. `keyQueue:restore(entry)` puts a taken entry back at the head. A
+   reader claiming a press before it acts hands the press back this way
+   when it declines to act on it.
+
 ## The fill
 
 1. The fill runs at the top of `coordinator.frame`, before any drawing,

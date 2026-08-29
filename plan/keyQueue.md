@@ -31,6 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 keyDispatch: the walk takes its press, and consumed goes (design/keyQueue.md § Claiming)
 - 2026-08-29 keyDispatch: prefix and letter capture take from the keyQueue (phase 2)
 - 2026-08-29 keyQueue: read the frame's key presses into a claimable queue (phase 1)
 
@@ -40,13 +41,5 @@
 
 ## Queued (current phase; one-liners)
 
-- **The keychain walk takes, and `consumed` goes.** The walk takes the
-  press that selects a command before it invokes, so a command raising
-  a modal or a picker hands it a queue the press has left; a command
-  returning false hands the entry back with `keyQueue:restore(entry)`,
-  which returns it to the head. `keyQueue:held` builds the chord half
-  of `commandHeld`, which stays the whole of the return. The mini
-  pattern editor's Esc/Enter fallback takes those keys instead of
-  gating on `consumed`; its `swallowInput` and `pendingAction` wait for
-  phase 5.
+(empty)
 

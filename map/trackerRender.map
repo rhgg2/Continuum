@@ -707,7 +707,6 @@
   @field r colourIdx  @ drawMapBody:590
   @field r cols  @ cursorChan:69 paletteActions:168 cursorColLabel:642 removeOrHideCol:1056 handleFxChainKeys:1347 drawFxChainBody:1584,1591,1594 renderBody:1777 statusSegments:1824
   @field w cols  @ stripPlan:1311
-  @field w commandHeld  @ renderBody:1811
   @field r ctx  @ 30
   @field r current  @ drawMapBody:590
   @field w current  @ toolbarSegments.render:80,95,112,127,138 sampleItems:673 retuneTargetItems:818 retuneKeyItems:833 destItems:1129 kindItems:1475

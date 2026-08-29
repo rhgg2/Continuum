@@ -4,6 +4,7 @@
 --invariant: one keyQueue per coordinator; each fill replaces the last frame's entries
 --shape: entry = { key: imguiKey, mods: modMask, repeated: bool }
 --contract: take/takeAny remove what they return, so a claimed press is gone for every later reader
+--contract: restore puts a taken entry back at the head, for a declining claimant to hand off
 --contract: an owner named at the fill holds the frame; take/takeAny answer nil to others
 --contract: held/mods read ImGui live, and answer the same whoever owns the queue
 --contract: frameMods is the mask the fill stamped; a reader judges a chord by it, then takes at it
@@ -82,6 +83,9 @@ function keyQueue:takeAny(claimant)
   if not claimable(claimant) then return nil end
   return table.remove(entries, 1)
 end
+
+-- A reader claiming before it acts hands the press back this way when it decides not to.
+function keyQueue:restore(entry) table.insert(entries, 1, entry) end
 
 function keyQueue:held(key)  return ImGui.IsKeyDown(ctx, key) end
 function keyQueue:mods()     return ImGui.GetKeyMods(ctx)     end

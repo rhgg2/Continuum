@@ -14,6 +14,8 @@ local scratch = require('scratch')
 local fakeImGui = t.imgui()
 _G.reaper.ImGui_GetBuiltinPath = _G.reaper.ImGui_GetBuiltinPath or function() return '/stub' end
 
+local kq   -- the frame's queue, rebuilt per loadPE and refilled per setKeys
+
 local pressed, down, curMods = {}, {}, 0
 fakeImGui.GetKeyMods      = function() return curMods end
 fakeImGui.IsKeyPressed    = function(_, k) return pressed[k] == true end
@@ -31,9 +33,12 @@ fakeImGui.PopFont      = function() end
 fakeImGui.CalcTextSize = function() return 8, 14 end
 fakeImGui.GetStyleVar  = function() return 4, 4 end
 
+-- The mini editor runs inside the modal the fill records as owner, and claims under that
+-- name, so the queue each pass reads is filled as one. See docs/keyQueue.md § Ownership.
 local function setKeys(keys, mods)
   pressed, down, curMods = {}, {}, mods or 0
   for _, k in ipairs(keys or {}) do pressed[k] = true; down[k] = true end
+  kq:fill('modal')
 end
 
 local fakeChrome = setmetatable({}, { __index = function() return function() end end })
@@ -52,6 +57,8 @@ local function loadPE(deps)
   for _, m in ipairs({ 'imgui', 'keyDispatch', 'manifest', 'curveEditor', 'painter' }) do
     package.loaded[m] = nil
   end
+  kq = util.instantiate('keyQueue', { ctx = fakeGui.ctx })
+  deps.keyQueue = kq
   return util.instantiate('patternEditor', deps)
 end
 
@@ -103,15 +110,18 @@ return {
       local _, pe = withEditor(harness)
       pe:open(NOTES_BODY, noop)
 
-      -- Super+X (editNoteFx) is excluded, so it is unbound on the mini cmgr and the
-      -- walk does not consume it. Note-mutating effects need a prior draw to size the
-      -- grid, so consumption is the headless seam for "bound + dispatched".
+      -- Super+X (editNoteFx) is excluded, so it is unbound on the mini cmgr and the walk
+      -- leaves its press alone. Note-mutating effects need a prior draw to size the grid, so
+      -- the claim is the headless seam for "bound + dispatched".
       setKeys({ fakeImGui.Key_X }, fakeImGui.Mod_Super)
-      t.eq(pe:handleInput(function() end).consumed, false, 'an excluded command is inert')
+      pe:handleInput(function() end)
+      t.truthy(kq:take(fakeImGui.Key_X, fakeImGui.Mod_Super, 'modal'),
+               'an excluded command is inert, and its press stays in the queue')
 
-      -- '.' (delete) is whitelisted -> bound + dispatched -> consumed.
+      -- '.' (delete) is whitelisted -> bound + dispatched -> claimed.
       setKeys({ fakeImGui.Key_Period }, fakeImGui.Mod_None)
-      t.eq(pe:handleInput(function() end).consumed, true, 'a whitelisted command dispatches')
+      pe:handleInput(function() end)
+      t.eq(kq:take(fakeImGui.Key_Period, nil, 'modal'), nil, 'a whitelisted command dispatches, taking its press')
     end,
   },
 

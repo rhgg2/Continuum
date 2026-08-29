@@ -458,10 +458,10 @@ function pe:draw()
   ImGui.Dummy(ctx, w, h)
 end
 
---contract: input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits
---contract: returns the dispatch result kr = { consumed, commandHeld }
+--contract: input pass -- mouse, dispatch against mini cmgr, note entry
+--contract: an Esc the walk left cancels, Enter commits
 function pe:handleInput(close)
-  if swallowInput then swallowInput = false; return { consumed = true, commandHeld = {} } end
+  if swallowInput then swallowInput = false; return end
   if pendingAction then
     local action = pendingAction; pendingAction = nil
     if     action == 'commit' then close(false)
@@ -469,23 +469,21 @@ function pe:handleInput(close)
     elseif action.save   then saveShelf(action.save)
     elseif action.delete then deleteShelf(action.delete)
     else   loadShelf(action.load) end
-    return { consumed = true, commandHeld = {} }
+    return
   end
   gridPane:handleMouse()
   miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
-  local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx, keyQueue)
-  gridPane:handleKeys(kr)
-  -- A picker popup consumes its own Esc/Enter, but IsKeyPressed can't see that (two input streams);
+  gridPane:handleKeys(keyDispatch.dispatchKeys(miniFocus, cmgr, keyQueue))
+  -- A picker popup consumes its own Esc/Enter in ImGui's own stream, which the fill never read;
   -- gate the fallback on the same pickerIsActive acceptInput folds, so the key can't double-fire.
-  if not kr.consumed and not chrome.pickerIsActive() then
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  if not chrome.pickerIsActive() then
+    if keyQueue:take(ImGui.Key_Escape, nil, 'modal') then
       cancel(close)
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-        or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
+    elseif keyQueue:take(ImGui.Key_Enter, nil, 'modal')
+        or keyQueue:take(ImGui.Key_KeypadEnter, nil, 'modal') then
       close(false)
     end
   end
-  return kr
 end
 
 modalHost:registerKind('patternEditor', function(_, close)
