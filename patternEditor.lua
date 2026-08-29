@@ -63,6 +63,7 @@ end
 
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = false,
+  keyQueue = keyQueue, claimant = 'modal',
   inputAllowed = acceptInput,
 })
 
@@ -473,7 +474,8 @@ function pe:handleInput(close)
   end
   gridPane:handleMouse()
   miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
-  gridPane:handleKeys(keyDispatch.dispatchKeys(miniFocus, cmgr, keyQueue))
+  keyDispatch.dispatchKeys(miniFocus, cmgr, keyQueue)
+  gridPane:handleKeys()
   -- A picker popup consumes its own Esc/Enter in ImGui's own stream, which the fill never read;
   -- gate the fallback on the same pickerIsActive acceptInput folds, so the key can't double-fire.
   if not chrome.pickerIsActive() then

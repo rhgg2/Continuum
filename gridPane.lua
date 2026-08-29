@@ -7,6 +7,7 @@
 --invariant: page-persistent state: cellW/H, dragging, laneConsumed, paintLast
 --contract: host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates
 --contract: host chordEntry=false gates the chord gesture off (the pattern editor passes false)
+--contract: host supplies the keyQueue note entry takes from, and the claimant it takes under
 local util   = require 'util'
 local groups = require 'groups'
 
@@ -17,8 +18,9 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).tv, (...).inputAllowed, (...).chordEntry
+local cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry, keyQueue, claimant =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).tv, (...).inputAllowed, (...).chordEntry,
+  (...).keyQueue, (...).claimant
 
 ---------- PRIVATE
 
@@ -1129,62 +1131,67 @@ function gridPane:handleMouse()
   end
 end
 
--- commandHeld gates note entry per key: a key bound to both a command and note
--- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
 --contract: no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip
 --contract: no-op while a scope captures letters -- the menu's walk owns the keyboard, note entry included
---contract: every fresh press enters; only lastEditKey autorepeats
+--contract: every fresh press enters; only lastEditKey autorepeats, and a stale repeat goes back
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 --contract: a note key typed while armed exits region mode then enters (execute-through)
 --contract: Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk
---contract: Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits
-function gridPane:handleKeys(commandHeld)
-  local modsNow = ImGui.GetKeyMods(ctx)
+--contract: Backspace deletes last chord note; shift release commits
+--contract: every claim is at frameMods, under the host's claimant -- see docs/keyQueue.md
+function gridPane:handleKeys()
   -- Poll-based commit: catches the release wherever it lands (focus loss,
   -- modal open). Bit-test — extra modifiers must not read as a release.
-  local shiftGone = (modsNow & ImGui.Mod_Shift) == 0
+  local shiftGone = (keyQueue:mods() & ImGui.Mod_Shift) == 0
   if tv:chordActive()  and shiftGone then tv:chordCommit()  end
   if tv:digitsActive() and shiftGone then tv:digitsCommit() end
 
   -- A scope owning the letters (the menu's walk) owns the whole keyboard: the grid types
   -- nothing while it is up. See docs/commandManager.md § Scope stack.
   if not inputAllowed() or cmgr:letterCapture() then return end
-  -- Backspace deletes the last chord note, or steps the value gesture back one
-  -- place (restore-to-retype). The two gestures are never live together.
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Backspace, false) then
-    if     tv:chordActive()  then tv:chordBackspace()
-    elseif tv:digitsActive() then tv:digitsBackspace() end
+  local mods = keyQueue:frameMods()
+
+  -- Backspace deletes the last chord note, or steps the value gesture back one place
+  -- (restore-to-retype). Both gestures run under Shift, so the press carries the frame's mask.
+  if tv:chordActive() or tv:digitsActive() then
+    local back = keyQueue:take(ImGui.Key_Backspace, mods, claimant)
+    if back and back.repeated then keyQueue:restore(back)
+    elseif back then
+      if tv:chordActive() then tv:chordBackspace() else tv:digitsBackspace() end
+    end
   end
   local ec = tv:ec()
 
-  local shiftHeld  = modsNow == ImGui.Mod_Shift
-  local spreadHeld = modsNow == (ImGui.Mod_Shift | ImGui.Mod_Alt)
-  if (modsNow == ImGui.Mod_None or shiftHeld or spreadHeld) and not cmgr:isPrefixActive() then
+  local shiftHeld  = mods == ImGui.Mod_Shift
+  local spreadHeld = mods == (ImGui.Mod_Shift | ImGui.Mod_Alt)
+  if (mods == ImGui.Mod_None or shiftHeld or spreadHeld) and not cmgr:isPrefixActive() then
     local function enterAtCursor(char)
       local row, colIdx, stop = ec:pos()
       local c = tv.grid.cols[colIdx]
       if c then tv:editEvent(c, c.cells and c.cells[row], stop, char) end
     end
     for _, entry in ipairs(editKeys) do
-      if not commandHeld[entry.key] then
-        local fresh    = ImGui.IsKeyPressed(ctx, entry.key, false)
-        local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
-        if fresh or (repeated and entry.key == lastEditKey) then
+      local press = keyQueue:take(entry.key, mods, claimant)
+      if press then
+        local noteChar = cmgr:noteChars(entry.char) ~= nil
+        local wanted
+        if shiftHeld or spreadHeld then
+          -- Shift gestures are fresh-only: chord strike on a note col (+Alt spreads
+          -- channels), else the value place-walk. Each declines off its context.
+          local hexChar = entry.char >= string.byte('a') and entry.char <= string.byte('f')
+          wanted = not press.repeated and (noteChar or (shiftHeld and (entry.digit or hexChar)))
+        else   -- plain entry (Mod_None)
+          wanted = not press.repeated or entry.key == lastEditKey
+        end
+        if not wanted then keyQueue:restore(press)   -- a press this pass leaves alone goes back
+        else
+          if ec:isInRegionMode() then ec:regionExit() end   -- a typed note executes through
+          if ec:isSticky() then ec:selClear(); break end
           if shiftHeld or spreadHeld then
-            -- Shift gestures are fresh-only: chord strike on a note col (+Alt spreads
-            -- channels), else the value place-walk. Each declines off its context.
-            local noteChar = cmgr:noteChars(entry.char) ~= nil
-            local hexChar  = entry.char >= string.byte('a') and entry.char <= string.byte('f')
-            if fresh and (noteChar or (shiftHeld and (entry.digit or hexChar))) then
-              if ec:isInRegionMode() then ec:regionExit() end
-              if ec:isSticky() then ec:selClear(); break end
-              local struck = chordEntry and noteChar and tv:chordStrike(entry.char, spreadHeld)
-              if not struck and shiftHeld then tv:digitsStrike(entry.char) end
-            end
-          else   -- plain entry (Mod_None)
-            if ec:isInRegionMode() then ec:regionExit() end   -- a typed note executes through
-            if ec:isSticky() then ec:selClear(); break end
-            if fresh then lastEditKey = entry.key end
+            local struck = chordEntry and noteChar and tv:chordStrike(entry.char, spreadHeld)
+            if not struck and shiftHeld then tv:digitsStrike(entry.char) end
+          else
+            lastEditKey = entry.key
             enterAtCursor(entry.char)
           end
         end

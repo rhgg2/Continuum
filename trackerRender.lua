@@ -18,8 +18,9 @@ local ImGui = require 'imgui' '0.10'
 
 --contract: trackerPage (the controller) owns the stack + take lifecycle and drives this renderer
 --contract: the renderer holds only tv (injected); it never reaches mm/tm/gm
-local cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help, (...).pe
+local cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe, keyQueue =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help, (...).pe,
+  (...).keyQueue
 
 -- The renderer reads project data (tracks/slots) through the arrange facade;
 -- the tracker's selection nav goes straight to tv. See docs/trackerPage.md.
@@ -1067,6 +1068,7 @@ local tr = {}
 -- folds focusState.acceptCmds so note-entry self-suppresses under modal/picker/palette/strip focus.
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = true,
+  keyQueue = keyQueue,
   inputAllowed = function() return tr:focusState().acceptCmds end,
 })
 
@@ -1808,8 +1810,8 @@ function tr:renderBody(_, w, h, dispatch)
     local mx, my = ImGui.GetMousePos(ctx)
     if mx >= ox and mx < ox + gridW and my >= oy and my < oy + h then stripExitReq = true end
   end
-  local commandHeld = dispatch and dispatch(self:focusState()) or {}
-  if not help:wasOpenAtFrameStart() then gridPane:handleKeys(commandHeld) end
+  if dispatch then dispatch(self:focusState()) end
+  if not help:wasOpenAtFrameStart() then gridPane:handleKeys() end
   if stripExitReq then   -- exit after this frame's dispatch saw us focused; prune a husk left empty
     if stripHost then tv:pruneEmptyRegion(stripHost) end
     stripFocus, stripExitReq, stripSnapshot, stripHost = false, false, nil, nil

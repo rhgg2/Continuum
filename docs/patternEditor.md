@@ -134,6 +134,6 @@ callback taken at open. `bind`/`unbind` pass `skipGuard` so the checkout
 on scratch never touches the host's guarded track.
 
 The keyboard is shared, not owned. The host's `keyQueue` arrives at
-construction, and the mini editor's dispatch claims under the `modal` name the
-fill recorded, since it draws inside that modal — see `docs/keyQueue.md` §
-Ownership.
+construction, and the mini editor's dispatch and note entry both claim under
+the `modal` name the fill recorded, since they draw inside that modal — see
+`docs/keyQueue.md` § Ownership.

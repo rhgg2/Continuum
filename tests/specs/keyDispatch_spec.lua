@@ -1,16 +1,15 @@
 -- keyDispatch: the prefix-capture + keychain walk extracted from coordinator
 -- (design/fx-patterns.md P3 step a). Now an importable module the fx-pattern
 -- mini modal reuses, so pin the dispatch contract directly: first-hit claiming,
--- commandHeld hold-tracking, the acceptCmds gate, prefix capture + finish,
--- false-declines, and the pageSuppressed root narrowing.
+-- the acceptCmds gate, prefix capture + finish, false-declines, and the
+-- pageSuppressed root narrowing.
 --
 -- The dispatcher is handed a real keyQueue, filled from the same fake ImGui each
 -- time a test sets the key state (see docs/keyQueue.md). Every reader in it takes
 -- what it acts on, so the queue after the pass is the observable throughout: a
 -- press something fired on is gone, one nothing acted on is still there, and a
--- declined one is back. The pass returns commandHeld alone -- the keys down and
--- command-bound at the live chord, which note entry consults per key -- and which
--- dispatch may claim at all while one of the four owners holds the frame.
+-- declined one is back -- and which of them dispatch may claim at all while one of
+-- the four owners holds the frame.
 
 local t    = require('support')
 local util = require('util')
@@ -106,8 +105,8 @@ return {
   {
     -- A leaf's letter closes the walk inside the capture, so by the time the grid's own
     -- key pass runs, the sink it gates on is gone while the letter is still pressed. The
-    -- captured key comes back held, which is what that pass consults per key.
-    name = 'a captured letter is reported held, so the same frame\'s note entry skips it',
+    -- capture claimed the press, which is what keeps note entry off it.
+    name = 'a captured letter leaves the queue, so the same frame\'s note entry cannot see it',
     run = function()
       local cmgr, log = freshCmgr()
       local kd   = loadKD()
@@ -116,8 +115,8 @@ return {
       cmgr:push(walk)
 
       setKeys{ pressed = { fakeImGui.Key_A } }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
-      t.eq(held[fakeImGui.Key_A], true, 'the letter the walk took comes back held')
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      t.eq(kq:take(fakeImGui.Key_A), nil, 'the letter the walk took is gone from the queue')
       t.eq(cmgr:letterCapture(), nil, 'though the sink the grid gates on is already gone')
       t.deepEq(log.fired, {}, 'and the binding the letter carries never fires')
     end,
@@ -183,15 +182,14 @@ return {
   },
 
   {
-    name = 'a pressed bound key fires its command, is claimed, and reports as held',
+    name = 'a pressed bound key fires its command and is claimed',
     run = function()
       local cmgr, log = freshCmgr()
       local kd = loadKD()
       setKeys{ pressed = { fakeImGui.Key_A } }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
       t.deepEq(log.fired, { 'alpha' }, "only the pressed key's command fires")
       t.eq(kq:take(fakeImGui.Key_A), nil, 'and the walk claimed the press it acted on')
-      t.eq(held[fakeImGui.Key_A], true, 'the down bound key is reported held')
     end,
   },
 
@@ -230,15 +228,16 @@ return {
   },
 
   {
-    name = 'a held (not freshly pressed) bound key reports in commandHeld but does not fire',
+    -- A key's state is not a press: the fill stocks the queue from presses alone, so a key
+    -- merely held down puts nothing in it and the walk finds nothing to act on.
+    name = 'a held (not freshly pressed) bound key does not fire',
     run = function()
       local cmgr, log = freshCmgr()
       local kd = loadKD()
       setKeys{ down = { fakeImGui.Key_A } }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
-      t.eq(held[fakeImGui.Key_A], true, 'held bound key still reported for note-entry gating')
-      t.eq(held[fakeImGui.Key_B], nil, 'while a bound key nobody is holding is not reported')
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
       t.deepEq(log.fired, {}, 'no command fired on a mere hold')
+      t.eq(kq:takeAny(), nil, 'and the hold stocked the queue with nothing')
     end,
   },
 
@@ -280,9 +279,8 @@ return {
       local cmgr, log = freshCmgr()
       local kd = loadKD()
       setKeys{ pressed = { fakeImGui.Key_D, fakeImGui.Key_E } }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
       t.deepEq(log.fired, { 'decline' }, 'the body still ran')
-      t.eq(held[fakeImGui.Key_D], nil, 'the declined key is released from commandHeld')
       local first = kq:takeAny()
       t.eq(first and first.key, fakeImGui.Key_D,
            'and its press is back at the head, ahead of the frame\'s other presses')
@@ -315,17 +313,16 @@ return {
   },
 
   {
-    name = 'a shift-chord binding fires under shift and reports held',
+    name = 'a shift-chord binding fires under shift',
     run = function()
       local cmgr, log = freshCmgr()
       cmgr:registerAll{ gamma = function() log.fired[#log.fired + 1] = 'gamma' end }
       cmgr:bind('gamma', { { fakeImGui.Key_9, fakeImGui.Mod_Shift } })
       local kd = loadKD()
       setKeys{ pressed = { fakeImGui.Key_9 }, mods = fakeImGui.Mod_Shift }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
       t.deepEq(log.fired, { 'gamma' }, 'chord command fired')
       t.eq(kq:take(fakeImGui.Key_9, fakeImGui.Mod_Shift), nil, 'and the press is claimed at the chord mask')
-      t.eq(held[fakeImGui.Key_9], true, 'chord key reported held, gating grid entry')
     end,
   },
 
@@ -337,22 +334,9 @@ return {
       cmgr:bind('gamma', { { fakeImGui.Key_9, fakeImGui.Mod_Shift } })
       local kd = loadKD()
       setKeys{ pressed = { fakeImGui.Key_9 } }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
       t.deepEq(log.fired, {}, 'no command fired')
-      t.eq(held[fakeImGui.Key_9], nil, 'key not held-marked: free for digit entry')
       t.truthy(kq:take(fakeImGui.Key_9), 'and the bare press the chord does not match stays in the queue')
-    end,
-  },
-
-  {
-    name = 'held marking follows the live chord: bare binding unmarked while shift is down',
-    run = function()
-      local cmgr, log = freshCmgr()
-      local kd = loadKD()
-      setKeys{ down = { fakeImGui.Key_A }, mods = fakeImGui.Mod_Shift }
-      local held = kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
-      t.eq(held[fakeImGui.Key_A], nil, 'mod-none binding not held under an active chord')
-      t.deepEq(log.fired, {}, 'nothing fired')
     end,
   },
 

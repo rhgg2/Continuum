@@ -233,41 +233,40 @@ wheel ignores command return codes.
 
 ### Keys (`handleKeys`)
 
-Strictly ordered, one pass per frame:
+1. Note entry takes the presses it enters from the keyQueue
+   (`docs/keyQueue.md`), under the claimant its host supplies — nobody
+   on the tracker page, `modal` in the mini pattern editor. The host
+   runs the dispatcher first, so a press a command fired on has already
+   left the queue when the scan runs.
 
-1. **Command dispatch.** Iterate `cmgr.keymap`; `IsKeyPressed(key) &&
-   GetKeyMods() == mods` fires the command. The command returns `false`
-   to decline (keep scanning, let the char queue see the press) or
-   anything else (incl. `nil`) to consume the keypress. UI effects
-   (modal, swing editor, quit) are produced as side effects by commands
-   rm itself registers — see `docs/commandManager.md`.
-2. **Edit char queue** (unmodified, no command key held). One
-   character dequeued via `GetInputQueueCharacter` per frame and
-   routed to `vm:editEvent`. The `commandHeld` flag is tracked across
-   the dispatch pass because `IsKeyPressed` and the character queue
-   don't share auto-repeat timing; without the gate, a held command
-   key leaks a character into the edit path.
-3. **Shift-held gestures.** Shift plus a note key strikes a chord
-   (Shift+Alt spreading it across channels); Shift plus a digit runs the
-   value-entry overwrite cursor. Both are fresh-press only, each declines
-   off its own context, and shift release commits. They are a dedicated
-   edit path rather than character-queue entries because they need the
-   modifier state. See `docs/trackerView.md` § Value entry and § Chord
-   entry.
+1. The scan walks `editKeys`, the key constants the grid types, and
+   takes each at the frame's modifier mask. A press it does not act on
+   goes back to the queue.
 
-**Why KEY stream, not char queue, for `editKeys`.**
-`ImGui.Key_*` is physical and `IsKeyPressed(repeat)` fires on ImGui's
-own repeat timer, so every key autorepeats uniformly. The OS char queue
-silently suppressed repeats for keys with a macOS press-and-hold accent
-menu (e.g. `a`–`z`), making held-key entry unreliable.
+1. `editKeys` names ImGui key constants because the OS character queue
+   silently suppressed repeats for keys with a macOS press-and-hold
+   accent menu (`a`–`z` among them), making held-key entry unreliable.
+   ImGui's own repeat timer fires for every key alike.
 
-Only the newest held edit key autorepeats (`lastEditKey`). Without this
-guard, a held chord would re-enter all its keys interleaved on each
-repeat tick — the OS char queue only ever repeated the last key, but
-`IsKeyPressed` fires for every key still held.
+1. Only the newest edit key (`lastEditKey`) autorepeats. Without that
+   rule a held chord would re-enter all its keys interleaved on each
+   repeat tick, since the repeat fires for every key still held.
 
-Modal is a hard gate: `handleKeys` returns immediately if `modalState`
-is set, so the popup owns the keyboard until dismissed.
+1. Shift plus a note key strikes a chord, Shift+Alt spreading it across
+   channels, and Shift plus a digit runs the value-entry overwrite
+   cursor. Both act on fresh presses only, each declines off its own
+   context, and shift release commits — see `docs/trackerView.md`
+   § Value entry and § Chord entry.
+
+1. Backspace steps a live gesture back one note or one place. Both
+   gestures run under Shift, so its press carries the frame's mask and
+   is claimed at that mask.
+
+1. Two guards decide whether the scan is asked at all: the host's
+   `inputAllowed`, which folds the modal, picker, palette and fx-strip
+   states, and a scope's letter sink, since the menu's walk owns the
+   whole keyboard while it is up. A press a guard suppresses stays in
+   the queue.
 
 ## Modal
 

@@ -52,7 +52,7 @@ local function handlePrefixCapture(cmgr, keyQueue, claimant)
 end
 
 -- A scope may declare a letter sink (the lotus menu's walk); a bare letter goes to it, not
--- the keychain (Shift tolerated). Returns the key taken, since a leaf may close the sink first.
+-- the keychain (Shift tolerated). Returns whether a letter went to the sink.
 local function handleLetterCapture(cmgr, keyQueue, claimant)
   local capture = cmgr:letterCapture()
   if not capture then return nil end
@@ -60,29 +60,25 @@ local function handleLetterCapture(cmgr, keyQueue, claimant)
   if (mods & ~ImGui.Mod_Shift) ~= 0 then return nil end
   for i = 0, 25 do
     if keyQueue:take(ImGui.Key_A + i, mods, claimant) then
-      capture(string.char(65 + i)); return ImGui.Key_A + i
+      capture(string.char(65 + i)); return true
     end
   end
   return nil
 end
 
---shape: dispatchResult = { [imguiKey]=true } — the keys down AND command-bound at the frame's chord
 --contract: returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
 --contract: the walk claims the press before invoking; a command's reads see a queue without it
---contract: first-hit wins; false declines, releases the key and restores its press to the queue
+--contract: first-hit wins; false declines, and restores the press to the queue
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
 --contract: a captured '/' also opens the menu
 --contract: a captured digit dismisses the top scope, resolving the slash as the bar
 --contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
---contract: a captured letter comes back in the result, so note entry re-reading the frame skips it
 --contract: every claim is at frameMods, as state.claimant -- see docs/keyQueue.md
 function keyDispatch.dispatchKeys(state, cmgr, keyQueue)
-  if state.suppressKbd or not state.acceptCmds then return {} end
-  if handlePrefixCapture(cmgr, keyQueue, state.claimant) then return {} end
-  local letterKey = handleLetterCapture(cmgr, keyQueue, state.claimant)
-  if letterKey then return { [letterKey] = true } end
-  local commandHeld = {}
+  if state.suppressKbd or not state.acceptCmds then return end
+  if handlePrefixCapture(cmgr, keyQueue, state.claimant) then return end
+  if handleLetterCapture(cmgr, keyQueue, state.claimant) then return end
   local modsNow = keyQueue:frameMods()
   local keychain = state.pageSuppressed and { cmgr:rootKeymap() } or cmgr:keychain()
   for _, keymap in ipairs(keychain) do
@@ -90,9 +86,6 @@ function keyDispatch.dispatchKeys(state, cmgr, keyQueue)
       for _, spec in ipairs(keys) do
         local key, mods = cmgr:keySpec(spec, ImGui)
         if mods == modsNow then
-          if keyQueue:held(key) then
-            commandHeld[key] = true
-          end
           local entry = keyQueue:take(key, mods, state.claimant)
           if entry then
             -- Freeze the prefix buffer immediately before invoke so
@@ -101,17 +94,15 @@ function keyDispatch.dispatchKeys(state, cmgr, keyQueue)
               cmgr:finishPrefix()
             end
             if cmgr:invoke(command) == false then
-              commandHeld[key] = nil
               keyQueue:restore(entry)
             else
-              return commandHeld
+              return
             end
           end
         end
       end
     end
   end
-  return commandHeld
 end
 
 return keyDispatch

@@ -43,7 +43,8 @@ local pe = util.instantiate('patternEditor',
 
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,
-    gui = gui, modalHost = modalHost, help = help, facade = facade, pe = pe })
+    gui = gui, modalHost = modalHost, help = help, facade = facade, pe = pe,
+    keyQueue = keyQueue })
 
 local tp = {}
 local lastHash = nil   -- bound take's last-seen MIDI hash; external-mutation watcher baseline

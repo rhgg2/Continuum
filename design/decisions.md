@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — Note entry takes the presses it enters from the keyQueue, which retires
+  commandHeld: a press a command fired on has already left the queue, so the grid cannot see it and
+  needs no per-key hold table. Backspace is claimed at the frame's modifier mask, since the chord
+  and value gestures run under Shift and the press that steps them back carries it. A press the
+  edit-key scan declines goes back to the queue, as a declining command's press does.
+
 - **2026-08-29** — Reloading Continuum is a relaunch of its own ReaScript action, since a fresh Lua
   state is what re-reads edited source. reload() only flags the restart and returns, so the response
   file is on disk before the state is torn down. Starting an instance when none is running cannot go
