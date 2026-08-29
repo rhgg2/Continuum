@@ -1,2 +1,7 @@
 # Raw MIDI-blob fixtures (MIDI_GetAllEvts payloads) -- true binary.
 *.rawmidi binary
+
+# Every branch prepends to the top of the decisions log, so parallel worktrees
+# conflict there on every merge. Union keeps both entries; it is safe only
+# because entries are append-once, and would silently duplicate an edited one.
+design/decisions.md merge=union
