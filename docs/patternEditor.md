@@ -136,4 +136,6 @@ on scratch never touches the host's guarded track.
 The keyboard is shared, not owned. The host's `keyQueue` arrives at
 construction, and the mini editor's dispatch and note entry both claim under
 the `modal` name the fill recorded, since they draw inside that modal — see
-`docs/keyQueue.md` § Ownership.
+`docs/keyQueue.md` § Ownership. A shelf picker open over the modal takes the
+frame from it, so the editor's own Escape and Enter fallback simply declines
+while one is up.

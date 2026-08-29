@@ -11,6 +11,13 @@ local fakeImGui = setmetatable({ Mod_None = 0 }, {
     rawset(tbl, '##n', n); rawset(tbl, k, n); return n end,
 })
 
+-- keyQueue enumerates the Key_* names the shim table holds, once, as it loads; the metatable
+-- above mints them on touch, so mint every key a reader here can act on before that.
+for _, name in ipairs({ 'Enter', 'KeypadEnter', 'Escape',
+                        'UpArrow', 'DownArrow', 'LeftArrow', 'RightArrow' }) do
+  local _ = fakeImGui['Key_' .. name]
+end
+
 -- Mouse and keyboard for the frame about to be drawn, plus the hit rects it claimed.
 local frame = { wheel = 0, hovered = false, clicked = false, text = '', pressed = {}, hits = {} }
 
@@ -39,6 +46,8 @@ fakeImGui.IsItemActive             = function() return true end
 fakeImGui.IsItemDeactivated        = function() return false end
 fakeImGui.GetMouseWheel            = function() return frame.wheel, 0 end
 fakeImGui.IsKeyPressed             = function(_, k) return frame.pressed[k] == true end
+fakeImGui.GetKeyMods               = function() return 0 end
+fakeImGui.IsAnyItemActive          = function() return false end
 -- EnterReturnsTrue: the field reports a commit only on Enter.
 fakeImGui.InputText                = function() return frame.pressed[fakeImGui.Key_Enter] == true, frame.text end
 
@@ -48,9 +57,12 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
 
+-- An open field owns the keyboard, so the frame's queue is filled under its name.
+local kq = util.instantiate('keyQueue', { ctx = {} })
+
 local function mkChrome(h)
   local lib = util.instantiate('library', { cm = h.cm, synthetic = {} })
-  return util.instantiate('chrome', { cm = h.cm, ctx = {}, uiSize = 12, lib = lib })
+  return util.instantiate('chrome', { cm = h.cm, ctx = {}, uiSize = 12, lib = lib, keyQueue = kq })
 end
 
 -- A one-cell bar over a value the test can watch. `edit` selects the number behaviour.
@@ -63,7 +75,7 @@ local function mkBar(harness, value, edit)
                      edit = edit } }
   local draw   = chrome.makeStatusBar()
   frame.wheel, frame.hovered, frame.clicked, frame.clickId, frame.pressed = 0, false, false, nil, {}
-  return chrome, box, function() draw(segs) end
+  return chrome, box, function() kq:fill('statusEdit'); draw(segs) end
 end
 
 -- A flags cell over three booleans the test can watch. Labels of three lengths, so a
@@ -81,7 +93,7 @@ local function mkFlags(harness)
   local segs = { { id = 'modes', edit = { kind = 'flags', items = items } } }
   local draw = chrome.makeStatusBar()
   frame.wheel, frame.hovered, frame.clicked, frame.clickId, frame.pressed = 0, false, false, nil, {}
-  return chrome, box, function() frame.hits = {}; draw(segs) end
+  return chrome, box, function() frame.hits = {}; kq:fill('statusEdit'); draw(segs) end
 end
 
 return {

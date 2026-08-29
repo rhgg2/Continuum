@@ -44,8 +44,9 @@ other.
    claims is what arrived.
 
 1. The fill settles which reader owns the keyboard for the frame: the
-   cheat sheet, an open modal, an open picker, and a status cell
-   holding an open field, in that precedence.
+   cheat sheet, an open picker, a status cell holding an open field,
+   and an open modal, in that precedence. A popup raised over a modal
+   is nearer the user than the modal, so it takes the keyboard.
 
 1. `tick` is the pre-draw beat for the pages that need one — the modal
    host, the sample page, wiring's external resync while wiring is

@@ -113,8 +113,9 @@ against the toolbar's ink and the status bar's alike.
    that click as a drag, and drags the selection away. Enter commits
    through `set`; Esc and any other loss of the field cancel. One edit is open at
    a time, held in chrome as the cell's id and the buffer, and
-   `statusEditActive()` reports it so a page gates its keys as it does on
-   `pickerIsActive()`.
+   `statusEditActive()` reports it. The coordinator reads that at the next
+   frame's fill, so an open field owns the keyboard and the cell claims its
+   Escape under `statusEdit` (`docs/keyQueue.md § Ownership`).
 
 1. That gate would stick shut if the cell holding the edit stopped drawing — a
    page switch, or a `visible` turning false. The bar therefore drops an edit
@@ -182,7 +183,7 @@ The -/+ symbols are drawn as crisp axis-aligned filled rects on the window draw 
 
 ## Picker
 
-The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped: pages check it before consuming Enter so the picker's own Enter handler wins.
+The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped, and the coordinator reads it at the next frame's fill: an open picker owns the keyboard, outranking even an open modal, and the picker claims Enter, Escape and the four arrows under `picker` (`docs/keyQueue.md § Ownership`). Ownership therefore trails the picker by a frame at each end, and a press landing in the frame after a picker closes is dropped.
 
 `libPicker` takes a spec table (`{ key, current, excludeOthers, off }`) and builds the item list for a library-shaped cm key (`swings`, `tempers`, `fxPatches`) in three groups, in order: Off (nil key, suppressed by `off = false` — a catalogue written *into*, like the fx tab's `save`, has nothing to turn off); project entries (`cm.project[key]`, plain label, with a trailing ` •` badge when `lib.modified` reports the entry has diverged from its library source); and other entries present in the merged view but not yet localized to project (`+` prefix). `excludeOthers` filters names out of the third group only — used to hide `id` from the swing picker, which is already covered by Off. Each row also carries where it was drawn from and how that group announces itself: `tier` is `project` on a group-2 row and `global` on a group-3 one, with `groupLabel` `Project` and `Library` to match, and neither on Off, which is no tier. A group-3 row names the library tier even where only the factory catalogue carries the name: factory is a seed source, not somewhere a name resolves from, so such a row is a seeded one whose library copy has been deleted, and calling it `global` leaves its `×` a quiet no-op where `factory` would raise in `lib.delete`.
 

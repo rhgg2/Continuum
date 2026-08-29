@@ -30,22 +30,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 chrome: the picker and the status field claim from the keyQueue (design/keyQueue.md § Ownership)
 - 2026-08-29 modalHost: the built-in renderers claim their keys from the keyQueue (design/keyQueue.md § Ownership)
 - 2026-08-29 help: the cheat sheet claims its keys from the keyQueue (design/keyQueue.md § Ownership)
 - 2026-08-29 keyQueue: the fill claims a live text field's keys (design/keyQueue.md § Ownership)
-- 2026-08-29 gridPane: note entry takes its presses from the keyQueue (design/keyQueue.md § Claiming)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The picker and the status field claim under their names** —
-   `chrome.drawPicker` takes Enter, Escape and the four arrows as
-   `picker`, and the status cell takes Escape as `statusEdit`.
-   `patternEditor`'s `pickerIsActive` gate over its Escape/Enter
-   fallback goes, ownership having replaced it.
 
 1. **`suppressKbd` goes** — out of the five `focusState` builders,
    `miniFocus`, and `keyDispatch`'s early return, taking the

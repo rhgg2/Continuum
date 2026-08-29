@@ -27,11 +27,11 @@ local lib = util.instantiate('library',
 -- Seed each user library from the factory catalogue on first run (empty tier).
 for _, key in ipairs{ 'swings', 'tempers' } do lib.seedIfEmpty(key) end
 
+local keyQueue = util.instantiate('keyQueue', { ctx = ctx })
 local chrome = util.instantiate('chrome',
-  { cm = cm, ctx = ctx, uiSize = uiSize, lib = lib })
+  { cm = cm, ctx = ctx, uiSize = uiSize, lib = lib, keyQueue = keyQueue })
 local toolbar   = chrome.makeToolbar()     -- one shared toolbar; renders the active page's row
 local statusBar = chrome.makeStatusBar()   -- one shared status bar; renders the active page's cells
-local keyQueue  = util.instantiate('keyQueue', { ctx = ctx })
 local modalHost = util.instantiate('modalHost',
   { ctx = ctx, chrome = chrome, keyQueue = keyQueue })
 local help      = util.instantiate('help',
@@ -164,13 +164,12 @@ local function anyFxFloating()
   return false
 end
 
--- The four readers that take the whole keyboard, in precedence. Read before the frame
--- draws anything, so each answers for the state the presses arrived in.
+-- The four readers, in precedence; see docs/coordinator.md § The frame.
 local function keyboardOwner()
   if help:isOpen()             then return 'help'       end
-  if modalHost:isOpen()        then return 'modal'      end
   if chrome.pickerIsActive()   then return 'picker'     end
   if chrome.statusEditActive() then return 'statusEdit' end
+  if modalHost:isOpen()        then return 'modal'      end
 end
 
 local function frame()

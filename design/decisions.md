@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — An open picker and an open status field outrank an open modal in the fill's
+  precedence, over the modal-first order the four owners started with. A popup is raised over a
+  modal rather than beside it, so it is nearer the user; without the reorder the shelf pickers
+  inside the pattern editor would sit on a frame the modal owns, and every claim they made under
+  `picker` would be refused. Ownership then covers what `patternEditor`'s `pickerIsActive` gate over
+  its Escape/Enter fallback covered, so that gate goes.
+
 - **2026-08-29** — REAPER's link is released by the same liveness test that reclaims abandoned
   session trees: a tree is held exactly when a session directory under its slug records a pid that
   still names a claude process. No separate record of who claimed the link is kept, so the two ways

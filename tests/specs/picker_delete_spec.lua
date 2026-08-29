@@ -11,6 +11,13 @@ local fakeImGui = setmetatable({ Mod_None = 0 }, {
     rawset(tbl, '##n', n); rawset(tbl, k, n); return n end,
 })
 
+-- keyQueue enumerates the Key_* names the shim table holds, once, as it loads; the metatable
+-- above mints them on touch, so mint every key the picker acts on before that.
+for _, name in ipairs({ 'Enter', 'KeypadEnter', 'Escape',
+                        'UpArrow', 'DownArrow', 'LeftArrow', 'RightArrow' }) do
+  local _ = fakeImGui['Key_' .. name]
+end
+
 -- Buttons drawn this frame, in row order: one entry per ×, carrying the ink its diagonals used.
 local drawnButtons, clickRow = {}, nil
 for _, name in ipairs({ 'AlignTextToFramePadding', 'Text', 'SameLine', 'PushStyleVar', 'PopStyleVar',
@@ -36,6 +43,8 @@ fakeImGui.IsItemHovered         = function() return false end
 fakeImGui.CreateFunctionFromEEL = function() return {} end
 fakeImGui.InputText             = function() return true, '' end
 fakeImGui.IsKeyPressed          = function() return false end   -- no Enter: the row loop runs
+fakeImGui.GetKeyMods            = function() return 0 end
+fakeImGui.IsAnyItemActive       = function() return false end
 fakeImGui.Selectable            = function() return false end
 fakeImGui.ColorConvertDouble4ToU32 = function(r, g, b) return math.floor(r * 255) * 65536
                                                             + math.floor(g * 255) * 256
@@ -60,9 +69,12 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')
 
+-- The picker owns the keyboard while its popup is up, so the frame's queue is filled as one.
+local kq = util.instantiate('keyQueue', { ctx = {} })
+
 local function mkChrome(h)
   local lib = util.instantiate('library', { cm = h.cm, synthetic = {} })
-  return util.instantiate('chrome', { cm = h.cm, ctx = {}, uiSize = 12, lib = lib })
+  return util.instantiate('chrome', { cm = h.cm, ctx = {}, uiSize = 12, lib = lib, keyQueue = kq })
 end
 
 local SHELF = { { label = 'lead', key = 'lead' }, { label = 'bass', key = 'bass' } }
@@ -71,6 +83,7 @@ local SHELF = { { label = 'lead', key = 'lead' }, { label = 'bass', key = 'bass'
 -- Returns the key onDelete fired with, and the buttons drawn this frame.
 local function frame(chrome, click, noDelete)
   clickRow, drawnButtons = click, {}
+  kq:fill('picker')
   local deleted
   local spec = { kind = 'test', buttonLabel = 'Load', items = SHELF, onPick = function() end }
   if not noDelete then spec.onDelete = function(key) deleted = key end end

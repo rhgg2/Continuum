@@ -28,9 +28,10 @@ The mechanism landed: see `docs/keyQueue.md` § Ownership, and § The
 fill for the claim an unowned frame's live text field makes. What
 remains is the readers' side.
 
-1. The four owners are the cheat sheet while it was open at frame
-   start, an open modal, an open picker, and a status cell holding an
-   open field. Each passes its name; every other reader omits one.
+1. The four owners are, in precedence, the cheat sheet while it was
+   open at frame start, an open picker, a status cell holding an open
+   field, and an open modal. A picker raised inside a modal owns the
+   frame. Each passes its name; every other reader omits one.
 
 ## Hold and repeat
 

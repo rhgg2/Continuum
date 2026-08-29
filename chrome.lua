@@ -8,12 +8,14 @@
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?, groupLabel?: string, current?=bool, tier?='project'|'global'}], groups?: [{key, label?}], onPick: fn(key, tier), onCancel?: fn(), onCreate?: fn(text, group), onDelete?: fn(key, tier), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
+--contract: the picker and an open status field claim their keys under 'picker' and 'statusEdit'
+--contract: see docs/keyQueue.md § Ownership
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 local util    = require 'util'
 
-local cm, ctx, lib  = (...).cm, (...).ctx, (...).lib
+local cm, ctx, lib, keyQueue = (...).cm, (...).ctx, (...).lib, (...).keyQueue
 
 local chrome = {}
 
@@ -474,7 +476,7 @@ local statusWheel = { id = nil, accum = 0 }
 
 function chrome.statusRects() return lastStatusRects end
 
---contract: true while a status cell holds an open field; gates page keys as pickerIsActive does
+--contract: true while a status cell holds an open field; the next fill hands it the keyboard
 function chrome.statusEditActive() return statusEdit ~= nil end
 
 local function statusText(seg)
@@ -574,7 +576,8 @@ local function numberEdit(seg, x, y, w)
     local v = tonumber(text)
     if v then seg.set(clampTo(v, seg.edit)) end
     statusEdit = nil
-  elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) or ImGui.IsItemDeactivated(ctx) then
+  elseif keyQueue:take(ImGui.Key_Escape, keyQueue:frameMods(), 'statusEdit')
+      or ImGui.IsItemDeactivated(ctx) then
     statusEdit = nil
   else
     statusEdit.text = text
@@ -929,7 +932,7 @@ function chrome.drawPicker(d)
   local open = ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav)
   ImGui.PopStyleVar(ctx, 1)
   if not open then ImGui.PopStyleColor(ctx, inkPushes); return end
-  pickerActive = true   -- block page key dispatch this frame so Enter doesn't leak
+  pickerActive = true   -- the coordinator reads this at the next frame's fill, handing us the keyboard
 
   -- No horizontal item spacing: a Selectable's rect is otherwise extended half a spacing past the
   -- content edge on each side, standing the rows wider than the filter field and its rule.
@@ -948,8 +951,6 @@ function chrome.drawPicker(d)
   local _, filter = ImGui.InputText(ctx, '##filter_' .. d.kind, prevFilter,
     ImGui.InputTextFlags_CallbackAlways, clearSelCb)
   pickerFilter[d.kind] = filter
-  local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-               or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
   ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) - DIVIDER_LIFT)
   ImGui.Separator(ctx)
 
@@ -991,10 +992,13 @@ function chrome.drawPicker(d)
   end
   local cursor = pickerCursor[d.kind] or 1
   local n = #rows
+  local mods = keyQueue:frameMods()
   if n > 0 then
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) or ImGui.IsKeyPressed(ctx, ImGui.Key_RightArrow) then
+    if keyQueue:take(ImGui.Key_DownArrow, mods, 'picker')
+       or keyQueue:take(ImGui.Key_RightArrow, mods, 'picker') then
       cursor = cursor % n + 1
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow) or ImGui.IsKeyPressed(ctx, ImGui.Key_LeftArrow) then
+    elseif keyQueue:take(ImGui.Key_UpArrow, mods, 'picker')
+        or keyQueue:take(ImGui.Key_LeftArrow, mods, 'picker') then
       cursor = (cursor - 2) % n + 1
     end
   end
@@ -1006,10 +1010,11 @@ function chrome.drawPicker(d)
     if r.create then d.onCreate(filter, r.create) else d.onPick(r.item.key, r.item.tier) end
   end
 
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  if keyQueue:take(ImGui.Key_Escape, mods, 'picker') then
     if d.onCancel then d.onCancel() end
     ImGui.CloseCurrentPopup(ctx)
-  elseif entered then
+  elseif keyQueue:take(ImGui.Key_Enter, mods, 'picker')
+      or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'picker') then
     if rows[cursor] then choose(rows[cursor]) end
     ImGui.CloseCurrentPopup(ctx)
   else

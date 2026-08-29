@@ -63,11 +63,12 @@ fakeImGui.Button = function(_, label)
 end
 
 -- The mini editor runs inside the modal the fill records as owner, and claims under that
--- name, so the queue each pass reads is filled as one. See docs/keyQueue.md § Ownership.
-local function setKeys(keys, mods)
+-- name, so the queue each pass reads is filled as one. A shelf picker open over the modal
+-- takes the frame instead, hence `owner`. See docs/keyQueue.md § Ownership.
+local function setKeys(keys, mods, owner)
   pressed, down, curMods = {}, {}, mods or 0
   for _, k in ipairs(keys or {}) do pressed[k] = true; down[k] = true end
-  kq:fill('modal')
+  kq:fill(owner or 'modal')
 end
 
 local capturedPickers = {}
@@ -134,8 +135,8 @@ local function frame(pe, o)
   pe:draw()
 end
 
-local function input(pe, keys)
-  setKeys(keys or {})
+local function input(pe, keys, owner)
+  setKeys(keys or {}, nil, owner)
   pe:handleInput(function() end)
 end
 
@@ -245,6 +246,25 @@ return {
 
       input(pe, { fakeImGui.Key_Escape })
       t.eq(#get().specs, 2, 'Esc restored the modal-open snapshot, not the loaded body')
+    end,
+  },
+
+  {
+    name = 'Esc with a shelf picker over the modal leaves the load standing',
+    run = function(harness)
+      local h, pe, get = withEditor(harness, notesBody())   -- snapshot: 2 specs
+      h.ds:assign('fxPatterns', { small = {
+        kind = 'notes', lengthPpq = 480, root = 60,
+        specs = { { lane = 1, ppq = 0, endppq = 240, pitch = 72, vel = 90, detune = 0, delay = 0 } },
+      } })
+
+      frame(pe)
+      capturedPickers.peShelf.onPick('small')
+      input(pe)
+      t.eq(#get().specs, 1, 'the load took effect')
+
+      input(pe, { fakeImGui.Key_Escape }, 'picker')
+      t.eq(#get().specs, 1, "the picker owns the frame, so the editor's Esc fallback declined it")
     end,
   },
 

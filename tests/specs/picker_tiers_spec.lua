@@ -11,6 +11,13 @@ local fakeImGui = setmetatable({ Mod_None = 0 }, {
     rawset(tbl, '##n', n); rawset(tbl, k, n); return n end,
 })
 
+-- keyQueue enumerates the Key_* names the shim table holds, once, as it loads; the metatable
+-- above mints them on touch, so mint every key the picker acts on before that.
+for _, name in ipairs({ 'Enter', 'KeypadEnter', 'Escape',
+                        'UpArrow', 'DownArrow', 'LeftArrow', 'RightArrow' }) do
+  local _ = fakeImGui['Key_' .. name]
+end
+
 -- The popup body in submission order: one entry per heading, row or rule. Rows also record the id
 -- scope they were drawn under, ImGui faulting on two visible items that share an id.
 local filterText, pressed, body, idStack = '', {}, {}, {}
@@ -37,6 +44,8 @@ fakeImGui.CreateFunctionFromEEL = function() return {} end
 fakeImGui.ColorConvertDouble4ToU32 = function() return 0 end   -- the popup pushes its own ink
 fakeImGui.InputText             = function() return true, filterText end
 fakeImGui.IsKeyPressed          = function(_, k) return pressed[k] == true end
+fakeImGui.GetKeyMods            = function() return 0 end
+fakeImGui.IsAnyItemActive       = function() return false end
 fakeImGui.Separator             = function() body[#body + 1] = { rule = true } end
 fakeImGui.TextDisabled          = function(_, label) body[#body + 1] = { heading = label } end
 fakeImGui.Selectable            = function(_, label)
@@ -52,9 +61,12 @@ local util = require('util')
 
 local BULLET = ' \xe2\x80\xa2'   -- space + U+2022, the modified marker
 
+-- The picker owns the keyboard while its popup is up, so the frame's queue is filled as one.
+local kq = util.instantiate('keyQueue', { ctx = {} })
+
 local function mkChrome(h)
   local lib = util.instantiate('library', { cm = h.cm, synthetic = {} })
-  return util.instantiate('chrome', { cm = h.cm, ctx = {}, uiSize = 12, lib = lib })
+  return util.instantiate('chrome', { cm = h.cm, ctx = {}, uiSize = 12, lib = lib, keyQueue = kq })
 end
 
 -- A catalogue with `wobble` in both tiers -- the case a resolved list could not show.
@@ -75,6 +87,7 @@ local function frame(chrome, items, text, opts)
   opts = opts or {}
   filterText, body, idStack = text or '', {}, {}
   pressed = opts.enter and { [fakeImGui.Key_Enter] = true } or {}
+  kq:fill('picker')
   local fired
   chrome.drawPicker{
     kind = 'test', buttonLabel = 'save', items = items, groups = chrome.tierGroups,

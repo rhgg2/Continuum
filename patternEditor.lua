@@ -476,15 +476,11 @@ function pe:handleInput(close)
   miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
   keyDispatch.dispatchKeys(miniFocus, cmgr, keyQueue)
   gridPane:handleKeys()
-  -- A picker popup consumes its own Esc/Enter in ImGui's own stream, which the fill never read;
-  -- gate the fallback on the same pickerIsActive acceptInput folds, so the key can't double-fire.
-  if not chrome.pickerIsActive() then
-    if keyQueue:take(ImGui.Key_Escape, nil, 'modal') then
-      cancel(close)
-    elseif keyQueue:take(ImGui.Key_Enter, nil, 'modal')
-        or keyQueue:take(ImGui.Key_KeypadEnter, nil, 'modal') then
-      close(false)
-    end
+  if keyQueue:take(ImGui.Key_Escape, nil, 'modal') then
+    cancel(close)
+  elseif keyQueue:take(ImGui.Key_Enter, nil, 'modal')
+      or keyQueue:take(ImGui.Key_KeypadEnter, nil, 'modal') then
+    close(false)
   end
 end
 
