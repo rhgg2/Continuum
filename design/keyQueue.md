@@ -24,23 +24,13 @@ Landed: see `docs/keyQueue.md` § The queue and § The fill.
 
 ## Ownership
 
-The mechanism landed: see `docs/keyQueue.md` § Ownership. What remains
-is the readers' side.
+The mechanism landed: see `docs/keyQueue.md` § Ownership, and § The
+fill for the claim an unowned frame's live text field makes. What
+remains is the readers' side.
 
 1. The four owners are the cheat sheet while it was open at frame
    start, an open modal, an open picker, and a status cell holding an
    open field. Each passes its name; every other reader omits one.
-
-1. Unowned is the ordinary case. A text field active at the end of the
-   previous frame then claims the presses a field consumes — the
-   printable keys, Backspace and Delete, and the arrows with Home and
-   End.
-
-1. The fill reads that field from ImGui's active item, which a slider
-   mid-drag also sets, so the claim is wider than the fields it is for.
-
-1. Enter, Escape, Tab, and any press carrying Super or Ctrl, survive
-   that claim. A field's host acts on them.
 
 1. Ownership governs the keyboard alone. The cheat sheet keeps its own
    guards over the readers that take the mouse.

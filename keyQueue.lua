@@ -8,6 +8,8 @@
 --contract: an owner named at the fill holds the frame; take/takeAny answer nil to others
 --contract: held/mods read ImGui live, and answer the same whoever owns the queue
 --contract: frameMods is the mask the fill stamped; a reader judges a chord by it, then takes at it
+--contract: an unowned frame with an item active drops the keys a live text field consumes
+--contract: Enter, Escape, Tab and any Ctrl/Super chord survive that drop, for the field's host
 
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
@@ -17,9 +19,27 @@ local ctx = (...).ctx
 -- The readers that take the whole keyboard for a frame. See docs/keyQueue.md § Ownership.
 local OWNERS = { help = true, modal = true, picker = true, statusEdit = true }
 
--- Every key constant the shim carries, ascending, less the mouse keys and the modifier
--- keys -- a modifier is state, and rides on every entry as the mask.
-local KEYS = {}
+-- The keys a live text field consumes: the printables, the two erasing keys, and the
+-- caret's own. Enter, Escape and Tab belong to the field's host, so they are not here.
+local FIELD_NAMES = {}
+do
+  local names = { 'Space', 'Backspace', 'Delete', 'Home', 'End',
+                  'LeftArrow', 'RightArrow', 'UpArrow', 'DownArrow',
+                  'Apostrophe', 'Comma', 'Minus', 'Period', 'Slash', 'Semicolon', 'Equal',
+                  'LeftBracket', 'Backslash', 'RightBracket', 'GraveAccent',
+                  'KeypadDecimal', 'KeypadDivide', 'KeypadMultiply', 'KeypadSubtract',
+                  'KeypadAdd', 'KeypadEqual' }
+  for i = 0, 25 do util.add(names, string.char(65 + i)) end
+  for i = 0, 9  do util.add(names, tostring(i)); util.add(names, 'Keypad' .. i) end
+  for _, name in ipairs(names) do FIELD_NAMES['Key_' .. name] = true end
+end
+
+-- A chord under either of these is a command, and reaches the queue past a live field.
+local CHORD_MODS = ImGui.Mod_Ctrl | ImGui.Mod_Super
+
+-- KEYS: every key constant the shim carries, ascending, minus the mouse keys and modifiers.
+-- Modifiers are state riding every entry as a mask; FIELD is the field's share, by value.
+local KEYS, FIELD = {}, {}
 do
   local modifiers = {}
   for _, side in ipairs{ 'Left', 'Right' } do
@@ -32,6 +52,7 @@ do
        and name:sub(1, 4) == 'Key_' and name:sub(1, 9) ~= 'Key_Mouse'
        and not modifiers[name] then
       util.add(KEYS, value)
+      if FIELD_NAMES[name] then FIELD[value] = true end
     end
   end
   table.sort(KEYS)
@@ -60,9 +81,12 @@ function keyQueue:fill(ownerNow)
   entries, owner = {}, checked(ownerNow)
   local mods = ImGui.GetKeyMods(ctx)
   frameMask   = mods
+  -- An owner takes the whole keyboard, a field it hosts included. Otherwise an active item
+  -- is a live field, and the fill never asks after the keys it consumes.
+  local field = owner == nil and (mods & CHORD_MODS) == 0 and ImGui.IsAnyItemActive(ctx)
   for _, key in ipairs(KEYS) do
     -- Press-or-repeat first: only a key that answered pays the call that separates the two.
-    if ImGui.IsKeyPressed(ctx, key, true) then
+    if not (field and FIELD[key]) and ImGui.IsKeyPressed(ctx, key, true) then
       util.add(entries, { key      = key,
                           mods     = mods,
                           repeated = not ImGui.IsKeyPressed(ctx, key, false) })

@@ -30,22 +30,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 keyQueue: the fill claims a live text field's keys (design/keyQueue.md § Ownership)
 - 2026-08-29 gridPane: note entry takes its presses from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 keyDispatch: the walk takes its press, and consumed goes (design/keyQueue.md § Claiming)
 - 2026-08-29 keyDispatch: prefix and letter capture take from the keyQueue (phase 2)
-- 2026-08-29 keyQueue: read the frame's key presses into a claimable queue (phase 1)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The fill claims a live text field's keys** — where ImGui reports an
-   active item at fill time, the fill drains the printables, Backspace
-   and Delete, and the arrows with Home and End, leaving Enter, Escape,
-   Tab and the Super/Ctrl chords for the field's host. `keyQueue_spec`
-   covers both sides of that line. (§ Ownership)
 
 1. **The cheat sheet claims under `help`** — dismissal takes any press,
    chord capture takes the chord it binds, the conflict prompt takes

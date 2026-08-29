@@ -47,6 +47,16 @@ press is gone.**
    frame. `keyQueue:frameMods()` returns it, so a reader deciding
    whether a chord is one it acts on tests the mask its entries carry.
 
+1. The fill makes a claim of its own. Where no owner holds the frame
+   and ImGui reports an active item, a live text field takes the keys a
+   field consumes — the printable keys, Backspace and Delete, and the
+   arrows with Home and End. The fill does not ask after them, so they
+   reach no reader.
+
+1. Enter, Escape, Tab and any press carrying Ctrl or Super survive that
+   claim, for the field's host to act on. `ImGui.IsAnyItemActive` is the
+   test, so a slider mid-drag claims as a field does.
+
 ## Claiming
 
 1. `keyDispatch` claims each press it acts on, at the frame's mods and

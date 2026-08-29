@@ -26,6 +26,7 @@ local pressed, down, curMods = {}, {}, 0
 function fakeImGui.GetKeyMods(_)      return curMods            end
 function fakeImGui.IsKeyPressed(_, k) return pressed[k] == true end
 function fakeImGui.IsKeyDown(_, k)    return down[k]    == true end
+function fakeImGui.IsAnyItemActive(_) return false            end   -- no live field headless
 
 local ctx = {}
 local kq          -- the frame's queue, rebuilt per loadKD and refilled per setKeys

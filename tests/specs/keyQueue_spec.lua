@@ -4,6 +4,9 @@
 -- second call separating a fresh press from an autorepeat is paid only for a key that answered),
 -- the exact modifier match with Mod_None standing in for an omitted mask, ownership declining
 -- every claimant but the owner, and held/mods reading live state under an owner.
+--
+-- They also pin the fill's own claim: an unowned frame with an item active is a live text
+-- field, which takes the keys a field consumes before any reader sees them.
 
 local t    = require('support')
 local util = require('util')
@@ -19,9 +22,12 @@ local EXCLUDED = { 'MouseLeft', 'MouseRight', 'MouseWheelX', 'MouseWheelY',
 for i, name in ipairs(EXCLUDED) do img['Key_' .. name] = 900 + i end
 
 -- Fake key state. pressed[key] is 'fresh' or 'repeat'; every IsKeyPressed call is logged, so a
--- test can assert what the fill asked for as well as what it made of the answers.
+-- test can assert what the fill asked for as well as what it made of the answers. itemActive is
+-- ImGui's active item, which the fill reads as a live field.
 local pressed, down, curMods, polled = {}, {}, 0, {}
+local itemActive = false
 
+function img.IsAnyItemActive() return itemActive      end
 function img.GetKeyMods()      return curMods         end
 function img.IsKeyDown(_, key) return down[key] == true end
 function img.IsKeyPressed(_, key, withRepeat)
@@ -33,7 +39,7 @@ end
 package.preload['imgui'] = function() return function() return img end end
 
 local function newQueue()
-  pressed, down, curMods, polled = {}, {}, 0, {}
+  pressed, down, curMods, polled, itemActive = {}, {}, 0, {}, false
   return util.instantiate('keyQueue', { ctx = ctx })
 end
 
@@ -149,6 +155,62 @@ return {
       t.eq(first.key,       lo,  'the lower key constant comes first')
       t.eq(q:takeAny().key, hi,  'then the higher')
       t.eq(q:takeAny(),     nil, 'and the queue is empty')
+    end,
+  },
+
+  {
+    -- A field takes the printables, the two erasing keys, and the caret's own; what it does
+    -- not consume is its host's, and reaches the queue. The fill never asks after a key it
+    -- would drop, so the dropped keys are absent from the poll log as well as from the queue.
+    name = 'a live text field claims the keys it consumes, and leaves the rest',
+    run = function()
+      local q = newQueue()
+      local taken   = { 'A', '5', 'Keypad3', 'Space', 'Minus', 'Backspace', 'Delete',
+                        'LeftArrow', 'UpArrow', 'Home', 'End' }
+      local survives = { 'Enter', 'KeypadEnter', 'Escape', 'Tab', 'F1', 'PageUp', 'Insert' }
+      for _, name in ipairs(taken)    do pressed[img['Key_' .. name]] = 'fresh' end
+      for _, name in ipairs(survives) do pressed[img['Key_' .. name]] = 'fresh' end
+      itemActive = true
+      q:fill()
+      local seen = polledKeys()
+      for _, name in ipairs(taken) do
+        t.eq(q:take(img['Key_' .. name]), nil, name .. ' is the field\'s')
+        t.falsy(seen[img['Key_' .. name]], 'and the fill did not ask after ' .. name)
+      end
+      for _, name in ipairs(survives) do
+        t.truthy(q:take(img['Key_' .. name]), name .. ' is the field host\'s')
+      end
+    end,
+  },
+
+  {
+    -- Ctrl and Super make a command chord, not a keystroke; Shift and Alt make a character,
+    -- so a press under either is still the field's.
+    name = 'a Ctrl or Super chord survives the field claim, a Shift one does not',
+    run = function()
+      for _, mod in ipairs{ 'Mod_Ctrl', 'Mod_Super' } do
+        local q = newQueue()
+        pressed[img.Key_A], curMods, itemActive = 'fresh', img[mod], true
+        q:fill()
+        t.truthy(q:take(img.Key_A, img[mod]), 'A under ' .. mod .. ' reaches the queue')
+      end
+      local q = newQueue()
+      pressed[img.Key_A], curMods, itemActive = 'fresh', img.Mod_Shift, true
+      q:fill()
+      t.eq(q:take(img.Key_A, img.Mod_Shift), nil, 'a shifted printable is typing')
+    end,
+  },
+
+  {
+    -- An owner takes the whole keyboard, the field's keys with it: the picker's filter is a
+    -- live field, and its arrows would otherwise be claimed out from under it.
+    name = 'the field claim is off while an owner holds the frame',
+    run = function()
+      local q = newQueue()
+      pressed[img.Key_LeftArrow], pressed[img.Key_A], itemActive = 'fresh', 'fresh', true
+      q:fill('picker')
+      t.truthy(q:take(img.Key_LeftArrow, nil, 'picker'), 'the owner still has its arrows')
+      t.truthy(q:take(img.Key_A,         nil, 'picker'), 'and the printables too')
     end,
   },
 

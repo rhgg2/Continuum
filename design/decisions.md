@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The fill's claim on a live text field's keys is off while one of the four owners
+  holds the frame. An owner takes the whole keyboard, a field it hosts included: the picker's filter
+  is a live field, and an unconditional claim would take the arrows its cursor reads.
+
 - **2026-08-29** — Note entry takes the presses it enters from the keyQueue, which retires
   commandHeld: a press a command fired on has already left the queue, so the grid cannot see it and
   needs no per-key hold table. Backspace is claimed at the frame's modifier mask, since the chord
