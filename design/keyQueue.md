@@ -1,7 +1,7 @@
 # keyQueue — design
 
-> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 3
-> (note entry)
+> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 4
+> (ownership)
 
 **Every key press Continuum acts on is read once, at the top of the
 frame, into a queue; a reader claims what it acts on, and a claimed
@@ -36,8 +36,14 @@ is the readers' side.
    printable keys, Backspace and Delete, and the arrows with Home and
    End.
 
+1. The fill reads that field from ImGui's active item, which a slider
+   mid-drag also sets, so the claim is wider than the fields it is for.
+
 1. Enter, Escape, Tab, and any press carrying Super or Ctrl, survive
    that claim. A field's host acts on them.
+
+1. Ownership governs the keyboard alone. The cheat sheet keeps its own
+   guards over the readers that take the mouse.
 
 ## Hold and repeat
 

@@ -17,7 +17,7 @@
    and status edit own the queue; `suppressKbd`, `pickerIsActive` and
    `statusEditActive` stop being read as gates, the five
    `wasOpenAtFrameStart` guards go, and the direct readers those guards
-   never covered come under the same rule.  ← next
+   never covered come under the same rule.  ← in flight
 5. **Phase 5 — The raising readers** (§ Claiming) — the modal renderers,
    the fx strip and the param palette take rather than poll. With the
    press claimed before what it raises can read, the five `appearing`
@@ -41,5 +41,36 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 3 is done; run /plan-next to refill from phase 4.)
+1. **The fill claims a live text field's keys** — where ImGui reports an
+   active item at fill time, the fill drains the printables, Backspace
+   and Delete, and the arrows with Home and End, leaving Enter, Escape,
+   Tab and the Super/Ctrl chords for the field's host. `keyQueue_spec`
+   covers both sides of that line. (§ Ownership)
+
+1. **The cheat sheet claims under `help`** — dismissal takes any press,
+   chord capture takes the chord it binds, the conflict prompt takes
+   Enter and Escape, and edit mode takes its Escape. The coordinator's
+   `help:isOpen()` override in `dispatch` goes, with the two key-side
+   `wasOpenAtFrameStart` guards: tracker's `handleKeys`, and the sampler
+   browser's arrows, which take from the queue instead. The three
+   mouse-side guards stay.
+
+1. **The modal claims under `modal`** — `modalHost`'s confirm renderer
+   takes Y, N, Enter and Escape; its prompt renderer takes Enter,
+   KeypadEnter and Escape. The appearing-frame skip in front of
+   `onChord` goes, the walk having claimed the opening press before the
+   command ran.
+
+1. **The picker and the status field claim under their names** —
+   `chrome.drawPicker` takes Enter, Escape and the four arrows as
+   `picker`, and the status cell takes Escape as `statusEdit`.
+   `patternEditor`'s `pickerIsActive` gate over its Escape/Enter
+   fallback goes, ownership having replaced it.
+
+1. **`suppressKbd` goes** — out of the five `focusState` builders,
+   `miniFocus`, and `keyDispatch`'s early return, taking the
+   `pickerIsActive`, `statusEditActive` and `modalHost:isOpen` reads
+   that fed it; `acceptCmds` keeps its own. The page specs asserting the
+   field go with it, and phase 6 has the direct readers that still guard
+   themselves.
 
