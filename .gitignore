@@ -15,3 +15,6 @@
 
 # `claude --worktree` puts its worktrees here, inside the repo.
 /.claude/worktrees/
+
+# Claude Code's per-machine settings, written beside the tracked ones.
+/.claude/settings.local.json
