@@ -1,7 +1,7 @@
 # keyQueue — design
 
-> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 2
-> (the dispatcher)
+> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 3
+> (note entry)
 
 **Every key press Continuum acts on is read once, at the top of the
 frame, into a queue; a reader claims what it acts on, and a claimed
@@ -16,10 +16,8 @@ Landed: see `docs/keyQueue.md` § The queue and § The fill.
 1. A reader claims in the statement where it acts, so a reader that
    acts on a press it did not claim is a defect.
 
-1. The claim precedes whatever the press sets in motion. The keychain
-   walk takes the press that selects a command before it invokes, so a
-   command raising a modal, a picker or the menu walk hands it a queue
-   the press has already left.
+1. The claim precedes whatever the press sets in motion. Landed for
+   the dispatcher: see `docs/keyQueue.md` § Claiming.
 
 1. A reader that ends a gesture claims the press that ended it, and
    drops the state it held in the same frame.

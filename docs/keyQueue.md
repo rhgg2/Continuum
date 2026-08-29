@@ -47,6 +47,21 @@ press is gone.**
    frame. `keyQueue:frameMods()` returns it, so a reader deciding
    whether a chord is one it acts on tests the mask its entries carry.
 
+## Claiming
+
+1. `keyDispatch` claims each press it acts on, at the frame's mods and
+   under the claimant its state carries. Prefix capture takes the digit
+   or the slash it appends; a scope's letter sink takes the letter it
+   passes on; the keychain walk takes the key whose binding fires.
+
+1. The walk claims before it invokes. A command raising a modal, a
+   picker or the menu's walk is thus handed a queue the press has
+   already left.
+
+1. A command declining its press (`docs/commandManager.md` § Dispatch &
+   result protocol) gets it restored to the head of the queue, and the
+   walk scans on.
+
 ## Ownership
 
 1. A reader that takes the whole keyboard **owns** the queue for the

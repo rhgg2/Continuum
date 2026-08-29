@@ -302,7 +302,7 @@ return value is a single boolean-ish:
 | return          | meaning                                                    |
 |-----------------|------------------------------------------------------------|
 | `nil` (default) | command handled; stop scanning further bindings this frame |
-| `false`         | command declined the keypress; let the char queue see it   |
+| `false`         | command declined the keypress; the walk restores it to the queue |
 
 UI effects (open a modal, open the swing editor, quit) are not
 expressed in the return value — the commands that produce them are
