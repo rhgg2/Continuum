@@ -13,16 +13,17 @@
 3. **Phase 3 — Note entry** (§ Claiming, § Order) — landed 2026-08-29, 1
    commit. The scan's claims and its decline path now sit in
    `docs/trackerPage.md` § Keys.
-4. **Phase 4 — Ownership** (§ Ownership) — the cheat sheet, modal, picker
-   and status edit own the queue; `suppressKbd`, `pickerIsActive` and
-   `statusEditActive` stop being read as gates, the five
-   `wasOpenAtFrameStart` guards go, and the direct readers those guards
-   never covered come under the same rule.  ← in flight
+4. **Phase 4 — Ownership** (§ Ownership) — landed 2026-08-29, 4 commits.
+   The rule it built now sits in `docs/keyQueue.md` § Ownership. Mouse
+   readers keep their own guards, so the three cheat-sheet ones stay;
+   the two modal gates on `focusState` pass to phase 5, where the
+   renderers that make them redundant land.
 5. **Phase 5 — The raising readers** (§ Claiming) — the modal renderers,
    the fx strip and the param palette take rather than poll. With the
    press claimed before what it raises can read, the five `appearing`
    guards, `swallowInput`, `periodSwallow`, `releaseReq` and
-   `stripExitReq` come out with them.
+   `stripExitReq` come out with them, and the two carried modal gates
+   with them.  ← in flight
 6. **Phase 6 — The rest, and the record** — the remaining direct readers
    on the sampler, wiring, arrange and editor pages, the mouse-gesture
    modifier reads moved onto `held`, and the model moved into
@@ -40,4 +41,29 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+- **The tracker's modal renderers claim** — `takeProps`, `retune` and
+  `newTake` in `trackerRender` take Enter, KeypadEnter and Escape under
+  `modal`; their three `IsWindowAppearing` guards and the retune
+  renderer's `pickerIsActive` gate go with the polling.
+- **The arrange page's modal renderers claim** — `createSlot` and
+  `tidyTrack` take their keys under `modal`, their two `appearing`
+  guards go, and `arrangeRender:focusState` drops
+  `modalHost:wasOpenAtFrameStart`.
+- **The editor's modal renderers claim** — `swingNew`, `temperNew` and
+  `temperImport` take Enter and Escape under `modal`, reading commit off
+  the field's deactivation as they do now; `wiringRender:focusState`
+  drops its modal gate, and `modalHost`'s `wasOpen` snapshot and `tick`
+  go with the last reader of them.
+- **The mini pattern editor stops guarding** — `swallowInput` and the
+  `pickerIsActive` gate in `acceptInput` go: the walk claims the
+  launching press before the modal opens, and a picker raised inside the
+  modal owns the frame.
+- **The fx strip takes** — `handleFxChainKeys` claims each key it acts on
+  at the frame's mods, so `periodSwallow` goes and `stripExitReq` keeps
+  only what the commit button and the grid click need.
+- **The parameter palette takes** — `handlePaletteKeys` claims Tab,
+  Escape, the two Super chords and the navigation keys; `releaseReq`
+  goes, since a claimed Escape cannot reach the dispatcher later in the
+  frame.
 

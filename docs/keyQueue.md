@@ -87,7 +87,8 @@ press is gone.**
 1. A reader hosted by an owner claims under that owner's name.
    `keyDispatch` takes the name from the state it is given, so the mini
    pattern editor captures inside the modal while the coordinator's own
-   dispatch does not.
+   dispatch does not. Every other reader omits a name, and on a frame
+   with no owner every claim succeeds.
 
 1. Ownership governs the keyboard alone. A reader taking the mouse keeps
    its own guard, as the cheat sheet's page-side mouse passes do

@@ -1,7 +1,7 @@
 # keyQueue — design
 
-> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 4
-> (ownership)
+> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 5
+> (the raising readers)
 
 **Every key press Continuum acts on is read once, at the top of the
 frame, into a queue; a reader claims what it acts on, and a claimed
@@ -24,14 +24,8 @@ Landed: see `docs/keyQueue.md` § The queue and § The fill.
 
 ## Ownership
 
-The mechanism landed: see `docs/keyQueue.md` § Ownership, and § The
-fill for the claim an unowned frame's live text field makes. What
-remains is the readers' side.
-
-1. The four owners are, in precedence, the cheat sheet while it was
-   open at frame start, an open picker, a status cell holding an open
-   field, and an open modal. A picker raised inside a modal owns the
-   frame. Each passes its name; every other reader omits one.
+Landed: see `docs/keyQueue.md` § Ownership, and § The fill for the
+claim an unowned frame's live text field makes.
 
 ## Hold and repeat
 
