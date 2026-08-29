@@ -8,6 +8,12 @@ not eight or ten.
   holds the frame. An owner takes the whole keyboard, a field it hosts included: the picker's filter
   is a live field, and an unconditional claim would take the arrows its cursor reads.
 
+- **2026-08-29** — Abandoned session trees are reclaimed by a sweep at SessionStart, keyed on the
+  pid each session records when it starts. The SessionEnd hook still tears down its own session, and
+  cannot be the only mechanism: a `claude --worktree` session deletes the worktree hosting that hook
+  before the hook runs, and a run can be cut off partway. Liveness of the recorded pid decides which
+  trees are abandoned; mtime could only guess.
+
 - **2026-08-29** — Note entry takes the presses it enters from the keyQueue, which retires
   commandHeld: a press a command fired on has already left the queue, so the grid cannot see it and
   needs no per-key hold table. Backspace is claimed at the frame's modifier mask, since the chord

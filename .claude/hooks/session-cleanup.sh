@@ -9,6 +9,12 @@
 # Why this exists at all: the layout was assumed to be swept by the OS, and it
 # is not. Left alone it reached 138 session dirs, 104 registered worktrees and
 # 1.25 GB, which also made `git worktree list` useless.
+#
+# Owning the teardown is necessary and not sufficient. A `claude --worktree`
+# session deletes the worktree hosting this script before SessionEnd can run it,
+# so the ends this hook cannot witness include some perfectly ordinary ones. The
+# sweep in session-env.sh reclaims whatever this misses, keyed on a recorded pid
+# rather than the mtime the paragraph above rightly refuses to guess from.
 input=$(cat)
 session_id=$(printf '%s' "$input" | jq -r '.session_id')
 cwd=$(printf '%s' "$input" | jq -r '.cwd')
@@ -43,8 +49,12 @@ if [ "$(readlink "$link")" = "$cwd" ] && [ "$cwd" != "$main" ]; then
   ln -sfn "$main" "$link"
 fi
 
-scratchpad="$root/$slug/${session_id}/scratchpad"
-git -C "$project" worktree remove --force "$scratchpad/spike" 2>/dev/null
+# Delete first, deregister second, because this hook does get cut off partway:
+# a run on 29 Aug left every file removed and every directory still standing.
+# With the tree already gone, `prune` alone finishes the job, and session-env.sh
+# runs it again at the next start. With the tree still standing, nothing
+# finishes it - prune only drops registrations whose directory has vanished, so
+# a spike left on disk goes on looking healthy to it forever.
 rm -rf "$root/$slug/${session_id}"
 rm -f "$root/$(basename "$cwd")-$(printf '%s' "$session_id" | cut -c1-8)"
 git -C "$project" worktree prune 2>/dev/null
