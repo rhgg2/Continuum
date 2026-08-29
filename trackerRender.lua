@@ -798,11 +798,9 @@ modalHost:registerKind('takeProps', function(s, close)
   local okPressed     = ImGui.Button(ctx, 'OK')
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
-  local mods          = keyQueue:frameMods()
-  if okPressed or keyQueue:take(ImGui.Key_Enter, mods, 'modal')
-               or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+  if okPressed or modalHost:takeEnter() then
     close(true, s.nameBuf, tonumber(s.beatsBuf), s.mode)
-  elseif cancelPressed or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+  elseif cancelPressed or modalHost:takeEscape() then
     close(false)
   end
 end)
@@ -949,15 +947,13 @@ modalHost:registerKind('retune', function(s, close)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
   -- A picker raised over the modal owns the frame, so these claims answer nil while one is
   -- up, and the Enter it consumes cannot commit the modal behind it.
-  local mods          = keyQueue:frameMods()
-  if okPressed or keyQueue:take(ImGui.Key_Enter, mods, 'modal')
-               or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+  if okPressed or modalHost:takeEnter() then
     close(true, { scope        = s.scope,        strength     = s.strength,
                   target       = s.target,       key          = s.key,
                   facility     = s.facility,     purity       = s.purity,
                   sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock,
                   ambient      = s.ambient })
-  elseif cancelPressed or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+  elseif cancelPressed or modalHost:takeEscape() then
     close(false)
   end
 end)
@@ -1644,11 +1640,9 @@ modalHost:registerKind('newTake', function(s, close)
   local ok     = ImGui.Button(ctx, 'OK')
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')
-  local mods   = keyQueue:frameMods()
-  if ok or keyQueue:take(ImGui.Key_Enter, mods, 'modal')
-        or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+  if ok or modalHost:takeEnter() then
     close(true, s.nameBuf, s.beatsBuf)
-  elseif cancel or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+  elseif cancel or modalHost:takeEscape() then
     close(false)
   end
 end)

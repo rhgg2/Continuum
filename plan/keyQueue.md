@@ -31,21 +31,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 modalHost: every modal claims commit and cancel through the host (design/keyQueue.md § Claiming)
 - 2026-08-29 arrange: the modal renderers claim their keys from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 tracker: the modal renderers claim their keys from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 input: drop suppressKbd; the keyboard's only gate is ownership (design/keyQueue.md § Ownership)
-- 2026-08-29 chrome: the picker and the status field claim from the keyQueue (design/keyQueue.md § Ownership)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- **The editor's modal renderers claim** — `swingNew`, `temperNew` and
-  `temperImport` take Enter and Escape under `modal`, reading commit off
-  the field's deactivation as they do now; `wiringRender:focusState`
-  drops its modal gate, and `modalHost`'s `wasOpen` snapshot and `tick`
-  go with the last reader of them.
 - **The mini pattern editor stops guarding** — `swallowInput` and the
   `pickerIsActive` gate in `acceptInput` go: the walk claims the
   launching press before the modal opens, and a picker raised inside the

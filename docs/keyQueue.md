@@ -72,6 +72,10 @@ press is gone.**
    result protocol) gets it restored to the head of the queue, and the
    walk scans on.
 
+1. A modal renderer claims commit and cancel through `modalHost`: one
+   take covers Enter and its keypad twin, the other Escape, both under
+   `modal` at the frame's mods.
+
 ## Ownership
 
 1. A reader that takes the whole keyboard **owns** the queue for the

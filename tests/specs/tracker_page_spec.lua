@@ -68,7 +68,6 @@ local fakeModalHost = {
   openConfirm         = function(self, state) self.last = state end,
   registerKind        = function(self, kind, body) self.kinds[kind] = body end,
   isOpen              = function() return false end,
-  wasOpenAtFrameStart = function() return false end,
   reset               = function(self) self.last = nil end,
 }
 
@@ -230,6 +229,11 @@ local function newTrackerPage(cm, ds, cmgr, chrome, gui, help)
   fakeModalHost:reset()
   resetArrange()
   pageKeyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  -- A modal body's commit and cancel claims are modalHost's own, so the fake delegates them
+  -- to a real host over this page's queue.
+  local realHost = util.instantiate('modalHost', { ctx = gui and gui.ctx, keyQueue = pageKeyQueue })
+  fakeModalHost.takeEnter  = function() return realHost:takeEnter()  end
+  fakeModalHost.takeEscape = function() return realHost:takeEscape() end
   help = help or util.instantiate('help',
     { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = pageKeyQueue })
   local lib  = util.instantiate('library',

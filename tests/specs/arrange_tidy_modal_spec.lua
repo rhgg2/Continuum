@@ -89,17 +89,21 @@ local function mkTidyModal(harness)
   local av = util.instantiate('arrangeView', { cm = h.cm, cmgr = h.cmgr, am = am })
 
   local kinds = {}
+  modalKeyQueue  = util.instantiate('keyQueue', {})
+  -- The body's commit and cancel claims are modalHost's own, so the fake delegates them to a
+  -- real host over the same queue.
+  local realHost = util.instantiate('modalHost', { keyQueue = modalKeyQueue })
   local modalHost = {
     open         = function() end,
     openConfirm  = function() end,
     openPrompt   = function() end,
     registerKind = function(_, kind, fn) kinds[kind] = fn end,
+    takeEnter    = function() return realHost:takeEnter()  end,
+    takeEscape   = function() return realHost:takeEscape() end,
   }
   local help = util.instantiate('help', { chrome = fakeChrome, cmgr = h.cmgr })
-  modalKeyQueue = util.instantiate('keyQueue', {})
   util.instantiate('arrangeRender', { cm = h.cm, cmgr = h.cmgr, chrome = fakeChrome,
-                                      modalHost = modalHost, help = help, av = av,
-                                      keyQueue = modalKeyQueue })
+                                      modalHost = modalHost, help = help, av = av })
   local bases, assignment = av:seedTidy(0)
   return kinds.tidyTrack,
          { trackIdx = 0, bases = bases, assignment = assignment, newBase = '' }

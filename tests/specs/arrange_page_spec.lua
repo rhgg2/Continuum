@@ -14,9 +14,9 @@ _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 -- The keys this frame reports as pressed and the modifiers held with them: the queue's fill
 -- reads both, and what a modal body can claim is what the fill put there. A live field and an
--- open modal are flags the focusState tests set.
-local pressedKeys, frameMods    = {}, 0
-local anyItemActive, modalWasOpen = false, false
+-- live field is a flag the focusState test sets.
+local pressedKeys, frameMods = {}, 0
+local anyItemActive          = false
 fakeImGui.IsKeyPressed      = function(_, key) return pressedKeys[key] == true end
 fakeImGui.GetKeyMods        = function() return frameMods end
 fakeImGui.IsAnyItemActive   = function() return anyItemActive end
@@ -40,7 +40,6 @@ local fakeModalHost = {
   openConfirm         = function(self, state) self.last = state end,
   registerKind        = function(self, kind, body) self.kinds[kind] = body end,
   isOpen              = function() return false end,
-  wasOpenAtFrameStart = function() return modalWasOpen end,
 }
 -- captured.nav = switchPage target (dive seam); captured.props = item handed to the tracker facade.
 -- captured.facades holds the page's published facades so tests can drive arrange's own capabilities.
@@ -73,6 +72,11 @@ local function newArrangePage(cm, ds, cmgr, chrome, gui, help)
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
   for _, m in ipairs({ 'imgui', 'painter', 'keyDispatch' }) do package.loaded[m] = nil end
   pageKeyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  -- A modal body's commit and cancel claims are modalHost's own, so the fake delegates them
+  -- to a real host over this page's queue.
+  local realHost = util.instantiate('modalHost', { ctx = gui and gui.ctx, keyQueue = pageKeyQueue })
+  fakeModalHost.takeEnter  = function() return realHost:takeEnter()  end
+  fakeModalHost.takeEscape = function() return realHost:takeEscape() end
   help = help or util.instantiate('help',
     { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = pageKeyQueue })
   return util.instantiate('arrangePage',
@@ -1343,16 +1347,16 @@ return {
   },
 
   -- Ownership settles at the fill, so a modal up at frame start holds the keyboard and every
-  -- claim the dispatcher makes answers nil. What acceptCmds still reports is a live field.
+  -- claim the dispatcher makes answers nil. What acceptCmds reports is a live field, alone.
   {
-    name = 'acceptCmds tracks the live field alone, not an open modal',
+    name = 'acceptCmds tracks the live field',
     run = function(harness)
       local h  = harness.mk()
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, { ctx = {} })
-      modalWasOpen, anyItemActive = true, false
-      t.eq(ap:focusState().acceptCmds, true, 'an open modal does not gate the page')
-      modalWasOpen, anyItemActive = false, true
-      t.eq(ap:focusState().acceptCmds, false, 'a live field does')
+      anyItemActive = false
+      t.eq(ap:focusState().acceptCmds, true, 'nothing holding the keyboard leaves it open')
+      anyItemActive = true
+      t.eq(ap:focusState().acceptCmds, false, 'a live field closes it')
       anyItemActive = false
     end,
   },

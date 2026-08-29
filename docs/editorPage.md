@@ -80,6 +80,11 @@ active — so Esc still cancels an InputText edit or a slider drag before
 it ever closes the page. The check sits in `renderBody`, before the
 panes draw.
 
+The panes' own modals — New swing, New tuning and Import — claim Enter
+and Escape from the queue as every modal does (`docs/keyQueue.md` §
+Claiming). The two New modals read their commit off the name field
+deactivating, and claim the Enter that deactivated it.
+
 ## focusState: page bindings off, root globals live
 
 `focusState` always reports `pageSuppressed = true`: this page has no

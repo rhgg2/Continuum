@@ -3,6 +3,7 @@
 --shape: state = { kind, title, callback?, onClose?, flags?, ... per-kind fields }
 --contract: render(state, close) draws inside an active BeginPopupModal; close(invoke, ...args) captures+clears state, closes popup, pcalls callback if invoke, then pcalls onClose unconditionally
 --contract: any renderer claims the keys it acts on under 'modal'; see docs/keyQueue.md
+--contract: takeEnter/takeEscape are that claim for commit and cancel, at the frame's mods
 local ImGui = require 'imgui' '0.10'
 
 local ctx      = (...).ctx
@@ -11,9 +12,8 @@ local keyQueue = (...).keyQueue
 
 local POPUP_ID = '###modalHost'
 
-local kinds   = {}
-local state   = nil
-local wasOpen = false   -- snapshot at tick(); stays true across the closing frame
+local kinds = {}
+local state = nil
 
 local function label() return (state and state.title or '') .. POPUP_ID end
 
@@ -48,9 +48,18 @@ function modalHost:openConfirm(args)
 end
 
 function modalHost:isOpen() return state ~= nil end
-function modalHost:wasOpenAtFrameStart() return wasOpen end
 
-function modalHost:tick() wasOpen = (state ~= nil) end
+-- The keys a modal commits and cancels on, claimed under its own name at the frame's mods.
+-- Every renderer takes through these, so Enter and its keypad twin are paired in one place.
+function modalHost:takeEnter()
+  local mods = keyQueue:frameMods()
+  return keyQueue:take(ImGui.Key_Enter, mods, 'modal')
+      or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal')
+end
+
+function modalHost:takeEscape()
+  return keyQueue:take(ImGui.Key_Escape, keyQueue:frameMods(), 'modal')
+end
 
 function modalHost:draw()
   if not state then return end
@@ -109,9 +118,9 @@ end
 modalHost:registerKind('confirm', function(s, close)
   ImGui.Text(ctx, s.prompt)
   local mods = keyQueue:frameMods()
-  if keyQueue:take(ImGui.Key_Y, mods, 'modal') or keyQueue:take(ImGui.Key_Enter, mods, 'modal') then
+  if keyQueue:take(ImGui.Key_Y, mods, 'modal') or modalHost:takeEnter() then
     close(true, true)
-  elseif keyQueue:take(ImGui.Key_N, mods, 'modal') or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+  elseif keyQueue:take(ImGui.Key_N, mods, 'modal') or modalHost:takeEscape() then
     close(true, false)
   end
 end)
@@ -130,11 +139,9 @@ modalHost:registerKind('prompt', function(s, close)
   s.buf = buf
   local shown = s.resolve and s.resolve(buf) or ''
   if shown ~= '' then ImGui.Text(ctx, '\xe2\x86\x92 ' .. shown) end
-  local mods = keyQueue:frameMods()
-  if keyQueue:take(ImGui.Key_Enter, mods, 'modal')
-  or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+  if modalHost:takeEnter() then
     close(true, shown ~= '' and shown or buf)
-  elseif keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+  elseif modalHost:takeEscape() then
     close(false)
   end
 end)

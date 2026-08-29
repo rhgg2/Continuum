@@ -624,13 +624,13 @@ modalHost:registerKind('swingNew', function(s, close)
   local _, buf = ImGui.InputText(ctx, '##newname', s.buf)
   ImGui.PopID(ctx)
   s.buf = buf
-  local entered = ImGui.IsItemDeactivated(ctx)
-              and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                   or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter))
+  -- The Enter that deactivated the field is the commit, and claiming it is what keeps a reader
+  -- behind the modal from acting on it too. see docs/keyQueue.md § Claiming
+  local entered = ImGui.IsItemDeactivated(ctx) and modalHost:takeEnter()
   ImGui.SameLine(ctx)
   local confirm = entered or ImGui.Button(ctx, 'Create')
   ImGui.SameLine(ctx)
-  local cancel  = ImGui.Button(ctx, 'Cancel') or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
+  local cancel  = ImGui.Button(ctx, 'Cancel') or modalHost:takeEscape()
   if confirm then
     local name = (buf or ''):match('^%s*(.-)%s*$')
     if name == '' then

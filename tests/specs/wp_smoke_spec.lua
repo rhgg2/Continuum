@@ -21,7 +21,6 @@ local fakeModalHost = {
   openConfirm         = function() end,
   registerKind        = function() end,
   isOpen              = function() return false end,
-  wasOpenAtFrameStart = function() return false end,
 }
 local fakeFacade = {
   publish      = function() end,

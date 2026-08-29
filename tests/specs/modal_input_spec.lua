@@ -62,13 +62,12 @@ local function fresh()
 end
 
 -- One frame as the coordinator runs it: the fill names the owner from the modal's state
--- before anything draws, the tick follows, and the modal draws last.
+-- before anything draws, and the modal draws last.
 local function frame(opts)
   opts = opts or {}
   pressed, curMods, typed = {}, opts.mods or 0, opts.typed
   for _, key in ipairs(opts.pressed or {}) do pressed[key] = true end
   kq:fill(modalHost:isOpen() and 'modal' or nil)
-  modalHost:tick()
   modalHost:draw()
   appearing = false
 end
@@ -185,7 +184,6 @@ return {
       fresh()
       pressed, curMods = { [fakeImGui.Key_Y] = true }, 0
       kq:fill(nil)
-      modalHost:tick()
       t.truthy(kq:take(fakeImGui.Key_Y, nil, nil), 'the walk claims the press it dispatches on')
       openConfirm()                    -- as the command the walk invoked does, mid-frame
       modalHost:draw()

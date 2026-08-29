@@ -78,7 +78,6 @@ local jsFocus       = reaper.JS_Window_GetForeground ~= nil   -- js_ReaScriptAPI
 
 --contract: tick() runs once per frame before the page draws; no selection bus here
 local function tick()
-  modalHost:tick()
   if pages.sample then pages.sample:tick() end
   if pages.wiring and active == 'wiring' then pages.wiring:syncExternal() end
   bridge:tick()

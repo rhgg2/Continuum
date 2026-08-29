@@ -14,8 +14,8 @@ local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
 --contract: arrangePage (the controller) owns the stack (am/av) and hands this renderer av only
-local cm, cmgr, chrome, gui, modalHost, av, help, keyQueue =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help, (...).keyQueue
+local cm, cmgr, chrome, gui, modalHost, av, help =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -689,18 +689,6 @@ function openCreateModal(trackIdx, qnPos, beats)
   }
 end
 
--- The keys the modals below commit and cancel on. A modal owns the queue, so each claim names
--- it, and a press one reader claims is gone for the next. see docs/keyQueue.md § Claiming
-local function takeEnter()
-  local mods = keyQueue:frameMods()
-  return keyQueue:take(ImGui.Key_Enter, mods, 'modal')
-      or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal')
-end
-
-local function takeEscape()
-  return keyQueue:take(ImGui.Key_Escape, keyQueue:frameMods(), 'modal')
-end
-
 -- Two-field create modal: name + length-in-beats.
 modalHost:registerKind('createSlot', function(s, close)
   ImGui.Text(ctx, 'Name')
@@ -713,8 +701,8 @@ modalHost:registerKind('createSlot', function(s, close)
   local ok = ImGui.Button(ctx, 'OK')
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')
-  if ok or takeEnter() then close(true, s.nameBuf, s.beatsBuf)
-  elseif cancel or takeEscape() then close(false) end
+  if ok or modalHost:takeEnter() then close(true, s.nameBuf, s.beatsBuf)
+  elseif cancel or modalHost:takeEscape() then close(false) end
 end)
 
 -- The tidy editor. A row's dropdown assigns its slot to a base, and '(keep)' drops it from
@@ -756,7 +744,7 @@ local function drawBaseList(s)
     end
     -- The Enter that deactivated the field belongs to it, so the footer below cannot commit
     -- the tidy on the same press.
-    if ImGui.IsItemDeactivated(ctx) then s.editing = nil; takeEnter() end
+    if ImGui.IsItemDeactivated(ctx) then s.editing = nil; modalHost:takeEnter() end
     ImGui.SameLine(ctx)
     if ImGui.Button(ctx, '\xc3\x97##dropBase' .. i, dropW, 0) then edit = { drop = base } end
   end
@@ -767,7 +755,7 @@ local function drawBaseList(s)
   -- the Add button would read stale text; Enter still deactivates the field, watched for below.
   local _, newBuf = ImGui.InputTextWithHint(ctx, '##newBase', 'new base', s.newBase)
   s.newBase = newBuf
-  local entered = ImGui.IsItemDeactivated(ctx) and takeEnter()
+  local entered = ImGui.IsItemDeactivated(ctx) and modalHost:takeEnter()
   ImGui.SameLine(ctx)
   if ImGui.Button(ctx, 'Add') or entered then edit = { add = s.newBase } end
 
@@ -852,8 +840,8 @@ modalHost:registerKind('tidyTrack', function(s, close)
   local ok = ImGui.Button(ctx, 'OK')
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')
-  if ok or takeEnter() then close(true, s.assignment)
-  elseif cancel or takeEscape() then close(false) end
+  if ok or modalHost:takeEnter() then close(true, s.assignment)
+  elseif cancel or modalHost:takeEscape() then close(false) end
 end)
 
 -- Rename and delete are keyboard gestures on the cursor take; prune and tidy are the

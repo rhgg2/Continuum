@@ -48,9 +48,9 @@ other.
    and an open modal, in that precedence. A popup raised over a modal
    is nearer the user than the modal, so it takes the keyboard.
 
-1. `tick` is the pre-draw beat for the pages that need one — the modal
-   host, the sample page, wiring's external resync while wiring is
-   active, and the bridge. There is no selection bus.
+1. `tick` is the pre-draw beat for the pages that need one — the sample
+   page, wiring's external resync while wiring is active, and the
+   bridge. There is no selection bus.
 
 1. Drawing goes toolbar band, body, the open menu's row over the body's
    last row (`docs/menu.md § The walk`), status band, then the help

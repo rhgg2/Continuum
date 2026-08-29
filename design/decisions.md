@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The commit and cancel claims live on `modalHost` as `takeEnter` and
+  `takeEscape`, over a pair of file-local helpers per renderer. Every modal body already holds
+  the host, and the host owns the `modal` name, so the Enter/KeypadEnter pair is written once
+  and `arrangeRender` and the editor panes need no `keyQueue` of their own.
+
 - **2026-08-29** — The tidy modal's Enter is claimed by the field it deactivates, over gating the
   footer on `IsAnyItemActive`. One reader acts on the press and claims it, so the footer's claim
   answers nil behind it, and the ordering the gate needed — reading the active item before the

@@ -2693,14 +2693,11 @@ function wr:statusSegments()
   return statusSegments
 end
 
---contract: acceptCmds=false if any item active, fx popup is up, or a modal was open at frame start.
+--contract: acceptCmds=false if any item is active or the fx popup is up
+--contract: a modal owns the queue instead, so this doesn't check for one
 function wr:focusState()
   if not ctx then return { acceptCmds = false } end
-  return {
-    acceptCmds = not ImGui.IsAnyItemActive(ctx)
-                 and not popups.fx
-                 and not modalHost:wasOpenAtFrameStart(),
-  }
+  return { acceptCmds = not ImGui.IsAnyItemActive(ctx) and not popups.fx }
 end
 
 ----- Wiring scope
