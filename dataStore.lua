@@ -14,7 +14,7 @@ local ps   = assert(deps and deps.ps, 'dataStore requires a pextStore dep { ps =
 
 local function print(...) return util.print(...) end
 
------------ REGISTRY
+---------- REGISTRY
 
 -- name -> scope (each key's actual write tier in the pre-split configManager).
 local registry = {
@@ -59,7 +59,7 @@ local function copy(v)
   return v
 end
 
------------ CACHE
+---------- CACHE
 
 -- cache[scope] = { name -> value }, lazily loaded. The global cache is the whole
 -- continuum-data.lua table; per-key scopes load each registered name's own blob.
@@ -102,7 +102,7 @@ local function persist(scope, name, value)
   end
 end
 
------------ PUBLIC INTERFACE
+---------- PUBLIC INTERFACE
 
 local ds = {}
 local fire = util.installHooks(ds)

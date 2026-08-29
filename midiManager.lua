@@ -652,8 +652,8 @@ function mm:load(newTake)
     end
   end
 
-  ----- UUID binding (notes ↔ the parsed note sidecars) + metadata join. Ahead of dedup so
-  ----- the voicing verdicts see intent (ppqL, detune, derived).
+  ----- UUID binding (notes ↔ the parsed note sidecars) + metadata join
+  -- Ahead of dedup, so the voicing verdicts see intent (ppqL, detune, derived).
 
   local uuidCount = {}
   do
@@ -740,8 +740,8 @@ function mm:load(newTake)
     end
   end
 
-  ----- UUID unification (reassign duplicated uuids, mint for unbound survivors;
-  ----- flushTake regenerates the sidecars)
+  ----- UUID unification — reassign duplicated uuids, mint for unbound survivors
+  -- flushTake regenerates the sidecars.
 
   for _, note in ordered(notes, noteOrder) do
     local uuid = note.uuid

@@ -54,7 +54,7 @@ local MASTER = '__master__'
 
 local DAG = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- validate
 
@@ -215,7 +215,7 @@ function DAG.classify(userGraph, feedbackSeeds)
   return components
 end
 
------ compile context
+----- Compile context
 
 -- Lazy ctx factory; derivations memoise into closure-local `cache`.
 -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
@@ -528,7 +528,7 @@ local function buildCtx(userGraph, derivedSplits)
   return ctx
 end
 
------ realisation
+----- Realisation
 
 -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
 -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
@@ -932,7 +932,7 @@ do
   end
 end
 
------ master minimization
+----- Master minimization
 
 -- master class = cone of master's largest dominator whose entry pulls <=1 audio
 -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
@@ -1041,7 +1041,7 @@ local function deriveMasterSplit(userGraph)
   return {}
 end
 
------ bus splice
+----- Bus splice
 
 -- Sub-threshold busses (authored degree < 2×2) splice out before derivation;
 -- in×out pairs become direct edges at the product gain. See docs/DAG.md § bus splice.
@@ -1376,7 +1376,7 @@ local function allocateOnce(tracks, nodes)
     perTrack[trackKey] = { entry = entry, state = state, slotMap = slotMap, N = N, flows = flows }
   end
 
-  ----- midi register file (family-wide): the folder pipe makes a parent-send-connected set ONE bus domain.
+  ----- MIDI register file (family-wide): the folder pipe makes a parent-send-connected set ONE bus domain
   -- Bus 0 = merged take aggregate; distinct crossings allocate family-unique.
 
   -- A foldered child names its parent via parentFeed.sink (a folder conduit, never master).
@@ -1546,7 +1546,7 @@ local function allocateOnce(tracks, nodes)
     end
   end
 
-  ----- per-track midi post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice.
+  ----- Per-track MIDI post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice
   for _, trackKey in ipairs(trackKeys) do
     local entry = tracks[trackKey]
     local state = perTrack[trackKey].state
@@ -1580,7 +1580,7 @@ local function allocateOnce(tracks, nodes)
       end
     end
 
-    ----- bracket post-pass — see docs/DAG.md § allocate
+    ----- Bracket post-pass — see docs/DAG.md § allocate
     -- in-park: input→0 (from=-1 silences recv, bus-0 parks on PARK_BUS); out-park restores (retain=0), routes/swallows.
     local splicedFxOrder, bracketNodes = {}, nil
     for _, fxId in ipairs(entry.fxOrder or {}) do
@@ -1684,7 +1684,7 @@ local function allocateOnce(tracks, nodes)
   return out, meta
 end
 
------ capacity bisection
+----- Capacity bisection
 
 -- Over-cap classes are bisected along their topo chain at the min-crossing gap (lowest-slot tie-break).
 -- Resource-triggered / bandwidth objective; distinct from split-at-node. see docs/DAG.md § Capacity bisection.

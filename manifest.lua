@@ -70,8 +70,9 @@ manifest.global = {
   },
 }
 
------ tracker (bodies in trackerView + trackerRender; editCursor's and clipboard's
------ register onto the same scope, returnToArrange's in continuum's Main)
+----- tracker (bodies in trackerView + trackerRender)
+-- editCursor's and clipboard's register onto the same scope; returnToArrange's
+-- is in continuum's Main.
 
 -- A delete binding carries Backspace beside Delete: on a Mac laptop the bare key
 -- is Backspace, and Key_Delete (\xe2\x8c\xa6) needs Fn.

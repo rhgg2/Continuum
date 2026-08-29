@@ -26,7 +26,7 @@ local ar = util.instantiate('arrangeRender',  { cm = cm, cmgr = cmgr, chrome = c
 
 local ap = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- Page lifecycle — arrange is project-wide, so bind takes no take
 

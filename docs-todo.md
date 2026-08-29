@@ -3,6 +3,7 @@
 ## done
 
 continuum.md
+CONVENTIONS.md
 coordinator.md
 curveEditor.md
 fs.md
@@ -17,7 +18,6 @@ Sorted by size ascending (bytes).
 
 |   size | file                |
 |-------:|---------------------|
-|   2759 | CONVENTIONS.md      |
 |   2814 | masterMix.md        |
 |   2931 | samplePage.md       |
 |   3384 | dataStore.md        |

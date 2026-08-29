@@ -366,7 +366,7 @@ end
 -- markGroup seats instance 1 at the rect's own origin; a caller gating before it asks about the same anchor.
 local function originAnchor(rect) return { ppq = rect.ppq, chan = rect.chanLo } end
 
------------ PUBLIC
+---------- PUBLIC
 
 -- A caller that would half-apply on a refusal gates here first. see docs/groupManager.md § Regions are disjoint
 --contract: the groupId markGroup would refuse this rect over, else nil
@@ -422,8 +422,9 @@ function gm:newInstance(groupId, anchor)
   return instId
 end
 
------ Active group (dupeClip-idiom selector; the command layer owns the
------  clear-on-other-command lifetime, gm only the pointer)
+----- Active group — the dupeClip-idiom selector
+-- The command layer owns the clear-on-other-command lifetime, gm only the
+-- pointer.
 
 function gm:activeGroup() return activeGroup end
 function gm:clearActive() activeGroup = nil end
@@ -530,7 +531,7 @@ function gm:footprintAliases(cells)
   return false
 end
 
------------ SEAM
+---------- SEAM
 
 local function reproject(groupId)
   local group = groups[groupId]
@@ -625,7 +626,7 @@ ds:subscribe('dataChanged', function(change)
   if change.name == 'groups' and change.invalidate then rehydrate() end
 end)
 
------------ INSTANCE / GROUP LIFECYCLE
+---------- INSTANCE / GROUP LIFECYCLE
 
 -- Cascades: dropping the group's last instance also drops the group,
 -- clearing activeGroup if it pointed here (else it would dangle).

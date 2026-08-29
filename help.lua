@@ -31,7 +31,7 @@ local function resetEdit() editing, capturing, conflict = nil, nil, nil end
 
 local help = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 function help:registerPage(name, placements) pages[name] = placements end
 function help:setPage(name)              current = name; resetEdit() end
@@ -53,7 +53,7 @@ function help:anchor(key, x, y, w, h)
   anchors[key] = { x = x, y = y, w = w, h = h }
 end
 
------------ DRAW
+---------- DRAW
 
 -- Per-frame draw state: set at the top of help:draw, read by the helpers below.
 local dl, lineH, theme, capBg, capLine, boxes
@@ -377,7 +377,7 @@ local function insideAnyBox(mouseX, mouseY)
   return false
 end
 
------------ EDIT MODE
+---------- EDIT MODE
 
 -- A pressed non-modifier key plus the live modifier mask, as a cmgr keyspec.
 local function buildSpec(key, mods)

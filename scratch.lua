@@ -46,7 +46,7 @@ local function mint()
   return guid, track
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 --contract: persisted guid + live handle, or nil if none minted yet. Never mints.
 function scratch.peek()

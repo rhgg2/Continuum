@@ -75,7 +75,7 @@ end
 
 local keyQueue = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 function keyQueue:fill(ownerNow)
   entries, owner = {}, checked(ownerNow)

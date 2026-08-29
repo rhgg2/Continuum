@@ -150,7 +150,7 @@ local grid = {
 local tv = {}
 tv.grid = grid  -- live handle for rm; mutated in place on rebuild
 
------ Selection — the tracker's own (track, slot), held in cm, decoupled from the arrange cursor.
+----- Selection — the tracker's own (track, slot), held in cm, decoupled from the arrange cursor
 -- Writers mutate cm only; trackerPage's bindFromSelection binds. See docs/trackerPage.md § Selection.
 
 -- Nearest extant slot to `desired` in the ascending midiSlots list: the exact
@@ -222,7 +222,7 @@ end
 --contract: pin a slot on the current track
 function tv:selectSlot(slotIdx) cm:set('track', 'trackerSlot', slotIdx) end
 
------ The current instance — which placement of the bound slot we are in.
+----- The current instance — which placement of the bound slot we are in
 -- see docs/trackerPage.md § The current instance
 
 -- Held as a take handle, not a shape: a rebuild restates startQN and lengthQN,

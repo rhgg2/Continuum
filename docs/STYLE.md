@@ -70,6 +70,10 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
    there is goes one level deep, and usually as an apposition set off
    by dashes.
    
+1. A heading is capitalised, unless it begins with an identifier, which
+   keeps its own spelling — `gainHost`, `targetTracks shape`,
+   `setLength(newPpq)`.
+
 1. Terms are assigned specific meanings. Term definitions are bolded,
    as is a document's opening thesis. For any other emphasis, use
    italics, and sparingly.

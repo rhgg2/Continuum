@@ -428,9 +428,8 @@ local toolbarSegments = {
   },
 }
 
------ F1 help placements — the slot verbs pin under the status cell they move,
------ the rest flow over the body. A placement names a manifest group; the
------ group's entries are its rows, in declared order.
+----- F1 help placements — the slot verbs pin under the status cell they move
+-- The rest flow over the body. See docs/help.md § What's where.
 
 help:registerPage('sample', {
   { group = 'Slots',     anchor = 'status.slot', place = 'pin'  },

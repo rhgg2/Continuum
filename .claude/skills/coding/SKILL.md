@@ -28,7 +28,7 @@ closure that breaks the alignment.
 Tables crossing a pass boundary get role-named fields (`xLo`/`xHi`,
 `chanLeft`, `pitchWidth`, `viewRows`) rather than bare coordinates.
 
-Section banners: `----- Name`. Major: `----------- PUBLIC`.
+Section banners: `----- Name`. Major: `---------- PUBLIC`.
 
 ## Comments
 

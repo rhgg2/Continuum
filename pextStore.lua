@@ -13,7 +13,7 @@ local function print(...)
   return util.print(...)
 end
 
------------ PRIVATE STATE
+---------- PRIVATE STATE
 
 local PROJEXT_SECTION = 'rdm'
 
@@ -35,7 +35,7 @@ local lastStateCount = -1
 local baseline    = {}   -- [scope/slot] = last-seen raw string (watched blobs only)
 local watchGroups = {}   -- { { blobs = { { scope, slot }, ... }, onDiverge = fn }, ... }
 
------------ RAW BACKEND I/O
+---------- RAW BACKEND I/O
 
 local function takeRaw(handle, slot)
   if not handle then return '' end
@@ -67,7 +67,7 @@ local function readRaw(scope, slot, handle)
   error('pextStore: unknown scope ' .. tostring(scope))
 end
 
------------ PROJEXT UNDO MIRROR
+---------- PROJEXT UNDO MIRROR
 
 -- REAPER undo rewinds the scratch chunk but not projext; undoable project slots
 -- write both, and pollUndo copies rewound mirrors back — docs/pextStore.md § Mirror.
@@ -295,7 +295,7 @@ local function encode(scope, value)
   return util.serialise(value)
 end
 
------------ WATCHER
+---------- WATCHER
 
 local function blobKey(blob) return blob.scope .. '/' .. blob.slot end
 
@@ -332,7 +332,7 @@ local function dropStale()
   end
 end
 
------------ PUBLIC INTERFACE
+---------- PUBLIC INTERFACE
 
 local ps = {}
 local fire = util.installHooks(ps)

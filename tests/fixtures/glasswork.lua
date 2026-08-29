@@ -153,7 +153,7 @@ local function build(tm, gm)
   end
   tm:flush()
 
-  ----- Mark the subject and cascade three staggered canon instances.
+  ----- Mark the subject and cascade three staggered canon instances
   -- Gather the flushed lane-1 events (they carry uuid now) straight from the
   -- channel column -- a pure-tm path, no mm handle needed.
   local subject = {}

@@ -162,7 +162,7 @@ end
 
 local er = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 -- Fast path: set the pane + selection; the editTuning/editSwing commands
 -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.

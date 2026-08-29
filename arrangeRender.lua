@@ -919,7 +919,7 @@ local function renderPaletteBody(focusedTrack)
   renderPaletteList(slots)
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 --shape: ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }
 local toolbarSegments = {
@@ -934,10 +934,9 @@ local toolbarSegments = {
 
 function ar:toolbarSegments() return toolbarSegments end
 
------ F1 help placements — the modes callout pins under its toolbar checkbox and
------ the zoom pair under the beats/row cell; the rest flow over the body. A
------ placement names a manifest group; the group's entries are its rows.
------ The drop and advance families each collapse to a single row.
+----- F1 help placements — modes and zoom pin, the rest flow over the body
+-- The modes callout pins under its toolbar checkbox, the zoom pair under the
+-- beats/row cell. See docs/help.md § What's where.
 
 help:registerPage('arrange', {
   { group = 'Modes',      anchor = 'toolbar.followPlay', place = 'pin'  },

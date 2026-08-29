@@ -227,7 +227,7 @@ local function cancel(close)
   close(false)
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 --contract: mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back
 --contract: snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)

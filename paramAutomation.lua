@@ -304,7 +304,7 @@ function pa.frecencyOrder(params, fxScores)
   return sorted
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 --contract: no-op (and no undo point) when every track's mirror already matches
 function pa:apply()

@@ -518,7 +518,7 @@ local function loopToTargets()
   am:loopTo(loQN, hiQN)
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- View state — cursor, scroll, focus, density
 
@@ -946,7 +946,7 @@ function av:seedCursor()
   setSelection {}
 end
 
------------ COMMANDS
+---------- COMMANDS
 
 -- cmgr:scope is idempotent — page addresses the same scope.
 local arrange = cmgr:scope('arrange')

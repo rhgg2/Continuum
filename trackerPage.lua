@@ -63,7 +63,7 @@ end
 -- See docs/trackerPage.md § External-mutation watcher (the bridge-undo incident).
 mm:subscribe('flushed', function() lastHash = takeHash() end)
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- Take lifecycle (take ops on tm, view-state on tv)
 
@@ -90,8 +90,9 @@ function tp:dropTake() tm:detach(); tv:dropGrid() end
 --contract: for coord's external-mutation watcher; re-reads the bound take, no swap
 function tp:reloadFromReaper() tm:reloadFromReaper() end
 
------ Selection — the tracker owns (track, slot) in cm; tv holds the nav + resolve,
--- the page binds. See docs/trackerPage.md § Selection.
+----- Selection — the tracker owns (track, slot) in cm
+-- tv holds the nav and the resolve, the page binds. See docs/trackerPage.md
+-- § Selection.
 
 --contract: rebind to the selection take on change. See docs/trackerPage.md § Selection
 function tp:bindFromSelection()

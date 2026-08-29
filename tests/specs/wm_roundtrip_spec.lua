@@ -299,7 +299,7 @@ local corpus = {
     end,
   },
 
-  ----- folder track parents (step 3a): conduit edge rides B_MAINSEND onto the parent.
+  ----- folder track parents (step 3a): conduit edge rides B_MAINSEND onto the parent
   {
     name = 'folder: two children sum into parent -> master',
     seed = function(h) seedSource(h,'guid-A'); seedSource(h,'guid-B'); seedSource(h,'guid-P') end,
@@ -384,7 +384,7 @@ local corpus = {
     end,
   },
 
-  ----- folder track parents (step 3b): the family is one midi bus domain (the pipe is n->n).
+  ----- folder track parents (step 3b): the family is one midi bus domain (the pipe is n->n)
   {
     -- Merge fate: the child's take rides the pipe onto the parent's bus-0 aggregate; the parent's
     -- own fx hears it. Two midi hops survive the round-trip: child -> parent node -> parent fx.

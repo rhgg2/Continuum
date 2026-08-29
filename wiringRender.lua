@@ -274,7 +274,7 @@ local function drawBodyOutline(p, nv)
   strokeNodeRect(p, nodeBox(nv), 'wiring.node.selected')
 end
 
------ M / B badges: output-mute + bypass toggles on fx nodes (effect/generator), top-left corner.
+----- M / B badges: output-mute + bypass toggles on fx nodes (effect/generator), top-left corner
 -- Hit-tested manually (badgeHit) — click toggles via wv, wins over drag/dive. See docs/wiringPage.md § M / B badges.
 
 local function nodeHasFx(nv) return nv.category == 'effect' or nv.category == 'generator' end
@@ -2635,13 +2635,13 @@ local function renderPaletteBody()
   renderPaletteList(sources)
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 function wr:toolbarSegments() return {} end
 
------ F1 help placements — the page carries no toolbar of its own, so every group
------ flows over the canvas. A placement names a manifest group; the group's
------ entries are its rows, in declared order.
+----- F1 help placements — every group flows over the canvas
+-- The page carries no toolbar of its own, so nothing pins. See
+-- docs/help.md § What's where.
 
 help:registerPage('wiring', {
   { group = 'Wiring',    anchor = 'body', place = 'flow' },

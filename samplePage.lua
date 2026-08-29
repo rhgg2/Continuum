@@ -28,7 +28,7 @@ local sr = util.instantiate('sampleRender',
 
 local sp = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- Page lifecycle (track ops on sv, JSFX poll on sm)
 

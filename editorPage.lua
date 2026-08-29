@@ -22,7 +22,7 @@ local er = util.instantiate('editorRender',
 
 local ep = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 -- Fast path: editTuning/editSwing set pane + selection via the renderer, then
 -- switch the page (they hold coord). Mirrors samplePage's diveToSampler.

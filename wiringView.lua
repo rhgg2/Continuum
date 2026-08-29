@@ -130,7 +130,7 @@ local function nodeView(id, node)
   }
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- wm pass-through
 

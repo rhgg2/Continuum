@@ -14,7 +14,9 @@ local PROJ = 0
 local rm = {}
 local installedFxCache = nil  -- reaper's installed-FX set is fixed at runtime
 
------------ track resolution
+---------- PRIVATE
+
+----- Track resolution
 
 -- Stable under reordering. Master matched first since it is absent
 -- from the project-track list.
@@ -27,7 +29,7 @@ local function locateTrack(id)
   end
 end
 
------------ fx resolution
+----- FX resolution
 
 local function locateFx(id)
   local function indexIn(track)
@@ -44,7 +46,7 @@ local function locateFx(id)
   end
 end
 
------------ pin maps
+----- Pin maps
 
 -- Pair P occupies channels 2(P-1)/2(P-1)+1. A port owns two pins (left/right bit
 -- masks); a pair is connected when its bit is set across both pins.
@@ -138,7 +140,7 @@ local function writePinMaps(track, fxIdx, pm)
   dir(1, outs, pm.outs)
 end
 
------------ per-fx midi routing
+----- Per-FX MIDI routing
 
 -- No ReaScript API for per-FX in/out bus + output-passthrough; patch the track
 -- state chunk directly. See docs/routingManager.md § Per-FX MIDI routing.
@@ -330,7 +332,7 @@ local function readFXMidiRouting(lines, fxIdx)
            outDisabled = (flags & 0x02) ~= 0 }
 end
 
------------ fx read
+----- FX read
 
 --shape: fx = { id=guid, ident=string, fxType=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- ident JS-normalised; midi only for VST/AU/CLAP; rm:fx adds trackId
 
@@ -424,7 +426,7 @@ local function readFxChain(track)
   return out
 end
 
------------ sends
+----- Sends
 
 --shape: send = { to=guid, kind='audio'|'midi', gain=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }  -- track output routing; no id
 
@@ -541,7 +543,7 @@ local function reconcileSends(track, sends)
   end
 end
 
------------ metadata
+----- Metadata
 
 -- Native = REAPER-backed; any other record key is metadata rm persists.
 -- See docs/routingManager.md § Metadata.
@@ -596,7 +598,7 @@ local function writeMeta(store, id, meta)
   ds:assign(META_KEY[store], blob)
 end
 
------ Mute: clear live pins on one side, stash the real pinout in fx-meta so reads stay wired.
+----- Mute: clear live pins on one side, stash the real pinout in fx-meta so reads stay wired
 -- Processor mutes its input; generator (ignores input) mutes its output. See docs/routingManager.md § Mute.
 
 -- A muted fx reads its live (cleared) side, so swap the stashed real pinout back
@@ -620,7 +622,7 @@ local function divertIfMuted(fxId, pm)
   return { ins = pm.ins, outs = {} }
 end
 
------------ read
+----- Read
 
 local function trackName(track)
   local _, name = reaper.GetSetMediaTrackInfo_String(track, 'P_NAME', '', false)
@@ -678,7 +680,7 @@ local function stampParents(records)
   end
 end
 
------------ write
+----- Write
 
 local function writeMainSend(track, ms)
   local set = function(parm, value)
@@ -768,7 +770,7 @@ local function writeTrackFields(track, t)
   if t.sends    then reconcileSends(track, t.sends) end
 end
 
------------------ PUBLIC
+---------- PUBLIC
 
 --contract: lightweight {id, name, number, isMaster} per project track + master; no fx/sends/chunk reads.
 function rm:trackLabels()

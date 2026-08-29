@@ -44,7 +44,7 @@ local function seededHarness(notes)
 end
 
 return {
-  ----- End-to-end: the real gm propagation path under classic-55.
+  ----- End-to-end: the real gm propagation path under classic-55
 
   {
     name = 'newInstance copies land on the swung grid (add path guard)',
@@ -169,8 +169,9 @@ return {
     end,
   },
 
-  ----- Unit pins on tm's public API with the exact update shapes
-  ----- groupManager.updToInstance emits. Production surface, not a fake.
+  ----- Unit pins on tm's public API
+  -- The update shapes are the ones groupManager.updToInstance emits — the
+  -- production surface, not a fake.
 
   {
     name = 'assignEvent: a logical (ppq+endppqL) update swings the onset',

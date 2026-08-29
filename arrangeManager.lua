@@ -323,7 +323,7 @@ local function stampForTake(take)
   stampColour(take, ensureColours()[id])
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- Discovery
 

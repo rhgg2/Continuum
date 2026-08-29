@@ -40,7 +40,7 @@ facade.publishDebug('wiring', { rm = rm, wm = wm, wv = wv })
 
 local wp = {}
 
------------ PUBLIC
+---------- PUBLIC
 
 ----- Page lifecycle — wiring is project-wide, so bind takes no take
 

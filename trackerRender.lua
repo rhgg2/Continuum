@@ -713,9 +713,9 @@ local statusSegments = {
 
 ----- Input
 
------ F1 help placements — toolbar callouts pinned to their segments, plus a
------ flowed panel of grid/global bindings packed over the grid body. A placement
------ names a manifest group; the group's entries are its rows, in declared order.
+----- F1 help placements — toolbar callouts pin to their segments
+-- The grid and global bindings flow in a panel packed over the grid body. See
+-- docs/help.md § What's where.
 
 help:registerPage('tracker', {
   { group = 'Track',           anchor = 'toolbar.track',  place = 'pin' },

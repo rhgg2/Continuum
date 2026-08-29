@@ -1,67 +1,96 @@
 # Documentation conventions
 
-Four layers carry information about a module:
+**Four layers carry information about a module.**
 
-1. Source code — the `.lua` file. Names and structure say WHAT.
-2. `--KIND:` annotations — source-embedded one-liners for
-   invariants and contracts not carried by the code. Five kinds:
+1. Source code — the `.lua` file. Names and structure say *what*.
+2. `--KIND:` annotations — one-liners embedded in the source, for
+   invariants and contracts the code does not carry. Five kinds:
    `--invariant:`, `--contract:`, `--shape:`, `--emits:`, `--reaper:`.
-3. `.map` files — derived semantic outline produced by
-   `tools/map_extract.py`. One per `.lua`. Read first; the source
-   second.
-4. `docs/<file>.md` — ahistorical prose. The model behind the design,
-   and non-local rationale as to WHY the code has to be as it is.
-
-The doc layer doesn't restate the API surface. Signatures, contracts,
-shapes, and signals belong in source + `.map`. It also does not state
-design history.
+3. `.map` files — a semantic outline derived by
+   `tools/map_extract.py`, one per `.lua`. Read the map first, the
+   source second.
+4. `docs/<file>.md` — ahistorical prose in the register of
+   `docs/STYLE.md`: the model behind the design, and the non-local
+   rationale for *why* the code has to be as it is.
 
 ## Shape of a file doc
 
-Thematic prose following `docs/STYLE.md`, with:
+1. A file doc carries what the source and its annotations cannot.
 
-- one-line purpose at the top
-- the model — identity, persistence, lifecycle, ownership
-- the *why* behind any invariant complex enough that the one-line
-  `--invariant:` leaves a question.
-- concerns that span files (the `time` and `pitch` model in
-  `docs/timing.md` and `docs/tuning.md` are the templates)
+1. It opens with a one-line purpose, then states the model — identity,
+   persistence, lifecycle, ownership.
 
-## Length discipline for annotations
+1. Beyond that it gives the *why* behind any invariant complex enough
+   that the one-line `--invariant:` leaves a question.
 
-For `--invariant:`, `--contract:`, `--emits:`, `--reaper:`: one line,
-≤100 characters, aim for 90.
+1. A concern spanning several files gets its own doc, which every file
+   doc it touches cites. Time and pitch are the templates:
+   `docs/timing.md` and `docs/tuning.md`.
 
-`--shape:` describes the shape of a table: field names, types, and
-nesting, but not prose. These are not length-capped, since a field
-list legitimately enumerates more than a rule states.
+## Length discipline for comments
 
-For specs under `tests/`, the file header and the preamble above each
-case are the documentation, and can run as long as they need to.
+1. An `--invariant:`, `--contract:`, `--emits:` or `--reaper:` line is
+   one line of ≤100 characters; aim for 90.
 
-Other comment runs cap at 2 lines. Anything longer belongs in
-`docs/<file>.md` with a one-line pointer at the site (e.g. `-- see
-docs/<file>.md § <section>`).
+1. `--shape:` describes a table — field names, types and nesting, and
+   no prose. Its cap is 400 characters, since a field list
+   legitimately enumerates more than a rule states.
+
+1. Other comment runs cap at 2 lines. Anything longer belongs in
+   `docs/<file>.md`, with a one-line pointer at the site (for example
+   `-- see docs/<file>.md § <section>`).
+
+1. A pointer names `docs/`, not `design/`, since the doc layer is the
+   one that persists. A live plan's design doc is the exception: its
+   model has nowhere else to be yet.
+
+1. Specs under `tests/` are exempt from the run cap. A spec's file
+   header and the preamble above each case are its documentation, and
+   run as long as they need. The `--KIND:` caps still apply there.
 
 ## Shape of a source file
 
-- Single-line header, `-- See docs/<file>.md for the model.`
-- `--KIND:` annotations attach to the construct they describe.
-- Inline comments only where they encode a non-obvious WHY.
-- Section dividers are fine if they aid navigation in a long file. Use
-  them to label logical groups of adjacent functions. Two levels,
-  stacked by scope:
-  - `---------- NAME` — 10 dashes, ALL CAPS. Top-level partitions
-    (e.g. `PRIVATE`, `PUBLIC`).
-  - `----- Name` — 5 dashes, Title Case. Subsections within a partition
-    (e.g. `Swing`, `Update manager`, `Rebuild`, `Transport`, `Mutation`,
-    `Lifecycle`).
-  Labels are one line, no trailing punctuation, no prose.
+1. The file opens with a single-line header, `-- See docs/<file>.md
+   for the model.`
+
+1. `--KIND:` annotations attach to the construct they describe.
+
+1. Inline comments appear only where they encode a non-obvious *why*.
+
+1. Section dividers label logical groups of adjacent functions in a
+   long file. There are two levels, stacked by scope:
+
+   - `---------- NAME` — 10 dashes, all caps, for top-level partitions
+     such as `PRIVATE` and `PUBLIC`.
+   - `----- Name` — 5 dashes, for subsections within a partition, such
+     as `Swing`, `Rebuild` or `Lifecycle`.
+
+1. A divider may sit indented inside a long function or table, where it
+   labels a group of statements or of cases.
+
+1. A divider label is capitalised on the same rule as a heading
+   (`docs/STYLE.md` § Structure), so one that begins with an identifier
+   keeps its spelling — `----- wm pass-through`, `----- fxNote
+   reconciliation`, and `manifest.lua`'s `----- tracker` for the scope
+   key.
+
+1. A divider label is one line, with no trailing punctuation. It may
+   carry a single clause after an em-dash or a colon, saying what the
+   group holds or why it exists.
+
+1. A divider never spans two lines. Prose that long is a *why*-comment,
+   or belongs in `docs/`.
 
 ## Workflow
 
-1. Source change first. Update or add `--KIND:` annotations alongside.
-2. The `.map` file regenerates via the post-edit hook, which rebuilds
-   every source newer than its map.
-3. If the change touches anything `docs/<file>.md` describes, update
-   the doc in the same pass.
+1. The source changes first, with its `--KIND:` annotations updated or
+   added alongside.
+
+1. A post-edit hook regenerates the `.map`, rebuilding every source
+   newer than its map.
+
+1. Where the change touches anything `docs/<file>.md` describes, the
+   doc is updated in the same pass.
+
+1. `tools/comment_hygiene.py` checks the caps above against the diff,
+   at session start and as a commit is drafted.

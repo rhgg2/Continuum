@@ -846,7 +846,7 @@ local function forEachEvent(fn)
 end
 
 
------ derived-event reconcile skeleton (R2)
+----- Derived-event reconcile skeleton (R2)
 -- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
 --contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
 local function reconcileDerived(a)
@@ -1455,7 +1455,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     end
   end
 
-  ----- Parked staging: logical-only edits to the fx replace off-take.
+  ----- Parked staging: logical-only edits to the fx replace off-take
 
   -- Edits stage here and ride flush: a parked edit that wrote ds inline would rebuild mid-batch and
   -- discard still-staged mm ops. rebuildRegionPark derives realisation from the spec each pass.
@@ -1518,7 +1518,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     end)
   end
 
-  ----- Flush: commit accumulated ops to mm.
+  ----- Flush: commit accumulated ops to mm
 
   --contract: no-op if nothing staged
   --contract: commits deletes, then assigns, then adds under one mm:modify

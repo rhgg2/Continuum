@@ -83,7 +83,7 @@ return {
     end,
   },
 
-  ----- allocator: the family is one MIDI bus domain (the identity pipe is n->n, un-gateable).
+  ----- allocator: the family is one MIDI bus domain (the identity pipe is n->n, un-gateable)
   {
     -- A child fx emits midi to a parent fx through the pipe. They must agree on one family-unique
     -- bus >= 1 (off the bus-0 aggregate): the child emits on it, the parent reads it, n->n for free.

@@ -97,7 +97,7 @@ local function schedulePinCorrection(byGuid)
   end
 end
 
------ compiled-graph cache: one clone+compile per structural change, pulled by wv
+----- Compiled-graph cache: one clone+compile per structural change, pulled by wv
 
 local function adjacencies(g)
   local forward, reverse = {}, {}
@@ -169,7 +169,7 @@ local function fxMidiPorts(ident)
   return { ins = traits.recv and 1 or 0, outs = traits.send and 1 or 0 }
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 --contract: reconstructs the graph from REAPER via read, fires wiringChanged{kind='load'}
 function wm:load()
@@ -1088,7 +1088,7 @@ function wm:targetState()
   return out
 end
 
------ read : wiringSnapshot -> userGraph
+----- Read: wiringSnapshot -> userGraph
 
 -- Pass 3c: audio + CU collapse + gain + full midi-bus walk (fan-in, merge, brackets), then
 -- component classification (bus-aware + feedback quarantine). Node ids are rm ids. Pure.

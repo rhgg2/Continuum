@@ -3,7 +3,7 @@
 files named as arguments if any; on whole files with `--all` (cleanup mode); or
 on candidate lines fed to `--measure` on stdin (drafting mode).
 
-Rules (docs/CONVENTIONS.md § Length discipline for annotations):
+Rules (docs/CONVENTIONS.md § Length discipline for comments):
 - `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars.
 - `--shape:` is exempt from the 100-char rule but soft-capped at 400 chars
   per line — a single shape line that long is almost certainly either
@@ -13,6 +13,11 @@ Rules (docs/CONVENTIONS.md § Length discipline for annotations):
   annotations) cap at 2 lines. Section dividers (`-----`, `----- Name`,
   `---------- PUBLIC`) are structure, not WHY, so they neither count toward
   a run nor join two runs into one.
+- A divider is one line, optionally carrying a clause after an em-dash or
+  colon. Two adjacent labelled dividers are a prose run in disguise: because a
+  divider is structure, the WHY-run cap cannot see it, so the run is flagged
+  here instead. A bare rule carries no label, so it neither counts toward a run
+  nor joins two.
 - A comment citing `design/`, other than a live plan's design doc: a pointer
   names `docs/`, the layer that persists. Those are exempt because their model
   has nowhere else to be yet; /plan-next repoints them as a phase lands.
@@ -126,6 +131,22 @@ def why_runs(lines):
         yield (start, len(lines))
 
 
+def divider_runs(lines):
+    """Yield (start, end) 1-based inclusive for runs of consecutive labelled
+    divider lines. A run longer than one line is prose wearing dashes; a bare
+    rule holds no prose, so it takes no part."""
+    start = None
+    for i, line in enumerate(lines, 1):
+        if DIVIDER.match(line) and line.strip('- \t'):
+            if start is None:
+                start = i
+        elif start is not None:
+            yield (start, i - 1)
+            start = None
+    if start is not None:
+        yield (start, len(lines))
+
+
 def cap_for(line):
     """The per-line cap this line answers to, or None where none applies."""
     if KIND_CAPPED.match(line):
@@ -169,6 +190,16 @@ def check_file(path, added, live_docs):
                 out.append((path, str(ln),
                             'comment cites design/ — a pointer names docs/',
                             line.strip()))
+    # Dividers are checked in specs too: the spec exemption below covers `--`
+    # preambles, which are a spec's documentation, not dashes.
+    for start, end in divider_runs(lines):
+        n = end - start + 1
+        if n == 1 or not added.intersection(range(start, end + 1)):
+            continue
+        out.append((path, f'{start}-{end}',
+                    f'divider run > 1 line ({n}) — a divider is one label '
+                    f'line; move the prose to a WHY comment or docs/',
+                    lines[start - 1].strip()))
     if is_spec(path):
         return out
     for start, end in why_runs(lines):

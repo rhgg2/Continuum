@@ -38,8 +38,9 @@ end
 local function fracToDb(frac) return reaper.SLIDER2DB(frac * 1000) end
 local function dbToVol(db)     return db <= -150 and 0 or 10 ^ (db / 20) end
 
------ Crisp (non-AA) primitives: ReaImGui's AddLine/AddRect are anti-aliased with
------ no per-call toggle, so axis-aligned filled rects stand in for 1px rules.
+----- Crisp (non-AA) primitives
+-- ReaImGui's AddLine/AddRect are anti-aliased with no per-call toggle, so
+-- axis-aligned filled rects stand in for 1px rules.
 
 local function hrule(dl, x0, x1, y, col) ImGui.DrawList_AddRectFilled(dl, px(x0), px(y), px(x1), px(y) + 1, col) end
 local function vrule(dl, x, y0, y1, col) ImGui.DrawList_AddRectFilled(dl, px(x), px(y0), px(x) + 1, px(y1), col) end

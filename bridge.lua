@@ -222,7 +222,7 @@ local function recordAction()
   if named then writeAtomic(join('action.id'), '_' .. named) end
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 -- Enable-gate: the MCP server creating the spool dir switches the bridge on.
 local bridge = {}

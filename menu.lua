@@ -45,7 +45,7 @@ local function occupied(node)
   return false
 end
 
------------ PUBLIC
+---------- PUBLIC
 
 function menu:isOpen() return open end
 
