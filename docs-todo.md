@@ -6,6 +6,7 @@ continuum.md
 CONVENTIONS.md
 coordinator.md
 curveEditor.md
+dataStore.md
 fs.md
 masterMix.md
 samplePage.md
@@ -20,7 +21,6 @@ Sorted by size ascending (bytes).
 
 |   size | file                |
 |-------:|---------------------|
-|   3384 | dataStore.md        |
 |   3421 | voicing.md          |
 |   3769 | wiringView.md       |
 |   4171 | library.md          |

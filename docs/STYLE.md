@@ -31,7 +31,8 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
    change is left un-enumerated.
 
 1. Edits replace, rather than augment; paths abandoned do not retain a
-   write-up.
+   write-up. Likewise, a working model that changes does not document
+   the history, just the new model.
 
 1. A design doc states the model as it will be, in the present tense.
 
@@ -71,8 +72,10 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
    by dashes.
    
 1. A heading is capitalised, unless it begins with an identifier, which
-   keeps its own spelling — `gainHost`, `targetTracks shape`,
-   `setLength(newPpq)`.
+   keeps its own case.
+
+1. A heading names its section's concept positively and not by
+   contrast with something else.
 
 1. Terms are assigned specific meanings. Term definitions are bolded,
    as is a document's opening thesis. For any other emphasis, use

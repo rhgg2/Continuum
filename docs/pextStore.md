@@ -7,7 +7,7 @@ context, and runs the watcher that catches undo/redo.
 
 It exists to be written **once** and shared by two faces: `configManager`
 (schema, tier merge) and `dataStore` (per-key document storage) — see
-`docs/dataStore.md § Document data is not config` for what separates them.
+`docs/dataStore.md` for what separates them.
 
 ## Why a shared engine
 

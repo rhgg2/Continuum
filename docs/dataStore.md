@@ -1,70 +1,67 @@
 # dataStore
 
-Per-key **document-data** storage — the second face over `pextStore`,
-beside `configManager`. Where cm holds user-facing *settings* (schema,
-five-tier merge, defaults), ds holds the project's structural *content*:
-mirror groups, sampler/arrange slot palettes, CV bindings, the swing map,
-display columns, mix state.
+**Per-key storage for document data.** Document data is persisted data
+that the code writes so that its own structures survive the session, by
+contrast with config, the parameters a user sets. dataStore is the
+second face over pextStore, beside configManager (`docs/pextStore.md`).
 
-## Document data is not config
+## Registry
 
-A config key resolves through tiers — a global default a project/track/
-take can override — and always has a meaningful default. Document data
-lives at exactly **one scope** (take, track, project, or global), has no
-default beyond *absent*, and is never overridden from a higher tier. The
-word is **scope**, not tier, on purpose: scopes are independent addresses,
-not a merge stack. `groups` on this take has nothing to do with `groups`
-anywhere else.
+1. Each document-data key lives at exactly one **scope** — take,
+   track, project or global.
 
-Before the split these keys rode cm's schema purely so `pruneUnknown`
-wouldn't drop them on load — a junk drawer. They never participated in the
-merge. ds gives them a home that matches what they are.
+1. The **registry** maps each name to its scope, and is the sole truth
+   for which names exist. It is closed: a new document-data key is a
+   new registry line.
 
-## Registry, not open schema
+1. An unknown name raises at every entry point.
 
-The `registry` (`name → scope`) is the sole truth for valid data keys and
-where each lives. Typos raise on every entry point, exactly as cm's schema
-does for config — the "unknowns raise" safety is preserved, just owned by
-the right module now. It is a closed table: adding a document-data key
-means adding a registry line.
+1. The global file is the exception. It holds every global key in one
+   table, so it can carry a name absent from the registry. Such a name
+   is silently dropped on load.
 
 ## Per-key blobs
 
-Each take/track `(scope, name)` is its own P_EXT key (`ctm_data.<name>`),
-not a slice of one shared blob. Two reasons, both load-bearing:
+1. Each take or track key is its own `P_EXT` blob, named
+   `ctm_data.<name>`.
 
-- **Write isolation.** A write serialises only its own key. One shared
-  blob would reserialise the large `groups` tree every time a CV binding
-  moved.
-- **Targeted signals.** A per-key undo baseline lets the watcher name
-  exactly which key an undo tick rewound, so it fires `dataChanged{scope,
-  name}` — each manager wakes only for its own namespace.
+1. The take it sits on is the one pextStore holds **bound**, and the
+   track is the one that take is on (`docs/pextStore.md`).
 
-`project` reuses the engine's projext section, slot = name. `global` is the
-exception: one disk file (`continuum-data.lua`), since its lone resident
-(`paramFrecency`) is small and per-key files there would be ceremony.
+1. A write therefore serialises only its own key. An undo baseline is
+   likewise per key, so the watcher can name the key a rewind touched (§
+   Signals).
+
+1. A project key is a slot in the engine's projext section. Global is
+   one disk file, `continuum-data.lua`.
 
 ## Signals
 
-ds fires one signal, `dataChanged`, with a flat `{ scope, name }` payload —
-one fire per changed key, never a blanket reload. This is deliberate: cm's
-`configChanged{}` reload exists
-only because `pollUndo` couldn't name the moved key; the per-key baseline
-removes that limitation, so importing a reload variant would re-inflict the
-wound. An undo tick adds `invalidate = true` to each rewound key's fire, so
-subscribers can tell a rewind from a live edit.
+1. dataStore fires one signal, `dataChanged`, carrying `{ scope, name }`,
+   once per changed key. A subscriber wakes only for its own keys.
 
-Context rebind is a *separate* signal: `pextStore` emits `contextChanged`,
-and ds drops its take/track caches so the next read reloads against the new
-take/track. `project` and `global` are context-free and survive untouched.
+1. An undo tick adds `invalidate = true` to each rewound key's fire, so
+   a subscriber can tell a rewind from a live edit.
+
+1. Take and track keys ride pextStore's undo watcher, as do project
+   keys, except those in `PROJECT_PLAIN`: `guardedTrack` follows live
+   flags and would desync if rewound. Global stays outside undo.
+
+## Caches
+
+1. dataStore holds one lazily loaded cache per scope, and deep-clones
+   on the way in and out, so no caller aliases its state.
+
+1. pextStore's `contextChanged` drops the take and track caches, and
+   the next read reloads against the new take or track. Project and
+   global are context-free and survive.
 
 ## Foreign-handle access
 
-`getAt(handle, name)` / `assignAt(handle, name, value)` read and write an
-arbitrary take/track off the bound context — how `arrangeManager`,
-`sampleManager`, and `paramAutomation` reach every project take/track
-without rebinding (and firing reload churn). A foreign **write** refreshes
-the cache and fires `dataChanged` *only* when it lands on the bound handle,
-so a write aimed at another take never disturbs the current view. These
-replace cm's old `readTakeKey`/`readTrackKey`/`writeTakeKey`/`writeTrackKey`
-bypass seams, now removed.
+1. `getAt` and `assignAt` address a take or track other than the bound
+   one, so arrangeManager, sampleManager and paramAutomation can reach
+   every take and track in the project without rebinding.
+
+1. A foreign write refreshes the cache and fires `dataChanged` only
+   when the handle is the bound one, so a write aimed elsewhere leaves
+   the current view alone.
