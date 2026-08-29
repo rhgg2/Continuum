@@ -4,6 +4,7 @@
 
 continuum.md
 coordinator.md
+curveEditor.md
 fs.md
 routingManager.md
 sampleView.md
@@ -16,7 +17,6 @@ Sorted by size ascending (bytes).
 
 |   size | file                |
 |-------:|---------------------|
-|   2623 | curveEditor.md      |
 |   2759 | CONVENTIONS.md      |
 |   2814 | masterMix.md        |
 |   2931 | samplePage.md       |

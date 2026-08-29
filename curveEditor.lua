@@ -134,7 +134,7 @@ function curveEditor:frame(a)
       local mouseT = pt.fromScreen(mx, my)
       if mouseT >= tMin and mouseT < tMax then
         -- Step risers carry no curve value at their x, so nearLine misses them;
-        -- detect separately -- see docs/curveEditor.md § Step riser as a hover target.
+        -- detect separately -- see docs/curveEditor.md § Step risers are hit tested directly.
         for i = 1, n - 1 do
           local shp = events[i].shape
           if (shp == nil or shp == 'step')
