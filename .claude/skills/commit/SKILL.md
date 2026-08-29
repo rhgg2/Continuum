@@ -57,14 +57,15 @@ script.
   that leaves something behind. Commits unrelated to the live plan
   omit the key.
 
-If the manifest is non-empty, apply it thus:
+If the manifest is non-empty, write it to the scratchpad and run the
+script over it, as one `apply_patches` call:
 
-```sh
-python3 tools/bookkeep.py <<'JSON'
+```
+creates: [{ path: <scratchpad>/bookkeep.json, overwrite: true, content:
 {"date":"2026-07-22",
  "decision":"one or two lines of prose; the script formats it",
- "land":{"headline":"tm: …","ref":"§ 3"}}
-JSON
+ "land":{"headline":"tm: …","ref":"§ 3"}} }]
+after:  python3 tools/bookkeep.py < <scratchpad>/bookkeep.json
 ```
 
 ## 4. The commit
