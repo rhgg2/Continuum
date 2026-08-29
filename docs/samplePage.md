@@ -1,72 +1,100 @@
 # samplePage / sampleRender
 
-The sample page is split in two, mirroring the tracker, arrange, and
-wiring stacks:
+**The sample page loads audio files from disk into the slots of a
+track's sampler FX.** A folder tree and file list sit on the left over
+a waveform trim strip, with the track's slots down the right.
 
-- **samplePage** is the controller — the object `coordinator` drives. It
-  constructs the stack (`sm` stays local, only `sv` leaves), owns the
-  page lifecycle (`bind`/`setTrack`/`unbind`/`tick`), publishes the
-  `sample` facade, and delegates every render call to the renderer.
-- **sampleRender** draws the three-pane browser+slots and the trim
-  strip, reads keyboard and mouse, and owns the `sample` command scope.
-  It is handed sampleView only and never reaches sampleManager, so the
-  slot mutations it issues (`setTrim`/`setName`/`stageInto`/`syncSlot`)
-  can reach no track but the bound one.
+## The split
 
-A bound track need not carry the sampler FX: the picker lists only
-tracks that do, but the FX can be removed while the page holds the
-track. `sv:isLive` reports whether it is still there, and sampleRender
-wraps the whole body in `chrome.disabledIf(not isLive)` — the surface
-greys and stops responding, so no edit is aimed at a JSFX that is not
-there.
+1. samplePage builds the stack and hands sampleRender only sampleView.
+   sampleManager stays local, so the renderer's slot mutations cannot
+   reach a track other than the bound one.
 
-## Where state lives
+1. sampleRender draws the three panes and the strip, reads keyboard
+   and mouse, and owns the `sample` command scope.
 
-sampleRender is render-only. Every persistent fact lives elsewhere:
+1. The `sample` facade carries `setTrack`, which `diveToSampler` uses
+   to open the page already bound to a track.
 
-- **sampleView** — browser selection, current folder, bound track.
-- **configManager** — `currentSample`, `previewInPlace`, `advanceOnLoad`.
-- **dataStore** — `slotEntries`, at the track tier.
-- **sampleManager** — JSFX-side slot truth, audio bytes.
+## A bound track may lose its FX
 
-sampleRender holds only frame-local caches (peaks, durations) and
-ephemeral interaction state (drag handle, in-flight rename, preview-in-
-place breadcrumb). All of it is reconstructible from the layers below;
-none of it survives a reload.
+1. A bound track need not carry the sampler FX. The picker lists only
+   tracks that do, but the FX can be removed while the page still
+   holds the track.
+
+1. `sv:isLive` reports whether it is still there. sampleRender wraps
+   the whole body in `chrome.disabledIf(not isLive)`, so the surface
+   greys and goes inert for as long as the FX is absent.
 
 ## Preview-in-place
 
-Auditioning a slot replacement without committing. The JSFX slot is
-staged to a transient file while `cm:slotEntries` stays untouched. The
-preview lives until the user does anything that implies they've moved
-on — a browser navigation, a slot focus change, or a stray click — at
-which point `revertPreviewInPlace` pushes cm's truth back to the JSFX.
+1. A preview-in-place auditions a slot replacement without committing
+   it.
 
-The trigger frame is consumed (`pip.justTriggered=true`) so the same
-input that started the preview doesn't immediately revert it. After
-that frame the auto-revert is armed.
+1. `stageInto` copies the file into the project folder under a
+   content-hashed name and points the JSFX slot at it. The slot's
+   `slotEntries` entry is untouched, so dataStore still holds the
+   committed truth.
 
-This is "modal without modality": the user gets the preview/commit
-discipline of a modal dialog without the dialog. The cost is that the
-revert criterion has to be liberal — anything that looks like a
-context shift counts — because there's no explicit close.
+1. The preview lasts until any sign of moving on — a browser
+   navigation, a slot focus change, a stray click, or unbinding the
+   page. `revertPreviewInPlace` then pushes the stored entry back to
+   the JSFX. The list is broad because a preview has no explicit
+   close.
 
-## Peak / duration cache
+1. The revert test runs at the end of the body, and skips the frame on
+   which the preview was triggered — the click that started the
+   preview would otherwise satisfy it at once. `pip.justTriggered`
+   marks that frame, and is cleared as it passes.
 
-File-path-keyed and survives across frames because `BuildPeaks` is a
-multi-frame op and the strip would flicker if we recomputed each draw.
+## The trim strip
 
-Cache entries are width-keyed too: a peak histogram computed for N
-columns can't be reused at M, because `GetPeaks` reduces frames to
-columns inside REAPER and a foreign width gives the wrong shape. So
-window resize drops the cache for the visible strip and rebuilds.
+1. The trim strip shows the focused slot's file as a waveform, with a
+   start handle and an end handle. Dragging them sets the frame range
+   the JSFX plays.
 
-## Drag handle stickiness
+1. A live drag overrides the stored start and end locally, so the
+   markers track the cursor without a round trip. `setTrim` writes the
+   range, and dataStore catches up on the next frame.
 
-Which handle (start vs end) the user is dragging is decided on the
-first active frame by mouse proximity, then held until release. The
-choice never switches mid-drag, even if the cursor crosses the other
-handle, because handle-flipping under the cursor is unusable.
+1. The write enforces `0 ≤ start ≤ end - 1` and `start + 1 ≤ end ≤
+   frames - 2`: the file's last two frames are reserved.
 
-The `drag` table is keyed by slot; switching to a different slot
-mid-drag implicitly drops the drag (the liveDrag check fails).
+## Peak and duration caches
+
+1. The waveform is one high and low sample value per screen column,
+   computed from the file by REAPER.
+
+1. That computation is expensive, so peaks and durations are cached by
+   absolute file path, and the entries survive across frames.
+
+1. `PCM_Source_BuildPeaks` completes over several frames, so a peak
+   entry starts partly built and is finished in a later frame.
+
+1. The column count is part of the entry, because
+   `PCM_Source_GetPeaks` does the reduction from samples to columns
+   itself: values built for one strip width are the wrong shape at
+   another. Resizing the window drops the entry and rebuilds it.
+
+1. An unreadable file caches `false`, so the failure is not retried
+   every frame.
+
+## Trim drag stickiness
+
+1. A drag on the trim strip moves one handle, start or end. Which one
+   is chosen on the drag's first frame, by proximity to the mouse.
+
+1. That choice holds until release. The cursor crossing the other
+   handle does not change it.
+
+1. The drag is keyed by slot, so changing the focused slot mid-drag
+   ends it: the live-drag test no longer matches.
+
+## sampleRender holds nothing durable
+
+1. Its own state is the peak and duration caches, the live drag, and a
+   rename in progress. All of it rebuilds from the layers below, and
+   none survives a reload.
+
+1. Every durable fact lives beneath it; `docs/sampleView.md §
+   Transient and durable` says where.

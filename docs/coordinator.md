@@ -19,6 +19,11 @@ other.
 1. A page is anything answering `toolbarSegments`, `renderBody`,
    `statusSegments`, `bind` and `unbind`.
 
+1. A page module is a controller: it builds its own stack and delegates
+   every render call to a companion renderer. Where the stack has a
+   view layer, the renderer is handed that and never the manager, so
+   the drawing half cannot reach past the view.
+
 ## Activation
 
 1. `setActive(name)` unbinds the outgoing page, resets the shared
