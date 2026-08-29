@@ -8,6 +8,13 @@ not eight or ten.
   holds the frame. An owner takes the whole keyboard, a field it hosts included: the picker's filter
   is a live field, and an unconditional claim would take the arrows its cursor reads.
 
+- **2026-08-29** — The tree REAPER falls back to is recorded in `Scripts/Continuum.home`, written by
+  every claim and read by `__startup.lua` when the launcher is unreachable. Releasing the link
+  cannot depend on SessionEnd: a `claude --worktree` session deletes the worktree hosting that hook
+  before it fires, leaving the link naming nothing, which stops Continuum starting at all.
+  `__startup.lua` runs at every REAPER launch and is the only Continuum code outside the link, so
+  the repair belongs there and nowhere else.
+
 - **2026-08-29** — Abandoned session trees are reclaimed by a sweep at SessionStart, keyed on the
   pid each session records when it starts. The SessionEnd hook still tears down its own session, and
   cannot be the only mechanism: a `claude --worktree` session deletes the worktree hosting that hook

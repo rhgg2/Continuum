@@ -21,6 +21,7 @@ Sister servers: continuum_map, reaper_docs, continuum_tests. Same uv-script idio
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -59,6 +60,10 @@ SPOOL = PROJECT_ROOT / ".claude" / "mcp" / "reaper" / "spool"
 # the one moment this path matters most is when nothing is running to be asked.
 LINK = Path.home() / "Library/Application Support/REAPER/Scripts/Continuum"
 
+# Where the link should point when no session holds it, recorded beside the link
+# because that is the one place readable when the link itself is broken. See _claim.
+HOME = LINK.with_name(LINK.name + ".home")
+
 mcp = FastMCP("reaper")
 
 
@@ -88,6 +93,23 @@ def _holder() -> Optional[Path]:
         return None
 
 
+def _main_tree() -> Optional[Path]:
+    """The repo's main worktree, or None if this tree is not in a repo.
+
+    PROJECT_ROOT is whichever tree this server started in, and that one can be
+    deleted with the session that made it. Only the main tree outlives every
+    session, so it is the only safe thing to send REAPER back to."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "rev-parse",
+             "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    common = done.stdout.strip()
+    return Path(common).parent if done.returncode == 0 and common else None
+
+
 def _claim() -> None:
     """Point REAPER at this tree.
 
@@ -106,7 +128,17 @@ def _claim() -> None:
     the REAPER install rather than about a tree -- but the launcher only ever reads it
     through the link, and without it a fresh worktree can restart a live Continuum and
     never start a dead one.
+
+    The fallback is recorded before anything moves. SessionEnd hands the link back
+    when it runs, and there are ordinary ends where it does not: a `claude --worktree`
+    session deletes the worktree hosting that hook before SessionEnd can fire it. The
+    link is then left naming a tree that no longer exists, which stops Continuum
+    starting at all, with no session left running to notice. __startup.lua repairs it
+    from this file at the next REAPER launch.
     """
+    home = _main_tree()
+    if home is not None:
+        HOME.write_text(f"{home}\n", encoding="utf-8")
     held = _holder()
     if held == PROJECT_ROOT:
         return
