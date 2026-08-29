@@ -52,22 +52,30 @@ for k, v in pairs(chanMsgLUT) do chanMsgEvTypes[v] = k end
 
 ---------- PRIVATE
 
---invariant: notes/ccs are sparse, keyed by slot; a slot is one event's loc for as long as it lives
-local notes       = {}
-local ccs         = {}
-local noteMaxSlot = 0     -- high-water mark: a mint comes from here when the free list is empty
-local ccMaxSlot   = 0
-local noteFree    = {}    -- slots a delete handed back, LIFO; reused before minting
-local ccFree      = {}
---invariant: noteOrder/ccOrder are dense [1..n] slot ids, ascending ppq; only load leaves dead ones
-local noteOrder   = {}
-local ccOrder     = {}
+--shape: stream = { list, order, free, maxSlot, chans, sidecars } -- one kind's whole slot table
+--invariant: streams.note and streams.cc are the only two; every event belongs to exactly one
+--invariant: list is sparse, keyed by slot; a slot is one event's loc for as long as it lives
+--invariant: order is dense [1..n] slot ids, ascending ppq; only load leaves dead ones
+--invariant: chans[chan] holds that channel's slice of order, in the same order
+local function newStream()
+  return {
+    list     = {},   -- the events, sparse, keyed by slot
+    order    = {},   -- slot ids in ppq order
+    free     = {},   -- slots a delete handed back, LIFO; reused before minting
+    maxSlot  = 0,    -- high-water mark: a mint comes from here when the free list is empty
+    chans    = {},   -- per-channel index; rebuild reconstructs it, the verbs maintain it
+    sidecars = {},   -- [slot] = the owner's sidecar row; every note has one, a plain cc none
+  }
+end
+local streams = { note = newStream(), cc = newStream() }
+-- Every evType but 'note' is a cc. Resolving an event to its stream is the only place
+-- that discrimination is made, bar the two boundaries where midiBlob wants the kind's name.
+local function streamOf(evt) return evt.evType == 'note' and streams.note or streams.cc end
+
 local orderEpoch  = 0     -- bumped by every splice; ordered() asserts on it to catch a mid-walk mutation
 local eventsByUuid      = {}
 --invariant: on a collision collisionIdx holds the survivor; the loser stays uuid-addressable
 local collisionIdx      = {}   -- note seats only; the same-pitch detector, never an address book
---invariant: chanIdx[kind][chan] = dense ppq-ordered slots, that channel's slice of the global one
-local chanIdx    = { note = {}, cc = {} }   -- per-channel index; rebuild reconstructs, the verbs maintain
 local maxUUID    = 0
 local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
@@ -75,13 +83,12 @@ local modifyDepth  = 0      -- reload can re-enter modify; only the outermost fl
 local flushPending = false  -- a dirty modify happened somewhere in the nest; flush once on unwind
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
---invariant: noteSidecars/ccSidecars are sparse, keyed by owner's slot; the verbs maintain them
-local noteSidecars = {}   -- [noteSlot] = { eventtype = 15, ppq, msg }; every note carries one
-local ccSidecars   = {}   -- [ccSlot]   = { eventtype = -1, ppq, msg }; a plain cc carries none
+--shape: a sidecar row is { eventtype = 15, ppq, msg } on a note, { eventtype = -1, ppq, msg } on a cc
 local sidecarCount = 0    -- for perf.count('texts') alone; a sparse table has no #
 -- The grouped view buildWire keys on: state, not a per-flush composition, because the wire
 -- holds a reference to it. rebuild regroups -- the one place all three are replaced.
-local sidecarTexts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
+local sidecarTexts = { noteSidecars = streams.note.sidecars, ccSidecars = streams.cc.sidecars,
+                       carried = carriedTexts }
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
 local loadedBlob            -- converged-rebind gate; see docs/midiManager.md § Converged load
 local wire                  -- last flush's midiBlob wire state; nil = nothing built yet
@@ -326,7 +333,9 @@ end
 
 -- Walk one kind in ppq order. The length is captured up front, so a mid-walk add stays unseen
 -- -- the mid-iteration contract. A live-walk splice raises instead; see docs/midiManager.md § Collect first, then mutate.
-local function ordered(list, order)   -- yields (loc, evt)
+local function ordered(stream, order)   -- yields (loc, evt); order defaults to the whole stream's
+  local list = stream.list
+  order = order or stream.order
   local i, n, epoch = 0, #order, orderEpoch
   return function()
     assert(epoch == orderEpoch, 'mm: order array spliced under a live walk')
@@ -342,14 +351,18 @@ end
 
 -- util.insertSorted lands at the lower bound, so a non-strict comparator carries the new slot past
 -- everything already at its ppq -- the pinned add rule, and a move obeys it for free.
-local function orderInsert(list, order, slot)
+local function orderInsert(stream, slot, order)
+  local list = stream.list
+  order = order or stream.order
   orderEpoch = orderEpoch + 1
   util.insertSorted(order, slot, function(a, b) return list[a].ppq <= list[b].ppq end)
 end
 
 -- Must run while the event is still in `list` under its OLD ppq: that ppq is the search key.
 -- Binary-search to the head of its run of equals, then scan the run for the slot itself.
-local function orderRemove(list, order, slot)
+local function orderRemove(stream, slot, order)
+  local list = stream.list
+  order = order or stream.order
   local ppq    = list[slot].ppq
   local lo, hi = 1, #order + 1
   while lo < hi do
@@ -367,10 +380,17 @@ local function orderRemove(list, order, slot)
 end
 
 -- Retire a slot: out of the order array, out of the list, onto the free list.
-local function freeSlot(list, order, free, slot)
-  orderRemove(list, order, slot)
-  list[slot] = nil
-  util.add(free, slot)
+local function freeSlot(stream, slot)
+  orderRemove(stream, slot)
+  stream.list[slot] = nil
+  util.add(stream.free, slot)
+end
+
+-- freeSlot's mirror: what a delete handed back, or a fresh slot off the high-water mark.
+local function mintSlot(stream)
+  local slot = table.remove(stream.free)
+  if not slot then stream.maxSlot = stream.maxSlot + 1; slot = stream.maxSlot end
+  return slot
 end
 
 
@@ -400,22 +420,19 @@ local function bucketOrder(slots, chan)
   return order
 end
 
-local function listOf(evt) return evt.evType == 'note' and notes or ccs end
-local function chanOrder(evt)
-  return bucketOrder(chanIdx[evt.evType == 'note' and 'note' or 'cc'], evt.chan)
-end
+local function chanOrder(evt) return bucketOrder(streamOf(evt).chans, evt.chan) end
 
 -- The global order array's own splice helpers, so each bucket inherits the pinned equal-ppq add
 -- rule -- and, with it, the standing constraint: drop while evt is still listed at its OLD ppq.
-local function indexPut(evt)  orderInsert(listOf(evt), chanOrder(evt), evt.loc) end
-local function indexDrop(evt) orderRemove(listOf(evt), chanOrder(evt), evt.loc) end
+local function indexPut(evt)  orderInsert(streamOf(evt), evt.loc, chanOrder(evt)) end
+local function indexDrop(evt) orderRemove(streamOf(evt), evt.loc, chanOrder(evt)) end
 
 -- One channel's slice of exactly what a whole-array ordered walk yields, in the same order --
 -- being the same kind of walk over that channel's own order array.
-local function rawInChan(kind, chan)
-  local order = chanIdx[kind][chan]
+local function rawInChan(stream, chan)
+  local order = stream.chans[chan]
   if not order then return function() end end
-  return ordered(kind == 'note' and notes or ccs, order)
+  return ordered(stream, order)
 end
 
 ----- Sidecar rows
@@ -457,12 +474,12 @@ end
 -- A refresh, not a reseat: the entry's ppq places the row and its body encodes it, so any
 -- structural assign re-derives both through sidecarCache -- a few field compares on a hit.
 local function sidecarPut(evt)
-  if evt.evType == 'note' then seatSidecar(noteSidecars, evt.loc, noteSidecarEntry(evt))
-  else seatSidecar(ccSidecars, evt.loc, (not evt.plain) and ccSidecarEntry(evt) or nil) end
+  if evt.evType == 'note' then seatSidecar(streams.note.sidecars, evt.loc, noteSidecarEntry(evt))
+  else seatSidecar(streams.cc.sidecars, evt.loc, (not evt.plain) and ccSidecarEntry(evt) or nil) end
 end
 
 local function sidecarDrop(evt)
-  seatSidecar(evt.evType == 'note' and noteSidecars or ccSidecars, evt.loc, nil)
+  seatSidecar(streamOf(evt).sidecars, evt.loc, nil)
 end
 
 ----- Reindex
@@ -471,25 +488,26 @@ end
 -- Compacts the dedup holes, orders by ppq, and mints slots 1..n; rebuilds every index. See docs/midiManager.md § Stable slots.
 local function rebuild(metadata)
   perf.start('rebuild')
+  local noteStream, ccStream = streams.note, streams.cc
   perf.start('compact')
-  notes = util.compact(notes, noteMaxSlot); noteMaxSlot = #notes
-  ccs   = util.compact(ccs,   ccMaxSlot);   ccMaxSlot   = #ccs
+  noteStream.list = util.compact(noteStream.list, noteStream.maxSlot)
+  ccStream.list   = util.compact(ccStream.list,   ccStream.maxSlot)
+  noteStream.maxSlot, ccStream.maxSlot = #noteStream.list, #ccStream.list
   perf.stop('compact')
   perf.start('sort')
-  stableByPpq(notes); stableByPpq(ccs)   -- a foreign blob's order isn't ours to trust
+  stableByPpq(noteStream.list); stableByPpq(ccStream.list)   -- a foreign blob's order isn't ours to trust
   perf.stop('sort')
   perf.start('collisionIdx')
-  collisionIdx, eventsByUuid = {}, {}
-  chanIdx = { note = {}, cc = {} }
-  noteFree, ccFree = {}, {}
-  noteSidecars, ccSidecars, sidecarCount = {}, {}, 0
+  collisionIdx, eventsByUuid, sidecarCount = {}, {}, 0
+  for _, stream in pairs(streams) do stream.chans, stream.free, stream.sidecars = {}, {}, {} end
   orderEpoch = orderEpoch + 1
   -- Compacted and sorted by here, so slot order and ppq order coincide: the order arrays are identities.
-  noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
+  noteStream.order, ccStream.order = identityOrder(noteStream.maxSlot), identityOrder(ccStream.maxSlot)
   -- Seat inline rather than via indexPut: this is the one bulk path (every event, every load), the
   -- kind is known per loop, and the ppq order lets each bucket be appended to rather than spliced.
-  local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
-  for i, n in ipairs(notes) do
+  local noteSlots,    ccSlots    = noteStream.chans,    ccStream.chans
+  local noteSidecars, ccSidecars = noteStream.sidecars, ccStream.sidecars
+  for i, n in ipairs(noteStream.list) do
     n.loc = i
     collisionIdx[cachedSeatKey(n)] = n
     util.add(bucketOrder(noteSlots, n.chan), i)
@@ -499,7 +517,7 @@ local function rebuild(metadata)
     end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
-  for i, c in ipairs(ccs) do
+  for i, c in ipairs(ccStream.list) do
     c.loc = i
     util.add(bucketOrder(ccSlots, c.chan), i)
     if c.uuid then
@@ -528,14 +546,14 @@ local function flushTake()
   -- The live tables, unsnapshotted: buildWire keys on the slot, so it reads notes, ccs
   -- and both sidecar groups sparse.
   if wireFull or not wire then
-    wire, wireFull = midiBlob.buildWire(notes, ccs, sidecarTexts, carriedPassthrough), false
+    wire, wireFull = midiBlob.buildWire(streams.note.list, streams.cc.list, sidecarTexts, carriedPassthrough), false
   else
     perf.start('splice')
     if not midiBlob.syncSlots(wire, wireDirt) then
       -- A disagreement means the dirt has lost track of the wire: no further splice would
       -- be trustworthy, and a lost key is silent at the byte level.
       print('flushTake: wire splice disagreed with the held wire; regenerating')
-      wire = midiBlob.buildWire(notes, ccs, sidecarTexts, carriedPassthrough)
+      wire = midiBlob.buildWire(streams.note.list, streams.cc.list, sidecarTexts, carriedPassthrough)
     end
     perf.stop('splice')
   end
@@ -553,7 +571,7 @@ local function flushTake()
   reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)
   perf.stop('setEvts')
 
-  perf.count('notes', #noteOrder); perf.count('ccs', #ccOrder)
+  perf.count('notes', #streams.note.order); perf.count('ccs', #streams.cc.order)
   perf.count('texts', sidecarCount + #carriedTexts)
   dirty = false
   wireDirt = { note = {}, cc = {} }   -- spent: the wire agrees with the model again
@@ -610,7 +628,8 @@ function mm:load(newTake)
   local takeSwapped = take ~= newTake
   if takeSwapped then take = newTake; setTakeGuid() end
 
-  notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
+  streams.note.list, streams.cc.list = {}, {}
+  eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, 0, false
   carriedTexts, carriedPassthrough, dirty = {}, {}, false
   local parsedCcSidecars, parsedNoteSidecars = {}, {}   -- decoded off the take; consumed for binding
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
@@ -629,13 +648,16 @@ function mm:load(newTake)
   ----- Read take: one MIDI_GetAllEvts blob parsed to note/cc/text records
   perf.start('read')
   local _, blob = reaper.MIDI_GetAllEvts(take)
-  local texts, passthrough
-  notes, ccs, texts, passthrough = midiBlob.parse(blob)
+  local notes, ccs, texts, passthrough = midiBlob.parse(blob)
   perf.stop('read')
   carriedPassthrough = passthrough
-  noteMaxSlot, ccMaxSlot = #notes, #ccs
+  -- notes and ccs alias the two streams' lists for the normalisation pass below, which mutates
+  -- their elements but never replaces them. rebuild() does replace them, so nothing past it reads these.
+  streams.note.list, streams.cc.list = notes, ccs
+  streams.note.maxSlot, streams.cc.maxSlot = #notes, #ccs
   -- Parse order, which is the take's order; rebuild reseats both arrays into ppq order below.
-  noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
+  streams.note.order = identityOrder(streams.note.maxSlot)
+  streams.cc.order   = identityOrder(streams.cc.maxSlot)
   -- Sidecars (notation type 15, cc type -1) are consumed for uuid binding and
   -- regenerated on flush; anything that doesn't decode is carried through verbatim.
   for _, t in ipairs(texts) do
@@ -743,7 +765,7 @@ function mm:load(newTake)
   ----- UUID unification — reassign duplicated uuids, mint for unbound survivors
   -- flushTake regenerates the sidecars.
 
-  for _, note in ordered(notes, noteOrder) do
+  for _, note in ordered(streams.note) do
     local uuid = note.uuid
     if uuid and uuidCount[uuid] > 1 then
       local newUUID = assignNewUUID(note)
@@ -873,7 +895,7 @@ function mm:load(newTake)
 
   -- Every hand-out is uuid-addressable: a plain cc mints its uuid here, in memory only.
   -- Runs after persisted uuids are known, so it can't collide. See docs/midiManager.md § Plain ccs.
-  for _, cc in ordered(ccs, ccOrder) do
+  for _, cc in ordered(streams.cc) do
     if not cc.uuid then cc.plain = true; assignNewUUID(cc) end
   end
 
@@ -911,7 +933,7 @@ function mm:load(newTake)
   --emits: flushed -- nil; flushTake reprojected the take (self-write, not an external mutation)
   if wroteTake then fire('flushed') end
 
-  perf.count('events', #noteOrder + #ccOrder)
+  perf.count('events', #streams.note.order + #streams.cc.order)
   perf.stop('load')
 end
 
@@ -932,12 +954,14 @@ end)
 --contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
 function mm:unload()
   take, poolGuid, loadedBlob, wire = nil, nil, nil, nil
-  notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
-  noteOrder, ccOrder = {}, {}
-  noteFree, ccFree   = {}, {}
-  noteMaxSlot, ccMaxSlot, dirty = 0, 0, false
+  eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, 0, false
+  -- chans is left standing: the next load's rebuild replaces it, and until then a walk over
+  -- an emptied list yields nothing whichever slots it names.
+  for _, stream in pairs(streams) do
+    stream.list, stream.order, stream.free, stream.sidecars, stream.maxSlot = {}, {}, {}, {}, 0
+  end
+  dirty, sidecarCount = false, 0
   carriedTexts, carriedPassthrough = {}, {}
-  noteSidecars, ccSidecars, sidecarCount = {}, {}, 0
 end
 
 
@@ -956,7 +980,7 @@ local function resolveCollisions()
   local events = {}
   for _, pending in pairs(pendingCollisions) do
     local group = {}
-    for _, n in ordered(notes, noteOrder) do
+    for _, n in ordered(streams.note) do
       if n.chan == pending.chan and n.pitch == pending.pitch then util.add(group, n) end
     end
     local kills, voiced, onsetOf = voicing.resolveGroup(group)
@@ -967,16 +991,16 @@ local function resolveCollisions()
                 n.uuid, n.chan, n.pitch, n.ppq, pending.verb)
       indexDrop(n)
       sidecarDrop(n)
-      freeSlot(notes, noteOrder, noteFree, n.loc)
+      freeSlot(streams.note, n.loc)
       eventsByUuid[n.uuid] = nil
       deleteMetadatum(n.uuid)
     end
     for _, n in ipairs(voiced) do
       if onsetOf[n] ~= n.ppq then
         local oldPpq = n.ppq
-        orderRemove(notes, noteOrder, n.loc); indexDrop(n)
+        orderRemove(streams.note, n.loc); indexDrop(n)
         n.ppq = onsetOf[n]
-        orderInsert(notes, noteOrder, n.loc); indexPut(n)
+        orderInsert(streams.note, n.loc); indexPut(n)
         sidecarPut(n)   -- the nudge moved the ppq that places its row
         util.add(events, { kind = 'nudged', uuid = n.uuid,
                            chan = n.chan, pitch = n.pitch, ppq = n.ppq })
@@ -1001,10 +1025,12 @@ local function markChan(chan) if chan then dirtyChans[chan] = true end end
 -- what makes repeated gestures on a slot coalesce. See docs/midiManager.md § Wire dirt.
 local function markWire(evt, before)
   if wireFull or not wire or not evt then return end
-  local stream = evt.evType == 'note' and 'note' or 'cc'
-  local group  = wireDirt[stream]
+  -- One of the two boundaries that wants the kind's name rather than its stream: midiBlob
+  -- keys the wire by it. mm:byUuid, which hands the name out, is the other.
+  local kind  = evt.evType == 'note' and 'note' or 'cc'
+  local group = wireDirt[kind]
   if group[evt.loc] == nil then
-    group[evt.loc] = before or midiBlob.slotState(wire, stream, evt.loc)
+    group[evt.loc] = before or midiBlob.slotState(wire, kind, evt.loc)
   end
 end
 
@@ -1085,7 +1111,7 @@ local function cloneOut(evt)
 end
 
 function mm:notes()
-  local it = ordered(notes, noteOrder)
+  local it = ordered(streams.note)
   return function()
     local i, note = it()
     if note then return i, cloneOut(note) end
@@ -1095,8 +1121,8 @@ end
 --contract: yields mm-internal note records uncloned; do not mutate (read-only fast path)
 --contract: notesRaw(chan) yields just that channel's, in ppq order -- same slice, same order
 function mm:notesRaw(chan)
-  if chan then return rawInChan('note', chan) end
-  return ordered(notes, noteOrder)
+  if chan then return rawInChan(streams.note, chan) end
+  return ordered(streams.note)
 end
 
 --contract: assignNote: lockless write when t touches no structural field
@@ -1108,7 +1134,7 @@ local function assignNote(loc, t)
   local hasStructural = t.ppq or t.endppq or t.pitch or t.vel or t.chan or t.muted ~= nil
 
   if not hasStructural then
-    local note = notes[loc]
+    local note = streams.note.list[loc]
     if not note then return end
 
     util.assign(note, t)
@@ -1118,18 +1144,18 @@ local function assignNote(loc, t)
 
   if not checkLock() then return end
 
-  local note = notes[loc]
+  local note = streams.note.list[loc]
   if not note then return end
 
   local oldKey = seatKey(note)
   -- ppq is the sort key and no other field is, so only a move re-splices -- and the remove has to
   -- see the old ppq. Hence the sequence: remove, assign, insert.
   local movesPpq = t.ppq ~= nil and t.ppq ~= note.ppq
-  if movesPpq then orderRemove(notes, noteOrder, note.loc) end
+  if movesPpq then orderRemove(streams.note, note.loc) end
 
   util.assign(note, t)
   if note.muted == false then note.muted = nil end
-  if movesPpq then orderInsert(notes, noteOrder, note.loc) end
+  if movesPpq then orderInsert(streams.note, note.loc) end
 
   local newKey = seatKey(note)
   if newKey ~= oldKey then
@@ -1165,11 +1191,10 @@ local function addNote(t)
   end
   t.uuid = note.uuid
 
-  local slot = table.remove(noteFree)
-  if not slot then noteMaxSlot = noteMaxSlot + 1; slot = noteMaxSlot end
-  notes[slot] = note
-  note.loc    = slot
-  orderInsert(notes, noteOrder, slot)
+  local slot = mintSlot(streams.note)
+  streams.note.list[slot] = note
+  note.loc = slot
+  orderInsert(streams.note, slot)
   indexPut(note)
   sidecarPut(note)
   local key = seatKey(note)
@@ -1183,7 +1208,7 @@ end
 
 --invariant: a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
 function mm:ccs()
-  local it = ordered(ccs, ccOrder)
+  local it = ordered(streams.cc)
   return function()
     local i, msg = it()
     if msg then return i, cloneOut(msg) end
@@ -1193,8 +1218,8 @@ end
 --contract: yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
 --contract: ccsRaw(chan) yields just that channel's, in ppq order -- same slice, same order
 function mm:ccsRaw(chan)
-  if chan then return rawInChan('cc', chan) end
-  return ordered(ccs, ccOrder)
+  if chan then return rawInChan(streams.cc, chan) end
+  return ordered(streams.cc)
 end
 
 --contract: assignCC: lockless iff t touches no structural field and doesn't promote a plain cc
@@ -1203,7 +1228,7 @@ end
 local function assignCC(loc, t)
   if not take then return end
 
-  local msg = ccs[loc]
+  local msg = streams.cc.list[loc]
   if not msg then return end
 
   local hasStructural = t.ppq or t.evType or t.chan or t.cc or t.pitch
@@ -1226,10 +1251,10 @@ local function assignCC(loc, t)
   end
 
   local movesPpq = t.ppq ~= nil and t.ppq ~= msg.ppq   -- ppq is the sort key; no other field is
-  if movesPpq then orderRemove(ccs, ccOrder, msg.loc) end
+  if movesPpq then orderRemove(streams.cc, msg.loc) end
 
   util.assign(msg, t)
-  if movesPpq then orderInsert(ccs, ccOrder, msg.loc) end
+  if movesPpq then orderInsert(streams.cc, msg.loc) end
 
   if hasStructural then
     if msg.muted == false then msg.muted = nil end
@@ -1252,11 +1277,10 @@ local function pushCC(t)
   msg.shape = msg.shape or 'step'   -- wire default; parse used to supply it on read-back
   if msg.shape ~= 'bezier' then msg.tension = nil end
 
-  local slot = table.remove(ccFree)
-  if not slot then ccMaxSlot = ccMaxSlot + 1; slot = ccMaxSlot end
-  ccs[slot] = msg
-  msg.loc   = slot
-  orderInsert(ccs, ccOrder, slot)
+  local slot = mintSlot(streams.cc)
+  streams.cc.list[slot] = msg
+  msg.loc = slot
+  orderInsert(streams.cc, slot)
   indexPut(msg)
   return msg
 end
@@ -1348,9 +1372,9 @@ function mm:delete(uuid)
   if evt.evType == 'note' then
     local key = seatKey(evt)
     if collisionIdx[key] == evt then collisionIdx[key] = nil end   -- only the seat it owns
-    freeSlot(notes, noteOrder, noteFree, evt.loc)
+    freeSlot(streams.note, evt.loc)
   else
-    freeSlot(ccs, ccOrder, ccFree, evt.loc)
+    freeSlot(streams.cc, evt.loc)
   end
   eventsByUuid[evt.uuid] = nil
   if not evt.plain then deleteMetadatum(evt.uuid) end
@@ -1359,8 +1383,8 @@ end
 --contract: yields (uuid, evt-clone) over all live events, notes then ccs
 --invariant: events() keys by uuid, unlike notes()/ccs(), which yield (loc, clone)
 function mm:events()
-  local noteIt = ordered(notes, noteOrder)
-  local ccIt   = ordered(ccs, ccOrder)
+  local noteIt = ordered(streams.note)
+  local ccIt   = ordered(streams.cc)
   return function()
     local _, e = noteIt()
     if not e then _, e = ccIt() end

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — mm holds each kind's slot table as one `stream` record -- list, order, free,
+  maxSlot, chans, sidecars -- over the twelve twinned file-scope locals that were threaded through
+  the slot helpers as arguments. `streamOf(evt)` becomes the sole site discriminating note from cc,
+  bar the two boundaries where midiBlob wants the kind's name rather than its stream. `wireDirt`
+  stays keyed by kind rather than joining the record, since `midiBlob.syncSlots` takes it whole.
+
 - **2026-08-29** — The mini pattern editor's first frame is an ordinary input pass. The fx strip
   claims the press that opens the editor, and modalHost:draw runs later in the same frame, so the
   editor reads a queue that press has left; a press nobody claimed reaches the editor there as on

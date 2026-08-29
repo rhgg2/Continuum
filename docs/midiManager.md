@@ -134,7 +134,7 @@ the same ppq. UUIDs are universal: every note gets one on load whether or not
 it carries metadata.
 
 On load, duplicates, missing UUIDs, and collisions are reconciled:
-1. Scan notation events into `noteSidecars`, bind to notes by tag, and join
+1. Scan notation events into a parse buffer, bind to notes by tag, and join
    each bound uuid's metadata onto its note. Binding is collision-aware —
    notes and sidecars bucket by `(ppq, chan, pitch)` and pair off in order —
    and runs ahead of dedup so the voicing verdicts see intent (`ppqL`,
@@ -257,10 +257,17 @@ not a gesture to salvage.
 
 **Stable slots.** A `loc` is a slot id, not a position: minted from a free list
 on add, handed back to it on delete, and carried unchanged for as long as the
-event lives. Ppq order lives beside the events instead, in `noteOrder` /
-`ccOrder` — dense `[1..n]` arrays of slot ids that the verbs splice
-(`orderInsert` / `orderRemove`: a binary search plus a shift). Every read that
-has to be in ppq order walks one of them, and array position means nothing.
+event lives. Ppq order lives beside the events instead, in `order` — a dense
+`[1..n]` array of slot ids that the verbs splice (`orderInsert` /
+`orderRemove`: a binary search plus a shift). Every read that has to be in ppq
+order walks one, and array position means nothing.
+
+Slots are minted per kind, so everything keyed on one is held per kind: `list`,
+`order`, `free`, `maxSlot`, `chans` and `sidecars` make up a **stream**, and
+there are exactly two — `streams.note` and `streams.cc`. A stream is what the
+slot helpers take, and `streamOf(evt)` resolves an event to its own. The two
+kinds are told apart there and at the two boundaries where midiBlob wants the
+kind's name rather than its stream.
 
 What that bought is a pass that no longer exists, rather than a faster one.
 `rebuild` recomputed every `loc`, and so every index keyed on one, which is why
@@ -274,7 +281,7 @@ load-bearing in exchange — `mm:assign` re-keys `collisionIdx` in place and
 brackets a chan **or** ppq move with `indexDrop`/`indexPut`, and
 `resolveCollisions` splices its own kills and nudges.
 
-The per-channel index rides the same mechanism. `chanIdx[kind][chan]` is one
+The per-channel index rides the same mechanism. A stream's `chans[chan]` is one
 order array per channel — that channel's slice of the global one, spliced by
 the same `orderInsert`/`orderRemove` — so `notesRaw(chan)` is a plain `ordered`
 walk over it rather than a whole-take walk filtered on membership. That widens
@@ -379,7 +386,7 @@ Every note and every metadata'd cc needs a row in the take's text stream: a
 notation event (type 15) or a `}RDM` sysex (type -1). Those rows used to be
 regenerated per flush — `flushTake` walked both order arrays and rebuilt the two
 groups from scratch, O(all events) on every mutation. They are mm state now:
-`noteSidecars` and `ccSidecars`, sparse and keyed by their owner's slot, seated
+each stream's `sidecars`, sparse and keyed by their owner's slot, seated
 and dropped at exactly the sites that maintain the order arrays (`sidecarPut`
 beside `indexPut`, `sidecarDrop` beside `indexDrop`), with `rebuild` seating both
 wholesale on load. `flushTake` hands the two tables to `buildWire` without
@@ -538,7 +545,7 @@ Firing rules:
 - **A `loc` is a slot, stable for as long as the event lives** — but only within
   one load: `rebuild` mints fresh slots off the take's own order every time, so
   nothing may cache a loc across a reload. Address by uuid.
-- **Ppq-ordered reads go through `noteOrder`/`ccOrder`**, not array position.
+- **Ppq-ordered reads go through the stream's `order`**, not array position.
   The verbs splice those arrays, so slot order and ppq order coincide only just
   after `rebuild`: a moved or added event walks in its ppq place while keeping
   whatever slot it already held.
