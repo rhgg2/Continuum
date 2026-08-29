@@ -72,10 +72,12 @@ JSON
 If you changed no `.lua` files, you may as well commit yourself: `git
 add <scope> && git commit -m "<headline>"`, no commit body.
 
-Otherwise, spawn a `commit-finisher` subagent and hand it the headline
-(and to be clear, there is still no commit body) plus which paths to
-stage, if the scope from steps 1 and 2 is narrower than "all dirty
-files".
+Otherwise, invoke the `commit-finish` skill with the Skill tool. Its
+arguments are the headline (and to be clear, there is still no commit
+body), plus which paths to stage if the scope from steps 1 and 2 is
+narrower than "all dirty files".
 
-The agent runs a comment hygiene pass then commits. When it returns,
-eyeball its summary; no need to re-audit.
+The skill runs as a subagent, opening with the tree state and a
+comment-hygiene report already gathered; it fixes what the report
+names, then commits. When it returns, eyeball its summary; no need to
+re-audit.

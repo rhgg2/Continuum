@@ -180,6 +180,17 @@ emitDocsOwed() {
   echo "    $crossCutting"
 }
 
+# The hygiene pass is the finisher's whole first act, and the report is a file:line
+# list rather than file contents — cheap enough to gather upfront, so the fork opens
+# knowing what it has to fix. Exit 1 means violations, which is the normal case here.
+emitHygiene() {
+  echo "Comment hygiene over the working-tree diff, run at invocation — it is current,"
+  echo "so re-run it only after applying fixes:"
+  echo
+  echo '$ python3 tools/comment_hygiene.py'
+  python3 tools/comment_hygiene.py
+}
+
 emitTreeState() {
   echo "Working-tree state, gathered at invocation — it is current, so don't re-run these:"
   echo
@@ -203,6 +214,7 @@ for name in "$@"; do
     docs-citations)  emitDocsCitations ;;
     docs-owed)       emitDocsOwed ;;
     tree-state)      emitTreeState ;;
+    hygiene)         emitHygiene ;;
     *) echo "gather.sh: no emitter named '$name' — the skill asked for context that"
        echo "does not exist, which is a typo worth reporting rather than working around." ;;
   esac

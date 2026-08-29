@@ -33,7 +33,6 @@ ALLOWED_PREFIXES = (
     ("git", "status"), ("git", "diff"), ("git", "log"), ("git", "show"),
     ("git", "rev-parse"), ("git", "add"), ("git", "commit"),
     ("cd",), ("pwd",), ("ls",), ("echo",), ("true",),
-    ("cat",), ("head",), ("tail",), ("wc",), ("grep",), ("sort",), ("uniq",),
 )
 
 # Only these join segments. Any other operator token (`>`, `<`, `>&`, `(`) means a shape
