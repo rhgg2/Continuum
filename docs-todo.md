@@ -7,6 +7,7 @@ CONVENTIONS.md
 coordinator.md
 curveEditor.md
 fs.md
+masterMix.md
 routingManager.md
 sampleView.md
 scratch.md
@@ -18,7 +19,6 @@ Sorted by size ascending (bytes).
 
 |   size | file                |
 |-------:|---------------------|
-|   2814 | masterMix.md        |
 |   2931 | samplePage.md       |
 |   3384 | dataStore.md        |
 |   3421 | voicing.md          |
