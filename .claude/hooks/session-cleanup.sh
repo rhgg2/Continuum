@@ -45,8 +45,12 @@ esac
 # relink costs nothing: the next reload claims the link regardless.
 link="$HOME/Library/Application Support/REAPER/Scripts/Continuum"
 main=$(dirname "$(git -C "$project" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+# Staged and renamed, not relinked in place: a running Continuum re-stats this
+# link every tick, so it must never name nothing. Same reason _claim uses a
+# rename, and the sweep in session-env.sh the same again. -h keeps the rename
+# from following the link into the directory it names.
 if [ "$(readlink "$link")" = "$cwd" ] && [ "$cwd" != "$main" ]; then
-  ln -sfn "$main" "$link"
+  ln -sfn "$main" "$link.release" && mv -fh "$link.release" "$link"
 fi
 
 # Delete first, deregister second, because this hook does get cut off partway:

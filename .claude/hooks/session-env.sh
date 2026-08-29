@@ -68,28 +68,49 @@ done
 # guess. A resumed session rewrites it on the way back in, so the lease `resume`
 # takes out expires here when it is never taken up.
 #
+# The same fact answers who holds REAPER, so both questions run off one predicate
+# rather than each keeping its own record.
+#
 # Scope is this repo and its worktrees - one slug per cwd, each of them the main
 # tree's path with the separators flattened. A sibling repo sharing our prefix
 # keeps its worktrees in a different .git, so the glob names our slug and our
 # slug-with-a-suffix rather than our prefix, and the whole sweep is skipped
 # outside a repo: `dirname` of the empty string is ".", which would silently
 # widen it from our slugs to every project under $root.
+# A session dir is held while the pid it recorded still names a claude process.
+owned() {
+  [ -f "$1/cli.pid" ] || return 1
+  case "$(ps -o comm= -p "$(cat "$1/cli.pid")" 2>/dev/null)" in
+    *claude) return 0 ;;
+  esac
+  return 1
+}
+
+# Whether anyone is working in a given tree, found through the slug its path
+# flattens to. This is the same question the sweep asks, one level up.
+watched() {
+  for held_dir in "$root/$(printf '%s' "$1" | tr '/' '-')"/*/; do
+    held_dir=${held_dir%/}
+    [ -d "$held_dir" ] && owned "$held_dir" && return 0
+  done
+  return 1
+}
+
 common_dir=$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 if [ -n "$common_dir" ]; then
-  main_slug=$(dirname "$common_dir" | tr '/' '-')
+  main_tree=$(dirname "$common_dir")
+  main_slug=$(printf '%s' "$main_tree" | tr '/' '-')
   for dead in "$root/$main_slug"/*/ "$root/$main_slug"-*/*/; do
     dead=${dead%/}
     [ -d "$dead" ] || continue
     [ "$dead" = "$root/$slug/$session_id" ] && continue
-    if [ -f "$dead/cli.pid" ]; then
-      case "$(ps -o comm= -p "$(cat "$dead/cli.pid")" 2>/dev/null)" in
-        *claude) continue ;;
-      esac
-    elif [ -d "$dead/scratchpad/spike" ] || [ -n "$(find "$dead" -type f | head -1)" ]; then
-      # A missing cli.pid is not evidence of death: the walk above writes nothing
-      # when it finds no claude ancestor. Only a directory holding neither a spike
-      # nor a single file is certainly abandoned, and a live session has the spike.
-      continue
+    owned "$dead" && continue
+    # A missing cli.pid is not evidence of death: the walk above writes nothing
+    # when it finds no claude ancestor. Only a directory holding neither a spike
+    # nor a single file is certainly abandoned, and a live session has the spike.
+    if [ ! -f "$dead/cli.pid" ]; then
+      [ -d "$dead/scratchpad/spike" ] && continue
+      [ -n "$(find "$dead" -type f | head -1)" ] && continue
     fi
     printf '%s\tsweep\t%s\n' "$(date -u +%FT%TZ)" "$(basename "$dead")" >> "$root/session-end.log"
     rm -rf "$dead"
@@ -100,6 +121,26 @@ if [ -n "$common_dir" ]; then
   # session-cleanup.sh killed after its rm -rf, which is why that hook deletes
   # before it deregisters.
   git worktree prune 2>/dev/null
+
+  # Hand REAPER back when the tree holding it has no session left. reaper_reload
+  # claims the link by pointing it at the claiming tree, and SessionEnd returns
+  # it; the ends that hook never sees leave it naming a tree nobody works in.
+  # REAPER keeps loading that Continuum, and every other session's requests go to
+  # a spool nothing polls - silence that reads as a dead instance until asked.
+  #
+  # Staged and renamed rather than relinked in place, so the link never names
+  # nothing: a running Continuum re-stats it every tick. mv needs -h because the
+  # link resolves to a directory, and without it the rename lands *inside* that
+  # directory - leaving the link untouched and a stray Continuum.release in
+  # somebody's checkout. See docs/bridge.md § Claiming REAPER.
+  reaper_link="$HOME/Library/Application Support/REAPER/Scripts/Continuum"
+  held=$(readlink "$reaper_link" 2>/dev/null)
+  if [ -n "$held" ] && [ "$held" != "$main_tree" ] && ! watched "$held"; then
+    if ln -sfn "$main_tree" "$reaper_link.release" 2>/dev/null &&
+       mv -fh "$reaper_link.release" "$reaper_link" 2>/dev/null; then
+      printf '%s\trelease\t%s\n' "$(date -u +%FT%TZ)" "$held" >> "$root/session-end.log"
+    fi
+  fi
 fi
 
 # A link outlives its target either way round, and a dangling one is no use to

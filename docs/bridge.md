@@ -198,6 +198,14 @@ and symlinked into REAPER's `Scripts` directory, and that symlink names
 the main tree directly: reaching it through `Scripts/Continuum` would
 break the repair along with the link it repairs.
 
+A tree that outlives its session fails the other way. The link still
+resolves, so REAPER loads that Continuum and nothing looks wrong, while
+every other session's requests go to a spool nothing polls. The sweep in
+`session-env.sh` hands the link back at the next SessionStart, on the
+same test it uses to decide a tree is abandoned: a tree is being worked
+in exactly when some session directory under its slug records a live
+pid. The holder therefore keeps no record of its own.
+
 ## Hazards
 
 - **File-eval is an execution surface.** Anything that can write to

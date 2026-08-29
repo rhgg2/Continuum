@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — REAPER's link is released by the same liveness test that reclaims abandoned
+  session trees: a tree is held exactly when a session directory under its slug records a pid that
+  still names a claude process. No separate record of who claimed the link is kept, so the two ways
+  a claim outlives its session - the tree deleted along with it, and the tree surviving it - are
+  answered by one predicate at SessionStart.
+
 - **2026-08-29** — Ownership is settled at the fill, so the frame the cheat sheet opens on has no
   owner and any claimant may take from it. The sheet keeps its open-at-frame-start gate over
   dismissal, with ownership standing behind that gate rather than in its place. A capture the
