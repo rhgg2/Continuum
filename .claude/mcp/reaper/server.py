@@ -11,11 +11,16 @@ returns the rendered result. This closes the fake/real gap for REAPER-specific
 behaviour (playback stranding, take round-trips, API layout quirks) that
 harness tests can't observe. See docs/bridge.md for the model.
 
+One REAPER serves however many worktrees have sessions open, and the symlink it
+loads Continuum through decides which one is live. reaper_reload claims it; eval
+never does. See docs/bridge.md § Claiming REAPER.
+
 Sister servers: continuum_map, reaper_docs, continuum_tests. Same uv-script idiom.
 """
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
 from pathlib import Path
@@ -49,6 +54,11 @@ ArgModelBase.model_json_schema = classmethod(
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SPOOL = PROJECT_ROOT / ".claude" / "mcp" / "reaper" / "spool"
 
+# REAPER loads Continuum through this symlink, so it names the tree that is live.
+# Hardcoded rather than asked for: GetResourcePath() needs a running instance, and
+# the one moment this path matters most is when nothing is running to be asked.
+LINK = Path.home() / "Library/Application Support/REAPER/Scripts/Continuum"
+
 mcp = FastMCP("reaper")
 
 
@@ -68,6 +78,66 @@ def _sweep() -> None:
             p.unlink()
         except OSError:
             pass
+
+
+def _holder() -> Optional[Path]:
+    """The tree REAPER currently loads Continuum from, or None if the link is gone."""
+    try:
+        return Path(os.readlink(LINK))
+    except OSError:
+        return None
+
+
+def _claim() -> None:
+    """Point REAPER at this tree.
+
+    bridge.lua and the launcher both derive their spool dir from the path they were
+    loaded from and never resolve it, so the string they re-stat every tick is the
+    link itself. A repoint therefore moves the code the next launch reads and the
+    spool the running instance polls, together, on its next frame. rename over the
+    link makes that one step: there is no moment when the link is nowhere.
+
+    Only reload calls this. A claim on eval would mean any session could pull REAPER
+    out from under whoever is watching it, which is precisely the confusion separate
+    worktrees exist to end.
+
+    action.id is seeded from the outgoing tree when this one has none. It names an
+    action registered against a script path that never changes, so it is a fact about
+    the REAPER install rather than about a tree -- but the launcher only ever reads it
+    through the link, and without it a fresh worktree can restart a live Continuum and
+    never start a dead one.
+    """
+    held = _holder()
+    if held == PROJECT_ROOT:
+        return
+    mine = SPOOL / "action.id"
+    if held is not None and not mine.exists():
+        theirs = held / ".claude" / "mcp" / "reaper" / "spool" / "action.id"
+        if theirs.exists():
+            mine.write_text(theirs.read_text(encoding="utf-8"), encoding="utf-8")
+    staging = LINK.with_name(LINK.name + ".claim")
+    staging.unlink(missing_ok=True)
+    staging.symlink_to(PROJECT_ROOT)
+    os.replace(staging, LINK)
+
+
+def _why_silent() -> str:
+    """Why nothing answered, as far as the link can say without asking REAPER.
+
+    Under one worktree per session the commonest cause is that another tree holds
+    REAPER, which from here looks exactly like a dead instance: the requests land in
+    a spool nobody polls. Distinguishing the two is the whole reason this reads the
+    link rather than naming one cause and hoping."""
+    held = _holder()
+    if held is None:
+        return (f"{LINK} is missing, so REAPER has no Continuum to load at all. "
+                "See docs/bridge.md § Claiming REAPER.")
+    if held != PROJECT_ROOT:
+        return (f"REAPER is loaded from {held}, not this tree. Its bridge polls that "
+                "tree's spool and never sees these requests; reaper_reload claims it.")
+    return ("is Continuum running in REAPER? The bridge ticks from Continuum's defer "
+            "loop; if REAPER is open but Continuum isn't running, nothing polls the "
+            "spool dir.")
 
 
 def _spool(code: str, timeout_s: float) -> Optional[str]:
@@ -169,17 +239,18 @@ def reaper_eval(
     """
     out = _spool(_build_request(code, undo_label, depth), timeout_s)
     if out is None:
-        return (
-            f"no response after {timeout_s:g}s — is Continuum running in REAPER? "
-            "The bridge ticks from Continuum's defer loop; if REAPER is open but "
-            "Continuum isn't running, nothing polls the spool dir."
-        )
+        return f"no response after {timeout_s:g}s — {_why_silent()}"
     return out
 
 
 @mcp.tool(structured_output=False)
 def reaper_reload(timeout_s: float = 20) -> str:
     """Restart Continuum so edited source takes effect — or start it if it isn't running.
+
+    Claims REAPER for this tree: repoints the symlink it loads Continuum through, so
+    the instance that comes back is running this session's code. Any other session's
+    eval goes silent until it claims REAPER in turn. See docs/bridge.md § Claiming
+    REAPER.
 
     Returns when Continuum is up and its bridge answering, not merely when the restart
     was asked for. Live UI state is lost; the new instance re-reads the project.
@@ -188,6 +259,7 @@ def reaper_reload(timeout_s: float = 20) -> str:
     answers, and this returns a timeout naming that cause. Check REAPER's console.
     """
     started = time.monotonic()
+    _claim()
     ack = _spool("return reload()", 5)
     if ack is None:
         # Nothing is running to reload, so ask REAPER's startup launcher to start one.

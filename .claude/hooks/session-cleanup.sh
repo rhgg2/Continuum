@@ -32,6 +32,17 @@ case "$reason" in
   resume) exit 0 ;;
 esac
 
+# REAPER loads Continuum through one symlink, claimed by whichever session last
+# called reaper_reload (see .claude/mcp/reaper/server.py). Hand it back to the main
+# tree on the way out -- but only if this session still holds it, or the session
+# that happens to finish first takes REAPER from one still using it. A failed
+# relink costs nothing: the next reload claims the link regardless.
+link="$HOME/Library/Application Support/REAPER/Scripts/Continuum"
+main=$(dirname "$(git -C "$project" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+if [ "$(readlink "$link")" = "$cwd" ] && [ "$cwd" != "$main" ]; then
+  ln -sfn "$main" "$link"
+fi
+
 scratchpad="$root/$slug/${session_id}/scratchpad"
 git -C "$project" worktree remove --force "$scratchpad/spike" 2>/dev/null
 rm -rf "$root/$slug/${session_id}"

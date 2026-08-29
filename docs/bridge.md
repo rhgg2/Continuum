@@ -150,6 +150,39 @@ So `reaper_reload` means "a fresh Continuum is running when this
 returns": it restarts a live instance, or, when nothing answers, plants
 a marker and waits for the launcher's instance to come up.
 
+## Claiming REAPER
+
+One REAPER runs, and it loads Continuum through one symlink —
+`Scripts/Continuum`, pointed at a tree. Sessions work in separate
+worktrees, so that link decides which tree is live, and `reaper_reload`
+repoints it at the calling session's tree before asking for anything.
+Claiming is the reload; there is no second protocol to remember.
+
+The link does more than choose the code for the next launch. `bridge.lua`
+derives its spool directory from the path it was loaded from and never
+resolves it, so the string it re-stats each tick *is* the link — a
+running instance follows a repoint on its next frame, with nothing told
+and nothing restarted. The launcher works the same way. So one `rename`
+moves the code and the spool together, and there is no moment when the
+link points nowhere.
+
+What the other sessions get is silence, not error. Their requests land in
+their own tree's spool, which nothing polls: a session that does not hold
+the link cannot reach REAPER, and cannot reach it by accident either.
+`reaper_eval` reads the link when it times out, because "loaded from
+another tree" and "not running at all" are otherwise the same
+observation.
+
+`action.id` is the exception to per-tree spool state. It names an action
+registered against a script path that never changes, so it is a fact
+about the REAPER install; a claim seeds it from the outgoing tree when
+the incoming one has none. Without that, a fresh worktree could restart
+a live Continuum but never start a dead one.
+
+SessionEnd hands the link back to the main tree, and only if the ending
+session still holds it — otherwise whichever session finishes first
+takes REAPER from one still using it.
+
 ## Hazards
 
 - **File-eval is an execution surface.** Anything that can write to
@@ -159,8 +192,10 @@ a marker and waits for the launcher's instance to come up.
   nothing outside can kill one. The server's timeout ends the waiting,
   not the chunk.
 - **Continuum not running** is indistinguishable from a slow chunk:
-  the server times out with a message naming the likely cause. No
-  heartbeat file in v1 — add one only if the 5s wait proves annoying.
+  the server times out with a message naming the likely cause. It can
+  rule one cause in without asking REAPER anything — a link pointing at
+  another tree is visible from outside. No heartbeat file in v1 — add
+  one only if the 5s wait proves annoying.
 
 ## Testing seam
 

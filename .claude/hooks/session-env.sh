@@ -77,5 +77,12 @@ from the main tree. REAPER and the .map/lint hooks do not work; \`lua tests/run.
 with the scratchpad; if the spike has value beyond this session, suggest promotion to tests/spikes/ in the main tree."
 fi
 
+# The maps are generated rather than tracked, so a tree that has not held a
+# session yet -- a fresh clone, a new worktree -- has none, and map_query would
+# answer every question with silence rather than an error. Unconditional: the
+# mtime filter makes the warm case (~45ms) cheap enough not to need a branch,
+# and the cold one (~7s) is paid once per tree.
+(cd "$cwd" && python3 tools/map_regen.py --write --stale-only) >/dev/null 2>&1
+
 jq -n --arg ctx "$ctx" \
   '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'

@@ -1,8 +1,2 @@
-map/*.map linguist-generated=true
-map/*.map -diff
-
-map/specs/*.map linguist-generated=true
-map/specs/*.map -diff
-
 # Raw MIDI-blob fixtures (MIDI_GetAllEvts payloads) -- true binary.
 *.rawmidi binary

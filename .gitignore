@@ -1,7 +1,6 @@
 .DS_Store
 **/__pycache__/
 /.claude/mcp/reaper/spool/
-/.claude/precedent.json
 /.claude/test-baseline.json
 /.claude/agent-memory/
 /.claude/HANDOFF.md
@@ -9,3 +8,10 @@
 /plan/IMPL.md
 /plan/IMPL.diff
 /flow.html
+
+# Symbol maps: derived from the .lua corpus by tools/map_regen.py, rebuilt at
+# SessionStart and after every edit. 
+/map/
+
+# `claude --worktree` puts its worktrees here, inside the repo.
+/.claude/worktrees/

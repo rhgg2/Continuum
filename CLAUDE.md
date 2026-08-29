@@ -53,9 +53,11 @@ Docs, design docs and the decisions log share the register of
 
 ## Tooling
 
-`map/<module>.map` and `map/specs/<spec>.map` are symbol maps,
-regenerated on every edit. Besides direct reading, the maps can be
-queried via `mcp__continuum_map__map_query`. These are optimised for
+`map/<module>.map` and `map/specs/<spec>.map` are symbol maps. They
+are generated rather than tracked: built at session start in a tree
+that lacks them, and regenerated on every edit. Besides direct
+reading, the maps can be queried via `mcp__continuum_map__map_query`.
+These are optimised for
 cross-cutting queries you can put a name to; save the `Explore` agent
 for genuinely fuzzy and open-ended queries.
 

@@ -1,8 +1,28 @@
 {
-  "attribution" : {
-    "commit": "",
-    "pr": ""
+  "permissions": {
+    "allow": [
+      "mcp__continuum_map__map_query",
+      "mcp__continuum_tests__lua_test_run",
+      "mcp__continuum_tests__lua_probe",
+      "mcp__continuum_perturb__spec_perturb",
+      "mcp__reaper_docs__reaper_doc_lookup",
+      "mcp__reaper__reaper_eval",
+      "mcp__reaper__reaper_restart",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git log *)",
+      "Bash(python3 *)",
+      "Bash(lua *)",
+      "Skill(commit-finish)"
+    ]
   },
+  "enabledMcpjsonServers": [
+    "continuum_map",
+    "reaper_docs",
+    "continuum_tests",
+    "reaper",
+    "continuum_perturb"
+  ],
   "hooks": {
     "SessionStart": [
       {
