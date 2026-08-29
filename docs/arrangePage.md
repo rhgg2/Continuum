@@ -208,29 +208,23 @@ is otherwise stable — an added base joins at the end, and an edit
 leaves the rest where they are, so no row jumps under a rename.
 
 A rename lands when the field deactivates, not per keystroke, so a
-half-typed name merges nothing. Enter in a base field therefore
-commits that rename alone; the footer's Enter is gated on no item
-being active, read before the fields are drawn.
+half-typed name merges nothing. The Enter deactivating a base field is
+claimed by that field, so it commits the rename alone and the footer
+behind it reads a queue without it.
 
 ### Modal infrastructure
 
-A single popup id (`MODAL_TITLE`) backs all three modals (create,
-delete, prune). The `modal` module-local holds `{ kind, ... fields }`
-or nil; `renderModal()` dispatches by `kind`. Pinning `(trackIdx,
-slotIdx)` (or `(trackIdx, qnPos)` for create) into modal at open-time
-means the cursor moving mid-edit can't retarget the action.
+The page's four modals are `modalHost` kinds: the renderer registers a
+body for create and tidy, and opens delete and prune through the
+confirm kind. Pinning `(trackIdx, slotIdx)`, or `(trackIdx, qnPos)` for
+create, into the state at open time means the cursor moving mid-edit
+cannot retarget the action.
 
-`modalOpenAtFrameStart` is captured at the top of `renderBody` and
-fed into `focusState`: while a modal is open at frame start,
-`acceptCmds` is false so that the Enter committing the modal's
-InputText can't leak to root-scope bindings (notably quit) on the
-same frame. CloseCurrentPopup deactivates the InputText same-frame,
-flipping `IsAnyItemActive` to false before dispatch runs — the
-frame-start capture is what closes that hole.
-
-The popup carries `WindowFlags_NoNav` so ImGui's popup-nav doesn't
-steal arrow keys from the InputText. `chrome.pushChromeWindow` wraps
-Begin/End so the popup inherits parchment/chrome styles.
+An open modal owns the keyboard for the frame, so each body claims the
+keys it acts on under `modal` and `focusState` says nothing about
+modals — see `docs/keyQueue.md` § Ownership. The chord raising a modal
+has left the queue before that modal's body first draws, because the
+keychain walk claims a press before it invokes.
 
 ## Slot creation: Ctrl+Enter
 

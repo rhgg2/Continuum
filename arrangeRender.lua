@@ -14,8 +14,8 @@ local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
 --contract: arrangePage (the controller) owns the stack (am/av) and hands this renderer av only
-local cm, cmgr, chrome, gui, modalHost, av, help =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help
+local cm, cmgr, chrome, gui, modalHost, av, help, keyQueue =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help, (...).keyQueue
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -689,25 +689,32 @@ function openCreateModal(trackIdx, qnPos, beats)
   }
 end
 
--- Two-field create modal: name + length-in-beats. OK/Cancel keys are
--- gated on not-appearing so the Cmd+Enter that opened it doesn't self-dismiss.
+-- The keys the modals below commit and cancel on. A modal owns the queue, so each claim names
+-- it, and a press one reader claims is gone for the next. see docs/keyQueue.md § Claiming
+local function takeEnter()
+  local mods = keyQueue:frameMods()
+  return keyQueue:take(ImGui.Key_Enter, mods, 'modal')
+      or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal')
+end
+
+local function takeEscape()
+  return keyQueue:take(ImGui.Key_Escape, keyQueue:frameMods(), 'modal')
+end
+
+-- Two-field create modal: name + length-in-beats.
 modalHost:registerKind('createSlot', function(s, close)
-  local appearing = ImGui.IsWindowAppearing(ctx)
   ImGui.Text(ctx, 'Name')
-  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
+  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
   local rvN, nb = ImGui.InputText(ctx, '##createName', s.nameBuf)
   if rvN then s.nameBuf = nb end
   ImGui.Text(ctx, 'Length (beats)')
   local rvB, bb = ImGui.InputText(ctx, '##createBeats', s.beatsBuf)
   if rvB then s.beatsBuf = bb end
   local ok = ImGui.Button(ctx, 'OK')
-              or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                                  or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')
-              or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if ok then close(true, s.nameBuf, s.beatsBuf)
-  elseif cancel then close(false) end
+  if ok or takeEnter() then close(true, s.nameBuf, s.beatsBuf)
+  elseif cancel or takeEscape() then close(false) end
 end)
 
 -- The tidy editor. A row's dropdown assigns its slot to a base, and '(keep)' drops it from
@@ -747,7 +754,9 @@ local function drawBaseList(s)
     if ImGui.IsItemDeactivatedAfterEdit(ctx) and s.editing then
       edit = { rename = { from = base, to = s.editing.buf } }
     end
-    if ImGui.IsItemDeactivated(ctx) then s.editing = nil end
+    -- The Enter that deactivated the field belongs to it, so the footer below cannot commit
+    -- the tidy on the same press.
+    if ImGui.IsItemDeactivated(ctx) then s.editing = nil; takeEnter() end
     ImGui.SameLine(ctx)
     if ImGui.Button(ctx, '\xc3\x97##dropBase' .. i, dropW, 0) then edit = { drop = base } end
   end
@@ -758,9 +767,7 @@ local function drawBaseList(s)
   -- the Add button would read stale text; Enter still deactivates the field, watched for below.
   local _, newBuf = ImGui.InputTextWithHint(ctx, '##newBase', 'new base', s.newBase)
   s.newBase = newBuf
-  local entered = ImGui.IsItemDeactivated(ctx)
-              and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                   or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter))
+  local entered = ImGui.IsItemDeactivated(ctx) and takeEnter()
   ImGui.SameLine(ctx)
   if ImGui.Button(ctx, 'Add') or entered then edit = { add = s.newBase } end
 
@@ -782,10 +789,6 @@ local function drawTidyLabels()
 end
 
 modalHost:registerKind('tidyTrack', function(s, close)
-  local appearing = ImGui.IsWindowAppearing(ctx)
-  -- Read before the fields are drawn, so a base field still counts as active on the frame
-  -- whose Enter deactivates it: that Enter commits the rename, not the tidy.
-  local typing = ImGui.IsAnyItemActive(ctx)
   chrome.headingLabel('Bases')
   drawBaseList(s)
   ImGui.Separator(ctx)
@@ -847,13 +850,10 @@ modalHost:registerKind('tidyTrack', function(s, close)
   ImGui.SetCursorPosX(ctx, (ImGui.GetWindowWidth(ctx) - pairW) / 2)
 
   local ok = ImGui.Button(ctx, 'OK')
-              or (not appearing and not typing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                                  or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')
-              or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if ok then close(true, s.assignment)
-  elseif cancel then close(false) end
+  if ok or takeEnter() then close(true, s.assignment)
+  elseif cancel or takeEscape() then close(false) end
 end)
 
 -- Rename and delete are keyboard gestures on the cursor take; prune and tidy are the
@@ -1045,13 +1045,10 @@ function ar:statusSegments()
   return statusSegments
 end
 
---contract: acceptCmds=false if any item active, or a modal was open at frame start.
+--contract: acceptCmds=false if any item is active; a modal owns the queue instead of gating here.
 function ar:focusState()
   if not ctx then return { acceptCmds = false } end
-  return {
-    acceptCmds = not ImGui.IsAnyItemActive(ctx)
-                 and not modalHost:wasOpenAtFrameStart(),
-  }
+  return { acceptCmds = not ImGui.IsAnyItemActive(ctx) }
 end
 
 

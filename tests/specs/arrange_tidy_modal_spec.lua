@@ -1,19 +1,23 @@
--- The tidy editor's base list, drawn over a fake imgui: does the Add button see what stands
--- in the new-base field? ReaImGui hands a buffer back only on a frame its InputText returns
--- true, so a field flagged EnterReturnsTrue reads blank to every gesture but Enter.
+-- The tidy editor's modal body, drawn over a fake imgui. Two properties live here. The base
+-- list's Add path: ReaImGui hands a buffer back only on a frame its InputText returns true,
+-- so a field flagged EnterReturnsTrue reads blank to every gesture but Enter. And the keys the
+-- body claims: an Enter belongs to whichever reader acts on it -- the field the press
+-- deactivates, else the footer -- and a claimed press is gone (docs/keyQueue.md § Claiming).
 local t    = require('support')
 local util = require('util')
 
--- Constants (Key_*, *Flags_*, StyleVar_*, Col_*) resolve to disjoint numeric ids via the
--- metatable; the functions the modal body calls are set explicitly below.
-local fakeImGui = setmetatable({ Mod_None = 0 }, {
-  __index = function(tbl, k) local n = rawget(tbl, '##n') or 0; n = n + 1
-    rawset(tbl, '##n', n); rawset(tbl, k, n); return n end,
-})
+-- Key and modifier constants are explicit; the flags and style vars the body reads auto-vivify
+-- to distinct numbers, and every function it calls is set below.
+local fakeImGui = t.imgui()
 
--- What the user has typed into the new-base field, the button label reading as pressed,
--- and whether Enter went down in the field this frame.
-local typed, clicked, enter = '', nil, false
+-- The frame the body draws over: what stands in the new-base field, the button label reading
+-- as pressed, the field this frame's press deactivates and whether it was edited, the text a
+-- named field reads back, and the keys pressed with the modifiers held.
+local typed, clicked       = '', nil
+local deactivating, edited = nil, false
+local renaming             = nil    -- { label, text }: the field a test has typed into
+local pressed, frameMods   = {}, 0
+local lastItem             = nil    -- the item drawn most recently; the IsItem* reads answer for it
 
 for _, name in ipairs({ 'AlignTextToFramePadding', 'Text', 'TextDisabled', 'SameLine', 'Separator',
   'PushStyleVar', 'PopStyleVar', 'PushStyleColor', 'PopStyleColor', 'PushFont', 'PopFont',
@@ -26,21 +30,29 @@ fakeImGui.GetFrameHeightWithSpacing  = function() return 24 end
 fakeImGui.CalcTextSize               = function() return 20 end
 fakeImGui.GetWindowWidth             = function() return 400 end
 fakeImGui.IsWindowAppearing          = function() return false end
-fakeImGui.IsAnyItemActive            = function() return true end
--- Enter both deactivates the field it lands in and reads as pressed for the frame.
-fakeImGui.IsItemDeactivated          = function() return enter end
-fakeImGui.IsItemDeactivatedAfterEdit = function() return false end
-fakeImGui.IsKeyPressed               = function(_, key) return enter and key == fakeImGui.Key_Enter end
+-- A field deactivating this frame was active when the frame began, which is what a reader
+-- asking after a live field sees.
+fakeImGui.IsAnyItemActive            = function() return deactivating ~= nil end
+fakeImGui.GetKeyMods                 = function() return frameMods end
+fakeImGui.IsKeyPressed               = function(_, key) return pressed[key] == true end
+fakeImGui.IsItemDeactivated          = function() return deactivating ~= nil and lastItem == deactivating end
+fakeImGui.IsItemDeactivatedAfterEdit = function() return edited and lastItem == deactivating end
 fakeImGui.CreateFunctionFromEEL      = function() return {} end
 fakeImGui.Attach                     = function() end
 -- The row list is a child window; refusing it leaves the base list as the frame's whole content.
 fakeImGui.BeginChild = function() return false end
 fakeImGui.Button     = function(_, label) return label == clicked end
--- The rename fields sit untouched, so they return their own text and no change.
-fakeImGui.InputText  = function(_, _, value) return false, value end
-fakeImGui.InputTextWithHint = function(_, _, _, value, flags)
+-- A named rename field reads back the text typed into it; the others sit untouched.
+fakeImGui.InputText  = function(_, label, value)
+  lastItem = label
+  if renaming and renaming.label == label then return true, renaming.text end
+  return false, value
+end
+fakeImGui.InputTextWithHint = function(_, label, _, value, flags)
+  lastItem = label
   local onEnterOnly = flags == fakeImGui.InputTextFlags_EnterReturnsTrue
-  local committed   = onEnterOnly and enter or (not onEnterOnly and typed ~= value)
+  local committed   = onEnterOnly and pressed[fakeImGui.Key_Enter]
+                   or (not onEnterOnly and typed ~= value)
   if committed then return true, typed end
   return false, value
 end
@@ -57,6 +69,8 @@ local tidyItems = {
   { track = 'tr1', name = 'a', pos = 0, takeName = 'Bassline' },
   { track = 'tr1', name = 'b', pos = 4, takeName = 'Bassline (var 3)' },
 }
+
+local modalKeyQueue   -- the queue the body under test claims from; drawFrame fills it
 
 -- Build the tidy modal's body over a real av, and return it with the state openTidyModal seeds.
 local function mkTidyModal(harness)
@@ -82,19 +96,29 @@ local function mkTidyModal(harness)
     registerKind = function(_, kind, fn) kinds[kind] = fn end,
   }
   local help = util.instantiate('help', { chrome = fakeChrome, cmgr = h.cmgr })
+  modalKeyQueue = util.instantiate('keyQueue', {})
   util.instantiate('arrangeRender', { cm = h.cm, cmgr = h.cmgr, chrome = fakeChrome,
-                                      modalHost = modalHost, help = help, av = av })
+                                      modalHost = modalHost, help = help, av = av,
+                                      keyQueue = modalKeyQueue })
   local bases, assignment = av:seedTidy(0)
   return kinds.tidyTrack,
          { trackIdx = 0, bases = bases, assignment = assignment, newBase = '' }
 end
 
--- One frame of the modal, with the field holding `text` and `gesture` committing it.
-local function drawWith(harness, text, gesture)
-  local body, s = mkTidyModal(harness)
-  typed, clicked, enter = text, gesture == 'add' and 'Add' or nil, gesture == 'enter'
-  body(s, function() end)
-  return s
+-- One frame of the open modal, as the coordinator and modalHost run it: the fill names the
+-- frame's owner before anything draws, then the body draws over the state it holds, with a
+-- close recording what it was called with.
+local function drawFrame(body, s, opts)
+  opts = opts or {}
+  typed, clicked               = opts.typed or '', opts.clicked
+  deactivating, edited         = opts.deactivating, opts.edited or false
+  renaming                     = opts.renaming
+  pressed, frameMods, lastItem = {}, opts.mods or 0, nil
+  for _, key in ipairs(opts.pressed or {}) do pressed[key] = true end
+  modalKeyQueue:fill('modal')
+  local closed
+  body(s, function(invoke, ...) closed = { invoke, ... } end)
+  return closed
 end
 
 local function holds(bases, name)
@@ -106,26 +130,80 @@ return {
   {
     name = 'the Add button appends the base standing in the field',
     run = function(harness)
-      local s = drawWith(harness, 'Drums', 'add')
+      local body, s = mkTidyModal(harness)
+      drawFrame(body, s, { typed = 'Drums', clicked = 'Add' })
       t.truthy(holds(s.bases, 'Drums'), 'the typed base joined the list')
       t.eq(s.newBase, '', 'and the field is cleared for the next one')
     end,
   },
 
+  -- Enter in the new-base field adds the base, and that field claims the press, so the
+  -- footer below reads a queue without it.
   {
-    name = 'Enter in the field appends it too',
+    name = 'Enter in the new-base field appends it too, and leaves the tidy open',
     run = function(harness)
-      local s = drawWith(harness, 'Drums', 'enter')
+      local body, s = mkTidyModal(harness)
+      local closed = drawFrame(body, s, { typed = 'Drums', deactivating = '##newBase',
+                                          pressed = { fakeImGui.Key_Enter } })
       t.truthy(holds(s.bases, 'Drums'), 'the typed base joined the list')
       t.eq(s.newBase, '', 'and the field is cleared for the next one')
+      t.eq(closed, nil, 'the tidy did not commit behind it')
+      t.eq(modalKeyQueue:take(fakeImGui.Key_Enter, nil, 'modal'), nil, 'the field claimed the Enter')
     end,
   },
 
   {
     name = 'an untouched field adds nothing',
     run = function(harness)
-      local s = drawWith(harness, '', 'add')
+      local body, s = mkTidyModal(harness)
+      drawFrame(body, s, { clicked = 'Add' })
       t.eq(#s.bases, 1, 'only the seeded base is listed')
+    end,
+  },
+
+  -- With no field to consume it, the Enter is the footer's. A key the body acts on is gone
+  -- from the queue afterwards, one it does not act on is still there.
+  {
+    name = 'the footer Enter commits the assignment, and claims the press',
+    run = function(harness)
+      local body, s = mkTidyModal(harness)
+      local closed = drawFrame(body, s, { pressed = { fakeImGui.Key_Enter, fakeImGui.Key_Q } })
+      t.eq(closed[1], true, 'the modal closed, invoking its callback')
+      t.eq(closed[2], s.assignment, 'with the assignment the rows hold')
+      t.eq(modalKeyQueue:take(fakeImGui.Key_Enter, nil, 'modal'), nil, 'the Enter was claimed')
+      t.truthy(modalKeyQueue:take(fakeImGui.Key_Q, nil, 'modal'),
+               'a key the body does not act on is still in the queue')
+    end,
+  },
+
+  {
+    name = 'Escape drops the edit, and claims the press',
+    run = function(harness)
+      local body, s = mkTidyModal(harness)
+      local closed = drawFrame(body, s, { pressed = { fakeImGui.Key_Escape } })
+      t.eq(closed[1], false, 'the modal closed without invoking the callback')
+      t.eq(modalKeyQueue:take(fakeImGui.Key_Escape, nil, 'modal'), nil, 'the Escape was claimed')
+    end,
+  },
+
+  -- A rename lands when the field deactivates, and the Enter that deactivated it belongs to
+  -- that field. Two frames, as the user types and then commits.
+  {
+    name = 'Enter committing a base rename leaves the tidy open',
+    run = function(harness)
+      local body, s = mkTidyModal(harness)
+      local base = s.bases[1]
+      t.truthy(base, 'the track seeds a base to rename (precondition)')
+
+      drawFrame(body, s, { renaming = { label = '##base1', text = 'Drums' } })
+      t.eq(s.editing and s.editing.buf, 'Drums', 'the field holds the typed name (precondition)')
+
+      local closed = drawFrame(body, s, { deactivating = '##base1', edited = true,
+                                          pressed = { fakeImGui.Key_Enter } })
+      t.truthy(holds(s.bases, 'Drums'), 'the rename landed')
+      t.eq(holds(s.bases, base), false, 'and the name it replaced is gone')
+      t.eq(closed, nil, 'the tidy did not commit behind it')
+      t.eq(modalKeyQueue:take(fakeImGui.Key_Enter, nil, 'modal'), nil, 'the field claimed the Enter')
     end,
   },
 }

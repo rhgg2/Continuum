@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The tidy modal's Enter is claimed by the field it deactivates, over gating the
+  footer on `IsAnyItemActive`. One reader acts on the press and claims it, so the footer's claim
+  answers nil behind it, and the ordering the gate needed — reading the active item before the
+  fields draw — goes with the gate.
+
 - **2026-08-29** — A modal renderer's appearing-frame guard comes out in favour of the keychain
   walk's claim, over keeping both. The press that raised the modal has left the queue before the
   renderer first draws, so the guard has nothing left to block. The cost is that a modal raised by a

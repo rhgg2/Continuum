@@ -12,16 +12,35 @@ package.preload['imgui'] = function()
 end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
+-- The keys this frame reports as pressed and the modifiers held with them: the queue's fill
+-- reads both, and what a modal body can claim is what the fill put there. A live field and an
+-- open modal are flags the focusState tests set.
+local pressedKeys, frameMods    = {}, 0
+local anyItemActive, modalWasOpen = false, false
+fakeImGui.IsKeyPressed      = function(_, key) return pressedKeys[key] == true end
+fakeImGui.GetKeyMods        = function() return frameMods end
+fakeImGui.IsAnyItemActive   = function() return anyItemActive end
+-- The drawing a modal body does, reduced to what it reads back: widgets reporting nothing touched.
+fakeImGui.IsWindowAppearing = function() return false end
+fakeImGui.Button            = function() return false end
+fakeImGui.InputText         = function(_, _, buf) return false, buf end
+for _, name in ipairs({ 'Text', 'SameLine', 'SetKeyboardFocusHere' }) do
+  fakeImGui[name] = function() end
+end
+
 local util = require('util')
 
+-- Capturing fake: the last open state, so a test can drive the commit, and each registered
+-- renderer body, so a test can draw one.
 local fakeModalHost = {
   last                = nil,
+  kinds               = {},
   open                = function(self, state) self.last = state end,
   openPrompt          = function(self, state) self.last = state end,
   openConfirm         = function(self, state) self.last = state end,
-  registerKind        = function() end,
+  registerKind        = function(self, kind, body) self.kinds[kind] = body end,
   isOpen              = function() return false end,
-  wasOpenAtFrameStart = function() return false end,
+  wasOpenAtFrameStart = function() return modalWasOpen end,
 }
 -- captured.nav = switchPage target (dive seam); captured.props = item handed to the tracker facade.
 -- captured.facades holds the page's published facades so tests can drive arrange's own capabilities.
@@ -43,17 +62,51 @@ local fakeFacade = {
     return {}
   end,
 }
+local pageKeyQueue   -- the queue the page under test was built on; the modal tests fill it
+
 local function newArrangePage(cm, ds, cmgr, chrome, gui, help)
   captured.nav, captured.props, captured.dive, captured.facades = nil, nil, nil, {}
   fakeModalHost.last = nil
   cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
-  local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  -- Another spec's load may have cached its own imgui; rebind before the page's modules
+  -- require it, so the queue, the bodies and the tests all read one key table.
+  package.preload['imgui'] = function() return function(_) return fakeImGui end end
+  for _, m in ipairs({ 'imgui', 'painter', 'keyDispatch' }) do package.loaded[m] = nil end
+  pageKeyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
   help = help or util.instantiate('help',
-    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
+    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = pageKeyQueue })
   return util.instantiate('arrangePage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, help = help,
       eventMeta = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') }),
-      modalHost = fakeModalHost, facade = fakeFacade })
+      modalHost = fakeModalHost, facade = fakeFacade, keyQueue = pageKeyQueue })
+end
+
+-- A page over one track with the arrange scope pushed and the real bindings installed: the
+-- state createSlot opens from, and the chord the walk claims when it fires.
+local function arrangePageOnTrack(harness)
+  local h = harness.mk()
+  h.cm:set('project', 'arrangeBeatPerRow', 1)
+  h.reaper:setTrackName('tr1', 'Track 1')
+  h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                            pos = 0, len = 1, srcLen = 1, poolGuid = '{p1}' })
+  h.reaper:setProjectTracks{ 'tr1' }
+  local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, { ctx = {} })
+  h.cmgr:installManifest({ arrange = require('manifest').arrange }, fakeImGui)
+  h.cmgr:push('arrange')
+  return h, ap
+end
+
+-- One frame of an open modal as the coordinator and modalHost run it: the fill names the
+-- frame's owner before anything draws, then the body draws over the state the opener seeded,
+-- with a close recording what it was called with.
+local function drawModal(opts)
+  opts = opts or {}
+  pressedKeys, frameMods = {}, opts.mods or 0
+  for _, key in ipairs(opts.pressed or {}) do pressedKeys[key] = true end
+  pageKeyQueue:fill(opts.owner or 'modal')
+  local state, closed = fakeModalHost.last, nil
+  fakeModalHost.kinds[state.kind](state, function(invoke, ...) closed = { invoke, ... } end)
+  return closed
 end
 
 -- Two instances of slot 0, one row each at QN 0 and 1, with rows 0..1 banded.
@@ -1234,6 +1287,73 @@ return {
       table.sort(starts)
       t.eq(#starts, 2, 'the drop placed rather than replacing')
       t.eq(starts[2], 1, 'at the cursor row')
+    end,
+  },
+
+  ----- The create modal, claiming (docs/keyQueue.md § Claiming)
+
+  {
+    name = 'the create modal takes the Enter it commits on, and leaves the rest',
+    run = function(harness)
+      local h = arrangePageOnTrack(harness)
+      h.cmgr:invoke('createSlot')
+      t.eq(fakeModalHost.last.kind, 'createSlot', 'the modal opened (precondition)')
+
+      t.eq(drawModal{ pressed = { fakeImGui.Key_Q } }, nil,
+           'a key the body does not act on closes nothing')
+      t.truthy(pageKeyQueue:take(fakeImGui.Key_Q, nil, 'modal'),
+               'and is still in the queue after the draw')
+
+      local closed = drawModal{ pressed = { fakeImGui.Key_Enter } }
+      t.eq(closed[1], true, 'Enter commits')
+      t.eq(closed[2], fakeModalHost.last.nameBuf, 'with the name the field holds')
+      t.eq(closed[3], fakeModalHost.last.beatsBuf, 'and the length beside it')
+      t.eq(pageKeyQueue:take(fakeImGui.Key_Enter, nil, 'modal'), nil, 'the Enter was claimed')
+    end,
+  },
+
+  {
+    name = 'the create modal takes its Escape, and cancels',
+    run = function(harness)
+      local h = arrangePageOnTrack(harness)
+      h.cmgr:invoke('createSlot')
+      local closed = drawModal{ pressed = { fakeImGui.Key_Escape } }
+      t.eq(closed[1], false, 'Escape closes without invoking the callback')
+      t.eq(pageKeyQueue:take(fakeImGui.Key_Escape, nil, 'modal'), nil, 'and the press was claimed')
+    end,
+  },
+
+  -- The chord raising the modal cannot dismiss it: the walk claims Super+Enter before it
+  -- invokes, so the body's first draw -- on that same frame -- reads a queue without it.
+  {
+    name = 'the chord raising the create modal has left the queue before the body reads',
+    run = function(harness)
+      local h = arrangePageOnTrack(harness)
+      local keyDispatch = require('keyDispatch')
+      pressedKeys, frameMods = { [fakeImGui.Key_Enter] = true }, fakeImGui.Mod_Super
+      pageKeyQueue:fill(nil)
+      keyDispatch.dispatchKeys({ acceptCmds = true }, h.cmgr, pageKeyQueue)
+      t.eq(fakeModalHost.last and fakeModalHost.last.kind, 'createSlot',
+           'the chord opened the create modal')
+
+      local state, closed = fakeModalHost.last, nil
+      fakeModalHost.kinds[state.kind](state, function(invoke, ...) closed = { invoke, ... } end)
+      t.eq(closed, nil, 'and the modal it raised committed nothing on the same frame')
+    end,
+  },
+
+  -- Ownership settles at the fill, so a modal up at frame start holds the keyboard and every
+  -- claim the dispatcher makes answers nil. What acceptCmds still reports is a live field.
+  {
+    name = 'acceptCmds tracks the live field alone, not an open modal',
+    run = function(harness)
+      local h  = harness.mk()
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, { ctx = {} })
+      modalWasOpen, anyItemActive = true, false
+      t.eq(ap:focusState().acceptCmds, true, 'an open modal does not gate the page')
+      modalWasOpen, anyItemActive = false, true
+      t.eq(ap:focusState().acceptCmds, false, 'a live field does')
+      anyItemActive = false
     end,
   },
 
