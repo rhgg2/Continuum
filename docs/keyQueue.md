@@ -89,6 +89,10 @@ press is gone.**
    pattern editor captures inside the modal while the coordinator's own
    dispatch does not.
 
+1. Ownership governs the keyboard alone. A reader taking the mouse keeps
+   its own guard, as the cheat sheet's page-side mouse passes do
+   (`docs/help.md § Input while open`).
+
 ## Hold and repeat
 
 1. A key's state is not a press. `keyQueue:held(key)` and

@@ -30,24 +30,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 help: the cheat sheet claims its keys from the keyQueue (design/keyQueue.md § Ownership)
 - 2026-08-29 keyQueue: the fill claims a live text field's keys (design/keyQueue.md § Ownership)
 - 2026-08-29 gridPane: note entry takes its presses from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 keyDispatch: the walk takes its press, and consumed goes (design/keyQueue.md § Claiming)
-- 2026-08-29 keyDispatch: prefix and letter capture take from the keyQueue (phase 2)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The cheat sheet claims under `help`** — dismissal takes any press,
-   chord capture takes the chord it binds, the conflict prompt takes
-   Enter and Escape, and edit mode takes its Escape. The coordinator's
-   `help:isOpen()` override in `dispatch` goes, with the two key-side
-   `wasOpenAtFrameStart` guards: tracker's `handleKeys`, and the sampler
-   browser's arrows, which take from the queue instead. The three
-   mouse-side guards stay.
 
 1. **The modal claims under `modal`** — `modalHost`'s confirm renderer
    takes Y, N, Enter and Escape; its prompt renderer takes Enter,

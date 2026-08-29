@@ -29,7 +29,9 @@ local fakeFacade = {
   get          = function() return {} end,
 }
 local function newWiringPage(cm, ds, cmgr, chrome, gui, help)
-  help = help or util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
+  local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  help = help or util.instantiate('help',
+    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
   return util.instantiate('wiringPage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, help = help,
       modalHost = fakeModalHost, facade = fakeFacade })

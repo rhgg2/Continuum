@@ -1811,7 +1811,7 @@ function tr:renderBody(_, w, h, dispatch)
     if mx >= ox and mx < ox + gridW and my >= oy and my < oy + h then stripExitReq = true end
   end
   if dispatch then dispatch(self:focusState()) end
-  if not help:wasOpenAtFrameStart() then gridPane:handleKeys() end
+  gridPane:handleKeys()
   if stripExitReq then   -- exit after this frame's dispatch saw us focused; prune a husk left empty
     if stripHost then tv:pruneEmptyRegion(stripHost) end
     stripFocus, stripExitReq, stripSnapshot, stripHost = false, false, nil, nil

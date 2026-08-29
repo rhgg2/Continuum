@@ -47,7 +47,9 @@ local function newArrangePage(cm, ds, cmgr, chrome, gui, help)
   captured.nav, captured.props, captured.dive, captured.facades = nil, nil, nil, {}
   fakeModalHost.last = nil
   cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
-  help = help or util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
+  local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  help = help or util.instantiate('help',
+    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
   return util.instantiate('arrangePage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, help = help,
       eventMeta = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') }),

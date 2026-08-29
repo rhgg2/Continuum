@@ -32,10 +32,11 @@ local chrome = util.instantiate('chrome',
 local toolbar   = chrome.makeToolbar()     -- one shared toolbar; renders the active page's row
 local statusBar = chrome.makeStatusBar()   -- one shared status bar; renders the active page's cells
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
-local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
+local keyQueue  = util.instantiate('keyQueue', { ctx = ctx })
+local help      = util.instantiate('help',
+  { ctx = ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
 local menu      = util.instantiate('menu', { cmgr = cmgr })
 local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
-local keyQueue  = util.instantiate('keyQueue', { ctx = ctx })
 -- Live-REAPER eval bridge — assigned after coord (its env captures coord). See docs/bridge.md.
 local bridge
 
@@ -110,12 +111,9 @@ end
 -- measures as one chrome.toolbar list (every page records at least this rect).
 local switcherSeg = { id = 'switcher', render = drawSwitcher }
 
+-- An owner named at the fill holds the whole keyboard, so the walk's claims answer
+-- nil behind an open cheat-sheet or modal. See docs/keyQueue.md § Ownership.
 local function dispatch(state)
-  -- While the cheat-sheet is up, all dispatch is suppressed; help:draw closes
-  -- on any key or an off-box click, swallowing the gesture.
-  if help:isOpen() then
-    state = { suppressKbd = true, pageSuppressed = true, acceptCmds = false }
-  end
   keyDispatch.dispatchKeys(state, cmgr, keyQueue)
 end
 

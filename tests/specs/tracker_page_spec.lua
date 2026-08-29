@@ -205,7 +205,9 @@ end
 local function newTrackerPage(cm, ds, cmgr, chrome, gui, help)
   fakeModalHost:reset()
   resetArrange()
-  help = help or util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
+  local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  help = help or util.instantiate('help',
+    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
   local lib  = util.instantiate('library',
     { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
   return util.instantiate('trackerPage',

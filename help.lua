@@ -5,18 +5,20 @@
 --invariant: anchors are frame-scoped — cleared each frame, repopulated by render code only while open
 --invariant: edit state (editing/capturing/conflict) resets on overlay close or page change
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
+--contract: every key the sheet acts on is claimed under 'help' -- see docs/keyQueue.md § Ownership
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
 
-local ctx    = (...).ctx
-local chrome = (...).chrome
-local cmgr   = (...).cmgr
+local ctx      = (...).ctx
+local chrome   = (...).chrome
+local cmgr     = (...).cmgr
+local keyQueue = (...).keyQueue
 
 local pages   = {}    -- pageName → placements
 local anchors = {}    -- key → { x, y, w, h }
 local current = nil
 local open    = false
-local openAtStart = false   -- open as of frame start; gates dismissal + page input swallow
+local openAtStart = false   -- open as of frame start; gates dismissal + the pages' mouse guards
 
 local PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8
 local PIN_GAP, WIN_MARGIN, BOX_R = 4, 2, 4   -- pin drop below segment; window-edge inset; box corner radius
@@ -358,33 +360,13 @@ local function placeFlow(flows)
   end
 end
 
-local dismissKeyList
-local function buildDismissKeys()
-  local keys = {}
-  local function span(from, to) for key = from, to do util.add(keys, key) end end
-  span(ImGui.Key_A, ImGui.Key_Z);           span(ImGui.Key_0, ImGui.Key_9)
-  span(ImGui.Key_Keypad0, ImGui.Key_Keypad9); span(ImGui.Key_F1, ImGui.Key_F12)
-  for _, key in ipairs {
-    ImGui.Key_Enter, ImGui.Key_KeypadEnter, ImGui.Key_Escape, ImGui.Key_Tab,
-    ImGui.Key_Backspace, ImGui.Key_Delete, ImGui.Key_Space, ImGui.Key_Insert,
-    ImGui.Key_UpArrow, ImGui.Key_DownArrow, ImGui.Key_LeftArrow, ImGui.Key_RightArrow,
-    ImGui.Key_Home, ImGui.Key_End, ImGui.Key_PageUp, ImGui.Key_PageDown,
-    ImGui.Key_Minus, ImGui.Key_KeypadSubtract, ImGui.Key_Equal, ImGui.Key_Comma,
-    ImGui.Key_Period, ImGui.Key_Semicolon, ImGui.Key_Apostrophe, ImGui.Key_Slash,
-    ImGui.Key_LeftBracket, ImGui.Key_RightBracket, ImGui.Key_GraveAccent, ImGui.Key_Backslash,
-  } do util.add(keys, key) end
-  return keys
-end
-
--- Char queue catches punctuation/layout-specific keys; the explicit list covers
--- the non-printables (and alphanumerics, since the macOS char queue drops some).
-local function anyKeyPressed()
-  if (ImGui.GetInputQueueCharacter(ctx, 0)) then return true end
-  dismissKeyList = dismissKeyList or buildDismissKeys()
-  for _, key in ipairs(dismissKeyList) do
-    if ImGui.IsKeyPressed(ctx, key) then return true end
-  end
-  return false
+-- Claims any press; the char queue also catches a layout key the shim lacks
+-- a constant for. See docs/help.md § Input while open.
+local function claimAnyPress()
+  if not openAtStart then return false end
+  if keyQueue:takeAny('help') then return true end
+  local hasChar = ImGui.GetInputQueueCharacter(ctx, 0)
+  return hasChar
 end
 
 local function insideAnyBox(mouseX, mouseY)
@@ -464,15 +446,14 @@ local function reassign()
 end
 
 local function pollCapture()
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then capturing, conflict = nil, nil; return end
-  dismissKeyList = dismissKeyList or buildDismissKeys()
-  local mods = ImGui.GetKeyMods(ctx)
-  for _, key in ipairs(dismissKeyList) do
-    if key ~= ImGui.Key_Escape and ImGui.IsKeyPressed(ctx, key) then
-      commitCapture(buildSpec(key, mods))
-      return
-    end
-  end
+  local press = keyQueue:takeAny('help')
+  if not press then return end
+  if press.key == ImGui.Key_Escape then capturing, conflict = nil, nil; return end
+  local spec = buildSpec(press.key, press.mods)
+  -- A binding persists as its token, so a key with no token name is no chord: hand
+  -- that press back, and stay armed for one that is.
+  if not cmgr:tokenForSpec(spec, ImGui) then return keyQueue:restore(press) end
+  commitCapture(spec)
 end
 
 -- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
@@ -489,9 +470,10 @@ end
 -- Warn-phase input: Esc/Cancel abandons untouched, Enter or the Reassign button
 -- commits. Off-button clicks are swallowed (modal), never dismissing the sheet.
 local function handleConflict()
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then conflict = nil; return end
-  local accept = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-              or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  local mods = keyQueue:frameMods()
+  if keyQueue:take(ImGui.Key_Escape, mods, 'help') then conflict = nil; return end
+  local accept = keyQueue:take(ImGui.Key_Enter, mods, 'help') ~= nil
+              or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'help') ~= nil
   if not accept and ImGui.IsMouseClicked(ctx, 0) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
     for _, hit in ipairs(conflictHits) do
@@ -508,7 +490,7 @@ end
 -- The refusal prompt is an acknowledgement: any key or click clears it, and the
 -- gesture is swallowed rather than dismissing the sheet.
 local function handleRefusal()
-  if ImGui.IsMouseClicked(ctx, 0) or anyKeyPressed() then conflict = nil end
+  if ImGui.IsMouseClicked(ctx, 0) or claimAnyPress() then conflict = nil end
 end
 
 local function handleClicks()
@@ -586,11 +568,11 @@ function help:draw()
     handleRefusal()
   elseif capturing then
     pollCapture()
-  elseif editing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  elseif editing and keyQueue:take(ImGui.Key_Escape, keyQueue:frameMods(), 'help') then
     editing = nil
   else
     handleClicks()
-    if openAtStart and not editing and anyKeyPressed() then open = false end
+    if not editing and claimAnyPress() then open = false end
   end
 end
 

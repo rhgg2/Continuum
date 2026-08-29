@@ -20,8 +20,8 @@ local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 local util    = require 'util'
 
-local cm, ds, cmgr, chrome, gui, sv, help =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).sv, (...).help
+local cm, ds, cmgr, chrome, gui, sv, help, keyQueue =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).sv, (...).help, (...).keyQueue
 
 local N_SLOTS = 64
 
@@ -195,18 +195,14 @@ local function drawFiles(folder, root)
     selIdx = 1
   end
 
-  -- These arrows are read straight from the key stream, bypassing the dispatcher
-  -- coord suppresses, so the cheat-sheet gates them. See docs/help.md § Input while open.
-  if not help:wasOpenAtFrameStart() then
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow)
-        and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
-      local next = items[math.min((selIdx or 0) + 1, #items)]
-      if next then sv:setBrowserItem(next.path, next.isFolder); selMoved = true end
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)
-        and ImGui.GetKeyMods(ctx) == ImGui.Mod_None then
-      local prev = items[math.max((selIdx or #items + 1) - 1, 1)]
-      if prev then sv:setBrowserItem(prev.path, prev.isFolder); selMoved = true end
-    end
+  -- These arrows bypass the dispatcher, so they claim what they act on as it does,
+  -- and answer nil to a frame an owner holds. See docs/keyQueue.md § Ownership.
+  if keyQueue:take(ImGui.Key_DownArrow) then
+    local next = items[math.min((selIdx or 0) + 1, #items)]
+    if next then sv:setBrowserItem(next.path, next.isFolder); selMoved = true end
+  elseif keyQueue:take(ImGui.Key_UpArrow) then
+    local prev = items[math.max((selIdx or #items + 1) - 1, 1)]
+    if prev then sv:setBrowserItem(prev.path, prev.isFolder); selMoved = true end
   end
 
   sel = sv:getBrowserPath()

@@ -18,9 +18,12 @@ local fakeFacade = {
   get = function() return { currentTake = function() return nil end } end,
 }
 local function newSamplePage(cm, cmgr, chrome, gui, help)
-  help = help or util.instantiate('help', { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr })
+  local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  help = help or util.instantiate('help',
+    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
   return util.instantiate('samplePage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, help = help, facade = fakeFacade })
+    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, help = help, facade = fakeFacade,
+      keyQueue = keyQueue })
 end
 
 return {

@@ -67,8 +67,9 @@ other.
    out of view for the length of the drag.
 
 1. `dispatch`, threaded into `renderBody`, is the route from keys to
-   the command manager. It suppresses everything while the cheat-sheet
-   is open — see `docs/help.md § Input while open`.
+   the command manager, and carries the page's own focus state. Behind
+   an owner its claims answer nil, so no command fires — see
+   `docs/keyQueue.md § Ownership`.
 
 ## Boot warm-up
 

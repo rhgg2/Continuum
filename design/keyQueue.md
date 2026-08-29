@@ -32,9 +32,6 @@ remains is the readers' side.
    start, an open modal, an open picker, and a status cell holding an
    open field. Each passes its name; every other reader omits one.
 
-1. Ownership governs the keyboard alone. The cheat sheet keeps its own
-   guards over the readers that take the mouse.
-
 ## Hold and repeat
 
 Landed: see `docs/keyQueue.md` § Hold and repeat.
@@ -55,9 +52,8 @@ Landed: see `docs/keyQueue.md` § Hold and repeat.
    reader is asked. They are guards on a reader, and a press a guard
    suppresses stays in the queue for the reader after it.
 
-1. The character queue remains the route for text. The cheat sheet's
-   dismissal and the fx strip's type-to-open read it
-   (`docs/help.md`); note entry reads the key stream.
+1. The character queue remains the route for text. The fx strip's
+   type-to-open reads it; note entry reads the key stream.
 
 ## Open
 

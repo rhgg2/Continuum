@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — Ownership is settled at the fill, so the frame the cheat sheet opens on has no
+  owner and any claimant may take from it. The sheet keeps its open-at-frame-start gate over
+  dismissal, with ownership standing behind that gate rather than in its place. A capture the
+  command manager has no binding token for is no chord: that press goes back to the queue, and
+  capture stays armed.
+
 - **2026-08-29** — The fill's claim on a live text field's keys is off while one of the four owners
   holds the frame. An owner takes the whole keyboard, a field it hosts included: the picker's filter
   is a live field, and an unconditional claim would take the arrows its cursor reads.

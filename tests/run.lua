@@ -222,6 +222,7 @@ local specs = {
   'coordinator_spec',
   'keyDispatch_spec',
   'gridPane_note_entry_spec',
+  'help_input_spec',
   'masterMix_spec',
   'dag_validate_spec',
   'dag_srcset_spec',

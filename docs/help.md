@@ -91,22 +91,24 @@ nothing; any key or click clears the prompt.
 
 ## Input while open
 
-F1 is a root-scope command, reachable on every page, so it toggles the
+F1 is a root-scope command, reachable on every page, so it opens the
 overlay regardless of which page-scoped bindings are live. While open the
 overlay is dismiss-on-interaction: **any** key, or a mouse-down off the
 callout boxes, closes it — and that gesture is *swallowed*, never reaching
 the page underneath.
 
-Swallowing spans two input surfaces that fire independently: the
-coordinator suppresses command dispatch (`acceptCmds = false`), and each
-page skips the passes that read the mouse or key stream directly, bypassing
-dispatch, while `help:wasOpenAtFrameStart()` — the tracker's grid mouse and
-note entry, arrange's grid mouse, the wiring canvas's whole input phase, and
-the sampler browser's arrows. Dismissal is gated on the open-at-frame-start
-flag so the F1 press that opens the sheet isn't also read as the keypress
-that closes it. Toolbar and param-palette ImGui widgets behind the overlay
-are *not* blocked — true modality there would need a popup window; the dim
-plus the swallowed grid/keyboard is the deliberate trade.
+The keyboard is swallowed by ownership: the sheet owns the key queue for
+every frame it was open at the start of (`docs/keyQueue.md § Ownership`),
+so a press reaches no other reader, and dismissal claims the one it closes
+on. The press that opened the sheet arrived on a frame no owner held, and
+so cannot also close it. F1 closes the sheet as any other key does, the
+dispatcher having no claim on it while the sheet owns the queue.
+
+The mouse is swallowed per page: the tracker's grid, arrange's grid and the
+wiring canvas skip their mouse passes while `help:wasOpenAtFrameStart()`.
+Toolbar and param-palette ImGui widgets behind the overlay are *not*
+blocked — true modality there would need a popup window; the dim plus the
+swallowed grid and keyboard is the deliberate trade.
 
 The overlay won't open over a modal dialog (it would cover its own
 buttons), and won't open on a page that declared no manifest.
@@ -122,8 +124,10 @@ clicking a keycap body re-captures it (replace). Clicking another row's
 keycap just moves the focus, so rebinding several commands costs one click
 each rather than a focus/exit dance.
 
-Capture reads the next non-modifier key plus the live modifier mask
-(`ImGui.GetKeyMods`) and turns it into a `cmgr` keyspec. Esc cancels
+Capture claims the next press and turns it, with the modifier mask that
+press carries, into a `cmgr` keyspec. A key the command manager has no
+binding token for is no chord: that press goes back to the queue, and
+capture stays armed. Esc cancels
 capture (leaving the row focused); Esc again leaves edit mode. While a row
 is focused or capturing, the dismiss-on-key path is suspended — otherwise
 the very keys being captured would close the sheet.
