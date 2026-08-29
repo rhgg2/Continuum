@@ -5,15 +5,12 @@
 
 ## Phases
 
-1. **Phase 1 — The queue** (§ The queue, § The fill, § Hold and repeat)
-   — the module, the enumeration off the shim, the fill from the top of
-   `coordinator.frame`, `take`/`takeAny`/`held`/`mods`, and the spec
-   that pins them. Nothing drains it yet, so the frame behaves as
-   before.
+1. **Phase 1 — The queue** — landed 2026-08-29, 1 commit. The model it
+   built now sits in `docs/keyQueue.md`.
 2. **Phase 2 — The dispatcher** (§ Claiming) — `keyDispatch` takes from
    the queue for prefix capture, the letter sink and the keychain walk.
    `consumed` and the claim half of `commandHeld` go; `held` serves the
-   chord half.
+   chord half.  ← in flight
 3. **Phase 3 — Note entry** (§ Claiming, § Order) — `gridPane`'s edit-key
    scan takes what it enters, and the `commandHeld` line patching the
    menu's letter fall-through comes out.
@@ -41,4 +38,26 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+- **The queue reaches keyDispatch, and the two captures take.**
+  `keyQueue:frameMods()` returns the mask the fill stamped, and
+  `dispatchKeys(state, cmgr, ctx, keyQueue)` takes the queue as a
+  fourth argument — passed by `coordinator.dispatch`, and by the mini
+  pattern editor, which receives the host's instance at its
+  construction site. Prefix capture takes its digits, `/` and Escape;
+  the letter sink takes its A–Z. Each tests its tolerated mask against
+  `frameMods()` as it does now, then takes at that exact mask.
+  `commandHeld` still carries the captured letter, since note entry
+  still reads ImGui until phase 3. `keyDispatch_spec` drives a real
+  keyQueue filled against its fake ImGui.
+
+- **The keychain walk takes, and `consumed` goes.** The walk takes the
+  press that selects a command before it invokes, so a command raising
+  a modal or a picker hands it a queue the press has left; a command
+  returning false hands the entry back with `keyQueue:restore(entry)`,
+  which returns it to the head. `keyQueue:held` builds the chord half
+  of `commandHeld`, which stays the whole of the return. The mini
+  pattern editor's Esc/Enter fallback takes those keys instead of
+  gating on `consumed`; its `swallowInput` and `pendingAction` wait for
+  phase 5.
 

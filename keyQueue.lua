@@ -1,5 +1,5 @@
 -- One frame of key presses, filled before any drawing and drained by claims.
--- See design/keyQueue.md.
+-- See docs/keyQueue.md.
 
 --invariant: one keyQueue per coordinator; each fill replaces the last frame's entries
 --shape: entry = { key: imguiKey, mods: modMask, repeated: bool }
@@ -12,7 +12,7 @@ local util  = require 'util'
 
 local ctx = (...).ctx
 
--- The readers that take the whole keyboard for a frame. See design/keyQueue.md § Ownership.
+-- The readers that take the whole keyboard for a frame. See docs/keyQueue.md § Ownership.
 local OWNERS = { help = true, modal = true, picker = true, statusEdit = true }
 
 -- Every key constant the shim carries, ascending, less the mouse keys and the modifier

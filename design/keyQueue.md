@@ -1,49 +1,15 @@
 # keyQueue — design
 
-> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 1
-> (the queue)
+> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 2
+> (the dispatcher)
 
 **Every key press Continuum acts on is read once, at the top of the
 frame, into a queue; a reader claims what it acts on, and a claimed
 press is gone.**
 
-## The queue
+## The queue, and the fill
 
-1. An **entry** is one key press: `{ key, mods, repeated }` — the ImGui
-   key constant, the modifier mask as the fill read it, and whether
-   ImGui reports the press as an autorepeat.
-
-1. **keyQueue** is a single instance, built in `coordinator.lua` and
-   threaded into the pages beside `chrome` and `modalHost`. It holds
-   one frame's entries, and each frame's fill replaces the last.
-
-1. A **claim** removes an entry, and `keyQueue:take(key, mods)` is the
-   way to make one. It returns the entry, or nil where the key is
-   absent, already claimed, or carries modifiers other than `mods`.
-
-1. An omitted `mods` means `Mod_None`, so a reader acting on a chord
-   names the mask it acts on.
-
-1. `keyQueue:takeAny()` claims and returns the first unclaimed entry,
-   for a reader that acts on any press at all.
-
-## The fill
-
-1. The fill runs at the top of `coordinator.frame`, before any
-   drawing, so the state it reads is the state that held when the
-   presses arrived.
-
-1. The keys it enumerates are read off the `imgui` shim table by name
-   once at load — the shim is an ordinary table under a metatable that
-   only guards missing fields — less the mouse keys and the modifier
-   keys.
-
-1. Each frame the fill asks ImGui for every enumerated key and pushes
-   an entry per press. It asks for a press-or-repeat first, and only a
-   positive answer costs the second call that separates the two.
-
-1. The modifier mask is read once and stamped on every entry of that
-   frame.
+Landed: see `docs/keyQueue.md` § The queue and § The fill.
 
 ## Claiming
 
@@ -60,17 +26,12 @@ press is gone.**
 
 ## Ownership
 
-1. A reader that takes the whole keyboard **owns** the queue for the
-   frame. Ownership is settled at the fill, and `take` and `takeAny`
-   return nil to every other reader while it holds.
+The mechanism landed: see `docs/keyQueue.md` § Ownership. What remains
+is the readers' side.
 
-1. Four readers own, in this precedence: the cheat sheet while it was
-   open at frame start, an open modal, an open picker, and a status
-   cell holding an open field.
-
-1. A claim names its claimant: `take` and `takeAny` take one as a last
-   argument, which the four owners pass and every other reader omits. A
-   name outside the four raises.
+1. The four owners are the cheat sheet while it was open at frame
+   start, an open modal, an open picker, and a status cell holding an
+   open field. Each passes its name; every other reader omits one.
 
 1. Unowned is the ordinary case. A text field active at the end of the
    previous frame then claims the presses a field consumes — the
@@ -82,15 +43,7 @@ press is gone.**
 
 ## Hold and repeat
 
-1. A key's state is not a press. `keyQueue:held(key)` and
-   `keyQueue:mods()` read ImGui live, and answer the same whoever owns
-   the queue.
-
-1. The chord gate, the commit on shift release, and the modifiers a
-   mouse gesture reads are all state questions, and use those two.
-
-1. Autorepeat rides on the entry, so a reader wanting fresh strikes
-   only tests `repeated`.
+Landed: see `docs/keyQueue.md` § Hold and repeat.
 
 ## Order
 
