@@ -6,6 +6,7 @@
 --contract: take/takeAny remove what they return, so a claimed press is gone for every later reader
 --contract: an owner named at the fill holds the frame; take/takeAny answer nil to others
 --contract: held/mods read ImGui live, and answer the same whoever owns the queue
+--contract: frameMods is the mask the fill stamped; a reader judges a chord by it, then takes at it
 
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
@@ -35,7 +36,7 @@ do
   table.sort(KEYS)
 end
 
-local entries, owner = {}, nil
+local entries, owner, frameMask = {}, nil, 0
 
 -- A name is one of the four owners or nobody; anything else is a typo, which would
 -- otherwise read as a key that quietly does nothing.
@@ -57,6 +58,7 @@ local keyQueue = {}
 function keyQueue:fill(ownerNow)
   entries, owner = {}, checked(ownerNow)
   local mods = ImGui.GetKeyMods(ctx)
+  frameMask   = mods
   for _, key in ipairs(KEYS) do
     -- Press-or-repeat first: only a key that answered pays the call that separates the two.
     if ImGui.IsKeyPressed(ctx, key, true) then
@@ -81,7 +83,8 @@ function keyQueue:takeAny(claimant)
   return table.remove(entries, 1)
 end
 
-function keyQueue:held(key) return ImGui.IsKeyDown(ctx, key) end
-function keyQueue:mods()    return ImGui.GetKeyMods(ctx)     end
+function keyQueue:held(key)  return ImGui.IsKeyDown(ctx, key) end
+function keyQueue:mods()     return ImGui.GetKeyMods(ctx)     end
+function keyQueue:frameMods() return frameMask                end
 
 return keyQueue

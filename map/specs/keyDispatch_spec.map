@@ -1,6 +1,6 @@
-@spec keyDispatch_spec  src=tests/specs/keyDispatch_spec.lua  loc=317  cases=14
-@exercises commandManager (cmgr)
-@surface   cmgr:registerAll, cmgr:bind, cmgr:scope, cmgr:push, cmgr:pop, cmgr:letterCapture, cmgr:beginPrefix, cmgr:isPrefixActive, cmgr:finishPrefix
+@spec keyDispatch_spec  src=tests/specs/keyDispatch_spec.lua  loc=386  cases=17
+@exercises keyQueue (kq), commandManager (cmgr), keyDispatch (kd)
+@surface   kq:fill, cmgr:registerAll, cmgr:bind, kd.dispatchKeys, cmgr:scope, cmgr:push, cmgr:pop, cmgr:letterCapture, cmgr:beginPrefix, cmgr:isPrefixActive, cmgr:finishPrefix, kq:take
 
 # Intent
   keyDispatch: the prefix-capture + keychain walk extracted from coordinator
@@ -8,107 +8,127 @@
   mini modal reuses, so pin the dispatch contract directly: consume/first-hit,
   commandHeld hold-tracking, the acceptCmds gate, prefix capture + finish,
   false-declines, and the pageSuppressed root narrowing.
+  
+  The dispatcher is handed a real keyQueue, filled from the same fake ImGui each
+  time a test sets the key state (see docs/keyQueue.md). The two captures take
+  from it, so the cases below also pin what a capture leaves behind, and which
+  dispatch may capture at all while one of the four owners holds the frame.
 
 # Helpers
-  @fn setKeys(opts)  @ 23-27
-      -- A pressed key is also down; `down` alone models a hold with no fresh press.
-  @fn loadKD()  @ 33-38
+  @fn setKeys(opts)  @ 33-38
+      -- A pressed key is also down; `down` alone models a hold with no fresh press. `owner`
+      -- names one of the four keyboard owners the fill records, or nobody.
+  @fn loadKD()  @ 45-52
       -- Rebind imgui to ours before loading keyDispatch: earlier specs' module-load
       -- preloads cache a different fake, so nil both and re-require (curveEditor idiom).
-  @fn freshCmgr()  @ 42-56
+      -- keyQueue enumerates the shim it finds, so instantiate it under the same rebind.
+  @fn freshCmgr()  @ 56-70
       -- Fresh real cmgr with commands bound to bare (Mod_None) keys; the returned log
       -- records which bodies ran and the last prefix arg one received.
 
 # Cases
-  @case 'a scope capturing letters takes them ahead of the keychain walk'  [pure]  @ 64-87
-  @case 'a captured letter is reported held, so the same frame\'s note entry skips it'  [pure]  @ 94-108
-  @case 'a slash during prefix entry appends and opens the walk; a digit takes it back'  [pure]  @ 116-140
-  @case 'a letter after the slash walks, and leaves the prefix for the leaf to freeze'  [pure]  @ 147-168
-  @case 'a pressed bound key fires its command, consumes, and reports as held'  [pure]  @ 172-181
-  @case 'acceptCmds=false short-circuits: nothing dispatched'  [pure]  @ 185-193
-  @case 'a held (not freshly pressed) bound key reports in commandHeld but does not fire'  [pure]  @ 197-206
-  @case 'a digit while a prefix is open is captured, not dispatched'  [pure]  @ 210-220
-  @case 'with a prefix open, a bound key freezes the prefix, dispatches, and clears it'  [pure]  @ 224-236
-  @case 'a command returning false declines: not consumed, key released from commandHeld'  [pure]  @ 240-249
-  @case 'pageSuppressed narrows the walk to root: page bindings die, globals live'  [pure]  @ 253-273
-  @case 'a shift-chord binding fires under shift and reports held'  [pure]  @ 277-288
-  @case 'the same key pressed bare ignores the shift binding entirely'  [pure]  @ 292-303
-  @case 'held marking follows the live chord: bare binding unmarked while shift is down'  [pure]  @ 307-315
+  @case 'a scope capturing letters takes them ahead of the keychain walk'  [pure]  @ 78-101
+  @case 'a captured letter is reported held, so the same frame\'s note entry skips it'  [pure]  @ 108-122
+  @case 'a slash during prefix entry appends and opens the walk; a digit takes it back'  [pure]  @ 130-154
+  @case 'a letter after the slash walks, and leaves the prefix for the leaf to freeze'  [pure]  @ 161-182
+  @case 'a pressed bound key fires its command, consumes, and reports as held'  [pure]  @ 186-195
+  @case 'acceptCmds=false short-circuits: nothing dispatched'  [pure]  @ 199-207
+  @case 'a held (not freshly pressed) bound key reports in commandHeld but does not fire'  [pure]  @ 211-220
+  @case 'a digit while a prefix is open is captured, not dispatched'  [pure]  @ 224-234
+  @case 'with a prefix open, a bound key freezes the prefix, dispatches, and clears it'  [pure]  @ 238-250
+  @case 'a command returning false declines: not consumed, key released from commandHeld'  [pure]  @ 254-263
+  @case 'pageSuppressed narrows the walk to root: page bindings die, globals live'  [pure]  @ 267-287
+  @case 'a shift-chord binding fires under shift and reports held'  [pure]  @ 291-302
+  @case 'the same key pressed bare ignores the shift binding entirely'  [pure]  @ 306-317
+  @case 'held marking follows the live chord: bare binding unmarked while shift is down'  [pure]  @ 321-329
+  @case 'a captured digit leaves the queue; the press nothing claimed stays in it'  [pure]  @ 336-345
+  @case 'a captured letter leaves the queue, at the mask it was struck with'  [pure]  @ 351-362
+  @case 'under an owner, only the dispatch claiming that name captures'  [pure]  @ 369-384
 
 # Uses (outbound edges)
-  @use call cmgr:registerAll  @ 45,123,153,280,295
-  @use call cmgr:bind  @ 51,52,53,54,281,296
-  @use call cmgr:scope  @ 72,98,120,151,256
-  @use call cmgr:push  @ 73,100,123,153,259
-  @use call cmgr:pop  @ 99,122
-  @use call cmgr:letterCapture  @ 106
-  @use call cmgr:beginPrefix  @ 125,155,214,228
-  @use call cmgr:isPrefixActive  @ 134,166,218,235
-  @use call cmgr:finishPrefix  @ 139,167
+  @use call kq:fill  @ 37
+  @use call cmgr:registerAll  @ 59,137,167,294,309
+  @use call cmgr:bind  @ 65,66,67,68,295,310
+  @use call kd.dispatchKeys  @ 83,89,95,99,117,141,145,151,171,173,176,191,204,216,230,244,246,259,277,282,285,298,313,326,342,359,376,381
+  @use call cmgr:scope  @ 86,112,134,165,270,355
+  @use call cmgr:push  @ 87,114,137,167,273,356
+  @use call cmgr:pop  @ 113,136
+  @use call cmgr:letterCapture  @ 120
+  @use call cmgr:beginPrefix  @ 139,169,228,242,340,373
+  @use call cmgr:isPrefixActive  @ 148,180,232,249
+  @use call cmgr:finishPrefix  @ 153,181,383
+  @use call kq:take  @ 343,344,361,378
 
 # Fields (r read / w write incl. constructor keys)
-  @field w GetKeyMods  @ 18
-  @field r ImGui_GetBuiltinPath  @ 29
-  @field w ImGui_GetBuiltinPath  @ 29
-  @field w IsKeyDown  @ 20
-  @field w IsKeyPressed  @ 19
-  @field r Key_2  @ 136
-  @field r Key_3  @ 126
-  @field r Key_4  @ 156
-  @field r Key_5  @ 215,229
-  @field r Key_9  @ 281,283,287,296,298,301
-  @field r Key_A  @ 51,68,74,102,105,161,176,180,189,201,204,270
-  @field r Key_A  @ 311,313
-  @field w Key_A  @ 14
-  @field r Key_B  @ 52,80,84
-  @field w Key_B  @ 14
-  @field r Key_C  @ 53,231
-  @field w Key_C  @ 14
-  @field r Key_D  @ 54,244,247
-  @field w Key_D  @ 14
-  @field r Key_E  @ 258,262,267
-  @field w Key_E  @ 14
-  @field w Key_Escape  @ 13
-  @field r Key_Slash  @ 130,158
-  @field w Key_Slash  @ 13
-  @field w Mod_Alt  @ 12
-  @field r Mod_Ctrl  @ 84
-  @field w Mod_Ctrl  @ 12
-  @field w Mod_None  @ 12
-  @field r Mod_Shift  @ 80,281,283,296,311
-  @field w Mod_Shift  @ 12
-  @field w Mod_Super  @ 12
-  @field w acceptCmds  @ 69,75,81,85,103,127,131,137,157,159,162,177
-  @field w acceptCmds  @ 190,202,216,230,232,245,263,268,271,284,299,312
-  @field w alpha  @ 46
-  @field w arg  @ 44,48
-  @field w beta  @ 47
-  @field w captureLetter  @ 72,99,121,152
-  @field w cm  @ 43
-  @field r commandHeld  @ 105,180,204,247,287,301,313
-  @field r consumed  @ 76,104,132,163,178,191,203,217,233,246,263,268
-  @field r consumed  @ 285,300
-  @field w counted  @ 48
-  @field w decline  @ 49
-  @field w dismiss  @ 122
-  @field r down  @ 26
-  @field w down  @ 201,311
-  @field r fired  @ 46,47,48,49,70,78,107,123
-  @field r fired  @ 133,165,179,192,205,219,234,248,257,264,272
-  @field r fired  @ 280,286,295,302,314
-  @field w fired  @ 44,266
-  @field w gamma  @ 280,295
-  @field r loaded  @ 35,36
-  @field r mods  @ 24
-  @field w mods  @ 80,84,283,311
-  @field w name  @ 64,94,116,147,172,185,197,210,224,240,253,277
-  @field w name  @ 292,307
-  @field w openMenu  @ 123,153
-  @field w pageSuppressed  @ 268,271
-  @field r preload  @ 34
-  @field r pressed  @ 25
-  @field w pressed  @ 68,74,80,84,102,126,130,136,156,158,161,176
-  @field w pressed  @ 189,215,229,231,244,262,267,270,283,298
-  @field r reaper  @ 29
-  @field w run  @ 65,95,117,148,173,186,198,211,225,241,254,278
-  @field w run  @ 293,308
+  @field w GetKeyMods  @ 24
+  @field r ImGui_GetBuiltinPath  @ 40
+  @field w ImGui_GetBuiltinPath  @ 40
+  @field w IsKeyDown  @ 26
+  @field w IsKeyPressed  @ 25
+  @field r Key_2  @ 150
+  @field r Key_3  @ 140
+  @field r Key_4  @ 170
+  @field r Key_5  @ 229,243,341,344
+  @field r Key_7  @ 375,378,380
+  @field r Key_9  @ 295,297,301,310,312,315
+  @field r Key_A  @ 65,82,88,116,119,175,190,194,203,215,218,284
+  @field r Key_A  @ 325,327,358,361
+  @field w Key_A  @ 19
+  @field r Key_B  @ 66,94,98
+  @field w Key_B  @ 19
+  @field r Key_C  @ 67,245
+  @field w Key_C  @ 19
+  @field r Key_D  @ 68,258,261
+  @field w Key_D  @ 19
+  @field r Key_E  @ 272,276,281,341,343
+  @field w Key_E  @ 19
+  @field w Key_Escape  @ 18
+  @field r Key_Slash  @ 144,172
+  @field w Key_Slash  @ 18
+  @field w Mod_Alt  @ 17
+  @field r Mod_Ctrl  @ 98
+  @field w Mod_Ctrl  @ 17
+  @field w Mod_None  @ 17
+  @field r Mod_Shift  @ 94,295,297,310,325,358,361
+  @field w Mod_Shift  @ 17
+  @field w Mod_Super  @ 17
+  @field w acceptCmds  @ 83,89,95,99,117,141,145,151,171,173,176,191
+  @field w acceptCmds  @ 204,216,230,244,246,259,277,282,285,298,313,326
+  @field w acceptCmds  @ 342,359,376,381
+  @field w alpha  @ 60
+  @field w arg  @ 58,62
+  @field w beta  @ 61
+  @field w captureLetter  @ 86,113,135,166,355
+  @field w claimant  @ 381
+  @field w cm  @ 57
+  @field r commandHeld  @ 119,194,218,261,301,315,327
+  @field r consumed  @ 90,118,146,177,192,205,217,231,247,260,277,282
+  @field r consumed  @ 299,314,377,382
+  @field w counted  @ 62
+  @field w ctx  @ 50
+  @field w decline  @ 63
+  @field w dismiss  @ 136
+  @field r down  @ 36
+  @field w down  @ 215,325
+  @field r fired  @ 60,61,62,63,84,92,121,137
+  @field r fired  @ 147,179,193,206,219,233,248,262,271,278,286
+  @field r fired  @ 294,300,309,316,328
+  @field w fired  @ 58,280
+  @field w gamma  @ 294,309
+  @field r loaded  @ 47,48
+  @field r mods  @ 34
+  @field w mods  @ 94,98,297,325,358
+  @field w name  @ 78,108,130,161,186,199,211,224,238,254,267,291
+  @field w name  @ 306,321,336,351,369
+  @field w openMenu  @ 137,167
+  @field r owner  @ 37
+  @field w owner  @ 375,380
+  @field w pageSuppressed  @ 282,285
+  @field r preload  @ 46
+  @field r pressed  @ 35
+  @field w pressed  @ 82,88,94,98,116,140,144,150,170,172,175,190
+  @field w pressed  @ 203,229,243,245,258,276,281,284,297,312,341,358
+  @field w pressed  @ 375,380
+  @field r reaper  @ 40
+  @field w run  @ 79,109,131,162,187,200,212,225,239,255,268,292
+  @field w run  @ 307,322,337,352,370

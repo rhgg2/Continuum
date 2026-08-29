@@ -22,26 +22,28 @@ local function isDigitMods(mods)
   return (mods & ~(ImGui.Mod_Ctrl | ImGui.Mod_Super)) == 0
 end
 
-local function handlePrefixCapture(cmgr, ctx)
+local function handlePrefixCapture(cmgr, keyQueue, claimant)
   if not cmgr:isPrefixActive() then return nil end
-  local mods = ImGui.GetKeyMods(ctx)
-  for d = 0, 9 do
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_0 + d) and isDigitMods(mods) then
-      cmgr:appendPrefix(tostring(d))
-      -- A digit is no menu letter, so it reads a preceding '/' as the rational's bar and
-      -- dismisses the walk that slash opened.
-      local dismiss = cmgr:dismissal()
-      if dismiss then dismiss() end
+  local mods = keyQueue:frameMods()
+  if isDigitMods(mods) then
+    for d = 0, 9 do
+      if keyQueue:take(ImGui.Key_0 + d, mods, claimant) then
+        cmgr:appendPrefix(tostring(d))
+        -- A digit is no menu letter, so it reads a preceding '/' as the rational's bar and
+        -- dismisses the walk that slash opened.
+        local dismiss = cmgr:dismissal()
+        if dismiss then dismiss() end
+        return 'consumed'
+      end
+    end
+    if keyQueue:take(ImGui.Key_Slash, mods, claimant) then
+      -- The slash is the bar and the menu key alike: it does both, and the next key says which.
+      cmgr:appendPrefix('/')
+      cmgr:invoke('openMenu')
       return 'consumed'
     end
   end
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Slash) and isDigitMods(mods) then
-    -- The slash is the bar and the menu key alike: it does both, and the next key says which.
-    cmgr:appendPrefix('/')
-    cmgr:invoke('openMenu')
-    return 'consumed'
-  end
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  if keyQueue:take(ImGui.Key_Escape, mods, claimant) then
     cmgr:cancelPrefix(); return 'consumed'
   end
   return nil
@@ -49,12 +51,13 @@ end
 
 -- A scope may declare a letter sink (the lotus menu's walk); a bare letter goes to it, not
 -- the keychain (Shift tolerated). Returns the key taken, since a leaf may close the sink first.
-local function handleLetterCapture(cmgr, ctx)
+local function handleLetterCapture(cmgr, keyQueue, claimant)
   local capture = cmgr:letterCapture()
   if not capture then return nil end
-  if (ImGui.GetKeyMods(ctx) & ~ImGui.Mod_Shift) ~= 0 then return nil end
+  local mods = keyQueue:frameMods()
+  if (mods & ~ImGui.Mod_Shift) ~= 0 then return nil end
   for i = 0, 25 do
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_A + i) then
+    if keyQueue:take(ImGui.Key_A + i, mods, claimant) then
       capture(string.char(65 + i)); return ImGui.Key_A + i
     end
   end
@@ -70,15 +73,16 @@ end
 --contract: a captured digit dismisses the top scope, resolving the slash as the bar
 --contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
 --contract: a captured letter comes back in commandHeld, so note entry re-reading the frame skips it
-function keyDispatch.dispatchKeys(state, cmgr, ctx)
+--contract: both captures take from keyQueue at frameMods, as state.claimant -- see docs/keyQueue.md
+function keyDispatch.dispatchKeys(state, cmgr, ctx, keyQueue)
   if state.suppressKbd or not state.acceptCmds then
     return { consumed = false, commandHeld = {} }
   end
-  local cap = handlePrefixCapture(cmgr, ctx)
+  local cap = handlePrefixCapture(cmgr, keyQueue, state.claimant)
   if cap == 'consumed' then
     return { consumed = true, commandHeld = {} }
   end
-  local letterKey = handleLetterCapture(cmgr, ctx)
+  local letterKey = handleLetterCapture(cmgr, keyQueue, state.claimant)
   if letterKey then
     return { consumed = true, commandHeld = { [letterKey] = true } }
   end

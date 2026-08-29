@@ -40,7 +40,8 @@ press is gone.**
    positive answer costs the second call that separates the two.
 
 1. The modifier mask is read once and stamped on every entry of that
-   frame.
+   frame. `keyQueue:frameMods()` returns it, so a reader deciding
+   whether a chord is one it acts on tests the mask its entries carry.
 
 ## Ownership
 
@@ -53,6 +54,11 @@ press is gone.**
    `takeAny` answer nil to a claimant other than the name recorded, and
    a claimant outside the four raises — a typo would otherwise read as
    a key that quietly does nothing.
+
+1. A reader hosted by an owner claims under that owner's name.
+   `keyDispatch` takes the name from the state it is given, so the mini
+   pattern editor captures inside the modal while the coordinator's own
+   dispatch does not.
 
 ## Hold and repeat
 

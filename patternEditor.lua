@@ -1,7 +1,7 @@
 -- See docs/patternEditor.md for the model.
 
 --contract: OWNS ps/cm/ds/eventMeta + mm/tm/gm/tv/cmgr + gridPane
---contract: RECEIVES host facade + chrome/gui/modalHost
+--contract: RECEIVES host facade + chrome/gui/modalHost/keyQueue
 --contract: checkout take parks on scratch, never slot-registered; close deletes it directly
 --contract: bind/unbind pass skipGuard -- the mini stack must never touch the host's guardedTrack
 --contract: real gm over an empty groups key -- every edit falls through to tm, wash is empty
@@ -22,8 +22,8 @@ local ImGui        = require 'imgui' '0.10'
 local keyDispatch  = require 'keyDispatch'
 local manifest     = require 'manifest'
 
-local facade, chrome, gui, modalHost, hostDs =
-  (...).facade, (...).chrome, (...).gui, (...).modalHost, (...).hostDs
+local facade, chrome, gui, modalHost, hostDs, keyQueue =
+  (...).facade, (...).chrome, (...).gui, (...).modalHost, (...).hostDs, (...).keyQueue
 local ctx = gui.ctx
 
 ----- Own stack -- the harness `mk` shape, wired to the real shared facade
@@ -389,9 +389,10 @@ local modalChrome
 -- Rows the last launch sized the modal for; pe:draw snaps the first-ever window to fit them exactly.
 local launchRows
 
--- The mini editor owns the keyboard whenever its popup is up. acceptCmds is refreshed each frame in
--- handleInput so command dispatch pauses while a toolbar widget (RPB stepper, buttons) holds focus.
-local miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed = false }
+-- The mini editor is the modal the fill recorded as owner, so it claims as one. acceptCmds is
+-- refreshed each frame in handleInput, pausing dispatch while a toolbar widget holds focus.
+local miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed = false,
+                    claimant = 'modal' }
 
 -- Mini toolbar: a copy of the tracker RPB ticker plus Commit/Cancel.
 -- see docs/patternEditor.md § Write-through commit for the button/pendingAction handoff.
@@ -472,7 +473,7 @@ function pe:handleInput(close)
   end
   gridPane:handleMouse()
   miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
-  local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx)
+  local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx, keyQueue)
   gridPane:handleKeys(kr)
   -- A picker popup consumes its own Esc/Enter, but IsKeyPressed can't see that (two input streams);
   -- gate the fallback on the same pickerIsActive acceptInput folds, so the key can't double-fire.

@@ -31,6 +31,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 keyDispatch: prefix and letter capture take from the keyQueue (phase 2)
 - 2026-08-29 keyQueue: read the frame's key presses into a claimable queue (phase 1)
 
 ## Now
@@ -38,18 +39,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **The queue reaches keyDispatch, and the two captures take.**
-  `keyQueue:frameMods()` returns the mask the fill stamped, and
-  `dispatchKeys(state, cmgr, ctx, keyQueue)` takes the queue as a
-  fourth argument — passed by `coordinator.dispatch`, and by the mini
-  pattern editor, which receives the host's instance at its
-  construction site. Prefix capture takes its digits, `/` and Escape;
-  the letter sink takes its A–Z. Each tests its tolerated mask against
-  `frameMods()` as it does now, then takes at that exact mask.
-  `commandHeld` still carries the captured letter, since note entry
-  still reads ImGui until phase 3. `keyDispatch_spec` drives a real
-  keyQueue filled against its fake ImGui.
 
 - **The keychain walk takes, and `consumed` goes.** The walk takes the
   press that selects a command before it invokes, so a command raising

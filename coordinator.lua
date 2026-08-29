@@ -116,7 +116,7 @@ local function dispatch(state)
   if help:isOpen() then
     state = { suppressKbd = true, pageSuppressed = true, acceptCmds = false }
   end
-  return keyDispatch.dispatchKeys(state, cmgr, ctx)
+  return keyDispatch.dispatchKeys(state, cmgr, ctx, keyQueue)
 end
 
 -- The open menu's level, as one line of letters and titles over the body's last row.
