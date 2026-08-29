@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The sampler's open rename is a guard on the page's reader, not a fifth keyboard
+  owner: the fill records no owner for it, and the field is not active on the frame it opens, so it
+  blocks acceptCmds while it is up. Ownership settles at the fill, so a modal raised mid-frame gates
+  nothing until the next one -- one frame's granularity is the price of reading the state once.
+
 - **2026-08-29** — An open picker and an open status field outrank an open modal in the fill's
   precedence, over the modal-first order the four owners started with. A popup is raised over a
   modal rather than beside it, so it is nearer the user; without the reorder the shelf pickers

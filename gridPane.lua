@@ -5,7 +5,7 @@
 --invariant: col.x == nil is the visibility predicate; per-column draws must gate on it
 --invariant: cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
 --invariant: page-persistent state: cellW/H, dragging, laneConsumed, paintLast
---contract: host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates
+--contract: host supplies inputAllowed() -- folds the item-active/palette/strip gates
 --contract: host chordEntry=false gates the chord gesture off (the pattern editor passes false)
 --contract: host supplies the keyQueue note entry takes from, and the claimant it takes under
 local util   = require 'util'
@@ -1131,7 +1131,7 @@ function gridPane:handleMouse()
   end
 end
 
---contract: no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip
+--contract: no-op unless inputAllowed(); host folds item-active/palette/strip
 --contract: no-op while a scope captures letters -- the menu's walk owns the keyboard, note entry included
 --contract: every fresh press enters; only lastEditKey autorepeats, and a stale repeat goes back
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)

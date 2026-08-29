@@ -66,7 +66,8 @@ local function handleLetterCapture(cmgr, keyQueue, claimant)
   return nil
 end
 
---contract: returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
+--contract: returns early (no dispatch) when not state.acceptCmds
+--contract: an owned frame needs no gate, since every claim answers nil
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
 --contract: the walk claims the press before invoking; a command's reads see a queue without it
 --contract: first-hit wins; false declines, and restores the press to the queue
@@ -76,7 +77,7 @@ end
 --contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
 --contract: every claim is at frameMods, as state.claimant -- see docs/keyQueue.md
 function keyDispatch.dispatchKeys(state, cmgr, keyQueue)
-  if state.suppressKbd or not state.acceptCmds then return end
+  if not state.acceptCmds then return end
   if handlePrefixCapture(cmgr, keyQueue, state.claimant) then return end
   if handleLetterCapture(cmgr, keyQueue, state.claimant) then return end
   local modsNow = keyQueue:frameMods()

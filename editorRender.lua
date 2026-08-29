@@ -248,14 +248,12 @@ local statusSegments = {
 
 function er:statusSegments() return statusSegments end
 
---shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
+--shape: focusState = { pageSuppressed:bool, acceptCmds:bool }
 function er:focusState()
-  if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive()
+  if not ctx then return { pageSuppressed = false, acceptCmds = false } end
   return {
-    suppressKbd    = suppressKbd,
     pageSuppressed = true,
-    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx),
+    acceptCmds     = not ImGui.IsAnyItemActive(ctx),
   }
 end
 

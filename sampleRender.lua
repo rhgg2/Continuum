@@ -593,14 +593,12 @@ function sr:closeTransients()
   drag.handle, drag.slot, drag.startF, drag.endF = nil, nil, nil, nil
 end
 
---contract: acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
+--contract: acceptCmds is blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited)
+--contract: so trim-field typing doesn't trigger commands
+--contract: an open rename blocks it too -- no owner is recorded, and the field isn't active on open
 function sr:focusState()
-  if not ctx then return { suppressKbd = false, acceptCmds = false } end
-  local pa = chrome.pickerIsActive()
-  return {
-    suppressKbd = pa or rename ~= nil,
-    acceptCmds  = (not pa) and not ImGui.IsAnyItemActive(ctx),
-  }
+  if not ctx then return { acceptCmds = false } end
+  return { acceptCmds = rename == nil and not ImGui.IsAnyItemActive(ctx) }
 end
 
 

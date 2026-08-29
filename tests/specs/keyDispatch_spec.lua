@@ -393,4 +393,24 @@ return {
       t.eq(cmgr:finishPrefix(), 7, 'the dispatch claiming the modal captures, and only its digit reached the buffer')
     end,
   },
+
+  {
+    -- Ownership is the whole gate on the walk: the page's focusState carries no
+    -- modal/picker bit, so an owned frame reaches the keychain with acceptCmds set and
+    -- fires nothing, because the claim before the invoke answers nil.
+    name = 'a bound press under an owner fires no command, and stays in the queue',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd = loadKD()
+
+      setKeys{ pressed = { fakeImGui.Key_A }, owner = 'modal' }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      t.deepEq(log.fired, {}, 'the bound command did not fire behind the owner')
+      t.truthy(kq:take(fakeImGui.Key_A, nil, 'modal'), 'and its press is still there for the owner')
+
+      setKeys{ pressed = { fakeImGui.Key_A } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      t.deepEq(log.fired, { 'alpha' }, 'the same press with nobody owning the frame fires')
+    end,
+  },
 }

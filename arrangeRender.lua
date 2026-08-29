@@ -1046,15 +1046,12 @@ function ar:statusSegments()
   return statusSegments
 end
 
---contract: acceptCmds=false if picker active, any item active, or modal was open at frame start.
+--contract: acceptCmds=false if any item active, or a modal was open at frame start.
 function ar:focusState()
-  if not ctx then return { suppressKbd = false, acceptCmds = false } end
-  local blocked = chrome and (chrome.pickerIsActive() or chrome.statusEditActive()) or false
+  if not ctx then return { acceptCmds = false } end
   return {
-    suppressKbd = blocked,
-    acceptCmds  = (not blocked)
-                  and not ImGui.IsAnyItemActive(ctx)
-                  and not modalHost:wasOpenAtFrameStart(),
+    acceptCmds = not ImGui.IsAnyItemActive(ctx)
+                 and not modalHost:wasOpenAtFrameStart(),
   }
 end
 

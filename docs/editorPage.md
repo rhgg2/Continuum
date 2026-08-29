@@ -85,11 +85,9 @@ panes draw.
 `focusState` always reports `pageSuppressed = true`: this page has no
 tracker-style page command scope to keep alive, so page bindings stay
 off while the root globals (quit, page-switch) stay live.
-`suppressKbd` rises when a modal host, a picker, or a pane sub-modal is
-open; `acceptCmds` is the gap where neither that nor an active ImGui
-item is eating the keyboard. Dispatch runs *before* the panes draw so
-`focusState` reads modal-active while it is still set — the same
-ordering the tracker path uses, for the same reason.
+`acceptCmds` is the gap where no ImGui item holds the keyboard; a modal
+or a picker owns the queue instead (`docs/keyQueue.md` § Ownership), so
+the dispatch this page's state drives claims nothing while one is up.
 
 ## The library tree palette
 

@@ -2693,16 +2693,13 @@ function wr:statusSegments()
   return statusSegments
 end
 
---contract: acceptCmds=false if any picker active, any item active, or modal open at frame start.
+--contract: acceptCmds=false if any item active, fx popup is up, or a modal was open at frame start.
 function wr:focusState()
-  if not ctx then return { suppressKbd = false, acceptCmds = false } end
-  local pa = chrome and chrome.pickerIsActive() or false
+  if not ctx then return { acceptCmds = false } end
   return {
-    suppressKbd = pa,
-    acceptCmds  = (not pa)
-                  and not ImGui.IsAnyItemActive(ctx)
-                  and not popups.fx
-                  and not modalHost:wasOpenAtFrameStart(),
+    acceptCmds = not ImGui.IsAnyItemActive(ctx)
+                 and not popups.fx
+                 and not modalHost:wasOpenAtFrameStart(),
   }
 end
 

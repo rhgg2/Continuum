@@ -49,9 +49,10 @@ Landed: see `docs/keyQueue.md` § Hold and repeat.
 
 ## What guards, and what claims
 
-1. `paletteFocus`, `stripFocus` and `pageSuppressed` decide which
-   reader is asked. They are guards on a reader, and a press a guard
-   suppresses stays in the queue for the reader after it.
+1. `paletteFocus`, `stripFocus`, the sampler's open rename and
+   `pageSuppressed` decide which reader is asked. They are guards on a
+   reader, and a press a guard suppresses stays in the queue for the
+   reader after it.
 
 1. The character queue remains the route for text. The fx strip's
    type-to-open reads it; note entry reads the key stream.

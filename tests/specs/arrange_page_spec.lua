@@ -150,13 +150,12 @@ return {
   },
 
   {
-    name = 'focusState before any render returns both bits false',
+    name = 'focusState before any render accepts no commands',
     run = function(harness)
       local h  = harness.mk()
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       local fs = ap:focusState()
-      t.eq(fs.suppressKbd, false, 'no suppression without a context')
-      t.eq(fs.acceptCmds,  false, 'no acceptance without a context')
+      t.eq(fs.acceptCmds, false, 'no acceptance without a context')
     end,
   },
 

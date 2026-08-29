@@ -30,21 +30,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 input: drop suppressKbd; the keyboard's only gate is ownership (design/keyQueue.md § Ownership)
 - 2026-08-29 chrome: the picker and the status field claim from the keyQueue (design/keyQueue.md § Ownership)
 - 2026-08-29 modalHost: the built-in renderers claim their keys from the keyQueue (design/keyQueue.md § Ownership)
 - 2026-08-29 help: the cheat sheet claims its keys from the keyQueue (design/keyQueue.md § Ownership)
-- 2026-08-29 keyQueue: the fill claims a live text field's keys (design/keyQueue.md § Ownership)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **`suppressKbd` goes** — out of the five `focusState` builders,
-   `miniFocus`, and `keyDispatch`'s early return, taking the
-   `pickerIsActive`, `statusEditActive` and `modalHost:isOpen` reads
-   that fed it; `acceptCmds` keeps its own. The page specs asserting the
-   field go with it, and phase 6 has the direct readers that still guard
-   themselves.
 

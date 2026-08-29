@@ -1065,7 +1065,7 @@ end
 local tr = {}
 
 -- The grid + lane render core. inputAllowed
--- folds focusState.acceptCmds so note-entry self-suppresses under modal/picker/palette/strip focus.
+-- folds focusState.acceptCmds so note entry self-suppresses under palette/strip focus.
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = true,
   keyQueue = keyQueue,
@@ -1827,16 +1827,14 @@ function tr:statusSegments()
   return statusSegments
 end
 
--- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
--- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
---shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
+-- acceptCmds: no item active (toolbar focus is transient; see IsAnyItemActive), grid focus.
+-- A modal, picker or status edit owns the queue instead -- docs/keyQueue.md § Ownership.
+--shape: focusState = { pageSuppressed:bool, acceptCmds:bool }
 function tr:focusState()
-  if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
-  local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive() or chrome.statusEditActive()
+  if not ctx then return { pageSuppressed = false, acceptCmds = false } end
   return {
-    suppressKbd    = suppressKbd,
-    pageSuppressed = false,
-    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx) and not paletteFocus and not stripFocus,
+    pageSuppressed = false,   -- unused: swing/temper live on their own page
+    acceptCmds     = not ImGui.IsAnyItemActive(ctx) and not paletteFocus and not stripFocus,
   }
 end
 

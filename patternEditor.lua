@@ -392,8 +392,7 @@ local launchRows
 
 -- The mini editor is the modal the fill recorded as owner, so it claims as one. acceptCmds is
 -- refreshed each frame in handleInput, pausing dispatch while a toolbar widget holds focus.
-local miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed = false,
-                    claimant = 'modal' }
+local miniFocus = { acceptCmds = true, pageSuppressed = false, claimant = 'modal' }
 
 -- Mini toolbar: a copy of the tracker RPB ticker plus Commit/Cancel.
 -- see docs/patternEditor.md § Write-through commit for the button/pendingAction handoff.
