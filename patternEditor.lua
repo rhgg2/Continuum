@@ -51,14 +51,12 @@ local openSnapshot             -- body as opened; Esc/Cancel restore it. A Load 
 local editPoly = false         -- kind opt-in: poly authors overlapping note lanes, mono pins everything to lane 1
 local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
-local swallowInput = false     -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
 local pendingAction            -- 'commit'|'cancel'|{save=name}|{load=name} set by a toolbar widget in draw; handleInput drains it next
 
 -- Note entry and command dispatch both self-suppress while a toolbar widget holds focus, mirroring
 -- the main grid (trackerRender: inputAllowed folds focusState.acceptCmds). item==nil means dormant.
 local function acceptInput()
   return item ~= nil and not ImGui.IsAnyItemActive(ctx)
-     and not chrome.pickerIsActive()
 end
 
 local gridPane = util.instantiate('gridPane', {
@@ -461,7 +459,6 @@ end
 --contract: input pass -- mouse, dispatch against mini cmgr, note entry
 --contract: an Esc the walk left cancels, Enter commits
 function pe:handleInput(close)
-  if swallowInput then swallowInput = false; return end
   if pendingAction then
     local action = pendingAction; pendingAction = nil
     if     action == 'commit' then close(false)
@@ -491,7 +488,6 @@ end)
 --contract: production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
 function pe:launch(body, commit, poly)
   if self:open(body, commit, poly) then
-    swallowInput = true   -- the launching key (Enter/←→) still has a live press-edge; skip the modal's first input pass so it isn't re-read as commit/nav
     local vw = ImGui.Viewport_GetWorkSize(ImGui.GetWindowViewport(ctx))
     -- Height fits the whole grid capped at 32 content rows (curve mode adds the endL terminal
     -- row), plus the modal chrome. Width stays a viewport fraction; both axes stay user-resizable.

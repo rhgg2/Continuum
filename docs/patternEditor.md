@@ -139,3 +139,9 @@ the `modal` name the fill recorded, since they draw inside that modal — see
 `docs/keyQueue.md` § Ownership. A shelf picker open over the modal takes the
 frame from it, so the editor's own Escape and Enter fallback simply declines
 while one is up.
+
+The press that opens the editor is claimed by the fx strip before `launch` runs.
+`modalHost:draw` comes later in the same frame as the strip's keys, so the
+editor's first input pass reads that same queue, minus the launching press. That
+pass is an ordinary one: a press nobody claimed reaches the editor on the frame
+it opens as on any later one.

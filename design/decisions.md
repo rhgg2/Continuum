@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The mini pattern editor's first frame is an ordinary input pass. The fx strip
+  claims the press that opens the editor, and modalHost:draw runs later in the same frame, so the
+  editor reads a queue that press has left; a press nobody claimed reaches the editor there as on
+  any later frame. The item-active guard stays, since the fill's text-field claim is skipped on a
+  frame a modal owns.
+
 - **2026-08-29** — The fx strip's keyboard exits drop the session where they claim the press, over
   the frame-end request they had shared with the mouse. A claimed Escape cannot reach the page
   dispatch later in the frame, which was the deferral's only reason. The header buttons and the grid

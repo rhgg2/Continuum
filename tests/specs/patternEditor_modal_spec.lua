@@ -3,6 +3,11 @@
 -- subset onto the checkout (a whitelisted command edits it, an excluded chord is
 -- inert), and that an unconsumed Esc closes. Drives the real handleInput pass
 -- against a controllable imgui; no grid draw.
+--
+-- The launch-frame pair pins the claim discipline of docs/keyQueue.md: the fx
+-- strip claims the press that opens the editor, and modalHost:draw runs later in
+-- that same frame, so the editor's first pass reads a queue the press has left.
+-- That pass is otherwise an ordinary one.
 
 local t       = require('support')
 local util    = require('util')
@@ -35,11 +40,15 @@ fakeImGui.GetStyleVar  = function() return 4, 4 end
 
 -- The mini editor runs inside the modal the fill records as owner, and claims under that
 -- name, so the queue each pass reads is filled as one. See docs/keyQueue.md § Ownership.
-local function setKeys(keys, mods)
+local function press(keys, mods)
   pressed, down, curMods = {}, {}, mods or 0
   for _, k in ipairs(keys or {}) do pressed[k] = true; down[k] = true end
-  kq:fill('modal')
 end
+
+local function setKeys(keys, mods) press(keys, mods); kq:fill('modal') end
+
+-- The frame a launch happens on was filled before the modal existed, so it carries no owner.
+local function setLaunchKeys(keys, mods) press(keys, mods); kq:fill(nil) end
 
 local fakeChrome = setmetatable({}, { __index = function() return function() end end })
 local fakeGui    = { ctx = {}, font = 'grid', uiFont = 'ui', fontSize = { ui = 13 } }
@@ -161,6 +170,37 @@ return {
       setKeys({ fakeImGui.Key_Escape }, fakeImGui.Mod_None)
       pe:handleInput(function(invoke) closedWith = invoke end)
       t.eq(closedWith, false, 'Esc invoked close(false)')
+    end,
+  },
+
+  {
+    name = 'the launch frame reads a queue the launching press has left',
+    run = function(harness)
+      local _, pe = withEditor(harness)
+      -- Enter on a pattern row opens the editor; the fx strip claims it before calling launch,
+      -- standing in here for handleFxChainKeys, which has no headless seam.
+      setLaunchKeys({ fakeImGui.Key_Enter }, fakeImGui.Mod_None)
+      t.truthy(kq:take(fakeImGui.Key_Enter), 'the launching press is there for the strip to claim')
+
+      local closed = false
+      pe:launch(NOTES_BODY, noop)
+      pe:handleInput(function() closed = true end)
+      t.eq(closed, false, 'the claimed Enter did not commit the editor it opened')
+    end,
+  },
+
+  {
+    name = 'an unclaimed press on the launch frame reaches the editor',
+    run = function(harness)
+      local _, pe = withEditor(harness)
+      -- The claim is the whole protection, so the launch frame is an ordinary pass: a press
+      -- nobody claimed belongs to the editor there as on any later frame.
+      setLaunchKeys({ fakeImGui.Key_Escape }, fakeImGui.Mod_None)
+
+      local closedWith
+      pe:launch(NOTES_BODY, noop)
+      pe:handleInput(function(invoke) closedWith = invoke end)
+      t.eq(closedWith, false, 'the unclaimed Escape cancelled the editor')
     end,
   },
 }
