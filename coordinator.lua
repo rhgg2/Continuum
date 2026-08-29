@@ -31,8 +31,9 @@ local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiSize = uiSize, lib = lib })
 local toolbar   = chrome.makeToolbar()     -- one shared toolbar; renders the active page's row
 local statusBar = chrome.makeStatusBar()   -- one shared status bar; renders the active page's cells
-local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local keyQueue  = util.instantiate('keyQueue', { ctx = ctx })
+local modalHost = util.instantiate('modalHost',
+  { ctx = ctx, chrome = chrome, keyQueue = keyQueue })
 local help      = util.instantiate('help',
   { ctx = ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
 local menu      = util.instantiate('menu', { cmgr = cmgr })

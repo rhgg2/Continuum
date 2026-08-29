@@ -741,8 +741,8 @@ help:registerPage('tracker', {
 
 ----- Modal-driven commands
 
-local function openPrompt(title, prompt, callback, resolve, onChord)
-  modalHost:openPrompt{ title = title, prompt = prompt, callback = callback, resolve = resolve, onChord = onChord }
+local function openPrompt(title, prompt, callback, resolve)
+  modalHost:openPrompt{ title = title, prompt = prompt, callback = callback, resolve = resolve }
 end
 
 local function openConfirm(title, callback, prompt)

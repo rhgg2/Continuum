@@ -57,9 +57,5 @@ Landed: see `docs/keyQueue.md` § Hold and repeat.
 
 ## Open
 
-1. Whether the modal renderers keep reading Enter and Escape where
-   they draw, or declare the keys they act on to `modalHost`, which
-   claims and dispatches them.
-
 1. Whether `pageSuppressed` is better expressed as a cmgr scope with a
    passthrough, which would take it out of the guards above.

@@ -9,6 +9,12 @@ not eight or ten.
   still names a claude process. No separate record of who claimed the link is kept, so the two ways
   a claim outlives its session - the tree deleted along with it, and the tree surviving it - are
   answered by one predicate at SessionStart.
+- **2026-08-29** — A modal renderer claims the keys it acts on where it draws, over declaring them
+  to modalHost for the host to claim and dispatch. A custom kind decides its keys at draw time from
+  the command manager's current bindings and from its own sub-state, which a declared key list
+  cannot express; declaring would also put a second claiming mechanism beside the one every other
+  reader uses. The prompt renderer drops EnterReturnsTrue with the same move: the field is read
+  every frame, so the preview and the value Enter commits are the same text.
 
 - **2026-08-29** — Ownership is settled at the fill, so the frame the cheat sheet opens on has no
   owner and any claimant may take from it. The sheet keeps its open-at-frame-start gate over

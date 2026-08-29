@@ -1,13 +1,13 @@
--- See docs/modalHost.md for the model.
-
 --invariant: one modalHost per coordinator; threaded into every page that opens modals
 --invariant: state.kind picks the render; built-ins are 'prompt' and 'confirm'; pages register custom kinds at load time
 --shape: state = { kind, title, callback?, onClose?, flags?, ... per-kind fields }
 --contract: render(state, close) draws inside an active BeginPopupModal; close(invoke, ...args) captures+clears state, closes popup, pcalls callback if invoke, then pcalls onClose unconditionally
+--contract: built-in renderers claim their keys under 'modal'; see docs/keyQueue.md § Ownership
 local ImGui = require 'imgui' '0.10'
 
-local ctx    = (...).ctx
-local chrome = (...).chrome
+local ctx      = (...).ctx
+local chrome   = (...).chrome
+local keyQueue = (...).keyQueue
 
 local POPUP_ID = '###modalHost'
 
@@ -33,7 +33,6 @@ function modalHost:openPrompt(args)
     prompt   = args.prompt,
     callback = args.callback,
     resolve  = args.resolve,
-    onChord  = args.onChord,
     buf      = args.buf or '',
     selectTo = args.selectTo,
   }
@@ -109,51 +108,34 @@ end
 
 modalHost:registerKind('confirm', function(s, close)
   ImGui.Text(ctx, s.prompt)
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Y) or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) then
+  local mods = keyQueue:frameMods()
+  if keyQueue:take(ImGui.Key_Y, mods, 'modal') or keyQueue:take(ImGui.Key_Enter, mods, 'modal') then
     close(true, true)
-  elseif ImGui.IsKeyPressed(ctx, ImGui.Key_N) or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  elseif keyQueue:take(ImGui.Key_N, mods, 'modal') or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
     close(true, false)
   end
 end)
 
 modalHost:registerKind('prompt', function(s, close)
-  local appearing = ImGui.IsWindowAppearing(ctx)
-  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
+  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.Text(ctx, s.prompt)
-  -- Skip the chord on the appearing frame: the keypress that opened this
-  -- prompt is still live that frame and would resolve it instantly.
-  if s.onChord and not appearing then
-    local resolved = s.onChord()
-    if resolved ~= nil then close(true, resolved); return end
-  end
-  if s.resolve then
-    -- Live preview: no EnterReturnsTrue (buf would lag a keystroke). Read
-    -- each frame, resolve for preview, detect Enter manually.
-    local _, buf = ImGui.InputText(ctx, '##modal', s.buf)
-    s.buf = buf
-    local shown = s.resolve(buf)
-    if shown ~= '' then ImGui.Text(ctx, '\xe2\x86\x92 ' .. shown) end
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-    or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
-      close(true, shown ~= '' and shown or buf)
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      close(false)
-    end
-  else
-    -- selectTo opens the field with its first n characters selected, armed until
-    -- the field goes active. see docs/chrome.md § Opening a field with a selection
-    local selFlags, selCb = 0, nil
-    if s.selectTo then selFlags, selCb = chrome.selectTo(s.selectTo) end
-    local rv, buf = ImGui.InputText(ctx, '##modal', s.buf,
-      ImGui.InputTextFlags_EnterReturnsTrue | selFlags, selCb)
-    if s.selectTo and ImGui.IsItemActive(ctx) then s.selectTo = nil end
-    if rv then
-      close(true, buf)
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      close(false)
-    else
-      s.buf = buf
-    end
+  -- selectTo opens the field with its first n characters selected, armed until
+  -- the field goes active. see docs/chrome.md § Opening a field with a selection
+  local selFlags, selCb = 0, nil
+  if s.selectTo then selFlags, selCb = chrome.selectTo(s.selectTo) end
+  -- The buffer is read every frame, so the preview below and the value Enter commits
+  -- are the same text. EnterReturnsTrue would lag both a keystroke behind.
+  local _, buf = ImGui.InputText(ctx, '##modal', s.buf, selFlags, selCb)
+  if s.selectTo and ImGui.IsItemActive(ctx) then s.selectTo = nil end
+  s.buf = buf
+  local shown = s.resolve and s.resolve(buf) or ''
+  if shown ~= '' then ImGui.Text(ctx, '\xe2\x86\x92 ' .. shown) end
+  local mods = keyQueue:frameMods()
+  if keyQueue:take(ImGui.Key_Enter, mods, 'modal')
+  or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+    close(true, shown ~= '' and shown or buf)
+  elseif keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+    close(false)
   end
 end)
 
