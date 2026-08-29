@@ -14,6 +14,7 @@ routingManager.md
 sampleView.md
 scratch.md
 viewContext.md
+voicing.md
 
 ## still to do
 
@@ -21,7 +22,6 @@ Sorted by size ascending (bytes).
 
 |   size | file                |
 |-------:|---------------------|
-|   3421 | voicing.md          |
 |   3769 | wiringView.md       |
 |   4171 | library.md          |
 |   4176 | painter.md          |

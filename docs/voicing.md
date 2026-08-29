@@ -1,68 +1,81 @@
 # voicing
 
-Same-pitch voice policy: of two notes colliding on one raw
-`(ppq, chan, pitch)`, which is a duplicate to kill and which are
-distinct voices to separate. Pure module — no state; callers stage
-every mm write themselves.
+**A policy module for which same-pitch collisions are duplicates and
+which are distinct voices.** Two notes can land on one raw `(ppq,
+chan, pitch)`; voicing says whether one dies or the two are separated.
+It is a pure module with no state, and callers stage every midiManager
+write themselves.
 
 ## The model
 
-MIDI voices one note per `(chan, pitch)`: two note-ons at the same raw
-onset are illegal — mm's token index and the wire format both key on
-it. But raw collision does not mean same *voice*. Intent lives in the
-sidecar metadata — `ppqL` (logical seat), `detune`, `derived` — and two
-notes with distinct intent are two voices that swing, delay, or a
-detune cluster happened to collapse onto one raw. Killing one destroys
-authored music; the policy instead nudges the successor to
-`prev.ppq + 1` so each voice keeps its own onset (and with it its own
-pb absorber).
+1. A MIDI channel sounds at most one note at a time at a given pitch,
+   so two note-ons at the same raw `(ppq, chan, pitch)` are illegal.
 
-A collision is a genuine duplicate only when the notes carry the same
-intent — equal `ppqL` and `detune` — or when one is a regenerable
-fxNote (`derived`), which always loses to an authored note. Duplicates
-collapse to the longer (authored `endppqL` preferred over raw
-`endppq`). Foreign MIDI, carrying no intent at all, degrades to the
-blind keep-the-longest this policy replaced.
+1. Notes that collide on one raw onset need not be one voice. A note's
+   **intent** is the step it was written on, and lives in the sidecar
+   metadata. Two notes of distinct intent may collide by virtue of swing,
+   delay or detune (`docs/timing.md`).
 
-## Why one module
+1. They must be separated: the successor moves to `prev.ppq + 1`, so
+   each keeps its own onset, and with it its own pb absorber
+   (`docs/tuning.md`).
 
-mm and tm consume the same policy from this one pure module. mm's load-dedup
-runs before the metadata join, so it cannot see intent: judging on its own it
-would eat voices on external collapse (Ctrl-Z, or a foreign script moving two
-authored notes onto one raw).
+1. A `fixed` external is never moved by `separateOnset`, so
+   trackerManager's tail walk leaves it where it is. `fixed` is
+   trackerManager's tag for a note it reintroduced but does not own
+   (`docs/trackerManager.md` § Rebuild: externals).
 
-Verdicts, not traversals. `separateOnset` judges one collision and says
-nothing about which notes to ask or in what order; tm's tail walk asks
-only the notes its interval dirt has news for, and mm's backstop asks a
-whole group. The module exported the whole-channel walk too until
-2026-07-17, when the tail walk went interval-native and no caller wanted
-it any more (`docs/trackerManager.md` § Rebuild: tail walk).
+1. A collision is a genuine duplicate when the notes carry the same
+   intent, meaning equal `ppqL` and `detune`, or when one is a
+   regenerable fxNote, marked `derived`, which always loses to an
+   authored note.
 
-`resolveGroup` sorts its group `(ppq, ppqL)` in place before walking,
-so callers can't skip the ordering the nudge cascade depends on. A
-caller that already holds the group in that order — tm's flush scan,
-bucketing the raw index's `rawThenLogical` walk by pitch — enters
-through `resolveSorted`, which is the same walk without the sort.
+1. Duplicates collapse to the longer note, preferring the authored
+   `endppqL` to the raw `endppq`. Foreign MIDI carries no intent, so
+   for it this degrades to keeping the longest simpliciter.
 
-Deliberately a sibling entry point and not a `presorted` flag on
-`resolveGroup`: a flag would let any caller assert its way past the
-ordering, which is the one thing the in-place sort exists to prevent.
-The second door still names the ordering it requires, in its contract,
-so the guarantee is made once at a seam that has a name.
+## Verdicts
+
+1. voicing decides collisions for notes provided by a caller.
+   `separateOnset` judges one pair; `resolveGroup` and `resolveSorted`
+   walk a group already assembled.
+
+## Ordering
+
+1. The nudge cascade depends on the group arriving in `(ppq, ppqL)`
+   order: each note gives way to its settled predecessor, and a note
+   out of order gives way to the wrong one.
+
+1. `resolveGroup` sorts the group in place before walking, so its
+   caller need not arrive with one sorted.
+
+1. `resolveSorted` is the same walk without the sort, and its contract
+   names the order it requires.
 
 ## Enforcement layers
 
-The invariant is mm's; enforcement is layered, outermost first:
+1. The invariant is midiManager's. Five sites enforce it: four on the
+   path from an edit to the take, and one on the way back in.
 
-- **tm's tail walk** separates in steady state and keeps tm's live
-  clones coherent — see `docs/trackerManager.md` § Same-pitch onset
-  separation. The reseat and the flush scan separated too until
-  2026-07-17; both were redundant layers below it.
-- **mm write-path backstop** repairs anything a write path missed, at
-  the outermost `modify` unwind — `docs/midiManager.md` § Mutation
-  contract. In steady state it finds nothing.
-- **mm load-dedup** applies the verdicts to whatever arrives from the
-  take, so an external collapse nudges instead of eating a voice.
-- **midiBlob.buildWire** asserts, warn-and-write: a collision reaching
-  the codec is an upstream bug reported loudly, never edited silently —
-  the codec stays a pure bijection.
+1. **trackerManager's tail walk** separates during the rebuild, and so
+   keeps trackerManager's live clones coherent
+   (`docs/trackerManager.md` § Same-pitch onset separation). It is
+   trackerManager's only separation site.
+
+1. **trackerManager's flush collision scan** kills duplicates over the
+   post-flush note set, inside `mm:modify`'s preflush
+   (`docs/trackerManager.md` § Flush collision scan). Running before
+   the commit allows this to happen within trackerManager.
+
+1. **midiManager's write-path backstop** repairs whatever a write path
+   missed, at the outermost `modify` unwind (`docs/midiManager.md`
+   § Mutation contract). It should find nothing.
+
+1. **midiBlob.buildWire** asserts the invariant and writes anyway,
+   with a warning. A collision reaching the codec is a bug upstream,
+   and the codec stays a pure bijection.
+
+1. **midiManager's load-dedup** applies the verdicts to whatever
+   arrives from the take. Metadata is reconstructed beforehand, so it
+   sees intent, and an external collapse — an undo, or a foreign
+   script collapsing two authored notes — can be separated.
