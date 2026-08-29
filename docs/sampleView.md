@@ -1,50 +1,72 @@
 # sampleView
 
-Take-independent view rendered when `cm:get('viewMode') == 'sample'`. Owns
-the file browser + slot list UI but no persistent state of its own —
-selection lives in transient locals, sample assignments live in the
-sampler JSFX (driven via gmem mailboxes).
+**The sample page's transient state, and the renderer's only route to
+the sampler.** Nothing sampleView holds is persisted; every durable
+fact lives elsewhere.
 
-## Identity model
+## Keyed to a track
 
-Sample mode keys against a **REAPER track**, not a take. The track is
-chosen explicitly through the toolbar picker, whose list comes from
-`sv:listTracks()` → `sm:listTracks()` (tracks carrying the Continuum
-Sampler FX). `samplePage:bind` seeds a default track on first entry —
-the parent track of the last-active take — then drops the take context
-so take-tier reads stop resolving against it.
+1. Sample mode keys configManager to a REAPER track; the tracker stack
+   keys it to a take. The track comes from the toolbar picker, which
+   lists the tracks carrying the Continuum Sampler FX.
 
-`sv:setTrack(track)` is the single rebind path. It calls
-`cm:setTrack(track)` and clears the transient `currentSample` override
-so the merged read falls back to the new track's stored slot (or the
-schema default). Test seams construct sv with `cm = nil`, exercising
-the local field only.
+1. `samplePage:bind` seeds the first one — the parent of the
+   last-active take — and re-asserts the page's track at every later
+   activation, since whichever page is active re-keys the shared
+   configManager.
 
-## gmem boundary
+1. `sv:setTrack` is the single rebind path. Rebinding drops the
+   transient `currentSample` override, so the slot number falls back
+   to the one the new track stores, or to the schema default.
 
-The view never speaks gmem or REAPER directly — it holds `sm` (the
-`sampleManager`, built and injected by `samplePage`) and routes every
-side-effect through it: `sm:assign`, `sm:previewSlot`, `sm:previewPath`,
-`sm:clearSlot`, `sm:stopPreview`, `sm:listTracks`. The view passes its
-own bound track into each call, so the manager's track-first signatures
-stay uniform. Holding the manager (rather than a bag of injected
-closures) keeps sv testable in the pure-Lua harness, where a
-call-recording fake `sm` stands in. Preview semantics — slot vs.
-hidden-path audition, the `bounds` flag — live on `sampleManager`.
+## Transient and durable
 
-## Layout
+1. sampleView's locals are the bound track, the current folder, the
+   highlighted browser row, the selected file, the preview source, and
+   the set of expanded folder subtrees. A reload starts from none of
+   them.
 
-Three side-by-side `BeginChild` panes inside the body region:
+1. The durable facts sit elsewhere: `sampleBrowserRoot`,
+   `currentSample`, `advanceOnLoad` and `previewInPlace` are
+   configManager keys; `slotEntries` is track-tier dataStore data; the
+   audio itself belongs to the JSFX, reached through sampleManager.
 
-1. **Folder tree** (left) — recursive `TreeNode` walk rooted at
-   `cm:get('sampleBrowserRoot')` (or `$HOME` if unset). Clicking a node
-   updates `currentFolder`.
-2. **Audio files** (middle) — `[▶][filename]` rows for `currentFolder`.
-   Play icon → `auditionPath(full)`. Selectable single-click → select.
-   Selectable double-click → `loadSelectedIntoCurrent()`.
-3. **Slots** (right) — `[▶][NN name]` rows for slots 0..N_SLOTS-1. Play
-   icon → `auditionSlot(idx)`. Selectable click → `currentSample = idx`.
+1. The browse root shows the split: it persists at the global tier,
+   while the current folder it seeds does not. Setting a root
+   therefore clears the folder, which puts the new one on screen.
 
-The `##` label suffixes on `SmallButton` give every play icon a unique
-ImGui ID (full path for files, slot index for slots) so identical
-filenames in different folders don't collide.
+## Where the audition points
+
+1. One audition key serves both panes, so sampleView records which
+   pane the user last touched. `previewSource` is `'file'` or
+   `'slot'`: highlighting a file in the browser sets the first,
+   `setSlotFocus` sets the second, and `auditionCurrent` dispatches on
+   it.
+
+1. `setBrowserItem` records the highlighted row.
+   `selectedFile` mirrors it for a file and is nulled for a folder, so
+   neither audition nor load can fire on a directory.
+
+## The sampleManager boundary
+
+1. Everything beyond sampleView's own locals — the sampler JSFX, and
+   the project's tracks — is reached through the injected
+   sampleManager, which holds the preview semantics
+   (`docs/sampleManager.md`).
+
+1. sampleView passes its bound track into each sampleManager call,
+   which keeps the track-first signatures uniform. `sv:syncSlot` is
+   the exception: its caller supplies the track, since a
+   preview-in-place revert restores the one captured when the preview
+   was triggered, which need not still be bound.
+
+1. sampleRender is handed sampleView alone and never sampleManager
+   (`docs/samplePage.md`), so a JSFX-side edit cannot reach a track
+   other than the bound one.
+
+## Loading advances the slot
+
+1. A load assigns the selected file to the current slot and, under
+   `advanceOnLoad`, moves the current slot to the next empty one above
+   it. Filling a row of slots from a folder is then one keypress per
+   file.

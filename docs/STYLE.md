@@ -20,6 +20,10 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
 1. It says nothing about what the model is not, or what it does not
    do; the exception is the "Open" section of a design doc.
 
+1. It also does not restate the API. Function names appear where the
+   model needs them; signatures, parameters, return values and method
+   rosters live in the code's contracts and in `map/`.
+
 1. It reads linearly, with each part following logically from its
    predecessor, and cross-references only other project docs.
    
@@ -30,6 +34,10 @@ annotations and inline comments, see `docs/CONVENTIONS.md`.
    write-up.
 
 1. A design doc states the model as it will be, in the present tense.
+
+1. Module names should be spelt out in full when they stand alone in
+   prose; in module function calls, the standard abbreviations are
+   fine.
 
 ## Register
 

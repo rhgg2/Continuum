@@ -9,16 +9,24 @@ wiring stacks:
   `sample` facade, and delegates every render call to the renderer.
 - **sampleRender** draws the three-pane browser+slots and the trim
   strip, reads keyboard and mouse, and owns the `sample` command scope.
-  It is handed `sv` only and never reaches `sm` — slot mutations route
-  through `sv` (`setTrim`/`setName`/`stageInto`/`syncSlot`/`isLive`), so
-  what was a discipline is now structural.
+  It is handed sampleView only and never reaches sampleManager, so the
+  slot mutations it issues (`setTrim`/`setName`/`stageInto`/`syncSlot`)
+  can reach no track but the bound one.
+
+A bound track need not carry the sampler FX: the picker lists only
+tracks that do, but the FX can be removed while the page holds the
+track. `sv:isLive` reports whether it is still there, and sampleRender
+wraps the whole body in `chrome.disabledIf(not isLive)` — the surface
+greys and stops responding, so no edit is aimed at a JSFX that is not
+there.
 
 ## Where state lives
 
 sampleRender is render-only. Every persistent fact lives elsewhere:
 
 - **sampleView** — browser selection, current folder, bound track.
-- **configManager** — `slotEntries`, `currentSample`, `previewInPlace`.
+- **configManager** — `currentSample`, `previewInPlace`, `advanceOnLoad`.
+- **dataStore** — `slotEntries`, at the track tier.
 - **sampleManager** — JSFX-side slot truth, audio bytes.
 
 sampleRender holds only frame-local caches (peaks, durations) and

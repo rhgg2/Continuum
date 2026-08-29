@@ -6,6 +6,8 @@ continuum.md
 coordinator.md
 fs.md
 routingManager.md
+sampleView.md
+scratch.md
 viewContext.md
 
 ## still to do
@@ -14,8 +16,6 @@ Sorted by size ascending (bytes).
 
 |   size | file                |
 |-------:|---------------------|
-|   2348 | scratch.md          |
-|   2404 | sampleView.md       |
 |   2623 | curveEditor.md      |
 |   2759 | CONVENTIONS.md      |
 |   2814 | masterMix.md        |

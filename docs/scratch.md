@@ -1,49 +1,77 @@
 # scratch
 
-One hidden, muted REAPER track that the project parks things on. Three
-tenants share it:
+**The scratch track is where a REAPER object lives when it has to
+exist in the project without appearing in it.** There is one per
+project: hidden, muted, minted on first use, and identified by a guid
+persisted in projext under `continuum_wiring/scratch`.
 
-- **`pextStore`** mirrors every *undoable* project-scope slot (eventMeta
-  tags, project-tier config, dataStore's project keys — rm's fx/bus meta
-  among them) onto the track's P_EXT under `ctm_ps.*`, so REAPER undo
-  rewinds them (docs/pextStore.md § The mirror).
-- **`wiringManager`** parks FX that have no compile-graph track —
-  disconnected nodes, lowered-parked instances.
-- **`arrangeManager`** (forthcoming) parks the MIDI of emptied palette
-  slots, so a slot survives losing its last grid instance.
+## Tenants
 
-## Why its own module
+1. A **tenant** is a module that keeps something on the track. There
+   are four, and their needs have nothing to do with one another:
 
-The needs are unrelated to each other and to the modules that have them.
-"Provide a shared scratch track" is not a routing concern, a wiring
-concern, or a config concern — so it lives nowhere but here. rm used to
-own it, which fused "I need a track for my undo mirror" with "the project
-has a scratch track"; this module splits them. rm has since given up its
-private mirror entirely — its meta is project-scope `dataStore` data, so
-pextStore mirrors it like any other undoable slot.
+   - `pextStore` mirrors the project's undoable data — eventMeta tags,
+     project-tier config, dataStore's project keys — onto the track's
+     `P_EXT`, so that REAPER's undo, which rewinds track chunks but
+     not projext, restores it (`docs/pextStore.md`);
+   - `wiringManager` mints every FX plugin here, and leaves it here
+     while its graph node has no track of its own — a node with
+     nothing connected to it, say. The plugin keeps its parameter
+     state throughout (`docs/wiringManager.md`);
+   - `arrangeManager` moves a palette slot's MIDI item here when its
+     last placement in the arrangement is deleted, so that the slot
+     and its pooled source outlive their placements
+     (`docs/arrangeManager.md` § Parking);
+   - `patternEditor` edits a pattern by materialising it onto a take
+     here and reading it back on commit, since the tracker stack edits
+     takes and nothing else. The take is deleted when the editor
+     closes (`docs/patternEditor.md`).
 
-## Why `require`, not injected
+## A module of its own
 
-`scratch` holds no state. Its identity is the guid persisted in projext
-(`continuum_wiring/scratch`), and it re-locates the live track by guid on
-every call — REAPER track handles go stale, so there is nothing safe to
-memoise. A stateless module is reached by `require`, like `util`/`DAG`/
-`fs`; injection would thread a dependency that carries no state through
-every rm/wm construction site (~40, mostly test scaffolds) and buy
-nothing. The single-owner property comes free: one cached module table,
-one persisted guid.
+1. No tenant owns the track. Four modules need the same thing — a
+   place in the project for an object that must not appear in it — so
+   the track is provided once, here.
+
+1. This module is then the track's sole owner: one guid in projext,
+   and one module table shared by every caller. The tenants then agree
+   on which track they mean with no coordination necessary.
+
+1. The module itself holds nothing between calls: REAPER invalidates
+   track handles freely, so the live track is re-located by guid every
+   time.
+
+## Minting on demand
+
+1. `id()` and `track()` mint on first use: minting appends the track,
+   names it `continuum: scratch`, hides and mutes it, and persists the
+   guid.
+
+1. `peek()` returns the persisted guid and the live handle, or
+   nothing, and never mints. This serves `am:isVisibleTrack` and
+   `wm:isScratchTrack`, which only ask whether a given track is the
+   scratch.
+
+1. The same holds for a write with nothing to preserve. pextStore
+   mirrors a removal onto a scratch that already exists, but will not
+   mint one to record it; the next genuine write mirrors what is
+   missing (`docs/pextStore.md`).
 
 ## Hidden and muted
 
-Hidden keeps it out of the mixer and TCP. Muted keeps it **silent** —
-distinct and necessary: wiring parks synth FX here, and a parked MIDI
-item (arrange) feeds the track's FX chain, so an unmuted scratch could
-sound a parked synth into master. `B_MUTE` is set once at mint.
+1. Hidden keeps the track out of the mixer and the track control
+   panel, so the user never meets it.
 
-## The folder-pin copy
+1. Muting ensures that parked MIDI items don't sound through parked
+   instrument FX.
 
-Minting appends a track; if the project ends inside an open folder the
-new track would join it. The ~10-line top-level pin is copied from
-`rm:addTrack` rather than called, to keep this module dependency-free
-(rm is a per-stack instance this module can't reach). Two instances of
-the pin is within tolerance; extract only if a third appears.
+## Pinned to the top level
+
+1. A track appended while the project ends inside an open folder joins
+   that folder, and sends its output to the folder's parent. `mint`
+   therefore closes the accumulated folder depth on the last track
+   before appending.
+
+1. The ten lines implementing this duplicate `rm:addTrack`, since
+   routingManager is a per-stack instance a required module cannot
+   reach. A third copy would be worth extracting.
