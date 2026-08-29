@@ -20,7 +20,8 @@ Landed: see `docs/keyQueue.md` § The queue and § The fill.
    the dispatcher: see `docs/keyQueue.md` § Claiming.
 
 1. A reader that ends a gesture claims the press that ended it, and
-   drops the state it held in the same frame.
+   drops the state it held in the same frame. Landed: see
+   `docs/keyQueue.md` § Claiming.
 
 ## Ownership
 

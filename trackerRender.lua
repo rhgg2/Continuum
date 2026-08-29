@@ -189,8 +189,15 @@ local scrollReq    = false   -- one-shot: scroll the cursor row into view next d
 local stripFocus    = false
 local stripHost     = nil    -- uuid the strip is pinned to while focused; lets a just-minted empty chain render
 local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, commit keeps the edits
-local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
+local stripExitReq  = false  -- one-shot: an exit asked for mid-draw, so the focus survives the rest of the draw that reads it
 local fxFocusReq    = false  -- one-shot: Super-X from the parameters pane enters the fx session next fx-body draw
+
+-- Leave the session: cull a husk it left empty, then drop the focus, the pin and the baseline.
+-- The keys that end it call this where they claim; the in-draw exits ask through stripExitReq.
+local function exitStrip()
+  if stripHost then tv:pruneEmptyRegion(stripHost) end
+  stripFocus, stripExitReq, stripSnapshot, stripHost = false, false, nil, nil
+end
 
 -- The caret identity a tab override anchors to, lapsing as soon as the caret moves off
 -- it; tv owns the format, since the raise writes an anchor of its own (see tv:paletteTab).
@@ -1141,7 +1148,10 @@ end
 -- Period rows: the ladder is a fast path, not a fence. see docs/trackerRender.md § A period is a fraction
 local periodEdit       -- { id, buf } while a Period box holds the caret; nil otherwise
 local periodFocusReq   -- id of the box the keyboard asked for, consumed by the next draw
-local periodSwallow    -- one-shot: drop the strip's next key pass, so the Enter that closed a box isn't re-read as Enter on its row
+
+-- The presses ImGui closes a period box on. Whichever one arrives ends the box's gesture, so the
+-- box is the reader that claims it. see docs/trackerRender.md § A period is a fraction
+local BOX_ENDERS = { ImGui.Key_Enter, ImGui.Key_KeypadEnter, ImGui.Key_Escape, ImGui.Key_Tab }
 
 local function rowId(row) return 'fx_' .. row.index .. '_' .. row.fd.field .. '_' .. row.part end
 
@@ -1162,7 +1172,15 @@ local function periodBox(host, row, width)
     local period = timing.parsePeriod(periodEdit.buf)
     if period then tv:setFxField(host, row.index, row.fd.field, period) end
   end
-  if ImGui.IsItemDeactivated(ctx) then periodEdit, periodSwallow = nil, true end
+  if ImGui.IsItemDeactivated(ctx) then
+    -- The strip's own keys run later this frame with the item already inactive, so an unclaimed
+    -- closing press would land on the row behind and reopen the box, or leave the session.
+    local mods = keyQueue:frameMods()
+    for _, key in ipairs(BOX_ENDERS) do
+      if keyQueue:take(key, mods) then break end
+    end
+    periodEdit = nil
+  end
 end
 
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
@@ -1315,37 +1333,40 @@ local stripPlan do
     if ok and c >= 32 and c < 127 then return string.char(c) end
   end
 
-  -- Revert the chain to its keyboard-entry baseline, then request exit. Shared by the strip's own
-  -- Esc, the cancel button, and the add-slot picker's Esc (which aborts a still-empty gesture).
-  local function cancelStrip()
+  -- Revert the chain to its keyboard-entry baseline. The strip's own Esc exits where it claims;
+  -- the cancel button and the add-slot picker's Esc run mid-draw, so they ask for the exit.
+  local function revertStrip()
     if stripSnapshot then tv:setNoteFx(stripSnapshot.host, stripSnapshot.fx or util.REMOVE) end
-    stripExitReq = true   -- drop at frame end, not now, so the exit Esc isn't re-dispatched
   end
+  local function cancelStrip() revertStrip(); stripExitReq = true end
 
   -- 1D grammar: Up/Down walk rows, Left/Right edit or open a picker, Super+Up/Down reorder.
   -- Enter/Super+X/Super+R/Esc — see docs/trackerRender.md § FX chain — palette tab.
   local function handleFxChainKeys(plan)
-    if periodSwallow then periodSwallow = false; return end
-    local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-    local mods  = ImGui.GetKeyMods(ctx)
+    local mods  = keyQueue:frameMods()
     local super = (mods & ImGui.Mod_Super) ~= 0
-    if press(ImGui.Key_Escape) then cancelStrip(); return end
-    if super and press(ImGui.Key_X) then stripExitReq = true; return end   -- commit and leave (Super+X toggles the session)
-    if super and press(ImGui.Key_R) then                    -- commit, then raise the parameters tab
-      stripExitReq = true; tv:overrideTab('parameters', caretKeyNow()); paletteFocus, focusFindReq = 'find', true; return
+    local take  = function(k) return keyQueue:take(k, mods) end
+    if take(ImGui.Key_Escape) then revertStrip(); exitStrip(); return end
+    if super and take(ImGui.Key_X) then exitStrip(); return end   -- commit and leave (Super+X toggles the session)
+    if super and take(ImGui.Key_R) then                     -- commit, then raise the parameters tab
+      exitStrip(); tv:overrideTab('parameters', caretKeyNow()); paletteFocus, focusFindReq = 'find', true; return
     end
     local cols = plan.cols
     local cur  = clampCursor(cols)
     local col  = cols[cur.stage]
-    if press(ImGui.Key_Tab) then                            -- jump to the next/prev stage, onto its first field (add slot lands on its row)
+    if take(ImGui.Key_Tab) then                             -- jump to the next/prev stage, onto its first field (add slot lands on its row)
       local back = (mods & ImGui.Mod_Shift) ~= 0
       cur.stage  = util.clamp(cur.stage + (back and -1 or 1), 1, #cols)
       cur.param  = #cols[cur.stage].fields > 0 and 1 or 0
       tv:setStripCursor(cur); return
     end
-    local up, down    = press(ImGui.Key_UpArrow),   press(ImGui.Key_DownArrow)
-    local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
-    if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+    -- Claimed ahead of the branch that spends them: an arrow always acts while the strip holds the
+    -- keyboard, and -/= act on a field row -- a header row leaves them to type-to-open below.
+    local up, down    = take(ImGui.Key_UpArrow),   take(ImGui.Key_DownArrow)
+    local left, right = take(ImGui.Key_LeftArrow), take(ImGui.Key_RightArrow)
+    local plus  = cur.param >= 1 and take(ImGui.Key_Equal)
+    local minus = cur.param >= 1 and take(ImGui.Key_Minus)
+    if take(ImGui.Key_Enter) or take(ImGui.Key_KeypadEnter) then
       if cur.param == 0 then                                -- header/add row: open the kind picker (mirrors ←→)
         chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
       else                                                  -- field row: pattern opens its editor, a period takes the caret, plain values inert
@@ -1355,7 +1376,7 @@ local stripPlan do
       end
     elseif super and (up or down) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, up and -1 or 1) then cur.stage = cur.stage + (up and -1 or 1) end
-    elseif super and press(ImGui.Key_B) and not col.isAdd then   -- toggle bypass from any of the stage's rows (mirrors Super+↑/↓)
+    elseif super and not col.isAdd and take(ImGui.Key_B) then   -- toggle bypass from any of the stage's rows (mirrors Super+↑/↓)
       tv:setFxBypass(plan.host, col.index, not col.bypass)
     elseif up or down then                                  -- walk the whole chain as one column
       local rows = chainRows(cols)
@@ -1365,10 +1386,10 @@ local stripPlan do
       chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
     elseif left or right then                               -- field row: nudge the value
       adjustRow(plan.host, col.fields[cur.param], right, mods)
-    elseif press(ImGui.Key_Minus) or press(ImGui.Key_Equal) then
-      if cur.param >= 1 then adjustRow(plan.host, col.fields[cur.param], press(ImGui.Key_Equal), mods) end
-    elseif press(ImGui.Key_Backspace) or press(ImGui.Key_Delete) then
-      if not col.isAdd then tv:removeFxStage(plan.host, col.index) end
+    elseif plus or minus then                               -- the ladder's keyboard twin of ←→
+      adjustRow(plan.host, col.fields[cur.param], plus, mods)
+    elseif not col.isAdd and (take(ImGui.Key_Backspace) or take(ImGui.Key_Delete)) then
+      tv:removeFxStage(plan.host, col.index)
     elseif col.isAdd or cur.param == 0 then
       local ch = typedChar()                                -- type-to-open: add slot appends, a header swaps
       if ch then chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index), ch) end
@@ -1583,10 +1604,9 @@ local stripPlan do
       if col.isAdd then drawAddChainStage(plan.host, cur.stage == ci)
       else              drawChainStage(plan.host, col, cur.stage == ci, cur, ci == 1, ci == #plan.cols - 1) end
     end
-    if stripFocus and not modalHost:isOpen()
-       and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
-      handleFxChainKeys(plan)
-    end
+    -- A modal or a picker over the strip owns the frame, so its claims answer nil under either.
+    -- An active item is a field the strip hosts, and the press closing it is the field's own.
+    if stripFocus and not ImGui.IsAnyItemActive(ctx) then handleFxChainKeys(plan) end
   end
 
   -- Super+X enters the fx session (a selection mints its region, the caret pins); the session claims
@@ -1776,10 +1796,7 @@ function tr:renderBody(_, w, h, dispatch)
   local gridW  = chrome.gridWidth(w)
   local fxChosen = stripFocus or tv:tabOverride(caretKeyNow()) == 'fx'
   local plan     = stripPlan(fxChosen)   -- fxChosen shows the bare add row when the fx tab is picked on an empty host
-  if stripFocus and not plan then   -- the pinned host vanished (undo/removal); tidy and drop focus
-    if stripHost then tv:pruneEmptyRegion(stripHost) end   -- cull an emptied husk
-    stripFocus, stripSnapshot, stripHost = false, nil, nil
-  end
+  if stripFocus and not plan then exitStrip() end   -- the pinned host vanished (undo/removal); tidy and drop focus
   gridPane:draw(gridW, h)   -- half-row bottom breathing is built into gridPane; fx chain lives in the palette now
   if stripFocus or paletteFocus then   -- focus lives in the palette: wash the grid to disabled
     ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
@@ -1799,10 +1816,7 @@ function tr:renderBody(_, w, h, dispatch)
   end
   if dispatch then dispatch(self:focusState()) end
   gridPane:handleKeys()
-  if stripExitReq then   -- exit after this frame's dispatch saw us focused; prune a husk left empty
-    if stripHost then tv:pruneEmptyRegion(stripHost) end
-    stripFocus, stripExitReq, stripSnapshot, stripHost = false, false, nil, nil
-  end
+  if stripExitReq then exitStrip() end   -- an in-draw exit, landing with the draw that read the focus over
 
   tv:tick()
 end

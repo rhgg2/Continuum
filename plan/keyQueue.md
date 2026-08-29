@@ -31,10 +31,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-29 tracker: the fx strip claims its keys from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 modalHost: every modal claims commit and cancel through the host (design/keyQueue.md § Claiming)
 - 2026-08-29 arrange: the modal renderers claim their keys from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 tracker: the modal renderers claim their keys from the keyQueue (design/keyQueue.md § Claiming)
-- 2026-08-29 input: drop suppressKbd; the keyboard's only gate is ownership (design/keyQueue.md § Ownership)
 
 ## Now
 
@@ -42,12 +42,9 @@
 
 ## Queued (current phase; one-liners)
 - **The mini pattern editor stops guarding** — `swallowInput` and the
-  `pickerIsActive` gate in `acceptInput` go: the walk claims the
-  launching press before the modal opens, and a picker raised inside the
-  modal owns the frame.
-- **The fx strip takes** — `handleFxChainKeys` claims each key it acts on
-  at the frame's mods, so `periodSwallow` goes and `stripExitReq` keeps
-  only what the commit button and the grid click need.
+  `pickerIsActive` gate in `acceptInput` go: the strip claims the press
+  that launches the editor before the modal opens, and a picker raised
+  inside the modal owns the frame.
 - **The parameter palette takes** — `handlePaletteKeys` claims Tab,
   Escape, the two Super chords and the navigation keys; `releaseReq`
   goes, since a claimed Escape cannot reach the dispatcher later in the

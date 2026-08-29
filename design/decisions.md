@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — The fx strip's keyboard exits drop the session where they claim the press, over
+  the frame-end request they had shared with the mouse. A claimed Escape cannot reach the page
+  dispatch later in the frame, which was the deferral's only reason. The header buttons and the grid
+  click keep it, since they fire mid-draw and the rest of the draw still reads the focus they would
+  drop.
+
 - **2026-08-29** — The commit and cancel claims live on `modalHost` as `takeEnter` and
   `takeEscape`, over a pair of file-local helpers per renderer. Every modal body already holds
   the host, and the host owns the `modal` name, so the Enter/KeypadEnter pair is written once

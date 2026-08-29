@@ -76,6 +76,12 @@ press is gone.**
    take covers Enter and its keypad twin, the other Escape, both under
    `modal` at the frame's mods.
 
+1. A reader that ends a gesture claims the press that ended it, and
+   drops the state it held in the same statement. The fx strip's period
+   box is one: ImGui closes the field on Enter, Escape or Tab, and the
+   box claims whichever arrived, so the strip's own keys, running later
+   in the frame, do not read it a second time.
+
 ## Ownership
 
 1. A reader that takes the whole keyboard **owns** the queue for the

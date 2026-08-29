@@ -285,10 +285,11 @@ ladder in a few strokes. The value itself is a text box over `timing.parsePeriod
 type `7/19` or `7/4`, and it commits when the text parses and reverts when it
 doesn't. Enter on the row hands it the caret, and while it holds the caret the
 strip's own keys stand down under the `IsAnyItemActive` gate, so Left/Right move
-through the text and not the ladder. The Enter that *closes* the box needs a
-swallow of its own: keys run after the draw that closed it, so the live press-edge
-would land on the row and reopen the box it just committed -- `patternEditor`'s
-`swallowInput` problem, arrived at from the other end. Nothing typed joins the
+through the text and not the ladder. The press that *closes* the box is the box's
+to claim: the strip's keys run after the draw that closed it, with the item
+already inactive, so an unclaimed press would land on the row behind and reopen
+what it just committed. ImGui closes the field on Enter, on Escape and on Tab,
+and the box claims whichever arrived. Nothing typed joins the
 ladder: the ladder is a navigation surface, and an entry accreted per stray
 keystroke would be paid for by every later Left/Right.
 
