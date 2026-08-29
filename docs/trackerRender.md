@@ -193,6 +193,15 @@ and the first box hit wins where two placements overlap. The click takes no
 keyboard focus, as the tab click and the pin take none, and writes nothing to
 the transport.
 
+## Take properties modal
+
+The `takeProps` custom modal reads/writes per-instance state (`s`) supplied at
+open time. Mutating `beatsBuf` externally is invisible to an active
+`InputText`, which caches its own buffer. Bumping `beatsGen` changes the
+widget's `PushID` identity and forces it to re-initialise from `beatsBuf`;
+`refocusBeats` then puts the cursor back so the user can keep typing. Both the
+chord and button paths share this so the `InputText` stays in sync.
+
 ## FX chain — palette tab
 
 See `docs/generators.md` § The chain for what a chain means; this section is

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-29** — A modal renderer's appearing-frame guard comes out in favour of the keychain
+  walk's claim, over keeping both. The press that raised the modal has left the queue before the
+  renderer first draws, so the guard has nothing left to block. The cost is that a modal raised by a
+  mouse click on a frame that also carries an Enter reads it, which takes a click and a keystroke
+  inside the same frame.
+
 - **2026-08-29** — The sampler's open rename is a guard on the page's reader, not a fifth keyboard
   owner: the fill records no owner for it, and the field is not active on the frame it opens, so it
   blocks acceptCmds while it is up. Ownership settles at the fill, so a modal raised mid-frame gates

@@ -749,12 +749,7 @@ local function openConfirm(title, callback, prompt)
   modalHost:openConfirm{ title = title, prompt = prompt, callback = callback }
 end
 
--- Custom modal: take properties. Renderer reads/writes per-instance state
--- (s) supplied at open time. Mutating rowsBuf externally is invisible to an
--- active InputText, which caches its own buffer. Bumping rowsGen changes the
--- widget's PushID identity and forces it to re-initialise from rowsBuf;
--- refocusRows then puts the cursor back so the user can keep typing. Both
--- chord and button paths share this so the InputText stays in sync.
+-- Custom modal: take properties. `docs/trackerRender.md` § Take properties modal
 modalHost:registerKind('takeProps', function(s, close)
   local function scaleBy(factor)
     local n = tonumber(s.beatsBuf)
@@ -764,21 +759,20 @@ modalHost:registerKind('takeProps', function(s, close)
     s.beatsGen     = s.beatsGen + 1
     s.refocusBeats = true
   end
-  local function pressedAny(specs)
-    if not specs then return false end
-    for _, spec in ipairs(specs) do
+  -- The rows-per-beat bindings are the modal's own while it owns the queue: each is
+  -- claimed at the mods it carries. see docs/keyQueue.md § Ownership
+  local function tookAny(specs)
+    for _, spec in ipairs(specs or {}) do
       local key, mods = cmgr:keySpec(spec, ImGui)
-      if ImGui.IsKeyPressed(ctx, key) and ImGui.GetKeyMods(ctx) == mods then return true end
+      if keyQueue:take(key, mods, 'modal') then return true end
     end
     return false
   end
 
-  if     pressedAny(cmgr:keysFor('doubleRPB')) then scaleBy(2)
-  elseif pressedAny(cmgr:keysFor('halveRPB'))  then scaleBy(0.5) end
+  if     tookAny(cmgr:keysFor('doubleRPB')) then scaleBy(2)
+  elseif tookAny(cmgr:keysFor('halveRPB'))  then scaleBy(0.5) end
 
-  -- Appearing frame: Enter is still IsKeyPressed=true — gate OK/Cancel
-  -- below so a binding like Super+Shift+Enter doesn't self-dismiss.
-  local appearing = ImGui.IsWindowAppearing(ctx)
+  local appearing = ImGui.IsWindowAppearing(ctx)   -- the frame the length field takes focus on
 
   ImGui.Text(ctx, 'Item name')
   local rvN, name = ImGui.InputText(ctx, '##takeprops_name', s.nameBuf)
@@ -802,13 +796,15 @@ modalHost:registerKind('takeProps', function(s, close)
   end
 
   local okPressed     = ImGui.Button(ctx, 'OK')
-                     or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                                         or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
-                     or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if     okPressed     then close(true, s.nameBuf, tonumber(s.beatsBuf), s.mode)
-  elseif cancelPressed then close(false) end
+  local mods          = keyQueue:frameMods()
+  if okPressed or keyQueue:take(ImGui.Key_Enter, mods, 'modal')
+               or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+    close(true, s.nameBuf, tonumber(s.beatsBuf), s.mode)
+  elseif cancelPressed or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+    close(false)
+  end
 end)
 
 -- The library's targets as picker rows: a temper every one of whose pitches is a ratio.
@@ -848,10 +844,7 @@ local RETUNE_LOCK, RETUNE_PURITY, RETUNE_AMBIENT = 1, 32, 0.25
 -- Custom modal: retune (docs/trackerView.md § Retune) — scope is a field
 -- here, not scopedAction's confirm, and OK is the single commit point.
 modalHost:registerKind('retune', function(s, close)
-  -- Appearing frame: the opening chord's key is still IsKeyPressed=true — gate
-  -- OK/Cancel below so it can't self-dismiss.
-  local appearing = ImGui.IsWindowAppearing(ctx)
-  local notation  = tv:activeTemper()
+  local notation = tv:activeTemper()
 
   -- One column: every control's frame starts past the widest label, so the pickers,
   -- the stepper and the sliders line up however wide their own labels run.
@@ -946,28 +939,27 @@ modalHost:registerKind('retune', function(s, close)
     if rvS then s.strength = strength end
   end)
 
-  -- A picker popup consumes its own Enter/Escape, invisible to IsKeyPressed (two input
-  -- streams) — gate the keys on the flag the pages fold, else one keystroke picks a row and commits the modal behind it.
-  local picking       = chrome.pickerIsActive()
-  local committing    = not appearing and not picking
   local spacingX, padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing),
                          ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   local buttonsW      = ImGui.CalcTextSize(ctx, 'OK') + ImGui.CalcTextSize(ctx, 'Cancel')
                       + padX * 4 + spacingX
   ImGui.SetCursorPosX(ctx, originX + (ImGui.GetContentRegionAvail(ctx) - buttonsW) / 2)
   local okPressed     = ImGui.Button(ctx, 'OK')
-                     or (committing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                                      or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
   ImGui.SameLine(ctx)
   local cancelPressed = ImGui.Button(ctx, 'Cancel')
-                     or (committing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if okPressed then
+  -- A picker raised over the modal owns the frame, so these claims answer nil while one is
+  -- up, and the Enter it consumes cannot commit the modal behind it.
+  local mods          = keyQueue:frameMods()
+  if okPressed or keyQueue:take(ImGui.Key_Enter, mods, 'modal')
+               or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
     close(true, { scope        = s.scope,        strength     = s.strength,
                   target       = s.target,       key          = s.key,
                   facility     = s.facility,     purity       = s.purity,
                   sonoritySize = s.sonoritySize, harmonicLock = s.harmonicLock,
                   ambient      = s.ambient })
-  elseif cancelPressed then close(false) end
+  elseif cancelPressed or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+    close(false)
+  end
 end)
 
 -- A refused step's window widens to the nearest points on offer, not by default -- widening
@@ -1642,22 +1634,23 @@ local function openNewTakeModal()
 end
 
 modalHost:registerKind('newTake', function(s, close)
-  local appearing = ImGui.IsWindowAppearing(ctx)
   ImGui.Text(ctx, 'Name')
-  if appearing then ImGui.SetKeyboardFocusHere(ctx) end
+  if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
   local rvN, nb = ImGui.InputText(ctx, '##newTakeName', s.nameBuf)
   if rvN then s.nameBuf = nb end
   ImGui.Text(ctx, 'Length (beats)')
   local rvB, bb = ImGui.InputText(ctx, '##newTakeBeats', s.beatsBuf)
   if rvB then s.beatsBuf = bb end
-  local ok = ImGui.Button(ctx, 'OK')
-              or (not appearing and (ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-                                  or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)))
+  local ok     = ImGui.Button(ctx, 'OK')
   ImGui.SameLine(ctx)
   local cancel = ImGui.Button(ctx, 'Cancel')
-              or (not appearing and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape))
-  if ok then close(true, s.nameBuf, s.beatsBuf)
-  elseif cancel then close(false) end
+  local mods   = keyQueue:frameMods()
+  if ok or keyQueue:take(ImGui.Key_Enter, mods, 'modal')
+        or keyQueue:take(ImGui.Key_KeypadEnter, mods, 'modal') then
+    close(true, s.nameBuf, s.beatsBuf)
+  elseif cancel or keyQueue:take(ImGui.Key_Escape, mods, 'modal') then
+    close(false)
+  end
 end)
 
 -- Super-R toggles the parameters tab: park it over an auto-shown chain and land on the find box, or,

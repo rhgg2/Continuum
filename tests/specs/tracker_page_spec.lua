@@ -10,6 +10,27 @@ local t = require('support')
 local fakeImGui = t.imgui()
 fakeImGui.PushFont,       fakeImGui.PopFont       = function() end, function() end
 fakeImGui.PushStyleColor, fakeImGui.PopStyleColor = function() end, function() end
+-- The keys this frame reports as pressed and the modifiers held with them: the queue's
+-- fill reads both, and what a modal body can claim is what the fill put there.
+local pressedKeys, frameMods = {}, 0
+fakeImGui.IsKeyPressed    = function(_, key) return pressedKeys[key] == true end
+fakeImGui.GetKeyMods      = function() return frameMods end
+fakeImGui.IsAnyItemActive = function() return false end
+-- The drawing a modal body does, reduced to what it reads back: the sizes and positions
+-- it lays its column out on, and widgets reporting nothing touched.
+fakeImGui.IsWindowAppearing     = function() return false end
+fakeImGui.Button                = function() return false end
+fakeImGui.RadioButton           = function() return false end
+fakeImGui.InputText             = function(_, _, buf)   return false, buf   end
+fakeImGui.SliderDouble          = function(_, _, value) return false, value end
+fakeImGui.CalcTextSize          = function() return 20, 10 end
+fakeImGui.GetStyleVar           = function() return 4, 4 end
+fakeImGui.GetCursorPosX         = function() return 0 end
+fakeImGui.GetContentRegionAvail = function() return 400, 300 end
+for _, name in ipairs({ 'Text', 'SameLine', 'PushID', 'PopID', 'SetCursorPosX',
+                        'SetNextItemWidth', 'SetKeyboardFocusHere', 'AlignTextToFramePadding' }) do
+  fakeImGui[name] = function() end
+end
 package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
@@ -37,14 +58,15 @@ local MEAN = tuning.derive{
 local FIVES = tuning.derive(tuning.genDiamond(15, 5))
 
 -- Capturing fake: stash the last open state so tests can simulate the
--- modal commit by calling fakeModalHost.last.callback(...). registerKind
--- accepts but ignores renderer bodies (no rendering happens here).
+-- modal commit by calling fakeModalHost.last.callback(...), and keep each
+-- registered renderer body so the tests below can draw one.
 local fakeModalHost = {
   last                = nil,
+  kinds               = {},
   open                = function(self, state) self.last = state end,
   openPrompt          = function(self, state) self.last = state end,
   openConfirm         = function(self, state) self.last = state end,
-  registerKind        = function() end,
+  registerKind        = function(self, kind, body) self.kinds[kind] = body end,
   isOpen              = function() return false end,
   wasOpenAtFrameStart = function() return false end,
   reset               = function(self) self.last = nil end,
@@ -202,17 +224,59 @@ local function seedItems(h, takes, srcLen)
   end
 end
 
+local pageKeyQueue      -- the queue the page under test was built on; the modal tests fill it
+
 local function newTrackerPage(cm, ds, cmgr, chrome, gui, help)
   fakeModalHost:reset()
   resetArrange()
-  local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
+  pageKeyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
   help = help or util.instantiate('help',
-    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
+    { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = pageKeyQueue })
   local lib  = util.instantiate('library',
     { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
   return util.instantiate('trackerPage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, lib = lib,
-      modalHost = fakeModalHost, help = help, facade = fakeFacade })
+      modalHost = fakeModalHost, help = help, facade = fakeFacade, keyQueue = pageKeyQueue })
+end
+
+-- Chrome for a modal body: the house widgets report nothing touched, and the two taking a
+-- function run it, so the controls behind them draw.
+local modalChrome = {
+  colour         = function() return 0 end,
+  radio          = function() return false end,
+  drawPicker     = function() end,
+  libPicker      = function() return {} end,
+  numberStepper  = function() return false end,
+  disabledIf     = function(_, fn) fn() end,
+}
+
+-- One frame of an open modal as the coordinator and modalHost run it: the fill names the
+-- frame's owner before anything draws, then the body draws over the state the opener
+-- seeded, with a close recording what it was called with.
+local function drawModal(opts)
+  opts = opts or {}
+  pressedKeys, frameMods = {}, opts.mods or 0
+  for _, key in ipairs(opts.pressed or {}) do pressedKeys[key] = true end
+  pageKeyQueue:fill(opts.owner or 'modal')
+  local state, closed = fakeModalHost.last, nil
+  fakeModalHost.kinds[state.kind](state, function(invoke, ...) closed = { invoke, ... } end)
+  return closed
+end
+
+-- A page bound to a take with the tracker scope pushed and the real bindings installed:
+-- the state a modal command opens from, and the chords a modal body claims at.
+local function boundTrackerPage(harness, config)
+  local h = harness.mk(config)
+  h.cmgr:installManifest(require('manifest'), fakeImGui)
+  h.reaper:setProjectTracks{ 'tr1' }
+  h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true, pos = 0, len = 1, poolGuid = '{p1}' })
+  h.reaper:seedMidi('tr1/t1',
+    { notes = { { ppq = 0, endppq = 60, chan = 0, pitch = 76, vel = 100 } } })
+  local tp = newTrackerPage(h.cm, h.ds, h.cmgr, modalChrome, {})
+  fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+  tp:bindFromSelection()
+  h.cmgr:push('tracker')
+  return h, tp
 end
 
 local function trackList(trackCount)
@@ -1907,6 +1971,115 @@ return {
       offer(true)
       t.eq(chord()[66], nil, 'taken, the tritone leaves F#')
       t.truthy(math.abs(chord()[67] - 1.9550) < 0.01, 'for the 3/2 the D beside it wants')
+    end,
+  },
+
+  ----- The tracker's modal renderers, claiming (docs/keyQueue.md § Ownership)
+
+  -- The bodies are drawn here as modalHost draws them: over the state the opener seeded,
+  -- on a frame the fill has named an owner for. The queue after the draw is the second
+  -- observable -- a press the body acted on is gone, one it declined is still there.
+  --
+  -- The chord that opened the modal is not in that queue, because the keychain walk
+  -- claimed it before it invoked; modal_input_spec pins that for the built-in kinds.
+  {
+    name = 'the take-properties modal takes the Enter it commits on, and leaves the rest',
+    run = function(harness)
+      local h = boundTrackerPage(harness)
+      h.cmgr:invoke('takeProperties')
+      t.eq(fakeModalHost.last.kind, 'takeProps', 'the modal opened (precondition)')
+
+      t.eq(drawModal{ pressed = { fakeImGui.Key_Q } }, nil, 'a key the body does not act on closes nothing')
+      t.truthy(pageKeyQueue:take(fakeImGui.Key_Q, nil, 'modal'), 'and is still in the queue after the draw')
+
+      local closed = drawModal{ pressed = { fakeImGui.Key_Enter } }
+      t.eq(closed[1], true, 'Enter commits')
+      t.eq(closed[2], fakeModalHost.last.nameBuf, 'with the name the field holds')
+      t.eq(closed[3], tonumber(fakeModalHost.last.beatsBuf), 'and its length, as a number')
+      t.eq(pageKeyQueue:take(fakeImGui.Key_Enter, nil, 'modal'), nil, 'the Enter was claimed')
+    end,
+  },
+
+  {
+    name = 'the take-properties modal takes its Escape, and cancels',
+    run = function(harness)
+      local h = boundTrackerPage(harness)
+      h.cmgr:invoke('takeProperties')
+      local closed = drawModal{ pressed = { fakeImGui.Key_Escape } }
+      t.eq(closed[1], false, 'Escape closes without invoking the callback')
+      t.eq(pageKeyQueue:take(fakeImGui.Key_Escape, nil, 'modal'), nil, 'and the press was claimed')
+    end,
+  },
+
+  -- The rows-per-beat bindings are the modal's own: the tracker's dispatch is not asked
+  -- while a modal owns the queue, so the body claims the chord at the mods it carries.
+  -- Halving what was doubled is the oracle for the field it wrote.
+  {
+    name = 'the take-properties modal takes the rows-per-beat chords, and scales the length',
+    run = function(harness)
+      local h = boundTrackerPage(harness)
+      h.cmgr:invoke('takeProperties')
+      local s      = fakeModalHost.last
+      local opened = tonumber(s.beatsBuf)
+      t.truthy(opened and opened > 0, 'the length field opens on a length (precondition)')
+
+      local function chordFor(name)
+        local specs = h.cmgr:keysFor(name)
+        t.truthy(specs and specs[1], name .. ' is bound in the tracker scope (precondition)')
+        return h.cmgr:keySpec(specs[1], fakeImGui)
+      end
+
+      local key, mods = chordFor('doubleRPB')
+      t.eq(drawModal{ pressed = { key }, mods = mods }, nil, 'the chord does not close the modal')
+      t.eq(tonumber(s.beatsBuf), opened * 2, 'the length doubled')
+      t.eq(pageKeyQueue:take(key, mods, 'modal'), nil, 'and the chord was claimed')
+
+      key, mods = chordFor('halveRPB')
+      drawModal{ pressed = { key }, mods = mods }
+      t.eq(tonumber(s.beatsBuf), opened, 'halving what was doubled restores the length it opened on')
+      t.eq(pageKeyQueue:take(key, mods, 'modal'), nil, 'and that chord was claimed too')
+    end,
+  },
+
+  {
+    name = 'the new-take modal takes its KeypadEnter, and commits the buffers',
+    run = function(harness)
+      local h = boundTrackerPage(harness)
+      h.cmgr:invoke('newTakeBelow')
+      t.eq(fakeModalHost.last.kind, 'newTake', 'the modal opened (precondition)')
+      local closed = drawModal{ pressed = { fakeImGui.Key_KeypadEnter } }
+      t.eq(closed[1], true, 'the keypad Enter commits as the main one does')
+      t.eq(closed[2], '07', 'with the name seeded from the next free slot')
+      t.eq(pageKeyQueue:take(fakeImGui.Key_KeypadEnter, nil, 'modal'), nil, 'and it was claimed')
+    end,
+  },
+
+  {
+    name = 'the retune modal takes the Enter it commits on',
+    run = function(harness)
+      local h = boundTrackerPage(harness,
+        { config = { project = { tempers = { MEAN = MEAN }, temper = 'MEAN' } } })
+      h.cmgr:invoke('retune')
+      local closed = drawModal{ pressed = { fakeImGui.Key_Enter } }
+      t.eq(closed[1], true, 'Enter commits')
+      t.eq(closed[2].scope, 'all', 'with the slots the fields hold')
+      t.eq(closed[2].strength, 1, 'the strength dial among them')
+      t.eq(pageKeyQueue:take(fakeImGui.Key_Enter, nil, 'modal'), nil, 'the Enter was claimed')
+    end,
+  },
+
+  -- A picker popup raised inside the modal outranks it at the fill, and eats its own Enter
+  -- in ImGui's stream. The modal's claims answer nil for that frame, so one keystroke
+  -- cannot pick a row and commit the modal behind it.
+  {
+    name = 'a picker inside the retune modal owns the frame, so the modal commits nothing',
+    run = function(harness)
+      local h = boundTrackerPage(harness,
+        { config = { project = { tempers = { MEAN = MEAN }, temper = 'MEAN' } } })
+      h.cmgr:invoke('retune')
+      t.eq(drawModal{ pressed = { fakeImGui.Key_Enter }, owner = 'picker' }, nil,
+           'the modal closed nothing while the picker held the keyboard')
+      t.truthy(pageKeyQueue:take(fakeImGui.Key_Enter, nil, 'picker'), 'the Enter is the picker\'s to take')
     end,
   },
 

@@ -2,7 +2,7 @@
 --invariant: state.kind picks the render; built-ins are 'prompt' and 'confirm'; pages register custom kinds at load time
 --shape: state = { kind, title, callback?, onClose?, flags?, ... per-kind fields }
 --contract: render(state, close) draws inside an active BeginPopupModal; close(invoke, ...args) captures+clears state, closes popup, pcalls callback if invoke, then pcalls onClose unconditionally
---contract: built-in renderers claim their keys under 'modal'; see docs/keyQueue.md § Ownership
+--contract: any renderer claims the keys it acts on under 'modal'; see docs/keyQueue.md
 local ImGui = require 'imgui' '0.10'
 
 local ctx      = (...).ctx
