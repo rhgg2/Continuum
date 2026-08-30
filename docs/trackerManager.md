@@ -1007,7 +1007,7 @@ reload).
 ## Span-covered fx scans
 
 `coverInto(list, spanSet, admit, emit)` builds the span cover of a ppq-sorted list: the governing
-entry at-or-before each span's start (so `evalCurve`/`sliceCurve` reads within the span see the
+entry at-or-before each span's start (so `curves.eval`/`curves.slice` reads within the span see the
 right precursor), every entry through the span, then the closing entry past its end. `admit`
 filters entries out of governance and emission alike — a skipped entry never governs; spans dedup
 across a call by resuming from the last consumed index rather than rescanning from 1.

@@ -160,20 +160,20 @@ decides whether phase 3 is worth taking.**
    way.
 
 1. `spans.lua` publishes six names and `curves.lua` nine. The module
-   name carries the subject, so the four names that carried it drop it.
+   name carries the subject, so the six names that carried it drop it.
    Spans: `merge`, `mergeWindows`, `overlapping`, `intersects`, `clip`,
-   `subtract`. Curves: `interpolate`,
-   `evalCurve`, `sliceCurve`, `sumStreams`, `foldChains`,
-   `foldIntoWindow`, `closeAtWindowEnd`, `anyNonZero`, `isCurved`. Four
+   `subtract`. Curves: `interpolate`, `eval`, `slice`, `sumStreams`,
+   `foldChains`, `foldIntoWindow`, `closeAtWindowEnd`, `anyNonZero`,
+   `isCurved`. Four
    of the fold's helpers — `negated`, `foldWhole`, `chainCuts`,
    `foldSub` — have no caller outside the region and stay private.
 
 1. `interpolate` arrives from the other direction. The value of a
    breakpoint pair at a ppq is curve algebra, and `curveSample`'s shape
-   functions with it, so both leave midiManager; `mm:interpolate` stays
-   as a delegate and its other callers are untouched. Without it the
-   region's one free variable is not `util`, and the fold cannot be
-   driven from a list of points.
+   functions with it, so both leave midiManager outright, and the view
+   reaches them through `tm:interpolate`. Without it the region's one
+   free variable is not `util`, and the fold cannot be driven from a
+   list of points.
 
 1. `firstAfter` and `firstAtOrAfter` go to `util`. They are binary
    seeks over a ppq-sorted list, with nine external callers each and

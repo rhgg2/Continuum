@@ -29,8 +29,8 @@ into `gridCol.ghosts[y]` for rm to render. The sample point for row
 `y` is `ctx:rowToPPQ(y, chan)` — so under swing the ghost reflects
 the value at the row's realised time, not at "fraction of rows
 traversed". Curve evaluation is delegated to `tm:interpolate` (which
-forwards to `mm:interpolate`); the shape / tension / bezier-handle
-table are owned by midiManager.
+forwards to `curves.interpolate`); the shape / tension / bezier-handle
+table are owned by the curve algebra.
 
 **2** `pa` events are not ghosted — they live inside note columns.
 

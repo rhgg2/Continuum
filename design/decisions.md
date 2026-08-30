@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The breakpoint-curve algebra leaves as `curves.lua`, publishing `interpolate`,
+  `eval`, `slice`, the two half-open window rules and the two predicates. The module name carries
+  the subject, so `evalCurve` and `sliceCurve` shed it as the span names did. `curveSample` and
+  `mm:interpolate` leave midiManager outright, rather than leaving the delegate this morning's entry
+  planned: trackerView reaches the algebra through `tm:interpolate`, so mm's only remaining callers
+  were two specs, and the algebra is the oracle those specs wanted of it.
+
 - **2026-08-30** — The half-open span algebra leaves as `spans.lua`, requiring only `util` and
   publishing `merge`, `mergeWindows`, `overlapping`, `intersects`, `clip` and `subtract`. The module
   name carries the subject, so the four names that carried it shed it. A module required under its

@@ -504,8 +504,8 @@ return {
 
   -- Ghost-sampling coverage runs through the vm surface (gridCol.ghosts)
   -- because that's the contract rm consumes. Shape semantics themselves
-  -- are owned by midiManager (mm:interpolate); these tests only pin that
-  -- the vm→tm→mm pathway wires up correctly and preserves val/refs.
+  -- are owned by the curve algebra (curves.interpolate); these tests only
+  -- pin that the vm→tm pathway wires up correctly and preserves val/refs.
 
   {
     name = 'ghosts: linear pair populates interior rows with proportional vals',

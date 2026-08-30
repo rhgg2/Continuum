@@ -1,11 +1,12 @@
 -- Bezier tension through fx windows. The continuous bases feeding fx expansion
 -- (pbBaseFor/ccBasesFor) must carry authored tension: in-window folds interpolate
--- via mm:interpolate, and a dropped tension silently re-shapes the curve, skewing
+-- via the curve algebra, and a dropped tension silently re-shapes the curve, skewing
 -- every derived seat under the window. Depth-0 sine / scale-0 lfo make the fx
 -- contribution exactly zero, so each seat is a pure sample of the authored base.
 
-local t    = require('support')
-local util = require('util')
+local t      = require('support')
+local util   = require('util')
+local curves = require('curves')
 
 -- Matches tm's centsToRaw at the default pbRange (2 semitones = 200 cents).
 local function c2r(c) return util.clamp(util.round(c * 8192 / 200), -8192, 8191) end
@@ -20,8 +21,8 @@ end
 
 -- The slice edge channelStreams synthesizes: value sampled at the window bound, shape and
 -- tension carried from the governing point (the curve re-anchors at the edge).
-local function sliceEdge(fm, govern, target, ppq)
-  return { ppq = ppq, val = fm:interpolate(govern, target, ppq, 'val'),
+local function sliceEdge(govern, target, ppq)
+  return { ppq = ppq, val = curves.interpolate(govern, target, ppq, 'val'),
            shape = govern.shape, tension = govern.tension }
 end
 
@@ -50,11 +51,11 @@ return {
 
       local govern = { ppq = 0,   val = 0,   shape = 'bezier', tension = 0.9 }
       local target = { ppq = 480, val = 100 }
-      local e120 = sliceEdge(h.fm, govern, target, 120)
-      local e360 = sliceEdge(h.fm, govern, target, 360)
+      local e120 = sliceEdge(govern, target, 120)
+      local e360 = sliceEdge(govern, target, 360)
       t.truthy(pbs[120] and pbs[135], 'seats at the window start and the first sine extremum')
       t.eq(pbs[120].val, c2r(e120.val), 'window-start seat samples the tensioned curve')
-      t.eq(pbs[135].val, c2r(h.fm:interpolate(e120, e360, 135, 'val')),
+      t.eq(pbs[135].val, c2r(curves.interpolate(e120, e360, 135, 'val')),
         'in-window seat interpolates with the tension riding the slice edge')
     end,
   },
@@ -88,13 +89,13 @@ return {
       local first  = { ppq = 0,   val = 0,   shape = 'bezier', tension = 0.9 }
       local middle = { ppq = 240, val = 100, shape = 'bezier', tension = -0.9 }
       local last   = { ppq = 480, val = 0 }
-      local e120 = sliceEdge(h.fm, first,  middle, 120)
-      local e360 = sliceEdge(h.fm, middle, last,   360)
+      local e120 = sliceEdge(first,  middle, 120)
+      local e360 = sliceEdge(middle, last,   360)
       local function ccRound(v) return util.clamp(util.round(v), 0, 127) end
       t.truthy(cc1[180] and cc1[300], 'seats at the lfo cycle points inside each segment')
-      t.eq(cc1[180].val, ccRound(h.fm:interpolate(e120, middle, 180, 'val')),
+      t.eq(cc1[180].val, ccRound(curves.interpolate(e120, middle, 180, 'val')),
         'column-picked bezier governs [120,240): tension rides the fold')
-      t.eq(cc1[300].val, ccRound(h.fm:interpolate(middle, e360, 300, 'val')),
+      t.eq(cc1[300].val, ccRound(curves.interpolate(middle, e360, 300, 'val')),
         'parked bezier governs [240,360): tension survives the park pick')
     end,
   },

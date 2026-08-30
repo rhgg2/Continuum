@@ -24,6 +24,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 curves: take the breakpoint curve algebra from trackerManager and mm (design/tracker-manager-split.md § Phase 1 1–3)
 - 2026-08-30 spans: take the half-open span algebra from trackerManager (design/tracker-manager-split.md § Phase 1 1–2)
 - 2026-08-30 util: take the two ppq index seeks from trackerManager (design/tracker-manager-split.md § Phase 1 4)
 
@@ -32,15 +33,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **`curves.lua` takes interpolation and the point level.**
-   `curveSample` and `mm:interpolate` move from midiManager to
-   `curves.interpolate`, and `mm:interpolate` delegates so its other
-   callers are untouched; `evalCurve`, `sliceCurve`, `isCurved`,
-   `anyNonZero`, `closeAtWindowEnd` and `foldIntoWindow` follow. The
-   module requires `util` and `spans`. A spec drives the five shapes and
-   bezier tension directly, and holds the two half-open edge rules: the
-   close owns tick `eL-1`, and material folds onto `eL-2`.
 
 1. **The fold joins it.** `sumStreams` and the four private helpers —
    `negated`, `foldWhole`, `chainCuts`, `foldSub` — move behind

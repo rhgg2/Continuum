@@ -46,6 +46,7 @@ local specs = {
   'util_serialise_spec',
   'util_pretty_serialise_spec',
   'spans_spec',
+  'curves_spec',
   'mm_signal_flow_spec',
   'mm_cc_metadata_spec',
   'mm_plain_cc_spec',

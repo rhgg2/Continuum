@@ -40,6 +40,7 @@
 
 local util    = require 'util'
 local spans   = require 'spans'
+local curves  = require 'curves'
 local timing  = require 'timing'
 local voicing = require 'voicing'
 
@@ -261,10 +262,6 @@ local function centsToRaw(cents)
   return util.clamp(util.round(cents * 8192 / pbLim()), -8192, 8191)
 end
 
-local function isCurved(shape)
-  return shape and shape ~= 'step' and shape ~= 'linear'
-end
-
 -- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
 local function ccGridStep()
   return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
@@ -288,45 +285,26 @@ local function coverOnsets(events, spanSet, emit)
   end
 end
 
--- Curve value at ppq: held both ways (first value before, last after), shape interp within.
-local function evalCurve(curve, ppq)
-  if #curve == 0 then return 0 end
-  local i = util.firstAfter(curve, ppq)
-  local A, B = curve[i - 1], curve[i]
-  if not A then return curve[1].val end
-  if not B then return A.val end
-  return mm:interpolate(A, B, ppq, 'val')
-end
-
--- A producer hands its target back before the window exits: one step point at eL-1, inside the
--- half-open span, so no close ever lands on the boundary row. see docs/generators.md § Route-by-window
-local function closeAtWindowEnd(pts, val, sL, eL)
-  if eL - 1 <= sL then return pts end
-  if pts[#pts] and pts[#pts].ppq == eL - 1 then table.remove(pts) end   -- the close owns the tick
-  util.add(pts, { ppq = eL - 1, val = val, shape = 'step' })
-  return pts
-end
-
 -- Sum a held base curve and N macro curves over span [sL, eL) -- half-open, so eL is never emitted.
 -- Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
 local function sumStreams(base, macros, span)
   local sL, eL = span[1], span[2]
   local grid   = ccGridStep()
-  local curves = { base }
-  for _, m in ipairs(macros) do util.add(curves, m) end
+  local summands = { base }
+  for _, m in ipairs(macros) do util.add(summands, m) end
   local function segmentAt(curve, ppq)   -- the bp pair governing ppq; nil B at/beyond the end (held)
     local i = util.firstAfter(curve, ppq)
     return curve[i - 1], curve[i]
   end
   local function sumAt(ppq)
     local v = 0
-    for _, c in ipairs(curves) do v = v + evalCurve(c, ppq) end
+    for _, c in ipairs(summands) do v = v + curves.eval(c, ppq) end
     return v                                   -- raw: each emission site rounds and clamps in its own units
   end
 
   -- feature points: span ends plus every constituent bp strictly within, deduped and sorted
   local seen, fps = { [sL] = true, [eL] = true }, { sL, eL }
-  for _, c in ipairs(curves) do
+  for _, c in ipairs(summands) do
     for _, bp in ipairs(c) do
       if bp.ppq > sL and bp.ppq < eL and not seen[bp.ppq] then
         seen[bp.ppq] = true; util.add(fps, bp.ppq)
@@ -341,11 +319,11 @@ local function sumStreams(base, macros, span)
   for idx = 1, #fps - 1 do
     local p, q = fps[idx], fps[idx + 1]
     local anyCurved, movers, sole = false, 0, nil
-    for _, c in ipairs(curves) do
+    for _, c in ipairs(summands) do
       local A, B = segmentAt(c, p)
       local s = (A and B) and (A.shape or 'linear') or 'step'
       if s ~= 'step' then movers = movers + 1 end
-      if isCurved(s) then
+      if curves.isCurved(s) then
         anyCurved = true
         if A.ppq == p and B.ppq == q then sole = A end
       end
@@ -366,22 +344,6 @@ local function sumStreams(base, macros, span)
   return pts
 end
 
--- A stage's material stops short of the tick closeAtWindowEnd owns: anything at or past the line
--- collapses onto that last tick, so a closing control point survives. see docs/generators.md § Route-by-window
-local function foldIntoWindow(pts, sL, eL)
-  local last, out = eL - 2, {}   -- eL-1 is the close's; eL-2 is the last tick material may hold
-  if last < sL then return out end
-  for _, p in ipairs(pts) do
-    if p.ppq >= sL and p.ppq < last then
-      util.add(out, p)
-    elseif p.ppq >= last then
-      if out[#out] and out[#out].ppq == last then table.remove(out) end   -- one point owns the tick
-      util.add(out, util.assign(util.clone(p), { ppq = last }))
-    end
-  end
-  return out
-end
-
 local function rawToCents(raw)
   return util.round(raw / 8192 * pbLim())
 end
@@ -395,28 +357,6 @@ local function negated(pts)
   end
   return out
 end
-local function anyNonZero(curve)
-  for _, point in ipairs(curve) do if point.val ~= 0 then return true end end
-  return false
-end
-
--- Slice a ppq-keyed base curve to [startL, endL]: entering/closing values at the edges (shape/tension
--- from the governing point so interpolation carries through), authored points strictly within.
-local function sliceCurve(base, startL, endL)
-  if #base == 0 then return {} end
-  local function edge(ppq)
-    local govern = base[util.firstAfter(base, ppq) - 1]
-    return { ppq = ppq, val = evalCurve(base, ppq),
-             shape = govern and govern.shape or 'step', tension = govern and govern.tension }
-  end
-  local pts = { edge(startL) }
-  for _, point in ipairs(base) do
-    if point.ppq > startL and point.ppq < endL then util.add(pts, point) end
-  end
-  util.add(pts, edge(endL))
-  return pts
-end
-
 -- Fold records in storage order (later replace wins, painter fold); all-flat -> empty so stale seats sweep.
 -- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see docs/generators.md § Multiplicity
 local function foldWhole(covering, span, base)
@@ -431,7 +371,7 @@ local function foldWhole(covering, span, base)
       end
     end
   end
-  if not any and not anyNonZero(base) then return {} end
+  if not any and not curves.anyNonZero(base) then return {} end
   return stream
 end
 
@@ -453,7 +393,7 @@ end
 -- Fold the active records over one sub-span [a,b) with a constant active set; half-open unless closing.
 -- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see docs/generators.md § Multiplicity
 local function foldSub(active, a, b, base, closeHere)
-  local subBase = sliceCurve(base, a, b)
+  local subBase = curves.slice(base, a, b)
   local stream, streamed, touched = subBase, false, false
   for _, rec in ipairs(active) do
     if #rec.curve > 0 then
@@ -467,8 +407,8 @@ local function foldSub(active, a, b, base, closeHere)
     end
   end
   if streamed then return stream end                       -- [a,b): a rec's own close rides in as a breakpoint
-  if not touched and not anyNonZero(subBase) then return {} end
-  local pts = sliceCurve(stream, a, b)                     -- raw replace curve or held base: clip to [a,b]
+  if not touched and not curves.anyNonZero(subBase) then return {} end
+  local pts = curves.slice(stream, a, b)                     -- raw replace curve or held base: clip to [a,b]
   if not closeHere and #pts > 0 then table.remove(pts) end -- half-open: the edge belongs to the next sub-span
   return pts
 end
@@ -593,8 +533,8 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
   -- column's order; bases pre-sorted, slices preserve order).
   sortByPPQ(pas)
   local ccs = {}
-  for cc, base in pairs(ccBases) do ccs[cc] = sliceCurve(base, startL, endL) end
-  return pas, ccs, ats, sliceCurve(pbBase, startL, endL)
+  for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
+  return pas, ccs, ats, curves.slice(pbBase, startL, endL)
 end
 -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
 -- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
@@ -1589,7 +1529,7 @@ function tm:length()               return pendingLen or (mm and mm:length()) or 
 function tm:resolution()           return mm and mm:resolution() end
 function tm:name()                 return mm and mm:name() end
 function tm:timeSigs()             return mm and mm:timeSigs() or {} end
-function tm:interpolate(A, B, ppq, field) return mm and mm:interpolate(A, B, ppq, field) end
+function tm:interpolate(A, B, ppq, field) return curves.interpolate(A, B, ppq, field) end
 
 -- E_c: column is inner, global is outer (see docs/timing.md).
 --contract: cached per-(cm, mm) pair; invalidated at rebuild head.
@@ -2062,7 +2002,7 @@ function tm:fxCurveAt(uuid, chan, target, ppqL)
   local index = rawIndexFor(chan)
   local seats = target == 'pb' and index.pbs or index.ccs[target]
   if not seats or #seats == 0 then return nil end
-  local val = evalCurve(seats, ppq)
+  local val = curves.eval(seats, ppq)
   -- A pb seat's val is realisation, detune included -- the same subtraction the column projection makes.
   return target == 'pb' and val - detuneAt(chan, ppq) or val
 end
@@ -3584,11 +3524,11 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
           cur = { { ppq = startL, val = generators.restFor(target), shape = 'step' } }
         end
         local inherited = cur
-        if mode == 'replace' then cur = foldIntoWindow(out.delta, startL, endL)
+        if mode == 'replace' then cur = curves.foldIntoWindow(out.delta, startL, endL)
         else                      cur = sumStreams(cur, { out.delta }, { startL, endL }) end
         -- One rule for both modes: whatever the stage did inside its window, the target leaves it reading
         -- as the stage found it. A generator cannot bend the channel past its own end.
-        cur = closeAtWindowEnd(cur, evalCurve(inherited, endL), startL, endL)
+        cur = curves.closeAtWindowEnd(cur, curves.eval(inherited, endL), startL, endL)
         owned[target] = true
         if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
       end
@@ -3621,7 +3561,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       for target, contributed in pairs(owned) do
         if target == 'pb' then
           local curve = stream.pb
-          if not contributed and not anyNonZero(curve) then curve = {} end
+          if not contributed and not curves.anyNonZero(curve) then curve = {} end
           util.add(fxOut.pbChains[chan], { window = { startL, endL }, curve = curve,
                                         mode = generators.chainDestType(producer.fx, target) })
         else
@@ -4613,7 +4553,7 @@ local function rebuildPbs(fxOut, extraColumns)
       local A, B = src[i - 1], src[i]
       if not A then return 0 end
       if not B then return A.cents end
-      return mm:interpolate(A, B, ppq, 'cents')
+      return curves.interpolate(A, B, ppq, 'cents')
     end
 
     -- Authored breakpoints bounding M, excluding any pb exactly at M.
@@ -4637,7 +4577,7 @@ local function rebuildPbs(fxOut, extraColumns)
       -- value-changing authored span.
       local ramps = replaceWinAt(onset.ppq)
                     or (A and B and A.shape and A.shape ~= 'step'
-                        and (isCurved(A.shape) or A.cents ~= B.cents))
+                        and (curves.isCurved(A.shape) or A.cents ~= B.cents))
       if ramps then
         -- Dual point (see docs/tuning.md § Value-aware seats): before/at carry old/new detune, both
         -- linear so the curve rides through; a window-start onset (ppq 0) has no prior cell.
@@ -4661,7 +4601,7 @@ local function rebuildPbs(fxOut, extraColumns)
         for _, onset in ipairs(onsets) do
           if onset.ppq > A.ppq and onset.ppq < B.ppq then hasOnset = true break end
         end
-        if isCurved(A.shape) and hasOnset then
+        if curves.isCurved(A.shape) and hasOnset then
           local p = A.ppq + gridStep
           while p < B.ppq do
             if not seats[p] and not inKeptRange(p) and inSeatScope(p) then
