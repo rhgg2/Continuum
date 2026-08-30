@@ -77,14 +77,7 @@ Landed — see `docs/menu.md` § The row.
 
 ## Both routes on the cheat-sheet
 
-1. A pathed command's path renders as a chip beside its key chips.
-   Quantize shows its chord and `/GQ`; save shows `/FS` alone.
-
-1. Paths are learned where keys already are: the cheat-sheet stays the
-   one place a command's routes are read.
-
-1. The chip renders the route the entry carries (`docs/commandManager.md`
-   § Menu tree), so it cannot drift from the tree the menu walks.
+Landed — see `docs/help.md` § What's where.
 
 ## What load asserts
 

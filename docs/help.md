@@ -58,6 +58,15 @@ where the UI font has them — Tab/PgUp/PgDn and all of Windows/Linux stay words
 description text and chip fills on the base ramp so the dark shortcut glyphs
 and the `/` separator read against light keycaps.
 
+A pathed command (`docs/commandManager.md` § Menu tree) also shows the route
+that walks to it, as a keycap of its own in a column between the keys and the
+labels; the chip holds the route as typed, so its `/` keeps its natural width,
+and a box holding no such command has no route column. A command with no
+chord shows its route alone, where the em dash for an unreachable command would
+stand. The route is no binding: it carries no ✕ and no capture, and a click on
+it only focuses the row — which is how a command reached by its path alone is
+given a chord.
+
 The chips, and the box of chip rows they sit in, draw through `keycaps.lua`,
 bound once a frame to a drawlist and a theme. A draw call reports where the
 chips landed, and the sheet decorates that geometry with its click map and its

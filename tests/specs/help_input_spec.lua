@@ -64,7 +64,8 @@ local function noop() end
 
 -- Rebind imgui to ours before loading: earlier specs' preloads cache a different
 -- fake, so drop the imgui-capturing modules and re-require (curveEditor idiom).
-local function fresh()
+local function fresh(opts)
+  opts = opts or {}
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
   for _, m in ipairs({ 'imgui', 'help', 'keycaps', 'keyQueue', 'commandManager' }) do
     package.loaded[m] = nil
@@ -73,14 +74,27 @@ local function fresh()
   cmgr = util.instantiate('commandManager',
                           { cm = util.instantiate('configManager', { ps = util.instantiate('pextStore') }) })
   cmgr:registerAll{ alpha = noop, beta = noop }
-  cmgr:installManifest({ global = { Grid = {
+  cmgr:installManifest({ global = { Grid = opts.entries or {
     { name = 'alpha', label = 'Alpha', keys = { 'A' } },
     { name = 'beta',  label = 'Beta',  keys = { 'B' } },
   } } }, fakeImGui)
+  if opts.tree then cmgr:installTree(opts.tree) end
   help = util.instantiate('help', { ctx = ctx, chrome = fakeChrome, cmgr = cmgr, keyQueue = kq })
   help:registerPage('tracker', { { group = 'Grid', anchor = 'body', place = 'flow' } })
   help:setPage('tracker')
   help:toggle()
+end
+
+-- The pathed fixture: alpha carries a chord and a path, beta the path alone, both
+-- reading under one menu group, so the routes that walk to them are /GA and /GB.
+local function freshPathed()
+  fresh{
+    entries = {
+      { name = 'alpha', label = 'Alpha', keys = { 'A' }, path = 'Grid/Alpha' },
+      { name = 'beta',  label = 'Beta',                  path = 'Grid/Beta'  },
+    },
+    tree = { { name = 'Grid', desc = 'The grid', children = {} } },
+  }
 end
 
 -- One frame as the coordinator runs it: the fill names the owner from the sheet's
@@ -97,6 +111,7 @@ end
 
 local CHIP = { x = 20, y = 35 }   -- inside the first row's keycap chip of the only box
 local LINE = 14                   -- the fake's text line height
+local EM_DASH = '\xe2\x80\x94'
 
 -- The outlined rects in draw order -- the box, then one keycap chip per row --
 -- and where a given string was drawn.
@@ -114,6 +129,37 @@ local function textAt(text)
   for _, call in ipairs(drawn) do
     if call.op == 'Text' and call[4] == text then return { x = call[1], y = call[2] } end
   end
+end
+
+local function centre(rect)
+  return { x = (rect.x0 + rect.x1) / 2, y = (rect.y0 + rect.y1) / 2 }
+end
+
+-- Nothing but a ✕ tag draws a line, so a count of them counts the focused row's
+-- removable chips.
+local function diagonals()
+  local count = 0
+  for _, call in ipairs(drawn) do
+    if call.op == 'Line' then count = count + 1 end
+  end
+  return count
+end
+
+-- The largest filled rect on a row, taken between the box's left edge and the route
+-- column: on a row that draws no chord that is the + tag's own box.
+local function largestFillOn(row, leftX, rightX)
+  local best
+  for _, call in ipairs(drawn) do
+    local x0, y0, x1, y1 = call[1], call[2], call[3], call[4]
+    if call.op == 'RectFilled' and x0 > leftX and x1 < rightX
+       and y0 >= row.y0 and y0 < row.y0 + LINE then
+      local area = (x1 - x0) * (y1 - y0)
+      if not best or area > best.area then
+        best = { x = (x0 + x1) / 2, y = (y0 + y1) / 2, area = area }
+      end
+    end
+  end
+  return best
 end
 
 -- A chip's width is the line height times a fraction, so a position derived from
@@ -297,6 +343,72 @@ return {
       t.eq(kq:take(fakeImGui.Key_Enter, nil, 'help'), nil, 'the prompt claimed the Enter')
       t.deepEq(cmgr:keyLabelList('alpha', fakeImGui), { 'B' }, 'the chord moved to the row being edited')
       t.eq(#cmgr:keysFor('beta'), 0, 'and the victim lost it')
+    end,
+  },
+
+  {
+    -- A pathed command's route reads in a column of its own, between the chords and
+    -- the labels. The em dash stands for a command with no way in at all, so beta,
+    -- reachable by its path, shows the route where the dash would have stood.
+    name = 'a pathed row draws its route between its chord and its label',
+    run = function()
+      freshPathed()
+      frame{}
+
+      local rects = outlines()
+      t.eq(#rects, 4, "the box, alpha's chord chip, and a route chip per row")
+      local chord, routeA, routeB = rects[2], rects[3], rects[4]
+      local alpha = textAt('Alpha')
+      t.truthy(routeA.x0 > chord.x1, 'the route stands right of the chord')
+      t.truthy(alpha.x > routeA.x1, 'and left of the label')
+      t.eq(routeA.y0, chord.y0, 'on its row')
+      t.eq(routeB.x0, routeA.x0, 'the two routes share a column')
+      t.eq(routeB.y0, routeA.y0 + LINE + 2, 'a row apart')
+      t.truthy(textAt('/GA'), 'the route drew as the keys that walk to it')
+      t.eq(textAt(EM_DASH), nil, 'and the path-only row drew no dash')
+    end,
+  },
+
+  {
+    -- The route is no binding: clicking it focuses its row and does no more. The ✕
+    -- tags over the chord chip are the focus; a second click on the route arms no
+    -- capture, so the press after it leaves the chord alone. A focused row reserves
+    -- room for its + tag, which moves the columns right of it, so each click is aimed
+    -- at the chip the frame before it drew.
+    name = 'a click on the route focuses the row without arming capture',
+    run = function()
+      freshPathed()
+      frame{}
+      t.eq(diagonals(), 0, 'no row is focused yet (precondition)')
+
+      frame{ mouse = centre(outlines()[3]) }
+      frame{}
+      t.truthy(diagonals() > 0, 'the click focused the row, which shows its ✕')
+      frame{ mouse = centre(outlines()[3]) }
+      frame{}
+      t.truthy(diagonals() > 0, 'a second click leaves the row focused')
+      frame{ pressed = { fakeImGui.Key_C } }
+      t.deepEq(cmgr:keyLabelList('alpha', fakeImGui), { 'A' }, 'and captured no chord')
+    end,
+  },
+
+  {
+    -- A command reached by its path alone still takes a chord: its route focuses the
+    -- row, and the + that focus reveals captures. The tag is read off the draw record
+    -- as the one filled box on a row that drew no chord.
+    name = 'a path-only command is bound through the + its route reveals',
+    run = function()
+      freshPathed()
+      frame{}
+      frame{ mouse = centre(outlines()[4]) }
+      frame{}
+
+      local box, routeB = outlines()[1], outlines()[4]
+      local tag = largestFillOn(routeB, box.x0, routeB.x0)
+      t.truthy(tag, 'the + tag drew on the focused row (precondition)')
+      frame{ mouse = tag }
+      frame{ pressed = { fakeImGui.Key_C } }
+      t.deepEq(cmgr:keyLabelList('beta', fakeImGui), { 'C' }, 'the path-only row took the chord')
     end,
   },
 }

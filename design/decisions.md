@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The cheat-sheet draws a pathed command's route in a column of its own, between
+  the keys and the labels, so the routes align down the box. The route chip binds nothing, yet a
+  click on it focuses its row, which is how a command reached by its path alone is given a chord.
+
 - **2026-08-30** — A pathed entry's route carries the menu key at its head, so it reads as the
   keystrokes that walk to the command: `/GQ` rather than `GQ`. A consumer draws the route as it
   stands, and composes no part of it.

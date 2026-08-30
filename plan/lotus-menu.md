@@ -45,10 +45,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 help: a pathed command's row shows the route that walks to it (§ Both routes on the cheat-sheet)
 - 2026-08-30 cmgr: a pathed entry carries the route that walks to it (§ Both routes on the cheat-sheet)
 - 2026-08-30 menu: the preview line shows the level below the highlight (§ Where it draws)
 - 2026-08-30 menu: the row draws as keycaps and titles, and wraps (§ Where it draws)
-- 2026-08-30 help: the keycap chips and their box become a module (§ Where it draws)
 
 ## Now
 
@@ -56,12 +56,3 @@
 
 ## Queued (current phase; one-liners)
 
-2. **The cheat-sheet shows both routes** — a pathed command's row draws its
-   route in a keycap after its key chips, through `keycaps`' chip renderer,
-   separated by a plain gap since the `/` between chips reads as "or". The
-   route chip is inert: no click hit, no ✕ and no `+`, paths being unbound
-   for now. A pathed command with no binding shows its route where the em
-   dash stands, and the box's key column widens to hold the chip. Spec, on
-   the recorded draw calls `help_input_spec`'s layout case reads: a bound
-   pathed command draws chord and route, an unbound one route alone, and a
-   click on the route chip opens no editor. `docs/help.md` gains the model.

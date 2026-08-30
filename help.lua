@@ -139,6 +139,12 @@ local function decorateRow(row, placed)
             capturing ~= nil and capturing.cmd == row.cmd and capturing.replace == nil,
             { kind = 'add', cmd = row.cmd })
   end
+  -- The route is no binding, so its chip takes a hit that focuses the row and no ✕.
+  if placed.route then
+    local chip = placed.route.chips[1]
+    util.add(hits, { x = chip.x, y = chip.y, w = chip.w, h = chip.h,
+                     kind = 'route', cmd = row.cmd })
+  end
 end
 
 -- A command's human label comes from its manifest entry, wherever it is declared:
@@ -161,10 +167,13 @@ local function familyRow(family)
   return row
 end
 
+-- A row with no chord at all reads as an em dash; one a path reaches reads as its
+-- route alone. See docs/help.md § What's where.
 local function commandRow(entry)
   local editingRow = entry.name == editing
   local labels     = cmgr:keyLabelList(entry.name, ImGui)
-  local row = { cluster = caps.cluster(labels or (editingRow and {} or { EM_DASH })),
+  local unbound    = (editingRow or entry.route) and {} or { EM_DASH }
+  local row = { cluster = caps.cluster(labels or unbound), route = entry.route and caps.textCluster(entry.route),
                 label = entry.label, cmd = entry.name, specs = cmgr:keysFor(entry.name) or {} }
   -- The + tag is the sheet's own decoration, so the sheet pays for its width.
   if editingRow then row.cluster.width = row.cluster.width + ADD_GAP + tagSide() end
@@ -401,7 +410,7 @@ end
 
 -- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
 local function hitAt(mouseX, mouseY)
-  local rank, best = { remove = 3, add = 2, chip = 1 }, nil
+  local rank, best = { remove = 3, add = 2, chip = 1, route = 1 }, nil
   for _, hit in ipairs(hits) do
     if mouseX >= hit.x and mouseX <= hit.x + hit.w
        and mouseY >= hit.y and mouseY <= hit.y + hit.h
@@ -445,7 +454,8 @@ local function handleClicks()
     if     hit.family           then editing, capturing = nil, { family = hit.family }
     elseif hit.kind == 'remove' then rebindWithout(hit.cmd, hit.spec)
     elseif hit.kind == 'add'    then editing, capturing = hit.cmd, { cmd = hit.cmd }
-    elseif editing == hit.cmd   then capturing = { cmd = hit.cmd, replace = hit.spec }
+    elseif hit.kind == 'chip' and editing == hit.cmd then
+      capturing = { cmd = hit.cmd, replace = hit.spec }
     else                             editing = hit.cmd end
   elseif not insideAnyBox(mouseX, mouseY) then
     open = false; resetEdit()
