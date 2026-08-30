@@ -34,6 +34,31 @@ return {
   },
 
   {
+    name = 'periodClass sorts the whole ladder into three families and nothing else',
+    run = function()
+      local count = { plain = 0, dotted = 0, triplet = 0 }
+      for _, p in ipairs(L) do
+        local class = timing.periodClass(p)
+        t.truthy(count[class], timing.formatPeriod(p) .. ' lands in a family, not ' .. tostring(class))
+        count[class] = count[class] + 1
+      end
+      -- Six bases, each with its dotted and its triplet, and the two long plain entries above them.
+      t.deepEq(count, { plain = 8, dotted = 6, triplet = 6 }, 'the families partition the ladder')
+    end,
+  },
+  {
+    name = 'a factor of 3 in the denominator reads as a triplet, in the numerator as a dot',
+    run = function()
+      t.eq(timing.periodClass{ 1, 4 },  'plain')
+      t.eq(timing.periodClass{ 3, 8 },  'dotted')
+      t.eq(timing.periodClass{ 1, 6 },  'triplet')
+      t.eq(timing.periodClass{ 2, 3 },  'triplet')   -- the long triplet, whose numerator is not 1
+      t.eq(timing.periodClass{ 7, 19 }, 'plain')     -- off the ladder: where a typed period would sit
+      t.eq(timing.periodClass(4),       'plain')     -- a scalar period reads the same way
+    end,
+  },
+
+  {
     name = 'formatPeriod writes bare fractions, whole QN without a denominator',
     run = function()
       t.eq(timing.formatPeriod{ 3, 8 }, '3/8')

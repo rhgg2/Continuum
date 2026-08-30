@@ -1142,42 +1142,45 @@ local function pickChoice(host, index, entry, fd, option)
   if stage ~= entry then tv:replaceFxStage(host, index, stage) end
 end
 
--- Period rows: the ladder is a fast path, not a fence. see docs/trackerRender.md § A period is a fraction
-local periodEdit       -- { id, buf } while a Period box holds the caret; nil otherwise
-local periodFocusReq   -- id of the box the keyboard asked for, consumed by the next draw
-
--- The presses ImGui closes a period box on. Whichever one arrives ends the box's gesture, so the
--- box is the reader that claims it. see docs/trackerRender.md § A period is a fraction
-local BOX_ENDERS = { ImGui.Key_Enter, ImGui.Key_KeypadEnter, ImGui.Key_Escape, ImGui.Key_Tab }
-
 local function rowId(row) return 'fx_' .. row.index .. '_' .. row.fd.field .. '_' .. row.part end
 
--- The tokenBox discipline (temperEditor): show the buffer while focused, commit on deactivate only
--- where the text parses. Unparsable input reverts next frame rather than clearing the field.
-local function periodBox(host, row, width)
-  local id    = rowId(row)
-  local shown = (periodEdit and periodEdit.id == id) and periodEdit.buf
-                or timing.formatPeriod(row.entry[row.fd.field])
-  if periodFocusReq == id then ImGui.SetKeyboardFocusHere(ctx); periodFocusReq = nil end
-  ImGui.SetNextItemWidth(ctx, width)
-  local rv, buf = ImGui.InputText(ctx, '##' .. id, shown, ImGui.InputTextFlags_AutoSelectAll)
-  -- Arm on activation, not on the first keystroke: a box reached and left untyped must still hold
-  -- the strip's arrows, or Left/Right would step the ladder out from under the caret.
-  if ImGui.IsItemActivated(ctx) then periodEdit = { id = id, buf = shown } end
-  if rv and periodEdit then periodEdit.buf = buf end
-  if ImGui.IsItemDeactivatedAfterEdit(ctx) and periodEdit then
-    local period = timing.parsePeriod(periodEdit.buf)
-    if period then tv:setFxField(host, row.index, row.fd.field, period) end
+-- Period rows: the ladder is a fast path, not a fence, so it is the picker's list and its filter
+-- field is the custom entry. see docs/trackerRender.md § A period is a fraction
+local function periodKind(row) return 'fxPeriod_' .. rowId(row) end
+
+-- The ladder's three families, in the order the popup stacks them; a group here sorts the list rather
+-- than naming somewhere a pick lands, so the create row goes in the one its own period belongs to.
+local PERIOD_GROUPS = { { key = 'plain',   label = 'Plain'   },
+                        { key = 'dotted',  label = 'Dotted'  },
+                        { key = 'triplet', label = 'Triplet' } }
+
+local function periodItems(value)
+  local cur, items = timing.periodQN(value), {}
+  for _, p in ipairs(timing.periodLadder) do
+    util.add(items, { label = timing.formatPeriod(p), key = p, group = timing.periodClass(p),
+                      current = math.abs(timing.periodQN(p) - cur) < 1e-9 })
   end
-  if ImGui.IsItemDeactivated(ctx) then
-    -- The strip's own keys run later this frame with the item already inactive, so an unclaimed
-    -- closing press would land on the row behind and reopen the box, or leave the session.
-    local mods = keyQueue:frameMods()
-    for _, key in ipairs(BOX_ENDERS) do
-      if keyQueue:take(key, mods, 'palette') then break end
-    end
-    periodEdit = nil
-  end
+  return items
+end
+
+-- What the parser accepts is what the create row offers, reduced -- so 6/8 reads back as the 3/4 it
+-- would commit, and text naming no period offers nothing at all.
+local function periodCreateLabel(text)
+  local period = timing.parsePeriod(text)
+  if not period then return nil end
+  return timing.formatPeriod(period), timing.periodClass(period)
+end
+
+local function periodPicker(host, row, width)
+  local function write(period) tv:setFxField(host, row.index, row.fd.field, period) end
+  chrome.drawPicker{
+    kind = periodKind(row), buttonLabel = timing.formatPeriod(row.entry[row.fd.field]), width = width,
+    items = periodItems(row.entry[row.fd.field]), groups = PERIOD_GROUPS,
+    createLabel = periodCreateLabel,
+    -- By copy: a ladder entry is shared across every row that offers it, and the stage keeps its own.
+    onPick   = function(period) write{ period[1], period[2] } end,
+    onCreate = function(text) write(timing.parsePeriod(text)) end,
+  }
 end
 
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
@@ -1232,7 +1235,7 @@ local function fxFieldWidget(host, row, width)
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
     if pick then pickChoice(host, index, entry, fd, fd.options[pick]) end
   elseif fd.widget == 'period' then
-    periodBox(host, row, width)
+    periodPicker(host, row, width)
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local note   = tv:noteByUuid(host)
@@ -1366,10 +1369,10 @@ local stripPlan do
     if take(ImGui.Key_Enter) or take(ImGui.Key_KeypadEnter) then
       if cur.param == 0 then                                -- header/add row: open the kind picker (mirrors ←→)
         chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
-      else                                                  -- field row: pattern opens its editor, a period takes the caret, plain values inert
+      else                                                  -- field row: pattern opens its editor, a period its picker, plain values inert
         local rw = col.fields[cur.param]
         if     rw.fd.widget == 'pattern' then launchPattern(plan.host, rw.index, rw.fd, rw.entry)
-        elseif rw.fd.widget == 'period'  then periodFocusReq = rowId(rw) end
+        elseif rw.fd.widget == 'period'  then chrome.requestPickerOpen(periodKind(rw)) end
       end
     elseif super and (up or down) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, up and -1 or 1) then cur.stage = cur.stage + (up and -1 or 1) end

@@ -5,7 +5,7 @@
 --shape: chrome (status bar) = { makeStatusBar()->fn(segments), statusRects()->{id->rect}, statusEditActive()->bool }
 --shape: libPickerSpec = { key: string, current?: any, excludeOthers?: {name->true}, off?: bool = true }
 --shape: chrome (shared row primitives) = { rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
---shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?, groupLabel?: string, current?=bool, tier?='project'|'global'}], groups?: [{key, label?}], onPick: fn(key, tier), onCancel?: fn(), onCreate?: fn(text, group), onDelete?: fn(key, tier), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?, groupLabel?: string, current?=bool, tier?='project'|'global'}], groups?: [{key, label?}], onPick: fn(key, tier), onCancel?: fn(), onCreate?: fn(text, group), createLabel?: fn(text)->label|nil, group?, onDelete?: fn(key, tier), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --contract: the picker and an open status field claim their keys under 'picker' and 'statusEdit'
@@ -957,6 +957,10 @@ function chrome.drawPicker(d)
   -- The popup body, in the order it draws: one block per group, each with its heading, optional
   -- create row, then matching items; `rows` is the flat cursor domain over that order. See docs/chrome.md § Picker.
   local lf = filter:lower()
+  -- The create row's label and the block it leads, unless the caller names them -- a nil label there
+  -- withholds the row, a nil group leaves it leading every block. see docs/chrome.md § Picker
+  local createLabel, createGroup = '+ new: ' .. filter, nil
+  if d.createLabel then createLabel, createGroup = d.createLabel(filter) end
   local blocks, rows, currentRow = {}, {}, nil
   for _, g in ipairs(d.groups or inferGroups(d.items)) do
     local block, matched, exact = { key = g.key, label = g.label, rows = {} }, {}, false
@@ -972,8 +976,9 @@ function chrome.drawPicker(d)
     end
     -- The create row leads its group: were it to trail, three letters and Enter would land on the
     -- first name they partly matched and overwrite it.
-    if d.onCreate and filter ~= '' and not exact then
-      addRow{ create = g.key, label = '+ new: ' .. filter }
+    if d.onCreate and createLabel and filter ~= '' and not exact
+       and (createGroup == nil or createGroup == g.key) then
+      addRow{ create = g.key, label = createLabel }
     end
     for _, it in ipairs(matched) do
       addRow{ item = it, label = it.label }

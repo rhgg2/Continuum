@@ -17,6 +17,14 @@ not eight or ten.
   prefix's exemption is now declared per entry as keepsPrefix, in place of the dispatcher's
   hardcoded beginPrefix name. The walk's own keys carry it, so an arrow or an Enter over a pending
   buffer leaves it for the leaf.
+- **2026-08-30** — The fx strip's Period row becomes a picker over the ladder rather than a text
+  box: the popup's own filter field is the custom entry, so a fraction the ladder never names is
+  typed where a name would be typed, and the box's close-press bookkeeping (periodEdit, BOX_ENDERS)
+  goes with it. Stacking the ladder under its three families then needed drawPicker's create row to
+  stop leading every block -- createLabel may now name the block its text belongs to, a group being
+  a destination only for the tier pickers and merely a sort here. timing.periodClass reads the
+  family off the fraction, a factor of 3 in the denominator being a triplet and in the numerator a
+  dot, so a typed period is placed like a ladder entry.
 
 - **2026-08-30** — The stream record becomes a closure: makeStream() holds list, order, free,
   maxSlot, chans and sidecars as locals, so the six can only move together and only through its

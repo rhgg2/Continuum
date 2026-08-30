@@ -384,6 +384,7 @@ fake-pb absorber".
   and clamp there.
 - **The period ladder lives here**, beside `periodQN`, so the convention
   has one owner — though the only surface reading `periodLadder`,
-  `parsePeriod`, `formatPeriod` and `steppedPeriod` is the fx strip's
-  Period row. `parsePeriod` reduces, so a typed `6/8` and the ladder's
-  `3/4` are the one value and compare equal.
+  `parsePeriod`, `formatPeriod`, `periodClass` and `steppedPeriod` is the
+  fx strip's Period row. `parsePeriod` reduces, so a typed `6/8` and the
+  ladder's `3/4` are the one value and compare equal, and `periodClass`
+  names the family either of them lands in.

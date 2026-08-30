@@ -185,6 +185,16 @@ timing.periodLadder = {} do
   table.sort(ladder, function(a, b) return a[1] / a[2] > b[1] / b[2] end)
 end
 
+--contract: which of the ladder's three families a period belongs to
+--contract: also what the fx Period picker's typed entry is keyed on
+function timing.periodClass(period)
+  local num, den = period, 1
+  if type(period) == 'table' then num, den = period[1], period[2] end
+  if den % 3 == 0 then return 'triplet' end
+  if num % 3 == 0 then return 'dotted' end
+  return 'plain'
+end
+
 --contract: period -> its bare-fraction text; a whole QN drops the denominator
 function timing.formatPeriod(period)
   if type(period) == 'number' then return ('%g'):format(period) end

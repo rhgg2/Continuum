@@ -277,22 +277,26 @@ field, the same route the Dest picker takes. A pattern field opens the same way:
 a named wave draws its own), and the commit, not the opening, is what writes the
 restated stage — so an editor closed on Esc leaves the wave standing.
 
-**A period is a fraction.** A Period row carries its own widget rather than a
-choice, because a choice can hold only what its list names. `timing.periodLadder`
-is the fast path -- every base with its dotted and triplet, long to short -- and
-Left/Right walk it by *magnitude* rather than by list position, so a period the
-ladder never names still steps from where it sits instead of snapping to the top.
-Ctrl halves or doubles, landing on the nearest entry, which crosses the twenty-entry
-ladder in a few strokes. The value itself is a text box over `timing.parsePeriod`:
-type `7/19` or `7/4`, and it commits when the text parses and reverts when it
-doesn't. Enter on the row hands it the caret, and while it holds the caret the
-strip's own keys stand down under the `IsAnyItemActive` gate, so Left/Right move
-through the text and not the ladder. The press that *closes* the box is the box's
-to claim: the strip's keys run after the draw that closed it, with the item
-already inactive, so an unclaimed press would land on the row behind and reopen
-what it just committed. ImGui closes the field on Enter, on Escape and on Tab,
-and the box claims whichever arrived. Nothing typed joins the
-ladder: the ladder is a navigation surface, and an entry accreted per stray
+**A period is a fraction.** A Period row carries a picker rather than a choice,
+because a choice can hold only what its list names. `timing.periodLadder` -- every
+base with its dotted and triplet, long to short -- is both the picker's list and
+the fast path under Left/Right, which walk it by *magnitude* rather than by list
+position, so a period the ladder never names still steps from where it sits
+instead of snapping to the top. Ctrl halves or doubles, landing on the nearest
+entry, which crosses the twenty-entry ladder in a few strokes. The popup stacks
+the ladder under its three families -- Plain, Dotted, Triplet, by
+`timing.periodClass` -- which is where the arrows' single descending run reads as
+three short ones. The picker's own filter field is the custom entry: type `7/19`
+or `6/8` and the create row offers it back reduced, through `timing.parsePeriod`
+-- which is also what withholds that row while the text names no period, by
+returning nil from `createLabel` (`docs/chrome.md` § Picker). A typed period is
+classified like a ladder entry, so its create row leads the one family it belongs
+to rather than all three, and typing a period the ladder already names finds it
+there instead of offering to re-make it. A picked entry is written by copy, one ladder table
+being shared by every row that offers it. Enter on the row opens the picker, the
+route the Dest row takes, and the picker owns the keyboard while it is up, so the
+strip's own keys stand down under the `IsAnyItemActive` gate. Nothing typed joins
+the ladder: the ladder is a navigation surface, and an entry accreted per stray
 keystroke would be paid for by every later Left/Right.
 
 **One axis navigates, the other edits.** `stripCursor = {stage, param}` (param 0
@@ -304,7 +308,7 @@ cycles on Left/Right too (`drawPicker` treats them as Up/Down). **Super+Up/Down*
 reorder the stage and **Super+B** toggles its bypass — both act on the current stage
 from any of its rows, and a bare letter can't serve here because a header row hands
 every printable character to type-to-open; **Enter** activates the row — opening the kind picker on a
-header/add row, the pattern editor on a pattern field, inert on a plain value;
+header/add row, the pattern editor on a pattern field, the ladder picker on a period, inert on a plain value;
 **Super+X** commits from any row and leaves; **Delete/Backspace** removes a
 stage; typing on a header/add row opens the picker seeded with that character. No
 axis does double duty — the confusion of the old horizontal strip, where
