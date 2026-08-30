@@ -924,9 +924,13 @@ bug that leaked synthetic PCs onto a non-tracker take's note-ons).
 
 Synthesis runs in one place, and this stage is it. The delta goes to mm.
 Its `records` list comes from the channel's raw-index notes plus the
-fx-derived live ones, each carrying its column cell as `key`, and feeds
-through the pure `reconcilePCsForChan` helper; records lost to lane
-priority get `sampleShadowed = true` for renderer dimming.
+fx-derived live ones, and feeds through the pure `reconcilePCsForChan`
+helper; records lost to lane priority get `sampleShadowed = true` for
+renderer dimming. A raw-index note carries its column cell as `cell` and
+marks through `setCell`; an fx-derived note holds no cell, so it carries
+the spec as `spec` and the field is written direct (§ The note-lane
+shed). The flag is realisation, re-derived every rebuild, so a park
+round-trip drops it.
 
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
 each seed onset to `[onset, next onset)` — the interval over which one note's
@@ -1202,6 +1206,9 @@ The shed is precise, and every mutator of a seated lane owns it:
   through `setCell(cell, field, value)`, which sheds only when the value
   moves. Writing unconditionally would shed every bounded lane on every
   pass, because the tail walk restamps `endppqC` for each note it binds.
+  A record holding no cell is written direct instead: `setCell` reads
+  `(chan, lane)` off whatever it is handed, so an off-take fx spec would
+  shed the lane its number names while that lane's own cells stand.
 
 The failure is asymmetric — too pessimistic costs a re-place, too
 optimistic silently renders a stale cell — which is why the enumeration,

@@ -16,6 +16,11 @@ not eight or ten.
   opening at the same column, in place of a box floating over the highlighted member. A highlighted
   group previews its own members there and a highlighted leaf its description, and a previewed
   keycap is washed, since its letter reaches nothing until the highlight is taken.
+- **2026-08-30** — The PC pass re-derives `sampleShadowed` on every rebuild, so it counts as
+  realisation and joins `REALISATION`; a park round-trip drops it instead of stashing a stale flag.
+  Shadow marking now splits by seat: a raw-index record marks through `setCell`, while an fx-derived
+  one writes its own spec, because `setCell` reads (chan, lane) off whatever it is handed and a bare
+  spec sheds a note lane whose cells have not moved.
 
 - **2026-08-30** — The menu's row is a strip rather than a box: it spans the window's margins as the
   toolbar and status bands do, ruled along its top edge in a colour role of its own, with no border

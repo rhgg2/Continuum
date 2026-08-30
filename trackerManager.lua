@@ -27,7 +27,7 @@
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
---shape:   event in the logical frame, minus realisation (delayC/endppqC/realised/derived/frame/cents),
+--shape:   event in the logical frame, minus the realisation frame (the REALISATION set),
 --shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
 --shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
@@ -881,9 +881,9 @@ end
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the sink {del(event), add(spec)}
---contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
+--contract: marks sampleShadowed=true on the cell or the spec of records lost to lane priority
 --contract: spans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
---invariant: shadow marking needs the seat: a record with no colEvt sheds its lane silently
+--invariant: a seated record marks via setCell, off-take direct: no lane sheds a cell it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
 local function reconcilePCsForChan(chan, records, sink, spans)
   local existing = {}
@@ -899,7 +899,11 @@ local function reconcilePCsForChan(chan, records, sink, spans)
     table.sort(g, function(a, b) return a.lane < b.lane end)
     util.add(winners, g[1])
     for i = 2, #g do
-      if g[i].key then setCell(g[i].key, 'sampleShadowed', true) end
+      local lost = g[i]
+      -- A seated record marks through its column cell. An off-take fx spec holds no cell, and
+      -- setCell would shed the lane its number names without that lane's contents having moved.
+      if lost.cell then setCell(lost.cell, 'sampleShadowed', true)
+      elseif lost.spec then lost.spec.sampleShadowed = true end
     end
   end
 
@@ -2961,8 +2965,9 @@ local function realiseParked(chan, members, takeLenL, dirt)
 end
 
 -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
--- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
-local REALISATION = { delayC = true, endppqC = true, realised = true, derived = true, frame = true, cents = true, colEvt = true }
+-- round-trip untouched; restore mirrors it (clone back, re-derive realisation, incl. sampleShadowed).
+local REALISATION = { delayC = true, endppqC = true, realised = true, derived = true,
+                      frame = true, cents = true, colEvt = true, sampleShadowed = true }
 --contract: evt must be logical-frame (a column event); an mm-raw source overrides ppq via `adds`
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
@@ -5013,7 +5018,7 @@ local function rebuildPCs(noteLive)
     local function recordNote(entry)
       if walkable(entry) then
         util.add(records, { ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
-                            sample = entry.sample, key = entry.colEvt })
+                            sample = entry.sample, cell = entry.colEvt })
       end
     end
     if rawSpans then
@@ -5025,7 +5030,7 @@ local function rebuildPCs(noteLive)
       local n = w.evt
       if not spans or pcInSpans(spans, n.ppq, false) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
-        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
+        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, spec = n })
       end
     end
     reconcilePCsForChan(chan, records, pcWrites, spans)
