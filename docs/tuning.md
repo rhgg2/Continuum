@@ -561,7 +561,7 @@ the cell. An ungated call (`seatSpans == nil`, dirty-wholesale channels)
 walks `{0, math.huge}`: the whole channel, same as before scoping.
 
 **3** Spans are coalesced to disjoint ascending order first
-(`mergeSpans`) because the seats table is written by overwrite while a
+(`spans.merge`) because the seats table is written by overwrite while a
 dual point seats one tick *below* its onset. With onsets out of
 ascending order, one onset's dual point can clobber the seat belonging
 to the onset just before it.

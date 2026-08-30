@@ -159,9 +159,10 @@ decides whether phase 3 is worth taking.**
    `curves` requires `spans` for `overlapping`, and the arrow is one
    way.
 
-1. `spans.lua` publishes six names and `curves.lua` nine. Spans:
-   `mergeSpans`, `mergeWindows`, `overlapping`, `spanSetIntersects`,
-   `clipToSpanSet`, `subtractSpanSet`. Curves: `interpolate`,
+1. `spans.lua` publishes six names and `curves.lua` nine. The module
+   name carries the subject, so the four names that carried it drop it.
+   Spans: `merge`, `mergeWindows`, `overlapping`, `intersects`, `clip`,
+   `subtract`. Curves: `interpolate`,
    `evalCurve`, `sliceCurve`, `sumStreams`, `foldChains`,
    `foldIntoWindow`, `closeAtWindowEnd`, `anyNonZero`, `isCurved`. Four
    of the fold's helpers — `negated`, `foldWhole`, `chainCuts`,

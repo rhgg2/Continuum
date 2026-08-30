@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The half-open span algebra leaves as `spans.lua`, requiring only `util` and
+  publishing `merge`, `mergeWindows`, `overlapping`, `intersects`, `clip` and `subtract`. The module
+  name carries the subject, so the four names that carried it shed it. A module required under its
+  own noun collides with the locals holding its data, and trackerManager's sixteen take role names
+  instead: `spanSet` for a bare span list, `seedSpans` for the PC path's two-frame spans.
+
 - **2026-08-30** — `firstAfter` and `firstAtOrAfter` join `util` keyed on `.ppq`, and stay distinct
   from `util.seek`. A key function earns its place at the third caller reading something other than
   ppq, and there is none. `seek` scans and answers an item where these bisect and answer an index,

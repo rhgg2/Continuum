@@ -1006,7 +1006,7 @@ reload).
 
 ## Span-covered fx scans
 
-`coverInto(list, spans, admit, emit)` builds the span cover of a ppq-sorted list: the governing
+`coverInto(list, spanSet, admit, emit)` builds the span cover of a ppq-sorted list: the governing
 entry at-or-before each span's start (so `evalCurve`/`sliceCurve` reads within the span see the
 right precursor), every entry through the span, then the closing entry past its end. `admit`
 filters entries out of governance and emission alike — a skipped entry never governs; spans dedup
@@ -1018,7 +1018,7 @@ forward through one closing onset past `endL`. Membership is still overlap, not 
 authored notes are re-queried each rebuild, one walk feeding both generator events and fixed lane
 occupancy. See `docs/generators.md` § Hosts and membership.
 
-`pbBaseFor(chan, spans)` / `ccBasesFor(chan, spans)` build the absolute authored base (ppq-keyed,
+`pbBaseFor(chan, spanSet)` / `ccBasesFor(chan, spanSet)` build the absolute authored base (ppq-keyed,
 logical) covering only the caller's merged producer windows, not the whole channel: every read of
 the base — `channelStreams`' slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so
 the cover is exact there and the scan is never O(channel). Parked events are authoritative at

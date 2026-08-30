@@ -24,6 +24,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 spans: take the half-open span algebra from trackerManager (design/tracker-manager-split.md § Phase 1 1–2)
 - 2026-08-30 util: take the two ppq index seeks from trackerManager (design/tracker-manager-split.md § Phase 1 4)
 
 ## Now
@@ -31,13 +32,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **`spans.lua`.** The six span-set names — `mergeSpans`,
-   `mergeWindows`, `overlapping`, `spanSetIntersects`, `clipToSpanSet`,
-   `subtractSpanSet` — move to a module whose only requirement is `util`.
-   A spec covers adjacency joining and gaps splitting, that no input span
-   is aliased into a merge, half-openness at both edges, and subtraction
-   as the complement of clipping within one span.
 
 1. **`curves.lua` takes interpolation and the point level.**
    `curveSample` and `mm:interpolate` move from midiManager to

@@ -39,6 +39,7 @@
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
 local util    = require 'util'
+local spans   = require 'spans'
 local timing  = require 'timing'
 local voicing = require 'voicing'
 
@@ -269,64 +270,6 @@ local function ccGridStep()
   return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
 end
 
--- Coalesce { lo, hi } spans into maximal disjoint ascending ones: overlap and adjacency join, gaps
--- split. Copies as it goes, so no input span is aliased into the result.
-local function mergeSpans(spans)
-  local sorted = {}
-  for _, s in ipairs(spans) do util.add(sorted, { s[1], s[2] }) end
-  table.sort(sorted, function(a, b) return a[1] < b[1] end)
-  local merged = {}
-  for _, s in ipairs(sorted) do
-    local last = merged[#merged]
-    if last and s[1] <= last[2] then last[2] = math.max(last[2], s[2])
-    else util.add(merged, { s[1], s[2] }) end
-  end
-  return merged
-end
--- Merge macro windows into maximal covered spans; and pick the macros covering a span.
--- Shared by cc- and pb-augment summation.
-local function mergeWindows(bucket)
-  local wins = {}
-  for _, m in ipairs(bucket) do util.add(wins, m.window) end
-  return mergeSpans(wins)
-end
-local function overlapping(bucket, span)
-  local out = {}
-  for _, m in ipairs(bucket) do
-    if m.window[1] < span[2] and m.window[2] > span[1] then util.add(out, m) end
-  end
-  return out
-end
-
--- Half-open span-set intersection over the continuous gate's merged scopes (nil scope = empty).
-local function spanSetIntersects(spans, window)
-  for _, span in ipairs(spans or {}) do
-    if window[1] < span[2] and window[2] > span[1] then return true end
-  end
-  return false
-end
-local function clipToSpanSet(span, spans)
-  local clipped = {}
-  for _, scope in ipairs(spans or {}) do
-    local lo, hi = math.max(span[1], scope[1]), math.min(span[2], scope[2])
-    if lo < hi then util.add(clipped, { lo, hi }) end
-  end
-  return clipped
-end
--- Complement of clipToSpanSet within `span` (`spans` sorted and disjoint: mergeWindows output).
-local function subtractSpanSet(span, spans)
-  local rest, cursor = {}, span[1]
-  for _, scope in ipairs(spans or {}) do
-    local lo, hi = math.max(span[1], scope[1]), math.min(span[2], scope[2])
-    if lo < hi then
-      if cursor < lo then util.add(rest, { cursor, lo }) end
-      cursor = hi
-    end
-  end
-  if cursor < span[2] then util.add(rest, { cursor, span[2] }) end
-  return rest
-end
-
 -- Strict-next non-pa onset after ppq in a ppq-sorted lane column (logical); nil past the last.
 local function nextLaneOnset(events, ppq)
   local i = util.firstAfter(events, ppq)
@@ -335,8 +278,8 @@ local function nextLaneOnset(events, ppq)
 end
 -- Onset-membership cover of a ppq-sorted list against disjoint ascending spans: emit each event whose
 -- onset falls in [lo, hi). The fx-path rule -- visit window extents, never the whole channel.
-local function coverOnsets(events, spans, emit)
-  for _, span in ipairs(spans or {}) do
+local function coverOnsets(events, spanSet, emit)
+  for _, span in ipairs(spanSet or {}) do
     for i = util.firstAtOrAfter(events, span[1]), #events do
       local evt = events[i]
       if evt.ppq >= span[2] then break end
@@ -533,7 +476,7 @@ end
 -- Fold parallel chains covering `span` in storage order: whole-span records take the verbatim fast path,
 -- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see docs/generators.md § Multiplicity
 local function foldChains(recs, span, base)
-  local covering = overlapping(recs, span)
+  local covering = spans.overlapping(recs, span)
   if #covering == 1 then return covering[1].curve end
   -- A kept range and a full re-derive of the same material must agree point for point, which they only
   -- do once the dirt cannot decide where segments fall. see docs/generators.md § Multiplicity
@@ -573,9 +516,9 @@ local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()
 
 -- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
 -- see docs/trackerManager.md § Span-covered fx scans
-local function coverInto(list, spans, admit, emit)
+local function coverInto(list, spanSet, admit, emit)
   local nextIdx = 1
-  for _, span in ipairs(spans) do
+  for _, span in ipairs(spanSet) do
     local govern = util.firstAfter(list, span[1]) - 1
     while govern >= nextIdx and admit and not admit(list[govern]) do govern = govern - 1 end
     local i = math.max(govern, nextIdx)
@@ -854,8 +797,8 @@ end
 
 -- Half-open span membership, frame-matched: projected column cells always test logical --
 -- projectEvent flips their ppq to ppqL and drops the sidecar; mm-frame records test raw.
-local function pcInSpans(spans, ppq, logical)
-  for _, s in ipairs(spans) do
+local function pcInSpans(seedSpans, ppq, logical)
+  for _, s in ipairs(seedSpans) do
     local lo, hi = logical and s.sL or s.sRaw, logical and s.eL or s.eRaw
     if ppq >= lo and ppq < hi then return true end
   end
@@ -866,13 +809,13 @@ end
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the sink {del(event), add(spec)}
 --contract: marks sampleShadowed=true on the cell or the spec of records lost to lane priority
---contract: spans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
+--contract: seedSpans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
 --invariant: a seated record marks via setCell, off-take direct: no lane sheds a cell it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
-local function reconcilePCsForChan(chan, records, sink, spans)
+local function reconcilePCsForChan(chan, records, sink, seedSpans)
   local existing = {}
   for _, e in ipairs((channels[chan].columns.pc and channels[chan].columns.pc.events) or {}) do
-    if not spans or pcInSpans(spans, e.ppq, true) then util.add(existing, e) end
+    if not seedSpans or pcInSpans(seedSpans, e.ppq, true) then util.add(existing, e) end
   end
 
   local groups = {}
@@ -1791,7 +1734,7 @@ local function buildFxTargets(windows)
     end
   end
   for _, targets in pairs(byProducer) do
-    for target, spans in pairs(targets) do targets[target] = mergeSpans(spans) end
+    for target, claimed in pairs(targets) do targets[target] = spans.merge(claimed) end
   end
   fxTargetsByProducer = byProducer
 end
@@ -1812,8 +1755,8 @@ local function unionRealisation(uuid, byUuid)
       util.add(union.chans, chan)
       for _, note in ipairs(part.notes)  do util.add(union.notes, note) end
       for _, cell in ipairs(part.parked) do util.add(union.parked, cell) end
-      for target, spans in pairs(part.targets) do
-        for _, span in ipairs(spans) do util.bucket(union.targets, target, span) end
+      for target, claimed in pairs(part.targets) do
+        for _, span in ipairs(claimed) do util.bucket(union.targets, target, span) end
       end
     end
   end
@@ -1824,7 +1767,7 @@ local function unionRealisation(uuid, byUuid)
   end)
   -- The expanded producers claim one span each over the same logical window, so the merge collapses
   -- them back to the stored region's own.
-  for target, spans in pairs(union.targets) do union.targets[target] = mergeSpans(spans) end
+  for target, claimed in pairs(union.targets) do union.targets[target] = spans.merge(claimed) end
   return union
 end
 
@@ -2106,10 +2049,10 @@ end
 --invariant: read off the take, so a kept producer's curve stands where a re-run one's does
 function tm:fxCurveAt(uuid, chan, target, ppqL)
   local realisation = fxRealisationByUuid[uuid]
-  local spans = realisation and realisation.targets[target]
-  if not spans then return nil end
+  local claimed = realisation and realisation.targets[target]
+  if not claimed then return nil end
   local inside = false
-  for _, span in ipairs(spans) do
+  for _, span in ipairs(claimed) do
     if ppqL >= span[1] and ppqL < span[2] then inside = true; break end
   end
   if not inside then return nil end
@@ -2541,9 +2484,9 @@ local function rawSpanMap(wins)
 end
 
 local function inSpan(map, chan, cc, ppq, inclusiveEnd)
-  local spans = map[chan] and map[chan][cc or false]
-  if spans then
-    for _, s in ipairs(spans) do
+  local winSpans = map[chan] and map[chan][cc or false]
+  if winSpans then
+    for _, s in ipairs(winSpans) do
       local withinEnd = ppq < s.eRaw or (inclusiveEnd and ppq == s.eRaw)
       if ppq >= s.sRaw and withinEnd then return true end
     end
@@ -2587,10 +2530,10 @@ local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   if not byCc then return end
   local ccBuckets = rawIndexFor(chan).ccs
   local seen = {}
-  for ccNum, spans in pairs(byCc) do
+  for ccNum, winSpans in pairs(byCc) do
     local list = ccBuckets[ccNum]
     if list then
-      for _, span in ipairs(spans) do
+      for _, span in ipairs(winSpans) do
         if windowSeeded(seedRows, span.sL, span.eL) then
           for i = util.firstAtOrAfter(list, span.sRaw), #list do
             local evt = list[i]
@@ -3036,7 +2979,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
         util.bucket(noteWins, w.chan, { window = { w.startppq, w.endppq } })
       end
     end
-    for chan, wins in pairs(noteWins) do noteSpans[chan] = mergeWindows(wins) end
+    for chan, wins in pairs(noteWins) do noteSpans[chan] = spans.mergeWindows(wins) end
   end
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take, fed
@@ -3050,10 +2993,10 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       util.add(scan, { evt = evt, chan = evt.chan, lane = laneIdx,
                        spec = parkSpec(evt, { lane = laneIdx }) })
     end
-    for chan, spans in pairs(noteSpans) do
+    for chan, chanSpans in pairs(noteSpans) do
       if dirtyChans[chan] then
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
-          coverOnsets(col.events, spans, function(evt)
+          coverOnsets(col.events, chanSpans, function(evt)
             if evt.evType ~= 'pa' then candidate(evt, laneIdx) end
           end)
         end
@@ -3187,7 +3130,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
         util.bucket(ccWins, util.key(w.chan, w.cc), { window = { w.startppq, w.endppq } })
       end
     end
-    for key, wins in pairs(ccWins) do ccSpans[key] = mergeWindows(wins) end
+    for key, wins in pairs(ccWins) do ccSpans[key] = spans.mergeWindows(wins) end
 
     local scan = {}
     for chan = 1, 16 do
@@ -3522,7 +3465,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
   -- Absolute authored bases per channel (ppq-keyed, logical), covering only the caller's spans.
   -- see docs/trackerManager.md § Span-covered fx scans
-  local function pbBaseFor(chan, spans)
+  local function pbBaseFor(chan, spanSet)
     local base, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedPb or {}) do
       util.add(base, { ppq = cell.ppq, val = cell.cents, shape = cell.shape or 'step', tension = cell.tension })
@@ -3531,7 +3474,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- The maintained pb index is raw-sorted; pbs carry no delay and swing is monotone, so the raw
     -- cover is the logical cover. Authored = the cents sidecar (seats and foreign pbs carry none).
     local rawSpans = {}
-    for _, span in ipairs(spans) do
+    for _, span in ipairs(spanSet) do
       util.add(rawSpans, { tm:fromLogical(chan, span[1]), tm:fromLogical(chan, span[2]) })
     end
     local function authored(pb) return not pb.derived and pb.cents ~= nil end
@@ -3544,7 +3487,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     sortByPPQ(base)
     return base
   end
-  local function ccBasesFor(chan, spans)
+  local function ccBasesFor(chan, spanSet)
     local bases, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedCC or {}) do
       util.bucket(bases, cell.cc, { ppq = cell.ppq, val = cell.val, shape = cell.shape or 'step',
@@ -3552,7 +3495,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       seen[util.key(cell.cc, cell.ppq)] = true
     end
     for cc, col in pairs(channels[chan].columns.ccs) do
-      coverInto(col.events, spans, nil, function(evt)
+      coverInto(col.events, spanSet, nil, function(evt)
         if not seen[util.key(cc, evt.ppq)] then
           util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
                                    tension = evt.tension })
@@ -3730,7 +3673,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     local function keepable(producer)
       local targets = generators.continuousTargets(producer.fx)
       for target in pairs(targets) do
-        if spanSetIntersects(emitScope[target], producer.window) then return false end
+        if spans.intersects(emitScope[target], producer.window) then return false end
       end
       return true
     end
@@ -3839,7 +3782,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
           for target in pairs(targetsOf[producer]) do util.bucket(emitWins, target, producer) end
         end
       end
-      for target, group in pairs(emitWins) do emitScope[target] = mergeWindows(group) end
+      for target, group in pairs(emitWins) do emitScope[target] = spans.mergeWindows(group) end
       fxOut.pbScope[chan] = emitScope.pb or {}
     end
 
@@ -3849,8 +3792,8 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     for _, producer in ipairs(producers) do
       if not gated or seeded[producer] or not keepable(producer) then util.add(running, producer) end
     end
-    local spans = mergeWindows(running)
-    pbBase, ccBases = pbBaseFor(chan, spans), ccBasesFor(chan, spans)
+    local runWins = spans.mergeWindows(running)
+    pbBase, ccBases = pbBaseFor(chan, runWins), ccBasesFor(chan, runWins)
     fxOut.pbBase[chan] = pbBase
 
     for _, producer in ipairs(producers) do runOrKeep(producer) end
@@ -3887,8 +3830,8 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         for _, rec in ipairs(recs) do minStart = math.min(minStart, rec.window[1]) end
         base = { { ppq = minStart, val = rest, shape = 'step' } }
       end
-      for _, span in ipairs(mergeWindows(recs)) do
-        for _, emitSpan in ipairs(gated and clipToSpanSet(span, emitScope[cc]) or { span }) do
+      for _, span in ipairs(spans.mergeWindows(recs)) do
+        for _, emitSpan in ipairs(gated and spans.clip(span, emitScope[cc]) or { span }) do
           for _, point in ipairs(foldChains(recs, emitSpan, base)) do
             if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
               util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
@@ -4457,8 +4400,8 @@ local function rebuildPbs(fxOut, extraColumns)
                        startRaw = tm:fromLogical(chan, sub[1], 0),
                        endRaw   = tm:fromLogical(chan, sub[2], 0) })
     end
-    for _, span in ipairs(mergeWindows(pbChains[chan])) do
-      for _, sub in ipairs(emitSpans and clipToSpanSet(span, emitSpans) or { span }) do
+    for _, span in ipairs(spans.mergeWindows(pbChains[chan])) do
+      for _, sub in ipairs(emitSpans and spans.clip(span, emitSpans) or { span }) do
         local bps = {}
         for _, point in ipairs(foldChains(liveRecs, sub, pbBase[chan])) do
           -- Fold fast paths return whole curves, and an interior closing edge belongs to the kept
@@ -4471,7 +4414,7 @@ local function rebuildPbs(fxOut, extraColumns)
         sortByPPQ(bps)
         addWin(sub, bps, nil)
       end
-      for _, sub in ipairs(emitSpans and subtractSpanSet(span, emitSpans) or {}) do
+      for _, sub in ipairs(emitSpans and spans.subtract(span, emitSpans) or {}) do
         addWin(sub, {}, true)
       end
     end
@@ -4512,7 +4455,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Extents come by seek, ahead of the gather.
   local function seatScope(chan, dirt, replaceWins, derivedLane1)
     if dirt == true then return nil end
-    local spans = {}
+    local seatSpans = {}
     -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, the
     -- same union lane1Between/lane1DetuneAt seek; seek both here and take the nearer.
     local function nextLane1After(ppq)
@@ -4520,13 +4463,13 @@ local function rebuildPbs(fxOut, extraColumns)
       local derived  = util.seek(derivedLane1, 'after', ppq)
       return math.min(authored and authored.ppq or math.huge, derived and derived.ppq or math.huge)
     end
-    local function lane1Span(ppq) util.add(spans, { ppq - DUAL_POINT_TICK, nextLane1After(ppq) }) end
+    local function lane1Span(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, nextLane1After(ppq) }) end
     local function bpSpan(ppq)
       -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
       local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
       local prevBp = util.seek(rawIndexFor(chan).pbs, 'before', ppq, authored)
       local nextBp = util.seek(rawIndexFor(chan).pbs, 'after',  ppq, authored)
-      util.add(spans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
+      util.add(seatSpans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
     end
     -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
     -- cc/at/pc families move no pb seat, so only an unrecognised kind ungates the channel.
@@ -4550,15 +4493,15 @@ local function rebuildPbs(fxOut, extraColumns)
       end
     end
     for _, win in ipairs(replaceWins.wins) do
-      if not win.kept then util.add(spans, { win.startRaw - DUAL_POINT_TICK, win.endRaw }) end
+      if not win.kept then util.add(seatSpans, { win.startRaw - DUAL_POINT_TICK, win.endRaw }) end
     end
     -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
     -- need to seat, refresh, or retire it, so its point is always in scope.
     local authoredFirst = util.seek(rawIndexFor(chan).notes, 'at-or-after', 0, lane1Note)
     local firstPpq = math.min(authoredFirst and authoredFirst.ppq or math.huge,
                               derivedLane1[1] and derivedLane1[1].ppq or math.huge)
-    if firstPpq ~= math.huge then util.add(spans, { firstPpq - DUAL_POINT_TICK, firstPpq }) end
-    return spans
+    if firstPpq ~= math.huge then util.add(seatSpans, { firstPpq - DUAL_POINT_TICK, firstPpq }) end
+    return seatSpans
   end
 
   -- Replace windows + seat spans per dirty chan, computed ahead of the gather. Fresh (non-kept)
@@ -4577,9 +4520,9 @@ local function rebuildPbs(fxOut, extraColumns)
 
   -- A ppq's membership in a channel's seat scope; nil spans (ungated) puts everything in scope. The
   -- clone/carry partition: the gather clones only in-scope pbs, projection carries the rest verbatim.
-  local function inSpans(spans, ppq)
-    if not spans then return true end
-    for _, s in ipairs(spans) do
+  local function inSpans(spanSet, ppq)
+    if not spanSet then return true end
+    for _, s in ipairs(spanSet) do
       if ppq >= s[1] and ppq <= s[2] then return true end
     end
     return false
@@ -4590,9 +4533,9 @@ local function rebuildPbs(fxOut, extraColumns)
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      local spans = seatSpansByChan[chan]
+      local seatSpans = seatSpansByChan[chan]
       for _, entry in ipairs(rawIndexFor(chan).pbs) do
-        if inSpans(spans, entry.ppq) then
+        if inSpans(seatSpans, entry.ppq) then
           local pb = util.clone(entry, { colEvt = true })
           pb.origShape = entry.shape
           util.bucket(pbsByChan, pb.chan, pb)
@@ -4615,7 +4558,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor, seeded by the
     -- carried-in detune and walked per coalesced seat span. see docs/tuning.md § Seat-span-scoped onset walk
     local onsets, onsetAt = {}, {}
-    for _, span in ipairs(seatSpans and mergeSpans(seatSpans) or { { 0, math.huge } }) do
+    for _, span in ipairs(seatSpans and spans.merge(seatSpans) or { { 0, math.huge } }) do
       local prev = lane1DetuneAt(chan, span[1] - 1)
       for _, note in ipairs(lane1Between(chan, span[1], span[2])) do
         local detune = note.detune or 0
@@ -4966,23 +4909,23 @@ local function pcSeedSpans(chan, dirt, noteLive)
     local live = s.uuid and tm:byUuid(s.uuid)
     if live then addPoint(live.ppq, live.ppqL) end
   end
-  local spans, notes = {}, rawIndexFor(chan).notes
+  local seedSpans, notes = {}, rawIndexFor(chan).notes
   for _, point in ipairs(points) do
     local i = util.firstAfter(notes, point.ppq)
     while notes[i] and not walkable(notes[i]) do i = i + 1 end
     local nextNote = notes[i]
-    util.add(spans, { sRaw = point.ppq, eRaw = nextNote and nextNote.ppq or math.huge,
-                      sL = point.ppqL, eL = nextNote and nextNote.ppqL or math.huge })
+    util.add(seedSpans, { sRaw = point.ppq, eRaw = nextNote and nextNote.ppq or math.huge,
+                          sL = point.ppqL, eL = nextNote and nextNote.ppqL or math.huge })
   end
-  return spans
+  return seedSpans
 end
 
 -- pcSeedSpans' raw extents overlap routinely (two points per seed, shared next-onsets); merge to
 -- disjoint ascending so coverOnsets emits each in-span event exactly once. see interval-dirt v2 § 4
-local function rawCoverSpans(spans)
+local function rawCoverSpans(seedSpans)
   local raw = {}
-  for _, s in ipairs(spans) do util.add(raw, { s.sRaw, s.eRaw }) end
-  return mergeSpans(raw)
+  for _, s in ipairs(seedSpans) do util.add(raw, { s.sRaw, s.eRaw }) end
+  return spans.merge(raw)
 end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records,
@@ -4995,9 +4938,9 @@ local function rebuildPCs(noteLive)
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
     local dirt = dirtyChans[chan]
     if not dirt then goto nextChan end
-    local spans = pcSeedSpans(chan, dirt, noteLive[chan])
-    local rawSpans = spans and rawCoverSpans(spans)
-    spansByChan[chan], rawSpansByChan[chan] = spans, rawSpans
+    local seedSpans = pcSeedSpans(chan, dirt, noteLive[chan])
+    local rawSpans = seedSpans and rawCoverSpans(seedSpans)
+    spansByChan[chan], rawSpansByChan[chan] = seedSpans, rawSpans
     local records = {}
     local function recordNote(entry)
       if walkable(entry) then
@@ -5012,12 +4955,12 @@ local function rebuildPCs(noteLive)
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
-      if not spans or pcInSpans(spans, n.ppq, false) then
+      if not seedSpans or pcInSpans(seedSpans, n.ppq, false) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, spec = n })
       end
     end
-    reconcilePCsForChan(chan, records, pcWrites, spans)
+    reconcilePCsForChan(chan, records, pcWrites, seedSpans)
     ::nextChan::
   end
   pcWrites.commit()
@@ -5026,11 +4969,11 @@ local function rebuildPCs(noteLive)
   -- committed stream. Always a fresh events table -- tv's cell carry keys on table identity.
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      local spans = spansByChan[chan]
+      local seedSpans = spansByChan[chan]
       local events = {}
-      if spans then
+      if seedSpans then
         for _, e in ipairs((channels[chan].columns.pc and channels[chan].columns.pc.events) or {}) do
-          if not pcInSpans(spans, e.ppq, true) then util.add(events, e) end
+          if not pcInSpans(seedSpans, e.ppq, true) then util.add(events, e) end
         end
       end
       local function projectPc(cc)
@@ -5038,7 +4981,7 @@ local function rebuildPCs(noteLive)
         projectEvent(cell, chan)
         util.add(events, cell)
       end
-      if spans then
+      if seedSpans then
         coverOnsets(rawIndexFor(chan).pcs, rawSpansByChan[chan], projectPc)
       else
         for _, cc in ipairs(rawIndexFor(chan).pcs) do projectPc(cc) end
