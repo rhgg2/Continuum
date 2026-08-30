@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The lotus menu draws its letters as the cheat-sheet's keycaps, in the row and in
+  the panel alike, since a menu letter is a key pressed. A row wider than the window wraps upward,
+  so every title is drawn in full. One box sits above the highlighted member, carrying its title and
+  its description line, and a group's children with their letters, so the lookahead and a leaf's
+  line are one mechanism. That box stops at the window's top edge and slides to stay within its
+  sides, covering the toolbar where a deep group needs the room.
+
 - **2026-08-30** — The lotus menu's highlight moves with Left and Right, since a level draws as one
   row; Enter and Up take it, Down and Esc unwind. An unwind restores the index the descent was taken
   through, so stepping back up the path lands the highlight where the eye left it. The numeric

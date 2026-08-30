@@ -1,7 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 4
-> (the walk)
+> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 5
+> (the row)
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
@@ -64,38 +64,12 @@ Landed — see `docs/commandManager.md` § The top level.
 
 ## Walking a path
 
-1. `/` opens the menu at the top level. The key is free: the dispatcher
-   consumes `/` only while the prefix buffer is open
-   (`docs/commandManager.md` § Prefix capture).
-
-1. A letter descends. A group's letter opens that group; a leaf's letter
-   closes the menu and invokes its command, in that order, so the command is
-   gated by the ordinary stack. Nothing confirms a choice, because each letter
-   is unique within its level.
-
-1. Esc pops one level, and closes the menu from the top. The menu holds
-   its own path and unwinds it, so one scope covers the whole walk.
-
-1. Arrows move the highlight and Enter takes it, for a path not yet known
-   by heart.
+Landed — see `docs/menu.md` §§ The walk and The highlight.
 
 ## What stays live
 
-1. The open menu is a modal scope. Page and grid keys are blocked, so a
-   letter always means a menu letter.
-
-1. Passthrough keeps the transport and the page switchers live. Play, stop
-   and travel to a page reach their commands with the menu open, because
-   Continuum is played while it is edited and travel is not a menu letter.
-
-1. The menu reads its surface off the stack as it opens, since its own
-   modality would otherwise hide the commands it walks to. Closing a page
-   switch's outgoing menu is the coordinator's, so the two scopes unwind in
-   order — see `docs/menu.md` § A modal scope.
-
-1. The numeric prefix survives the walk. Opening the menu neither freezes
-   nor clears a pending prefix, so `⌘U 4 /VRS` sets rows-per-beat to 4.
-   The leaf's invoke consumes it exactly as a chord's would.
+Landed — see `docs/menu.md` §§ A modal scope, What stays live and A
+pending prefix.
 
 ## Where it draws
 
@@ -103,16 +77,28 @@ Landed — see `docs/commandManager.md` § The top level.
    The toolbar above holds the controls a command is chosen against, and
    the menu leaves it uncovered.
 
-1. A **panel** drops from the highlighted group and grows upward. It
-   lists that group's members with their letters, so the panel is the
-   **lookahead** — the level below the highlight, shown before the
-   highlight is taken.
+1. A member draws as its letter in a keycap beside its title, the keycap
+   the cheat-sheet draws. The letter is a key pressed, so it reads as one
+   in both places. The highlighted member wears a fill.
+
+1. The row wraps upward where its level is wider than the window, so
+   every title is drawn in full.
+
+1. A **panel** sits above the highlighted member and grows upward. It
+   carries that member's title and its description line, and a group's
+   children with their letters, so the panel is the **lookahead** — the
+   level below the highlight, shown before the highlight is taken.
+
+1. The panel is the cheat-sheet's box renderer. F1 draws every group at
+   once; the menu draws one and walks.
+
+1. The panel stops at the window's top edge and slides to stay within its
+   sides, covering the toolbar where a deep group needs the room. An
+   uncovered toolbar is the row's rule, and the row stands for the length
+   of the walk while the next letter replaces the panel.
 
 1. The menu overlays and does not reflow. Opening it moves no grid row,
    so the cursor stays where the eye left it.
-
-1. The panel is the cheat-sheet's box renderer with a highlight. F1 draws
-   every group at once; the menu draws one and walks.
 
 ## Both routes on the cheat-sheet
 
@@ -147,7 +133,3 @@ Landed — see `docs/commandManager.md` § The top level.
 - **The editor's row.** The sampler declares two pathed verbs and wiring
   one, so both pages earn a row of their own. The editor declares none, and
   whether the global paths alone earn it a row is not settled.
-
-- **A narrow window.** Twelve titles fit a comfortable width. What the
-  row does when they do not — truncate, wrap, or scroll — is not
-  settled.

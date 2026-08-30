@@ -31,11 +31,12 @@
    `/` to open, a letter to descend or invoke, Esc to unwind, arrows and
    Enter for the highlight, transport passed through, prefix surviving. The
    letters land with a plain row, so the walk is used from the keyboard
-   before the prefix and the highlight are cut. ← in flight
+   before the prefix and the highlight are cut. — landed 2026-08-30, four
+   commits; the model now lives in `docs/menu.md`.
 5. **Phase 5 — The row** (§ Where it draws) — the row's own geometry over
    the plain line phase 4 draws, the lookahead panel drawn upward from the
    highlight on the cheat-sheet's box renderer, and what a thin page or a
-   narrow window does.
+   narrow window does. ← in flight
 6. **Phase 6 — Both routes** (§ Both routes on the cheat-sheet) — a pathed
    command's path as a chip beside its key chips, rendered from the entry
    and the group letters.
@@ -53,4 +54,22 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+1. **The chip box leaves the cheat-sheet** — the keycap cluster and the
+   box it sits in (title, then rows of chips and labels) move out of
+   `help.lua` into a module of their own, drawn against a drawlist and a
+   theme passed in. The sheet keeps its edit tags and its click map, and
+   hands them to the module. Green-first: `help_input_spec` drives
+   `help:draw` under a fake ImGui and pins the sheet unchanged, with a
+   layout case on the measured box.
+2. **The row's own geometry** — the level draws as keycaps and titles,
+   the highlighted member wearing a fill and its description line shown,
+   wrapping upward where the window is too narrow for the level. The
+   drawing leaves `coordinator.lua` for a render module of its own.
+   Spec: a new `menu_render_spec`, on the fake ImGui `help_input_spec`
+   builds, reads the letters, the fill and the wrap off the draw calls.
+3. **The lookahead panel** — the box above the highlighted member,
+   carrying its title and description, and a group's children with their
+   letters, drawn through item 1's module and clamped to the window's
+   top and sides. Spec, in `menu_render_spec`: a group highlight draws
+   its children, a leaf highlight stops at the line, and a deep group
+   clamps.
