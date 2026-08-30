@@ -125,9 +125,11 @@ is a menu letter rather than a page verb.**
 
 1. The level draws as a strip over the body's last row, on the
    foreground draw list, so opening the menu moves no grid row. The
-   strip reaches the window's margins, as the toolbar and status bands
-   do, stands on the status bar below it, and rules its top edge in a
-   colour role of its own, defaulted to the highlight's.
+   toolbar above the body holds the controls a command is chosen
+   against, so the strip leaves it uncovered. The strip reaches the
+   window's margins, as the toolbar and status bands do, stands on the
+   status bar below it, and rules its top edge in a colour role of its
+   own, defaulted to the highlight's.
    `menuRender.lua` owns the drawing, and reads the walk off the menu.
 
 1. A member draws as its letter in a keycap beside its title, through the

@@ -36,10 +36,12 @@
 5. **Phase 5 — The row** (§ Where it draws) — the row's own geometry over
    the plain line phase 4 draws, the lookahead panel drawn upward from the
    highlight on the cheat-sheet's box renderer, and what a thin page or a
-   narrow window does. ← in flight
+   narrow window does. — landed 2026-08-30, four commits; the lookahead
+   landed as a preview line in the strip instead of a panel, and the model
+   now lives in `docs/menu.md` § The row.
 6. **Phase 6 — Both routes** (§ Both routes on the cheat-sheet) — a pathed
    command's path as a chip beside its key chips, rendered from the entry
-   and the group letters.
+   and the group letters. ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -54,4 +56,19 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+1. **A pathed entry carries its route** — `installTree` already resolves
+   each pathed entry's node, title and letter; it also records the letters
+   walked from the top of the tree down to the entry, behind the slash that
+   opens the menu — `/NET` for `Navigate/Editor/Tuning`, `/EU` for undo. The
+   route is stamped from the tree's own letters, so it cannot drift from
+   what the menu walks. Spec, in `cmgr_menu_spec`: a nested path's route, a
+   letter override honoured, and no route on a fluent entry.
+2. **The cheat-sheet shows both routes** — a pathed command's row draws its
+   route in a keycap after its key chips, through `keycaps`' chip renderer,
+   separated by a plain gap since the `/` between chips reads as "or". The
+   route chip is inert: no click hit, no ✕ and no `+`, paths being unbound
+   for now. A pathed command with no binding shows its route where the em
+   dash stands, and the box's key column widens to hold the chip. Spec, on
+   the recorded draw calls `help_input_spec`'s layout case reads: a bound
+   pathed command draws chord and route, an unbound one route alone, and a
+   click on the route chip opens no editor. `docs/help.md` gains the model.

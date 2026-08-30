@@ -1,7 +1,7 @@
 # lotus menu — a typed path to every deliberate verb
 
-> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 5
-> (the row)
+> opened: 2026-08-25 · status: in flight — plan/lotus-menu.md, phase 6
+> (both routes)
 
 **Every command is declared once, in a per-scope manifest carrying its
 label, its keys, and — for the deliberate verbs — a menu path. `/` opens
@@ -73,11 +73,7 @@ pending prefix.
 
 ## Where it draws
 
-1. The row, its keycaps, its wrap and its preview line have landed — see
-   `docs/menu.md` § The row.
-
-1. The toolbar above the body holds the controls a command is chosen
-   against, and the row leaves it uncovered.
+Landed — see `docs/menu.md` § The row.
 
 ## Both routes on the cheat-sheet
 
