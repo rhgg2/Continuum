@@ -17,9 +17,11 @@ scope.modal = true
 
 --shape: member = { letter, title, desc, node? , entry? }  -- a group carries its node, a leaf its entry
 
-local open    = false
-local path    = {}   -- the nodes descended into
-local surface = {}   -- the entries the menu snapshotted as it opened
+local open      = false
+local path      = {}   -- the nodes descended into
+local surface   = {}   -- the entries the menu snapshotted as it opened
+local highlight = 1    -- the member of the current level Enter takes
+local marks     = {}   -- the highlight each level on the path was left on
 
 local menu = {}
 
@@ -45,12 +47,43 @@ local function occupied(node)
   return false
 end
 
+-- What a letter does, and what Enter does to the highlight: a group descends, a leaf
+-- closes the menu and invokes.
+--contract: the level descended from is marked with the index taken, for the unwind to restore
+local function choose(index)
+  local member = menu:level()[index]
+  if not member then return end
+  if member.node then
+    marks[#path + 1] = index
+    util.add(path, member.node)
+    highlight = 1
+  else
+    -- Close first, so the leaf's command is gated by the stack the menu was walked over
+    -- rather than blocked by the menu's own modality.
+    local name = member.entry.name
+    menu:close()
+    -- And freeze the prefix here, as the keychain walk does immediately before its invoke,
+    -- so a prefix typed before the walk reaches the leaf.
+    cmgr:finishPrefix()
+    cmgr:invoke(name)
+  end
+end
+
+-- The level draws as one row, so the highlight runs along it and either end joins the other.
+local function move(step)
+  local count = #menu:level()
+  if count > 0 then highlight = (highlight - 1 + step) % count + 1 end
+end
+
 ---------- PUBLIC
 
 function menu:isOpen() return open end
 
 --contract: the nodes descended into, empty at the top level; the menu owns it and unwinds it
 function menu:path() return path end
+
+--contract: the index into the current level, which Enter takes
+function menu:highlight() return highlight end
 
 --contract: the members of the node the path names — groups in tree order, then leaves by title
 function menu:level()
@@ -76,32 +109,24 @@ function menu:level()
   return members
 end
 
---contract: the member the letter names
---contract: a group's letter descends
---contract: a leaf's letter closes the menu and invokes; unmatched is dropped
+--contract: takes the member the letter names, as Enter takes the highlight; unmatched is dropped
 function menu:press(letter)
   local hit
-  for _, member in ipairs(self:level()) do
-    if member.letter == letter then hit = member end
+  for index, member in ipairs(self:level()) do
+    if member.letter == letter then hit = index end
   end
-  if not hit then return end
-  if hit.node then
-    util.add(path, hit.node)
-  else
-    -- Close first, so the leaf's command is gated by the stack the menu was walked over
-    -- rather than blocked by the menu's own modality.
-    local name = hit.entry.name
-    self:close()
-    -- And freeze the prefix here, as the keychain walk does immediately before its invoke,
-    -- so a prefix typed before the walk reaches the leaf.
-    cmgr:finishPrefix()
-    cmgr:invoke(name)
-  end
+  if hit then choose(hit) end
 end
 
 --contract: pops one level, and closes the menu from the top
+--contract: the highlight returns to the member the level below was descended through
 function menu:back()
-  if #path == 0 then self:close() else path[#path] = nil end
+  if #path == 0 then
+    self:close()
+  else
+    path[#path] = nil
+    highlight   = marks[#path + 1] or 1
+  end
 end
 
 -- The surface is read before the menu's own scope goes on the stack: its modality would
@@ -110,13 +135,13 @@ function menu:open()
   if open then return end
   surface           = cmgr:surface()
   scope.passthrough = livePassthrough()
-  path, open = {}, true
+  path, marks, highlight, open = {}, {}, 1, true
   cmgr:push(scope)
 end
 
 function menu:close()
   if not open then return end
-  path, surface, open = {}, {}, false
+  path, surface, marks, highlight, open = {}, {}, {}, 1, false
   cmgr:pop(scope)
 end
 
@@ -128,5 +153,8 @@ scope.dismiss       = function() menu:close() end
 
 cmgr:register('openMenu',   function() menu:open()  end)
 scope:register('menuBack',  function() menu:back()  end)
+scope:register('menuLeft',  function() move(-1)          end)
+scope:register('menuRight', function() move(1)           end)
+scope:register('menuEnter', function() choose(highlight) end)
 
 return menu

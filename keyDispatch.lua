@@ -72,6 +72,7 @@ end
 --contract: the walk claims the press before invoking; a command's reads see a queue without it
 --contract: first-hit wins; false declines, and restores the press to the queue
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+--contract: except an entry declared transparent (cmgr:keepsPrefix), which passes through
 --contract: a captured '/' also opens the menu
 --contract: a captured digit dismisses the top scope, resolving the slash as the bar
 --contract: while captureLetter is declared, that sink gets bare/Shift letters, not the keychain
@@ -91,7 +92,7 @@ function keyDispatch.dispatchKeys(state, cmgr, keyQueue)
           if entry then
             -- Freeze the prefix buffer immediately before invoke so
             -- pendingPrefix is set when invoke reads it as the first arg.
-            if cmgr:isPrefixActive() and command ~= 'beginPrefix' then
+            if cmgr:isPrefixActive() and not cmgr:keepsPrefix(command) then
               cmgr:finishPrefix()
             end
             if cmgr:invoke(command) == false then

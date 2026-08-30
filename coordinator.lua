@@ -117,12 +117,13 @@ local function dispatch(state)
   keyDispatch.dispatchKeys(state, cmgr, keyQueue)
 end
 
--- The open menu's level, as one line of letters and titles over the body's last row.
--- Phase 5 gives the row its own geometry — see design/lotus-menu.md § Where it draws.
+-- The open menu's level: one line over the body's last row, highlight
+-- bracketed (docs/menu.md § The level, § The highlight).
 local function drawMenuRow(x, bottom, width)
-  local parts = {}
-  for _, member in ipairs(menu:level()) do
-    util.add(parts, member.letter .. ' ' .. member.title)
+  local parts, current = {}, menu:highlight()
+  for index, member in ipairs(menu:level()) do
+    local part = member.letter .. ' ' .. member.title
+    util.add(parts, index == current and '[' .. part .. ']' or part)
   end
   local dl    = ImGui.GetForegroundDrawList(ctx)
   local lineH = ImGui.GetTextLineHeight(ctx)

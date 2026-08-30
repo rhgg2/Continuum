@@ -59,10 +59,10 @@ local unwalked = {
   wiring = {
     'wiringClearSelection',
   },
-  -- Opening the menu and stepping back out are the walk's own verbs, so neither is
-  -- walked to.
+  -- Stepping back out and moving the highlight are the walk's own verbs, so none of them
+  -- is walked to.
   menu = {
-    'menuBack',
+    'menuBack', 'menuLeft', 'menuRight', 'menuEnter',
   },
 }
 

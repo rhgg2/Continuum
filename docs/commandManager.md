@@ -333,6 +333,13 @@ they collide with prefix entry only just after Super-U. There is no
 letter-chord support — vim-style two-key entry (`gr`, `gg`) would need
 new machinery.
 
+An entry may declare itself **transparent** to the prefix, as
+`keepsPrefix`, and the keychain walk then neither freezes nor spends the
+buffer before invoking that command. `beginPrefix` is one, since it
+opens the buffer; the lotus menu's walk keys are the others, since the
+prefix belongs to the leaf the walk reaches (`docs/menu.md` § A pending
+prefix).
+
 The `/` in that alphabet is the rational's bar and the lotus menu's key
 at once, so a captured `/` invokes `openMenu` as well as appending, and
 the key after it resolves which was meant: a digit continues the

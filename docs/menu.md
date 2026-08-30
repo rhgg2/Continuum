@@ -101,6 +101,22 @@ is a menu letter rather than a page verb.**
    letter is still pressed. Key dispatch therefore reports the letter
    it captured as held, which that pass reads per key.
 
+## The highlight
+
+1. The menu holds a **highlight**, an index into the current level. Left
+   and Right move it along the level, and either end joins the other.
+
+1. Enter takes the highlight, doing what that member's letter does: a
+   group descends, a leaf closes the menu and invokes. Up takes it too,
+   and Down unwinds, the second pair beside Enter and Esc.
+
+1. A descent marks the level it leaves with the index it was taken
+   through, and an unwind restores that mark. Stepping back up the path
+   therefore returns the highlight to the member it descended through,
+   by letter and by Enter alike. Opening and closing clear the marks.
+
+1. The row brackets the highlighted member.
+
 ## A pending prefix
 
 1. `/` is the numeric prefix's rational bar as well as the menu key
@@ -115,3 +131,9 @@ is a menu letter rather than a page verb.**
    before its invoke, where the keychain walk calls it too, so `⌘U 4
    /VRS` sets rows per beat to 4. A walk abandoned leaves the buffer
    open where it stood.
+
+1. The walk's own keys reach commands, not a sink, so each is declared
+   transparent to the prefix (`docs/commandManager.md` § Prefix
+   capture). Moving the highlight and unwinding a level leave the buffer
+   as they found it, and the leaf Enter reaches takes it exactly as the
+   leaf a letter reaches does.

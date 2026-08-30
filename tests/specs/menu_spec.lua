@@ -63,6 +63,19 @@ local function named(members, title)
   for _, m in ipairs(members) do if m.title == title then return m end end
 end
 
+-- The position a member holds in its level, named by a group's title or by the entry a
+-- leaf carries, so a re-cut path moves nothing here.
+local function indexOf(members, wanted)
+  for i, m in ipairs(members) do
+    if m.title == wanted or m.entry == wanted then return i end
+  end
+end
+
+-- Right from the first member, which is where every level opens.
+local function highlightTo(mgr, index)
+  for _ = 2, index do mgr:invoke('menuRight') end
+end
+
 return {
   {
     name = 'opening pushes the menu scope over the page, and closing pops it',
@@ -349,6 +362,99 @@ return {
       mgr:invoke('menuBack')
       mgr:invoke('menuBack')
       t.eq(mgr:letterCapture(), nil, 'a closed menu captures nothing again')
+    end,
+  },
+
+  {
+    -- The second route through a level, for a path not known by heart. The level draws as
+    -- one row, so Left and Right run along it, and either end joins the other.
+    name = 'the highlight moves along the level, and wraps at either end',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      local top = menu:level()
+      t.truthy(#top > 2, 'the top level holds a row to move along')
+      t.eq(menu:highlight(), 1, 'the walk opens on the first member')
+
+      mgr:invoke('menuRight')
+      t.eq(menu:highlight(), 2, 'Right moves along the row')
+      mgr:invoke('menuLeft')
+      mgr:invoke('menuLeft')
+      t.eq(menu:highlight(), #top, 'and Left off the front wraps to the last member')
+      mgr:invoke('menuRight')
+      t.eq(menu:highlight(), 1, 'as Right off the end wraps to the first')
+    end,
+  },
+
+  {
+    -- Enter is the letter's equal: it descends on a group and invokes on a leaf, so the same
+    -- walk taken either way reaches the same command. /GQ is the tracker's quantize.
+    name = 'Enter takes the highlight, doing what that member\'s letter would',
+    run = function()
+      local mgr, menu, log = fixture('tracker')
+      mgr:invoke('openMenu')
+      menu:press('G')
+      menu:press('Q')
+      t.deepEq(log, { 'quantize' }, 'the letters reach the leaf')
+
+      mgr:invoke('openMenu')
+      highlightTo(mgr, indexOf(menu:level(), 'Grid'))
+      mgr:invoke('menuEnter')
+      t.deepEq(titles(menu:path()), { 'Grid' }, 'Enter on a group descends into it')
+      t.eq(menu:highlight(), 1, 'and the level below opens on its first member')
+
+      highlightTo(mgr, indexOf(menu:level(), mgr:entry('quantize')))
+      mgr:invoke('menuEnter')
+      t.deepEq(log, { 'quantize', 'quantize' }, 'Enter on a leaf invokes what its letter did')
+      t.eq(menu:isOpen(), false, 'and the menu is closed behind it')
+    end,
+  },
+
+  {
+    -- What the unwind restores: a descent marks the level it leaves with the member it was
+    -- taken through, so stepping back up the path lands the highlight where the eye left it,
+    -- whether the descent was by letter or by Enter.
+    name = 'an unwind returns the highlight to the member it descended through',
+    run = function()
+      local mgr, menu = fixture('tracker')
+      mgr:invoke('openMenu')
+      local top  = menu:level()
+      local grid = indexOf(top, 'Grid')
+      t.truthy(grid > 1, 'the group is not the one the walk opens on')
+
+      menu:press('G')
+      t.eq(menu:highlight(), 1, 'the descent opens on the first member below')
+      mgr:invoke('menuRight')
+      mgr:invoke('menuBack')
+      t.deepEq(titles(menu:level()), titles(top), 'the unwind is back at the level it came from')
+      t.eq(menu:highlight(), grid, 'with the highlight on the group it descended through')
+
+      mgr:invoke('menuEnter')
+      t.deepEq(titles(menu:path()), { 'Grid' }, 'which Enter descends into again')
+      t.eq(menu:highlight(), 1, 'from the first member, the mark below being spent')
+    end,
+  },
+
+  {
+    -- The prefix is the leaf's, whichever route reaches it: moving the highlight neither
+    -- freezes nor spends the buffer, and Enter freezes it exactly where a letter does.
+    name = 'the highlight keys leave a pending prefix for the leaf Enter reaches',
+    run = function()
+      local mgr, menu, log = fixture('tracker')
+      local seen
+      mgr:scope('tracker'):register('setRPB', function(n) util.add(log, 'setRPB'); seen = n end)
+
+      mgr:beginPrefix(); mgr:appendPrefix('4'); mgr:appendPrefix('/')
+      mgr:invoke('openMenu')
+      menu:press('V')
+      menu:press('R')
+      highlightTo(mgr, indexOf(menu:level(), mgr:entry('setRPB')))
+      t.eq(mgr:isPrefixActive(), true, 'moving the highlight leaves the buffer open')
+
+      mgr:invoke('menuEnter')
+      t.deepEq(log, { 'setRPB' }, 'Enter reached the leaf the path names')
+      t.eq(seen, 4, 'taking the pending prefix as its first argument')
+      t.eq(mgr:isPrefixActive(), false, 'and the buffer is spent')
     end,
   },
 }

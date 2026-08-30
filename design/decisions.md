@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The lotus menu's highlight moves with Left and Right, since a level draws as one
+  row; Enter and Up take it, Down and Esc unwind. An unwind restores the index the descent was taken
+  through, so stepping back up the path lands the highlight where the eye left it. The numeric
+  prefix's exemption is now declared per entry as keepsPrefix, in place of the dispatcher's
+  hardcoded beginPrefix name. The walk's own keys carry it, so an arrow or an Enter over a pending
+  buffer leaves it for the leaf.
+
 - **2026-08-30** — The stream record becomes a closure: makeStream() holds list, order, free,
   maxSlot, chans and sidecars as locals, so the six can only move together and only through its
   surface -- the module chunk's own pattern one level down. The surface splits in two: verbs (get,

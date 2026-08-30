@@ -183,6 +183,36 @@ return {
   },
 
   {
+    -- Transparency to the prefix, declared per entry: the walk's own keys move a highlight
+    -- over a buffer the leaf will take, and the key that opens the buffer must not spend it
+    -- either. The dispatcher asks the manifest, so the exemption is a property of the
+    -- command. See docs/commandManager.md § Prefix capture.
+    name = 'a command declared to keep the prefix neither freezes nor spends it',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd = loadKD()
+      cmgr:installManifest({ global = { Global = {
+        { name = 'alpha',   label = 'Alpha',   keepsPrefix = true },
+        { name = 'counted', label = 'Counted' },
+      } } }, fakeImGui)
+
+      cmgr:beginPrefix()
+      setKeys{ pressed = { fakeImGui.Key_4 } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      setKeys{ pressed = { fakeImGui.Key_A } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      t.deepEq(log.fired, { 'alpha' }, 'the transparent command fired')
+      t.eq(cmgr:isPrefixActive(), true, 'over a buffer still open behind it')
+
+      setKeys{ pressed = { fakeImGui.Key_C } }
+      kd.dispatchKeys({ acceptCmds = true }, cmgr, kq)
+      t.deepEq(log.fired, { 'alpha', 'counted' }, 'and the next command takes it')
+      t.eq(log.arg, 4, 'as the value the buffer held')
+      t.eq(cmgr:isPrefixActive(), false, 'spent by the command that was not transparent')
+    end,
+  },
+
+  {
     name = 'a pressed bound key fires its command and is claimed',
     run = function()
       local cmgr, log = freshCmgr()

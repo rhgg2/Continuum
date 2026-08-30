@@ -42,20 +42,15 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 menu: arrows move a highlight, and Enter takes it (§ Walking a path)
 - 2026-08-29 menu: a pending prefix survives the walk, and the leaf takes it (§ What stays live)
 - 2026-08-28 menu: letters walk the tree, and the level draws over the body (§ Walking a path)
 - 2026-08-28 menu: the level a path names, read off the surface at open (§ The surface)
-- 2026-08-28 menu: the walk's modal scope, and the verbs that open and close it (§ What stays live)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-5. **The highlight.** The menu holds a highlight index into the current
-   level, reset on every descent and unwind. Up and Down move it, Enter
-   takes it — descending on a group, invoking on a leaf — and Left is Esc's
-   unwind. It is the field Phase 5's lookahead panel reads. Spec: the
-   highlight wraps within a level, and Enter on a leaf invokes what its
-   letter would. Re-cut this against the row in use, since seeing the level
-   may change what the highlight has to do.
+
+(empty)

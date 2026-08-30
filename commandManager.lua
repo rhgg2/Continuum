@@ -137,7 +137,7 @@ function cmgr:bindAll(tbl)        global:bindAll(tbl)     end
 -- installed from it. see docs/commandManager.md § Manifest
 
 --shape: manifest = { [scopeName] = { [groupName] = { entry, ... } } }
---shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, group }
+--shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, group, keepsPrefix? }
 --invariant: a command resolves to exactly one entry — two scopes declaring it raises
 --invariant: a group's entries are a list, so the order they are declared in is the order they read
 
@@ -387,6 +387,13 @@ function cmgr:appendPrefix(ch)
 end
 
 function cmgr:cancelPrefix() clearPrefixState() end
+
+--contract: whether the buffer passes through a command untouched, as declared by its entry
+--contract: false for a command no manifest declares, so an undeclared verb freezes as before
+function cmgr:keepsPrefix(name)
+  local entry = self.entries[name]
+  return (entry and entry.keepsPrefix) == true
+end
 
 --contract: empty or unparseable buffer → nil pending value; integer N stored as (N/1)
 --contract: a trailing '/' is dropped, so an unfinished rational reads as its numerator

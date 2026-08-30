@@ -2,7 +2,7 @@
 -- see docs/commandManager.md §§ Manifest, Menu tree
 
 --shape: { scope = { group = { entry, ... } } }
---shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, letter?, family?, base? }
+--shape: entry = { name, label = 'Play / pause', keys = { 'Ctrl+Z', ... }?, path?, letter?, family?, base?, keepsPrefix? }
 --shape: family = { label = 'Place slot', members = { entry, ... } } -- one cheat-sheet row
 
 local util = require 'util'
@@ -17,6 +17,10 @@ local function command(name, label, keys, path, letter)
   return { name = name, label = label, path = path, letter = letter,
            keys = type(keys) == 'string' and { keys } or keys }
 end
+
+-- A command the numeric prefix passes through untouched: the keychain walk neither freezes
+-- nor spends the buffer before it. See docs/commandManager.md § Prefix capture.
+local function transparent(entry) entry.keepsPrefix = true; return entry end
 
 -- One member of a generated family: the family table is shared, and `base` is the
 -- member's unmasked token, which a family rebind re-masks. See docs/commandManager.md § Manifest.
@@ -54,7 +58,7 @@ manifest.global = {
     command('undo',             'Undo',                'Ctrl+Z',       'Edit/Undo'),
     command('redo',             'Redo',                'Ctrl+Shift+Z', 'Edit/Redo'),
     command('quit',             'Quit',                'Ctrl+Q',       'File/Quit'),
-    command('beginPrefix',      'Numeric prefix',      'Super+U'),
+    transparent(command('beginPrefix', 'Numeric prefix',   'Super+U')),
     command('toggleFxWindows',  'Toggle FX windows',   'F11',          'View/FX'),
     command('toggleProfiler',   'Toggle profiler',     'Ctrl+Shift+P', 'File/Profiler'),
     command('openMenu',         'Menu',                'Slash'),
@@ -350,9 +354,14 @@ manifest.wiring = {
 
 ----- menu (bodies in menu.lua; no page places this group, so the sheet never draws it)
 
+-- The walk's own keys are transparent to the prefix, which belongs to the leaf the walk
+-- reaches. Up takes the highlight and Down unwinds, the second pair beside Enter and Esc.
 manifest.menu = {
   Menu = {
-    command('menuBack',              'Back',              { 'Escape', 'Super+G' }),
+    transparent(command('menuBack',  'Back',              { 'Escape', 'Super+G', 'Down' })),
+    transparent(command('menuLeft',  'Highlight left',    'Left')),
+    transparent(command('menuRight', 'Highlight right',   'Right')),
+    transparent(command('menuEnter', 'Take the highlight', { 'Enter', 'KeypadEnter', 'Up' })),
   },
 }
 
