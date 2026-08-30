@@ -9,12 +9,15 @@ allowed-tools: Bash(bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh *)
 
 !`bash ${CLAUDE_PROJECT_DIR}/.claude/context/gather.sh tree-state hygiene`
 
-You are finishing a commit. `$ARGUMENTS` names the headline, and may
-name a narrower set of paths to stage. Do these in order, then stop.
+You are finishing a commit. Your specific instructions from the main
+session are:
+
+`$ARGUMENTS`
 
 ## 1. Comment hygiene
 
-The report above names every violation you have to fix. It flags:
+The comment hygiene report names every violation you have to fix. It
+flags:
 
 - `--invariant:`/`--contract:`/`--emits:`/`--reaper:` lines >100 chars;
 - `--shape:` lines >400 chars; 
@@ -49,8 +52,9 @@ pre-existing comments that got pulled in an over-long comment block;
 fix these all the same.
 
 Apply the fixes with `mcp__patches__apply_patches`. Stage every fix
-from one hygiene run in a single call; re-run the checker, and call
-again only for what it turns up.
+in a single call, and set `after: python3 tools/comment_hygiene.py` to
+rerun the hygiene checker afterward. If there are still violations,
+iterate thi step.
 
 ## 2. Commit
 
