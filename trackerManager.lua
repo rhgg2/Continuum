@@ -327,27 +327,9 @@ local function subtractSpanSet(span, spans)
   return rest
 end
 
--- Sum a held base curve and N macro curves over span [sL, eL) -- half-open, so eL is never emitted.
--- Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
-local function firstAfter(list, target)   -- first index with .ppq > target (binary; list ppq-sorted)
-  local lo, hi = 1, #list + 1
-  while lo < hi do
-    local mid = (lo + hi) // 2
-    if list[mid].ppq <= target then lo = mid + 1 else hi = mid end
-  end
-  return lo
-end
-local function firstAtOrAfter(list, target)   -- first index with .ppq >= target (binary; list ppq-sorted)
-  local lo, hi = 1, #list + 1
-  while lo < hi do
-    local mid = (lo + hi) // 2
-    if list[mid].ppq < target then lo = mid + 1 else hi = mid end
-  end
-  return lo
-end
 -- Strict-next non-pa onset after ppq in a ppq-sorted lane column (logical); nil past the last.
 local function nextLaneOnset(events, ppq)
-  local i = firstAfter(events, ppq)
+  local i = util.firstAfter(events, ppq)
   while events[i] and events[i].evType == 'pa' do i = i + 1 end
   return events[i] and events[i].ppq
 end
@@ -355,7 +337,7 @@ end
 -- onset falls in [lo, hi). The fx-path rule -- visit window extents, never the whole channel.
 local function coverOnsets(events, spans, emit)
   for _, span in ipairs(spans or {}) do
-    for i = firstAtOrAfter(events, span[1]), #events do
+    for i = util.firstAtOrAfter(events, span[1]), #events do
       local evt = events[i]
       if evt.ppq >= span[2] then break end
       emit(evt)
@@ -366,7 +348,7 @@ end
 -- Curve value at ppq: held both ways (first value before, last after), shape interp within.
 local function evalCurve(curve, ppq)
   if #curve == 0 then return 0 end
-  local i = firstAfter(curve, ppq)
+  local i = util.firstAfter(curve, ppq)
   local A, B = curve[i - 1], curve[i]
   if not A then return curve[1].val end
   if not B then return A.val end
@@ -382,13 +364,15 @@ local function closeAtWindowEnd(pts, val, sL, eL)
   return pts
 end
 
+-- Sum a held base curve and N macro curves over span [sL, eL) -- half-open, so eL is never emitted.
+-- Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
 local function sumStreams(base, macros, span)
   local sL, eL = span[1], span[2]
   local grid   = ccGridStep()
   local curves = { base }
   for _, m in ipairs(macros) do util.add(curves, m) end
   local function segmentAt(curve, ppq)   -- the bp pair governing ppq; nil B at/beyond the end (held)
-    local i = firstAfter(curve, ppq)
+    local i = util.firstAfter(curve, ppq)
     return curve[i - 1], curve[i]
   end
   local function sumAt(ppq)
@@ -478,7 +462,7 @@ end
 local function sliceCurve(base, startL, endL)
   if #base == 0 then return {} end
   local function edge(ppq)
-    local govern = base[firstAfter(base, ppq) - 1]
+    local govern = base[util.firstAfter(base, ppq) - 1]
     return { ppq = ppq, val = evalCurve(base, ppq),
              shape = govern and govern.shape or 'step', tension = govern and govern.tension }
   end
@@ -592,7 +576,7 @@ local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()
 local function coverInto(list, spans, admit, emit)
   local nextIdx = 1
   for _, span in ipairs(spans) do
-    local govern = firstAfter(list, span[1]) - 1
+    local govern = util.firstAfter(list, span[1]) - 1
     while govern >= nextIdx and admit and not admit(list[govern]) do govern = govern - 1 end
     local i = math.max(govern, nextIdx)
     while i <= #list do
@@ -620,7 +604,7 @@ local function eachWindowNote(chan, startL, endL, fn)
       local hi   = math.min(ceil, nextOn)
       if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
     end
-    local from = firstAfter(events, startL)
+    local from = util.firstAfter(events, startL)
     for j = from - 1, 1, -1 do
       if events[j].evType ~= 'pa' then pending = events[j]; break end
     end
@@ -650,14 +634,14 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
   local cols = channels[chan].columns
   local pas, ats = {}, {}
   for _, col in ipairs(cols.notes) do
-    for j = firstAtOrAfter(col.events, startL), #col.events do
+    for j = util.firstAtOrAfter(col.events, startL), #col.events do
       local evt = col.events[j]
       if evt.ppq >= endL then break end
       if evt.evType == 'pa' then util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel }) end
     end
   end
   local atEvents = cols.at and cols.at.events or {}
-  for j = firstAtOrAfter(atEvents, startL), #atEvents do
+  for j = util.firstAtOrAfter(atEvents, startL), #atEvents do
     local evt = atEvents[j]
     if evt.ppq >= endL then break end
     util.add(ats, { ppq = evt.ppq, val = evt.val })
@@ -955,7 +939,7 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
   -- see docs/trackerManager.md § Pitchbend: tm's role in the tuning model
   function detuneAt(chan, P)
     local notes = rawIndex[chan].notes
-    for i = firstAfter(notes, P) - 1, 1, -1 do
+    for i = util.firstAfter(notes, P) - 1, 1, -1 do
       if notes[i].lane == 1 then return notes[i].detune or 0 end
     end
     return 0
@@ -2448,7 +2432,7 @@ local function exciseNotes(chan, rows, claims)
     local events = col.events
     local dropAt
     for _, row in ipairs(rows) do
-      for i = firstAtOrAfter(events, row), #events do
+      for i = util.firstAtOrAfter(events, row), #events do
         local evt = events[i]
         if evt.ppq ~= row then break end
         if not claims or claims(evt) then
@@ -2608,7 +2592,7 @@ local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
     if list then
       for _, span in ipairs(spans) do
         if windowSeeded(seedRows, span.sL, span.eL) then
-          for i = firstAtOrAfter(list, span.sRaw), #list do
+          for i = util.firstAtOrAfter(list, span.sRaw), #list do
             local evt = list[i]
             if evt.ppq >= span.eRaw then break end
             if not seen[evt.uuid] then
@@ -3148,7 +3132,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
         local pas = rawIndexFor(chan).pas
         for _, cell in ipairs(channels[chan].parked or {}) do
           local sRaw, eRaw = tm:fromLogical(chan, cell.ppq), tm:fromLogical(chan, cell.endppqC)
-          for i = firstAtOrAfter(pas, sRaw), #pas do
+          for i = util.firstAtOrAfter(pas, sRaw), #pas do
             local cc = pas[i]
             if cc.ppq >= eRaw then break end
             if not seen[cc] and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
@@ -3278,7 +3262,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
       local pbs = rawIndexFor(win.chan).pbs
-      for i = firstAtOrAfter(pbs, sRaw), #pbs do
+      for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
         if not cc.derived and not seatByRegion(cc.chan, cc.ppq) then
@@ -3308,7 +3292,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
       local pbs = rawIndexFor(win.chan).pbs
-      for i = firstAtOrAfter(pbs, sRaw), #pbs do
+      for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
         seedDirty(cc.chan, rawSeed(cc, 'delete'))
@@ -3589,7 +3573,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     local found
     local col = channels[host.chan].columns.notes[host.lane]
     if col then
-      for j = firstAfter(col.events, note.ppq), #col.events do
+      for j = util.firstAfter(col.events, note.ppq), #col.events do
         if col.events[j].evType ~= 'pa' then found = col.events[j]; break end
       end
     end
@@ -4400,11 +4384,11 @@ local function rebuildPbs(fxOut, extraColumns)
   -- view is gone; each query hits the index and the derived stream direct.
   local function lane1DetuneAt(chan, ppq)
     local notes = rawIndexFor(chan).notes
-    local i = firstAfter(notes, ppq) - 1        -- last index at or before ppq
+    local i = util.firstAfter(notes, ppq) - 1        -- last index at or before ppq
     while i >= 1 and not lane1Note(notes[i]) do i = i - 1 end
     local authored = i >= 1 and notes[i] or nil
     local derivedNotes = liveLane1ByChan[chan]
-    local derived = derivedNotes and derivedNotes[firstAfter(derivedNotes, ppq) - 1] or nil
+    local derived = derivedNotes and derivedNotes[util.firstAfter(derivedNotes, ppq) - 1] or nil
     if authored and derived then
       return ((authored.ppq >= derived.ppq) and authored or derived).detune or 0
     end
@@ -4415,7 +4399,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- the onset walk's per-span slice, replacing the whole-channel scan.
   local function lane1Between(chan, lo, hi)
     local notes, derivedNotes = rawIndexFor(chan).notes, liveLane1ByChan[chan] or {}
-    local i, j, out = firstAtOrAfter(notes, lo), firstAtOrAfter(derivedNotes, lo), {}
+    local i, j, out = util.firstAtOrAfter(notes, lo), util.firstAtOrAfter(derivedNotes, lo), {}
     while true do
       while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
       local authored = notes[i];      if authored and authored.ppq > hi then authored = nil end
@@ -4682,7 +4666,7 @@ local function rebuildPbs(fxOut, extraColumns)
     local function streamValue(ppq)
       local win  = replaceWinAt(ppq)
       local src  = win and win.bps or realPbs
-      local i    = firstAfter(src, ppq)
+      local i    = util.firstAfter(src, ppq)
       local A, B = src[i - 1], src[i]
       if not A then return 0 end
       if not B then return A.cents end
@@ -4691,7 +4675,7 @@ local function rebuildPbs(fxOut, extraColumns)
 
     -- Authored breakpoints bounding M, excluding any pb exactly at M.
     local function spanAround(M)
-      local after  = firstAfter(realPbs, M)
+      local after  = util.firstAfter(realPbs, M)
       local before = after - 1
       while before >= 1 and realPbs[before].ppq == M do before = before - 1 end
       return realPbs[before], realPbs[after]
@@ -4984,7 +4968,7 @@ local function pcSeedSpans(chan, dirt, noteLive)
   end
   local spans, notes = {}, rawIndexFor(chan).notes
   for _, point in ipairs(points) do
-    local i = firstAfter(notes, point.ppq)
+    local i = util.firstAfter(notes, point.ppq)
     while notes[i] and not walkable(notes[i]) do i = i + 1 end
     local nextNote = notes[i]
     util.add(spans, { sRaw = point.ppq, eRaw = nextNote and nextNote.ppq or math.huge,

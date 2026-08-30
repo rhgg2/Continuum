@@ -96,6 +96,13 @@ uses half-open `[lo, hi)` intervals so adjacent windows tile without
 double-counting. Both take an optional filter predicate, letting callers
 restrict to note-ons, particular channels, etc. without a pre-pass.
 
+`util.firstAfter` and `util.firstAtOrAfter` answer the same question by
+bisection, and answer it as an index rather than an item: the first index
+whose ppq passes the target, or one past the end when none does. Callers
+read `firstAfter(list, ppq) - 1` as the last index at or before ppq, and 0
+as "nothing before it". The pair differ only across a run of equal ppq,
+which one opens and the other closes.
+
 ## Conventions
 
 - **`clone` is shallow; `deepClone` is recursive.** `clone(src, exclude)`

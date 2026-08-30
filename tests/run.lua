@@ -39,6 +39,7 @@ local specs = {
   'dataStore_spec',
   'eventMeta_spec',
   'util_edit_primitives_spec',
+  'util_seeks_spec',
   'util_bucket_spec',
   'util_install_hooks_spec',
   'util_instantiate_spec',

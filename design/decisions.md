@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — `firstAfter` and `firstAtOrAfter` join `util` keyed on `.ppq`, and stay distinct
+  from `util.seek`. A key function earns its place at the third caller reading something other than
+  ppq, and there is none. `seek` scans and answers an item where these bisect and answer an index,
+  so one name over both would hide two contracts.
+
 - **2026-08-30** — Interpolation is curve algebra, so `curveSample` and `mm:interpolate` move to
   `curves.lua` when the algebra leaves trackerManager, leaving `mm:interpolate` as a delegate for
   the view and the cents stream. The alternative, an interpolator argument threaded through six

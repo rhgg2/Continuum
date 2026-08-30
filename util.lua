@@ -179,6 +179,26 @@ function util.seek(items, mode, key, filter, keyFn)
   return hit
 end
 
+-- Index seeks over a ppq-sorted list: the first index whose .ppq passes the target, or #list + 1 when
+-- none does. Bisecting, and answering an index where util.seek scans and answers an item.
+function util.firstAfter(list, target)   -- first index with .ppq > target
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[mid].ppq <= target then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
+
+function util.firstAtOrAfter(list, target)   -- first index with .ppq >= target
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[mid].ppq < target then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
+
 -- Splice item into an already-sorted list at its lower bound (before any element not less than it),
 -- by the same less-than a table.sort(list, less) would use. O(log n) search plus the shift.
 function util.insertSorted(list, item, less)

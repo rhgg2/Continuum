@@ -24,19 +24,13 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-30 util: take the two ppq index seeks from trackerManager (design/tracker-manager-split.md § Phase 1 4)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The seeks join `util`.** `firstAfter` and `firstAtOrAfter` become
-   `util.firstAfter` and `util.firstAtOrAfter`, beside `util.seek` and
-   `util.insertSorted` which share their shape; tm's two dozen call sites
-   repoint. A spec covers the empty list, both boundaries, a run of equal
-   ppq, and the past-the-end index each returns.
 
 1. **`spans.lua`.** The six span-set names — `mergeSpans`,
    `mergeWindows`, `overlapping`, `spanSetIntersects`, `clipToSpanSet`,
