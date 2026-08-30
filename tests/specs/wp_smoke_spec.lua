@@ -7,7 +7,10 @@
 
 local t = require('support')
 
+-- openFxPicker reads the cursor to place the node it will spawn, so the fake
+-- needs a mouse position before the picker command will run.
 local fakeImGui = t.imgui()
+fakeImGui.GetMousePos = function() return 100, 100 end
 package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
@@ -27,13 +30,17 @@ local fakeFacade = {
   publishDebug = function() end,
   get          = function() return {} end,
 }
+-- Rebind imgui to ours before loading the page: earlier specs' preloads cache a
+-- different fake, so drop the imgui-capturing modules and re-require.
 local function newWiringPage(cm, ds, cmgr, chrome, gui, help)
+  package.preload['imgui'] = function() return function(_) return fakeImGui end end
+  for _, m in ipairs({ 'imgui', 'painter' }) do package.loaded[m] = nil end
   local keyQueue = util.instantiate('keyQueue', { ctx = gui and gui.ctx })
   help = help or util.instantiate('help',
     { ctx = gui and gui.ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
   return util.instantiate('wiringPage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui, help = help,
-      modalHost = fakeModalHost, facade = fakeFacade })
+      keyQueue = keyQueue, modalHost = fakeModalHost, facade = fakeFacade })
 end
 
 return {
@@ -117,6 +124,24 @@ return {
       local wp = newWiringPage(h.cm, h.ds, h.cmgr, nil, {})
       wp:bind(); wp:bind('ignored'); wp:unbind()
       t.eq(calls, 0, 'no cm re-key from bind/unbind')
+    end,
+  },
+
+  {
+    -- The FX picker takes the whole keyboard while it is up, which the page
+    -- reports to the coordinator's fill as `picker` (docs/keyQueue.md §
+    -- Ownership). The production route in is the wiringAddFx command, so the
+    -- wiring scope has to be on the stack for the command to be reachable —
+    -- the lastCommand check keeps a silently unreachable invoke from passing.
+    name = 'the fx picker owns the key queue while it is up',
+    run = function(harness)
+      local h  = harness.mk()
+      local wp = newWiringPage(h.cm, h.ds, h.cmgr, nil, {})
+      h.cmgr:push('wiring')
+      t.eq(wp:keyboardOwner(), nil, 'no owner with no picker up')
+      h.cmgr:invoke('wiringAddFx')
+      t.eq((h.cmgr:lastCommand()), 'wiringAddFx', 'the picker command ran')
+      t.eq(wp:keyboardOwner(), 'picker', 'the open picker owns the keyboard')
     end,
   },
 

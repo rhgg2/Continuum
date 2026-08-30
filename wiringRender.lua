@@ -16,8 +16,9 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cmgr, chrome, gui, modalHost, wv, facade, help =
-  (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade, (...).help
+local cmgr, chrome, gui, modalHost, wv, facade, help, keyQueue =
+  (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade, (...).help,
+  (...).keyQueue
 
 local ctx      = gui and gui.ctx or nil
 local wireFont = gui and gui.wireFont or nil
@@ -2693,11 +2694,17 @@ function wr:statusSegments()
   return statusSegments
 end
 
---contract: acceptCmds=false if any item is active or the fx popup is up
+--contract: acceptCmds=false if any item is active
 --contract: a modal owns the queue instead, so this doesn't check for one
 function wr:focusState()
   if not ctx then return { acceptCmds = false } end
-  return { acceptCmds = not ImGui.IsAnyItemActive(ctx) and not popups.fx }
+  return { acceptCmds = not ImGui.IsAnyItemActive(ctx) }
+end
+
+-- The fx picker takes the whole keyboard while it is up.
+--contract: the coordinator asks this at the fill; the popup's keys claim under the name
+function wr:keyboardOwner()
+  if popups.fx then return 'picker' end
 end
 
 ----- Wiring scope
@@ -2774,8 +2781,10 @@ renderFxPicker = function(pck)
   local prev = pck.buf
   local _, buf = ImGui.InputText(ctx, '##fxFilter', prev)
   pck.buf = buf
-  local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-               or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)
+  -- The popup owns the queue, so its keys claim under that name. See docs/keyQueue.md § Ownership.
+  local mods    = keyQueue:frameMods()
+  local take    = function(key) return keyQueue:take(key, mods, 'picker') end
+  local entered = take(ImGui.Key_Enter) or take(ImGui.Key_KeypadEnter)
   ImGui.Separator(ctx)
 
   local lf = buf:lower()
@@ -2789,14 +2798,14 @@ renderFxPicker = function(pck)
   local n = #matches
   local cursor = pck.cursor or 1
   if n > 0 then
-    if     ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then cursor = cursor % n + 1
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow)   then cursor = (cursor - 2) % n + 1
+    if     take(ImGui.Key_DownArrow) then cursor = cursor % n + 1
+    elseif take(ImGui.Key_UpArrow)   then cursor = (cursor - 2) % n + 1
     end
   end
   cursor = math.min(math.max(cursor, 1), math.max(n, 1))
   pck.cursor = cursor
 
-  if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  if take(ImGui.Key_Escape) then
     ImGui.CloseCurrentPopup(ctx)
     popups.fx = nil
   elseif entered and matches[cursor] then

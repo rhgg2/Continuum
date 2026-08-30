@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — A picker popup a page raises owns the key queue, under the same `picker` name the
+  toolbar's picker claims under; the name covers every picker popup. Ownership replaces the
+  focusState clause that gated commands while the popup was up, since a claim made under no name
+  answers nil for the whole frame.
+
 - **2026-08-30** — The editor page's Esc takes the press from the queue, and its modalHost:isOpen()
   gate goes: a sub-modal owns the frame, so the take answers nil without a gate to say so. The
   item-active guard stays, since Escape survives the fill's text-field claim on purpose, and a live

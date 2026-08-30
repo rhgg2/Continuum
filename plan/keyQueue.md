@@ -31,24 +31,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 wiring: the fx picker owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 - 2026-08-30 editor, sampler: the page Escapes claim from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-30 tracker: the palette pane owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 - 2026-08-29 patternEditor: drop the input swallow and the picker gate (design/keyQueue.md § Claiming)
-- 2026-08-29 tracker: the fx strip claims its keys from the keyQueue (design/keyQueue.md § Claiming)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **wiring: the fx popup owns the queue.** The wiring page answers
-  `keyboardOwner` with `picker` while `popups.fx` is up, and the
-  popup's Enter, keypad Enter, Up, Down and Escape claim under that
-  name. The name now covers any picker popup, and `docs/keyQueue.md` §
-  Ownership says so. `wr:focusState` drops its `popups.fx` clause. The
-  popup's arrow navigation is dead today — the fill's live-field claim
-  takes the arrows on an unowned frame — and ownership restores it.
 
 - **wiring: the gesture cancel claims.** The draft-cancelling Escape in
   `wiringRender.renderBody` claims, so the Esc-bound

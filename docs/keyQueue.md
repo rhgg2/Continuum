@@ -97,6 +97,10 @@ press is gone.**
    recorded, and a claimant outside the five raises — a typo would
    otherwise read as a key that quietly does nothing.
 
+1. `picker` covers every picker popup: the toolbar's, which chrome
+   settles, and the wiring page's add-FX popup, which the page answers
+   for.
+
 1. `palette` is the tracker's right-hand pane, either tab. The
    parameters tree and the fx chain are two focus sessions on one pane
    and can overlap for a frame, so one name covers both.

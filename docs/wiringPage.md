@@ -54,6 +54,11 @@ since every phase needs what the one before it left.
 8. **Popups** — the wire menu, the node menu and the FX picker, each
    through `popupShell`. The band overlay draws after all three.
 
+While the FX picker is up the page owns the key queue as `picker`, and
+the popup's Enter, arrows and Escape claim under that name
+(`docs/keyQueue.md` § Ownership). The page's other readers, claiming
+under no name, are locked out for those frames.
+
 ## The gesture state machine
 
 Editing flows through one page-local variable, `gesture` — nil when
