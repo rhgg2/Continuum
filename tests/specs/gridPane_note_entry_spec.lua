@@ -1,4 +1,4 @@
--- Note entry taking its presses from the keyQueue (design/keyQueue.md § Claiming).
+-- Note entry taking its presses from the keyQueue (docs/keyQueue.md § Claiming).
 -- gridPane's edit-key scan is driven directly here: the real grid pane over the
 -- harness's tracker view, a real command manager and a real queue filled from a
 -- controllable imgui -- the production instantiation, with the host's gates as

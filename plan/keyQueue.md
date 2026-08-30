@@ -24,10 +24,10 @@
    `periodSwallow`, `releaseReq` and the two carried modal gates came
    out with them. `stripExitReq` stayed: the strip's mid-draw mouse
    exits fire while the rest of the draw still reads the focus.
-6. **Phase 6 — The rest, and the record** — the remaining direct readers
-   on the sampler, wiring, arrange and editor pages, the mouse-gesture
-   modifier reads moved onto `held`, and the model moved into
-   `docs/keyQueue.md` with the drain order written down.
+6. **Phase 6 — The rest, and the record** ← in flight — the remaining
+   direct readers on the sampler, wiring, arrange and editor pages, the
+   mouse-gesture modifier reads moved onto `held`, and the model moved
+   into `docs/keyQueue.md` with the drain order written down.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -41,4 +41,35 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+- **sampler, editor: the page Escapes claim.** `sampleRender`'s rename
+  cancel and `editorRender`'s drop-out take Escape from the queue
+  instead of reading it. The editor's `modalHost:isOpen()` gate goes,
+  since a modal owns the queue and the take answers nil; its
+  `IsAnyItemActive` gate stays, because Escape survives the fill's
+  field claim so the field can cancel itself.
+
+- **wiring: the fx popup owns the queue.** The wiring page answers
+  `keyboardOwner` with `picker` while `popups.fx` is up, and the
+  popup's Enter, keypad Enter, Up, Down and Escape claim under that
+  name. The name now covers any picker popup, and `docs/keyQueue.md` §
+  Ownership says so. `wr:focusState` drops its `popups.fx` clause. The
+  popup's arrow navigation is dead today — the fill's live-field claim
+  takes the arrows on an unowned frame — and ownership restores it.
+
+- **wiring: the gesture cancel claims.** The draft-cancelling Escape in
+  `wiringRender.renderBody` claims, so the Esc-bound
+  `wiringClearSelection` no longer runs on the same press by accident.
+
+- **the mouse gestures read modifiers through the queue.** Six
+  `GetKeyMods` sites move to `keyQueue:mods()`: gridPane's region paint
+  and shift-extend, the tracker mini-map's snap, arrange's snap and its
+  click modifiers, wiring's shift-clear and curveEditor's free-drag.
+  `curveEditor` and `gridPane` need `keyQueue` threaded to them.
+
+- **the record.** `docs/keyQueue.md` gains § Order — the drain order as
+  a property of the call graph — and the distinction between a guard
+  deciding whether a reader is asked and a claim removing a press.
+  `design/keyQueue.md` collapses to pointers, less its Open item on
+  `pageSuppressed`.
 

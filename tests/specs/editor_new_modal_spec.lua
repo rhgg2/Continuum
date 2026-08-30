@@ -1,4 +1,4 @@
--- The editor stack's three modals claiming from the keyQueue (design/keyQueue.md § Claiming).
+-- The editor stack's three modals claiming from the keyQueue (docs/keyQueue.md § Claiming).
 -- The swing and temper New modals and the temper Import modal draw over a fake imgui and the
 -- real queue, filled as the coordinator fills it, with the modal named as the frame's owner.
 -- The claims run through a real modalHost built on the same queue, so what the tests exercise

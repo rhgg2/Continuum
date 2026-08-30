@@ -59,6 +59,9 @@ press is gone.**
 
 ## Claiming
 
+1. A reader claims in the statement where it acts, so a reader acting
+   on a press it did not claim is a defect.
+
 1. `keyDispatch` claims each press it acts on, at the frame's mods and
    under the claimant its state carries. Prefix capture takes the digit
    or the slash it appends; a scope's letter sink takes the letter it

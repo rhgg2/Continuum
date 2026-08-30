@@ -1,7 +1,7 @@
 # keyQueue — design
 
-> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 5
-> (the raising readers)
+> opened: 2026-08-28 · status: in flight — plan/keyQueue.md, phase 6
+> (the rest, and the record)
 
 **Every key press Continuum acts on is read once, at the top of the
 frame, into a queue; a reader claims what it acts on, and a claimed
@@ -13,22 +13,13 @@ Landed: see `docs/keyQueue.md` § The queue and § The fill.
 
 ## Claiming
 
-1. A reader claims in the statement where it acts, so a reader that
-   acts on a press it did not claim is a defect.
-
-1. The claim precedes whatever the press sets in motion. Landed for
-   the dispatcher: see `docs/keyQueue.md` § Claiming.
-
-1. A reader that ends a gesture claims the press that ended it, and
-   drops the state it held in the same frame. Landed for the fx strip
-   and for the palette's Esc/Enter: see `docs/keyQueue.md` § Claiming.
+Landed: see `docs/keyQueue.md` § Claiming.
 
 ## Ownership
 
-Landed: see `docs/keyQueue.md` § Ownership, and § The fill for the
-claim an unowned frame's live text field makes. The active page
-answers the fill last, through an optional `keyboardOwner`; the
-tracker's right-hand pane is the one owner a page names.
+Landed: see `docs/keyQueue.md` § Ownership, `docs/coordinator.md` §
+Pages for the `keyboardOwner` a page answers, and `docs/keyQueue.md` §
+The fill for the claim an unowned frame's live text field makes.
 
 ## Hold and repeat
 

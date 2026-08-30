@@ -1,4 +1,4 @@
--- The cheat sheet claiming from the keyQueue (design/keyQueue.md § Ownership).
+-- The cheat sheet claiming from the keyQueue (docs/keyQueue.md § Ownership).
 -- The real overlay is driven here over a real command manager carrying a two-command
 -- manifest, a chrome that reports no toolbar or status rects, and a controllable
 -- imgui whose drawing calls are inert -- the production instantiation, with the

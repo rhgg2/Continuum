@@ -1,4 +1,4 @@
--- The modal claiming from the keyQueue (design/keyQueue.md § Ownership).
+-- The modal claiming from the keyQueue (docs/keyQueue.md § Ownership).
 -- The real modalHost is driven here over the real queue, a chrome whose style pushes
 -- are inert, and a controllable imgui -- the production instantiation, with the frame's
 -- owner named as the coordinator names it.
