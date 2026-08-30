@@ -1,69 +1,68 @@
--- Pin commit 2a of the sampler-integration plan: enabling trackerMode
--- inserts a `sample` part into note cells, hides the PC col, and routes
--- sample-stop edits onto note.sample. tm doesn't yet act on the field
--- (synthesis lands in 2b) — these specs cover only the vm-side wiring.
+-- trackerMode is the sampler-reachable mode: trackerPage seeds it per bind
+-- from wm:samplerReachable, and the stack then reads a note's `sample` as
+-- authoring intent that tm realises as a PC stream
+-- (docs/trackerManager.md § PC synthesis). This spec covers the vm side:
+-- the pc col gives way to a sample part inside the note cell, sample-stop
+-- edits write note.sample and carry currentSample with them, and the part
+-- is inert on pa cells.
 
 local t = require('support')
 
+-- The chan-1 cols under one mode. Only one scenario is live at a time (each
+-- mk swaps _G.reaper), so a mode comparison builds them in sequence and
+-- keeps only the cols it read.
+local function chan1Cols(harness, trackerMode)
+  local h = harness.mk{
+    seed = {
+      notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
+      ccs   = { { ppq = 0, evType = 'pc', chan = 1, val = 7 } },
+    },
+    config = trackerMode and { transient = { trackerMode = true } } or nil,
+  }
+  h.vm:setGridSize(80, 40)
+  local cols = {}
+  for _, c in ipairs(h.vm.grid.cols) do
+    if c.midiChan == 1 then cols[#cols+1] = c end
+  end
+  return cols
+end
+
+local function colOfType(cols, type, lane)
+  for _, c in ipairs(cols) do
+    if c.type == type and (lane == nil or c.lane == lane) then return c end
+  end
+end
+
 return {
 
-  ----- PC col visibility
+  ----- What the mode does to the grid
+  -- Both cases put the same seed under each mode and assert the
+  -- difference, so neither half can pass over a grid that was never built.
 
   {
-    name = 'trackerMode off: pc events surface as a pc col',
+    name = 'the pc col appears iff trackerMode is off',
     run = function(harness)
-      local h = harness.mk{
-        seed = {
-          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-          ccs   = { { ppq = 0, evType = 'pc', chan = 1, val = 7 } },
-        },
-      }
-      h.vm:setGridSize(80, 40)
-      local pcCol
-      for _, c in ipairs(h.vm.grid.cols) do
-        if c.midiChan == 1 and c.type == 'pc' then pcCol = c end
-      end
-      t.truthy(pcCol, 'pc col present when trackerMode=false')
+      local off = chan1Cols(harness, false)
+      local on  = chan1Cols(harness, true)
+      t.truthy(colOfType(off, 'pc'), 'the pc event surfaces as a col with the mode off')
+      t.falsy(colOfType(on, 'pc'),  'the same pc event yields no col with the mode on')
     end,
   },
 
   {
-    name = 'trackerMode on: pc col is hidden',
+    name = 'trackerMode puts a two-stop sample part in the note col',
     run = function(harness)
-      local h = harness.mk{
-        seed = {
-          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-          ccs   = { { ppq = 0, evType = 'pc', chan = 1, val = 7 } },
-        },
-        config = { transient = { trackerMode = true } },
-      }
-      h.vm:setGridSize(80, 40)
-      for _, c in ipairs(h.vm.grid.cols) do
-        t.falsy(c.type == 'pc',
-          'pc col must not appear in grid when trackerMode=true')
+      local off = colOfType(chan1Cols(harness, false), 'note', 1)
+      local on  = colOfType(chan1Cols(harness, true),  'note', 1)
+      t.deepEq(off.parts, {'pitch','vel'},          'no sample part with the mode off')
+      t.deepEq(on.parts,  {'pitch','sample','vel'}, 'sample sits between pitch and vel')
+      local stops = 0
+      for _, part in pairs(on.partAt) do
+        if part == 'sample' then stops = stops + 1 end
       end
-    end,
-  },
-
-  ----- Note col gains a `sample` part under trackerMode
-
-  {
-    name = 'trackerMode on: note col carries sample part',
-    run = function(harness)
-      local h = harness.mk{
-        seed = {
-          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
-        },
-        config = { transient = { trackerMode = true } },
-      }
-      h.vm:setGridSize(80, 40)
-      local lane1
-      for _, c in ipairs(h.vm.grid.cols) do
-        if c.midiChan == 1 and c.type == 'note' and c.lane == 1 then lane1 = c end
-      end
-      t.truthy(lane1, 'lane-1 note col exists')
-      t.deepEq(lane1.parts, {'pitch','sample','vel'}, 'parts include sample')
-      t.eq(lane1.width, 9, 'cell width grew to 9')
+      t.eq(stops, 2, 'one edit stop per hex nibble')
+      t.eq(on.width - off.width, stops + 1,
+           'the cell grew by the two digits and the separator before them')
     end,
   },
 
@@ -126,8 +125,11 @@ return {
     end,
   },
 
+  -- Every note carries authoring intent whatever its lane; lane priority
+  -- decides only whose sample reaches the PC stream, marking the losers
+  -- sampleShadowed. So the vm edits a lane-2 sample like any other.
   {
-    name = 'sample edits work on lane-2 notes too (no lane gating in 2a)',
+    name = 'a sample edit writes through on a lane-2 note',
     run = function(harness)
       -- Two overlapping pitches force a lane-2 col on chan 1.
       local h = harness.mk{
@@ -213,21 +215,22 @@ return {
   },
 
   ----- inputSampleUp / inputSampleDown commands
-  -- Step ±1 across the full 0..127 range. Empty slots are reachable —
-  -- the user may want to author a sample value before the sampler has
-  -- loaded that slot.
+  -- Step ±1 across the full 0..127 range. That the range isn't gated on
+  -- which slots the sampler has loaded — you may author a value before
+  -- loading its slot — goes unasserted: no scenario here has a sampler,
+  -- so nothing distinguishes a loaded slot from an empty one.
 
   {
-    name = 'inputSampleUp increments by 1 even into empty slots',
+    name = 'inputSampleUp steps currentSample up by 1',
     run = function(harness)
       local h = harness.mk{ config = { take = { currentSample = 5 } } }
       h.cmgr:invoke('inputSampleUp')
-      t.eq(h.cm:get('currentSample'), 6, 'stepped to empty slot 6')
+      t.eq(h.cm:get('currentSample'), 6)
     end,
   },
 
   {
-    name = 'inputSampleDown decrements by 1 even into empty slots',
+    name = 'inputSampleDown steps currentSample down by 1',
     run = function(harness)
       local h = harness.mk{ config = { take = { currentSample = 5 } } }
       h.cmgr:invoke('inputSampleDown')
