@@ -166,6 +166,7 @@ facade.publish('tracker', {
 function tp:toolbarSegments() return tr:toolbarSegments() end
 function tp:statusSegments()       return tr:statusSegments() end
 function tp:focusState()           return tr:focusState() end
+function tp:keyboardOwner()        return tr:keyboardOwner() end
 
 --contract: resolve selection, page follow, draw, then snapshot take hash as next frame's baseline
 function tp:renderBody(ctx, w, h, dispatch)

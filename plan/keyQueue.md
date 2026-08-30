@@ -18,12 +18,12 @@
    readers keep their own guards, so the three cheat-sheet ones stay;
    the two modal gates on `focusState` pass to phase 5, where the
    renderers that make them redundant land.
-5. **Phase 5 — The raising readers** (§ Claiming) — the modal renderers,
-   the fx strip and the param palette take rather than poll. With the
-   press claimed before what it raises can read, the five `appearing`
-   guards, `swallowInput`, `periodSwallow`, `releaseReq` and
-   `stripExitReq` come out with them, and the two carried modal gates
-   with them.  ← in flight
+5. **Phase 5 — The raising readers** (§ Claiming) — landed 2026-08-30,
+   5 commits. The modal renderers, the fx strip and the param palette
+   take rather than poll, and the `appearing` guards, `swallowInput`,
+   `periodSwallow`, `releaseReq` and the two carried modal gates came
+   out with them. `stripExitReq` stayed: the strip's mid-draw mouse
+   exits fire while the rest of the draw still reads the focus.
 6. **Phase 6 — The rest, and the record** — the remaining direct readers
    on the sampler, wiring, arrange and editor pages, the mouse-gesture
    modifier reads moved onto `held`, and the model moved into
@@ -31,18 +31,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 tracker: the palette pane owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 - 2026-08-29 patternEditor: drop the input swallow and the picker gate (design/keyQueue.md § Claiming)
 - 2026-08-29 tracker: the fx strip claims its keys from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-29 modalHost: every modal claims commit and cancel through the host (design/keyQueue.md § Claiming)
-- 2026-08-29 arrange: the modal renderers claim their keys from the keyQueue (design/keyQueue.md § Claiming)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- **The parameter palette takes** — `handlePaletteKeys` claims Tab,
-  Escape, the two Super chords and the navigation keys; `releaseReq`
-  goes, since a claimed Escape cannot reach the dispatcher later in the
-  frame.
 

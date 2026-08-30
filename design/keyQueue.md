@@ -20,13 +20,15 @@ Landed: see `docs/keyQueue.md` § The queue and § The fill.
    the dispatcher: see `docs/keyQueue.md` § Claiming.
 
 1. A reader that ends a gesture claims the press that ended it, and
-   drops the state it held in the same frame. Landed: see
-   `docs/keyQueue.md` § Claiming.
+   drops the state it held in the same frame. Landed for the fx strip
+   and for the palette's Esc/Enter: see `docs/keyQueue.md` § Claiming.
 
 ## Ownership
 
 Landed: see `docs/keyQueue.md` § Ownership, and § The fill for the
-claim an unowned frame's live text field makes.
+claim an unowned frame's live text field makes. The active page
+answers the fill last, through an optional `keyboardOwner`; the
+tracker's right-hand pane is the one owner a page names.
 
 ## Hold and repeat
 
@@ -44,10 +46,10 @@ Landed: see `docs/keyQueue.md` § Hold and repeat.
 
 ## What guards, and what claims
 
-1. `paletteFocus`, `stripFocus`, the sampler's open rename and
-   `pageSuppressed` decide which reader is asked. They are guards on a
-   reader, and a press a guard suppresses stays in the queue for the
-   reader after it.
+1. The sampler's open rename, `pageSuppressed` and the palette's
+   `treeArrows` decide which reader is asked, or whether a reader acts.
+   They are guards on a reader, and a press a guard suppresses stays in
+   the queue for the reader after it.
 
 1. The character queue remains the route for text. The fx strip's
    type-to-open reads it; note entry reads the key stream.

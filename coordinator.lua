@@ -163,12 +163,15 @@ local function anyFxFloating()
   return false
 end
 
--- The four readers, in precedence; see docs/coordinator.md § The frame.
+-- The owners, in precedence; see docs/coordinator.md § The frame. The page answers
+-- last: a picker or modal raised from a pane is nearer the user than the pane.
 local function keyboardOwner()
   if help:isOpen()             then return 'help'       end
   if chrome.pickerIsActive()   then return 'picker'     end
   if chrome.statusEditActive() then return 'statusEdit' end
   if modalHost:isOpen()        then return 'modal'      end
+  local page = pages[active]
+  if page.keyboardOwner then return page:keyboardOwner() end
 end
 
 local function frame()
@@ -318,7 +321,8 @@ end
 
 ---------- PUBLIC
 
---shape: page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), statusSegments(), bind(...), unbind() }
+--shape: page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), statusSegments(),
+--               bind(...), unbind(), keyboardOwner()? }
 --contract: register instantiates page; first registered becomes active; returns page handle
 local coord = {}
 

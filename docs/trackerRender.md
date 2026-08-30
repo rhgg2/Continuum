@@ -18,28 +18,30 @@ Focus is a tri-state in `paletteFocus` (`'find' | 'tree' | nil`):
 - **tree** — the param tree owns the arrows; no ImGui item is active.
 - **nil** — the grid owns the keys.
 
-`paletteFocus` feeds `acceptCmds` (and `handleKeys`), so grid bindings stay
-quiet while the palette has focus. Because `drawParamPalette` runs *before*
-`dispatch`/`handleKeys` in `renderBody`, the palette consumes its keys first
-and the grid sees an already-suppressed frame — no double handling.
+Set, `paletteFocus` makes the pane the key queue's owner for the frame: the
+coordinator asks the page at the fill, the page asks `tr:keyboardOwner`, and
+every claim the grid dispatcher and note entry then make answers nil
+(`docs/keyQueue.md` § Ownership). The fill's own text-field claim is off on an
+owned frame, so every key reaches the queue even while the find box is live.
 
-Up/Down always move the tree cursor: a single-line `InputText` ignores them,
-so they can be claimed via `IsKeyPressed` even while the find box is active
-(the same trick `chrome.drawPicker` relies on), clamped at the ends and
-scrolling the row into view. Left/Right drive the tree only when not editing
-find-box text. Enter on a param automates it, then clears the find box and
-drops to the grid; Esc clears and drops without automating — both via the sink.
-The drop is deferred to the sink one frame later so the same Enter/Esc keystroke
-isn't seen by the grid dispatcher (which would otherwise toggle to arrange).
-Super-L arms/cancels learn on the cursor's fx, on the heading or one of its
-params.
+The palette claims what it acts on. Up/Down move the tree cursor, clamped at
+the ends and scrolling the row into view; a single-line `InputText` ignores
+them, so the claim costs the find box nothing. Left/Right drive the tree only
+when the find box holds no text — declined, the press stays in the queue, and
+ImGui's field moves the caret on its own read regardless. Enter on a param
+automates it, then clears the find box and drops to the grid; Esc clears and
+drops without automating. Both drop the focus in the statement that claims the
+press, which suffices: a claimed press cannot reach the grid dispatcher later
+in the frame. Super-L arms/cancels learn on the cursor's fx, on the heading or
+one of its params.
 
 ### The focus sink
 
 An `InputText`, once active, stays active until ImGui moves focus elsewhere.
 To leave the find box without a click (Tab→tree, Esc→grid) we park focus on a
 1px invisible button — `SetKeyboardFocusHere` before it deactivates the input.
-The grid then works purely through the dispatcher; it never needs ImGui window
+That is a different job from disposing of a press: the sink deactivates the
+field, the claim spends the key. The grid then works purely through the dispatcher; it never needs ImGui window
 focus, only the absence of an active item plus `paletteFocus = nil`. The sink
 sits near the top of the pane so scrolling never culls it out of submission.
 

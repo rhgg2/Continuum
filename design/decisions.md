@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The tracker's right-hand pane owns the key queue while either tab holds focus,
+  over narrowing the fill's text-field claim so the palette could keep its arrows past a live find
+  box. Left/Right from an *empty* find box drive the tree, and the fill cannot know the box is
+  empty, so the narrowing has no rule to state; ownership does, and it takes `releaseReq` and the
+  two `acceptCmds` terms with it.
+
 - **2026-08-30** — mm holds each kind's slot table as one `stream` record -- list, order, free,
   maxSlot, chans, sidecars -- over the twelve twinned file-scope locals that were threaded through
   the slot helpers as arguments. `streamOf(evt)` becomes the sole site discriminating note from cc,

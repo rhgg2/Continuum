@@ -17,7 +17,9 @@ other.
    `extra` at the registration site.
 
 1. A page is anything answering `toolbarSegments`, `renderBody`,
-   `statusSegments`, `bind` and `unbind`.
+   `statusSegments`, `bind` and `unbind`. A page one of whose panes
+   takes the whole keyboard also answers `keyboardOwner`, which the
+   fill asks.
 
 1. A page module is a controller: it builds its own stack and delegates
    every render call to a companion renderer. Where the stack has a
@@ -50,8 +52,10 @@ other.
 
 1. The fill settles which reader owns the keyboard for the frame: the
    cheat sheet, an open picker, a status cell holding an open field,
-   and an open modal, in that precedence. A popup raised over a modal
-   is nearer the user than the modal, so it takes the keyboard.
+   an open modal, and last the active page's own answer, in that
+   precedence. A popup raised over a modal is nearer the user than the
+   modal, so it takes the keyboard; and a picker or modal raised from
+   a page's pane is nearer the user than the pane.
 
 1. `tick` is the pre-draw beat for the pages that need one — the sample
    page, wiring's external resync while wiring is active, and the

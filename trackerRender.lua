@@ -177,12 +177,11 @@ local function paletteActions()
   end)
 end
 
--- Palette focus tri-state: 'find' | 'tree' | nil (grid). Gates focusState
--- and handleKeys. See docs/trackerRender.md § Param palette — keyboard focus.
+-- Palette focus tri-state: 'find' | 'tree' | nil (grid). Set, the pane owns the key
+-- queue for the frame. See docs/trackerRender.md § Param palette — keyboard focus.
 local paletteFocus = nil
 local focusFindReq = false   -- one-shot: focus the find box next draw
 local defocusReq   = false   -- one-shot: park focus on the sink, leaving the find box
-local releaseReq   = false   -- one-shot: drop paletteFocus to nil at the sink (Esc/Enter)
 local scrollReq    = false   -- one-shot: scroll the cursor row into view next draw
 
 -- FX-chain session focus: routes the keyboard into the fx palette tab (mirrors paletteFocus).
@@ -312,41 +311,41 @@ end
 -- Apply this frame's palette keys to cursor/expansion. Returns true when it
 -- changed the focus mode (Tab/Esc/Enter-automate) so the caller skips reconcile.
 local function handlePaletteKeys(nav)
-  local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-  if press(ImGui.Key_Tab) then
+  local mods  = keyQueue:frameMods()
+  local super = (mods & ImGui.Mod_Super) ~= 0
+  local take  = function(k) return keyQueue:take(k, mods, 'palette') end
+  if take(ImGui.Key_Tab) then
     if paletteFocus == 'find' then paletteFocus, defocusReq = 'tree', true
     else paletteFocus, focusFindReq = 'find', true end
     return true
   end
-  if press(ImGui.Key_Escape) then
-    -- Defer the focus drop to the sink next frame: keep paletteFocus set
-    -- through this frame's focusState so the same Esc isn't dispatched.
-    tv:setPaletteFilter(''); defocusReq, releaseReq = true, true
+  if take(ImGui.Key_Escape) then
+    tv:setPaletteFilter(''); paletteFocus, defocusReq = nil, true
     return true
   end
-  if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_X) then
+  if super and take(ImGui.Key_X) then
     tv:overrideTab('fx', caretKeyNow()); fxFocusReq = true; return true   -- cross to fx: claim the tab, focus the chain next fx draw
   end
-  if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_R) then
+  if super and take(ImGui.Key_R) then
     tv:clearTabOverride(); return true   -- toggle parameters off: the auto chain re-shows and focus falls to the grid
   end
   if #nav == 0 then return end
 
   local idx = navIndex(nav, tv:paletteCursor())
   if not idx then idx = 1; tv:setPaletteCursor{ fxGuid = nav[1].fxGuid, param = nav[1].param } end
-  -- Up/Down move, clamped — no wrap past the ends. Left/Right drive the tree
-  -- unless the find box is editing text. Any move scrolls the cursor in view.
+  -- Up/Down move (clamped, no wrap). Left/Right drive the tree unless the find
+  -- box is editing text, where the press is declined and stays in the queue.
   local treeArrows = paletteFocus == 'tree' or tv:paletteFilter() == ''
   local newIdx = idx
-  if press(ImGui.Key_DownArrow) then newIdx = math.min(idx + 1, #nav)
-  elseif press(ImGui.Key_UpArrow) then newIdx = math.max(idx - 1, 1)
-  elseif press(ImGui.Key_PageDown) then newIdx = math.min(idx + PALETTE_PAGE, #nav)
-  elseif press(ImGui.Key_PageUp) then newIdx = math.max(idx - PALETTE_PAGE, 1)
-  elseif treeArrows and press(ImGui.Key_RightArrow) then
+  if take(ImGui.Key_DownArrow) then newIdx = math.min(idx + 1, #nav)
+  elseif take(ImGui.Key_UpArrow) then newIdx = math.max(idx - 1, 1)
+  elseif take(ImGui.Key_PageDown) then newIdx = math.min(idx + PALETTE_PAGE, #nav)
+  elseif take(ImGui.Key_PageUp) then newIdx = math.max(idx - PALETTE_PAGE, 1)
+  elseif treeArrows and take(ImGui.Key_RightArrow) then
     local e = nav[idx]
     if e.param == nil and not e.item.open then tv:setFxExpanded(e.fxGuid, true)
     else newIdx = math.min(idx + 1, #nav) end
-  elseif treeArrows and press(ImGui.Key_LeftArrow) then
+  elseif treeArrows and take(ImGui.Key_LeftArrow) then
     local e = nav[idx]
     if e.param == nil and e.item.open then tv:setFxExpanded(e.fxGuid, false)
     elseif e.param ~= nil then
@@ -362,15 +361,14 @@ local function handlePaletteKeys(nav)
     tv:setPaletteCursor{ fxGuid = cur.fxGuid, param = cur.param }
     if cur.param then selectParam(cur) end
   end
-  if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_L) then
+  if super and take(ImGui.Key_L) then
     tv:armLearn(cur.row)   -- cur.row is the cursor's fx, whether on it or a child
     if tv:learnFxGuid() then tv:setFxExpanded(cur.row.fxGuid, true) end
   end
-  if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+  if take(ImGui.Key_Enter) or take(ImGui.Key_KeypadEnter) then
     if cur.param then
-      -- Deferred drop (see Esc) so the same Enter doesn't reach the grid.
       selectParam(cur); tv:automateParam()
-      tv:setPaletteFilter(''); tv:setPaletteCursor(nil); defocusReq, releaseReq = true, true
+      tv:setPaletteFilter(''); tv:setPaletteCursor(nil); paletteFocus, defocusReq = nil, true
       return true
     end
     tv:setFxExpanded(cur.fxGuid, not cur.item.open)
@@ -501,7 +499,6 @@ local function drawParamsBody(childFocused)
   -- (Tab→tree, Esc/Enter→grid). Kept near the top so scroll never culls it.
   local parking = defocusReq
   if defocusReq then ImGui.SetKeyboardFocusHere(ctx); defocusReq = false end
-  if releaseReq then paletteFocus, releaseReq = nil, false end
   ImGui.InvisibleButton(ctx, '##paletteSink', 1, 1)
 
   local plan = buildPlan(tv:paramTargets(), tv:paletteFilter():lower())
@@ -1059,8 +1056,8 @@ end
 -- below, captures the same table the helper installs methods on.
 local tr = {}
 
--- The grid + lane render core. inputAllowed
--- folds focusState.acceptCmds so note entry self-suppresses under palette/strip focus.
+-- The grid + lane render core; inputAllowed folds focusState.acceptCmds, so
+-- note entry self-suppresses under a live item or behind the pane's claim.
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = true,
   keyQueue = keyQueue,
@@ -1177,7 +1174,7 @@ local function periodBox(host, row, width)
     -- closing press would land on the row behind and reopen the box, or leave the session.
     local mods = keyQueue:frameMods()
     for _, key in ipairs(BOX_ENDERS) do
-      if keyQueue:take(key, mods) then break end
+      if keyQueue:take(key, mods, 'palette') then break end
     end
     periodEdit = nil
   end
@@ -1345,7 +1342,7 @@ local stripPlan do
   local function handleFxChainKeys(plan)
     local mods  = keyQueue:frameMods()
     local super = (mods & ImGui.Mod_Super) ~= 0
-    local take  = function(k) return keyQueue:take(k, mods) end
+    local take  = function(k) return keyQueue:take(k, mods, 'palette') end
     if take(ImGui.Key_Escape) then revertStrip(); exitStrip(); return end
     if super and take(ImGui.Key_X) then exitStrip(); return end   -- commit and leave (Super+X toggles the session)
     if super and take(ImGui.Key_R) then                     -- commit, then raise the parameters tab
@@ -1828,15 +1825,21 @@ function tr:statusSegments()
   return statusSegments
 end
 
--- acceptCmds: no item active (toolbar focus is transient; see IsAnyItemActive), grid focus.
--- A modal, picker or status edit owns the queue instead -- docs/keyQueue.md § Ownership.
+-- acceptCmds: false under a live item, or when a modal, picker, status edit
+-- or the right pane owns the queue — see docs/keyQueue.md § Ownership.
 --shape: focusState = { pageSuppressed:bool, acceptCmds:bool }
 function tr:focusState()
   if not ctx then return { pageSuppressed = false, acceptCmds = false } end
   return {
     pageSuppressed = false,   -- unused: swing/temper live on their own page
-    acceptCmds     = not ImGui.IsAnyItemActive(ctx) and not paletteFocus and not stripFocus,
+    acceptCmds     = not ImGui.IsAnyItemActive(ctx),
   }
+end
+
+-- The right-hand pane takes the whole keyboard while either tab holds focus.
+--contract: the coordinator asks this at the fill; the name covers both tabs
+function tr:keyboardOwner()
+  if paletteFocus or stripFocus then return 'palette' end
 end
 
 return tr

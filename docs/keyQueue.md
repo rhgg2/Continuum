@@ -89,10 +89,14 @@ press is gone.**
    name; the precedence is the coordinator's (`docs/coordinator.md` §
    The frame).
 
-1. The names are `help`, `modal`, `picker` and `statusEdit`. `take` and
-   `takeAny` answer nil to a claimant other than the name recorded, and
-   a claimant outside the four raises — a typo would otherwise read as
-   a key that quietly does nothing.
+1. The names are `help`, `modal`, `picker`, `statusEdit` and `palette`.
+   `take` and `takeAny` answer nil to a claimant other than the name
+   recorded, and a claimant outside the five raises — a typo would
+   otherwise read as a key that quietly does nothing.
+
+1. `palette` is the tracker's right-hand pane, either tab. The
+   parameters tree and the fx chain are two focus sessions on one pane
+   and can overlap for a frame, so one name covers both.
 
 1. A reader hosted by an owner claims under that owner's name.
    `keyDispatch` takes the name from the state it is given, so the mini

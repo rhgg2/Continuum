@@ -219,13 +219,13 @@ return {
     run = function()
       local q = newQueue()
       pressed[img.Key_A] = 'fresh'
-      q:fill('modal')
+      q:fill('palette')
       t.eq(q:take(img.Key_A),               nil, 'an unnamed reader is declined')
       t.eq(q:takeAny(),                     nil, 'and so is a bare takeAny')
-      t.eq(q:take(img.Key_A, nil, 'picker'), nil, 'as is another owner')
-      t.truthy(q:take(img.Key_A, nil, 'modal'), 'the owner claims it')
+      t.eq(q:take(img.Key_A, nil, 'modal'),  nil, 'as is another owner')
+      t.truthy(q:take(img.Key_A, nil, 'palette'), 'the owner claims it')
       t.falsy(pcall(function() q:fill('jazz') end),
-              'an owner outside the four raises')
+              'an owner outside the five raises')
       t.falsy(pcall(function() q:take(img.Key_A, nil, 'jazz') end),
               'as does a claim made under one')
     end,

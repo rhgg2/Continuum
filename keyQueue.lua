@@ -17,7 +17,8 @@ local util  = require 'util'
 local ctx = (...).ctx
 
 -- The readers that take the whole keyboard for a frame. See docs/keyQueue.md § Ownership.
-local OWNERS = { help = true, modal = true, picker = true, statusEdit = true }
+local OWNERS = { help = true, modal = true, picker = true, statusEdit = true,
+                 palette = true }
 
 -- The keys a live text field consumes: the printables, the two erasing keys, and the
 -- caret's own. Enter, Escape and Tab belong to the field's host, so they are not here.
@@ -60,7 +61,7 @@ end
 
 local entries, owner, frameMask = {}, nil, 0
 
--- A name is one of the four owners or nobody; anything else is a typo, which would
+-- A name is one of the five owners or nobody; anything else is a typo, which would
 -- otherwise read as a key that quietly does nothing.
 local function checked(name)
   if name ~= nil and not OWNERS[name] then

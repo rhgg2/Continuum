@@ -263,10 +263,10 @@ wheel ignores command return codes.
    is claimed at that mask.
 
 1. Two guards decide whether the scan is asked at all: the host's
-   `inputAllowed`, which folds the active-item, palette and fx-strip
-   states, and a scope's letter sink, since the menu's walk owns the
-   whole keyboard while it is up. A press a guard suppresses stays in
-   the queue. A modal or a picker needs no guard here, since it owns
+   `inputAllowed`, which folds the active-item state, and a scope's
+   letter sink, since the menu's walk owns the whole keyboard while it
+   is up. A press a guard suppresses stays in the queue. A modal, a
+   picker or the right-hand pane needs no guard here, since it owns
    the queue (`docs/keyQueue.md` § Ownership).
 
 ## Modal
