@@ -14,8 +14,8 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local swingEditor, temperEditor, cmgr, chrome, gui, modalHost =
-  (...).swingEditor, (...).temperEditor, (...).cmgr, (...).chrome, (...).gui, (...).modalHost
+local swingEditor, temperEditor, cmgr, chrome, gui, keyQueue =
+  (...).swingEditor, (...).temperEditor, (...).cmgr, (...).chrome, (...).gui, (...).keyQueue
 local ctx, uiFont, uiSize = gui.ctx, gui.uiFont, gui.fontSize.ui
 
 local pane = 'swing'   -- 'swing' | 'temper'
@@ -217,10 +217,10 @@ function er:renderBody(_, w, h, dispatch)
   -- (same ordering as the tracker path).
   if dispatch then dispatch(self:focusState()) end
   local p = activePane()
-  -- Page-level Esc returns to the previous page; guarded so an active
-  -- InputText/slider keeps Esc to cancel itself, and a sub-modal owns it.
-  if droppedIn and not modalHost:isOpen() and not ImGui.IsAnyItemActive(ctx)
-     and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+  -- Page-level Esc returns to the previous page; the take answers nil to a frame a
+  -- sub-modal owns, and the guard keeps Esc for an active InputText or slider drag.
+  if droppedIn and not ImGui.IsAnyItemActive(ctx)
+     and keyQueue:take(ImGui.Key_Escape) then
     onClose(); return
   end
   if pane == 'swing'  and not swingEditor:isOpen()        then swingEditor:open()  end

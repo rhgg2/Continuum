@@ -74,11 +74,13 @@ contributes nothing between the selector and Close.
 ## Esc is guarded
 
 Page-level Esc closes the page, but only on a tracker drop-in
-(`droppedIn`) and only when nothing nearer wants it: not while a pane
-sub-modal (the New-swing popup) is open, and not while an ImGui item is
-active — so Esc still cancels an InputText edit or a slider drag before
-it ever closes the page. The check sits in `renderBody`, before the
-panes draw.
+(`droppedIn`), and only when no ImGui item is active — so Esc still
+cancels an InputText edit or a slider drag before it ever closes the
+page. The check sits in `renderBody`, before the panes draw.
+
+The close takes Esc from the queue, so a pane sub-modal (the New-swing
+popup) needs no gate of its own: the modal owns the queue while it is
+up, and the take answers nil (`docs/keyQueue.md` § Ownership).
 
 The panes' own modals — New swing, New tuning and Import — claim Enter
 and Escape from the queue as every modal does (`docs/keyQueue.md` §

@@ -31,23 +31,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 editor, sampler: the page Escapes claim from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-30 tracker: the palette pane owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 - 2026-08-29 patternEditor: drop the input swallow and the picker gate (design/keyQueue.md § Claiming)
 - 2026-08-29 tracker: the fx strip claims its keys from the keyQueue (design/keyQueue.md § Claiming)
-- 2026-08-29 modalHost: every modal claims commit and cancel through the host (design/keyQueue.md § Claiming)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **sampler, editor: the page Escapes claim.** `sampleRender`'s rename
-  cancel and `editorRender`'s drop-out take Escape from the queue
-  instead of reading it. The editor's `modalHost:isOpen()` gate goes,
-  since a modal owns the queue and the take answers nil; its
-  `IsAnyItemActive` gate stays, because Escape survives the fill's
-  field claim so the field can cancel itself.
 
 - **wiring: the fx popup owns the queue.** The wiring page answers
   `keyboardOwner` with `picker` while `popups.fx` is up, and the

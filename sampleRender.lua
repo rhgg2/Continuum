@@ -255,7 +255,7 @@ local function drawSlots()
       if rv then
         sv:setName(idx, buf)
         rename = nil
-      elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+      elseif keyQueue:take(ImGui.Key_Escape) then
         rename = nil
       elseif rename.justOpened then
         rename.buf, rename.justOpened = buf, nil

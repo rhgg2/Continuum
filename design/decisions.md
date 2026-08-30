@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The editor page's Esc takes the press from the queue, and its modalHost:isOpen()
+  gate goes: a sub-modal owns the frame, so the take answers nil without a gate to say so. The
+  item-active guard stays, since Escape survives the fill's text-field claim on purpose, and a live
+  InputText or a slider mid-drag cancels itself with it. The sampler's rename cancel claims the same
+  way, which leaves wiring as the last direct reader.
+
 - **2026-08-30** — The tracker's right-hand pane owns the key queue while either tab holds focus,
   over narrowing the fill's text-field claim so the palette could keep its arrows past a live find
   box. Left/Right from an *empty* find box drive the tree, and the fill cannot know the box is

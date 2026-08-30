@@ -9,8 +9,9 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, ds, cmgr, chrome, gui, modalHost, facade, lib =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).lib
+local cm, ds, cmgr, chrome, gui, modalHost, facade, lib, keyQueue =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).lib,
+  (...).keyQueue
 local swingEditor  = util.instantiate('swingEditor',
   { cm = cm, ds = ds, chrome = chrome, ctx = gui.ctx, gui = gui, facade = facade, modalHost = modalHost, lib = lib })
 local temperEditor = util.instantiate('temperEditor',
@@ -18,7 +19,7 @@ local temperEditor = util.instantiate('temperEditor',
 
 local er = util.instantiate('editorRender',
   { swingEditor = swingEditor, temperEditor = temperEditor,
-    cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
+    cmgr = cmgr, chrome = chrome, gui = gui, keyQueue = keyQueue })
 
 local ep = {}
 
