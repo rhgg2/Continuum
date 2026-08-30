@@ -48,6 +48,35 @@ modes. `t.eq(col.width, 9)` became a relation against the mode-off
 width. Two case names promised "even into empty slots", which no
 scenario here can exercise. All five original perturbation kills held.
 
+**tm_fx_region_spec** (3117 → 3162, 116 tests unchanged). The header and six
+banners framed the spec by plan phase — "Note macros v2", "4.6 producer
+split", G2, G4, Phase A, A3, A4, C2 — all of which resolve to archived design
+docs; each became the model sentence it pins, cited to a `docs/generators.md`
+§. Restated constants: `ccDefaultRest[10]`'s 64 was copied into nine expected
+values across four cc-augment cases, so a change of the controller's rest
+broke four cases about the *fold* — they now read the rest and add the
+fixture's own deltas, and the config default is left to `generators_spec`,
+which holds the teeth for it. The `fxp-1` uuid pinned the mint's counter seed
+as well as its prefix (perturbing the seed to 40 killed it) and became a
+prefix match. Two `freezeRect` cases spelled `'note:1'` / `'pb:0'` as
+literals; they now route through `groups.streamId`. The captured `1244` at
+the detune onset was a two-tick geometry artifact rationalised in a comment
+— replaced by the relation it was really after (the pair differ by detune
+alone), which still kills a cent of drift in the dual point and a widened
+dual-point gap. Non-triviality guards went onto seven assertions whose two
+sides could both go empty or nil (the freeze-gate snapshots, explode's
+before/after, the widened-window cc sweep, the cc round-trip fingerprint,
+freeze-to-group's cents); `#curve == 3` became a count derived from the
+live column. `arp over a silent span` had no positive control and gained
+one that is itself a model sentence: the chain registers its note window
+regardless (§ Emission is ownership ¶3). Two whole-record `deepEq`s over
+input-stream records became field reads, so adding a field to `host.pas`
+no longer breaks a case about the PA riding in. One case went the other
+way: its preamble claimed an emptied cc column shell "stands rather than
+vanishing", which nothing in `docs/` states and nothing in the suite
+catches — the assertion was right to hedge and the comment was corrected
+instead.
+
 ## still to do
 
 Sorted by size descending (lines). `asserts` counts t.eq / t.deepEq /
@@ -56,7 +85,6 @@ is a hint, not a verdict.
 
 |  lines | tests | asserts | spec |
 |-------:|------:|--------:|------|
-|   3117 |   116 |     428 | tm_fx_region_spec |
 |   2172 |    69 |     257 | tracker_page_spec |
 |   2078 |    72 |     185 | sonority_spec |
 |   1977 |   117 |     365 | am_spec |

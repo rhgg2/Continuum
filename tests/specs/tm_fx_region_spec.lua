@@ -1,8 +1,10 @@
--- Note macros v2: region hosts. The N=0 sine pb seat stream proves the generator-side substrate
--- (ds, 4.6 producer split, reconcile, G4 round-trip). see docs/generators.md
+-- Region hosts in tm: a channel x ppq span carrying an fx list, the parking replace requires of it, and
+-- the markerless seats its continuous output leaves on the wire. The N=0 sine case is that substrate with
+-- the host note taken away -- membership empty, the chain still owning its window. see docs/generators.md
 local t          = require('support')
 local util       = require('util')
 local generators = require('generators')
+local groups     = require('groups')
 
 -- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; sine extrema at
 -- ppq 15 (peak) / 45 (trough); stream anchored 0 at both window ends.
@@ -15,6 +17,11 @@ end
 local function rawToCents(raw, pbRange)
   return util.round(raw * (pbRange or 2) * 100 / 8192)
 end
+
+-- The base an un-automated cc augment sums onto. Polarity is the controller's own and its rest says so,
+-- which makes the value the controller's business and not the fold's -- so read it rather than restate it.
+-- see docs/generators.md § pb and cc ¶4
+local function ccRest(cc) return generators.ccDefaultRest[cc] end
 
 -- A seat is recognized purely by region membership, on pb and cc alike: anything inside a live region's
 -- span, half-open (as production's covered()). The close folds to endppq-1, so the end row is never
@@ -112,7 +119,7 @@ local function anyNoteOnChan(h, chan)
   return false
 end
 
------ Arp (A3): replace parks members off the take; augment keeps them sounding
+----- Arp: replace parks its members off the take, augment leaves them sounding (§ Hosts and membership ¶5)
 
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- step 60 at res 240
 
@@ -335,10 +342,11 @@ return {
     end,
   },
 
-  ----- G4 -- round-trip stability
+  ----- Round-trip stability: a seat reconciles by (ppq, val, shape), so a no-change rebuild churns
+  ----- nothing (§ Route-by-window ¶4)
 
   {
-    name = 'G4: region pb seat stream is byte-identical across rebuild -> flush',
+    name = 'fx region: the pb seat stream is byte-identical across rebuild -> flush',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
@@ -355,10 +363,10 @@ return {
     end,
   },
 
-  ----- G2 -- region removal leaves no pb seat
+  ----- Removal sweeps: a deleted region's orphaned seats go with it (§ Transitions and edges ¶1)
 
   {
-    name = 'G2: removing the region leaves no pb seat after reconcile',
+    name = 'fx region: removing the region leaves no pb seat after reconcile',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
@@ -433,7 +441,8 @@ return {
     end,
   },
 
-  ----- Phase A: generator output is self-sufficient of mm array order (design/archive/deferred-reindex.md)
+  ----- Determinism: lane allocation is a pure function of the region's occupancy, and of nothing else --
+  ----- not mm's array order (§ Output ¶4)
 
   {
     name = 'two rebuilds over an arp region allocate byte-identical derived notes + lanes',
@@ -625,7 +634,7 @@ return {
   },
 
   {
-    name = 'G4: replace arp + parked chord are byte-identical across rebuild -> flush',
+    name = 'replace: arp + parked chord are byte-identical across rebuild -> flush',
     run = function(harness)
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
@@ -743,7 +752,7 @@ return {
       local typed
       for _, s in ipairs(stash) do if s.pitch == 72 then typed = s end end
       t.truthy(typed, 'the typed note is stashed')
-      t.eq(typed.uuid, 'fxp-1', 'a window-authored parked note mints an fxp uuid')
+      t.truthy(typed.uuid:match('^fxp%-'), 'a window-authored parked note mints an fxp uuid')
       t.eq(typed.ppq, 120, 'the stashed spec keeps the logical onset it was typed at')
       t.deepEq(authoredPitches(h), {}, 'the typed note never enters the take -- it is parked')
       local pitches = {}
@@ -978,11 +987,15 @@ return {
     run = function(harness)
       local h = harness.mk()
       injectArp(h)
+      -- The chain ran over the silent span and claimed its note window all the same: a chain that folds
+      -- nothing still owns what it claimed. see docs/generators.md § Emission is ownership ¶3
+      t.eq(#(h.ds:get('prevWindows') or {}), 1, 'the arp registered its note window over the silent span')
       t.eq(#derivedNotes(h), 0, 'no members -> no derived notes (every step rests)')
     end,
   },
 
-  ----- A4: the producer exposes the windowed channel as typed input streams
+  ----- Input streams: the producer hands the windowed channel over as typed streams, PA among them and
+  ----- not special (§ Input streams ¶3)
 
   {
     name = 'fx region: the producer hands the generator notes/pas/ccs/ats input streams',
@@ -1008,12 +1021,18 @@ return {
       generators.kinds.capture = nil   -- restore before asserting (generators is a shared module)
 
       t.truthy(captured, 'the capture kind ran and recorded its host')
-      t.deepEq(captured.pas, { { ppq = 120, pitch = 60, vel = 77 } }, 'the PA rides into host.pas')
+      t.eq(#captured.pas, 1, 'one PA in the window, one in host.pas')
+      local pa = captured.pas[1]
+      t.eq(pa.ppq, 120, 'the PA rides into host.pas at its logical onset')
+      t.eq(pa.pitch, 60, 'carrying the pitch it was addressed by')
+      t.eq(pa.vel, 77, 'and its pressure')
       t.deepEq(captured.ccs[74], { { ppq = 0,   val = 50, shape = 'step' },
                                    { ppq = 60,  val = 50, shape = 'step' },
                                    { ppq = 240, val = 50, shape = 'step' } },
         'authored cc 74 buckets into host.ccs as an absolute curve with entering/closing edge values')
-      t.deepEq(captured.ats, { { ppq = 180, val = 33 } }, 'channel aftertouch into host.ats')
+      t.eq(#captured.ats, 1, 'one channel aftertouch in the window, one in host.ats')
+      t.eq(captured.ats[1].ppq, 180, 'at its logical onset')
+      t.eq(captured.ats[1].val, 33, 'carrying its value')
       t.deepEq(field(captured.notes, 'pitch'), { 60 }, 'the covered note is the membership (host.notes)')
     end,
   },
@@ -1162,7 +1181,7 @@ return {
     end,
   },
 
-  ----- C2: continuous stages fold in-chain -- order is load-bearing on the pb channel too
+  ----- Continuous stages fold in-chain: order is semantic on the pb channel too (§ The chain ¶6)
 
   {
     name = 'fx chain (continuous): [replace, augment] -- the augment stage wobbles the replaced curve',
@@ -1432,9 +1451,10 @@ return {
       h.tm:rebuild()
       generators.kinds.ccA, generators.kinds.ccB = nil, nil
 
-      t.eq(ccFillAt(h, 1, 10, 60).val,  104, 'r1 exclusive head: rest 64 + macroA 40')
-      t.eq(ccFillAt(h, 1, 10, 180).val, 114, 'overlap: rest 64 + macroA 40 (held) + macroB 10')
-      t.eq(ccFillAt(h, 1, 10, 240).val, 74,  'r2 exclusive tail seats at 240: rest 64 + macroB 10 -- macroA no longer folds')
+      t.eq(ccFillAt(h, 1, 10, 60).val,  ccRest(10) + 40,      'r1 exclusive head: rest + macroA 40')
+      t.eq(ccFillAt(h, 1, 10, 180).val, ccRest(10) + 40 + 10, 'overlap: rest + macroA 40 (held) + macroB 10')
+      t.eq(ccFillAt(h, 1, 10, 240).val, ccRest(10) + 10,
+        'r2 exclusive tail seats at 240: rest + macroB 10 -- macroA no longer folds')
     end,
   },
 
@@ -1579,11 +1599,14 @@ return {
       t.eq(derivedPb(h, 1, 238).val, centsToRaw(80), 'the curve reaches its full 60c + 20c detune on the last tick material holds')
       t.eq(derivedPb(h, 1, 239).val, centsToRaw(20), 'and the close hands back detune alone -- 60c does not outlive the window')
 
-      -- The detune step rides a dual point at the onset: same curve value, detune jumps 0 -> 20. The
-      -- closing control point folds to 238 (239 is the close's), so the segment spans [0,238] and its
-      -- interior runs a fraction ahead of the authored [0,240] geometry -- 30.4c at 119, not a round 30c.
-      t.eq(derivedPb(h, 1, 119).val, 1244, 'just-before the onset: curve only, detune 0')
-      t.eq(derivedPb(h, 1, 120).val, 1244 + centsToRaw(20), 'at the onset: the same curve value + detune 20 -- the step is exact')
+      -- The detune step rides a dual point at the onset: one curve value, detune jumping 0 -> 20. The
+      -- exactness of that step is the claim, so read the step and not the value: the closing control point
+      -- folds to 238 (239 is the close's), so the segment spans [0,238] and its interior runs a fraction
+      -- ahead of the authored [0,240] geometry -- a two-tick compression the model declines to fix.
+      local before, at = derivedPb(h, 1, 119).val, derivedPb(h, 1, 120).val
+      t.eq(at - before, centsToRaw(20), 'the pair at the onset differ by detune alone -- the step is exact')
+      t.truthy(math.abs(rawToCents(before) - 30) <= 2,
+        'and the curve value there is the slow shape near its own midpoint, detune not yet folded in')
     end,
   },
 
@@ -1742,7 +1765,7 @@ return {
   },
 
   {
-    name = 'G4 (cc replace): the fill is byte-identical and re-adds nothing across a no-change rebuild',
+    name = 'cc replace: the fill is byte-identical and re-adds nothing across a no-change rebuild',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.ccRep = {
@@ -1814,8 +1837,8 @@ return {
       h.tm:rebuild()
       generators.kinds.ccCap = nil
 
-      t.eq(ccFillAt(h, 1, 10, 0).val,  64, 'no authored automation -> base is the default rest (64) + macro 0')
-      t.eq(ccFillAt(h, 1, 10, 60).val, 94, 'at the macro peak the seat is rest 64 + delta 30')
+      t.eq(ccFillAt(h, 1, 10, 0).val,  ccRest(10),      'no authored automation -> the base is the rest, macro 0 on top')
+      t.eq(ccFillAt(h, 1, 10, 60).val, ccRest(10) + 30, 'at the macro peak the seat is rest + delta 30')
       for _, s in ipairs(fillRecords(h, 1, 10)) do
         t.eq(s.plain, true, 'an augment seat is markerless -- no sidecar, no eventMeta')
       end
@@ -1865,14 +1888,15 @@ return {
       h.tm:rebuild()
       generators.kinds.ccCap = nil
 
-      t.eq(ccFillAt(h, 1, 10, 120).val, 100, 'the governing authored value, not ccDefaultRest 64, is the base')
+      t.truthy(100 ~= ccRest(10), 'the authored value differs from the rest, so a fallback to rest would show')
+      t.eq(ccFillAt(h, 1, 10, 120).val, 100, 'the governing authored value, not the controller rest, is the base')
       t.eq(ccFillAt(h, 1, 10, 180).val, 110, 'governing base 100 + macro delta 10 at the peak')
       t.truthy(authoredCC(h, 1, 10, 0), 'the authored cc stays on the take -- it lies outside the window')
     end,
   },
 
   {
-    name = 'fx region (cc augment): two overlapping regions sum every stream (N-stream regression guard)',
+    name = 'fx region (cc augment): two overlapping regions sum every stream, none dropped',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.ccA = {
@@ -1898,8 +1922,10 @@ return {
       h.tm:rebuild()
       generators.kinds.ccA, generators.kinds.ccB = nil, nil
 
-      t.eq(ccFillAt(h, 1, 10, 60).val, 114, 'overlap sums rest 64 + macroA 40 + macroB 10 -- no stream dropped')
-      t.eq(ccFillAt(h, 1, 10, 0).val,  64,  'both macros anchor 0 at the window edge -> base rest alone')
+      t.eq(ccFillAt(h, 1, 10, 60).val, ccRest(10) + 40 + 10,
+        'overlap sums rest + macroA 40 + macroB 10 -- no stream dropped')
+      t.eq(ccFillAt(h, 1, 10, 0).val,  ccRest(10),
+        'both macros anchor 0 at the window edge -> the base rest alone')
     end,
   },
 
@@ -1961,12 +1987,12 @@ return {
 
       local seat = seatMap()
       t.deepEq(authoredPitches(h), { 60 }, 'the augment host keeps sounding -- it is not parked')
-      t.eq(seat[0],  64, 'the note-host window seats base rest 64 + macro 0 at the start')
-      t.eq(seat[60], 89, 'and rest 64 + macro delta 25 at the peak')
+      t.eq(seat[0],  ccRest(10),      'the note-host window seats the base rest + macro 0 at the start')
+      t.eq(seat[60], ccRest(10) + 25, 'and rest + macro delta 25 at the peak')
 
       h.tm:rebuild()   -- kind still registered: seats must be recognized, re-summed, not swept or duplicated
       generators.kinds.ccCap = nil
-      t.eq(seatMap()[60], 89, 'the summed seat is stable across a no-change rebuild')
+      t.eq(seatMap()[60], ccRest(10) + 25, 'the summed seat is stable across a no-change rebuild')
     end,
   },
 
@@ -2094,6 +2120,7 @@ return {
       for i, e in ipairs(fx) do if e.kind == 'trill' then trillIdx = i end end
       h.vm:removeFxStage(uuid, trillIdx)
 
+      t.truthy(#baseline.seats > 0, 'the sine seats a fill to compare (so the round-trip is not over nothing)')
       t.deepEq(ccFingerprint(), baseline, 'the cc realisation round-trips: seats + parked stash unchanged')
     end,
   },
@@ -2127,7 +2154,9 @@ return {
       local stash = stashOfType(h, 'cc')
       t.eq(#stash, 1, 'the exposed authored cc parks in the same pass')
       t.eq(stash[1].ppq, 480, 'the parked spec is the exposed cc')
-      for _, c in ipairs(h.fm:dump().ccs) do
+      local onWire = h.fm:dump().ccs
+      t.truthy(#onWire > 0, 'the widened window seats a fill, so the sweep below is not over nothing')
+      for _, c in ipairs(onWire) do
         t.truthy(c.uuid ~= authoredUuid, 'the authored cc left the take; only fill seats remain')
       end
     end,
@@ -2338,9 +2367,11 @@ return {
       h.tm:flush()
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
       t.eq(#stashOfType(h, 'cc'), 2, 'sine parks both authored cc off-take')
-      -- The authored cc parked out of it, so the column shell stands empty rather than vanishing.
+      -- The authored cc parked out of it and the summed seats route out of columns, so cc10 shows
+      -- nothing before the freeze. Whether the emptied column shell survives its last event is
+      -- representation rather than model -- nothing states it -- so read the content, not the shell.
       local live = h.tm:getChannel(1).columns.ccs[10]
-      t.eq(#(live and live.events or {}), 0, 'live, nothing on cc10 is on screen -- seats and authored both off')
+      t.eq(#((live and live.events) or {}), 0, 'live, nothing on cc10 is on screen -- seats and authored both off')
 
       t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
 
@@ -2414,9 +2445,10 @@ return {
 
       local windows = h.ds:get('prevWindows') or {}
       t.eq(#windows, 1, 'one producer, one entry')
-      t.eq(windows[1] and windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
-      t.eq(windows[1] and windows[1].id, h.tm:getChannel(1).parked[1].uuid,
-           "stamped with its producer's identity")
+      t.eq(windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
+      local hostUuid = h.tm:getChannel(1).parked[1].uuid
+      t.truthy(hostUuid, 'the parked host carries a uuid to be stamped with')
+      t.eq(windows[1].id, hostUuid, "and the window is stamped with its producer's identity")
     end,
   },
 
@@ -2658,6 +2690,8 @@ return {
       h.tm:rebuild()
       local regions, windows, parked =
         h.ds:get('fxRegions'), h.ds:get('prevWindows'), h.ds:get('fxParked')
+      t.eq(#windows, 2, 'both producers stand in the census')
+      t.eq(#parked, 1, 'and the member they both park is in the stash')
 
       t.falsy(h.tm:freezeEligible('fxr-1'), 'the map refuses the earlier region')
       t.falsy(h.tm:freezeEligible('fxr-2'), 'and the later')
@@ -2865,7 +2899,8 @@ return {
 
       t.deepEq(h.tm:freezeRect('fxr-1'),
         { ppq = 0, dur = 240, chanLo = 1,
-          streams = { [0] = { ['note:1'] = true, ['pb:0'] = true } } },
+          streams = { [0] = { [groups.streamId{ evType = 'note', key = 1 }] = true,
+                              [groups.streamId{ evType = 'pb' }]            = true } } },
         'the lane the derived notes landed on plus the pb target, and lane 2 absent')
     end,
   },
@@ -2878,7 +2913,8 @@ return {
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
 
       t.deepEq(h.tm:freezeRect(uuid),
-        { ppq = 0, dur = 240, chanLo = 1, streams = { [0] = { ['pb:0'] = true } } },
+        { ppq = 0, dur = 240, chanLo = 1,
+          streams = { [0] = { [groups.streamId{ evType = 'pb' }] = true } } },
         'the host stays authored rather than becoming output, so its own lane is not in the rect')
     end,
   },
@@ -2890,7 +2926,8 @@ return {
       addNote(h)
       injectRegion(h)   -- a live producer over the same span must not answer for the note
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
-      t.falsy(h.tm:freezeRect(uuid), 'a plain note has no footprint to claim')
+      t.truthy(h.tm:freezeRect('fxr-1'), 'the region over the same span does claim a footprint')
+      t.falsy(h.tm:freezeRect(uuid), 'a plain note has none of its own to claim')
     end,
   },
 
@@ -2985,7 +3022,12 @@ return {
         if e.hidden and e.ppq >= 0 and e.ppq <= 240 then hiddenInWindow = hiddenInWindow + 1 end
       end
       t.truthy(hiddenInWindow > 0, 'the detune seats an absorber inside the window bounds')
-      t.eq(#curve, 3, 'and the curve members are the thinned survivors alone')
+      local visibleInWindow = 0
+      for _, e in ipairs(col.events) do
+        if not e.hidden and e.ppq >= 0 and e.ppq <= 240 then visibleInWindow = visibleInWindow + 1 end
+      end
+      t.truthy(visibleInWindow > 0, 'the thin left survivors standing')
+      t.eq(#curve, visibleInWindow, 'and the curve members are those survivors alone -- the absorber stays out')
       for _, m in ipairs(curve) do t.truthy(live[m], 'each member is the live column event itself') end
     end,
   },
@@ -3002,6 +3044,7 @@ return {
       t.truthy(members and members[1], 'the freeze hands back its members')
       local uuid  = members[1].uuid
       local cents = h.tm:byUuid(uuid).cents
+      t.truthy(cents, 'the freeze authored a cents sidecar to survive the reload')
 
       h.tm:reloadFromReaper()
 
@@ -3060,8 +3103,10 @@ return {
       h.tm:rebuild()
       local before1     = derivedFor(h, 1, expanded('fxr-g', 1))
       local before7     = derivedFor(h, 7, expanded('fxr-g', 7))
-      local stashBefore = util.deepClone(h.ds:get('fxParked') or {})
-      local winBefore   = util.deepClone(h.ds:get('prevWindows') or {})
+      local stashBefore = h.ds:get('fxParked') or {}
+      local winBefore   = h.ds:get('prevWindows') or {}
+      t.truthy(#before1 > 0 and #before7 > 0, 'the global chain derived onto both channels')
+      t.truthy(#stashBefore > 0 and #winBefore > 0, 'and parked its members under a registered window')
 
       t.truthy(h.tm:explodeRegion('fxr-g'), 'the explode reports success')
       local chans, uuids = {}, {}
