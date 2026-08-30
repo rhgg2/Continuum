@@ -4556,12 +4556,14 @@ local function rebuildPbs(fxOut, extraColumns)
       return curves.interpolate(A, B, ppq, 'cents')
     end
 
-    -- Authored breakpoints bounding M, excluding any pb exactly at M.
-    local function spanAround(M)
-      local after  = util.firstAfter(realPbs, M)
-      local before = after - 1
-      while before >= 1 and realPbs[before].ppq == M do before = before - 1 end
-      return realPbs[before], realPbs[after]
+    -- The stream governing M, whichever owns it: a window's own curve inside one, the authored
+    -- breakpoints outside. `into` is the segment M is entered on, `at` a breakpoint standing on it.
+    local function streamAround(M)
+      local win = replaceWinAt(M)
+      local src = win and win.bps or realPbs
+      local i   = util.firstAtOrAfter(src, M)
+      local at  = src[i]
+      return src[i - 1], (at and at.ppq == M) and at or nil
     end
 
     -- Seats to realise: ppq -> { cents, ppqL, shape }. The consolidated assign turns each
@@ -4571,13 +4573,12 @@ local function rebuildPbs(fxOut, extraColumns)
     local seats = {}
     for _, onset in ipairs(onsets) do
       if inKeptRange(onset.ppq) then goto nextOnset end   -- kept side: its seats stand from last pass
-      local cents = streamValue(onset.ppq)
-      local A, B  = spanAround(onset.ppq)
-      -- Inside a replace window the curve always ramps; otherwise ramp only across a curved or
-      -- value-changing authored span.
-      local ramps = replaceWinAt(onset.ppq)
-                    or (A and B and A.shape and A.shape ~= 'step'
-                        and (curves.isCurved(A.shape) or A.cents ~= B.cents))
+      local cents    = streamValue(onset.ppq)
+      local into, at = streamAround(onset.ppq)
+      -- The segment the stream enters the onset on decides: a moving one smears the detune step
+      -- back across the preceding cell (see docs/tuning.md § Value-aware seats).
+      local ramps = into and into.shape and into.shape ~= 'step'
+                    and (curves.isCurved(into.shape) or into.cents ~= cents)
       if ramps then
         -- Dual point (see docs/tuning.md § Value-aware seats): before/at carry old/new detune, both
         -- linear so the curve rides through; a window-start onset (ppq 0) has no prior cell.
@@ -4587,7 +4588,9 @@ local function rebuildPbs(fxOut, extraColumns)
         end
         seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = 'linear' }
       else
-        seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = 'step' }
+        -- A breakpoint standing on the onset owns the segment leaving it, so the seat carries its
+        -- shape; with nothing there the stream is held and the seat steps.
+        seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = at and at.shape or 'step' }
       end
       ::nextOnset::
     end

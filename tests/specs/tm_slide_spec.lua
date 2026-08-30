@@ -26,6 +26,23 @@ local function pbSeatAt(dump, chan, ppq)
   for _, c in ipairs(pbSeatsOf(dump, chan)) do if c.ppq == ppq then return c end end
 end
 
+-- A retuned pair under a region host, so the anchor (the successor's onset) falls inside the fx
+-- window and the seat pass meets the glide's step and the detune step on one tick. The retune is
+-- what puts them there: with both detunes 0 there is no onset to collide with.
+-- see docs/tuning.md § Value-aware seats
+local function addRetunedPair(h, place)
+  h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,
+                  detune = -8, intentCents = 6000, delay = 0, lane = 1 })
+  h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 960, chan = 1, pitch = 61, vel = 100,
+                  detune = 8, intentCents = 6100, delay = 0, lane = 1 })
+  h.tm:flush()
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 960,
+                               fx = { { kind = 'slide', dest = 'pb', over = { 1, 4 },
+                                        per = 'note', place = place, shape = 'slow' } } } })
+  h.tm:rebuild(); h.tm:flush()
+  return h.fm:dump()
+end
+
 -- A slide host (pitch 60, lane 1) gliding into a following lane-1 note. The host
 -- window ends at that next note's onset (240), so snap 15 -> arrival at ppq 225.
 local function addSlidePair(h, nextPitch, nextDetune)
@@ -287,6 +304,33 @@ return {
       local dump = h.fm:dump()
       t.eq(pbSeatAt(dump, 1, 15).val, centsToRaw(30), 'the sine window seats +30 at its extremum')
       t.truthy(pbSeatAt(dump, 1, 465),                'the slide window seats its arrival at ppq 465')
+    end,
+  },
+
+  ----- A retuned pair: the anchor is a detune onset too, and the glide's step must survive it
+
+  {
+    name = 'a retuned pair glides in: the curve steps onto the anchor rather than ramping into it',
+    run = function(harness)
+      local dump = addRetunedPair(harness.mk(), 'in')
+      local opening = pbSeatAt(dump, 1, 0)
+      t.eq(opening.val, centsToRaw(-8),  'the host opens on its own detune')
+      t.eq(opening.shape, 'step',        'and holds it -- nothing ramps out of the opening seat')
+      t.falsy(pbSeatAt(dump, 1, 479),    'no dual point: a stepping curve needs no split to keep the detune jump narrow')
+      local anchor = pbSeatAt(dump, 1, 480)
+      t.eq(anchor.val, centsToRaw(-108), 'the successor enters on the host pitch: the 116c interval under its own +8c')
+      t.eq(anchor.shape, 'slow',         'and glides out on the shape the stage was set to')
+    end,
+  },
+
+  {
+    name = 'a retuned pair glides away: the detune onset leaves the arrival standing',
+    run = function(harness)
+      local dump = addRetunedPair(harness.mk(), 'away')
+      t.eq(pbSeatAt(dump, 1, 479).val, centsToRaw(108),
+        'the arrival keeps the glide target; the onset one tick on does not overwrite it')
+      t.eq(pbSeatAt(dump, 1, 480).val, centsToRaw(8),
+        'and the handoff re-centres onto the successor detune')
     end,
   },
 

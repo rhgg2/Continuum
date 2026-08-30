@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The pb seat pass's ramp test reads whichever stream owns the onset, so a
+  generator's curve answers it exactly as an authored one does. Asserting instead that a window
+  always ramps put a dual point on the tick before a curve's step, dragging the arrival value back
+  across the whole preceding note -- portamento steps onto its anchor, and a retune makes that
+  anchor a detune onset as well. A breakpoint standing on the onset now keeps its own shape, owning
+  the segment that leaves.
+
 - **2026-08-30** — The breakpoint-curve algebra leaves as `curves.lua`, publishing `interpolate`,
   `eval`, `slice`, the two half-open window rules and the two predicates. The module name carries
   the subject, so `evalCurve` and `sliceCurve` shed it as the span names did. `curveSample` and

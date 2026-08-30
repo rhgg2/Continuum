@@ -644,6 +644,15 @@ generator's breakpoints); the breakpoints become derived seats carrying
 their shape, and a curved curve-segment split by a detune onset
 densifies exactly as an authored one does.
 
+**5** The ramp test of ¶3 reads that curve too — a generated line is
+asked whether it moves into the onset exactly as an authored one is, and
+a breakpoint standing on the onset keeps its own shape, owning the
+segment that leaves. Portamento is what insists on this: a glide steps
+onto its anchor, and after a retune that anchor is a detune onset as
+well. Assuming a window always ramps put a dual point on the tick before
+the step, which dragged the arrival value back across the whole
+preceding note.
+
 **5** Authored pbs the window covers **park off-take** (the unified
 `fxParked` stash, `evType='pb'`) so every on-take pb in the window is a
 derived seat — exclusive ownership. They stay visible in-column via the
