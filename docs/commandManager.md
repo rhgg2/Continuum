@@ -95,8 +95,14 @@ will eventually layer overrides on top.
 1. A **consumer** is a surface reading the manifest for its own slice, and
    it never reads another consumer's output: `bindAll` takes each entry's
    name and keys, the cheat-sheet its label and group (`docs/help.md`
-   § What's where). An entry carries no rendering, so how a chord prints
-   and where a box draws stay with the consumer.
+   § What's where), the menu its title and path (`docs/menu.md`). An entry
+   carries no rendering, so how a chord prints and where a box draws stay
+   with the consumer.
+
+1. Group and path cut the same entries two ways, for two different acts —
+   browsing a static map, and typing a path. So a command with no path
+   reads on the cheat-sheet and nowhere in the menu, and neither cut is
+   derived from the other.
 
 1. `installManifest(manifest, ImGui)` parses each entry's tokens into
    keyspecs, writes them into its scope's keymap, stamps each entry with

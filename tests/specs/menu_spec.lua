@@ -5,7 +5,7 @@
 -- stack at the moment the menu opens, so the tracker's own transport verbs pass through
 -- while the tracker is showing. The close verb is registered on the menu's own scope, so
 -- the gate is its own guard — Esc reaches it only while the menu is up, and the open verb
--- is blocked by the scope it pushed. See design/lotus-menu.md § What stays live.
+-- is blocked by the scope it pushed. See docs/menu.md §§ A modal scope and What stays live.
 
 local t    = require('support')
 local util = require('util')

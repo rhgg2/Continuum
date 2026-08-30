@@ -22,6 +22,13 @@ is a menu letter rather than a page verb.**
    the Esc bindings of the scopes below. The scope it pushed likewise
    blocks a second `openMenu`.
 
+1. Region mode is spring-loaded rather than modal
+   (`docs/commandManager.md` § Spring-loaded scope), and `/` is neither
+   redirected nor kept alive there. So opening the menu inside region
+   mode bails the mode first, and the walk reads the tracker page's own
+   surface. Every region verb is fluent, so no path leaves with the
+   mode.
+
 1. A page that suppresses its own bindings suppresses none of the
    menu's: the walk's keys hang off a modal scope, and key dispatch
    lifts page suppression while one is up (`docs/keyQueue.md`
