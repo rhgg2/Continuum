@@ -14,7 +14,7 @@ local util  = require 'util'
 
 local keycaps = {}
 
-keycaps.BOX_R, keycaps.CHIP_R = 4, 3   -- corner radii, shared with what a caller draws alongside
+keycaps.BOX_R, keycaps.CHIP_R = 3, 2   -- corner radii, shared with what a caller draws alongside
 
 local PAD, ROW_GAP, KEY_GAP = 6, 2, 12   -- box inset; between rows; between the key column and the labels
 local CHIP_PADX_INNER, CHIP_PADX_OUTER, SEP_GAP = 0, 2, 4

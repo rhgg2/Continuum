@@ -22,6 +22,12 @@ is a menu letter rather than a page verb.**
    the Esc bindings of the scopes below. The scope it pushed likewise
    blocks a second `openMenu`.
 
+1. A page that suppresses its own bindings suppresses none of the
+   menu's: the walk's keys hang off a modal scope, and key dispatch
+   lifts page suppression while one is up (`docs/keyQueue.md`
+   § Guards). So the arrows, Enter and Esc walk on the editor page,
+   where the letters already did.
+
 1. The coordinator constructs the menu beside `help`, and closes it at
    the top of `setActive`. Travel passes through the walk, and a page
    switch pops the page's scope, so the menu comes off the stack first
@@ -113,9 +119,12 @@ is a menu letter rather than a page verb.**
 
 ## The row
 
-1. The level draws as a band over the body's last row, on the foreground
-   draw list, so opening the menu moves no grid row. `menuRender.lua`
-   owns the drawing, and reads the walk off the menu.
+1. The level draws as a strip over the body's last row, on the
+   foreground draw list, so opening the menu moves no grid row. The
+   strip reaches the window's margins, as the toolbar and status bands
+   do, stands on the status bar below it, and rules its top edge in a
+   colour role of its own, defaulted to the highlight's.
+   `menuRender.lua` owns the drawing, and reads the walk off the menu.
 
 1. A member draws as its letter in a keycap beside its title, through the
    cheat-sheet's chip renderer and in its colours (`docs/help.md` § What's
@@ -126,7 +135,7 @@ is a menu letter rather than a page verb.**
 
 1. A level wider than the row packs into as many lines as it needs. The
    lines read top to bottom and the last stands on the row's floor, so the
-   band grows upward into the body.
+   strip grows upward into the body.
 
 ## A pending prefix
 

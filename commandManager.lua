@@ -466,6 +466,12 @@ function cmgr:dismissal()
   return top and top.dismiss
 end
 
+--contract: whether the top scope is modal, for a caller narrowing the walk on its own account
+function cmgr:isModal()
+  local top = self.stack[#self.stack]
+  return not not (top and top.modal)
+end
+
 ----- Dispatch
 
 -- The last command body to run, and a monotonic count run — cmgr has no after-any-command

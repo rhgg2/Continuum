@@ -157,7 +157,9 @@ press is gone.**
      does not run — the rename field is not active on the frame it
      opens, so the fill's own claim does not cover it;
    - `pageSuppressed` narrows the walk to the root keymap, so a page
-     binding is not asked while a body-region editor holds the page;
+     binding is not asked while a body-region editor holds the page,
+     and stands off under a modal scope, whose own passthrough filter
+     is the narrower one and whose keys are nobody's page bindings;
    - the palette's Left and Right drive the fx tree unless the find box
      is editing text, where they stay in the queue for the box.
 

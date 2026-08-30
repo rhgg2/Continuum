@@ -69,6 +69,7 @@ end
 --contract: returns early (no dispatch) when not state.acceptCmds
 --contract: an owned frame needs no gate, since every claim answers nil
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
+--contract: a modal scope lifts it — its own filter is narrower, its keys aren't page bindings
 --contract: the walk claims the press before invoking; a command's reads see a queue without it
 --contract: first-hit wins; false declines, and restores the press to the queue
 --contract: while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
@@ -82,7 +83,10 @@ function keyDispatch.dispatchKeys(state, cmgr, keyQueue)
   if handlePrefixCapture(cmgr, keyQueue, state.claimant) then return end
   if handleLetterCapture(cmgr, keyQueue, state.claimant) then return end
   local modsNow = keyQueue:frameMods()
-  local keychain = state.pageSuppressed and { cmgr:rootKeymap() } or cmgr:keychain()
+  -- A modal scope sits above the page, so page suppression lifts while one is up:
+  -- otherwise the menu's arrows and Enter would die under a suppressing body-region editor page.
+  local suppressed = state.pageSuppressed and not cmgr:isModal()
+  local keychain   = suppressed and { cmgr:rootKeymap() } or cmgr:keychain()
   for _, keymap in ipairs(keychain) do
     for command, keys in pairs(keymap) do
       for _, spec in ipairs(keys) do

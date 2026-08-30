@@ -4,6 +4,18 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The menu's row is a strip rather than a box: it spans the window's margins as the
+  toolbar and status bands do, ruled along its top edge in a colour role of its own, with no border
+  or rounding. It is chrome furniture in the footer band, not an overlay laid over the body, and it
+  reads as one. The cheat-sheet's box renderer still draws the lookahead panel; only the row's own
+  ground stopped being one of its boxes.
+
+- **2026-08-30** — A modal scope lifts page suppression in key dispatch: the walk reads the full
+  keychain while one is up, rather than the root keymap alone. The modal's own passthrough filter
+  is already the narrower of the two, and its keys are nobody's page bindings, so the editor page's
+  standing suppression no longer eats the menu's arrows, Enter and Esc. `cmgr:isModal()` asks the
+  question, beside the other top-of-stack accessors.
+
 - **2026-08-30** — The menu's row draws through the cheat-sheet's chip renderer and in its colours,
   so a letter reads as a key in both places; only the fill under the highlighted member takes a
   colour role of its own. The drawing lives in menuRender.lua, which keeps menu.lua free of ImGui,

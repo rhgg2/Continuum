@@ -1,8 +1,8 @@
 -- See docs/menu.md § The row for the model.
 -- @noindex
 
--- The open menu's row: the level as keycap letters and titles over the body's last
--- row, on the foreground drawlist, wrapping upward where the row is too narrow.
+-- The open menu's row: the level as keycap letters and titles on a strip across the
+-- body's last row, on the foreground drawlist, wrapping upward where the row is too narrow.
 
 local ImGui   = require 'imgui' '0.10'
 local keycaps = require 'keycaps'
@@ -12,9 +12,9 @@ local ctx    = (...).ctx
 local chrome = (...).chrome
 local menu   = (...).menu
 
-local PAD, ROW_GAP = 6, 2             -- the band's inset; between wrapped lines
-local LETTER_GAP, MEMBER_GAP = 6, 18  -- keycap to title; member to member
-local HL_PAD = 3                      -- the highlight fill's reach past its member
+local PAD, ROW_GAP = 9, 2             -- the strip's inset; between wrapped lines
+local LETTER_GAP, MEMBER_GAP = 4, 12  -- keycap to title; member to member
+local HL_PAD_X, HL_PAD_Y = 3, 3       -- the highlight fill's reach past its member
 
 local menuRender = {}
 
@@ -37,6 +37,14 @@ local function layout(caps, members, width)
   return lines
 end
 
+-- A plain band to the window's margins, ruled along its top edge. ReaImGui's AddLine is
+-- anti-aliased with no per-call toggle, so a 1px filled rect stands in for the rule (masterMix's idiom).
+local function strip(dl, x0, top, x1, bottom)
+  ImGui.DrawList_AddRectFilled(dl, x0, top, x1, bottom, chrome.colour('help.box'))
+  local rule = chrome.colour('menu.rule')
+  ImGui.DrawList_AddRectFilled(dl, x0, top,        x1, top + 1, rule)
+end
+
 -- The cheat-sheet's colours, so a letter reads as a key in both places.
 local function menuTheme()
   return { bg     = chrome.colour('help.box'),   border = chrome.colour('help.border'),
@@ -44,7 +52,7 @@ local function menuTheme()
            label  = chrome.colour('help.desc'),  chip   = chrome.colour('help.chip') }
 end
 
---contract: draws the open menu's level in `width`, standing on `bottom`; closed draws nothing
+--contract: draws the open menu level on a `width` strip standing on `bottom`; closed draws nothing
 function menuRender:draw(x, bottom, width)
   if not menu:isOpen() then return end
   local dl    = ImGui.GetForegroundDrawList(ctx)
@@ -54,7 +62,7 @@ function menuRender:draw(x, bottom, width)
   if #lines == 0 then return end
 
   local top = bottom - PAD * 2 - #lines * lineH - (#lines - 1) * ROW_GAP
-  caps.panel(x, top, x + width, bottom)
+  strip(dl, x, top, x + width, bottom)
 
   local highlight, index, rowY = menu:highlight(), 0, top + PAD
   for _, line in ipairs(lines) do
@@ -62,8 +70,9 @@ function menuRender:draw(x, bottom, width)
       index = index + 1
       local memberX = x + PAD + placed.x
       if index == highlight then
-        ImGui.DrawList_AddRectFilled(dl, memberX - HL_PAD, rowY, memberX + placed.w + HL_PAD,
-                                     rowY + lineH, chrome.colour('menu.highlight'), keycaps.BOX_R)
+        ImGui.DrawList_AddRectFilled(dl, memberX - HL_PAD_X, rowY - HL_PAD_Y,
+                                     memberX + placed.w + HL_PAD_X, rowY + lineH + HL_PAD_Y,
+                                     chrome.colour('menu.highlight'), keycaps.BOX_R)
       end
       caps.drawCluster(placed.cluster, memberX, rowY)
       ImGui.DrawList_AddText(dl, memberX + placed.cluster.width + LETTER_GAP, rowY,

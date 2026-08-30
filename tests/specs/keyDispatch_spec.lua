@@ -18,7 +18,8 @@ local util = require('util')
 -- mask, then reads back what the walk did.
 local fakeImGui = { Mod_None = 0, Mod_Ctrl = 1, Mod_Super = 2, Mod_Shift = 4, Mod_Alt = 8,
                     Key_Slash = 200, Key_Escape = 201,
-                    Key_A = 300, Key_B = 301, Key_C = 302, Key_D = 303, Key_E = 304 }
+                    Key_A = 300, Key_B = 301, Key_C = 302, Key_D = 303, Key_E = 304,
+                    Key_F = 305 }
 for d = 0, 9 do fakeImGui['Key_' .. d] = 100 + d end
 
 local pressed, down, curMods = {}, {}, 0
@@ -340,6 +341,35 @@ return {
       setKeys{ pressed = { fakeImGui.Key_A } }
       kd.dispatchKeys({ acceptCmds = true, pageSuppressed = true }, cmgr, kq)
       t.deepEq(log.fired, { 'alpha' }, 'global binding still fires under pageSuppressed')
+    end,
+  },
+
+  {
+    -- The lotus menu is modal and sits above the page, so its keys are not the page's:
+    -- suppression stands off while it is up, or the walk would lose its arrows and Enter
+    -- on the editor page, which suppresses its bindings the whole time it holds the page.
+    name = 'a modal scope keeps its own keys under pageSuppressed',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local page = cmgr:scope('page')
+      page:register('pageOnly', function() log.fired[#log.fired + 1] = 'pageOnly' end)
+      page:bind('pageOnly', { fakeImGui.Key_E })
+      cmgr:push(page)
+      local walk = cmgr:scope('walk')
+      walk.modal = true
+      walk:register('walkOn', function() log.fired[#log.fired + 1] = 'walkOn' end)
+      walk:bind('walkOn', { fakeImGui.Key_F })
+      cmgr:push(walk)
+      local kd = loadKD()
+
+      setKeys{ pressed = { fakeImGui.Key_F } }
+      kd.dispatchKeys({ acceptCmds = true, pageSuppressed = true }, cmgr, kq)
+      t.deepEq(log.fired, { 'walkOn' }, 'the modal scope\'s own key fires under suppression')
+
+      log.fired = {}
+      setKeys{ pressed = { fakeImGui.Key_E } }
+      kd.dispatchKeys({ acceptCmds = true, pageSuppressed = true }, cmgr, kq)
+      t.deepEq(log.fired, {}, 'and the page binding below it stays blocked, by the modal filter')
     end,
   },
 

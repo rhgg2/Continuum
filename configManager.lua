@@ -247,7 +247,7 @@ local declarations = {
   { 'colour.chrome.modal.titleBg',        'alt.zone6'          },  -- modalHost title bar: lift off editor.bg
   -- F1 cheat-sheet overlay (help.lua): blue panel; chips + description ride the
   -- base ramp so the dark shortcut glyphs read on light keycaps.
-  { 'colour.chrome.help.box',    'colour.chrome.statusBar.bg' },
+  { 'colour.chrome.help.box',    'alt.zone6' },
   { 'colour.chrome.help.border', 'colour.global.text'         },
   { 'colour.chrome.help.title',  'colour.global.text'         },
   { 'colour.chrome.help.key',    'colour.global.text'         },  -- shortcut glyphs + the '/' separator
@@ -261,6 +261,7 @@ local declarations = {
   -- The lotus menu's row (menuRender.lua) draws in the cheat-sheet's colours; the fill
   -- under the highlighted member is its own, a zone off the band it sits on.
   { 'colour.chrome.menu.highlight', 'alt.zone7' },
+  { 'colour.chrome.menu.rule',      'colour.chrome.menu.highlight' },  -- the strip's 1px rule, along its top edge
   { 'colour.chrome.editor.bg',            'base.zone9' },  -- editor body (snapped from #e9e7df)
   -- Pane-selector pills on the editor body: editor.button a zone below toolbar.button.
   { 'colour.chrome.editor.button',        'base.zone9' },

@@ -283,7 +283,9 @@ local function frame()
     local bodyW, bodyPaneH = availW0 - CHROME_PAD_X * 2, bodyH - CHROME_PAD_Y
     page:renderBody(ctx, bodyW, bodyPaneH, dispatch)
     ImGui.Unindent(ctx, CHROME_PAD_X)
-    menuRender:draw(bodyX, bodyY + bodyPaneH, bodyW)
+    -- The menu's row is a strip to the window's margins, like the bands above and below it,
+    -- standing a chrome gap clear of the status bar.
+    menuRender:draw(bodyX - CHROME_PAD_X, bodyY + bodyPaneH, availW0)
 
     -- Status band pinned to (toolbarBottom + bodyH); the parchment
     -- gap above is the leftover.

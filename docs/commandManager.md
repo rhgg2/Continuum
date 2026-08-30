@@ -238,6 +238,11 @@ both honour this. The gate on `invoke` honours the same rule, so
 the two paths agree: a key that doesn't dispatch in a given mode
 will also not invoke its command.
 
+`mgr:isModal()` reports whether the top scope is modal, for a caller
+narrowing the walk on its own account: key dispatch's page suppression
+stands off while a modal scope is up (`docs/keyQueue.md` § Guards), so
+the menu walks on a page that suppresses its own bindings.
+
 A scope can also declare `captureLetter`, a sink for a plain letter
 key. `mgr:letterCapture()` returns the top scope's, and key dispatch
 offers a bare or Shift letter to it ahead of the keychain walk, so the
