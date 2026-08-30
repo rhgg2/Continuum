@@ -258,6 +258,9 @@ local declarations = {
   { 'colour.chrome.help.dim',    {'base.zone0', 0.47}         },  -- scrim behind the cheat-sheet overlay
   { 'colour.chrome.help.tag',       'base.zone9'                 },  -- edit-tag box fill (one zone above chips, full alpha)
   { 'colour.chrome.help.tagBorder', 'colour.chrome.help.border' },  -- edit-tag 1px crisp border
+  -- The lotus menu's row (menuRender.lua) draws in the cheat-sheet's colours; the fill
+  -- under the highlighted member is its own, a zone off the band it sits on.
+  { 'colour.chrome.menu.highlight', 'alt.zone7' },
   { 'colour.chrome.editor.bg',            'base.zone9' },  -- editor body (snapped from #e9e7df)
   -- Pane-selector pills on the editor body: editor.button a zone below toolbar.button.
   { 'colour.chrome.editor.button',        'base.zone9' },

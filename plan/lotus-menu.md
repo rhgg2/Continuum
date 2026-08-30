@@ -43,10 +43,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 menu: the row draws as keycaps and titles, and wraps (§ Where it draws)
 - 2026-08-30 help: the keycap chips and their box become a module (§ Where it draws)
 - 2026-08-30 menu: arrows move a highlight, and Enter takes it (§ Walking a path)
 - 2026-08-29 menu: a pending prefix survives the walk, and the leaf takes it (§ What stays live)
-- 2026-08-28 menu: letters walk the tree, and the level draws over the body (§ Walking a path)
 
 ## Now
 
@@ -54,12 +54,6 @@
 
 ## Queued (current phase; one-liners)
 
-2. **The row's own geometry** — the level draws as keycaps and titles,
-   the highlighted member wearing a fill and its description line shown,
-   wrapping upward where the window is too narrow for the level. The
-   drawing leaves `coordinator.lua` for a render module of its own.
-   Spec: a new `menu_render_spec`, on the fake ImGui `help_input_spec`
-   builds, reads the letters, the fill and the wrap off the draw calls.
 3. **The lookahead panel** — the box above the highlighted member,
    carrying its title and description, and a group's children with their
    letters, drawn through item 1's module and clamped to the window's

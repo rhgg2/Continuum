@@ -223,6 +223,7 @@ local specs = {
   'keyDispatch_spec',
   'gridPane_note_entry_spec',
   'help_input_spec',
+  'menu_render_spec',
   'modal_input_spec',
   'masterMix_spec',
   'dag_validate_spec',

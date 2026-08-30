@@ -73,16 +73,11 @@ pending prefix.
 
 ## Where it draws
 
-1. The menu **row** sits over the body's last row, above the status bar.
-   The toolbar above holds the controls a command is chosen against, and
-   the menu leaves it uncovered.
+1. The row, its keycaps and its wrap have landed — see `docs/menu.md`
+   § The row.
 
-1. A member draws as its letter in a keycap beside its title, the keycap
-   the cheat-sheet draws. The letter is a key pressed, so it reads as one
-   in both places. The highlighted member wears a fill.
-
-1. The row wraps upward where its level is wider than the window, so
-   every title is drawn in full.
+1. The toolbar above the body holds the controls a command is chosen
+   against, and the row leaves it uncovered.
 
 1. A **panel** sits above the highlighted member and grows upward. It
    carries that member's title and its description line, and a group's
@@ -96,9 +91,6 @@ pending prefix.
    sides, covering the toolbar where a deep group needs the room. An
    uncovered toolbar is the row's rule, and the row stands for the length
    of the walk while the next letter replaces the panel.
-
-1. The menu overlays and does not reflow. Opening it moves no grid row,
-   so the cursor stays where the eye left it.
 
 ## Both routes on the cheat-sheet
 

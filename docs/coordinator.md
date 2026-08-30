@@ -62,7 +62,7 @@ other.
    bridge. There is no selection bus.
 
 1. Drawing goes toolbar band, body, the open menu's row over the body's
-   last row (`docs/menu.md § The walk`), status band, then the help
+   last row (`docs/menu.md § The row`), status band, then the help
    overlay and any modal above them. The band layouts belong to chrome
    — see `docs/chrome.md § Toolbar layout` and `§ Status bar layout`.
 

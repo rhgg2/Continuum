@@ -37,6 +37,7 @@ local modalHost = util.instantiate('modalHost',
 local help      = util.instantiate('help',
   { ctx = ctx, chrome = chrome, cmgr = cmgr, keyQueue = keyQueue })
 local menu      = util.instantiate('menu', { cmgr = cmgr })
+local menuRender = util.instantiate('menuRender', { ctx = ctx, chrome = chrome, menu = menu })
 local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
 -- Live-REAPER eval bridge — assigned after coord (its env captures coord). See docs/bridge.md.
 local bridge
@@ -115,22 +116,6 @@ local switcherSeg = { id = 'switcher', render = drawSwitcher }
 -- nil behind an open cheat-sheet or modal. See docs/keyQueue.md § Ownership.
 local function dispatch(state)
   keyDispatch.dispatchKeys(state, cmgr, keyQueue)
-end
-
--- The open menu's level: one line over the body's last row, highlight
--- bracketed (docs/menu.md § The level, § The highlight).
-local function drawMenuRow(x, bottom, width)
-  local parts, current = {}, menu:highlight()
-  for index, member in ipairs(menu:level()) do
-    local part = member.letter .. ' ' .. member.title
-    util.add(parts, index == current and '[' .. part .. ']' or part)
-  end
-  local dl    = ImGui.GetForegroundDrawList(ctx)
-  local lineH = ImGui.GetTextLineHeight(ctx)
-  local top   = bottom - lineH - STATUS_PAD_Y * 2
-  ImGui.DrawList_AddRectFilled(dl, x, top, x + width, bottom, chrome.colour('statusBar.bg'))
-  ImGui.DrawList_AddText(dl, x + STATUS_PAD_X, top + STATUS_PAD_Y,
-                         chrome.colour('statusBar.text'), table.concat(parts, '   '))
 end
 
 ----- External commands (REAPER-keymap bridge)
@@ -291,7 +276,7 @@ local function frame()
     local bodyW, bodyPaneH = availW0 - CHROME_PAD_X * 2, bodyH - CHROME_PAD_Y
     page:renderBody(ctx, bodyW, bodyPaneH, dispatch)
     ImGui.Unindent(ctx, CHROME_PAD_X)
-    if menu:isOpen() then drawMenuRow(bodyX, bodyY + bodyPaneH, bodyW) end
+    menuRender:draw(bodyX, bodyY + bodyPaneH, bodyW)
 
     -- Status band pinned to (toolbarBottom + bodyH); the parchment
     -- gap above is the leftover.

@@ -87,10 +87,6 @@ is a menu letter rather than a page verb.**
    pages bind, which the menu's scope shadows for the length of the
    walk.
 
-1. The coordinator draws the level as one line of letters and titles
-   over the body's last row, on the foreground draw list, so opening
-   the menu moves no grid row.
-
 1. The grid types nothing while the walk is up. Note entry reads the
    key stream directly rather than through cmgr, so it asks whether a
    scope captures letters, and stands off for every key while one
@@ -115,7 +111,22 @@ is a menu letter rather than a page verb.**
    therefore returns the highlight to the member it descended through,
    by letter and by Enter alike. Opening and closing clear the marks.
 
-1. The row brackets the highlighted member.
+## The row
+
+1. The level draws as a band over the body's last row, on the foreground
+   draw list, so opening the menu moves no grid row. `menuRender.lua`
+   owns the drawing, and reads the walk off the menu.
+
+1. A member draws as its letter in a keycap beside its title, through the
+   cheat-sheet's chip renderer and in its colours (`docs/help.md` § What's
+   where). The letter is a key pressed, so it reads as one in both places.
+
+1. The highlighted member wears a fill in a colour role of its own,
+   covering its keycap and its title together.
+
+1. A level wider than the row packs into as many lines as it needs. The
+   lines read top to bottom and the last stands on the row's floor, so the
+   band grows upward into the body.
 
 ## A pending prefix
 

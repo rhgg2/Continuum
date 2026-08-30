@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The menu's row draws through the cheat-sheet's chip renderer and in its colours,
+  so a letter reads as a key in both places; only the fill under the highlighted member takes a
+  colour role of its own. The drawing lives in menuRender.lua, which keeps menu.lua free of ImGui,
+  so the walk's spec loads it without a fake.
+
 - **2026-08-30** — The keycap chips and the box of chip rows they sit in draw through keycaps.lua,
   bound to a drawlist and a theme. A draw call reports where the chips landed, and the cheat-sheet
   decorates that geometry with its click map and its edit tags, so the module holds no interaction
