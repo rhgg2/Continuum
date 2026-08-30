@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The stream record becomes a closure: makeStream() holds list, order, free,
+  maxSlot, chans and sidecars as locals, so the six can only move together and only through its
+  surface -- the module chunk's own pattern one level down. The surface splits in two: verbs (get,
+  admit, release, insert, remove, ordered, inChan, the bucket splices) and lifecycle (seed, reset,
+  compact, sortByPpq, reindex, plus rawList and sidecarGroup for the tables midiBlob holds by
+  reference). admit is minted as release's mirror, so the free list has both directions in one
+  place. orderEpoch follows the fields inside, which ends the false positive where a cc splice
+  tripped a live note walk.
+
 - **2026-08-30** — The keyQueue drain order is recorded as what ownership leaves undecided: the fill
   first, the cheat sheet and modal last, and in between a page's own body readers, the keychain walk
   and note entry, with the page placing the walk among them. The design doc collapses whole, so its

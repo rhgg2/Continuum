@@ -258,14 +258,17 @@ not a gesture to salvage.
 **Stable slots.** A `loc` is a slot id, not a position: minted from a free list
 on add, handed back to it on delete, and carried unchanged for as long as the
 event lives. Ppq order lives beside the events instead, in `order` — a dense
-`[1..n]` array of slot ids that the verbs splice (`orderInsert` /
-`orderRemove`: a binary search plus a shift). Every read that has to be in ppq
-order walks one, and array position means nothing.
+`[1..n]` array of slot ids that the verbs splice (`insert` / `remove`: a binary
+search plus a shift). Every read that has to be in ppq order walks one, and
+array position means nothing.
 
 Slots are minted per kind, so everything keyed on one is held per kind: `list`,
 `order`, `free`, `maxSlot`, `chans` and `sidecars` make up a **stream**, and
-there are exactly two — `streams.note` and `streams.cc`. A stream is what the
-slot helpers take, and `streamOf(evt)` resolves an event to its own. The two
+there are exactly two — `streams.note` and `streams.cc`. A stream is
+`makeStream()`'s closure over those six: they are its locals, not its fields, so
+nothing outside it can move one without the others. What a caller sees is the
+verb surface — `get`, `admit`, `release`, `insert`, `remove`, `ordered`,
+`inChan` — and `streamOf(evt)` resolves an event to its own stream. The two
 kinds are told apart there and at the two boundaries where midiBlob wants the
 kind's name rather than its stream.
 
@@ -283,7 +286,7 @@ brackets a chan **or** ppq move with `indexDrop`/`indexPut`, and
 
 The per-channel index rides the same mechanism. A stream's `chans[chan]` is one
 order array per channel — that channel's slice of the global one, spliced by
-the same `orderInsert`/`orderRemove` — so `notesRaw(chan)` is a plain `ordered`
+the same splice helpers — so `notesRaw(chan)` is a plain `ordered`
 walk over it rather than a whole-take walk filtered on membership. That widens
 what counts as maintenance: a ppq move re-seats the event inside its own
 channel too, which is why the `mm:assign` bracket covers both moves and why
@@ -291,8 +294,9 @@ channel too, which is why the `mm:assign` bracket covers both moves and why
 
 **Collect first, then mutate.** A splice under a live iterator drops a
 neighbour out of the walk silently, and that is the one failure mode worth a
-tripwire: `ordered` captures an `orderEpoch` and asserts it on every step, so a
-mid-walk mutation raises rather than quietly skipping an event. (A mid-walk
+tripwire: `ordered` captures its stream's `orderEpoch` and asserts it on every
+step, so a mid-walk mutation of *that* stream raises rather than quietly
+skipping an event. (A mid-walk
 *add* stays invisible as it always did — the walk captures its length up front.)
 
 **Same-pitch backstop.** `tm`'s separation sites uphold the `(ppq, chan,
