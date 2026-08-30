@@ -28,13 +28,12 @@
 -- cents over fifty, so that a notation states the seats and measures nothing.
 -- The box is no part of it, being a constant in the displacements.
 --
--- Pins the relaxation that minimises it (§ The springs): the sweep's answer on a
+-- Pins the relaxation that minimises it (§ The springs): the solve's answer on a
 -- pair whose optimum is a closed form, under soft springs and stiff, and a comma
 -- loop whose residue no displacement can make slack.
 --
--- Pins the terms the walk relaxes on (§ The solve): a warm start that buys the
--- sweep its speed and not its answer, and a held strand standing as data at the
--- displacement it carries while its neighbours settle around it.
+-- Pins the terms the walk relaxes on (§ The solve): a held strand standing as data
+-- at the displacement it carries while its neighbours settle around it.
 --
 -- Pins the beam that chooses the spellings (§ The candidates): a spelling standing
 -- at any offset from the seats, no two of its members taking one spelling, a full
@@ -46,11 +45,11 @@
 -- is written on, which onsets a member may wait through, and that everything a
 -- sonority reads of a member is indexed at its strand.
 --
--- Pins the walk itself (§ The solve): an answer held against an exhaustive search
--- over the same spelling lists, a cap of one taking the greedy road, a strand
--- that has stopped standing at the cents the walk left it, a chord whose
--- members are all new entering on the drift the sonority before it reached, and
--- two roads resting apart kept apart by the key.
+-- Pins the walk itself (§ The solve): the floor refusing no road that would have
+-- won, held against an exhaustive search over the same spelling lists, a cap of
+-- one taking the greedy road, a strand that has stopped standing at the cents the
+-- walk left it, a chord whose members are all new entering on the drift the
+-- sonority before it reached, and two roads resting apart kept apart by the key.
 --
 -- Pins the deferral the walk carries (§ The candidates): a rolled chord charged
 -- for the pair it held where that pair places, landing where the struck chord
@@ -263,10 +262,9 @@ local function exactly(actual, expected, why)
     '%s: expected %.6f, got %.6f', why, expected, actual))
 end
 
--- The solve's own figures, taken past the doc's two places but not past what the sweep
--- settles to: a displacement lands good to about a hundredth of a cent (sonority.lua,
--- TOLERANCE), so a figure read off one is pinned no finer, and stands under a change of
--- sweep rather than recording where this one stops.
+-- The solve's own figures, taken past the doc's two places but not to the bit: the
+-- relaxation is exact, but a figure reads off the road the beam took to reach it, so one
+-- pinned finer than a thousandth records this beam rather than what the passage settles to.
 local function nearly(actual, expected, why)
   t.truthy(math.abs(actual - expected) < 2e-3, string.format(
     '%s: expected %.4f, got %.6f', why, expected, actual))
@@ -498,7 +496,9 @@ local take = heldLines({
 }, 960)
 
 -- What the notation and the target hand the walk: an onset per sonority and a spelling
--- list apiece, at the beam width and the stiffness the figures below are taken under.
+-- list apiece, at the beam width and the stiffness the figures below are taken under. The
+-- width is load-bearing for the floor test below and not only for its figures: the roads
+-- the floor refuses thin out as it narrows, and by twelve it refuses none at all.
 local function termsOf(strands, n, moves)
   local seat = sonority.seats(strands, edo12)
   local onsets, lists = sonority.onsets(strands, sonority.walk(strands, n)), {}
@@ -539,6 +539,10 @@ end
 -- back: the search the walk is held against, in the odometer order everyChoice takes, so
 -- that an exact tie falls to the same combination the walk's own tie-break keeps. A rest is
 -- read along a road, so a combination is priced by walking it rather than relaxed cold.
+--
+-- A list of one at a cap of one is what makes this a control rather than the walk run twice:
+-- the bar is set by the road itself and so refuses it nothing, where the walk's own bar is
+-- set by the pool around it. Everything else the two sides share, and so cancels.
 local function bruteSpelled(lists, count, strength, stiffness, onsets, seat)
   local at, best = {}, nil
   for i = 1, #lists do at[i] = 1 end
@@ -791,7 +795,7 @@ return {
       local hand = 8 * (1 * (-20 + 13.6863) + 0.5 * (5 - 1.9550)) / (8 * 1.5 + 1)
       nearly(hand, -2.9484, 'the hand solution, the sounding neighbour counting double')
       nearly(sonority.relax(sonority.ties({ springs }, root), 1, 8, { 0, -20, 5 }, { 0, 0, 0 }, root)[1],
-             hand, 'which is where the sweep leaves it')
+             hand, 'which is where the solve leaves it')
 
       -- Every strand free, against what the same spelling settles at with all three sounding.
       local start, free, rest = allFree(3)
@@ -877,28 +881,6 @@ return {
   },
 
   {
-    name = 'relax: a warm start settles where the cold one did',
-    run = function()
-      -- The objective is convex, so where the sweep begins buys it sweeps and not an answer:
-      -- the comma loop started well off its optimum comes back to the same three cents.
-      local seat   = { 0, 400, 900 }
-      local third  = sonority.springs({ 1, 2 }, seat, allSounding, { {}, { [5] =  1 } })
-      local fourth = sonority.springs({ 2, 3 }, seat, allSounding, { {}, { [3] = -1 } })
-      local sixth  = sonority.springs({ 1, 3 }, seat, allSounding, { {}, { [3] =  3 } })
-      local loop = { third, fourth, sixth }
-
-      local start, free, rest = allFree(3)
-      local ties = sonority.ties(loop, free)
-      local cold = sonority.relax(ties, 1, 8, start, rest, free)
-      local warm = sonority.relax(ties, 1, 8, { 40, -30, 25 }, rest, { 1, 2, 3 })
-
-      for index = 1, 3 do
-        near(warm[index], cold[index], 'strand ' .. index .. ' settles where it always did')
-      end
-    end,
-  },
-
-  {
     name = 'ties: a set starting from another settles where one gathered whole settles',
     run = function()
       -- The walk ties the onsets an answer has settled once, and starts the ties of each
@@ -925,16 +907,16 @@ return {
     name = 'relax: a held strand stands where it was put, and the rest settle around it',
     run = function()
       -- The walk frees the strands an onset sounds and reads the rest: here the root is data
-      -- at ten cents sharp, pulling on the springs of a triad whose sweep it takes no turn in.
+      -- at ten cents sharp, pulling on the springs of a triad whose solve it takes no turn in.
       local major = sonority.springs({ 1, 2, 3 }, { 0, 400, 700 }, allSounding,
                                      { {}, { [5] = 1 }, { [3] = 1 } })
 
-      local sweeping = { 2, 3 }
-      local held = sonority.relax(sonority.ties({ major }, sweeping), 1, 8,
-                                  { 10, 0, 0 }, { 0, 0, 0 }, sweeping)
+      local freed = { 2, 3 }
+      local held = sonority.relax(sonority.ties({ major }, freed), 1, 8,
+                                  { 10, 0, 0 }, { 0, 0, 0 }, freed)
       t.eq(held[1], 10, 'the held strand stands exactly where it was put')
 
-      -- The two that sweep sit at the optimum of what is left, the held one a constant in it.
+      -- The two that move sit at the optimum of what is left, the held one a constant in it.
       local settled = objectiveAt({ major }, held, 3, 1, 8, { 0, 0, 0 })
       for _, index in ipairs{ 2, 3 } do
         for _, nudge in ipairs{ -0.5, 0.5 } do
@@ -1296,11 +1278,17 @@ return {
   },
 
   {
-    name = 'search: the walk returns what an exhaustive search over its spelling lists returns',
+    name = 'search: the floor refuses no road that would have won',
     run = function()
-      -- A ii–V–I under pure fifths and thirds, spelled 2,016 ways over its three onsets:
-      -- the walk carries a capped set of partial answers through it and comes back with
-      -- the best of them, at 17.51 against the walk's own 17.74 (§ The solve).
+      -- box + closed is a floor under what a road can finish at, so the walk refuses a road
+      -- whose floor stands over the pool's bar without ever relaxing it (§ The solve). That
+      -- is the claim here, and it is the one an enumeration can hold the walk to: of the 576
+      -- roads the second onset of this ii–V–I opens, 290 are refused unexamined, and each of
+      -- the 13,824 combinations walked alone below says whether one of them would have won.
+      --
+      -- The cap is not what is under test -- this passage answers 1,1,1 at a cap of one --
+      -- and the walk settling where the enumeration settles, at 17.46 against its own frozen
+      -- 17.56, is the reading that says so.
       local strands = progression{ { 62, 65, 69 }, { 55, 59, 62 }, { 60, 64, 67 } }
       local onsets, lists, seat = termsOf(strands, 5, fifthsAndThirds)
 

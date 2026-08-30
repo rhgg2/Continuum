@@ -243,25 +243,23 @@ offered to an excluded strand — is `design/adaptive-tuning.md`.
    commensurable and the dials are the weights a strand settles under.
 
 1. With the spellings chosen the objective is a convex quadratic in the
-   displacements, with no bound on them and no branch in it, so
-   `sonority.relax` sweeps strand by strand to the optimum: each strand
-   settles at the weighted mean of what its springs ask of it and its
-   own rest — each ask weighted by its spring's weight,
-   the two dials weighting the two terms, and the fifty both charges
-   are taken over dividing out.
+   displacements, with no bound on them and no branch in it, so each
+   strand stands at the weighted mean of what its springs ask of it and
+   its own rest — each ask weighted by its spring's weight, the two
+   dials weighting the two terms, and the fifty both charges are taken
+   over dividing out.
 
-1. The sweep order and the start buy
-   speed rather than the answer, and `sonority.ties` pre-sums the asks
-   and the weights they carry, since the strands a sweep holds stay
-   fixed while it runs.
+1. Written for every free strand at once those means are a linear
+   system, and `sonority.relax` eliminates it rather than iterating
+   towards it. A row's diagonal exceeds the neighbours it carries by
+   the pull's strength, which the lock's floor holds above zero (§ The
+   dials), so the minimum is unique, the elimination needs no pivot
+   search, and the answer is exact rather than short of one by a
+   residual.
 
-1. Stepping a strand past that mean rather than onto it settles in the
-   same place and halves the sweeps a cold start takes, at a factor near
-   1.55 — though a strand no spring ties reaches its rest in the one
-   step, and must take that step whole rather than overshoot it. It is
-   not taken: the solve warm-starts, so its sweeps open near the answer
-   with little left to accelerate, and the factor costs a retune more
-   than it saves.
+1. A held strand states a constant in its neighbours' rows rather than
+   a column of its own, so `sonority.ties` pre-sums the asks and the
+   weights they carry.
 
 ## The candidates
 
@@ -421,8 +419,8 @@ offered to an excluded strand — is `design/adaptive-tuning.md`.
 1. A rest has to be frozen data. The springs constrain differences of
    displacements alone, so a pull charged against a live mean of those
    same displacements would leave a whole passage free to slide at no
-   cost; the relaxation sweeps coordinate by coordinate, and its answer
-   along such a direction would depend on where the sweep started.
+   cost, and an objective flat along a direction has no one minimum for
+   the relaxation to find.
 
 1. The walk charges what it has closed once. A strand sounds over one
    run of onsets, so once the walk is past every strand a sonority
@@ -491,9 +489,10 @@ offered to an excluded strand — is `design/adaptive-tuning.md`.
 
 1. The span stops short of zero, and its stiff end still moves. With no
    pull the objective is flat under a translation of every displacement,
-   so the answer states the sweep's order rather than the music: at a
-   lock of nothing the eighty-eight-note take stands 184¢ from its page
-   on average. At the floor the page holds the answer loosely, a
+   so it has no one minimum and the system § The springs eliminates is
+   singular: a relaxation there answers with a whole passage's drift
+   rather than the music, standing the eighty-eight-note take 184¢ from
+   its page on average. At the floor the page holds the answer loosely, a
    step-class wandering 115¢ across that take where a lock of 0.5 holds
    it to 21¢; at the ceiling the pull holds the page at the cost of
    the harmony, the same take's wolf pairs going from 53 to 64 and its

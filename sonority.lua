@@ -356,15 +356,10 @@ end
 
 ----- The relaxation
 
--- A displacement settles good to about a hundredth of a cent, under a third of one step of
--- pitch bend, so nothing should read a figure off it any finer. The cap guards, not schedules.
-local TOLERANCE, SWEEPS = 1e-4, 1000
-local abs = math.abs -- the sweep calls it repeatedly
-
 -- Where each spring would stand its two strands, given the other: i a delta below j, j a
--- delta above i, gathered for the strands that sweep since a held strand reads only its neighbours' ties, pre-summed since they stand still while the sweeps run.
+-- delta above i, gathered for the strands that move since a held strand reads only its neighbours' ties, pre-summed since they stand still while the system is solved.
 --shape: Ties = { [strand] = { other, other, .., weights={ weight, .. }, count, delta=<the weighted tie deltas summed>, weight=<the weights summed> } }
---contract: springs per onset, the strands that sweep, the onsets to tie (all of them by default)
+--contract: springs per onset, the strands that move, the onsets to tie (all of them by default)
 --contract: base: a Ties to start from, carried whole, over onsets this call does not tie again
 --contract: → a Ties: the base's, and what those onsets' springs tie on top of it
 function sonority.ties(springs, free, onsets, base)
@@ -403,31 +398,56 @@ function sonority.ties(springs, free, onsets, base)
   return ties
 end
 
--- One strand's optimum with its neighbours held: what its springs ask of it against its
--- rest, the two dials weighting them and the fifty both are charged over dividing out.
-local function settle(ties, displacement, strength, stiffness, rest)
-  local count, seats, weights = ties.count, ties.delta, ties.weights
-  for k = 1, count do seats = seats + weights[k] * displacement[ties[k]] end
-  if count == 0 then return rest end -- a strand no spring ties, settling at its rest
-
-  return (stiffness * seats + strength * rest) / (stiffness * ties.weight + strength)
-end
-
---invariant: convex in the displacements, so the sweep order and the start buy speed, not the answer
---contract: ties, strength, stiffness, start and rest (per strand), free (strands that sweep)
+-- Written for every free strand at once, its weighted-mean equation makes a linear system,
+-- one row apiece, eliminated here rather than iterated towards (§ The springs).
+--invariant: a row's diagonal exceeds its neighbours by the pull's strength
+--invariant: the lock's floor holds the diagonal positive, so the minimum is unique
+--contract: ties, strength, stiffness, start and rest (per strand), free (the strands that move)
 --contract: → displacements minimising springCost + pullCost, held strands at their start
 function sonority.relax(ties, strength, stiffness, start, rest, free)
-  local displacement = table.move(start, 1, #start, 1, {})
+  local count, columnOf = #free, {}
+  for column, index in ipairs(free) do columnOf[index] = column end
 
-  for _ = 1, SWEEPS do
-    local worst = 0
-    for _, index in ipairs(free) do
-      local settled = settle(ties[index], displacement, strength, stiffness, rest[index])
-      local moved   = abs(settled - displacement[index])
-      if moved > worst then worst = moved end
-      displacement[index] = settled
+  -- A free neighbour asks in its own column; a held one stands still, so its ask is a
+  -- constant. A strand no spring ties leaves a row that reads as its rest alone.
+  local matrix, target = {}, {}
+  for row, index in ipairs(free) do
+    local tie, coefficients = ties[index], {}
+    for column = 1, count do coefficients[column] = 0 end
+    coefficients[row] = stiffness * tie.weight + strength
+    target[row]       = stiffness * tie.delta  + strength * rest[index]
+
+    for k = 1, tie.count do
+      local column = columnOf[tie[k]]
+      if column then
+        coefficients[column] = coefficients[column] - stiffness * tie.weights[k]
+      else
+        target[row] = target[row] + stiffness * tie.weights[k] * start[tie[k]]
+      end
     end
-    if worst < TOLERANCE then break end
+    matrix[row] = coefficients
+  end
+
+  for column = 1, count do
+    local pivot = matrix[column][column]
+    for row = column + 1, count do
+      local factor = matrix[row][column] / pivot
+      if factor ~= 0 then
+        for k = column, count do
+          matrix[row][k] = matrix[row][k] - factor * matrix[column][k]
+        end
+        target[row] = target[row] - factor * target[column]
+      end
+    end
+  end
+
+  local displacement = table.move(start, 1, #start, 1, {})
+  for row = count, 1, -1 do
+    local settled = target[row]
+    for column = row + 1, count do
+      settled = settled - matrix[row][column] * displacement[free[column]]
+    end
+    displacement[free[row]] = settled / matrix[row][row]
   end
   return displacement
 end
@@ -1133,9 +1153,9 @@ local function extend(answer, spelling, onsets, at, seat, strength, stiffness, r
   -- Only the onsets this spelling wrote are tied here — its own, and the deferrals it
   -- completed; the rest the answer tied before its spellings were tried.
   util.add(written, at)
-  local sweeping = onsets[at].sounding
-  local displacement = sonority.relax(sonority.ties(springs, sweeping, written, carried),
-                                      strength, stiffness, answer.displacement, rest, sweeping)
+  local freed = onsets[at].sounding
+  local displacement = sonority.relax(sonority.ties(springs, freed, written, carried),
+                                      strength, stiffness, answer.displacement, rest, freed)
 
   -- What closed since the last extension is charged once, at displacements that will not move
   -- again and carried: the onsets the cursor has passed, and this onset's strands sounded for the last time (§ The solve).

@@ -51,6 +51,13 @@ not eight or ten.
   key queue and hands it down with the frame's other arguments, so the leaf editor holds no key
   state. The exclusivity is pinned by a scan in keyQueue_spec — only keyQueue.lua may name ImGui's
   GetKeyMods.
+- **2026-08-30** — `sonority.relax` eliminates the linear system its stationarity conditions state,
+  over sweeping Gauss-Seidel to a tolerance: the harmonic lock's floor puts the pull's strength on
+  every diagonal, so the system is positive definite, the minimum unique and the answer exact rather
+  than short by a residual. The suite drops from 14.6s to 9.9s, a production solve by about 2% --
+  the relaxation is a twentieth of one. The beam's width and cap stay where they are: the cost gaps
+  between roads stand three orders above the residual the sweeps left, so exactness buys a discrete
+  choice nothing.
 
 - **2026-08-30** — The wiring canvas's draft cancel takes Escape at the frame's mods, over the bare
   Mod_None the editor and sampler cancels use: a draft is begun shift-held, and the modifiers a

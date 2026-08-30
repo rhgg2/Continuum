@@ -213,9 +213,9 @@ unrelated to what they check.
 - **Config tier shadowing.** A value set at a wide tier can be
   shadowed by a fixture's narrower tier — read the target fixture's
   config before trusting a red test.
-- **Don't pin finer than the computation settles.** A figure read off
-  an iterative solve is good to that solve's tolerance and no further
-  (`sonority.relax`), so a pin taken to more places records where the
-  loop stopped rather than what the model says, and breaks the moment
-  anyone changes the loop. Pin an aggregate looser still: forty
-  displacements added up carry forty times one displacement's slack.
+- **Don't pin finer than the computation settles.** A figure off the
+  sonority solve is exact for the road the beam took, and the road is a
+  discrete choice a thousandth of a cent can flip, so a pin taken to
+  more places records this beam rather than what the model says. Pin an
+  aggregate looser still: forty displacements added up carry forty
+  times one displacement's slack.
