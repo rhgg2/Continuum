@@ -31,10 +31,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 keyQueue: document the drain order and the guards (design/keyQueue.md § Order, § What guards, and what claims)
 - 2026-08-30 keyQueue: the mouse gestures read modifiers through the queue (design/keyQueue.md § Hold and repeat)
 - 2026-08-30 wiring: the gesture cancel claims its Escape (design/keyQueue.md § Claiming)
 - 2026-08-30 wiring: the fx picker owns the key queue (design/keyQueue.md § Claiming, § Ownership)
-- 2026-08-30 editor, sampler: the page Escapes claim from the keyQueue (design/keyQueue.md § Claiming)
 
 ## Now
 
@@ -42,9 +42,5 @@
 
 ## Queued (current phase; one-liners)
 
-- **the record.** `docs/keyQueue.md` gains § Order — the drain order as
-  a property of the call graph — and the distinction between a guard
-  deciding whether a reader is asked and a claim removing a press.
-  `design/keyQueue.md` collapses to pointers, less its Open item on
-  `pageSuppressed`.
+(empty)
 

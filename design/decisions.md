@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The keyQueue drain order is recorded as what ownership leaves undecided: the fill
+  first, the cheat sheet and modal last, and in between a page's own body readers, the keychain walk
+  and note entry, with the page placing the walk among them. The design doc collapses whole, so its
+  open question -- whether pageSuppressed is better expressed as a cmgr scope with a passthrough --
+  is dropped rather than carried.
+
 - **2026-08-30** — curveEditor takes the answer rather than the queue: the host reads shift off the
   key queue and hands it down with the frame's other arguments, so the leaf editor holds no key
   state. The exclusivity is pinned by a scan in keyQueue_spec — only keyQueue.lua may name ImGui's

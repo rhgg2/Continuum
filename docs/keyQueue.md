@@ -29,6 +29,12 @@ press is gone.**
    reader claiming a press before it acts hands the press back this way
    when it declines to act on it.
 
+1. The queue holds presses. Text arrives through ImGui's own character
+   queue, which the fx strip's type-to-open reads for the frame's first
+   printable character; note entry names key constants instead, because
+   that queue drops repeats for the macOS press-and-hold keys
+   (`docs/trackerPage.md` § Keys).
+
 ## The fill
 
 1. The fill runs at the top of `coordinator.frame`, before any drawing,
@@ -114,6 +120,52 @@ press is gone.**
 1. Ownership governs the keyboard alone. A reader taking the mouse keeps
    its own guard, as the cheat sheet's page-side mouse passes do
    (`docs/help.md § Input while open`).
+
+## Order
+
+1. Readers are asked in the order the frame draws them, which
+   `docs/coordinator.md` § The frame states: the fill runs before any
+   drawing, and the cheat sheet and the modal draw last.
+
+1. Ownership settles most of that order in advance. An owned frame
+   answers nil to every claim under another name, so where those
+   readers sit in the draw changes nothing.
+
+1. Order decides the outcome between the readers asked on an unowned
+   frame: a page's own body readers, the keychain walk and note entry.
+   All three run inside `renderBody`, and the page places the walk among
+   them — the editor page walks first, the other pages last.
+
+1. A body reader ahead of the walk takes the press from any binding on
+   the same key. The wiring page's gesture cancel is one: it claims
+   Escape while a draft is in flight, so the Escape-bound
+   clear-selection does not fire that frame.
+
+1. A reader after the walk gets what the walk left. The editor page's
+   Escape-to-return is one, and the tracker's note entry scan another
+   (`docs/trackerPage.md` § Keys), so a key that fires a command never
+   also enters a note.
+
+## Guards
+
+1. A guard decides whether a reader is asked; a claim removes a press.
+   A press a guard suppresses stays in the queue for the reader after
+   it.
+
+1. Three guards stand on the walk and the readers around it:
+   - the sampler's open rename holds `acceptCmds` false, so the walk
+     does not run — the rename field is not active on the frame it
+     opens, so the fill's own claim does not cover it;
+   - `pageSuppressed` narrows the walk to the root keymap, so a page
+     binding is not asked while a body-region editor holds the page;
+   - the palette's Left and Right drive the fx tree unless the find box
+     is editing text, where they stay in the queue for the box.
+
+1. The note entry scan carries two more of its own
+   (`docs/trackerPage.md` § Keys).
+
+1. Ownership is not a guard. An owned frame needs no gate, since every
+   claim under another name already answers nil.
 
 ## Hold and repeat
 
