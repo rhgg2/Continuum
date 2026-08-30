@@ -86,18 +86,3 @@ Landed — see `docs/help.md` § What's where.
 
 1. Letters are unique within a level, and both checks run at load — see
    `docs/commandManager.md` § Menu tree.
-
-## Open
-
-- **The footer band.** The status bar has landed there (`docs/chrome.md`
-  § Status bar layout), so the band's geometry is settled and the
-  cheat-sheet's pins have moved once already.
-
-- **Whether a path is editable.** The cheat-sheet rebinds keys in place
-  (`docs/help.md` § Editing bindings). Whether a path may be re-cut the
-  same way, and whether a re-cut persists as tokens the way binding
-  overrides do, is not settled.
-
-- **The editor's row.** The sampler declares two pathed verbs and wiring
-  one, so both pages earn a row of their own. The editor declares none, and
-  whether the global paths alone earn it a row is not settled.

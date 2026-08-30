@@ -227,3 +227,29 @@ pipeline for a divergence a fork already delivers.
 **The obligation now:** divergence stays structural. A placement carries
 a start QN and a rendered length and nothing else realisation reads, so
 an overlay would be added rather than untangled.
+
+## Re-cutting a path — the cheat-sheet as a menu editor
+
+> From `design/archive/lotus-menu.md` § Open. Read
+> `docs/commandManager.md` § Menu tree for what a path and a route are,
+> and `docs/help.md` § Editing bindings for how a chord is re-cut today.
+
+The cheat-sheet rebinds a chord in place: click the chip, press the new
+chord, and an override persists as tokens. A pathed command's row now
+shows its route beside those chips, and the obvious next gesture is to
+click the route and retype it — moving a verb to a different group, or
+under a different letter, without editing `manifest.lua`.
+
+The cost is that a path is not a chord. A chord is one command's private
+fact, so an override touches nothing else; a path names groups, so
+re-cutting one may mint a group, empty a group, or collide with a letter
+a sibling holds — and the letter checks that run at load would have to
+run again at the edit, over the declaration as overridden. Persisting it
+is a second question: an override that names a group the tree no longer
+declares has to fail soft, where a rebinding's victim is always a
+command that still exists.
+
+**The obligation now:** a route stays derived. `installTree` stamps it
+from the tree's own letters and nothing else mints or caches one, so a
+re-cut would change the declaration and restamp rather than teach a
+second party how a route is spelled.
