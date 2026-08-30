@@ -5,12 +5,11 @@
 
 ## Phases
 
-1. **Phase 1 — the algebra leaves** (§ Phase 1) — `spans.lua` and
-   `curves.lua`, the two seeks to `util`, and the fold tested against a
-   list of points rather than a rebuild.  ← in flight
+1. **Phase 1 — the algebra leaves** (§ Phase 1) — landed 2026-08-30, in
+   five commits; the model moved to `docs/algebra.md`.
 2. **Phase 2 — the dirt spine** (§ Phase 2) — `dirt.lua` with one join
    verb, collapsing the three hand-written joins and fixing the two that
-   are wrong.
+   are wrong.  ← in flight
 3. **Phase 3 — pb at its seam** (§ What the specs hold 4) — coverage of
    `rebuildPbs`'s keep/live split, `pbScope` gating, and the seating ↔
    synthesis seam, before anything moves.
@@ -35,6 +34,18 @@
 
 ## Queued (current phase; one-liners)
 
-The two citations naming these as trackerManager's —
-`docs/trackerManager.md` on `evalCurve`/`sliceCurve` and on `foldChains`
-— repoint with the commits that move them.
+1. **The join verb.** One write verb over the dirt lattice,
+   `join(chan, dirt)`, taking `true`, a seed or a seed list, with the
+   wholesale cap enforced in one place. It subsumes `dirtyChan` and
+   `seedDirty`, and replaces the two hand-written joins that are wrong:
+   the tail walk's emission carries a seed list past the cap forever,
+   and `absorbReloadDirt`'s fold assigns its deduped list over standing
+   seed dirt. Red-first on both, the cap case in `tm_tail_gating_spec`.
+
+1. **`dirt.lua`.** The journal leaves trackerManager: `dirtyChans`,
+   `staleSwing`, the join, the per-channel read the stage gates branch
+   on, the mid-pipeline `staleSwing` clear, and `wipe` returning the
+   channels it consumed for the mute-conform sweep. The module requires
+   nothing. The seed minters, `seedCovers`/`seedRowsFor` and
+   `clearSwing` stay with the structures they read, and gate parity pins
+   the move green.

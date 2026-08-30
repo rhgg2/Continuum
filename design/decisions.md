@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — `spans.lua` and `curves.lua` stay two modules and share one doc,
+  `docs/algebra.md`. Nothing uses curves without spans, but trackerManager uses spans at many sites
+  with no curve in sight, so the smaller module stays a leaf other geometry can reach. One namespace
+  would also stand `clip` on a span beside `slice` on a curve, the same idea on different objects,
+  distinguished only by prefix.
+
 - **2026-08-30** — The curve fold joins `curves.lua`: `sumStreams` and `foldChains` publish, and the
   four helpers under them turn private. The densify step passes in as a parameter, since it reads
   the take's resolution and the CC-interp setting; trackerManager keeps `ccGridStep` and now

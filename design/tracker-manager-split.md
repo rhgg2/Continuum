@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
 > opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 1 (the algebra leaves)
+> at phase 2 (the dirt spine)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -154,44 +154,8 @@ decides whether phase 3 is worth taking.**
 
 ## Phase 1 — the algebra leaves
 
-1. The algebra leaves as two modules. `spans.lua` holds half-open span
-   sets; `curves.lua` holds ppq-keyed breakpoint curves and their fold.
-   `curves` requires `spans` for `overlapping`, and the arrow is one
-   way.
-
-1. `spans.lua` publishes six names and `curves.lua` nine. The module
-   name carries the subject, so the six names that carried it drop it.
-   Spans: `merge`, `mergeWindows`, `overlapping`, `intersects`, `clip`,
-   `subtract`. Curves: `interpolate`, `eval`, `slice`, `sumStreams`,
-   `foldChains`, `foldIntoWindow`, `closeAtWindowEnd`, `anyNonZero`,
-   `isCurved`. Four
-   of the fold's helpers — `negated`, `foldWhole`, `chainCuts`,
-   `foldSub` — have no caller outside the region and stay private.
-
-1. `interpolate` arrives from the other direction. The value of a
-   breakpoint pair at a ppq is curve algebra, and `curveSample`'s shape
-   functions with it, so both leave midiManager outright, and the view
-   reaches them through `tm:interpolate`. Without it the region's one
-   free variable is not `util`, and the fold cannot be driven from a
-   list of points.
-
-1. `firstAfter` and `firstAtOrAfter` go to `util`. They are binary
-   seeks over a ppq-sorted list, with nine external callers each and
-   further use inside both new modules. `util` already holds
-   `util.seek` and `util.insertSorted`, and these join them.
-
-1. What reads configuration stays in tm. `pbLim`, `centsToRaw` and
-   `rawToCents` read `cm:get('pbRange')`; `ccGridStep` reads the take's
-   resolution and CCINTERP. This costs the split nothing. Each emission
-   site rounds and clamps in its own units, so no curve name mentions
-   `pbLim`, and the densify step passes into the fold as a parameter.
-
-1. Phase 1 goes first because it is also the instrument. Its own value
-   is about 325 lines, six per cent of the file. The curve fold is
-   currently reachable only through a full tm rebuild; extracted, it
-   can be tested against a list of points. And removing the pure names
-   from every rebuild stage's dependency set gives the phase-3 count
-   its meaning.
+Landed 2026-08-30 as `spans.lua` and `curves.lua`, with the two seeks in
+`util`. The model is `docs/algebra.md`.
 
 ## Phase 2 — the dirt spine becomes `dirt.lua`
 
