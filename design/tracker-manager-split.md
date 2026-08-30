@@ -1,6 +1,7 @@
 # trackerManager: the algebra and the engine
 
-> opened: 2026-08-07 · status: proposed — plan to follow
+> opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
+> at phase 1 (the algebra leaves)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -158,24 +159,31 @@ decides whether phase 3 is worth taking.**
    `curves` requires `spans` for `overlapping`, and the arrow is one
    way.
 
-1. `spans.lua` publishes six names and `curves.lua` eight. Spans:
+1. `spans.lua` publishes six names and `curves.lua` nine. Spans:
    `mergeSpans`, `mergeWindows`, `overlapping`, `spanSetIntersects`,
-   `clipToSpanSet`, `subtractSpanSet`. Curves: `evalCurve`,
-   `sliceCurve`, `sumStreams`, `foldChains`, `foldIntoWindow`,
-   `closeAtWindowEnd`, `anyNonZero`, `isCurved`. Four of the fold's
-   helpers — `negated`, `foldWhole`, `chainCuts`, `foldSub` — have no
-   caller outside the region and stay private.
+   `clipToSpanSet`, `subtractSpanSet`. Curves: `interpolate`,
+   `evalCurve`, `sliceCurve`, `sumStreams`, `foldChains`,
+   `foldIntoWindow`, `closeAtWindowEnd`, `anyNonZero`, `isCurved`. Four
+   of the fold's helpers — `negated`, `foldWhole`, `chainCuts`,
+   `foldSub` — have no caller outside the region and stay private.
+
+1. `interpolate` arrives from the other direction. The value of a
+   breakpoint pair at a ppq is curve algebra, and `curveSample`'s shape
+   functions with it, so both leave midiManager; `mm:interpolate` stays
+   as a delegate and its other callers are untouched. Without it the
+   region's one free variable is not `util`, and the fold cannot be
+   driven from a list of points.
 
 1. `firstAfter` and `firstAtOrAfter` go to `util`. They are binary
    seeks over a ppq-sorted list, with nine external callers each and
    further use inside both new modules. `util` already holds
    `util.seek` and `util.insertSorted`, and these join them.
 
-1. The cents↔raw conversions stay in tm. `pbLim`, `centsToRaw` and
-   `rawToCents` read `cm:get('pbRange')`, which makes them
-   configuration. This costs nothing: `sumStreams` clamps from
-   `opts.lo`/`opts.hi` and never names `pbLim` itself, so the boundary
-   falls where it already is.
+1. What reads configuration stays in tm. `pbLim`, `centsToRaw` and
+   `rawToCents` read `cm:get('pbRange')`; `ccGridStep` reads the take's
+   resolution and CCINTERP. This costs the split nothing. Each emission
+   site rounds and clamps in its own units, so no curve name mentions
+   `pbLim`, and the densify step passes into the fold as a parameter.
 
 1. Phase 1 goes first because it is also the instrument. Its own value
    is about 325 lines, six per cent of the file. The curve fold is

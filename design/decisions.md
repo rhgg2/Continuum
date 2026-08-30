@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — Interpolation is curve algebra, so `curveSample` and `mm:interpolate` move to
+  `curves.lua` when the algebra leaves trackerManager, leaving `mm:interpolate` as a delegate for
+  the view and the cents stream. The alternative, an interpolator argument threaded through six
+  signatures, names in each of them the only value it ever takes.
+
 - **2026-08-30** — The cheat-sheet draws a pathed command's route in a column of its own, between
   the keys and the labels, so the routes align down the box. The route chip binds nothing, yet a
   click on it focuses its row, which is how a command reached by its path alone is given a chord.
