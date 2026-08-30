@@ -102,24 +102,21 @@ a different table, so removing one strands the raw entry — invisible to a
 uuid-holed read of mm, and exposed the moment a splice reads the index.
 `deleteLowlevel` resolves through `byUuid` before removing, for that reason.
 
-The index is the primary structure and the stager is one of its clients,
-which is the opposite of how the name reads. `rawIndex[chan]` holds every
-event on the channel, one `rawThenLogical`-sorted list per type; the whole
-rebuild pipeline reads it in place, ~40 sites of it, against ~10 callers
-for the write verbs — nearly all of those tm's own forwarders. The index
-lives inside um because um is what keeps it true, not because staging owns
-it. `rawIndexFor(chan)` is the single read door: it covers all six lists,
-and the typed `rawNotes`/`rawPbs` spellings that used to sit beside it are
-gone.
+The index is the primary structure and the stager is one of its clients.
+`rawIndex[chan]` holds every event on the channel, one
+`rawThenLogical`-sorted list per type; the whole rebuild pipeline reads it
+in place, ~40 sites of it, against ~10 callers for the write verbs — nearly
+all of those tm's own forwarders. The index lives inside um because um is
+what keeps it true. `rawIndexFor(chan)` is the single read door, covering
+all six lists.
 
-`rawThenLogical` is a total order, not a two-key sort: raw tick, then logical
-seat, then authored before generated, then lane, then pitch. The tail is
-load-bearing rather than decorative. Records can share a tick and a pitch — a
-nudge lands a derived note on an authored one — and `(ppq, ppqL)` alone leaves
-them in Lua's unstable sort order, which is exactly the order the frontier walk
-reconstructs settlement from (§ What the walk visits, and what it emits). The
-one preference the tail states is meaningful: authored settles before
-generated.
+`rawThenLogical` is a total order: raw tick, then logical seat, then authored
+before generated, then lane, then pitch. The tail carries weight. Records can
+share a tick and a pitch — a nudge lands a derived note on an authored one —
+and `(ppq, ppqL)` alone leaves them in Lua's unstable sort order, which is
+exactly the order the frontier walk reconstructs settlement from (§ What the
+walk visits, and what it emits). The tail's one preference is meaningful:
+authored settles before generated.
 
 Staging proper: all mutations — from tv and from tm's own rebuild-time
 housekeeping — funnel through `tm:addEvent` / `tm:assignEvent` /
@@ -136,9 +133,7 @@ re-reads its whole event set — module init and wholesale reloads
 Derivation that happens to run at flush time is not staging, and sits
 outside both blocks: `collisionKills` (§ Flush collision scan) is at file
 scope, called by `flush` before the commit because tm's kill verdicts have
-to land before mm ever sees a same-pitch collision. The flush-time PC
-reconcile that used to sit beside it is gone — the rebuild pipeline already
-has that stage.
+to land before mm ever sees a same-pitch collision.
 
 The sections below reference um by name because its frame and encoding
 choices (cents not raw; realisation toward mm, logical at the public
@@ -155,7 +150,7 @@ that is the whole set:
 - `boundNote` writes `endppq` — the clipped tail.
 - `stampSamples` writes `sample` — the prevailing PC's sample.
 
-Things that look like entry mutation and aren't: `rebuildPbs` clones at the
+Three further writes sit outside the contract: `rebuildPbs` clones at the
 boundary, `rebuildInternals` writes mm's own column clones, and
 `colEvt`/`realised` are um's own decoration, set through `stampColEvt` and
 the entry lifecycle.
@@ -166,28 +161,22 @@ where the field is one of `rawThenLogical`'s keys, re-true the containing
 list — inline, or flagged for the open `withDeferredSort` block to sort
 once at its close. Only `ppq` of the three actually stains a sort key, but
 the door is the same for all of them so the rule lives in one place instead
-of at the call site. This is what retired `resortRawNotes`, a whole-channel
-re-sort the walk had to remember to call: with the repair structural,
-keeping the manual one would leave two ways to be correct.
+of at the call site.
 
-`anyNudge` survived that retirement, narrowed. It gated two repairs and
-only um's list became structural — `linearTails`'s merged `notes` and
-`frontierTails`'s `extras` are the walk's own scratch lists sharing the same
-records, so nothing can flag them, and dropping the gate would put an
+`anyNudge` gates the walk's own scratch lists. `linearTails`'s merged
+`notes` and `frontierTails`'s `extras` share um's records but are the walk's
+own tables, so nothing can flag them, and an ungated repair would put an
 unconditional whole-channel sort on the dense path every pass.
 
-Nothing enforces any of this at runtime, deliberately. A metatable proxy
-would miss the exact write that matters — `__newindex` does not fire for a
-key that already exists — and catching it would need shadow storage with
-`__index` on every read, taxing the hot path the sharing exists to protect.
-`tm_raw_index_order_spec` is the backstop instead: it stains the index with
-a real nudge and catches a binary-seek reader answering from the stale
-order, and it pins every entry's `ppq` against mm's. The order half is
-checked through a consumer rather than literally, because asserting on the
-lists themselves would mean publishing a read accessor whose only caller is
-a spec. So the contract is declared and checked, not enforced: a new stage
-writing `entry.ppq` directly is a live bug, and the spec sees it only where
-a reader downstream is looking at the stale order.
+The contract is declared and checked, not enforced at runtime: a metatable
+proxy would miss the write that matters, since `__newindex` does not fire
+for a key that already exists. `tm_raw_index_order_spec` is the backstop. It
+stains the index with a real nudge and catches a binary-seek reader
+answering from the stale order, and it pins every entry's `ppq` against
+mm's. The order half is checked through a consumer, since asserting on the
+lists themselves would publish a read accessor whose only caller is a spec.
+So a new stage writing `entry.ppq` directly is a live bug, visible only
+where a reader downstream reads the stale order.
 
 ### Incremental index reconciliation
 
@@ -203,28 +192,18 @@ An entry refreshes in place only when its `ppq` is unchanged; otherwise it is
 removed and reinserted. `rawIndex[chan].notes`/`.pbs` are ppq-sorted while
 `rawIndexListFor` keys on evType/chan/lane alone, so refreshing in place across a
 moved onset would leave those lists out of order — and `refreshEntry`'s pb
-branch never copies `ppq`, so that entry would keep a stale onset for good.
-This check was free until 2026-07-17: mm addressed by content token, a ppq move
-re-keyed it, and the remove-and-reinsert path followed automatically. A uuid
-survives the move, so the condition has to be stated.
+branch never copies `ppq`, so that entry would keep a stale onset. A uuid
+survives the move, so the condition has to be stated explicitly.
 
-The eviction used to need a guard (`byUuid[uuid] == prev`): a reswing re-keyed
-every note's token, the batch's `pairs(touched)` walk visits handles in hash
-order, and a uuid's new-token insert could land before its old-token eviction —
-so evicting unconditionally deleted the just-inserted live entry. Addressing by
-uuid there is one key per event and one table, and the guard went with the
-re-key.
-
-Reseating is a splice, not a re-sort. The list an entry moves within is ordered
-everywhere except at that one entry, so `rawIndexInsert` binary-searches its
-seat (`util.insertSorted`) and `assignLowlevel` reseats a moved entry by
-removing and reinserting it — the same path a channel migration already took,
-which is why the two collapsed into one branch. Re-sorting the whole list
-instead is O(n log n) Lua comparator calls to place a single event: ~8ms per
-added note on a dense single-channel take (8.4k notes all on channel 1), where
-the identity scan and shift it replaces cost ~0.2ms. Bulk paths keep the sort —
-`withDeferredSort` appends and sorts each touched list once at the end, because
-N splices into one list would beat N sorts only for small N.
+Reseating is a splice. The list an entry moves within is ordered everywhere
+except at that one entry, so `rawIndexInsert` binary-searches its seat
+(`util.insertSorted`) and `assignLowlevel` reseats a moved entry by removing
+and reinserting it — the same path a channel migration takes. Re-sorting the
+whole list is O(n log n) Lua comparator calls to place a single event: ~8ms per
+added note on a dense single-channel take (8.4k notes all on channel 1),
+against ~0.2ms for the identity scan and shift it replaces. Bulk paths keep the
+sort: `withDeferredSort` appends and sorts each touched list once at the end,
+since N splices into one list beat N sorts only for small N.
 
 `tm_raw_index_order_spec` pins both mechanics against the bulk-built index: the
 tail walk reads these lists in order to find each note's same-pitch successor,
@@ -238,9 +217,7 @@ event set from REAPER; ordinary edit rebuilds keep the live index and just
 `wholesale=true` from `load`/`reload` (every event object is new, index stale)
 and `wholesale=false` from `modify` (in-place, index still valid). tm captures
 that bit at the top of `rebuild`, before the pipeline's own nested `mm:modify`
-calls re-fire `'reload'` and would otherwise clear it. The incremental path
-was validated against a full `reload()` by a perf-gated shadow-compare during
-the migration; that scaffolding is removed now that parity is established.
+calls re-fire `'reload'` and would otherwise clear it.
 
 Note entries also carry `colEvt` — the seat stamp. As the rebuild seats a
 column cell (internals, externals, or a restored parked note as the park
@@ -283,16 +260,13 @@ the set of dirty logical rows from the seeds (snapshot `ppqL` ∪ each survivor'
 `rebuildInternals` re-clones that row from mm: an add finds the new note, a delete finds nothing and
 the event vanishes, a move seeded both rows and gets both. Membership keys on the row, not the full
 seat, because same-pitch/PC shadowing is a same-`ppqL` cross-lane relation: a deleted shadower must
-re-materialise the survivor sharing its row, and a seat key (ppqL + lane + pitch) would skip it. This
-is the row-keyed successor to the old `intervals.intersects`, which keyed on `ppqL` endpoints for the
-same reason.
+re-materialise the survivor sharing its row, and a seat key (ppqL + lane + pitch) would skip it.
 
-Widening a seed to its neighbouring onsets buys nothing *here*. No stage reads a neighbour's
-column event expecting a fresh clone — every raw consumer reads um's raw index, which holds every
-mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its
-results back through the `colEvt` seat stamp. A carried event whose mm note did not change is
-already correct. Closure belongs to the tail walk, computed against that same index — see
-§ What the walk visits, and what it emits.
+A seed covers its own rows and no more. Every raw consumer reads um's raw index, which holds every
+mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its results
+back through the `colEvt` seat stamp — so a carried event whose mm note did not change is already
+correct. Closure belongs to the tail walk, computed against that same index (§ What the walk
+visits, and what it emits).
 
 The cc family splices seed by seed rather than row by row (`spliceChannelCCs`):
 each cc/at/pc seed excises the cell it carries — an exact-row seek matched on
@@ -335,11 +309,9 @@ tm-specific facts:
   (`hidden = pb.derived and (shape==nil or shape=='step')`); the host
   note for delay inheritance is the lane-1 note at the absorber's seat
   (`pb.ppq`), recovered geometrically — the host carries no marker.
-- **No per-mutation upkeep.** There is no `markFake`/`reconcileBoundary`
-  machinery: absorbers are not maintained on each edit. The absorber pass
-  reseats the whole absorber set against the final post-walk lane-1
-  layout, so a detune edit just writes `n.detune` and lets the next
-  rebuild reconcile.
+- **Upkeep is wholesale.** The absorber pass reseats the whole absorber
+  set against the final post-walk lane-1 layout, so a detune edit writes
+  `n.detune` and lets the next rebuild reconcile.
 
 ### Implementation invariants
 
@@ -461,14 +433,12 @@ Semantics:
 - **Pb edits don't maintain absorbers.** Adding or deleting a real pb
   stages only that pb; the absorber set is reconciled wholesale by
   rebuild's absorber pass, never adjusted per-edit.
-- **Parked edits stage; they never write `ds` inline.** `ds:assign` fires
-  `dataChanged` → `tm:rebuild` synchronously, and a rebuild reloads the um
-  cache — so a parked edit writing `ds` mid-loop during a multi-select (a
-  transpose spanning a parked chord and normal notes) would rebuild and
-  discard the still-staged mm edits. That is a correctness hazard rather
-  than a deferrable nicety, so parked edits ride `flush` like every other
-  staged edit, through a `parkedEdits` buffer peer to `adds`/`assigns`/
-  `deletes`. Flush applies them to a cloned stash under a guard suppressing
+- **Parked edits stage.** `ds:assign` fires `dataChanged` → `tm:rebuild`
+  synchronously, and a rebuild reloads the um cache — so a parked edit
+  writing `ds` mid-loop during a multi-select (a transpose spanning a parked
+  chord and normal notes) would rebuild and discard the still-staged mm
+  edits. Parked edits therefore ride `flush` like every other staged edit,
+  through a `parkedEdits` buffer peer to `adds`/`assigns`/`deletes`. Flush applies them to a cloned stash under a guard suppressing
   the inline rebuild, then either rides the mm reload's rebuild or drives one
   explicit rebuild where the edit was parked-only.
 - **Flush re-entrancy.** `flush` snapshots and clears `adds/assigns/
@@ -509,8 +479,7 @@ Triggered by:
 - cm `'configChanged'` signal, except for `tvOnlyKeys` — `defaultSwing` and
   `fxPatches` — which tv consumes without a structural rebuild. Neither feeds
   a derivation: a patch catalogue is a vocabulary of chains to instantiate
-  from, so without the exemption each save would cost a full re-derivation of
-  the take for a write no realisation reads;
+  from, and no realisation reads it;
 - ds `'dataChanged'` on the project data tm derives from: `swing`,
   `fxRegions`, `fxParked`, `extraColumns`, `paramAutomation` and `noteDelay`.
 
@@ -521,8 +490,8 @@ so layers above tm needn't reach into mm.
 Reentrancy-guarded by `rebuilding`. Also guarded against a dead take: if
 `mm:take()` is nil (take deleted under us) `rebuild` returns immediately,
 retaining tv's last rendered frame. This is the same liveTake guard every
-other mm consumer applies; without it a foreign-track `configChanged` fired
-during arrange's take-delete sequence would crash on a nil resolution.
+other mm consumer applies — a foreign-track `configChanged` can fire during
+arrange's take-delete sequence, against a take that no longer resolves.
 
 A third gate makes an idle trigger free. `rebuild(∅)` — no dirt, no stale
 swing, no wholesale re-read, no take swap, no `requestRebuild` — returns
@@ -582,11 +551,7 @@ runs it, with a pointer to its detail where one exists.
   restored cc lands on the exact ppq of the fill seat the wider window
   left on the take; under uuid addressing the two are distinct events, so
   the fill reconcile deletes that seat by its own handle and the authored
-  value stands. (While mm addressed by content token the two shared a
-  `cc|chan|cc|ppq` key: the restore had to delete the seat itself and hide
-  it from `fx.ccExisting`, or the reconcile deleted the authored event
-  instead and the value drifted to the fill on every window round-trip.)
-  Carried-forward tails clip against on-take note
+  value stands. Carried-forward tails clip against on-take note
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
   parked member. `realiseParked` caches each member's render clip
@@ -596,8 +561,7 @@ runs it, with a pointer to its detail where one exists.
   a seed ppq falls inside its cached span; else the cached end rides. The
   reseek is a binary seek into the member's sorted lane column
   (`nextLaneOnset`, shared with `hostWindowEnd`) plus a small member-only
-  strict-next map for parked neighbours — the old whole-channel `bounds`
-  materialisation is gone. A take-length change needs no guard: it
+  strict-next map for parked neighbours. A take-length change needs no guard: it
   arrives as `mm:setLength`'s wholesale reload, which recomputes every
   member (mirrors `fxHostWin`). Lane bound only, never pitch: a parked cell never
   reaches mm, so it carries pure intent — the same extent
@@ -627,8 +591,7 @@ runs it, with a pointer to its detail where one exists.
   their host. A parked PA is gone from `mm`, so it is re-projected from
   `channels[chan].parkedPA` into its parked host's lane — visible
   off-take, riding the note column as an on-take PA would. Both passes
-  splice in order (`insertNoteCell`), so nothing downstream re-sorts; the
-  per-chan touched set the function still returns has no consumer.
+  splice in order (`insertNoteCell`), so nothing downstream re-sorts.
 - **Fx expansion** (`rebuildFx`). Receives the settled windows as a
   parameter — the window pass is its own earlier stage, not a phase of
   this one. Every producer the gate does not keep runs (§ The producer gate)
@@ -639,10 +602,8 @@ runs it, with a pointer to its detail where one exists.
   offline — cc-augment sums per target into markerless cc seats, pb defers
   to the absorber pass. The note add/del leaves `rebuildFx` as data
   (`fxOut.noteOps`); the tail walk seeds its own batch with it and commits
-  atomically. A table crossing a stage boundary can be read by whoever holds
-  it, where a batch closure shared along the pipeline hands on commit authority
-  over upvalue arrays no reader can consult. `fxOut.noteLive` (the predicted set) feeds the tail walk and
-  PC synthesis. See `docs/generators.md` § Offline continuous realisation.
+  atomically, so every stage can read what crosses the boundary.
+  `fxOut.noteLive` (the predicted set) feeds the tail walk and PC synthesis. See `docs/generators.md` § Offline continuous realisation.
 - **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
   predicted fxNotes walk together: clamp same-pitch onset collisions
   (fixed onsets frozen), then clip each realised note-off against its
@@ -685,10 +646,9 @@ The universal tail pass resolves each note's realised
 note-off against its same-lane and same-pitch successors. The "strict
 next" — first group member with a strictly greater ppq, chord-mates at
 equal ppq skipped — is precomputed once per ppq-sorted group in a
-back-to-front pass, then looked up per note. It used to be rescanned
-linearly per note: a retrig host expands to a long run of same-pitch
-fxNotes, so that scan made the walk O(k²) inside the group and dominated
-rebuild on macro-heavy takes.
+back-to-front pass, then looked up per note. A retrig host expands to a long
+run of same-pitch fxNotes, so a per-note rescan would make the walk O(k²)
+inside the group.
 
 ### Span-covered fx scans
 
@@ -759,24 +719,18 @@ with no live cell, so an unstamped host is never silently skipped.
 
 A take-length change reclips every OPEN window, yet needs no separate guard. Length moves only
 through `mm:setLength`, which fires a `wholesale=true` reload; that dirties all 16 channels, so
-`computeFxWindows` walks every fx channel at the new `takeLen` and overwrites the cache. An earlier
-draft carried an `fxWinLen` stamp to wipe the cache on a length change — dead code, since the
-wholesale reload beats it to the recompute every time.
+`computeFxWindows` walks every fx channel at the new `takeLen` and overwrites the cache.
 
 The two calls per rebuild (head `hostWindows` feeding the note pass, post-settlement `fxWindow` —
 computed by `settleWindows` from within the park stage — feeding cc/pb membership and `rebuildFx`)
 share the one `fxHostWin`. Park and restore seed the channels they touch, so the settlement call
 recomputes exactly those and reuses the rest.
 
-**The reuse arm is unexercised by the suite.** Removing `perHost`'s seed-driven invalidation outright
-(`local dirty = cached == nil`, dropping `seededUuid[uuid]`) leaves every one of the 2208 specs green,
-so nothing anywhere distinguishes a host riding a stale cached window from one that recomputes. The
-arm's correctness rests on reading it, not on coverage. *Why* it goes unreached is not settled:
-`rebuild(takeChanged)` wholesales the channel and a wholesale channel goes to `walkChannel`, which
-explains any fixture passing `true`, but `absorbReloadDirt` does fold a flush's per-verb seeds into
-interval dirt and the carry arm reads it, so an ordinary edit looks like it ought to arrive here. A
-fixture needs all three of a warm cache, seeded rather than wholesale dirt naming the host, and a
-window value that actually moves. Until one exists, treat any change to this cache as unguarded.
+**The reuse arm is unexercised by the suite.** Removing `perHost`'s seed-driven invalidation
+outright (`local dirty = cached == nil`, dropping `seededUuid[uuid]`) leaves every spec green, so
+nothing distinguishes a host riding a stale cached window from one that recomputes. A fixture
+reaching the arm needs all three of a warm cache, seeded dirt naming the host, and a window value
+that moves. Until one exists, treat any change to this cache as unguarded.
 
 ### The placement fixpoint
 
@@ -798,18 +752,14 @@ One settlement step suffices by construction: cc/pb parks remove no note
 onsets, so continuous parking moves no window, and a second continuous
 pass could create no new coverage.
 
-Without the split the fixpoint escaped: a same-pass note park widened a
-surviving host's cc/pb window past the head membership set, deferring the
-exposed pb one rebuild and the exposed cc until its channel's next dirt —
-while fx expansion, reading post-park windows, realised its stream with
-the authored cc still on the wire. The dirt gates stay sound under the
-split: a note park only moves windows on its own channel, and the note
-and cc scans share the same per-channel gate, so any channel whose
-windows can move mid-pass is already dirty when the cc scan runs.
+The dirt gates stay sound under the split: a note park only moves windows on
+its own channel, and the note and cc scans share the same per-channel gate,
+so any channel whose windows can move mid-pass is already dirty when the cc
+scan runs.
 
-The over-approximation arm needs no such care: restores narrow windows,
-so at worst the settled set carries a member the layout no longer covers,
-and the prior-set partition — ungated — restores it at the next rebuild.
+The over-approximation arm is looser still: restores narrow windows, so at
+worst the settled set carries a member the layout no longer covers, and the
+prior-set partition — ungated — restores it at the next rebuild.
 
 ### Park window census
 
@@ -819,22 +769,20 @@ latter two are disjoint only because `settleWindows` declares the pass's parks t
 The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's cell at once,
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
-of it, so undeclared, a self-parking host would land in both arms.
-
-The census was not the reader that mattered, though — it caught the duplicate with a uuid dedupe, and
-fx expansion, whose producer bucket is `fxWindow`'s keys plus `channels[chan].parked`, has none. It
-ran such a host's chain twice and `foldChains` summed the two pb curves into one of twice the
-authored depth. That is why the declaration sits at the writer and the dedupe is gone.
+of it, so undeclared, a self-parking host would land in both arms — and fx expansion, whose producer
+bucket is `fxWindow`'s keys plus `channels[chan].parked`, would run its chain twice and `foldChains`
+would sum the two pb curves to twice the authored depth. The declaration therefore sits at the
+writer, where one statement serves every reader.
 
 `freezeRegion`'s resync drops the frozen producer's entries from `prevWindows` (the
 seat-recognition baseline) by their stamped `id`: every window `parkWindows` emits carries its
 producer's uuid. The stamp is identity for subtraction only — seat recognition still matches on
-spans, so nothing downstream reads it. Matching by value could not do this job: two producers that
-happen to emit identical windows (a same-target overlap, or two on-take hosts riding the same fx)
-are indistinguishable by value, and taking a surviving neighbour's entry would make the next rebuild
-read its seats as freshly authored and park them off-take. The `id` drop also holds where value
-matching frayed: a persisted window that no longer recomputes field-for-field (a kind deregistered,
-a clipping context changed) still leaves with its producer.
+spans, so nothing downstream reads it. Identity is what the subtraction needs: two producers can
+emit identical windows (a same-target overlap, or two on-take hosts riding the same fx), and a
+value match could take a surviving neighbour's entry, leaving the next rebuild to read its seats as
+freshly authored and park them off-take. The `id` drop also holds for a persisted window that no
+longer recomputes field-for-field (a kind deregistered, a clipping context changed): it still
+leaves with its producer.
 
 The same census answers freeze eligibility. `freezeRefused` partitions the windows `parkWindows`
 emits by their stamped `id` — the frozen producer's on one side, every other producer's on the other
@@ -853,10 +801,9 @@ builds for itself is unfiltered, unlike the rebuild's, so the refusal is stated 
 All three arms answer *what is committed* — `fxRegions`, the maintained fx-host index, the stash — so
 `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
 invisible to the gate, and freeze's own closing flush would then commit it: a live window over the
-seats just frozen, which are markerless, so its producer re-derives them. That is the outcome the
-gate exists to prevent, and it arrived with success reported. The leading flush is a no-op when
-nothing is staged, at the price of one empty `preflush` (which `flush` fires ahead of its no-op
-check).
+seats just frozen, which are markerless, so its producer re-derives them — with success reported.
+The leading flush is a no-op when nothing is staged, at the price of one empty `preflush` (which
+`flush` fires ahead of its no-op check).
 
 ### Derivation dirt: the gated spine
 
@@ -911,13 +858,11 @@ splices the seed-touched windows, `rebuildPbs` gathers span-bounded. Wholesale d
 Dirt is a lattice — `nil` < seed list < `true` — and every writer **joins**, never
 assigns: a pass may discover more dirt, never less. `seedDirty` no-ops once
 wholesale, the tail walk's emission checks `dirt ~= true`, and `absorbReloadDirt`
-folds under the same guard. The guard was missing from the seed fold until
-2026-07-28, where it demoted a standing `true` to whatever that flush happened to
-seed. The dirt that survives no restatement is what this protects: `setLength`
-marks all 16 wholesale for OPEN tails spanning the new end, and an OPEN tail
-stages no mm op, so it leaves no seed to be rediscovered from. A shrink that also
-killed one event on a channel demoted that channel to the kill's seed and left the
-OPEN tail uncut. Pinned in `tm_tail_gating_spec`.
+folds under the same guard. What the join protects is dirt that survives no
+restatement: `setLength` marks all 16 wholesale for OPEN tails spanning the new
+end, and an OPEN tail stages no mm op, so it leaves no seed to be rediscovered
+from. A demotion to a co-occurring kill's seed would leave that OPEN tail uncut.
+Pinned in `tm_tail_gating_spec`.
 
 Past the cap the dirt collapses to the whole channel, so `rebuildInternals`' excise-skip and its
 fresh column build agree with the tail walk.
@@ -948,13 +893,11 @@ the frontier onto the linear walk.
 tv's cell carry keys on a column's `events` **table identity**: the same
 table coming back means reuse the built cells and ghosts. That makes the
 identity a protocol — a lane's `events` table must change identity exactly
-when something a renderer can see about that lane changed. `exciseNotes`
-originally wrote `col.events = kept` for every lane of an interval-dirty
-channel whether or not it dropped anything, so a one-note edit shed all of
-chan 1's lanes and tv re-placed the whole take (7.8ms of `place` on a dense
-one).
+when something a renderer can see about that lane changed. A lane shed
+without cause costs tv a re-place of the whole take — 7.8ms of `place` on a
+dense one.
 
-The shed is now precise, and every mutator of a seated lane owns it:
+The shed is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseNotes` assigns only when it actually dropped a
   cell; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
@@ -978,18 +921,12 @@ not the conditional, is the work. The tail walk is the reach to watch:
 `settleOnset`'s `delayC` and `boundNote`'s `endppqC`/`endppq` land on notes
 no seed covered, in lanes otherwise carried whole.
 
-Two things need no shed. Wholesale and stale-swing channels get a
+Two cases need no shed. Wholesale and stale-swing channels get a
 brand-new `columns.notes`, so their identity is fresh by construction. And
 a local bound to `col.events` that outlives a shed operates on the dead
 table — the read-only walks (`eachWindowNote`, `channelStreams`,
 `coverOnsets`) do not care, but the park scan did, which is why a note
 carry stores its lane index and resolves the table at unlink time.
-
-`col.version`, bumped by tm and keyed on by tv, was the rejected
-alternative. It is the more honest protocol — today the cache key is an
-accident of who happened to allocate a table — but it moves the tm/tv
-boundary to fix one path, and the cc path (`spliceChannelCCs`) is already
-precise under the existing one.
 
 ### Dormant guard
 
@@ -1000,17 +937,16 @@ fired in this state would resolve swing/trackerMode off empty take tiers, causin
 a mm/cm mismatch. The `configChanged` subscriber therefore returns early if
 `cm:boundTake()` is nil; the next real `bindTake` call fires a coherent rebuild.
 
-That guard **drops** the change, which was harmless only while every rebind
-marked all 16 channels dirty anyway. Under the converged-rebind gate
+That guard **drops** the change. Under the converged-rebind gate
 (midiManager.md § Converged load) a rebind may mark nothing, so what happened
 while the tracker was away has to be recovered at the bind.
 
-Replaying the missed signals is not enough, because the worst case fires no
-signal at all: the ds/cm state under the bound take and its track (`swing`,
-`fxRegions`, `extraColumns`, `fxParked`, `paramAutomation`, the take config
-tier) is rewound by a REAPER undo while `ps` watches only the *bound* take's slots — nothing is listening, and cm/ds simply refill
-their caches from storage at the next `setContext`. The same blind spot swallows
-the `trackerMode` re-seed, which `bindTake` writes under its own suppression
+The worst case fires no signal at all: the ds/cm state under the bound take
+and its track (`swing`, `fxRegions`, `extraColumns`, `fxParked`,
+`paramAutomation`, the take config tier) is rewound by a REAPER undo while
+`ps` watches only the *bound* take's slots, and cm/ds refill their caches
+from storage at the next `setContext`. The same blind spot swallows the
+`trackerMode` re-seed, which `bindTake` writes under its own suppression
 window.
 
 So the bind compares rather than listens: `derivationInputs()` gathers everything
@@ -1023,23 +959,19 @@ needs. A spurious diff costs one derivation; a missed one writes stale output,
 which is why the diff is over values and not over a change counter that only
 ticks when someone remembered to tick it.
 
-## Fx is phases, not a layer
+## Fx as rebuild phases
 
-tm is large, and the obvious relief is an `fxManager`. It is the wrong cut. Fx
-is not a layer but a set of phases woven into tm's one rebuild, sharing the
-`fx` accumulator and the deferred mmBatch, and the tail walk deliberately
-fuses authored, external and derived notes into one atomic commit. An
-`fxManager` would have to reach into tm's `channels`, `fx` and `deferred` —
-the cross-layer reach the architecture forbids, buying size-down at
-coupling-up. Parked edits have to coordinate with `adds`/`assigns`/`deletes`
-inside `flush` besides (§ Mutation contract), so splitting parking out is the
-wrong cut twice over.
+Fx is a set of phases woven into tm's one rebuild, sharing the `fx`
+accumulator and the deferred mmBatch; the tail walk fuses authored, external
+and derived notes into one atomic commit. Parked edits coordinate with
+`adds`/`assigns`/`deletes` inside `flush` besides (§ Mutation contract). Both
+therefore live where tm's `channels`, `fx` and `deferred` live, since
+lifting either out would mean reaching across a layer for them.
 
-Pressure relief goes the other way: push *pure* fx logic into `generators`
-(`docs/generators.md` § The ctx discipline). If size ever does force a
-structural split, the honest seam is the whole rebuild pipeline lifted to a
-`trackerRebuild` file with `channels`/`fx`/`deferred` as an explicit ctx —
-not fx.
+Pressure on tm's size goes to `generators`, which takes the *pure* fx logic
+(`docs/generators.md` § The ctx discipline). If size forces a structural
+split, the seam is the whole rebuild pipeline lifted to a `trackerRebuild`
+file with `channels`/`fx`/`deferred` as an explicit ctx.
 
 ## PC synthesis under trackerMode
 
@@ -1054,23 +986,13 @@ tier inside the bind's suppression window. So the mode tracks the
 *bound* take, never lagging on the arrange cursor mid-navigation (the
 bug that leaked synthetic PCs onto a non-tracker take's note-ons).
 
-Synthesis runs in one place: **rebuild step 4.5** re-derives every
-dirty channel's PC stream from current note state and writes the delta
-to mm. Its `records` list comes from the channel's raw-index notes plus
-the fx-derived live ones, each carrying its column cell as `key`, and
-feeds through the pure `reconcilePCsForChan` helper; records lost to
-lane priority get `sampleShadowed = true` for renderer dimming.
-
-A second, flush-time pass ran the same derivation one mm commit
-earlier, over any channel whose notes had just mutated. It was deleted
-(2026-07-27). Every channel it dirtied was already dirty by the time
-the rebuild ran — the low-level verbs seed, and `mm:modify`'s reload
-folds those seeds in — so it only ever repeated the sweep with less
-information: no seed spans, no `noteLive` records, no shadow marking.
-It also inverted the bearing rule, because it synthesised from
-`n.sample or 0`: an unstamped note got a placeholder-zero PC parked at
-its own onset, which the next `stampSamples` then found and stamped
-back as 0, instead of the sample actually prevailing there.
+Synthesis runs in one place: the pipeline's PC stage (`rebuildPCs`)
+re-derives every dirty channel's PC stream from current note state and
+writes the delta to mm. Its `records` list comes from the channel's
+raw-index notes plus the fx-derived live ones, each carrying its column
+cell as `key`, and feeds through the pure `reconcilePCsForChan` helper;
+records lost to lane priority get `sampleShadowed = true` for renderer
+dimming.
 
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
 each seed onset to `[onset, next onset)` — the interval over which one note's
@@ -1089,7 +1011,7 @@ their own PC each, even if their logical ppqs match.
 ## Column allocation rules
 
 `noteColumnAccepts` is consulted only for unstamped raw notes; a
-stamped note never reaches it (see Rebuild step 2). For an unstamped
+stamped note never reaches it (§ Rebuild: partition). For an unstamped
 candidate, `noteColumnAccepts(col, note)`:
 
 Comparisons run in **intent space**: the candidate's note-on has its
@@ -1125,17 +1047,15 @@ with no matching pitch anywhere in the channel are dropped.
 Ownership in um is a separate question from column binding, and um tests
 it in the **logical** frame (`forEachAttachedPA`). A PA carries its own
 `ppqL` and the CC walk reswings it from that seat, exactly as it does a
-note — a PA is not slaved to its host's raw onset. So a host's
-realisation moves independently of the PAs it owns: a forward delay
-pushes a note's raw onset clean past a PA at its own logical seat, and
-the tail walk's same-pitch nudge does the same for a tick. A raw-frame
-test calls those PAs detached, and um then declines to move or cull them
-with their host — orphaning them in `mm`.
+note. So a host's realisation moves independently of the PAs it owns: a
+forward delay pushes a note's raw onset clean past a PA at its own logical
+seat, and the tail walk's same-pitch nudge does the same for a tick. Only
+the logical test still counts those PAs as attached, so only it moves and
+culls them with their host; a raw-frame test would orphan them in `mm`.
 
 Reading um's index rather than mm also widens what counts as attached: the
 index carries staged adds, so a PA added this gesture and not yet flushed
-follows its host's resize or delete. A staged PA is attached, and scanning mm's
-committed set alone would not see it.
+follows its host's resize or delete.
 
 `forEachAttachedPA` gathers its matches into a list before invoking `fn` on each, rather than
 calling `fn` inline mid-walk. `fn` is `deleteLowlevel` or `assignLowlevel`, and both remove from
@@ -1146,15 +1066,13 @@ entry into the removed slot, so an inline call would skip it.
 decide whether a move is a translation, and again to perform the carry.
 
 The translation test compares **logical lengths** (`L2 - L1 == endL -
-startL`), not raw deltas at the two endpoints. Swing is a periodic warp,
-so a whole-note logical move is a whole-note raw move only when the
-note's length is an exact multiple of the swing period — only then do
-both endpoints keep their phase and shift by the same amount. At any
-other length they warp differently, and a raw-frame test reads the move
-as a resize, culling every PA the new span excludes. That is also why the
-function takes the logical span rather than the older `cullEnd`
-parameter, which existed only to smuggle the logical `OPEN` sentinel into
-a raw-frame test. In the logical frame `OPEN` is just `math.huge`, and
+startL`). Swing is a periodic warp, so a whole-note logical move is a
+whole-note raw move only when the note's length is an exact multiple of the
+swing period — only then do both endpoints keep their phase and shift by the
+same amount. At any other length they warp differently, and a raw-frame test
+reads the move as a resize, culling every PA the new span excludes. The
+function therefore takes the logical span. In the logical frame `OPEN` is
+just `math.huge`, and
 since `math.huge` minus either seat is `math.huge`, an open tail that
 stays open satisfies the same equality with no special case.
 
@@ -1255,7 +1173,7 @@ not among the `dataChanged` keys tm rebuilds on (§ Rebuild).
   inside um and toward mm. `timing.delayToPPQ` is the sole converter.
 - **pb.val in cents** inside tm; raw conversion only at load and flush.
 - **Absorber marker.** `pb.derived == 'absorber'` is the sole marker
-  (persisted as pb metadata); reconciled by rebuild step 4.9, never
+  (persisted as pb metadata); reconciled by the absorber pass, never
   toggled per-edit.
 - **`util.REMOVE`** as a value in `assignEvent` deletes the field
   (passed through to mm).
@@ -1271,11 +1189,11 @@ not among the `dataChanged` keys tm rebuilds on (§ Rebuild).
 
 When `realiseNoteUpdate` stages a delay or endppq change, the raw onset
 and raw tail are clamped immediately (`onset ≥ 0`, `tail ≤ takeLen`).
-This is NOT the authoritative clip — step 4.8 re-applies the full
-same-pitch and take-edge constraints against the final post-walk geometry,
-and flush re-applies on every write. Clamping here keeps the staged raw
-value in range so interim mm readers (before the next rebuild) never see
-out-of-range values. Divergence surfaces as `delay ~= delayC` (tp paints
+The authoritative clip is the tail walk's, which re-applies the full
+same-pitch and take-edge constraints against the final post-walk geometry;
+flush re-applies on every write. Clamping here keeps the staged raw value in
+range, so interim mm readers (before the next rebuild) see only in-range
+values. Divergence surfaces as `delay ~= delayC` (tp paints
 `*` next to the delay digits) and `endppq ~= endppqC`; the renderer draws
 `endppqC`, so no separate endppq cue is needed.
 
@@ -1301,39 +1219,27 @@ that gives way — `prev.ppq + 1` — or nil if the record stands (a `fixed`
 external never gives way). Pure geometry on `evt.ppq`; the caller stages
 its own mm write.
 
-The traversal is deliberately not `voicing`'s. Which predecessor counts
-as settled, and how far a cascade runs, depends on which notes the pass
-has news for — and that is interval dirt, which only the caller knows
-(§ Rebuild: tail walk). `voicing` owned the walk too until 2026-07-17,
-when the tail walk went interval-native and the whole-channel traversal
-it exported stopped being the one anybody wanted.
+The traversal belongs to the caller. Which predecessor counts as settled,
+and how far a cascade runs, depends on which notes the pass has news for —
+and that is interval dirt, which only the caller knows (§ Rebuild: tail
+walk).
 
 **One site separates**: the tail walk (`rebuildTails`), where real notes
 and predicted fxNotes walk together — separate before the atomic note
 commit, then clip tails.
 
-The reseat (`rebuildInternals`) and the flush scan nudged too until
-2026-07-17. Both went for one reason: a nudge they skip is not a lost
-voice but a collision riding one stage further, to a site that separates
-it before anything can read it. The reseat's notes reach the walk through
-um's raw index, in the same pass and the same `mm:batch` nest, so mm's
-backstop — which resolves at the *outermost* unwind — still finds
-nothing. The flush scan's staged add reaches that same backstop at
-flush's own unwind, ahead of the rebuild it triggers.
+A collision an earlier stage passes over is a collision riding one stage
+further, to a site that separates it before anything can read it. The
+reseat's notes reach the walk through um's raw index, in the same pass and
+the same `mm:batch` nest, so mm's backstop — which resolves at the
+*outermost* unwind — finds nothing. A flush scan's staged add reaches that
+same backstop at flush's own unwind, ahead of the rebuild it triggers.
 
 The walk and the backstop are **independently sufficient** for the reseat
-case: disabling either still separates, and it takes disabling both to
-land two voices on one raw (`tm_reseat_collision_spec`, which pins the
-surviving voice and deliberately names no layer). The backstop is a real
-second line here, not a formality — it is simply never reached, because
-the walk gets there first.
-
-What had made both necessary was token addressing: a transient collision
-left two notes sharing a token, so a staged write could resolve to the
-wrong one, and each stage had to clear its own collisions before
-committing. Uuid addressing (2026-07-16) made a collision merely
-transient rather than unnameable — and the two nudges became the pipeline
-separating one collision three times.
+case: disabling either still separates, and it takes disabling both to land
+two voices on one raw (`tm_reseat_collision_spec`, which pins the surviving
+voice and names no layer). The backstop is a real second line, simply never
+reached, because the walk gets there first.
 
 **Commit ordering.** Notes are addressed by uuid, but `collisionIdx` is
 keyed by realised ppq, so an occupying move (an edit landing on a peer's
@@ -1342,14 +1248,11 @@ moves by **descending target ppq** so every vacate leads its occupy. The
 reseat path is immune: reswing moves both notes to fresh raws, away from
 each other's seats.
 
-The sort stopped being load-bearing on 2026-07-17, when `assignNote` began
-evicting only the slot it still owns: the occupier's clobber no longer
-strands the peer, and either order now leaves the index correct. What
-descending still buys is silence. An ascending commit records a transient
-same-seat collision, and every pending key costs the backstop a full
-walk of the note array at the unwind — measured at ~65µs on
-glasswork, against a ~17.7ms flush. Defensive rather than load-bearing,
-and too cheap to be worth removing.
+Either order leaves the index correct, since `assignNote` evicts only the
+slot it still owns. What descending buys is silence: an ascending commit
+records a transient same-seat collision, and every pending key costs the
+backstop a full walk of the note array at the unwind — ~65µs on glasswork,
+against a ~17.7ms flush. Defensive, and too cheap to be worth removing.
 
 ## Flush collision scan
 
@@ -1367,49 +1270,38 @@ backstop (`midiManager.lua:1040`) fires ~never; after the commit, mm's
 `resolveGroup` would always pre-empt `voicing.resolveSorted` and the
 verdict would be mm's rather than tm's.
 
-That list is exactly the post-flush note set the scan used to assemble
-by sweeping `byUuid` and then `adds`, because every site that files a
-note into one files it into the other: `makeEntry` is `byUuid`'s only
-writer and its only callers (`idxReconcile`, `loadIndex`) file into
-`rawIndex` too, `addLowlevel` files a staged add into `rawIndex` and
-`adds` together, and `deleteLowlevel` removes from both. Parked edits
-are in neither. It is also already sorted, by `rawThenLogical`, which
-is a strict *refinement* of the `(ppq, ppqL)` order the scan used to
-impose: every pair that comparator ordered, this one orders the same
-way, and it only settles ties `table.sort` left arbitrary. In those
-ties the verdict is order-symmetric anyway — `supersedes` kills the
-derived note from either side, and with derived-ness equal the longer
-`endppqL` wins from either side.
+That list is exactly the post-flush note set, because every site that files
+a note into `byUuid` files it into `rawIndex` too: `makeEntry` is `byUuid`'s
+only writer and its only callers (`idxReconcile`, `loadIndex`) file into
+both, `addLowlevel` files a staged add into `rawIndex` and `adds` together,
+and `deleteLowlevel` removes from both. Parked edits are in neither. It is
+also already sorted, by `rawThenLogical`, a strict *refinement* of the
+`(ppq, ppqL)` order the verdict needs: it settles ties `table.sort` would
+leave arbitrary, and in those ties the verdict is order-symmetric anyway —
+`supersedes` kills the derived note from either side, and with derived-ness
+equal the longer `endppqL` wins from either side.
 
-So the scan sorts nothing and hashes nothing: one array walk per
-channel, singleton buckets skipped because a lone note cannot collide.
-The cost it sheds was real — on a dense take the old shape ran 8438
-hash iterations, 8438 string keys, ~60k sort comparisons and 8438
-`onsetOf` writes for a one-note edit that yields no kills at all.
+So the scan sorts nothing and hashes nothing: one array walk per channel,
+singleton buckets skipped because a lone note cannot collide.
 
 Not a per-self peer walk: two notes can collide without either being the
 edited one, and repeated per-self truncation damages peers a later
 same-flush op would resolve.
 
 Each group runs `voicing.resolveSorted` for its **kill** verdicts alone
-(see `docs/voicing.md`). Neither tails nor onsets are touched: the scan
-clipped tails and nudged onsets until 2026-07-17, and both were the same
-vestige, from the days when this scan *was* the truncation and separation
-site. The walk's tail bound is strictly stronger — post-walk rather than
-staged geometry — and a rebuild always follows a flush, so every tail the
-loop wrote was overwritten moments later; the onsets it separated the
-walk separates just as surely (§ Same-pitch onset separation).
+(see `docs/voicing.md`). Tails and onsets belong to the tail walk, whose
+bound is the stronger one — post-walk geometry against this scan's staged
+geometry — and a rebuild always follows a flush (§ Same-pitch onset
+separation).
 
-The kills do not follow them out, and the asymmetry is precisely why:
-the walk separates but never kills. A duplicate that reaches the
-walk is separated rather than collapsed — and a separated pair is no
-longer a collision, so mm's backstop finds nothing left to dedup either.
-This scan is the only site in the stack that dedups a staged add against
-a committed note, and killing through um's verbs is what carries the
-semantics mm shouldn't own (PA culling, detune-aware resize). It went
-uncovered once already; `tm_flush_collision_scan_spec` now pins it.
-`endppqL` (intent) is never written here — deleting a blocker lets the
-raw tail regrow to it.
+Kills stay here, and the asymmetry is why: the walk separates but never
+kills. A duplicate reaching the walk is separated, and a separated pair is
+no longer a collision, so mm's backstop finds nothing left to dedup. This
+scan is the only site in the stack that dedups a staged add against a
+committed note, and killing through um's verbs carries the semantics mm does
+not own (PA culling, detune-aware resize). Pinned by
+`tm_flush_collision_scan_spec`. `endppqL` (intent) is never written here, so
+deleting a blocker lets the raw tail regrow to it.
 
 ## Length operations
 
@@ -1624,10 +1516,9 @@ predecessor.
 
 Successors come from one backward pass carrying, per lane and per pitch,
 the note last seen and that note's strict next — a neighbour sharing the
-current note's raw is no successor of it, so it hands over its own. That
-replaced the `strictNextMap` bucket-and-map build the walk used until
-2026-07-17, and the separate parked-bound bucket with it: parked cells
-are few enough to scan, and only for the notes the sweep bounds.
+current note's raw is no successor of it, so it hands over its own. Parked
+bounds come from a scan instead of a bucket, parked cells being few and read
+only for the notes the sweep bounds.
 
 The walk **emits**. A nudged lane-1 onset moved every absorber seat
 between it and the next lane-1 onset, so the walk seeds that interval
@@ -1638,8 +1529,7 @@ Two walks share these rules; a seed-count threshold picks between them.
 The **linear walk** is authoritative for dense and wholesale dirt: one
 forward onset pass, one predecessor probe per axis to build the bound
 set, one backward pass to clip and emit — over the whole channel. It is
-the degenerate fallback (§ Phase 4.75, § The degenerate case gates on
-seed count). The **frontier probe walk** takes the common sparse-seed
+the degenerate fallback. The **frontier probe walk** takes the common sparse-seed
 channel: it seeks to each seed by name and probes a bounded few rows for
 its lane and pitch neighbours, with no whole-channel traversal and no
 `mergeIndexed` — the sorted index and the small extras list stay separate
@@ -1666,10 +1556,9 @@ Projection assumes every event it sees is sidecar-stamped, and the CC
 walk guarantees it: `rawDivergesFromLogical` counts a missing `ppqL` as
 divergence, so foreign MIDI is anchored (`ppqL = toLogical(raw)`) on the
 first rebuild that dirties its channel. Notes get the same guarantee from
-the externals pass. That stamp — not A2's now-retired duplicate — is what
-makes "columns are logical" true; gate it and sidecar-less events reach
-columns in the raw frame, where `rescaleLength` would warp them through
-swing twice. See § Swing for why the anchor is not optional.
+the externals pass. That stamp is what makes "columns are logical" true;
+gate it and sidecar-less events reach columns in the raw frame, where
+`rescaleLength` would warp them through swing twice.
 
 `evt.endppq` is the AUTHORED logical ceiling (mm's `endppqL` stamp, or
 `util.OPEN` for a deliberately-unbounded tail). `evt.endppqC` is the
