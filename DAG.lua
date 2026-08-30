@@ -38,8 +38,8 @@
 --shape: allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
 local util = require('util')
 
-local CU_IDENT = 'JS:Continuum Utility'
--- Merge CU gain-bank width (utility/Continuum Utility.jsfx). Fan-in past this
+local CU_IDENT = 'JS:Ctm Utility'
+-- Merge CU gain-bank width (utility/Ctm Utility.jsfx). Fan-in past this
 -- fans out to a CU cascade; see docs/DAG.md § per-consumer merge.
 local MERGE_WIDTH = 16
 

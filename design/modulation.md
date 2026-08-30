@@ -305,7 +305,7 @@ gains an input-port family and an allocator, and nothing else.**
 
 The automation layer landed standalone in 2026-06, before any graph, and
 went track-tier in 2026-08: the `paramAutomation` store and applier, the
-`Continuum CC` filter and listen banks, bus 126, `ccManager`'s claims
+`Ctm CC` filter and listen banks, bus 126, `ccManager`'s claims
 registry, and the cone-walk palette. Under one graph it is re-founded,
 not extended.
 
@@ -334,7 +334,7 @@ not extended.
    wm's standing invariant reaps the FX for free. `ccm` is deleted, not
    folded — only `pa` ever claimed it.
 
-1. The **sum node is new code**. `Continuum CC`'s add bank was retired
+1. The **sum node is new code**. `Ctm CC`'s add bank was retired
    in 2026-07 when note-macro summation moved offline into the
    park-and-seat, so there is no kernel left to lift; only its clamp
    discipline carries over.

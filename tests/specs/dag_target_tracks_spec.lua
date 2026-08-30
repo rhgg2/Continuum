@@ -753,7 +753,7 @@ return {
       local list = cuEntries(tracks['guid-s'])
       t.eq(#list, 1, 'one merge CU synthesised')
       local cu = list[1].node
-      t.eq(cu.fxIdent,         'JS:Continuum Utility')
+      t.eq(cu.fxIdent,         'JS:Ctm Utility')
       t.eq(cu.params.mode,     'merge')
       t.eq(cu.params.nPairs,   1)
       t.deepEq(cu.params.gains, { 0.5 })

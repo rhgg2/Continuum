@@ -23,7 +23,7 @@ local SLOTS     = 16
 local META_PEXT = 'P_EXT:ctm_paramAuto'
 local TOP_LANE  = 119   -- 120..127 are channel-mode messages
 
--- Continuum CC.jsfx param banks: value sliders, then src/dst/listen codes.
+-- Ctm CC.jsfx param banks: value sliders, then src/dst/listen codes.
 local P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48
 
 local pa = {}

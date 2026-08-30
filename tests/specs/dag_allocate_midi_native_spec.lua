@@ -6,7 +6,7 @@ local DAG = require('DAG')
 -- outBus its producer emit bus; both default 0. JSFX (bracket path) and merge
 -- CUs (synthNodes) are excluded — 3c.3b.2 reads these for native chunk surgery.
 
-local CU_IDENT = 'JS:Continuum Utility'
+local CU_IDENT = 'JS:Ctm Utility'
 
 return {
   {

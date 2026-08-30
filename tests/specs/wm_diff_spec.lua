@@ -87,7 +87,7 @@ return {
       local order = target['guid-A'].fx
       t.eq(#order, 2, 'CU and fx both surface')
       -- CU comes first (it sits upstream of fx on the source track).
-      t.eq(order[1].ident, 'JS:Continuum Utility')
+      t.eq(order[1].ident, 'JS:Ctm Utility')
       t.eq(order[1].id,    '{CU-7}', 'guid resolved from consumer.mergeGuids[trackKey]')
       t.eq(order[1].params.mode,   1, 'merge mode flattened to its slider float')
       t.eq(order[1].params.nPairs, 1)
@@ -102,7 +102,7 @@ return {
       local _, wm = mkWm(harness)
       local mk = function(gain) return {
         ['guid-A'] = { trackKind='sourceTrack', id='guid-A',
-                       fx = { { id='{CU-1}', ident='JS:Continuum Utility',
+                       fx = { { id='{CU-1}', ident='JS:Ctm Utility',
                                params={ mode='gain', gain = gain } } },
                        mainSend = {on=true}, sends = {} },
       } end
@@ -119,7 +119,7 @@ return {
       local _, wm = mkWm(harness)
       local both = {
         ['guid-A'] = { trackKind='sourceTrack', id='guid-A',
-                       fx = { { id='{CU-1}', ident='JS:Continuum Utility',
+                       fx = { { id='{CU-1}', ident='JS:Ctm Utility',
                                params={ mode='gain', gain = 0.5 } } },
                        mainSend = {on=true}, sends = {} },
       }

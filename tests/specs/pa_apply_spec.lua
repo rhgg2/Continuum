@@ -1,4 +1,4 @@
--- pa:apply realises bindings into fakeReaper: a Continuum CC node pinned
+-- pa:apply realises bindings into fakeReaper: a Ctm CC node pinned
 -- at the chain head of both ends, filter/listen banks, plink config on
 -- the target fx, and a bus-126 midi-only send fanning out. The mirror
 -- short-circuit makes a second apply touch nothing; unbinding tears the
@@ -43,14 +43,14 @@ return {
 
       -- source: CC node + filter bank
       t.eq(#r._state.fxByTrack[src], 1, 'CC node added on source')
-      t.eq(namedParm(r, src, 0, 'fx_ident'), 'Continuum CC')
+      t.eq(namedParm(r, src, 0, 'fx_ident'), 'Ctm CC')
       t.eq(r.TrackFX_GetParam(src, 0, P_SRC), 119, 'slot 0 src = (chan-1)*128 + lane')
       t.eq(r.TrackFX_GetParam(src, 0, P_DST), 0,   'slot 0 dst = bus code')
       t.eq(r.TrackFX_GetParam(src, 0, P_SRC + 1), -1, 'slot 1 empty')
 
       -- target: CC node moved to the chain head, synth shifted up
       t.eq(#r._state.fxByTrack[dst], 2)
-      t.eq(namedParm(r, dst, 0, 'fx_ident'), 'Continuum CC', 'CC node at the chain head')
+      t.eq(namedParm(r, dst, 0, 'fx_ident'), 'Ctm CC', 'CC node at the chain head')
       t.eq(r.TrackFX_GetParam(dst, 0, P_LISTEN), 0, 'slot 0 listens to the bus code')
       t.eq(r.TrackFX_GetParam(dst, 0, P_LISTEN + 1), -1)
 
@@ -112,7 +112,7 @@ return {
       h.pa:unautomate(1, lane)
 
       t.eq(#r._state.fxByTrack[dst], 2, 'node survives — still claimed')
-      t.eq(namedParm(r, dst, 0, 'fx_ident'), 'Continuum CC', 'CC node still at the head')
+      t.eq(namedParm(r, dst, 0, 'fx_ident'), 'Ctm CC', 'CC node still at the head')
       t.eq(#r._state.fxByTrack[src], 0, 'source node reaped — pa was its only claim')
     end,
   },

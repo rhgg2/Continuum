@@ -39,8 +39,8 @@ local pinCorrection = nil -- { [guid]=pinMaps } awaiting a post-grow re-assert; 
 local refreshStateTrack   -- assigned below; used by createSourceTrack/instantiateFxOnScratch (defined late)
 
 local SCRATCH_KEY = '__scratch__'  -- scratch's logical trackKey; its guid is rm-owned
-local CU_IDENT    = 'JS:Continuum Utility'
-local CC_IDENT    = 'JS:Continuum CC'  -- paramAutomation's node — invisible to read/diff/apply
+local CU_IDENT    = 'JS:Ctm Utility'
+local CC_IDENT    = 'JS:Ctm CC'  -- paramAutomation's node — invisible to read/diff/apply
 local AUTO_BUS    = 126                -- its CC-propagation bus; sends on it aren't wiring's
 
 local function isJS(ident)
@@ -427,14 +427,14 @@ function wm:showFxWindow(fxId)
   return rm:showFx(fxId)
 end
 
--- A graph node is the Continuum Sampler by its fx display name; the wiring
+-- A graph node is the Ctm Sampler by its fx display name; the wiring
 -- graph is the authority on which takes reach one (legacy: a per-track FX scan).
 function wm:isSamplerNode(node)
   return node ~= nil and node.kind == 'fx' and node.fxDisplay ~= nil
-     and node.fxDisplay:find('Continuum Sampler', 1, true) ~= nil
+     and node.fxDisplay:find('Ctm Sampler', 1, true) ~= nil
 end
 
---contract: true iff track's source node reaches a Continuum Sampler via midi cone; false off-graph
+--contract: true iff track's source node reaches a Ctm Sampler via midi cone; false off-graph
 function wm:samplerReachable(track)
   local sourceId = track and reaper.GetTrackGUID(track)
   local g = self:viewGraph()
@@ -1118,7 +1118,7 @@ local function readGraph(snap, busMeta)
     util.add(edges, e)
   end
 
-  -- MIDI merge CU (utility/Continuum Utility.jsfx @block mode 1): every producer on a
+  -- MIDI merge CU (utility/Ctm Utility.jsfx @block mode 1): every producer on a
   -- masked input bus is rewritten onto outBus; masked buses clear, others pass through.
   local function mergeMidi(live, cu)
     local outBus, masked = cu.outBus, {}

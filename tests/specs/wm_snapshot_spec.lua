@@ -119,8 +119,8 @@ return {
       wm:load()
       local track = seedSourceTrack(h, wm, 'guid-A')
       seedFx(h, track, 'JS:owned',             '{FX-1}')
-      seedFx(h, track, 'JS:Continuum Utility', '{CU-1}')
-      h.reaper:setFxParamNames('JS:Continuum Utility', { 'mode', 'from', 'to' })
+      seedFx(h, track, 'JS:Ctm Utility', '{CU-1}')
+      h.reaper:setFxParamNames('JS:Ctm Utility', { 'mode', 'from', 'to' })
       local ok, err = wm:mutate(function(g)
         g.nodes['f'] = { kind='fx', fxIdent='JS:owned', fxId='{FX-1}', midiInBracketGuid='{CU-1}',
                          pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
@@ -133,7 +133,7 @@ return {
       local idents = {}
       for _, e in ipairs(snap['guid-A'].fx) do idents[e.ident] = e.id end
       t.eq(idents['JS:owned'],             '{FX-1}')
-      t.eq(idents['JS:Continuum Utility'], '{CU-1}')
+      t.eq(idents['JS:Ctm Utility'], '{CU-1}')
     end,
   },
   {

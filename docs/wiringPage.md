@@ -141,7 +141,7 @@ The seven modes:
 Two inputs resolve at the canvas but hold no state, so they are not
 modes:
 
-- **Double-click a node body** dives: a Continuum Sampler node opens the
+- **Double-click a node body** dives: a Ctm Sampler node opens the
   sample page bound to its track (via `diveToSampler`); any other fx node
   floats its REAPER FX window. The first click's no-op body-drag has
   already committed, so a `dblConsumed` flag stops the second press from

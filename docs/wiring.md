@@ -198,7 +198,7 @@ consuming FX's merge CU (see Merge and split).
 
 **Gain lives on native volume when a send can host it.** A gain on a
 wire that compiles to a REAPER send (track→track) or the parent/master
-send needs no Continuum Utility — the send's own `D_VOL` carries it
+send needs no Ctm Utility — the send's own `D_VOL` carries it
 (`DAG`'s `gainHost` names the host). This applies only when that
 send is the *sole* audio contributor (one `D_VOL` can't encode two
 wires' gains) and only for a gain sitting on the boundary wire itself

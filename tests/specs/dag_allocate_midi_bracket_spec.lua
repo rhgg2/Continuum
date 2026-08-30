@@ -4,7 +4,7 @@ local DAG = require('DAG')
 -- Bracket post-pass: BusRoute CU around a non-bus-aware JSFX (reads/writes bus 0 only).
 -- in-park: input→0, -1 silences disconnected recv, parks transit on bus 127; out-park: retores+routes/swallows.
 
-local CU_IDENT = 'JS:Continuum Utility'
+local CU_IDENT = 'JS:Ctm Utility'
 local PARK = 127
 
 -- Stage-2 fixture: two source-tracks each midi-sending into trackKey-c, hitting

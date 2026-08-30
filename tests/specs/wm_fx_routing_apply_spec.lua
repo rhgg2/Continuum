@@ -146,11 +146,11 @@ return {
     name = 'fxRouting/apply: CU bridge JSFX is not patched and not counted',
     run = function(harness)
       -- Edge carries an `ops` payload, so the lowering inserts a CU bridge
-      -- (JS:Continuum Utility) at slot 0; the user fx lands at slot 1. The
+      -- (JS:Ctm Utility) at slot 0; the user fx lands at slot 1. The
       -- VST fx is routing-index 0 and gets patched; CU has no routingBytes.
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
-      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
+      h.reaper:setFxParamNames('JS:Ctm Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
         g.nodes.f = mintFx(wm, 'VST:Foo', nil)
@@ -159,7 +159,7 @@ return {
       end)
       apply(wm)
       local _, slot0Ident = h.reaper.TrackFX_GetFXName(track, 0)
-      t.eq(slot0Ident, 'JS:Continuum Utility', 'CU bridge at slot 0')
+      t.eq(slot0Ident, 'JS:Ctm Utility', 'CU bridge at slot 0')
       t.eq(routingFlag(h, track, 0), nil, 'CU JSFX never patched')
       local fxFlag = routingFlag(h, track, 1)
       t.truthy(fxFlag, 'VST fx routing bytes captured')

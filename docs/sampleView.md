@@ -8,7 +8,7 @@ fact lives elsewhere.
 
 1. Sample mode keys configManager to a REAPER track; the tracker stack
    keys it to a take. The track comes from the toolbar picker, which
-   lists the tracks carrying the Continuum Sampler FX.
+   lists the tracks carrying the Ctm Sampler FX.
 
 1. `samplePage:bind` seeds the first one — the parent of the
    last-active take — and re-asserts the page's track at every later

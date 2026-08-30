@@ -3,7 +3,7 @@
 
 --invariant: ds is sole authority for slot state ({path,start,end,name}); JSFX is a pure consumer
 --invariant: ds holds project-relative paths; sm prepends currentPrefix so JSFX needs no prefix
---invariant: gmem layout mirrors Continuum_Sampler.jsfx; SLOT_BASE/BOOT_BASE constants must stay in lockstep with the JSFX side
+--invariant: gmem layout mirrors Ctm Sampler.jsfx; SLOT_BASE/BOOT_BASE constants must stay in lockstep with the JSFX side
 --invariant: per-instance bundled mailbox at SLOT_BASE+id*SLOT_STRIDE; preview retains its own legacy magic-gated mailbox at PREVIEW_BASE
 --invariant: at most one slot drained per track per tick — keeps last-write-wins consolidation simple
 --invariant: instance ids are persisted via track P_EXT (PEXT_KEY) and mirrored into JSFX slider2 every getInstanceId call
@@ -16,7 +16,7 @@
 local fs   = require 'fs'
 local util = require 'util'
 
-local SAMPLER_FX            = 'Continuum Sampler'
+local SAMPLER_FX            = 'Ctm Sampler'
 local GMEM_NS               = 'Continuum_sampler'
 local MAGIC                 = 1717658484   -- 'CTML' as 32-bit ASCII
 local MAX_INSTANCES         = 128
@@ -27,7 +27,7 @@ local NAME_MAX              = 64
 local SLOT_STRIDE           = 8 + PATH_MAX + NAME_MAX                    -- 1091
 
 local PREVIEW_BASE          = 1024
--- Numbers mirror Continuum_Sampler.jsfx; intermediate strides are no
+-- Numbers mirror Ctm Sampler.jsfx; intermediate strides are no
 -- longer derivable Lua-side.
 local SLOT_BASE             = 561152
 local BOOT_BASE             = SLOT_BASE + MAX_INSTANCES * SLOT_STRIDE    -- 700800

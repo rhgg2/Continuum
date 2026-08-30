@@ -1,4 +1,4 @@
-desc:Continuum Sampler
+desc:Ctm Sampler
 tags: sampler tracker continuum
 version: 0.01
 author: Continuum
@@ -1027,7 +1027,7 @@ gfx_setfont(1, "Arial", 13);
 
 gfx_y = 6; gfx_x = 8;
 pal_shade(1);
-gfx_drawstr("Continuum Sampler");
+gfx_drawstr("Ctm Sampler");
 
 // ---------- Grid ----------
 built_this_tick = 0;

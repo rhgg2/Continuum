@@ -1,5 +1,5 @@
 -- wm:samplerReachable — wiring is the authority on whether a take is a tracker
--- take: does its source track's MIDI cone reach a Continuum Sampler. Replaces
+-- take: does its source track's MIDI cone reach a Ctm Sampler. Replaces
 -- sampleManager's legacy per-track FX scan.
 
 local t    = require('support')
@@ -30,7 +30,7 @@ local function fx(ident, display)
            ports={audio={ins=1, outs=1}, midi={ins=1, outs=1}} }
 end
 
-local function sampler() return fx('JS:Continuum_Sampler', 'Continuum Sampler') end
+local function sampler() return fx('JS:Ctm Sampler', 'Ctm Sampler') end
 
 local function edge(type, from, to) return { type=type, from=from, to=to } end
 

@@ -1,7 +1,7 @@
 # sampleManager
 
 Wire-protocol bridge between the configManager (the authority for slot
-state) and the Continuum Sampler JSFX (a pure consumer of decoded
+state) and the Ctm Sampler JSFX (a pure consumer of decoded
 audio). cm holds the canonical slot table; sm publishes it across the
 gmem boundary, watches for resets on the JSFX side, and re-publishes
 when state was lost.
@@ -61,7 +61,7 @@ re-issues the mailbox for every entry.
 
 Each sampler-bearing track holds a `samplerInstanceId` in track P_EXT,
 allocated lazily by `getInstanceId`. The id partitions the gmem
-bundled-mailbox region so multiple Continuum Sampler instances on the
+bundled-mailbox region so multiple Ctm Sampler instances on the
 same project don't collide.
 
 `getInstanceId` always echoes the resolved id back into JSFX slider2

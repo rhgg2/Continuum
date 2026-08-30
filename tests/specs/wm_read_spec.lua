@@ -3,7 +3,7 @@
 local t    = require('support')
 local util = require('util')
 
-local CU_IDENT = 'JS:Continuum Utility'
+local CU_IDENT = 'JS:Ctm Utility'
 
 local function mkWm(harness)
   local h  = harness.mk()

@@ -35,7 +35,7 @@ end
 -- Default GUID per-track is supplied by fakeReaper; pass guidOverride to
 -- control it.
 local function bindSamplerTrack(h, track, guidOverride)
-  h.reaper:setTrackFX(track, { 'Continuum Sampler' })
+  h.reaper:setTrackFX(track, { 'Ctm Sampler' })
   h.reaper:setProjectTracks({ track })
   if guidOverride then h.reaper:setFxGuid(track, guidOverride) end
   h.cm:setTrack(track)
@@ -160,8 +160,8 @@ return {
     name = 'getInstanceId skips taken ids when assigning a new track',
     run = function(harness)
       local h = harness.mk()
-      h.reaper:setTrackFX('t1', { 'Continuum Sampler' })
-      h.reaper:setTrackFX('t2', { 'Continuum Sampler' })
+      h.reaper:setTrackFX('t1', { 'Ctm Sampler' })
+      h.reaper:setTrackFX('t2', { 'Ctm Sampler' })
       h.reaper:setProjectTracks({ 't1', 't2' })
       h.reaper.GetSetMediaTrackInfo_String('t1', 'P_EXT:samplerInstanceId', '0', true)
       local sm = newSampleManager(mkOps(), h.cm, h.ds)
@@ -659,8 +659,8 @@ return {
     name = 'migrate walks every sampler track, not just the bound one',
     run = function(harness)
       local h = harness.mk()
-      h.reaper:setTrackFX('t1', { 'Continuum Sampler' })
-      h.reaper:setTrackFX('t2', { 'Continuum Sampler' })
+      h.reaper:setTrackFX('t1', { 'Ctm Sampler' })
+      h.reaper:setTrackFX('t2', { 'Ctm Sampler' })
       h.reaper:setProjectTracks({ 't1', 't2' })
       h.cm:setTrack('t1')
       h.ds:assign('slotEntries', { [0] = { path = 'Continuum/a.wav' } })

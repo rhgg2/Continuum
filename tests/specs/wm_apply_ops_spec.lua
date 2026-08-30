@@ -159,7 +159,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       local track = seedSource(h, 'guid-A')
-      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
+      h.reaper:setFxParamNames('JS:Ctm Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s = source('guid-A')
         g.nodes.f = mintFx(wm, 'JS:foo', nil)
@@ -169,7 +169,7 @@ return {
       apply(wm)
       t.eq(h.reaper.TrackFX_GetCount(track), 2, 'CU + fx materialised')
       local _, cuIdent = h.reaper.TrackFX_GetFXName(track, 0)
-      t.eq(cuIdent, 'JS:Continuum Utility')
+      t.eq(cuIdent, 'JS:Ctm Utility')
       local sets = {}
       for _, c in ipairs(h.reaper._state.calls) do
         if c.fn == 'TrackFX_SetParam' and c.track == track and c.fxIdx == 0 then
@@ -385,7 +385,7 @@ return {
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
       seedSource(h, 'guid-B')
-      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
+      h.reaper:setFxParamNames('JS:Ctm Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.sA  = source('guid-A')
         g.nodes.fxA = mintFx(wm, 'JS:a')
@@ -418,7 +418,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       local trackA = seedSource(h, 'guid-A')
-      h.reaper:setFxParamNames('JS:Continuum Utility', CU_PARAMS)
+      h.reaper:setFxParamNames('JS:Ctm Utility', CU_PARAMS)
       wm:mutate(function(g)
         g.nodes.s  = source('guid-A')
         g.nodes.f1 = mintFx(wm, 'JS:f1')

@@ -26,10 +26,10 @@ return {
     end,
   },
   {
-    name = 'nodeView.activate = "sampler" when fxDisplay names the Continuum Sampler',
+    name = 'nodeView.activate = "sampler" when fxDisplay names the Ctm Sampler',
     run = function(harness)
       local _, wv = mkWv(harness)
-      local id = wv:addFx(0, 0, { name = 'Continuum Sampler', ident = 'VST3:Continuum Sampler' })
+      local id = wv:addFx(0, 0, { name = 'Ctm Sampler', ident = 'VST3:Ctm Sampler' })
       t.truthy(id)
       t.eq(viewById(wv, id).activate, 'sampler', 'sampler dives to the sample page')
     end,

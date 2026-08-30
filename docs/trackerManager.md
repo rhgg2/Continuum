@@ -917,7 +917,7 @@ the reconciliation.
 
 `trackerMode` itself is wiring-derived, not a per-frame probe: on each
 `bindTake` the page asks `wm:samplerReachable(take.track)` — does the
-take's MIDI cone reach a Continuum Sampler — and seeds the transient
+take's MIDI cone reach a Ctm Sampler — and seeds the transient
 tier inside the bind's suppression window. So the mode tracks the
 *bound* take, never lagging on the arrange cursor mid-navigation (the
 bug that leaked synthetic PCs onto a non-tracker take's note-ons).

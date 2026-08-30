@@ -1,14 +1,14 @@
 -- ccManager.lua
--- Owns the per-track Continuum CC node (Continuum CC.jsfx): resolve, pin at head, reap.
+-- Owns the per-track Ctm CC node (Ctm CC.jsfx): resolve, pin at head, reap.
 
 --invariant: the node exists iff a producer claims it; release reaps it when the last claim drops
 --shape: claims = { [producer:str] = { [trackGuid:str] = MediaTrack } }
 --contract: claim pins the node at index 0, records the producer's claim, returns 0
 --contract: release drops the claim; returns the surviving node index, or nil if it reaped/absent
---reaper: TrackFX_AddByName/CopyToTrack/Delete; node = fx_type JS with fx_ident 'Continuum CC'
+--reaper: TrackFX_AddByName/CopyToTrack/Delete; node = fx_type JS with fx_ident 'Ctm CC'
 
-local CC_ADDNAME = 'JS:Continuum CC'  -- TrackFX_AddByName argument
-local CC_IDENT   = 'Continuum CC'     -- parsed fx_ident, matched on lookup
+local CC_ADDNAME = 'JS:Ctm CC'  -- TrackFX_AddByName argument
+local CC_IDENT   = 'Ctm CC'     -- parsed fx_ident, matched on lookup
 
 local ccm = {}
 local claims = {}   -- producer -> { guid -> track }
@@ -30,7 +30,7 @@ function ccm:claim(producer, track)
   local idx = nodeIndex(track)
   if not idx then
     idx = reaper.TrackFX_AddByName(track, CC_ADDNAME, false, -1)
-    if idx < 0 then error('ccManager: Continuum CC.jsfx not found in Effects') end
+    if idx < 0 then error('ccManager: Ctm CC.jsfx not found in Effects') end
   end
   if idx ~= 0 then
     reaper.TrackFX_CopyToTrack(track, idx, track, 0, true)

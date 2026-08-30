@@ -30,22 +30,12 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+**`dirt.lua` and its join verb** — the journal leaves trackerManager as a
+state machine: `join` is the sole write, the gates and the swing flag are
+queries, and no caller sees `dirtyChans`. The two hand-written joins that
+are wrong (the tail emission's missing cap, the reload fold's assign over
+standing seeds) collapse into the verb. The two queued items merged, and
+it is implemented directly, without a brief. (design § Phase 2)
 
 ## Queued (current phase; one-liners)
 
-1. **The join verb.** One write verb over the dirt lattice,
-   `join(chan, dirt)`, taking `true`, a seed or a seed list, with the
-   wholesale cap enforced in one place. It subsumes `dirtyChan` and
-   `seedDirty`, and replaces the two hand-written joins that are wrong:
-   the tail walk's emission carries a seed list past the cap forever,
-   and `absorbReloadDirt`'s fold assigns its deduped list over standing
-   seed dirt. Red-first on both, the cap case in `tm_tail_gating_spec`.
-
-1. **`dirt.lua`.** The journal leaves trackerManager: `dirtyChans`,
-   `staleSwing`, the join, the per-channel read the stage gates branch
-   on, the mid-pipeline `staleSwing` clear, and `wipe` returning the
-   channels it consumed for the mute-conform sweep. The module requires
-   nothing. The seed minters, `seedCovers`/`seedRowsFor` and
-   `clearSwing` stay with the structures they read, and gate parity pins
-   the move green.
