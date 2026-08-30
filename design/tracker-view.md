@@ -17,7 +17,7 @@ commits touch it. Second on both axes, with a steep cliff below it to
 `trackerRender.lua` at 1550.
 
 **2** The tempting diagnosis is the one that worked next door.
-`design/tracker-manager-split.md` § The problem argues that tm is long
+`design/tracker-manager-split.md` § Length and coupling argues that tm is long
 because it holds several tenants rather than because it is tangled, and
 offers a test: every large section already exports exactly one name.
 Apply that test to tv and it fails four times in five. The editing block
