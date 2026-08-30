@@ -20,7 +20,7 @@ local cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta, lib, keyQue
 local function arrange() return facade.get('arrange') end
 
 -- trackerMode is wiring-derived per bind, not a per-frame probe — follows the bound
--- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis under trackerMode.
+-- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis.
 local function samplerMode(take)
   local track = take and arrange().ownerTrack(take)
   return (track and facade.get('wiring').samplerReachable(track)) or false

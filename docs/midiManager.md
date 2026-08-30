@@ -31,7 +31,7 @@ and an `eventMeta` bucket in the project. That price is worth paying for anythin
 a user authored and expects to survive a round trip, and worth paying for nothing
 else — and "nothing else" is most of a dense pb stream. `rebuildPbs` resynthesises
 absorber seats wholesale every rebuild and recognises the last rebuild's by
-*window*, not by id (docs/trackerManager.md § Route-by-window). Those seats want to
+*window*, not by id (docs/generators.md § Route-by-window). Those seats want to
 be plain native MIDI, and they are.
 
 What they still need is to be addressable while they live. Identity and

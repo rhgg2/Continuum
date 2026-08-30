@@ -100,7 +100,7 @@ local function sortByPPQ(tbl)
 end
 
 -- Total order for the raw working set: raw tick, then logical seat (ppqL, falling back to raw
--- pre-seating), authored-before-generated, lane, then pitch. See docs/trackerManager.md § Update manager.
+-- pre-seating), authored-before-generated, lane, then pitch. See docs/trackerManager.md § Update manager (um).
 local function rawThenLogical(a, b)
   if a.ppq ~= b.ppq then return a.ppq < b.ppq end
   local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
@@ -1551,7 +1551,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
 
       -- Same-pitch moves transiently share a seat key. assignNote's guard keeps the index correct in
-      -- either order; descending only spares the backstop a scan. see docs/trackerManager.md § Commit ordering
+      -- either order; descending only spares the backstop a scan. see docs/trackerManager.md § Same-pitch onset separation
       table.sort(flushAssigns, function(a, b)
         return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
       end)
@@ -2314,7 +2314,7 @@ local function projectCC(cc, overlay)
 end
 
 -- Columns are logical-born: each build site flips its events with this as it seats them; the
--- tail walk re-stamps movers' delayC/endppqC. see docs/trackerManager.md § Rebuild: logical projection
+-- tail walk re-stamps movers' delayC/endppqC. see docs/trackerManager.md § Logical projection
 --contract: every column event arrives stamped -- CC walk anchors foreign cc; externals, notes
 local function projectEvent(evt, chan)
   if evt.ppqL ~= nil then
@@ -2465,7 +2465,7 @@ local function exciseNotes(chan, rows, claims)
 end
 
 -- Partition mm notes stamped/external, lay internal columns logical-born, reseat stale-swing.
--- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
+-- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Partition and internal lanes
 --contract: interval dirt: non-derived notes carry ppqL -- an external mutation reloads wholesale
 local function rebuildInternals()
   local internal, external = {}, {}
@@ -2593,7 +2593,7 @@ local function spliceCcCell(live, ccWrites)
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
--- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § Rebuild: CC walk.
+-- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § CC walk.
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
@@ -2669,7 +2669,7 @@ local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
 end
 
 -- Wholesale / stale-swing path: re-derive a channel's whole cc/at/pc stream from mm. Verbatim from the
--- pre-splice CC walk; interval dirt takes spliceChannelCCs. see docs/trackerManager.md § Rebuild: CC walk
+-- pre-splice CC walk; interval dirt takes spliceChannelCCs. see docs/trackerManager.md § CC walk
 local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExisting)
   for _, cc in mm:ccsRaw(chan) do
     local uuid = cc.uuid
@@ -2682,7 +2682,7 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
     end
 
     -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
-    -- Markerless pb seats in a prior window skip it (inclusive end). see docs/trackerManager.md § Rebuild: CC walk
+    -- Markerless pb seats in a prior window skip it (inclusive end). see docs/trackerManager.md § CC walk
     local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq)
     local movedPpq, movedPpqL
     if not cc.derived and not pbSeat then
@@ -2727,7 +2727,7 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
 end
 
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
--- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
+-- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § CC walk
 local function rebuildCCs(prevWindows)
   local ccWrites = mmBatch()
   local ccExisting = emptyChans()
@@ -2789,7 +2789,7 @@ end
 ----- Rebuild externals
 
 -- Lane packing for one externals pass. Overlap tests are realised-time, but columns are logical by
--- now -- so occupancy is um's raw index plus this pass's placements. see docs/trackerManager.md § Rebuild: externals
+-- now -- so occupancy is um's raw index plus this pass's placements. see docs/trackerManager.md § Externals
 local function externalLanePacker(external)
   local lenient = cm:get('overlapOffset') * mm:resolution()
   local onsetI  = {}   -- [evt] = intent-frame onset; an event's never moves while the pass runs
@@ -2888,7 +2888,7 @@ local function externalLanePacker(external)
 end
 
 -- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, project, tag `fixed`;
--- block window + tail passes. see docs/trackerManager.md § Rebuild: externals
+-- block window + tail passes. see docs/trackerManager.md § Externals
 local function rebuildExternals(external)
   if #external == 0 then return end
 
@@ -3320,7 +3320,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
   persistParked('fxParked', allParked, fxParked)
   batch.commit()
   -- Seat-stamp each restored cell like any other seat, now the commit lands it in mm; bare write,
-  -- no setCell -- see docs/trackerManager.md § Note entries also carry colEvt.
+  -- no setCell -- see docs/trackerManager.md § Incremental index reconciliation.
   for _, cell in ipairs(restoredCells) do
     if stampColEvt(cell) then cell.realised = true end
   end
@@ -3504,7 +3504,7 @@ end
 -- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
 local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
-  -- directly); the writers seat in order and nothing since reorders. see docs § Rebuild: logical projection
+  -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
 
   -- fxWindow's keys are exactly the non-pa fx cells (computeFxWindows emitted them, on-take + restored);
   -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads producers instead of rescanning columns.
@@ -3936,7 +3936,7 @@ end
 ----- Rebuild tails
 
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
--- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
+-- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
 --contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
 -- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
 -- their batches and marking tables and drive the same rules over their own state.
@@ -3969,7 +3969,7 @@ local function makeTailRules(ctx)
                     or e.endppqL and tm:fromLogical(chan, e.endppqL)
                     or math.huge
     -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
-    -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
+    -- but the lane geometry still does. See docs/trackerManager.md § Tail walk.
     local laneAnchor = laneNext
     if onTake then
       local parked = parkedBoundFor(e)
@@ -3980,7 +3980,7 @@ local function makeTailRules(ctx)
       or math.huge
     local pitchClip = pitchNext and pitchNext.ppq or math.huge
     -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
-    -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Rebuild: tail walk
+    -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Tail walk
     local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
     local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
     local rounded   = util.round(rawBound)
@@ -4001,7 +4001,7 @@ local function makeTailRules(ctx)
 end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
--- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Rebuild: tail walk
+-- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Tail walk
 local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
@@ -4015,7 +4015,7 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   -- seed positions (dead seeds included) plus every disturbed onset, added below.
   local anchors = {}
   -- A kept fx spec (gate-verbatim, unchanged since last pass) is already settled and clipped: it
-  -- rides as a bound anchor only, never a fresh disturbance. see docs/trackerManager.md § Rebuild: tail walk
+  -- rides as a bound anchor only, never a fresh disturbance. see docs/trackerManager.md § Tail walk
   for _, e in ipairs(notes) do if e.derived and not keptDerived[e] then disturbed[e] = true end end
   if dirt == true then
     for _, e in ipairs(notes) do disturbed[e] = true end   -- degenerate pass: load, external change
