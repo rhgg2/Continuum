@@ -1515,18 +1515,17 @@ local stripPlan do
   -- A bypassed stage dims its *labels* only. BeginDisabled would block the mouse while the keyboard
   -- path (adjustRow → tv:setFxField) sailed past it, and the A/B gesture wants the stage editable.
   local function withDim(dim, fn)
-    if dim then ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('tracker.inactive')) end
-    fn()
-    if dim then ImGui.PopStyleColor(ctx, 1) end
+    if dim then chrome.styled({ colours = { Text = 'tracker.inactive' } }, fn)
+    else fn() end
   end
 
   -- Per-stage bypass, riding the header cluster beside `del`. Idle it inherits the row's text
   -- colour; lit it borrows the wiring page's bypass tint so the two bypasses read alike.
   local function drawBypassBadge(host, col)
-    if col.bypass then ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('tracker.fx.bypassed')) end
+    local lit = col.bypass and chrome.pushStyle{ colours = { Text = 'tracker.fx.bypassed' } }
     -- No clickToCursor: applies live without entering the session, like del/↑/↓ and value edits.
     if ImGui.Button(ctx, 'byp##fxbyp' .. col.index) then tv:setFxBypass(host, col.index, not col.bypass) end
-    if col.bypass then ImGui.PopStyleColor(ctx, 1) end
+    if lit then chrome.popStyle(lit) end
   end
 
   -- One stage as tree rows: heading (swap-picker) with ↑/↓ reorder + del, then a field per row —
@@ -1786,9 +1785,9 @@ function tr:renderBody(_, w, h, dispatch)
   if #tv.grid.cols == 0 then
     if dispatch then dispatch(self:focusState()) end
     ImGui.PushFont(ctx, uiFont, gui.fontSize.ui)
-    ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('text'))
-    ImGui.Text(ctx, 'No MIDI takes on this track.')
-    ImGui.PopStyleColor(ctx)
+    chrome.styled({ colours = { Text = 'text' } }, function()
+      ImGui.Text(ctx, 'No MIDI takes on this track.')
+    end)
     ImGui.PopFont(ctx)
     return
   end

@@ -241,9 +241,10 @@ local function drawSlots()
     ImGui.SetCursorPosX(ctx, ImGui.GetCursorPosX(ctx) + aw - tw)
     ImGui.TextDisabled(ctx, numStr)
     ImGui.TableSetColumnIndex(ctx, 1)
-    local selCol = isSelected and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
-    ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, selCol)
-    ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  selCol)
+    -- The lit fill is ImGui's own resolved Header colour, not a palette entry, so it
+    -- is minted as a token rather than passed as a bare int.
+    local selCol = isSelected and { u32 = ImGui.GetStyleColor(ctx, ImGui.Col_Header) } or chrome.CLEAR
+    local rowInk = chrome.pushStyle{ colours = { HeaderHovered = selCol, HeaderActive = selCol } }
     local entry   = entries[idx]
     if rename and rename.slot == idx then
       if rename.justOpened then ImGui.SetKeyboardFocusHere(ctx) end
@@ -277,7 +278,7 @@ local function drawSlots()
         if ImGui.IsMouseDoubleClicked(ctx, 0) then sv:auditionSlot(idx) end
       end
     end
-    ImGui.PopStyleColor(ctx, 2)
+    chrome.popStyle(rowInk)
   end
   ImGui.EndTable(ctx)
 end
@@ -465,7 +466,7 @@ function sr:renderBody(_, w, h, dispatch)
   local folder = sv:getCurrentFolder() or root
   local isLive = sv:isLive()
 
-  ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('bg'))
+  local bodyInk = chrome.pushStyle{ colours = { ChildBg = 'bg' } }
 
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
@@ -569,7 +570,7 @@ function sr:renderBody(_, w, h, dispatch)
 
   if dispatch then dispatch(self:focusState()) end
   ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_Arrow)
-  ImGui.PopStyleColor(ctx, 1)
+  chrome.popStyle(bodyInk)
 end
 
 local function slotReadout()

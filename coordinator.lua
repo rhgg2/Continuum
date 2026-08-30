@@ -62,6 +62,15 @@ local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 -- edge, where a cell padded to the toolbar's 4px is awkward to put a pointer on.
 local STATUS_PAD_X, STATUS_PAD_Y = CHROME_PAD_X + 5, 7
 
+-- The window's own furniture, laid under everything a page draws.
+local FRAME_INK = {
+  WindowBg      = 'bg',
+  TitleBg       = 'toolbar.bg',
+  TitleBgActive = 'toolbar.bg',
+  ScrollbarBg   = 'scrollBg',
+  ScrollbarGrab = 'scrollHandle',
+}
+
 local pages, active, previous = {}, nil, nil
 local lastToolbarActive = nil   -- last page measured; a switch re-pins the band height
 local bootSettled   = false  -- latched once boot transients (fonts, window width) settle
@@ -87,15 +96,15 @@ end
 local function drawSwitcher()
   local function pageButton(label, name)
     local isActive = active == name
-    if isActive then
-      -- Match hover to the active fill so a selected button stays put on hover.
-      ImGui.PushStyleColor(ctx, ImGui.Col_Button,        chrome.colour('toolbar.buttonActive'))
-      ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, chrome.colour('toolbar.buttonActive'))
-    end
+    -- Match hover to the active fill so a selected button stays put on hover.
+    local lit = isActive and chrome.pushStyle{ colours = {
+      Button        = 'toolbar.buttonActive',
+      ButtonHovered = 'toolbar.buttonActive',
+    } }
     if ImGui.Button(ctx, label) and not isActive then
       cmgr:invoke('switchPage', name)
     end
-    if isActive then ImGui.PopStyleColor(ctx, 2) end
+    if lit then chrome.popStyle(lit) end
   end
   pageButton('A', 'arrange')
   ImGui.SameLine(ctx, 0, 4)
@@ -176,13 +185,9 @@ local function frame()
   local page = pages[active]
 
   ImGui.PushFont(ctx, uiFont, uiSize)
-  ImGui.PushStyleColor(ctx, ImGui.Col_WindowBg,     chrome.colour('bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBg,      chrome.colour('toolbar.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive,chrome.colour('toolbar.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ScrollbarBg,  chrome.colour('scrollBg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ScrollbarGrab,chrome.colour('scrollHandle'))
+  local frameInk = chrome.pushStyle{ colours = FRAME_INK }
 
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 0, 0)
+  local windowPad = chrome.pushStyle{ vars = { WindowPadding = { 0, 0 } } }
   if focusFrames > 0 then
     ImGui.SetNextWindowFocus(ctx)              -- ImGui-internal focus; must precede Begin
     if myHwnd then reaper.JS_Window_SetForeground(myHwnd) end   -- the OS-level focus grab
@@ -194,7 +199,7 @@ local function frame()
     | ImGui.WindowFlags_NoDocking
     | ImGui.WindowFlags_NoNav
     | ImGui.WindowFlags_NoMove)
-  ImGui.PopStyleVar(ctx)
+  chrome.popStyle(windowPad)
   -- Active-item drags (e.g. the lane strip's curve editor) can otherwise
   -- accumulate auto-scroll on the parent window, pushing the grid below
   -- the visible region for the duration of the drag.
@@ -217,11 +222,11 @@ local function frame()
     -- auto-resizes to fit. See docs/coordinator.md § Toolbar band height.
     local function drawToolbarRow()
       chrome.pushChromeStyles()
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 6, 2)
-      local segs = { switcherSeg, masterMix.segment }
-      for _, s in ipairs(page:toolbarSegments()) do util.add(segs, s) end
-      toolbar(segs)
-      ImGui.PopStyleVar(ctx, 1)
+      chrome.styled({ vars = { FramePadding = { 6, 2 } } }, function()
+        local segs = { switcherSeg, masterMix.segment }
+        for _, s in ipairs(page:toolbarSegments()) do util.add(segs, s) end
+        toolbar(segs)
+      end)
       chrome.popChromeStyles()
     end
 
@@ -230,28 +235,31 @@ local function frame()
     if active ~= lastToolbarActive then
       lastToolbarActive = active
       local sx, sy = ImGui.GetCursorScreenPos(ctx)
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_Alpha, 0)
-      ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X, CHROME_PAD_Y)
+      local measure = chrome.pushStyle{ vars = {
+        Alpha         = 0,
+        WindowPadding = { CHROME_PAD_X, CHROME_PAD_Y },
+      } }
       if ImGui.BeginChild(ctx, '##toolbarMeasure', 0, 0,
                           ImGui.ChildFlags_AutoResizeY | ImGui.ChildFlags_AlwaysUseWindowPadding,
                           ImGui.WindowFlags_NoScrollbar | ImGui.WindowFlags_NoNav) then
         drawToolbarRow()
       end
       ImGui.EndChild(ctx)
-      ImGui.PopStyleVar(ctx, 2)
+      chrome.popStyle(measure)
       ImGui.SetCursorScreenPos(ctx, sx, sy)
     end
 
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
-    local rowH = ImGui.GetFrameHeight(ctx)
-    ImGui.PopStyleVar(ctx, 1)
+    local rowH = chrome.styled({ vars = { FramePadding = { 9, 2 } } },
+                               function() return ImGui.GetFrameHeight(ctx) end)
     local _, spacingY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
     local lines       = chrome.toolbarLineCount()
     local bandH       = lines * rowH + (lines - 1) * spacingY
 
     chrome.resetPickerActive()
-    ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('toolbar.bg'))
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, CHROME_PAD_X, CHROME_PAD_Y)
+    local toolbarBand = chrome.pushStyle{
+      colours = { ChildBg = 'toolbar.bg' },
+      vars    = { WindowPadding = { CHROME_PAD_X, CHROME_PAD_Y } },
+    }
     ImGui.SetNextWindowContentSize(ctx, 0, bandH)
     if ImGui.BeginChild(ctx, '##toolbar', 0, 0,
                         ImGui.ChildFlags_AutoResizeY | ImGui.ChildFlags_AlwaysUseWindowPadding,
@@ -259,8 +267,7 @@ local function frame()
       drawToolbarRow()
     end
     ImGui.EndChild(ctx)
-    ImGui.PopStyleVar(ctx)
-    ImGui.PopStyleColor(ctx)
+    chrome.popStyle(toolbarBand)
 
     -- Body region: reserve a fixed footer for the status bar; the
     -- page paints into the remaining viewport at (CHROME_PAD_X,
@@ -281,17 +288,17 @@ local function frame()
     -- Status band pinned to (toolbarBottom + bodyH); the parchment
     -- gap above is the leftover.
     ImGui.SetCursorPosY(ctx, cursorY + bodyH)
-    ImGui.PushStyleColor(ctx, ImGui.Col_ChildBg, chrome.colour('statusBar.bg'))
-    ImGui.PushStyleColor(ctx, ImGui.Col_Text,    chrome.colour('statusBar.text'))
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, STATUS_PAD_X, STATUS_PAD_Y)
+    local statusBand = chrome.pushStyle{
+      colours = { ChildBg = 'statusBar.bg', Text = 'statusBar.text' },
+      vars    = { WindowPadding = { STATUS_PAD_X, STATUS_PAD_Y } },
+    }
     if ImGui.BeginChild(ctx, '##statusBar', 0, footerH,
                         ImGui.ChildFlags_AlwaysUseWindowPadding,
                         ImGui.WindowFlags_NoScrollbar) then
       statusBar(page:statusSegments())
     end
     ImGui.EndChild(ctx)
-    ImGui.PopStyleVar(ctx)
-    ImGui.PopStyleColor(ctx, 2)
+    chrome.popStyle(statusBand)
   end
 
   if visible then help:draw() end
@@ -299,7 +306,7 @@ local function frame()
 
   ImGui.End(ctx)
 
-  ImGui.PopStyleColor(ctx, 5)
+  chrome.popStyle(frameInk)
   ImGui.PopFont(ctx)
 
   if open and not quitting then reaper.defer(function() xpcall(frame, errHandler) end) end
@@ -321,8 +328,12 @@ end
 
 --contract: setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
 --contract: tracker's no-arg bind resolves its stored selection; renderBody keeps it current
+--contract: an unregistered name raises with nothing unbound — a half-swapped coordinator
+--            names a page that isn't there, and the next frame draws through the hole
 function coord:setActive(name)
   if active == name then return true end
+  local incoming = pages[name]
+      or error('coordinator: no page registered as ' .. tostring(name))
   -- The menu's scope sits above the page's, and travel passes through the walk: it comes
   -- off the stack before the page's does. See docs/menu.md § A modal scope.
   menu:close()
@@ -335,7 +346,7 @@ function coord:setActive(name)
   active = name
   help:setPage(name)
   cmgr:push(name)
-  pages[name]:bind()
+  incoming:bind()
   return true
 end
 

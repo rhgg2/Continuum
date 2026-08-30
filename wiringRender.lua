@@ -237,14 +237,13 @@ end
 -- Callers do their own hover test: the flags differ between the sites.
 local function tooltipAt(sx, sy, text)
   ImGui.SetNextWindowPos(ctx, sx, sy, ImGui.Cond_Always, 0.5, 1.0)
-  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg, chrome.colour('wiring.tooltip.bg'))
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 4, 2)
-  if ImGui.BeginTooltip(ctx) then
-    ImGui.Text(ctx, text)
-    ImGui.EndTooltip(ctx)
-  end
-  ImGui.PopStyleVar(ctx, 1)
-  ImGui.PopStyleColor(ctx, 1)
+  chrome.styled({ colours = { PopupBg = 'wiring.tooltip.bg' },
+                  vars    = { WindowPadding = { 4, 2 } } }, function()
+    if ImGui.BeginTooltip(ctx) then
+      ImGui.Text(ctx, text)
+      ImGui.EndTooltip(ctx)
+    end
+  end)
 end
 
 -- A port-row slot: audio square or keyboard icon, an InvisibleButton (padded
@@ -2413,14 +2412,14 @@ end
 -- slot dropped when ImGui reports it closed. The caller positions the window.
 local function popupShell(slot, id, flags, body)
   chrome.pushChromeWindow()
-  ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('separator'))
-  if ImGui.BeginPopup(ctx, id, flags) then
-    body()
-    ImGui.EndPopup(ctx)
-  else
-    popups[slot] = nil
-  end
-  ImGui.PopStyleColor(ctx, 1)
+  chrome.styled({ colours = { Border = 'separator' } }, function()
+    if ImGui.BeginPopup(ctx, id, flags) then
+      body()
+      ImGui.EndPopup(ctx)
+    else
+      popups[slot] = nil
+    end
+  end)
   chrome.popChromeWindow()
 end
 
@@ -2546,10 +2545,7 @@ local function renderCanvas(w, h)
   ImGui.Dummy(ctx, w, h)
 end
 
-local function pushBodyStyles()
-  ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('text'))
-end
-local function popBodyStyles() ImGui.PopStyleColor(ctx, 1) end
+local BODY_INK = { colours = { Text = 'text' } }
 
 ----- Palette pane
 
@@ -2661,27 +2657,26 @@ end
 --contract: body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.
 function wr:renderBody(_, w, h, dispatch)
   if not ctx then return end
-  pushBodyStyles()
+  chrome.styled(BODY_INK, function()
+    local ox, oy  = ImGui.GetCursorScreenPos(ctx)
+    local canvasW = chrome.gridWidth(w)
+    help:anchor('body', ox, oy, w, h)
+    if ImGui.BeginChild(ctx, '##wiringCanvas', canvasW, h,
+                        ImGui.ChildFlags_None,
+                        ImGui.WindowFlags_NoNav
+                        | ImGui.WindowFlags_NoScrollbar
+                        | ImGui.WindowFlags_NoScrollWithMouse) then
+      renderCanvas(canvasW, h)
+    end
+    ImGui.EndChild(ctx)
 
-  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
-  local canvasW = chrome.gridWidth(w)
-  help:anchor('body', ox, oy, w, h)
-  if ImGui.BeginChild(ctx, '##wiringCanvas', canvasW, h,
-                      ImGui.ChildFlags_None,
-                      ImGui.WindowFlags_NoNav
-                      | ImGui.WindowFlags_NoScrollbar
-                      | ImGui.WindowFlags_NoScrollWithMouse) then
-    renderCanvas(canvasW, h)
-  end
-  ImGui.EndChild(ctx)
+    chrome.palettePane{
+      x = ox + canvasW, y = oy, h = h,
+      label = 'sources',
+      draw  = renderPaletteBody,
+    }
+  end)
 
-  chrome.palettePane{
-    x = ox + canvasW, y = oy, h = h,
-    label = 'sources',
-    draw  = renderPaletteBody,
-  }
-
-  popBodyStyles()
   if dispatch then dispatch(self:focusState()) end
 end
 

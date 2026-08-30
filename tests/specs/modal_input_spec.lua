@@ -42,7 +42,7 @@ for _, name in ipairs({ 'Text', 'EndPopup', 'SetNextWindowPos', 'SetNextWindowSi
   fakeImGui[name] = function() end
 end
 
-local fakeChrome = {
+local fakeChrome = t.styleScopes{
   colour           = function() return 0 end,
   pushChromeWindow = function() end,
   popChromeWindow  = function() end,

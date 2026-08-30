@@ -12,6 +12,20 @@ Colours are looked up by name via `cm:get('colour.<name>')`. An entry can be an 
 
 The resolved U32 values are cached on the chrome instance and flushed on `configChanged`.
 
+## Style scopes
+
+A **style scope** is a set of ImGui style pushes together with the handle that closes them. `pushStyle` takes a spec and returns the handle, `popStyle` unwinds what that handle laid down, and `styled` brackets a body between the two so an early return inside it cannot skip the pop.
+
+1. ImGui pops its style stacks by count, and the count is a property of the push site. Spelled out at both ends it is maintained by hand, and the pops this replaced ran as high as seventeen. The handle carries it instead, so the count has one source.
+
+1. A spec names its slots bare: `FrameBg`, not `ImGui.Col_FrameBg`. Which of the two stacks a slot belongs to follows from the sub-table it sits in, so `colours` and `vars` travel in one spec.
+
+1. A colour is a name resolved through `chrome.colour`, or a `{u32}` token for one that is computed. A bare int raises. `painter` holds this discipline on the drawlist side, and `PushStyleColor` was the widget-side hole in it; see `docs/painter.md § Colour by name only`.
+
+1. The colour and var stacks are independent, so scopes need not nest across the two. A popup pushes its padding and its ink together before `Begin`, then drops the padding alone so interior widgets pad normally. That is two scopes with two handles.
+
+1. `pushChromeStyles` and `pushChromeWindow` bracket across call sites, so `styled` cannot serve them and their handles live on a stack in chrome. The stack is LIFO: a window scope opens inside the chrome scope that pushed it, and closes before it.
+
 ## Screen-space drawing
 
 `chrome.screenPainter()` is the reach for drawlist work in screen space: an identity-transform painter over the current window's draw list, so a caller names its colours as every other painter does. Raw `GetWindowDrawList` and `DrawList_Add*` take integers where chrome takes names, and code written against them leaves the palette behind. The draw list is captured when the painter is built, so build one per draw function and call it in the window it paints.
@@ -124,7 +138,9 @@ against the toolbar's ink and the status bar's alike.
 1. A picker popup pushes its own ink, since the two bands it opens from carry
    opposite text colours and only the toolbar's styles are ambient. The values
    are the ones `pushChromeStyles` holds, so a toolbar picker is unchanged. The
-   push goes before `BeginPopup`, which is where a window's fill is taken.
+   push goes before `BeginPopup`, which is where a window's fill is taken, and it
+   is a scope of its own so the popup's padding can close at `Begin` while the ink
+   stays open across the body.
 
 1. A pick cell hands its rect to `drawPicker`, which draws its own button and
    owns the popup. The well arrives as that button's fill rather than as a rect

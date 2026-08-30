@@ -243,9 +243,9 @@ local function newTrackerPage(cm, ds, cmgr, chrome, gui, help)
       modalHost = fakeModalHost, help = help, facade = fakeFacade, keyQueue = pageKeyQueue })
 end
 
--- Chrome for a modal body: the house widgets report nothing touched, and the two taking a
+-- Chrome for a modal body: the house widgets report nothing touched, and the ones taking a
 -- function run it, so the controls behind them draw.
-local modalChrome = {
+local modalChrome = t.styleScopes{
   colour         = function() return 0 end,
   radio          = function() return false end,
   drawPicker     = function() end,
@@ -2094,7 +2094,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.reaper:setProjectTracks{ 'tr1' }
-      local fakeChrome = { colour = function() return 0 end }
+      local fakeChrome = t.styleScopes{ colour = function() return 0 end }
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, fakeChrome, { fontSize = { ui = 13 } })
       fakeArrange.slotsByIdx[0] = {}        -- the track has no slots
       local origText, shown = rawget(fakeImGui, 'Text')

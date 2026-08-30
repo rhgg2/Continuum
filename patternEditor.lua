@@ -395,21 +395,22 @@ local miniFocus = { acceptCmds = true, pageSuppressed = false, claimant = 'modal
 -- Mini toolbar: a copy of the tracker RPB ticker plus Commit/Cancel.
 -- see docs/patternEditor.md § Write-through commit for the button/pendingAction handoff.
 local function drawToolbar()
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 6, 2)   -- match the main toolbar's element height (coordinator pushes the same)
-  ImGui.AlignTextToFramePadding(ctx)
-  chrome.headingLabel('RPB')
-  ImGui.SameLine(ctx, 0, 8)
-  local changed, n = chrome.numberStepper('rpb', cm:get('rowPerBeat'), { min = 1, max = 32, align = 'center' })
-  if changed then tv:setRowPerBeat(n) end
-  ImGui.SameLine(ctx, 0, 12); chrome.verticalSeparator(); ImGui.SameLine(ctx, 0, 12)
-  if ImGui.Button(ctx, 'Commit##peCommit') then pendingAction = 'commit' end
-  ImGui.SameLine(ctx, 0, 6)
-  if ImGui.Button(ctx, 'Cancel##peCancel') then pendingAction = 'cancel' end
-  ImGui.SameLine(ctx, 0, 12); chrome.verticalSeparator(); ImGui.SameLine(ctx, 0, 12)
-  drawSave()
-  ImGui.SameLine(ctx, 0, 6)
-  drawLoad()
-  ImGui.PopStyleVar(ctx, 1)
+  -- match the main toolbar's element height (coordinator pushes the same)
+  chrome.styled({ vars = { FramePadding = { 6, 2 } } }, function()
+    ImGui.AlignTextToFramePadding(ctx)
+    chrome.headingLabel('RPB')
+    ImGui.SameLine(ctx, 0, 8)
+    local changed, n = chrome.numberStepper('rpb', cm:get('rowPerBeat'), { min = 1, max = 32, align = 'center' })
+    if changed then tv:setRowPerBeat(n) end
+    ImGui.SameLine(ctx, 0, 12); chrome.verticalSeparator(); ImGui.SameLine(ctx, 0, 12)
+    if ImGui.Button(ctx, 'Commit##peCommit') then pendingAction = 'commit' end
+    ImGui.SameLine(ctx, 0, 6)
+    if ImGui.Button(ctx, 'Cancel##peCancel') then pendingAction = 'cancel' end
+    ImGui.SameLine(ctx, 0, 12); chrome.verticalSeparator(); ImGui.SameLine(ctx, 0, 12)
+    drawSave()
+    ImGui.SameLine(ctx, 0, 6)
+    drawLoad()
+  end)
 end
 
 --contract: draw pass -- toolbar row, grid fills the region below; popup sizes to fit

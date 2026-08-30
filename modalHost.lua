@@ -73,18 +73,20 @@ function modalHost:draw()
 
   chrome.pushChromeWindow()
   -- A modal is always the focused window, so only the *Active title slot shows.
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive, chrome.colour('modal.titleBg'))
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowRounding, 5)
-  -- Title-bar height is font + FramePadding.y*2; pad it taller, then drop the
-  -- override right after Begin so interior widgets keep normal padding.
+  local frame = chrome.pushStyle{
+    colours = { TitleBgActive = 'modal.titleBg' },
+    vars    = { WindowRounding = 5 },
+  }
+  -- Title-bar height is font + FramePadding.y*2; pad it taller in its own scope,
+  -- dropped right after Begin so interior widgets keep normal padding.
   local padX, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, padX, padY + 2)
+  local titlePad = chrome.pushStyle{ vars = { FramePadding = { padX, padY + 2 } } }
   -- state.size opens the modal at that size, still user-resizable; the default is
   -- auto-resize-to-content (sizes to the interior widgets).
   if state.size then ImGui.SetNextWindowSize(ctx, state.size[1], state.size[2], ImGui.Cond_Appearing) end
   local flags = (state.size and 0 or ImGui.WindowFlags_AlwaysAutoResize) | (state.flags or 0)
   local opened = ImGui.BeginPopupModal(ctx, label(), nil, flags)
-  ImGui.PopStyleVar(ctx, 1)
+  chrome.popStyle(titlePad)
   if opened then
     local cb      = state.callback
     local onClose = state.onClose
@@ -108,8 +110,7 @@ function modalHost:draw()
   else
     state = nil
   end
-  ImGui.PopStyleVar(ctx, 1)
-  ImGui.PopStyleColor(ctx, 1)
+  chrome.popStyle(frame)
   chrome.popChromeWindow()
 end
 

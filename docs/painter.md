@@ -38,6 +38,11 @@ a bare int raises. That keeps the one legitimate escape — a genuinely
 computed colour — from widening into "any int goes", which is the very
 discipline the name rule exists to hold.
 
+The widget side holds the same rule. `chrome.pushStyle` takes names and
+tokens for ImGui's style colours, so a colour reaches the screen by one
+discipline whichever path it travels; see `docs/chrome.md § Style
+scopes`.
+
 ## What converts, what doesn't
 
 Only positions pass through the transform. Stroke widths, corner radii,

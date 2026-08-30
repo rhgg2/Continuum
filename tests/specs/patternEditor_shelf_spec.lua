@@ -73,7 +73,7 @@ end
 
 local capturedPickers = {}
 local fakeChrome = setmetatable(
-  { drawPicker = function(d) capturedPickers[d.kind] = d end },
+  t.styleScopes{ drawPicker = function(d) capturedPickers[d.kind] = d end },
   { __index = function() return function() end end })
 local fakeGui       = { ctx = {}, font = 'grid', uiFont = 'ui', fontSize = { ui = 13 } }
 local fakeModalHost = { registerKind = function() end, open = function() end }

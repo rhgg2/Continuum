@@ -59,15 +59,14 @@ end
 
 ----- Style + draw helpers
 
-local function pushBodyStyles()
-  ImGui.PushStyleColor(ctx, ImGui.Col_Text,             chrome.colour('text'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TableHeaderBg,    chrome.colour('bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TableRowBg,       chrome.colour('bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TableRowBgAlt,    chrome.colour('bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TableBorderLight, chrome.colour('separator'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TableBorderStrong,chrome.colour('separator'))
-end
-local function popBodyStyles() ImGui.PopStyleColor(ctx, 6) end
+local BODY_INK = { colours = {
+  Text              = 'text',
+  TableHeaderBg     = 'bg',
+  TableRowBg        = 'bg',
+  TableRowBgAlt     = 'bg',
+  TableBorderLight  = 'separator',
+  TableBorderStrong = 'separator',
+} }
 
 -- Row label = QN at the row's top edge. beatPerRow is integer-valued
 -- in normal use (1, 4, 8, 16); show the QN as an integer.
@@ -792,7 +791,7 @@ modalHost:registerKind('tidyTrack', function(s, close)
   local pick
   local _, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_CellPadding)
   if ImGui.BeginChild(ctx, '##tidyRows', TIDY_LIST_W, listH) then
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, TIDY_GUTTER, padY)
+    local cellPad = chrome.pushStyle{ vars = { CellPadding = { TIDY_GUTTER, padY } } }
     if ImGui.BeginTable(ctx, '##tidyList', 4) then
       -- A base is a prefix of the names either side of it, so every column hugs its
       -- content and only the last takes up the slack.
@@ -828,7 +827,7 @@ modalHost:registerKind('tidyTrack', function(s, close)
       end
       ImGui.EndTable(ctx)
     end
-    ImGui.PopStyleVar(ctx, 1)
+    chrome.popStyle(cellPad)
   end
   ImGui.EndChild(ctx)
   if pick then s.assignment[pick.idx] = pick.base end
@@ -947,47 +946,43 @@ help:registerPage('arrange', {
 function ar:renderBody(_, w, h, dispatch)
   if not ctx then return end
 
-  pushBodyStyles()
+  chrome.styled(BODY_INK, function()
+    local ox, oy = ImGui.GetCursorScreenPos(ctx)
+    help:anchor('body', ox, oy, w, h)
 
-  local ox, oy = ImGui.GetCursorScreenPos(ctx)
-  help:anchor('body', ox, oy, w, h)
-
-  local tracks  = av:projectTracks()
-  local nTracks = #tracks
-  if nTracks == 0 then
-    ImGui.Text(ctx, '(no tracks in project)')
-    av:setGridSize(0, 0)
-    popBodyStyles()
-    if dispatch then dispatch(self:focusState()) end
-    return
-  end
-
-  local gridW = chrome.gridWidth(w)
-  -- NoNav suppresses the blue nav rect from Tab/arrow focus; NoScroll*
-  -- stop the wheel nudging the child — we route the wheel to the cursor.
-  if ImGui.BeginChild(ctx, '##arrangeGrid', gridW, h,
-                      ImGui.ChildFlags_None,
-                      ImGui.WindowFlags_NoNav
-                      | ImGui.WindowFlags_NoScrollWithMouse
-                      | ImGui.WindowFlags_NoScrollbar) then
-    -- The grid reads the mouse directly, bypassing the dispatcher coord suppresses,
-    -- so the cheat-sheet gates it here. See docs/help.md § Input while open.
-    local dragCand, loopCand, createCand, lassoCand
-    if not help:wasOpenAtFrameStart() then
-      dragCand, loopCand, createCand, lassoCand = handleGridMouse(tracks)
+    local tracks = av:projectTracks()
+    if #tracks == 0 then
+      ImGui.Text(ctx, '(no tracks in project)')
+      av:setGridSize(0, 0)
+      return
     end
-    renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
-  end
-  ImGui.EndChild(ctx)
 
-  local focusedTrack = tracks[av:cursorCol() + 1]
-  chrome.palettePane{
-    x = ox + gridW, y = oy, h = h,
-    label = paletteTrackLabel(focusedTrack),
-    draw  = function() renderPaletteBody(focusedTrack) end,
-  }
+    local gridW = chrome.gridWidth(w)
+    -- NoNav suppresses the blue nav rect from Tab/arrow focus; NoScroll*
+    -- stop the wheel nudging the child — we route the wheel to the cursor.
+    if ImGui.BeginChild(ctx, '##arrangeGrid', gridW, h,
+                        ImGui.ChildFlags_None,
+                        ImGui.WindowFlags_NoNav
+                        | ImGui.WindowFlags_NoScrollWithMouse
+                        | ImGui.WindowFlags_NoScrollbar) then
+      -- The grid reads the mouse directly, bypassing the dispatcher coord suppresses,
+      -- so the cheat-sheet gates it here. See docs/help.md § Input while open.
+      local dragCand, loopCand, createCand, lassoCand
+      if not help:wasOpenAtFrameStart() then
+        dragCand, loopCand, createCand, lassoCand = handleGridMouse(tracks)
+      end
+      renderGrid(tracks, dragCand, loopCand, createCand, lassoCand)
+    end
+    ImGui.EndChild(ctx)
 
-  popBodyStyles()
+    local focusedTrack = tracks[av:cursorCol() + 1]
+    chrome.palettePane{
+      x = ox + gridW, y = oy, h = h,
+      label = paletteTrackLabel(focusedTrack),
+      draw  = function() renderPaletteBody(focusedTrack) end,
+    }
+  end)
+
   if dispatch then dispatch(self:focusState()) end
 end
 

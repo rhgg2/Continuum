@@ -370,13 +370,14 @@ end
 
 -- The grid name box and ui-font cells round to different frame heights at one
 -- nominal size; measure the grid box and pad ui widgets up so the row is flush.
+--contract: returns the style handle to hand back to chrome.popStyle
 local function pushUiPadToGrid()
   ImGui.PushFont(ctx, gui.font, gui.fontSize.ui)
   local gridH = ImGui.GetFrameHeight(ctx)
   ImGui.PopFont(ctx)
   local padX, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, padX,
-    padY + (gridH - ImGui.GetFrameHeight(ctx)) / 2)
+  return chrome.pushStyle{ vars = { FramePadding = {
+    padX, padY + (gridH - ImGui.GetFrameHeight(ctx)) / 2 } } }
 end
 
 local function drawStepRow(temper, i)
@@ -389,11 +390,11 @@ local function drawStepRow(temper, i)
 
   ImGui.TableNextColumn(ctx)
   ImGui.SetNextItemWidth(ctx, -1)
-  pushUiPadToGrid()
+  local pitchPad = pushUiPadToGrid()
   if i == 1 then ImGui.BeginDisabled(ctx) end   -- the unison is pinned at 1/1
   tokenBox('##c', i, temper.pitches[i], function(tok) setStepPitch(i, tok) end)
   if i == 1 then ImGui.EndDisabled(ctx) end
-  ImGui.PopStyleVar(ctx)
+  chrome.popStyle(pitchPad)
 
   -- Names are pitch labels: render in the grid font at the ui size so the field
   -- reads as the note on the tracker grid; ui-font cells pad up to match it.
@@ -406,9 +407,9 @@ local function drawStepRow(temper, i)
 
   ImGui.TableNextColumn(ctx)
   if i > 1 then
-    pushUiPadToGrid()
+    local delPad = pushUiPadToGrid()
     if ImGui.Button(ctx, 'del') then removeStep(i) end
-    ImGui.PopStyleVar(ctx)
+    chrome.popStyle(delPad)
   end
 
   ImGui.PopID(ctx)
@@ -427,7 +428,7 @@ end
 local function drawStepTable(temper)
   local _, availY = ImGui.GetContentRegionAvail(ctx)
   -- Zero vertical cell padding so rows abut with no gap, like the tracker grid.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_CellPadding, 0, 1)
+  local cellPad = chrome.pushStyle{ vars = { CellPadding = { 0, 1 } } }
   if ImGui.BeginTable(ctx, '##temperSteps', 4, ImGui.TableFlags_ScrollY, 0, availY) then
     ImGui.TableSetupColumn(ctx, 'Step',  ImGui.TableColumnFlags_WidthFixed, STEP_W)
     ImGui.TableSetupColumn(ctx, 'Cents', ImGui.TableColumnFlags_WidthFixed, CENTS_W)
@@ -447,9 +448,9 @@ local function drawStepTable(temper)
       ImGui.TextDisabled(ctx, 'P')
       ImGui.TableNextColumn(ctx)
       ImGui.SetNextItemWidth(ctx, -1)
-      pushUiPadToGrid()
+      local periodPad = pushUiPadToGrid()
       tokenBox('##period', 'period', temper.periodPitch or '2/1', setPeriodPitch)
-      ImGui.PopStyleVar(ctx)
+      chrome.popStyle(periodPad)
       ImGui.PopID(ctx)
     end
 
@@ -457,13 +458,13 @@ local function drawStepTable(temper)
     ImGui.TableNextRow(ctx)
     ImGui.TableNextColumn(ctx)
     ImGui.TableNextColumn(ctx)
-    pushUiPadToGrid()
+    local addPad = pushUiPadToGrid()
     if ImGui.Button(ctx, 'add row') then addStep() end
-    ImGui.PopStyleVar(ctx)
+    chrome.popStyle(addPad)
 
     ImGui.EndTable(ctx)
   end
-  ImGui.PopStyleVar(ctx)
+  chrome.popStyle(cellPad)
 end
 
 -- New + Import modals, hosted by modalHost (kinds registered below). Creates at
@@ -583,12 +584,10 @@ local GEN_KINDS = {
 -- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
 -- toolbar's, since editor.bg is darker); active stays recessed/lit.
 local function pillButton(label, active)
-  local fill = chrome.colour(active and 'editor.buttonActive' or 'editor.button')
-  ImGui.PushStyleColor(ctx, ImGui.Col_Button,        fill)
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, fill)
-  local hit = ImGui.Button(ctx, label)
-  ImGui.PopStyleColor(ctx, 2)
-  return hit
+  local fill = active and 'editor.buttonActive' or 'editor.button'
+  return chrome.styled({ colours = { Button = fill, ButtonHovered = fill } }, function()
+    return ImGui.Button(ctx, label)
+  end)
 end
 
 local function genKindSelector()
@@ -881,9 +880,7 @@ local function drawStepsTop()
   if not editable then ImGui.EndDisabled(ctx) end
   ImGui.Separator(ctx)
   if not editable then ImGui.BeginDisabled(ctx) end
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 9, 2)
-  drawStepTable(temper)
-  ImGui.PopStyleVar(ctx, 1)
+  chrome.styled({ vars = { FramePadding = { 9, 2 } } }, function() drawStepTable(temper) end)
   if not editable then ImGui.EndDisabled(ctx) end
 end
 

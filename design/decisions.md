@@ -14,6 +14,12 @@ not eight or ten.
   decorates that geometry with its click map and its edit tags, so the module holds no interaction
   state and the menu draws its row and its lookahead panel through the same code. An edit tag
   therefore draws over the label it reaches into.
+- **2026-08-30** — Chrome grows style scopes: pushStyle takes a spec of bare slot names and hands
+  back a handle, popStyle unwinds what that handle laid down, and styled brackets a body so an early
+  return cannot skip the pop. The scope is a handle, over a LIFO stack closed by a bare popStyle,
+  because ImGui's colour and var stacks are independent and both popup sites interleave them.
+  Colours arrive as names or {u32} tokens and a bare int raises, closing the hole PushStyleColor
+  left in painter's discipline.
 
 - **2026-08-30** — The lotus menu draws its letters as the cheat-sheet's keycaps, in the row and in
   the panel alike, since a menu letter is a key pressed. A row wider than the window wraps upward,

@@ -29,6 +29,17 @@ function M.imgui()
   })
 end
 
+-- chrome's style scopes, as a chrome stub needs them: pushStyle hands back a
+-- handle popStyle discards, and styled RUNS its body — the widgets a draw pass
+-- puts inside a scope have to be drawn, or a spec sees an empty frame.
+function M.styleScopes(fields)
+  return util.assign({
+    pushStyle = function() return {} end,
+    popStyle  = function() end,
+    styled    = function(_, fn) return fn() end,
+  }, fields or {})
+end
+
 local function repr(v, depth)
   depth = depth or 0
   if depth > 4 then return '...' end

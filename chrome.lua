@@ -1,6 +1,7 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(colour?), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text, dimBy?), dimText(alpha)->u32, screenPainter()->painter}
+--shape: chrome = { colour(name, scope?)->u32, pushStyle(spec)->handle, popStyle(handle), styled(spec,fn), pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(colour?), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text, dimBy?), dimText(alpha)->u32, screenPainter()->painter}
+--shape: styleSpec = { colours?: { <Col slot name> = colourName | {u32} }, vars?: { <StyleVar slot name> = n | {x, y} } }
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(d)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: chrome (status bar) = { makeStatusBar()->fn(segments), statusRects()->{id->rect}, statusEditActive()->bool }
 --shape: libPickerSpec = { key: string, current?: any, excludeOthers?: {name->true}, off?: bool = true }
@@ -90,62 +91,135 @@ local paintBinder = { colour = chrome.colour }
 -- palette. Build one per draw fn — the draw list is captured now, so call it in the target window.
 function chrome.screenPainter() return painter.new(ctx, paintBinder, {}) end
 
+----- Style scopes
+
+-- Style scopes: pushStyle/popStyle/styled bracket ImGui's hand-counted style
+-- stacks with a handle. See docs/chrome.md § Style scopes.
+
+-- Fully transparent — not a colour from the palette but the absence of one, so it
+-- gets a name of its own rather than the hand-packed int pushStyle would reject.
+chrome.CLEAR = { u32 = 0 }
+
+local function styleColour(c)
+  if type(c) == 'string' then return chrome.colour(c) end
+  if type(c) == 'table'  then return c.u32          end
+  error('chrome: a style colour must be a name or a token, not a raw int')
+end
+
+local function styleSlot(prefix, name)
+  return ImGui[prefix .. name]
+      or error('chrome: no style slot ImGui.' .. prefix .. tostring(name))
+end
+
+--contract: returns an opaque handle; every pushStyle needs its popStyle
+function chrome.pushStyle(spec)
+  local handle = {}
+  -- Slot order is immaterial: each slot is its own stack and only the running
+  -- total is ever popped, so an unordered pairs() over the spec is enough.
+  if spec.colours then
+    local n = 0
+    for name, c in pairs(spec.colours) do
+      ImGui.PushStyleColor(ctx, styleSlot('Col_', name), styleColour(c))
+      n = n + 1
+    end
+    handle.colours = n
+  end
+  if spec.vars then
+    local n = 0
+    for name, v in pairs(spec.vars) do
+      local slot = styleSlot('StyleVar_', name)
+      if type(v) == 'table' then ImGui.PushStyleVar(ctx, slot, v[1], v[2])
+      else                       ImGui.PushStyleVar(ctx, slot, v) end
+      n = n + 1
+    end
+    handle.vars = n
+  end
+  return handle
+end
+
+function chrome.popStyle(handle)
+  if handle.vars    then ImGui.PopStyleVar(ctx, handle.vars)      end
+  if handle.colours then ImGui.PopStyleColor(ctx, handle.colours) end
+end
+
+--contract: forwards up to three of fn's return values — InputText's two is the widest in use
+function chrome.styled(spec, fn)
+  local handle = chrome.pushStyle(spec)
+  local a, b, c = fn()
+  chrome.popStyle(handle)
+  return a, b, c
+end
+
+----- The chrome look
+
+local CHROME_INK = {
+  Text             = 'toolbar.text',
+  Button           = 'toolbar.button',
+  -- Hover holds the resting fill for buttons and frame bgs; active toggle buttons
+  -- re-flatten at each site, while a button press still darkens via ButtonActive.
+  ButtonHovered    = 'toolbar.button',
+  ButtonActive     = 'toolbar.buttonActive',
+  FrameBg          = 'toolbar.button',
+  -- Frame bg flat on hover AND press — slider tracks/inputs never highlight;
+  -- a slider's only feedback is the grab (SliderGrab / SliderGrabActive).
+  FrameBgHovered   = 'toolbar.button',
+  FrameBgActive    = 'toolbar.button',
+  CheckMark        = 'toolbar.checkMark',
+  SliderGrab       = 'toolbar.sliderGrab',
+  SliderGrabActive = 'toolbar.sliderGrabActive',
+  PopupBg          = 'toolbar.popupBg',
+  Border           = 'toolbar.buttonBorder',
+  -- InputTextCursor has its own slot; the default is invisible against
+  -- chrome-styled frame backgrounds, so InputText shows focused but caretless.
+  InputTextCursor  = 'toolbar.text',
+  -- ImGui's stock TextSelectedBg is a bright blue that clashes with the
+  -- parchment chrome; ride the cool-blue alt ramp instead.
+  TextSelectedBg   = 'toolbar.textSelection',
+  -- Selectable / list-row highlight (the Header family) also defaults to stock
+  -- blue; ride the same alt ramp so every chrome selection reads as one blue.
+  Header           = 'toolbar.selectedRow',
+  HeaderHovered    = 'toolbar.selectedRow',
+  HeaderActive     = 'toolbar.selectedRow',
+}
+
+-- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
+local CHROME_WINDOW_INK = {
+  WindowBg         = 'editor.bg',
+  PopupBg          = 'editor.bg',
+  TitleBg          = 'editor.bg',
+  TitleBgActive    = 'editor.bg',
+  TitleBgCollapsed = 'editor.bg',
+  Separator        = 'toolbar.buttonBorder',
+}
+
+-- These bracket across call sites rather than lexically; see docs/chrome.md § Style scopes.
+local chromeScopes = {}
+
 function chrome.pushChromeStyles()
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 0)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameRounding, 1)
   -- With the border gone the fill bleeds into the 1px ring it used to occupy;
   -- trim a px per axis so framed widgets keep their old footprint.
   local fpx, fpy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, fpx - 1, fpy - 1)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Text,           chrome.colour('toolbar.text'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_Button,         chrome.colour('toolbar.button'))
-  -- Hover holds the resting fill for buttons and frame bgs; active toggle buttons
-  -- re-flatten at each site, while a button press still darkens via ButtonActive.
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered,  chrome.colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonActive,   chrome.colour('toolbar.buttonActive'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBg,        chrome.colour('toolbar.button'))
-  -- Frame bg flat on hover AND press — slider tracks/inputs never highlight;
-  -- a slider's only feedback is the grab (Col_SliderGrab / SliderGrabActive).
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgHovered, chrome.colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgActive,  chrome.colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_CheckMark,      chrome.colour('toolbar.checkMark'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrab,       chrome.colour('toolbar.sliderGrab'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrabActive, chrome.colour('toolbar.sliderGrabActive'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,        chrome.colour('toolbar.popupBg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_Border,         chrome.colour('toolbar.buttonBorder'))
-  -- Col_InputTextCursor has its own slot; default is invisible against
-  -- chrome-styled frame backgrounds, so InputText shows focused but caretless.
-  ImGui.PushStyleColor(ctx, ImGui.Col_InputTextCursor, chrome.colour('toolbar.text'))
-  -- ImGui's stock Col_TextSelectedBg is a bright blue that clashes with the
-  -- parchment chrome; ride the cool-blue alt ramp instead.
-  ImGui.PushStyleColor(ctx, ImGui.Col_TextSelectedBg, chrome.colour('toolbar.textSelection'))
-  -- Selectable / list-row highlight (Col_Header family) also defaults to stock
-  -- blue; ride the same alt ramp so every chrome selection reads as one blue.
-  ImGui.PushStyleColor(ctx, ImGui.Col_Header,        chrome.colour('toolbar.selectedRow'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, chrome.colour('toolbar.selectedRow'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  chrome.colour('toolbar.selectedRow'))
+  util.add(chromeScopes, chrome.pushStyle{
+    colours = CHROME_INK,
+    vars    = { FrameBorderSize = 0, FrameRounding = 1,
+                FramePadding    = { fpx - 1, fpy - 1 } },
+  })
 end
 
 function chrome.popChromeStyles()
-  ImGui.PopStyleColor(ctx, 17)
-  ImGui.PopStyleVar(ctx, 3)
+  chrome.popStyle(table.remove(chromeScopes))
 end
 
--- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
 function chrome.pushChromeWindow()
   chrome.pushChromeStyles()
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowBorderSize, 1)
-  ImGui.PushStyleColor(ctx, ImGui.Col_WindowBg,         chrome.colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,          chrome.colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBg,          chrome.colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive,    chrome.colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgCollapsed, chrome.colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_Separator,        chrome.colour('toolbar.buttonBorder'))
+  util.add(chromeScopes, chrome.pushStyle{
+    colours = CHROME_WINDOW_INK,
+    vars    = { WindowBorderSize = 1 },
+  })
 end
 
 function chrome.popChromeWindow()
-  ImGui.PopStyleColor(ctx, 6)
-  ImGui.PopStyleVar(ctx, 1)
+  chrome.popStyle(table.remove(chromeScopes))
   chrome.popChromeStyles()
 end
 
@@ -189,11 +263,10 @@ end
 -- ambient framed-row height; measured from GetFrameHeight, not a fixed nudge.
 local function compactControl(draw)
   local frameH = ImGui.GetFrameHeight(ctx)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 0, 0)
-  ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + (frameH - ImGui.GetFrameHeight(ctx)) / 2)
-  local a, b = draw()
-  ImGui.PopStyleVar(ctx, 1)
-  return a, b
+  return chrome.styled({ vars = { FramePadding = { 0, 0 } } }, function()
+    ImGui.SetCursorPosY(ctx, ImGui.GetCursorPosY(ctx) + (frameH - ImGui.GetFrameHeight(ctx)) / 2)
+    return draw()
+  end)
 end
 
 function chrome.checkbox(label, value)
@@ -227,21 +300,20 @@ function chrome.numberStepper(id, value, opts)
     local shown = fmt and string.format(fmt, value) or tostring(value)
     inset = math.max(BOX_PAD, math.floor((boxW - ImGui.CalcTextSize(ctx, shown)) / 2))
   end
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, inset, fpy)
-  ImGui.SetNextItemWidth(ctx, boxW)
-  local changed, n
-  if fmt then changed, n = ImGui.InputDouble(ctx, '##' .. id, value, 0, 0, fmt)
-  else        changed, n = ImGui.InputInt(ctx, '##' .. id, value, 0, 0) end
-  ImGui.PopStyleVar(ctx, 1)
+  local changed, n = chrome.styled({ vars = { FramePadding = { inset, fpy } } }, function()
+    ImGui.SetNextItemWidth(ctx, boxW)
+    if fmt then return ImGui.InputDouble(ctx, '##' .. id, value, 0, 0, fmt) end
+    return ImGui.InputInt(ctx, '##' .. id, value, 0, 0)
+  end)
   if changed then n = clamp(n) end
 
   ImGui.PushItemFlag(ctx, ImGui.ItemFlags_ButtonRepeat, true)
   local arm = math.max(2, math.floor(btnSz * 0.18))   -- -/+ arm reach; bar = 2*arm+1 px (odd), 1px thick
   local function stepBtn(dir, isPlus)
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, btnSz / 2, fpy)
-    ImGui.SameLine(ctx, 0, innerX)
-    local pressed = ImGui.Button(ctx, '##' .. id .. dir, btnSz, btnSz)
-    ImGui.PopStyleVar(ctx, 1)
+    local pressed = chrome.styled({ vars = { FramePadding = { btnSz / 2, fpy } } }, function()
+      ImGui.SameLine(ctx, 0, innerX)
+      return ImGui.Button(ctx, '##' .. id .. dir, btnSz, btnSz)
+    end)
     local x0, y0 = ImGui.GetItemRectMin(ctx)
     local x1, y1 = ImGui.GetItemRectMax(ctx)
     local cx, cy = math.floor((x0 + x1) / 2), math.floor((y0 + y1) / 2)
@@ -272,9 +344,9 @@ function chrome.dropdown(id, current, items)
   local btnW = widest + padX * 2
   -- The box is cut for the widest entry, so a centred label would drift with the
   -- current value's length. Left-align it, as the picker's own button reads.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ButtonTextAlign, 0, 0.5)
-  local open = ImGui.Button(ctx, current .. DROP_ARROW .. '##' .. id, btnW)
-  ImGui.PopStyleVar(ctx, 1)
+  local open = chrome.styled({ vars = { ButtonTextAlign = { 0, 0.5 } } }, function()
+    return ImGui.Button(ctx, current .. DROP_ARROW .. '##' .. id, btnW)
+  end)
   if open then ImGui.OpenPopup(ctx, id .. '_popup') end
   local x = ImGui.GetItemRectMin(ctx)
   local _, y = ImGui.GetItemRectMax(ctx)
@@ -282,27 +354,28 @@ function chrome.dropdown(id, current, items)
   ImGui.SetNextWindowSize(ctx, btnW, 0)
   -- A hairline one zone down from the fill, so the list reads as a surface of its
   -- own rather than bleeding into whatever it covers.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_PopupBorderSize, 1)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Border, chrome.colour('toolbar.popupBorder'))
   local picked
-  if ImGui.BeginPopup(ctx, id .. '_popup', ImGui.WindowFlags_NoNav) then
-    for idx, it in ipairs(items) do
-      if ImGui.Selectable(ctx, it, it == current) then picked = idx end
+  chrome.styled({ colours = { Border = 'toolbar.popupBorder' },
+                  vars    = { PopupBorderSize = 1 } }, function()
+    if ImGui.BeginPopup(ctx, id .. '_popup', ImGui.WindowFlags_NoNav) then
+      for idx, it in ipairs(items) do
+        if ImGui.Selectable(ctx, it, it == current) then picked = idx end
+      end
+      ImGui.EndPopup(ctx)
     end
-    ImGui.EndPopup(ctx)
-  end
-  ImGui.PopStyleColor(ctx, 1)
-  ImGui.PopStyleVar(ctx, 1)
+  end)
   return picked
 end
 
 -- Section label for toolbar and status segments: dimmed so it reads as a heading, not a
 -- control. Caller follows with SameLine; the dim rides ambient Col_Text so it suits both bands.
 function chrome.headingLabel(text, dimBy)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.dimText(dimBy or 0.55))
-  ImGui.AlignTextToFramePadding(ctx)
-  ImGui.Text(ctx, text)
-  ImGui.PopStyleColor(ctx, 1)
+  -- dimText derives its ink from the ambient Col_Text rather than the palette, so
+  -- it has no name to pass and is minted as a token instead.
+  chrome.styled({ colours = { Text = { u32 = chrome.dimText(dimBy or 0.55) } } }, function()
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, text)
+  end)
 end
 
 -- Picker-open request state, hoisted above the toolbar: layout peeks it to
@@ -370,19 +443,19 @@ function chrome.makeToolbar()
   -- Without it the cold row lays out flat and AutoResizeY jumps the body one frame later.
   local function measureWidths(segments, collapsed)
     local x, y = ImGui.GetCursorScreenPos(ctx)
-    ImGui.PushStyleVar(ctx, ImGui.StyleVar_Alpha, 0)
-    local first = true
-    for _, seg in ipairs(segments) do
-      if not seg.visible or seg.visible() then
-        if not first then ImGui.SameLine(ctx) end
-        drawSegment(seg, collapsed[seg.id])
-        local minX = ImGui.GetItemRectMin(ctx)
-        local maxX = ImGui.GetItemRectMax(ctx)
-        toolbarWidths[seg.id] = maxX - minX
-        first = false
+    chrome.styled({ vars = { Alpha = 0 } }, function()
+      local first = true
+      for _, seg in ipairs(segments) do
+        if not seg.visible or seg.visible() then
+          if not first then ImGui.SameLine(ctx) end
+          drawSegment(seg, collapsed[seg.id])
+          local minX = ImGui.GetItemRectMin(ctx)
+          local maxX = ImGui.GetItemRectMax(ctx)
+          toolbarWidths[seg.id] = maxX - minX
+          first = false
+        end
       end
-    end
-    ImGui.PopStyleVar(ctx, 1)
+    end)
     ImGui.SetCursorScreenPos(ctx, x, y)
   end
   -- Cold = a visible segment we have no width for yet (fresh page, or post-reset).
@@ -566,11 +639,13 @@ local function numberEdit(seg, x, y, w)
   if statusEdit.selectTo then selFlags, selCb = chrome.selectTo(statusEdit.selectTo) end
   -- The band's ink is white, so the selection goes dark; ImGui's stock blue is a
   -- translucent wash that all but vanishes on the well.
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBg,        chrome.colour('statusBar.well'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TextSelectedBg, chrome.colour('statusBar.textSelection'))
-  local committed, text = ImGui.InputText(ctx, '##statusEdit_' .. seg.id, statusEdit.text,
-    ImGui.InputTextFlags_EnterReturnsTrue | selFlags, selCb)
-  ImGui.PopStyleColor(ctx, 2)
+  local committed, text = chrome.styled({ colours = {
+    FrameBg        = 'statusBar.well',
+    TextSelectedBg = 'statusBar.textSelection',
+  } }, function()
+    return ImGui.InputText(ctx, '##statusEdit_' .. seg.id, statusEdit.text,
+      ImGui.InputTextFlags_EnterReturnsTrue | selFlags, selCb)
+  end)
   if statusEdit.selectTo and ImGui.IsItemActive(ctx) then statusEdit.selectTo = nil end
   if committed then
     local v = tonumber(text)
@@ -590,17 +665,19 @@ local PICK_ARROW = ' \xe2\x96\xbe'
 local function pickCell(seg, x, y, w)
   local padX = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   ImGui.SetCursorScreenPos(ctx, x, y)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Button,        chrome.colour('statusBar.well'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered, chrome.colour('statusBar.well'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonActive,  chrome.colour('statusBar.well'))
-  chrome.drawPicker{
-    kind        = 'status_' .. seg.id,
-    buttonLabel = fitLabel(statusText(seg), w - padX * 2 - ImGui.CalcTextSize(ctx, PICK_ARROW)),
-    width       = w, placement = 'above',
-    items       = seg.edit.items(),
-    onPick      = function(key) seg.set(key) end,
-  }
-  ImGui.PopStyleColor(ctx, 3)
+  chrome.styled({ colours = {
+    Button        = 'statusBar.well',
+    ButtonHovered = 'statusBar.well',
+    ButtonActive  = 'statusBar.well',
+  } }, function()
+    chrome.drawPicker{
+      kind        = 'status_' .. seg.id,
+      buttonLabel = fitLabel(statusText(seg), w - padX * 2 - ImGui.CalcTextSize(ctx, PICK_ARROW)),
+      width       = w, placement = 'above',
+      items       = seg.edit.items(),
+      onPick      = function(key) seg.set(key) end,
+    }
+  end)
 end
 
 -- Self-naming tokens over one cell: a lit one wears the well, an unlit one dim text in
@@ -661,7 +738,7 @@ function chrome.makeStatusBar()
     local editDrawn = false
     -- ImGui rings the focused item with the nav cursor. On a row of one-datum cells that
     -- reads as a stray box around whatever was last clicked, so the bar draws without it.
-    ImGui.PushStyleColor(ctx, ImGui.Col_NavCursor, 0x00000000)
+    local noNavRing = chrome.pushStyle{ colours = { NavCursor = chrome.CLEAR } }
     for _, seg in ipairs(segments) do
       if not seg.visible or seg.visible() then
         if not first then
@@ -675,7 +752,7 @@ function chrome.makeStatusBar()
         x, first = x + cellW, false
       end
     end
-    ImGui.PopStyleColor(ctx, 1)
+    chrome.popStyle(noNavRing)
     -- A page switch or a cell turning invisible takes its open edit with it; else the
     -- gate on page keys would stay shut with nothing on screen holding it.
     if statusEdit and not editDrawn then statusEdit = nil end
@@ -854,15 +931,6 @@ local POPUP_INK = {
   TextSelectedBg  = 'toolbar.textSelection',
 }
 
-local function pushPopupInk()
-  local n = 0
-  for slot, name in pairs(POPUP_INK) do
-    ImGui.PushStyleColor(ctx, ImGui['Col_' .. slot], chrome.colour(name))
-    n = n + 1
-  end
-  return n
-end
-
 -- Generic typeahead picker. Enter picks the highlighted match; group
 -- separators show only when filter is empty.
 function chrome.drawPicker(d)
@@ -890,13 +958,15 @@ function chrome.drawPicker(d)
     if minW and btnW < minW then btnW = minW end
     if maxW and btnW > maxW then btnW = maxW end
   end
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ButtonTextAlign, 0, 0.5)
-  if d.flat then ImGui.PushStyleColor(ctx, ImGui.Col_Button, 0x00000000) end   -- transparent rest; hover/active still give feedback
+  -- A flat picker rests transparent; hover and active still give feedback.
+  local button = chrome.pushStyle{
+    colours = d.flat and { Button = chrome.CLEAR } or nil,
+    vars    = { ButtonTextAlign = { 0, 0.5 } },
+  }
   local opening
   if btnW then opening = ImGui.Button(ctx, btnTxt, btnW, 0)
   else         opening = ImGui.Button(ctx, btnTxt) end
-  if d.flat then ImGui.PopStyleColor(ctx, 1) end
-  ImGui.PopStyleVar(ctx, 1)
+  chrome.popStyle(button)
   -- Anchor popup to the button rect; OpenPopup otherwise uses mouse
   -- position, putting a keyboard-triggered popup at the text cursor.
   local btnX, btnTop     = ImGui.GetItemRectMin(ctx)
@@ -923,20 +993,21 @@ function chrome.drawPicker(d)
   -- item spacing past it: take that off the horizontal padding so the list runs where it always did.
   local spacingX, spacingY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing)
   local padX, padY         = ImGui.GetStyleVar(ctx, ImGui.StyleVar_WindowPadding)
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, padX + 1 - spacingX / 2, padY)
-  -- The fill is taken at Begin, so the ink goes on before it, not inside the body.
-  local inkPushes = pushPopupInk()
+  -- Two scopes, not one: the padding closes at Begin, the ink outlives the body.
+  -- See docs/chrome.md § Editing a status cell.
+  local padding = chrome.pushStyle{ vars = { WindowPadding = { padX + 1 - spacingX / 2, padY } } }
+  local ink     = chrome.pushStyle{ colours = POPUP_INK }
   -- NoNav: kill ImGui's built-in keyboard nav highlight on the popup —
   -- otherwise it draws a second cursor that fights ours and steals
   -- arrow keys / character input from the filter InputText.
   local open = ImGui.BeginPopup(ctx, popupId, ImGui.WindowFlags_NoNav)
-  ImGui.PopStyleVar(ctx, 1)
-  if not open then ImGui.PopStyleColor(ctx, inkPushes); return end
+  chrome.popStyle(padding)
+  if not open then chrome.popStyle(ink); return end
   pickerActive = true   -- the coordinator reads this at the next frame's fill, handing us the keyboard
 
   -- No horizontal item spacing: a Selectable's rect is otherwise extended half a spacing past the
   -- content edge on each side, standing the rows wider than the filter field and its rule.
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_ItemSpacing, 0, spacingY)
+  local rowSpacing = chrome.pushStyle{ vars = { ItemSpacing = { 0, spacingY } } }
 
   if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.SetNextItemWidth(ctx, (ImGui.GetContentRegionAvail(ctx)))
@@ -1054,8 +1125,8 @@ function chrome.drawPicker(d)
     ImGui.Dummy(ctx, 0, 0)
   end
 
-  ImGui.PopStyleVar(ctx, 1)
-  ImGui.PopStyleColor(ctx, inkPushes)
+  chrome.popStyle(rowSpacing)
+  chrome.popStyle(ink)
   ImGui.EndPopup(ctx)
 end
 
@@ -1139,12 +1210,12 @@ end
 -- Selectable with hover/active highlight suppressed: only the selected row shows
 -- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
 function chrome.rowSelectable(label, selected, flags)
-  local hi = selected and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, hi)
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  hi)
-  local clicked = ImGui.Selectable(ctx, label, selected, flags or 0)
-  ImGui.PopStyleColor(ctx, 2)
-  return clicked
+  -- The lit fill is ImGui's own resolved Header colour, not a palette entry, so it
+  -- is minted as a token rather than passed as a bare int.
+  local hi = selected and { u32 = ImGui.GetStyleColor(ctx, ImGui.Col_Header) } or chrome.CLEAR
+  return chrome.styled({ colours = { HeaderHovered = hi, HeaderActive = hi } }, function()
+    return ImGui.Selectable(ctx, label, selected, flags or 0)
+  end)
 end
 
 -- Gutter + nesting metrics shared by every tree (sampler folders, fx palette,
