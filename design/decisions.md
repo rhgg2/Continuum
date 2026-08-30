@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The wiring canvas's draft cancel takes Escape at the frame's mods, over the bare
+  Mod_None the editor and sampler cancels use: a draft is begun shift-held, and the modifiers a
+  gesture needs should not defeat the press that abandons it. The take also comes out of the
+  cheat-sheet gate, which now wraps the mouse passes alone, since ownership answers the keyboard
+  question for it.
+
 - **2026-08-30** — A picker popup a page raises owns the key queue, under the same `picker` name the
   toolbar's picker claims under; the name covers every picker popup. Ownership replaces the
   focusState clause that gated commands while the popup was up, since a claim made under no name

@@ -31,20 +31,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 wiring: the gesture cancel claims its Escape (design/keyQueue.md § Claiming)
 - 2026-08-30 wiring: the fx picker owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 - 2026-08-30 editor, sampler: the page Escapes claim from the keyQueue (design/keyQueue.md § Claiming)
 - 2026-08-30 tracker: the palette pane owns the key queue (design/keyQueue.md § Claiming, § Ownership)
-- 2026-08-29 patternEditor: drop the input swallow and the picker gate (design/keyQueue.md § Claiming)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **wiring: the gesture cancel claims.** The draft-cancelling Escape in
-  `wiringRender.renderBody` claims, so the Esc-bound
-  `wiringClearSelection` no longer runs on the same press by accident.
 
 - **the mouse gestures read modifiers through the queue.** Six
   `GetKeyMods` sites move to `keyQueue:mods()`: gridPane's region paint

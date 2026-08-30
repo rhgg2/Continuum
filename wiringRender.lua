@@ -2510,16 +2510,16 @@ local function renderCanvas(w, h)
   resolveHover(frame)
   drawCanvas(frame)
 
-  -- Input reads the mouse/keys directly, bypassing dispatcher coord suppresses,
-  -- so the cheat-sheet gates them together (docs/help.md § Input while open).
-  if not help:wasOpenAtFrameStart() then
-    -- Esc cancels an in-flight draft. Consume the press so the wiring-scope
-    -- wiringClearSelection (also bound to Esc) doesn't run on the same key.
-    if gesture and modes[gesture.mode].escCancels
-       and ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      gesture = nil
-    end
+  -- Esc cancels an in-flight draft, and the claim keeps the Esc-bound
+  -- wiringClearSelection off the same press. A draft is drawn shift-held, so it claims at frame mods.
+  if gesture and modes[gesture.mode].escCancels
+     and keyQueue:take(ImGui.Key_Escape, keyQueue:frameMods()) then
+    gesture = nil
+  end
 
+  -- The mouse reads directly, bypassing the suppressions the dispatcher honours,
+  -- so the cheat-sheet gates those together (docs/help.md § Input while open).
+  if not help:wasOpenAtFrameStart() then
     local faderConsumed = faderInput(frame)
     beginGesture(frame, faderConsumed)
 

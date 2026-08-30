@@ -76,9 +76,11 @@ ones it needs:
   cannot drift.
 - **`update(g, frame)`** runs after hover resolution, where the drop target
   is known: it ticks the gesture and commits it on mouseup.
-- **`escCancels`** binds Esc to dropping the gesture. Only the two drafts
-  declare it, and neither has teardown beyond the clear, so a flag serves
-  until a mode needs a hook.
+- **`escCancels`** binds Esc to dropping the gesture. The press is claimed
+  from the key queue at the frame's mods, so the Esc-bound
+  `wiringClearSelection` does not run on it. Only the two drafts declare
+  it, and neither has teardown beyond the clear, so a flag serves until a
+  mode needs a hook.
 
 Either hook clears the gesture by returning false. Both are handed the
 frame carrier (*The canvas frame*): inject's transients are written back
