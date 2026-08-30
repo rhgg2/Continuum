@@ -18,8 +18,9 @@ unaccompanied commits and leaves the judgement to a human.
 
 Only passes are recorded. Which docs exist, how big they are, and
 which have never been audited are read off the tree by
-`tools/docs_audit.py`, which prints the states and the unaudited docs
-by ascending size. `tools/docs_audit.py pass <doc>.md` stamps a row.
+`tools/audit.py docs`, which prints the states and the unaudited docs
+by ascending size. `tools/audit.py docs pass <doc>.md` stamps a row.
+`specs-audit.md` is the same ledger for `tests/specs/`.
 
 These are reference material rather than Continuum's own docs, and are
 not audited:
