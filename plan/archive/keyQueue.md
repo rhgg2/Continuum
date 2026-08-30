@@ -1,7 +1,7 @@
 # keyQueue — plan
 
-> source: `design/keyQueue.md` — synthesis compiled from there;
-> don't design here.
+> closed 2026-08-30. The model lives in `docs/keyQueue.md`,
+> `docs/trackerPage.md` and `docs/coordinator.md`.
 
 ## Phases
 
@@ -24,10 +24,11 @@
    `periodSwallow`, `releaseReq` and the two carried modal gates came
    out with them. `stripExitReq` stayed: the strip's mid-draw mouse
    exits fire while the rest of the draw still reads the focus.
-6. **Phase 6 — The rest, and the record** ← in flight — the remaining
-   direct readers on the sampler, wiring, arrange and editor pages, the
-   mouse-gesture modifier reads moved onto `held`, and the model moved
-   into `docs/keyQueue.md` with the drain order written down.
+6. **Phase 6 — The rest, and the record** — landed 2026-08-30, 5
+   commits. The remaining direct readers on the sampler, wiring, arrange
+   and editor pages took their keys from the queue, the mouse-gesture
+   modifier reads moved onto `held`, and the model moved into
+   `docs/keyQueue.md` with the drain order written down.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -38,9 +39,5 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
-
-## Queued (current phase; one-liners)
-
-(empty)
+(empty — the plan is closed.)
 
