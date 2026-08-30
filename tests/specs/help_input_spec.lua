@@ -39,9 +39,13 @@ fakeImGui.GetWindowSize     = function() return 800, 600 end
 fakeImGui.CalcTextSize      = function(_, s) return 8 * #tostring(s), 14 end
 fakeImGui.IsMouseClicked    = function(_, button) return mouse ~= nil and button == 0 end
 fakeImGui.GetMousePos       = function() return mouse and mouse.x or -1, mouse and mouse.y or -1 end
+-- The draw calls record rather than no-op, so the layout case below reads the
+-- box's geometry off them. Each entry keeps the arguments past the drawlist.
+local drawn = {}
 for _, name in ipairs({ 'DrawList_AddRectFilled', 'DrawList_AddRect',
                         'DrawList_AddText', 'DrawList_AddLine' }) do
-  fakeImGui[name] = function() end
+  local op = name:match('^DrawList_Add(.+)$')
+  fakeImGui[name] = function(_, ...) util.add(drawn, { op = op, ... }) end
 end
 
 -- cmgr resolves keycap glyphs per platform; headless there is no host to ask.
@@ -62,7 +66,7 @@ local function noop() end
 -- fake, so drop the imgui-capturing modules and re-require (curveEditor idiom).
 local function fresh()
   package.preload['imgui'] = function() return function(_) return fakeImGui end end
-  for _, m in ipairs({ 'imgui', 'help', 'keyQueue', 'commandManager' }) do
+  for _, m in ipairs({ 'imgui', 'help', 'keycaps', 'keyQueue', 'commandManager' }) do
     package.loaded[m] = nil
   end
   kq   = util.instantiate('keyQueue', { ctx = ctx })
@@ -83,7 +87,7 @@ end
 -- state before anything draws, then the page anchors its body and the sheet draws.
 local function frame(opts)
   opts = opts or {}
-  pressed, curMods, mouse, queuedChar = {}, opts.mods or 0, opts.mouse, opts.char
+  pressed, curMods, mouse, queuedChar, drawn = {}, opts.mods or 0, opts.mouse, opts.char, {}
   for _, key in ipairs(opts.pressed or {}) do pressed[key] = true end
   kq:fill(help:isOpen() and 'help' or nil)
   help:beginFrame()
@@ -92,6 +96,32 @@ local function frame(opts)
 end
 
 local CHIP = { x = 20, y = 35 }   -- inside the first row's keycap chip of the only box
+local LINE = 14                   -- the fake's text line height
+
+-- The outlined rects in draw order -- the box, then one keycap chip per row --
+-- and where a given string was drawn.
+local function outlines()
+  local found = {}
+  for _, call in ipairs(drawn) do
+    if call.op == 'Rect' then
+      util.add(found, { x0 = call[1], y0 = call[2], x1 = call[3], y1 = call[4] })
+    end
+  end
+  return found
+end
+
+local function textAt(text)
+  for _, call in ipairs(drawn) do
+    if call.op == 'Text' and call[4] == text then return { x = call[1], y = call[2] } end
+  end
+end
+
+-- A chip's width is the line height times a fraction, so a position derived from
+-- it is compared to the pixel rather than to the bit.
+local function near(actual, expected, msg)
+  t.truthy(math.abs(actual - expected) < 0.001,
+           msg .. ' (' .. tostring(actual) .. ' vs ' .. tostring(expected) .. ')')
+end
 
 -- Focus the first row, then arm its chip for capture: two clicks on the same chip,
 -- as docs/help.md § Editing describes.
@@ -102,6 +132,38 @@ local function captureFirstChip()
 end
 
 return {
+  {
+    -- The box the sheet measures, read off the draw calls it made. The fixture's
+    -- group holds two single-chord commands, so the box is a title row and two
+    -- command rows, and the label column clears the wider of the two clusters.
+    -- This pins the geometry across the move of the chip and box drawing into
+    -- keycaps: the numbers are the sheet's own pads and gaps, in the fake's units.
+    name = 'the group box lays out its title, chips and labels',
+    run = function()
+      fresh()
+      frame{}
+
+      local rects = outlines()
+      t.eq(#rects, 3, 'the box outline, and a keycap chip per command row')
+      local box, chip, chip2 = rects[1], rects[2], rects[3]
+      t.deepEq({ box.x0, box.y0 }, { 8, 8 }, 'the box sits one gap inside the body rect')
+      t.eq(box.y1 - box.y0, 6 * 2 + LINE * 3 + 2 * 2, 'and stands three rows tall')
+
+      local title, alpha, beta = textAt('Grid'), textAt('Alpha'), textAt('Beta')
+      t.deepEq(title, { x = 14, y = 14 }, 'the title is padded inside the box')
+      t.eq(chip.x0, title.x, "the first row's chip starts at the title column")
+      t.eq(chip.y0, title.y + LINE + 2, 'a row below it')
+      t.eq(chip.y1 - chip.y0, LINE, 'and stands one line tall')
+      t.truthy(8 * #'A' < LINE * 0.9, 'the glyph is narrower than the square floor (precondition)')
+      near(chip.x1 - chip.x0, LINE * 0.9 + 2 * 2, 'a lone glyph floors to a square, plus the outer pad')
+      t.eq(alpha.y, chip.y0, 'the label sits on its row')
+      t.eq(alpha.x, chip.x1 + 12, 'past the key column')
+      t.deepEq(beta, { x = alpha.x, y = alpha.y + LINE + 2 }, 'and the next row below')
+      t.eq(chip2.y0, beta.y, 'which is where the second chip drew')
+      near(box.x1, alpha.x + 8 * #'Alpha' + 6, 'the box closes a pad past the widest label')
+    end,
+  },
+
   {
     -- Dismissal acts on any press at all, so it claims whatever it found: the press
     -- that closed the sheet reaches no reader on the page underneath.

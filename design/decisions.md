@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The keycap chips and the box of chip rows they sit in draw through keycaps.lua,
+  bound to a drawlist and a theme. A draw call reports where the chips landed, and the cheat-sheet
+  decorates that geometry with its click map and its edit tags, so the module holds no interaction
+  state and the menu draws its row and its lookahead panel through the same code. An edit tag
+  therefore draws over the label it reaches into.
+
 - **2026-08-30** — The lotus menu draws its letters as the cheat-sheet's keycaps, in the row and in
   the panel alike, since a menu letter is a key pressed. A row wider than the window wraps upward,
   so every title is drawn in full. One box sits above the highlighted member, carrying its title and

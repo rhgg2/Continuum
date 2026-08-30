@@ -6,8 +6,9 @@
 --invariant: edit state (editing/capturing/conflict) resets on overlay close or page change
 --contract: 'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
 --contract: every key the sheet acts on is claimed under 'help' -- see docs/keyQueue.md § Ownership
-local ImGui = require 'imgui' '0.10'
-local util  = require 'util'
+local ImGui   = require 'imgui' '0.10'
+local keycaps = require 'keycaps'
+local util    = require 'util'
 
 local ctx      = (...).ctx
 local chrome   = (...).chrome
@@ -20,8 +21,7 @@ local current = nil
 local open    = false
 local openAtStart = false   -- open as of frame start; gates dismissal + the pages' mouse guards
 
-local PAD, ROW_GAP, KEY_GAP, BOX_GAP = 6, 2, 12, 8
-local PIN_GAP, WIN_MARGIN, BOX_R = 4, 2, 4   -- pin drop below segment; window-edge inset; box corner radius
+local BOX_GAP, PIN_GAP, WIN_MARGIN = 8, 4, 2   -- between boxes; pin drop below segment; window-edge inset
 local EM_DASH = '\xe2\x80\x94'
 
 -- Edit-mode state: `editing` = cmd whose row shows ✕/+; `capturing` awaits a chord;
@@ -56,7 +56,7 @@ end
 ---------- DRAW
 
 -- Per-frame draw state: set at the top of help:draw, read by the helpers below.
-local dl, lineH, theme, capBg, capLine, boxes
+local dl, lineH, theme, caps, boxes
 
 local function rectFor(key)
   local toolbarId = key:match('^toolbar%.(.+)$')
@@ -66,46 +66,12 @@ local function rectFor(key)
   return anchors[key]
 end
 
--- Each shortcut gets its own keycap chip ('/'-separated for multi-binding cmds);
--- symbol glyphs are floored to a square (so , . ` read as keys), word labels stay natural.
-local CHIP_PADX_INNER, CHIP_PADX_OUTER, CHIP_R, SEP_GAP, CHIP_MIN_RATIO, CHIP_ALPHA = 0, 2, 3, 4, 0.9, 0xcc
-local SEP = '/'
 local FAMILY_SEP = '\xe2\x80\x93'   -- – (between a generated family's first and last chord)
 local CAPTURE_GLYPH = '\xe2\x80\xa6'   -- … (chip cue while capturing a replacement)
 local TAG_SYM, TAG_PAD, ADD_GAP = 7, 1, 9   -- tag symbol px (odd -> centred +); moat inside the 1px border; gap before + tag
-local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
 
 -- Side of a square edit-tag box: the symbol plus a 2px moat and the 1px border.
 local function tagSide() return TAG_SYM + (TAG_PAD + 1) * 2 end
-
--- Lay out a shortcut's chips (separator-joined, one per binding) into geometry for
--- drawCluster: total width + each chip's {w, cells}; word runs share one cell, symbols one each.
-local function layoutCluster(keys, withAdd, sep)
-  sep = sep or SEP
-  local sepW, chips, total = ImGui.CalcTextSize(ctx, sep), {}, 0
-  for index, chord in ipairs(keys) do
-    local cells, chipW, run = {}, CHIP_PADX_OUTER * 2, nil
-    local function cell(text)
-      local cellW = math.max((ImGui.CalcTextSize(ctx, text)) + CHIP_PADX_INNER, lineH * CHIP_MIN_RATIO)
-      util.add(cells, { text = text, w = cellW })
-      chipW = chipW + cellW
-    end
-    for _, code in utf8.codes(chord) do
-      local glyph = utf8.char(code)
-      if #glyph == 1 and glyph:match('%w') then
-        run = (run or '') .. glyph
-      else
-        if run then cell(run); run = nil end
-        cell(glyph)
-      end
-    end
-    if run then cell(run) end
-    util.add(chips, { w = chipW, cells = cells })
-    total = total + chipW + (index > 1 and SEP_GAP * 2 + sepW or 0)
-  end
-  if withAdd then total = total + ADD_GAP + tagSide() end   -- room for the trailing + tag
-  return { width = total, chips = chips, sep = sep }
-end
 
 -- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
 -- drawlist the overlay uses: painter binds to the window drawlist, behind the dim.
@@ -141,47 +107,37 @@ local function drawTag(cx, cy, symbol, ink, captureHere, hit)
   util.add(hits, hit)
 end
 
--- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
--- trailing + tag, each with its own hit. See docs/help.md § Editing.
-local function drawCluster(row, x, y)
-  local cluster, cmd, family = row.cluster, row.cmd, row.family
-  local sepW, cursorX = ImGui.CalcTextSize(ctx, cluster.sep), x
-  local isEditing = cmd ~= nil and cmd == editing
-  local isCapture = capturing ~= nil
-                    and ((family ~= nil and capturing.family == family)
-                         or (cmd ~= nil and capturing.cmd == cmd))
-  for index, chip in ipairs(cluster.chips) do
-    if index > 1 then
-      ImGui.DrawList_AddText(dl, cursorX + SEP_GAP, y, theme.key, cluster.sep)
-      cursorX = cursorX + SEP_GAP * 2 + sepW
-    end
+-- The capture cue on a row: a family captures for the whole row, so every chip of
+-- it shows the cue; a command's capture cues the one chip being replaced.
+local function accentFor(row)
+  if not capturing then return nil end
+  local whole = row.family ~= nil and capturing.family == row.family
+  if not (whole or (row.cmd ~= nil and capturing.cmd == row.cmd)) then return nil end
+  local chips = {}
+  for index = 1, #row.cluster.chips do
     local spec = row.specs and row.specs[index]
-    local x2   = cursorX + chip.w
-    -- A family captures for the whole row, so both its chips show the cue.
-    local captureHere = isCapture and (family ~= nil or (spec ~= nil and spec == capturing.replace))
-    ImGui.DrawList_AddRectFilled(dl, cursorX, y, x2, y + lineH, capBg, CHIP_R)
-    ImGui.DrawList_AddRect(dl, cursorX, y, x2, y + lineH, captureHere and theme.title or capLine, CHIP_R)
-    if captureHere then
-      local glyphW = ImGui.CalcTextSize(ctx, CAPTURE_GLYPH)
-      ImGui.DrawList_AddText(dl, cursorX + (chip.w - glyphW) / 2, y, theme.title, CAPTURE_GLYPH)
-    else
-      local glyphX = cursorX + CHIP_PADX_OUTER
-      for _, cell in ipairs(chip.cells) do
-        local textW = ImGui.CalcTextSize(ctx, cell.text)
-        ImGui.DrawList_AddText(dl, glyphX + (cell.w - textW) / 2, y, theme.key, cell.text)
-        glyphX = glyphX + cell.w
-      end
-    end
-    util.add(hits, { x = cursorX, y = y, w = chip.w, h = lineH, kind = 'chip',
-                     cmd = cmd, spec = spec, family = family })
+    if whole or (spec ~= nil and spec == capturing.replace) then chips[index] = true end
+  end
+  return { chips = chips, text = CAPTURE_GLYPH }
+end
+
+-- Records a click hit per chip the box placed; in edit mode also draws the ✕ corner
+-- tags and the trailing + tag, each with its own hit. See docs/help.md § Editing.
+local function decorateRow(row, placed)
+  local isEditing = row.cmd ~= nil and row.cmd == editing
+  for index, chip in ipairs(placed.chips) do
+    local spec = row.specs and row.specs[index]
+    util.add(hits, { x = chip.x, y = chip.y, w = chip.w, h = chip.h, kind = 'chip',
+                     cmd = row.cmd, spec = spec, family = row.family })
     if isEditing and spec ~= nil then
-      drawTag(x2+2, y, 'x', theme.remove, false, { kind = 'remove', cmd = cmd, spec = spec })
+      drawTag(chip.x + chip.w + 2, chip.y, 'x', theme.remove, false,
+              { kind = 'remove', cmd = row.cmd, spec = spec })
     end
-    cursorX = x2
   end
   if isEditing then
-    drawTag(cursorX + ADD_GAP + tagSide() / 2, y + lineH / 2, '+', theme.add,
-            isCapture and capturing.replace == nil, { kind = 'add', cmd = cmd })
+    drawTag(placed.endX + ADD_GAP + tagSide() / 2, placed.y + lineH / 2, '+', theme.add,
+            capturing ~= nil and capturing.cmd == row.cmd and capturing.replace == nil,
+            { kind = 'add', cmd = row.cmd })
   end
 end
 
@@ -200,52 +156,43 @@ end
 local function familyRow(family)
   local members = family.members
   local chords  = { chordOf(members[1].name), chordOf(members[#members].name) }
-  return { cluster = layoutCluster(chords, false, FAMILY_SEP),
-           label = family.label, family = family }
+  local row = { cluster = caps.cluster(chords, FAMILY_SEP), label = family.label, family = family }
+  row.accent = accentFor(row)
+  return row
 end
 
 local function commandRow(entry)
   local editingRow = entry.name == editing
   local labels     = cmgr:keyLabelList(entry.name, ImGui)
-  return { cluster = layoutCluster(labels or (editingRow and {} or { EM_DASH }), editingRow),
-           label = entry.label, cmd = entry.name, specs = cmgr:keysFor(entry.name) or {} }
+  local row = { cluster = caps.cluster(labels or (editingRow and {} or { EM_DASH })),
+                label = entry.label, cmd = entry.name, specs = cmgr:keysFor(entry.name) or {} }
+  -- The + tag is the sheet's own decoration, so the sheet pays for its width.
+  if editingRow then row.cluster.width = row.cluster.width + ADD_GAP + tagSide() end
+  row.accent = accentFor(row)
+  return row
 end
 
--- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the box
--- w/h, sized to the wider of title vs the shortcut column + widest label.
-local function layoutBox(title, entries)
-  local rows, keyW, labelW, collapsed = {}, 0, 0, {}
+-- A group's box over one row per command, a generated family collapsed to one row.
+local function groupBox(title, entries)
+  local rows, collapsed = {}, {}
   for _, entry in ipairs(entries) do
     local family = entry.family
-    local row
     if not family then
-      row = commandRow(entry)
+      util.add(rows, commandRow(entry))
     elseif not collapsed[family] then
-      row, collapsed[family] = familyRow(family), true
-    end
-    if row then
-      util.add(rows, row)
-      keyW   = math.max(keyW, row.cluster.width)
-      labelW = math.max(labelW, (ImGui.CalcTextSize(ctx, row.label)))
+      util.add(rows, familyRow(family)); collapsed[family] = true
     end
   end
-  local titleW = ImGui.CalcTextSize(ctx, title)
-  local w = math.max(titleW, keyW + KEY_GAP + labelW) + PAD * 2
-  local h = PAD * 2 + lineH * (#rows + 1) + ROW_GAP * #rows
-  return { title = title, rows = rows, keyW = keyW, w = w, h = h }
+  return caps.box(title, rows)
 end
 
-local function drawBox(box, x, y)
-  ImGui.DrawList_AddRectFilled(dl, x, y, x + box.w, y + box.h, theme.bg, BOX_R)
-  ImGui.DrawList_AddRect(dl, x, y, x + box.w, y + box.h, theme.border, BOX_R)
-  local rowY = y + PAD
-  ImGui.DrawList_AddText(dl, x + PAD, rowY, theme.title, box.title)
-  rowY = rowY + lineH + ROW_GAP
-  for _, row in ipairs(box.rows) do
-    drawCluster(row, x + PAD, rowY)
-    ImGui.DrawList_AddText(dl, x + PAD + box.keyW + KEY_GAP, rowY, theme.label, row.label)
-    rowY = rowY + lineH + ROW_GAP
+-- Draws a group's box, decorates the chips it placed, and records the rect for the
+-- off-box click test.
+local function drawGroupBox(box, x, y)
+  for index, placed in ipairs(caps.drawBox(box, x, y)) do
+    decorateRow(box.rows[index], placed)
   end
+  util.add(boxes, { x = x, y = y, w = box.w, h = box.h })
 end
 
 local PROMPT_PAD, BTN_PADX, BTN_GAP, LINE_GAP = 10, 10, 8, 4
@@ -283,8 +230,7 @@ local function drawConflict(winX, winY, winW, winH)
   local y0   = math.floor(winY + (winH - boxH) / 2)
   local x1, y1 = x0 + boxW, y0 + boxH
 
-  ImGui.DrawList_AddRectFilled(dl, x0, y0, x1, y1, theme.bg, BOX_R)
-  ImGui.DrawList_AddRect(dl, x0, y0, x1, y1, theme.border, BOX_R)
+  caps.panel(x0, y0, x1, y1)
   local rowY = y0 + PROMPT_PAD
   ImGui.DrawList_AddText(dl, x0 + (boxW - w1) / 2, rowY, theme.title, line1)
   rowY = rowY + lineH + LINE_GAP
@@ -293,8 +239,8 @@ local function drawConflict(winX, winY, winW, winH)
   local btnY, bx = y1 - PROMPT_PAD - btnH, x0 + math.floor((boxW - totalBtnW) / 2)
   for i, button in ipairs(buttons) do
     local bw = btnW[i]
-    ImGui.DrawList_AddRectFilled(dl, bx, btnY, bx + bw, btnY + btnH, capBg, CHIP_R)
-    ImGui.DrawList_AddRect(dl, bx, btnY, bx + bw, btnY + btnH, capLine, CHIP_R)
+    ImGui.DrawList_AddRectFilled(dl, bx, btnY, bx + bw, btnY + btnH, caps.capBg, keycaps.CHIP_R)
+    ImGui.DrawList_AddRect(dl, bx, btnY, bx + bw, btnY + btnH, caps.capLine, keycaps.CHIP_R)
     local tw = ImGui.CalcTextSize(ctx, button.text)
     ImGui.DrawList_AddText(dl, bx + (bw - tw) / 2, btnY + 3, theme.title, button.text)
     util.add(conflictHits, { x = bx, y = btnY, w = bw, h = btnH, kind = button.kind })
@@ -333,9 +279,7 @@ local function placePins(pins, winX, winW)
   local shift = math.max(leftShift, math.min(0, rightShift))
 
   for i, pin in ipairs(pins) do
-    local x = xs[i] + shift
-    drawBox(pin.box, x, pin.top)
-    util.add(boxes, { x = x, y = pin.top, w = pin.box.w, h = pin.box.h })
+    drawGroupBox(pin.box, xs[i] + shift, pin.top)
   end
 end
 
@@ -353,8 +297,7 @@ local function placeFlow(flows)
     if cursor.x + box.w > rect.x + rect.w and cursor.x > rect.x + BOX_GAP then
       cursor.x, cursor.y, cursor.rowH = rect.x + BOX_GAP, cursor.y + cursor.rowH + BOX_GAP, 0
     end
-    drawBox(box, cursor.x, cursor.y)
-    util.add(boxes, { x = cursor.x, y = cursor.y, w = box.w, h = box.h })
+    drawGroupBox(box, cursor.x, cursor.y)
     cursor.x = cursor.x + box.w + BOX_GAP
     cursor.rowH = math.max(cursor.rowH, box.h)
   end
@@ -514,8 +457,7 @@ function help:draw()
   local placements = current and pages[current]
   if not placements then return end
 
-  dl    = ImGui.GetForegroundDrawList(ctx)
-  lineH = ImGui.GetTextLineHeight(ctx)
+  dl = ImGui.GetForegroundDrawList(ctx)
   local winX, winY = ImGui.GetWindowPos(ctx)
   local winW, winH = ImGui.GetWindowSize(ctx)
   ImGui.DrawList_AddRectFilled(dl, winX, winY, winX + winW, winY + winH, chrome.colour('help.dim'))
@@ -532,10 +474,10 @@ function help:draw()
     tag       = chrome.colour('help.tag'),
     tagBorder = chrome.colour('help.tagBorder'),
   }
-  capBg   = withAlpha(theme.chip, CHIP_ALPHA)
-  capLine = withAlpha(theme.border, 0x66)
-  boxes   = {}   -- every drawn rect, for the off-box click test below
-  hits    = {}   -- per-frame click map (chips, ✕, +); rebuilt by drawCluster
+  caps  = keycaps.new(ctx, dl, theme)
+  lineH = caps.lineH
+  boxes = {}   -- every drawn rect, for the off-box click test below
+  hits  = {}   -- per-frame click map (chips, ✕, +); rebuilt by decorateRow
 
   -- The reachable surface, bucketed by the group each entry declares. A group with
   -- no reachable member draws no box, so a modal scope or a thin page thins the sheet.
@@ -548,7 +490,7 @@ function help:draw()
   for _, placement in ipairs(placements) do
     local rect, entries = rectFor(placement.anchor), byGroup[placement.group]
     if rect and entries then
-      local box = layoutBox(placement.group, entries)
+      local box = groupBox(placement.group, entries)
       if placement.place == 'flow' then
         util.add(flows, { box = box, rect = rect, anchor = placement.anchor })
       else

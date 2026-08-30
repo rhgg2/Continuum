@@ -43,10 +43,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 help: the keycap chips and their box become a module (§ Where it draws)
 - 2026-08-30 menu: arrows move a highlight, and Enter takes it (§ Walking a path)
 - 2026-08-29 menu: a pending prefix survives the walk, and the leaf takes it (§ What stays live)
 - 2026-08-28 menu: letters walk the tree, and the level draws over the body (§ Walking a path)
-- 2026-08-28 menu: the level a path names, read off the surface at open (§ The surface)
 
 ## Now
 
@@ -54,13 +54,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The chip box leaves the cheat-sheet** — the keycap cluster and the
-   box it sits in (title, then rows of chips and labels) move out of
-   `help.lua` into a module of their own, drawn against a drawlist and a
-   theme passed in. The sheet keeps its edit tags and its click map, and
-   hands them to the module. Green-first: `help_input_spec` drives
-   `help:draw` under a fake ImGui and pins the sheet unchanged, with a
-   layout case on the measured box.
 2. **The row's own geometry** — the level draws as keycaps and titles,
    the highlighted member wearing a fill and its description line shown,
    wrapping upward where the window is too narrow for the level. The
