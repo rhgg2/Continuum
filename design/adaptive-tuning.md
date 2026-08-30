@@ -1,8 +1,8 @@
 # Design — Adaptive tuning
 
-> opened: 2026-07-04 · status: parked — plan/adaptive-tuning.md, before
-> phase 5 (seams) with phases 1–4 landed; the solver's boundary settled.
-> Pushed under plan/lotus-menu.md.
+> opened: 2026-07-04 · status: in flight — plan/adaptive-tuning.md,
+> before phase 5 (seams) with phases 1–4 landed; the solver's boundary
+> settled.
 
 **Solve a selection in one pass for a single detune per note that
 makes its sounding sonorities as harmonious as they can jointly be

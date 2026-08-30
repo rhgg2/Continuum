@@ -1,7 +1,8 @@
 # Lotus menu — plan
 
-> source: `design/lotus-menu.md` — synthesis compiled from there;
-> don't design here.
+> closed: 2026-08-30. The model now lives in `docs/commandManager.md`,
+> `docs/menu.md` and `docs/help.md`; the design doc it was compiled from
+> is gone.
 
 ## Phases
 
@@ -41,7 +42,8 @@
    now lives in `docs/menu.md` § The row.
 6. **Phase 6 — Both routes** (§ Both routes on the cheat-sheet) — a pathed
    command's path as a chip beside its key chips, rendered from the entry
-   and the group letters. ← in flight
+   and the group letters. — landed 2026-08-30, two commits; the model now
+   lives in `docs/help.md` § What's where.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -49,10 +51,3 @@
 - 2026-08-30 cmgr: a pathed entry carries the route that walks to it (§ Both routes on the cheat-sheet)
 - 2026-08-30 menu: the preview line shows the level below the highlight (§ Where it draws)
 - 2026-08-30 menu: the row draws as keycaps and titles, and wraps (§ Where it draws)
-
-## Now
-
-(empty — run /plan-next to compile the next brief.)
-
-## Queued (current phase; one-liners)
-
