@@ -31,22 +31,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 keyQueue: the mouse gestures read modifiers through the queue (design/keyQueue.md § Hold and repeat)
 - 2026-08-30 wiring: the gesture cancel claims its Escape (design/keyQueue.md § Claiming)
 - 2026-08-30 wiring: the fx picker owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 - 2026-08-30 editor, sampler: the page Escapes claim from the keyQueue (design/keyQueue.md § Claiming)
-- 2026-08-30 tracker: the palette pane owns the key queue (design/keyQueue.md § Claiming, § Ownership)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **the mouse gestures read modifiers through the queue.** Six
-  `GetKeyMods` sites move to `keyQueue:mods()`: gridPane's region paint
-  and shift-extend, the tracker mini-map's snap, arrange's snap and its
-  click modifiers, wiring's shift-clear and curveEditor's free-drag.
-  `curveEditor` and `gridPane` need `keyQueue` threaded to them.
 
 - **the record.** `docs/keyQueue.md` gains § Order — the drain order as
   a property of the call graph — and the distinction between a guard

@@ -404,6 +404,7 @@ local function curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)
     end,
     snap    = function(t) return util.round(t) end,
     hovered = hovered,
+    shifted = (keyQueue:mods() & ImGui.Mod_Shift) ~= 0,
     dragId  = colIdx,
     colours = {
       axis         = 'laneAxis',
@@ -1010,7 +1011,7 @@ function gridPane:handleMouse()
   -- active group, alt-drag removes it; debounced per cell via paintLast.
   local rc = ec:regionCursor()
   if ec:isInRegionMode() and rc and held and ImGui.IsWindowHovered(ctx) then
-    local mods = ImGui.GetKeyMods(ctx)
+    local mods = keyQueue:mods()
     local add  = (mods & ImGui.Mod_Shift) ~= 0
     local sub  = (mods & ImGui.Mod_Alt)   ~= 0
     if add or sub then
@@ -1067,7 +1068,7 @@ function gridPane:handleMouse()
       return
     end
 
-    local shift = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
+    local shift = keyQueue:mods() & ImGui.Mod_Shift ~= 0
 
     if shift then
       tv:endReselectCascades()   -- shift-extend is a re-selection

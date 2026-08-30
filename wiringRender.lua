@@ -1879,7 +1879,7 @@ local function beginFrame(w, h)
   -- Body split added a palette child; gate every press-start on canvas hover
   -- so a palette click can't begin a canvas band/drag/menu. Mouseup stays open.
   local overCanvas = ImGui.IsWindowHovered(ctx)
-  local shiftHeld = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
+  local shiftHeld = keyQueue:mods() & ImGui.Mod_Shift ~= 0
   -- Shift clears the selection (rising edge only) so the wire-creation hover
   -- owns the visual layer; releasing shift drops sticky (a pinned overlay
   -- lives for one shift press).

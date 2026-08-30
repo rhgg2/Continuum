@@ -552,7 +552,7 @@ local function drawMapBody()
     mapPress = { qn = qnAt(my), moved = false }
   end
   if mapPress then
-    local snapped = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+    local snapped = keyQueue:mods() & ImGui.Mod_Shift == 0
     if ImGui.IsMouseDragging(ctx, 0) then mapPress.moved = true end
     if mapPress.moved then
       loopCand = tv:mapLoopCand(mapPress, qnAt(my), snapped, MAP_CELL_QN)

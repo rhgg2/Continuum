@@ -4,7 +4,8 @@
 --invariant: anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire
 --invariant: editor owns no domain data; events/projections/eval/callbacks all supplied by host per frame
 --invariant: transient state (hover, segHover, segPin, preview, previewSuppress, drag) lives in factory closure; segPin and drag straddle frames and are invalidated when host's dragId changes
---invariant: snapped move (no shift) constrains t to integer ticks; shift-held free move uses FREE_EPS_T margin against neighbours
+--invariant: a snapped move constrains t to integer ticks
+--invariant: the host's shifted flag frees it, at a FREE_EPS_T margin from neighbours
 --invariant: exactly one of {move-drag, hover, insert-preview, segHover} is active per frame; later branches are gated on earlier ones being absent
 --shape: drag = { kind='move'|'tension'|'inert', id=dragId, idx=number, startMx, startMy, moved=bool, [startMouseT], [startTension, ax, ay, bx, by] }
 --shape: segPin = { id=dragId, segI=number, mx=number, my=number }
@@ -32,7 +33,7 @@ local hover, segHover, segPin, preview, previewSuppress, drag
 
 local curveEditor = {}
 
---shape: FrameArgs = { rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours=config-names{axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
+--shape: FrameArgs = { rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, shifted=bool, dragId, colours=config-names{axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
 --contract: returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
 --contract: callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
 --contract: host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered
@@ -309,9 +310,9 @@ function curveEditor:frame(a)
   local nextT  = (i < n) and tArr[i + 1] or  math.huge
 
   local toVal = util.clamp(util.round(rawVal), vMin, vMax)
-  local shifted = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift ~= 0
 
-  if shifted then
+  -- The host reads shift off the key queue and hands the answer down; see docs/keyQueue.md.
+  if a.shifted then
     local toT = util.clamp(mouseT, prevT + FREE_EPS_T, nextT - FREE_EPS_T)
     cb.onMoveFree(i, toT, toVal)
   else

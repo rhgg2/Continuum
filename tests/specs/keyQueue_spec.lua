@@ -7,6 +7,10 @@
 --
 -- They also pin the fill's own claim: an unowned frame with an item active is a live text
 -- field, which takes the keys a field consumes before any reader sees them.
+--
+-- The last case scans the production sources instead of driving the queue: modifier state is the
+-- queue's to read, so keyQueue.lua is the only file that may name ImGui's GetKeyMods. Every
+-- other reader, the mouse gestures included, goes through keyQueue:mods().
 
 local t    = require('support')
 local util = require('util')
@@ -245,6 +249,26 @@ return {
       local entry = q:take(img.Key_A, img.Mod_Shift, 'modal')
       t.truthy(entry, 'the entry is still there to claim')
       t.eq(entry.mods, img.Mod_Shift, 'and keeps the stamp the fill gave it')
+    end,
+  },
+
+  {
+    name = 'keyQueue is the only production file that names GetKeyMods',
+    run = function()
+      local specDir = debug.getinfo(1, 'S').source:match('^@?(.*)/[^/]+$')
+      local listing = assert(io.popen('ls -1 ' .. specDir .. '/../../*.lua'))
+      local named = {}
+      local scanned = 0
+      for path in listing:lines() do
+        local file = assert(io.open(path, 'r'))
+        local source = file:read('a'); file:close()
+        scanned = scanned + 1
+        if source:find('GetKeyMods', 1, true) then util.add(named, path:match('[^/]+$')) end
+      end
+      listing:close()
+      t.truthy(scanned > 50, 'the scan found the production tree (' .. scanned .. ' files)')
+      t.deepEq(named, { 'keyQueue.lua' },
+        'these files read ImGui modifier state: ' .. table.concat(named, ' '))
     end,
   },
 }

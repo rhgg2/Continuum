@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — curveEditor takes the answer rather than the queue: the host reads shift off the
+  key queue and hands it down with the frame's other arguments, so the leaf editor holds no key
+  state. The exclusivity is pinned by a scan in keyQueue_spec — only keyQueue.lua may name ImGui's
+  GetKeyMods.
+
 - **2026-08-30** — The wiring canvas's draft cancel takes Escape at the frame's mods, over the bare
   Mod_None the editor and sampler cancels use: a draft is begun shift-held, and the modifiers a
   gesture needs should not defeat the press that abandons it. The take also comes out of the

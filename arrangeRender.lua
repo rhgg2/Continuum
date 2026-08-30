@@ -14,8 +14,9 @@ local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
 --contract: arrangePage (the controller) owns the stack (am/av) and hands this renderer av only
-local cm, cmgr, chrome, gui, modalHost, av, help =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help
+local cm, cmgr, chrome, gui, modalHost, av, help, keyQueue =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).av, (...).help,
+  (...).keyQueue
 
 local ctx = gui and gui.ctx or nil
 -- gui.font is monospace (Source Code Pro) attached at context create;
@@ -231,7 +232,7 @@ local function handleGridMouse(tracks)
   local mcol, mrow = pg.fromScreen(mx, my)
   local bpr        = av:beatPerRow()
   local myQN       = av:rowToQN(mrow)
-  local snapped    = ImGui.GetKeyMods(ctx) & ImGui.Mod_Shift == 0
+  local snapped    = keyQueue:mods() & ImGui.Mod_Shift == 0
   local inBody     = my >= g.bodyTop and my <= g.bodyBot
   local inGutter   = mx >= g.paneLeft and mx < g.gutterR
 
@@ -260,7 +261,7 @@ local function handleGridMouse(tracks)
       local row = math.min(g.sr + g.visRows - 1, math.floor(mrow))
       local take, mode
       if col >= 0 and col < nTracks then take, mode = av:hitTake(col, myQN, bpr / g.rowH) end
-      local mods      = ImGui.GetKeyMods(ctx)
+      local mods      = keyQueue:mods()
       local additive  = mods & ImGui.Mod_Shift ~= 0   -- Shift: extend the selection
       local duplicate = mods & ImGui.Mod_Ctrl  ~= 0   -- Ctrl: a drag duplicates
       if take then

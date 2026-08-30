@@ -24,7 +24,7 @@ local VMIN, VMAX = 0, 100
 
 local rec, cb
 local mouse = { x = 0, y = 0 }
-local btn   = { clicked = false, double = false, down = false, mods = 0 }
+local btn   = { clicked = false, double = false, down = false }
 
 local function record(name)
   return function(...) rec[#rec + 1] = { fn = name, args = { ... } } end
@@ -43,7 +43,6 @@ fakeImGui.GetMousePos           = function(_) return mouse.x, mouse.y end
 fakeImGui.IsMouseClicked        = function(_) return btn.clicked end
 fakeImGui.IsMouseDoubleClicked  = function(_) return btn.double end
 fakeImGui.IsMouseDown           = function(_) return btn.down end
-fakeImGui.GetKeyMods            = function(_) return btn.mods end
 fakeImGui.Mod_Shift      = 4
 fakeImGui.DrawFlags_None   = 0
 fakeImGui.DrawFlags_Closed = 1
@@ -101,7 +100,7 @@ end
 
 local function setMouse(x, y, b)
   mouse.x, mouse.y = x, y
-  btn.clicked, btn.double, btn.down, btn.mods = false, false, false, 0
+  btn.clicked, btn.double, btn.down = false, false, false
   for k, v in pairs(b or {}) do btn[k] = v end
 end
 
@@ -158,6 +157,27 @@ return {
       frame(ed)
       t.deepEq(cb.move, { 2, 6, 100 },
         'onMove carries the hit-tested index and the inverse-mapped, snapped t/val')
+    end,
+  },
+  {
+    -- The host reads the modifier off the key queue and hands the answer down as a frame
+    -- arg, so the editor names no key state of its own (docs/keyQueue.md § Hold and repeat).
+    name = 'a drag with the host reporting shift moves free of the snap',
+    run = function()
+      rec, cb = {}, {}
+      local ed = newEd()
+
+      setMouse(200, 70, { clicked = true, down = true })   -- on anchor 2
+      frame(ed, { shifted = true })
+
+      rec, cb = {}, {}
+      setMouse(214, 60, { down = true })                   -- t=5.7, val=90: between snap lines
+      frame(ed, { shifted = true })
+      t.eq(cb.move, nil, 'the snapped callback stays quiet')
+      t.truthy(cb.moveFree, 'the free one fires')
+      t.eq(cb.moveFree[1], 2, 'on the hit-tested anchor')
+      t.truthy(math.abs(cb.moveFree[2] - 5.7) < 1e-6, 'at the unsnapped t the cursor maps to')
+      t.eq(cb.moveFree[3], 90, 'and the rounded value')
     end,
   },
   {

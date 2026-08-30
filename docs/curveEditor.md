@@ -10,8 +10,11 @@ its host.**
 
 1. Everything the editor works with arrives as its arguments — the
    events, the projections between curve space and screen, the curve
-   evaluation, and the callbacks that carry insert, move, tension,
-   delete and shape-cycle back to the document.
+   evaluation, whether shift is held, and the callbacks that carry
+   insert, move, tension, delete and shape-cycle back to the document.
+
+1. The host reads shift off the key queue (`docs/keyQueue.md` § Hold
+   and repeat), so the editor names no key state of its own.
 
 1. `dragId` is the curve's identity, supplied by the host each frame.
    A gesture that straddles frames (`drag`, `segPin`) is dropped when
