@@ -89,41 +89,42 @@ so it tells you nothing about what they check.
 
 ## Writing good tests
 
-A good test fails if and only if the thing it names breaks. One which
-cannot fail is **tautological**, and a false green, and one which
-fails for unrelated reasons is **brittle**, and leads to test churn.
+A test enforces the model — what `docs/` states and `--contract:`/
+`--invariant:` annotate — not its realisation in code. Every test
+should pin a sentence of the model; if no such sentence exists, either
+the model is under-documented or you are about to pin the
+implementation. This is checkable before writing anything.
 
-To avoid tautology:
+A good test fails iff the sentence it pins breaks. Each direction has
+a failure mode: a test that cannot fail is **tautological** (a false
+green); one that fails for unrelated reasons is **brittle** (test
+churn). Both mean the test is coupled to something other than the
+model.
 
-1. Guard against vacuous tests. An assertion over a batch may be
-   tautological if the batch is empty, and a comparison tautological
-   when both sides are nil. Guard against this by asserting the
-   non-triviality as a precondition.
+Against tautology:
 
-1. Perturbation-test. A single test may not catch every mode of
-   failure; a well-designed spec group will.
-   `mcp__continuum_perturb__spec_perturb` gives you a precise answer.
+1. Guard non-triviality. An assertion over a batch is vacuous when the
+   batch is empty; a comparison, when both sides are nil. Assert the
+   precondition.
 
-To avoid brittleness:
+1. Produce expected values by independent means, and not by restating
+   the module's constants or logic.
 
-1. Prefer second computations to literals. A constant in an assertion
-   is brittle. If the expected value can be produced by another route,
-   use that as an oracle.
+Against brittleness:
 
-1. Compare under the coarsest relation the contract fixes. A `deepEq`
-   against a whole record is brittle if only one field is relevant.
-   Tolerances or predicates may do the same work, and also help to
-   clarify what the test contract actually is.
+1. Assert the coarsest relation the contract fixes: containment,
+   order, invariance, the difference between two runs. A whole-record
+   `deepEq` is brittle when one field matters. Geometry, layout and
+   formatting almost always yield to relations.
 
-1. Seed through the production path. For example, add notes via
-   `tm:addEvent`, which follows the production representation when it
-   moves and applies the correct substrate.
+1. Seed through the production path (`tm:addEvent`, not hand-built
+   tables), so fixtures move when the representation does.
 
-1. Perturbation-test. Change constants or literals which should have
-   no bearing on the property under test, and check nothing goes red.
-   Again, apply `mcp__continuum_perturb__spec_perturb`.
+Perturbation probes both directions at once: vary what should not
+matter and expect green; break what should and expect red.
+`mcp__continuum_perturb__spec_perturb` automates this. No single test
+catches every failure mode — a well-designed spec group does.
 
-Sometimes, brittleness is unavoidable: the real behaviour is the only
-oracle. Best practice in this case is to ensure that the test includes
-the mechanism for regenerating its ground truth, so that hand-patching
-is not necessary.
+Sometimes brittleness is unavoidable because the real behaviour is the
+only oracle. Then the test must carry the mechanism for regenerating
+its ground truth, so a legitimate change never means hand-patching.
