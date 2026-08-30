@@ -9,8 +9,9 @@
 local POLL_FRAMES = 30    -- ~1s; the spawn path is human-paced, not frame-paced
 local STALE_S     = 60
 
+-- '..' keeps the path through the link REAPER loaded us by; see bridge.lua.
 local here     = debug.getinfo(1, 'S').source:match('^@?(.*[/\\])') or './'
-local spoolDir = here .. '.claude/mcp/reaper/spool'
+local spoolDir = here .. '../.claude/mcp/reaper/spool'
 local marker   = spoolDir .. '/spawn.marker'
 local actionId = spoolDir .. '/action.id'
 

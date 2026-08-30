@@ -206,12 +206,18 @@ def _head(root: Path) -> str:
 def _lua_run(root: Path, source: Path, timeout: int) -> tuple[str, str, Optional[int]]:
     """Run source in root; (stdout, stderr, exit status), status None on timeout.
 
-    LUA_PATH names the three roots tests/run.lua names, so a probe can require
+    LUA_PATH names the roots tests/run.lua names, so a probe can require
     production modules and `harness` alike, and gets them from the tree it is
     running in rather than from wherever the file happens to sit.
+
+    Every stack directory under src/, found by listing rather than by the fixed
+    list continuum.lua and run.lua carry: those are Lua and cannot read a
+    directory, this can, and a list here is one more place to forget.
     """
+    src_dirs = [root / "src"] + sorted(p for p in root.glob("src/*") if p.is_dir())
     env = dict(os.environ)
-    env["LUA_PATH"] = f"{root}/?.lua;{root}/tests/?.lua;{root}/tests/specs/?.lua;;"
+    env["LUA_PATH"] = (";".join(f"{d}/?.lua" for d in src_dirs)
+                       + f";{root}/tests/?.lua;{root}/tests/specs/?.lua;;")
     try:
         proc = subprocess.run(
             ["lua", str(source)],
@@ -235,8 +241,9 @@ def lua_probe(
 ) -> str:
     """Run a Lua snippet against the working tree, the session's spike, or both.
 
-    package.path covers the tree root, tests/ and tests/specs/, so
-    `require('util')` and `require('harness')` work with no preamble.
+    package.path covers every stack directory under src/, plus tests/ and
+    tests/specs/, so `require('util')` and `require('harness')` work with no
+    preamble.
     Nothing is printed implicitly: use print or io.write.
 
     Args:

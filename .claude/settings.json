@@ -7,7 +7,7 @@
       "mcp__continuum_perturb__spec_perturb",
       "mcp__reaper_docs__reaper_doc_lookup",
       "mcp__reaper__reaper_eval",
-      "mcp__reaper__reaper_restart",
+      "mcp__reaper__reaper_reload",
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git log *)",

@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — `src/` gains a directory per page stack, with `coordinator` for the frame and
+  `shared` for the rest: a reachability trace over require and util.instantiate edges put 50 of 59
+  modules under exactly one page, and resolved all five straddlers to `shared`. Grouping by kind or
+  by language says nothing the filenames do not, and a stack's JSFX sits with it because the
+  coupling that bites is the Lua-JSFX lockstep. Requires stay flat names over a fanned
+  `package.path`; dotted paths would have spelt the layout into 118 spec files, and a module's
+  location is no part of the production shape specs consume. A lint over directories is owed, and
+  until it lands nothing enforces the partition.
+
 - **2026-08-31** — The dirt journal leaves as `dirt.lua` with its write verb already in it, merging
   two planned commits: the verb has no testable home until the module exists, and splitting them
   meant an interim assign-shaped door built to be deleted. `add` is the sole write and

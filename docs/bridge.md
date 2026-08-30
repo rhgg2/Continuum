@@ -153,7 +153,7 @@ a marker and waits for the launcher's instance to come up.
 ## Claiming REAPER
 
 One REAPER runs, and it loads Continuum through one symlink —
-`Scripts/Continuum`, pointed at a tree. Sessions work in separate
+`Scripts/Continuum`, pointed at a tree's `src/`. Sessions work in separate
 worktrees, so that link decides which tree is live, and `reaper_reload`
 repoints it at the calling session's tree before asking for anything.
 Claiming is the reload; there is no second protocol to remember.
@@ -189,8 +189,8 @@ exit can leave the link naming a tree that no longer exists. Continuum
 then stops starting at all, and quietly: the action and `__startup.lua`
 both reach it through the link, and the latter is guarded on the file
 existing so that a moved repo raises no dialog. A claim therefore records
-the main tree in `Scripts/Continuum.home`, beside the link, before it
-moves anything. `__startup.lua` reads that file when the launcher is
+where the link should point in `Scripts/Continuum.home`, beside the link,
+before it moves anything. `__startup.lua` reads that file when the launcher is
 unreachable and repoints the link before loading it. Running at every
 REAPER launch and living outside the link, it is the only place the
 repair can happen with no session left to ask. It is tracked in the repo

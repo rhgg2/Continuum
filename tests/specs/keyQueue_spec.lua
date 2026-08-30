@@ -256,7 +256,8 @@ return {
     name = 'keyQueue is the only production file that names GetKeyMods',
     run = function()
       local specDir = debug.getinfo(1, 'S').source:match('^@?(.*)/[^/]+$')
-      local listing = assert(io.popen('ls -1 ' .. specDir .. '/../../*.lua'))
+      -- find, not a glob: production is a nested tree under src/ now.
+      local listing = assert(io.popen('find ' .. specDir .. "/../../src -name '*.lua'"))
       local named = {}
       local scanned = 0
       for path in listing:lines() do

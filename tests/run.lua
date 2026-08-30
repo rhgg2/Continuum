@@ -4,10 +4,15 @@ local info = debug.getinfo(1, 'S').source:match('^@?(.*)')
 local testDir = info:match('^(.*)/[^/]+$') or '.'
 local projectRoot = testDir:match('^(.*)/tests$') or testDir .. '/..'
 
-package.path = projectRoot .. '/?.lua;'
-            .. testDir     .. '/?.lua;'
-            .. testDir     .. '/specs/?.lua;'
+package.path = testDir .. '/?.lua;'
+            .. testDir .. '/specs/?.lua;'
             .. package.path
+
+-- Mirrors the src/ directory list in continuum.lua; keep the two in step.
+for _, dir in ipairs { '', 'shared/', 'coordinator/', 'tracker/',
+                       'wiring/', 'sample/', 'arrange/', 'editor/' } do
+  package.path = projectRoot .. '/src/' .. dir .. '?.lua;' .. package.path
+end
 
 local harness = require('harness')
 

@@ -38,6 +38,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def source(name: str) -> Path:
+    """A control file's .lua, wherever under src/ its stack directory has it.
+    Module names are unique across the tree -- map_regen refuses a corpus where
+    two sources claim one .map -- so the glob answers exactly once."""
+    found = sorted(ROOT.glob(f"src/**/{name}"))
+    if len(found) != 1:
+        raise SystemExit(f"{name}: {len(found)} sources under src/, expected one")
+    return found[0]
+
+
 # ----- Records
 
 @dataclass
@@ -490,13 +500,13 @@ def differences(label: str, expected, actual) -> list[str]:
 def control() -> int:
     problems: list[str] = []
 
-    _, found = calls(ROOT / CONTROL_FILE)
+    _, found = calls(source(CONTROL_FILE))
     problems += differences(
         CONTROL_FILE, CONTROL_FILE_RECORDS,
         [(c.line, c.proto.lo, c.proto.hi, c.kind, c.name) for c in found])
 
     for (src, line), rows in sorted(CONTROL_SITES.items()):
-        _, found = calls(ROOT / src)
+        _, found = calls(source(src))
         problems += differences(
             f"{src}:{line}", rows,
             [(c.proto.lo, c.proto.hi, c.kind, c.name) for c in found if c.line == line])

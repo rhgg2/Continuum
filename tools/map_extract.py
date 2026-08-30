@@ -80,7 +80,6 @@ and handler rows alike carry no doc comments and no annotations.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -1241,8 +1240,18 @@ def emit(cm: MapFile) -> str:
     add = out.append
     sections = list(cm.sections)        # consumed by emit_items as we walk
 
-    src_rel = ('/'.join(cm.src.parts[-2:]) if cm.src.parent.name == 'tests'
-               else cm.src.name)
+    # Root-relative: map_index turns this into a jump target and flow_extract
+    # reopens it as PROJECT_ROOT / src, so a bare basename stops resolving once
+    # sources live under src/<stack>/. Last 'src', not the first: a checkout may
+    # itself sit under some unrelated src/.
+    parts = cm.src.parts
+    if 'src' in parts:
+        start = len(parts) - parts[::-1].index('src') - 1
+        src_rel = '/'.join(parts[start:])
+    elif cm.src.parent.name == 'tests':
+        src_rel = '/'.join(parts[-2:])
+    else:
+        src_rel = cm.src.name
     head = f"@module {cm.module}  src={src_rel}  loc={cm.loc}  mode={cm.mode}"
     if cm.return_target:
         head += f"  self={cm.return_target}"
@@ -1678,24 +1687,3 @@ def emit_spec(sm: SpecMap) -> str:
         emit_field_rows(out, sm.fields)
 
     return '\n'.join(out).rstrip() + '\n'
-
-
-# ----- CLI
-
-def main(argv: list[str]) -> int:
-    if len(argv) < 2:
-        print("usage: map_extract.py <lua-file> [<out-dir>]", file=sys.stderr)
-        return 2
-    src = Path(argv[1]).resolve()
-    out_dir = Path(argv[2]).resolve() if len(argv) > 2 else src.parent / 'map'
-    out_dir.mkdir(parents=True, exist_ok=True)
-    is_spec = src.parent.name == 'specs'
-    text = emit_spec(parse_spec(src)) if is_spec else emit(parse(src))
-    out_path = out_dir / (src.stem + '.map')
-    out_path.write_text(text)
-    print(out_path)
-    return 0
-
-
-if __name__ == '__main__':
-    raise SystemExit(main(sys.argv))

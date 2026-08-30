@@ -27,6 +27,7 @@ and the report says by how much.
   tools/audit.py specs pass am_spec.lua     and HEAD
 """
 
+import glob
 import os
 import re
 import subprocess
@@ -91,12 +92,12 @@ def commitsSince(since, *paths):
 
 
 def moduleOf(doc):
-    """The .lua a doc is named after, if there is one."""
-    stem = doc[:-3]
-    for candidate in (stem + ".lua", os.path.join("sampler", stem + ".lua")):
-        if os.path.exists(os.path.join(ROOT, candidate)):
-            return candidate
-    return None
+    """The .lua a doc is named after, if there is one. Module names are unique
+    across src/, so the first hit is the only one -- but the path is which stack
+    directory holds it, and git names the module by that path."""
+    found = glob.glob(os.path.join(ROOT, "src", "**", doc[:-3] + ".lua"),
+                      recursive=True)
+    return os.path.relpath(found[0], ROOT) if found else None
 
 
 def surveyDocs(audit):

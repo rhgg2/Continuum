@@ -86,9 +86,12 @@ def _sweep() -> None:
 
 
 def _holder() -> Optional[Path]:
-    """The tree REAPER currently loads Continuum from, or None if the link is gone."""
+    """The tree REAPER currently loads Continuum from, or None if the link is gone.
+
+    The link names a tree's src/, since that is what REAPER installs; every caller
+    here compares against trees, so the parent is what they mean."""
     try:
-        return Path(os.readlink(LINK))
+        return Path(os.readlink(LINK)).parent
     except OSError:
         return None
 
@@ -138,7 +141,9 @@ def _claim() -> None:
     """
     home = _main_tree()
     if home is not None:
-        HOME.write_text(f"{home}\n", encoding="utf-8")
+        # The link target, not the tree: __startup.lua relinks to this string
+        # verbatim, and REAPER loads Continuum from a tree's src/.
+        HOME.write_text(f"{home}/src\n", encoding="utf-8")
     held = _holder()
     if held == PROJECT_ROOT:
         return
@@ -149,7 +154,7 @@ def _claim() -> None:
             mine.write_text(theirs.read_text(encoding="utf-8"), encoding="utf-8")
     staging = LINK.with_name(LINK.name + ".claim")
     staging.unlink(missing_ok=True)
-    staging.symlink_to(PROJECT_ROOT)
+    staging.symlink_to(PROJECT_ROOT / "src")
     os.replace(staging, LINK)
 
 

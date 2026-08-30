@@ -49,8 +49,9 @@ main=$(dirname "$(git -C "$project" rev-parse --path-format=absolute --git-commo
 # link every tick, so it must never name nothing. Same reason _claim uses a
 # rename, and the sweep in session-env.sh the same again. -h keeps the rename
 # from following the link into the directory it names.
-if [ "$(readlink "$link")" = "$cwd" ] && [ "$cwd" != "$main" ]; then
-  ln -sfn "$main" "$link.release" && mv -fh "$link.release" "$link"
+# The link names a tree's src/, which is what REAPER installs.
+if [ "$(readlink "$link")" = "$cwd/src" ] && [ "$cwd" != "$main" ]; then
+  ln -sfn "$main/src" "$link.release" && mv -fh "$link.release" "$link"
 fi
 
 # Delete first, deregister second, because this hook does get cut off partway:

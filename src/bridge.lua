@@ -18,9 +18,11 @@ local env  = deps.env or {}
 -- module locals, so deps.env stays the sole manager surface.
 setmetatable(env, { __index = _G })
 
+-- '..' rather than a resolved root: keeps the path through the symlink so a
+-- repoint moves the spool with the code. See docs/bridge.md § Claiming REAPER.
 local function defaultSpoolDir()
   local here = debug.getinfo(1, 'S').source:match('^@?(.*[/\\])') or './'
-  return here .. '.claude/mcp/reaper/spool'
+  return here .. '../.claude/mcp/reaper/spool'
 end
 local spoolDir = deps.spoolDir or defaultSpoolDir()
 

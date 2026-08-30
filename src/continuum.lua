@@ -5,7 +5,12 @@
 
 do
   local script_path = debug.getinfo(1,'S').source:match[[^@?(.*[\/])[^\/]-$]]
-  package.path = script_path .. '?.lua;' .. package.path
+  -- Module names stay flat over the nested tree; requires resolve wherever a
+  -- module lives. See docs/continuum.md § Loading (mirrored in tests/run.lua).
+  for _, dir in ipairs { '', 'shared/', 'coordinator/', 'tracker/',
+                         'wiring/', 'sample/', 'arrange/', 'editor/' } do
+    package.path = script_path .. dir .. '?.lua;' .. package.path
+  end
   if not reaper.ImGui_GetBuiltinPath then
     reaper.MB('ReaImGui is required. Install it via ReaPack.', 'Continuum', 0)
     return

@@ -21,6 +21,9 @@ builds the substack and drives lifecycle on the layer that owns it. So
 the adjacent-layer guidance above governs calls *within* the chain,
 not the page's reach into it.
 
+`src/` holds a directory per page stack, with `coordinator` for the
+frame and `shared` for what several stacks need.
+
 Each piece of state has one owner, so a special case is usually
 evidence of having located the wrong owner rather than a pragmatic
 shortcut. `cm` is sole truth for config keys, `dataStore` for document

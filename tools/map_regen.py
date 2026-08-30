@@ -36,7 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # (source glob, output directory), both relative to ROOT.
 SOURCE_SETS = (
-    ('*.lua',             'map'),
+    ('src/*.lua',         'map'),
+    ('src/*/*.lua',       'map'),
     ('tests/*.lua',       'map'),
     ('tests/specs/*.lua', 'map/specs'),
 )
@@ -52,8 +53,10 @@ def corpus() -> dict[Path, Path]:
     for pattern, out_dir in SOURCE_SETS:
         for src in sorted(ROOT.glob(pattern)):
             dest = ROOT / out_dir / (src.stem + '.map')
-            # map/ is flat over both the root and tests/, so two sources can
-            # claim one .map -- and one would silently overwrite the other.
+            # map/ is flat over src/, its subdirectories and tests/, so two
+            # sources can claim one .map -- and one would silently overwrite the
+            # other. This is also what enforces the globally unique module names
+            # continuum.lua's flat package.path depends on.
             if dest in sources:
                 raise SystemExit(f"map collision: {rel(sources[dest])} and "
                                  f"{rel(src)} both map to {rel(dest)}")

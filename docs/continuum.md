@@ -6,9 +6,13 @@ coordinator, binds the global commands, and enters the defer loop.
 
 ## Loading
 
-1. A `do` block puts the script's own directory on `package.path`,
-   resolved through `debug.getinfo`. The script thus loads the same
-   way whatever REAPER's working directory is.
+1. A `do` block puts `src/` and each of its stack directories on
+   `package.path`, resolved through `debug.getinfo`. The script thus
+   loads the same way whatever REAPER's working directory is.
+
+1. Module names stay flat over the nested tree, so `require 'DAG'`
+   resolves wherever in the tree DAG lives. Thus, names must be
+   globally unique, which `tools/map_regen.py` enforces.
 
 1. ReaImGui's builtin path goes on next. Its absence is the one
    failure reported through a message box rather than the console.

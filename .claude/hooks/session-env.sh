@@ -134,9 +134,13 @@ if [ -n "$common_dir" ]; then
   # directory - leaving the link untouched and a stray Continuum.release in
   # somebody's checkout. See docs/bridge.md § Claiming REAPER.
   reaper_link="$HOME/Library/Application Support/REAPER/Scripts/Continuum"
+  # The link names a tree's src/; strip it, because watched() slugs the path to
+  # find session dirs keyed by the tree. Left on, it would match nothing and the
+  # release would fire while a session was still working in that tree.
   held=$(readlink "$reaper_link" 2>/dev/null)
+  held=${held%/src}
   if [ -n "$held" ] && [ "$held" != "$main_tree" ] && ! watched "$held"; then
-    if ln -sfn "$main_tree" "$reaper_link.release" 2>/dev/null &&
+    if ln -sfn "$main_tree/src" "$reaper_link.release" 2>/dev/null &&
        mv -fh "$reaper_link.release" "$reaper_link" 2>/dev/null; then
       printf '%s\trelease\t%s\n' "$(date -u +%FT%TZ)" "$held" >> "$root/session-end.log"
     fi
