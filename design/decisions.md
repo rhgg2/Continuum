@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The curve fold joins `curves.lua`: `sumStreams` and `foldChains` publish, and the
+  four helpers under them turn private. The densify step passes in as a parameter, since it reads
+  the take's resolution and the CC-interp setting; trackerManager keeps `ccGridStep` and now
+  resolves it once per rebuild stage instead of once per sum. The fold's lone-record path returns
+  the record's own curve, unclipped and not a copy, which is stated as an invariant now that the
+  callers doing the clip sit in another file.
+
 - **2026-08-30** — The pb seat pass's ramp test reads whichever stream owns the onset, so a
   generator's curve answers it exactly as an authored one does. Asserting instead that a window
   always ramps put a dual point on the tick before a curve's step, dragging the arrival value back

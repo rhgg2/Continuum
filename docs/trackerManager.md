@@ -1124,7 +1124,8 @@ The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked ho
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
 of it, so undeclared, a self-parking host would land in both arms — and fx expansion, whose producer
-bucket is `fxWindow`'s keys plus `channels[chan].parked`, would run its chain twice and `foldChains`
+bucket is `fxWindow`'s keys plus `channels[chan].parked`, would run its chain twice and
+`curves.foldChains`
 would sum the two pb curves to twice the authored depth. The declaration therefore sits at the
 writer, where one statement serves every reader.
 

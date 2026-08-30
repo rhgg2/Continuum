@@ -24,6 +24,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 curves: take the fold of parallel chains from trackerManager (design/tracker-manager-split.md § Phase 1 2, 5)
 - 2026-08-30 curves: take the breakpoint curve algebra from trackerManager and mm (design/tracker-manager-split.md § Phase 1 1–3)
 - 2026-08-30 spans: take the half-open span algebra from trackerManager (design/tracker-manager-split.md § Phase 1 1–2)
 - 2026-08-30 util: take the two ppq index seeks from trackerManager (design/tracker-manager-split.md § Phase 1 4)
@@ -33,16 +34,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The fold joins it.** `sumStreams` and the four private helpers —
-   `negated`, `foldWhole`, `chainCuts`, `foldSub` — move behind
-   `foldChains`. `ccGridStep` stays in tm as configuration, and the
-   densify step passes as a parameter through `sumStreams`, `foldWhole`,
-   `foldSub` and `foldChains`. A spec exercises the fold against lists of
-   points: a single covering record verbatim, a replace against an add,
-   sub-splitting at record edges, the all-flat sweep to empty, and the
-   extent-then-select emission that keeps a kept range agreeing with a
-   full re-derive.
 
 The two citations naming these as trackerManager's —
 `docs/trackerManager.md` on `evalCurve`/`sliceCurve` and on `foldChains`
