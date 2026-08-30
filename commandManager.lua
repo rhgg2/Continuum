@@ -232,7 +232,9 @@ end
 
 --shape: node = { name = 'Grid', letter = 'G', desc = 'The grid, swing, quantize', children = { node, ... } }
 
-local segments, resolveParent, stampLetters, claim, claimLevel, checkLetters
+local MENU_KEY = '/'   -- opens the menu, and so heads every route
+
+local segments, walkGroups, stampLetters, claim, claimLevel, checkLetters
 
 function segments(path)
   local parts = {}
@@ -240,10 +242,10 @@ function segments(path)
   return parts
 end
 
--- The node whose level a leaf reads in: every segment but the last names a group, so
--- a one-segment path resolves to nil and reads at the top level.
-function resolveParent(tree, parts, name)
-  local nodes, parent = tree, nil
+-- Walks parts to the node whose level a leaf reads in, plus the letters of the groups
+-- passed; a one-segment path resolves to nil and reads at the top level.
+function walkGroups(tree, parts, name)
+  local nodes, parent, letters = tree, nil, ''
   for index = 1, #parts - 1 do
     local found
     for _, node in ipairs(nodes) do
@@ -252,9 +254,9 @@ function resolveParent(tree, parts, name)
     if not found then
       error('menu: ' .. name .. ' — no group ' .. parts[index] .. ' in ' .. table.concat(parts, '/'))
     end
-    parent, nodes = found, found.children
+    parent, nodes, letters = found, found.children, letters .. found.letter
   end
-  return parent
+  return parent, letters
 end
 
 function stampLetters(nodes)
@@ -303,7 +305,8 @@ local function collectPathed(out, scope)
   return out
 end
 
---contract: stamps node letters, each pathed entry's title/letter/node; runs after installManifest
+--contract: stamps node letters, each pathed entry's title/letter/node/route; after installManifest
+--invariant: an entry's route is the keys walking to it — menu key, groups' letters, its own
 function cmgr:installTree(tree)
   self.tree = tree
   stampLetters(tree)
@@ -312,7 +315,9 @@ function cmgr:installTree(tree)
       local parts  = segments(entry.path)
       entry.title  = parts[#parts]
       entry.letter = entry.letter or entry.title:sub(1, 1):upper()
-      entry.node   = resolveParent(tree, parts, name)
+      local parent, letters = walkGroups(tree, parts, name)
+      entry.node   = parent
+      entry.route  = MENU_KEY .. letters .. entry.letter
     end
   end
   -- Each scope is checked over global's leaves rather than against the manifest whole:

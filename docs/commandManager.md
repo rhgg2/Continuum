@@ -185,6 +185,11 @@ will eventually layer overrides on top.
    level the command reads in, and nil at the top level — raising on a segment
    naming no group in the level it reaches.
 
+1. An entry's **route** is the keys that walk to it: the menu key, then the
+   letter of each group its path descends into and the entry's own — `/NET`
+   for `Navigate/Editor/Tuning`. `installTree` stamps it from the tree's own
+   letters, so a route shown elsewhere is the one the menu walks.
+
 1. The letter check runs over global's leaves paired with one scope's at a
    time, since two page scopes are never on the stack together and a letter
    they share is two menus rather than a collision. Both checks read the

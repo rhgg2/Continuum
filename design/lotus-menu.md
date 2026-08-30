@@ -83,8 +83,8 @@ Landed — see `docs/menu.md` § The row.
 1. Paths are learned where keys already are: the cheat-sheet stays the
    one place a command's routes are read.
 
-1. The chip is rendered from the entry's path and the group letters, so
-   it cannot drift from the tree the menu walks.
+1. The chip renders the route the entry carries (`docs/commandManager.md`
+   § Menu tree), so it cannot drift from the tree the menu walks.
 
 ## What load asserts
 

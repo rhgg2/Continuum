@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — A pathed entry's route carries the menu key at its head, so it reads as the
+  keystrokes that walk to the command: `/GQ` rather than `GQ`. A consumer draws the route as it
+  stands, and composes no part of it.
+
 - **2026-08-30** — The lotus menu's lookahead draws as a second line of the row, above the level and
   opening at the same column, in place of a box floating over the highlighted member. A highlighted
   group previews its own members there and a highlighted leaf its description, and a previewed

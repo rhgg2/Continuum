@@ -45,10 +45,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 cmgr: a pathed entry carries the route that walks to it (§ Both routes on the cheat-sheet)
 - 2026-08-30 menu: the preview line shows the level below the highlight (§ Where it draws)
 - 2026-08-30 menu: the row draws as keycaps and titles, and wraps (§ Where it draws)
 - 2026-08-30 help: the keycap chips and their box become a module (§ Where it draws)
-- 2026-08-30 menu: arrows move a highlight, and Enter takes it (§ Walking a path)
 
 ## Now
 
@@ -56,13 +56,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **A pathed entry carries its route** — `installTree` already resolves
-   each pathed entry's node, title and letter; it also records the letters
-   walked from the top of the tree down to the entry, behind the slash that
-   opens the menu — `/NET` for `Navigate/Editor/Tuning`, `/EU` for undo. The
-   route is stamped from the tree's own letters, so it cannot drift from
-   what the menu walks. Spec, in `cmgr_menu_spec`: a nested path's route, a
-   letter override honoured, and no route on a fluent entry.
 2. **The cheat-sheet shows both routes** — a pathed command's row draws its
    route in a keycap after its key chips, through `keycaps`' chip renderer,
    separated by a plain gap since the `/` between chips reads as "or". The

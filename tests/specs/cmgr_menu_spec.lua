@@ -4,8 +4,9 @@
 -- leaf's from its menu title, that a declared letter wins over either, that groups
 -- and leaves share one namespace per level while two levels are independent, that
 -- two scopes never stacked together may reuse a letter while a page scope colliding
--- with global raises, that a path naming no group raises, and that the real manifest
--- installs with every path reaching the level it reads in.
+-- with global raises, that a path naming no group raises, that a pathed entry carries
+-- the route of letters that reaches it, and that the real manifest installs with every
+-- path reaching the level it reads in.
 
 local t    = require('support')
 local util = require('util')
@@ -160,6 +161,27 @@ return {
   },
 
   {
+    -- The route is the keystrokes that reach a leaf: the menu key, then the letter of
+    -- each group descended into and the leaf's own. It is stamped from the tree's
+    -- letters, so it cannot drift from what the menu walks.
+    name = 'a pathed entry carries its route, and a fluent one carries none',
+    run = function()
+      local mgr = fresh()
+      mgr:installManifest({ global = { Global = {
+        { name = 'editTuning', label = 'Edit tuning', path = 'Navigate/Editor/Tuning' },
+        { name = 'quantize',   label = 'Quantize',    path = 'Take/Quantize', letter = 'Z' },
+        { name = 'toggleHelp', label = 'This help',   path = 'Help' },
+        { name = 'playPause',  label = 'Play / pause', keys = { 'Space' } },
+      } } }, img)
+      mgr:installTree({ node('Navigate', nil, { node('Editor') }), node('Take', 'K') })
+      t.eq(mgr:entry('editTuning').route, '/NET', 'a group letter per segment, then the leaf\'s')
+      t.eq(mgr:entry('quantize').route,   '/KZ',  'declared letters win, group and leaf alike')
+      t.eq(mgr:entry('toggleHelp').route, '/H',   'a top-level leaf is one letter behind the key')
+      t.eq(mgr:entry('playPause').route,  nil,    'a fluent command is reached by its chord alone')
+    end,
+  },
+
+  {
     -- The real declaration: the tree installs against the whole manifest, every path
     -- lands under the group its penultimate segment names, and the scope walk passes
     -- the tree over, since it declares groups rather than commands.
@@ -186,6 +208,8 @@ return {
       end
       t.truthy(top > 0, 'and at least one leaf sits at the top level')
       t.eq(mgr:entry('quantize').letter, 'Q', 'quantize is reached by Q under Grid')
+      t.eq(mgr:entry('quantize').route, '/GQ', 'and walked to by the slash, G and Q')
+      t.eq(mgr:entry('editTuning').route, '/NET', 'the tuning editor by a three-letter route')
 
       -- The real page pair the synthetic case above stands for: tracker and arrange
       -- both title their take properties Properties, and never stack together.
