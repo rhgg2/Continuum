@@ -73,24 +73,11 @@ pending prefix.
 
 ## Where it draws
 
-1. The row, its keycaps and its wrap have landed — see `docs/menu.md`
-   § The row.
+1. The row, its keycaps, its wrap and its preview line have landed — see
+   `docs/menu.md` § The row.
 
 1. The toolbar above the body holds the controls a command is chosen
    against, and the row leaves it uncovered.
-
-1. A **panel** sits above the highlighted member and grows upward. It
-   carries that member's title and its description line, and a group's
-   children with their letters, so the panel is the **lookahead** — the
-   level below the highlight, shown before the highlight is taken.
-
-1. The panel is the cheat-sheet's box renderer. F1 draws every group at
-   once; the menu draws one and walks.
-
-1. The panel stops at the window's top edge and slides to stay within its
-   sides, covering the toolbar where a deep group needs the room. An
-   uncovered toolbar is the row's rule, and the row stands for the length
-   of the walk while the next letter replaces the panel.
 
 ## Both routes on the cheat-sheet
 

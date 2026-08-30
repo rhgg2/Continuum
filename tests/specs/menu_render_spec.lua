@@ -54,19 +54,21 @@ local function node(name) return { name = name, desc = name .. ' commands', chil
 -- fake, so drop the imgui-capturing modules and re-require (curveEditor idiom).
 --
 -- The surface is three groups, each holding one verb a level down, and one
--- top-level leaf: a level of four members whose titles are of known width.
+-- top-level leaf: a level of four members whose titles are of known width. No
+-- two members share a letter, across levels as well as within one, so a letter
+-- found in the draw list names the member that drew it.
 local function fresh()
   package.preload['imgui'] = function() return function(_) return img end end
   for _, m in ipairs({ 'imgui', 'keycaps' }) do package.loaded[m] = nil end
   mgr = util.instantiate('commandManager', {})
   mgr:register('save', function() end)
-  for _, name in ipairs({ 'editSwing', 'addColumn', 'fillRegion' }) do
+  for _, name in ipairs({ 'editTempo', 'addColumn', 'fillRegion' }) do
     mgr:scope('page'):register(name, function() end)
   end
   mgr:installManifest({
     global = { File = { { name = 'save', label = 'Save the project', path = 'Save' } } },
     page   = { Edit = {
-      { name = 'editSwing',  label = 'Edit swing',  path = 'Grid/Swing'   },
+      { name = 'editTempo',  label = 'Edit tempo',  path = 'Grid/Tempo'   },
       { name = 'addColumn',  label = 'Add column',  path = 'Column/Add'   },
       { name = 'fillRegion', label = 'Fill region', path = 'Region/Fill'  },
     } },
@@ -127,6 +129,18 @@ local function keycapAround(letter)
   end
 end
 
+-- What the topmost line holds, which is the preview's: the level stands on the strip's
+-- floor, and the preview reads above it.
+local function previewTexts()
+  local top
+  for _, box in ipairs(texts()) do top = math.min(top or box.y0, box.y0) end
+  local found = {}
+  for _, box in ipairs(texts()) do
+    if box.y0 == top then util.add(found, box) end
+  end
+  return found
+end
+
 return {
   {
     -- The level read off the draw calls it made: each member's letter in a keycap with
@@ -173,8 +187,12 @@ return {
       for _, box in ipairs(texts()) do
         t.truthy(contains(strip, box), box.text .. ' is drawn inside the strip')
       end
-      local line = boxOf('Grid')
-      t.eq(line.y0 - strip.y0, strip.y1 - line.y1, 'the line sits between equal pads')
+      local ceiling, floor
+      for _, box in ipairs(texts()) do
+        ceiling = math.min(ceiling or box.y0, box.y0)
+        floor   = math.max(floor   or box.y1, box.y1)
+      end
+      t.eq(ceiling - strip.y0, strip.y1 - floor, 'the lines sit between equal pads')
     end,
   },
 
@@ -235,6 +253,70 @@ return {
       for _, box in ipairs(texts()) do
         t.truthy(contains(strip, box), box.text .. ' is drawn inside the strip')
       end
+    end,
+  },
+
+  {
+    -- The line above the level, where a highlighted group shows the level its letter
+    -- would descend into. Its letters sit in washed keycaps: they read as keys, but none
+    -- of them is pressable until the highlight is taken.
+    name = 'a highlighted group previews its own members on the line above',
+    run = function()
+      fresh()
+      drawRow(WIDE)
+
+      local shown = previewTexts()
+      t.truthy(#shown > 0, 'the row draws a line above the level')
+      t.truthy(shown[1].y0 < boxOf('Grid').y0, 'which reads above the highlighted group')
+
+      local letter, title = boxOf('T'), boxOf('Tempo')
+      t.truthy(letter and title, 'Grid\'s one member draws its letter and its title')
+      t.eq(letter.y0, shown[1].y0, 'on that line')
+      t.eq(title.y0, letter.y0, 'the title reading on its letter\'s line')
+      t.truthy(title.x0 > letter.x1, 'and following it')
+
+      local previewCap, levelCap = keycapAround(letter), keycapAround(boxOf('G'))
+      t.truthy(previewCap and levelCap, 'both letters sit in a keycap')
+      t.eq(previewCap.x0, levelCap.x0, 'the preview opening in line with the level')
+      t.eq(previewCap.colour & 0xFFFFFF00, levelCap.colour & 0xFFFFFF00,
+           'the previewed keycap wears the level\'s own colour')
+      t.truthy((previewCap.colour & 0xFF) < (levelCap.colour & 0xFF),
+               'washed, since its letter is not pressable from here')
+    end,
+  },
+
+  {
+    -- A leaf has no level below it, so the line above carries what its command does.
+    name = 'a highlighted leaf previews its description, and that alone',
+    run = function()
+      fresh()
+      mgr:invoke('menuLeft')   -- off the first member, round to the last, which is the leaf
+      drawRow(WIDE)
+
+      local title = boxOf('Save')
+      t.truthy(contains(rects('menu.highlight')[1], title), 'the leaf is the highlighted member')
+
+      local shown = previewTexts()
+      t.eq(#shown, 1, 'one thing draws on the line above')
+      t.eq(shown[1].text, 'Save the project', 'and it is the leaf\'s description')
+      t.truthy(shown[1].y0 < title.y0, 'reading above the level')
+      t.truthy(keycapAround(shown[1]) == nil, 'with no keycap on it')
+    end,
+  },
+
+  {
+    -- The preview is the level below the highlight, so moving the highlight moves it.
+    name = 'the preview follows the highlight',
+    run = function()
+      fresh()
+      drawRow(WIDE)
+      t.truthy(boxOf('Tempo'), 'the first member\'s own member previews')
+
+      mgr:invoke('menuRight')
+      drawRow(WIDE)
+      t.truthy(boxOf('Add'), 'Right carries the preview to the next member\'s')
+      t.truthy(boxOf('Tempo') == nil, 'and the member it left previews no longer')
+      t.eq(boxOf('Add').y0, previewTexts()[1].y0, 'on the line above the level')
     end,
   },
 }

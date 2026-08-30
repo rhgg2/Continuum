@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-30** — The lotus menu's lookahead draws as a second line of the row, above the level and
+  opening at the same column, in place of a box floating over the highlighted member. A highlighted
+  group previews its own members there and a highlighted leaf its description, and a previewed
+  keycap is washed, since its letter reaches nothing until the highlight is taken.
+
 - **2026-08-30** — The menu's row is a strip rather than a box: it spans the window's margins as the
   toolbar and status bands do, ruled along its top edge in a colour role of its own, with no border
   or rounding. It is chrome furniture in the footer band, not an overlay laid over the body, and it

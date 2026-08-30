@@ -9,6 +9,7 @@
 --shape: accent = { chips = { [chipIndex] = true }, text } -- chips in the title colour, text replacing their glyphs
 --shape: placed = { x, y, endX, chips = { { x, y, w, h } } } -- where a drawn cluster landed
 --contract: theme carries bg, border, title, key, label and chip; new() derives fill and outline
+--contract: a wash below 1 scales the alpha of everything a chip draws, for keys not pressable now
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
 
@@ -21,12 +22,15 @@ local CHIP_PADX_INNER, CHIP_PADX_OUTER, SEP_GAP = 0, 2, 4
 local CHIP_MIN_RATIO, CHIP_ALPHA = 0.9, 0xcc   -- a cell's square floor as a fraction of the line; chip fill alpha
 local SEP = '/'
 
-local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | a end
+local function withAlpha(rgba, a) return (rgba & 0xFFFFFF00) | math.floor(a) end
+local function washed(rgba, wash) return withAlpha(rgba, (rgba & 0xFF) * wash) end
 
-function keycaps.new(ctx, dl, theme)
+function keycaps.new(ctx, dl, theme, wash)
+  wash = wash or 1
   local lineH   = ImGui.GetTextLineHeight(ctx)
-  local capBg   = withAlpha(theme.chip, CHIP_ALPHA)
-  local capLine = withAlpha(theme.border, 0x66)
+  local capBg   = washed(withAlpha(theme.chip, CHIP_ALPHA), wash)
+  local capLine = washed(withAlpha(theme.border, 0x66), wash)
+  local keyInk  = washed(theme.key, wash)
   local caps    = { lineH = lineH, capBg = capBg, capLine = capLine }
 
   -- Lays a shortcut's chips (separator-joined, one per binding) out into
@@ -70,7 +74,7 @@ function keycaps.new(ctx, dl, theme)
     local sepW, cursorX, placed = ImGui.CalcTextSize(ctx, cluster.sep), x, {}
     for index, chip in ipairs(cluster.chips) do
       if index > 1 then
-        ImGui.DrawList_AddText(dl, cursorX + SEP_GAP, y, theme.key, cluster.sep)
+        ImGui.DrawList_AddText(dl, cursorX + SEP_GAP, y, keyInk, cluster.sep)
         cursorX = cursorX + SEP_GAP * 2 + sepW
       end
       local x2   = cursorX + chip.w
@@ -84,7 +88,7 @@ function keycaps.new(ctx, dl, theme)
         local glyphX = cursorX + CHIP_PADX_OUTER
         for _, cell in ipairs(chip.cells) do
           local textW = ImGui.CalcTextSize(ctx, cell.text)
-          ImGui.DrawList_AddText(dl, glyphX + (cell.w - textW) / 2, y, ink or theme.key, cell.text)
+          ImGui.DrawList_AddText(dl, glyphX + (cell.w - textW) / 2, y, ink or keyInk, cell.text)
           glyphX = glyphX + cell.w
         end
       end

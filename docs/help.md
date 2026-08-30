@@ -62,7 +62,9 @@ The chips, and the box of chip rows they sit in, draw through `keycaps.lua`,
 bound once a frame to a drawlist and a theme. A draw call reports where the
 chips landed, and the sheet decorates that geometry with its click map and its
 edit tags, so the module holds no interaction state and the menu draws its row
-and its lookahead panel through the same code.
+and its preview through the same code. A theme takes an optional wash, which
+scales the alpha of everything a chip draws; the menu's preview line uses it for
+letters that are not pressable yet.
 
 Groups are `place = 'pin'` (a callout pinned beneath a toolbar segment)
 or `place = 'flow'` (the grid cheat-sheet, filling the body rect row-major

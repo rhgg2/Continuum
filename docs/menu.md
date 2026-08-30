@@ -76,6 +76,10 @@ is a menu letter rather than a page verb.**
    pressed. A closed menu holds an empty surface, and so an empty
    level.
 
+1. The **lookahead** is the level below the highlight: the members of a
+   highlighted group's node, and empty for a leaf, which has no level
+   below it.
+
 ## The walk
 
 1. A letter reaches the menu through the sink its scope declares
@@ -133,9 +137,19 @@ is a menu letter rather than a page verb.**
 1. The highlighted member wears a fill in a colour role of its own,
    covering its keycap and its title together.
 
-1. A level wider than the row packs into as many lines as it needs. The
-   lines read top to bottom and the last stands on the row's floor, so the
-   strip grows upward into the body.
+1. A level wider than the row packs into as many lines as it needs, and so
+   does the preview. The lines read top to bottom and the last stands on
+   the row's floor, so the strip grows upward into the body.
+
+1. The **preview** is a second line, above the level in the same strip and
+   opening at the same column. A highlighted group shows its lookahead
+   there, each member's letter beside its title; a highlighted leaf shows
+   its description. So the level below the highlight is read before the
+   highlight is taken.
+
+1. A previewed letter's keycap is washed. The letter reads as a key in
+   both lines, and the wash says it reaches nothing until the highlight is
+   taken.
 
 ## A pending prefix
 

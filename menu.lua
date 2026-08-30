@@ -47,6 +47,30 @@ local function occupied(node)
   return false
 end
 
+-- The members of a node: its occupied child groups in tree order, then the entries stamped
+-- with it, by title.
+local function membersOf(node)
+  local members = {}
+  for _, child in ipairs(node and node.children or cmgr.tree) do
+    if occupied(child) then
+      util.add(members, { letter = child.letter, title = child.name,
+                          desc   = child.desc,   node  = child })
+    end
+  end
+  -- The surface unions two scopes, whose groups the manifest orders separately, so the
+  -- leaves of one level read by title.
+  local leaves = {}
+  for _, entry in ipairs(surface) do
+    if entry.path and entry.node == node then util.add(leaves, entry) end
+  end
+  table.sort(leaves, function(entryA, entryB) return entryA.title < entryB.title end)
+  for _, entry in ipairs(leaves) do
+    util.add(members, { letter = entry.letter, title = entry.title,
+                        desc   = entry.label,  entry = entry })
+  end
+  return members
+end
+
 -- What a letter does, and what Enter does to the highlight: a group descends, a leaf
 -- closes the menu and invokes.
 --contract: the level descended from is marked with the index taken, for the unwind to restore
@@ -86,27 +110,12 @@ function menu:path() return path end
 function menu:highlight() return highlight end
 
 --contract: the members of the node the path names — groups in tree order, then leaves by title
-function menu:level()
-  local node    = path[#path]
-  local members = {}
-  for _, child in ipairs(node and node.children or cmgr.tree) do
-    if occupied(child) then
-      util.add(members, { letter = child.letter, title = child.name,
-                          desc   = child.desc,   node  = child })
-    end
-  end
-  -- The surface unions two scopes, whose groups the manifest orders separately, so the
-  -- leaves of one level read by title.
-  local leaves = {}
-  for _, entry in ipairs(surface) do
-    if entry.path and entry.node == node then util.add(leaves, entry) end
-  end
-  table.sort(leaves, function(entryA, entryB) return entryA.title < entryB.title end)
-  for _, entry in ipairs(leaves) do
-    util.add(members, { letter = entry.letter, title = entry.title,
-                        desc   = entry.label,  entry = entry })
-  end
-  return members
+function menu:level() return membersOf(path[#path]) end
+
+--contract: the members one level below the highlight — a highlighted group's own, empty for a leaf
+function menu:lookahead()
+  local member = self:level()[highlight]
+  return member and member.node and membersOf(member.node) or {}
 end
 
 --contract: takes the member the letter names, as Enter takes the highlight; unmatched is dropped

@@ -43,10 +43,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-30 menu: the preview line shows the level below the highlight (§ Where it draws)
 - 2026-08-30 menu: the row draws as keycaps and titles, and wraps (§ Where it draws)
 - 2026-08-30 help: the keycap chips and their box become a module (§ Where it draws)
 - 2026-08-30 menu: arrows move a highlight, and Enter takes it (§ Walking a path)
-- 2026-08-29 menu: a pending prefix survives the walk, and the leaf takes it (§ What stays live)
 
 ## Now
 
@@ -54,9 +54,4 @@
 
 ## Queued (current phase; one-liners)
 
-3. **The lookahead panel** — the box above the highlighted member,
-   carrying its title and description, and a group's children with their
-   letters, drawn through item 1's module and clamped to the window's
-   top and sides. Spec, in `menu_render_spec`: a group highlight draws
-   its children, a leaf highlight stops at the line, and a deep group
-   clamps.
+(empty)
