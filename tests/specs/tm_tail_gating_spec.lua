@@ -12,7 +12,7 @@ end
 
 return {
   {
-    name = 'swing change reseats an open tail through the dirtyChans gate',
+    name = 'swing change reseats an open tail through the dirt gate',
     run = function(harness)
       -- Open note (pitch 60) clips to the next same-lane onset (blocker at logical 120, a
       -- mid-tile peak at res 240). Both seed internal under identity swing; turning swing on
@@ -29,7 +29,7 @@ return {
       local before = noteByPitch(h.fm:dump().notes, 60).endppq
       t.eq(before, 120, 'open tail clipped to the blocker under identity swing')
 
-      -- Turn swing on: dataChanged -> global nil->c58 -> markSwingStale(nil) -> dirtyChan(nil).
+      -- Turn swing on: dataChanged -> global nil->c58 -> markSwingStale(nil) -> dirt.add(nil, true).
       -- The gate lets chan 1 through, so the blocker reseats and the open tail re-clips to it.
       h.ds:assign('swing', { global = 'c58' })
 

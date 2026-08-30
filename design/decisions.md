@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — The dirt journal leaves as `dirt.lua` with its write verb already in it, merging
+  two planned commits: the verb has no testable home until the module exists, and splitting them
+  meant an interim assign-shaped door built to be deleted. `add` is the sole write and
+  `has`/`wholesale` the reads, so the lattice's two rules hold in one place. Neither hand-written
+  join it replaces is reachable through the public API today, so `dirt_spec` states the rules rather
+  than pinning a regression. One journal per trackerManager rather than a module singleton, since
+  specs instantiate tm repeatedly and phase 3's rebuild takes the same instance.
+
 - **2026-08-30** — `spans.lua` and `curves.lua` stay two modules and share one doc,
   `docs/algebra.md`. Nothing uses curves without spans, but trackerManager uses spans at many sites
   with no curve in sight, so the smaller module stays a leaf other geometry can reach. One namespace

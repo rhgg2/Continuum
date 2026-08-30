@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
 > opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 2 (the dirt spine)
+> at phase 3 (pb at its seam)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -33,8 +33,8 @@ decides whether phase 3 is worth taking.**
    another.
 
 1. The first coupling is mid-pass enlargement of the dirt.
-   `rebuildTails` writes `dirtyChans[chan]` and `rebuildRegionPark`
-   calls `seedDirty` at seven sites; `rebuildPA`, `rebuildFx`,
+   `rebuildTails` adds to a channel's dirt and `rebuildRegionPark` does
+   the same at seven sites; `rebuildPA`, `rebuildFx`,
    `rebuildPbs` and `rebuildPCs` then gate on the enlarged set. A stage
    before the park pass gates on a strictly smaller set than a stage
    after it.
@@ -159,56 +159,10 @@ Landed 2026-08-30 as `spans.lua` and `curves.lua`, with the two seeks in
 
 ## Phase 2 — the dirt spine becomes `dirt.lua`
 
-1. Derivation dirt is a lattice. A channel's entry rises from absent
-   through a seed list to wholesale `true`; a list longer than
-   `WHOLESALE_SEED_CAP` collapses to `true`; every writer joins — moves
-   an entry up — and never assigns (`docs/trackerManager.md` §
-   Derivation dirt: the gated spine).
-
-1. The journal has one write verb, `join(chan, dirt)`. `dirt` is
-   `true`, a seed, or a seed list; the verb moves the channel's entry
-   up the lattice and enforces the cap in one place. A wholesale mark
-   is `join(chan, true)`, and a mid-pass enlargement is the same call
-   at a visible call site.
-
-1. `dirt.lua` holds the journal and its lattice, and whatever reads
-   another structure stays with that structure. The module keeps
-   `dirtyChans`, `staleSwing`, the join, the per-channel read the stage
-   gates use, and two clears: `staleSwing` clears mid-pipeline once its
-   two consumers have run, and `wipe` returns the set of channels it
-   consumed, which tm folds into its mute-conform sweep. The module
-   requires nothing.
-
-1. Four families stay with the structures they read.
-   - `parkSeed`, `rawSeed`, `seedRegionEdit` and `seedParkedEdit` mint
-     seeds by calling `tm:fromLogical` and reading `derivedInputs`, so
-     they stay with that projection.
-   - `seedCovers` and `seedRowsFor` interpret seeds against the live
-     index, and their only callers are stages, so they move with the
-     engine.
-   - `shedLane` is frame identity, and travels on the frame handle
-     (§ Phase 3).
-   - `clearSwing` invalidates the time projection's swing cache, and
-     stays beside it.
-
-1. The code implements the join by hand three times: `seedDirty`, the
-   reload fold in `absorbReloadDirt`, and the tail walk's emission. Two
-   of the three are wrong today.
-
-1. The tail emission has no cap check, so a large disturbance carries
-   forward as an ever-growing seed list. The reload fold assigns its
-   deduped list over whatever stands, which would drop standing seed
-   dirt. It is sound only because every edit-path seeder rebuilds
-   immediately, so no seed list survives to flush time — a discipline
-   nothing enforces.
-
-1. The class has already cost a bug of the kind a real join makes
-   impossible. The fold's wholesale guard was missing until 2026-07-28;
-   it demoted a standing wholesale and left an OPEN tail uncut.
-
-1. Gathering the spine shrinks phase 3's interface, which is why this
-   phase precedes the engine move. The join is a correctness fix, and
-   it stands whether or not the engine ever moves.
+Landed 2026-08-31 as `dirt.lua`, one journal per tracker: `add` is the
+sole write and the gates are queries, so `seedCovers`, `seedRowsFor` and
+the seed minters stay with the structures they read. The model is
+`docs/trackerManager.md` § Derivation dirt: the gated spine.
 
 ## Phase 3 — the engine leaves
 

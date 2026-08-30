@@ -97,7 +97,8 @@ Step 4.7 of `tm:rebuild`. For each non-derived event:
 - **stale and ppqL present** — rebuild raw:
   `ppq = round(swing.fromLogical(ppqL)) + delayToPPQ(delay)`, and
   similarly `endppq = round(swing.fromLogical(endppqL))`. The
-  staleSwing flag is cleared at the end of the pass.
+  stale-swing flag is cleared mid-pass, once the partition and the CC
+  walk have read it.
 - **else** — predicted-check. Compute
   `predicted = round(swing.fromLogical(ppqL)) + delayToPPQ(delay)`.
   If `|raw − predicted| ≤ 1 ppq`, no-op. Otherwise rederive

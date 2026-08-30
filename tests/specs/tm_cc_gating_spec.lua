@@ -33,7 +33,7 @@ end
 
 return {
   {
-    name = 'swing change reseats a CC through the dirtyChans gate',
+    name = 'swing change reseats a CC through the dirt gate',
     run = function(harness)
       -- Seed a foreign cc at raw=139 (no ppqL); the first rebuild stamps ppqL under c58.
       local h = harness.mk{

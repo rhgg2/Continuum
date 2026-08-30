@@ -44,9 +44,6 @@ local curves  = require 'curves'
 local timing  = require 'timing'
 local voicing = require 'voicing'
 
--- Past this many distinct seeds, whole-channel re-derive beats per-seed bookkeeping; the dirt
--- collapses to the wholesale sentinel. Was intervals.merge's MAX. see design § Retirement of intervals
-local WHOLESALE_SEED_CAP = 64
 -- Above this many disturbed seeds (dirt + derived fx events) the frontier's per-seed probes cost more
 -- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
 local FRONTIER_SEED_CAP = 16
@@ -65,10 +62,9 @@ local fire = util.installHooks(tm)
 
 local channels    = {}
 local lastMuteSet = {}
---invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
-local staleSwing  = {}
---invariant: dirtyChans[chan] (seed|true): ccs/fx/park/tails/pbs/pcs re-derive it, else freeze
-local dirtyChans   = {}
+-- The derivation journal, and the swing-staleness flag beside it: any edit or config change adds a
+-- channel's dirt, and the gated stages read it. Missed dirt writes silent wrong output. see dirt.lua
+local dirt = require('dirt').new()
 -- Deep clone of derivationInputs() as of the last rebuild: what the current frame was derived under.
 -- bindTake diffs against it, because a rebind can find any of it changed with no signal to hear.
 local derivedInputs
@@ -161,23 +157,6 @@ local function isSorted(events)
   return true
 end
 
--- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
--- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see docs/trackerManager.md § Derivation dirt: the gated spine
-local function dirtyChan(chan)
-  if chan then dirtyChans[chan] = true; return end
-  for i = 1, 16 do dirtyChans[i] = true end
-end
-
--- Mid-pass seed append: the region/park reconcile's per-member dirt, after the flush already set the
--- channel. No-op once wholesale; collapses past the cap.
-local function seedDirty(chan, seed)
-  local dirt = dirtyChans[chan]
-  if dirt == true then return end
-  if dirt == nil then dirtyChans[chan] = { seed }; return end
-  util.add(dirt, seed)
-  if #dirt > WHOLESALE_SEED_CAP then dirtyChans[chan] = true end
-end
-
 -- A birth-snapshot seed for a park member, so its dirt reads like verb dirt downstream: parkSeed from a
 -- logical park spec (raw derived), rawSeed from an mm-raw event (raw in hand). Mirror um's snapshot.
 local function parkSeed(spec, verb)
@@ -193,7 +172,7 @@ end
 -- A region edit's real dirt is its members, found later by the park reconcile; here we seed one trigger
 -- point per region the uuid diff changed (create/remove/move/fx-change), waking its park scan and fx producer.
 local function seedRegionEdit(newRegions)
-  if not derivedInputs then dirtyChan(); return end
+  if not derivedInputs then dirt.add(nil, true); return end
   local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
   local function trigger(r)
     -- A chan-0 region's edit dirties all sixteen channels -- wider than the set in use on purpose. see docs/trackerManager.md § Channel & column model
@@ -201,8 +180,8 @@ local function seedRegionEdit(newRegions)
     local first, last = r.chan, r.chan
     if r.chan == 0 then first, last = 1, 16 end
     for chan = first, last do
-      seedDirty(chan, { verb = 'region', ppqL = r.startppq,
-                        ppq = tm:fromLogical(chan, r.startppq) })
+      dirt.add(chan, { verb = 'region', ppqL = r.startppq,
+                       ppq = tm:fromLogical(chan, r.startppq) })
     end
   end
   local old, seen = {}, {}
@@ -226,7 +205,7 @@ end
 -- An external/undo fxParked change (not tm's own flush -- that stash write is converged output): seed
 -- each added member (newly parked) and removed member (restored).
 local function seedParkedEdit(newParked)
-  if not derivedInputs then dirtyChan(); return end
+  if not derivedInputs then dirt.add(nil, true); return end
   local function key(m)
     if m.evType == 'note' then return 'note\0' .. tostring(m.uuid) end
     return util.key(m.evType, m.chan, m.cc or 0, m.ppq)
@@ -234,8 +213,8 @@ local function seedParkedEdit(newParked)
   local old, new = {}, {}
   for _, m in ipairs(derivedInputs.fxParked or {}) do old[key(m)] = m end
   for _, m in ipairs(newParked or {}) do new[key(m)] = m end
-  for k, m in pairs(new) do if not old[k] then seedDirty(m.chan, parkSeed(m, 'park')) end end
-  for k, m in pairs(old) do if not new[k] then seedDirty(m.chan, parkSeed(m, 'restore')) end end
+  for k, m in pairs(new) do if not old[k] then dirt.add(m.chan, parkSeed(m, 'park')) end end
+  for k, m in pairs(old) do if not new[k] then dirt.add(m.chan, parkSeed(m, 'restore')) end end
 end
 
 -- Everything the pipeline derives from beyond the take itself. Nothing signals when it changes under a
@@ -913,7 +892,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   local adds = {}
   local assigns = {}
   local deletes = {}
-  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt = the snapshotted record itself -- an add's uuid is stamped on it at mm commit, so it late-binds. folded (dedup-by-uuid) into dirtyChans. see design § The model, inverted
+  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt = the snapshotted record itself -- an add's uuid is stamped on it at mm commit, so it late-binds. folded (dedup-by-uuid) into the dirt journal. see design § The model, inverted
   local seeds = {}
   local parkedEdits = {}
   local parkedUuidSeq = 0
@@ -1208,7 +1187,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     for _, e in ipairs(parkedEdits) do
       local ref  = e.spec or e.evt
       -- flushParked runs before the fold, so feed the seed table (absorbReloadDirt folds it, or the
-      -- parked-only path below does); a mid-pass seedDirty here would be overwritten by that fold.
+      -- parked-only path below does), keeping one seed order for the whole flush.
       util.bucket(seeds, ref.chan, parkSeed(ref, e.op))
       if e.op == 'add' then
         util.add(parked, e.spec)
@@ -1307,7 +1286,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   ----- Reload / clear
 
-  -- Fold this flush's per-verb seeds into dirtyChans as seed dirt: dedup-by-uuid (seeded
+  -- Fold this flush's per-verb seeds into the journal as seed dirt: dedup-by-uuid (seeded
   -- chans), fold-whole (unseeded payload chans). see docs/trackerManager.md § Interval seeds
   function absorbReloadDirt(payloadChans)
     for chan, list in pairs(seeds) do
@@ -1318,14 +1297,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
           util.add(deduped, s)
         end
       end
-      -- Past the cap the dirt collapses to the whole channel (see docs/trackerManager.md § Derivation
-      -- dirt: the gated spine); join, never assign, so this cannot restate wholesale already standing.
-      if dirtyChans[chan] ~= true then
-        dirtyChans[chan] = #deduped > WHOLESALE_SEED_CAP and true or deduped
-      end
+      dirt.add(chan, deduped)
     end
     for chan in pairs(payloadChans) do
-      if not seeds[chan] then dirtyChans[chan] = true end
+      if not seeds[chan] then dirt.add(chan, true) end
     end
   end
 
@@ -1429,9 +1404,8 @@ end
 --contract: chan==nil marks all 16 channels stale; otherwise just the named channel
 --contract: consumed by the next tm:rebuild, then cleared
 function tm:markSwingStale(chan)
-  dirtyChan(chan) -- swing move re-times this chan's derivations (raw reseat + absorber seats); not carried by the mm payload
-  if chan then staleSwing[chan] = true; return end
-  for i = 1, 16 do staleSwing[i] = true end
+  dirt.add(chan, true) -- swing move re-times this chan's derivations (raw reseat + absorber seats); not carried by the mm payload
+  dirt.swing.add(chan)
 end
 
 -- A geometry-only change (a gm region edit staging no mm ops) still needs the grid rebuilt
@@ -1446,7 +1420,7 @@ local computeFxWindows
 local freezeEligibleByUuid = {}
 local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
 
--- Rebuild output, built by the fx pass behind the dirtyChans gate: a clean channel keeps its lists,
+-- Rebuild output, built by the fx pass behind the dirt gate: a clean channel keeps its lists,
 -- a channel that ran gets them replaced, keyed by producer: the overlay draws one chain's own.
 --shape: fxNotesByProducer[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents] }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
@@ -1744,7 +1718,7 @@ local function freezeRegion(uuid, toGroup)
   -- Inside this same staging block, so the closing rebuild back-derives cents on the survivors alone.
   if toGroup then thinSeats(frozen.chan, windows) end
 
-  dirtyChan(frozen.chan)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
+  dirt.add(frozen.chan, true)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
   -- A continuous-only or husk region stages no mm ops at all, and flush's no-op gate would swallow
   -- the pass; the request carries it past that and past rebuild(∅). Harmless when assigns staged.
   tm:requestRebuild()
@@ -1870,7 +1844,7 @@ function tm:setLength(newPpq)
     -- mm:setLength runs last, so the take is still long here: pendingLen is what tells the tail
     -- walk the new end. All-16 dirt because any channel may hold an OPEN tail spanning it.
     pendingLen = newPpq
-    dirtyChan()
+    dirt.add(nil, true)
     tm:requestRebuild()   -- an OPEN-only shrink stages no mm ops; flush must rebuild regardless
     tm:flush()
     pendingLen = nil
@@ -2096,10 +2070,10 @@ local function mmBatch()
 end
 
 -- True when raw ppq can't be explained by the logical projection: foreign MIDI (no ppqL) or
--- an external raw edit. staleSwing chans return false -- their divergence is an expected reseat.
+-- an external raw edit. Swing-stale chans return false -- their divergence is an expected reseat.
 local function rawDivergesFromLogical(evt)
-  if evt.ppqL == nil      then return true  end
-  if staleSwing[evt.chan] then return false end
+  if evt.ppqL == nil          then return true  end
+  if dirt.swing.has(evt.chan) then return false end
   local delayPpq = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
   local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, delayPpq)
   if evt.ppq == 0 and rawFromLogical < 0 then return false end
@@ -2135,10 +2109,10 @@ end
 
 -- Seed membership by logical row -- same ppqL any lane, so a deleted shadower re-materialises its
 -- row. The fx producer query wants the same rows as a range test. see docs § Interval materialisation
-local function seedCovers(seedList)
-  if seedList == true then return function() return true end end
+local function seedCovers(chan)
+  if dirt.wholesale(chan) then return function() return true end end
   local rows = {}
-  for _, row in ipairs(seedRowsFor(seedList)) do rows[row] = true end
+  for _, row in ipairs(seedRowsFor(dirt.has(chan))) do rows[row] = true end
   return function(note) return rows[note.ppqL or note.ppq] or false end
 end
 local function windowSeeded(rows, startL, endL)
@@ -2183,10 +2157,9 @@ local function rebuildInternals()
   -- Clean channels carry their columns whole: never visited, so never cloned. Interval-dirty ones
   -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
-    local dirt = dirtyChans[chan]
-    if dirt then
-      local covers = seedCovers(dirt)
-      if dirt ~= true then exciseNotes(chan, seedRowsFor(dirt)) end
+    if dirt.has(chan) then
+      local covers = seedCovers(chan)
+      if not dirt.wholesale(chan) then exciseNotes(chan, seedRowsFor(dirt.has(chan))) end
       for _, raw in mm:notesRaw(chan) do
         -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
@@ -2217,7 +2190,7 @@ local function rebuildInternals()
     -- set detune/delay at ingestion to skip defensive guards downstream
     note.detune = note.detune or 0
     note.delay  = note.delay  or 0
-    if staleSwing[note.chan] then
+    if dirt.swing.has(note.chan) then
       -- Rederive realised onset from logical; endppq is the tail walk's. Reswing can collapse two
       -- distinct-ppqL same-pitch notes onto one raw -- staged to mm; the walk separates it this pass.
       local reswungPpq = tm:fromLogical(note.chan, note.ppqL, delayToPPQ(note.delay))
@@ -2226,7 +2199,7 @@ local function rebuildInternals()
     end
     -- Columns are logical-born: every seat projects at ingestion.
     projectEvent(note, note.chan)
-    if dirtyChans[note.chan] ~= true and not staleSwing[note.chan] then
+    if not dirt.wholesale(note.chan) and not dirt.swing.has(note.chan) then
       shedLane(note.chan, note.lane)
       insertNoteCell(col.events, note)   -- splice into the carried logical lane; stays ordered
     else
@@ -2396,7 +2369,7 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
     local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq)
     local movedPpq, movedPpqL
     if not cc.derived and not pbSeat then
-      if staleSwing[cc.chan] and cc.ppqL ~= nil then
+      if dirt.swing.has(cc.chan) and cc.ppqL ~= nil then
         local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
         if newPpq ~= cc.ppq then
           ccWrites.assign({ uuid = uuid }, { ppq = newPpq })
@@ -2454,10 +2427,9 @@ local function rebuildCCs(prevWindows)
   -- Clean channels carry their cc/at/pc columns whole: never visited. Interval-dirty ones splice just
   -- the seeded cells (spliceChannelCCs); wholesale/stale-swing chans re-derive the whole stream.
   for chan = 1, 16 do
-    local dirt = dirtyChans[chan]
-    if dirt then
-      if dirt == true then fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExisting)
-      else                 spliceChannelCCs(chan, dirt, fillWin, ccWrites, ccExisting)
+    if dirt.has(chan) then
+      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExisting)
+      else                         spliceChannelCCs(chan, dirt.has(chan), fillWin, ccWrites, ccExisting)
       end
     end
   end
@@ -2638,9 +2610,9 @@ local parkedClipEnd = {}   -- uuid -> endppqC (logical); a take-length change ar
 -- Clip each parked member's tail to its render end (ceiling, on-take lane onset, parked-neighbour
 -- onset), cached per uuid and dirt-gated -- see docs/trackerManager.md § Region-replace parking
 --contract: derives each member's endppqC (the render clip); the authored ceiling on endppq stands
-local function realiseParked(chan, members, takeLenL, dirt)
+local function realiseParked(chan, members, takeLenL)
   local seededUuid, seededPpq = {}, {}
-  for _, s in ipairs(type(dirt) == 'table' and dirt or {}) do
+  for _, s in ipairs(not dirt.wholesale(chan) and dirt.has(chan) or {}) do
     if s.uuid then seededUuid[s.uuid] = true end
     if s.ppqL then util.add(seededPpq, s.ppqL) end
   end
@@ -2651,7 +2623,7 @@ local function realiseParked(chan, members, takeLenL, dirt)
   local memberNextOf = strictNextMap(byLane)
   for _, m in ipairs(members) do
     local cached = parkedClipEnd[m.uuid]
-    local dirty  = dirt == true or cached == nil or seededUuid[m.uuid]
+    local dirty  = dirt.wholesale(chan) or cached == nil or seededUuid[m.uuid]
     if not dirty then
       for _, p in ipairs(seededPpq) do
         if p >= m.ppq and p <= cached then dirty = true; break end
@@ -2773,7 +2745,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
                        spec = parkSpec(evt, { lane = laneIdx }) })
     end
     for chan, chanSpans in pairs(noteSpans) do
-      if dirtyChans[chan] then
+      if dirt.has(chan) then
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           coverOnsets(col.events, chanSpans, function(evt)
             if evt.evType ~= 'pa' then candidate(evt, laneIdx) end
@@ -2782,7 +2754,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       end
     end
     for host in pairs(hostWindows or {}) do
-      if dirtyChans[host.chan] and generators.parksNotes(host) then
+      if dirt.has(host.chan) and generators.parksNotes(host) then
         candidate(host, host.lane)
       end
     end
@@ -2790,13 +2762,13 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     -- Park removes a blocker; same-lane/pitch neighbours' tails regrow.
     local restores
     parkedNotes, restores = reconcilePark(scan, priorByType.note or {},
-      function(spec) seedDirty(spec.chan, parkSeed(spec, 'park')) end)
+      function(spec) dirt.add(spec.chan, parkSeed(spec, 'park')) end)
 
     -- Restores re-enter their columns now (unrealised) and land in mm with this stage's commit;
     -- the tail walk then meets each as an ordinary seated entry and clips it in place.
     local takeLen = tm:length()
     for _, spec in ipairs(restores) do
-      seedDirty(spec.chan, parkSeed(spec, 'restore'))
+      dirt.add(spec.chan, parkSeed(spec, 'restore'))
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
@@ -2831,7 +2803,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       if #members > 0 then
         -- On-take survivors bound a parked tail on its own lane (rebuildTails' model): the per-member
         -- column seek finds the first note after the region, not just the next parked member.
-        realiseParked(chan, members, tm:toLogical(chan, takeLen), dirtyChans[chan])
+        realiseParked(chan, members, tm:toLogical(chan, takeLen))
       end
     end
   end
@@ -2850,7 +2822,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     -- Fresh: an on-take PA whose host just parked leaves the take and stashes. Bounded by each parked
     -- member's raw span (its own PAs), not the channel's cc count. see docs/trackerManager.md § Span-covered fx scans
     for chan = 1, 16 do
-      if dirtyChans[chan] then
+      if dirt.has(chan) then
         local pas = rawIndexFor(chan).pas
         for _, cell in ipairs(channels[chan].parked or {}) do
           local sRaw, eRaw = tm:fromLogical(chan, cell.ppq), tm:fromLogical(chan, cell.endppqC)
@@ -2861,7 +2833,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
               seen[cc] = true
               -- Seed the PA's row so rebuildPA's gated parked loop re-projects it: mmBatch.del
               -- accumulates raw ops but seeds no interval dirt, exactly as the pb park seeds its own.
-              seedDirty(cc.chan, rawSeed(cc, 'park'))
+              dirt.add(cc.chan, rawSeed(cc, 'park'))
               batch.del({ uuid = cc.uuid })
               freshCells[cc.chan] = freshCells[cc.chan] or {}
               freshCells[cc.chan][cc.uuid] = cc.ppqL or cc.ppq   -- the row the excise seeks
@@ -2885,7 +2857,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       if hostParked(spec.chan, spec.pitch, spec.ppq) then
         util.add(newParked, spec)
       else
-        seedDirty(spec.chan, parkSeed(spec, 'restore'))
+        dirt.add(spec.chan, parkSeed(spec, 'restore'))
         batch.add(util.assign(util.clone(spec),   -- back to mm: raw onset, logical sidecar
           { ppq = tm:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq }))
       end
@@ -2913,7 +2885,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
 
     local scan = {}
     for chan = 1, 16 do
-      if dirtyChans[chan] then
+      if dirt.has(chan) then
         for cc, col in pairs(channels[chan].columns.ccs) do
           coverOnsets(col.events, ccSpans[util.key(chan, cc)], function(evt)
             util.add(scan, { evt = evt, events = col.events,
@@ -2988,7 +2960,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
         if not cc.derived and not seatByRegion(cc.chan, cc.ppq) then
-          seedDirty(cc.chan, rawSeed(cc, 'park'))
+          dirt.add(cc.chan, rawSeed(cc, 'park'))
           -- val: logical cents from the cents sidecar (restore maps back); entry.val is already the
           -- raw-derived cents, the best-effort fallback for a foreign pre-cents pb.
           local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq,
@@ -3003,7 +2975,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     -- Restore re-adds to the take; the absorber (later this rebuild) refines the wire raw with
     -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
     for _, spec in ipairs(restores) do
-      seedDirty(spec.chan, parkSeed(spec, 'restore'))
+      dirt.add(spec.chan, parkSeed(spec, 'restore'))
       batch.add(util.assign(util.clone(spec),
         { ppq = tm:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq,
           cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
@@ -3017,7 +2989,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
-        seedDirty(cc.chan, rawSeed(cc, 'delete'))
+        dirt.add(cc.chan, rawSeed(cc, 'delete'))
         batch.del({ uuid = cc.uuid })
       end
     end
@@ -3094,8 +3066,8 @@ end
 -- channelStreams) read it inline. see docs/trackerManager.md § PA dispatch
 local function rebuildPA()
   for chan = 1, 16 do
-    if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
-      local covers = seedCovers(dirtyChans[chan])   -- wholesale: always-true; interval: seeded rows only
+    if dirt.has(chan) then   -- clean: PA already sits in the carried note column
+      local covers = seedCovers(chan)   -- wholesale: always-true; interval: seeded rows only
       for _, cc in ipairs(rawIndexFor(chan).pas) do
         if covers(cc) then
           local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
@@ -3113,8 +3085,8 @@ local function rebuildPA()
   -- Parked PAs left the take (off-take, silent) but still ride their host's note column --
   -- projected unrealised into the parked host's lane. see docs/trackerManager.md § PA dispatch
   for chan = 1, 16 do
-    if dirtyChans[chan] then
-      local covers = seedCovers(dirtyChans[chan])
+    if dirt.has(chan) then
+      local covers = seedCovers(chan)
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
         if covers(cell) then
           local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
@@ -3169,9 +3141,9 @@ function computeFxWindows(extraFxChans, parkedNotes)
 
   -- Per-host reuse/reseek: recomputes a host only when its own uuid seeded or a seed ppq fell in its
   -- cached span; else the cached end rides. Returns false on an unstamped host to fall to walkChannel.
-  local function perHost(chan, takeLenL, dirt)
+  local function perHost(chan, takeLenL, seedList)
     local seededUuid, seededPpq = {}, {}
-    for _, s in ipairs(dirt or {}) do
+    for _, s in ipairs(seedList or {}) do
       if s.uuid then seededUuid[s.uuid] = true end
       if s.ppqL then util.add(seededPpq, s.ppqL) end
     end
@@ -3198,12 +3170,11 @@ function computeFxWindows(extraFxChans, parkedNotes)
     local takeLenL = tm:toLogical(chan, takeLen)
     local hosts    = fxHostsFor(chan)
     local hasHosts = hosts and next(hosts)
-    local dirt     = dirtyChans[chan]
     local isExtra  = extraFxChans and extraFxChans[chan]
-    if isExtra or dirt == true then
+    if isExtra or dirt.wholesale(chan) then
       if hasHosts or isExtra then walkChannel(chan, takeLenL) end
     elseif hasHosts then
-      if not perHost(chan, takeLenL, type(dirt) == 'table' and dirt or nil) then
+      if not perHost(chan, takeLenL, dirt.has(chan)) then
         walkChannel(chan, takeLenL)
       end
     end
@@ -3433,12 +3404,11 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
     -- Producer gate: under interval dirt an unseeded producer outside every emit scope it feeds keeps
     -- its output verbatim -- notes self-match by fxKey, seats re-feed the reconcile. see design § phase 5
-    local dirt = dirtyChans[chan]
-    local gated = dirt ~= true
+    local gated = not dirt.wholesale(chan)
     local keptById, dirtyRows
     local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     local seeded, emitScope = {}, {}
-    if gated then dirtyRows = seedRowsFor(dirt) end
+    if gated then dirtyRows = seedRowsFor(dirt.has(chan)) end
     -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
     -- noteExisting walk to the first keep.
     local function keptFor()
@@ -3515,7 +3485,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       -- Hold-stream reach: authored pb/cc breakpoints and lane-1 detune hold forward past window
       -- edges, invisible to window-local seeds.
       local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
-      for _, s in ipairs(dirt) do
+      for _, s in ipairs(dirt.has(chan)) do
         if s.pitch == nil or s.lane == 1 then
           local from = s.ppqL
           local liveEvt = s.uuid and tm:byUuid(s.uuid)
@@ -3640,7 +3610,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
   for chan = 1, 16 do
     -- Frozen: derived notes/CCs stand untouched in mm; leave noteLive empty so tails/pbs/pcs skip too.
-    if dirtyChans[chan] then expandChannel(chan) end
+    if dirt.has(chan) then expandChannel(chan) end
   end
   return fxOut
 end
@@ -3714,7 +3684,7 @@ end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Tail walk
-local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
+local function linearTails(chan, notes, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, takeLen = takeLen,
@@ -3729,7 +3699,7 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   -- A kept fx spec (gate-verbatim, unchanged since last pass) is already settled and clipped: it
   -- rides as a bound anchor only, never a fresh disturbance. see docs/trackerManager.md § Tail walk
   for _, e in ipairs(notes) do if e.derived and not keptDerived[e] then disturbed[e] = true end end
-  if dirt == true then
+  if dirt.wholesale(chan) then
     for _, e in ipairs(notes) do disturbed[e] = true end   -- degenerate pass: load, external change
   else
     local noteByUuid, bySeat = {}, {}
@@ -3737,7 +3707,7 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
       if e.uuid then noteByUuid[e.uuid] = e end
       util.bucket(bySeat, seatKey(e.ppqL or e.ppq, e.lane, e.pitch), e)
     end
-    for _, seed in ipairs(dirt) do
+    for _, seed in ipairs(dirt.has(chan)) do
       util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
       local rec = seed.uuid and noteByUuid[seed.uuid]
       if rec then disturbed[rec] = true
@@ -3771,7 +3741,7 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   for e in pairs(disturbed) do bound[e] = true end
   -- Wholesale already binds every note, so the predecessor probes add nothing -- and running them per
   -- note is O(n^2). Only the seeded case needs them, to reach the non-disturbed neighbours dirt shadows.
-  if dirt ~= true then
+  if not dirt.wholesale(chan) then
     for e in pairs(disturbed) do util.add(anchors, { pos = e.ppq, lane = e.lane, pitch = e.pitch }) end
     for _, a in ipairs(anchors) do
       local lanePred  = util.seek(notes, 'before', a.pos, function(e) return e.lane  == a.lane  end)
@@ -3907,7 +3877,7 @@ end
 
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal.
-local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, takeLen, res,
+local function frontierTails(chan, indexList, extras, parkedBoundFor, takeLen, res,
                              clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
@@ -3920,7 +3890,7 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   -- index tick cluster answers; byUuid resolve is note-scoped -- see docs § What the walk visits, and what it emits.
   local anchors = {}
   for _, rec in ipairs(extras) do if rec.derived and not keptDerived[rec] then disturbed[rec] = true end end
-  for _, seed in ipairs(dirt) do
+  for _, seed in ipairs(dirt.has(chan)) do
     util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
     local rec = seed.uuid and tm:byUuid(seed.uuid)
     if rec and rec.evType == 'note' and rec.chan == chan then disturbed[rec] = true
@@ -4014,8 +3984,7 @@ local function rebuildTails(noteLive, noteOps)
   for _, spec in ipairs(noteOps.adds) do tailWrites.add(spec) end
   for chan = 1, 16 do
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
-    local dirt = dirtyChans[chan]
-    if not dirt then goto nextChan end
+    if not dirt.has(chan) then goto nextChan end
     -- A kept fx spec is settled from last pass and rides the walk as a bound anchor only; only fresh
     -- (re-run producer) derived notes seed disturbance and count toward the frontier cap.
     local extras, keptDerived, freshLive = {}, {}, 0
@@ -4045,18 +4014,17 @@ local function rebuildTails(noteLive, noteOps)
     -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
     local indexedNotes = rawIndexFor(chan).notes
     local emitted
-    if dirt ~= true and #dirt + freshLive <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, indexedNotes, extras, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
+    if not dirt.wholesale(chan) and #dirt.has(chan) + freshLive <= FRONTIER_SEED_CAP then
+      emitted = frontierTails(chan, indexedNotes, extras, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
     else
       local notes = mergeIndexed(indexedNotes, walkable, extras)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
+      emitted = linearTails(chan, notes, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
     end
 
-    if #emitted > 0 and dirt ~= true then
-      for _, s in ipairs(dirt) do util.add(emitted, s) end
-      dirtyChans[chan] = emitted
-    end
+    -- The walk's own dirt joins what it was given: past the cap the channel collapses to wholesale,
+    -- so the stages below it read the same lattice every other writer does.
+    dirt.add(chan, emitted)
     ::nextChan::
   end
   -- Clamps commit first: separating colliding same-pitch onsets settles mm's seat keys before
@@ -4087,7 +4055,7 @@ local function rebuildPbs(fxOut, extraColumns)
   local function lane1Note(entry) return entry.lane == 1 and walkable(entry) end
   local freshLane1, liveLane1ByChan = {}, {}
   for chan = 1, 16 do
-    if dirtyChans[chan] then
+    if dirt.has(chan) then
       -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
       local liveLane1 = {}
@@ -4234,8 +4202,8 @@ local function rebuildPbs(fxOut, extraColumns)
 
   -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
   -- Extents come by seek, ahead of the gather.
-  local function seatScope(chan, dirt, replaceWins, derivedLane1)
-    if dirt == true then return nil end
+  local function seatScope(chan, replaceWins, derivedLane1)
+    if dirt.wholesale(chan) then return nil end
     local seatSpans = {}
     -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, the
     -- same union lane1Between/lane1DetuneAt seek; seek both here and take the nearer.
@@ -4258,7 +4226,7 @@ local function rebuildPbs(fxOut, extraColumns)
       return not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
                   or seed.evType == 'at' or seed.evType == 'pc')
     end
-    for _, seed in ipairs(dirt) do
+    for _, seed in ipairs(dirt.has(chan)) do
       -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
       -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
       local live = seed.uuid and tm:byUuid(seed.uuid)
@@ -4289,12 +4257,11 @@ local function rebuildPbs(fxOut, extraColumns)
   -- derived lane-1 output ungates the channel (seatSpans nil).
   local winsByChan, seatSpansByChan = {}, {}
   for chan = 1, 16 do
-    local dirt = dirtyChans[chan]
-    if dirt then
+    if dirt.has(chan) then
       local replaceWins = replaceWindows(chan)
       winsByChan[chan] = replaceWins
       if not freshLane1[chan] then
-        seatSpansByChan[chan] = seatScope(chan, dirt, replaceWins, liveLane1ByChan[chan])
+        seatSpansByChan[chan] = seatScope(chan, replaceWins, liveLane1ByChan[chan])
       end
     end
   end
@@ -4313,7 +4280,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- names its source; origShape is held because the pass rewrites shape.
   local pbsByChan = {}
   for chan = 1, 16 do
-    if dirtyChans[chan] then
+    if dirt.has(chan) then
       local seatSpans = seatSpansByChan[chan]
       for _, entry in ipairs(rawIndexFor(chan).pbs) do
         if inSpans(seatSpans, entry.ppq) then
@@ -4596,7 +4563,7 @@ local function rebuildPbs(fxOut, extraColumns)
 
   for chan = 1, 16 do
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild entry).
-    if dirtyChans[chan] then
+    if dirt.has(chan) then
       local pbs = pbsByChan[chan] or {}
       sortByPPQ(pbs)
 
@@ -4646,7 +4613,7 @@ end
 ----- Rebuild sample stamp
 
 -- The bearing rule: under trackerMode every note bears a sample, stamped once from the onset PC;
--- inheritance freezes at stamp time. Gated on dirtyChans (seed|true, see :68).
+-- inheritance freezes at stamp time. Gated on the dirt journal (seed list or wholesale).
 local function stampSamples()
   if not cm:get('trackerMode') then return end
   local stampWrites = mmBatch()
@@ -4660,11 +4627,10 @@ local function stampSamples()
     end
   end
   for chan = 1, 16 do
-    local dirt = dirtyChans[chan]
-    if dirt == true then
+    if dirt.wholesale(chan) then
       for _, entry in ipairs(rawIndexFor(chan).notes) do stamp(entry) end
-    elseif dirt then
-      for _, s in ipairs(dirt) do
+    elseif dirt.has(chan) then
+      for _, s in ipairs(dirt.has(chan)) do
         local uuid = s.uuid or (s.evt and s.evt.uuid)
         local entry = uuid and tm:byUuid(uuid)
         if entry then stamp(entry) end
@@ -4678,8 +4644,8 @@ end
 
 -- Seed closure for PC synthesis: each seed onset's [onset, next onset) span, both frames.
 -- nil = wholesale (also forced by fresh derived output).
-local function pcSeedSpans(chan, dirt, noteLive)
-  if dirt == true then return nil end
+local function pcSeedSpans(chan, noteLive)
+  if dirt.wholesale(chan) then return nil end
   for _, w in ipairs(noteLive) do
     if not w.kept then return nil end
   end
@@ -4687,7 +4653,7 @@ local function pcSeedSpans(chan, dirt, noteLive)
   local function addPoint(ppq, ppqL)
     if ppq ~= nil then util.add(points, { ppq = ppq, ppqL = ppqL or ppq }) end
   end
-  for _, s in ipairs(dirt) do
+  for _, s in ipairs(dirt.has(chan)) do
     addPoint(s.ppq, s.ppqL)
     local live = s.uuid and tm:byUuid(s.uuid)
     if live then addPoint(live.ppq, live.ppqL) end
@@ -4719,9 +4685,8 @@ local function rebuildPCs(noteLive)
   local spansByChan, rawSpansByChan = {}, {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
-    local dirt = dirtyChans[chan]
-    if not dirt then goto nextChan end
-    local seedSpans = pcSeedSpans(chan, dirt, noteLive[chan])
+    if not dirt.has(chan) then goto nextChan end
+    local seedSpans = pcSeedSpans(chan, noteLive[chan])
     local rawSpans = seedSpans and rawCoverSpans(seedSpans)
     spansByChan[chan], rawSpansByChan[chan] = seedSpans, rawSpans
     local records = {}
@@ -4751,7 +4716,7 @@ local function rebuildPCs(noteLive)
   -- pc column splice: out-of-span cells carry; in-span (or wholesale) cells re-read from the
   -- committed stream. Always a fresh events table -- tv's cell carry keys on table identity.
   for chan = 1, 16 do
-    if dirtyChans[chan] then
+    if dirt.has(chan) then
       local seedSpans = spansByChan[chan]
       local events = {}
       if seedSpans then
@@ -4822,7 +4787,7 @@ local function rebuildPipeline(didReload)
 
   perf.start('internals'); local external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
-  staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
+  dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns, sources.paramAutomation); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
   perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
@@ -4877,8 +4842,8 @@ local function rebuildPipeline(didReload)
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
   perf.start('view'); clearStaging(); perf.stop('view')
-  for chan in pairs(dirtyChans) do muteConform[chan] = true end
-  dirtyChans = {}   -- gated stages consumed the spine; next edit window accumulates fresh
+  -- The gated stages consumed the spine; the next edit window accumulates fresh dirt.
+  for chan in pairs(dirt.clear()) do muteConform[chan] = true end
   perf.start('derivedInputs')
   derivedInputs = util.deepClone(derivationInputs())   -- after the pipeline's own ds writes have settled
   perf.stop('derivedInputs')
@@ -4887,7 +4852,7 @@ end
 --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
 --contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
 --contract: dead take (mm:take() nil) is a no-op; tv retains its last frame
---invariant: rebuild(∅) (no dirt/staleSwing/reload/takeChanged/request) short-circuits pre-nest
+--invariant: rebuild(∅) (no dirt/stale swing/reload/takeChanged/request) short-circuits pre-nest
 -- see docs/trackerManager.md § Rebuild
 function tm:rebuild(takeChanged)
   if rebuilding then return end
@@ -4895,13 +4860,12 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- rebuild(∅) does literally nothing: with no dirt, clean swing, no wholesale re-read, no
   -- take swap and no force, every stage would converge to the carried frame -- skip it all.
-  if not (takeChanged or mmReloaded or rebuildRequested
-          or next(dirtyChans) ~= nil or next(staleSwing) ~= nil) then return end
+  if not (takeChanged or mmReloaded or rebuildRequested or dirt.pending()) then return end
   rebuildRequested = false
   rebuilding = true
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
+  if didReload or takeChanged then dirt.add(nil, true) end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -4911,9 +4875,9 @@ function tm:rebuild(takeChanged)
   channels = {}
   shedLanes = {}   -- per-pass memo: a lane shed on the last pass must shed again on this one
   for i = 1, 16 do
-    if dirtyChans[i] == true then
+    if dirt.wholesale(i) then
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
-    elseif dirtyChans[i] then
+    elseif dirt.has(i) then
       -- Interval dirt carries note AND cc/at/pc columns; both splice just their seeded cells. Park and
       -- pb still want the fresh channel; priorPb feeds the kept-range carry. see design § phase 3
       local prevCols = prevChannels[i].columns
@@ -5029,7 +4993,7 @@ do
     elseif not tvOnlyKeys[key] then
       -- temper reaches no derivation, but tv's context snapshot rides tm's rebuild signal, so a
       -- notation change comes through here to refresh the lens rather than to re-derive anything.
-      dirtyChan()   -- any other derivation config (pbRange/ccInterp/overlapOffset) re-derives all chans
+      dirt.add(nil, true)   -- any other derivation config (pbRange/ccInterp/overlapOffset) re-derives all chans
     end
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
@@ -5059,7 +5023,7 @@ do
     elseif change.name == 'extraColumns' or change.name == 'paramAutomation' then
       -- extraColumns is grow-only/merge-safe, not parking -- a whole re-derive stays. see design § phase 3
       -- A binding shapes columns the same way, so bind/unbind (and its undo) arrives here too.
-      if not flushingParked then dirtyChan(); tm:rebuild(false) end
+      if not flushingParked then dirt.add(nil, true); tm:rebuild(false) end
     elseif change.name == 'noteDelay' then
       -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only,
       -- forced past the rebuild(∅) gate since it seeds no dirt.
@@ -5104,9 +5068,7 @@ do
     cm:setContext(take)
     if take then cm:set('transient', 'trackerMode', (opts and opts.trackerMode) or false) end
     bindingTake = false
-    if opts and opts.markSwingStale then
-      for i = 1, 16 do staleSwing[i] = true end
-    end
+    if opts and opts.markSwingStale then dirt.swing.add(nil) end
     -- Nothing above marked dirt (cm ran suppressed), and the converged gate in mm:load no longer
     -- blanket-dirties a rebind. Whatever changed unheard -- an undo of the take's swing, a wiring
     -- flip re-seeding trackerMode -- shows up here as a diff. markSwingStale covers dirt AND reseat.

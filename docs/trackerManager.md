@@ -244,7 +244,7 @@ lane when it re-entered the column.
 um's low-level verbs (`addLowlevel`/`assignLowlevel`/`deleteLowlevel`) each drop a *birth
 snapshot* of the event they touched -- its uuid, verb, both-frame position, lane, pitch, and
 authored span -- into a `seeds[chan]` list separate from `adds`/`assigns`/`deletes`. `flush` folds
-the seeds into `dirtyChans` via `absorbReloadDirt`, deduped by uuid (first-wins keeps the birth
+the seeds into the dirt journal via `absorbReloadDirt`, deduped by uuid (first-wins keeps the birth
 state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
 
 A move is one seed, not two: its snapshot records the vacated (old) position, while the surviving
@@ -513,7 +513,7 @@ carried by mm's `'reload'` payload as `wholesale`: true from `load`/`reload`,
 where every record is new, so columns reproject and the um index fully
 reloads (§ Incremental index reconciliation); false from `modify`, where mm
 mutated in place and both stand. *Derivation dirt* is a
-per-channel set, `dirtyChans`, marked by edit verbs (via mm's `reload`
+per-channel journal, `dirt.lua`, marked by edit verbs (via mm's `reload`
 `chans` payload), swing (`markSwingStale`), any non-tv config change (all
 16), fx-region and parking edits, and pipeline-internal movers (a tail-walk
 nudge marks the captured set so the later pbs pass sees it). It is captured
@@ -524,7 +524,7 @@ subscriber drops them while `rebuilding` — they are converged output, not
 edits, and marking all 16 dirty mid-rebuild would defeat retention (a channel
 clean in the CC walk but dirty in fx double-derives its seats).
 
-A channel absent from `dirtyChans` **freezes**. Under frame retention (B1) the
+A channel absent from the journal **freezes**. Under frame retention (B1) the
 freeze is total: rebuild carries the channel's whole prior `channels[i]` —
 columns and all — forward, so materialisation itself skips (internals places
 nothing, the CC walk clones nothing, `rebuildPA` and the pc-refresh reproject
@@ -556,19 +556,20 @@ Interval dirt narrows the freeze below channel grain: a channel whose only dirt 
 edits carries its CC/park/pb state forward like a clean channel and splices just the closed spans —
 `rebuildInternals` excises and re-clones the note span (§ Interval materialisation), `rebuildCCs`
 splices the seed-touched windows, `rebuildPbs` gathers span-bounded. Wholesale dirt
-(`dirtyChans[chan] == true`) still replaces the whole channel.
+still replaces the whole channel.
 
-Dirt is a lattice — `nil` < seed list < `true` — and every writer **joins**, never
-assigns: a pass may discover more dirt, never less. `seedDirty` no-ops once
-wholesale, the tail walk's emission checks `dirt ~= true`, and `absorbReloadDirt`
-folds under the same guard. What the join protects is dirt that survives no
+Dirt is a lattice — `nil` < seed list < `true` — held by `dirt.lua`, one journal
+per tracker, which the edit side and the rebuild share. Every writer calls `add`,
+which **joins**: it raises a channel's entry and never lowers it, so a pass may
+discover more dirt, never less. What that protects is dirt that survives no
 restatement: `setLength` marks all 16 wholesale for OPEN tails spanning the new
 end, and an OPEN tail stages no mm op, so it leaves no seed to be rediscovered
 from. A demotion to a co-occurring kill's seed would leave that OPEN tail uncut.
-Pinned in `tm_tail_gating_spec`.
+Pinned in `tm_tail_gating_spec`, and the lattice itself in `dirt_spec`.
 
 Past the cap the dirt collapses to the whole channel, so `rebuildInternals`' excise-skip and its
-fresh column build agree with the tail walk.
+fresh column build agree with the tail walk. `add` enforces the cap, so the tail walk's own
+mid-pass emission collapses on the same terms as an edit's seeds.
 
 ### The pipeline
 
@@ -624,7 +625,7 @@ projects `cc`/`at`/`pc` into columns. Pb projection defers to
 
 The reconcile has two rules:
 
-- `staleSwing[chan]`: ppqL is truth; reseat `raw = fromLogical(ppqL)`.
+- A swing-stale channel: ppqL is truth; reseat `raw = fromLogical(ppqL)`.
 - Otherwise, if raw diverges from ppqL: external raw edit; restamp
   `ppqL = toLogical(raw)`.
 
@@ -841,7 +842,7 @@ del/add in one modify.
 #### What the walk visits, and what it emits
 
 The walk reads its whole channel but does work only where the pass has
-news. `dirtyChans[chan]` arrives as seed dirt (§ Interval seeds), and
+news. The channel's dirt arrives as seed dirt (§ Interval seeds), and
 a note the dirt does not name kept its raw and its ceiling — last pass
 left it separated and clipped against neighbours that also stood still.
 `disturbed` is that judgement and it is the whole of the walk: a note is
@@ -885,9 +886,8 @@ bounds come from a scan instead of a bucket, parked cells being few and read
 only for the notes the sweep bounds.
 
 The walk **emits**. A nudged lane-1 onset moved every absorber seat
-between it and the next lane-1 onset, so the walk seeds that interval
-into `dirtyChans[chan]` and `rebuildPbs` consumes it later in the same
-pass.
+between it and the next lane-1 onset, so the walk adds that interval to
+the channel's dirt and `rebuildPbs` consumes it later in the same pass.
 
 Two walks share these rules; a seed-count threshold picks between them.
 The **linear walk** is authoritative for dense and wholesale dirt: one
@@ -994,7 +994,7 @@ seated them, and nothing walks a column to re-project — a second projection wo
 The pipeline then persists its own window set: `settledWindows` goes to
 `ds:assign('prevWindows', …)` when it differs from the set this pass read,
 so the next rebuild recognises seats against it. `clearStaging()` drops
-un-flushed ops, the pass's `dirtyChans` fold into `muteConform` and clear,
+un-flushed ops, the pass's dirt folds into `muteConform` and clears,
 and `derivedInputs` re-snapshots once the pipeline's own ds writes have
 settled. The index itself needs no tail step: on a wholesale reload it
 was fully `reload()`ed at the pipeline head,
@@ -1345,7 +1345,7 @@ Under swing those two disagree — and a PA whose raw and seat disagree is
 not merely imprecise. On a settled channel the CC walk reads the
 divergence as an external raw edit and restamps `ppqL` from the raw
 (`rebuildCCs`), so a fabricated realisation silently overwrites the very
-intent the carry set out to preserve. Only a `staleSwing` channel gets
+intent the carry set out to preserve. Only a swing-stale channel gets
 the reverse treatment, its seat reswung into raw; everywhere else, raw
 wins the disagreement.
 
