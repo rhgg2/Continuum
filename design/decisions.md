@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — Phase 4 gives the frame a handle with direct access to `channels`, where the
+  index and the stager get door tables: the frame's seven operations already take a frame or a piece
+  of one as their first argument, so the engine's writes need no door, and the handle's `channels`
+  field swaps each pass where tm mints the map. `index.byUuid` joins the index doors and `tm:byUuid`
+  delegates to it, since tv and gm call the public method; that settles the first half of the
+  split's open question about what `tm` covers. `fxNotesByProducer` is handed in and mutated in
+  place, which the engine's rule allows, because a clean channel keeps its lists across passes and
+  so the map is not the engine's to create.
+
 - **2026-08-31** — `src/` gains a directory per page stack, with `coordinator` for the frame and
   `shared` for the rest: a reachability trace over require and util.instantiate edges put 50 of 59
   modules under exactly one page, and resolved all five straddlers to `shared`. Grouping by kind or

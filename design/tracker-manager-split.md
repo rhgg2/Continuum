@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
 > opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 3 (pb at its seam)
+> at phase 4 (the seams drawn in place)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -297,17 +297,8 @@ the seed minters stay with the structures they read. The model is
    per-pass scratch field on a column event registers as a spurious
    diff. Both are cheap to update and expensive to meet unprepared.
 
-1. The gap is `rebuildPbs`. It is the largest stage and the thinnest
-   pinned against its size: `tm_pb_gating_spec` is two identity cases,
-   `tm_pb_interp_spec` covers interpolation across a detune onset,
-   `tm_absorber_reseat_spec` the delay reseat, and `tm_tuning_spec`
-   reaches it only obliquely through cents. Its keep/live split and
-   `pbScope` gating rest on one case, gate parity's pb half, and the
-   seam between its seating and its synthesis (§ Two movements) is
-   unpinned on either side. § Phase 1 makes the same observation one
-   level down, where the curve fold is reachable only through a full
-   rebuild. So pb realisation needs coverage at its own seam before
-   phase 3 moves it.
+1. `rebuildPbs` is pinned at its own seams by `tm_pb_keep_split_spec`,
+   `tm_seat_scope_spec` and `tm_pb_seam_spec`.
 
 ## Open
 
