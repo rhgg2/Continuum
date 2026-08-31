@@ -86,7 +86,7 @@ decides whether phase 3 is worth taking.**
    arms. Inside REBUILD, two dozen writes reach its fields. Outside it,
    every occurrence is a read or a comment — the accessors publish the
    frame, and the mute sweep walks it for cells to mute and then routes
-   the edit through `assignEvent`. The edit path stages to mm and seeds
+   the edit through `stager.assign`. The edit path stages to mm and seeds
    dirt, and never writes the frame. Today that holds by discipline,
    and it took a script to confirm; after the split it holds because
    the edit-side file has no such variable in scope.

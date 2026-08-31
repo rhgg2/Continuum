@@ -904,8 +904,9 @@ end
 ---------- STAGER
 
 -- Stages mm-facing ops, commits them in one mm:modify; reaches the index above only via its doors.
-local addEvent, assignEvent, deleteEvent, addParked, assignParked,
-      deleteParked, flush, reload, clearStaging, absorbReloadDirt do
+-- `stager` is the handle its doors hang on; the staged ops stay private to the block.
+local stager = {}
+do
 
   ----- State
 
@@ -1046,7 +1047,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   ----- Public interface
 
-  function deleteEvent(evtOrUuid)
+  function stager.delete(evtOrUuid)
     local evt = lookup(evtOrUuid)
     if not evt then return end
     if evt.evType == 'note' then deleteNote(evt)
@@ -1069,7 +1070,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: derives a provisional raw note-off; the universal tail pass owns the real one
   --invariant: endppqL is tm-private; callers never set it
   --contract: rawCaller=true bypass: translation skipped, only delay-delta applies
-  --invariant: assignEvent consumes rawTime before calling; never reaches mm (docs/timing.md)
+  --invariant: stager.assign consumes rawTime before calling; never reaches mm (docs/timing.md)
   local function realiseNoteUpdate(evt, update, rawCaller)
     -- A delay clear arrives as util.REMOVE (assign honours it downstream); decode
     -- to 0 here so the onset arithmetic below never sees the sentinel table.
@@ -1117,7 +1118,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     if isNote and evt.endppq ~= nil then stampEndppq(evt, evt.chan) end
   end
 
-  function assignEvent(evtOrUuid, update)
+  function stager.assign(evtOrUuid, update)
     local evt = lookup(evtOrUuid)
     if not evt then return end
     local rawCaller = update.rawTime
@@ -1137,11 +1138,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: notes default detune=0, delay=0, lane=1
   --contract: evt.ppq/endppq arrive logical; endppq is the authored ceiling (or util.OPEN)
   --contract: stamps ppqL and endppqL (tm-private); rewrites ppq/endppq to raw before mm
-  --contract: evt.rawTime=true bypasses translation (mirrors assignEvent; rescale-only caller)
+  --contract: evt.rawTime=true bypasses translation (mirrors stager.assign; rescale-only caller)
   --invariant: rawTime consumed here so it never persists on the record or reaches mm
   --contract: pb authoring frame is logical cents; val stored as cents on the event
   --contract: um only stages; rebuild absorber pass reconciles seats, recomputes raw vals at flush
-  function addEvent(evt)
+  function stager.add(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
     if evt.evType == 'note' then
@@ -1174,16 +1175,16 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     return 'fxp-' .. parkedUuidSeq
   end
 
-  function addParked(spec)
+  function stager.addParked(spec)
     if spec.evType == 'note' and not spec.uuid then spec.uuid = mintParkedUuid() end
     util.add(parkedEdits, { op = 'add', spec = spec })
   end
 
-  function assignParked(evt, update)
+  function stager.assignParked(evt, update)
     util.add(parkedEdits, { op = 'assign', evt = evt, update = update })
   end
 
-  function deleteParked(evt)
+  function stager.deleteParked(evt)
     util.add(parkedEdits, { op = 'delete', evt = evt })
   end
 
@@ -1206,7 +1207,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     local parked = util.deepClone(ds:get('fxParked') or {})
     for _, e in ipairs(parkedEdits) do
       local ref  = e.spec or e.evt
-      -- flushParked runs before the fold, so feed the seed table (absorbReloadDirt folds it, or the
+      -- flushParked runs before the fold, so feed the seed table (stager.flushDirt folds it, or the
       -- parked-only path below does), keeping one seed order for the whole flush.
       util.bucket(seeds, ref.chan, parkSeed(ref, e.op))
       if e.op == 'add' then
@@ -1238,7 +1239,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: preflush fires before the no-op check so a subscriber can stage peer ops
   --emits: postflush -- nil
   --contract: postflush fires after the commit; subscribers read mm-stamped uuids on staged adds
-  function flush()
+  function stager.flush()
     fire('preflush', adds, assigns, deletes)
     if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0
        and not rebuildRequested then return end
@@ -1297,7 +1298,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       perf.stop('mm')
       perf.stop('flush'); perf.report()
     else
-      absorbReloadDirt({})   -- no mm reload to fold flushParked's seeds; fold them here
+      stager.flushDirt({})   -- no mm reload to fold flushParked's seeds; fold them here
     end
 
     fire('postflush')
@@ -1308,7 +1309,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   -- Fold this flush's per-verb seeds into the journal as seed dirt: dedup-by-uuid (seeded
   -- chans), fold-whole (unseeded payload chans). see docs/trackerManager.md § Interval seeds
-  function absorbReloadDirt(payloadChans)
+  function stager.flushDirt(payloadChans)
     for chan, list in pairs(seeds) do
       local deduped, seen = {}, {}
       for _, s in ipairs(list) do
@@ -1326,13 +1327,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   -- Drop un-flushed staging: a rebuild must not carry command-path ops across
   -- (matches prior "fresh um per rebuild").
-  function clearStaging()
+  function stager.clear()
     adds, assigns, deletes = {}, {}, {}
     parkedEdits            = {}
     seeds                  = {}
   end
 
-  function reload() clearStaging(); index.load() end
+  function stager.reload() stager.clear(); index.load() end
 end
 
 ---------- PUBLIC
@@ -1582,7 +1583,7 @@ local function thinSeats(chan, windows)
       -- By identity, not value: two breakpoints can carry the same number, and it is this one that
       -- lost its place.
       for _, p in ipairs(points) do
-        if not kept[p] then deleteEvent(p.evt) end
+        if not kept[p] then stager.delete(p.evt) end
       end
     end
   end
@@ -1680,14 +1681,14 @@ local function freezeRegion(uuid, toGroup)
   for _, note in ipairs(index.raw(frozen.chan).notes) do
     if note.derived == uuid then util.add(promoted, note) end
   end
-  for _, note in ipairs(promoted) do assignEvent(note, { derived = util.REMOVE }) end
+  for _, note in ipairs(promoted) do stager.assign(note, { derived = util.REMOVE }) end
   -- Captured before the flush: the rebuild that follows refiles these entries, and the uuid is what
   -- crosses it -- index.colEvtFor is the door back to the settled cell.
   local promotedUuids = {}
   for _, note in ipairs(promoted) do util.add(promotedUuids, note.uuid) end
   -- The chain goes with the region form it stood for. A note-dest chain would have parked its
   -- host in the stash arm; an on-take host's is continuous-only, and index.move de-registers it, so nothing regenerates.
-  if onTakeHost then assignEvent(onTakeHost, { fx = util.REMOVE }) end
+  if onTakeHost then stager.assign(onTakeHost, { fx = util.REMOVE }) end
 
   local droppedHosts = {}
   for _, spec in ipairs(stash) do
@@ -1748,12 +1749,12 @@ end
 
 ----- Mutation
 
-function tm:deleteEvent(evt)         deleteEvent(evt)         end
-function tm:addEvent(evt)            addEvent(evt)            end
-function tm:assignEvent(evt, update) assignEvent(evt, update) end
-function tm:addParked(spec)           addParked(spec)           end
-function tm:assignParked(evt, update) assignParked(evt, update) end
-function tm:deleteParked(evt)         deleteParked(evt)         end
+function tm:deleteEvent(evt)         stager.delete(evt)         end
+function tm:addEvent(evt)            stager.add(evt)            end
+function tm:assignEvent(evt, update) stager.assign(evt, update) end
+function tm:addParked(spec)           stager.addParked(spec)           end
+function tm:assignParked(evt, update) stager.assignParked(evt, update) end
+function tm:deleteParked(evt)         stager.deleteParked(evt)         end
 --contract: one-way; the host's chain, its parked members and its windows are gone after the call
 --contract: host = a live region, or a note (parked or on-take) carrying fx; else false
 --contract: flushes any staged ops first, so the eligibility census reads a settled take
@@ -1839,7 +1840,7 @@ function tm:fxCurveAt(uuid, chan, target, ppqL)
   return target == 'pb' and val - index.detuneAt(chan, ppq) or val
 end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
-function tm:flush() if flush() then tm:rebuild(false) end end
+function tm:flush() if stager.flush() then tm:rebuild(false) end end
 
 ----- Length
 
@@ -1858,8 +1859,8 @@ function tm:setLength(newPpq)
         util.add(clamps, evt)
       end
     end)
-    for _, evt in ipairs(kills)  do deleteEvent(evt)                       end
-    for _, evt in ipairs(clamps) do assignEvent(evt, { endppq = newPpq })  end
+    for _, evt in ipairs(kills)  do stager.delete(evt)                       end
+    for _, evt in ipairs(clamps) do stager.assign(evt, { endppq = newPpq })  end
     -- mm:setLength runs last, so the take is still long here: pendingLen is what tells the tail
     -- walk the new end. All-16 dirt because any channel may hold an OPEN tail spanning it.
     pendingLen = newPpq
@@ -1900,7 +1901,7 @@ function tm:rescaleLength(newPpq)
       util.add(plans, p)
     end)
     for _, p in ipairs(plans) do
-      assignEvent(p.evt, {
+      stager.assign(p.evt, {
         ppq      = p.newPpq,
         endppq   = p.newEndppq,
         delay    = p.newDelay,
@@ -1990,7 +1991,7 @@ function tm:setMutedChannels(set)
     for _, col in ipairs(channel and channel.columns.notes or {}) do
       for _, evt in ipairs(col.events) do
         if evt.evType ~= 'pa' and (evt.muted == true) ~= want then
-          assignEvent(evt, { muted = want })
+          stager.assign(evt, { muted = want })
         end
       end
     end
@@ -4783,7 +4784,7 @@ end
 local function rebuildPipeline(didReload)
   -- A wholesale mm re-read strands the incremental index: reload before any stage reads it;
   -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
-  if didReload then perf.start('reload'); reload(); perf.stop('reload') end
+  if didReload then perf.start('reload'); stager.reload(); perf.stop('reload') end
 
   -- One head snapshot of the ds intent keys the pipeline reads; every key is read before any same-pass
   -- write. Stages take these as params, with regions already expanded to per-channel producers.
@@ -4853,7 +4854,7 @@ local function rebuildPipeline(didReload)
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
-  perf.start('view'); clearStaging(); perf.stop('view')
+  perf.start('view'); stager.clear(); perf.stop('view')
   -- The gated stages consumed the spine; the next edit window accumulates fresh dirt.
   for chan in pairs(dirt.clear()) do muteConform[chan] = true end
   perf.start('derivedInputs')
@@ -4984,7 +4985,7 @@ do
     mmReloaded = (info and info.wholesale) or false
     -- Own pipeline commits are converged output, not dirt (I8).
     if not rebuilding and info and info.chans then
-      absorbReloadDirt(info.chans)
+      stager.flushDirt(info.chans)
     end
     tm:rebuild(pendingTakeSwap)
     pendingTakeSwap = false

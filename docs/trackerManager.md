@@ -91,7 +91,7 @@ Two `do ... end` blocks folded into tm's own scope, not separate objects:
 the source banners them `-- RAW INDEX` and `-- STAGER`. The index owns
 `rawIndex`/`byUuid`/`fxHosts` and the upkeep that keeps them true, and
 hangs its doors on one `index` table; the stager accumulates mm-facing
-ops and commits them. The arrow runs one way — staging reaches the index
+ops and commits them, hanging its own on `stager`. The arrow runs one way — staging reaches the index
 through its doors (`index.add`, `index.delete`, `index.move`,
 `index.sync`, `index.forget`, `index.load`) and never the reverse — so the type→list mapping
 (`rawIndexListFor`) stays inside the index.
@@ -131,17 +131,17 @@ Staging proper: all mutations — from tv and from tm's own rebuild-time
 housekeeping — funnel through `tm:addEvent` / `tm:assignEvent` /
 `tm:deleteEvent`, which apply to the index and accumulate mm-facing ops in
 `adds`/`assigns`/`deletes`. `tm:flush()` commits the batch in one
-`mm:modify` call and drives the follow-on rebuild; the stager's own `flush`
-only reports whether the caller still owes one, because a stager that calls
-`tm:rebuild` is the layering inversion in miniature. The index is
-maintained at every mm-write site (the verbs, flush, and rebuild's
-`mmBatch`), so a full `reload()` from `mm:events()` runs only when mm
+`mm:modify` call and drives the follow-on rebuild; the stager's own
+`stager.flush` only reports whether the caller still owes one, because a
+stager that calls `tm:rebuild` is the layering inversion in miniature. The
+index is maintained at every mm-write site (the verbs, flush, and rebuild's
+`mmBatch`), so a full `index.load()` from `mm:events()` runs only when mm
 re-reads its whole event set — module init and wholesale reloads
 (§ Incremental index reconciliation).
 
 Derivation that happens to run at flush time is not staging, and sits
 outside both blocks: `collisionKills` (§ Flush collision scan) is at file
-scope, called by `flush` before the commit because tm's kill verdicts have
+scope, called by `stager.flush` before the commit because tm's kill verdicts have
 to land before mm ever sees a same-pitch collision.
 
 The sections below reference um by name because its frame and encoding
@@ -220,9 +220,10 @@ so a misplaced entry surfaces as a mis-clipped tail rather than as anything
 visibly index-shaped.
 
 Because every mm write maintains the index, it is authoritative and survives
-across rebuilds. A rebuild only full-`reload()`s under materialisation dirt
-(§ Derivation dirt: the gated spine), where every event object is new;
-ordinary edit rebuilds keep the live index and just `clearStaging()`. tm
+across rebuilds. A rebuild calls `stager.reload` — drop staging, re-read the
+index whole — only under materialisation dirt (§ Derivation dirt: the gated
+spine), where every event object is new; ordinary edit rebuilds keep the live
+index and just `stager.clear()`. tm
 captures the `wholesale` bit at the top of `rebuild`, before the pipeline's
 own nested `mm:modify` calls re-fire `'reload'` and would otherwise clear it.
 
@@ -243,9 +244,9 @@ its lane when it re-entered the column.
 
 um's low-level verbs (`addLowlevel`/`assignLowlevel`/`deleteLowlevel`) each drop a *birth
 snapshot* of the event they touched -- its uuid, verb, both-frame position, lane, pitch, and
-authored span -- into a `seeds[chan]` list separate from `adds`/`assigns`/`deletes`. `flush` folds
-the seeds into the dirt journal via `absorbReloadDirt`, deduped by uuid (first-wins keeps the birth
-state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
+authored span -- into a `seeds[chan]` list separate from `adds`/`assigns`/`deletes`.
+`stager.flushDirt` folds the seeds into the dirt journal, deduped by uuid (first-wins keeps the
+birth state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
 
 A move is one seed, not two: its snapshot records the vacated (old) position, while the surviving
 event's current position is recovered live from `byUuid`. Membership (`seedCovers`) keys on the
@@ -993,11 +994,11 @@ seated them, and nothing walks a column to re-project — a second projection wo
 
 The pipeline then persists its own window set: `settledWindows` goes to
 `ds:assign('prevWindows', …)` when it differs from the set this pass read,
-so the next rebuild recognises seats against it. `clearStaging()` drops
+so the next rebuild recognises seats against it. `stager.clear()` drops
 un-flushed ops, the pass's dirt folds into `muteConform` and clears,
 and `derivedInputs` re-snapshots once the pipeline's own ds writes have
-settled. The index itself needs no tail step: on a wholesale reload it
-was fully `reload()`ed at the pipeline head,
+settled. The index itself needs no tail step: on a wholesale reload
+`stager.reload` re-read it whole at the pipeline head,
 before any stage read it, and the pipeline's own commits maintained it from
 there; edit rebuilds kept the live index throughout (§ Incremental index
 reconciliation). tm fires the `'rebuild'` signal carrying the `takeChanged`

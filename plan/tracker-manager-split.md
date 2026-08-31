@@ -22,19 +22,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: gather the stager's doors onto one table (design/tracker-manager-split.md § Phase 3 8)
 - 2026-08-31 tm: gather the raw index's doors onto one table (design/tracker-manager-split.md § Phase 3 14, § Open 1)
 - 2026-08-31 config: teach the maps about door tables (design/tracker-manager-split.md § Phase 3 8)
 - 2026-08-31 tm: gather the frame and its operations into one handle (design/tracker-manager-split.md § Phase 3 14)
-- 2026-08-31 tm: pin the seam between seating and absorber synthesis (design/tracker-manager-split.md § What the specs hold 4)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The stager as a door table.** The same move for STAGER's ten
-   names, whose callers are tm's mutation API and its lifecycle.
 
 1. **The fx maps come back by return.** `buildFreezeMaps`,
    `buildFxTargets` and `buildFxRealisation` return their maps, and

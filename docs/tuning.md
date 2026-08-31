@@ -587,7 +587,7 @@ on the wire whatever names them.
 
 **2** An anchored or detune-seated onset already holds a hidden absorber
 pb, and the projection hides it, so the pitchbend cell reads empty.
-Authoring there must therefore **adopt** that seat: `addEvent` seeks
+Authoring there must therefore **adopt** that seat: `stager.add` seeks
 `chans[chan].pbs` for a pb at that onset and assigns it (new cents,
 `derived` cleared) rather than pushing a rival.
 
