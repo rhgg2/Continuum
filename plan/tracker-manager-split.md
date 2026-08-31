@@ -22,10 +22,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: pin the seam between seating and absorber synthesis (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 tm: pin the seat scope a dirt seed closes to (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 tm: pin the keep/live split of a clipped pb window (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 dirt: take the derivation journal from trackerManager (design/tracker-manager-split.md § Phase 2)
-- 2026-08-30 curves: take the fold of parallel chains from trackerManager (design/tracker-manager-split.md § Phase 1 2, 5)
 
 ## Now
 
@@ -33,11 +33,5 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The seating ↔ synthesis seam** — a new spec separating which seats
-   a detune arrangement calls for from how absorbers realise them. An
-   absorber standing at a seat is adopted with its uuid, a spare moves to
-   an unfilled seat, leftovers are deleted, and each seat lands as raw =
-   `centsToRaw(cents + detune)`. A seat inside a replace window persists
-   native MIDI only; one outside every window carries the cents and ppqL
-   sidecar.
+(empty)
 
