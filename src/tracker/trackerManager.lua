@@ -13,7 +13,7 @@
 --invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
 --invariant: col events sort by logical ppq
 --invariant: endppq carries no delay; delay shifts only the note-on
---invariant: 16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
+--invariant: 16 channels always present; frame.channels[i] non-nil for i in 1..16 after rebuild
 
 --shape: channel = { chan, columns = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }
 --shape: column = { events=[evt,...], [cc=ccNum] }  -- events sorted by logical ppq
@@ -31,10 +31,10 @@
 --shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
 --shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
---shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)
---shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render cells
---shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells
---shape: channels[chan].parkedPA = { { evType='pa', chan, pitch, ppq, vel, [rpb] }, ... } -- off-take PA cells; rebuildPA re-projects them into the host note column
+--shape: frame.channels[chan].parked = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)
+--shape: frame.channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render cells
+--shape: frame.channels[chan].parkedPb = { { evType='pb', chan, ppq, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells
+--shape: frame.channels[chan].parkedPA = { { evType='pa', chan, pitch, ppq, vel, [rpb] }, ... } -- off-take PA cells; rebuildPA re-projects them into the host note column
 --contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -60,7 +60,9 @@ local fire = util.installHooks(tm)
 
 ---------- STATE
 
-local channels    = {}
+-- The frame the engine derives and the accessors publish. `frame` is the stable handle; its
+-- `channels` map swaps each pass, and the operations that seat cells in it travel alongside.
+local frame       = { channels = {} }
 local lastMuteSet = {}
 -- The derivation journal, and the swing-staleness flag beside it: any edit or config change adds a
 -- channel's dirt, and the gated stages read it. Missed dirt writes silent wrong output. see dirt.lua
@@ -83,6 +85,77 @@ local pendingLen
 -- fromLogical rounding slop, shared by the tail pass and rebuild rule.
 local EPS         = 1
 
+---------- FRAME
+
+do
+  -- col -> already renewed this pass: a lane renewed on the last pass must renew again on this one,
+  -- so the memo belongs to the channels map and newPass replaces the two together.
+  local renewed = {}
+
+  -- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
+  -- then pitch, so an equal-onset seat holds across rebuilds.
+  local function noteColumnLess(a, b)
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
+    if aPa ~= bPa then return bPa end
+    return (a.pitch or 0) < (b.pitch or 0)
+  end
+
+  -- Open a rebuild pass: the channels map is minted afresh and handed back for the carry-forward
+  -- loop to read the clean channels out of.
+  function frame.newPass()
+    local prev = frame.channels
+    frame.channels, renewed = {}, {}
+    return prev
+  end
+
+  function frame.sortByPPQ(tbl)
+    table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
+  end
+
+  function frame.sortNoteColumn(tbl) table.sort(tbl, noteColumnLess) end
+
+  -- A writer that knows an onset splices its cell at the seat, keeping the lane ordered without a blunt
+  -- whole-column re-sort downstream.
+  function frame.insertNoteCell(events, cell)
+    util.insertSorted(events, cell, noteColumnLess)
+  end
+
+  -- tv's cell carry keys on a note lane's `events` table identity, so a change to the lane's membership
+  -- or to a seated cell's rendered fields must replace that table with a fresh one. see docs/trackerManager.md § Note-lane renewal
+  --invariant: a note lane's events table changes identity iff its contents changed (tv's carry key)
+  function frame.renewLane(chan, lane)
+    local channel = frame.channels[chan]
+    local col = channel and channel.columns.notes[lane]
+    if col and not renewed[col] then
+      renewed[col] = true
+      col.events = util.clone(col.events)
+    end
+    return col
+  end
+
+  -- A caller that replaced a lane's events table itself has done the renewal; recording it keeps a
+  -- later renewLane from cloning the fresh table on top.
+  function frame.markRenewed(col) renewed[col] = true end
+
+  -- Field write on a seated cell: renew only where the value actually moves, or the tail walk's
+  -- restamp renews every bounded lane every pass. Cells are self-describing, so (chan, lane) is here.
+  function frame.setCell(cell, field, value)
+    if cell[field] == value then return end
+    frame.renewLane(cell.chan, cell.lane)
+    cell[field] = value
+  end
+
+  -- A lane is disordered only when a raw->logical flip crossed two onsets; a cheap scan lets the flip
+  -- skip re-sorting the common already-ordered lane.
+  function frame.isSorted(events)
+    for i = 2, #events do
+      if noteColumnLess(events[i], events[i - 1]) then return false end
+    end
+    return true
+  end
+end
+
 ---------- SHARED HELPERS
 
 --invariant: flushingParked is restored on every exit; an escaping error must not freeze rebuilds
@@ -91,70 +164,6 @@ local function suppressingRebuild(fn)
   local ok, err = xpcall(fn, debug.traceback)
   flushingParked = false
   if not ok then error(err, 0) end
-end
-
-local function sortByPPQ(tbl)
-  table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
-end
-
--- Total order for the raw working set: raw tick, then logical seat (ppqL, falling back to raw
--- pre-seating), authored-before-generated, lane, then pitch. See docs/trackerManager.md § Update manager (um).
-local function rawThenLogical(a, b)
-  if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-  local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
-  if aL ~= bL then return aL < bL end
-  if (a.derived or false) ~= (b.derived or false) then return not a.derived end
-  if (a.lane or 0) ~= (b.lane or 0) then return (a.lane or 0) < (b.lane or 0) end
-  return (a.pitch or 0) < (b.pitch or 0)
-end
-
--- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
--- then pitch, so an equal-onset seat holds across rebuilds.
-local function noteColumnLess(a, b)
-  if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-  local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
-  if aPa ~= bPa then return bPa end
-  return (a.pitch or 0) < (b.pitch or 0)
-end
-
-local function sortNoteColumn(tbl) table.sort(tbl, noteColumnLess) end
-
--- A writer that knows an onset splices its cell at the seat, keeping the lane ordered without a blunt
--- whole-column re-sort downstream.
-local function insertNoteCell(events, cell)
-  util.insertSorted(events, cell, noteColumnLess)
-end
-
-local shedLanes = {}   -- col -> already shed this pass; reset at the rebuild head
-
--- tv's cell carry keys on a note lane's `events` table identity, so a change to the lane's membership
--- or to a seated cell's rendered fields must swap that table out. see docs/trackerManager.md § The note-lane shed
---invariant: a note lane's events table changes identity iff its contents changed (tv's carry key)
-local function shedLane(chan, lane)
-  local channel = channels[chan]
-  local col = channel and channel.columns.notes[lane]
-  if col and not shedLanes[col] then
-    shedLanes[col] = true
-    col.events = util.clone(col.events)
-  end
-  return col
-end
-
--- Field write on a seated cell: shed only where the value actually moves, or the tail walk's
--- restamp sheds every bounded lane every pass. Cells are self-describing, so (chan, lane) is here.
-local function setCell(cell, field, value)
-  if cell[field] == value then return end
-  shedLane(cell.chan, cell.lane)
-  cell[field] = value
-end
-
--- A lane is disordered only when a raw->logical flip crossed two onsets; a cheap scan lets the flip
--- skip re-sorting the common already-ordered lane.
-local function isSorted(events)
-  for i = 2, #events do
-    if noteColumnLess(events[i], events[i - 1]) then return false end
-  end
-  return true
 end
 
 -- A birth-snapshot seed for a park member, so its dirt reads like verb dirt downstream: parkSeed from a
@@ -295,7 +304,7 @@ end
 -- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
 -- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
 local function eachWindowNote(chan, startL, endL, fn)
-  for laneIdx, col in ipairs(channels[chan].columns.notes) do
+  for laneIdx, col in ipairs(frame.channels[chan].columns.notes) do
     -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
     -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
     local events = col.events
@@ -332,7 +341,7 @@ end
 -- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
 -- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
 local function channelStreams(chan, startL, endL, pbBase, ccBases)
-  local cols = channels[chan].columns
+  local cols = frame.channels[chan].columns
   local pas, ats = {}, {}
   for _, col in ipairs(cols.notes) do
     for j = util.firstAtOrAfter(col.events, startL), #col.events do
@@ -349,7 +358,7 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
   end
   -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
   -- column's order; bases pre-sorted, slices preserve order).
-  sortByPPQ(pas)
+  frame.sortByPPQ(pas)
   local ccs = {}
   for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
   return pas, ccs, ats, curves.slice(pbBase, startL, endL)
@@ -397,7 +406,7 @@ end
 -- One host cell's window end: authored (or take-end) ceiling, clipped to its strict-next lane onset.
 local function hostWindowEnd(cell, takeLenL)
   local ceil = (cell.endppq == nil or cell.endppq == util.OPEN) and takeLenL or math.min(cell.endppq, takeLenL)
-  local succ = nextLaneOnset(channels[cell.chan].columns.notes[cell.lane].events, cell.ppq)
+  local succ = nextLaneOnset(frame.channels[cell.chan].columns.notes[cell.lane].events, cell.ppq)
   return succ and math.min(ceil, succ) or ceil
 end
 
@@ -509,7 +518,7 @@ end
 
 local function forEachEvent(fn)
   for i=1,16 do
-    local channel = channels[i]
+    local channel = frame.channels[i]
     if channel then
       local chan, cols = channel.chan, channel.columns
       for lane, col in ipairs(cols.notes) do
@@ -568,11 +577,11 @@ end
 --contract: appends removals/adds to the sink {del(event), add(spec)}
 --contract: marks sampleShadowed=true on the cell or the spec of records lost to lane priority
 --contract: seedSpans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
---invariant: a seated record marks via setCell, off-take direct: no lane sheds a cell it lacks
+--invariant: a seated record marks via setCell, off-take direct: no lane renews for a cell it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
 local function reconcilePCsForChan(chan, records, sink, seedSpans)
   local existing = {}
-  for _, e in ipairs((channels[chan].columns.pc and channels[chan].columns.pc.events) or {}) do
+  for _, e in ipairs((frame.channels[chan].columns.pc and frame.channels[chan].columns.pc.events) or {}) do
     if not seedSpans or pcInSpans(seedSpans, e.ppq, true) then util.add(existing, e) end
   end
 
@@ -586,8 +595,8 @@ local function reconcilePCsForChan(chan, records, sink, seedSpans)
     for i = 2, #g do
       local lost = g[i]
       -- A seated record marks through its column cell. An off-take fx spec holds no cell, and
-      -- setCell would shed the lane its number names without that lane's contents having moved.
-      if lost.cell then setCell(lost.cell, 'sampleShadowed', true)
+      -- setCell would renew the lane its number names without that lane's contents having moved.
+      if lost.cell then frame.setCell(lost.cell, 'sampleShadowed', true)
       elseif lost.spec then lost.spec.sampleShadowed = true end
     end
   end
@@ -622,7 +631,7 @@ end
 ---------- RAW INDEX
 
 -- Owns rawIndex/byUuid/fxHosts and the upkeep that keeps them true; knows nothing of staging.
-local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
+local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
       idxReconcile, withDeferredSort, setRaw, detuneAt, forEachAttachedPA,
       rawIndexInsert, rawIndexRemove, rawIndexRefile, forgetUuid, loadIndex do
 
@@ -632,6 +641,18 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
   local rawIndex = {}
   local byUuid = {}
   local fxHosts = {}   -- chan -> { uuid = true } for on-take .fx notes; maintained, never rescanned. see design § Phase 5.5
+
+  ----- Order
+
+  -- Total order for the raw working set; every list here holds it. See docs/trackerManager.md § Update manager (um).
+  function rawThenLogical(a, b)
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
+    if aL ~= bL then return aL < bL end
+    if (a.derived or false) ~= (b.derived or false) then return not a.derived end
+    if (a.lane or 0) ~= (b.lane or 0) then return (a.lane or 0) < (b.lane or 0) end
+    return (a.pitch or 0) < (b.pitch or 0)
+  end
 
   ----- Read surface
 
@@ -1319,13 +1340,13 @@ end
 
 ----- Accessors
 
-function tm:getChannel(chan)      return channels and channels[chan] end
+function tm:getChannel(chan)      return frame.channels[chan] end
 
 function tm:channels()
   local i = 0
   return function()
     i = i + 1
-    local channel = channels[i]
+    local channel = frame.channels[i]
     if channel then
       return i, channel
     end
@@ -1577,7 +1598,7 @@ local function groupMembers(frozen, windows, promotedUuids)
     local cell = colEvtFor(uuid)
     if cell then util.add(members, cell) end
   end
-  local columns = channels[frozen.chan].columns
+  local columns = frame.channels[frozen.chan].columns
   for _, w in ipairs(windows) do
     if w.evType ~= 'note' then
       local col = w.evType == 'pb' and columns.pb or (columns.ccs or {})[w.cc]
@@ -1680,7 +1701,7 @@ local function freezeRegion(uuid, toGroup)
   -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
   -- behind. Host resolution is hostParked's, over live render cells.
   local function hostDropped(pa)
-    for _, cell in ipairs(channels[pa.chan].parked or {}) do
+    for _, cell in ipairs(frame.channels[pa.chan].parked or {}) do
       if cell.pitch == pa.pitch and pa.ppq >= cell.ppq and pa.ppq < cell.endppqC then
         return droppedHosts[cell.uuid] == true
       end
@@ -1966,7 +1987,7 @@ function tm:setMutedChannels(set)
     if (prev[chan] == true) ~= (lastMuteSet[chan] == true) then sweep[chan] = true end
   end
   for chan in pairs(sweep) do
-    local channel = channels[chan]
+    local channel = frame.channels[chan]
     local want = lastMuteSet[chan] == true
     for _, col in ipairs(channel and channel.columns.notes or {}) do
       for _, evt in ipairs(col.events) do
@@ -2124,7 +2145,7 @@ end
 -- channel scan; `claims` refines within the cluster. see docs/trackerManager.md § The note-lane shed
 --invariant: a seated cell is projected (ppq == ppqL), so a seed row is the lane's sort key
 local function exciseNotes(chan, rows, claims)
-  for _, col in ipairs(channels[chan].columns.notes) do
+  for _, col in ipairs(frame.channels[chan].columns.notes) do
     local events = col.events
     local dropAt
     for _, row in ipairs(rows) do
@@ -2142,8 +2163,8 @@ local function exciseNotes(chan, rows, claims)
       for i, evt in ipairs(events) do
         if not dropAt[i] then util.add(kept, evt) end
       end
-      col.events = kept   -- kept is a fresh table: this assignment is the shed
-      shedLanes[col] = true
+      col.events = kept   -- kept is a fresh table: this assignment is the renewal
+      frame.markRenewed(col)
     end
   end
 end
@@ -2181,7 +2202,7 @@ local function rebuildInternals()
   -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
   -- cloning again. mm's stored note is untouched.
   for _, note in ipairs(internal) do
-    local channel = channels[note.chan]
+    local channel = frame.channels[note.chan]
     local notes = channel.columns.notes
     -- Stamped notes keep their authored lane verbatim (extended if missing);
     -- the tail walk clips tails afterward, so overlap here is never a concern.
@@ -2200,8 +2221,8 @@ local function rebuildInternals()
     -- Columns are logical-born: every seat projects at ingestion.
     projectEvent(note, note.chan)
     if not dirt.wholesale(note.chan) and not dirt.swing.has(note.chan) then
-      shedLane(note.chan, note.lane)
-      insertNoteCell(col.events, note)   -- splice into the carried logical lane; stays ordered
+      frame.renewLane(note.chan, note.lane)
+      frame.insertNoteCell(col.events, note)   -- splice into the carried logical lane; stays ordered
     else
       util.add(col.events, note)         -- fresh lane: append in mm raw order, order once below
       builtCols[col] = true
@@ -2211,7 +2232,7 @@ local function rebuildInternals()
   -- Raw and logical onset order diverge under swing or an authored swap; re-sort just the appended
   -- lanes that landed disordered.
   for col in pairs(builtCols) do
-    if not isSorted(col.events) then sortNoteColumn(col.events) end
+    if not frame.isSorted(col.events) then frame.sortNoteColumn(col.events) end
   end
   reseats.commit()
 
@@ -2261,7 +2282,7 @@ local function spliceCcCell(live, ccWrites)
   local event = util.clone(live)
   event.realised = true
   if movedPpqL then event.ppqL = movedPpqL end
-  local channel = channels[chan]
+  local channel = frame.channels[chan]
   local col
   if live.evType == 'cc' then
     col = channel.columns.ccs[live.cc] or { cc = live.cc, events = {} }
@@ -2304,7 +2325,7 @@ end
 
 -- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
 local function ccColumnFor(chan, evType, ccNum)
-  local cols = channels[chan].columns
+  local cols = frame.channels[chan].columns
   if evType == 'cc' then return cols.ccs[ccNum] end
   return cols[evType]
 end
@@ -2346,7 +2367,7 @@ local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
     end
   end
   -- tv's cell carry keys on events-table identity (same table => reuse built cells), so a spliced
-  -- column must shed its carried table -- exciseNotes' `col.events = kept` is the note-path twin.
+  -- column must renew its carried table -- exciseNotes' `col.events = kept` is the note-path twin.
   for col in pairs(touched) do col.events = util.clone(col.events) end
   buildCcExistingInWindows(chan, fillWin, ccExisting, seedRowsFor(seedList))
 end
@@ -2388,7 +2409,7 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
       event.realised = true
       if movedPpq  then event.ppq  = movedPpq end
       if movedPpqL then event.ppqL = movedPpqL end
-      local channel = channels[cc.chan]
+      local channel = frame.channels[cc.chan]
       local col
       if cc.evType == 'cc' then
         col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
@@ -2403,9 +2424,9 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
     ::continue::
   end
   -- mm's cc stream is insertion-ordered mid-session (fresh adds append); columns sort by ppq.
-  for _, col in pairs(channels[chan].columns.ccs) do sortByPPQ(col.events) end
+  for _, col in pairs(frame.channels[chan].columns.ccs) do frame.sortByPPQ(col.events) end
   for _, key in ipairs{ 'at', 'pc' } do
-    if channels[chan].columns[key] then sortByPPQ(channels[chan].columns[key].events) end
+    if frame.channels[chan].columns[key] then frame.sortByPPQ(frame.channels[chan].columns[key].events) end
   end
 end
 
@@ -2446,7 +2467,7 @@ local function rebuildExtraColumns(extraColumns, paramAutomation)
   local bound  = paramAutomation or {}
   local grew   = false
   for i = 1, 16 do
-    local c    = channels[i].columns
+    local c    = frame.channels[i].columns
     local want = extras[i] or { notes = defaultNoteCols }
     local n    = #c.notes
     if n > want.notes then
@@ -2454,7 +2475,7 @@ local function rebuildExtraColumns(extraColumns, paramAutomation)
       extras[i] = want
       grew = true
     end
-    while #c.notes < want.notes do pushNoteCol(channels[i]) end
+    while #c.notes < want.notes do pushNoteCol(frame.channels[i]) end
     if want.pc then c.pc = c.pc or { events = {} } end
     if want.pb then c.pb = c.pb or { events = {} } end
     if want.at then c.at = c.at or { events = {} } end
@@ -2574,7 +2595,7 @@ end
 local function rebuildExternals(external)
   if #external == 0 then return end
 
-  sortByPPQ(external)
+  frame.sortByPPQ(external)
   local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
   for _, note in ipairs(external) do
@@ -2582,7 +2603,7 @@ local function rebuildExternals(external)
     local d         = delayToPPQ(delay)
     local probe     = { chan = note.chan, ppq = note.ppq, endppq = note.endppq,
                         pitch = note.pitch, delay = delay, lane = note.lane }
-    local col, lane = packLane(channels[note.chan], probe)
+    local col, lane = packLane(frame.channels[note.chan], probe)
     local update    = {
       ppqL    = tm:toLogical(note.chan, note.ppq - d),
       endppqL = tm:toLogical(note.chan, note.endppq),
@@ -2594,8 +2615,8 @@ local function rebuildExternals(external)
     util.assign(colNote, update)
     colNote.fixed = true
     projectEvent(colNote, note.chan)
-    shedLane(note.chan, lane)
-    insertNoteCell(col.events, colNote)
+    frame.renewLane(note.chan, lane)
+    frame.insertNoteCell(col.events, colNote)
     stampColEvt(colNote)
     extWrites.assign(colNote, update)
   end
@@ -2619,7 +2640,7 @@ local function realiseParked(chan, members, takeLenL)
   -- member-next map: a parked member bounds another on its lane (both off-take, neither in the column)
   local byLane = {}
   for _, m in ipairs(members) do util.bucket(byLane, m.lane, m) end
-  for _, g in pairs(byLane) do sortByPPQ(g) end
+  for _, g in pairs(byLane) do frame.sortByPPQ(g) end
   local memberNextOf = strictNextMap(byLane)
   for _, m in ipairs(members) do
     local cached = parkedClipEnd[m.uuid]
@@ -2631,7 +2652,7 @@ local function realiseParked(chan, members, takeLenL)
     end
     if dirty then
       local ceil       = (m.endppq == nil or m.endppq == util.OPEN) and takeLenL or m.endppq
-      local onTake     = nextLaneOnset(channels[chan].columns.notes[m.lane].events, m.ppq)
+      local onTake     = nextLaneOnset(frame.channels[chan].columns.notes[m.lane].events, m.ppq)
       local memberNext = memberNextOf[m]
       m.endppqC = math.max(m.ppq + 1, math.min(ceil,
         onTake or math.huge, memberNext and memberNext.ppq or math.huge, takeLenL))
@@ -2655,9 +2676,9 @@ end
 
 -- Off-take render union: parked specs stay visible in-column as render-ready cells.
 local function renderUnion(field, newParked, toCell)
-  for chan = 1, 16 do channels[chan][field] = {} end
+  for chan = 1, 16 do frame.channels[chan][field] = {} end
   for _, spec in ipairs(newParked) do
-    util.add(channels[spec.chan][field], toCell(spec))
+    util.add(frame.channels[spec.chan][field], toCell(spec))
   end
 end
 
@@ -2698,10 +2719,10 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
         if onPark then onPark(carry.spec) end
         util.add(newParked, carry.spec)
         batch.del(carry.evt)
-        -- A note carry names its lane, not the lane's events table: shedLane swaps that table
-        -- between the scan and here, and the pre-shed one is no longer the lane tv will read.
+        -- A note carry names its lane, not the lane's events table: renewLane replaces that table
+        -- between the scan and here, and the old one is no longer the lane tv will read.
         if carry.lane then
-          unlink(shedLane(carry.chan, carry.lane).events, carry.evt)
+          unlink(frame.renewLane(carry.chan, carry.lane).events, carry.evt)
         elseif carry.events then
           unlink(carry.events, carry.evt)
         end
@@ -2746,7 +2767,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     end
     for chan, chanSpans in pairs(noteSpans) do
       if dirt.has(chan) then
-        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+        for laneIdx, col in ipairs(frame.channels[chan].columns.notes) do
           coverOnsets(col.events, chanSpans, function(evt)
             if evt.evType ~= 'pa' then candidate(evt, laneIdx) end
           end)
@@ -2769,13 +2790,13 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     local takeLen = tm:length()
     for _, spec in ipairs(restores) do
       dirt.add(spec.chan, parkSeed(spec, 'restore'))
-      local channel = channels[spec.chan]
+      local channel = frame.channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
       util.add(restoredCells, note)
-      local col = shedLane(spec.chan, spec.lane)
+      local col = frame.renewLane(spec.chan, spec.lane)
       util.add(col.events, note)
-      sortNoteColumn(col.events)
+      frame.sortNoteColumn(col.events)
       -- Provisional raw end: the authored ceiling is all that is known here, since the lane clip is
       -- the tail walk's to find -- boundNote's write-through corrects this in place.
       local ppq = tm:fromLogical(spec.chan, note.ppq)
@@ -2792,14 +2813,14 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
     renderUnion('parked', parkedNotes, function(spec)
-      local channel = channels[spec.chan]
+      local channel = frame.channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local cell = util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
       util.bucket(fxParkedByProducer, coveredBy(spec), cell)
       return cell
     end)
     for chan = 1, 16 do
-      local members = channels[chan].parked
+      local members = frame.channels[chan].parked
       if #members > 0 then
         -- On-take survivors bound a parked tail on its own lane (rebuildTails' model): the per-member
         -- column seek finds the first note after the region, not just the next parked member.
@@ -2812,7 +2833,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
   -- shown in the host lane by rebuildPA. Reconciled against the parked-note set. see docs/trackerManager.md § Region-replace parking
   do
     local function hostParked(chan, pitch, ppq)
-      for _, cell in ipairs(channels[chan].parked or {}) do
+      for _, cell in ipairs(frame.channels[chan].parked or {}) do
         if cell.pitch == pitch and ppq >= cell.ppq and ppq < cell.endppqC then return true end
       end
       return false
@@ -2824,7 +2845,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     for chan = 1, 16 do
       if dirt.has(chan) then
         local pas = rawIndexFor(chan).pas
-        for _, cell in ipairs(channels[chan].parked or {}) do
+        for _, cell in ipairs(frame.channels[chan].parked or {}) do
           local sRaw, eRaw = tm:fromLogical(chan, cell.ppq), tm:fromLogical(chan, cell.endppqC)
           for i = util.firstAtOrAfter(pas, sRaw), #pas do
             local cc = pas[i]
@@ -2886,7 +2907,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     local scan = {}
     for chan = 1, 16 do
       if dirt.has(chan) then
-        for cc, col in pairs(channels[chan].columns.ccs) do
+        for cc, col in pairs(frame.channels[chan].columns.ccs) do
           coverOnsets(col.events, ccSpans[util.key(chan, cc)], function(evt)
             util.add(scan, { evt = evt, events = col.events,
               spec = parkSpec(evt, { cc = cc }) })   -- cc pins the column key; evType/chan/ppq ride the event
@@ -2910,17 +2931,17 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       -- The fill seat at this ppq stays in ccExisting: rebuildFx's reconcile deletes it by its own
       -- uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
       batch.add(cell)
-      local channel = channels[spec.chan]
+      local channel = frame.channels[spec.chan]
       local col = channel.columns.ccs[spec.cc]
       if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
       util.add(col.events, util.clone(spec))
-      sortByPPQ(col.events)
+      frame.sortByPPQ(col.events)
     end
 
     -- Render union: the parked authored cc stays the visible surface (the fill is hidden
     -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.
     renderUnion('parkedCC', newParked, function(spec)
-      local ccs = channels[spec.chan].columns.ccs
+      local ccs = frame.channels[spec.chan].columns.ccs
       ccs[spec.cc] = ccs[spec.cc] or { cc = spec.cc, events = {} }
       return util.clone(spec)
     end)
@@ -3070,12 +3091,12 @@ local function rebuildPA()
       local covers = seedCovers(chan)   -- wholesale: always-true; interval: seeded rows only
       for _, cc in ipairs(rawIndexFor(chan).pas) do
         if covers(cc) then
-          local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
+          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cc.pitch, cc.ppq)
           if noteCol then
             local cell = projectCC(cc, { lane = lane })
             projectEvent(cell, chan)
-            shedLane(chan, lane)
-            insertNoteCell(noteCol.events, cell)
+            frame.renewLane(chan, lane)
+            frame.insertNoteCell(noteCol.events, cell)
           end
         end
       end
@@ -3087,13 +3108,13 @@ local function rebuildPA()
   for chan = 1, 16 do
     if dirt.has(chan) then
       local covers = seedCovers(chan)
-      for _, cell in ipairs(channels[chan].parkedPA or {}) do
+      for _, cell in ipairs(frame.channels[chan].parkedPA or {}) do
         if covers(cell) then
           local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-          local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
+          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cell.pitch, ppq)
           if noteCol then
-            shedLane(chan, lane)
-            insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
+            frame.renewLane(chan, lane)
+            frame.insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
           end
         end
       end
@@ -3120,7 +3141,7 @@ function computeFxWindows(extraFxChans, parkedNotes)
   -- Take-length changes land here too via mm:setLength's wholesale reload. see docs/trackerManager.md
   local function walkChannel(chan, takeLenL)
     local hosts = {}
-    for _, col in ipairs(channels[chan].columns.notes) do
+    for _, col in ipairs(frame.channels[chan].columns.notes) do
       -- Chord-mates share an onset and a successor: hold each host open until a later onset, then clip all.
       local openHosts = {}
       for _, evt in ipairs(col.events) do
@@ -3218,7 +3239,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
   -- see docs/trackerManager.md § Span-covered fx scans
   local function pbBaseFor(chan, spanSet)
     local base, seen = {}, {}
-    for _, cell in ipairs(channels[chan].parkedPb or {}) do
+    for _, cell in ipairs(frame.channels[chan].parkedPb or {}) do
       util.add(base, { ppq = cell.ppq, val = cell.cents, shape = cell.shape or 'step', tension = cell.tension })
       seen[cell.ppq] = true
     end
@@ -3235,17 +3256,17 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
       end
     end)
-    sortByPPQ(base)
+    frame.sortByPPQ(base)
     return base
   end
   local function ccBasesFor(chan, spanSet)
     local bases, seen = {}, {}
-    for _, cell in ipairs(channels[chan].parkedCC or {}) do
+    for _, cell in ipairs(frame.channels[chan].parkedCC or {}) do
       util.bucket(bases, cell.cc, { ppq = cell.ppq, val = cell.val, shape = cell.shape or 'step',
                                     tension = cell.tension })
       seen[util.key(cell.cc, cell.ppq)] = true
     end
-    for cc, col in pairs(channels[chan].columns.ccs) do
+    for cc, col in pairs(frame.channels[chan].columns.ccs) do
       coverInto(col.events, spanSet, nil, function(evt)
         if not seen[util.key(cc, evt.ppq)] then
           util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
@@ -3253,7 +3274,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         end
       end)
     end
-    for _, base in pairs(bases) do sortByPPQ(base) end
+    for _, base in pairs(bases) do frame.sortByPPQ(base) end
     return bases
   end
 
@@ -3265,7 +3286,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     local note = host.notes[1]
     if not note or not host.lane then return nil end
     local found
-    local col = channels[host.chan].columns.notes[host.lane]
+    local col = frame.channels[host.chan].columns.notes[host.lane]
     if col then
       for j = util.firstAfter(col.events, note.ppq), #col.events do
         if col.events[j].evType ~= 'pa' then found = col.events[j]; break end
@@ -3273,7 +3294,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     end
     -- Parked cells left the column but keep their seat in the lane. A handful at most, asked only
     -- for the nearer onset: scanned, not indexed (realiseParked's model).
-    for _, cell in ipairs(channels[host.chan].parked or {}) do
+    for _, cell in ipairs(frame.channels[host.chan].parked or {}) do
       if cell.lane == host.lane and cell.ppq > note.ppq
          and (not found or cell.ppq < found.ppq) then found = cell end
     end
@@ -3456,7 +3477,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- every hit is derived output. Window = the parked cell's realised extent (realiseParked
     -- applies the same bounds fxWindow would). A cell inside a region note-park window is region
     -- membership, not a host (own-fx suppressed -- the retained gap).
-    for _, cell in ipairs(channels[chan].parked or {}) do
+    for _, cell in ipairs(frame.channels[chan].parked or {}) do
       if cell.fx and not noteParkCovered(chan, cell.ppq) then
         util.add(producers, hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
       end
@@ -3469,7 +3490,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       local members
       if generators.parksNotes(region) then
         members = {}                             -- replace: derived notes stand in for the parked chord
-        for _, cell in ipairs(channels[chan].parked or {}) do
+        for _, cell in ipairs(frame.channels[chan].parked or {}) do
           if cell.ppq >= startL and cell.ppq < endL then util.add(members, soundingCell(cell)) end
         end
       else
@@ -3639,7 +3660,7 @@ local function makeTailRules(ctx)
     if e.colEvt and e.colEvt.delay ~= nil then
       -- The column stays logical; only the delayC give-way cue carries the raw shift.
       local shift = e.ppq - tm:fromLogical(chan, e.ppqL)
-      setCell(e.colEvt, 'delayC', util.round(timing.ppqToDelay(shift, res)))
+      frame.setCell(e.colEvt, 'delayC', util.round(timing.ppqToDelay(shift, res)))
     end
     if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
     return true
@@ -3674,8 +3695,8 @@ local function makeTailRules(ctx)
     if e.colEvt then
       -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
       local endppqC = tm:toLogical(chan, util.round(laneBound))
-      setCell(e.colEvt, 'endppqC', endppqC)
-      setCell(e.colEvt, 'endppq', e.endppqL == util.OPEN and util.OPEN or e.endppqL or endppqC)
+      frame.setCell(e.colEvt, 'endppqC', endppqC)
+      frame.setCell(e.colEvt, 'endppq', e.endppqL == util.OPEN and util.OPEN or e.endppqL or endppqC)
     end
   end
 
@@ -3996,7 +4017,7 @@ local function rebuildTails(noteLive, noteOps)
     -- Parked members left the columns but still bound a preceding on-take tail in their lane --
     -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
     local parkedBounds = {}
-    for _, cell in ipairs(channels[chan].parked or {}) do
+    for _, cell in ipairs(frame.channels[chan].parked or {}) do
       util.add(parkedBounds, { ppq = tm:fromLogical(chan, cell.ppq), ppqL = cell.ppq,
                                lane = cell.lane })
     end
@@ -4160,7 +4181,7 @@ local function rebuildPbs(fxOut, extraColumns)
                             cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
           end
         end
-        sortByPPQ(bps)
+        frame.sortByPPQ(bps)
         addWin(sub, bps, nil)
       end
       for _, sub in ipairs(emitSpans and spans.subtract(span, emitSpans) or {}) do
@@ -4524,7 +4545,7 @@ local function rebuildPbs(fxOut, extraColumns)
       for i = #pbs, kept + 1, -1 do pbs[i] = nil end
     end
 
-    sortByPPQ(pbs)
+    frame.sortByPPQ(pbs)
     perf.stop('match')
 
     local detuneOf = {}
@@ -4565,10 +4586,10 @@ local function rebuildPbs(fxOut, extraColumns)
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild entry).
     if dirt.has(chan) then
       local pbs = pbsByChan[chan] or {}
-      sortByPPQ(pbs)
+      frame.sortByPPQ(pbs)
 
-      local priorPbCol = channels[chan].priorPb
-      channels[chan].priorPb = nil
+      local priorPbCol = frame.channels[chan].priorPb
+      frame.channels[chan].priorPb = nil
       local seatSpans = seatSpansByChan[chan]
       local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, pbs, winsByChan[chan], seatSpans)
 
@@ -4599,9 +4620,9 @@ local function rebuildPbs(fxOut, extraColumns)
           util.add(pbColEvents, evt)
         end
       end
-      sortByPPQ(pbColEvents)
+      frame.sortByPPQ(pbColEvents)
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
-      channels[chan].columns.pb = keep and { events = pbColEvents } or nil
+      frame.channels[chan].columns.pb = keep and { events = pbColEvents } or nil
       perf.stop('project')
     end
   end
@@ -4623,7 +4644,7 @@ local function stampSamples()
       local prevailing = util.seek(rawIndexFor(entry.chan).pcs, 'at-or-before', entry.ppq)
       local sample = prevailing and prevailing.val or 0
       setRaw(entry, 'sample', sample)
-      setCell(entry.colEvt, 'sample', sample)
+      frame.setCell(entry.colEvt, 'sample', sample)
       stampWrites.assign(entry, { sample = sample })
     end
   end
@@ -4721,7 +4742,7 @@ local function rebuildPCs(noteLive)
       local seedSpans = spansByChan[chan]
       local events = {}
       if seedSpans then
-        for _, e in ipairs((channels[chan].columns.pc and channels[chan].columns.pc.events) or {}) do
+        for _, e in ipairs((frame.channels[chan].columns.pc and frame.channels[chan].columns.pc.events) or {}) do
           if not pcInSpans(seedSpans, e.ppq, true) then util.add(events, e) end
         end
       end
@@ -4735,8 +4756,8 @@ local function rebuildPCs(noteLive)
       else
         for _, cc in ipairs(rawIndexFor(chan).pcs) do projectPc(cc) end
       end
-      sortByPPQ(events)
-      channels[chan].columns.pc = { events = events }
+      frame.sortByPPQ(events)
+      frame.channels[chan].columns.pc = { events = events }
     end
   end
 end
@@ -4872,21 +4893,19 @@ function tm:rebuild(takeChanged)
   clearSwing()   -- rebuild is the (cm, mm) coherence point
   -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
   -- gated stage below skips clean chans so the carried columns stand.
-  local prevChannels = channels
-  channels = {}
-  shedLanes = {}   -- per-pass memo: a lane shed on the last pass must shed again on this one
+  local prevChannels = frame.newPass()
   for i = 1, 16 do
     if dirt.wholesale(i) then
-      channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
+      frame.channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
     elseif dirt.has(i) then
       -- Interval dirt carries note AND cc/at/pc columns; both splice just their seeded cells. Park and
       -- pb still want the fresh channel; priorPb feeds the kept-range carry. see design § phase 3
       local prevCols = prevChannels[i].columns
-      channels[i] = { chan = i, columns = { notes = prevCols.notes, ccs = prevCols.ccs,
+      frame.channels[i] = { chan = i, columns = { notes = prevCols.notes, ccs = prevCols.ccs,
                                             at = prevCols.at, pc = prevCols.pc },
                       priorPb = prevCols.pb }
     else
-      channels[i] = prevChannels[i]
+      frame.channels[i] = prevChannels[i]
     end
   end
 

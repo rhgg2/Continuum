@@ -4,6 +4,16 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — The frame handle is a do-block over a private memo, not a factory closure like
+  midiManager's makeStream: only the renewal memo can go behind a door, since fifty-seven sites read
+  deep into channels and the engine splices into columns later stages read, so an accessor would
+  hand out the mutable interior anyway for the cost of a call in the hottest loops. There is one
+  frame per trackerManager, and the do-block form is what RAW INDEX and STAGER already are.
+  rawThenLogical goes to the index rather than the frame: it orders the index's own lists, and its
+  non-engine callers are the index build. The lane shed is renamed renewal -- renewLane,
+  markRenewed, docs section Note-lane renewal -- since shed named neither the mechanism (the events
+  table is replaced by a clone) nor the intent (announce the lane changed).
+
 - **2026-08-31** — Phase 4 gives the frame a handle with direct access to `channels`, where the
   index and the stager get door tables: the frame's seven operations already take a frame or a piece
   of one as their first argument, so the engine's writes need no door, and the handle's `channels`

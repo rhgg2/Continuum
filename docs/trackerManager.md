@@ -165,7 +165,7 @@ boundary, `rebuildInternals` writes mm's own column clones, and
 the entry lifecycle.
 
 All three go through `setRaw(entry, field, value)`, the entry-side twin of
-`setCell` for column cells (§ The note-lane shed): skip the no-op, and
+`setCell` for column cells (§ Note-lane renewal): skip the no-op, and
 where the field is one of `rawThenLogical`'s keys, re-true the containing
 list — inline, or flagged for the open `withDeferredSort` block to sort
 once at its close. Only `ppq` of the three actually stains a sort key, but
@@ -236,8 +236,8 @@ and the remove-and-reinsert path carries the stamp onto the fresh entry.
 Re-seating overwrites it; a wholesale reload rebuilds entries bare, and the
 same pass's seating restamps them (the head reload runs before any stage).
 A restored park cell's stamp is likewise a bare write rather than a `setCell`:
-`realised` is bookkeeping no renderer reads, and the restore already shed its
-lane when it re-entered the column.
+`realised` is bookkeeping no renderer reads, and the restore already renewed
+its lane when it re-entered the column.
 
 ### Interval seeds
 
@@ -525,7 +525,7 @@ edits, and marking all 16 dirty mid-rebuild would defeat retention (a channel
 clean in the CC walk but dirty in fx double-derives its seats).
 
 A channel absent from the journal **freezes**. Under frame retention (B1) the
-freeze is total: rebuild carries the channel's whole prior `channels[i]` —
+freeze is total: rebuild carries the channel's whole prior `frame.channels[i]` —
 columns and all — forward, so materialisation itself skips (internals places
 nothing, the CC walk clones nothing, `rebuildPA` and the pc-refresh reproject
 nothing) alongside the derive/synthesise half of `ccs`, `fx`, `regionPark`,
@@ -749,7 +749,7 @@ set rather than in its own window pass.
 `rebuildPA` attaches each `pa` to the note column whose voice it
 modulates. It runs after column layout so the view and fx expansion read
 PAs inline, and after externals so foreign-MIDI PAs find their host. A parked PA is gone from `mm`, so it is re-projected from
-`channels[chan].parkedPA` into its parked host's lane — visible
+`frame.channels[chan].parkedPA` into its parked host's lane — visible
 off-take, riding the note column as an on-take PA would. Both passes
 splice in order (`insertNoteCell`), so nothing downstream re-sorts.
 
@@ -928,8 +928,8 @@ fx-derived live ones, and feeds through the pure `reconcilePCsForChan`
 helper; records lost to lane priority get `sampleShadowed = true` for
 renderer dimming. A raw-index note carries its column cell as `cell` and
 marks through `setCell`; an fx-derived note holds no cell, so it carries
-the spec as `spec` and the field is written direct (§ The note-lane
-shed). The flag is realisation, re-derived every rebuild, so a park
+the spec as `spec` and the field is written direct (§ Note-lane
+renewal). The flag is realisation, re-derived every rebuild, so a park
 round-trip drops it.
 
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
@@ -1124,7 +1124,7 @@ The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked ho
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
 of it, so undeclared, a self-parking host would land in both arms — and fx expansion, whose producer
-bucket is `fxWindow`'s keys plus `channels[chan].parked`, would run its chain twice and
+bucket is `fxWindow`'s keys plus `frame.channels[chan].parked`, would run its chain twice and
 `curves.foldChains`
 would sum the two pb curves to twice the authored depth. The declaration therefore sits at the
 writer, where one statement serves every reader.
@@ -1181,20 +1181,21 @@ walk visits, and what it emits). Without that, a channel dense in parked hosts
 re-clips every kept derived note on any edit, and a one-note change falls off
 the frontier onto the linear walk.
 
-## The note-lane shed
+## Note-lane renewal
 
 tv's cell carry keys on a column's `events` **table identity**: the same
 table coming back means reuse the built cells and ghosts. That makes the
 identity a protocol — a lane's `events` table must change identity exactly
-when something a renderer can see about that lane changed. A lane shed
-without cause costs tv a re-place of the whole take — 7.8ms of `place` on a
-dense one.
+when something a renderer can see about that lane changed. **Renewing** a
+lane is replacing that table with a clone of itself, and a renewal without
+cause costs tv a re-place of the whole take — 7.8ms of `place` on a dense
+one.
 
-The shed is precise, and every mutator of a seated lane owns it:
+Renewal is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseNotes` assigns only when it actually dropped a
   cell; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
-  the park restore) and the park unlink call `shedLane(chan, lane)` first.
+  the park restore) and the park unlink call `renewLane(chan, lane)` first.
   It takes the seeded rows and seeks each one into each lane rather than
   testing every cell against a predicate, so a lane holding no seeded row
   costs a binary search and nothing else. A `claims` refinement narrows
@@ -1204,12 +1205,17 @@ The shed is precise, and every mutator of a seated lane owns it:
   so a seed's row is the lane's own sort key, and the cluster at it is
   contiguous whatever the note-before-PA tie-break does inside.
 - **content** — an in-place field write on an already-seated cell goes
-  through `setCell(cell, field, value)`, which sheds only when the value
-  moves. Writing unconditionally would shed every bounded lane on every
+  through `setCell(cell, field, value)`, which renews only when the value
+  moves. Writing unconditionally would renew every bounded lane on every
   pass, because the tail walk restamps `endppqC` for each note it binds.
   A record holding no cell is written direct instead: `setCell` reads
   `(chan, lane)` off whatever it is handed, so an off-take fx spec would
-  shed the lane its number names while that lane's own cells stand.
+  renew the lane its number names while that lane's own cells stand.
+
+A lane renews at most once a pass. `renewLane` keeps the memo of what it
+has already cloned, and a caller that replaced the table itself records it
+through `markRenewed`; `newPass` clears the memo with the channels map it
+belongs to.
 
 The failure is asymmetric — too pessimistic costs a re-place, too
 optimistic silently renders a stale cell — which is why the enumeration,
@@ -1217,9 +1223,9 @@ not the conditional, is the work. The tail walk is the reach to watch:
 `settleOnset`'s `delayC` and `boundNote`'s `endppqC`/`endppq` land on notes
 no seed covered, in lanes otherwise carried whole.
 
-Two cases need no shed. Wholesale and stale-swing channels get a
+Two cases need no renewal. Wholesale and stale-swing channels get a
 brand-new `columns.notes`, so their identity is fresh by construction. And
-a local bound to `col.events` that outlives a shed operates on the dead
+a local bound to `col.events` that outlives a renewal operates on the dead
 table — the read-only walks (`eachWindowNote`, `channelStreams`,
 `coverOnsets`) do not care, but the park scan did, which is why a note
 carry stores its lane index and resolves the table at unlink time.

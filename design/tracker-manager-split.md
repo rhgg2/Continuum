@@ -256,15 +256,17 @@ the seed minters stay with the structures they read. The model is
 
 1. The second is operations on structures already being passed. If the
    frame travels as a handle, then `insertNoteCell`, `setCell`,
-   `sortNoteColumn`, `shedLane`, `sortByPPQ`, `rawThenLogical` and
-   `isSorted` travel on it: they are the frame's operations, and each
-   takes a frame or a piece of one as its first argument. Seven names
-   become zero.
+   `sortNoteColumn`, `renewLane` and `isSorted` travel on it, with
+   `sortByPPQ`: they are the frame's operations, and each takes a frame
+   or a piece of one as its first argument. The pass boundary and the
+   renewal memo are the frame's own, so `newPass` and `markRenewed` join
+   them. `rawThenLogical` goes to the index instead, whose lists it
+   orders. Seven names become zero.
 
 1. Two of the seven have a third caller. `setCell` is applied to a bare
    fx spec and `setRaw` to bare specs, and each carries a branch for
    it — `setRaw` accepts that a non-member record flags its channel's
-   list spuriously, and `setCell` calls `shedLane` on a lane the spec
+   list spuriously, and `setCell` calls `renewLane` on a lane the spec
    does not sit in, against the invariant that a note lane's events
    table changes identity only when its contents change. The cost is a
    spurious re-render. Naming the travelling record as a thing in its
