@@ -25,7 +25,7 @@ as a region whose channel and window are its own and whose fx list is
 `note.fx`, but that region is never materialised — it is just the note
 carrying `fx`. Explicit region objects exist only for the many-note and
 no-note cases. Storage stays dual because the note case is cheap and rides
-copy, move and group propagation for free; the producer is every
+copy, move and group propagation for free; the host is every
 note-as-implicit-region together with every explicit region; and PA,
 provenance and dirty-keying bind to whatever holds the fx.
 
@@ -316,8 +316,8 @@ pressure-aware arp all fall out of that one shape.
 at the seam is a smell, and for pb outright wrong — mm's pb is raw, not the
 cents-minus-detune the absorber computes. The streams are cheap *because*
 their intent value needs no computation, and they are projected to columns
-before the producer runs. The PA projection lands after externals and parking
-but before the producer, note columns being settled only by then, and it must
+before the chain runs. The PA projection lands after externals and parking
+but before the chain, note columns being settled only by then, and it must
 stay before the logical projection so pitch-column matching still works in
 the raw frame.
 
@@ -368,7 +368,7 @@ carrier, the add-bank slots and that per-block summation are all retired.
 **2** **One model: park the base, seat the sum.** A continuous fx region
 parks the authored automation its window covers off the take, exactly as
 note-replace parks the chord — bounded to authored breakpoints, visible, and
-editable by re-seat. The producer emits the region's **absolute** target
+editable by re-seat. The chain emits the region's **absolute** target
 curve, augment summing parked base plus macro and replace being the macro
 alone, and seats it on the target lane. The two modes collapse to one
 realisation path, differing only in whether the parked base folds in.
@@ -592,14 +592,14 @@ orphan on removal — and doctrinally, delay is a per-note-on offset
 ## pb and cc
 
 **1** **pb as generator input is authored breakpoints only.** Their logical
-value is the persisted `cents` sidecar, so the pre-producer walk reads it
+value is the persisted `cents` sidecar, so the walk that precedes the chain reads it
 directly — no cents-minus-detune reconstruction, no absorber split. A
 foreign-MIDI pb lacks the sidecar for one rebuild until the absorber
 back-derives and persists it, which is harmless and self-healing. The heavier
 path, the absorber's densified stream as input, stays unbuilt until a kind
 needs more than breakpoints.
 
-**2** **A pb replace seats an absolute curve on the base lane.** The producer
+**2** **A pb replace seats an absolute curve on the base lane.** The chain
 records the replace window with its curve, and inside the window the stream
 value is the *curve* rather than the authored breakpoints; the curve's
 breakpoints become derived seats carrying their shape. An authored pb inside

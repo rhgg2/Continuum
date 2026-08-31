@@ -16,7 +16,7 @@ local function pbSeatsOf(dump, chan)
   return out
 end
 
--- A trill parks its host and stands its own notes in the lane, so the producer's uuid comes off
+-- A trill parks its host and stands its own notes in the lane, so the host's uuid comes off
 -- the parked cell.
 local function parkedHostUuid(h, chan)
   for _, cell in ipairs(h.tm:getChannel(chan).parked or {}) do
@@ -48,7 +48,7 @@ local function curveAt(h, uuid, chan, target, ppqs)
   return out
 end
 
--- A note carrying fx is its own producer, and an augment chain leaves it on the take.
+-- A note carrying fx is its own host, and an augment chain leaves it on the take.
 local function hostUuid(h, chan)
   for _, e in ipairs(h.tm:getChannel(chan).columns.notes[1].events) do
     if e.fx then return e.uuid end
@@ -71,9 +71,9 @@ return {
       t.truthy(math.abs(vals[3]) <= 1,       'back through the rest at the half cycle')
       t.truthy(math.abs(vals[4] + 30) <= 1,  'and the trough at three quarters')
 
-      t.eq(h.tm:fxCurveAt(host, 1, 'pb', 300), nil, 'past the producer\'s window there is no curve')
+      t.eq(h.tm:fxCurveAt(host, 1, 'pb', 300), nil, 'past the host\'s window there is no curve')
       t.eq(h.tm:fxCurveAt(host, 1, 10, 0),     nil, 'nor on a target this chain never claimed')
-      t.eq(h.tm:fxRealisation('no-such-producer'), nil, 'and a uuid that runs no chain has nothing to sample')
+      t.eq(h.tm:fxRealisation('no-such-host'), nil, 'and a uuid that runs no chain has nothing to sample')
     end,
   },
 
@@ -101,7 +101,7 @@ return {
   },
 
   {
-    name = 'fxCurveAt: a kept producer\'s curve stands, because it reads the take not the emission',
+    name = 'fxCurveAt: a kept host\'s curve stands, because it reads the take not the emission',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent(vibHost(1)); h.tm:flush()
@@ -111,7 +111,7 @@ return {
       local before = curveAt(h, host, 1, 'pb', rows)
       t.truthy(before[2] ~= nil, 'fixture check: the curve is up')
 
-      -- The far note is the dirt; the producer at [0,240) is out of every emit scope, so it is
+      -- The far note is the dirt; the host at [0,240) is out of every emit scope, so it is
       -- kept rather than re-run and emits no record this rebuild.
       local far
       for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
@@ -119,7 +119,7 @@ return {
       end
       h.tm:assignEvent(far, { pitch = 65 }); h.tm:flush()
 
-      t.deepEq(curveAt(h, host, 1, 'pb', rows), before, 'the kept producer\'s seats are still on the take')
+      t.deepEq(curveAt(h, host, 1, 'pb', rows), before, 'the kept host\'s seats are still on the take')
     end,
   },
 
@@ -137,7 +137,7 @@ return {
       t.truthy(#before >= 2, 'fixture check: the trill emits derived notes on chan 2')
 
       -- Chan 2 is derivation-clean through both edits, so its fx pass never runs and emits no
-      -- record; the notes it keyed by producer last time are what the entry gathers.
+      -- record; the notes it keyed by host last time are what the entry gathers.
       h.tm:addEvent(plainNote(1, 480)); h.tm:flush()
       h.tm:addEvent(plainNote(1, 720)); h.tm:flush()
 

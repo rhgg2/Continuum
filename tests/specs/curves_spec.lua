@@ -7,7 +7,7 @@
 -- which is what lets the cases below compare a shape against the chord without restating it.
 --
 -- The window rules are the other half. A window [sL, eL) is half-open, so eL belongs to whatever
--- follows; a producer's close owns the tick eL-1 and its material stops at eL-2, which keeps a
+-- follows; a host's close owns the tick eL-1 and its material stops at eL-2, which keeps a
 -- closing control point from being overwritten by the last thing the stage emitted.
 
 local t = require('support')

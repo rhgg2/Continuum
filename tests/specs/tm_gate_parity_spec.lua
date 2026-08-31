@@ -127,7 +127,7 @@ return {
       h.tm:addEvent(note(3, 0,   67, { fx = sine30 }));  h.tm:flush()
       h.tm:addEvent(note(4, 0,   72));                 h.tm:flush()
       -- chan 5: two arp regions in disjoint windows. An edit inside one must freeze the other
-      -- producer-for-producer (phase 5), identity-keeping its derived notes.
+      -- host-for-host (phase 5), identity-keeping its derived notes.
       h.tm:addEvent(note(5, 0,   60));                 h.tm:flush()
       h.tm:addEvent(note(5, 480, 67));                 h.tm:flush()
       h.ds:assign('fxRegions', {
@@ -163,14 +163,14 @@ return {
       h.tm:addEvent(note(4, 0, 74)); h.tm:flush()
       assertParity(h, 'chan-4 region edit: re-park + re-derive == full re-derive')
 
-      -- Add a chord member inside region 5a's window: 5a re-derives, 5b is frozen by the producer
+      -- Add a chord member inside region 5a's window: 5a re-derives, 5b is frozen by the host
       -- gate (pure-note chain, window untouched) and identity-keeps its arp notes.
       h.tm:addEvent(note(5, 0, 64, { lane = 2 })); h.tm:flush()
-      assertParity(h, 'chan-5 producer gate: 5a re-derives, 5b identity-keeps == full re-derive')
+      assertParity(h, 'chan-5 host gate: 5a re-derives, 5b identity-keeps == full re-derive')
     end,
   },
   {
-    name = 'continuous gate: kept, clean-overlapping, and orphaned cc producers reconcile to parity',
+    name = 'continuous gate: kept, clean-overlapping, and orphaned cc hosts reconcile to parity',
     run = function(harness)
       local h = harness.mk{
         config = { project = { swings = { c58 = classic58 } } },
@@ -225,7 +225,7 @@ return {
       keptB = seatUuids(1, 10, 960, 1200)
       local hostA = h.tm:getChannel(1).columns.notes[1].events[1]
       h.tm:assignEvent(hostA, { fx = util.REMOVE }); h.tm:flush()
-      t.deepEq(seatUuids(1, 10, 0, 960), {}, 'removed producer: orphan seats deleted')
+      t.deepEq(seatUuids(1, 10, 0, 960), {}, 'removed host: orphan seats deleted')
       t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'window B still keeps across the removal')
       assertParity(h, 'chan-1 fx removal: orphans delete, B keeps == full re-derive')
     end,

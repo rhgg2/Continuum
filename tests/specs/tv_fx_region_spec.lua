@@ -32,7 +32,7 @@ local function injectRegion(h, over)
   h.tm:rebuild()
 end
 
--- Two producers, so a scoping case can ask which of them a ghost belongs to. Each entry
+-- Two hosts, so a scoping case can ask which of them a ghost belongs to. Each entry
 -- overrides the defaults injectRegion uses; the uuid is positional ('fxr-1', 'fxr-2', ...).
 local function injectRegions(h, list)
   local regions = {}
@@ -1313,7 +1313,7 @@ return {
       t.truthy(values and values[pbIdx], 'the claimed column carries the curve')
       local rows = {}
       for row = 0, 6 do if values[pbIdx][row] then util.add(rows, row) end end
-      t.deepEq(rows, { 0, 1, 2, 3 }, 'one value per row over the producer\'s window, and no further')
+      t.deepEq(rows, { 0, 1, 2, 3 }, 'one value per row over the host\'s window, and no further')
       t.eq(values[noteColIdx(h, 1)], nil, 'note columns take note ghosts, not values')
       t.eq(h.vm.grid.cols[pbIdx].cells[0], nil, 'and nothing entered the column: a ghost is not a cell')
     end,
@@ -1337,9 +1337,9 @@ return {
   },
 
   {
-    name = 'ghostOverlay: a kept producer still lights its curve after an edit elsewhere',
+    name = 'ghostOverlay: a kept host still lights its curve after an edit elsewhere',
     run = function(harness)
-      -- The claim comes off the census, not the emission: a producer outside the dirty interval
+      -- The claim comes off the census, not the emission: a host outside the dirty interval
       -- is kept rather than re-run and emits no cc record, and its curve has to stand anyway.
       local h = harness.mk{ seed = { ccs = { { ppq = 0, chan = 1, evType = 'cc', cc = 10, val = 0 } } } }
       h.vm:setGridSize(80, 40)
@@ -1361,7 +1361,7 @@ return {
 
       h.ec:setPos(0, fxIdx, 1)
       local values = (h.vm:ghostOverlay() or {}).values
-      t.truthy(values[ctsColIdx(h, 1, 'cc', 10)], 'the kept producer owns its target still')
+      t.truthy(values[ctsColIdx(h, 1, 'cc', 10)], 'the kept host owns its target still')
     end,
   },
 
@@ -1472,7 +1472,7 @@ return {
     end,
   },
 
-  ----- Scope: the overlay is one producer's realisation, not the take's
+  ----- Scope: the overlay is one host's realisation, not the take's
 
   {
     name = 'ghostOverlay: a chain on another channel keeps its ghosts to itself',

@@ -1,5 +1,5 @@
 -- The keep/live split of a clipped pb window. Under seed dirt a pb replace window is clipped
--- against the emit scope of the producers that re-ran (docs/trackerManager.md § The producer gate).
+-- against the emit scope of the hosts that re-ran (docs/trackerManager.md § The host gate).
 -- The live part refolds from the chain curve; the kept part's seats stand on the wire and its
 -- column cells carry verbatim from the prior pass. Where the two parts touch, the tick belongs to
 -- whichever side opens on it -- two pb events at one (chan, ppq) are a contradiction on the wire
@@ -36,7 +36,7 @@ local function host(ppq, depth)
            vel = 100, detune = 0, delay = 0, lane = 2, fx = sine(depth) }
 end
 
--- Three abutting pb producers, added one at a time so every pass is an ordinary edit rebuild.
+-- Three abutting pb hosts, added one at a time so every pass is an ordinary edit rebuild.
 local function threeWindows(harness)
   local h = harness.mk{ seed = { ccs = {
     { ppq = 1000, chan = 1, evType = 'pb',
@@ -86,7 +86,7 @@ local function pbWritesDuring(h, edit)
   return hit
 end
 
--- Dirt inside the third window alone, on a lane no producer hosts: [480,720) runs, the rest keeps.
+-- Dirt inside the third window alone, on a lane no host occupies: [480,720) runs, the rest keeps.
 local function seedThirdWindow(h)
   h.tm:addEvent({ evType = 'note', ppq = 600, endppq = 660, chan = 1, pitch = 70,
                   vel = 100, detune = 0, delay = 0, lane = 3 })

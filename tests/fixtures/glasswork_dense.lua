@@ -1,11 +1,11 @@
--- "Glasswork-dense" -- the producer-dense single-channel variant of glasswork,
+-- "Glasswork-dense" -- the host-dense single-channel variant of glasswork,
 -- built for interval-dirt Phase 5 commit 5 (the fx-gate measurement).
 --
 -- glasswork spreads its generators over 16 channels, so a one-note edit dirties
 -- one lightly-loaded channel and the flush is write-bound -- the phase-5 fx gate
 -- has almost nothing to skip (~3ms of re-derive). This variant piles the same
 -- continuous chains onto ONE channel (chan 1) as six lanes of back-to-back
--- one-bar hosts across all 32 bars, so rebuild(true) folds every producer -- the
+-- one-bar hosts across all 32 bars, so rebuild(true) folds every host -- the
 -- forced-full ceiling -- while a one-note edit seeds a single window and the gate
 -- keeps the rest. Four lanes are continuous (the expensive fold the gate narrows:
 -- pb x2, cc1, cc10); two are note chains. See design/interval-dirt.md § phase 5.

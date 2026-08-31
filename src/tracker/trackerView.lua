@@ -3101,7 +3101,7 @@ end
 --contract: a stored global region; any other uuid is a silent no-op
 function tv:explodeRegion(uuid) return tm:explodeRegion(uuid) end
 
---contract: nil for a non-producer; 'raw' when a live group's footprint blocks it; else 'group'
+--contract: nil for a uuid that hosts no chain; 'raw' when a live group's footprint blocks it; else 'group'
 -- Not atomic: the whole point is a decline that opens no undo block.
 function tv:freezeMode(uuid)
   if not tm:freezeEligible(uuid) then return nil end
@@ -3113,7 +3113,7 @@ end
 --contract: no members, no mint -- but the conversion still runs
 function tv:freezeToGroup(uuid)
   -- Read the rect first: freezeRectByUuid is republished each rebuild from the census, so the
-  -- conversion drops the producer's own entry on its way out.
+  -- conversion drops the host's own entry on its way out.
   local rect    = tm:freezeRect(uuid)
   local members = tm:freezeToGroup(uuid)
   -- An empty group is a rect that blocks future placements and outlines nothing.

@@ -153,11 +153,11 @@ local function derivedNotes(h)
   return out
 end
 
--- The identity an expanded producer carries: its stored region's uuid, qualified by the channel it
+-- The identity an expanded host carries: its stored region's uuid, qualified by the channel it
 -- landed on. see docs/trackerManager.md § Channel & column model
 local function expanded(uuid, chan) return util.key(uuid, chan) end
 
--- The notes one producer put on one channel, sorted by onset then lane. A global region's producers
+-- The notes one host put on one channel, sorted by onset then lane. A global region's hosts
 -- differ per channel, so the read names both.
 local function derivedFor(h, chan, uuid)
   local out = {}
@@ -763,6 +763,67 @@ return {
   },
 
   {
+    name = 'addParked (note): a reopened stash seeds the mint, so the new uuid clears what is already stashed',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      h.tm:addParked({ evType = 'note', chan = 1, lane = 1, ppq = 120, endppq = 240,
+                       pitch = 72, vel = 100, detune = 0, delay = 0 })
+      h.tm:flush()
+
+      -- A second mk() is a second session -- the module body reruns, so the mint counter
+      -- restarts at 0 -- while the take-scoped stash arrives from the document holding fxp-1.
+      local reopened = harness.mk({ data = {
+        fxRegions = { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } },
+        fxParked  = h.ds:get('fxParked'),
+      } })
+      reopened.tm:rebuild()
+      reopened.tm:addParked({ evType = 'note', chan = 1, lane = 1, ppq = 60, endppq = 120,
+                              pitch = 76, vel = 100, detune = 0, delay = 0 })
+      reopened.tm:flush()
+
+      local uuidOf = {}
+      for _, spec in ipairs(reopened.ds:get('fxParked')) do uuidOf[spec.pitch] = spec.uuid end
+      t.eq(uuidOf[72], 'fxp-1', 'the reopened spec keeps the uuid it was stashed under')
+      t.eq(uuidOf[76], 'fxp-2', 'the fresh mint clears the stash rather than restarting at 1')
+
+      -- What a collision would cost: findParked takes the first uuid match, so the note
+      -- already stashed would die in the newly typed one's place.
+      local typed
+      for _, cell in ipairs(reopened.tm:getChannel(1).parked) do
+        if cell.pitch == 76 then typed = cell end
+      end
+      reopened.tm:deleteParked(typed); reopened.tm:flush()
+      local left = {}
+      for _, spec in ipairs(reopened.ds:get('fxParked')) do left[#left + 1] = spec.pitch end
+      table.sort(left)
+      t.deepEq(left, { 60, 72 }, 'deleting the typed note leaves the one already stashed alone')
+    end,
+  },
+
+  {
+    name = 'addParked (note): two adds in one batch mint apart -- neither sees the other in the stash',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      for _, pitch in ipairs({ 72, 76 }) do
+        h.tm:addParked({ evType = 'note', chan = 1, lane = 1, ppq = 60, endppq = 120,
+                         pitch = pitch, vel = 100, detune = 0, delay = 0 })
+      end
+      h.tm:flush()
+
+      local minted = {}
+      for _, spec in ipairs(h.ds:get('fxParked')) do
+        if type(spec.uuid) == 'string' then minted[#minted + 1] = spec.uuid end
+      end
+      table.sort(minted)
+      t.deepEq(minted, { 'fxp-1', 'fxp-2' }, 'edits ride flush, so the counter is what keeps them apart')
+    end,
+  },
+
+  {
     name = 'parked cc: assignParked then deleteParked edits the off-take cc stash symmetrically',
     run = function(harness)
       local h = harness.mk()
@@ -994,11 +1055,11 @@ return {
     end,
   },
 
-  ----- Input streams: the producer hands the windowed channel over as typed streams, PA among them and
+  ----- Input streams: the host hands the windowed channel over as typed streams, PA among them and
   ----- not special (§ Input streams ¶3)
 
   {
-    name = 'fx region: the producer hands the generator notes/pas/ccs/ats input streams',
+    name = 'fx region: the host hands the generator notes/pas/ccs/ats input streams',
     run = function(harness)
       local h = harness.mk()
       -- A covered note (so a PA can ride its column) plus authored cc / channel-AT / poly-AT in
@@ -2418,18 +2479,18 @@ return {
       addNote(h)
       injectRegion(h)   -- a live region over the same span must not be swept by a miss
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
-      t.falsy(h.tm:freezeEligible(uuid), 'no chain: absent from the producer census, absent from the map')
+      t.falsy(h.tm:freezeEligible(uuid), 'no chain: absent from the host census, absent from the map')
       t.falsy(h.tm:freezeRegion(uuid), 'a note carrying no chain is not a host')
       t.deepEq(authoredPitches(h), { 60 }, 'the note stands')
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'and so does the region')
     end,
   },
 
-  ----- The producer census: prevWindows carries one entry per producer
+  ----- The host census: prevWindows carries one entry per host
 
   {
     -- The persisted window set is the seat-recognition baseline and the freeze gates' census both, so a
-    -- producer counted twice keeps an entry alive after its own freeze. see design/archive/fx-freeze.md
+    -- host counted twice keeps an entry alive after its own freeze. see design/archive/fx-freeze.md
     name = 'park windows: a self-parking note host contributes one window, not two',
     run = function(harness)
       local h = harness.mk()
@@ -2444,11 +2505,11 @@ return {
       t.eq(#h.tm:getChannel(1).parked, 1, 'the trill parks its own host')
 
       local windows = h.ds:get('prevWindows') or {}
-      t.eq(#windows, 1, 'one producer, one entry')
+      t.eq(#windows, 1, 'one host, one entry')
       t.eq(windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
       local hostUuid = h.tm:getChannel(1).parked[1].uuid
       t.truthy(hostUuid, 'the parked host carries a uuid to be stamped with')
-      t.eq(windows[1].id, hostUuid, "and the window is stamped with its producer's identity")
+      t.eq(windows[1].id, hostUuid, "and the window is stamped with its host's identity")
     end,
   },
 
@@ -2475,7 +2536,7 @@ return {
     end,
   },
 
-  ----- Global regions: channel 0 expands into a producer on every channel
+  ----- Global regions: channel 0 expands into a host on every channel
 
   {
     -- A chan-0 region is stored once and runs sixteen times: the head snapshot the pipeline takes
@@ -2598,9 +2659,9 @@ return {
   },
 
   {
-    -- The persisted window set is the seat-recognition baseline, so an expanded producer's identity
+    -- The persisted window set is the seat-recognition baseline, so an expanded host's identity
     -- has to survive a rebuild unchanged. see docs/trackerManager.md § Channel & column model
-    name = 'global region: a producer per channel in use, with stable derived identities',
+    name = 'global region: a host per channel in use, with stable derived identities',
     run = function(harness)
       local h = harness.mk()
       addNote(h)
@@ -2609,12 +2670,12 @@ return {
       h.tm:rebuild()
 
       local windows = h.ds:get('prevWindows') or {}
-      t.eq(#windows, 2, 'one note window per expanded producer')
+      t.eq(#windows, 2, 'one note window per expanded host')
       local ids, chans = {}, {}
       for _, w in ipairs(windows) do ids[w.id] = true; chans[w.chan] = true end
       t.truthy(ids[expanded('fxr-g', 1)] and ids[expanded('fxr-g', 2)],
                'each stamped with the identity its own channel derives')
-      t.falsy(ids['fxr-g'], 'the stored uuid names no producer of its own')
+      t.falsy(ids['fxr-g'], 'the stored uuid names no host of its own')
       t.falsy(chans[0], 'and nothing runs on channel 0')
 
       -- Fresh dirt on a channel already in use: past the region's window, so the set it reaches stands.
@@ -2626,14 +2687,14 @@ return {
 
   {
     -- Storage order is precedence among chains overlapping on one channel, and the expansion emits a
-    -- channel's own regions before the producers expanded onto it, whatever order storage holds them
+    -- channel's own regions before the hosts expanded onto it, whatever order storage holds them
     -- in. see docs/trackerManager.md § Channel & column model
     name = 'global region: a global chain packs after a channel region stored before it',
     run = function(harness)
       local h = harness.mk()
       addNote(h)
       -- Two note-replace chains, each stamping a pitch of its own: both park the member, so the lane
-      -- each lands on is the order the two producers were emitted in.
+      -- each lands on is the order the two hosts were emitted in.
       local function stamp(pitch)
         return { expand = function(stream)
                    return { notes = { { ppq = stream.window[1], endppq = stream.window[2],
@@ -2674,10 +2735,10 @@ return {
     end,
   },
 
-  ----- Freeze gates: refusals computed over the producer census, by owner identity
+  ----- Freeze gates: refusals computed over the host census, by owner identity
 
   {
-    -- Same target, overlapping windows: freezing either would leave the other's producer standing
+    -- Same target, overlapping windows: freezing either would leave the other's host standing
     -- over raw output it did not make. Refusal is silent. see design/archive/fx-freeze.md § Eligibility gates
     name = 'freeze gate (overlapping regions): neither freezes, and nothing changes',
     run = function(harness)
@@ -2690,7 +2751,7 @@ return {
       h.tm:rebuild()
       local regions, windows, parked =
         h.ds:get('fxRegions'), h.ds:get('prevWindows'), h.ds:get('fxParked')
-      t.eq(#windows, 2, 'both producers stand in the census')
+      t.eq(#windows, 2, 'both hosts stand in the census')
       t.eq(#parked, 1, 'and the member they both park is in the stash')
 
       t.falsy(h.tm:freezeEligible('fxr-1'), 'the map refuses the earlier region')
@@ -2760,7 +2821,7 @@ return {
 
   {
     -- The region's note window covers the host's onset, so freezing the region would leave the
-    -- host's producer running over raw arp notes. Freezing the host first is the recourse.
+    -- host's chain running over raw arp notes. Freezing the host first is the recourse.
     name = 'freeze gate (covered fx host): the region waits for the host it parks',
     run = function(harness)
       local h = harness.mk()
@@ -2777,13 +2838,13 @@ return {
       t.truthy(h.tm:freezeRegion(uuid), "the host freezes -- its own pb window overlaps nobody's")
       t.falsy(stashOfType(h, 'note')[1].fx, 'and stays parked, stripped of the chain')
       t.truthy(h.tm:freezeEligible('fxr-1'), "the host's freeze-rebuild moved the map")
-      t.truthy(h.tm:freezeRegion('fxr-1'), 'with no producer left under it, the region freezes')
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'with no host left under it, the region freezes')
     end,
   },
 
   {
     -- A note-dest host presents no window of its own (its note arm is suppressed), so no other
-    -- producer can refuse it: the inverse gate asks whether a neighbour's note window covers it.
+    -- host can refuse it: the inverse gate asks whether a neighbour's note window covers it.
     name = 'freeze gate (inverse): a note-dest host under a region note window is refused',
     run = function(harness)
       local h = harness.mk()
@@ -2802,7 +2863,7 @@ return {
   },
 
   {
-    -- Freeze drops the frozen producer's own baseline entries by their stamped id: a same-target
+    -- Freeze drops the frozen host's own baseline entries by their stamped id: a same-target
     -- neighbour whose window is disjoint keeps its entry and its curve. see design/archive/fx-freeze.md
     name = 'freeze (disjoint same-target neighbour): the survivor keeps its window and its curve',
     run = function(harness)
@@ -2812,13 +2873,13 @@ return {
         { uuid = 'fxr-2', chan = 1, startppq = 480, endppq = 720, fx = sine30 },
       })
       h.tm:rebuild()
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two producers, two pb windows on the same target')
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two hosts, two pb windows on the same target')
 
       t.truthy(h.tm:freezeEligible('fxr-1'), 'disjoint windows: the map clears the freeze')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze reports success')
 
       local baseline = h.ds:get('prevWindows') or {}
-      t.eq(#baseline, 1, "only the frozen producer's window leaves the baseline")
+      t.eq(#baseline, 1, "only the frozen host's window leaves the baseline")
       t.eq(baseline[1] and baseline[1].id, 'fxr-2',
            "the surviving entry carries the neighbour's identity, not just its value")
       t.falsy(h.ds:get('fxParked'), "the survivor's window is not newly created, so it sweeps nothing")
@@ -2827,14 +2888,14 @@ return {
   },
 
   {
-    -- The refusal is by producer, not by window value: a chain's own windows are its own on however
+    -- The refusal is by host, not by window value: a chain's own windows are its own on however
     -- many streams, and are never held against it.
     name = 'freeze gate (two targets, one chain): a chain does not refuse itself',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h, { fx = { sine30[1],
                                { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0, dest = 10 } } })
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one producer, a pb window and a cc window')
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one host, a pb window and a cc window')
       t.truthy(h.tm:freezeEligible('fxr-1'), 'its own windows are no neighbour in the map either')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'so the freeze goes through')
     end,
@@ -2888,7 +2949,7 @@ return {
   },
 
   {
-    -- A global chain runs one producer per channel in use, and its expansion stands over the region's
+    -- A global chain runs one host per channel in use, and its expansion stands over the region's
     -- span as any channel neighbour would. Gate and map read the one published window set, so both
     -- refuse. see docs/trackerManager.md § Fx window census
     name = 'freeze gate (global expansion): a chain under a global window is refused',
@@ -2908,7 +2969,7 @@ return {
   },
 
   {
-    -- The rect a freeze-to-group mint would claim: the producer's own span, and one streamId per
+    -- The rect a freeze-to-group mint would claim: the host's own span, and one streamId per
     -- stream its output actually stands on. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze rect: the footprint of a mixed note-and-curve output',
     run = function(harness)
@@ -2940,11 +3001,11 @@ return {
   },
 
   {
-    name = 'freeze rect: nil for a uuid that is not a producer',
+    name = 'freeze rect: nil for a uuid that hosts no chain',
     run = function(harness)
       local h = harness.mk()
       addNote(h)
-      injectRegion(h)   -- a live producer over the same span must not answer for the note
+      injectRegion(h)   -- a live host over the same span must not answer for the note
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
       t.truthy(h.tm:freezeRect('fxr-1'), 'the region over the same span does claim a footprint')
       t.falsy(h.tm:freezeRect(uuid), 'a plain note has none of its own to claim')
@@ -2957,11 +3018,11 @@ return {
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
-      t.truthy(h.tm:freezeRect('fxr-1'), 'the live producer has a rect')
+      t.truthy(h.tm:freezeRect('fxr-1'), 'the live host has a rect')
 
       h.ds:assign('fxRegions', util.REMOVE)
       h.tm:rebuild()
-      t.falsy(h.tm:freezeRect('fxr-1'), 'and it is gone on the rebuild that drops the producer')
+      t.falsy(h.tm:freezeRect('fxr-1'), 'and it is gone on the rebuild that drops the host')
     end,
   },
 
@@ -3112,8 +3173,8 @@ return {
   ----- Explode: the expansion, persisted in place of the stored global region
 
   {
-    -- The stored region gives way to the producers the expansion was running, uuids and all, so the
-    -- head snapshot reads the same producer list as before. see docs/trackerManager.md § Channel & column model
+    -- The stored region gives way to the hosts the expansion was running, uuids and all, so the
+    -- head snapshot reads the same host list as before. see docs/trackerManager.md § Channel & column model
     name = 'explode: the expansion persists in place of the global region',
     run = function(harness)
       local h = harness.mk()
@@ -3141,7 +3202,7 @@ return {
       t.deepEq(h.ds:get('fxParked') or {}, stashBefore, 'the park stash keeps the cells it stood in for')
       t.deepEq(h.ds:get('prevWindows') or {}, winBefore, 'and the window set the seats are recognized against')
       t.falsy(h.tm:fxRealisation('fxr-g'), 'the union entry goes with the stored region')
-      t.deepEq(h.tm:fxRealisation(expanded('fxr-g', 7)).chans, { 7 }, 'and each producer answers for itself')
+      t.deepEq(h.tm:fxRealisation(expanded('fxr-g', 7)).chans, { 7 }, 'and each host answers for itself')
     end,
   },
 

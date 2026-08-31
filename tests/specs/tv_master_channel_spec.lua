@@ -191,7 +191,7 @@ return {
       h.vm:setGridSize(80, 40)
       injectGlobals(h, { {} })
 
-      t.falsy(h.tm:freezeEligible('fxr-1'), 'a global region is no producer to freeze')
+      t.falsy(h.tm:freezeEligible('fxr-1'), 'a global region is no host to freeze')
       t.falsy(h.tm:freezeRegion('fxr-1'),   'and the conversion refuses outright')
 
       local regions = h.ds:get('fxRegions') or {}
@@ -297,7 +297,7 @@ return {
   ----- What the wire hears
 
   {
-    -- The head snapshot expands a global region into one producer per channel in use, so a chain
+    -- The head snapshot expands a global region into one host per channel in use, so a chain
     -- authored on the strip sounds on each of them and nowhere else.
     -- see docs/trackerManager.md § Channel & column model
     name = 'a global region runs its chain on every MIDI channel in use',
@@ -323,9 +323,9 @@ return {
   ----- What the strip shows
 
   {
-    -- A global region runs no producer of its own, so its realisation is the union of the ones it
-    -- expanded into, and a ghost lands on the channel of the producer that emitted it.
-    -- see docs/trackerManager.md § Realisation by producer
+    -- A global region is no host of its own, so its realisation is the union of the ones it
+    -- expanded into, and a ghost lands on the channel of the host that emitted it.
+    -- see docs/trackerManager.md § Realisation by host
     name = 'the caret on a global badge ghosts the chain on every channel it reaches',
     run = function(harness)
       local h = harness.mk()
@@ -348,7 +348,7 @@ return {
         local pitches = {}
         for row = 0, 4 do util.add(pitches, ghosts[row] and ghosts[row].pitch or false) end
         t.deepEq(pitches, { 60, 60, 60, 60, false },
-          'channel ' .. chan .. ' carries four ghosts, on the rows its own producer derived')
+          'channel ' .. chan .. ' carries four ghosts, on the rows its own host derived')
         t.truthy(suppressed[chan], 'and the original the chain parked there is hidden under them')
       end
     end,
@@ -462,7 +462,7 @@ return {
 
   {
     -- The union's claimed targets are the chain's, and the sampling asks for one channel at a time:
-    -- every channel reached lights the column it carries. see docs/trackerManager.md § Realisation by producer
+    -- every channel reached lights the column it carries. see docs/trackerManager.md § Realisation by host
     name = 'a global chain lights its curve on the target column of each channel it reaches',
     run = function(harness)
       local h = harness.mk{ data = { extraColumns = { [3]  = { notes = 1, pb = true },

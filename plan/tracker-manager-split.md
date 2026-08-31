@@ -26,10 +26,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: producer -> host, one word for what runs a chain (design/decisions.md 2026-08-31)
+- 2026-08-31 tm: one word for a window, one for a span (design/decisions.md 2026-08-31)
 - 2026-08-31 tm: hold the pass's park windows in one structure (design/tracker-manager-split.md § Phase 3 5)
 - 2026-08-31 tm: clear the take-scoped caches at the take-tier seam (design/tracker-manager-split.md § Phase 3 7)
-- 2026-08-31 tm: hand the fx maps up from the pipeline (design/tracker-manager-split.md § Phase 3 3-4)
-- 2026-08-31 tm: gather the stager's doors onto one table (design/tracker-manager-split.md § Phase 3 8)
 
 ## Now
 

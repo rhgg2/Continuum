@@ -32,7 +32,7 @@ local function ppqsOf(seats)
   return out
 end
 
--- Two continuous producers whose windows overlap on [120, 240): sine A alone before it, both across
+-- Two continuous hosts whose windows overlap on [120, 240): sine A alone before it, both across
 -- it, sine B alone after. One fixture covers all three of the fold's cases.
 local function overlappingPair(h)
   h.tm:addEvent(note(0,   240, 60, 1, sine30))

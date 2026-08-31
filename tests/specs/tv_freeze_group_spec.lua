@@ -1,4 +1,4 @@
--- Track B (fx freeze): the tv verb that converts a producer and mints a stock group over its
+-- Track B (fx freeze): the tv verb that converts a host and mints a stock group over its
 -- own output. tm_fx_region_spec pins the conversion and the thin; this spec is the wiring --
 -- the gate, the mint, the one undo block they share, and what the mint leaves behind: an
 -- ordinary group, which instances, mirrors and deletes like any other.
@@ -62,7 +62,7 @@ local function blockCounter(h)
   return function() return blocks end
 end
 
--- The fixture frozen: producer converted, mint standing over its own output. Returns the
+-- The fixture frozen: host converted, mint standing over its own output. Returns the
 -- harness and the instance the mint seated.
 local function frozen(harness)
   local h = harness.mk{ groups = true }
@@ -138,12 +138,12 @@ return {
 
       h.cmgr:invoke('freezeFxGroup')
 
-      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'the producer is gone -- the conversion ran')
+      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'the host is gone -- the conversion ran')
       local insts = h.gm:eachInstance()
       t.eq(#insts, 1, 'exactly one group, seated at its own origin')
-      t.eq(insts[1].anchor.ppq,  0, 'anchored at the producer onset')
-      t.eq(insts[1].anchor.chan, 1, 'on the producer channel')
-      t.eq(insts[1].rect.dur,  240, 'over the producer span')
+      t.eq(insts[1].anchor.ppq,  0, 'anchored at the host onset')
+      t.eq(insts[1].anchor.chan, 1, 'on the host channel')
+      t.eq(insts[1].rect.dur,  240, 'over the host span')
 
       local promoted = 0
       for _, n in ipairs(h.fm:dump().notes) do
@@ -195,7 +195,7 @@ return {
 
   {
     -- The gate runs before any mutation: markGroup's own refusal arrives after the conversion has
-    -- already destroyed the producer, leaving a freeze with nothing minted over it.
+    -- already destroyed the host, leaving a freeze with nothing minted over it.
     -- see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: a colliding footprint declines before anything moves',
     run = function(harness)
@@ -213,14 +213,14 @@ return {
       h.cmgr:invoke('freezeFxGroup')
 
       t.eq(blocks(), 0, 'the decline opens no undo block')
-      t.deepEq(h.ds:get('fxRegions'), before, 'the producer stands, chain intact')
+      t.deepEq(h.ds:get('fxRegions'), before, 'the host stands, chain intact')
       t.eq(#h.gm:eachInstance(), 1, 'and nothing was minted')
       t.eq(h.vm:freezeMode('fxr-1'), 'raw', 'the raw freeze is still on offer')
     end,
   },
 
   {
-    name = 'freeze to group: a plain note at the caret is no producer',
+    name = 'freeze to group: a plain note at the caret is no host',
     run = function(harness)
       local h = harness.mk{ groups = true }
       h.vm:setGridSize(80, 40)
@@ -283,7 +283,7 @@ return {
   },
 
   {
-    -- The producer is gone, so nothing re-derives what the delete takes away -- the members are
+    -- The host is gone, so nothing re-derives what the delete takes away -- the members are
     -- ordinary authored events now.
     name = 'freeze to group: deleting the group takes its output with it',
     run = function(harness)

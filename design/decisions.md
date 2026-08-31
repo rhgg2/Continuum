@@ -4,6 +4,18 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — One noun per thing in the window vocabulary. A **window** is the object — span,
+  host (uuid and type), channel, targets. A **span** is the bare interval, the word `spans.lua` and
+  the realisation targets already use, so nothing else is minted for it; the note-side pass computes
+  spans (`computeNoteFxSpans`, `clippedSpanEnd`, `noteFxClipEnd`) and `windowSet` turns them into
+  windows by attaching host and targets, gathering its three sources itself so the census stops
+  being a step. A **host** is the note or region a chain hangs on, as `docs/generators.md` already
+  had it, so `noteHost` becomes `hostType = 'note' | 'region'` — a note's span is clipped to the
+  next lane onset where a region's is authored, a derivation rather than a second concept — and
+  `producer` leaves tm entirely, keeping only its wiring sense of a graph node. Freeze reads
+  coverage from the published set narrowed to its own uuid, sound because the gate has already
+  refused any neighbour sharing a target in that span, so it builds no set of one.
+
 - **2026-08-31** — A park window is one producer's span typed by one stream it parks, and every
   window a producer emits takes that producer's span, so the census entry and the flat window list
   are one fact in two shapes. windowSet holds the pass's windows as a record per producer --

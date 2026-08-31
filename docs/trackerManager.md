@@ -34,14 +34,14 @@ into one ordinary region per channel in use, carrying its span and its chain, ea
 identified by the stored uuid qualified by the channel it lands on. That qualified uuid
 is opaque and never split back apart: the window store and the park stash carry it, so
 seat recognition matches on it unchanged (`docs/generators.md` § Route-by-window). Every
-pass below the snapshot therefore sees per-channel producers only.
+pass below the snapshot therefore sees per-channel hosts only.
 
 A channel is in use when it carries an authored note, when the park stash holds a note
 taken out of it, or when it has a pb or cc lane of its own. Derived output is no
 evidence of use: a chain emits its curve with or without material, so a channel counted
 in on the strength of a chain's own output would stay in the set for good.
 
-Expansion appends those producers after all the stored channel regions, so a channel's
+Expansion appends those hosts after all the stored channel regions, so a channel's
 own chains take precedence over a global one on it; among globals it is their storage
 order, which the master strip shows as their column order. The stored region holds the
 intent, so editing it seeds derivation dirt on all sixteen channels at once — wider than
@@ -49,9 +49,9 @@ the set in use, so a channel that has just left it gets a pass to clear what the
 left there.
 
 Explode persists the expansion. The stored channel-0 region gives way to the per-channel
-producers themselves, each kept under the uuid it was expanded with, and each taking the
+hosts themselves, each kept under the uuid it was expanded with, and each taking the
 expansion's own place in storage order — after the channel regions, before any global
-still stored. The passes below the snapshot therefore read the producer list they read
+still stored. The passes below the snapshot therefore read the host list they read
 before, so nothing re-derives and no channel is dirtied; the one rebuild is for the maps
 keyed by the stored region, whose union entry goes with it. A chain reaching no channel
 refuses to explode, since the expansion is empty and the chain would be lost.
@@ -741,11 +741,11 @@ the note pass's channel dirty), never for carried-forward priors.
 scan loops before they clone a `parkSpec`, so a take with no fx
 windows builds an empty scan and pays nothing per event; it accepts a
 stash spec or a column event — both logical, so it keys `ppq` directly.
-`covered()` wraps `coveredBy()`, which answers the parking producer's
+`covered()` wraps `coveredBy()`, which answers the parking host's
 uuid rather than a bare bool: a `currentWindows` entry is checked
 first, and only then the spec's own `fx`, because a self-parking host
 inside a region's window is that region's membership rather than its
-own producer — the same reading `rebuildFx` takes.
+own host — the same reading `rebuildFx` takes.
 A `pa` rides its host note, so it parks exactly when the host does:
 deleted from the take (silent — a stale PA against a fresh derived
 stream is meaningless; the generator owns any new realisation PAs),
@@ -764,8 +764,8 @@ splice in order (`spliceCell`), so nothing downstream re-sorts.
 ### Fx expansion
 
 `rebuildFx` receives the settled windows as a parameter, the window pass
-being its own earlier stage. Every producer the gate does not keep runs
-(§ The producer gate)
+being its own earlier stage. Every host the gate does not keep runs
+(§ The host gate)
 — on-take fx notes (augment hosts), parked
 note hosts (window = the realised parked extent), and fx regions; the
 derived fxNotes reconcile
@@ -858,9 +858,9 @@ disturbed if a seed names it, if it is derived, or if a nudge moved it. A
 seed names by uuid where it still answers one — a survivor, recovered
 live from `byUuid` — and by logical seat otherwise: an add, whose uuid
 lands only at commit, and a delete, whose uuid is already gone. Derived
-notes seed only where their producer re-ran: `rebuildFx` regenerates those
+notes seed only where their host re-ran: `rebuildFx` regenerates those
 tiles, so their raw is this pass's news whatever the dirt says. A kept
-producer's specs come back verbatim, settled and clipped last pass, so they
+host's specs come back verbatim, settled and clipped last pass, so they
 ride as bound anchors only and don't count toward the frontier threshold.
 
 Separation narrows on the same judgement. Only a disturbed note can
@@ -1027,7 +1027,7 @@ authored notes are re-queried each rebuild, one walk feeding both generator even
 occupancy. See `docs/generators.md` § Hosts and membership.
 
 `pbBaseFor(chan, spanSet)` / `ccBasesFor(chan, spanSet)` build the absolute authored base (ppq-keyed,
-logical) covering only the caller's merged producer windows, not the whole channel: every read of
+logical) covering only the caller's merged host windows, not the whole channel: every read of
 the base — `channelStreams`' slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so
 the cover is exact there and the scan is never O(channel). Parked events are authoritative at
 their ppq (deduped against the cover); the maintained pb index is raw-sorted, and since pbs carry
@@ -1039,7 +1039,7 @@ foreign pbs carry none).
 lane column instead of building a per-channel map up front, then takes the nearer of that and the
 lane's parked cells. Lane occupancy is column ∪ parked — the same union `renderUnion` puts on the
 grid — so a parked host has a successor despite being off-take, and a parked successor is the
-target a slide aims at. The subject is the *producer's* lane rather than the stream note's: a
+target a slide aims at. The subject is the *host's* lane rather than the stream note's: a
 region spans lanes, carries none, and resolves to nil, which is also what keeps a region-hosted
 `target='next'` off a member record that carries no channel.
 
@@ -1062,7 +1062,7 @@ replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, n
 ## Note fx span cache
 
 An fx note-host's span is `[onset, spanEnd)`, where `spanEnd` is the authored (or take-end)
-ceiling clipped to the host's strict-next same-lane onset — the ground a vibrato or tension producer
+ceiling clipped to the host's strict-next same-lane onset — the ground a vibrato or tension chain
 seats across. `computeNoteFxSpans` caches each host's `spanEnd` per uuid (`noteFxClipEnd`) and
 recomputes one only when the dirt reaches it: the host's own uuid seeded (its move or length
 mutation), or a seed ppq fell inside the host's cached span (a neighbour onset that becomes the
@@ -1135,7 +1135,7 @@ latter two are disjoint only because `settleWindows` declares the pass's parks t
 The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's cell at once,
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
-of it, so undeclared, a self-parking host would land in both arms — and fx expansion, whose producer
+of it, so undeclared, a self-parking host would land in both arms — and fx expansion, whose host
 bucket is `noteFxSpans`' keys plus `frame.channels[chan].parked`, would run its chain twice and
 `curves.foldChains`
 would sum the two pb curves to twice the authored depth. The declaration therefore sits at the
@@ -1145,21 +1145,21 @@ writer, where one statement serves every reader.
 a view over it. Every window is minted inside the set, so stamping `targets` touches no record the
 document owns.
 
-`freezeRegion`'s resync drops the frozen producer's entries from `prevWindows` (the
+`freezeRegion`'s resync drops the frozen host's entries from `prevWindows` (the
 seat-recognition baseline) by their stamped `id`: every per-target entry the set emits carries its
-producer's uuid. The stamp is identity for subtraction only — seat recognition still matches on
-spans, so nothing downstream reads it. Identity is what the subtraction needs: two producers can
+host's uuid. The stamp is identity for subtraction only — seat recognition still matches on
+spans, so nothing downstream reads it. Identity is what the subtraction needs: two hosts can
 emit identical windows (a same-target overlap, or two on-take hosts riding the same fx), and a
 value match could take a surviving neighbour's entry, leaving the next rebuild to read its seats as
 freshly authored and park them off-take. The `id` drop also holds for a persisted window that no
 longer recomputes field-for-field (a kind deregistered, a clipping context changed): it still
-leaves with its producer.
+leaves with its host.
 
 The same census answers freeze eligibility, through the window set the pass holds: the rebuild
 publishes it beside the rects, and it outlives the pass.
 
-`freezeRefused` makes one pass over the producers on the frozen one's channel and refuses on
-three counts. An overlapping neighbour claiming a target the frozen producer claims would be left
+`freezeRefused` makes one pass over the hosts on the frozen one's channel and refuses on
+three counts. An overlapping neighbour claiming a target the frozen host claims would be left
 standing over the raw output the freeze creates. An fx-carrying host whose onset the frozen note
 window covers is destroyed with the chord that window parks, and emits no note window to be caught by
 the first count — a `hostType = 'note'` window suppresses a note-dest host's, and a continuous-only
@@ -1174,26 +1174,26 @@ narrowed to the frozen uuid: the gate has refused every neighbour sharing a targ
 frozen span, so whatever the set covers there it covers on the frozen window's behalf, and freeze
 builds no set of its own. Refusal is silent and total — false, computed before
 any gather, so nothing of freeze's own is staged. A region stored on channel 0 refuses ahead of all
-this: it runs sixteen producers and is none of them, so no one channel's output is the one to convert
-(§ Channel & column model). Its expansions are producers of their own, so a chain overlapping a
+this: it expands into one host per channel and is none of them, so no one channel's output is the one to convert
+(§ Channel & column model). Its expansions are hosts of their own, so a chain overlapping a
 global chain's output is refused like any other neighbour's.
 
 The published set states *what is committed* — `fxRegions`, the maintained fx-host index, the stash,
 as the last rebuild settled them — so `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
 invisible to the gate, and freeze's own closing flush would then commit it: a live window over the
-seats just frozen, which are markerless, so its producer re-derives them — with success reported.
+seats just frozen, which are markerless, so its host re-derives them — with success reported.
 The leading flush is a no-op when nothing is staged, at the price of one empty `preflush` (which
 `flush` fires ahead of its no-op check).
 
-## The producer gate
+## The host gate
 
-Under seed dirt a producer whose window no seed touches does not run. Its
+Under seed dirt a host whose window no seed touches does not run. Its
 derived specs come back verbatim from the last pass (`keptFor`), and
-`reconcileFx` self-matches them by `fxKey`, so a kept producer writes nothing
+`reconcileFx` self-matches them by `fxKey`, so a kept host writes nothing
 to mm and re-derives nothing.
 
 Keeping is decided against the emit scope, not by the kind of chain. A
-continuous producer is keepable when no target's emit scope intersects its
+continuous host is keepable when no target's emit scope intersects its
 window: emission clips to that scope, so a kept window and a fresh emission can
 never claim the same seat. A kept pb window still records its geometry, tagged
 `kept`, because pb seats are markerless downstream — a window absent from the
@@ -1401,25 +1401,25 @@ cell carries besides is the fields its backing addresses it by (`chan` +
 `endppq` — which is what lets the note move and resize machinery work on
 parked cells unchanged.
 
-## Realisation by producer
+## Realisation by host
 
 **1** The ghost overlay asks one question — what does *this* chain realise —
 and asks it per frame, off a caret that moves without a rebuild
 (`docs/trackerView.md` § Ghost sampling). Answering at read time would mean
 walking every channel's derived notes and every parked cell in the document,
 per frame, to discard nearly all of both. The rebuild already holds the
-answer: a derived spec carries its producer's uuid as it is emitted, a park
+answer: a derived spec carries its host's uuid as it is emitted, a park
 window carries the id of the chain that opened it, and the census names every
-producer on the take. So tm keys those three outputs by producer as it builds
+host on the take. So tm keys those three outputs by host as it builds
 them and gathers them into one entry per chain at the pipeline tail;
 `tm:fxRealisation` hands a host its entry and the view's query is a lookup.
 
 **2** The claimed continuous targets come off the **census**, not the
-emission. Emission is dirt-gated — a producer outside the dirty interval is
-kept rather than re-run, and a kept producer emits no record — so a target set
+emission. Emission is dirt-gated — a host outside the dirty interval is
+kept rather than re-run, and a kept host emits no record — so a target set
 read off it would vanish on the first edit elsewhere in the channel and return
 with the dirt. The note half can ride the emission because the reconcile
-re-adds a kept producer's specs verbatim; nothing re-adds its curve. What does
+re-adds a kept host's specs verbatim; nothing re-adds its curve. What does
 not blink is `chainTargets`, which already names a target per continuous cc
 dest and one for pb, blind to dirt and blind to bypass, so the target set is
 the window set the rebuild computes for parking anyway.
@@ -1433,14 +1433,14 @@ claimed target at one logical ppq, called once per row per frame. The channel
 it reads on comes in as an argument rather than off the entry, since one chain
 can realise on sixteen of them.
 
-**5** A stored global region runs no producer of its own (§ Channel & column
+**5** A stored global region is no host of its own (§ Channel & column
 model), so its uuid answers with the union
-of the producers it expanded into — their derived notes, their claimed targets
+of the hosts it expanded into — their derived notes, their claimed targets
 and the cells they parked. The entry therefore names the channels it realises
 on rather than one channel, and each note in it carries the channel of the
-producer that emitted it.
+host that emitted it.
 
-**6** The claimed spans are logical, not raw. Each expanded producer claims its
+**6** The claimed spans are logical, not raw. Each expanded host claims its
 target over the same logical window, so the union merges back to the stored
 region's own span, while raw spans would be as many different intervals as
 there are channels under per-channel swing. The conversion to raw happens at

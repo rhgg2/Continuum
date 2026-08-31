@@ -177,7 +177,7 @@ local function rawSeed(evt, verb)
 end
 
 -- A region edit's real dirt is its members, found later by the park reconcile; here we seed one trigger
--- point per region the uuid diff changed (create/remove/move/fx-change), waking its park scan and fx producer.
+-- point per region the uuid diff changed (create/remove/move/fx-change), waking its park scan and its fx expansion.
 local function seedRegionEdit(newRegions)
   if not derivedInputs then dirt.add(nil, true); return end
   local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
@@ -394,8 +394,8 @@ local function soundingCell(cell)
   return util.assign(util.clone(cell), { endppq = cell.endppqC })
 end
 
--- A note host (on-take or parked) as a producer: derived notes ride the host's lane/delay/sample.
-local function hostProducer(host, windowEnd, lane)
+-- A note host as fx expansion runs it: derived notes ride the host's lane/delay/sample.
+local function hostFromNote(host, windowEnd, lane)
   return { window = { host.ppq, windowEnd }, notes = { host }, fx = host.fx,
            id = host.uuid, lane = lane, delay = host.delay,
            sample = host.sample, delayPpq = delayToPPQ(host.delay) }
@@ -425,7 +425,7 @@ end
 local function expandedUuid(uuid, chan) return util.key(uuid, chan) end
 
 -- inUse is channelsInUse's set, taken from the same head snapshot: a channel outside it runs no
--- producer, so a chain reaches nothing the document never used; second return is the stored globals, whose own uuids the union answers for. see docs/trackerManager.md § Channel & column model
+-- host, so a chain reaches nothing the document never used; second return is the stored globals, whose own uuids the union answers for. see docs/trackerManager.md § Channel & column model
 local function expandGlobals(regions, inUse)
   local channelRegions, globals = {}, {}
   for _, region in ipairs(regions or {}) do
@@ -532,7 +532,7 @@ end
 local function freezeRefused(frozen, windows)
   for _, other in ipairs(windows.on(frozen.chan)) do
     if other.uuid ~= frozen.uuid then
-      -- Half-open for every target: a producer's close folds at endppq-1, so abutting windows no
+      -- Half-open for every target: a host's close folds at endppq-1, so abutting windows no
       -- longer share a boundary seat and abutting is genuinely disjoint.
       if frozen.startppq < other.endppq and other.startppq < frozen.endppq then
         for target in pairs(frozen.targets) do
@@ -1484,24 +1484,24 @@ end
 function tm:requestRebuild() rebuildRequested = true end
 
 -- Rebuild output, not a cache: the pipeline mints them wholesale each pass from the settled census
--- and tm:rebuild installs what comes back; absence = not a producer.
-local producerWindows  = windowSet({}, {}, {})   -- the pass's fx windows, whole
+-- and tm:rebuild installs what comes back; absence = not a host.
+local fxWindows  = windowSet({}, {}, {})   -- the pass's fx windows, whole
 local freezeRectByUuid = {}              -- uuid -> the gm rect a freeze-to-group mint would claim
 
 -- The one fx map that outlives a pass: the fx stage writes only the channels it ran, keyed by
--- producer, so the overlay draws one chain's own.
---shape: fxNotesByProducer[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents] }, ... }
+-- host, so the overlay draws one chain's own.
+--shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents] }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
-local fxNotesByProducer = {}
+local fxNotesByHost = {}
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
 -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
-local function buildFreezeRects(producers)
-  local producerChans, lanesByUuid = {}, {}
-  for _, p in ipairs(producers) do producerChans[p.chan] = true end
-  for chan in pairs(producerChans) do
+local function buildFreezeRects(hosts)
+  local hostChans, lanesByUuid = {}, {}
+  for _, host in ipairs(hosts) do hostChans[host.chan] = true end
+  for chan in pairs(hostChans) do
     for _, note in ipairs(index.raw(chan).notes) do
-      -- A derived note carries its producer's uuid, so the bucketing needs no window arithmetic.
+      -- A derived note carries its host's uuid, so the bucketing needs no window arithmetic.
       if note.derived then
         local lanes = lanesByUuid[note.derived] or {}
         lanes[note.lane] = true
@@ -1510,49 +1510,49 @@ local function buildFreezeRects(producers)
     end
   end
   local rects = {}
-  for _, producer in ipairs(producers) do
-    -- A husk producer (no fx, no output) claims an empty stream set rather than none: it is still
-    -- a producer, and whether an empty footprint is worth minting is the caller's question.
+  for _, host in ipairs(hosts) do
+    -- A husk host (no fx, no output) claims an empty stream set rather than none: it is still
+    -- a host, and whether an empty footprint is worth minting is the caller's question.
     local streams = {}
     -- The note target is a park window, not output: a rect's note lanes are the ones the fx pass wrote.
-    for target in pairs(producer.targets) do
+    for target in pairs(host.targets) do
       if     target == 'pb'           then streams['pb:0'] = true
       elseif type(target) == 'number' then streams['cc:' .. target] = true end
     end
-    for lane in pairs(lanesByUuid[producer.uuid] or {}) do streams['note:' .. lane] = true end
-    -- Single-channel by construction, so chanOffset 0 is the only key; span is the producer's own.
-    rects[producer.uuid] = { ppq = producer.startppq, dur = producer.endppq - producer.startppq,
-                             chanLo = producer.chan, streams = { [0] = streams } }
+    for lane in pairs(lanesByUuid[host.uuid] or {}) do streams['note:' .. lane] = true end
+    -- Single-channel by construction, so chanOffset 0 is the only key; span is the host's own.
+    rects[host.uuid] = { ppq = host.startppq, dur = host.endppq - host.startppq,
+                         chanLo = host.chan, streams = { [0] = streams } }
   end
   return rects
 end
 
--- The continuous half of the same window set: which pb/cc targets each producer's chains own,
--- logical framed. see docs/trackerManager.md § Realisation by producer
---shape: byProducer[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
-local function buildFxTargets(producers)
-  local byProducer = {}
-  for _, producer in ipairs(producers) do
+-- The continuous half of the same window set: which pb/cc targets each host's chains own,
+-- logical framed. see docs/trackerManager.md § Realisation by host
+--shape: byHost[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
+local function buildFxTargets(hosts)
+  local byHost = {}
+  for _, host in ipairs(hosts) do
     local targets, any = {}, false
-    for target in pairs(producer.targets) do
-      -- One span per target: a window takes its producer's span, so there is nothing to merge.
+    for target in pairs(host.targets) do
+      -- One span per target: a window takes its host's span, so there is nothing to merge.
       if target ~= 'note' then
-        targets[target], any = { { producer.startppq, producer.endppq } }, true
+        targets[target], any = { { host.startppq, host.endppq } }, true
       end
     end
-    if any then byProducer[producer.uuid] = targets end
+    if any then byHost[host.uuid] = targets end
   end
-  return byProducer
+  return byHost
 end
 
--- One producer's whole output in one place, gathered at the tail where the census has settled: the
--- passes above each key their share by producer uuid, and the ghost overlay draws exactly one entry.
+-- One host's whole output in one place, gathered at the tail where the census has settled: the
+-- passes above each key their share by host uuid, and the ghost overlay draws exactly one entry.
 --shape: fxRealisationByUuid[uuid] = { uuid, chans, notes, targets, parked }
 --   targets' spans are logical; notes and parked are the built lists by reference
 local fxRealisationByUuid = {}
 
--- A stored global region runs no producer of its own, so its uuid answers with the union of the ones
--- it expanded into: their notes, their claimed targets, the cells they parked. see docs/trackerManager.md § Realisation by producer
+-- A stored global region is no host of its own, so its uuid answers with the union of the ones
+-- it expanded into: their notes, their claimed targets, the cells they parked. see docs/trackerManager.md § Realisation by host
 local function unionRealisation(uuid, byUuid)
   local union = { uuid = uuid, chans = {}, notes = {}, targets = {}, parked = {} }
   for chan = 1, 16 do
@@ -1571,21 +1571,21 @@ local function unionRealisation(uuid, byUuid)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
     return a.chan < b.chan
   end)
-  -- The expanded producers claim one span each over the same logical window, so the merge collapses
+  -- The expanded hosts claim one span each over the same logical window, so the merge collapses
   -- them back to the stored region's own.
   for target, claimed in pairs(union.targets) do union.targets[target] = spans.merge(claimed) end
   return union
 end
 
---contract: byProducer carries the three shares the passes above keyed by producer uuid: notes
+--contract: byHost carries the three shares the passes above keyed by host uuid: notes
 -- (channel-keyed first), targets, parked
-local function buildFxRealisation(census, globals, byProducer)
+local function buildFxRealisation(census, globals, byHost)
   local out = {}
   for _, p in ipairs(census) do
     out[p.uuid] = { uuid = p.uuid, chans = { p.chan },
-                    notes   = (byProducer.notes[p.chan] or {})[p.uuid] or {},
-                    targets = byProducer.targets[p.uuid] or {},
-                    parked  = byProducer.parked[p.uuid] or {} }
+                    notes   = (byHost.notes[p.chan] or {})[p.uuid] or {},
+                    targets = byHost.targets[p.uuid] or {},
+                    parked  = byHost.parked[p.uuid] or {} }
   end
   for _, region in ipairs(globals or {}) do out[region.uuid] = unionRealisation(region.uuid, out) end
   return out
@@ -1649,7 +1649,7 @@ end
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
 -- windows all convert to authored form in one flush.
 local function freezeRegion(uuid, toGroup)
-  -- Settle first: the census reads committed state, so a staged producer would be invisible to it
+  -- Settle first: the census reads committed state, so a staged host would be invisible to it
   -- and then committed by our own flush. see docs/trackerManager.md § Fx window census
   tm:flush()
 
@@ -1658,7 +1658,7 @@ local function freezeRegion(uuid, toGroup)
   for _, r in ipairs(regions) do
     if r.uuid == uuid then region = r else util.add(keptRegions, r) end
   end
-  -- A global region runs sixteen producers and is none of them, so no one channel's output is the one
+  -- A global region expands into one host per channel and is none of them, so no one channel's output is the one
   -- to freeze. Its stored uuid names no window of the published set either, but the refusal is stated
   -- here rather than left to fall out of a lookup that misses.
   if region and region.chan == 0 then return false end
@@ -1692,8 +1692,8 @@ local function freezeRegion(uuid, toGroup)
 
   -- The windows the last rebuild published, gated before anything is gathered so a refusal leaves
   -- the pass having staged nothing. see docs/trackerManager.md § Fx window census
-  local settled = producerWindows.window(uuid)
-  if not settled or freezeRefused(settled, producerWindows) then return false end
+  local settled = fxWindows.window(uuid)
+  if not settled or freezeRefused(settled, fxWindows) then return false end
 
   -- The frozen window per stream it parks: the group arm's two passes walk it -- the thin in the raw
   -- frame, the member gather in the logical one.
@@ -1703,7 +1703,7 @@ local function freezeRegion(uuid, toGroup)
   -- Never rebuildRegionPark's covered(): its first clause answers "does this spec park itself", true
   -- of every self-parked note host on the channel, and would take theirs too.
   local function covered(spec)
-    return producerWindows.covers(spec.evType, spec.chan, spec.cc, spec.ppq) == uuid
+    return fxWindows.covers(spec.evType, spec.chan, spec.cc, spec.ppq) == uuid
   end
 
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
@@ -1742,12 +1742,12 @@ local function freezeRegion(uuid, toGroup)
     local drop = spec.evType == 'pa' and hostDropped(spec) or covered(spec)
     if hostSpec and spec.uuid == uuid then
       -- Freeze takes the chain, not the note: a host parked by another live region's note window stays
-      -- parked, stripped, so assembleParkWindows stops running its producer over the frozen curve.
+      -- parked, stripped, so nothing runs its chain over the frozen curve.
       if not destroysHost then util.add(keptParked, util.clone(spec, { fx = true })) end
     elseif not drop then util.add(keptParked, spec) end
   end
 
-  -- By stamped id, not window value: a neighbouring producer can hold a window identical to the
+  -- By stamped id, not window value: a neighbouring host can hold a window identical to the
   -- frozen one, and identity keeps them apart. See docs/trackerManager.md § Fx window census.
   local prevWindows, keptWindows = ds:get('prevWindows') or {}, {}
   for _, w in ipairs(prevWindows) do
@@ -1791,17 +1791,17 @@ function tm:deleteParked(evt)         stager.deleteParked(evt)         end
 --contract: flushes any staged ops first, so the eligibility census reads a settled take
 --contract: any refusal is silent: returns false, stages nothing of its own, raises nothing
 --contract: refuses same-target overlap with a neighbour; abutting counts for pb, not cc/note
---contract: refuses a covered fx host, or a note-dest host under another producer's note window
+--contract: refuses a covered fx host, or a note-dest host under another host's note window
 --contract: refuses a global region (chan 0): a view surface, running on no channel
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
 --contract: freezeRegion's conversion plus a bounded thin of each continuous stream, one flush
 --contract: members are column events (authored frame, no ppqL) for gm:markGroup, else false
 --contract: the take is settled on return; no part of the conversion is left for the caller's flush
 function tm:freezeToGroup(uuid)       return freezeRegion(uuid, true) end
---contract: one-way; the stored global gives way to the producers it expanded into, uuids kept
+--contract: one-way; the stored global gives way to the hosts it expanded into, uuids kept
 --contract: false, staging nothing, for a uuid naming anything but a stored chan-0 region
 --contract: false for a chain reaching no channel; the expansion would be empty, losing the chain
---contract: flushes first, rebuilds once; the producer list is unchanged, so no channel is dirtied
+--contract: flushes first, rebuilds once; the host list is unchanged, so no channel is dirtied
 -- The expansion, persisted: the passes below the head snapshot read the very list they read before,
 -- and the rebuild is for the maps keyed by the stored region. see docs/trackerManager.md § Channel & column model
 function tm:explodeRegion(uuid)
@@ -1813,7 +1813,7 @@ function tm:explodeRegion(uuid)
   end
   if not (region and region.chan == 0) then return false end
   -- The channels the last rebuild expanded onto, which is what the strip ghosts: every expanded
-  -- producer is in its census, emitting or not, so the union answers for the whole set.
+  -- host is in its census, emitting or not, so the union answers for the whole set.
   local realisation = fxRealisationByUuid[uuid]
   local chans = realisation and realisation.chans or {}
   if #chans == 0 then return false end
@@ -1830,30 +1830,30 @@ function tm:explodeRegion(uuid)
   tm:flush()
   return true
 end
---contract: reads the last rebuild's published windows; staged-not-flushed producers are invisible
---contract: false for any uuid that is not a live producer; never stages
+--contract: reads the last rebuild's published windows; staged-not-flushed hosts are invisible
+--contract: false for any uuid that is not a live host; never stages
 function tm:freezeEligible(uuid)
-  local frozen = producerWindows.window(uuid)
-  return frozen ~= nil and not freezeRefused(frozen, producerWindows)
+  local frozen = fxWindows.window(uuid)
+  return frozen ~= nil and not freezeRefused(frozen, fxWindows)
 end
 --contract: reads the last rebuild's settled census; never computes, never stages
---contract: nil for a non-producer uuid; a producer with no output gets empty streams
+--contract: nil for a uuid that hosts no chain; a host with no output gets empty streams
 --contract: every member tm:freezeToGroup hands back lies inside the rect
 -- A clone per call: gm:markGroup stores the rect by reference and tm replaces its map each rebuild.
 function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r and util.deepClone(r) end
---contract: everything uuid's producer realised this rebuild; nil if uuid runs no chain
---contract: a stored global uuid answers with the union of the producers it expanded into
+--contract: everything uuid's chain realised this rebuild; nil if uuid runs no chain
+--contract: a stored global uuid answers with the union of the hosts it expanded into
 --contract: notes = its derived onsets, logical-onset order (a ghost is one row: no tail rides)
 --contract: parked = originals it stands in for; targets = its claimed pb/cc spans, logical framed
---contract: chans = the channels it realises on, ascending -- one for an ordinary producer
+--contract: chans = the channels it realises on, ascending -- one for an ordinary host
 --invariant: read-only; tm rebuilds the map each pass
 function tm:fxRealisation(uuid)
   return uuid and fxRealisationByUuid[uuid] or nil
 end
---contract: the producer's realised value on target at ppqL; nil outside the spans it claimed
+--contract: the host's realised value on target at ppqL; nil outside the spans it claimed
 --contract: chan is the channel to read on -- a global chain realises on each of the ones it reaches
 --contract: cents-minus-detune for pb, the value itself for cc; interpolated between seats
---invariant: read off the take, so a kept producer's curve stands where a re-run one's does
+--invariant: read off the take, so a kept host's curve stands where a re-run one's does
 function tm:fxCurveAt(uuid, chan, target, ppqL)
   local realisation = fxRealisationByUuid[uuid]
   local claimed = realisation and realisation.targets[target]
@@ -2162,7 +2162,7 @@ local function seedRowsFor(seedList)
 end
 
 -- Seed membership by logical row -- same ppqL any lane, so a deleted shadower re-materialises its
--- row. The fx producer query wants the same rows as a range test. see docs § Interval materialisation
+-- row. The fx host query wants the same rows as a range test. see docs § Interval materialisation
 local function seedCovers(chan)
   if dirt.wholesale(chan) then return function() return true end end
   local rows = {}
@@ -2725,13 +2725,13 @@ local function rebuildRegionPark(windows, fxParked, prevWindows, noteFxSpans, se
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
   -- seat-stamps each cell, so the tail walk meets an ordinary seated entry.
   local restoredCells = {}
-  -- The originals each producer's chain parked, keyed by the producer that parked each: cells by
+  -- The originals each host's chain parked, keyed by the host that parked each: cells by
   -- reference, minted here and handed back for the realisation entries.
-  local parkedByProducer = {}
+  local parkedByHost = {}
 
-  -- One predicate for all passes, answering with the producer that parks the spec: a per-target
+  -- One predicate for all passes, answering with the host that parks the spec: a per-target
   -- window covers it, or (note specs only) spec.fx parks itself. see docs/trackerManager.md § Region-replace parking
-  --contract: the parking producer's uuid, nil for a spec no window claims
+  --contract: the parking host's uuid, nil for a spec no window claims
   local function coveredBy(spec)
     for _, w in ipairs(windows) do
       if w.evType == spec.evType and w.chan == spec.chan and w.cc == spec.cc
@@ -2844,7 +2844,7 @@ local function rebuildRegionPark(windows, fxParked, prevWindows, noteFxSpans, se
       local channel = frame.channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local cell = util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
-      util.bucket(parkedByProducer, coveredBy(spec), cell)   -- the overlay suppresses only its own producer's
+      util.bucket(parkedByHost, coveredBy(spec), cell)   -- the overlay suppresses only its own host's
       return cell
     end)
     for chan = 1, 16 do
@@ -3056,7 +3056,7 @@ local function rebuildRegionPark(windows, fxParked, prevWindows, noteFxSpans, se
   for _, cell in ipairs(restoredCells) do
     if index.stampColEvt(cell) then cell.realised = true end
   end
-  return parkedByProducer
+  return parkedByHost
 end
 
 ----- Raw working set
@@ -3233,15 +3233,15 @@ end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
---contract: notesByProducer is carried between passes, so the stage writes the channels it ran and
+--contract: notesByHost is carried between passes, so the stage writes the channels it ran and
 -- leaves a frozen channel's lists standing
-local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegions, notesByProducer)
+local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegions, notesByHost)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
 
   -- noteFxSpans' keys are exactly the non-pa fx cells (computeNoteFxSpans emitted them, on-take + restored);
-  -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads producers instead of rescanning columns.
+  -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads hosts instead of rescanning columns.
   local fxHostsByChan = {}
   for host in pairs(noteFxSpans) do
     local bucket = fxHostsByChan[host.chan]
@@ -3311,7 +3311,7 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
   local res = mm:resolution()
   local pbRangeCents = pbLim()   -- slide clamps its target to what pb can reach
   -- Strict next same-lane note (slide's only consumer): lane occupancy is column union parked, and
-  -- the subject is the producer's lane, so a region (no lane) resolves nil. see docs/trackerManager.md § Span-covered fx scans
+  -- the subject is the host's lane, so a region (no lane) resolves nil. see docs/trackerManager.md § Span-covered fx scans
   local function nextSameLaneNote(host)
     local note = host.notes[1]
     if not note or not host.lane then return nil end
@@ -3341,7 +3341,7 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
     util.bucket(fxRegionsByChan, region.chan, region)
   end
 
-  -- Producer-owned outputs: live notes, existence ops (dels/adds) awaiting the walk, per-chain pb curves, authored
+  -- Host-owned outputs: live notes, existence ops (dels/adds) awaiting the walk, per-chain pb curves, authored
   -- pb base, and the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split.
   local fxOut = { noteLive = emptyChans(), noteOps = { dels = {}, adds = {} },
                   pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
@@ -3356,21 +3356,21 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
   -- the final owned channels emit. see docs/generators.md § The chain
   local function expandChannel(chan)
     local predicted, ccLive = {}, {}
-    local pbBase, ccBases   -- assigned after producer enumeration: bases cover producer windows
+    local pbBase, ccBases   -- assigned after host enumeration: bases cover host windows
     -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
     -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
     local ccChains = {}
-    -- One producer interface, three sources: an on-take fx note, a parked fx cell, or an explicit
+    -- One host interface, three sources: an on-take fx note, a parked fx cell, or an explicit
     -- fxRegion; the generator sees none of them. see docs/generators.md § Hosts and membership
-    local function runProducer(producer)
-      local startL, endL = producer.window[1], producer.window[2]
-      -- host: the untouched membership + windowed channel input streams, built once per chain;
-      -- stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
+    local function runHost(host)
+      local startL, endL = host.window[1], host.window[2]
+      -- The same host as a generator sees it (generators' `host` argument): untouched membership plus
+      -- the windowed channel streams; stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
       local pas, ccs, ats, pb = channelStreams(chan, startL, endL, pbBase, ccBases)
-      local host = { window = { startL, endL }, chan = chan, lane = producer.lane, id = producer.id,
-                     notes = producer.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
-      local stream = util.pick(host, "window chan lane id notes pas ccs ats pb")
-      stream.ccs = util.assign({}, host.ccs)   -- folds replace per-target lists; host's map stays untouched
+      local original = { window = { startL, endL }, chan = chan, lane = host.lane, id = host.id,
+                         notes = host.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
+      local stream = util.pick(original, "window chan lane id notes pas ccs ats pb")
+      stream.ccs = util.assign({}, original.ccs)   -- folds replace per-target lists; the original's map stays untouched
       local ownsNotes = false
       local owned = {}   -- continuous target ('pb' | cc number) -> true once a stage folded a curve in
 
@@ -3395,13 +3395,13 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
         if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
       end
 
-      for _, params in ipairs(producer.fx) do
+      for _, params in ipairs(host.fx) do
         local meta = generators.kinds[params.kind]
         if meta then
           local dest = generators.destOf(params)
           -- Ownership is registered below, so an early skip would drop the chain's record; both modes'
           -- identity is augment-with-no-output. See docs/generators.md § The chain.
-          local out  = params.bypass and { notes = {}, delta = {} } or meta.expand(stream, host, params, chanCtx)
+          local out  = params.bypass and { notes = {}, delta = {} } or meta.expand(stream, original, params, chanCtx)
           local mode = params.bypass and 'augment' or meta.mode
           if dest == 'note' then
             ownsNotes = true
@@ -3425,26 +3425,26 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
           local curve = stream.pb
           if not contributed and not curves.anyNonZero(curve) then curve = {} end
           util.add(fxOut.pbChains[chan], { window = { startL, endL }, curve = curve,
-                                        mode = generators.chainDestType(producer.fx, target) })
+                                        mode = generators.chainDestType(host.fx, target) })
         else
           util.bucket(ccChains, target,
                       { window = { startL, endL }, curve = stream.ccs[target] or {},
-                        mode = generators.chainDestType(producer.fx, target) })
+                        mode = generators.chainDestType(host.fx, target) })
         end
       end
-      -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region producers (lane
-      -- unset) defer to batch lane allocation below; note producers ride the host lane inline.
+      -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region hosts (lane
+      -- unset) defer to batch lane allocation below; note hosts ride their own lane inline.
       if not ownsNotes then return end
-      local regionNotes = producer.lane == nil and {} or nil
+      local regionNotes = host.lane == nil and {} or nil
       for _, hit in ipairs(stream.notes) do
         util.add(regionNotes or predicted, {
-          evType = 'note', chan = chan, lane = producer.lane, derived = producer.id,
+          evType = 'note', chan = chan, lane = host.lane, derived = host.id,
           pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
           intentCents = hit.intentCents,
-          delay = producer.delay or 0, sample = producer.sample,
+          delay = host.delay or 0, sample = host.sample,
           ppqL = hit.ppq, endppqL = hit.endppq,
-          ppq    = tm:fromLogical(chan, hit.ppq,    producer.delayPpq),
-          endppq = tm:fromLogical(chan, hit.endppq, producer.delayPpq),
+          ppq    = tm:fromLogical(chan, hit.ppq,    host.delayPpq),
+          endppq = tm:fromLogical(chan, hit.endppq, host.delayPpq),
         })
       end
       if regionNotes then
@@ -3453,7 +3453,7 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
       end
     end
 
-    -- Producer gate: under interval dirt an unseeded producer outside every emit scope it feeds keeps
+    -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds keeps
     -- its output verbatim -- notes self-match by fxKey, seats re-feed the reconcile. see design § phase 5
     local gated = not dirt.wholesale(chan)
     local keptById, dirtyRows
@@ -3471,36 +3471,36 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
     end
     -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
     -- emission drops its own remainder.
-    local function keepable(producer)
-      local targets = generators.continuousTargets(producer.fx)
+    local function keepable(host)
+      local targets = generators.continuousTargets(host.fx)
       for target in pairs(targets) do
-        if spans.intersects(emitScope[target], producer.window) then return false end
+        if spans.intersects(emitScope[target], host.window) then return false end
       end
       return true
     end
-    local function runOrKeep(producer)
-      if gated and not seeded[producer] and keepable(producer) then
-        for _, kept in ipairs(keptFor()[producer.id] or {}) do
+    local function runOrKeep(host)
+      if gated and not seeded[host] and keepable(host) then
+        for _, kept in ipairs(keptFor()[host.id] or {}) do
           util.add(predicted, kept); keptFx[kept] = true
         end
         -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
         -- vanished window would read them as authored pbs.
-        if generators.continuousTargets(producer.fx).pb then
-          util.add(fxOut.pbChains[chan], { window = { producer.window[1], producer.window[2] }, kept = true })
+        if generators.continuousTargets(host.fx).pb then
+          util.add(fxOut.pbChains[chan], { window = { host.window[1], host.window[2] }, kept = true })
         end
       else
-        runProducer(producer)
+        runHost(host)
       end
     end
 
-    -- Producer enumeration precedes every run: the continuous-gate scopes below classify each
-    -- producer against the full set, so the set must exist first.
-    local producers = {}
+    -- Host enumeration precedes every run: the continuous-gate scopes below classify each
+    -- host against the full set, so the set must exist first.
+    local hosts = {}
 
-    -- Note producers. Only augment hosts (continuous kinds) remain on-take -- a discrete-replace
-    -- host was parked at 4.5 and runs from its parked cell below. Derived notes ride the host lane.
-    for _, host in ipairs(fxHostsByChan[chan] or {}) do
-      util.add(producers, hostProducer(host, noteFxSpans[host], host.lane))
+    -- Note hosts. Only augment ones (continuous kinds) remain on-take -- a discrete-replace host
+    -- was parked at 4.5 and runs from its parked cell below. Derived notes ride the host lane.
+    for _, cell in ipairs(fxHostsByChan[chan] or {}) do
+      util.add(hosts, hostFromNote(cell, noteFxSpans[cell], cell.lane))
     end
 
     -- Parked note hosts: the host left the take (note-host replace parks, like a region), so
@@ -3509,11 +3509,11 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
     -- membership, not a host (own-fx suppressed -- the retained gap).
     for _, cell in ipairs(frame.channels[chan].parked or {}) do
       if cell.fx and not noteParkCovered(chan, cell.ppq) then
-        util.add(producers, hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
+        util.add(hosts, hostFromNote(soundingCell(cell), cell.endppqC, cell.lane))
       end
     end
 
-    -- Region producers: no host note. A discrete-replace kind feeds the realised parked chord
+    -- Region hosts: no note behind them. A discrete-replace kind feeds the realised parked chord
     -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
     for _, region in ipairs(fxRegionsByChan[chan] or {}) do
       local startL, endL = region.startppq, region.endppq
@@ -3526,11 +3526,11 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
       else
         members = membersOf(chan, startL, endL)  -- augment: members still sound
       end
-      util.add(producers, { window = { startL, endL }, notes = members,
+      util.add(hosts, { window = { startL, endL }, notes = members,
                             fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
 
-    -- Emit scope per target = merged windows of the seeded producers touching it; the cc fold and
+    -- Emit scope per target = merged windows of the seeded hosts touching it; the cc fold and
     -- reconcile clip to it. Clean windows never enter ccExisting, so their seats keep untouched.
     if gated then
       -- Hold-stream reach: authored pb/cc breakpoints and lane-1 detune hold forward past window
@@ -3546,58 +3546,58 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
         end
       end
       local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
-      local function emitsLane1Notes(producer)
-        if producer.lane ~= nil and producer.lane ~= 1 then return false end
-        return generators.parksNotes(producer)
+      local function emitsLane1Notes(host)
+        if host.lane ~= nil and host.lane ~= 1 then return false end
+        return generators.parksNotes(host)
       end
-      local function holdSensitive(producer, targets)
-        if targets.pb and producer.window[2] > pbHoldFrom then return true end
+      local function holdSensitive(host, targets)
+        if targets.pb and host.window[2] > pbHoldFrom then return true end
         for target in pairs(targets) do
-          if target ~= 'pb' and producer.window[2] > baseHoldFrom
-             and generators.chainDestType(producer.fx, target) == 'augment' then return true end
+          if target ~= 'pb' and host.window[2] > baseHoldFrom
+             and generators.chainDestType(host.fx, target) == 'augment' then return true end
         end
         return false
       end
       local targetsOf = {}
-      for _, producer in ipairs(producers) do
-        targetsOf[producer] = generators.continuousTargets(producer.fx)
-        seeded[producer] = windowSeeded(dirtyRows, producer.window[1], producer.window[2])
+      for _, host in ipairs(hosts) do
+        targetsOf[host] = generators.continuousTargets(host.fx)
+        seeded[host] = windowSeeded(dirtyRows, host.window[1], host.window[2])
       end
       -- Fixpoint: a live lane-1 note-emitter re-detunes the stream from its window start, which can
       -- wake pb windows further right, which may themselves emit lane-1 notes.
       local changed = true
       while changed do
         changed = false
-        for _, producer in ipairs(producers) do
-          if seeded[producer] and emitsLane1Notes(producer) and producer.window[1] < pbHoldFrom then
-            pbHoldFrom = producer.window[1]; changed = true
+        for _, host in ipairs(hosts) do
+          if seeded[host] and emitsLane1Notes(host) and host.window[1] < pbHoldFrom then
+            pbHoldFrom = host.window[1]; changed = true
           end
-          if not seeded[producer] and holdSensitive(producer, targetsOf[producer]) then
-            seeded[producer] = true; changed = true
+          if not seeded[host] and holdSensitive(host, targetsOf[host]) then
+            seeded[host] = true; changed = true
           end
         end
       end
       local emitWins = {}
-      for _, producer in ipairs(producers) do
-        if seeded[producer] then
-          for target in pairs(targetsOf[producer]) do util.bucket(emitWins, target, producer) end
+      for _, host in ipairs(hosts) do
+        if seeded[host] then
+          for target in pairs(targetsOf[host]) do util.bucket(emitWins, target, host) end
         end
       end
       for target, group in pairs(emitWins) do emitScope[target] = spans.mergeWindows(group) end
       fxOut.pbScope[chan] = emitScope.pb or {}
     end
 
-    -- Bases cover only the producers runOrKeep will actually run: a kept producer reads no base (its
-    -- output re-adds verbatim); every running producer's window feeds channelStreams. see design § 5
+    -- Bases cover only the hosts runOrKeep will actually run: a kept host reads no base (its
+    -- output re-adds verbatim); every running host's window feeds channelStreams. see design § 5
     local running = {}
-    for _, producer in ipairs(producers) do
-      if not gated or seeded[producer] or not keepable(producer) then util.add(running, producer) end
+    for _, host in ipairs(hosts) do
+      if not gated or seeded[host] or not keepable(host) then util.add(running, host) end
     end
     local runWins = spans.mergeWindows(running)
     pbBase, ccBases = pbBaseFor(chan, runWins), ccBasesFor(chan, runWins)
     fxOut.pbBase[chan] = pbBase
 
-    for _, producer in ipairs(producers) do runOrKeep(producer) end
+    for _, host in ipairs(hosts) do runOrKeep(host) end
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
     -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
@@ -3617,10 +3617,10 @@ local function rebuildFx(noteExisting, ccExisting, noteFxSpans, windows, fxRegio
       if a.lane ~= b.lane then return a.lane < b.lane end
       return a.pitch < b.pitch
     end)
-    -- Bucketed after the sort, so each producer's list inherits the onset order.
-    local byProducer = {}
-    for _, n in ipairs(fxNotes) do util.bucket(byProducer, n.derived, n) end
-    notesByProducer[chan] = byProducer
+    -- Bucketed after the sort, so each host's list inherits the onset order.
+    local byHost = {}
+    for _, n in ipairs(fxNotes) do util.bucket(byHost, n.derived, n) end
+    notesByHost[chan] = byHost
 
     -- cc emission: fold (curves.foldChains) into markerless seats, clipped to the emit scope; half-open --
     -- the closing value belongs to the kept side.
@@ -4037,7 +4037,7 @@ local function rebuildTails(noteLive, noteOps)
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     if not dirt.has(chan) then goto nextChan end
     -- A kept fx spec is settled from last pass and rides the walk as a bound anchor only; only fresh
-    -- (re-run producer) derived notes seed disturbance and count toward the frontier cap.
+    -- (re-run host) derived notes seed disturbance and count toward the frontier cap.
     local extras, keptDerived, freshLive = {}, {}, 0
     for _, w in ipairs(noteLive[chan]) do
       util.add(extras, w.evt)
@@ -4833,7 +4833,7 @@ local function rebuildPipeline(didReload)
   if didReload then perf.start('reload'); stager.reload(); perf.stop('reload') end
 
   -- One head snapshot of the ds intent keys the pipeline reads; every key is read before any same-pass
-  -- write. Stages take these as params, with regions already expanded to per-channel producers.
+  -- write. Stages take these as params, with regions already expanded to per-channel hosts.
   local sources = {
     fxParked        = ds:get('fxParked'),
     prevWindows     = ds:get('prevWindows'),
@@ -4876,14 +4876,14 @@ local function rebuildPipeline(didReload)
   end
 
   perf.start('regionPark')
-  local parkedByProducer = rebuildRegionPark(currentWindows.perTarget(), sources.fxParked, sources.prevWindows,
+  local parkedByHost = rebuildRegionPark(currentWindows.perTarget(), sources.fxParked, sources.prevWindows,
                                              headFxSpans, settleWindows)  -- park covered, carry/restore prior
   perf.stop('regionPark')
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   perf.start('fx')
   local fxOut = rebuildFx(noteExisting, ccExisting, settledFxSpans, settledWindows.perTarget(), sources.fxRegions,
-                          fxNotesByProducer)  -- fx expansion: derived notes/CCs
+                          fxNotesByHost)  -- fx expansion: derived notes/CCs
   perf.stop('fx')
 
   perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
@@ -4904,10 +4904,10 @@ local function rebuildPipeline(didReload)
   perf.start('freezeMaps')
   maps.freezeRect = buildFreezeRects(settledWindows.windows())
   perf.stop('freezeMaps')
-  -- The shares the passes above keyed by producer, gathered last; only the notes outlive the pass.
-  local byProducer = { notes = fxNotesByProducer, parked = parkedByProducer,
+  -- The shares the passes above keyed by host, gathered last; only the notes outlive the pass.
+  local byHost = { notes = fxNotesByHost, parked = parkedByHost,
                        targets = buildFxTargets(settledWindows.windows()) }
-  maps.fxRealisation = buildFxRealisation(settledWindows.windows(), globalRegions, byProducer)
+  maps.fxRealisation = buildFxRealisation(settledWindows.windows(), globalRegions, byHost)
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
@@ -4966,7 +4966,7 @@ function tm:rebuild(takeChanged)
   mm:batch(function() maps = rebuildPipeline(didReload) end)
   -- Install what the pass created. Nothing reads these mid-pass, and the accessors read between
   -- rebuilds, so they stand before the signal goes out.
-  producerWindows, freezeRectByUuid, fxRealisationByUuid =
+  fxWindows, freezeRectByUuid, fxRealisationByUuid =
     maps.windows, maps.freezeRect, maps.fxRealisation
   rebuilding = false
 

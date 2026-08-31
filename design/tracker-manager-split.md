@@ -161,7 +161,7 @@ decides whether phase 3 is worth taking.**
    `endppq`, or the take length.
 
 1. Derived notes lie outside the population. A derived note is a
-   producer's output and a window is over intent, so every path reads
+   host's output and a window is over intent, so every path reads
    authored onsets by predicate, and a gated channel's carried column
    answers as a wholesale one does.
 
@@ -207,16 +207,16 @@ the seed minters stay with the structures they read. The model is
 1. The fx maps meet that rule directly. `fxRealisationByUuid` and
    `freezeRectByUuid` are written once at the tail of the pipeline and
    read only by accessors, so they come back from `run` and tm
-   installs them. `fxTargetsByProducer` and `fxParkedByProducer` have
+   installs them. `fxTargetsByHost` and `fxParkedByHost` have
    one reader each, the realisation builder at that same tail, so they
    are the pipeline's own locals and never reach tm.
 
 1. Freeze eligibility is a decision about what tm will do, and so is
-   not rebuild output. A park window is one producer's span typed by
-   one stream it parks, and every window of a producer takes that
-   producer's span, so **`windowSet`** holds a record per producer —
-   channel, span, host flags, and the targets its chain reaches — and
-   mints the flat list from it for the readers that scan one. The
+   not rebuild output. An fx window is one host's span typed by
+   one stream it parks, and every window a host emits takes that
+   host's span, so **`windowSet`** holds one window per host —
+   channel, span, host type, and the targets its chain reaches — and
+   mints the per-target list from it for the readers that scan one. The
    rebuild publishes the set; `freezeRefused` reads it in one pass over
    the channel; and both `tm:freezeEligible` and `freezeRegion`'s gate
    call that on demand, so the button and the verb answer from one
@@ -226,7 +226,7 @@ the seed minters stay with the structures they read. The model is
 
 1. `fxOut` marks the rule's scope. It is created by the engine and
    never leaves it, so nothing about the boundary bears on it; the one
-   value that does cross, `fxNotesByProducer`, is built from copies of
+   value that does cross, `fxNotesByHost`, is built from copies of
    the specs because the tail walk is still settling them.
 
 1. Two things are the engine's own and stay with it: `parkedClipEnd`
@@ -284,7 +284,7 @@ the seed minters stay with the structures they read. The model is
    *zero* uses outside the engine — they are the engine's own,
    lexically stranded at file scope. The fx-expansion helper family is
    the bulk of it: `coverInto`, `membersOf`, `channelStreams`,
-   `allocateRegionLanes`, `hostProducer`, `windowSet`, the
+   `allocateRegionLanes`, `hostFromNote`, `windowSet`, the
    reconcile skeletons. They move with the engine and stop being names
    at all.
 

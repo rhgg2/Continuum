@@ -43,22 +43,22 @@ signal, a column add or remove, and config. A table hanging off the column
 would be stale on the first arrow key, so `tv:ghostOverlay` derives the
 ghosts per frame, as the drag preview already is.
 
-**4** The overlay is **one producer's realisation, and the caret names which**.
+**4** The overlay is **one host's realisation, and the caret names which**.
 A ghost says this row is computed, and a reader looking at one wants to know
 by what; a surface lighting every chain in view at once answers that question
 for none of them. So the gate is the chain the caret's own event runs,
 resolved through `tm:fxRealisation`, and a cell running none answers nil.
 Sibling collisions are read by moving the caret onto the sibling, which is
 also how you would ask which chain to edit. The caret on the master strip names
-a chain running no producer of its own, and tm answers it with the union of the
+a chain that is no host of its own, and tm answers it with the union of the
 ones it expanded into, so the overlay's own reading is unchanged.
 
 **5** The filtering is not done at read time. A `derived == host` test in the
 draw loop would answer the question and leave the walks it answers from in
 place: every channel's derived notes gathered, and every parked cell in the
 document gathered, per frame, to discard nearly all of it. The rebuild already
-holds the answer, so tm keys those outputs by producer as it builds them
-(`docs/trackerManager.md` § Realisation by producer) and the view's whole
+holds the answer, so tm keys those outputs by host as it builds them
+(`docs/trackerManager.md` § Realisation by host) and the view's whole
 query is a lookup.
 
 **6** The overlay has two halves, because what the ghosts show and what they
@@ -89,7 +89,7 @@ real cell outranking one.
 claimed target at one logical ppq, samples it at every visible row of every
 claimed column on every channel the chain reaches, and the draw arm prefers it
 to the interpolation ghost — which
-describes the authored curve alone, and inside a producer's window that curve
+describes the authored curve alone, and inside a host's window that curve
 has been parked out of the way. Sampling is per row rather than bucketed by
 seat: a curve has no onsets to bucket, and a 1/4-QN LFO seated at the cc grid
 step would show its zero crossings and nothing else.
@@ -698,7 +698,7 @@ minted from a selection, the strip keeps at least one fx column whether occupied
 and hide and add-column both refuse there rather than leave it with nothing to select in.
 The strip is built in the view: fx columns are derived from `ds:get('fxRegions')` already,
 so channel 0 needs no tm channel and gets none. What the strip holds still sounds, though:
-the rebuild expands a global region into a producer on every MIDI channel
+the rebuild expands a global region into a host on every MIDI channel
 (`docs/trackerManager.md` § Channel & column model). Column 1 is therefore not where notes
 are typed: a take swap opens the caret on channel 1's first note column, and brings the
 scroll home in front of it, so the strip stands to the caret's left rather than off the

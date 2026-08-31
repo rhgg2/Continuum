@@ -140,7 +140,7 @@ stack (`next = ppq + dur`, the cascade's normal step) does not either —
 the span test is strict.
 
 `markGroup`'s refusal arrives too late for a caller whose own work would
-already have half-applied — the fx freeze destroys its producer before it
+already have half-applied — the fx freeze destroys its host before it
 can mint. Such a caller asks `gm:rectConflict(rect)` first: the same
 predicate against the same origin anchor `markGroup` itself will use.
 

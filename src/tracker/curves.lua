@@ -126,7 +126,7 @@ end
 
 ----- Meeting a half-open window's end
 
--- A producer hands its target back before the window exits: one step point at eL-1, inside the
+-- A host hands its target back before the window exits: one step point at eL-1, inside the
 -- half-open span, so no close ever lands on the boundary row. see docs/generators.md § Route-by-window
 function curves.closeAtWindowEnd(pts, val, sL, eL)
   if eL - 1 <= sL then return pts end

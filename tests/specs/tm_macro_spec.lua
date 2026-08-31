@@ -369,10 +369,10 @@ return {
     end,
   },
 
-  ----- tm:fxRealisationAt -- the door onto what one producer realised
+  ----- tm:fxRealisationAt -- the door onto what one host realised
 
   {
-    name = 'tm:fxRealisationAt hands back the producer under the row, with its onsets in the logical frame',
+    name = 'tm:fxRealisationAt hands back the host under the row, with its onsets in the logical frame',
     run = function(harness)
       local h = mkRetrigHost(harness)
       local host = parkedHost(h)
@@ -380,11 +380,11 @@ return {
       t.eq(#realised, 4, 'expansion happened')
 
       local fx = h.tm:fxRealisation(host.uuid)
-      t.eq(#fx.notes, #realised, 'the producer carries every derived note the dump holds')
+      t.eq(#fx.notes, #realised, 'the host carries every derived note the dump holds')
 
       local onsets = {}
       for _, fn in ipairs(fx.notes) do
-        t.eq(fn.derived, host.uuid, 'each record names its producer')
+        t.eq(fn.derived, host.uuid, 'each record names its host')
         t.eq(fn.lane, host.lane, 'each record carries the lane the allocator gave it')
         onsets[#onsets + 1] = fn.ppq
       end
