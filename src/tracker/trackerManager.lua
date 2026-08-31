@@ -1204,7 +1204,7 @@ do
   -- Apply staged edits to cloned stashes, then write back under suppressingRebuild so the inline
   -- dataChanged rebuild is suppressed (tm:flush drives the one rebuild).
   local function flushParked()
-    local parked = util.deepClone(ds:get('fxParked') or {})
+    local parked = ds:get('fxParked') or {}
     for _, e in ipairs(parkedEdits) do
       local ref  = e.spec or e.evt
       -- flushParked runs before the fold, so feed the seed table (stager.flushDirt folds it, or the
@@ -4868,7 +4868,7 @@ local function rebuildPipeline(didReload)
   -- The gated stages consumed the spine; the next edit window accumulates fresh dirt.
   for chan in pairs(dirt.clear()) do muteConform[chan] = true end
   perf.start('derivedInputs')
-  derivedInputs = util.deepClone(derivationInputs())   -- after the pipeline's own ds writes have settled
+  derivedInputs = derivationInputs()   -- after the pipeline's own ds writes have settled
   perf.stop('derivedInputs')
   return maps
 end
@@ -4939,12 +4939,12 @@ do
   -- Merged-tier read: a save at any tier lands in the same merged view, so diff
   -- captures real change to the composite a channel will resolve to.
   local function readSwings() return cm:get('swings', { mergeTiers = true }) end
-  local prevSwings = util.deepClone(readSwings())
-  local prevSwing  = util.deepClone(ds:get('swing') or {})
+  local prevSwings = readSwings()
+  local prevSwing  = ds:get('swing') or {}
 
   local function snapshotSwingState()
-    prevSwings = util.deepClone(readSwings())
-    prevSwing  = util.deepClone(ds:get('swing') or {})
+    prevSwings = readSwings()
+    prevSwing  = ds:get('swing') or {}
   end
 
   local function swingChannelDiff(prev, cur)
@@ -5016,7 +5016,7 @@ do
       for chan in pairs(channelsResolvingTo(changedSwingNames(prevSwings, curSwings))) do
         tm:markSwingStale(chan)
       end
-      prevSwings = util.deepClone(curSwings)
+      prevSwings = curSwings
     elseif not tvOnlyKeys[key] then
       -- temper reaches no derivation, but tv's context snapshot rides tm's rebuild signal, so a
       -- notation change comes through here to refresh the lens rather than to re-derive anything.
@@ -5039,7 +5039,7 @@ do
       else
         for chan in pairs(swingChannelDiff(prevSwing, cur)) do tm:markSwingStale(chan) end
       end
-      prevSwing = util.deepClone(cur)
+      prevSwing = cur
       tm:rebuild(false)
     elseif change.name == 'fxRegions' then
       -- Region edits seed only the changed regions' channels; unchanged channels freeze. see § Route-by-window
