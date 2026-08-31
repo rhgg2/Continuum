@@ -22,25 +22,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: pin the keep/live split of a clipped pb window (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 dirt: take the derivation journal from trackerManager (design/tracker-manager-split.md § Phase 2)
 - 2026-08-30 curves: take the fold of parallel chains from trackerManager (design/tracker-manager-split.md § Phase 1 2, 5)
 - 2026-08-30 curves: take the breakpoint curve algebra from trackerManager and mm (design/tracker-manager-split.md § Phase 1 1–3)
-- 2026-08-30 spans: take the half-open span algebra from trackerManager (design/tracker-manager-split.md § Phase 1 1–2)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The keep/live split of a clipped pb window** — a new spec on an fx
-   producer whose pb chain `pbScope` clips: the live sub-span refolds
-   from the chain curve, the kept sub-span's seats stand with no mm
-   write, and a shared edge is live at its opening tick and kept
-   everywhere else. Includes the fence — a kept-boundary seat inside a
-   live seat span carries from the prior pb column instead of projecting
-   fresh. Evidence: perturbations of `inKeptRange`, its opening-edge arm
-   and `fencedPb` all killed.
 
 1. **Seat scope: what a dirt seed closes to** — a new spec on
    `seatScope`. A lane-1 seed closes to a span reaching one tick back

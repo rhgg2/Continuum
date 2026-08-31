@@ -89,6 +89,7 @@ local specs = {
   'tm_authoring_forward_spec',
   'tm_absorber_reseat_spec',
   'tm_pb_gating_spec',
+  'tm_pb_keep_split_spec',
   'tm_cc_gating_spec',
   'tm_note_lane_carry_spec',
   'tm_tail_gating_spec',

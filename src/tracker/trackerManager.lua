@@ -4575,6 +4575,7 @@ local function rebuildPbs(fxOut, extraColumns)
       perf.start('project')
       -- Column projection. A derived seat is wire-only -- always hidden. This projects the in-scope
       -- clones fresh; the out-of-scope remainder carries below.
+      --invariant: one pb per raw ppq in the column -- the projected and carried sets partition it
       local anyVisible, pbColEvents = false, {}
       for _, pb in ipairs(pbs) do
         local hidden = pb.derived ~= nil
