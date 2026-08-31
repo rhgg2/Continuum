@@ -152,6 +152,26 @@ decides whether phase 3 is worth taking.**
    Realisation reaches the view only as cues, so the raw frame stays
    inside trackerManager.
 
+## One window population
+
+1. **A window is clipped by the authored onsets on its lane, on the take
+   or parked.** One rule covers an on-take host, a parked host and a
+   parked member: `hostWindowEnd` and `realiseParked` clip against the
+   same set, and each keeps its own ceiling — the cell's authored
+   `endppq`, or the take length.
+
+1. Derived notes lie outside the population. A derived note is a
+   producer's output and a window is over intent, so every path reads
+   authored onsets by predicate, and a gated channel's carried column
+   answers as a wholesale one does.
+
+1. Parking moves a note between the on-take half of the population and
+   the parked half, so the set of onsets a window clips against is
+   invariant across the park stage. One `computeFxWindows` call per
+   rebuild therefore serves the note pass, continuous membership and fx
+   expansion alike, and `rebuildRegionPark` receives the window set and
+   the census as data.
+
 ## Phase 1 — the algebra leaves
 
 Landed 2026-08-30 as `spans.lua` and `curves.lua`, with the two seeks in

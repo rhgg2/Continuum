@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — A window is clipped by the authored onsets on its lane, on the take or parked,
+  and derived notes lie outside that population. One rule then covers an on-take host, a parked host
+  and a parked member, and parking only moves a note between the two halves of the set, so the
+  windows hold across the park stage and a rebuild computes them once.
+
 - **2026-08-31** — The pipeline hands back only the fx maps that outlive it: fxRealisationByUuid,
   freezeRectByUuid and, until eligibility moves, freezeEligibleByUuid. fxTargetsByProducer and
   fxParkedByProducer have one reader each -- the realisation builder at the same tail -- so they are

@@ -16,7 +16,11 @@
    as a handle carrying its seven operations, index and stager as door
    tables, the fx maps coming back by return, and `forget()` on the
    take-tier path; all still inside tm.  ← in flight
-5. **Phase 5 — the engine leaves** (§ Phase 3 1–2, 11–17, § Open) —
+5. **Phase 5 — one window population** (§ One window population) — one
+   clip rule over the authored onsets of a lane, on-take and parked
+   alike; one window pass per rebuild, and `settleWindows` with it the
+   park fixpoint go.
+6. **Phase 6 — the engine leaves** (§ Phase 3 1–2, 11–17, § Open) —
    `trackerRebuild.lua` and its eight dependencies, with `tm` named as
    what it actually is.
 
