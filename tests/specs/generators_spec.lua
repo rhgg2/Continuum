@@ -338,7 +338,7 @@ return {
       t.deepEq(generators.chainTargets{ fx = {} }, {}, 'a husk parks nothing')
       t.deepEq(generators.chainTargets{ fx = { { kind = 'sine' }, { kind = 'sine' } } }, { pb = true },
                'two stages on one dest are one target: the stream is parked once')
-      t.deepEq(generators.chainTargets{ noteHost = true, fx = { { kind = 'arp' }, { kind = 'sine' } } },
+      t.deepEq(generators.chainTargets{ hostType = 'note', fx = { { kind = 'arp' }, { kind = 'sine' } } },
                { pb = true }, 'a note host self-parks through its own spec, so its note target is suppressed')
     end,
   },

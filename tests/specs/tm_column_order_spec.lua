@@ -3,7 +3,7 @@
 -- order IS the grid order. The raw frame still diverges -- raw = fromLogical(ppq) + delayToPPQ(delay),
 -- so a delay larger than the gap to a lane-mate reorders the lane in raw while the grid order stands.
 -- These cases pin that the consumers reading col.events in array order keep picking the *grid*
--- successor: computeFxWindows' host clip, eachWindowNote's onsets[i+1], nextSameLaneNote's
+-- successor: computeNoteFxSpans' host clip, eachWindowNote's onsets[i+1], nextSameLaneNote's
 -- strictNextMap.
 --
 -- Pins the host clip. A sine host's window ends at the strict next same-lane onset; that onset is

@@ -156,7 +156,7 @@ decides whether phase 3 is worth taking.**
 
 1. **A window is clipped by the authored onsets on its lane, on the take
    or parked.** One rule covers an on-take host, a parked host and a
-   parked member: `hostWindowEnd` and `realiseParked` clip against the
+   parked member: `clippedSpanEnd` and `realiseParked` clip against the
    same set, and each keeps its own ceiling — the cell's authored
    `endppq`, or the take length.
 
@@ -167,10 +167,10 @@ decides whether phase 3 is worth taking.**
 
 1. Parking moves a note between the on-take half of the population and
    the parked half, so the set of onsets a window clips against is
-   invariant across the park stage. One `computeFxWindows` call per
+   invariant across the park stage. One `computeNoteFxSpans` call per
    rebuild therefore serves the note pass, continuous membership and fx
-   expansion alike, and `rebuildRegionPark` receives the window set and
-   the census as data.
+   expansion alike, and `rebuildRegionPark` receives the window set as
+   data.
 
 ## Phase 1 — the algebra leaves
 
@@ -230,7 +230,7 @@ the seed minters stay with the structures they read. The model is
    the specs because the tail walk is still settling them.
 
 1. Two things are the engine's own and stay with it: `parkedClipEnd`
-   and `fxHostWin`, uuid-keyed caches that outlive a pass. Inside one
+   and `noteFxClipEnd`, uuid-keyed caches that outlive a pass. Inside one
    file their invalidation is implicit — `didReload` flows down from
    `tm:rebuild` and each cache reads it in passing. Across a boundary
    it has to be said out loud, most simply as a `forget()` the
@@ -284,7 +284,7 @@ the seed minters stay with the structures they read. The model is
    *zero* uses outside the engine — they are the engine's own,
    lexically stranded at file scope. The fx-expansion helper family is
    the bulk of it: `coverInto`, `membersOf`, `channelStreams`,
-   `allocateRegionLanes`, `hostProducer`, `producerCensus`, the
+   `allocateRegionLanes`, `hostProducer`, `windowSet`, the
    reconcile skeletons. They move with the engine and stop being names
    at all.
 

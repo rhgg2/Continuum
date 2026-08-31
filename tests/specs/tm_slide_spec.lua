@@ -265,7 +265,7 @@ return {
     name = 'a glide arrives at its successor, not at the end of whatever window its host owns',
     run = function(harness)
       local h = harness.mk()
-      -- The host's authored ceiling (480) runs well past its successor (240), and hostWindowEnd
+      -- The host's authored ceiling (480) runs well past its successor (240), and clippedSpanEnd
       -- clips only against the column -- so a parked successor leaves the window overrunning.
       -- The anchor is the successor's onset regardless, which is what closed the old late arrival.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,

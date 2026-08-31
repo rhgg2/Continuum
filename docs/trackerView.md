@@ -708,7 +708,7 @@ edge.
 parameter automation, and freeze. Mute and solo refuse because channel 0 carries no wire
 of its own to silence, and because solo mutes the channels it does not name — a solo on the strip
 would silence all sixteen. A parameter binding names a channel and a cc lane, and the
-strip has neither. Freeze is tm's refusal (`docs/trackerManager.md` § Park window census),
+strip has neither. Freeze is tm's refusal (`docs/trackerManager.md` § Fx window census),
 since a chain there realises on sixteen channels and freeze converts one. Paste needs no guard
 of its own: it drops any region whose rebased channel falls outside 1 to 16 (§ FX regions).
 Channel select stands, selecting the strip's columns rather than binding anything to the

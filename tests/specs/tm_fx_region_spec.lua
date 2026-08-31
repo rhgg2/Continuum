@@ -2889,8 +2889,8 @@ return {
 
   {
     -- A global chain runs one producer per channel in use, and its expansion stands over the region's
-    -- span as any channel neighbour would. Gate and map read the one published footprint set, so both
-    -- refuse. see docs/trackerManager.md § Park window census
+    -- span as any channel neighbour would. Gate and map read the one published window set, so both
+    -- refuse. see docs/trackerManager.md § Fx window census
     name = 'freeze gate (global expansion): a chain under a global window is refused',
     run = function(harness)
       local h = harness.mk()

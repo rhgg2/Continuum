@@ -13,9 +13,9 @@ leave when they are no longer current.
 
 `ctx.nextSameLaneNote` reads lane occupancy as column ∪ parked, so a
 stage aimed at a parked note finds it. The *window* clip does not:
-`hostWindowEnd` asks `nextLaneOnset` of the column alone
-(`trackerManager.lua:715`), so a host whose authored ceiling runs past a
-parked cell owns a window longer than it sounds, and every kind on it
+`clippedSpanEnd` asks `nextLaneOnset` of the column alone
+(`trackerManager.lua:405`), so a host whose authored ceiling runs past a
+parked cell owns a span longer than it sounds, and every kind on it
 realises across the whole tail. Portamento no longer shows it — a glide
 anchors on its successor's onset rather than on the window's end — but a
 retrig hosted there still tiles past the note it should have stopped at.

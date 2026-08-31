@@ -658,12 +658,12 @@ function generators.chainDestType(fx, target)
   return 'augment'
 end
 
---shape: chainTargets -> { ['note'|'pb'|ccNum] = true }
+--shape: chainTargets -> { ['note'|'pb'|ccNum] = true }, over a window or any record carrying fx
 -- One target per stream the chain reaches, whatever the stage count. see docs/generators.md § Emission is ownership
 -- A note host self-parks via its own note spec, so its note target is suppressed here.
-function generators.chainTargets(region)
-  local targets = generators.continuousTargets(region.fx)
-  if generators.parksNotes(region) and not region.noteHost then targets.note = true end
+function generators.chainTargets(window)
+  local targets = generators.continuousTargets(window.fx)
+  if generators.parksNotes(window) and window.hostType ~= 'note' then targets.note = true end
   return targets
 end
 
