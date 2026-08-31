@@ -1436,25 +1436,16 @@ function tm:requestRebuild() rebuildRequested = true end
 -- Defined with Rebuild Fx below; freeze's eligibility census needs the on-take host windows here.
 local computeFxWindows
 
--- Rebuild output, not a cache: buildFreezeMaps replaces them wholesale each rebuild from the settled
--- census; absence = not a producer.
+-- Rebuild output, not a cache: the pipeline mints them wholesale each pass from the settled census
+-- and tm:rebuild installs what comes back; absence = not a producer.
 local freezeEligibleByUuid = {}
 local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
 
--- Rebuild output, built by the fx pass behind the dirt gate: a clean channel keeps its lists,
--- a channel that ran gets them replaced, keyed by producer: the overlay draws one chain's own.
+-- The one fx map that outlives a pass: the fx stage writes only the channels it ran, keyed by
+-- producer, so the overlay draws one chain's own.
 --shape: fxNotesByProducer[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents] }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
 local fxNotesByProducer = {}
-
--- Continuous targets producers claim, census-sourced (so the emission gate can't blink one out), each
--- carrying the raw spans it claims them over. Rebuild output, both replaced wholesale.
---shape: fxTargetsByProducer[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
-local fxTargetsByProducer = {}
-
--- The originals each producer's chain parked, keyed by producer uuid; cells by reference, minted
--- and replaced wholesale by rebuildRegionPark's render union.
-local fxParkedByProducer = {}
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
 -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
@@ -1491,11 +1482,12 @@ local function buildFreezeMaps(census, windows)
     rects[p.uuid] = { ppq = p.startppq, dur = p.endppq - p.startppq, chanLo = p.chan,
                       streams = { [0] = streams } }
   end
-  freezeEligibleByUuid, freezeRectByUuid = eligible, rects
+  return eligible, rects
 end
 
--- The continuous half of the same window set: which pb/cc targets each channel's chains own, and over
--- what, logical framed. Census-sourced, so a kept producer still claims its target. see docs/trackerManager.md § Realisation by producer
+-- The continuous half of the same window set: which pb/cc targets each producer's chains own,
+-- logical framed. see docs/trackerManager.md § Realisation by producer
+--shape: byProducer[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
 local function buildFxTargets(windows)
   local byProducer = {}
   for _, w in ipairs(windows) do
@@ -1510,7 +1502,7 @@ local function buildFxTargets(windows)
   for _, targets in pairs(byProducer) do
     for target, claimed in pairs(targets) do targets[target] = spans.merge(claimed) end
   end
-  fxTargetsByProducer = byProducer
+  return byProducer
 end
 
 -- One producer's whole output in one place, gathered at the tail where the census has settled: the
@@ -1545,16 +1537,18 @@ local function unionRealisation(uuid, byUuid)
   return union
 end
 
-local function buildFxRealisation(census, globals)
+--contract: byProducer carries the three shares the passes above keyed by producer uuid: notes
+-- (channel-keyed first), targets, parked
+local function buildFxRealisation(census, globals, byProducer)
   local out = {}
   for _, p in ipairs(census) do
     out[p.uuid] = { uuid = p.uuid, chans = { p.chan },
-                    notes   = (fxNotesByProducer[p.chan] or {})[p.uuid] or {},
-                    targets = fxTargetsByProducer[p.uuid] or {},
-                    parked  = fxParkedByProducer[p.uuid] or {} }
+                    notes   = (byProducer.notes[p.chan] or {})[p.uuid] or {},
+                    targets = byProducer.targets[p.uuid] or {},
+                    parked  = byProducer.parked[p.uuid] or {} }
   end
   for _, region in ipairs(globals or {}) do out[region.uuid] = unionRealisation(region.uuid, out) end
-  fxRealisationByUuid = out
+  return out
 end
 
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
@@ -2691,6 +2685,9 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
   -- seat-stamps each cell, so the tail walk meets an ordinary seated entry.
   local restoredCells = {}
+  -- The originals each producer's chain parked, keyed by the producer that parked each: cells by
+  -- reference, minted here and handed back for the realisation entries.
+  local parkedByProducer = {}
 
   -- One predicate for all passes, answering with the producer that parks the spec: a currentWindows
   -- entry covers it, or (note specs only) spec.fx parks itself. see docs/trackerManager.md § Region-replace parking
@@ -2801,15 +2798,13 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
           endppq = util.round(math.max(ppq + 1, math.min(ceiling, takeLen))) }))
     end
 
-    -- Keyed by the producer that parked each cell, so the ghost overlay suppresses only its own.
-    fxParkedByProducer = {}
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
     renderUnion('parked', parkedNotes, function(spec)
       local channel = frame.channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local cell = util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
-      util.bucket(fxParkedByProducer, coveredBy(spec), cell)
+      util.bucket(parkedByProducer, coveredBy(spec), cell)   -- the overlay suppresses only its own producer's
       return cell
     end)
     for chan = 1, 16 do
@@ -3021,6 +3016,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
   for _, cell in ipairs(restoredCells) do
     if index.stampColEvt(cell) then cell.realised = true end
   end
+  return parkedByProducer
 end
 
 ----- Raw working set
@@ -3196,7 +3192,9 @@ end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
-local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions)
+--contract: notesByProducer is carried between passes, so the stage writes the channels it ran and
+-- leaves a frozen channel's lists standing
+local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions, notesByProducer)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
@@ -3581,7 +3579,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- Bucketed after the sort, so each producer's list inherits the onset order.
     local byProducer = {}
     for _, n in ipairs(fxNotes) do util.bucket(byProducer, n.derived, n) end
-    fxNotesByProducer[chan] = byProducer
+    notesByProducer[chan] = byProducer
 
     -- cc emission: fold (curves.foldChains) into markerless seats, clipped to the emit scope; half-open --
     -- the closing value belongs to the kept side.
@@ -4780,6 +4778,7 @@ local function channelsInUse(sources)
 end
 
 --contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
+--contract: returns the maps the fx accessors read, for tm:rebuild to install
 --invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
 local function rebuildPipeline(didReload)
   -- A wholesale mm re-read strands the incremental index: reload before any stage reads it;
@@ -4830,10 +4829,16 @@ local function rebuildPipeline(didReload)
     return settledWindows
   end
 
-  perf.start('regionPark'); rebuildRegionPark(currentWindows, sources.fxParked, sources.prevWindows, hostWindows, settleWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark')
+  local parkedByProducer = rebuildRegionPark(currentWindows, sources.fxParked, sources.prevWindows,
+                                             hostWindows, settleWindows)  -- park covered, carry/restore prior
+  perf.stop('regionPark')
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
-  perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, fxWindow, settledWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
+  perf.start('fx')
+  local fxOut = rebuildFx(noteExisting, ccExisting, fxWindow, settledWindows, sources.fxRegions,
+                          fxNotesByProducer)  -- fx expansion: derived notes/CCs
+  perf.stop('fx')
 
   perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
@@ -4848,9 +4853,14 @@ local function rebuildPipeline(didReload)
 
   -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
   -- the previous rebuild's note lanes. Sibling maps, one site.
-  perf.start('freezeMaps'); buildFreezeMaps(settledCensus, settledWindows); perf.stop('freezeMaps')
-  buildFxTargets(settledWindows)
-  buildFxRealisation(settledCensus, globalRegions)   -- last: it gathers what the passes above each keyed by producer
+  local maps = {}
+  perf.start('freezeMaps')
+  maps.freezeEligible, maps.freezeRect = buildFreezeMaps(settledCensus, settledWindows)
+  perf.stop('freezeMaps')
+  -- The shares the passes above keyed by producer, gathered last; only the notes outlive the pass.
+  local byProducer = { notes = fxNotesByProducer, parked = parkedByProducer,
+                       targets = buildFxTargets(settledWindows) }
+  maps.fxRealisation = buildFxRealisation(settledCensus, globalRegions, byProducer)
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
@@ -4860,6 +4870,7 @@ local function rebuildPipeline(didReload)
   perf.start('derivedInputs')
   derivedInputs = util.deepClone(derivationInputs())   -- after the pipeline's own ds writes have settled
   perf.stop('derivedInputs')
+  return maps
 end
 
 --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
@@ -4902,7 +4913,12 @@ function tm:rebuild(takeChanged)
 
   -- One nest for every staging stage, so the reindex and the take reprojection land once each
   -- rather than once per stage. rebuilding must outlive it: each stage's commit re-enters via 'reload'.
-  mm:batch(function() rebuildPipeline(didReload) end)
+  local maps
+  mm:batch(function() maps = rebuildPipeline(didReload) end)
+  -- Install what the pass created. Nothing reads these mid-pass, and the accessors read between
+  -- rebuilds, so they stand before the signal goes out.
+  freezeEligibleByUuid, freezeRectByUuid, fxRealisationByUuid =
+    maps.freezeEligible, maps.freezeRect, maps.fxRealisation
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean

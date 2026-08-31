@@ -184,10 +184,18 @@ the seed minters stay with the structures they read. The model is
    the engine mutates only what it was handed, and everything it
    *creates* leaves by the return.
 
-1. The fx maps meet that rule directly. `fxRealisationByUuid`,
-   `fxTargetsByChan`, `freezeEligibleByUuid` and their siblings are
-   written once at the tail of the pipeline and read only by
-   accessors, so they come back from `run` and tm installs them.
+1. The fx maps meet that rule directly. `fxRealisationByUuid` and
+   `freezeRectByUuid` are written once at the tail of the pipeline and
+   read only by accessors, so they come back from `run` and tm
+   installs them. `fxTargetsByProducer` and `fxParkedByProducer` have
+   one reader each, the realisation builder at that same tail, so they
+   are the pipeline's own locals and never reach tm.
+
+1. Freeze eligibility is a decision about what tm will do, and so is
+   not rebuild output. `freezeRefused` asks whether the rest of the
+   census contests a producer's claims, and `tm:freezeEligible`
+   computes that on demand from the footprints the rebuild publishes,
+   beside the freeze operation it guards.
 
 1. `fxOut` marks the rule's scope. It is created by the engine and
    never leaves it, so nothing about the boundary bears on it; the one

@@ -4,6 +4,18 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — The pipeline hands back only the fx maps that outlive it: fxRealisationByUuid,
+  freezeRectByUuid and, until eligibility moves, freezeEligibleByUuid. fxTargetsByProducer and
+  fxParkedByProducer have one reader each -- the realisation builder at the same tail -- so they are
+  the pipeline's own locals and never reach tm, which cuts the installed set from five to three.
+  fxNotesByProducer is handed in and mutated in place, since a frozen channel keeps its lists;
+  tm_fx_gating_spec now pins that, and minting the map fresh each pass kills the case. Freeze
+  eligibility is a decision about what tm is prepared to do, not derivation output: freezeRefused
+  tests whether the rest of the census contests a producer's claims, and only the freeze operation
+  turns that into a verdict, so tm:freezeEligible computes it on demand from the published
+  footprints. That is its own item, since two of the three refusal arms test a note window the rect
+  does not carry.
+
 - **2026-08-31** — The stager's doors take the index's verb vocabulary: stager.add, stager.assign
   and stager.delete, with the parked triple keeping its suffix, since a nested stager.park.add sits
   a dot deeper than the maps read. The seed fold is stager.flushDirt, pairing with stager.flush --

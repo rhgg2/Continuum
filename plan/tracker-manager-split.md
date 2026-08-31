@@ -22,10 +22,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: hand the fx maps up from the pipeline (design/tracker-manager-split.md § Phase 3 3-4)
 - 2026-08-31 tm: gather the stager's doors onto one table (design/tracker-manager-split.md § Phase 3 8)
 - 2026-08-31 tm: gather the raw index's doors onto one table (design/tracker-manager-split.md § Phase 3 14, § Open 1)
 - 2026-08-31 config: teach the maps about door tables (design/tracker-manager-split.md § Phase 3 8)
-- 2026-08-31 tm: gather the frame and its operations into one handle (design/tracker-manager-split.md § Phase 3 14)
 
 ## Now
 
@@ -33,17 +33,16 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The fx maps come back by return.** `buildFreezeMaps`,
-   `buildFxTargets` and `buildFxRealisation` return their maps, and
-   `rebuildPipeline` hands the set up to `tm:rebuild`, which installs
-   it. `fxParkedByProducer` is minted wholesale each pass and joins
-   them; `fxNotesByProducer` keeps a clean channel's lists across
-   passes, so it is handed in and mutated in place, which the rule
-   allows.
-
 1. **`forget()` on the take-tier path.** `parkedClipEnd` and `fxHostWin`
    get one explicit clear, called where a take swap or a wholesale
    re-read enters `tm:rebuild`. Their invalidation today is implicit in
    the wholesale dirt each of them gates on, and a cache outliving a
    take swap is a bug nothing in the code names.
+
+1. **Freeze eligibility leaves the pipeline.** `buildFreezeMaps` stops
+   minting a verdict per producer, and `tm:freezeEligible` computes
+   `freezeRefused` on demand from the footprints the last rebuild
+   published. Two of the three refusal arms test a note window, which
+   the rect does not carry today, so the published footprint has to
+   state it.
 

@@ -16,6 +16,21 @@ local function pbSeatsOf(dump, chan)
   return out
 end
 
+-- A trill parks its host and stands its own notes in the lane, so the producer's uuid comes off
+-- the parked cell.
+local function parkedHostUuid(h, chan)
+  for _, cell in ipairs(h.tm:getChannel(chan).parked or {}) do
+    if cell.fx then return cell.uuid end
+  end
+end
+
+-- A note-emitting chain, so the realisation entry carries derived notes rather than only seats.
+local function trillHost(chan)
+  return { evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
+           vel = 100, detune = 0, delay = 0, lane = 1,
+           fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 } } }
+end
+
 local function vibHost(chan)
   return { evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
            vel = 100, detune = 0, delay = 0, lane = 1, fx = sine30 }
@@ -105,6 +120,32 @@ return {
       h.tm:assignEvent(far, { pitch = 65 }); h.tm:flush()
 
       t.deepEq(curveAt(h, host, 1, 'pb', rows), before, 'the kept producer\'s seats are still on the take')
+    end,
+  },
+
+  {
+    name = 'gating: a frozen chan 2 keeps its derived notes in the realisation entry',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(trillHost(2)); h.tm:flush()
+      local host = parkedHostUuid(h, 2)
+
+      local before = {}
+      for _, note in ipairs(h.tm:fxRealisation(host).notes) do
+        before[#before + 1] = { ppq = note.ppq, pitch = note.pitch }
+      end
+      t.truthy(#before >= 2, 'fixture check: the trill emits derived notes on chan 2')
+
+      -- Chan 2 is derivation-clean through both edits, so its fx pass never runs and emits no
+      -- record; the notes it keyed by producer last time are what the entry gathers.
+      h.tm:addEvent(plainNote(1, 480)); h.tm:flush()
+      h.tm:addEvent(plainNote(1, 720)); h.tm:flush()
+
+      local after = {}
+      for _, note in ipairs(h.tm:fxRealisation(host).notes) do
+        after[#after + 1] = { ppq = note.ppq, pitch = note.pitch }
+      end
+      t.deepEq(after, before, 'the frozen chain still realises the notes it emitted')
     end,
   },
 
