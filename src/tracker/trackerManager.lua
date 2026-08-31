@@ -1208,12 +1208,24 @@ do
   -- Edits stage here and ride flush: a parked edit that wrote ds inline would rebuild mid-batch and
   -- discard still-staged mm ops. rebuildRegionPark derives realisation from the spec each pass.
 
-  do local parkedUuidSeq = 0
-    function stager.addParked(spec)
-      if spec.evType == 'note' and not spec.uuid then
-        parkedUuidSeq = parkedUuidSeq + 1
-        spec.uuid = 'fxp-' .. parkedUuidSeq
+  -- N restarts at 0 each session while the stash persists, so the mint takes the stash's
+  -- high-water mark first: the counter alone would reissue a uuid a live spec still holds.
+  -- The counter is what keeps one batch's own mints apart -- adds ride flush, so every add
+  -- in a batch scans the same not-yet-landed stash.
+  do
+    local parkedUuidSeq = 0
+
+    local function mintParkedUuid()
+      for _, spec in ipairs(ds:get('fxParked') or {}) do
+        local n = tonumber(tostring(spec.uuid):match('^fxp%-(%d+)$'))
+        if n and n > parkedUuidSeq then parkedUuidSeq = n end
       end
+      parkedUuidSeq = parkedUuidSeq + 1
+      return 'fxp-' .. parkedUuidSeq
+    end
+
+    function stager.addParked(spec)
+      if spec.evType == 'note' and not spec.uuid then spec.uuid = mintParkedUuid() end
       util.add(parkedEdits, { op = 'add', spec = spec })
     end
   end
