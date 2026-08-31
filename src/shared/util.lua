@@ -179,6 +179,12 @@ function util.seek(items, mode, key, filter, keyFn)
   return hit
 end
 
+-- Order a list by ppq alone, which is the order the seeks below assume of the list they bisect.
+-- Equal onsets land in no defined order; a list that needs one carries its own comparator.
+function util.sortByPPQ(list)
+  table.sort(list, function(a, b) return a.ppq < b.ppq end)
+end
+
 -- Index seeks over a ppq-sorted list: the first index whose .ppq passes the target, or #list + 1 when
 -- none does. Bisecting, and answering an index where util.seek scans and answers an item.
 function util.firstAfter(list, target)   -- first index with .ppq > target

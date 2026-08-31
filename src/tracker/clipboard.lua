@@ -391,7 +391,7 @@ local function pasteSingle(clip)
     util.add(events, e)
     ::nextCe::
   end
-  table.sort(events, function(a, b) return a.ppq < b.ppq end)
+  util.sortByPPQ(events)
 
   -- pitch is a note column's first part, so a span covers it only as the
   -- first element of the clip's list.
@@ -481,7 +481,7 @@ local function pasteMulti(clip)
         util.add(events, e)
       end
     end
-    table.sort(events, function(a, b) return a.ppq < b.ppq end)
+    util.sortByPPQ(events)
 
     -- Wipe existing events in the paste region. For notes, delete directly
     -- rather than via queueDeleteNotes — its survivor-extension fixup is for

@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — sortByPPQ leaves the frame handle for util, beside the seeks that assume the
+  order it makes: five of its thirteen call sites in tm were frame columns and the rest scratch
+  lists, while the same comparator stood written out longhand in five other modules. The note-column
+  trio -- sortNoteColumn, insertNoteCell, isSorted -- stays on the frame, since all three close over
+  the note-before-PA tie-break, which is the frame's own ordering rule. A pure function belongs to
+  what it is about; cheapness at a module boundary, which was the only argument for hanging the sort
+  on the handle, is not ownership.
+
 - **2026-08-31** — The maps learn door tables: a `function tbl.name` at module scope, on a table
   other than the one the module returns, is a private `@fn tbl.name` and calls on it are intra-file
   `@call` edges. The extractor's guard was indentation, which a `do` block defeats, so

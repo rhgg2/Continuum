@@ -96,6 +96,11 @@ uses half-open `[lo, hi)` intervals so adjacent windows tile without
 double-counting. Both take an optional filter predicate, letting callers
 restrict to note-ons, particular channels, etc. without a pre-pass.
 
+`util.sortByPPQ` puts a list into that order. Ties are left where the sort
+leaves them, so a list whose equal onsets need an order of their own carries
+its own comparator — trackerManager's note columns interleave notes and PAs
+that way.
+
 `util.firstAfter` and `util.firstAtOrAfter` answer the same question by
 bisection, and answer it as an index rather than an item: the first index
 whose ppq passes the target, or one past the end when none does. Callers

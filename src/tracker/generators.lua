@@ -212,7 +212,7 @@ local function glideSequence(stream, host, ctx)
   for _, note in ipairs(stream.notes) do
     if stream.lane or (note.lane or 1) == 1 then util.add(seq, note) end
   end
-  table.sort(seq, function(a, b) return a.ppq < b.ppq end)
+  util.sortByPPQ(seq)
   -- The successor is keyed on the original host note's identity, so it reads host, not the folded stream.
   local beyond = stream.lane and ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)
   if beyond then util.add(seq, beyond) end

@@ -190,7 +190,7 @@ local function readbackBody()
     end
     -- A lane is monophonic, so within its own column a note's tail ends at the next onset: clip so an
     -- OPEN/over-long ceiling never serialises as an overlap. The trailing note keeps its lengthPpq cap.
-    table.sort(colSpecs, function(a, b) return a.ppq < b.ppq end)
+    util.sortByPPQ(colSpecs)
     for i = 1, #colSpecs - 1 do
       colSpecs[i].endppq = math.min(colSpecs[i].endppq, colSpecs[i + 1].ppq)
     end

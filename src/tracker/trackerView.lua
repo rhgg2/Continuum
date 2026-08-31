@@ -2105,7 +2105,7 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
     -- the direction that keeps shifted PBs out of unprocessed notes' ranges.
     for _, run in ipairs(runs) do
       local chan = run.col.midiChan
-      table.sort(run.evs, function(a, b) return a.ppq < b.ppq end)
+      util.sortByPPQ(run.evs)
       local s, e, step = 1, #run.evs, 1
       if rowDelta > 0 then s, e, step = #run.evs, 1, -1 end
       for i = s, e, step do

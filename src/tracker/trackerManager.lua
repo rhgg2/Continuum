@@ -109,10 +109,6 @@ do
     return prev
   end
 
-  function frame.sortByPPQ(tbl)
-    table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
-  end
-
   function frame.sortNoteColumn(tbl) table.sort(tbl, noteColumnLess) end
 
   -- A writer that knows an onset splices its cell at the seat, keeping the lane ordered without a blunt
@@ -358,7 +354,7 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
   end
   -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
   -- column's order; bases pre-sorted, slices preserve order).
-  frame.sortByPPQ(pas)
+  util.sortByPPQ(pas)
   local ccs = {}
   for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
   return pas, ccs, ats, curves.slice(pbBase, startL, endL)
@@ -2424,9 +2420,9 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
     ::continue::
   end
   -- mm's cc stream is insertion-ordered mid-session (fresh adds append); columns sort by ppq.
-  for _, col in pairs(frame.channels[chan].columns.ccs) do frame.sortByPPQ(col.events) end
+  for _, col in pairs(frame.channels[chan].columns.ccs) do util.sortByPPQ(col.events) end
   for _, key in ipairs{ 'at', 'pc' } do
-    if frame.channels[chan].columns[key] then frame.sortByPPQ(frame.channels[chan].columns[key].events) end
+    if frame.channels[chan].columns[key] then util.sortByPPQ(frame.channels[chan].columns[key].events) end
   end
 end
 
@@ -2595,7 +2591,7 @@ end
 local function rebuildExternals(external)
   if #external == 0 then return end
 
-  frame.sortByPPQ(external)
+  util.sortByPPQ(external)
   local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
   for _, note in ipairs(external) do
@@ -2640,7 +2636,7 @@ local function realiseParked(chan, members, takeLenL)
   -- member-next map: a parked member bounds another on its lane (both off-take, neither in the column)
   local byLane = {}
   for _, m in ipairs(members) do util.bucket(byLane, m.lane, m) end
-  for _, g in pairs(byLane) do frame.sortByPPQ(g) end
+  for _, g in pairs(byLane) do util.sortByPPQ(g) end
   local memberNextOf = strictNextMap(byLane)
   for _, m in ipairs(members) do
     local cached = parkedClipEnd[m.uuid]
@@ -2935,7 +2931,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       local col = channel.columns.ccs[spec.cc]
       if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
       util.add(col.events, util.clone(spec))
-      frame.sortByPPQ(col.events)
+      util.sortByPPQ(col.events)
     end
 
     -- Render union: the parked authored cc stays the visible surface (the fill is hidden
@@ -3256,7 +3252,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
       end
     end)
-    frame.sortByPPQ(base)
+    util.sortByPPQ(base)
     return base
   end
   local function ccBasesFor(chan, spanSet)
@@ -3274,7 +3270,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         end
       end)
     end
-    for _, base in pairs(bases) do frame.sortByPPQ(base) end
+    for _, base in pairs(bases) do util.sortByPPQ(base) end
     return bases
   end
 
@@ -4181,7 +4177,7 @@ local function rebuildPbs(fxOut, extraColumns)
                             cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
           end
         end
-        frame.sortByPPQ(bps)
+        util.sortByPPQ(bps)
         addWin(sub, bps, nil)
       end
       for _, sub in ipairs(emitSpans and spans.subtract(span, emitSpans) or {}) do
@@ -4545,7 +4541,7 @@ local function rebuildPbs(fxOut, extraColumns)
       for i = #pbs, kept + 1, -1 do pbs[i] = nil end
     end
 
-    frame.sortByPPQ(pbs)
+    util.sortByPPQ(pbs)
     perf.stop('match')
 
     local detuneOf = {}
@@ -4586,7 +4582,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild entry).
     if dirt.has(chan) then
       local pbs = pbsByChan[chan] or {}
-      frame.sortByPPQ(pbs)
+      util.sortByPPQ(pbs)
 
       local priorPbCol = frame.channels[chan].priorPb
       frame.channels[chan].priorPb = nil
@@ -4620,7 +4616,7 @@ local function rebuildPbs(fxOut, extraColumns)
           util.add(pbColEvents, evt)
         end
       end
-      frame.sortByPPQ(pbColEvents)
+      util.sortByPPQ(pbColEvents)
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
       frame.channels[chan].columns.pb = keep and { events = pbColEvents } or nil
       perf.stop('project')
@@ -4756,7 +4752,7 @@ local function rebuildPCs(noteLive)
       else
         for _, cc in ipairs(rawIndexFor(chan).pcs) do projectPc(cc) end
       end
-      frame.sortByPPQ(events)
+      util.sortByPPQ(events)
       frame.channels[chan].columns.pc = { events = events }
     end
   end
