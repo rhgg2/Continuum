@@ -416,7 +416,7 @@ so fx-editor handles survive the round trip.
 
 **4** The view must tag a cell `parked` over exactly the spans the park pass
 parks over, or the tag and the parking disagree. Both read the same pure
-`generators` surface, `parksNotes` and `parkWindows`, and any new reason a
+`generators` surface, `parksNotes` and `chainTargets`, and any new reason a
 host stops parking has to reach those predicates too, or the runner and the
 tagging drift apart. Bypass is deliberately not such a reason (§ Note FX
 stages). Where a gm group and an fx region ever cover the same cell, `parked`
@@ -741,7 +741,7 @@ deleting the key — never `false`, so a chain with nothing bypassed serialises
 as it always did. That storage is the criterion: **bypass changes the
 realisation and never touches the authored notes.** A chain's parked chord
 stays parked whether or not its stages are bypassed, so the toggle moves
-nothing between take and stash and `parksNotes` / `parkWindows` never learn
+nothing between take and stash and `parksNotes` / `chainTargets` never learn
 about the flag. What it does reach is the fold (`docs/generators.md`
 § The chain).
 

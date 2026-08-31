@@ -26,10 +26,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: hold the pass's park windows in one structure (design/tracker-manager-split.md § Phase 3 5)
 - 2026-08-31 tm: clear the take-scoped caches at the take-tier seam (design/tracker-manager-split.md § Phase 3 7)
 - 2026-08-31 tm: hand the fx maps up from the pipeline (design/tracker-manager-split.md § Phase 3 3-4)
 - 2026-08-31 tm: gather the stager's doors onto one table (design/tracker-manager-split.md § Phase 3 8)
-- 2026-08-31 tm: gather the raw index's doors onto one table (design/tracker-manager-split.md § Phase 3 14, § Open 1)
 
 ## Now
 
@@ -37,10 +37,9 @@
 
 ## Queued (current phase; one-liners)
 
-1. **Freeze eligibility leaves the pipeline.** `buildFreezeMaps` stops
-   minting a verdict per producer, and `tm:freezeEligible` computes
-   `freezeRefused` on demand from the footprints the last rebuild
-   published. Two of the three refusal arms test a note window, which
-   the rect does not carry today, so the published footprint has to
-   state it.
+1. **The park scans ask the window set.** `rebuildRegionPark`,
+   `rebuildFx` and `rebuildCCs` take the flat list and re-scan it per
+   event; they take the set instead and ask `covers`, which indexes by
+   channel. `prevWindows` gains a constructor from stored data, so seat
+   recognition asks the prior set in the same voice as the current one.
 

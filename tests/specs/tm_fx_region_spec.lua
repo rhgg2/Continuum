@@ -1152,7 +1152,7 @@ return {
       h.tm:rebuild()
       generators.kinds.capRep = nil
 
-      t.falsy(authoredPb(h, 1, 0),   'parkWindows ignores the flag -- the authored pb still parks off-take')
+      t.falsy(authoredPb(h, 1, 0),   'chainTargets ignores the flag -- the authored pb still parks off-take')
       t.eq(derivedPb(h, 1, 0).val,   0,               'the seat carries the authored base, not the curve (0c)')
       t.eq(derivedPb(h, 1, 120).val, centsToRaw(40), 'and the base breakpoint at 120 (40c)')
     end,
@@ -2301,7 +2301,7 @@ return {
       t.falsy(h.tm:getChannel(1).columns.ccs[74], 'live, the seat is routed out of columns')
 
       -- The stub stays registered across the call: freeze recomputes the windows to drop, and
-      -- parkWindows skips a stage whose kind is nil -- the cc window would outlive its region.
+      -- chainTargets skips a stage whose kind is nil -- the cc window would outlive its region.
       t.truthy(h.tm:freezeRegion('fxr-1'))
       generators.kinds.ccRep = nil
 
@@ -2827,25 +2827,25 @@ return {
   },
 
   {
-    -- The partition is by producer, not by window value: a chain's own two pb windows are both
-    -- `mine`, and mine is never held against itself.
-    name = 'freeze gate (two stages, one target): a chain does not refuse itself',
+    -- The refusal is by producer, not by window value: a chain's own windows are its own on however
+    -- many streams, and are never held against it.
+    name = 'freeze gate (two targets, one chain): a chain does not refuse itself',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h, { fx = { sine30[1],
-                               { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0 } } })
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one producer, two pb windows')
-      t.truthy(h.tm:freezeEligible('fxr-1'), 'mine is never held against itself in the map either')
-      t.truthy(h.tm:freezeRegion('fxr-1'), 'its own windows are not a neighbour')
+                               { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0, dest = 10 } } })
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one producer, a pb window and a cc window')
+      t.truthy(h.tm:freezeEligible('fxr-1'), 'its own windows are no neighbour in the map either')
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'so the freeze goes through')
     end,
   },
 
   {
-    -- The census's three arms all answer "what is committed", while freeze's own closing flush commits
+    -- The published footprints state what is committed, while freeze's own closing flush commits
     -- whatever was staged: an unflushed host is invisible to the gate and then minted by the freeze,
     -- landing a live window over the seats just frozen. Freeze settles first.
     -- see design/archive/fx-freeze.md § Eligibility gates
-    name = 'freeze gate (staged host pending): freeze settles the take before reading the census',
+    name = 'freeze gate (staged host pending): freeze settles the take before reading the footprints',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)   -- pb region [0,240) on chan 1
@@ -2854,8 +2854,8 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67, vel = 100,
                       detune = 0, delay = 0, lane = 2, fx = sine30 })
 
-      -- Pinned seam, not an aspiration: the map reads the last rebuild's census, where the staged
-      -- host does not exist, while the verb settles first and sees it. In exactly this divergence the
+      -- Pinned seam, not an aspiration: the map reads the last rebuild's footprints, where the staged
+      -- host does not exist, while the verb's flush republishes them and sees it. In this divergence the
       -- verb's flush lands the pending op inside its undo block, so the block is non-empty anyway.
       t.truthy(h.tm:freezeEligible('fxr-1'), 'the staged neighbour is invisible to the map')
       t.falsy(h.tm:freezeRegion('fxr-1'), 'the pending host is a same-target neighbour: refused')
@@ -2884,6 +2884,26 @@ return {
       })
       h.tm:rebuild()
       t.truthy(h.tm:freezeEligible('fxr-1'), "the survivor's map entry flips on the next rebuild")
+    end,
+  },
+
+  {
+    -- A global chain runs one producer per channel in use, and its expansion stands over the region's
+    -- span as any channel neighbour would. Gate and map read the one published footprint set, so both
+    -- refuse. see docs/trackerManager.md § Park window census
+    name = 'freeze gate (global expansion): a chain under a global window is refused',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)   -- channel 1 in use, so the global expands onto it
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'glob-1', chan = 0, startppq = 0, endppq = 240, fx = sine30 },
+      })
+      h.tm:rebuild()
+
+      t.falsy(h.tm:freezeEligible('fxr-1'), "the global's expansion contests the same pb window")
+      t.falsy(h.tm:freezeRegion('fxr-1'),   'and the verb refuses on the footprints the map read')
+      t.eq(#(h.ds:get('fxRegions') or {}), 2, 'both regions stand')
     end,
   },
 

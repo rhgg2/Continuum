@@ -325,21 +325,21 @@ return {
   },
 
   {
-    name = 'parkWindows emits an evType-tagged window per continuous/replace target (note discrete, cc, pb augment)',
+    name = 'chainTargets names each stream a chain parks, one per dest however many stages reach it',
     run = function()
       generators.kinds.ccrep = { mode = 'replace', dest = 10 }   -- fixture: no built-in cc-replace kind
-      local windows = generators.parkWindows{
-        { chan = 1, startppq = 0,  endppq = 240, uuid = 'chord', fx = { { kind = 'arp' } } },   -- discrete replace -> note window
-        { chan = 3, startppq = 60, endppq = 120, uuid = 'rep',   fx = { { kind = 'ccrep' } } }, -- cc target (replace) -> cc window
-        { chan = 5, startppq = 0,  endppq = 240, uuid = 'wave',  fx = { { kind = 'sine' } } },  -- pb augment -> pb window
-        { chan = 7, fx = {} },                                                                  -- husk -> neither
-      }
+      t.deepEq(generators.chainTargets{ fx = { { kind = 'arp' } } }, { note = true },
+               'a discrete replace parks the chord it covers')
+      t.deepEq(generators.chainTargets{ fx = { { kind = 'ccrep' } } }, { [10] = true },
+               'a cc dest parks its controller lane')
       generators.kinds.ccrep = nil
-      t.deepEq(windows, {
-        { evType = 'note', chan = 1, id = 'chord', startppq = 0, endppq = 240 },
-        { evType = 'cc', chan = 3, cc = 10, id = 'rep', startppq = 60, endppq = 120 },
-        { evType = 'pb', chan = 5, id = 'wave', startppq = 0, endppq = 240 },
-      }, 'note for the discrete chord, cc for the cc target, pb for the augment gesture')
+      t.deepEq(generators.chainTargets{ fx = { { kind = 'sine' } } }, { pb = true },
+               'a pb augment parks the base lane')
+      t.deepEq(generators.chainTargets{ fx = {} }, {}, 'a husk parks nothing')
+      t.deepEq(generators.chainTargets{ fx = { { kind = 'sine' }, { kind = 'sine' } } }, { pb = true },
+               'two stages on one dest are one target: the stream is parked once')
+      t.deepEq(generators.chainTargets{ noteHost = true, fx = { { kind = 'arp' }, { kind = 'sine' } } },
+               { pb = true }, 'a note host self-parks through its own spec, so its note target is suppressed')
     end,
   },
 
@@ -348,10 +348,8 @@ return {
     run = function()
       t.eq(generators.parksNotes{ fx = { { kind = 'arp', bypass = true } } }, true,
         'bypass changes the realisation, never the authored notes -- the chord stays parked')
-      t.deepEq(generators.parkWindows{
-        { chan = 1, startppq = 0, endppq = 240, uuid = 'chord', fx = { { kind = 'arp', bypass = true } } },
-      }, { { evType = 'note', chan = 1, id = 'chord', startppq = 0, endppq = 240 } },
-        'the window stands: the chain re-seats the parked chord verbatim')
+      t.deepEq(generators.chainTargets{ fx = { { kind = 'arp', bypass = true } } }, { note = true },
+        'the target stands: the chain re-seats the parked chord verbatim')
       t.deepEq(generators.continuousTargets{ { kind = 'sine', bypass = true } }, { pb = true },
         'a bypassed chain still emits a re-seat record, so the dirt gate must keep scoping the target')
     end,
@@ -434,13 +432,10 @@ return {
   },
 
   {
-    name = 'parkWindows follows the dest param, not the registry (a retargeted pb kind parks cc)',
+    name = 'chainTargets follows the dest param, not the registry (a retargeted pb kind parks cc)',
     run = function()
-      local windows = generators.parkWindows{
-        { chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'sine', dest = 74 } } },
-      }
-      t.deepEq(windows, { { evType = 'cc', chan = 1, cc = 74, startppq = 0, endppq = 240 } },
-               "the entry's dest decides the window type")
+      t.deepEq(generators.chainTargets{ fx = { { kind = 'sine', dest = 74 } } }, { [74] = true },
+               "the entry's dest decides the stream it parks")
     end,
   },
 

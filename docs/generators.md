@@ -283,12 +283,17 @@ sounding.
 **2** The tempting rule is the simpler one — the final output *is* the final
 stream — and it re-emits a vibrato-only host's untouched membership as
 derived duplicates of notes already on the take. Ownership is the correction:
-`parkWindows` names a window per continuous target, and `parksNotes` fires on
+`chainTargets` names a target per continuous dest, and `parksNotes` fires on
 any note-dest kind, mode irrelevant.
 
 **3** A chain that folds nothing still owns what it claimed. It re-seats the
 parked base, or, over an all-zero pb base, registers an empty window so stale
 seats sweep.
+
+**4** `chainTargets` returns one target per stream the chain reaches, whatever
+the stage count: `note` for a discrete-replace chord, `pb` and cc for the
+continuous dests — replace and augment alike, since the summed base and
+macros seat on the target lane.
 
 ## Input streams
 

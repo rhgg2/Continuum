@@ -212,10 +212,17 @@ the seed minters stay with the structures they read. The model is
    are the pipeline's own locals and never reach tm.
 
 1. Freeze eligibility is a decision about what tm will do, and so is
-   not rebuild output. `freezeRefused` asks whether the rest of the
-   census contests a producer's claims, and `tm:freezeEligible`
-   computes that on demand from the footprints the rebuild publishes,
-   beside the freeze operation it guards.
+   not rebuild output. A park window is one producer's span typed by
+   one stream it parks, and every window of a producer takes that
+   producer's span, so **`windowSet`** holds a record per producer —
+   channel, span, host flags, and the targets its chain reaches — and
+   mints the flat list from it for the readers that scan one. The
+   rebuild publishes the set; `freezeRefused` reads it in one pass over
+   the channel; and both `tm:freezeEligible` and `freezeRegion`'s gate
+   call that on demand, so the button and the verb answer from one
+   source. Freeze's own census goes with them, and a global region
+   reaches the gate as its expansions, so a chain overlapping one is
+   refused.
 
 1. `fxOut` marks the rule's scope. It is created by the engine and
    never leaves it, so nothing about the boundary bears on it; the one

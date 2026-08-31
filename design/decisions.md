@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — A park window is one producer's span typed by one stream it parks, and every
+  window a producer emits takes that producer's span, so the census entry and the flat window list
+  are one fact in two shapes. windowSet holds the pass's windows as a record per producer --
+  channel, span, host flags, and the targets its chain reaches -- and mints the flat list from it
+  for the readers that scan one; generators.chainTargets names those targets, so a chain with two
+  stages on one dest parks that stream once and prevWindows persists one entry where it held two.
+  Freeze eligibility is a decision about what tm will do rather than rebuild output, so
+  tm:freezeEligible and freezeRegion's gate both compute refusal from the published set and freeze's
+  own census goes. A global region reaches the gate as its expansions, so a chain overlapping one is
+  refused where the unexpanded census cleared it.
+
 - **2026-08-31** — forgetCaches drops parkedClipEnd and fxHostWin on the branch a take swap or a
   wholesale re-read enters tm:rebuild. mm mints uuids per take, so an entry surviving that seam
   addresses an event of the take just left; today the wholesale dirt hides that by forcing every

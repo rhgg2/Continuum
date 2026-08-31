@@ -472,43 +472,80 @@ local function producerCensus(fxRegions, hostWins, parkedNoteSpecs)
   return producers
 end
 
--- Freeze eligibility over the census: a refusal means some other producer would be left standing
--- over the raw output this freeze creates. see docs/trackerManager.md § Park window census
-local function freezeRefused(frozen, census, windows)
-  local mine, others = {}, {}
-  for _, w in ipairs(windows) do
-    util.add(w.id == frozen.uuid and mine or others, w)
+-- The pass's park windows, held once: the producers are the fact, the flat list a view over them.
+-- see docs/trackerManager.md § Park window census
+--shape: doors -> producers() | producer(uuid) | on(chan) | covers(evType, chan, cc, ppq) | flat()
+--contract: covers answers with the producer parking that event, nil if none does
+--invariant: flat() is ordered note, pb, then cc ascending, within census order
+local function windowSet(census)
+  local producers, byUuid, byChan, flatWindows = {}, {}, {}, nil
+  -- Stamped on a copy: a census the pipeline mints is the pass's own, but freeze builds one over a
+  -- stored region, and a target set is no part of the document.
+  for _, record in ipairs(census) do
+    local producer = util.clone(record)
+    producer.targets = generators.chainTargets(record)
+    util.add(producers, producer)
+    byUuid[producer.uuid] = producer
+    util.bucket(byChan, producer.chan, producer)
   end
 
-  local function sameTarget(a, b)
-    return a.evType == b.evType and a.chan == b.chan and a.cc == b.cc
-  end
-  -- Half-open for every target: a producer's close folds at endppq-1, so abutting windows no longer
-  -- share a boundary seat and abutting is genuinely disjoint.
-  local function overlaps(a, b)
-    return a.startppq < b.endppq and b.startppq < a.endppq
-  end
+  local doors = {}
+  function doors.producers()    return producers end
+  function doors.producer(uuid) return byUuid[uuid] end
+  function doors.on(chan)       return byChan[chan] or {} end
 
-  for _, a in ipairs(mine) do
-    for _, b in ipairs(others) do
-      if sameTarget(a, b) and overlaps(a, b) then return true end
+  -- Half-open containment on every stream, which is also how parking reads a note: the note is taken
+  -- when its onset falls inside, so onset-in-span is the one test.
+  function doors.covers(evType, chan, cc, ppq)
+    for _, producer in ipairs(byChan[chan] or {}) do
+      if producer.targets[evType == 'cc' and cc or evType]
+         and ppq >= producer.startppq and ppq < producer.endppq then return producer.uuid end
     end
-    -- Onset-in-window, as parking decides it: a host the frozen note window covers is destroyed with
-    -- the chord it parks, taking its seats or its whole output with it.
-    if a.evType == 'note' then
-      for _, p in ipairs(census) do
-        if p.noteHost and p.uuid ~= frozen.uuid and p.chan == a.chan
-           and p.startppq >= a.startppq and p.startppq < a.endppq then return true end
+  end
+
+  -- The serialised view, minted once: `prevWindows` persists it and diffs it by value, so the order is
+  -- the target's own and not the order the chain's stages were authored in.
+  function doors.flat()
+    if flatWindows then return flatWindows end
+    flatWindows = {}
+    for _, producer in ipairs(producers) do
+      local function window(evType, cc)
+        util.add(flatWindows, { evType = evType, chan = producer.chan, cc = cc, id = producer.uuid,
+                                startppq = producer.startppq, endppq = producer.endppq })
       end
+      local ccs = {}
+      for target in pairs(producer.targets) do
+        if type(target) == 'number' then util.add(ccs, target) end
+      end
+      table.sort(ccs)
+      if producer.targets.note then window('note') end
+      if producer.targets.pb   then window('pb') end
+      for _, cc in ipairs(ccs) do window('cc', cc) end
     end
+    return flatWindows
   end
+  return doors
+end
 
-  -- The inverse: a note-dest host emits no park window at all, so nothing above can refuse it -- its
-  -- own span is the test. Continuous-only hosts do present curve windows, which the overlap arm has.
-  if frozen.noteHost and generators.parksNotes(frozen) then
-    for _, b in ipairs(others) do
-      if b.evType == 'note' and b.chan == frozen.chan
-         and frozen.startppq < b.endppq and b.startppq < frozen.endppq then return true end
+-- Freeze eligibility over the pass's producers: a refusal means some other producer would be left
+-- standing over the raw output this freeze creates. see docs/trackerManager.md § Park window census
+local function freezeRefused(frozen, windows)
+  for _, other in ipairs(windows.on(frozen.chan)) do
+    if other.uuid ~= frozen.uuid then
+      -- Half-open for every target: a producer's close folds at endppq-1, so abutting windows no
+      -- longer share a boundary seat and abutting is genuinely disjoint.
+      if frozen.startppq < other.endppq and other.startppq < frozen.endppq then
+        for target in pairs(frozen.targets) do
+          if other.targets[target] then return true end
+        end
+        -- A note-dest host emits no park window at all, so no target of its own can be met -- its own
+        -- span is the test. Continuous-only hosts do present curve windows, which the arm above has.
+        if frozen.noteHost and generators.parksNotes(frozen) and other.targets.note then return true end
+      end
+      -- Onset-in-window, as parking decides it: a host the frozen note window covers is destroyed with
+      -- the chord it parks, taking its seats or its whole output with it.
+      if frozen.targets.note and other.noteHost
+         and other.startppq >= frozen.startppq and other.startppq < frozen.endppq then return true end
     end
   end
   return false
@@ -1433,13 +1470,10 @@ end
 -- so tv re-tags cellKind. Forces the next flush and rebuild past their no-op gates.
 function tm:requestRebuild() rebuildRequested = true end
 
--- Defined with Rebuild Fx below; freeze's eligibility census needs the on-take host windows here.
-local computeFxWindows
-
 -- Rebuild output, not a cache: the pipeline mints them wholesale each pass from the settled census
 -- and tm:rebuild installs what comes back; absence = not a producer.
-local freezeEligibleByUuid = {}
-local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
+local producerWindows  = windowSet({})   -- the pass's park windows, whole
+local freezeRectByUuid = {}              -- uuid -> the gm rect a freeze-to-group mint would claim
 
 -- The one fx map that outlives a pass: the fx stage writes only the channels it ran, keyed by
 -- producer, so the overlay draws one chain's own.
@@ -1449,9 +1483,9 @@ local fxNotesByProducer = {}
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
 -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
-local function buildFreezeMaps(census, windows)
+local function buildFreezeRects(producers)
   local producerChans, lanesByUuid = {}, {}
-  for _, p in ipairs(census) do producerChans[p.chan] = true end
+  for _, p in ipairs(producers) do producerChans[p.chan] = true end
   for chan in pairs(producerChans) do
     for _, note in ipairs(index.raw(chan).notes) do
       -- A derived note carries its producer's uuid, so the bucketing needs no window arithmetic.
@@ -1462,45 +1496,38 @@ local function buildFreezeMaps(census, windows)
       end
     end
   end
-  local streamsByUuid = {}
-  for _, w in ipairs(windows) do
-    if w.evType ~= 'note' then
-      local streams = streamsByUuid[w.id] or {}
-      streams[w.evType == 'pb' and 'pb:0' or ('cc:' .. w.cc)] = true
-      streamsByUuid[w.id] = streams
-    end
-  end
-
-  local eligible, rects = {}, {}
-  for _, p in ipairs(census) do
-    eligible[p.uuid] = not freezeRefused(p, census, windows)
+  local rects = {}
+  for _, producer in ipairs(producers) do
     -- A husk producer (no fx, no output) claims an empty stream set rather than none: it is still
     -- a producer, and whether an empty footprint is worth minting is the caller's question.
-    local streams = streamsByUuid[p.uuid] or {}
-    for lane in pairs(lanesByUuid[p.uuid] or {}) do streams['note:' .. lane] = true end
+    local streams = {}
+    -- The note target is a park window, not output: a rect's note lanes are the ones the fx pass wrote.
+    for target in pairs(producer.targets) do
+      if     target == 'pb'           then streams['pb:0'] = true
+      elseif type(target) == 'number' then streams['cc:' .. target] = true end
+    end
+    for lane in pairs(lanesByUuid[producer.uuid] or {}) do streams['note:' .. lane] = true end
     -- Single-channel by construction, so chanOffset 0 is the only key; span is the producer's own.
-    rects[p.uuid] = { ppq = p.startppq, dur = p.endppq - p.startppq, chanLo = p.chan,
-                      streams = { [0] = streams } }
+    rects[producer.uuid] = { ppq = producer.startppq, dur = producer.endppq - producer.startppq,
+                             chanLo = producer.chan, streams = { [0] = streams } }
   end
-  return eligible, rects
+  return rects
 end
 
 -- The continuous half of the same window set: which pb/cc targets each producer's chains own,
 -- logical framed. see docs/trackerManager.md § Realisation by producer
 --shape: byProducer[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
-local function buildFxTargets(windows)
+local function buildFxTargets(producers)
   local byProducer = {}
-  for _, w in ipairs(windows) do
-    if w.evType ~= 'note' then
-      local target = w.evType == 'pb' and 'pb' or w.cc
-      local span   = { w.startppq, w.endppq }
-      local ownTargets = byProducer[w.id] or {}
-      util.bucket(ownTargets, target, span)
-      byProducer[w.id] = ownTargets
+  for _, producer in ipairs(producers) do
+    local targets, any = {}, false
+    for target in pairs(producer.targets) do
+      -- One span per target: a window takes its producer's span, so there is nothing to merge.
+      if target ~= 'note' then
+        targets[target], any = { { producer.startppq, producer.endppq } }, true
+      end
     end
-  end
-  for _, targets in pairs(byProducer) do
-    for target, claimed in pairs(targets) do targets[target] = spans.merge(claimed) end
+    if any then byProducer[producer.uuid] = targets end
   end
   return byProducer
 end
@@ -1649,24 +1676,18 @@ local function freezeRegion(uuid, toGroup)
   -- destroys it. A continuous-only chain leaves the note where it is.
   local destroysHost = hostRegion and generators.parksNotes(hostRegion)
 
-  -- computeFxWindows is rebuild machinery and warms its per-host cache as a side effect: safe to call
-  -- from out here because freeze clears no dirt, so the seeds the next rebuild re-derives on stand.
-  local census = producerCensus(regions, computeFxWindows(nil, stash), stash)
-  -- Gated before anything is gathered, so a refusal leaves the pass having staged nothing. `regions`
-  -- carries the frozen one and `stash` serves both arms; identity does the partitioning.
-  if freezeRefused(frozen, census, generators.parkWindows(census)) then return false end
+  -- The windows the last rebuild published, gated before anything is gathered so a refusal leaves
+  -- the pass having staged nothing. see docs/trackerManager.md § Park window census
+  local settled = producerWindows.producer(uuid)
+  if not settled or freezeRefused(settled, producerWindows) then return false end
 
-  -- Recomputed from the frozen producer alone: covered() below reads it, and so do the group arm's
+  -- The frozen producer's own windows, alone: covered() below reads them, and so do the group arm's
   -- two passes -- the thin in the raw frame, the member gather in the logical one.
-  local windows = generators.parkWindows({ frozen })
+  local windows = windowSet({ frozen })
   -- Window membership only, never rebuildRegionPark's covered(): its first clause answers "does this
   -- spec park itself", true of every self-parked note host on the channel, and would take theirs too.
   local function covered(spec)
-    for _, w in ipairs(windows) do
-      if w.evType == spec.evType and w.chan == spec.chan and w.cc == spec.cc
-         and spec.ppq >= w.startppq and spec.ppq < w.endppq then return true end
-    end
-    return false
+    return windows.covers(spec.evType, spec.chan, spec.cc, spec.ppq) ~= nil
   end
 
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
@@ -1730,7 +1751,7 @@ local function freezeRegion(uuid, toGroup)
   end)
 
   -- Inside this same staging block, so the closing rebuild back-derives cents on the survivors alone.
-  if toGroup then thinSeats(frozen.chan, windows) end
+  if toGroup then thinSeats(frozen.chan, windows.flat()) end
 
   dirt.add(frozen.chan, true)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
   -- A continuous-only or husk region stages no mm ops at all, and flush's no-op gate would swallow
@@ -1738,7 +1759,7 @@ local function freezeRegion(uuid, toGroup)
   tm:requestRebuild()
   tm:flush()
   if not toGroup then return true end
-  return groupMembers(frozen, windows, promotedUuids)
+  return groupMembers(frozen, windows.flat(), promotedUuids)
 end
 
 ----- Mutation
@@ -1793,9 +1814,12 @@ function tm:explodeRegion(uuid)
   tm:flush()
   return true
 end
---contract: reads the last rebuild's settled census; staged-not-flushed producers are invisible
---contract: false for any uuid that is not a live producer; never computes, never stages
-function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true end
+--contract: reads the last rebuild's published windows; staged-not-flushed producers are invisible
+--contract: false for any uuid that is not a live producer; never stages
+function tm:freezeEligible(uuid)
+  local frozen = producerWindows.producer(uuid)
+  return frozen ~= nil and not freezeRefused(frozen, producerWindows)
+end
 --contract: reads the last rebuild's settled census; never computes, never stages
 --contract: nil for a non-producer uuid; a producer with no output gets empty streams
 --contract: every member tm:freezeToGroup hands back lies inside the rect
@@ -3116,7 +3140,7 @@ end
 local fxHostWin = {}   -- uuid -> windowEndL (logical); take-scoped, dropped by forgetCaches at the
                        -- take-tier seam, which a take-length change (mm:setLength) reaches too
 
-function computeFxWindows(extraFxChans, parkedNotes)
+local function computeFxWindows(extraFxChans, parkedNotes)
   local takeLen = tm:length()
   local fxWindow = {}
   -- The stash is the authority on parkedness: the fx-host index lags a park until the tail-walk
@@ -4813,8 +4837,7 @@ local function rebuildPipeline(didReload)
   -- Park window set: fx-regions plus every on-take or still-producing parked note host, as a degenerate
   -- region (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see docs/generators.md § Offline continuous realisation
   local function assembleParkWindows(hostWins, parkedNoteSpecs)
-    local census = producerCensus(sources.fxRegions, hostWins, parkedNoteSpecs)
-    return generators.parkWindows(census), census
+    return windowSet(producerCensus(sources.fxRegions, hostWins, parkedNoteSpecs))
   end
 
   perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
@@ -4822,27 +4845,27 @@ local function rebuildPipeline(didReload)
   local currentWindows = assembleParkWindows(hostWindows, sources.fxParked or {})
   perf.stop('parkRegions')
 
-  -- Post-settlement window pass, called by rebuildRegionPark between its note and cc/pb passes: fxWindow
-  -- feeds fx expansion's host set, settledWindows the continuous membership + persisted window set, and settledCensus rides out to the freeze maps the pipeline tail builds.
-  local fxWindow, settledWindows, settledCensus
+  -- Post-settlement window pass: fxWindow feeds fx expansion's host set, settledWindows the tail's maps.
+  -- see docs/trackerManager.md § Fx and park windows
+  local fxWindow, settledWindows
   local function settleWindows(restoredCells, parkedNotes)
     local restoredFxChans = {}
     for _, cell in ipairs(restoredCells) do
       if cell.fx then restoredFxChans[cell.chan] = true end
     end
     fxWindow = computeFxWindows(restoredFxChans, parkedNotes)
-    settledWindows, settledCensus = assembleParkWindows(fxWindow, parkedNotes)
-    return settledWindows
+    settledWindows = assembleParkWindows(fxWindow, parkedNotes)
+    return settledWindows.flat()
   end
 
   perf.start('regionPark')
-  local parkedByProducer = rebuildRegionPark(currentWindows, sources.fxParked, sources.prevWindows,
+  local parkedByProducer = rebuildRegionPark(currentWindows.flat(), sources.fxParked, sources.prevWindows,
                                              hostWindows, settleWindows)  -- park covered, carry/restore prior
   perf.stop('regionPark')
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   perf.start('fx')
-  local fxOut = rebuildFx(noteExisting, ccExisting, fxWindow, settledWindows, sources.fxRegions,
+  local fxOut = rebuildFx(noteExisting, ccExisting, fxWindow, settledWindows.flat(), sources.fxRegions,
                           fxNotesByProducer)  -- fx expansion: derived notes/CCs
   perf.stop('fx')
 
@@ -4852,21 +4875,22 @@ local function rebuildPipeline(didReload)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('prevWindows')
-  if mm:take() and not util.deepEq(sources.prevWindows or {}, settledWindows) then
-    ds:assign('prevWindows', #settledWindows > 0 and settledWindows or util.REMOVE)
+  local flatWindows = settledWindows.flat()
+  if mm:take() and not util.deepEq(sources.prevWindows or {}, flatWindows) then
+    ds:assign('prevWindows', #flatWindows > 0 and flatWindows or util.REMOVE)
   end
   perf.stop('prevWindows')
 
   -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
   -- the previous rebuild's note lanes. Sibling maps, one site.
-  local maps = {}
+  local maps = { windows = settledWindows }
   perf.start('freezeMaps')
-  maps.freezeEligible, maps.freezeRect = buildFreezeMaps(settledCensus, settledWindows)
+  maps.freezeRect = buildFreezeRects(settledWindows.producers())
   perf.stop('freezeMaps')
   -- The shares the passes above keyed by producer, gathered last; only the notes outlive the pass.
   local byProducer = { notes = fxNotesByProducer, parked = parkedByProducer,
-                       targets = buildFxTargets(settledWindows) }
-  maps.fxRealisation = buildFxRealisation(settledCensus, globalRegions, byProducer)
+                       targets = buildFxTargets(settledWindows.producers()) }
+  maps.fxRealisation = buildFxRealisation(settledWindows.producers(), globalRegions, byProducer)
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
@@ -4925,8 +4949,8 @@ function tm:rebuild(takeChanged)
   mm:batch(function() maps = rebuildPipeline(didReload) end)
   -- Install what the pass created. Nothing reads these mid-pass, and the accessors read between
   -- rebuilds, so they stand before the signal goes out.
-  freezeEligibleByUuid, freezeRectByUuid, fxRealisationByUuid =
-    maps.freezeEligible, maps.freezeRect, maps.fxRealisation
+  producerWindows, freezeRectByUuid, fxRealisationByUuid =
+    maps.windows, maps.freezeRect, maps.fxRealisation
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean

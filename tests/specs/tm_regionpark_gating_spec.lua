@@ -31,7 +31,7 @@ end
 return {
   {
     -- Mechanism-independent pin for the span-covered scan: a self-parking note host carries no window
-    -- (parkWindows suppresses the note arm for note-hosts), so a correct cover must find it from the
+    -- (chainTargets suppresses the note target for note-hosts), so a correct cover must find it from the
     -- fx-host set, never by walking the column. A far plain note shares the channel to make a
     -- whole-column scan and a host-set lookup observably different in reach.
     name = 'a self-parking note host parks off-take via the fx-host set, not a column scan',

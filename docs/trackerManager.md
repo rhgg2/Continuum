@@ -582,7 +582,7 @@ runs it.
 1. **Extra columns** (`rebuildExtraColumns`)
 1. **Externals** (`rebuildExternals`)
 1. **Sample stamp** (`stampSamples`)
-1. **Fx and park windows** (`computeFxWindows`, `generators.parkWindows`)
+1. **Fx and park windows** (`computeFxWindows`, `windowSet`)
 1. **Region-replace parking** (`rebuildRegionPark`)
 1. **PA dispatch** (`rebuildPA`)
 1. **Fx expansion** (`rebuildFx`)
@@ -688,15 +688,22 @@ interval dirt visits just the seeded uuids.
 
 ### Fx and park windows
 
-`computeFxWindows` and `generators.parkWindows` walk each channel's note
-columns in the logical frame, so every fx host's window is its voice
-extent — the next same-lane onset, floored by the authored end or the take
-length, with chord-mates held open to a common clip. The park window set is
-those windows plus the fx regions, each parked or still-producing host
-entering as a degenerate one-note region. The set is assembled twice: a
-head set for the note pass, and a settled set (`settleWindows`, called from
-inside the park stage) for cc/pb membership and `rebuildFx`
-(§ Fx window cache).
+`computeFxWindows` walks each channel's note columns in the logical frame,
+so every fx host's window is its voice extent — the next same-lane onset,
+floored by the authored end or the take length, with chord-mates held open
+to a common clip. The park window set is those windows plus the fx regions,
+each parked or still-producing host entering as a degenerate one-note
+region. The set is assembled twice: a head set for the note pass, and a
+settled set (`settleWindows`, called from inside the park stage) for cc/pb
+membership and `rebuildFx` (§ Fx window cache).
+
+`windowSet` holds each set. A park window is one producer's span typed by
+one stream it parks, and every window of a producer takes that producer's
+span, so the set holds one record per producer — channel, span, host flags,
+and the targets its chain reaches, from `generators.chainTargets` — and
+answers in whichever shape a reader wants: membership for the park scans,
+the producers for the tail's maps, and a flat list, ordered note, pb, then
+cc ascending, for the stages that walk one and for the `prevWindows` write.
 
 ### Region-replace parking
 
@@ -1038,8 +1045,8 @@ region spans lanes, carries none, and resolves to nil, which is also what keeps 
 `rebuildRegionPark`'s note/cc scans are span-covered the same way: `coverOnsets` walks each
 channel's window extents (merged per-channel for notes, per `(chan, cc)` for ccs) rather than the
 whole column, since a covered event sits inside a current window by definition — the extents are
-the complete cover set. Self-parking fx hosts are the one exception: `parkWindows` suppresses their
-own note-arm window, so they carry none, and the note pass sources them separately from the
+the complete cover set. Self-parking fx hosts are the one exception: `chainTargets` suppresses their
+own note target, so they carry no note window, and the note pass sources them separately from the
 fx-host set (`hostWindows`), gated by `generators.parksNotes` and deduped against the
 window-driven scan by event identity.
 
@@ -1098,8 +1105,8 @@ membership, parking moves note onsets, and note onsets clip windows
 by splitting membership across the settlement point.
 
 Note membership reads the head window set, and is exact there: note
-windows come only from authored `fxRegions` (`parkWindows` suppresses the
-note arm on note-host regions) and a note host parks itself by predicate,
+windows come only from authored `fxRegions` (`chainTargets` suppresses the
+note target on note-host regions) and a note host parks itself by predicate,
 so note membership reads nothing the pass moves.
 
 Continuous (cc/pb) membership reads the settled set: after the note and
@@ -1133,8 +1140,11 @@ bucket is `fxWindow`'s keys plus `frame.channels[chan].parked`, would run its ch
 would sum the two pb curves to twice the authored depth. The declaration therefore sits at the
 writer, where one statement serves every reader.
 
+`windowSet` holds the pass's park windows once: the producers are the fact, and the flat list is a
+view over them. `targets` is stamped on the census records, which are the pass's own.
+
 `freezeRegion`'s resync drops the frozen producer's entries from `prevWindows` (the
-seat-recognition baseline) by their stamped `id`: every window `parkWindows` emits carries its
+seat-recognition baseline) by their stamped `id`: every window the set emits carries its
 producer's uuid. The stamp is identity for subtraction only — seat recognition still matches on
 spans, so nothing downstream reads it. Identity is what the subtraction needs: two producers can
 emit identical windows (a same-target overlap, or two on-take hosts riding the same fx), and a
@@ -1143,22 +1153,28 @@ freshly authored and park them off-take. The `id` drop also holds for a persiste
 longer recomputes field-for-field (a kind deregistered, a clipping context changed): it still
 leaves with its producer.
 
-The same census answers freeze eligibility. `freezeRefused` partitions the windows `parkWindows`
-emits by their stamped `id` — the frozen producer's on one side, every other producer's on the other
-— and refuses if the two sides meet on a target. Two further arms exist because window-vs-window
-cannot see everything: an fx-carrying host *inside* the frozen producer's note window emits no note
-window to be caught by — `noteHost` suppresses a note-dest host's, and a continuous-only chain has no
-note arm to suppress in the first place — and a note-dest host emits no window at all, so it is
-tested the other way round — its own span against the neighbours' note windows. The overlap
-predicate is half-open on every target: the pb re-centre seat folds at `endppq - 1`, so abutting
-windows share nothing and are disjoint in fact as well as in the test. Refusal is silent and total
-— false, computed before any gather, so nothing of freeze's own is staged. A region stored on
-channel 0 refuses ahead of all this: it runs sixteen producers and is none of them, so no one
-channel's output is the one to convert (§ Channel & column model). The census `freezeRegion`
-builds for itself is unfiltered, unlike the rebuild's, so the refusal is stated at the verb.
+The same census answers freeze eligibility, through the window set the pass holds: the rebuild
+publishes it beside the rects, and it outlives the pass.
 
-All three arms answer *what is committed* — `fxRegions`, the maintained fx-host index, the stash — so
-`freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
+`freezeRefused` makes one pass over the producers on the frozen one's channel and refuses on
+three counts. An overlapping neighbour claiming a target the frozen producer claims would be left
+standing over the raw output the freeze creates. An fx-carrying host whose onset the frozen note
+window covers is destroyed with the chord that window parks, and emits no note window to be caught by
+the first count — `noteHost` suppresses a note-dest host's, and a continuous-only chain has no note
+arm to suppress in the first place. A note-dest host emits no window at all, so it is tested the
+other way round, its own span against the neighbours' note windows. The overlap test is half-open on
+every target: the pb re-centre seat folds at `endppq - 1`, so abutting windows share nothing and are
+disjoint in fact as well as in the test.
+
+`tm:freezeEligible` and `freezeRegion`'s gate both compute refusal from the published set, so
+the button and the verb answer from one source. Refusal is silent and total — false, computed before
+any gather, so nothing of freeze's own is staged. A region stored on channel 0 refuses ahead of all
+this: it runs sixteen producers and is none of them, so no one channel's output is the one to convert
+(§ Channel & column model). Its expansions are producers of their own, so a chain overlapping a
+global chain's output is refused like any other neighbour's.
+
+The published set states *what is committed* — `fxRegions`, the maintained fx-host index, the stash,
+as the last rebuild settled them — so `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
 invisible to the gate, and freeze's own closing flush would then commit it: a live window over the
 seats just frozen, which are markerless, so its producer re-derives them — with success reported.
 The leading flush is a no-op when nothing is staged, at the price of one empty `preflush` (which
@@ -1399,10 +1415,9 @@ kept rather than re-run, and a kept producer emits no record — so a target set
 read off it would vanish on the first edit elsewhere in the channel and return
 with the dirt. The note half can ride the emission because the reconcile
 re-adds a kept producer's specs verbatim; nothing re-adds its curve. What does
-not blink is `parkWindows`, which already walks a window per continuous cc
-target and a pb window per pb target, blind to dirt and blind to bypass, so
-the target set is a fold of the window set the rebuild computes for parking
-anyway.
+not blink is `chainTargets`, which already names a target per continuous cc
+dest and one for pb, blind to dirt and blind to bypass, so the target set is
+the window set the rebuild computes for parking anyway.
 
 **3** One thing follows from taking the census whole: a note host claims its
 targets exactly as a region does, so a note carrying an lfo ghosts into the cc

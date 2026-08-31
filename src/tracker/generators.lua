@@ -658,29 +658,13 @@ function generators.chainDestType(fx, target)
   return 'augment'
 end
 
---shape: parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, id, startppq, endppq}, ... } (cc on cc windows only)
--- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
--- per continuous cc target and a pb window per continuous pb target (both replace or augment).
-function generators.parkWindows(regions)
-  local windows = {}
-  local function window(evType, region, cc)
-    util.add(windows, { evType = evType, chan = region.chan, cc = cc,
-                        id = region.uuid,
-                        startppq = region.startppq, endppq = region.endppq })
-  end
-  for _, region in ipairs(regions) do
-    -- A note host self-parks via its own note spec, not a region note window -- suppress the note arm
-    -- so a note host's region form only contributes continuous (cc/pb) windows.
-    if generators.parksNotes(region) and not region.noteHost then window('note', region) end
-    for _, params in ipairs(region.fx or {}) do
-      local dest = generators.kinds[params.kind] and generators.destOf(params)
-      -- cc and pb both park for replace and augment: the summed base + macros seat on the target
-      -- lane (cc) or base lane (pb). see docs/generators.md § pb and cc
-      if type(dest) == 'number' then window('cc', region, dest)
-      elseif dest == 'pb' then window('pb', region) end
-    end
-  end
-  return windows
+--shape: chainTargets -> { ['note'|'pb'|ccNum] = true }
+-- One target per stream the chain reaches, whatever the stage count. see docs/generators.md § Emission is ownership
+-- A note host self-parks via its own note spec, so its note target is suppressed here.
+function generators.chainTargets(region)
+  local targets = generators.continuousTargets(region.fx)
+  if generators.parksNotes(region) and not region.noteHost then targets.note = true end
+  return targets
 end
 
 ----- Curve thinning (freeze to group)
