@@ -1,4 +1,4 @@
--- tm's rawIndex holds one rawThenLogical-sorted list per channel per type, and the tail walk reads
+-- tm's rawIndex holds one raw-then-logical-sorted list per channel per type, and the tail walk reads
 -- those lists in order to find each note's same-pitch successor -- so a misplaced entry mis-clips a
 -- tail. The index is maintained two ways: built in bulk at load (sort per list), patched per-event by
 -- the add/assign verbs. Only the bulk path is self-evidently ordered. These cases pin the two against
@@ -58,7 +58,7 @@ end
 -- The nudge fixture. Three lane-1 notes on chan 1: the mover is edited onto the blocker's raw, they
 -- share a pitch and differ in ppqL (so voicing separates rather than dedupes), and the walk gives the
 -- mover way by one tick -- onto the neighbour's raw, where its later ppqL puts it last in
--- rawThenLogical order. It moves in value without moving in slot, which is the whole stain.
+-- raw-then-logical order. It moves in value without moving in slot, which is the whole stain.
 --
 -- Built by edit, not by seed: mm's load dedup runs voicing itself, so a seeded same-raw pair arrives
 -- already separated and the walk never nudges (tests/specs/mm_load_dedup_spec.lua).

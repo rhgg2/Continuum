@@ -93,12 +93,12 @@ decides whether phase 3 is worth taking.**
 
 1. The frame is one seam, and the index is the other. Both sides use
    the index, and they use it differently. The edit path reaches it
-   through semantic doors — `detuneAt` for the prevailing detune at a
-   seat, `forEachAttachedPA` for a host's PAs — and touches the raw
-   lists six times in all. The engine takes the lists and walks them,
-   twenty-seven times. The mediated write surface that
-   `um-index-stager.md` D2 built — `setRaw`, `stampColEvt`,
-   `withDeferredSort` — has no edit-side caller at all.
+   through semantic doors — `index.detuneAt` for the prevailing detune
+   at a seat, `index.forEachAttachedPA` for a host's PAs — and touches
+   the raw lists six times in all. The engine takes the lists and walks
+   them, twenty-seven times. The mediated write surface that
+   `um-index-stager.md` D2 built — `index.assign`, `index.stampColEvt`,
+   `index.withDeferredSort` — has no edit-side caller at all.
 
 ## Two movements
 
@@ -216,15 +216,14 @@ the seed minters stay with the structures they read. The model is
    as explicit lists. Passing `index` and `stager` as tables of those
    doors costs two names and moves no code.
 
-1. The write surface falls on the same line. `setRaw`, `stampColEvt`
-   and `withDeferredSort` are engine-only, so the line the handle draws
-   is the line the mutation privilege already has: tm keeps the lists
-   true across edits, the engine is the only writer mid-pass, and
-   `um-index-stager.md` D2's contract governs exactly that. Of
-   thirty-five references to `rawIndexFor`, twenty-seven are the
-   engine's and six the edit side's, the remaining two being the
-   declaration and the definition. A structure two modules use needs
-   one owner, and the door table gives it one.
+1. The write surface falls on the same line. `index.assign`,
+   `index.stampColEvt` and `index.withDeferredSort` are engine-only, so
+   the line the handle draws is the line the mutation privilege already
+   has: tm keeps the lists true across edits, the engine is the only
+   writer mid-pass, and `um-index-stager.md` D2's contract governs
+   exactly that. Of the thirty-three calls to `index.raw`, twenty-seven
+   are the engine's and six the edit side's. A structure two modules use
+   needs one owner, and the door table gives it one.
 
 1. Each field of a travelling record has one authoring stage. A record
    passes from the stage that mints it through the stages that settle
@@ -305,9 +304,7 @@ the seed minters stay with the structures they read. The model is
 ## Open
 
 1. What `tm` in the engine's dependency list covers. The stages call
-   four of its methods: `tm:fromLogical` and `tm:toLogical` are the
-   swing projection, `tm:byUuid` is a raw-index read declared inside
-   RAW INDEX, and `tm:length` is the take length with the shrink-flush
-   override. If `byUuid` travels on the index handle, the dependency
-   reduces to a time projection and a scalar, and should be named as
-   those.
+   three of its methods: `tm:fromLogical` and `tm:toLogical` are the
+   swing projection, and `tm:length` is the take length with the
+   shrink-flush override. The dependency is a time projection and a
+   scalar, and should be named as those.

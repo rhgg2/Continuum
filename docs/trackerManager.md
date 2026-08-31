@@ -89,14 +89,14 @@ extraColumns[chan] = {
 
 Two `do ... end` blocks folded into tm's own scope, not separate objects:
 the source banners them `-- RAW INDEX` and `-- STAGER`. The index owns
-`rawIndex`/`byUuid`/`fxHosts` and the upkeep that keeps them true; the
-stager accumulates mm-facing ops and commits them. The arrow runs one
-way — staging reaches the index through its doors (`rawIndexInsert`,
-`rawIndexRemove`, `rawIndexRefile`, `idxReconcile`, `forgetUuid`,
-`loadIndex`) and never the reverse — so the type→list mapping
+`rawIndex`/`byUuid`/`fxHosts` and the upkeep that keeps them true, and
+hangs its doors on one `index` table; the stager accumulates mm-facing
+ops and commits them. The arrow runs one way — staging reaches the index
+through its doors (`index.add`, `index.delete`, `index.move`,
+`index.sync`, `index.forget`, `index.load`) and never the reverse — so the type→list mapping
 (`rawIndexListFor`) stays inside the index.
 
-Maintenance through those doors is identity-based: `rawIndexRemove` finds its
+Maintenance through those doors is identity-based: `index.delete` finds its
 entry by object identity, so a caller hands the verbs mm's canonical record and
 never a projection of one. A projected column cell carries the same uuid and is
 a different table, so removing one strands the raw entry — invisible to a
@@ -105,10 +105,10 @@ uuid-holed read of mm, and exposed the moment a splice reads the index.
 
 The index is the primary structure and the stager is one of its clients.
 `rawIndex[chan]` holds every event on the channel, one
-`rawThenLogical`-sorted list per type; the whole rebuild pipeline reads it
+`index.order`-sorted list per type; the whole rebuild pipeline reads it
 in place, ~40 sites of it, against ~10 callers for the write verbs — nearly
 all of those tm's own forwarders. The index lives inside um because um is
-what keeps it true. `rawIndexFor(chan)` is the single read door, covering
+what keeps it true. `index.raw(chan)` is the single read door, covering
 all six lists.
 
 An event's `uuid` is its handle everywhere: durable across rebuilds and
@@ -119,7 +119,7 @@ stage's `mm:add` lands. Presence, and not the uuid, is what says "this event
 exists in mm, write through to it"; a parked spec keeps its uuid the whole
 time it is off-take.
 
-`rawThenLogical` is a total order: raw tick, then logical seat, then authored
+`index.order` is a total order: raw tick, then logical seat, then authored
 before generated, then lane, then pitch. The tail carries weight. Records can
 share a tick and a pitch — a nudge lands a derived note on an authored one —
 and `(ppq, ppqL)` alone leaves them in Lua's unstable sort order, which is
@@ -161,13 +161,13 @@ that is the whole set:
 
 Three further writes sit outside the contract: `rebuildPbs` clones at the
 boundary, `rebuildInternals` writes mm's own column clones, and
-`colEvt`/`realised` are um's own decoration, set through `stampColEvt` and
+`colEvt`/`realised` are um's own decoration, set through `index.stampColEvt` and
 the entry lifecycle.
 
-All three go through `setRaw(entry, field, value)`, the entry-side twin of
+All three go through `index.assign(entry, field, value)`, the entry-side twin of
 `setCell` for column cells (§ Note-lane renewal): skip the no-op, and
-where the field is one of `rawThenLogical`'s keys, re-true the containing
-list — inline, or flagged for the open `withDeferredSort` block to sort
+where the field is one of `index.order`'s keys, re-true the containing
+list — inline, or flagged for the open `index.withDeferredSort` block to sort
 once at its close. Only `ppq` of the three actually stains a sort key, but
 the door is the same for all of them so the rule lives in one place instead
 of at the call site.
@@ -189,7 +189,7 @@ where a reader downstream reads the stale order.
 
 ### Incremental index reconciliation
 
-`idxReconcile(uuid)` rebuilds one event's `byUuid`/`rawIndex` entry from mm's
+`index.sync(uuid)` rebuilds one event's `byUuid`/`rawIndex` entry from mm's
 canonical clone (`mm:byUuid`), producing an entry byte-identical to what a
 full `reload()` would build for it — both funnel through the shared
 `makeEntry` helper. Callers reconcile every touched uuid after the whole
@@ -205,13 +205,13 @@ branch never copies `ppq`, so that entry would keep a stale onset. A uuid
 survives the move, so the condition has to be stated explicitly.
 
 Reseating is a splice. The list an entry moves within is ordered everywhere
-except at that one entry, so `rawIndexInsert` binary-searches its seat
+except at that one entry, so `index.add` binary-searches its seat
 (`util.insertSorted`) and `assignLowlevel` reseats a moved entry by removing
 and reinserting it — the same path a channel migration takes. Re-sorting the
 whole list is O(n log n) Lua comparator calls to place a single event: ~8ms per
 added note on a dense single-channel take (8.4k notes all on channel 1),
 against ~0.2ms for the identity scan and shift it replaces. Bulk paths keep the
-sort: `withDeferredSort` appends and sorts each touched list once at the end,
+sort: `index.withDeferredSort` appends and sorts each touched list once at the end,
 since N splices into one list beat N sorts only for small N.
 
 `tm_raw_index_order_spec` pins both mechanics against the bulk-built index: the
@@ -229,7 +229,7 @@ own nested `mm:modify` calls re-fire `'reload'` and would otherwise clear it.
 Note entries also carry `colEvt` — the seat stamp. As the rebuild seats a
 column cell (internals, externals, or a restored parked note as the park
 stage's own commit lands it), it files the cell on the note's entry via
-`stampColEvt`. The stamp is how raw consumers reach the pass's live cell
+`index.stampColEvt`. The stamp is how raw consumers reach the pass's live cell
 without a per-pass column scan, and it must outlive reconciliation:
 `refreshEntry`'s sweep spares um's own decoration (`realised`, `colEvt`),
 and the remove-and-reinsert path carries the stamp onto the fresh entry.
@@ -298,7 +298,7 @@ tm-specific facts:
   but the first rebuild after it lands back-derives one and persists
   it, so from then on it rescales like any other.
 - **Lane-1 drives detune.** Every note has a `detune` field, but
-  only lane-1 notes feed the pb-realisation logic — `detuneAt` seeks
+  only lane-1 notes feed the pb-realisation logic — `index.detuneAt` seeks
   `rawIndex[chan].notes` (which holds every lane) through a lane-1
   filter, and the absorber pass reads only lane-1 onsets, so higher-lane
   detune never reaches the pb stream (I3). It survives as dead data for
@@ -865,7 +865,7 @@ Settlement runs against a pristine index. Each pitch's cascade chain is
 gathered first and settled by position afterwards: probing an index the pass is
 mutating unsorts the list the probe binary-searches, and the search cycles.
 Seed resolution is scoped to a note on this channel for a neighbouring reason —
-`tm:byUuid` answers pbs and ccs too, and a seed resolving to one buckets on a
+`index.byUuid` answers pbs and ccs too, and a seed resolving to one buckets on a
 nil pitch.
 
 The set of notes to re-bound is seed-driven, not span-tested. A note is
@@ -1062,7 +1062,7 @@ new clip). Everything else rides the cached end.
 
 The reseek is walk-free. `byUuid[uuid].colEvt` (the seat stamp, § Incremental index reconciliation)
 back-links a host uuid to its live column cell, so a dirty host reclips by seeking its own lane
-column through `colEvtFor(uuid)` rather than the old per-channel walk that built every column's
+column through `index.colEvtFor(uuid)` rather than the old per-channel walk that built every column's
 successor map up front. `hostWindowEnd(cell, takeLenL)` does the clip against `nextLaneOnset`.
 
 Two paths still walk the channel. A wholesale-dirty channel carries no seed positions to test a
@@ -1314,7 +1314,7 @@ is active, any column containing any note of that pitch accepts. PAs
 with no matching pitch anywhere in the channel are dropped.
 
 Ownership in um is a separate question from column binding, and um tests
-it in the **logical** frame (`forEachAttachedPA`). A PA carries its own
+it in the **logical** frame (`index.forEachAttachedPA`). A PA carries its own
 `ppqL` and the CC walk reswings it from that seat, exactly as it does a
 note. So a host's realisation moves independently of the PAs it owns: a
 forward delay pushes a note's raw onset clean past a PA at its own logical
@@ -1326,7 +1326,7 @@ Reading um's index rather than mm also widens what counts as attached: the
 index carries staged adds, so a PA added this gesture and not yet flushed
 follows its host's resize or delete.
 
-`forEachAttachedPA` gathers its matches into a list before invoking `fn` on each, rather than
+`index.forEachAttachedPA` gathers its matches into a list before invoking `fn` on each, rather than
 calling `fn` inline mid-walk. `fn` is `deleteLowlevel` or `assignLowlevel`, and both remove from
 and reinsert into the very `pas` list being walked — a `table.remove` mid-`ipairs` shifts the next
 entry into the removed slot, so an inline call would skip it.
@@ -1522,10 +1522,10 @@ verdict would be mm's rather than tm's.
 
 That list is exactly the post-flush note set, because every site that files
 a note into `byUuid` files it into `rawIndex` too: `makeEntry` is `byUuid`'s
-only writer and its only callers (`idxReconcile`, `loadIndex`) file into
+only writer and its only callers (`index.sync`, `index.load`) file into
 both, `addLowlevel` files a staged add into `rawIndex` and `adds` together,
 and `deleteLowlevel` removes from both. Parked edits are in neither. It is
-also already sorted, by `rawThenLogical`, a strict *refinement* of the
+also already sorted, by `index.order`, a strict *refinement* of the
 `(ppq, ppqL)` order the verdict needs: it settles ties `table.sort` would
 leave arbitrary, and in those ties the verdict is order-symmetric anyway —
 `supersedes` kills the derived note from either side, and with derived-ness

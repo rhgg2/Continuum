@@ -62,7 +62,7 @@ return {
     end,
   },
 
-  -- Pins detuneAt's lane walk where it is observable: the absorber pass re-derives flush's wire
+  -- Pins index.detuneAt's lane walk where it is observable: the absorber pass re-derives flush's wire
   -- values itself, so only this sample-time subtraction answers for the seek's lane filter.
   {
     name = 'fxCurveAt: pb projects back through the prevailing lane-1 detune, not a nearer lane-2 note',
@@ -71,7 +71,7 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 50, delay = 0, lane = 1, fx = sine30 })
       -- The interloper: nearer the sample points than the host, wrong lane, different detune. A
-      -- detuneAt landing at-or-before without walking back to lane 1 answers -30 for 50, and every
+      -- index.detuneAt landing at-or-before without walking back to lane 1 answers -30 for 50, and every
       -- sample past its onset comes back 80 cents sharp.
       h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 240, chan = 1, pitch = 64,
                       vel = 100, detune = -30, delay = 0, lane = 2 })

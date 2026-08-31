@@ -542,10 +542,10 @@ end
 -- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
 --contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
 local function reconcileDerived(a)
-  local index, kept = {}, {}
-  for _, e in ipairs(a.existing) do index[a.key(e)] = e end
+  local byKey, kept = {}, {}
+  for _, e in ipairs(a.existing) do byKey[a.key(e)] = e end
   for _, spec in ipairs(a.predicted) do
-    local have = index[a.key(spec)]
+    local have = byKey[a.key(spec)]
     if have and (not a.match or a.match(have, spec)) then
       kept[have] = true
       if a.onKeep then a.onKeep(spec, have) end
@@ -629,9 +629,9 @@ end
 ---------- RAW INDEX
 
 -- Owns rawIndex/byUuid/fxHosts and the upkeep that keeps them true; knows nothing of staging.
-local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
-      idxReconcile, withDeferredSort, setRaw, detuneAt, forEachAttachedPA,
-      rawIndexInsert, rawIndexRemove, rawIndexRefile, forgetUuid, loadIndex do
+-- `index` is the handle its doors hang on; the three structures stay private to the block.
+local index = {}
+do
 
   ----- State
 
@@ -643,7 +643,7 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
   ----- Order
 
   -- Total order for the raw working set; every list here holds it. See docs/trackerManager.md § Update manager (um).
-  function rawThenLogical(a, b)
+  function index.order(a, b)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
     local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
     if aL ~= bL then return aL < bL end
@@ -654,10 +654,9 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
 
   ----- Read surface
 
-  -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + detuneAt(seat).
-  -- Full absorber reconciliation is rebuild's absorber pass; um just stages the best-effort value.
-  -- see docs/trackerManager.md § Pitchbend: tm's role in the tuning model
-  function detuneAt(chan, P)
+  -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + index.detuneAt(seat).
+  -- Best-effort only; full absorber reconciliation is rebuild's absorber pass (docs/trackerManager.md § Pitchbend).
+  function index.detuneAt(chan, P)
     local notes = rawIndex[chan].notes
     for i = util.firstAfter(notes, P) - 1, 1, -1 do
       if notes[i].lane == 1 then return notes[i].detune or 0 end
@@ -667,22 +666,24 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
 
   -- The pipeline's raw working set, read in place by the walk and its raw consumers
   -- (filtered at use); entries are live um records.
-  function rawIndexFor(chan) return rawIndex[chan] end
+  function index.raw(chan) return rawIndex[chan] end
 
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
   -- instead of rescanning columns.
-  function fxHostsFor(chan) return fxHosts[chan] end
+  function index.fxHosts(chan) return fxHosts[chan] end
 
   -- Resolve a uuid to its live column cell via the seat stamp (byUuid.colEvt), so the fx-window cache
   -- reseeks a dirty host without a column walk. see docs/trackerManager.md § Fx window cache
-  function colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
+  function index.colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
 
-  -- The live column event for a uuid, valid until the next rebuild.
-  function tm:byUuid(uuid) return byUuid[uuid] end
+  -- The live index entry for a uuid, valid until the next rebuild.
+  function index.byUuid(uuid) return byUuid[uuid] end
+  -- gm and tv resolve a uuid through tm; the entry itself is the index's.
+  function tm:byUuid(uuid) return index.byUuid(uuid) end
 
   -- Ownership is tested logically (a raw delay or nudge can't detach a PA from its own seat), and
   -- this gathers before applying since fn mutates the very pas list it walks. see docs/trackerManager.md § PA binding
-  function forEachAttachedPA(host, fn)
+  function index.forEachAttachedPA(host, fn)
     local from, to = host.ppqL or host.ppq, host.endppqL or host.endppq
     local attached = {}
     for _, cc in ipairs(rawIndex[host.chan].pas) do
@@ -705,7 +706,7 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
     if t == 'pa' then return ri.pas end
     if t == 'at' then return ri.ats end
     if t == 'cc' then
-      -- Created on demand so idxReconcile's fast path compares two tables, never nil vs table.
+      -- Created on demand so index.sync's fast path compares two tables, never nil vs table.
       local bucket = ri.ccs[evt.cc]
       if not bucket then bucket = {}; ri.ccs[evt.cc] = bucket end
       return bucket
@@ -729,10 +730,10 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
     local set = fxHosts[chan or evt.chan]
     if set then set[evt.uuid] = nil end
   end
-  -- During a batched reconcile this holds the lists rawIndexInsert touched; the batch
+  -- During a batched reconcile this holds the lists index.add touched; the batch
   -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
   local deferredSort
-  function rawIndexInsert(evt)
+  function index.add(evt)
     local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
     setFxHost(evt)
@@ -742,10 +743,10 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
       util.add(tbl, evt)
       deferredSort[tbl] = true
     else
-      util.insertSorted(tbl, evt, rawThenLogical)
+      util.insertSorted(tbl, evt, index.order)
     end
   end
-  function rawIndexRemove(evt, chan)
+  function index.delete(evt, chan)
     local tbl = rawIndexListFor(evt, chan or evt.chan)
     if not tbl then return end
     clearFxHost(evt, chan)
@@ -754,14 +755,14 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
 
   -- Keep the index coherent (util.seek and the walk need ascending order): a chan move or an onset
   -- move both reseat via remove-then-place. See docs/trackerManager.md § Incremental index reconciliation.
-  function rawIndexRefile(evt, oldChan, update)
+  function index.move(evt, oldChan, update)
     local oldList  = rawIndexListFor(evt, oldChan)
     local newList  = rawIndexListFor(evt, evt.chan)
     local migrated = oldList ~= newList
     local reseated = newList ~= nil and (update.ppq ~= nil or update.ppqL ~= nil)
     if migrated or reseated then
-      rawIndexRemove(evt, oldChan)
-      rawIndexInsert(evt)
+      index.delete(evt, oldChan)
+      index.add(evt)
     end
     -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
     if update.fx ~= nil then setFxHost(evt) end
@@ -769,27 +770,27 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
 
   -- The batching door: rawIndex is um's, so um owns the deferral. Inserts and sort-key moves inside
   -- fn flag their list; each is sorted once here. A caller reaching for the flag gets a nil it can't see.
-  function withDeferredSort(fn)
+  function index.withDeferredSort(fn)
     local prev = deferredSort
     deferredSort = {}
     fn()
-    for tbl in pairs(deferredSort) do table.sort(tbl, rawThenLogical) end
+    for tbl in pairs(deferredSort) do table.sort(tbl, index.order) end
     deferredSort = prev
   end
 
-  -- rawThenLogical's keys: a write that moves one leaves the containing list out of order.
+  -- The order's keys: a write that moves one leaves the containing list out of order.
   local SORT_KEYS = { ppq = true, ppqL = true, lane = true, pitch = true, derived = true }
 
   -- Field write on an index entry, mirroring setCell for column cells: skip the no-op, and where the
   -- value moves a sort key, re-true the containing list -- deferred to the open block if there is one.
-  function setRaw(entry, field, value)
+  function index.assign(entry, field, value)
     if entry[field] == value then return end
     -- Non-member records (fx specs, restores) flag their channel's list spuriously: one redundant sort
     -- of a list the same walk is about to stain anyway, against an O(n) membership scan per write.
     local tbl = SORT_KEYS[field] and rawIndexListFor(entry, entry.chan)
     entry[field] = value
     if not tbl then return end
-    if deferredSort then deferredSort[tbl] = true else table.sort(tbl, rawThenLogical) end
+    if deferredSort then deferredSort[tbl] = true else table.sort(tbl, index.order) end
   end
 
   ----- Entry lifecycle
@@ -812,7 +813,7 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
   end
 
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
-  -- slot in rawIndex, so a same-slot reconcile skips the rawIndexRemove scan, reinsert and sort.
+  -- slot in rawIndex, so a same-slot reconcile skips the index.delete scan, reinsert and sort.
   local umDecor = { realised = true, colEvt = true }   -- um's own fields; mm's clone never carries them
   local function refreshEntry(prev, e)
     for k in pairs(prev) do if e[k] == nil and not umDecor[k] then prev[k] = nil end end
@@ -824,7 +825,7 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
 
   -- Incremental index upkeep for one uuid. rawIndex lists are ppq-sorted and rawIndexListFor ignores
   -- ppq, so refresh in place only at an unchanged ppq. see docs/trackerManager.md § Incremental index reconciliation
-  function idxReconcile(uuid)
+  function index.sync(uuid)
     if not uuid then return end
     local prev = byUuid[uuid]
     local _, e = mm:byUuid(uuid)
@@ -834,29 +835,29 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
       return
     end
     byUuid[uuid] = nil
-    if prev then rawIndexRemove(prev) end
+    if prev then index.delete(prev) end
     if e then
       local entry = makeEntry(e)
       entry.colEvt = prev and prev.colEvt   -- the seat stamp outlives reconciliation; only re-seating replaces it
-      rawIndexInsert(entry)
+      index.add(entry)
     end
   end
 
   -- Seat stamp: columns file their live cell on the entry as they seat it, giving raw consumers
   -- the cell without a per-pass column scan. Returns whether the uuid has an entry (mm knows it).
-  function stampColEvt(colNote)
+  function index.stampColEvt(colNote)
     local entry = byUuid[colNote.uuid]
     if entry then entry.colEvt = colNote end
     return entry ~= nil
   end
 
-  function forgetUuid(uuid) byUuid[uuid] = nil end
+  function index.forget(uuid) byUuid[uuid] = nil end
 
   ----- Load
 
   -- Rebuild the whole index from mm. Only for genuine loads (init, take swap, external
   -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
-  function loadIndex()
+  function index.load()
     byUuid = {}
     for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }; fxHosts[i] = {} end
     for _, e in mm:events() do
@@ -868,16 +869,16 @@ local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt, rawThenLogical,
     -- one sort per list settles the logical tie-break the incremental path maintains.
     for i = 1, 16 do
       local ri = rawIndex[i]
-      table.sort(ri.notes, rawThenLogical)
-      table.sort(ri.pbs, rawThenLogical)
-      table.sort(ri.pcs, rawThenLogical)
-      table.sort(ri.pas, rawThenLogical)
-      table.sort(ri.ats, rawThenLogical)
-      for _, bucket in pairs(ri.ccs) do table.sort(bucket, rawThenLogical) end
+      table.sort(ri.notes, index.order)
+      table.sort(ri.pbs, index.order)
+      table.sort(ri.pcs, index.order)
+      table.sort(ri.pas, index.order)
+      table.sort(ri.ats, index.order)
+      for _, bucket in pairs(ri.ccs) do table.sort(bucket, index.order) end
     end
   end
 
-  loadIndex()
+  index.load()
 end
 
 ---------- FLUSH DERIVATION
@@ -890,7 +891,7 @@ local function collisionKills()
   local kills = {}
   for chan = 1, 16 do
     local byPitch = {}
-    for _, n in ipairs(rawIndexFor(chan).notes) do util.bucket(byPitch, n.pitch, n) end
+    for _, n in ipairs(index.raw(chan).notes) do util.bucket(byPitch, n.pitch, n) end
     for _, group in pairs(byPitch) do
       if #group > 1 then   -- a lone note has nothing to collide with
         for _, n in ipairs(voicing.resolveSorted(group)) do util.add(kills, n) end
@@ -931,7 +932,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
     seedEvent(evt, 'add')
-    rawIndexInsert(evt)
+    index.add(evt)
     util.add(adds, { evt = evt })
   end
 
@@ -947,7 +948,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     util.assign(evt, update)
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
-    rawIndexRefile(evt, oldChan, update)
+    index.move(evt, oldChan, update)
     if not evt.realised then return end
     for _, e in ipairs(assigns) do
       if e.uuid == evt.uuid then
@@ -961,10 +962,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   local function deleteLowlevel(evt)
     seedEvent(evt, 'delete')
-    -- rawIndexRemove matches by object identity; the PC mutation hook deletes projected column
+    -- index.delete matches by object identity; the PC mutation hook deletes projected column
     -- cells, so resolve the raw record via byUuid first or the index entry strands.
-    rawIndexRemove(evt.uuid and tm:byUuid(evt.uuid) or evt)
-    if evt.uuid then forgetUuid(evt.uuid) end
+    index.delete(evt.uuid and index.byUuid(evt.uuid) or evt)
+    if evt.uuid then index.forget(evt.uuid) end
 
     if evt.realised then
       util.add(deletes, { uuid = evt.uuid, evt = evt })
@@ -980,7 +981,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   ----- High-level ops
 
-  -- um is a stager: pb authoring writes cents; wire raw is derived at flush (cents + detuneAt seat).
+  -- um is a stager: pb authoring writes cents; wire raw is derived at flush (cents + index.detuneAt seat).
   -- Absorber seating/reseating happens in rebuild's absorber pass from the final note layout.
 
   local function addNote(n)
@@ -989,7 +990,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   end
 
   local function deleteNote(n, keepPAs)
-    if not keepPAs then forEachAttachedPA(n, function(evt) deleteLowlevel(evt) end) end
+    if not keepPAs then index.forEachAttachedPA(n, function(evt) deleteLowlevel(evt) end) end
     deleteLowlevel(n)
   end
 
@@ -1001,7 +1002,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     -- Equal logical lengths, not equal raw deltas: swing warps both endpoints alike only when the
     -- length is a period multiple. An OPEN endL needs no case -- huge minus either seat is huge.
     if shiftL ~= 0 and L2 - L1 == endL - startL then
-      forEachAttachedPA(n, function(evt)
+      index.forEachAttachedPA(n, function(evt)
         -- Realise the moved seat, never add the host's raw delta: under swing those disagree, and
         -- the CC walk restamps ppqL from a divergent raw -- overwriting the intent being carried.
         local seat = (evt.ppqL or evt.ppq) + shiftL
@@ -1009,7 +1010,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       end)
     else
       local lastPA, lastSeat
-      forEachAttachedPA(n, function(evt)
+      index.forEachAttachedPA(n, function(evt)
         local seat = evt.ppqL or evt.ppq
         if seat <= L1 or seat >= L2 then
           if seat <= L1 and (not lastPA or seat > lastSeat) then lastPA, lastSeat = evt, seat end
@@ -1032,7 +1033,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       update.ppq, update.endppq, update.ppqL, update.endppqL = nil, nil, nil, nil
     end
     if update.pitch then
-      forEachAttachedPA(n, function(e) assignLowlevel(e, { pitch = update.pitch }) end)
+      index.forEachAttachedPA(n, function(e) assignLowlevel(e, { pitch = update.pitch }) end)
     end
     if next(update) then assignLowlevel(n, update) end
   end
@@ -1040,7 +1041,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   local function lookup(evtOrUuid)
     local uuid = type(evtOrUuid) == 'table' and evtOrUuid.uuid or evtOrUuid
     if not uuid then return end
-    return tm:byUuid(uuid), uuid
+    return index.byUuid(uuid), uuid
   end
 
   ----- Public interface
@@ -1154,7 +1155,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
       -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
       -- absorber seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
-      local seat = evt.evType == 'pb' and util.seek(rawIndexFor(evt.chan).pbs, 'at-or-before', evt.ppq)
+      local seat = evt.evType == 'pb' and util.seek(index.raw(evt.chan).pbs, 'at-or-before', evt.ppq)
       if seat and seat.ppq == evt.ppq then
         assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
       else
@@ -1264,16 +1265,16 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
         return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
       end)
 
-      -- pb wire conversion at flush: raw = centsToRaw(cents + detuneAt(seat)).
+      -- pb wire conversion at flush: raw = centsToRaw(cents + index.detuneAt(seat)).
       -- Rebuild's absorber pass refines with the post-walk layout; this is best-effort for the interim.
       for _, e in ipairs(flushAssigns) do
         if e.evt.evType == 'pb' and e.update.cents ~= nil then
-          e.update.val = centsToRaw(e.update.cents + detuneAt(e.evt.chan, e.evt.ppq))
+          e.update.val = centsToRaw(e.update.cents + index.detuneAt(e.evt.chan, e.evt.ppq))
         end
       end
       for _, a in ipairs(flushAdds) do
         if a.evt.evType == 'pb' then
-          a.evt.val = centsToRaw((a.evt.cents or 0) + detuneAt(a.evt.chan, a.evt.ppq))
+          a.evt.val = centsToRaw((a.evt.cents or 0) + index.detuneAt(a.evt.chan, a.evt.ppq))
         end
       end
 
@@ -1281,7 +1282,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       mm:modify(function()
         for _, o in ipairs(flushDeletes) do
           mm:delete(o.uuid)
-          forgetUuid(o.uuid)
+          index.forget(o.uuid)
         end
         for _, o in ipairs(flushAssigns) do
           mm:assign(o.uuid, o.update)
@@ -1290,7 +1291,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
           local uuid = mm:add(o.evt)
           -- addLowlevel already filed the raw staged object into rawIndex; drop it by identity
           -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents).
-          if uuid then rawIndexRemove(o.evt); idxReconcile(uuid) end
+          if uuid then index.delete(o.evt); index.sync(uuid) end
         end
       end)
       perf.stop('mm')
@@ -1331,7 +1332,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     seeds                  = {}
   end
 
-  function reload() clearStaging(); loadIndex() end
+  function reload() clearStaging(); index.load() end
 end
 
 ---------- PUBLIC
@@ -1460,7 +1461,7 @@ local function buildFreezeMaps(census, windows)
   local producerChans, lanesByUuid = {}, {}
   for _, p in ipairs(census) do producerChans[p.chan] = true end
   for chan in pairs(producerChans) do
-    for _, note in ipairs(rawIndexFor(chan).notes) do
+    for _, note in ipairs(index.raw(chan).notes) do
       -- A derived note carries its producer's uuid, so the bucketing needs no window arithmetic.
       if note.derived then
         local lanes = lanesByUuid[note.derived] or {}
@@ -1558,7 +1559,7 @@ end
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
 -- which points get authored at all, rather than cutting a curve back.
 local function thinSeats(chan, windows)
-  local index = rawIndexFor(chan)
+  local raw = index.raw(chan)
   for _, w in ipairs(windows) do
     if w.evType ~= 'note' then
       local isPb     = w.evType == 'pb'
@@ -1566,14 +1567,14 @@ local function thinSeats(chan, windows)
       local startRaw = tm:fromLogical(chan, w.startppq, 0)
       local endRaw   = tm:fromLogical(chan, w.endppq, 0)
       local points   = {}
-      for _, e in ipairs((isPb and index.pbs or index.ccs[w.cc]) or {}) do
+      for _, e in ipairs((isPb and raw.pbs or raw.ccs[w.cc]) or {}) do
         -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
         -- and not freeze's to delete. groupMembers' `hidden` is this partition.
         if not e.derived and e.ppq >= startRaw and e.ppq < endRaw then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
           util.add(points, { ppq = e.ppq, shape = e.shape, tension = e.tension, evt = e,
-                             val = isPb and (e.val - detuneAt(chan, e.ppq)) or e.val })
+                             val = isPb and (e.val - index.detuneAt(chan, e.ppq)) or e.val })
         end
       end
       local kept = {}
@@ -1593,7 +1594,7 @@ local function groupMembers(frozen, windows, promotedUuids)
   local members = {}
   for _, uuid in ipairs(promotedUuids) do
     -- A promoted note the collision walk killed on the way through has no cell left to mint from.
-    local cell = colEvtFor(uuid)
+    local cell = index.colEvtFor(uuid)
     if cell then util.add(members, cell) end
   end
   local columns = frame.channels[frozen.chan].columns
@@ -1639,9 +1640,9 @@ local function freezeRegion(uuid, toGroup)
     else
       -- byUuid is the raw-frame index entry and .colEvt its stamped logical cell, so the window comes
       -- off the cell and the assign off the entry. An unstamped (just-restored) host declines.
-      local cell = colEvtFor(uuid)
+      local cell = index.colEvtFor(uuid)
       if cell and cell.fx then
-        onTakeHost = tm:byUuid(uuid)
+        onTakeHost = index.byUuid(uuid)
         hostRegion = noteHostRegion(cell, hostWindowEnd(cell, tm:toLogical(cell.chan, tm:length())))
       end
     end
@@ -1676,17 +1677,16 @@ local function freezeRegion(uuid, toGroup)
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
   -- metadata, so each rides mm's lockless path; the note keeps its uuid, lane and detune.
   local promoted = {}
-  for _, note in ipairs(rawIndexFor(frozen.chan).notes) do
+  for _, note in ipairs(index.raw(frozen.chan).notes) do
     if note.derived == uuid then util.add(promoted, note) end
   end
   for _, note in ipairs(promoted) do assignEvent(note, { derived = util.REMOVE }) end
   -- Captured before the flush: the rebuild that follows refiles these entries, and the uuid is what
-  -- crosses it -- colEvtFor is the door back to the settled cell.
+  -- crosses it -- index.colEvtFor is the door back to the settled cell.
   local promotedUuids = {}
   for _, note in ipairs(promoted) do util.add(promotedUuids, note.uuid) end
-  -- The chain goes with the region form it stood for. No predicate: a note-dest chain would have
-  -- parked its host into the stash arm, so an on-take host's is continuous-only. rawIndexRefile picks
-  -- the change up and de-registers the host, so nothing regenerates.
+  -- The chain goes with the region form it stood for. A note-dest chain would have parked its
+  -- host in the stash arm; an on-take host's is continuous-only, and index.move de-registers it, so nothing regenerates.
   if onTakeHost then assignEvent(onTakeHost, { fx = util.REMOVE }) end
 
   local droppedHosts = {}
@@ -1831,12 +1831,12 @@ function tm:fxCurveAt(uuid, chan, target, ppqL)
   local ppq = tm:fromLogical(chan, ppqL, 0)
   -- Inside a window every event on the target is realisation: the authored curve parked to make way
   -- for it. So the seats are the take's own stream, read where it lies.
-  local index = rawIndexFor(chan)
-  local seats = target == 'pb' and index.pbs or index.ccs[target]
+  local raw = index.raw(chan)
+  local seats = target == 'pb' and raw.pbs or raw.ccs[target]
   if not seats or #seats == 0 then return nil end
   local val = curves.eval(seats, ppq)
   -- A pb seat's val is realisation, detune included -- the same subtraction the column projection makes.
-  return target == 'pb' and val - detuneAt(chan, ppq) or val
+  return target == 'pb' and val - index.detuneAt(chan, ppq) or val
 end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
@@ -1954,7 +1954,7 @@ function tm:tileLength(newPpq)
       local delta = k * oldPpq
       for _, src in ipairs(sourceEvents) do
         local c = util.clone(src)
-        if shift(c, delta) then idxReconcile(mm:add(c)) end
+        if shift(c, delta) then index.sync(mm:add(c)) end
       end
     end
   end)
@@ -2079,8 +2079,8 @@ local function mmBatch()
       perf.stop('batchModify')
       perf.start('batchIdx')
       local n = 0
-      withDeferredSort(function()
-        for uuid in pairs(touched) do idxReconcile(uuid); n = n + 1 end
+      index.withDeferredSort(function()
+        for uuid in pairs(touched) do index.sync(uuid); n = n + 1 end
       end)
       perf.count('reconciled', n)
       perf.stop('batchIdx')
@@ -2120,7 +2120,7 @@ local function seedRowsFor(seedList)
   local rows = {}
   for _, s in ipairs(seedList) do
     util.add(rows, s.ppqL)
-    local live = s.uuid and tm:byUuid(s.uuid)
+    local live = s.uuid and index.byUuid(s.uuid)
     if live then util.add(rows, live.ppqL or live.ppq) end
   end
   return rows
@@ -2224,7 +2224,7 @@ local function rebuildInternals()
       util.add(col.events, note)         -- fresh lane: append in mm raw order, order once below
       builtCols[col] = true
     end
-    stampColEvt(note)
+    index.stampColEvt(note)
   end
   -- Raw and logical onset order diverge under swing or an authored swap, so only the lanes this pass
   -- appended to can have landed disordered; the splices above stay ordered.
@@ -2296,7 +2296,7 @@ end
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
-  local ccBuckets = rawIndexFor(chan).ccs
+  local ccBuckets = index.raw(chan).ccs
   local seen = {}
   for ccNum, winSpans in pairs(byCc) do
     local list = ccBuckets[ccNum]
@@ -2509,7 +2509,7 @@ local function externalLanePacker(external)
     local lanes = occupancy[chan]
     if not lanes then
       lanes = {}
-      for _, entry in ipairs(rawIndexFor(chan).notes) do
+      for _, entry in ipairs(index.raw(chan).notes) do
         if not entry.derived and not isExternal[entry.uuid] then
           lanes[entry.lane] = lanes[entry.lane] or {}
           util.add(lanes[entry.lane], entry)
@@ -2611,7 +2611,7 @@ local function rebuildExternals(external)
     colNote.fixed = true
     projectEvent(colNote, note.chan)
     frame.spliceCell(note.chan, lane, colNote)
-    stampColEvt(colNote)
+    index.stampColEvt(colNote)
     extWrites.assign(colNote, update)
   end
   extWrites.commit()
@@ -2836,7 +2836,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     -- member's raw span (its own PAs), not the channel's cc count. see docs/trackerManager.md § Span-covered fx scans
     for chan = 1, 16 do
       if dirt.has(chan) then
-        local pas = rawIndexFor(chan).pas
+        local pas = index.raw(chan).pas
         for _, cell in ipairs(frame.channels[chan].parked or {}) do
           local sRaw, eRaw = tm:fromLogical(chan, cell.ppq), tm:fromLogical(chan, cell.endppqC)
           for i = util.firstAtOrAfter(pas, sRaw), #pas do
@@ -2968,7 +2968,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     local scan = {}
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      local pbs = rawIndexFor(win.chan).pbs
+      local pbs = index.raw(win.chan).pbs
       for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
@@ -2998,7 +2998,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     -- in the swept raw span. The authored restored above is an unrealised add, so delete-first order is safe.
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      local pbs = rawIndexFor(win.chan).pbs
+      local pbs = index.raw(win.chan).pbs
       for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
@@ -3018,7 +3018,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
   -- Seat-stamp each restored cell like any other seat, now the commit lands it in mm; bare write,
   -- no setCell -- see docs/trackerManager.md § Incremental index reconciliation.
   for _, cell in ipairs(restoredCells) do
-    if stampColEvt(cell) then cell.realised = true end
+    if index.stampColEvt(cell) then cell.realised = true end
   end
 end
 
@@ -3031,11 +3031,11 @@ local function walkable(note) return not note.derived and note.ppqL ~= nil end
 -- One-pass merge of the pre-sorted index list (filtered) with a small sorted extras list;
 -- replaces the whole-channel sort the per-pass scratch copy used to force.
 local function mergeIndexed(indexNotes, keep, extras)
-  table.sort(extras, rawThenLogical)
+  table.sort(extras, index.order)
   local merged, j = {}, 1
   for _, entry in ipairs(indexNotes) do
     if keep(entry) then
-      while extras[j] and rawThenLogical(extras[j], entry) do
+      while extras[j] and index.order(extras[j], entry) do
         util.add(merged, extras[j]); j = j + 1
       end
       util.add(merged, entry)
@@ -3052,7 +3052,7 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   -- Containment is raw geometry: scan the index; lowest lane wins, matching column order.
   -- Pre-commit restores can't match -- their endppq is nil until the walk derives it.
   local coveringLane
-  for _, rec in ipairs(rawIndexFor(channel.chan).notes) do
+  for _, rec in ipairs(index.raw(channel.chan).notes) do
     if walkable(rec) and rec.endppq and rec.pitch == pitch and rec.ppq <= ppq_pos
        and rec.endppq > ppq_pos and (coveringLane == nil or rec.lane < coveringLane) then
       coveringLane = rec.lane
@@ -3081,7 +3081,7 @@ local function rebuildPA()
   for chan = 1, 16 do
     if dirt.has(chan) then   -- clean: PA already sits in the carried note column
       local covers = seedCovers(chan)   -- wholesale: always-true; interval: seeded rows only
-      for _, cc in ipairs(rawIndexFor(chan).pas) do
+      for _, cc in ipairs(index.raw(chan).pas) do
         if covers(cc) then
           local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cc.pitch, cc.ppq)
           if noteCol then
@@ -3158,9 +3158,9 @@ function computeFxWindows(extraFxChans, parkedNotes)
       if s.uuid then seededUuid[s.uuid] = true end
       if s.ppqL then util.add(seededPpq, s.ppqL) end
     end
-    for uuid in pairs(fxHostsFor(chan)) do
+    for uuid in pairs(index.fxHosts(chan)) do
       if not parked[uuid] then
-        local cell = colEvtFor(uuid)
+        local cell = index.colEvtFor(uuid)
         if not cell then return false end
         local cached = fxHostWin[uuid]
         local dirty = cached == nil or seededUuid[uuid]
@@ -3179,7 +3179,7 @@ function computeFxWindows(extraFxChans, parkedNotes)
 
   for chan = 1, 16 do
     local takeLenL = tm:toLogical(chan, takeLen)
-    local hosts    = fxHostsFor(chan)
+    local hosts    = index.fxHosts(chan)
     local hasHosts = hosts and next(hosts)
     local isExtra  = extraFxChans and extraFxChans[chan]
     if isExtra or dirt.wholesale(chan) then
@@ -3240,7 +3240,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       util.add(rawSpans, { tm:fromLogical(chan, span[1]), tm:fromLogical(chan, span[2]) })
     end
     local function authored(pb) return not pb.derived and pb.cents ~= nil end
-    coverInto(rawIndexFor(chan).pbs, rawSpans, authored, function(pb)
+    coverInto(index.raw(chan).pbs, rawSpans, authored, function(pb)
       local ppq = pb.ppqL or pb.ppq
       if not seen[ppq] then
         util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
@@ -3499,7 +3499,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       for _, s in ipairs(dirt.has(chan)) do
         if s.pitch == nil or s.lane == 1 then
           local from = s.ppqL
-          local liveEvt = s.uuid and tm:byUuid(s.uuid)
+          local liveEvt = s.uuid and index.byUuid(s.uuid)
           if liveEvt then from = math.min(from, liveEvt.ppqL or liveEvt.ppq) end
           if s.pitch == nil then baseHoldFrom   = math.min(baseHoldFrom, from) end
           if s.lane  == 1   then detuneHoldFrom = math.min(detuneHoldFrom, from) end
@@ -3644,7 +3644,7 @@ local function makeTailRules(ctx)
     if not onset then return false end
     -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
     -- the clamp write stage here rather than in a second pass over a moved set.
-    setRaw(e, 'ppq', onset)
+    index.assign(e, 'ppq', onset)
     disturbed[e], nudged[e] = true, true
     local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
     if e.colEvt and e.colEvt.delay ~= nil then
@@ -3680,7 +3680,7 @@ local function makeTailRules(ctx)
     if rounded ~= e.endppq then
       local backing = e.colEvt or e
       if backing.realised then tailWrites.assign(backing, { endppq = rounded }) end
-      setRaw(e, 'endppq', rounded)
+      index.assign(e, 'endppq', rounded)
     end
     if e.colEvt then
       -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
@@ -3733,7 +3733,7 @@ local function linearTails(chan, notes, parkedBoundFor, takeLen, res, clampWrite
   -- Onset settlement: only a disturbed note collides, onto its same-pitch predecessor; a landed nudge
   -- marks itself disturbed so the cascade carries forward.
   local anyNudge, lastByPitch = false, {}
-  withDeferredSort(function()
+  index.withDeferredSort(function()
     for _, e in ipairs(notes) do
       local prev = lastByPitch[e.pitch]
       if disturbed[e] or (prev and disturbed[prev]) then
@@ -3744,7 +3744,7 @@ local function linearTails(chan, notes, parkedBoundFor, takeLen, res, clampWrite
   end)
   -- um re-trued its own list at the block's close; this pass's merge shares those records, so it
   -- carries the same stain and re-trues here.
-  if anyNudge then table.sort(notes, rawThenLogical) end
+  if anyNudge then table.sort(notes, index.order) end
 
   -- Bound set: every disturbed note, plus the nearest same-lane and same-pitch strict predecessor of
   -- every anchor -- the seed-driven replacement for the span stale-test. see design § Span-staleness
@@ -3790,7 +3790,7 @@ end
 
 ----- Frontier probe walk
 
--- First index into the rawThenLogical-sorted `list` with ppq >= `pos`; #list+1 if none. Every frontier
+-- First index into the raw-then-logical-sorted `list` with ppq >= `pos`; #list+1 if none. Every frontier
 -- probe binary-searches here, then scans outward a bounded few rows -- the seek that replaces the sweep.
 local function lowerBound(list, pos)
   local lo, hi = 1, #list + 1
@@ -3829,8 +3829,8 @@ local function nearestNote(indexList, extras, pos, side, filter)
   for _, rec in ipairs(extras) do
     local onSide = side == 'before' and rec.ppq < pos or side == 'after' and rec.ppq > pos
     local nearer = best == nil
-                   or (side == 'before' and rawThenLogical(best, rec))
-                   or (side == 'after'  and rawThenLogical(rec, best))
+                   or (side == 'before' and index.order(best, rec))
+                   or (side == 'after'  and index.order(rec, best))
     if onSide and filter(rec) and nearer then best = rec end
   end
   return best
@@ -3842,13 +3842,13 @@ local function prevSamePitch(indexList, extras, node)
   local best
   for i = upperBound(indexList, node.ppq) - 1, 1, -1 do
     local rec = indexList[i]
-    if walkable(rec) and rec ~= node and rec.pitch == node.pitch and rawThenLogical(rec, node) then
+    if walkable(rec) and rec ~= node and rec.pitch == node.pitch and index.order(rec, node) then
       best = rec; break
     end
   end
   for _, rec in ipairs(extras) do
-    if rec ~= node and rec.pitch == node.pitch and rawThenLogical(rec, node)
-       and (best == nil or rawThenLogical(best, rec)) then best = rec end
+    if rec ~= node and rec.pitch == node.pitch and index.order(rec, node)
+       and (best == nil or index.order(best, rec)) then best = rec end
   end
   return best
 end
@@ -3860,13 +3860,13 @@ local function nextSamePitch(indexList, extras, node, origPpq)
   local best
   for i = lowerBound(indexList, origPpq), #indexList do
     local rec = indexList[i]
-    if walkable(rec) and rec ~= node and rec.pitch == node.pitch and rawThenLogical(key, rec) then
+    if walkable(rec) and rec ~= node and rec.pitch == node.pitch and index.order(key, rec) then
       best = rec; break
     end
   end
   for _, rec in ipairs(extras) do
-    if rec ~= node and rec.pitch == node.pitch and rawThenLogical(key, rec)
-       and (best == nil or rawThenLogical(rec, best)) then best = rec end
+    if rec ~= node and rec.pitch == node.pitch and index.order(key, rec)
+       and (best == nil or index.order(rec, best)) then best = rec end
   end
   return best
 end
@@ -3903,7 +3903,7 @@ local function frontierTails(chan, indexList, extras, parkedBoundFor, takeLen, r
   for _, rec in ipairs(extras) do if rec.derived and not keptDerived[rec] then disturbed[rec] = true end end
   for _, seed in ipairs(dirt.has(chan)) do
     util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
-    local rec = seed.uuid and tm:byUuid(seed.uuid)
+    local rec = seed.uuid and index.byUuid(seed.uuid)
     if rec and rec.evType == 'note' and rec.chan == chan then disturbed[rec] = true
     else for _, hit in ipairs(seatMatches(indexList, extras, seed)) do disturbed[hit] = true end end
   end
@@ -3913,7 +3913,7 @@ local function frontierTails(chan, indexList, extras, parkedBoundFor, takeLen, r
   local byPitch, chains = {}, {}
   for e in pairs(disturbed) do util.bucket(byPitch, e.pitch, e) end
   for _, seeds in pairs(byPitch) do
-    table.sort(seeds, rawThenLogical)
+    table.sort(seeds, index.order)
     local si = 1
     while si <= #seeds do
       local head = seeds[si]; si = si + 1
@@ -3942,7 +3942,7 @@ local function frontierTails(chan, indexList, extras, parkedBoundFor, takeLen, r
   -- The block wraps settlement alone: the chains above gathered against the pristine index, and phase
   -- 2's bound probes below need it true again, so a block around the whole walk would be too late.
   local anyNudge = false
-  withDeferredSort(function()
+  index.withDeferredSort(function()
     for _, chain in ipairs(chains) do
       for i, node in ipairs(chain) do
         local prev = chain[i - 1]
@@ -3953,7 +3953,7 @@ local function frontierTails(chan, indexList, extras, parkedBoundFor, takeLen, r
     end
   end)
   -- indexList is um's own and the block's close re-trued it; extras belongs to this walk.
-  if anyNudge then table.sort(extras, rawThenLogical) end
+  if anyNudge then table.sort(extras, index.order) end
 
   -- Phase 2 -- bounds, order-free: every disturbed note plus each anchor's nearest same-lane and same-
   -- pitch strict predecessor re-bind. Bounds read settled onsets, write only endppq -- no re-disturb.
@@ -4023,7 +4023,7 @@ local function rebuildTails(noteLive, noteOps)
 
     -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
     -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
-    local indexedNotes = rawIndexFor(chan).notes
+    local indexedNotes = index.raw(chan).notes
     local emitted
     if not dirt.wholesale(chan) and #dirt.has(chan) + freshLive <= FRONTIER_SEED_CAP then
       emitted = frontierTails(chan, indexedNotes, extras, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
@@ -4078,7 +4078,7 @@ local function rebuildPbs(fxOut, extraColumns)
       end
       -- Sorted for the seeks below: seatScope and the value/onset queries walk it assuming ppq order,
       -- and the derived stream lives off-take in noteLive, so a raw-only seek would miss a parked host.
-      table.sort(liveLane1, rawThenLogical)
+      table.sort(liveLane1, index.order)
       liveLane1ByChan[chan] = liveLane1
     end
   end
@@ -4086,7 +4086,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Lane-1 detune queries over the note index union liveLane1, by binary seek -- the whole-channel
   -- view is gone; each query hits the index and the derived stream direct.
   local function lane1DetuneAt(chan, ppq)
-    local notes = rawIndexFor(chan).notes
+    local notes = index.raw(chan).notes
     local i = util.firstAfter(notes, ppq) - 1        -- last index at or before ppq
     while i >= 1 and not lane1Note(notes[i]) do i = i - 1 end
     local authored = i >= 1 and notes[i] or nil
@@ -4098,17 +4098,17 @@ local function rebuildPbs(fxOut, extraColumns)
     return (authored and authored.detune) or (derived and derived.detune) or 0
   end
 
-  -- Authored (walkable lane-1) union derived lane-1 with ppq in [lo, hi], in rawThenLogical order --
+  -- Authored (walkable lane-1) union derived lane-1 with ppq in [lo, hi], in raw-then-logical order --
   -- the onset walk's per-span slice, replacing the whole-channel scan.
   local function lane1Between(chan, lo, hi)
-    local notes, derivedNotes = rawIndexFor(chan).notes, liveLane1ByChan[chan] or {}
+    local notes, derivedNotes = index.raw(chan).notes, liveLane1ByChan[chan] or {}
     local i, j, out = util.firstAtOrAfter(notes, lo), util.firstAtOrAfter(derivedNotes, lo), {}
     while true do
       while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
       local authored = notes[i];      if authored and authored.ppq > hi then authored = nil end
       local derived  = derivedNotes[j]; if derived and derived.ppq > hi then derived = nil end
       if not authored and not derived then break end
-      if derived and (not authored or rawThenLogical(derived, authored)) then
+      if derived and (not authored or index.order(derived, authored)) then
         util.add(out, derived); j = j + 1
       else
         util.add(out, authored); i = i + 1
@@ -4119,12 +4119,12 @@ local function rebuildPbs(fxOut, extraColumns)
 
   -- The first lane-1 onset (authored or derived), the I2a anchor's point; nearer wins on a tie.
   local function firstLane1(chan)
-    local notes, i = rawIndexFor(chan).notes, 1
+    local notes, i = index.raw(chan).notes, 1
     while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
     local authored = notes[i]
     local derived = liveLane1ByChan[chan] and liveLane1ByChan[chan][1]
     if authored and derived then
-      return rawThenLogical(authored, derived) and authored or derived
+      return index.order(authored, derived) and authored or derived
     end
     return authored or derived
   end
@@ -4132,7 +4132,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Whether any lane-1 note (authored or derived) carries a non-zero detune. With prev seeded 0 an
   -- onset exists iff some detune is non-zero, so this early-exit scan is the whole-channel jump count.
   local function anyDetuneJump(chan)
-    for _, note in ipairs(rawIndexFor(chan).notes) do
+    for _, note in ipairs(index.raw(chan).notes) do
       if lane1Note(note) and (note.detune or 0) ~= 0 then return true end
     end
     for _, note in ipairs(liveLane1ByChan[chan] or {}) do
@@ -4219,7 +4219,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, the
     -- same union lane1Between/lane1DetuneAt seek; seek both here and take the nearer.
     local function nextLane1After(ppq)
-      local authored = util.seek(rawIndexFor(chan).notes, 'after', ppq, lane1Note)
+      local authored = util.seek(index.raw(chan).notes, 'after', ppq, lane1Note)
       local derived  = util.seek(derivedLane1, 'after', ppq)
       return math.min(authored and authored.ppq or math.huge, derived and derived.ppq or math.huge)
     end
@@ -4227,8 +4227,8 @@ local function rebuildPbs(fxOut, extraColumns)
     local function bpSpan(ppq)
       -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
       local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
-      local prevBp = util.seek(rawIndexFor(chan).pbs, 'before', ppq, authored)
-      local nextBp = util.seek(rawIndexFor(chan).pbs, 'after',  ppq, authored)
+      local prevBp = util.seek(index.raw(chan).pbs, 'before', ppq, authored)
+      local nextBp = util.seek(index.raw(chan).pbs, 'after',  ppq, authored)
       util.add(seatSpans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
     end
     -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
@@ -4240,7 +4240,7 @@ local function rebuildPbs(fxOut, extraColumns)
     for _, seed in ipairs(dirt.has(chan)) do
       -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
       -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
-      local live = seed.uuid and tm:byUuid(seed.uuid)
+      local live = seed.uuid and index.byUuid(seed.uuid)
       if not (live and live.chan == chan) then live = nil end
       if seed.lane == 1 or (live and live.lane == 1) then
         if seed.lane == 1 then lane1Span(seed.ppq) end
@@ -4257,7 +4257,7 @@ local function rebuildPbs(fxOut, extraColumns)
     end
     -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
     -- need to seat, refresh, or retire it, so its point is always in scope.
-    local authoredFirst = util.seek(rawIndexFor(chan).notes, 'at-or-after', 0, lane1Note)
+    local authoredFirst = util.seek(index.raw(chan).notes, 'at-or-after', 0, lane1Note)
     local firstPpq = math.min(authoredFirst and authoredFirst.ppq or math.huge,
                               derivedLane1[1] and derivedLane1[1].ppq or math.huge)
     if firstPpq ~= math.huge then util.add(seatSpans, { firstPpq - DUAL_POINT_TICK, firstPpq }) end
@@ -4293,7 +4293,7 @@ local function rebuildPbs(fxOut, extraColumns)
   for chan = 1, 16 do
     if dirt.has(chan) then
       local seatSpans = seatSpansByChan[chan]
-      for _, entry in ipairs(rawIndexFor(chan).pbs) do
+      for _, entry in ipairs(index.raw(chan).pbs) do
         if inSpans(seatSpans, entry.ppq) then
           local pb = util.clone(entry, { colEvt = true })
           pb.origShape = entry.shape
@@ -4352,7 +4352,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
     -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs.
     local realPbs, pbEntryByRaw = {}, {}
-    for _, entry in ipairs(rawIndexFor(chan).pbs) do
+    for _, entry in ipairs(index.raw(chan).pbs) do
       pbEntryByRaw[entry.ppq] = entry
       if not entry.derived and not inSeatWindow(entry.ppq) then
         local cents = entry.cents or (rawToCents(entry.raw) - lane1DetuneAt(chan, entry.ppq))
@@ -4631,20 +4631,20 @@ local function stampSamples()
   local stampWrites = mmBatch()
   local function stamp(entry)
     if entry.evType == 'note' and walkable(entry) and entry.sample == nil then
-      local prevailing = util.seek(rawIndexFor(entry.chan).pcs, 'at-or-before', entry.ppq)
+      local prevailing = util.seek(index.raw(entry.chan).pcs, 'at-or-before', entry.ppq)
       local sample = prevailing and prevailing.val or 0
-      setRaw(entry, 'sample', sample)
+      index.assign(entry, 'sample', sample)
       frame.setCell(entry.colEvt, 'sample', sample)
       stampWrites.assign(entry, { sample = sample })
     end
   end
   for chan = 1, 16 do
     if dirt.wholesale(chan) then
-      for _, entry in ipairs(rawIndexFor(chan).notes) do stamp(entry) end
+      for _, entry in ipairs(index.raw(chan).notes) do stamp(entry) end
     elseif dirt.has(chan) then
       for _, s in ipairs(dirt.has(chan)) do
         local uuid = s.uuid or (s.evt and s.evt.uuid)
-        local entry = uuid and tm:byUuid(uuid)
+        local entry = uuid and index.byUuid(uuid)
         if entry then stamp(entry) end
       end
     end
@@ -4667,10 +4667,10 @@ local function pcSeedSpans(chan, noteLive)
   end
   for _, s in ipairs(dirt.has(chan)) do
     addPoint(s.ppq, s.ppqL)
-    local live = s.uuid and tm:byUuid(s.uuid)
+    local live = s.uuid and index.byUuid(s.uuid)
     if live then addPoint(live.ppq, live.ppqL) end
   end
-  local seedSpans, notes = {}, rawIndexFor(chan).notes
+  local seedSpans, notes = {}, index.raw(chan).notes
   for _, point in ipairs(points) do
     local i = util.firstAfter(notes, point.ppq)
     while notes[i] and not walkable(notes[i]) do i = i + 1 end
@@ -4709,9 +4709,9 @@ local function rebuildPCs(noteLive)
       end
     end
     if rawSpans then
-      coverOnsets(rawIndexFor(chan).notes, rawSpans, recordNote)
+      coverOnsets(index.raw(chan).notes, rawSpans, recordNote)
     else
-      for _, entry in ipairs(rawIndexFor(chan).notes) do recordNote(entry) end
+      for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
@@ -4742,9 +4742,9 @@ local function rebuildPCs(noteLive)
         util.add(events, cell)
       end
       if seedSpans then
-        coverOnsets(rawIndexFor(chan).pcs, rawSpansByChan[chan], projectPc)
+        coverOnsets(index.raw(chan).pcs, rawSpansByChan[chan], projectPc)
       else
-        for _, cc in ipairs(rawIndexFor(chan).pcs) do projectPc(cc) end
+        for _, cc in ipairs(index.raw(chan).pcs) do projectPc(cc) end
       end
       util.sortByPPQ(events)
       frame.channels[chan].columns.pc = { events = events }
@@ -4764,7 +4764,7 @@ local mmReloaded = false
 local function channelsInUse(sources)
   local inUse = {}
   for chan = 1, 16 do
-    for _, note in ipairs(rawIndexFor(chan).notes) do
+    for _, note in ipairs(index.raw(chan).notes) do
       if not note.derived then inUse[chan] = true; break end
     end
   end
@@ -4977,7 +4977,7 @@ do
   -- mm's backstop repaired a missed same-pitch collision: re-key um surgically. No
   -- tm:rebuild here (re-enters mm:modify mid-unwind); geometry trues up next rebuild.
   mm:subscribe('collisionsResolved', function(info)
-    for _, e in ipairs(info.events) do idxReconcile(e.uuid) end
+    for _, e in ipairs(info.events) do index.sync(e.uuid) end
   end)
   mm:subscribe('takeSwapped', function() pendingTakeSwap = true end)
   mm:subscribe('reload', function(info)

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — The raw index's doors take mm's verb vocabulary -- index.add, index.assign,
+  index.delete, index.move -- so the edit side spells staging and the index behind it the same way.
+  The uuid re-read is index.sync, not reconcile: the file already spends that word on the
+  predicted-versus-existing skeleton (reconcileDerived, reconcileFx, reconcilePCs), a different
+  mechanism. index.raw(chan) is the list door, and the seat stamp keeps colEvtFor/stampColEvt beside
+  the colEvt field they read and write; renaming that field to seat is a separate change.
+
 - **2026-08-31** — Every frame operation now touches the frame's own state, the two pure ones having
   folded into the state ops they always accompanied: insertNoteCell never appeared without a
   renewLane on the line above it, at all four sites, and isSorted existed only as sortNoteColumn's

@@ -22,23 +22,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: gather the raw index's doors onto one table (design/tracker-manager-split.md § Phase 3 14, § Open 1)
 - 2026-08-31 config: teach the maps about door tables (design/tracker-manager-split.md § Phase 3 8)
 - 2026-08-31 tm: gather the frame and its operations into one handle (design/tracker-manager-split.md § Phase 3 14)
 - 2026-08-31 tm: pin the seam between seating and absorber synthesis (design/tracker-manager-split.md § What the specs hold 4)
-- 2026-08-31 tm: pin the seat scope a dirt seed closes to (design/tracker-manager-split.md § What the specs hold 4)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The index as a door table.** The fourteen names RAW INDEX
-   forward-declares become fields of one `index` table the block
-   returns, each shortened where `index` already carries the prefix.
-   `index.byUuid` joins them and `tm:byUuid` delegates, which settles
-   § Open 1's first half. Twenty-seven engine call sites and six
-   edit-side ones move onto the doors.
 
 1. **The stager as a door table.** The same move for STAGER's ten
    names, whose callers are tm's mutation API and its lifecycle.

@@ -152,7 +152,7 @@ return {
         return out
       end
       -- Tied on (ppq, ppqL), so both orders honour resolveSorted's contract -- and the tie is
-      -- exactly where rawThenLogical may hand it over in either order.
+      -- exactly where index.order may hand it over in either order.
       local authored = { id = 'authored', ppq = 0, ppqL = 0, endppqL = 240 }
       local derived  = { id = 'derived',  ppq = 0, ppqL = 0, endppqL = 960, derived = 'fx' }
 
