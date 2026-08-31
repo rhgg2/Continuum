@@ -22,25 +22,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: pin the seat scope a dirt seed closes to (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 tm: pin the keep/live split of a clipped pb window (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 dirt: take the derivation journal from trackerManager (design/tracker-manager-split.md § Phase 2)
 - 2026-08-30 curves: take the fold of parallel chains from trackerManager (design/tracker-manager-split.md § Phase 1 2, 5)
-- 2026-08-30 curves: take the breakpoint curve algebra from trackerManager and mm (design/tracker-manager-split.md § Phase 1 1–3)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **Seat scope: what a dirt seed closes to** — a new spec on
-   `seatScope`. A lane-1 seed closes to a span reaching one tick back
-   and forward to the next lane-1 onset, authored or derived; a pb seed
-   closes to the gap between the neighbouring authored pbs; an
-   unrecognised seed kind, wholesale dirt, and fresh derived lane-1
-   output each ungate the channel. The out-of-scope remainder carries
-   verbatim, its values untouched by a `centsToRaw` round trip, with
-   uuid and realised refreshed from the index.
 
 1. **The seating ↔ synthesis seam** — a new spec separating which seats
    a detune arrangement calls for from how absorbers realise them. An
