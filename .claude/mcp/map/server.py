@@ -172,11 +172,11 @@ def _widen_module(module):
 
 # ----- map_query ------------------------------------------------------------
 
-# Annotations: `@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`,
+# Annotations: `@invariant`, `@pre`, `@post`, `@contract`, `@shape`, `@emits`, `@reaper`,
 # any of which may carry a leading `?` (`@?invariant …`) for inferred-rather-
 # than-doc-grounded variants. `@deps` is rendered on its own line in the header.
 _ANN = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps|exercises|surface|harness))\s+'
+    r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|pre|post|contract|shape|emits|reaper|deps|exercises|surface|harness))\s+'
     r'(?P<body>.*?)(?:\s+@\s+(?P<line>\d+))?\s*$'
 )
 # `@use <kind> <target>  @ <caller>:<line>[,<line>] [<caller>:<line>...]`
@@ -237,6 +237,8 @@ def _normalize_kind(k: str) -> str:
         "prose": "ann", "body": "ann", "bodies": "ann",
         "signal": "emits", "signals": "emits",
         "invariants": "invariant", "contracts": "contract", "shapes": "shape",
+        "pres": "pre", "precondition": "pre", "preconditions": "pre",
+        "posts": "post", "postcondition": "post", "postconditions": "post",
         "fns": "fn", "functions": "fn",
         "apis": "api",
         "helds": "held",
@@ -262,8 +264,8 @@ _DECL_KINDS = frozenset({
 
 # Kinds whose payload is a prose body rather than a name. Mirrors the
 # alternation in `_ANN`; keep the two in step.
-_ANN_KINDS = frozenset({'invariant', 'contract', 'shape', 'emits', 'reaper',
-                        'deps', 'exercises', 'surface', 'harness'})
+_ANN_KINDS = frozenset({'invariant', 'pre', 'post', 'contract', 'shape', 'emits',
+                        'reaper', 'deps', 'exercises', 'surface', 'harness'})
 
 # Whether a declaration got written `api` or `held` is a fact about the row, and
 # the row says which — so asking for one means guessing an answer the map is

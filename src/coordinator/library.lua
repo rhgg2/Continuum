@@ -1,5 +1,5 @@
--- Project/library tier logic over a configManager handle; factory is a seed
--- source only, not a resolution tier. See docs/library.md.
+-- Project/library tier logic over a configManager handle. See docs/library.md.
+--invariant: factory is a seed source, not a resolution tier — only localize's floor reads it
 
 local util = require 'util'
 
@@ -56,7 +56,7 @@ local function sortedNames(tier, drop)
   return out
 end
 
---contract: { project, library } sorted names; synthetic floor dropped, no cross-dedup
+--post: fresh result.T = sorted(tier T's names \ synthetic(key)), T ∈ { project, library }
 function lib.names(key)
   local drop = synth(key)
   return {
@@ -67,13 +67,14 @@ end
 
 ----- Reads
 
---contract: deep copy from the named tier alone; nil where that tier lacks the name
+--pre: level ∈ { project, global }
+--post: fresh result = tier(level)[name]
 function lib.getAt(key, level, name)
   checkLevel(level)
   return (cm:getAt(level, key) or {})[name]
 end
 
---contract: true iff a project copy and a same-named source both exist and differ (util.deepEq)
+--post: result = (project[name] and library[name] exist and asLibrary forms differ)
 function lib.modified(key, name)
   local p = projectTier(key)[name]
   if p == nil then return false end
@@ -84,7 +85,8 @@ end
 
 ----- Localize / fork
 
---contract: copy resolvable entry (library|factory floor) into project; no-op if synthetic/proj copy
+--post: no-op iff name is synthetic, project[name] exists, or neither source has name
+--post: otherwise, project[name] := library[name] or factory(key)[name]
 function lib.localize(key, name)
   if synth(key)[name] then return end
   if projectTier(key)[name] ~= nil then return end
@@ -94,7 +96,7 @@ function lib.localize(key, name)
   if src ~= nil then writeTier('project', key, name, src) end
 end
 
---contract: localize then return the editable project copy
+--post: fresh result = project[name] after lib.localize — detached, so a write to it is lost
 function lib.forkToProject(key, name)
   lib.localize(key, name)
   return projectTier(key)[name]
@@ -102,7 +104,8 @@ end
 
 ----- Author
 
---contract: write a name into the named tier (cm:set deep-copies); synthetic names never
+--pre: level ∈ { project, global }
+--post: no-op iff name is synthetic; else tier(level)[name] := copy of value
 function lib.save(key, level, name, value)
   checkLevel(level)
   if synth(key)[name] then return end
@@ -111,13 +114,13 @@ end
 
 ----- Publish / revert
 
---contract: project copy -> library tier (deepClone via cm:set); no-op when there is no project copy
+--post: no-op iff project[name] is nil; else library[name] := asLibrary(key, project[name])
 function lib.publish(key, name)
   local p = projectTier(key)[name]
   if p ~= nil then writeTier('global', key, name, asLibrary(key, p)) end
 end
 
---contract: true iff publish would overwrite a divergent library copy (both tiers exist and differ)
+--post: result = (project[name] and library[name] exist and asLibrary forms differ)
 function lib.publishOverwrites(key, name)
   -- Library tier directly, not sourceOf: a factory-only shadow mints a new row, not an overwrite.
   local p = projectTier(key)[name]
@@ -126,7 +129,7 @@ function lib.publishOverwrites(key, name)
   return not util.deepEq(asLibrary(key, p), asLibrary(key, g))
 end
 
---contract: library source -> project, discarding drift; no-op if no library copy exists
+--post: no-op iff library[name] is nil; else project[name] := library[name]
 function lib.revert(key, name)
   local src = sourceOf(key, name)
   if src ~= nil then writeTier('project', key, name, src) end
@@ -134,7 +137,7 @@ end
 
 ----- Factory seed / reload
 
---contract: stock an empty library tier from the factory catalogue; no-op once it holds anything
+--post: no-op iff library ≠ {}; else library := factory(key) \ synthetic(key)
 function lib.seedIfEmpty(key)
   if next(libraryTier(key)) ~= nil then return end
   local drop = synth(key)
@@ -145,7 +148,8 @@ function lib.seedIfEmpty(key)
   if next(tier) ~= nil then cm:set('global', key, tier) end
 end
 
---contract: { add = names in factory not library, overwrite = present but divergent }; both sorted
+--post: fresh result.add = sorted { n ∈ S : library[n] is nil }, S = factory(key) \ synthetic(key)
+--post: fresh result.overwrite = sorted { n ∈ S : library[n] exists and differs }
 function lib.reloadPlan(key)
   local libr = libraryTier(key)
   local drop = synth(key)
@@ -161,7 +165,7 @@ function lib.reloadPlan(key)
   return { add = add, overwrite = overwrite }
 end
 
---contract: true iff a factory import would overwrite a divergent library copy (both exist, differ)
+--post: result = (factory(key)[name] and library[name] exist and differ)
 function lib.factoryOverwrites(key, name)
   local f = factoryTier(key)[name]
   local g = libraryTier(key)[name]
@@ -169,7 +173,7 @@ function lib.factoryOverwrites(key, name)
   return not util.deepEq(f, g)
 end
 
---contract: copy one factory entry into the library tier (deep-clone via cm:set); synthetic never
+--post: no-op iff name is synthetic or not in factory; else library[name] := factory(key)[name]
 function lib.importFactory(key, name)
   if synth(key)[name] then return end
   local value = factoryTier(key)[name]
@@ -178,7 +182,8 @@ end
 
 ----- Tidy / delete
 
---contract: drop project entries deepEq their source and not in inUse; single cm:set; returns removed
+--post: fresh result = sorted { n ∈ project : n ∉ inUse and deepEq(project[n], library[n]) }
+--post: project := project \ result, written in one cm:set
 function lib.tidy(key, inUse)
   inUse = inUse or {}
   local tier    = cm:getAt('project', key) or {}
@@ -196,7 +201,8 @@ function lib.tidy(key, inUse)
   return removed
 end
 
---contract: remove name from tier level (project|global); synthetic names never
+--pre: level ∈ { project, global }
+--post: no-op iff name is synthetic or absent; else tier(level) := tier(level) \ { name }
 function lib.delete(key, level, name)
   checkLevel(level)
   if synth(key)[name] then return end

@@ -4,7 +4,8 @@ files named as arguments if any; on whole files with `--all` (cleanup mode); or
 on candidate lines fed to `--measure` on stdin (drafting mode).
 
 Rules (docs/CONVENTIONS.md § Length discipline for comments):
-- `--invariant:` / `--contract:` / `--emits:` / `--reaper:` cap at 100 chars.
+- `--invariant:` / `--pre:` / `--post:` / `--contract:` / `--emits:` / `--reaper:`
+  cap at 100 chars.
 - `--shape:` is exempt from the 100-char rule but soft-capped at 400 chars
   per line — a single shape line that long is almost certainly either
   prose stuffed in alongside the fields, or a dense shape that should be
@@ -39,9 +40,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-KIND_CAPPED = re.compile(r'^\s*--\??(invariant|contract|emits|reaper):')
+KIND_CAPPED = re.compile(r'^\s*--\??(invariant|pre|post|contract|emits|reaper):')
 SHAPE       = re.compile(r'^\s*--\??shape:')
-ANY_KIND    = re.compile(r'^\s*--\??(invariant|contract|shape|emits|reaper):')
+ANY_KIND    = re.compile(r'^\s*--\??(invariant|pre|post|contract|shape|emits|reaper):')
 COMMENT     = re.compile(r'^\s*--')
 DESIGN_REF  = re.compile(r'^\s*--.*\bdesign/')
 DIVIDER     = re.compile(r'^\s*-{3,}')

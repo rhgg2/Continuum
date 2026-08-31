@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — **Source annotations are `pre`, `post` and `invariant`, each stating a
+  predicate.** `--contract:` conflated the caller's obligation with the callee's guarantee, so a
+  false line could not say whose bug it was; pre and post split that, and a module, having no call
+  to attach to, takes only invariant. A predicate needs a non-trivial truth-value, so prose that
+  constrains nothing goes to `--shape:` or `docs/`, and a line restating the body is worse than none
+  — it holds tautologically today and fails under any rewrite. A table result carries its ownership:
+  `fresh` unaliased and the caller's, `live` aliased and safely mutable, `unsafe` aliased, read-only
+  and of ephemeral validity — which `--contract:` had no way to say at all.
+
 - **2026-08-31** — One noun per thing in the window vocabulary. A **window** is the object — span,
   host (uuid and type), channel, targets. A **span** is the bare interval, the word `spans.lua` and
   the realisation targets already use, so nothing else is minted for it; the note-side pass computes

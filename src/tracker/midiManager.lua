@@ -1,6 +1,8 @@
 -- See docs/midiManager.md for the model.
 --invariant: channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
 --invariant: loc is a slot id, stable while the event lives; slots are re-minted on every load
+--invariant: every live event is uuid-addressable, a plain cc's in-memory uuid included
+--invariant: a uuid is durable across reload, except a plain cc's — re-minted each load
 --invariant: mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)
 --invariant: mm holds raw pb; cents/detune + absorber pb live in tm (docs/tuning.md)
 --invariant: muted is true-or-absent; false coerces to nil at write; pass false to clear
@@ -590,10 +592,10 @@ local fire = util.installHooks(mm)
 
 ----- Load
 
---contract: load is always external (lock-free): reads the take, normalises in-memory, reprojects
---contract: dedup/unify/reconcile mutate the model + set dirty; flushTake writes once if dirty
---contract: a take still holding loadedBlob is converged: fires reload{wholesale=false, chans={}}, returns
---contract: metadata persists incrementally: reassignment clones out, uuids no event claims swept
+--post: no-op iff newTake is nil; else streams and eventsByUuid agree with the take's bytes
+--post: (same take, bytes unchanged since load) → reload fires, nothing re-parses
+--post: (dedup, unification or reconcile changes)  → take rewritten once
+--post: metadata is not rewritten whole: reassignment's clones written, orphan uuids dropped
 function mm:load(newTake)
   if not newTake then return end
   perf.start('load')
@@ -766,7 +768,7 @@ function mm:load(newTake)
 
   ----- Sidecar reconcile (ccs ↔ the parsed cc sidecars)
   if next(parsedCcSidecars) then
-    --contract: stage-3 consensus: winning offset needs ≥ max(2, ceil(0.5·n)) votes, unique
+    --invariant: consensus offset (reconcile stage 3) wins on ≥ max(2, ceil(0.5·n)) votes, uniquely
     local THRESHOLD_FRAC, THRESHOLD_MIN = 0.5, 2
     local scsWorking, ccsWorking = util.clone(parsedCcSidecars), util.clone(ccs)
     local scBuckets, ccBuckets
@@ -897,9 +899,9 @@ function mm:load(newTake)
   end
   eventMeta:flush(poolGuid, metaWrites, metaDrops)
 
-  --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
-  --contract: then: ccsDeduped, ccsReconciled, collisionsResolved, reload, flushed (iff wrote)
-  --contract: dedup/reconcile signals fire only when their event kind has ≥1 record
+  --post: signals fire in order: takeSwapped, notesDeduped, uuidsReassigned, ccsDeduped
+  --post: ... then ccsReconciled, collisionsResolved, reload, and flushed iff the take was written
+  --post: a dedup or reconcile signal fires iff its event kind has ≥ 1 record
   --emits: takeSwapped    -- nil; only when load received a different take
   if takeSwapped           then fire('takeSwapped',     nil) end
   --emits: notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }
@@ -935,7 +937,7 @@ eventMeta:subscribe('poolsRewound', function(payload)
   end
 end)
 
---contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
+--post: take, its guid and every event index drop
 function mm:unload()
   take, poolGuid, loadedBlob, wire = nil, nil, nil, nil
   eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, 0, false
@@ -954,7 +956,8 @@ local function noteCollision(note, verb)
   pendingCollisions[util.key(note.chan, note.pitch)] = { chan = note.chan, pitch = note.pitch, verb = verb }
 end
 
---contract: resolves missed same-pitch collisions at the outermost unwind; steady state finds none
+--post: pendingCollisions := {}; fresh result = kill/nudge events, nil iff nothing moved
+--post: result ≠ nil → flushPending := true
 local function resolveCollisions()
   if not next(pendingCollisions) then return nil end
   local events = {}
@@ -1021,8 +1024,8 @@ local function markWireAdded(evt) markWire(evt, NO_KEYS) end
 
 ----- Locking
 
---contract: writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
---contract: a structural write marks the take dirty; modify reprojects it once via flushTake
+--pre: lock is held — every add, delete and structural assign runs inside mm:modify(fn)
+--post: dirty := true
 local function checkLock()
   assert(lock, 'Error! You must call modification functions via modify()!')
   dirty = true
@@ -1072,8 +1075,8 @@ function mm:modify(fn)
   if not ok then print('Error in modify: ' .. tostring(err)) end
 end
 
---contract: holds the nest open across the caller's modifies; takes no lock, writes nothing
---contract: not a gesture -- fires no reload, and an error propagates rather than printing
+--post: the nest holds open across the caller's modifies; no reload fires
+--post: an error from fn propagates
 -- A caller staging through many separate modifies (tm's rebuild pipeline) would otherwise reindex and
 -- reproject the take once per stage.
 function mm:batch(fn)
@@ -1090,6 +1093,7 @@ local function cloneOut(evt)
   return util.clone(evt, { loc = true })
 end
 
+--post: result = (loc, fresh note) iterator
 function mm:notes()
   local it = streams.note.ordered()
   return function()
@@ -1098,16 +1102,14 @@ function mm:notes()
   end
 end
 
---contract: yields mm-internal note records uncloned; do not mutate (read-only fast path)
---contract: notesRaw(chan) yields just that channel's, in ppq order -- same slice, same order
+--post: result = (loc, unsafe note) iterator
 function mm:notesRaw(chan)
   if chan then return streams.note.inChan(chan) end
   return streams.note.ordered()
 end
 
---contract: assignNote: lockless write when t touches no structural field
---contract: persists metadata only when t touches a metadata key; structural-only writes none
---invariant: assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
+--pre: t touches a structural field → lock is held
+--post: metadata re-persisted iff t touches a metadata key
 local function assignNote(loc, t)
   if not take then return end
 
@@ -1147,7 +1149,8 @@ local function assignNote(loc, t)
   if touchesMetadata(note, t) then saveMetadatum(note.uuid) end
 end
 
---contract: addNote always allocates a uuid; flushTake regenerates its notation sidecar
+--pre: lock is held; t has ppq, endppq, chan, pitch and vel
+--post: t.uuid := t.keepUuid when free, else a newly minted uuid
 local function addNote(t)
   if not (take and checkLock()) then return end
 
@@ -1184,6 +1187,7 @@ end
 ----- CCs
 
 --invariant: a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
+--post: result = (loc, fresh cc) iterator
 function mm:ccs()
   local it = streams.cc.ordered()
   return function()
@@ -1192,16 +1196,15 @@ function mm:ccs()
   end
 end
 
---contract: yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
---contract: ccsRaw(chan) yields just that channel's, in ppq order -- same slice, same order
+--post: result = (loc, unsafe cc) iterator
 function mm:ccsRaw(chan)
   if chan then return streams.cc.inChan(chan) end
   return streams.cc.ordered()
 end
 
---contract: assignCC: lockless iff t touches no structural field and doesn't promote a plain cc
---contract: first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
---contract: persists metadata only when t touches a metadata key; structural-only writes none
+--pre: (t touches a structural field, or stamps metadata on a plain cc) → lock is held
+--post: metadata on a plain cc promotes it: msg.plain := nil
+--post: metadata re-persisted iff t touches a metadata key
 local function assignCC(loc, t)
   if not take then return end
 
@@ -1259,7 +1262,9 @@ local function pushCC(t)
   return msg
 end
 
---contract: addCC always mints a uuid; a cc with no non-structural key is plain -- no sidecar
+--pre: lock is held; t has ppq, chan, its value field, and an evType in chanMsgLUT
+--post: t.uuid := a newly minted uuid
+--post: (t has no non-structural key) → msg.plain := true
 local function addCC(t)
   if not (take and checkLock()) then return end
 
@@ -1289,9 +1294,7 @@ local function addCC(t)
   sidecarPut(msg)   -- here and not in pushCC: the plain decision above is what decides the row
 end
 
---contract: returns (loc, evt-clone, kind) for the uuid, or nil if absent
---contract: works on every event -- a plain cc's in-memory uuid resolves like any other
---contract: a uuid is durable across reload, except a plain cc's -- re-minted each load
+--post: fresh result = (loc, clone, 'note'|'cc'); nil iff uuid does not exist
 function mm:byUuid(uuid)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
@@ -1300,8 +1303,8 @@ end
 
 ----- Unified uuid-addressed surface
 
---contract: t.evType='note' routes to addNote; anything else to addCC
---contract: returns the new event's uuid, or nil if t is malformed; inherits inner lock req
+--pre: lock is held
+--post: result = the new event's uuid; nil iff t is nil, evType-less or underspecified
 function mm:add(t)
   if not t or not t.evType then return nil end
   if t.evType == 'note' then addNote(t) else addCC(t) end
@@ -1310,9 +1313,8 @@ function mm:add(t)
   return t.uuid
 end
 
---contract: dispatches on the resolved event's evType; identity is stable, so no caller re-keys
---contract: returns the event's uuid (always == input), or nil if absent
---contract: inherits the inner method's metadata-only lockless carve-out
+--pre: (t touches a structural field, or promotes a plain cc) → lock is held
+--post: result = uuid; nil iff no event claims it
 function mm:assign(uuid, t)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
@@ -1332,8 +1334,9 @@ function mm:assign(uuid, t)
   return uuid
 end
 
---contract: deletes the event, returns its slot to the free list; flushTake reprojects
---contract: wipes the event's ctm_<uuid> metadata via deleteMetadatum; a plain cc stores none
+--pre: lock is held
+--post: no-op iff no event claims uuid
+--post: the event's metadata is wiped
 function mm:delete(uuid)
   if not (take and checkLock()) then return end
   local evt = eventsByUuid[uuid]
@@ -1352,7 +1355,7 @@ function mm:delete(uuid)
   if not evt.plain then deleteMetadatum(evt.uuid) end
 end
 
---contract: yields (uuid, evt-clone) over all live events, notes then ccs
+--post: result = (uuid, fresh clone) iterator over all events, notes then ccs
 --invariant: events() keys by uuid, unlike notes()/ccs(), which yield (loc, clone)
 function mm:events()
   local noteIt = streams.note.ordered()
@@ -1370,7 +1373,7 @@ function mm:take()
   return liveTake()
 end
 
---contract: the bound take's POOLEDEVTS pool guid (the metadata key); nil when dormant
+--post: result = the take's POOLEDEVTS guid; nil iff dormant
 function mm:poolGuid() return poolGuid end
 
 -- CCINTERP from the item chunk: interpolated points per QN REAPER linearizes CC at
@@ -1423,7 +1426,7 @@ end
 -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
 -- source is the right size, then bring the item to match.
 -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
---contract: qn sizes the source from its origin, so a head-trimmed item renders qn less its head
+--post: the source spans qn from its origin
 function mm:setLength(qn)
   if not liveTake() then return end
   local item     = reaper.GetMediaItemTake_Item(take)
@@ -1444,7 +1447,7 @@ end
 
 -- Spanned from the source origin to the source end, not the item's edges: a
 -- head-trimmed instance starts inside its source, and tm's frame runs from ppq 0.
---contract: ppq is measured from the source origin; the span covers head and tail alike
+--post: fresh result spans source origin to source end; ppq measured from that origin
 function mm:timeSigs()
   if not liveTake() then return {} end
 

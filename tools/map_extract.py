@@ -16,7 +16,9 @@ Two module shapes:
 
 Author-written annotations:
   --invariant: BODY      always-true property of this module
-  --contract:  BODY      promise made to / by callers
+  --pre:       BODY      caller's obligation; if false the callee owes nothing
+  --post:      BODY      callee's promise given the pre, over entry/exit state and result
+  --contract:  BODY      promise made to / by callers (superseded by pre/post)
   --emits:     NAME -- payload doc
   --shape:     NAME = { … }
   --reaper:    BODY      notes on REAPER surface
@@ -93,7 +95,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
-KINDS = ('invariant', 'contract', 'emits', 'shape', 'reaper')
+KINDS = ('invariant', 'contract', 'pre', 'post', 'emits', 'shape', 'reaper')
 
 ANN_RE        = re.compile(rf"^\s*--(\??)({'|'.join(KINDS)}):\s*(.*?)\s*$")
 COMMENT_RE    = re.compile(r"^\s*--\s?(.*)$")
