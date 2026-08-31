@@ -49,5 +49,6 @@ Per spec, in order:
 
 | spec                     | blob         | passed at |
 |--------------------------|--------------|-----------|
-| tm_fx_region_spec.lua    | f74d83c326b9 | 332446b4  |
-| vm_tracker_mode_spec.lua | 1dbe680827c7 | a747deec  |
+| tm_fx_region_spec.lua    | f74d83c326b9 | 332446b4 |
+| vm_retune_spec.lua       | 0e7ad31fbd6e | 05ad837f |
+| vm_tracker_mode_spec.lua | 1dbe680827c7 | a747deec |

@@ -1,5 +1,5 @@
--- Retune: with no target tv:retune(slots) runs every note in scope through
--- tuning.snap and writes the pair back, strength being how far of the way there
+-- Retune: with no target tv:retune(slots) puts every note in scope on the step it
+-- was written on and writes the pair back, strength being how far of the way there
 -- it actually lands, and remembers the target and key on the take. The notation
 -- is a twelve-note quarter-comma meantone MOS, so a step's seat carries a detune
 -- of its own and the window is asymmetric (+38.0 / -58.6 either side of step 1).
@@ -18,6 +18,12 @@
 -- is what the springs hold their intervals to. Nothing bounds where a strand lands,
 -- so a chord asking for 86 cents of stretch carries one of its notes past the step
 -- above it, and the intent it stores is what strands it as written on the next run.
+--
+-- What the springs answer is read as an interval against the ratio the spelling
+-- named, that being the quantity the dials price; where a case reads absolute cents
+-- instead it is the pull's anchoring of the chord it means. Ambient prices what a
+-- chord entering inherits, so it takes a chain of sonorities to say anything and its
+-- case climbs five triads where the rest sound one.
 --
 -- Either facility reads a note's render clip rather than its authored ceiling, so an
 -- open tail sounds to the next onset in its lane rather than to the end of the take.
@@ -108,6 +114,13 @@ end
 
 -- The detune a target point lands as, seated on the 12-EDO note it is written on.
 local function offset(token, semitones) return tuning.scalaPitch(token) - semitones * 100 end
+
+-- What a cell sounds, in absolute cents, and what an interval between two of them stands
+-- off the ratio its spelling said it would sound as -- which is what the dials price.
+local function sounds(chord, pitch) return pitch * 100 + chord[pitch] end
+local function impurity(chord, lower, upper, token)
+  return sounds(chord, upper) - sounds(chord, lower) - tuning.scalaPitch(token)
+end
 
 return {
   {
@@ -253,6 +266,7 @@ return {
     run = function(harness)
       local h = mk(harness, { note(0, 76, 0) })
       h.cm:set('take', 'retune.target', 'DIA')
+      t.eq(h.cm:getAt('take', 'retune.target'), 'DIA', 'the take carries a target to forget')
       h.vm:retune{ scope = 'all', strength = 1, key = 1, sonoritySize = 5, harmonicLock = 1 }
       t.eq(h.cm:getAt('take', 'retune.target'), nil, 'none is remembered as none')
     end,
@@ -299,6 +313,29 @@ return {
   },
 
   {
+    name = "strength blends the solve's pair as it blends the snap's",
+    run = function(harness)
+      -- The solve answers with the same point whatever the strength; strength is how far of
+      -- the way to it the note lands (docs/trackerView.md § Retune). So the half-strength run
+      -- stands at the midpoint of where each note was written and where the full run put it.
+      local function retuned(strength)
+        local h = mk(harness, c7(), '12EDO', { SEPTIMAL = SEPTIMAL })
+        h.vm:retune{ scope = 'all', strength = strength, target = 'SEPTIMAL', key = 1,
+                     facility = 'points', sonoritySize = 5, harmonicLock = 0.5 }
+        return chordAt(h, 0)
+      end
+
+      local full, half = retuned(1), retuned(0.5)
+      t.truthy(math.abs(full[70]) > 10, 'the full solve carried the seventh somewhere to be half of')
+      for _, pitch in ipairs{ 60, 64, 67, 70 } do
+        t.truthy(half[pitch], 'the blend seats the note on ' .. pitch .. ' where it was written')
+        near(sounds(half, pitch), (pitch * 100 + sounds(full, pitch)) / 2,
+             'and stands it half way to the point the solve chose')
+      end
+    end,
+  },
+
+  {
     name = 'a note moved off its step strands with the class its intent names',
     run = function(harness)
       local notes = c7()
@@ -324,6 +361,20 @@ return {
                                    facility = 'points', sonoritySize = 5, harmonicLock = 0.5 }
       t.deepEq(refused, { 7 }, 'the tritone, step 7 of the notation')
       t.eq(chordAt(h, 0)[64], 0, 'and the third that would have moved is untouched')
+    end,
+  },
+
+  {
+    name = 'the refusal names its steps in notation order, once however many strands wrote it',
+    run = function(harness)
+      -- Against the 7-limit diamond both the C sharp and the B have empty windows. The B is
+      -- written first and the C sharp returns after it as a second strand, so neither the
+      -- order the strands are walked in nor how many of them wrote a step reaches the answer.
+      local h = mk(harness, { note(0, 71, 0), note(0, 61, 0), note(120, 61, 0) },
+                   '12EDO', { SEPTIMAL = SEPTIMAL })
+      local refused = h.vm:retune{ scope = 'all', strength = 1, target = 'SEPTIMAL', key = 1,
+                                   facility = 'points', sonoritySize = 5, harmonicLock = 0.5 }
+      t.deepEq(refused, { 2, 12 }, 'the C sharp and the B, the low step first and each named once')
     end,
   },
 
@@ -419,19 +470,20 @@ return {
       t.eq(stood[63], 0, 'so nothing moved')
 
       local placed = retuned('moves')
-      settles(placed[60], -5.6314, 'the C, the chord mirroring the major triad')
-      settles(placed[63],  9.3842, 'the E flat a 6/5 above it, reached through the fifth')
-      settles(placed[67], -3.7546, 'the fifth a 3/2 above the C')
-      settles(placed[75],  9.3842, 'and the octave doubling seated in its own register')
+      settles(impurity(placed, 60, 67, '3/2'), -0.0782, 'the fifth all but pure above the C')
+      settles(impurity(placed, 63, 67, '5/4'),  0.5475, 'and the 5/4 the E flat reaches it through')
+      settles(impurity(placed, 60, 63, '6/5'), -0.6257,
+              'leaving the E flat a 6/5 above the C, which the set holds no point for')
+      settles(placed[75], placed[63], 'and the octave doubling seated in its own register')
     end,
   },
 
   {
     name = 'purity prices how nearly the spelled intervals sound pure',
     run = function(harness)
-      -- The same triad under two purities: soft springs leave the third audibly wide,
-      -- and stiff ones close it by carrying the notes further from where they were
-      -- written (docs/sonority.md § The dials).
+      -- The same triad down a sweep of purities, read as how wide of a pure 5/4 its third
+      -- actually sounds. A doubling of the dial halves that, and what buys the halving is the
+      -- C standing further from where it was written (docs/sonority.md § The dials).
       local function retuned(purity)
         local h = mk(harness, { note(0, 60, 0), note(0, 64, 0), note(0, 67, 0) },
                      '12EDO', { DIA = DIA })
@@ -440,15 +492,22 @@ return {
         return chordAt(h, 0)
       end
 
-      local soft = retuned(2)
-      settles(soft[60],  3.3517, 'soft springs seat the C nearest where it was written')
-      settles(soft[64], -8.3794, 'the third standing 1.96 cents wide of a pure 5/4')
-      settles(soft[67],  5.0274, 'and the fifth 0.28 cents narrow of a pure 3/2')
+      local wide, drift = {}, {}
+      for index, purity in ipairs{ 2, 4, 8, 16, 32 } do
+        local chord  = retuned(purity)
+        wide[index]  = impurity(chord, 60, 64, '5/4')
+        drift[index] = chord[60]
+      end
 
-      local stiff = retuned(32)
-      settles(stiff[60],  3.8686, 'stiff springs carry the C further out')
-      settles(stiff[64], -9.6766, 'closing the third to 0.14 cents of pure')
-      settles(stiff[67],  5.8035, 'and the fifth to 0.02 of pure')
+      settles(wide[1], 1.9552, 'soft springs leave the third audibly wide of a pure 5/4')
+      settles(wide[5], 0.1411, 'and the stiffest close it to a seventh of a cent')
+      for index = 1, 4 do
+        local closed = wide[index] / wide[index + 1]
+        t.truthy(closed > 1.8 and closed <= 2,
+                 'a doubling of purity halves the mistuning: ' .. tostring(closed))
+        t.truthy(drift[index + 1] > drift[index],
+                 'bought by carrying the C further from where it was written')
+      end
     end,
   },
 
@@ -466,18 +525,58 @@ return {
                       key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8, ambient = 1 }
 
       h.vm:retune(slots)
-      local first = cellsAt(h, 0)
+      local first, heard = cellsAt(h, 0), chordAt(h, 0)
       t.eq(first[67], nil, 'nothing left on the step the G was written on')
-      settles(first[68].detune, -41.0058, 'the G reading as the A flat it has gone past')
-      t.eq(first[68].intentCents, 6700, 'and carrying the step it was written on')
-      settles(first[64].detune, -23.8670, 'the E a stretched 5/4 below where it sounds')
-      settles(first[63].detune, -35.1291, 'and the E flat, which the set reaches from neither')
+      t.eq(first[68].intentCents, 6700, 'the G carrying the step it was written on')
+      settles(sounds(heard, 68) - 6700, 58.9948, 'and standing 59 cents above it, past the step between')
+      settles(impurity(heard, 64, 68, '5/4'), -3.4525,
+              'the E-G spelled a 5/4, whose 86 cents of stretch is more than the springs realise')
+      settles(heard[63], -35.1284, 'and the E flat, which the set reaches from neither')
 
       h.vm:retune(slots)
       local second = cellsAt(h, 0)
       for pitch, e in pairs(first) do
         t.truthy(second[pitch], 'the note on ' .. pitch .. ' stranding as its intent names it')
         settles(second[pitch].detune, e.detune, 'and the second run leaving it where the first did')
+      end
+    end,
+  },
+
+  {
+    name = 'ambient hands a chord entering a share of where the passage stood',
+    run = function(harness)
+      -- Five triads climbing by fifths. The share of the sonority before it that a strand
+      -- takes as its rest is the ambient slot: at 1 the drift compounds down the passage where
+      -- at 0 every strand rests where it was written (docs/sonority.md § The dials). What the
+      -- slot moves is where each chord sits, not how it is spelled.
+      local ROOTS = { 60, 67, 62, 69, 64 }
+      local function climbed(ambient)
+        local notes = {}
+        for index, root in ipairs(ROOTS) do
+          local at = (index - 1) * 60
+          util.add(notes, note(at, root,     0))
+          util.add(notes, note(at, root + 4, 0))
+          util.add(notes, note(at, root + 7, 0))
+        end
+        local h = mk(harness, notes, '12EDO', { FIVES = FIVES })
+        h.vm:retune{ scope = 'all', strength = 1, target = 'FIVES', facility = 'moves',
+                     key = 1, sonoritySize = 5, harmonicLock = 1, purity = 8, ambient = ambient }
+        local roots = {}
+        for index, root in ipairs(ROOTS) do roots[index] = chordAt(h, index - 1)[root] end
+        return roots, chordAt(h, #ROOTS - 1)
+      end
+
+      local rested,  last     = climbed(0)
+      local drifted, carried  = climbed(1)
+      settles(impurity(carried, 64, 68, '5/4'), impurity(last, 64, 68, '5/4'),
+              'the last chord is spelled alike either way')
+
+      local gap = {}
+      for index = 1, #ROOTS do gap[index] = drifted[index] - rested[index] end
+      t.truthy(gap[1] > 0, 'the inheritance carries the passage off the page from the first chord')
+      for index = 1, #ROOTS - 1 do
+        t.truthy(gap[index + 1] > gap[index],
+                 'and compounds down it: chord ' .. index .. ' stands ' .. tostring(gap[index]))
       end
     end,
   },
