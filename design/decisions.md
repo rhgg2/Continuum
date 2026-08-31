@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — forgetCaches drops parkedClipEnd and fxHostWin on the branch a take swap or a
+  wholesale re-read enters tm:rebuild. mm mints uuids per take, so an entry surviving that seam
+  addresses an event of the take just left; today the wholesale dirt hides that by forcing every
+  reader onto its recompute arm, which stops being checkable once the engine is another file. It
+  lands without a spec: instrumenting both caches with a generation counter showed no cross-seam
+  read anywhere in the suite, so nothing observable separates the two behaviours.
+
 - **2026-08-31** — A window is clipped by the authored onsets on its lane, on the take or parked,
   and derived notes lie outside that population. One rule then covers an on-take host, a parked host
   and a parked member, and parking only moves a note between the two halves of the set, so the

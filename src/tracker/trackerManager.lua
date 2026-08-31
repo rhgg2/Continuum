@@ -2614,8 +2614,8 @@ end
 
 ----- Rebuild region park
 
-local parkedClipEnd = {}   -- uuid -> endppqC (logical); a take-length change arrives as a wholesale
-                           -- reload, recomputed there -- no separate length guard (mirrors fxHostWin)
+local parkedClipEnd = {}   -- uuid -> endppqC (logical); take-scoped, dropped by forgetCaches at the
+                           -- take-tier seam, where a take-length change also arrives (mirrors fxHostWin)
 
 -- Clip each parked member's tail to its render end (ceiling, on-take lane onset, parked-neighbour
 -- onset), cached per uuid and dirt-gated -- see docs/trackerManager.md § Region-replace parking
@@ -3113,8 +3113,8 @@ end
 
 -- Note-host fx windows: authored/take ceiling clipped to strict-next same-lane onset, cached per
 -- uuid (fxHostWin), dirt-gated. see docs/trackerManager.md § Fx window cache
-local fxHostWin = {}   -- uuid -> windowEndL (logical); a take-length change arrives as a wholesale reload
-                       -- (mm:setLength), which walkChannel recomputes -- no separate length guard needed
+local fxHostWin = {}   -- uuid -> windowEndL (logical); take-scoped, dropped by forgetCaches at the
+                       -- take-tier seam, which a take-length change (mm:setLength) reaches too
 
 function computeFxWindows(extraFxChans, parkedNotes)
   local takeLen = tm:length()
@@ -4777,6 +4777,12 @@ local function channelsInUse(sources)
   return inUse
 end
 
+-- The uuid-keyed caches that outlive a pass. Each holds a span measured in the bound take, and mm
+-- mints uuids per take, so an entry surviving a swap or re-read names an event of the take just left.
+local function forgetCaches()
+  parkedClipEnd, fxHostWin = {}, {}
+end
+
 --contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
 --contract: returns the maps the fx accessors read, for tm:rebuild to install
 --invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
@@ -4889,7 +4895,9 @@ function tm:rebuild(takeChanged)
   rebuilding = true
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirt.add(nil, true) end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
+  -- Wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline, and the
+  -- take-tier caches go, since their uuid keys address the take just left.
+  if didReload or takeChanged then dirt.add(nil, true); forgetCaches() end
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point

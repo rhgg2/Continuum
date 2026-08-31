@@ -26,22 +26,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 tm: clear the take-scoped caches at the take-tier seam (design/tracker-manager-split.md § Phase 3 7)
 - 2026-08-31 tm: hand the fx maps up from the pipeline (design/tracker-manager-split.md § Phase 3 3-4)
 - 2026-08-31 tm: gather the stager's doors onto one table (design/tracker-manager-split.md § Phase 3 8)
 - 2026-08-31 tm: gather the raw index's doors onto one table (design/tracker-manager-split.md § Phase 3 14, § Open 1)
-- 2026-08-31 config: teach the maps about door tables (design/tracker-manager-split.md § Phase 3 8)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **`forget()` on the take-tier path.** `parkedClipEnd` and `fxHostWin`
-   get one explicit clear, called where a take swap or a wholesale
-   re-read enters `tm:rebuild`. Their invalidation today is implicit in
-   the wholesale dirt each of them gates on, and a cache outliving a
-   take swap is a bug nothing in the code names.
 
 1. **Freeze eligibility leaves the pipeline.** `buildFreezeMaps` stops
    minting a verdict per producer, and `tm:freezeEligible` computes

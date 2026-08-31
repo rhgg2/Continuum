@@ -720,9 +720,8 @@ channel is wholesale-dirty, it is uncached, its own uuid is seeded, or
 a seed ppq falls inside its cached span; else the cached end rides. The
 reseek is a binary seek into the member's sorted lane column
 (`nextLaneOnset`, shared with `hostWindowEnd`) plus a small member-only
-strict-next map for parked neighbours. A take-length change needs no guard: it
-arrives as `mm:setLength`'s wholesale reload, which recomputes every
-member (mirrors `fxHostWin`). Lane bound only, never pitch: a parked cell never
+strict-next map for parked neighbours. The cache is take-scoped, and drops at the
+take-tier seam alongside `fxHostWin` (§ Fx window cache). Lane bound only, never pitch: a parked cell never
 reaches mm, so it carries pure intent — the same extent
 `computeFxWindows` gives an on-take host. The note del/adds ride the
 tail walk's atomic commit. See `docs/generators.md` § Output. Each pass's
@@ -1072,9 +1071,13 @@ the post-park call runs — both fall to `walkChannel`, which recomputes every h
 refreshes the cache. `perHost` returns false (forcing the walk) the moment it meets an indexed host
 with no live cell, so an unstamped host is never silently skipped.
 
-A take-length change reclips every OPEN window, yet needs no separate guard. Length moves only
-through `mm:setLength`, which fires a `wholesale=true` reload; that dirties all 16 channels, so
-`computeFxWindows` walks every fx channel at the new `takeLen` and overwrites the cache.
+The cache is scoped to the bound take. `tm:rebuild` drops it, with `parkedClipEnd`, on the branch a
+take swap or a wholesale re-read enters (`forgetCaches`); mm mints uuids per take, so an entry
+surviving that seam addresses an event of the take just left.
+
+A take-length change reclips every OPEN window, yet needs no guard of its own. Length moves only
+through `mm:setLength`, which fires a `wholesale=true` reload — that same branch — so every fx
+channel walks afresh at the new `takeLen`.
 
 The two calls per rebuild (head `hostWindows` feeding the note pass, post-settlement `fxWindow` —
 computed by `settleWindows` from within the park stage — feeding cc/pb membership and `rebuildFx`)
