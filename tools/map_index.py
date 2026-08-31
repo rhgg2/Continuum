@@ -40,7 +40,9 @@ def src_of(mp: Path, text: str) -> str:
 
 def bare_name(kind: str, head: str) -> str:
     if kind == "fn":
-        m = re.match(r"^(\w+)\(", head)
+        # A door-table member is spelled for its table at the declaration and at
+        # every call site, as a held function is, so the qualifier is its name.
+        m = re.match(r"^([\w.]+)\(", head)
         return m.group(1) if m else head
     if kind == "api":
         m = re.match(r"^[\w]+[:.](\w+)\(", head)

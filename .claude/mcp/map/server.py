@@ -772,7 +772,8 @@ def map_query(
       query: regex, case-insensitive, substring-matched, not glob; anchor
         with ^$ for exact. Omit to return everything.
       kind: one kind, or 'decl' / 'ann' for a group. Omitted: decl + ann.
-        decl   fn / api (module method) / state / const / require /
+        decl   fn (a private helper, or `tbl.name` on a door table) /
+          api (module method) / state / const / require /
           construct / held (literal in a table field) / handler (literal
           given to a registrar) / case (a spec's test)
         ann    invariant / contract / shape / emits / deps (modules used) /

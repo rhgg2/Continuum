@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — The maps learn door tables: a `function tbl.name` at module scope, on a table
+  other than the one the module returns, is a private `@fn tbl.name` and calls on it are intra-file
+  `@call` edges. The extractor's guard was indentation, which a `do` block defeats, so
+  trackerManager's frame operations earned no rows at all and every call on one sat under unresolved
+  receivers -- the same blindness midiManager's stream verbs have had all along. The qualifier stays
+  part of the name, as for a held function, since the declaration and every call site spell it the
+  same way. makeStream's verbs sit a function deeper and need the nested-declaration work first.
+
 - **2026-08-31** — The frame handle is a do-block over a private memo, not a factory closure like
   midiManager's makeStream: only the renewal memo can go behind a door, since fifty-seven sites read
   deep into channels and the engine splices into columns later stages read, so an accessor would

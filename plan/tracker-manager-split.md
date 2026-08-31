@@ -22,25 +22,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-31 config: teach the maps about door tables (design/tracker-manager-split.md § Phase 3 8)
 - 2026-08-31 tm: gather the frame and its operations into one handle (design/tracker-manager-split.md § Phase 3 14)
 - 2026-08-31 tm: pin the seam between seating and absorber synthesis (design/tracker-manager-split.md § What the specs hold 4)
 - 2026-08-31 tm: pin the seat scope a dirt seed closes to (design/tracker-manager-split.md § What the specs hold 4)
-- 2026-08-31 tm: pin the keep/live split of a clipped pb window (design/tracker-manager-split.md § What the specs hold 4)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **Door tables in the maps.** `map_extract` captures a `function
-   tbl.name` only at indent zero, so the operations of a file-scope door
-   table go unrecorded, and every call on one lands in `@drop` under
-   unresolved receivers. The indent guard becomes a function-depth guard;
-   a dotfn whose owner is not the module's return target emits as a
-   private `@fn`; and `extract_uses` aliases such owners to the module, so
-   the calls become `@call` edges. midiManager's `makeStream` verbs sit a
-   function deeper and stay out of reach.
 
 1. **The index as a door table.** The fourteen names RAW INDEX
    forward-declares become fields of one `index` table the block

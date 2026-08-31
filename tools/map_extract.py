@@ -66,6 +66,15 @@ a dotted assignment target -- gets `# Functions held in tables`:
 the literal, because a bare field key collides with declarations elsewhere in
 the same file.
 
+`function tbl.name(...)` at module scope, on a table that is not the one the
+module returns, is a **door table** -- one name gathering some structure's
+operations, as trackerManager's `frame` does. Its members are private, so they
+earn `@fn tbl.name` rows under `# Private functions` and calls on them are
+intra-file `@call` edges; the qualifier is part of the name, since that is how
+the declaration and every call site spell it. Deeper than module scope the
+same form is a sub-instance's own verb (`makeStream`'s `stream.get`) and stays
+uncaptured.
+
 A wrapper assignment -- `local revert = util.atomic('Revert swing', function(name)`
 -- earns a declaration row of its own, `@fn` bare or `@api` on the module's
 own table: the wrapper forwards its arguments, and the name is spelled bare at
@@ -253,7 +262,7 @@ class MapFile:
     consts: list[Decl] = field(default_factory=list)
     private_fns: list[Block] = field(default_factory=list)
     methods: list[Block] = field(default_factory=list)
-    dotfns: list[Block] = field(default_factory=list)
+    door_fns: list[Block] = field(default_factory=list)  # members of a file-local door table
     api: list[Block] = field(default_factory=list)   # namespace: NS.fn
     held: list[Block] = field(default_factory=list)  # literals in table fields
     handlers: list[Block] = field(default_factory=list)  # literals handed to a registrar
@@ -642,21 +651,25 @@ def parse(path: Path) -> MapFile:
                                         doc=collect_doc(lines, i)))
             continue
 
-        # dot functions on a table (no self). Same indent guard as methods.
+        # dot functions on a table (no self). Module scope, as local helpers
+        # are: the owner is then a table of this file's, whatever a `do` block
+        # or an `if` indents it by. Deeper is a sub-instance's own verb.
         md = DOT_FN_RE.match(head)
         if md:
-            indent, owner, name, args = md.groups()
-            if indent == '' or owner == cm.return_target:
+            _, owner, name, args = md.groups()
+            imported = {d.name for d in cm.imports + cm.constructs}
+            if owner == cm.return_target or (fn_depth[i] == 0 and owner not in imported):
                 blk = Block(name=name, args=args.strip(),
                             line=i + 1, owner=owner, kind='dotfn',
                             doc=collect_doc(lines, i))
                 # A dot-function on the returned table is public whatever the
                 # module's loading shape -- chrome is instantiated with deps and
-                # publishes this way.
+                # publishes this way. On any other table of this file's it is a
+                # door: private, and spelled for the table at every mention.
                 if owner == cm.return_target:
                     cm.api.append(blk)
                 else:
-                    cm.dotfns.append(blk)
+                    cm.door_fns.append(blk)
             continue
 
         # local function — private helper. Captured at module scope (function
@@ -785,7 +798,7 @@ def parse(path: Path) -> MapFile:
     cm.imports.sort(key=lambda d: d.line)
     cm.constructs.sort(key=lambda d: d.line)
 
-    fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
+    fn_blocks = cm.private_fns + cm.methods + cm.door_fns + cm.api
     cm.held, cm.handlers, named = collect_literals(
         lines, code_lines, fn_depth, {b.line for b in fn_blocks}, cm.return_target)
     for blk in named:
@@ -806,7 +819,7 @@ def parse(path: Path) -> MapFile:
     cm.state = [d for d in cm.state if not is_shell(d)]
     cm.consts = [d for d in cm.consts if not is_shell(d)]
 
-    fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
+    fn_blocks = cm.private_fns + cm.methods + cm.door_fns + cm.api
     for blk in fn_blocks + cm.held + cm.handlers:
         blk.end_line = span_end(deltas, level_after, blk.line - 1) + 1
 
@@ -933,7 +946,10 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
     # The intra-module calls the loop below skips as non-outbound are this
     # file's own call graph; keep them, keyed by the callee's declaration head
     # so a private fn and a like-named method stay distinct rows.
-    members = {b.name: decl_head(b) for b in cm.methods + cm.dotfns + cm.api}
+    members = {b.name: decl_head(b) for b in cm.methods + cm.api}
+    # A door table is this module's own, so a call on one is an intra-module
+    # edge like a bare helper call, keyed by the spelling the site uses.
+    doors = {(b.owner, b.name): decl_head(b) for b in cm.door_fns}
     call_seen: set[tuple[str, int]] = set()
     def add_call(callee: str, line: int, col: int) -> None:
         key = (callee, line)
@@ -955,6 +971,11 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
 
         for m in CALL_RE.finditer(code):
             recv, sep, fn = m.group(1), m.group(2), m.group(3)
+            door = doors.get((recv, fn)) if sep == '.' else None
+            if door:
+                if not FN_DECL_PREFIX.fullmatch(code[:m.start()]):
+                    add_call(door, line, m.start())
+                continue
             mod = aliases.get(recv)
             if not mod:
                 # A declaration head matches CALL_RE too, and until now an
@@ -1116,7 +1137,7 @@ def attach_annotations(cm: MapFile) -> None:
     targets.extend(cm.consts)
     targets.extend(cm.private_fns)
     targets.extend(cm.methods)
-    targets.extend(cm.dotfns)
+    targets.extend(cm.door_fns)
     targets.extend(cm.api)
     targets.sort(key=lambda t: t.line)
 
@@ -1323,9 +1344,10 @@ def emit(cm: MapFile) -> str:
             emit_anns(out, d.annotations, '      ')
         add('')
 
-    if cm.private_fns:
+    if cm.private_fns or cm.door_fns:
         add("# Private functions")
-        emit_items(out, sections, cm.private_fns, '@fn ')
+        emit_items(out, sections, sorted(cm.private_fns + cm.door_fns,
+                                        key=lambda b: b.line), '@fn ')
         add('')
 
     if cm.held:
@@ -1351,8 +1373,8 @@ def emit(cm: MapFile) -> str:
         emit_items(out, sections, cm.api, '@api ')
         add('')
 
-    if cm.methods or cm.dotfns:
-        merged = sorted(cm.methods + cm.dotfns, key=lambda b: b.line)
+    if cm.methods:
+        merged = sorted(cm.methods, key=lambda b: b.line)
         owners = sorted({m.owner for m in merged})
         # `:` or `.` from how the owner's members are declared -- the module's
         # mode says nothing about the spelling a caller uses.
