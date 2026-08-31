@@ -109,14 +109,6 @@ do
     return prev
   end
 
-  function frame.sortNoteColumn(tbl) table.sort(tbl, noteColumnLess) end
-
-  -- A writer that knows an onset splices its cell at the seat, keeping the lane ordered without a blunt
-  -- whole-column re-sort downstream.
-  function frame.insertNoteCell(events, cell)
-    util.insertSorted(events, cell, noteColumnLess)
-  end
-
   -- tv's cell carry keys on a note lane's `events` table identity, so a change to the lane's membership
   -- or to a seated cell's rendered fields must replace that table with a fresh one. see docs/trackerManager.md § Note-lane renewal
   --invariant: a note lane's events table changes identity iff its contents changed (tv's carry key)
@@ -142,13 +134,23 @@ do
     cell[field] = value
   end
 
-  -- A lane is disordered only when a raw->logical flip crossed two onsets; a cheap scan lets the flip
-  -- skip re-sorting the common already-ordered lane.
-  function frame.isSorted(events)
+  -- Membership write: renew the lane, then splice at its onset to keep it
+  -- ordered; renewal and splice are one act. See docs/trackerManager.md § Note-lane renewal
+  function frame.spliceCell(chan, lane, cell)
+    local col = frame.renewLane(chan, lane)
+    util.insertSorted(col.events, cell, noteColumnLess)
+  end
+
+  -- Re-true a lane appended to in bulk: a raw->logical flip crossing two onsets is what disorders
+  -- one, and a cheap scan lets the common already-ordered lane skip the sort.
+  function frame.orderLane(col)
+    local events = col.events
     for i = 2, #events do
-      if noteColumnLess(events[i], events[i - 1]) then return false end
+      if noteColumnLess(events[i], events[i - 1]) then
+        table.sort(events, noteColumnLess)
+        return
+      end
     end
-    return true
   end
 end
 
@@ -2217,19 +2219,16 @@ local function rebuildInternals()
     -- Columns are logical-born: every seat projects at ingestion.
     projectEvent(note, note.chan)
     if not dirt.wholesale(note.chan) and not dirt.swing.has(note.chan) then
-      frame.renewLane(note.chan, note.lane)
-      frame.insertNoteCell(col.events, note)   -- splice into the carried logical lane; stays ordered
+      frame.spliceCell(note.chan, note.lane, note)   -- into the carried logical lane; stays ordered
     else
       util.add(col.events, note)         -- fresh lane: append in mm raw order, order once below
       builtCols[col] = true
     end
     stampColEvt(note)
   end
-  -- Raw and logical onset order diverge under swing or an authored swap; re-sort just the appended
-  -- lanes that landed disordered.
-  for col in pairs(builtCols) do
-    if not frame.isSorted(col.events) then frame.sortNoteColumn(col.events) end
-  end
+  -- Raw and logical onset order diverge under swing or an authored swap, so only the lanes this pass
+  -- appended to can have landed disordered; the splices above stay ordered.
+  for col in pairs(builtCols) do frame.orderLane(col) end
   reseats.commit()
 
   return external, noteExisting
@@ -2599,7 +2598,7 @@ local function rebuildExternals(external)
     local d         = delayToPPQ(delay)
     local probe     = { chan = note.chan, ppq = note.ppq, endppq = note.endppq,
                         pitch = note.pitch, delay = delay, lane = note.lane }
-    local col, lane = packLane(frame.channels[note.chan], probe)
+    local _, lane = packLane(frame.channels[note.chan], probe)
     local update    = {
       ppqL    = tm:toLogical(note.chan, note.ppq - d),
       endppqL = tm:toLogical(note.chan, note.endppq),
@@ -2611,8 +2610,7 @@ local function rebuildExternals(external)
     util.assign(colNote, update)
     colNote.fixed = true
     projectEvent(colNote, note.chan)
-    frame.renewLane(note.chan, lane)
-    frame.insertNoteCell(col.events, colNote)
+    frame.spliceCell(note.chan, lane, colNote)
     stampColEvt(colNote)
     extWrites.assign(colNote, update)
   end
@@ -2790,9 +2788,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
       util.add(restoredCells, note)
-      local col = frame.renewLane(spec.chan, spec.lane)
-      util.add(col.events, note)
-      frame.sortNoteColumn(col.events)
+      frame.spliceCell(spec.chan, spec.lane, note)
       -- Provisional raw end: the authored ceiling is all that is known here, since the lane clip is
       -- the tail walk's to find -- boundNote's write-through corrects this in place.
       local ppq = tm:fromLogical(spec.chan, note.ppq)
@@ -3091,8 +3087,7 @@ local function rebuildPA()
           if noteCol then
             local cell = projectCC(cc, { lane = lane })
             projectEvent(cell, chan)
-            frame.renewLane(chan, lane)
-            frame.insertNoteCell(noteCol.events, cell)
+            frame.spliceCell(chan, lane, cell)
           end
         end
       end
@@ -3109,8 +3104,7 @@ local function rebuildPA()
           local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
           local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cell.pitch, ppq)
           if noteCol then
-            frame.renewLane(chan, lane)
-            frame.insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
+            frame.spliceCell(chan, lane, projectCC(cell, {lane = lane}))   -- the cell is logical-born
           end
         end
       end

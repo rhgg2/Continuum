@@ -751,7 +751,7 @@ modulates. It runs after column layout so the view and fx expansion read
 PAs inline, and after externals so foreign-MIDI PAs find their host. A parked PA is gone from `mm`, so it is re-projected from
 `frame.channels[chan].parkedPA` into its parked host's lane — visible
 off-take, riding the note column as an on-take PA would. Both passes
-splice in order (`insertNoteCell`), so nothing downstream re-sorts.
+splice in order (`spliceCell`), so nothing downstream re-sorts.
 
 ### Fx expansion
 
@@ -1195,7 +1195,8 @@ Renewal is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseNotes` assigns only when it actually dropped a
   cell; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
-  the park restore) and the park unlink call `renewLane(chan, lane)` first.
+  the park restore) go through `spliceCell(chan, lane, cell)`, which renews
+  before it splices, and the park unlink calls `renewLane(chan, lane)` itself.
   It takes the seeded rows and seeks each one into each lane rather than
   testing every cell against a predicate, so a lane holding no seeded row
   costs a binary search and nothing else. A `claims` refinement narrows

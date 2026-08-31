@@ -255,14 +255,13 @@ the seed minters stay with the structures they read. The model is
    at all.
 
 1. The second is operations on structures already being passed. If the
-   frame travels as a handle, then `insertNoteCell`, `setCell`,
-   `sortNoteColumn`, `renewLane` and `isSorted` travel on it: they are
-   the frame's operations, and each takes a frame or a piece of one as
-   its first argument. The pass boundary and the renewal memo are the
-   frame's own, so `newPass` and `markRenewed` join them. Two of the
-   seven belong elsewhere — `rawThenLogical` to the index, whose lists it
-   orders, and `sortByPPQ` to `util`, beside the seeks that assume the
-   order it makes. Seven names become zero.
+   frame travels as a handle, then `spliceCell`, `setCell`, `orderLane`
+   and `renewLane` travel on it, with `newPass` and `markRenewed` for the
+   pass boundary and the renewal memo: they are the frame's operations,
+   and each takes the frame's own coordinates or a piece of it. Two of
+   the seven belong elsewhere — `rawThenLogical` to the index, whose
+   lists it orders, and `sortByPPQ` to `util`, beside the seeks that
+   assume the order it makes. Seven names become zero.
 
 1. Two of the seven have a third caller. `setCell` is applied to a bare
    fx spec and `setRaw` to bare specs, and each carries a branch for

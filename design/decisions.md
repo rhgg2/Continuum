@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-08-31** — Every frame operation now touches the frame's own state, the two pure ones having
+  folded into the state ops they always accompanied: insertNoteCell never appeared without a
+  renewLane on the line above it, at all four sites, and isSorted existed only as sortNoteColumn's
+  guard. spliceCell renews then splices, orderLane scans then sorts, and noteColumnLess stays
+  private with nothing pure exported at all. The fold also retires the silent failure that §
+  Note-lane renewal names -- splicing into a lane nobody renewed is no longer expressible.
+
 - **2026-08-31** — sortByPPQ leaves the frame handle for util, beside the seeks that assume the
   order it makes: five of its thirteen call sites in tm were frame columns and the rest scratch
   lists, while the same comparator stood written out longhand in five other modules. The note-column
