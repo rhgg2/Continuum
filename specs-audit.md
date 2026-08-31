@@ -2,8 +2,8 @@
 
 A record of when each spec in `tests/specs/` was last read against the
 standard of the coding skill, `.claude/skills/coding/SKILL.md`. Each
-row holds the spec's blob hash at that moment and the commit HEAD was
-on.
+row holds the spec's blob hash at that moment and the `main` commit
+the pass sat on.
 
 A spec has no single subject — each exercises a swathe of core
 modules, so nearly every commit touches one — and the audit is about

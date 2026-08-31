@@ -2,7 +2,7 @@
 
 A record of when each doc in `docs/` was last read against the code
 and found true. Each row holds the doc's blob hash at that moment and
-the commit HEAD was on. Staleness is then read off the commits since
+the `main` commit the pass sat on. Staleness is then read off the commits since
 that pass, and what matters is which side of the pair a commit
 touched:
 

@@ -2,7 +2,9 @@
 """Report which docs and specs have gone stale since they were audited.
 
 A ledger records, for each file that has passed a review, the blob hash
-of the file at that moment and the commit HEAD was on. Everything else
+of the file at that moment and the `main` commit the pass sat on --
+not HEAD, which on a worktree branch is a commit a later rebase may
+rewrite, leaving the row naming nothing. Everything else
 -- which files exist, how big they are, which have never been audited
 -- is read off the tree, so a ledger only ever carries facts a human
 established.
@@ -24,7 +26,7 @@ and the report says by how much.
   tools/audit.py docs                     report on docs/
   tools/audit.py specs                    report on tests/specs/
   tools/audit.py docs pass timing.md      stamp, at the current content
-  tools/audit.py specs pass am_spec.lua     and HEAD
+  tools/audit.py specs pass am_spec.lua     and the main commit below it
 """
 
 import glob
@@ -45,6 +47,12 @@ def git(*args):
     done = subprocess.run(
         ["git", "-C", ROOT, *args], capture_output=True, text=True)
     return done.stdout.strip() if done.returncode == 0 else None
+
+
+def gitOk(*args):
+    """Whether the command succeeded, for git's questions answered by exit code."""
+    return subprocess.run(["git", "-C", ROOT, *args],
+                          capture_output=True).returncode == 0
 
 
 def readLedger(audit):
@@ -70,7 +78,12 @@ def items(audit):
 
 
 def commitsSince(since, *paths):
-    """Commits since a pass, as (subject line, files touched) pairs."""
+    """Commits since a pass, as (subject line, files touched) pairs. A ref that
+    is not an ancestor gives an empty range rather than an error, so say so
+    here instead of reporting the file as having drifted for no stated reason."""
+    if not gitOk("merge-base", "--is-ancestor", since, "HEAD"):
+        sys.exit(f"{paths[0]}: passed at {since}, which is not an ancestor of "
+                 "HEAD -- a rebase or an amend rewrote it. Restamp the row.")
     log = git("log", "--format=%h %s", "--name-only", f"{since}..HEAD",
               "--", *paths)
     found, header, files = [], None, set()
@@ -202,16 +215,18 @@ def report(audit):
 
 
 def stamp(audit, names):
-    """Record each file as passed at its current content and HEAD."""
+    """Record each file as passed at its current content and the main commit it
+    sits on -- on main itself that is HEAD, and on a worktree branch it is the
+    base, which a rebase of that branch preserves."""
     passes, _ = readLedger(audit)
-    head = git("rev-parse", "--short=8", "HEAD")
+    base = git("rev-parse", "--short=8", git("merge-base", "HEAD", "main"))
     width = max(len(name) for name in list(passes) + names)
     for name in names:
         path = os.path.join(audit["dir"], name)
         if not os.path.exists(os.path.join(ROOT, path)):
             sys.exit(f"no such file: {path}")
-        passes[name] = (git("hash-object", path)[:12], head)
-        print(f"passed {name} at {passes[name][0]} / {head}")
+        passes[name] = (git("hash-object", path)[:12], base)
+        print(f"passed {name} at {passes[name][0]} / {base}")
 
     table = "".join(f"| {name:<{width}} | {blob} | {commit} |\n"
                     for name, (blob, commit) in sorted(passes.items()))
