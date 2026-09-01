@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — The fx document's ids are minted in tm, one helper over both stores, and the view
+  asks for a region's rather than minting it. The mint takes the higher of the store's high-water
+  mark and its own counter, which is what a batch of mints needs and what the region paste and the
+  park stager were each hand-rolling beside their own scan. tm owns both stores, so the mint that has
+  to see them lives there even though authoring a region does not.
+
 - **2026-09-01** — A length verb maps the whole document's logical time, and not the take alone: fx
   regions, the park stash and the realised-window census scale, clip or tile alongside the events.
   What a verb rewrites is intent, and realisation follows from it -- a region's span scales and its

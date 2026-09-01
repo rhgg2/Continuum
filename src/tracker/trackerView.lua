@@ -2800,19 +2800,6 @@ local function regionByUuid(uuid)
   end
 end
 
-local function maxFxRegionN(list)
-  local maxN = 0
-  for _, region in ipairs(list) do
-    local n = tonumber(tostring(region.uuid):match('^fxr%-(%d+)$'))
-    if n and n > maxN then maxN = n end
-  end
-  return maxN
-end
-
-local function mintRegionUuid()
-  return 'fxr-' .. (maxFxRegionN(ds:get('fxRegions') or {}) + 1)
-end
-
 -- A selection always mints a fresh region over its (channel, ppq span). Regions may
 -- overlap, so a repeated selection stacks a new one rather than reopening the last.
 local function mintRegionForSelection()
@@ -2820,7 +2807,7 @@ local function mintRegionForSelection()
   local col = grid.cols[col1]
   if not col then return end
   local chan   = col.midiChan
-  local region = { uuid = mintRegionUuid(), chan = chan,
+  local region = { uuid = tm:newFxRegionUuid(), chan = chan,
                    ppq = tv:rowToPPQ(row1, chan),
                    endppq   = tv:rowToPPQ(row2 + 1, chan), fx = {} }
   local out = {}
@@ -2874,13 +2861,11 @@ local function pasteFxRegions(list)
   local cursorRow, cursorChan = ec:row(), cursor.midiChan
   local out = {}
   for _, region in ipairs(ds:get('fxRegions') or {}) do util.add(out, region) end
-  local nextN = maxFxRegionN(out)
   for _, entry in ipairs(list) do
     local chan = cursorChan + entry.chanDelta
     if chan >= 1 and chan <= 16 then
-      nextN = nextN + 1
       util.add(out, {
-        uuid     = 'fxr-' .. nextN,
+        uuid     = tm:newFxRegionUuid(),
         chan     = chan,
         ppq = ctx:rowToPPQ(cursorRow + entry.row,    chan),
         endppq   = ctx:rowToPPQ(cursorRow + entry.endRow, chan),

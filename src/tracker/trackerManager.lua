@@ -307,6 +307,23 @@ local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()
 
 ----- Fx expansion helpers
 
+-- ids are `fxr-N` region / `fxp-N` parked. A mint takes the higher of the store's high-water mark
+-- and its own counter: store alone reissues an unflushed batch's id; counter alone, reset per session, reissues a live one.
+--pre: prefix is a literal, matched as one
+--post: result = an id claimed neither by ds[key] nor by any id this mint has already issued
+local fxUuidSeq = {}
+
+local function newFxUuid(prefix, key)
+  local seq = fxUuidSeq[prefix] or 0
+  for _, record in ipairs(ds:get(key) or {}) do
+    local n = tonumber(tostring(record.uuid):match('^' .. prefix .. '%-(%d+)$'))
+    if n and n > seq then seq = n end
+  end
+  seq = seq + 1
+  fxUuidSeq[prefix] = seq
+  return prefix .. '-' .. seq
+end
+
 -- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
 -- see docs/trackerManager.md § Span-covered fx scans
 local function coverInto(list, spanSet, admit, emit)
@@ -1324,26 +1341,11 @@ do
   -- Edits stage here and ride flush: a parked edit that wrote ds inline would rebuild mid-batch and
   -- discard still-staged mm ops. rebuildRegionPark derives realisation from the spec each pass.
 
-  -- N restarts at 0 each session while the stash persists, so the mint takes the stash's
-  -- high-water mark first: the counter alone would reissue a uuid a live spec still holds.
-  -- The counter is what keeps one batch's own mints apart -- adds ride flush, so every add
-  -- in a batch scans the same not-yet-landed stash.
-  do
-    local parkedUuidSeq = 0
-
-    local function mintParkedUuid()
-      for _, spec in ipairs(ds:get('fxParked') or {}) do
-        local n = tonumber(tostring(spec.uuid):match('^fxp%-(%d+)$'))
-        if n and n > parkedUuidSeq then parkedUuidSeq = n end
-      end
-      parkedUuidSeq = parkedUuidSeq + 1
-      return 'fxp-' .. parkedUuidSeq
-    end
-
-    function stager.addParked(spec)
-      if spec.evType == 'note' and not spec.uuid then spec.uuid = mintParkedUuid() end
-      util.add(parkedEdits, { op = 'add', spec = spec })
-    end
+  -- Adds ride flush, so every add in a batch scans the same not-yet-landed stash: the mint's own
+  -- counter is what keeps one batch's mints apart.
+  function stager.addParked(spec)
+    if spec.evType == 'note' and not spec.uuid then spec.uuid = newFxUuid('fxp', 'fxParked') end
+    util.add(parkedEdits, { op = 'add', spec = spec })
   end
 
   function stager.assignParked(evt, update)
@@ -1989,6 +1991,10 @@ function tm:fxCurveAt(uuid, chan, target, ppqL)
   -- A pb seat's val is realisation, detune included -- the same subtraction the column projection makes.
   return target == 'pb' and val - index.detuneAt(chan, ppq) or val
 end
+--contract: an id no stored region holds and no earlier mint issued; the caller stores the region
+-- The view authors regions, but the store the mint scans is tm's, and the parked stash mints beside it.
+function tm:newFxRegionUuid() return newFxUuid('fxr', 'fxRegions') end
+
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if stager.flush() then tm:rebuild(false) end end
 
