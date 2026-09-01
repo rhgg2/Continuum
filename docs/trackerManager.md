@@ -582,7 +582,7 @@ runs it.
 1. **Extra columns** (`rebuildExtraColumns`)
 1. **Externals** (`rebuildExternals`)
 1. **Sample stamp** (`stampSamples`)
-1. **Note fx spans and windows** (`computeNoteFxSpans`, `windowSet`)
+1. **Note fx spans and windows** (`computeNoteFxSpans`, `buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)
 1. **PA dispatch** (`rebuildPA`)
 1. **Fx expansion** (`rebuildFx`)
@@ -698,13 +698,12 @@ assembled twice: a head set for the note pass, and a settled set
 (`settleWindows`, called from inside the park stage) for cc/pb membership
 and `rebuildFx` (§ Note fx span cache).
 
-`windowSet` holds each set. Every stream a host parks takes the host's own
-span, so one window per host is the whole fact — channel, span, host type,
-and the targets its chain reaches, from `generators.chainTargets`. The set
-answers in whichever shape a reader wants: membership for the park scans,
-the windows themselves for the tail's maps, and the per-target list,
-ordered note, pb, then cc ascending, for the stages that walk one and for
-the `prevWindows` write.
+`buildFxWindows` holds each set. Every stream a host parks takes the host's
+own span, so one window per host is the whole fact — channel, span, host
+type, and the targets its chain reaches, from `generators.chainTargets`. The
+set answers in whichever shape a reader wants: membership for the park
+scans, the windows themselves for the tail's maps, and the per-target list,
+ordered note, pb, then cc ascending, for the `fxRealisedWindows` write.
 
 ### Region-replace parking
 
@@ -1000,7 +999,7 @@ seated them, and nothing walks a column to re-project — a second projection wo
 ### Closing the pass
 
 The pipeline then persists its own window set: `settledWindows` goes to
-`ds:assign('prevWindows', …)` when it differs from the set this pass read,
+`ds:assign('fxRealisedWindows', …)` when it differs from the set this pass read,
 so the next rebuild recognises seats against it. `stager.clear()` drops
 un-flushed ops, the pass's dirt folds into `muteConform` and clears,
 and `derivedInputs` re-snapshots once the pipeline's own ds writes have
@@ -1129,7 +1128,7 @@ prior-set partition — ungated — restores it at the next rebuild.
 
 ## Fx window census
 
-`windowSet` builds the pass's fx windows from three sources — authored `fxRegions`, on-take
+`buildFxWindows` builds the pass's fx windows from three sources — authored `fxRegions`, on-take
 note hosts (`noteFxSpans`, from `computeNoteFxSpans`), and parked fx hosts (`parkedSpecs`) — and the
 latter two are disjoint only because `settleWindows` declares the pass's parks to `computeNoteFxSpans`.
 The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's cell at once,
@@ -1141,11 +1140,25 @@ bucket is `noteFxSpans`' keys plus `frame.channels[chan].parked`, would run its 
 would sum the two pb curves to twice the authored depth. The declaration therefore sits at the
 writer, where one statement serves every reader.
 
-`windowSet` holds the pass's windows once: the window per host is the fact, and the per-target list
-a view over it. Every window is minted inside the set, so stamping `targets` touches no record the
-document owns.
+`buildFxWindows` holds the pass's windows once: the window per host is the fact, and the per-target
+list a view over it. Every window is minted inside the set, so stamping `targets` touches no record
+the document owns.
 
-`freezeRegion`'s resync drops the frozen host's entries from `prevWindows` (the
+The set holds logical spans and answers in either frame. `covers` compares a logical onset against
+them directly; `coversRaw` converts a window's bounds and compares raw to raw, which is what every
+question asked of an mm record needs (`docs/generators.md` § Route-by-window). The conversion happens
+on first ask and is then held: `tm:fromLogical` is stable across a pass, the swing projection being
+memoised and cleared only on a config change, so converting there is the same arithmetic as
+converting at the pass's head.
+
+The take's own set is that same list persisted, under `fxRealisedWindows`, and `buildRealisedWindows`
+replays it into the same doors — the inverse of the per-target view, grouping in first-appearance
+order so the round trip reproduces the list. A replayed window carries spans, targets, channel and
+uuid: the document persists the per-target view and not the host, so it has no `fx` and no
+`hostType`, and nothing asks the baseline for either. `realised` there says the take already carries
+these windows, having landed on the wire — not the raw frame of `docs/tuning.md`.
+
+`freezeRegion`'s resync drops the frozen host's entries from `fxRealisedWindows` (the
 seat-recognition baseline) by their stamped `id`: every per-target entry the set emits carries its
 host's uuid. The stamp is identity for subtraction only — seat recognition still matches on
 spans, so nothing downstream reads it. Identity is what the subtraction needs: two hosts can

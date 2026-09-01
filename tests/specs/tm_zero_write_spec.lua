@@ -7,7 +7,7 @@
 -- Distinct from tm_gate_parity's pin: that asserts a gated rebuild's OUTPUT
 -- equals a forced full re-derive's. Byte-identical output can still hide a
 -- no-op overwrite (assign the same value back); this counts the writes
--- themselves. The deepEq guards at the fxParked/prevWindows assign sites and
+-- themselves. The deepEq guards at the fxParked/fxRealisedWindows assign sites and
 -- the content-keyed reconcile are the production mechanism; this pins they hold.
 --
 -- Pinned on both interval-dirt phase-0 fixtures so the property spans both take

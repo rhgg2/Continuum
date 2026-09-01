@@ -213,6 +213,12 @@ unrelated to what they check.
 - **Config tier shadowing.** A value set at a wide tier can be
   shadowed by a fixture's narrower tier — read the target fixture's
   config before trusting a red test.
+- **Swing pins beat boundaries.** Turning swing on to separate the
+  logical and realisation frames separates nothing if the fixture's
+  spans start and end on the beat, where `fromLogical` is the
+  identity. A window over [0, 240) is degenerate at exactly the two
+  points a bounds comparison reads; [120, 360), which converts to
+  [139, 379), is not.
 - **Don't pin finer than the computation settles.** A figure off the
   sonority solve is exact for the road the beam took, and the road is a
   discrete choice a thousandth of a cent can flip, so a pin taken to

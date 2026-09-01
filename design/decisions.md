@@ -12,6 +12,16 @@ not eight or ten.
   — it holds tautologically today and fails under any rewrite. A table result carries its ownership:
   `fresh` unaliased and the caller's, `live` aliased and safely mutable, `unsafe` aliased, read-only
   and of ephemeral validity — which `--contract:` had no way to say at all.
+- **2026-09-01** — The window set is one thing with two populations, not a set beside a flat list.
+  windowSet(windows) is the set; buildFxWindows mints the pass's windows from regions, note hosts
+  and parked hosts, and buildRealisedWindows replays the take's stored per-target list into the same
+  doors, so the prior baseline answers in the same voice as the current one. The set answers in
+  either frame -- covers on a logical onset, coversRaw converting a window's bounds once for the
+  questions asked of mm records -- which retires nine open-coded window scans across the park
+  stages. The shared body is named for what it is rather than for the door-table mechanism, which
+  every closed-over table in the codebase has equal claim to. The persisted list becomes
+  fxRealisedWindows, grouping with fxRegions and fxParked; realised in the sense of having landed on
+  the wire, not the raw frame of docs/tuning.md.
 
 - **2026-08-31** — One noun per thing in the window vocabulary. A **window** is the object — span,
   host (uuid and type), channel, targets. A **span** is the bare interval, the word `spans.lua` and

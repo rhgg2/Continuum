@@ -10,6 +10,8 @@ local groups     = require('groups')
 -- ppq 15 (peak) / 45 (trough); stream anchored 0 at both window ends.
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
+local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
+
 local function centsToRaw(cents, pbRange)
   return util.round(cents * 8192 / ((pbRange or 2) * 100))
 end
@@ -1050,7 +1052,7 @@ return {
       injectArp(h)
       -- The chain ran over the silent span and claimed its note window all the same: a chain that folds
       -- nothing still owns what it claimed. see docs/generators.md § Emission is ownership ¶3
-      t.eq(#(h.ds:get('prevWindows') or {}), 1, 'the arp registered its note window over the silent span')
+      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 1, 'the arp registered its note window over the silent span')
       t.eq(#derivedNotes(h), 0, 'no members -> no derived notes (every step rests)')
     end,
   },
@@ -2245,7 +2247,7 @@ return {
         'and they are in the grid, not merely on the wire')
       t.falsy(h.ds:get('fxRegions'),  'the region is gone -- nil, not an empty array')
       t.falsy(h.ds:get('fxParked'),   'its parked members are destroyed with it')
-      t.falsy(h.ds:get('prevWindows'),'and its windows leave the recognition baseline')
+      t.falsy(h.ds:get('fxRealisedWindows'),'and its windows leave the recognition baseline')
     end,
   },
 
@@ -2441,7 +2443,7 @@ return {
       t.truthy(rec, 'the host is still indexed')
       t.falsy(rec.fx, 'but carries no chain -- freeze took it')
       t.falsy(h.ds:get('fxParked'), 'the authored cc it parked are destroyed with the window')
-      t.falsy(h.ds:get('prevWindows'), 'and its window leaves the recognition baseline')
+      t.falsy(h.ds:get('fxRealisedWindows'), 'and its window leaves the recognition baseline')
       local col = h.tm:getChannel(1).columns.ccs[10]
       t.truthy(col and #col.events > 0, 'the cc seats stand in the column as authored automation')
     end,
@@ -2486,7 +2488,7 @@ return {
     end,
   },
 
-  ----- The host census: prevWindows carries one entry per host
+  ----- The host census: fxRealisedWindows carries one entry per host
 
   {
     -- The persisted window set is the seat-recognition baseline and the freeze gates' census both, so a
@@ -2504,7 +2506,7 @@ return {
       h.tm:rebuild()   -- settle: the host is off-take when the window set is recomputed
       t.eq(#h.tm:getChannel(1).parked, 1, 'the trill parks its own host')
 
-      local windows = h.ds:get('prevWindows') or {}
+      local windows = h.ds:get('fxRealisedWindows') or {}
       t.eq(#windows, 1, 'one host, one entry')
       t.eq(windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
       local hostUuid = h.tm:getChannel(1).parked[1].uuid
@@ -2533,6 +2535,49 @@ return {
         if c.evType == 'pb' and c.chan == 1 then peak = math.max(peak, math.abs(c.val)) end
       end
       t.eq(peak, centsToRaw(30), 'the chain runs once: the sine peaks at its authored depth')
+    end,
+  },
+
+  {
+    -- The baseline answers about mm records, whose onsets are raw, so it converts a window's bounds
+    -- to the realisation frame before comparing. Swing pins beat boundaries, so only an off-beat
+    -- window parts the two frames at all -- and then a seat past the logical end still sits inside
+    -- the raw span. Compared logically it would read as freshly authored and be re-marked.
+    -- see docs/generators.md § Route-by-window
+    name = 'park windows (swung channel): a seat past the window\'s logical end is still a seat',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { c58 = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+      }
+      -- Window-blind: the file's own derivedPbs reads membership in the logical frame, which is the
+      -- very thing under test here.
+      local function wireStream()
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and c.chan == 1 then
+            util.add(out, { ppq = c.ppq, val = c.val, plain = c.plain, ppqL = c.ppqL })
+          end
+        end
+        table.sort(out, function(a, b) return a.ppq < b.ppq end)
+        return out
+      end
+
+      h.ds:assign('fxRegions',
+        { { uuid = 'fxr-sw', chan = 1, startppq = 120, endppq = 360, fx = sine30 } })
+      h.tm:rebuild()
+
+      t.truthy(h.tm:fromLogical(1, 360) > 360, 'the window end parts company with the logical frame')
+      local before = wireStream()
+      t.truthy(#before > 0, 'the chain seated a pb stream (non-vacuous)')
+      for _, s in ipairs(before) do t.eq(s.plain, true, 'first-derive seats are markerless') end
+      local past = 0
+      for _, s in ipairs(before) do if s.ppq >= 360 then past = past + 1 end end
+      t.truthy(past > 0, "and some of it lands past the window's logical end")
+
+      -- Wholesale: the CC walk re-decides seat or authored for every pb on the channel.
+      h.tm:rebuild(true)
+      t.deepEq(wireStream(), before, 'every seat is recognised again -- none re-marked, none swept')
     end,
   },
 
@@ -2669,7 +2714,7 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
 
-      local windows = h.ds:get('prevWindows') or {}
+      local windows = h.ds:get('fxRealisedWindows') or {}
       t.eq(#windows, 2, 'one note window per expanded host')
       local ids, chans = {}, {}
       for _, w in ipairs(windows) do ids[w.id] = true; chans[w.chan] = true end
@@ -2681,7 +2726,7 @@ return {
       -- Fresh dirt on a channel already in use: past the region's window, so the set it reaches stands.
       addNote(h, { chan = 2, pitch = 67, ppq = 240, endppq = 480 })
       h.tm:rebuild()
-      t.deepEq(h.ds:get('prevWindows'), windows, 'a second rebuild derives the same identities')
+      t.deepEq(h.ds:get('fxRealisedWindows'), windows, 'a second rebuild derives the same identities')
     end,
   },
 
@@ -2750,7 +2795,7 @@ return {
       })
       h.tm:rebuild()
       local regions, windows, parked =
-        h.ds:get('fxRegions'), h.ds:get('prevWindows'), h.ds:get('fxParked')
+        h.ds:get('fxRegions'), h.ds:get('fxRealisedWindows'), h.ds:get('fxParked')
       t.eq(#windows, 2, 'both hosts stand in the census')
       t.eq(#parked, 1, 'and the member they both park is in the stash')
 
@@ -2760,7 +2805,7 @@ return {
       t.falsy(h.tm:freezeRegion('fxr-2'), 'and so is the later one')
 
       t.deepEq(h.ds:get('fxRegions'), regions, 'both regions stand')
-      t.deepEq(h.ds:get('prevWindows'), windows, 'the recognition baseline is untouched')
+      t.deepEq(h.ds:get('fxRealisedWindows'), windows, 'the recognition baseline is untouched')
       t.deepEq(h.ds:get('fxParked'), parked, 'and nothing left the stash')
     end,
   },
@@ -2777,14 +2822,14 @@ return {
         h.tm:flush()
       end
       local lanes = h.tm:getChannel(1).columns.notes
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two on-take hosts, two identical pb windows')
+      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 2, 'two on-take hosts, two identical pb windows')
 
       t.falsy(h.tm:freezeEligible(lanes[1].events[1].uuid), 'the map refuses the first host')
       t.falsy(h.tm:freezeEligible(lanes[2].events[1].uuid), 'and its chord-mate')
       t.falsy(h.tm:freezeRegion(lanes[1].events[1].uuid), 'the first host is refused')
       t.falsy(h.tm:freezeRegion(lanes[2].events[1].uuid), 'and so is its chord-mate')
 
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'both baseline entries stand')
+      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 2, 'both baseline entries stand')
       for lane = 1, 2 do
         t.truthy(h.tm:getChannel(1).columns.notes[lane].events[1].fx, 'each host keeps its chain')
       end
@@ -2873,12 +2918,12 @@ return {
         { uuid = 'fxr-2', chan = 1, startppq = 480, endppq = 720, fx = sine30 },
       })
       h.tm:rebuild()
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two hosts, two pb windows on the same target')
+      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 2, 'two hosts, two pb windows on the same target')
 
       t.truthy(h.tm:freezeEligible('fxr-1'), 'disjoint windows: the map clears the freeze')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze reports success')
 
-      local baseline = h.ds:get('prevWindows') or {}
+      local baseline = h.ds:get('fxRealisedWindows') or {}
       t.eq(#baseline, 1, "only the frozen host's window leaves the baseline")
       t.eq(baseline[1] and baseline[1].id, 'fxr-2',
            "the surviving entry carries the neighbour's identity, not just its value")
@@ -2895,7 +2940,7 @@ return {
       local h = harness.mk()
       injectRegion(h, { fx = { sine30[1],
                                { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0, dest = 10 } } })
-      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one host, a pb window and a cc window')
+      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 2, 'one host, a pb window and a cc window')
       t.truthy(h.tm:freezeEligible('fxr-1'), 'its own windows are no neighbour in the map either')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'so the freeze goes through')
     end,
@@ -3185,7 +3230,7 @@ return {
       local before1     = derivedFor(h, 1, expanded('fxr-g', 1))
       local before7     = derivedFor(h, 7, expanded('fxr-g', 7))
       local stashBefore = h.ds:get('fxParked') or {}
-      local winBefore   = h.ds:get('prevWindows') or {}
+      local winBefore   = h.ds:get('fxRealisedWindows') or {}
       t.truthy(#before1 > 0 and #before7 > 0, 'the global chain derived onto both channels')
       t.truthy(#stashBefore > 0 and #winBefore > 0, 'and parked its members under a registered window')
 
@@ -3200,7 +3245,7 @@ return {
       t.deepEq(derivedFor(h, 1, expanded('fxr-g', 1)), before1, 'so the derived notes come through unchanged')
       t.deepEq(derivedFor(h, 7, expanded('fxr-g', 7)), before7, 'on both channels')
       t.deepEq(h.ds:get('fxParked') or {}, stashBefore, 'the park stash keeps the cells it stood in for')
-      t.deepEq(h.ds:get('prevWindows') or {}, winBefore, 'and the window set the seats are recognized against')
+      t.deepEq(h.ds:get('fxRealisedWindows') or {}, winBefore, 'and the window set the seats are recognized against')
       t.falsy(h.tm:fxRealisation('fxr-g'), 'the union entry goes with the stored region')
       t.deepEq(h.tm:fxRealisation(expanded('fxr-g', 7)).chans, { 7 }, 'and each host answers for itself')
     end,

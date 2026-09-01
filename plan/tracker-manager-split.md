@@ -26,20 +26,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-01 tm: the park scans ask the window set (design/tracker-manager-split.md § One window population)
 - 2026-08-31 tm: producer -> host, one word for what runs a chain (design/decisions.md 2026-08-31)
 - 2026-08-31 tm: one word for a window, one for a span (design/decisions.md 2026-08-31)
 - 2026-08-31 tm: hold the pass's park windows in one structure (design/tracker-manager-split.md § Phase 3 5)
-- 2026-08-31 tm: clear the take-scoped caches at the take-tier seam (design/tracker-manager-split.md § Phase 3 7)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The park scans ask the window set.** `rebuildRegionPark`,
-   `rebuildFx` and `rebuildCCs` take the flat list and re-scan it per
-   event; they take the set instead and ask `covers`, which indexes by
-   channel. `prevWindows` gains a constructor from stored data, so seat
-   recognition asks the prior set in the same voice as the current one.
 

@@ -4692,8 +4692,8 @@ function tv:rebuild(takeChanged)
     end
 
     -- Tag cells inside fx park windows 'parked' (positional, like 'member'): the leaf-edit facade routes
-    -- them to tm's off-take stash. prevWindows is the set 4.5 parked over this rebuild (regions + note hosts); parked wins on overlap.
-    local park = ds:get('prevWindows') or {}
+    -- them to tm's off-take stash. fxRealisedWindows is the set 4.5 parked over this rebuild (regions + note hosts); parked wins on overlap.
+    local park = ds:get('fxRealisedWindows') or {}
     for _, col in ipairs(grid.cols) do
       for _, w in ipairs(park) do
         if w.evType == col.type and w.chan == col.midiChan and (w.cc == nil or w.cc == col.cc) then
