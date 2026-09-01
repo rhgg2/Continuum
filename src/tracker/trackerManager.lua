@@ -309,18 +309,19 @@ local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()
 
 -- ids are `fxr-N` region / `fxp-N` parked. A mint takes the higher of the store's high-water mark
 -- and its own counter: store alone reissues an unflushed batch's id; counter alone, reset per session, reissues a live one.
---pre: prefix is a literal, matched as one
---post: result = an id claimed neither by ds[key] nor by any id this mint has already issued
-local fxUuidSeq = {}
+local fxUuidPrefix = { fxRegions = 'fxr', fxParked = 'fxp' }
+local fxUuidSeq    = {}
 
-local function newFxUuid(prefix, key)
-  local seq = fxUuidSeq[prefix] or 0
+--pre: key names a store in fxUuidPrefix
+--post: result = an id claimed neither by ds[key] nor by any id this mint has already issued
+local function newFxUuid(key)
+  local prefix, seq = fxUuidPrefix[key], fxUuidSeq[key] or 0
   for _, record in ipairs(ds:get(key) or {}) do
     local n = tonumber(tostring(record.uuid):match('^' .. prefix .. '%-(%d+)$'))
     if n and n > seq then seq = n end
   end
   seq = seq + 1
-  fxUuidSeq[prefix] = seq
+  fxUuidSeq[key] = seq
   return prefix .. '-' .. seq
 end
 
@@ -1344,7 +1345,7 @@ do
   -- Adds ride flush, so every add in a batch scans the same not-yet-landed stash: the mint's own
   -- counter is what keeps one batch's mints apart.
   function stager.addParked(spec)
-    if spec.evType == 'note' and not spec.uuid then spec.uuid = newFxUuid('fxp', 'fxParked') end
+    if spec.evType == 'note' and not spec.uuid then spec.uuid = newFxUuid('fxParked') end
     util.add(parkedEdits, { op = 'add', spec = spec })
   end
 
@@ -1993,7 +1994,7 @@ function tm:fxCurveAt(uuid, chan, target, ppqL)
 end
 --contract: an id no stored region holds and no earlier mint issued; the caller stores the region
 -- The view authors regions, but the store the mint scans is tm's, and the parked stash mints beside it.
-function tm:newFxRegionUuid() return newFxUuid('fxr', 'fxRegions') end
+function tm:newFxRegionUuid() return newFxUuid('fxRegions') end
 
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if stager.flush() then tm:rebuild(false) end end
@@ -2005,21 +2006,24 @@ function tm:flush() if stager.flush() then tm:rebuild(false) end end
 -- events through. see docs/trackerManager.md § Length operations
 local fxSpanKeys = { 'fxRegions', 'fxParked', 'fxRealisedWindows' }
 
---pre: mapSpan(ppq, endppq) -> onset, ceiling; a nil onset drops the record
+--pre: keys name the stores the verb maps; one it omits stands as it is
+--pre: mapSpan(ppq, endppq) -> the span's images in order; an empty list drops the record
 --pre: mapSpan concretes no util.OPEN ceiling, an open tail being intent that no resize edits
---post: ds[key] := its surviving mapped records, for each fx key whose records the map changed
+--post: ds[key] := its mapped records, for each named key whose records the map changed
+--post: the first image keeps the record's id and every later one mints its own
 --post: a parked delay scales by slope, the map being linear across the span the verb rewrites
 --invariant: the write is suppressed, so the caller's own flush drives the one rebuild that reads it
-local function mapFxDocument(mapSpan, slope)
+local function mapFxDocument(keys, mapSpan, slope)
   local writes = {}
-  for _, key in ipairs(fxSpanKeys) do
+  for _, key in ipairs(keys) do
     local stored, mapped = ds:get(key) or {}, {}
     for _, record in ipairs(stored) do
-      local ppq, endppq = mapSpan(record.ppq, record.endppq)
-      if ppq then
+      for i, span in ipairs(mapSpan(record.ppq, record.endppq)) do
         local out = util.clone(record)
-        out.ppq, out.endppq = ppq, endppq
+        out.ppq, out.endppq = span[1], span[2]
         if out.delay then out.delay = out.delay * slope end
+        -- A copy is a new record: nothing links it to the one it came from, so its id is its own.
+        if i > 1 and out.uuid then out.uuid = newFxUuid(key) end
         util.add(mapped, out)
       end
     end
@@ -2055,10 +2059,10 @@ function tm:setLength(newPpq)
     for _, evt in ipairs(clamps) do stager.assign(evt, { endppq = newPpq })  end
     -- The same verdict on the fx document: past the end it goes, astride the end it clips. A shrink
     -- is no scaling, so this is the one map that drops records.
-    mapFxDocument(function(ppq, endppq)
-      if ppq >= newPpq          then return nil        end
-      if endppq == util.OPEN    then return ppq, endppq end
-      return ppq, endppq and math.min(endppq, newPpq)
+    mapFxDocument(fxSpanKeys, function(ppq, endppq)
+      if ppq >= newPpq          then return {}                 end
+      if endppq == util.OPEN    then return { { ppq, endppq } } end
+      return { { ppq, endppq and math.min(endppq, newPpq) } }
     end, 1)
     -- mm:setLength runs last, so the take is still long here: pendingLen is what tells the tail
     -- walk the new end. All-16 dirt because any channel may hold an OPEN tail spanning it.
@@ -2113,7 +2117,7 @@ function tm:rescaleLength(newPpq)
   end
 
   -- The fx document first, so the rebuild inside applyTimeMap's flush derives from the scaled spans.
-  mapFxDocument(function(ppq, endppq) return f * ppq, endppq and f * endppq end, f)
+  mapFxDocument(fxSpanKeys, function(ppq, endppq) return { { f * ppq, endppq and f * endppq } } end, f)
   applyTimeMap(function(t) return f * t end, function() return f end)
   mm:setLength(newPpq / mm:resolution())
 end
@@ -2125,10 +2129,12 @@ function tm:tileLength(newPpq)
   local oldPpq = mm:length() or 0
   if oldPpq <= 0 or newPpq <= oldPpq then return self:setLength(newPpq) end
 
+  -- Authored events only: a copy tiles the intent and the copied regions derive their own output.
+  -- Copying realisation too would stand it alongside what the region it lands in derives.
   local function snapshot(iter)
     local out = {}
     for _, evt in iter do
-      if evt.ppq < oldPpq then
+      if evt.ppq < oldPpq and not evt.derived then
         local c = util.clone(evt, { uuid = true })
         util.add(out, c)
       end
@@ -2138,6 +2144,22 @@ function tm:tileLength(newPpq)
   local sourceEvents = snapshot(mm:events())
 
   mm:setLength(newPpq / mm:resolution())
+
+  -- Regions and parked hosts loop too; the census does not.
+  -- See docs/trackerManager.md § tileLength for why.
+  mapFxDocument({ 'fxRegions', 'fxParked' }, function(ppq, endppq)
+    local function ceilingAt(delta)
+      if not endppq or endppq == util.OPEN then return endppq end
+      return math.min(endppq + delta, newPpq)
+    end
+    local images = {}
+    for k = 0, math.ceil(newPpq / oldPpq) - 1 do
+      local delta = k * oldPpq
+      if ppq + delta >= newPpq then break end
+      util.add(images, { ppq + delta, ceilingAt(delta) })
+    end
+    return images
+  end, 1)
 
   local function shift(c, delta)
     c.ppq = c.ppq + delta

@@ -23,11 +23,14 @@ local function regionOf(h, uuid)
   end
 end
 
+-- Onset order, the stash keeping none of its own: a case naming a spec positionally means the nth
+-- parked cell down the channel.
 local function parkedNotesOn(h, chan)
   local out = {}
   for _, spec in ipairs(h.ds:get('fxParked') or {}) do
     if spec.evType == 'note' and spec.chan == chan then util.add(out, spec) end
   end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
   return out
 end
 
@@ -42,6 +45,27 @@ local function derivedOnsets(h, chan)
 end
 
 local function lastOf(list) return list[#list] end
+
+local function within(list, from, to)
+  local out = {}
+  for _, v in ipairs(list) do if v >= from and v < to then util.add(out, v) end end
+  return out
+end
+
+local function shiftedBy(list, delta)
+  local out = {}
+  for _, v in ipairs(list) do util.add(out, v + delta) end
+  return out
+end
+
+local function regionsOn(h, chan)
+  local out = {}
+  for _, r in ipairs(h.ds:get('fxRegions') or {}) do
+    if r.chan == chan then util.add(out, r) end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
 
 return {
 
@@ -113,6 +137,86 @@ return {
 
       t.truthy(lastOf(derivedOnsets(h, 1)) < 1920,
         'nothing derives past the new end -- no region is left there to derive it')
+    end,
+  },
+
+  {
+    -- A tile loops the intent, so a region and the hosts it parks come round again at each offset --
+    -- the copies being fresh records, since nothing links a region to the one it was copied from.
+    -- The census does not tile: a tiled region's seats do not exist yet, and an absent entry is the
+    -- true statement that the take carries none there.
+    name = 'a tile loops the fx regions and the stash with the take',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(hostNote(1, 0, 240))
+      h.tm:addEvent(hostNote(1, 960, 1200))   -- an unregioned control: the take walk loops it
+      h.tm:flush()
+      h.ds:assign('fxRegions',
+        { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+
+      local oldPpq = h.fm:length()
+      local source = derivedOnsets(h, 1)
+      t.truthy(#source > 1, 'precondition: the arp seats more than one tile in the region')
+
+      h.tm:tileLength(oldPpq * 2)
+
+      local regions = regionsOn(h, 1)
+      t.eq(#regions, 2, 'the region comes round again in the second copy')
+      t.eq(regions[2].ppq,    oldPpq,       'the copy sits one period on')
+      t.eq(regions[2].endppq, oldPpq + 240, 'carrying its span with it')
+      t.truthy(regions[2].uuid ~= regions[1].uuid, 'and holding an id of its own')
+      t.eq(regions[2].fx[1].kind, 'arp', 'the chain copies with the region')
+
+      local parked = parkedNotesOn(h, 1)
+      t.eq(#parked, 2, 'the host the region parks comes round with it')
+      t.eq(parked[2].ppq, oldPpq, 'parked where the copied region covers it')
+      t.truthy(parked[2].uuid ~= parked[1].uuid, 'under an id of its own, the take holding neither')
+
+      -- The take walk copies authored events only. Were it to copy derived ones too, the copies
+      -- would land inside the copied region's live window and stand alongside what it derives.
+      local after = derivedOnsets(h, 1)
+      t.deepEq(within(after, 0, 240), source, 'the first copy derives what it always did')
+      t.deepEq(within(after, oldPpq, oldPpq + 240), shiftedBy(source, oldPpq),
+        'and the second derives the same, one period on')
+    end,
+  },
+
+  {
+    -- A tile need not divide, and the last copy is then a partial one. It maps like any other, so a
+    -- region astride the new end clips to it and one whose onset is past it never lands -- the same
+    -- verdict the take walk passes on the notes beside them.
+    name = 'a partial tile clips the region astride the new end and drops one past it',
+    run = function(harness)
+      local h = harness.mk()
+      for _, ppq in ipairs({ 0, 1800, 3000 }) do
+        h.tm:addEvent(hostNote(1, ppq, ppq + 240))
+      end
+      h.tm:flush()
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-early',   chan = 1, ppq = 0,    endppq = 240,  fx = arpUp },
+        { uuid = 'fxr-astride', chan = 1, ppq = 1800, endppq = 2040, fx = arpUp },
+        { uuid = 'fxr-past',    chan = 1, ppq = 3000, endppq = 3240, fx = arpUp } })
+      h.tm:rebuild()
+
+      local oldPpq = h.fm:length()   -- 3840; the copy lands at +3840 and the take ends at 5760
+      local newPpq = oldPpq * 1.5
+      t.eq(#regionsOn(h, 1), 3, 'precondition: three regions in the source copy')
+
+      h.tm:tileLength(newPpq)
+
+      local regions = regionsOn(h, 1)
+      t.eq(#regions, 5, 'two of the three come round; the third has nowhere to land')
+      t.eq(regions[4].ppq,    oldPpq,        'the early region copies whole')
+      t.eq(regions[4].endppq, oldPpq + 240,  'span and all')
+      t.eq(regions[5].ppq,    oldPpq + 1800, 'the next one lands astride the new end')
+      t.eq(regions[5].endppq, newPpq,        'and clips to it')
+
+      local parked = parkedNotesOn(h, 1)
+      t.eq(#parked, 5, 'the hosts they park come round with them, and the third host likewise does not')
+      t.eq(parked[5].endppq, newPpq, 'the astride host clips where its region does')
+
+      t.truthy(lastOf(derivedOnsets(h, 1)) < newPpq, 'nothing derives past the new end')
     end,
   },
 

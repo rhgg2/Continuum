@@ -1619,12 +1619,18 @@ census hold spans of their own, so each verb maps them through the same
 time map it maps the events through — `mapFxDocument` is that pass. An
 OPEN ceiling is intent, and no verb concretes one.
 
+A verb names the stores it maps, and the map answers each span with its
+images: none to drop the record, one for a resize, several for a tile.
+The first image keeps the record's id and every later one mints its own,
+since nothing links a copy to what it was copied from.
+
 The census is the piece with teeth. Its spans key the pb create/remove
 diff of § Region-replace parking, so a census left where the seats no
 longer are reads as one window removed and another created; the removal
 then sweeps pbs from a span nothing occupies. A region left behind is
 merely visible — it keeps deriving at the rows it was authored on while
-the music around it has moved.
+the music around it has moved. A tile is the one verb that leaves the
+census out, and § tileLength says why.
 
 ### setLength(newPpq)
 
@@ -1684,3 +1690,15 @@ marker, user metadata). Since `oldPpq` sits on a swing-period boundary
 (take length aligns to QN), shifting by `k·oldPpq` is identical in
 logical and realised frames — one delta serves both `ppq` and `ppqL`
 paths.
+
+The take walk copies authored events only. A copy tiles intent and the
+copied regions derive their own output, so copying realisation too would
+stand the source's tiles alongside what the region they land in derives.
+The regions loop by the same offsets, and so do the hosts they park:
+those live in the stash, invisible to a take walk, and without them a
+copied region would come round covering nothing.
+
+The census does not loop. A copied region's seats do not exist yet, and
+an absent entry is the true statement that the take carries none there —
+the same statement a freshly-authored region makes. Looping it instead
+would enter the pass claiming seats that were never realised.

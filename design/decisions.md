@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — A tile loops the fx regions and the parked hosts they cover, and leaves the
+  census out: a copied region's seats do not exist yet, so an absent entry is the true statement
+  that the take carries none there -- the same one a freshly-authored region makes. The take walk
+  copies authored events only, a copy tiling intent while the copied regions derive their own
+  output. mapFxDocument answers each span with its images rather than one span, which is what lets a
+  tile share the resize verbs' pass at all: none drops a record, one resizes it, several loop it,
+  and the first image keeps the record's id while every later one mints its own.
+
 - **2026-09-01** — The fx document's ids are minted in tm, one helper over both stores, and the view
   asks for a region's rather than minting it. The mint takes the higher of the store's high-water
   mark and its own counter, which is what a batch of mints needs and what the region paste and the
