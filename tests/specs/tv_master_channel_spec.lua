@@ -12,7 +12,7 @@ local arpUp  = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete
 local function injectGlobals(h, list)
   local regions = {}
   for i, over in ipairs(list) do
-    local region = { uuid = 'fxr-' .. i, chan = 0, startppq = 0, endppq = 240, fx = sine30 }
+    local region = { uuid = 'fxr-' .. i, chan = 0, ppq = 0, endppq = 240, fx = sine30 }
     for k, v in pairs(over) do region[k] = v end
     util.add(regions, region)
   end
@@ -208,7 +208,7 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions',
-                  { { uuid = 'fxr-1', chan = 3, startppq = 0, endppq = 240, fx = sine30 } })
+                  { { uuid = 'fxr-1', chan = 3, ppq = 0, endppq = 240, fx = sine30 } })
       h.tm:rebuild()
       h.vm:rebuild()
 
@@ -444,7 +444,7 @@ return {
                      vel = 100, detune = 0, delay = 0, lane = 1 }
       h.tm:flush()
       h.ds:assign('fxRegions',
-                  { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+                  { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       t.falsy(h.vm:explodeEligible('fxr-1'), 'a region on a channel of its own is no global')
 

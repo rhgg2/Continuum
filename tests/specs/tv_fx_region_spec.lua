@@ -26,7 +26,7 @@ local chain3 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 },
                  { kind = 'velPattern', pattern = { 100, 55 } } }
 
 local function injectRegion(h, over)
-  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 }
+  local region = { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 }
   for k, v in pairs(over or {}) do region[k] = v end
   h.ds:assign('fxRegions', { region })
   h.tm:rebuild()
@@ -37,7 +37,7 @@ end
 local function injectRegions(h, list)
   local regions = {}
   for i, over in ipairs(list) do
-    local region = { uuid = 'fxr-' .. i, chan = 1, startppq = 0, endppq = 240, fx = sine30 }
+    local region = { uuid = 'fxr-' .. i, chan = 1, ppq = 0, endppq = 240, fx = sine30 }
     for k, v in pairs(over) do region[k] = v end
     util.add(regions, region)
   end
@@ -201,8 +201,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = arpUp },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 360, fx = arpUp },
       })
       h.tm:rebuild()
 
@@ -233,8 +233,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 120, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 240, fx = sine30 },
       })
       h.tm:rebuild()
       local n = 0
@@ -369,7 +369,7 @@ return {
       local r = (h.ds:get('fxRegions') or {})[1]
       t.truthy(r and r.uuid == uuid, 'a region was minted and is the edit host')
       t.eq(r.chan, 1, 'on the selected channel')
-      t.eq(r.startppq, h.vm:rowToPPQ(0, 1), 'window start = selection top')
+      t.eq(r.ppq, h.vm:rowToPPQ(0, 1), 'window start = selection top')
       t.eq(r.endppq, h.vm:rowToPPQ(4, 1), 'window end = one row past the selection bottom (exclusive)')
       t.eq(#r.fx, 0, 'minted empty -- the editor fills the kinds')
     end,
@@ -602,7 +602,7 @@ return {
       h.cmgr:invoke('noteOff')
       local r = region(h, 'fxr-1')
       t.truthy(r, 'the region survives -- noteOff shortens, never deletes')
-      t.eq(r.startppq, 0,   'onset unchanged')
+      t.eq(r.ppq, 0,   'onset unchanged')
       t.eq(r.endppq,  120,  'end truncated to the cursor row')
     end,
   },
@@ -613,8 +613,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {                             -- storage order != ppq order, same lane
-        { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 360, fx = sine30 },
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 240, endppq = 360, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 120, fx = sine30 },
       })
       h.tm:rebuild()
       local _, ci = fxColFor(h, 1)
@@ -687,12 +687,12 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
-      injectRegion(h, { startppq = 60, endppq = 180 })   -- rows 1..3
+      injectRegion(h, { ppq = 60, endppq = 180 })   -- rows 1..3
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(1, ci, 1)
       h.cmgr:invoke('nudgeForward')
       local r = region(h, 'fxr-1')
-      t.eq(r.startppq, 120, 'onset shifted +1 row')
+      t.eq(r.ppq, 120, 'onset shifted +1 row')
       t.eq(r.endppq,   240, 'end shifted +1 row (duration preserved)')
       t.eq(h.ec:row(), 2,   'the caret tracked the shift')
     end,
@@ -704,8 +704,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = sine30 },  -- storage-first
-        { uuid = 'fxr-2', chan = 1, startppq = 180, endppq = 300, fx = sine30 },  -- storage-later, disjoint
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 120, fx = sine30 },  -- storage-first
+        { uuid = 'fxr-2', chan = 1, ppq = 180, endppq = 300, fx = sine30 },  -- storage-later, disjoint
       })
       h.tm:rebuild()
       local _, ci = fxColFor(h, 1)
@@ -730,8 +730,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },  -- lane 1
-        { uuid = 'fxr-2', chan = 1, startppq = 0, endppq = 240, fx = sine30 },  -- lane 2 (overlaps)
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, ppq = 0, endppq = 240, fx = sine30 },  -- lane 2 (overlaps)
       })
       h.tm:rebuild()
       local i2
@@ -753,8 +753,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 120, fx = sine30 },  -- lane 1
-        { uuid = 'fxr-2', chan = 1, startppq = 0, endppq = 120, fx = sine30 },  -- lane 2 (overlap -> 2 cols)
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 120, fx = sine30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, ppq = 0, endppq = 120, fx = sine30 },  -- lane 2 (overlap -> 2 cols)
       })
       h.tm:rebuild()
       local i2
@@ -777,9 +777,9 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 60,  fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 180, fx = sine30 },
-        { uuid = 'fxr-3', chan = 1, startppq = 240, endppq = 300, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 60,  fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 180, fx = sine30 },
+        { uuid = 'fxr-3', chan = 1, ppq = 240, endppq = 300, fx = sine30 },
       })
       h.tm:rebuild()
       local _, ci = fxColFor(h, 1)     -- all disjoint -> one shared column
@@ -801,7 +801,7 @@ return {
       h.ec:setPos(0, ci, 1)
       h.cmgr:invoke('nudgeBack')
       local r = region(h, 'fxr-1')
-      t.eq(r.startppq, 0,   'onset held at the edge')
+      t.eq(r.ppq, 0,   'onset held at the edge')
       t.eq(r.endppq,   240, 'window unchanged')
     end,
   },
@@ -814,8 +814,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },  -- lane 1
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = sine30 },  -- lane 2, overlaps
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 360, fx = sine30 },  -- lane 2, overlaps
       })
       h.tm:rebuild()
       local _, i2 = fxColFor(h, 1)                       -- lane-1 col; lane-2 col is the next fx col
@@ -842,8 +842,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },  -- lane 1
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = sine30 },  -- lane 2, overlaps
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 360, fx = sine30 },  -- lane 2, overlaps
       })
       h.tm:rebuild()
       local _, ci1 = fxColFor(h, 1)
@@ -877,8 +877,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },  -- lane 1
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = sine30 },  -- lane 2, starts at row 2
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 360, fx = sine30 },  -- lane 2, starts at row 2
       })
       h.tm:rebuild()
       local _, ci1 = fxColFor(h, 1)
@@ -933,7 +933,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
-      injectRegion(h, { startppq = 180, endppq = 600 })   -- onset row 3, tail row 10
+      injectRegion(h, { ppq = 180, endppq = 600 })   -- onset row 3, tail row 10
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(2, ci, 1)
       h.ec:extendTo(4, ci, 1)                             -- band rows 2..4
@@ -955,7 +955,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
-      injectRegion(h, { startppq = 0, endppq = 600 })     -- onset row 0, spans to row 10
+      injectRegion(h, { ppq = 0, endppq = 600 })     -- onset row 0, spans to row 10
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(4, ci, 1)
       h.ec:extendTo(6, ci, 1)                             -- band rows 4..6: region passes through, onset above
@@ -977,11 +977,11 @@ return {
       h.cmgr:invoke('paste')
       local regions = h.ds:get('fxRegions')
       t.eq(#regions, 2, 'the paste stacked a second region (no destination wipe)')
-      t.eq(region(h, 'fxr-1').startppq, 0,   'the original onset is untouched')
+      t.eq(region(h, 'fxr-1').ppq, 0,   'the original onset is untouched')
       t.eq(region(h, 'fxr-1').endppq,   240, 'the original window is untouched')
       local pasted = region(h, 'fxr-2')
       t.truthy(pasted, 'the paste minted fxr-2')
-      t.eq(pasted.startppq, h.vm:rowToPPQ(8, 1),  'onset landed at the cursor row')
+      t.eq(pasted.ppq, h.vm:rowToPPQ(8, 1),  'onset landed at the cursor row')
       t.eq(pasted.endppq,   h.vm:rowToPPQ(12, 1), 'window length preserved (4 rows off the cursor)')
       t.eq(pasted.fx[1].kind, 'sine', 'the copied chain came with it')
     end,
@@ -1006,9 +1006,9 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = sine30 },  -- onset row 0, in band
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 240, fx = sine30 },  -- onset row 2, in band
-        { uuid = 'fxr-3', chan = 1, startppq = 480, endppq = 600, fx = sine30 },  -- onset row 8, out of band
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 120, fx = sine30 },  -- onset row 0, in band
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 240, fx = sine30 },  -- onset row 2, in band
+        { uuid = 'fxr-3', chan = 1, ppq = 480, endppq = 600, fx = sine30 },  -- onset row 8, out of band
       })
       h.tm:rebuild()
       local _, ci = fxColFor(h, 1)                        -- all disjoint -> one shared column
@@ -1078,8 +1078,8 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       h.ds:assign('fxRegions', {   -- same-target overlap: each refuses the other
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 360, fx = sine30 },
       })
       h.tm:rebuild()
       local _, ci = fxColFor(h, 1)
@@ -1101,7 +1101,7 @@ return {
       t.deepEq(h.ds:get('fxRegions'), before, 'and both regions stand')
 
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 },
       })
       h.tm:rebuild()
       local _, soleCi = fxColFor(h, 1)
@@ -1497,7 +1497,7 @@ return {
       h.vm:setGridSize(80, 40)
       noteAt(h, 1, 0, 60)
       noteAt(h, 1, 960, 64)
-      injectRegions(h, { { fx = arpUp }, { startppq = 960, endppq = 1200, fx = arpUp } })
+      injectRegions(h, { { fx = arpUp }, { ppq = 960, endppq = 1200, fx = arpUp } })
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(1, ci, 1)
       local ghosts = (h.vm:ghostOverlay() or {}).notes
@@ -1516,7 +1516,7 @@ return {
       h.vm:setGridSize(80, 40)
       noteAt(h, 1, 0, 60)
       noteAt(h, 1, 960, 64)
-      injectRegions(h, { { fx = arpUp }, { startppq = 960, endppq = 1200, fx = arpUp } })
+      injectRegions(h, { { fx = arpUp }, { ppq = 960, endppq = 1200, fx = arpUp } })
       local mine, theirs
       for _, cell in ipairs(h.tm:getChannel(1).parked) do
         if cell.ppq == 0 then mine = cell else theirs = cell end
@@ -1537,7 +1537,7 @@ return {
       h.vm:setGridSize(80, 40)
       noteAt(h, 1, 0, 60)
       noteAt(h, 1, 960, 64)
-      injectRegions(h, { { fx = sine30 }, { startppq = 960, endppq = 1200, fx = sine30 } })
+      injectRegions(h, { { fx = sine30 }, { ppq = 960, endppq = 1200, fx = sine30 } })
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(1, ci, 1)
       local values = (h.vm:ghostOverlay() or {}).values

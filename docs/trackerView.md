@@ -658,7 +658,7 @@ other clothes: a whole-lane LFO is a region of column × take bounds.
 
 **4** An existing region is addressed the way a note is — by giving it a cell.
 The per-channel **fx column** carries each region as a tailed kind-badge:
-onset at `startppq`, a note-style tail to `endppq`, a glyph for the primary
+onset at `ppq`, a note-style tail to `endppq`, a glyph for the primary
 kind, and the caret lands on it as it lands on anything else. No second
 navigable object and no region mode. The column/cell/tail machinery is the
 most native thing the tracker has, so region editing borrows that rather than

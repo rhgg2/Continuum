@@ -40,7 +40,7 @@ return {
       local uuid = authored.uuid
 
       h.ds:assign('fxRegions',
-        { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+        { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       t.eq(#h.tm:getChannel(1).parked, 1, 'the covered note parks off the take')
 
@@ -86,7 +86,7 @@ return {
       local uuid = authored.uuid
 
       h.ds:assign('fxRegions',
-        { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+        { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       t.eq(#h.tm:getChannel(1).parked, 1, 'only the covered note parks; the clipper sits outside')
 

@@ -36,7 +36,7 @@ local function addRetunedPair(h, place)
   h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 960, chan = 1, pitch = 61, vel = 100,
                   detune = 8, intentCents = 6100, delay = 0, lane = 1 })
   h.tm:flush()
-  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 960,
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 960,
                                fx = { { kind = 'slide', dest = 'pb', over = { 1, 4 },
                                         per = 'note', place = place, shape = 'slow' } } } })
   h.tm:rebuild(); h.tm:flush()
@@ -231,7 +231,7 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 600, chan = 1, pitch = 72, vel = 100,
                       detune = 0, delay = 0, lane = 1 })     -- decoy past the region: +1200c
       h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 120, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, ppq = 120, endppq = 240,
                                    fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
       h.tm:rebuild(); h.tm:flush()
       t.eq(#h.tm:getChannel(1).parked, 1, 'the region parked the successor off-take (non-vacuous)')
@@ -251,7 +251,7 @@ return {
                         vel = 100, detune = 0, delay = 0, lane = 1 })
         h.tm:flush()
       end
-      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'slide', over = { 1, 2 }, place = 'in' } } } })
       h.tm:rebuild(); h.tm:flush()
       t.eq(pbSeatAt(h.fm:dump(), 1, 120).val, centsToRaw(-200),
@@ -278,7 +278,7 @@ return {
                         detune = 0, delay = 0, lane = 1 })
         h.tm:flush()
         if park then
-          h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 240, endppq = 360,
+          h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, ppq = 240, endppq = 360,
                                        fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
         end
         h.tm:rebuild(); h.tm:flush()
@@ -311,11 +311,11 @@ return {
         h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
                         detune = 0, delay = 0, lane = 1 })
         h.tm:flush()
-        local regions = { { uuid = 'fxr-slide', chan = 1, startppq = 0, endppq = 480,
+        local regions = { { uuid = 'fxr-slide', chan = 1, ppq = 0, endppq = 480,
                             fx = { { kind = 'slide', over = { 1, 2 }, place = 'in' } } } }
         -- A second region over the successor alone: note-dest, so it parks it and seats no pb.
         if park then
-          util.add(regions, { uuid = 'fxr-park', chan = 1, startppq = 240, endppq = 480,
+          util.add(regions, { uuid = 'fxr-park', chan = 1, ppq = 240, endppq = 480,
                               fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } })
         end
         h.ds:assign('fxRegions', regions)

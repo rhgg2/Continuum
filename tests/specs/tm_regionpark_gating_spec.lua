@@ -59,8 +59,8 @@ return {
 
       -- Arp region over each host: replace-mode parks the covered note off-take on both channels.
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp },
-        { uuid = 'fxr-2', chan = 2, startppq = 0, endppq = 240, fx = arpUp },
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp },
+        { uuid = 'fxr-2', chan = 2, ppq = 0, endppq = 240, fx = arpUp },
       })
       h.tm:rebuild()
 
@@ -100,7 +100,7 @@ return {
       h.tm:addEvent{ evType = 'note', ppq = 960, endppq = 1200, chan = 1, pitch = 62,
                      vel = 100, detune = 0, delay = 0, lane = 1 }   -- on-take, the initial bound
       h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
 
       local function member()
@@ -136,7 +136,7 @@ return {
   },
   {
     -- rebuildPA's parked loop is now seed-gated per dirty channel. A region parks its host and
-    -- carries the host's on-take PA off-take, but the region edit seeds only its startppq -- not
+    -- carries the host's on-take PA off-take, but the region edit seeds only its ppq -- not
     -- the PA's own row. So the fresh-park scan must seed the parked PA's row, or the gated loop
     -- drops its off-take cell. PA sits at row 120, region trigger at row 0: red without the reseed.
     name = 'a freshly-parked PA still renders once in the host lane under an arp region',
@@ -146,7 +146,7 @@ return {
       h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 70 })
       h.tm:flush()
 
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
 
       local pas = 0

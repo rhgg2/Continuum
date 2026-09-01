@@ -16,7 +16,7 @@ local function chordStampRegion(h)
   h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                  vel = 100, detune = 0, delay = 0, lane = 1 }
   h.tm:flush()
-  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = chord3 } })
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = chord3 } })
   h.tm:rebuild()
 end
 
@@ -535,7 +535,7 @@ return {
       h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                      detune = 0, delay = 0, lane = 1 }
       h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sinePb } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sinePb } })
       h.tm:rebuild()
 
       t.falsy(colOn(h, 1, 'pb'), 'the claim leaves no mark on the grid')
@@ -549,7 +549,7 @@ return {
         seed = { ccs = { { ppq = 0, chan = 1, evType = 'cc', cc = 74, val = 64 } } },
       }
       h.vm:setGridSize(80, 40)
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sineCc } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sineCc } })
       h.tm:rebuild()
 
       t.falsy(colOn(h, 1, 'cc', 10), 'nothing authored cc 10, so nothing shows it')

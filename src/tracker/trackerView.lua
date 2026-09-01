@@ -1863,12 +1863,12 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
     local chan, uuid, lane = col.midiChan, cell.uuid, fxLaneOf(col)
     local regions = ds:get('fxRegions') or {}
     local function overlaps(region)
-      return region.chan == chan and ns < region.endppq and ne > region.startppq
+      return region.chan == chan and ns < region.endppq and ne > region.ppq
     end
     local moved, before = nil, 0
     for _, region in ipairs(regions) do
       if region.uuid == uuid then
-        moved = util.clone(region); moved.startppq, moved.endppq = ns, ne
+        moved = util.clone(region); moved.ppq, moved.endppq = ns, ne
         break
       elseif overlaps(region) then
         before = before + 1
@@ -2821,7 +2821,7 @@ local function mintRegionForSelection()
   if not col then return end
   local chan   = col.midiChan
   local region = { uuid = mintRegionUuid(), chan = chan,
-                   startppq = tv:rowToPPQ(row1, chan),
+                   ppq = tv:rowToPPQ(row1, chan),
                    endppq   = tv:rowToPPQ(row2 + 1, chan), fx = {} }
   local out = {}
   for _, existing in ipairs(ds:get('fxRegions') or {}) do util.add(out, existing) end
@@ -2843,7 +2843,7 @@ local function eachFxRegionInRect(r1, r2, c1, c2, fn)
       local bandHi = ctx:rowToPPQ(r2 + 1, chan)
       for _, cell in ipairs(col.events) do
         local region = regionByUuid(cell.uuid)
-        if region and region.startppq >= bandLo and region.startppq < bandHi then
+        if region and region.ppq >= bandLo and region.ppq < bandHi then
           fn(region, chan)
         end
       end
@@ -2858,7 +2858,7 @@ local function gatherFxRegions(r1, r2, c1, c2, anchorChan)
   eachFxRegionInRect(r1, r2, c1, c2, function(region, chan)
     util.add(out, {
       chanDelta = chan - anchorChan,
-      row       = ctx:ppqToRow(region.startppq, chan) - r1,
+      row       = ctx:ppqToRow(region.ppq, chan) - r1,
       endRow    = ctx:ppqToRow(region.endppq,   chan) - r1,
       fx        = util.deepClone(region.fx),
     })
@@ -2882,7 +2882,7 @@ local function pasteFxRegions(list)
       util.add(out, {
         uuid     = 'fxr-' .. nextN,
         chan     = chan,
-        startppq = ctx:rowToPPQ(cursorRow + entry.row,    chan),
+        ppq = ctx:rowToPPQ(cursorRow + entry.row,    chan),
         endppq   = ctx:rowToPPQ(cursorRow + entry.endRow, chan),
         fx       = util.deepClone(entry.fx),
       })
@@ -4526,8 +4526,8 @@ function tv:rebuild(takeChanged)
       end
       for _, region in ipairs(regions) do
         local lane = 1
-        while not free(lane, region.startppq, region.endppq) do lane = lane + 1 end
-        util.bucket(spans,  lane, { region.startppq, region.endppq })
+        while not free(lane, region.ppq, region.endppq) do lane = lane + 1 end
+        util.bucket(spans,  lane, { region.ppq, region.endppq })
         util.bucket(byLane, lane, region)
       end
       return byLane
@@ -4558,7 +4558,7 @@ function tv:rebuild(takeChanged)
             util.add(stages, { glyph = generators.glyphOf(entry.kind), bypass = entry.bypass })
           end
           if #stages > 0 then
-            util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
+            util.add(fxCells, { ppq = region.ppq, endppqC = region.endppq,
                                 uuid = region.uuid, stages = stages })
           end
         end
@@ -4697,7 +4697,7 @@ function tv:rebuild(takeChanged)
     for _, col in ipairs(grid.cols) do
       for _, w in ipairs(park) do
         if w.evType == col.type and w.chan == col.midiChan and (w.cc == nil or w.cc == col.cc) then
-          for row = ppqRowOf(w.startppq, col.midiChan), ppqRowOf(w.endppq, col.midiChan) - 1 do
+          for row = ppqRowOf(w.ppq, col.midiChan), ppqRowOf(w.endppq, col.midiChan) - 1 do
             col.cellKind[row] = 'parked'
           end
         end

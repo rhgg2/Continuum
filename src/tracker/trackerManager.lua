@@ -214,15 +214,15 @@ end
 -- point per region the uuid diff changed (create/remove/move/fx-change), waking its park scan and its fx expansion.
 local function seedRegionEdit(newRegions)
   if not derivedInputs then dirt.add(nil, true); return end
-  local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
+  local function key(r) return r.uuid or util.key(r.chan, r.ppq, r.endppq) end
   local function trigger(r)
     -- A chan-0 region's edit dirties all sixteen channels -- wider than the set in use on purpose. see docs/trackerManager.md § Channel & column model
     -- Each seed sits at that channel's own raw ppq, since swing resolves per channel.
     local first, last = r.chan, r.chan
     if r.chan == 0 then first, last = 1, 16 end
     for chan = first, last do
-      dirt.add(chan, { verb = 'region', ppqL = r.startppq,
-                       ppq = tm:fromLogical(chan, r.startppq) })
+      dirt.add(chan, { verb = 'region', ppqL = r.ppq,
+                       ppq = tm:fromLogical(chan, r.ppq) })
     end
   end
   local old, seen = {}, {}
@@ -231,7 +231,7 @@ local function seedRegionEdit(newRegions)
     local k = key(r); seen[k] = true
     local o = old[k]
     if not o then trigger(r)
-    elseif o.region.startppq ~= r.startppq or o.region.endppq ~= r.endppq
+    elseif o.region.ppq ~= r.ppq or o.region.endppq ~= r.endppq
         or not util.deepEq(o.region.fx, r.fx) then
       trigger(o.region); trigger(r)
     elseif o.index ~= i then
@@ -491,7 +491,7 @@ end
 
 -- A note host (on-take or parked) as its degenerate window (note-is-a-region).
 local function windowForNote(host, endppq)
-  return { uuid = host.uuid, chan = host.chan, startppq = host.ppq,
+  return { uuid = host.uuid, chan = host.chan, ppq = host.ppq,
            endppq = endppq, fx = host.fx, hostType = 'note' }
 end
 
@@ -529,7 +529,7 @@ local function perTargetWindows(window)
   table.sort(ccs)
   local function entry(evType, cc)
     util.add(entries, { evType = evType, chan = window.chan, cc = cc, id = window.uuid,
-                        startppq = window.startppq, endppq = window.endppq })
+                        ppq = window.ppq, endppq = window.endppq })
   end
   if window.targets.note then entry('note') end
   if window.targets.pb   then entry('pb') end
@@ -559,7 +559,7 @@ local function windowSet(windows)
   function doors.rawSpan(window)
     local span = rawSpans[window]
     if not span then
-      span = { tm:fromLogical(window.chan, window.startppq), tm:fromLogical(window.chan, window.endppq) }
+      span = { tm:fromLogical(window.chan, window.ppq), tm:fromLogical(window.chan, window.endppq) }
       rawSpans[window] = span
     end
     return span[1], span[2]
@@ -570,7 +570,7 @@ local function windowSet(windows)
   local function covering(evType, chan, cc, ppq, raw)
     for _, window in ipairs(byChan[chan] or {}) do
       if window.targets[evType == 'cc' and cc or evType] then
-        local startppq, endppq = window.startppq, window.endppq
+        local startppq, endppq = window.ppq, window.endppq
         if raw then startppq, endppq = doors.rawSpan(window) end
         if ppq >= startppq and ppq < endppq then return window.uuid end
       end
@@ -596,7 +596,7 @@ end
 
 -- The pass's fx windows, held once: one window per host -- authored region, on-take note or parked
 -- note -- and the per-target list a view over them. see docs/trackerManager.md § Fx window census
---shape: window -> { uuid, chan, startppq, endppq, fx, hostType = 'note'|'region', targets }
+--shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
 local function buildFxWindows(fxRegions, noteHostClips)
   local windows = {}
   -- Every window is minted here rather than taken by reference: a target set is no part of the
@@ -607,7 +607,7 @@ local function buildFxWindows(fxRegions, noteHostClips)
   end
 
   for _, r in ipairs(fxRegions) do
-    hold({ uuid = r.uuid, chan = r.chan, startppq = r.startppq, endppq = r.endppq,
+    hold({ uuid = r.uuid, chan = r.chan, ppq = r.ppq, endppq = r.endppq,
            fx = r.fx, hostType = 'region' })
   end
   -- Every fx host, on-take and parked alike, gets a window; sort order matches both halves
@@ -626,7 +626,7 @@ local function buildFxWindows(fxRegions, noteHostClips)
 end
 
 -- The stored baseline replayed into the same doors (docs/trackerManager.md § Fx window census).
---shape: replayed window -> { uuid, chan, startppq, endppq, targets }
+--shape: replayed window -> { uuid, chan, ppq, endppq, targets }
 --invariant: first-appearance order, so perTarget() reproduces the stored list exactly
 local function buildRealisedWindows(entries)
   local windows, byUuid = {}, {}
@@ -634,7 +634,7 @@ local function buildRealisedWindows(entries)
     local window = byUuid[entry.id]
     if not window then
       window = { uuid = entry.id, chan = entry.chan, targets = {},
-                 startppq = entry.startppq, endppq = entry.endppq }
+                 ppq = entry.ppq, endppq = entry.endppq }
       byUuid[entry.id] = window
       util.add(windows, window)
     end
@@ -650,7 +650,7 @@ local function freezeRefused(frozen, windows)
     if other.uuid ~= frozen.uuid then
       -- Half-open for every target: a host's close folds at endppq-1, so abutting windows no
       -- longer share a boundary seat and abutting is genuinely disjoint.
-      if frozen.startppq < other.endppq and other.startppq < frozen.endppq then
+      if frozen.ppq < other.endppq and other.ppq < frozen.endppq then
         for target in pairs(frozen.targets) do
           if other.targets[target] then return true end
         end
@@ -663,7 +663,7 @@ local function freezeRefused(frozen, windows)
       -- Onset-in-window, as parking decides it: a host the frozen note window covers is destroyed with
       -- the chord it parks, taking its seats or its whole output with it.
       if frozen.targets.note and other.hostType == 'note'
-         and other.startppq >= frozen.startppq and other.startppq < frozen.endppq then return true end
+         and other.ppq >= frozen.ppq and other.ppq < frozen.endppq then return true end
     end
   end
   return false
@@ -1637,7 +1637,7 @@ local function buildFreezeRects(hosts)
     end
     for lane in pairs(lanesByUuid[host.uuid] or {}) do streams['note:' .. lane] = true end
     -- Single-channel by construction, so chanOffset 0 is the only key; span is the host's own.
-    rects[host.uuid] = { ppq = host.startppq, dur = host.endppq - host.startppq,
+    rects[host.uuid] = { ppq = host.ppq, dur = host.endppq - host.ppq,
                          chanLo = host.chan, streams = { [0] = streams } }
   end
   return rects
@@ -1653,7 +1653,7 @@ local function buildFxTargets(hosts)
     for target in pairs(host.targets) do
       -- One span per target: a window takes its host's span, so there is nothing to merge.
       if target ~= 'note' then
-        targets[target], any = { { host.startppq, host.endppq } }, true
+        targets[target], any = { { host.ppq, host.endppq } }, true
       end
     end
     if any then byHost[host.uuid] = targets end
@@ -1715,7 +1715,7 @@ local function thinSeats(chan, windows)
     if w.evType ~= 'note' then
       local isPb     = w.evType == 'pb'
       local tol      = cm:get('freezeThin.' .. generators.destProfile(isPb and 'pb' or w.cc).unit)
-      local startRaw = tm:fromLogical(chan, w.startppq, 0)
+      local startRaw = tm:fromLogical(chan, w.ppq, 0)
       local endRaw   = tm:fromLogical(chan, w.endppq, 0)
       local points   = {}
       for _, e in ipairs((isPb and raw.pbs or raw.ccs[w.cc]) or {}) do
@@ -1755,7 +1755,7 @@ local function groupMembers(frozen, windows, promotedUuids)
       for _, e in ipairs(col and col.events or {}) do
         -- Half-open for pb too: the conversion pulls the closing seat inside the window, so nothing legitimate stands on endppq and every member lies inside the rect the mint claims.
         -- An absorber seated around a detune onset is hidden realisation, not group material.
-        if not e.hidden and e.ppq >= w.startppq and e.ppq < w.endppq then util.add(members, e) end
+        if not e.hidden and e.ppq >= w.ppq and e.ppq < w.endppq then util.add(members, e) end
       end
     end
   end
@@ -2409,7 +2409,7 @@ local function buildCcExistingInWindows(chan, realisedWindows, ccExisting, seedR
   local ccBuckets = index.raw(chan).ccs
   local seen = {}
   for _, window in ipairs(realisedWindows.on(chan)) do
-    if windowSeeded(seedRows, window.startppq, window.endppq) then
+    if windowSeeded(seedRows, window.ppq, window.endppq) then
       local sRaw, eRaw = realisedWindows.rawSpan(window)
       for target in pairs(window.targets) do
         local list = type(target) == 'number' and ccBuckets[target]
@@ -2854,7 +2854,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     local noteWins = {}
     for _, w in ipairs(windows.windows()) do
       if w.targets.note then
-        util.bucket(noteWins, w.chan, { window = { w.startppq, w.endppq } })
+        util.bucket(noteWins, w.chan, { window = { w.ppq, w.endppq } })
       end
     end
     for chan, wins in pairs(noteWins) do noteSpans[chan] = spans.mergeWindows(wins) end
@@ -2990,7 +2990,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     for _, w in ipairs(windows.windows()) do
       for target in pairs(w.targets) do
         if type(target) == 'number' then
-          util.bucket(ccWins, util.key(w.chan, target), { window = { w.startppq, w.endppq } })
+          util.bucket(ccWins, util.key(w.chan, target), { window = { w.ppq, w.endppq } })
         end
       end
     end
@@ -3043,10 +3043,10 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
   -- last rebuild's persisted set: a created window parks its authored pbs, a removed one sweeps. see § Route-by-window
   local prevPb, curPb = {}, {}
   for _, w in ipairs(realisedWindows.windows()) do
-    if w.targets.pb then prevPb[util.key(w.chan, w.startppq, w.endppq)] = w end
+    if w.targets.pb then prevPb[util.key(w.chan, w.ppq, w.endppq)] = w end
   end
   for _, w in ipairs(windows.windows()) do
-    if w.targets.pb then curPb[util.key(w.chan, w.startppq, w.endppq)] = w end
+    if w.targets.pb then curPb[util.key(w.chan, w.ppq, w.endppq)] = w end
   end
   local pbCreated, pbRemoved = {}, {}
   for k, w in pairs(curPb) do if not prevPb[k] then util.add(pbCreated, w) end end
@@ -3517,7 +3517,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     -- Region hosts: no note behind them. A discrete-replace kind feeds the realised parked chord
     -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
     for _, region in ipairs(fxRegionsByChan[chan] or {}) do
-      local startL, endL = region.startppq, region.endppq
+      local startL, endL = region.ppq, region.endppq
       local members
       if generators.parksNotes(region) then
         members = {}                             -- replace: derived notes stand in for the parked chord

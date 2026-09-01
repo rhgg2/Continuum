@@ -27,7 +27,7 @@ local function collidingPairBelowTile(harness)
   h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 240, chan = 1, pitch = 60,
                   vel = 100, detune = 0, delay = 0, lane = 1 })
   h.tm:flush()
-  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 120, endppq = 240,
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 120, endppq = 240,
                                fx = retrig } })
   h.tm:rebuild()
 

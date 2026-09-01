@@ -127,7 +127,7 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 300, endppq = 420, chan = 1, pitch = 62,
                       vel = 100, detune = 0, delay = 300, lane = 1 })
       h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 240, endppq = 360, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 240, endppq = 360, fx = arpUp } })
       h.tm:rebuild()
 
       local parked = {}

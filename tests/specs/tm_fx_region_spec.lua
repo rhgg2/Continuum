@@ -30,7 +30,7 @@ local function ccRest(cc) return generators.ccDefaultRest[cc] end
 -- seat territory. see docs/generators.md § Route-by-window
 local function inLiveRegion(h, chan, ppq)
   for _, r in ipairs(h.ds:get('fxRegions') or {}) do
-    if r.chan == chan and ppq >= r.startppq and ppq < r.endppq then return true end
+    if r.chan == chan and ppq >= r.ppq and ppq < r.endppq then return true end
   end
   return false
 end
@@ -108,7 +108,7 @@ end
 
 -- A region is channel x ppq span + fx; no host note. Inject via ds, then rebuild.
 local function injectRegion(h, over)
-  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 }
+  local region = { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 }
   for k, v in pairs(over or {}) do region[k] = v end
   h.ds:assign('fxRegions', { region })
   h.tm:rebuild()
@@ -133,7 +133,7 @@ local function addNote(h, over)
 end
 
 local function injectArp(h, over)
-  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp }
+  local region = { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp }
   for k, v in pairs(over or {}) do region[k] = v end
   h.ds:assign('fxRegions', { region })
   h.tm:rebuild()
@@ -308,7 +308,7 @@ return {
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccCap' } } } })
       h.tm:rebuild()
       generators.kinds.ccCap = nil
@@ -331,7 +331,7 @@ return {
         } } end,
         mode = 'replace', dest = 10, label = 'CcRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       generators.kinds.ccRep = nil
@@ -592,8 +592,8 @@ return {
       addNote(h, { pitch = 60, ppq = 0,   endppq = 480, lane = 1 })   -- parked by region A; authored tail 480
       addNote(h, { pitch = 60, ppq = 240, endppq = 480, lane = 1 })   -- parked by region B
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-a', chan = 1, startppq = 0,   endppq = 120, fx = arpUp },
-        { uuid = 'fxr-b', chan = 1, startppq = 240, endppq = 360, fx = arpUp },
+        { uuid = 'fxr-a', chan = 1, ppq = 0,   endppq = 120, fx = arpUp },
+        { uuid = 'fxr-b', chan = 1, ppq = 240, endppq = 360, fx = arpUp },
       })
       h.tm:rebuild()
       local parked
@@ -726,7 +726,7 @@ return {
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       generators.kinds.ccRep = nil
@@ -806,7 +806,7 @@ return {
       -- A second mk() is a second session -- the module body reruns, so the mint counter
       -- restarts at 0 -- while the take-scoped stash arrives from the document holding fxp-1.
       local reopened = harness.mk({ data = {
-        fxRegions = { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } },
+        fxRegions = { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } },
         fxParked  = h.ds:get('fxParked'),
       } })
       reopened.tm:rebuild()
@@ -865,7 +865,7 @@ return {
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
 
@@ -970,13 +970,13 @@ return {
       }
 
       -- Grow: window covers both authored cc; both park off-take.
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       local grown = {}
       for _, s in ipairs(stashOfType(h, 'cc')) do grown[s.ppq] = s.val end
 
       -- Shrink so cc74@180 falls outside (restored); cc74@60 stays covered (parked).
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 120,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 120,
                                    fx = { { kind = 'ccRep' } } } })
       generators.kinds.ccRep = nil   -- generators is shared: restore before asserting
 
@@ -1107,7 +1107,7 @@ return {
         expand = function(host) captured = host; return { notes = {}, delta = {} } end,
         mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capture' } } } })
       h.tm:rebuild()
       generators.kinds.capture = nil   -- restore before asserting (generators is a shared module)
@@ -1143,7 +1143,7 @@ return {
         expand = function(host) captured = host; return { notes = {}, delta = {} } end,
         mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capture' } } } })
       h.tm:rebuild()
       generators.kinds.capture = nil
@@ -1171,7 +1171,7 @@ return {
         expand = function(host) captured = host; return { notes = {}, delta = {} } end,
         mode = 'augment', dest = 10, label = 'Capture', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capture' } } } })
       h.tm:rebuild()
       generators.kinds.capture = nil
@@ -1205,7 +1205,7 @@ return {
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       generators.kinds.capRep = nil
@@ -1239,7 +1239,7 @@ return {
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep', bypass = true } } } })
       h.tm:rebuild()
       generators.kinds.capRep = nil
@@ -1263,7 +1263,7 @@ return {
         end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       generators.kinds.capRep = nil
@@ -1295,7 +1295,7 @@ return {
         } } end,
         mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' }, { kind = 'bump' } } } })
       h.tm:rebuild()
       generators.kinds.capRep, generators.kinds.bump = nil, nil
@@ -1326,7 +1326,7 @@ return {
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'bump' }, { kind = 'capRep' } } } })
       h.tm:rebuild()
       generators.kinds.capRep, generators.kinds.bump = nil, nil
@@ -1358,8 +1358,8 @@ return {
         mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capA' } } },
-        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capB' } } },
+        { uuid = 'r1', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'capA' } } },
+        { uuid = 'r2', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'capB' } } },
       })
       h.tm:rebuild()
       generators.kinds.capA, generators.kinds.capB = nil, nil
@@ -1389,8 +1389,8 @@ return {
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'bump' } } },
-        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capRep' } } },
+        { uuid = 'r1', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'bump' } } },
+        { uuid = 'r2', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'capRep' } } },
       })
       h.tm:rebuild()
       generators.kinds.bump, generators.kinds.capRep = nil, nil
@@ -1430,8 +1430,8 @@ return {
       -- One fixture, rebuilt twice: the flag is the only thing that moves between the two readings.
       local function layer(bypass)
         h.ds:assign('fxRegions', {
-          { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capA' } } },
-          { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capRep', bypass = bypass } } },
+          { uuid = 'r1', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'capA' } } },
+          { uuid = 'r2', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'capRep', bypass = bypass } } },
         })
         h.tm:rebuild()
       end
@@ -1471,8 +1471,8 @@ return {
         mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 120, endppq = 360, fx = { { kind = 'capA' } } },
-        { uuid = 'r2', chan = 1, startppq = 0,   endppq = 240, fx = { { kind = 'capB' } } },
+        { uuid = 'r1', chan = 1, ppq = 120, endppq = 360, fx = { { kind = 'capA' } } },
+        { uuid = 'r2', chan = 1, ppq = 0,   endppq = 240, fx = { { kind = 'capB' } } },
       })
       h.tm:rebuild()
       generators.kinds.capA, generators.kinds.capB = nil, nil
@@ -1503,8 +1503,8 @@ return {
         mode = 'replace', dest = 10, label = 'CcB', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccA' } } },
-        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccB' } } },
+        { uuid = 'r1', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'ccA' } } },
+        { uuid = 'r2', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'ccB' } } },
       })
       h.tm:rebuild()
       generators.kinds.ccA, generators.kinds.ccB = nil, nil
@@ -1537,8 +1537,8 @@ return {
         mode = 'augment', dest = 10, label = 'CcB', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 0,   endppq = 240, fx = { { kind = 'ccA' } } },
-        { uuid = 'r2', chan = 1, startppq = 120, endppq = 360, fx = { { kind = 'ccB' } } },
+        { uuid = 'r1', chan = 1, ppq = 0,   endppq = 240, fx = { { kind = 'ccA' } } },
+        { uuid = 'r2', chan = 1, ppq = 120, endppq = 360, fx = { { kind = 'ccB' } } },
       })
       h.tm:rebuild()
       generators.kinds.ccA, generators.kinds.ccB = nil, nil
@@ -1571,8 +1571,8 @@ return {
         mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 120, endppq = 360, fx = { { kind = 'capA' } } },
-        { uuid = 'r2', chan = 1, startppq = 0,   endppq = 240, fx = { { kind = 'capB' } } },
+        { uuid = 'r1', chan = 1, ppq = 120, endppq = 360, fx = { { kind = 'capA' } } },
+        { uuid = 'r2', chan = 1, ppq = 0,   endppq = 240, fx = { { kind = 'capB' } } },
       })
       h.tm:rebuild()
       local before = derivedPbs(h, 1)
@@ -1614,7 +1614,7 @@ return {
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       generators.kinds.capRep = nil
@@ -1642,7 +1642,7 @@ return {
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       -- While the region is present the authored pb parks off-take (the curve owns the wire) and
@@ -1675,7 +1675,7 @@ return {
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       generators.kinds.capRep = nil
@@ -1721,7 +1721,7 @@ return {
         end,
         mode = 'replace', dest = 'pb', label = 'CapDense', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capDense' } } } })
       h.tm:rebuild()
       generators.kinds.capDense = nil
@@ -1751,7 +1751,7 @@ return {
         end,
         mode = 'replace', dest = 'pb', label = 'CapDense', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'capDense' } } } })
       h.tm:rebuild()
       t.truthy(#derivedPbs(h, 1) >= 12, 'the dense curve seated many markerless seats while present')
@@ -1812,7 +1812,7 @@ return {
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       generators.kinds.ccRep = nil
@@ -1837,7 +1837,7 @@ return {
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       generators.kinds.ccRep = nil
@@ -1867,7 +1867,7 @@ return {
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       local before = fillsOf(h, 1, 74)
@@ -1898,7 +1898,7 @@ return {
         end,
         mode = 'replace', dest = 74, label = 'CcDense', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccDense' } } } })
       h.tm:rebuild()
       generators.kinds.ccDense = nil
@@ -1924,7 +1924,7 @@ return {
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccCap' } } } })
       h.tm:rebuild()
       generators.kinds.ccCap = nil
@@ -1951,7 +1951,7 @@ return {
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccCap' } } } })
       h.tm:rebuild()
       generators.kinds.ccCap = nil
@@ -1975,7 +1975,7 @@ return {
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
       }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 120, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 120, endppq = 240,
                                    fx = { { kind = 'ccCap' } } } })
       h.tm:rebuild()
       generators.kinds.ccCap = nil
@@ -2008,8 +2008,8 @@ return {
         mode = 'augment', dest = 10, label = 'CcB', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', {
-        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccA' } } },
-        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccB' } } },
+        { uuid = 'r1', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'ccA' } } },
+        { uuid = 'r2', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'ccB' } } },
       })
       h.tm:rebuild()
       generators.kinds.ccA, generators.kinds.ccB = nil, nil
@@ -2098,7 +2098,7 @@ return {
       -- lane successor. The successor is the retrig host -- parking it must not free the clip.
       addNote(h, { pitch = 62, ppq = 0,   endppq = 480, lane = 2 })   -- note A: authored ceiling 480
       addNote(h, { pitch = 60, ppq = 240, endppq = 480, lane = 2 })   -- host inside the region
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 240, endppq = 480,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 240, endppq = 480,
                                    fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
       h.tm:rebuild()
       local a
@@ -2118,7 +2118,7 @@ return {
       -- second tile [60,120). The tile must reach 120 -- a non-sounding parked note cannot cut it.
       addNote(h, { pitch = 60, ppq = 0,  endppq = 90,  lane = 1 })
       addNote(h, { pitch = 62, ppq = 90, endppq = 240, lane = 1 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
       h.tm:rebuild()
       local tileAt60
@@ -2143,7 +2143,7 @@ return {
       addNote(h, { ppq = 0, endppq = 480, pitch = 60,
                    fx = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } } })
       addNote(h, { ppq = 240, endppq = 480, pitch = 62 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 240, endppq = 480,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 240, endppq = 480,
                                    fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
       h.tm:rebuild()
       t.eq(#h.tm:getChannel(1).parked, 1, 'the region parked the successor off-take (non-vacuous)')
@@ -2270,7 +2270,7 @@ return {
 
       -- The region parks the successor. Its onset keeps its seat in the lane, so the window still
       -- ends there and the cc beyond it is reached by nothing.
-      injectArp(h, { startppq = 240, endppq = 480 })
+      injectArp(h, { ppq = 240, endppq = 480 })
       t.eq(#stashOfType(h, 'note'), 1, 'the region parked the successor (non-vacuous)')
       t.eq(#stashOfType(h, 'cc'),   0, 'and the window is where it was: no authored cc parks')
       local standing
@@ -2620,7 +2620,7 @@ return {
       end
 
       h.ds:assign('fxRegions',
-        { { uuid = 'fxr-sw', chan = 1, startppq = 120, endppq = 360, fx = sine30 } })
+        { { uuid = 'fxr-sw', chan = 1, ppq = 120, endppq = 360, fx = sine30 } })
       h.tm:rebuild()
 
       t.truthy(h.tm:fromLogical(1, 360) > 360, 'the window end parts company with the logical frame')
@@ -2647,7 +2647,7 @@ return {
       local h = harness.mk()
       addNote(h, { chan = 1, pitch = 60 })
       addNote(h, { chan = 7, pitch = 67 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
 
       t.deepEq(field(derivedFor(h, 1, expanded('fxr-g', 1)), 'pitch'), { 60, 60, 60, 60 },
@@ -2666,7 +2666,7 @@ return {
       local h = harness.mk()
       addNote(h, { chan = 1, pitch = 60 })
       addNote(h, { chan = 7, pitch = 67 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = sine30 } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = sine30 } })
       h.tm:rebuild()
 
       t.deepEq(pbChans(h), { 1, 7 }, 'the sine seats its curve on the two channels carrying notes')
@@ -2681,7 +2681,7 @@ return {
       local h = harness.mk()
       addNote(h, { chan = 1, pitch = 60 })
       addNote(h, { chan = 5, pitch = 64 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = sine30 } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = sine30 } })
       h.tm:rebuild()
       t.deepEq(pbChans(h), { 1, 5 }, 'fixture check: both channels run the chain')
 
@@ -2703,7 +2703,7 @@ return {
       local h = harness.mk()
       addNote(h, { chan = 1, pitch = 60 })
       h.ds:assign('extraColumns', { [9] = { notes = 1, pb = true } })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = sine30 } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = sine30 } })
       h.tm:rebuild()
 
       t.deepEq(pbChans(h), { 1, 9 }, 'channel 9 carries no note, and the lane it was given is enough')
@@ -2718,12 +2718,12 @@ return {
     run = function(harness)
       local h = harness.mk()
       addNote(h, { chan = 5, pitch = 64 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       t.deepEq(authoredPitches(h), {}, 'fixture check: the arp parks the only note channel 5 had')
 
       -- A real edit, so the pass re-expands: the take offers nothing on channel 5 to read it back in.
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 120, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 120, fx = arpUp } })
       h.tm:rebuild()
       t.eq(#derivedFor(h, 5, expanded('fxr-g', 5)), 2, 'the chain still runs on the channel it emptied')
     end,
@@ -2745,7 +2745,7 @@ return {
         mode = 'replace', dest = 'note', label = 'Stamp', defaults = {}, fields = {},
       }
       h.ds:assign('extraColumns', { [9] = { notes = 1, pb = true } })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240,
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240,
                                    fx = { { kind = 'stampG' } } } })
       h.tm:rebuild()
       t.eq(#derivedFor(h, 9, expanded('fxr-g', 9)), 1,
@@ -2767,7 +2767,7 @@ return {
       local h = harness.mk()
       addNote(h)
       addNote(h, { chan = 2, pitch = 64 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
 
       local windows = h.ds:get('fxRealisedWindows') or {}
@@ -2805,8 +2805,8 @@ return {
       end
       generators.kinds.stampG, generators.kinds.stampC = stamp(72), stamp(74)
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = { { kind = 'stampG' } } },
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'stampC' } } },
+        { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = { { kind = 'stampG' } } },
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = { { kind = 'stampC' } } },
       })
       h.tm:rebuild()
       generators.kinds.stampG, generators.kinds.stampC = nil, nil
@@ -2826,11 +2826,11 @@ return {
     run = function(harness)
       local h = harness.mk()
       addNote(h, { chan = 7, pitch = 67 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       t.eq(#derivedFor(h, 7, expanded('fxr-g', 7)), 4, 'the chain runs the full window on channel 7')
 
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 120, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 120, fx = arpUp } })
       h.tm:rebuild()
       t.eq(#derivedFor(h, 7, expanded('fxr-g', 7)), 2, 'and halving its window reaches channel 7 too')
     end,
@@ -2846,8 +2846,8 @@ return {
       local h = harness.mk()
       addNote(h)   -- a member both arps park, so each region has real output at stake
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = arpUp },
-        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = arpUp },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = arpUp },
+        { uuid = 'fxr-2', chan = 1, ppq = 120, endppq = 360, fx = arpUp },
       })
       h.tm:rebuild()
       local regions, windows, parked =
@@ -2899,8 +2899,8 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 480, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 240, endppq = 480, fx = sine30 },
       })
       h.tm:rebuild()
       t.truthy(h.tm:freezeEligible('fxr-1'), 'the map clears the earlier pb region')
@@ -2910,8 +2910,8 @@ return {
       local sineCc = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } }
       local h2 = harness.mk()
       h2.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sineCc },
-        { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 480, fx = sineCc },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sineCc },
+        { uuid = 'fxr-2', chan = 1, ppq = 240, endppq = 480, fx = sineCc },
       })
       h2.tm:rebuild()
       t.truthy(h2.tm:freezeEligible('fxr-1'), 'the map clears both abutting cc regions')
@@ -2955,7 +2955,7 @@ return {
       h.tm:flush()
       h.tm:rebuild()   -- settle: the trill parks its own host
       local uuid = h.tm:getChannel(1).parked[1].uuid
-      injectArp(h, { startppq = 120, endppq = 360 })
+      injectArp(h, { ppq = 120, endppq = 360 })
 
       t.falsy(h.tm:freezeEligible(uuid), 'the map refuses the note-dest host under the note window')
       t.falsy(h.tm:freezeRegion(uuid), 'the trill host is refused')
@@ -2970,8 +2970,8 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 480, endppq = 720, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 480, endppq = 720, fx = sine30 },
       })
       h.tm:rebuild()
       t.eq(#(h.ds:get('fxRealisedWindows') or {}), 2, 'two hosts, two pb windows on the same target')
@@ -3034,15 +3034,15 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
-        { uuid = 'fxr-2', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, ppq = 0, endppq = 240, fx = sine30 },
       })
       h.tm:rebuild()
       t.falsy(h.tm:freezeEligible('fxr-1'), 'identical windows refuse mutually')
       t.falsy(h.tm:freezeEligible('fxr-2'), 'in both directions')
 
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 },
       })
       h.tm:rebuild()
       t.truthy(h.tm:freezeEligible('fxr-1'), "the survivor's map entry flips on the next rebuild")
@@ -3058,8 +3058,8 @@ return {
       local h = harness.mk()
       addNote(h)   -- channel 1 in use, so the global expands onto it
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
-        { uuid = 'glob-1', chan = 0, startppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'glob-1', chan = 0, ppq = 0, endppq = 240, fx = sine30 },
       })
       h.tm:rebuild()
 
@@ -3281,7 +3281,7 @@ return {
       local h = harness.mk()
       addNote(h, { chan = 1, pitch = 60 })
       addNote(h, { chan = 7, pitch = 67 })
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       local before1     = derivedFor(h, 1, expanded('fxr-g', 1))
       local before7     = derivedFor(h, 7, expanded('fxr-g', 7))
@@ -3330,7 +3330,7 @@ return {
     name = 'explode: a chain reaching no channel refuses',
     run = function(harness)
       local h = harness.mk()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, startppq = 0, endppq = 240, fx = arpUp } })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-g', chan = 0, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
       t.deepEq(h.tm:fxRealisation('fxr-g').chans, {}, 'fixture check: an empty document puts no channel in use')
 

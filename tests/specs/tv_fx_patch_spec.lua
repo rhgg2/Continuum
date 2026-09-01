@@ -12,7 +12,7 @@ local chain = { { kind = 'arp',  period = { 1, 4 }, dir = 'up' },
                 { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0, bypass = true } }
 
 local function injectRegion(h, fx)
-  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = fx } })
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = fx } })
   h.tm:rebuild()
 end
 

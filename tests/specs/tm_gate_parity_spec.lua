@@ -131,9 +131,9 @@ return {
       h.tm:addEvent(note(5, 0,   60));                 h.tm:flush()
       h.tm:addEvent(note(5, 480, 67));                 h.tm:flush()
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-4',  chan = 4, startppq = 0,   endppq = 240, fx = arpUp },
-        { uuid = 'fxr-5a', chan = 5, startppq = 0,   endppq = 240, fx = arpUp },
-        { uuid = 'fxr-5b', chan = 5, startppq = 480, endppq = 720, fx = arpUp },
+        { uuid = 'fxr-4',  chan = 4, ppq = 0,   endppq = 240, fx = arpUp },
+        { uuid = 'fxr-5a', chan = 5, ppq = 0,   endppq = 240, fx = arpUp },
+        { uuid = 'fxr-5b', chan = 5, ppq = 480, endppq = 720, fx = arpUp },
       })
       h.tm:rebuild()
 

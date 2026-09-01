@@ -12,7 +12,7 @@ local arpUp  = { { kind = 'arp',  period = { 1, 4 }, dir = 'up' } }
 -- A mixed chain over a note: the arp promotes derived notes, the sine leaves pb breakpoints,
 -- so the one fixture yields both member kinds without registering a stub generator.
 local function injectMixed(h, over)
-  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+  local region = { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                    fx = { arpUp[1], sine30[1] } }
   for k, v in pairs(over or {}) do region[k] = v end
   h.ds:assign('fxRegions', { region })

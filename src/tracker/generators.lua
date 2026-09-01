@@ -5,7 +5,7 @@
 
 --invariant: pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
---shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq,[lane],[intentCents]},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
+--shape: stream/host = { window={ppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq,[lane],[intentCents]},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote -- no notation among them
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
