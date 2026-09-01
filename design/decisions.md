@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — A length verb maps the whole document's logical time, and not the take alone: fx
+  regions, the park stash and the realised-window census scale, clip or tile alongside the events.
+  What a verb rewrites is intent, and realisation follows from it -- a region's span scales and its
+  seats re-derive -- so a chain's own periods, being musical, stay put and a stretched region fills
+  with more of them. A shrink clips a region to the new end, an OPEN ceiling being intent that no
+  resize edits. One name for a logical span, ppq/endppq, is what lets the three keys share a mapper:
+  startppq was a mixed pair and bought a field-name indirection at every site treating a region and
+  a parked spec alike.
+
 - **2026-09-01** — A region's membership is its lanes' whole authored population, parked cells
   included, over the column-only read it had: a parked cell is the note the author sees, so a
   neighbouring chain parking it must not silently drop a glide that aimed at it. Lane allocation

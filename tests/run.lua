@@ -113,6 +113,7 @@ local specs = {
   'tm_conform_tail_spec',
   'tm_unified_projection_spec',
   'tm_rescale_conform_spec',
+  'tm_fx_length_spec',
   'tm_pc_synthesis_spec',
   'tm_macro_spec',
   'tm_sine_spec',

@@ -1994,6 +1994,42 @@ function tm:flush() if stager.flush() then tm:rebuild(false) end end
 
 ----- Length
 
+-- The document's logical time is not all on the take. Fx regions, the park stash and the realised
+-- census hold spans of their own, so a length verb maps them through the same time map it maps the
+-- events through. see docs/trackerManager.md § Length operations
+local fxSpanKeys = { 'fxRegions', 'fxParked', 'fxRealisedWindows' }
+
+--pre: mapSpan(ppq, endppq) -> onset, ceiling; a nil onset drops the record
+--pre: mapSpan concretes no util.OPEN ceiling, an open tail being intent that no resize edits
+--post: ds[key] := its surviving mapped records, for each fx key whose records the map changed
+--post: a parked delay scales by slope, the map being linear across the span the verb rewrites
+--invariant: the write is suppressed, so the caller's own flush drives the one rebuild that reads it
+local function mapFxDocument(mapSpan, slope)
+  local writes = {}
+  for _, key in ipairs(fxSpanKeys) do
+    local stored, mapped = ds:get(key) or {}, {}
+    for _, record in ipairs(stored) do
+      local ppq, endppq = mapSpan(record.ppq, record.endppq)
+      if ppq then
+        local out = util.clone(record)
+        out.ppq, out.endppq = ppq, endppq
+        if out.delay then out.delay = out.delay * slope end
+        util.add(mapped, out)
+      end
+    end
+    if not util.deepEq(stored, mapped) then writes[key] = mapped end
+  end
+  if not next(writes) then return end
+  -- All sixteen: a length verb moves the whole document, and the regions' own dirt would otherwise
+  -- come from the ds observer this write suppresses.
+  dirt.add(nil, true)
+  suppressingRebuild(function()
+    for key, records in pairs(writes) do
+      ds:assign(key, next(records) and records or util.REMOVE)
+    end
+  end)
+end
+
 -- On shrink, an OPEN ceiling is authored intent, not a casualty of resize: only the realised
 -- tail clips to the new end. See docs/trackerManager.md § Length operations for the ordering.
 --contract: a util.OPEN ceiling survives a shrink; only its realised tail comes down
@@ -2011,6 +2047,13 @@ function tm:setLength(newPpq)
     end)
     for _, evt in ipairs(kills)  do stager.delete(evt)                       end
     for _, evt in ipairs(clamps) do stager.assign(evt, { endppq = newPpq })  end
+    -- The same verdict on the fx document: past the end it goes, astride the end it clips. A shrink
+    -- is no scaling, so this is the one map that drops records.
+    mapFxDocument(function(ppq, endppq)
+      if ppq >= newPpq          then return nil        end
+      if endppq == util.OPEN    then return ppq, endppq end
+      return ppq, endppq and math.min(endppq, newPpq)
+    end, 1)
     -- mm:setLength runs last, so the take is still long here: pendingLen is what tells the tail
     -- walk the new end. All-16 dirt because any channel may hold an OPEN tail spanning it.
     pendingLen = newPpq
@@ -2063,6 +2106,8 @@ function tm:rescaleLength(newPpq)
     tm:flush()
   end
 
+  -- The fx document first, so the rebuild inside applyTimeMap's flush derives from the scaled spans.
+  mapFxDocument(function(ppq, endppq) return f * ppq, endppq and f * endppq end, f)
   applyTimeMap(function(t) return f * t end, function() return f end)
   mm:setLength(newPpq / mm:resolution())
 end

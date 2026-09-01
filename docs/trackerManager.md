@@ -1613,6 +1613,19 @@ deleting a blocker lets the raw tail regrow to it.
 
 ## Length operations
 
+A length verb rewrites logical time, and logical time is not all on the
+take. `fxRegions`, the `fxParked` stash and the `fxRealisedWindows`
+census hold spans of their own, so each verb maps them through the same
+time map it maps the events through — `mapFxDocument` is that pass. An
+OPEN ceiling is intent, and no verb concretes one.
+
+The census is the piece with teeth. Its spans key the pb create/remove
+diff of § Region-replace parking, so a census left where the seats no
+longer are reads as one window removed and another created; the removal
+then sweeps pbs from a span nothing occupies. A region left behind is
+merely visible — it keeps deriving at the rows it was authored on while
+the music around it has moved.
+
 ### setLength(newPpq)
 
 Shrink deletes events at-or-past the new end and clamps spanning notes;
@@ -1638,6 +1651,12 @@ about to create rather than the one it still has. All 16 channels are
 marked dirty, because any of them may hold a spanning OPEN tail and a
 clean channel's frame would otherwise carry forward unclipped.
 
+The fx document takes the same verdict. A region past the new end goes
+with the notes it covered, one astride the end clips to it, and a parked
+OPEN ceiling passes through as an on-take one does. This is the only
+length map that drops records: a shrink is no scaling, so a region with
+nothing left inside the take has no span to keep.
+
 ### rescaleLength(newPpq)
 
 Stretches the take by linearly remapping the logical frame. Each event on
@@ -1646,6 +1665,11 @@ stamps scale by `f`; raw ppqs are rederived through swing, so under
 non-identity swing raw ppqs are NOT linearly scaled — rows are preserved,
 which keeps reswing well-defined. Note delays scale by `f`. Frame stamps
 (`rpb`, swing slot names) are untouched. No events are deleted.
+
+The fx document scales alongside: region, park and census spans by `f`,
+and a parked note's delay as the take walk scales an on-take one. A
+chain's own periods are musical and do not scale, so a stretched region
+fills with more of them.
 
 ### tileLength(newPpq)
 
