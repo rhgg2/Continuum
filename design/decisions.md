@@ -12,6 +12,29 @@ not eight or ten.
   — it holds tautologically today and fails under any rewrite. A table result carries its ownership:
   `fresh` unaliased and the caller's, `live` aliased and safely mutable, `unsafe` aliased, read-only
   and of ephemeral validity — which `--contract:` had no way to say at all.
+- **2026-09-01** — The clip is one function that owns its cache. clipEnd(cell, takeLenL) answers
+  with the true clip, reusing the cached one where the rebuild's dirt cannot have moved it -- over a
+  factory returning a gate the caller then combined with a reclip and a cache write, three steps at
+  every call site and one cache with four writers. Cache and reset sit in a block exposing only
+  clipEnd and forgetClipEnds. The per-channel hoist the factory existed for is not paid for:
+  dirt.has is a table lookup and the journal caps a seed list at 64, so the gate now reads the
+  lattice where it is documented rather than pre-digesting it. Fx-host staleness after a restore
+  becomes the journal's third axis beside swing, not a channel set threaded through two signatures:
+  it is dirt about the index rather than about the data, so both clipNoteHosts calls take no
+  argument and what differs between them is what the journal holds. Verb and noun split:
+  clipNoteHosts is the pass, noteHostClips the value it returns.
+
+- **2026-09-01** — A lane's occupancy is its column union its parked cells, and one clip reads both
+  halves. A window's end and a parked cell's render clip are the same number — the cell's own
+  ceiling, clipped to the strict-next authored onset on its lane — so `clippedSpanEnd` answers for
+  both, and `offTakeEnd`, the member-next map and one of the two uuid-keyed caches go with their
+  duplicate dirt gate. The frame owns the parked half: it carries onto dirty channels too, so the
+  clip reads a true lane from the pass's head, and the lane buckets are memoised against the list
+  `renderUnion` replaces whole, which keeps the seek logarithmic where a scan would have gone
+  quadratic in a region's members. A parked note now bounds a host window exactly as an on-take note
+  does, closing the overrun the oddities register carried; parking moves no window, so the placement
+  fixpoint has nothing left to close and its section goes.
+
 - **2026-09-01** — The window set is one thing with two populations, not a set beside a flat list.
   windowSet(windows) is the set; buildFxWindows mints the pass's windows from regions, note hosts
   and parked hosts, and buildRealisedWindows replays the take's stored per-target list into the same

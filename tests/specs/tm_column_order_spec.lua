@@ -3,8 +3,7 @@
 -- order IS the grid order. The raw frame still diverges -- raw = fromLogical(ppq) + delayToPPQ(delay),
 -- so a delay larger than the gap to a lane-mate reorders the lane in raw while the grid order stands.
 -- These cases pin that the consumers reading col.events in array order keep picking the *grid*
--- successor: computeNoteFxSpans' host clip, eachWindowNote's onsets[i+1], nextSameLaneNote's
--- strictNextMap.
+-- successor: clippedSpanEnd's lane clip, eachWindowNote's onsets[i+1], nextSameLaneNote's seek.
 --
 -- Pins the host clip. A sine host's window ends at the strict next same-lane onset; that onset is
 -- a grid fact, so pulling the successor *earlier in raw* with a negative delay must not change it.
@@ -61,7 +60,7 @@ local function glideSeats(h, chan, fromPpq)
 end
 
 -- A slide host gliding into its lane successor (pitch 61 = +100c). target='next' resolves the
--- successor via nextSameLaneNote's strictNextMap, which reads the column in array order.
+-- successor via nextSameLaneNote, which seeks the column in array order.
 local function slideHost()
   return { evType = 'note', ppq = 60, endppq = 240, chan = 1, pitch = 60,
            vel = 100, detune = 0, delay = 0, lane = 1,

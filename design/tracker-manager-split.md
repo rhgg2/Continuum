@@ -161,13 +161,13 @@ decides whether phase 3 is worth taking.**
    `endppq`, or the take length.
 
 1. Derived notes lie outside the population. A derived note is a
-   host's output and a window is over intent, so every path reads
-   authored onsets by predicate, and a gated channel's carried column
-   answers as a wholesale one does.
+   host's output and a window is over intent; `rebuildInternals` routes
+   one to the fx stage's existing set instead of into a column, so the
+   population is authored by construction.
 
 1. Parking moves a note between the on-take half of the population and
    the parked half, so the set of onsets a window clips against is
-   invariant across the park stage. One `computeNoteFxSpans` call per
+   invariant across the park stage. One `clipNoteHosts` call per
    rebuild therefore serves the note pass, continuous membership and fx
    expansion alike, and `rebuildRegionPark` receives the window set as
    data.
@@ -202,7 +202,7 @@ the seed minters stay with the structures they read. The model is
    the stager reach the pipeline as door tables, the pass's maps come
    back by return, and the take-tier path calls `forget()` on the caches
    that outlive a pass. The model is `docs/trackerManager.md` § The frame
-   handle, § Update manager, § Fx window census and § Note fx span cache.
+   handle, § Update manager, § Fx window census and § Lane occupancy.
 
 1. The write surface falls on the same line. `index.assign`,
    `index.stampColEvt` and `index.withDeferredSort` are engine-only, so

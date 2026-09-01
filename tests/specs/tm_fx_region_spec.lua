@@ -2101,6 +2101,35 @@ return {
     end,
   },
 
+  ----- A parked cell bounds a host window as an on-take note does
+
+  {
+    -- One clip rule over both halves of lane occupancy: the parked cell keeps its lane seat, so the
+    -- host's chain stops where the note it stands in for begins. see docs/trackerManager.md § Lane occupancy
+    name = 'an on-take host window stops at a parked successor on its lane',
+    run = function(harness)
+      local h = harness.mk()
+      -- A cc10 augment with an authored ceiling of 480; the lane successor at 240 is the only thing
+      -- clipping its window, and the region takes it off the take.
+      addNote(h, { ppq = 0, endppq = 480, pitch = 60,
+                   fx = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } } })
+      addNote(h, { ppq = 240, endppq = 480, pitch = 62 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 240, endppq = 480,
+                                   fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
+      h.tm:rebuild()
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the region parked the successor off-take (non-vacuous)')
+
+      local within, beyond = 0, 0
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 10 and c.chan == 1 then
+          if c.ppq < 240 then within = within + 1 else beyond = beyond + 1 end
+        end
+      end
+      t.truthy(within > 0, 'the augment seats its curve over the window it does own')
+      t.eq(beyond, 0, 'and seats nothing past the parked onset, where its window ends')
+    end,
+  },
+
   ----- Parked-host continuous windows: deleting a self-parked fx host sweeps its seats
 
   {
@@ -2189,10 +2218,9 @@ return {
   },
 
   {
-    -- The placement fixpoint's one-step closure: continuous membership reads post-settlement windows,
-    -- so a window widened by a same-pass note park parks its exposed cc now, not after the next
-    -- same-channel dirt. see docs/trackerManager.md § The placement fixpoint
-    name = 'a same-pass note park widens a surviving host window and parks the exposed authored cc',
+    -- Parking moves a note between the halves of lane occupancy and takes no onset out of it, so a
+    -- window stands where it stood before the park. see docs/trackerManager.md § Lane occupancy
+    name = 'a note park leaves a surviving host window at the parked onset',
     run = function(harness)
       local h = harness.mk()
       -- Plain successor on the host's lane: it clips the host's sine window to [0, 240).
@@ -2211,17 +2239,16 @@ return {
       t.truthy(authoredUuid, 'the authored cc landed on the take')
       t.eq(#stashOfType(h, 'cc'), 0, 'the clipped window reaches no authored cc')
 
-      -- The region parks the successor; with its onset gone the host window widens to its
-      -- authored ceiling in the same pass, so the exposed cc must park in this rebuild.
+      -- The region parks the successor. Its onset keeps its seat in the lane, so the window still
+      -- ends there and the cc beyond it is reached by nothing.
       injectArp(h, { startppq = 240, endppq = 480 })
-      local stash = stashOfType(h, 'cc')
-      t.eq(#stash, 1, 'the exposed authored cc parks in the same pass')
-      t.eq(stash[1].ppq, 480, 'the parked spec is the exposed cc')
-      local onWire = h.fm:dump().ccs
-      t.truthy(#onWire > 0, 'the widened window seats a fill, so the sweep below is not over nothing')
-      for _, c in ipairs(onWire) do
-        t.truthy(c.uuid ~= authoredUuid, 'the authored cc left the take; only fill seats remain')
+      t.eq(#stashOfType(h, 'note'), 1, 'the region parked the successor (non-vacuous)')
+      t.eq(#stashOfType(h, 'cc'),   0, 'and the window is where it was: no authored cc parks')
+      local standing
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.uuid == authoredUuid then standing = c end
       end
+      t.truthy(standing, 'the authored cc stands on the take')
     end,
   },
 

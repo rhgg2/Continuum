@@ -262,26 +262,38 @@ return {
   },
 
   {
-    name = 'a glide arrives at its successor, not at the end of whatever window its host owns',
+    -- Lane occupancy is the column union the parked cells, so the successor clips the host window
+    -- whichever half it sits in. see docs/trackerManager.md § Lane occupancy
+    name = 'a parked successor anchors the glide where an on-take one does',
     run = function(harness)
-      local h = harness.mk()
-      -- The host's authored ceiling (480) runs well past its successor (240), and clippedSpanEnd
-      -- clips only against the column -- so a parked successor leaves the window overrunning.
-      -- The anchor is the successor's onset regardless, which is what closed the old late arrival.
-      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,
-                      detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'slide', over = { 1, 2 }, place = 'away' } } })
-      h.tm:flush()
-      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 360, chan = 1, pitch = 61, vel = 100,
-                      detune = 0, delay = 0, lane = 1 })
-      h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 240, endppq = 360,
-                                   fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
-      h.tm:rebuild(); h.tm:flush()
-      t.eq(#h.tm:getChannel(1).parked, 1, 'the region parked the successor off-take (non-vacuous)')
-      local dump = h.fm:dump()
-      t.eq(pbSeatAt(dump, 1, 239).val, centsToRaw(100), 'arrives a tick before the successor it aims at')
-      t.eq(pbSeatAt(dump, 1, 240).val, centsToRaw(0),   'and hands the channel back on its onset')
+      -- The host's authored ceiling (480) runs well past its successor (240), so the successor is
+      -- the only thing that can clip the window; the region takes it off the take.
+      local function glide(park)
+        local h = harness.mk()
+        h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100,
+                        detune = 0, delay = 0, lane = 1,
+                        fx = { { kind = 'slide', over = { 1, 2 }, place = 'away' } } })
+        h.tm:flush()
+        h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 360, chan = 1, pitch = 61, vel = 100,
+                        detune = 0, delay = 0, lane = 1 })
+        h.tm:flush()
+        if park then
+          h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 240, endppq = 360,
+                                       fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
+        end
+        h.tm:rebuild(); h.tm:flush()
+        return pbSeatsOf(h.fm:dump(), 1), #h.tm:getChannel(1).parked
+      end
+      local function valAt(seats, ppq)
+        for _, s in ipairs(seats) do if s.ppq == ppq then return s.val end end
+      end
+
+      local onTake, unparked = glide(false)
+      local parked, off      = glide(true)
+      t.eq(unparked, 0, 'the plain fixture leaves its successor on the take')
+      t.eq(off,      1, 'the region parks the successor off-take (non-vacuous)')
+      t.eq(valAt(onTake, 225), centsToRaw(100), 'the on-take glide arrives before the handoff')
+      t.deepEq(parked, onTake, 'and the parked successor gives the same stream, tick for tick')
     end,
   },
 

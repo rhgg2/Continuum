@@ -24,10 +24,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-01 tm: one clip for a lane's authored notes, on-take and parked (design/decisions.md 2026-09-01)
 - 2026-09-01 tm: the park scans ask the window set (design/tracker-manager-split.md § One window population)
 - 2026-08-31 tm: producer -> host, one word for what runs a chain (design/decisions.md 2026-08-31)
 - 2026-08-31 tm: one word for a window, one for a span (design/decisions.md 2026-08-31)
-- 2026-08-31 tm: hold the pass's park windows in one structure (design/tracker-manager-split.md § Phase 3 5)
 
 ## Now
 
@@ -35,16 +35,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. **One clip rule, one cache.** A window's end and a parked cell's render
-   clip are the same number: the authored ceiling — the cell's `endppq`, or
-   the take length — clipped to the next authored onset on the lane, on the
-   take or parked. `clippedSpanEnd` reads both halves of that population and
-   every window takes it, so `offTakeEnd` goes and `realiseParked` drops its
-   member-next map; the two uuid-keyed caches and their duplicate dirt gate
-   become one. Red-first in `tm_fx_region_spec`: an on-take host followed on
-   its lane by a parked note stops at it.
-
-1. **One window pass per rebuild.** `computeNoteFxSpans` and `buildFxWindows`
+1. **One window pass per rebuild.** `clipNoteHosts` and `buildFxWindows`
    run once, ahead of the park stage, which takes the set as data and hands
    it on; `rebuildFx` partitions its hosts by the frame's parked list, which
    is what the second pass was recomputing. `settleWindows` goes, and the
