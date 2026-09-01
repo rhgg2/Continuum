@@ -397,8 +397,13 @@ function midiBlob.slotState(wire, stream, slot)
            shape = evt and evt.shape, sidePpq = row and row.ppq }
 end
 
+-- A splice memmoves both arrays from its own index; buildWire wins past
+-- SPLICE_CAP structural changes -- see docs/midiBlob.md § Splicing a held wire.
+local SPLICE_CAP = 128
+
 -- Carry every dirty slot's keys from the caller's before-snapshots to what the model now
 -- says, phased so chunkOf never packs a dead key -- see docs/midiBlob.md § Splicing a held wire.
+--contract: true if spliced; false+'dense'|'disagreed' if caller must rebuild, wire untouched
 function midiBlob.syncSlots(wire, dirt)
   local drops, puts, repacks = {}, {}, {}
   for stream, group in pairs(dirt) do
@@ -415,10 +420,13 @@ function midiBlob.syncSlots(wire, dirt)
     end
   end
 
+  -- Declined before a single key moves, so the caller's rebuild starts from an untouched wire.
+  if #drops + #puts > SPLICE_CAP then return false, 'dense' end
+
   table.sort(drops, function(a, b) return a > b end)
-  for i = 1, #drops   do if not midiBlob.dropKey(wire, drops[i])     then return false end end
-  for i = 1, #puts    do if not midiBlob.putKey(wire, puts[i])       then return false end end
-  for i = 1, #repacks do if not midiBlob.repackKey(wire, repacks[i]) then return false end end
+  for i = 1, #drops   do if not midiBlob.dropKey(wire, drops[i])     then return false, 'disagreed' end end
+  for i = 1, #puts    do if not midiBlob.putKey(wire, puts[i])       then return false, 'disagreed' end end
+  for i = 1, #repacks do if not midiBlob.repackKey(wire, repacks[i]) then return false, 'disagreed' end end
   return true
 end
 

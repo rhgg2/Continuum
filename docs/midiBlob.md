@@ -106,6 +106,16 @@ twice, or dropped when it was never there. Nothing is mutated, and the caller's
 guard falls back to a full `buildWire`, because a disagreement means the dirt
 record has lost track of the wire and no further splice can be trusted.
 
+A splice is cheap per key but not free: `table.insert`/`table.remove` shift every
+key past the one that moved, so `k` splices over an `n`-key wire cost `O(k*n)`
+where `buildWire` costs `O(n)`. Measured, the two cross at a hundred-odd keys
+whatever `n` is — the ratio is packing cost against memmove cost, and `n` cancels.
+A gesture reaches that easily: deleting an fx note host takes every tile its chain
+realised with it, which was 3585 keys and 212ms of splicing on a take whose whole
+wire re-keys in 5. So `syncSlots` counts its structural changes first and declines
+past `SPLICE_CAP`, before a single key moves. It says which — `'dense'` or
+`'disagreed'` — because only the second is news about the wire's health.
+
 `slotState` and `syncSlots` sit one level up, where a caller thinks in slots rather
 than keys. `slotState` reads the wire's own model for the four fields that decide a
 slot's key set — `ppq`, `endppq`, `shape`, and the sidecar row's `sidePpq` — so the
@@ -127,7 +137,8 @@ puts, each of which re-packs a successor that is now certainly live. Then repack
 last because a repacked chunk's delta is only final once every insertion before it
 has landed. A failure at any phase returns immediately rather than pressing on: the
 caller is going to regenerate anyway, and continuing would walk into the dead key
-the failed drop left behind.
+the failed drop left behind. Repacks don't count toward the cap: they move no key,
+so they cost what they always did however many there are.
 
 The sidecar key comes off the *row's* ppq rather than its owner's, even though the
 caller keeps the two equal: the row is what `chunkOf` packs, so a row left stale has
