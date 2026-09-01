@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — Region lane allocation carries each lane's furthest reach alongside its spans: a
+  candidate starting past the reach clears the lane outright, and only one that could overlap walks
+  the list. A region tiles its span in order and every tile lands on the same lane, so a scan apiece
+  was quadratic in the tiles -- 28ms of a 32ms fx expansion, none of it the generator. The reach
+  over a sorted-neighbour probe, which is exact only for disjoint spans: a chordStamp on a note host
+  stacks simultaneous tiles on the host's one lane.
+
 - **2026-09-02** — The tail walk's bound set takes each anchor's nearest same-lane and same-pitch
   predecessor from one ascending sweep carrying the running last-in-lane and last-in-pitch, over the
   per-anchor util.seek pair it replaces. A seek is a scan, and the anchors are every seed plus every

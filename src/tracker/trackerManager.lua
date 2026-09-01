@@ -486,27 +486,30 @@ end
 -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
 -- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
 local function allocateRegionLanes(chan, startL, endL, derived, emitted)
-  local occupied = {}
-  eachLaneSpan(chan, startL, endL, onTakeOnLane, function(laneIdx, lo, hi)
-    util.bucket(occupied, laneIdx, { lo, hi })
-  end)
-  -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
-  -- (the host itself is off-take, so eachWindowNote no longer sees it).
-  for _, spec in ipairs(emitted) do
-    if spec.ppqL < endL and spec.endppqL > startL then
-      util.bucket(occupied, spec.lane, { spec.ppqL, spec.endppqL })
-    end
+  -- reach tracks each lane's furthest span end, so a start past it clears the lane without
+  -- scanning occupied -- the common case, since region tiling emits notes in span order.
+  local occupied, reach = {}, {}
+  local function occupy(lane, lo, hi)
+    util.bucket(occupied, lane, { lo, hi })
+    reach[lane] = math.max(reach[lane] or hi, hi)
   end
   local function laneFree(lane, lo, hi)
-    for _, span in ipairs(occupied[lane] or {}) do
+    if reach[lane] == nil or lo >= reach[lane] then return true end
+    for _, span in ipairs(occupied[lane]) do
       if lo < span[2] and hi > span[1] then return false end
     end
     return true
   end
+  eachLaneSpan(chan, startL, endL, onTakeOnLane, occupy)
+  -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
+  -- (the host itself is off-take, so eachWindowNote no longer sees it).
+  for _, spec in ipairs(emitted) do
+    if spec.ppqL < endL and spec.endppqL > startL then occupy(spec.lane, spec.ppqL, spec.endppqL) end
+  end
   for _, spec in ipairs(derived) do
     local lane = 1
     while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
-    util.bucket(occupied, lane, { spec.ppqL, spec.endppqL })
+    occupy(lane, spec.ppqL, spec.endppqL)
     spec.lane = lane
   end
 end
