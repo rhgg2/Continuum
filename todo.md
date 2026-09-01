@@ -40,3 +40,29 @@ destination and mints nothing over it — and it belongs to
   needs tracker mode to have a part at all, so a case there would be
   worth having before anyone relies on it.
 - add slot renumbering to "tidy" button in arrange view
+
+Keyboard gaps read off manifest.lua (2026-09-02). None is in design/.
+
+Mechanism exists, verb missing:
+- tracker: loop the block (Play/Loop/Block) — tv:setLoopRangeQN over
+  the selection's QN span; the map already sets a loop by drag
+- tracker: mute / solo the cursor's channel, and unmute/unsolo all —
+  tv:toggleChannelMute/Solo are reached only by a header click
+- arrange: cut / copy / paste / select all — paste is am:duplicateTake
+  per take with QN and track deltas, as the group-drag commit does
+- tracker: jump to next / previous event in column, prefix-aware —
+  Alt+Up/Down are spent on instances
+
+Block transforms — translation (nudge) and dilation (scale) exist,
+reflection doesn't:
+- retrograde: reverse the block in time, note-offs re-derived
+- inversion: reflect pitch about an anchor in cents, writing intent
+  (tuning.transposeNote's sibling)
+- humanize vel/delay over the block — the selection-edit face of
+  "randomness/humanize as an fx" above; delay is already per-note
+
+Larger:
+- repeat last command (C-x z) — lives in cmgr, carries the prefix
+- column reorder: move lane left / right
+- typed filter over command labels beside the letter-walk menu;
+  low confidence it earns its keep over walk + cheat-sheet
