@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
 > opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 5 (one window population)
+> at phase 6 (the time context)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -178,6 +178,36 @@ decides whether phase 3 is worth taking.**
    data. Each reader asks the frame which half a host is in at its own
    moment.
 
+## The time context
+
+1. **The projection between the logical and realisation frames is a
+   value, built once per pass from the take's length, its resolution,
+   the swing library and the document's swing assignment.** It carries
+   `fromLogical`, `toLogical` and the length it was built from. A
+   changed input means a new context, and nothing migrates.
+
+1. `viewContext` is the same shape one layer up
+   (`docs/viewContext.md`): a pure snapshot of coordinates, built by
+   the layer that owns it, held there, and read by the sibling that
+   needs it. `timeContext` is the tracker manager's.
+
+1. Construction is eager, at the head of `tm:rebuild` and before any
+   stage runs, so a pass has one projection throughout and no stage
+   can be the one that decides it.
+
+1. The engine takes the context as a parameter. Its thirty-six
+   projections then read a value the pass was given, and the edit
+   side's seventeen read the reference tm holds, which the same head
+   replaces.
+
+1. `tm:fromLogical` and `tm:toLogical` have no caller outside
+   trackerManager. The split narrows no API: a module-private function
+   becomes an argument.
+
+1. `timeContext` is what `tm` stood for in § Phase 3's dependency
+   list. The count stays at eight, because the engine's four reads of
+   the take length travel on the same value.
+
 ## Phase 1 — the algebra leaves
 
 Landed 2026-08-30 as `spans.lua` and `curves.lua`, with the two seeks in
@@ -193,10 +223,11 @@ the seed minters stay with the structures they read. The model is
 ## Phase 3 — the engine leaves
 
 1. The engine leaves as `trackerRebuild.lua`, taking eight
-   dependencies: `mm`, `cm`, `ds`, `tm`, `index`, `stager`, `dirt`,
-   `frame`. The first four the file takes via `(...)` exactly as tm
-   does today, and `dirt` is phase 2's module, required by both sides.
-   The last three are the decisions below.
+   dependencies: `mm`, `cm`, `ds`, `timeContext`, `index`, `stager`,
+   `dirt`, `frame`. The first three the file takes via `(...)` exactly
+   as tm does today, `timeContext` is § The time context's value, and
+   `dirt` is phase 2's module, required by both sides. The last three
+   are the decisions below.
 
 1. `trackerRebuild.lua` is one file. Its nine stages need the same
    substrate, so a file each would carry the same constructor nine
@@ -284,8 +315,8 @@ the seed minters stay with the structures they read. The model is
 
 ## Open
 
-1. What `tm` in the engine's dependency list covers. The stages call
-   three of its methods: `tm:fromLogical` and `tm:toLogical` are the
-   swing projection, and `tm:length` is the take length with the
-   shrink-flush override. The dependency is a time projection and a
-   scalar, and should be named as those.
+1. Which length the context resolves its swing composite against.
+   `tm:setLength`'s shrink flush drives a rebuild with `pendingLen`
+   set, so that pass clips tails to the new end while the take still
+   runs to the old one. The composite is resolved over a span, and
+   which span that pass wants is undecided.

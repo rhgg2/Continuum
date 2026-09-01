@@ -17,9 +17,12 @@
 5. **Phase 5 — one window population** (§ One window population) — landed
    2026-09-01, in three commits; the model is `docs/trackerManager.md`
    § Note host clips and windows.
-6. **Phase 6 — the engine leaves** (§ Phase 3, § Open) —
-   `trackerRebuild.lua` and its eight dependencies, with `tm` named as
-   what it actually is.
+6. **Phase 6 — the time context** (§ The time context) — the frame
+   projection becomes a value built once per pass, and the stages take
+   it as a parameter.
+7. **Phase 7 — the engine leaves** (§ Phase 3) — the engine's own
+   names regrouped in place and the dirt gates onto one door, then
+   `trackerRebuild.lua` and its eight dependencies.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -33,4 +36,16 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+- tm: the frame projection is a context built once per pass
+- tm: the rebuild stages take the time context as a parameter
+
+## Follow-up (same file, after the move)
+
+Nesting reduction inside two stages. None of it changes what crosses
+the boundary; each shortens a function too long to read in one pass.
+
+- tm: the lane-1 union stream as one set of queries, three seek copies to one (rebuildPbs, ~80 lines)
+- tm: replaceWindows and seatScope at file scope (rebuildPbs, ~120 lines)
+- tm: the fx base builders take their channel and spans (rebuildFx, ~40 lines)
 
