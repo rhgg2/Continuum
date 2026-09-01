@@ -85,7 +85,7 @@ return {
       h.cmgr:invoke('growNote')
 
       local A
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 and e.ppq == 0 then A = e end
       end
       t.truthy(A, 'A survives')
@@ -113,7 +113,7 @@ return {
       h.cmgr:invoke('noteOff')
 
       local A
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 and e.ppq == 0 then A = e end
       end
       t.truthy(A, 'A survives')
@@ -142,7 +142,7 @@ return {
       h.cmgr:invoke('noteOff')
 
       local A
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 and e.ppq == 0 then A = e end
       end
       t.truthy(A, 'A survives')

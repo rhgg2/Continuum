@@ -157,7 +157,7 @@ local function build(tm, gm)
   -- Gather the flushed lane-1 events (they carry uuid now) straight from the
   -- channel column -- a pure-tm path, no mm handle needed.
   local subject = {}
-  for _, e in ipairs(tm:getChannel(15).columns.notes[1].events) do
+  for _, e in ipairs(tm:getChannel(15).onTake.notes[1].events) do
     subject[#subject+1] = e
   end
   table.sort(subject, function(a, b) return a.ppq < b.ppq end)

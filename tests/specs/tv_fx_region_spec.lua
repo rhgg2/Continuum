@@ -434,7 +434,7 @@ return {
       t.eq(#stash, 1, 'one parked note in the stash')
       t.eq(stash[1].pitch, 61, 'the stash pitch was edited (not the take)')
       t.deepEq(authoredPitches(h), {}, 'still parked -- the edit did not push it to the take')
-      t.eq(h.tm:getChannel(1).parked[1].pitch, 61, 'the render cell shows the new pitch')
+      t.eq(h.tm:getChannel(1).parked.notes[1].pitch, 61, 'the render cell shows the new pitch')
     end,
   },
 
@@ -1353,7 +1353,7 @@ return {
       t.truthy((h.vm:ghostOverlay() or {}).values[ctsColIdx(h, 1, 'cc', 10)], 'fixture check: the curve is up')
 
       local far
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.ppq == 1920 then far = e end
       end
       h.tm:assignEvent(far, { pitch = 65 })
@@ -1426,7 +1426,7 @@ return {
                      vel = 90, detune = 0, delay = 0, lane = 2 }
       h.tm:flush()
       injectRegion(h, { fx = arpUp })   -- discrete replace: both notes park
-      local parked = h.tm:getChannel(1).parked
+      local parked = h.tm:getChannel(1).parked.notes
       t.eq(#parked, 2, 'fixture check: the chord parked off-take')
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(2, ci, 1)             -- caret in the fx column, mid-window
@@ -1449,7 +1449,7 @@ return {
       h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 2, pitch = 67,
                      vel = 90, detune = 0, delay = 0, lane = 1, fx = arpUp }
       h.tm:flush()
-      local mine, other = h.tm:getChannel(1).parked[1], h.tm:getChannel(2).parked[1]
+      local mine, other = h.tm:getChannel(1).parked.notes[1], h.tm:getChannel(2).parked.notes[1]
       t.truthy(mine and other, 'fixture check: both note hosts parked themselves')
       h.ec:setPos(0, noteColIdx(h, 1), 1)   -- caret on the host cell
       local overlay = h.vm:ghostOverlay()
@@ -1518,7 +1518,7 @@ return {
       noteAt(h, 1, 960, 64)
       injectRegions(h, { { fx = arpUp }, { ppq = 960, endppq = 1200, fx = arpUp } })
       local mine, theirs
-      for _, cell in ipairs(h.tm:getChannel(1).parked) do
+      for _, cell in ipairs(h.tm:getChannel(1).parked.notes) do
         if cell.ppq == 0 then mine = cell else theirs = cell end
       end
       t.truthy(mine and theirs, 'fixture check: each region parked the note it covers')

@@ -272,7 +272,7 @@ the seed minters stay with the structures they read. The model is
    to break, and it is already pinned.
 
 1. Two specs would nonetheless go red on a faithful move.
-   `tm_pb_gating_spec` asserts table identity of `columns.pb`, so
+   `tm_pb_gating_spec` asserts table identity of `onTake.pb`, so
    anything reconstructing the wrapper fails on equal data. And
    `VOLATILE` in `tm_gate_parity_spec` enumerates the three fields
    allowed to differ between a carried and a fresh frame, so a new

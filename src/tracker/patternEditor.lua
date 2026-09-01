@@ -159,7 +159,7 @@ end
 -- Read channel 1 back through tm and rebuild the whitelisted body -- the field pick IS the whitelist: notes drop fx/chan and fix lane 1, a curve normalises the pb column's cents to bipolar.
 -- lengthPpq/root ride the open snapshot (no bound command edits them); rpb reads live, so a toolbar change persists with the body rather than dying with the checkout take.
 local function readbackBody()
-  local cols = (tm:getChannel(1) or {}).columns or {}
+  local cols = (tm:getChannel(1) or {}).onTake or {}
   if editBody.kind == 'curve' then
     local points = {}
     if editBody.domain == 'cc' then

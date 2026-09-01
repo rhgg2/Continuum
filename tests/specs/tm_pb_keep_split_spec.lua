@@ -58,7 +58,7 @@ end
 -- ppqs holding a second event. A carried cell is the prior column's own table and a reprojected one
 -- a fresh clone, so table identity reads which side of the split claimed a tick.
 local function column(h)
-  local col = h.tm:getChannel(1).columns.pb
+  local col = h.tm:getChannel(1).onTake.pb
   t.truthy(col, 'fixture check: the authored pb surfaces a pb column')
   local byPpq, doubled = {}, {}
   for _, e in ipairs(col.events) do
@@ -96,7 +96,7 @@ end
 -- Dirt on the middle host itself: its chain re-runs at twice the depth, and [0,480) is live.
 local function deepenMiddleHost(h)
   local mid
-  for _, e in ipairs(h.tm:getChannel(1).columns.notes[2].events) do
+  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[2].events) do
     if e.ppq == WIN then mid = e end
   end
   t.truthy(mid, 'fixture check: the middle host stands on lane 2')

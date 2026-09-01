@@ -30,7 +30,7 @@ return {
       h.cmgr:invoke('insertRow')
 
       local note
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 then note = e end
       end
       t.truthy(note, 'open note survives insertRow')
@@ -63,7 +63,7 @@ return {
       h.cmgr:invoke('insertRow')
 
       local note
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 then note = e end
       end
       t.truthy(note, 'open spanning note survives')
@@ -93,7 +93,7 @@ return {
       h.cmgr:invoke('deleteRow')
 
       local note
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 then note = e end
       end
       t.truthy(note, 'open spanning note survives')

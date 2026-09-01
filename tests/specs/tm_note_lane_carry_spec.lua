@@ -14,7 +14,7 @@ local function note(ppq, pitch, lane, extra)
 end
 
 local function laneEvents(h, lane)
-  return h.tm:getChannel(1).columns.notes[lane].events
+  return h.tm:getChannel(1).onTake.notes[lane].events
 end
 
 -- chan 1 holding one note in lane 1 (row 0) and one in lane 2 (row 960), with both lanes'

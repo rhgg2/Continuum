@@ -57,14 +57,14 @@ return {
       })
       h.tm:flush()
 
-      -- Fake-only pb columns stay hidden — tm.channel.columns.pb should
+      -- Fake-only pb columns stay hidden — tm.channel.onTake.pb should
       -- be absent when the only pb present is the absorber.
       local ch = h.tm:getChannel(1)
-      t.falsy(ch.columns.pb, 'pb column hidden when only fake pbs exist')
+      t.falsy(ch.onTake.pb, 'pb column hidden when only fake pbs exist')
 
       -- And the note column still shows the note at ppq=0.
-      t.eq(#ch.columns.notes[1].events, 1)
-      t.eq(ch.columns.notes[1].events[1].detune, 50)
+      t.eq(#ch.onTake.notes[1].events, 1)
+      t.eq(ch.onTake.notes[1].events[1].detune, 50)
     end,
   },
 
@@ -79,7 +79,7 @@ return {
       h.tm:flush()
 
       -- Retune to 0 via tm's intent-speaking API.
-      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(note, { detune = 0 })
       h.tm:flush()
 
@@ -187,7 +187,7 @@ return {
       -- Move A past B in ppq. With the sort fix in assignLowlevel,
       -- detuneBefore(A.new) correctly returns B's detune; without it,
       -- it returns 0 and L != logicalBefore seats a real pb at A.new.
-      local A = h.tm:getChannel(1).columns.notes[1].events[1]
+      local A = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(A, { ppq = 200, endppq = 230 })
       h.tm:flush()
 
@@ -221,7 +221,7 @@ return {
       -- A rebuild reads from mm and must reconstruct the in-memory fake flag.
       h.tm:rebuild()
       local ch = h.tm:getChannel(1)
-      t.falsy(ch.columns.pb, 'pb column still hidden after rebuild (fake-only)')
+      t.falsy(ch.onTake.pb, 'pb column still hidden after rebuild (fake-only)')
     end,
   },
 
@@ -236,7 +236,7 @@ return {
       h.tm:flush()
       t.eq(#pbsAt(h.fm:dump(), 0), 1, 'pb seated')
 
-      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:deleteEvent(note)
       h.tm:flush()
 
@@ -318,7 +318,7 @@ return {
       t.eq(pbs[2].ppq, 480)
 
       -- Overwrite the second A with B (same detune as the third note).
-      local middle = h.tm:getChannel(1).columns.notes[1].events[2]
+      local middle = h.tm:getChannel(1).onTake.notes[1].events[2]
       h.tm:assignEvent(middle, { pitch = 50, detune = -30 })
       h.tm:flush()
 
@@ -401,7 +401,7 @@ return {
       t.eq(pbs[1].val, cents2raw(30))
 
       -- AAA → BAA: overwrite first A.
-      local first = h.tm:getChannel(1).columns.notes[1].events[1]
+      local first = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(first, { pitch = 50, detune = -30 })
       h.tm:flush()
 
@@ -413,7 +413,7 @@ return {
       t.eq(pbs[2].val, cents2raw(30))
 
       -- BAA → BBA: overwrite second A.
-      local second = h.tm:getChannel(1).columns.notes[1].events[2]
+      local second = h.tm:getChannel(1).onTake.notes[1].events[2]
       h.tm:assignEvent(second, { pitch = 50, detune = -30 })
       h.tm:flush()
 
@@ -472,7 +472,7 @@ return {
       t.eq(pbs[2].val, cents2raw(10))
 
       -- Move B past C. B sits at ppq=600 now; C's prior is A (detune 0).
-      local B = h.tm:getChannel(1).columns.notes[1].events[2]
+      local B = h.tm:getChannel(1).onTake.notes[1].events[2]
       h.tm:assignEvent(B, { ppq = 600, endppq = 840 })
       h.tm:flush()
 
@@ -506,7 +506,7 @@ return {
       })
       h.tm:flush()
 
-      local middle = h.tm:getChannel(1).columns.notes[1].events[2]
+      local middle = h.tm:getChannel(1).onTake.notes[1].events[2]
       h.tm:deleteEvent(middle)
       h.tm:flush()
 
@@ -576,7 +576,7 @@ return {
       t.eq(pbCount(), 1, 'baseline: lane-1 fake pb seated at ppq=0')
 
       -- Find the lane-2 note via tm's channel structure.
-      local lane2Col = h.tm:getChannel(1).columns.notes[2]
+      local lane2Col = h.tm:getChannel(1).onTake.notes[2]
       t.truthy(lane2Col, 'lane-2 column exists')
       local lane2Evt = lane2Col.events[1]
       t.eq(lane2Evt.pitch, 64, 'lane-2 holds the pitch-64 note')
@@ -620,7 +620,7 @@ return {
 
       -- Nudge the note's delay only. delayToPPQ(500, res=240) = 120,
       -- so the note's realised ppq shifts 0 → 120 added → 240.
-      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(note, { delay = 500 })
       h.tm:flush()
 
@@ -656,7 +656,7 @@ return {
       })
       h.tm:flush()
 
-      local pbCol = h.tm:getChannel(1).columns.pb
+      local pbCol = h.tm:getChannel(1).onTake.pb
       t.truthy(pbCol, 'pb column visible (real pb present)')
       local pbEvt
       for _, e in ipairs(pbCol.events) do
@@ -699,7 +699,7 @@ return {
       end
       t.falsy(realPbAtZero().derived, 'baseline: real pb stays real with detune=0')
 
-      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(note, { detune = 20 })
       h.tm:flush()
 
@@ -783,7 +783,7 @@ return {
       end
       t.eq(pbCount(), 0, 'baseline: no pbs (both detunes 0)')
 
-      local lane2 = h.tm:getChannel(1).columns.notes[2].events[1]
+      local lane2 = h.tm:getChannel(1).onTake.notes[2].events[1]
       h.tm:assignEvent(lane2, { detune = 75 })
       h.tm:flush()
 
@@ -818,7 +818,7 @@ return {
       }
 
       local B
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.ppq == 480 then B = e end
       end
       h.tm:assignEvent(B, { delay = -999 })
@@ -871,7 +871,7 @@ return {
 
       -- Now bump the note's detune to 25. Authored logical (cents=40)
       -- must survive; raw advances to cents+detune = 40+25 = 65.
-      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(note, { detune = 25 })
       h.tm:flush()
 

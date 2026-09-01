@@ -47,7 +47,7 @@ return {
         if s.evType == 'note' and s.fx then hosts = hosts + 1 end
       end
       t.eq(hosts, 1, 'the arp note-host parked itself off-take')
-      t.truthy(#h.tm:getChannel(1).parked > 0, 'and left a parked render cell for the grid')
+      t.truthy(#h.tm:getChannel(1).parked.notes > 0, 'and left a parked render cell for the grid')
     end,
   },
   {
@@ -66,20 +66,20 @@ return {
 
       local before2 = parkedOn(h.ds:get('fxParked'), 2)
       t.truthy(#before2 > 0, 'chan 2 host note parked off-take by its arp region')
-      t.truthy(#h.tm:getChannel(2).parked > 0, 'chan 2 has a parked render cell for the grid')
+      t.truthy(#h.tm:getChannel(2).parked.notes > 0, 'chan 2 has a parked render cell for the grid')
 
       -- Chan-1 edit outside every region window: dirties chan 1 only, so chan 2 is derivation-clean
       -- and its park scan is gated. The prior-set partition must still carry chan 2 through.
       h.tm:addEvent(plainNote(1, 480)); h.tm:flush()
       t.deepEq(parkedOn(h.ds:get('fxParked'), 2), before2,
         'chan 2 parked spec carried untouched through the chan-1 edit')
-      t.truthy(#h.tm:getChannel(2).parked > 0,
+      t.truthy(#h.tm:getChannel(2).parked.notes > 0,
         'chan 2 parked render cell survives -- not erased by the gated reconcile')
 
       -- Second chan-1 edit: had chan 2 been dropped, its off-take note would be gone from both the
       -- persisted set and the grid. The carry-through keeps it whole.
       h.tm:addEvent(plainNote(1, 720)); h.tm:flush()
-      t.truthy(#h.tm:getChannel(2).parked > 0,
+      t.truthy(#h.tm:getChannel(2).parked.notes > 0,
         'chan 2 parked render cell still present after two chan-1 edits')
       t.deepEq(parkedOn(h.ds:get('fxParked'), 2), before2,
         'chan 2 parked spec still byte-identical -- its reconcile never re-ran')
@@ -104,7 +104,7 @@ return {
       h.tm:rebuild()
 
       local function member()
-        for _, m in ipairs(h.tm:getChannel(1).parked) do
+        for _, m in ipairs(h.tm:getChannel(1).parked.notes) do
           if m.pitch == 60 and m.ppq == 0 then return m end
         end
       end
@@ -126,7 +126,7 @@ return {
 
       -- Removing it seeds its onset (== the cached clip): the gate fires and the clip regrows.
       local neighbour
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.ppq == 480 and e.pitch == 64 then neighbour = e end
       end
       t.truthy(neighbour, 'the neighbour note is on the take')
@@ -150,7 +150,7 @@ return {
       h.tm:rebuild()
 
       local pas = 0
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.evType == 'pa' and e.pitch == 60 then pas = pas + 1 end
       end
       t.eq(pas, 1, 'the parked PA renders exactly once in the host lane')

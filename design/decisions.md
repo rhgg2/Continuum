@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — A channel holds its authored events in two halves named for the side of the take
+  they sit on: onTake is what mm holds, parked is what an fx replace window took off it. The old
+  `columns` named the rendering rather than the side, and of its four parked siblings three were
+  named for their event type while the fourth carried the category alone; they group as
+  parked.notes/ccs/pb/pa, mirroring onTake's own names. The halves differ in representation --
+  onTake by column, parked flat with the lane or CC number on each event -- because mm reads into
+  lanes while one flat stash splits by type. Nothing about the population differs, so the grouping
+  is by side of the take, not by shape. An event is a record; a cell is a place, a row x column
+  position tv's grid draws which an event may occupy or contend for. tm has no places, so `cell`
+  throughout it is now `event`, and the word is left to the view that owns it.
+
 - **2026-09-01** — A tile loops the fx regions and the parked hosts they cover, and leaves the
   census out: a copied region's seats do not exist yet, so an absent entry is the true statement
   that the take carries none there -- the same one a freshly-authored region makes. The take walk

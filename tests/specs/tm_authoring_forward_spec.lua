@@ -70,7 +70,7 @@ return {
             chan = 1, pitch = 60, vel = 100 },
         }},
       }
-      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      local n = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(n, { ppq = 120 })
       h.tm:flush()
 
@@ -94,7 +94,7 @@ return {
             chan = 1, pitch = 60, vel = 100, delay = 0 },
         }},
       }
-      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      local n = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(n, { delay = 125 })
       h.tm:flush()
 
@@ -113,7 +113,7 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = util.OPEN,
                       chan = 1, pitch = 60, vel = 100 })
       h.tm:flush()
-      local ev = h.tm:getChannel(1).columns.notes[1].events[1]
+      local ev = h.tm:getChannel(1).onTake.notes[1].events[1]
       t.eq(ev.endppq,  util.OPEN, 'authored-open tail survives addEvent on endppq')
       t.eq(ev.endppqC, 1920,      'tm derives the realised tail to take length')
     end,
@@ -129,7 +129,7 @@ return {
                       chan = 1, pitch = 60, vel = 100 })
       h.tm:flush()
       local function at(p)
-        for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
           if e.ppq == p then return e end
         end
       end
@@ -145,10 +145,10 @@ return {
         { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
           chan = 1, pitch = 60, vel = 100 },
       }}}
-      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      local n = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(n, { endppq = util.OPEN })
       h.tm:flush()
-      local ev = h.tm:getChannel(1).columns.notes[1].events[1]
+      local ev = h.tm:getChannel(1).onTake.notes[1].events[1]
       t.eq(ev.endppq,  util.OPEN, 'finite note reopened via endppq=util.OPEN')
       t.eq(ev.endppqC, 1920,      'realised tail regrows to take length')
     end,
@@ -167,7 +167,7 @@ return {
         { ppq = 0, endppq = 120, ppqL = 0, endppqL = 120,
           chan = 1, pitch = 60, vel = 100 },
       }}}
-      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      local n = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(n, { endppq = 600 })  -- 120 past take-end
       h.tm:flush()
 
@@ -175,7 +175,7 @@ return {
       t.eq(notes[1].endppq,  480, 'raw endppq clipped at take length')
       t.eq(notes[1].endppqL, 600, 'authored ceiling preserved past take-end')
 
-      local ev = h.tm:getChannel(1).columns.notes[1].events[1]
+      local ev = h.tm:getChannel(1).onTake.notes[1].events[1]
       t.eq(ev.endppqC, 480, 'endppqC reflects the realised tail')
     end,
   },

@@ -46,7 +46,7 @@ return {
 
       local ch = h.tm:getChannel(1)
       local fakeDisp
-      for _, e in ipairs(ch.columns.pb.events) do
+      for _, e in ipairs(ch.onTake.pb.events) do
         if e.hidden then fakeDisp = e end
       end
       t.truthy(fakeDisp, 'fake pb projected into pb column as hidden display event')
@@ -111,7 +111,7 @@ return {
           },
         },
       }
-      local n = h.tm:getChannel(1).columns.notes[1].events[1]
+      local n = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(n, { delay = 250 })
       h.tm:flush()
 
@@ -142,7 +142,7 @@ return {
 
       -- Flatten the jump: set the second note's detune to 0.
       local second
-      for _, n in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, n in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if n.pitch == 62 then second = n end
       end
       h.tm:assignEvent(second, { detune = 0 })
@@ -185,7 +185,7 @@ return {
       -- Sparse edit inside the run: bump note 2's velocity. Its dirty span sits on a note whose
       -- detune (50) equals the detune carried in from note 1.
       local second
-      for _, n in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, n in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if n.pitch == 62 then second = n end
       end
       h.tm:assignEvent(second, { vel = 90 })

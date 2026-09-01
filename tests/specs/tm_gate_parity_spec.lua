@@ -45,13 +45,13 @@ local function projectFrame(tm)
   local frame = {}
   for chan = 1, 16 do
     local channel = tm:getChannel(chan)
-    local c = channel.columns
-    local f = { notes = {}, ccs = {} }
+    local c = channel.onTake
+    local f = { notes = {}, ccs = {}, parked = {} }
     for lane, col in ipairs(c.notes) do f.notes[lane] = projCol(col) end
     for ccNum, col in pairs(c.ccs)    do f.ccs[ccNum] = projCol(col) end
     f.pb = projCol(c.pb); f.pc = projCol(c.pc); f.at = projCol(c.at)
-    f.parked   = channel.parked   and projCol(channel.parked)   or nil
-    f.parkedCC = channel.parkedCC and projCol(channel.parkedCC) or nil
+    f.parked.notes = channel.parked.notes and projCol(channel.parked.notes) or nil
+    f.parked.ccs   = channel.parked.ccs   and projCol(channel.parked.ccs)   or nil
     frame[chan] = f
   end
   return frame
@@ -146,7 +146,7 @@ return {
       end
       t.truthy(nSeat3 > 0, 'sine pb seats present on chan 3 (fx ran)')
       t.truthy(nPb2 > 0,   'absorber pbs present on chan 2 (tuning ran)')
-      t.truthy(projectFrame(h.tm)[4].parked and #projectFrame(h.tm)[4].parked > 0,
+      t.truthy(projectFrame(h.tm)[4].parked.notes and #projectFrame(h.tm)[4].parked.notes > 0,
         'chan 4 has an off-take parked chord (region ran)')
       t.truthy(h.tm:fromLogical(1, 120) ~= 120, 'swing is active (projection non-identity)')
 
@@ -155,7 +155,7 @@ return {
       assertParity(h, 'chan-1 edit: frozen 2/3/4 re-read == full re-derive')
 
       -- Edit the sine host itself: chan 3 re-derives (dirty path), 2/4 stay frozen.
-      local vibNote = h.tm:getChannel(3).columns.notes[1].events[1]
+      local vibNote = h.tm:getChannel(3).onTake.notes[1].events[1]
       h.tm:assignEvent(vibNote, { pitch = 69 }); h.tm:flush()
       assertParity(h, 'chan-3 fx edit: dirty re-derive + frozen 2/4 == full re-derive')
 
@@ -223,7 +223,7 @@ return {
 
       -- Remove window A's fx outright: its orphan seats are fed by nothing and delete; B still keeps.
       keptB = seatUuids(1, 10, 960, 1200)
-      local hostA = h.tm:getChannel(1).columns.notes[1].events[1]
+      local hostA = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(hostA, { fx = util.REMOVE }); h.tm:flush()
       t.deepEq(seatUuids(1, 10, 0, 960), {}, 'removed host: orphan seats deleted')
       t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'window B still keeps across the removal')
@@ -339,7 +339,7 @@ return {
       -- Detune edit at 480: the closure is [480, next lane-1 onset 960] inclusive. The absorbers
       -- at 0 and 1440 sit outside it and must stand verbatim, uuid included.
       local before = pbBag(1)
-      local n480 = h.tm:getChannel(1).columns.notes[1].events[2]
+      local n480 = h.tm:getChannel(1).onTake.notes[1].events[2]
       h.tm:assignEvent(n480, { detune = 45 }); h.tm:flush()
       local after = pbBag(1)
       t.deepEq(after[1], before[1], 'absorber at 0: outside the closure, verbatim')
@@ -390,7 +390,7 @@ return {
 
       -- Reseat the onset with a detune edit -- a lane-1 seed whose span is {999, 1300}, excluding both
       -- authored pbs. cents stays 60 (the value stream is detune-independent); only the wire moves.
-      local onsetNote = h.tm:getChannel(1).columns.notes[1].events[2]
+      local onsetNote = h.tm:getChannel(1).onTake.notes[1].events[2]
       h.tm:assignEvent(onsetNote, { detune = 40 }); h.tm:flush()
       t.eq(pbAt(1, 1000).cents, 60, 'reseated onset still samples the ramp, not a truncated 0')
       -- The reseat turns 1300 into a fresh onset (40->20 step) whose absorbers project before commit

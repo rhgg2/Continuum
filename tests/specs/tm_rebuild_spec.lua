@@ -10,8 +10,8 @@ return {
       for chan = 1, 16 do
         local ch = h.tm:getChannel(chan)
         t.truthy(ch, 'channel exists')
-        t.eq(#ch.columns.notes, 1, 'one note lane by default')
-        t.eq(#ch.columns.notes[1].events, 0, 'lane is empty')
+        t.eq(#ch.onTake.notes, 1, 'one note lane by default')
+        t.eq(#ch.onTake.notes[1].events, 0, 'lane is empty')
       end
     end,
   },
@@ -25,8 +25,8 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1, 'one note column')
-      local col = ch.columns.notes[1]
+      t.eq(#ch.onTake.notes, 1, 'one note column')
+      local col = ch.onTake.notes[1]
       -- tm strips `chan` and `lane` from column events — channel is
       -- implied by the column's position in the grid.
       t.eventsMatch(col.events, { { ppq = 0, endppq = 240, pitch = 60, vel = 100 } })
@@ -116,9 +116,9 @@ return {
       }
       -- pb column hidden because the only pb is the absorber.
       local ch = h.tm:getChannel(1)
-      t.falsy(ch.columns.pb, 'pb column hidden for fake-only pb')
+      t.falsy(ch.onTake.pb, 'pb column hidden for fake-only pb')
       -- Note still visible in col-1 with its detune intact.
-      t.eq(ch.columns.notes[1].events[1].detune, 50)
+      t.eq(ch.onTake.notes[1].events[1].detune, 50)
     end,
   },
 
@@ -145,12 +145,12 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(ch.columns.notes[1].events[1].ppq, 0,
+      t.eq(ch.onTake.notes[1].events[1].ppq, 0,
         'note surfaces at logical ppq=0')
 
-      t.truthy(ch.columns.pb, 'pb column surfaces (visible pb present)')
+      t.truthy(ch.onTake.pb, 'pb column surfaces (visible pb present)')
       local fakeDisp
-      for _, e in ipairs(ch.columns.pb.events) do
+      for _, e in ipairs(ch.onTake.pb.events) do
         if e.hidden then fakeDisp = e end
       end
       t.truthy(fakeDisp, 'fake pb display event present in column')
@@ -189,7 +189,7 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 2, 'two lanes allocated for coincident notes')
+      t.eq(#ch.onTake.notes, 2, 'two lanes allocated for coincident notes')
     end,
   },
 
@@ -202,9 +202,9 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.truthy(ch.columns.pb, 'pb column exists')
+      t.truthy(ch.onTake.pb, 'pb column exists')
       -- Default pbRange = 2 semitones = 200 cents. val 4096 / 8192 * 200 = 100.
-      t.eventsMatch(ch.columns.pb.events, { { ppq = 0, val = 100 } })
+      t.eventsMatch(ch.onTake.pb.events, { { ppq = 0, val = 100 } })
     end,
   },
 
@@ -225,7 +225,7 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 2,
+      t.eq(#ch.onTake.notes, 2,
         'shared intent onset spills to a second lane even when delays differ')
     end,
   },
@@ -247,9 +247,9 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1,
+      t.eq(#ch.onTake.notes, 1,
         'intent-disjoint notes share a lane despite realised collision')
-      t.eq(#ch.columns.notes[1].events, 2, 'both notes live in lane 1')
+      t.eq(#ch.onTake.notes[1].events, 2, 'both notes live in lane 1')
     end,
   },
 
@@ -280,15 +280,15 @@ return {
       }
       local ch = h.tm:getChannel(1)
 
-      local ccEvt = ch.columns.ccs[74].events[1]
+      local ccEvt = ch.onTake.ccs[74].events[1]
       t.eq(ccEvt.mood, 'blue', 'cc custom field rides through projection')
       t.eq(ccEvt.tag,  42,     'cc tag rides through projection')
 
-      t.truthy(ch.columns.pb, 'pb column surfaces')
+      t.truthy(ch.onTake.pb, 'pb column surfaces')
       -- The first-note anchor adds a hidden pb=0 at ppq 0; the authored
       -- pb is the visible one.
       local pbEvt
-      for _, e in ipairs(ch.columns.pb.events) do
+      for _, e in ipairs(ch.onTake.pb.events) do
         if not e.hidden then pbEvt = e end
       end
       t.truthy(pbEvt, 'authored pb projected')
@@ -297,7 +297,7 @@ return {
 
       -- pa is attached to the host note's column, alongside the note.
       local paEvt
-      for _, e in ipairs(ch.columns.notes[1].events) do
+      for _, e in ipairs(ch.onTake.notes[1].events) do
         if e.evType == 'pa' then paEvt = e end
       end
       t.truthy(paEvt, 'pa event projected onto host-pitch note col')
@@ -318,7 +318,7 @@ return {
       t.eventsMatch(dump.notes, { { ppq = 0, endppq = 240, pitch = 60, vel = 100 } })
 
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes[1].events, 1, 'tm sees the new note on rebuild')
+      t.eq(#ch.onTake.notes[1].events, 1, 'tm sees the new note on rebuild')
     end,
   },
 
@@ -330,7 +330,7 @@ return {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
         },
       }
-      local before = h.tm:getChannel(1).columns.notes[1].events[1]
+      local before = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:deleteEvent(before)
       h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 90, detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
@@ -352,7 +352,7 @@ return {
                        delay = 0, ppqL = 0, endppqL = 240 } },
         },
       }
-      t.eq(#h.tm:getChannel(1).columns.notes[1].events, 1, 'note present before take death')
+      t.eq(#h.tm:getChannel(1).onTake.notes[1].events, 1, 'note present before take death')
 
       -- Take deleted under us: mm self-heals take() to nil but keeps stale
       -- notes (the dangling-take seam). resolution() now reads nil.
@@ -363,7 +363,7 @@ return {
       -- subscriber. A dormant (dead-take) tracker must not rebuild.
       h.cm:set('project', 'defaultSwing', {})
 
-      t.eq(#h.tm:getChannel(1).columns.notes[1].events, 1,
+      t.eq(#h.tm:getChannel(1).onTake.notes[1].events, 1,
         'last frame retained, no crash on dead-take rebuild')
     end,
   },
@@ -382,7 +382,7 @@ return {
           },
         },
       }
-      local note = h.tm:getChannel(1).columns.notes[1].events[1]
+      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(note, { endppq = util.OPEN })
       h.tm:flush()
 
@@ -412,7 +412,7 @@ return {
       }
       local function paByRow()
         local out = {}
-        for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
           if e.evType == 'pa' then out[e.ppq] = e end
         end
         return out
@@ -448,7 +448,7 @@ return {
       }
       local function paRows()
         local rows = {}
-        for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
           if e.evType == 'pa' then rows[#rows + 1] = e.ppq end
         end
         table.sort(rows)

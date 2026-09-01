@@ -53,7 +53,7 @@ end
 -- Note-host replace parks: the authored note leaves the take and remains the
 -- visible, editable surface in channels[chan].parked.
 local function parkedHost(h)
-  return h.tm:getChannel(1).parked[1]
+  return h.tm:getChannel(1).parked.notes[1]
 end
 
 -- Host + retrig under swing and delay. Shared across the G-tests.
@@ -128,7 +128,7 @@ return {
       h.tm:flush()
 
       t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 0, 'no fxNote survives fx removal')
-      t.falsy(h.tm:getChannel(1).parked[1], 'nothing left parked')
+      t.falsy(h.tm:getChannel(1).parked.notes[1], 'nothing left parked')
       local restored
       for _, n in ipairs(h.fm:dump().notes) do
         if not n.derived then restored = n end
@@ -155,7 +155,7 @@ return {
       h.tm:flush()
 
       local cell
-      for _, ev in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, ev in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if ev.uuid == uuid then cell = ev end
       end
       t.truthy(cell, 'the restored note is present as a grid cell')
@@ -361,7 +361,7 @@ return {
       h.tm:addEvent({ evType = 'pa', ppq = 30, chan = 1, pitch = 60, vel = 90 })
       h.tm:flush()
       local pa
-      for _, evt in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, evt in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if evt.evType == 'pa' and evt.ppq == 30 then pa = evt end
       end
       t.truthy(pa, "the PA seats in the parked host's lane column")
@@ -400,7 +400,7 @@ return {
 
       t.eq(h.tm:fxRealisation('fxr-nope'), nil, 'a uuid that runs no chain has no realisation at all')
 
-      for lane, column in ipairs(h.tm:getChannel(1).columns.notes) do
+      for lane, column in ipairs(h.tm:getChannel(1).onTake.notes) do
         for _, evt in ipairs(column.events) do
           t.falsy(evt.derived, 'lane ' .. lane .. ' column carries no derived event')
         end

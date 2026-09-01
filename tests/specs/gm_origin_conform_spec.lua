@@ -123,13 +123,13 @@ return {
 
       local function lane(n)
         local out = {}
-        for _, ev in ipairs(h.tm:getChannel(1).columns.notes[n].events) do
+        for _, ev in ipairs(h.tm:getChannel(1).onTake.notes[n].events) do
           if ev.evType ~= 'pa' then out[#out + 1] = ev end
         end
         return out
       end
 
-      local notes2 = h.tm:getChannel(1).columns.notes[2]
+      local notes2 = h.tm:getChannel(1).onTake.notes[2]
       t.falsy(notes2 and #lane(2) > 0,
         'no lane-2 bump: instance 1 and its sibling copy do not collide')
 

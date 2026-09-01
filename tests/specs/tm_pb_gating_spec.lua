@@ -31,14 +31,14 @@ return {
         { ppq = 480, chan = 1, evType = 'pb', val = 0 },
         { ppq = 480, chan = 2, evType = 'pb', val = 0 },
       } } }
-      local before1 = h.tm:getChannel(1).columns.pb
-      local before2 = h.tm:getChannel(2).columns.pb
+      local before1 = h.tm:getChannel(1).onTake.pb
+      local before2 = h.tm:getChannel(2).onTake.pb
       t.truthy(before1 and before2, 'both channels surface a visible pb column')
 
       h.tm:rebuild(false)   -- no edit: every channel clean
 
-      t.eq(h.tm:getChannel(1).columns.pb, before1, 'clean chan 1 reuses its pb column object')
-      t.eq(h.tm:getChannel(2).columns.pb, before2, 'clean chan 2 reuses its pb column object')
+      t.eq(h.tm:getChannel(1).onTake.pb, before1, 'clean chan 1 reuses its pb column object')
+      t.eq(h.tm:getChannel(2).onTake.pb, before2, 'clean chan 2 reuses its pb column object')
     end,
   },
 
@@ -65,13 +65,13 @@ return {
       local h = harness.mk{ seed = { ccs = {
         { ppq = 480, chan = 2, evType = 'pb', val = 0 },
       } } }
-      local before2 = h.tm:getChannel(2).columns.pb
+      local before2 = h.tm:getChannel(2).onTake.pb
       t.truthy(before2, 'chan 2 surfaces a pb column')
 
       -- Document-data edit: arrives as dataChanged, now dirtyPb()s all 16 channels.
       h.ds:assign('extraColumns', { [1] = { notes = 1, pb = true } })
 
-      local after2 = h.tm:getChannel(2).columns.pb
+      local after2 = h.tm:getChannel(2).onTake.pb
       t.truthy(after2, 'chan 2 still surfaces a pb column')
       t.truthy(after2 ~= before2, 'extraColumns edit re-derived chan 2 (fresh column, not carried)')
     end,

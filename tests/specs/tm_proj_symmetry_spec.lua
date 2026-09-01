@@ -35,7 +35,7 @@ local function seeded(notes)
 end
 
 local function noteAt(tm, pitch)
-  for _, e in ipairs(tm:getChannel(1).columns.notes[1].events) do
+  for _, e in ipairs(tm:getChannel(1).onTake.notes[1].events) do
     if e.pitch == pitch then return e end
   end
 end

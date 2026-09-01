@@ -260,7 +260,7 @@ return {
       t.eq(n.ppq, 0, 'raw clamped to 0 (cannot go negative)')
 
       -- delayC is computed by tm's projection (line 1527).
-      local col1 = h.tm:getChannel(1).columns.notes[1]
+      local col1 = h.tm:getChannel(1).onTake.notes[1]
       local cn = col1.events[1]
       t.eq(cn.delayC, -250, 'delayC reflects the realised onset')
       t.truthy(cn.delay ~= cn.delayC, 'divergence flag fires (delay ~= delayC)')
@@ -291,7 +291,7 @@ return {
       h.ec:setPos(0, 2, 5)
       h.vm:editEvent(col, col.cells[0], 5, string.byte('5'), false)  -- A.delay = 500 → A.raw = 120
 
-      local col1 = h.tm:getChannel(1).columns.notes[1]
+      local col1 = h.tm:getChannel(1).onTake.notes[1]
       local A, B
       for _, e in ipairs(col1.events) do
         if e.ppq == 0   then A = e end

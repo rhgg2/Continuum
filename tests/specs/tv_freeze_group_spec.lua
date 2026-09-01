@@ -154,7 +154,7 @@ return {
       end
       t.truthy(promoted > 0, 'the arp promoted notes')
 
-      local pbCol = h.tm:getChannel(1).columns.pb
+      local pbCol = h.tm:getChannel(1).onTake.pb
       t.truthy(pbCol, 'the frozen sine left a pb column')
       local survivors = 0
       for _, e in ipairs(pbCol.events) do

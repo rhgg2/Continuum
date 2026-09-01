@@ -66,7 +66,7 @@ return {
 
       -- Expansion + microtonal detune + absorbers must actually have happened --
       -- else "byte-identical" is satisfied vacuously.
-      local host = h.tm:getChannel(1).parked[1]
+      local host = h.tm:getChannel(1).parked.notes[1]
       t.truthy(host, 'the host is parked off-take')
       local fns = fxNotesOf(h.fm:dump(), host.uuid)
       t.eq(#fns, 4, 'trill over a 1-QN window at 1/4-QN period yields 4 fxNotes (all hits derived)')
@@ -94,7 +94,7 @@ return {
       h.tm:flush()
 
       local dump = h.fm:dump()
-      local host = h.tm:getChannel(1).parked[1]
+      local host = h.tm:getChannel(1).parked.notes[1]
       t.eq(host.pitch, 60, 'the parked host keeps its pitch')
       local fns = fxNotesOf(dump, host.uuid)
       t.deepEq({ fns[1].ppq, fns[2].ppq, fns[3].ppq, fns[4].ppq }, { 0, 60, 120, 180 },
@@ -143,7 +143,7 @@ return {
                       vel = 100, detune = 0, delay = 0, lane = 1, fx = trill2 })
       h.tm:flush()
 
-      local host = h.tm:getChannel(1).parked[1]
+      local host = h.tm:getChannel(1).parked.notes[1]
       local fns  = fxNotesOf(h.fm:dump(), host.uuid)
       t.deepEq({ fns[2].pitch, fns[2].detune or 0 }, { 62, 0 },
         'the alternation stands 200 cents above the host')
@@ -167,7 +167,7 @@ return {
                       fx = trill2 })
       h.tm:flush()
 
-      local host = h.tm:getChannel(1).parked[1]
+      local host = h.tm:getChannel(1).parked.notes[1]
       t.eq(host.intentCents, 6000, 'fixture check: the parked host keeps the step it was written on')
       local fns = fxNotesOf(h.fm:dump(), host.uuid)
       t.deepEq({ fns[1].intentCents, fns[2].intentCents, fns[3].intentCents, fns[4].intentCents },
@@ -186,16 +186,16 @@ return {
       h.tm:flush()
 
       local sounded = {}
-      for i, n in ipairs(fxNotesOf(h.fm:dump(), h.tm:getChannel(1).parked[1].uuid)) do
+      for i, n in ipairs(fxNotesOf(h.fm:dump(), h.tm:getChannel(1).parked.notes[1].uuid)) do
         sounded[i] = { n.pitch, n.detune }
       end
 
       -- Only the intent moves, so the take sounds exactly as it did and nothing but the
       -- name can tell the reconcile that the notes standing there are stale.
-      h.tm:assignParked(h.tm:getChannel(1).parked[1], { intentCents = 6100 })
+      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { intentCents = 6100 })
       h.tm:flush()
 
-      local fns = fxNotesOf(h.fm:dump(), h.tm:getChannel(1).parked[1].uuid)
+      local fns = fxNotesOf(h.fm:dump(), h.tm:getChannel(1).parked.notes[1].uuid)
       t.deepEq({ fns[1].intentCents, fns[2].intentCents, fns[3].intentCents, fns[4].intentCents },
         { 6100, 6300, 6100, 6300 },
         'the derived notes follow the host onto the step it now names')

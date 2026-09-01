@@ -20,7 +20,7 @@ end
 -- The host: parked off-take once it carries a discrete kind, else the sole
 -- authored (non-derived) take note.
 local function hostUuid(h)
-  local parked = h.tm:getChannel(1).parked[1]
+  local parked = h.tm:getChannel(1).parked.notes[1]
   if parked then return parked.uuid end
   for _, n in ipairs(h.fm:dump().notes) do if not n.derived then return n.uuid end end
 end

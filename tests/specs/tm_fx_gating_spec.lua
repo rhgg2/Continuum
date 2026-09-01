@@ -19,7 +19,7 @@ end
 -- A trill parks its host and stands its own notes in the lane, so the host's uuid comes off
 -- the parked cell.
 local function parkedHostUuid(h, chan)
-  for _, cell in ipairs(h.tm:getChannel(chan).parked or {}) do
+  for _, cell in ipairs(h.tm:getChannel(chan).parked.notes or {}) do
     if cell.fx then return cell.uuid end
   end
 end
@@ -50,7 +50,7 @@ end
 
 -- A note carrying fx is its own host, and an augment chain leaves it on the take.
 local function hostUuid(h, chan)
-  for _, e in ipairs(h.tm:getChannel(chan).columns.notes[1].events) do
+  for _, e in ipairs(h.tm:getChannel(chan).onTake.notes[1].events) do
     if e.fx then return e.uuid end
   end
 end
@@ -114,7 +114,7 @@ return {
       -- The far note is the dirt; the host at [0,240) is out of every emit scope, so it is
       -- kept rather than re-run and emits no record this rebuild.
       local far
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.ppq == 1920 then far = e end
       end
       h.tm:assignEvent(far, { pitch = 65 }); h.tm:flush()
@@ -164,7 +164,7 @@ return {
       h.tm:addEvent(plainNote(1, 480)); h.tm:flush()
       h.tm:addEvent(plainNote(1, 720)); h.tm:flush()
 
-      t.falsy(h.tm:getChannel(2).columns.pb, 'chan 2 seats stay hidden -- no pb column surfaces')
+      t.falsy(h.tm:getChannel(2).onTake.pb, 'chan 2 seats stay hidden -- no pb column surfaces')
       t.deepEq(pbSeatsOf(h.fm:dump(), 2), before,
         'frozen chan 2 pb seat stream is byte-identical -- its generators never re-ran')
     end,

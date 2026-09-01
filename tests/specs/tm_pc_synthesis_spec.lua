@@ -25,7 +25,7 @@ local function uuidOfNote(mm, chan, pitch)
 end
 
 local function laneEvent(tm, chan, lane, i)
-  return tm:getChannel(chan).columns.notes[lane].events[i]
+  return tm:getChannel(chan).onTake.notes[lane].events[i]
 end
 
 return {
@@ -342,7 +342,7 @@ return {
       -- Walk all chan-1 lane events; the surviving pitch-64 note should
       -- have sampleShadowed cleared.
       local survivor
-      for _, lane in ipairs(h.tm:getChannel(1).columns.notes) do
+      for _, lane in ipairs(h.tm:getChannel(1).onTake.notes) do
         for _, evt in ipairs(lane.events) do
           if evt.pitch == 64 then survivor = evt end
         end
@@ -393,7 +393,7 @@ return {
       }
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 5 }, { ppq = 480, val = 3 } })
       local stolen
-      for _, lane in ipairs(h.tm:getChannel(1).columns.notes) do
+      for _, lane in ipairs(h.tm:getChannel(1).onTake.notes) do
         for _, evt in ipairs(lane.events) do
           if evt.pitch == 64 and evt.evType ~= 'pa' then stolen = evt end
         end

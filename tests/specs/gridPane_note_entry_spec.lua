@@ -68,7 +68,7 @@ local function letterKey(ch) return fakeImGui.Key_A + (string.byte(ch) - string.
 
 -- Onset lookup straight from tm, as the chord/value specs do.
 local function noteAt(h, lane, ppq)
-  local laneCol = h.tm:getChannel(1).columns.notes[lane]
+  local laneCol = h.tm:getChannel(1).onTake.notes[lane]
   for _, evt in ipairs(laneCol and laneCol.events or {}) do
     if evt.ppq == ppq then return evt end
   end

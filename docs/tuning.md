@@ -656,7 +656,7 @@ preceding note.
 **5** Authored pbs the window covers **park off-take** (the unified
 `fxParked` stash, `evType='pb'`) so every on-take pb in the window is a
 derived seat — exclusive ownership. They stay visible in-column via the
-`parkedPb` render union and restore to the take when the region leaves.
+`parked.pb` render union and restore to the take when the region leaves.
 Each wire raw is `centsToRaw(curve + detune)` — no carrier, no add-bank
 slot. See `docs/generators.md` § pb and cc.
 

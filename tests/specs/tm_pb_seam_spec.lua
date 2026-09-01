@@ -70,7 +70,7 @@ local function pool(h)
 end
 
 local function lane1Cell(h, ppq)
-  for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
     if e.ppq == ppq then return e end
   end
   t.truthy(false, 'fixture check: a lane-1 note stands at ' .. ppq)

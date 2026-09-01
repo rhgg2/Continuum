@@ -41,7 +41,7 @@ end
 
 -- The channel's pb column by ppq. No swing here, so a cell's logical ppq is its raw one.
 local function column(h)
-  local col = h.tm:getChannel(1).columns.pb
+  local col = h.tm:getChannel(1).onTake.pb
   t.truthy(col, 'fixture check: the channel surfaces a pb column')
   local byPpq = {}
   for _, e in ipairs(col.events) do byPpq[e.ppq] = e end
@@ -49,7 +49,7 @@ local function column(h)
 end
 
 local function noteCell(h, ppq)
-  for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
     if e.ppq == ppq then return e end
   end
   t.truthy(false, 'fixture check: a lane-1 note stands at ' .. ppq)

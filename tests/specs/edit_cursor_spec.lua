@@ -617,8 +617,8 @@ return {
 
       -- Sanity: A and B share lane 1 (intent intervals don't overlap).
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1, 'A and B share a lane in intent space')
-      t.eq(#ch.columns.notes[1].events, 2, 'both notes in lane 1')
+      t.eq(#ch.onTake.notes, 1, 'A and B share a lane in intent space')
+      t.eq(#ch.onTake.notes[1].events, 2, 'both notes in lane 1')
 
       h.ec:setPos(0, 2, 1)  -- cursorNoteBefore at row 0 picks A
       h.cmgr:invoke('growNote')
@@ -666,7 +666,7 @@ return {
       h.vm:setGridSize(80, 16)
 
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (intents touch at logical 60)')
+      t.eq(#ch.onTake.notes, 1, 'A and B share lane 1 (intents touch at logical 60)')
 
       h.ec:setPos(0, 2, 1)  -- cursorNoteBefore picks A
       h.cmgr:invoke('growNote')
@@ -703,7 +703,7 @@ return {
       h.vm:setGridSize(80, 40)
 
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (intents touch)')
+      t.eq(#ch.onTake.notes, 1, 'A and B share lane 1 (intents touch)')
 
       h.ec:setPos(0, 2, 1)  -- cursorNoteBefore at row 0 picks A
       h.cmgr:invoke('growNote')
@@ -748,7 +748,7 @@ return {
       h.vm:setGridSize(80, 16)
 
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (different pitch, no overlap)')
+      t.eq(#ch.onTake.notes, 1, 'A and B share lane 1 (different pitch, no overlap)')
 
       h.ec:setPos(0, 2, 1)  -- cursorNoteBefore picks A
       h.cmgr:invoke('nudgeForward')
@@ -781,7 +781,7 @@ return {
       h.vm:setGridSize(80, 40)
 
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.columns.notes, 1, 'A and B share lane 1 (overlap within lenient threshold)')
+      t.eq(#ch.onTake.notes, 1, 'A and B share lane 1 (overlap within lenient threshold)')
 
       h.ec:setPos(3, 2, 1)  -- on B's onset row
       h.cmgr:invoke('nudgeBack')

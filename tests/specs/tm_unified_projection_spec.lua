@@ -83,7 +83,7 @@ return {
       t.eq(A.endppq, 140,       "A's tail retro-clipped to B's clamped onset")
 
       local Bsurf
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.ppq == 180 then Bsurf = e end
       end
       t.truthy(Bsurf,           'B projected to tv surface')

@@ -8,7 +8,9 @@ automatically whenever mm or cm fires.
 ## Channel & column model
 
 16 channels, numbered 1..16 as in mm, one per MIDI channel. Each channel
-carries a `columns` table:
+carries its authored events in two halves, named for the side of the take
+they sit on: `onTake` is what mm holds, `parked` is what an fx replace
+window took off it (§ Lane occupancy). `onTake` is by column:
 
 | kind     | shape                                  | source                    |
 |----------|----------------------------------------|---------------------------|
@@ -21,6 +23,16 @@ carries a `columns` table:
 Every column has `events` (array sorted by **logical** ppq). `cc` columns
 additionally carry `cc` (the controller number). Presentation order is a
 tv concern — tm imposes none.
+
+`parked` mirrors those names — `notes`, `ccs`, `pb`, `pa` — but holds flat
+lists of render-ready events rather than columns, each event carrying the
+lane or CC number that places it. The two halves differ in representation
+because of how each arrives: mm reads into lanes, while one flat stash
+(`fxParked`) splits by type. Nothing about the population differs.
+
+A **cell** is a place — a row × column position tv's grid draws, which an
+event may occupy or contend for. tm has no places, only events and the
+lanes and columns they sit in.
 
 Poly-aftertouch (`pa`) events do **not** get their own column. They
 attach to the note column whose voice they modulate (see *PA binding*
@@ -68,7 +80,7 @@ under the `lane` key. Lane counts are stable across rebuilds via
 
 `extraColumns` is also the single source of "columns the user has opened
 per channel" — columns present in extras but not backed by events are
-materialised as empty, so consumers see a uniform `channel.columns`
+materialised as empty, so consumers see a uniform `channel.onTake`
 irrespective of whether a column is data-driven or user-opened.
 
 One kind of column is opened from elsewhere: a cc lane driving an fx param.
@@ -98,7 +110,7 @@ through its doors (`index.add`, `index.delete`, `index.move`,
 
 Maintenance through those doors is identity-based: `index.delete` finds its
 entry by object identity, so a caller hands the verbs mm's canonical record and
-never a projection of one. A projected column cell carries the same uuid and is
+never a projection of one. A projected column event carries the same uuid and is
 a different table, so removing one strands the raw entry — invisible to a
 uuid-holed read of mm, and exposed the moment a splice reads the index.
 `deleteLowlevel` resolves through `byUuid` before removing, for that reason.
@@ -114,7 +126,7 @@ all six lists.
 An event's `uuid` is its handle everywhere: durable across rebuilds and
 reloads, stable under any assign, and what `tm:byUuid` and every mm verb
 take. What um's records add is `realised` — set on entries built from an mm
-clone, absent on staged adds and on restored parked cells until the park
+clone, absent on staged adds and on restored parked events until the park
 stage's `mm:add` lands. Presence, and not the uuid, is what says "this event
 exists in mm, write through to it"; a parked spec keeps its uuid the whole
 time it is off-take.
@@ -165,7 +177,7 @@ boundary, `rebuildInternals` writes mm's own column clones, and
 the entry lifecycle.
 
 All three go through `index.assign(entry, field, value)`, the entry-side twin of
-`setCell` for column cells (§ Note-lane renewal): skip the no-op, and
+`setEvent` for column events (§ Note-lane renewal): skip the no-op, and
 where the field is one of `index.order`'s keys, re-true the containing
 list — inline, or flagged for the open `index.withDeferredSort` block to sort
 once at its close. Only `ppq` of the three actually stains a sort key, but
@@ -228,15 +240,15 @@ captures the `wholesale` bit at the top of `rebuild`, before the pipeline's
 own nested `mm:modify` calls re-fire `'reload'` and would otherwise clear it.
 
 Note entries also carry `colEvt` — the seat stamp. As the rebuild seats a
-column cell (internals, externals, or a restored parked note as the park
-stage's own commit lands it), it files the cell on the note's entry via
-`index.stampColEvt`. The stamp is how raw consumers reach the pass's live cell
+column event (internals, externals, or a restored parked note as the park
+stage's own commit lands it), it files the event on the note's entry via
+`index.stampColEvt`. The stamp is how raw consumers reach the pass's live event
 without a per-pass column scan, and it must outlive reconciliation:
 `refreshEntry`'s sweep spares um's own decoration (`realised`, `colEvt`),
 and the remove-and-reinsert path carries the stamp onto the fresh entry.
 Re-seating overwrites it; a wholesale reload rebuilds entries bare, and the
 same pass's seating restamps them (the head reload runs before any stage).
-A restored park cell's stamp is likewise a bare write rather than a `setCell`:
+A restored park event's stamp is likewise a bare write rather than a `setEvent`:
 `realised` is bookkeeping no renderer reads, and the restore already renewed
 its lane when it re-entered the column.
 
@@ -277,7 +289,7 @@ correct. Closure belongs to the tail walk, computed against that same index (§ 
 visits, and what it emits).
 
 The cc family splices seed by seed rather than row by row (`spliceChannelCCs`):
-each cc/at/pc seed excises the cell it carries — an exact-row seek matched on
+each cc/at/pc seed excises the event it carries — an exact-row seek matched on
 uuid — and re-clones its survivor from `mm:byUuid`, so neither O(channel) pass
 remains. A fresh add has no uuid when its seed is born, mm stamping one at
 commit, so the seed holds the snapshotted record itself and reads the uuid off
@@ -512,8 +524,8 @@ was dormant gets consumed, and when there is none this gate stops the pass.
 `frame` is the handle the pipeline mutates and the accessors publish. Its
 `channels` map swaps each pass — `newPass` mints the fresh one and hands the
 old back for the carry-forward loop to read the clean channels out of — and
-the operations that seat cells travel on the handle beside it: `spliceCell`,
-`setCell`, `renewLane`, `markRenewed`, `orderLane` and `nextOnLane`. Cells are
+the operations that seat events travel on the handle beside it: `spliceEvent`,
+`setEvent`, `renewLane`, `markRenewed`, `orderLane` and `nextOnLane`. Events are
 self-describing, so each takes the frame's own coordinates.
 
 The pipeline mutates what it was handed and returns what it builds. The
@@ -720,7 +732,7 @@ chain removed, a freeze — has already landed in the document, so both halves
 of a lane answer to the document from here on.
 
 `clipNoteHosts` then gives each note host its clip, the lane clip of § Lane
-occupancy, on-take cells and stash cells alike. A region's span is authored,
+occupancy, on-take events and stash events alike. A region's span is authored,
 so only the note hosts are computed. The fx window set is those clips plus
 the fx regions, each host entering as a degenerate one-note region.
 
@@ -728,7 +740,7 @@ One pass serves the whole pipeline. Parking moves a host between the halves
 of its lane and moves no window: the clip counts both halves, and a host
 keeps its uuid, span and targets across the move. Each reader asks the frame
 which half a host is in at its own moment — the park scan passes over the
-hosts already parked, and fx expansion runs those from their stash cells.
+hosts already parked, and fx expansion runs those from their stash events.
 
 `buildFxWindows` holds the set. Every stream a host parks takes the host's
 own span, so one window per host is the whole fact — channel, span, host
@@ -751,11 +763,11 @@ lands them, keeping their uuid and fx. A
 restored cc lands on the exact ppq of the fill seat the wider window
 left on the take; under uuid addressing the two are distinct events, so
 the fill reconcile deletes that seat by its own handle and the authored
-value stands. A parked cell's render clip (`endppqC`) is the lane clip of § Lane
+value stands. A parked event's render clip (`endppqC`) is the lane clip of § Lane
 occupancy, so a parked tail stops at the first successor past its region
 whether that successor is on the take or parked beside it. `realiseParked`
 derives it through the one clip that section describes. Lane bound
-only, never pitch: a parked cell never reaches mm, so it carries pure intent
+only, never pitch: a parked event never reaches mm, so it carries pure intent
 — the same span an on-take host gets. The note del/adds ride the
 tail walk's atomic commit. See `docs/generators.md` § Output. Each pass's
 `scan` builds its `spec` inline at the scan site, where that pass's
@@ -782,9 +794,9 @@ set rather than in its own window pass.
 `rebuildPA` attaches each `pa` to the note column whose voice it
 modulates. It runs after column layout so the view and fx expansion read
 PAs inline, and after externals so foreign-MIDI PAs find their host. A parked PA is gone from `mm`, so it is re-projected from
-`frame.channels[chan].parkedPA` into its parked host's lane — visible
+`frame.channels[chan].parked.pa` into its parked host's lane — visible
 off-take, riding the note column as an on-take PA would. Both passes
-splice in order (`spliceCell`), so nothing downstream re-sorts.
+splice in order (`spliceEvent`), so nothing downstream re-sorts.
 
 ### Fx expansion
 
@@ -857,7 +869,7 @@ tie-break): the successor is nudged to `prev.ppq + 1`
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 
-Parked members bound on-take tails' lanes too: a parked cell has already
+Parked members bound on-take tails' lanes too: a parked event has already
 left the columns, but its lane geometry still applies to a preceding
 on-take tail sharing that lane. Parked is off-take, so it never bounds
 the wire (pitch), and a region's own tiles never read parked bounds at
@@ -915,7 +927,7 @@ predecessor.
 Successors come from one backward pass carrying, per lane and per pitch,
 the note last seen and that note's strict next — a neighbour sharing the
 current note's raw is no successor of it, so it hands over its own. Parked
-bounds come from a scan instead of a bucket, parked cells being few and read
+bounds come from a scan instead of a bucket, parked events being few and read
 only for the notes the sweep bounds.
 
 The walk **emits**. A nudged lane-1 onset moved every absorber seat
@@ -959,8 +971,8 @@ Synthesis runs in one place, and this stage is it. The delta goes to mm.
 Its `records` list comes from the channel's raw-index notes plus the
 fx-derived live ones, and feeds through the pure `reconcilePCsForChan`
 helper; records lost to lane priority get `sampleShadowed = true` for
-renderer dimming. A raw-index note carries its column cell as `cell` and
-marks through `setCell`; an fx-derived note holds no cell, so it carries
+renderer dimming. A raw-index note carries its column event as `evt` and
+marks through `setEvent`; an fx-derived note holds no event, so it carries
 the spec as `spec` and the field is written direct (§ Note-lane
 renewal). The flag is realisation, re-derived every rebuild, so a park
 round-trip drops it.
@@ -968,7 +980,7 @@ round-trip drops it.
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
 each seed onset to `[onset, next onset)` — the interval over which one note's
 PC prevails — and the existing set, the records and the pc-column splice all
-filter on them. A span carries both frames, since a projected column cell tests
+filter on them. A span carries both frames, since a projected column event tests
 logical where an mm record tests raw. Fresh derived output ungates the channel:
 an fx-born onset has no verb seed to name it, so a pass holding any unkept
 `noteLive` spec synthesises wholesale.
@@ -1013,7 +1025,7 @@ gate it and sidecar-less events reach columns in the raw frame, where
 `evt.endppq` is the AUTHORED logical ceiling (mm's `endppqL` stamp, or
 `util.OPEN` for a deliberately-unbounded tail). `evt.endppqC` is the
 LANE-clipped logical ceiling — render-only, plus the sounding extent a
-parked cell hands a generator. It is not the inversion of mm's raw
+parked event hands a generator. It is not the inversion of mm's raw
 `endppq`: the walk clips the wire further at the next same-pitch onset,
 and that clip never shows (§ Tail walk). An uncached note (no
 `endppqL` stamp in mm) has no authored ceiling, so it falls back to
@@ -1084,11 +1096,11 @@ replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, n
 
 ## Lane occupancy
 
-A lane's authored notes are its column's cells together with the parked cells that have left the
-take, and one clip reads both halves. `clippedSpanEnd` returns a cell's own ceiling — its authored
+A lane's authored notes are its column's events together with the parked events that have left the
+take, and one clip reads both halves. `clippedSpanEnd` returns an event's own ceiling — its authored
 `endppq`, or the take length — clipped to the strict-next authored onset on its lane. An fx
-host's window end and a parked cell's render clip are that same number, and one seek finds the
-successor that bounds both: `frame.nextOnLane` takes the nearer of the column's next cell and the
+host's window end and a parked event's render clip are that same number, and one seek finds the
+successor that bounds both: `frame.nextOnLane` takes the nearer of the column's next event and the
 lane's next parked one.
 
 Parking takes no onset out of that population, so a window stands where it stood. A note moves
@@ -1096,39 +1108,39 @@ between the halves and the lane it occupies is unchanged, and a host's chain sto
 its region has parked — the note the derived output stands in for.
 
 Membership reads the whole population; lane allocation reads the on-take half alone. A region's
-members are what sounds on its lanes, and a parked cell is one: it is the note the author sees, and
+members are what sounds on its lanes, and a parked event is one: it is the note the author sees, and
 the chain that parked it is a neighbour's business. Allocation asks a narrower question — which
 lanes the derived output may take — and a parked host's own tiles already hold its lane, so counting
 the host as well would push its output off the lane it was written on. `eachLaneSpan` walks either
 population: `membersOf` hands it the whole, `allocateRegionLanes` the column alone.
 
 The frame owns both halves. Every channel carries its parked list across the pass boundary, dirty
-or clean, since those cells are off-take and a wholesale mm re-read has no claim on them; the clip
+or clean, since those events are off-take and a wholesale mm re-read has no claim on them; the clip
 therefore reads a true lane from the pass's head, before the park stage rewrites the list. The lane
 buckets the seek reads are memoised against the list they index, and `renderUnion` replaces that
 list whole, so a stale index cannot be reached.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column —
 `rebuildInternals` routes it to the fx stage's existing set instead — so a column holds authored
-cells by construction and the clip needs no filter of its own.
+events by construction and the clip needs no filter of its own.
 
-`clipEnd` answers with a cached clip where the rebuild's dirt cannot have moved it: a cell reclips
+`clipEnd` answers with a cached clip where the rebuild's dirt cannot have moved it: an event reclips
 when its channel is wholesale-dirty, it is uncached, its own uuid is seeded (its move or length
 mutation), or a seed ppq fell inside its cached span (a neighbour onset that becomes the new clip).
 Everything else rides the cached end. Callers ask for a clip and get one; the cache is `clipEnd`'s
 alone to read and write, scoped to a block that exposes only it and `forgetClipEnds`. One cache
-serves on-take hosts and parked cells alike, since a uuid is in one half or the other and the rule
+serves on-take hosts and parked events alike, since a uuid is in one half or the other and the rule
 is the same either way.
 
 The reclip is walk-free for an on-take host. `byUuid[uuid].colEvt` (the seat stamp, § Incremental
-index reconciliation) back-links a host uuid to its live column cell, so a dirty host reclips by
+index reconciliation) back-links a host uuid to its live column event, so a dirty host reclips by
 seeking its own lane through `index.colEvtFor(uuid)` rather than the old per-channel walk that built
 every column's successor map up front.
 
 One path still walks the channel, and the reason is host discovery, not the cache. A wholesale-dirty
-channel leaves the fx-host index unable to reach a live cell, so `walkChannel` finds the hosts by
+channel leaves the fx-host index unable to reach a live event, so `walkChannel` finds the hosts by
 scanning the columns — and asks `clipEnd` for each, like every other caller. `perHost` returns false
-(forcing the walk) the moment it meets an indexed host with no live cell, so an unstamped host is
+(forcing the walk) the moment it meets an indexed host with no live event, so an unstamped host is
 never silently skipped.
 
 The cache is scoped to the bound take. `tm:rebuild` drops it on the branch a take swap or a
@@ -1140,25 +1152,25 @@ through `mm:setLength`, which fires a `wholesale=true` reload — that same bran
 channel walks afresh at the new `takeLen`.
 
 A rebuild clips once, and its two readers share the one cache: the stash render asks for every
-parked cell's render clip and `clipNoteHosts` for every host's span end, which for a parked host is
+parked event's render clip and `clipNoteHosts` for every host's span end, which for a parked host is
 the same number.
 
 **The reuse arm is unexercised by the suite.** Removing the seed-driven invalidation outright
 (reusing on any cache hit, dropping the seed test) leaves every spec green, so nothing
-distinguishes a cell riding a stale cached span from one that recomputes. A fixture reaching the arm
-needs all three of a warm cache, seeded dirt naming the cell, and a span end that moves. Until one
+distinguishes an event riding a stale cached span from one that recomputes. A fixture reaching the arm
+needs all three of a warm cache, seeded dirt naming the event, and a span end that moves. Until one
 exists, treat any change to this cache as unguarded.
 
 ## Fx window census
 
 `buildFxWindows` builds the pass's fx windows from two sources — authored `fxRegions` and the note
 host clips, which `clipNoteHosts` takes over both halves of every lane.
-The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's cell at once,
+The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's event at once,
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
 of it, so the frame's parked list is what declares which arm takes a given host: the clip pass skips
 an indexed uuid the stash holds, and fx expansion hands one to the arm that runs it from its stash
-cell. Without that a self-parking host would run its chain twice, and `curves.foldChains` would sum
+event. Without that a self-parking host would run its chain twice, and `curves.foldChains` would sum
 the two pb curves to twice the authored depth.
 
 `buildFxWindows` holds the pass's windows once: the window per host is the fact, and the per-target
@@ -1253,24 +1265,24 @@ one.
 Renewal is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseNotes` assigns only when it actually dropped a
-  cell; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
-  the park restore) go through `spliceCell(chan, lane, cell)`, which renews
+  event; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
+  the park restore) go through `spliceEvent(chan, lane, event)`, which renews
   before it splices, and the park unlink calls `renewLane(chan, lane)` itself.
   It takes the seeded rows and seeks each one into each lane rather than
-  testing every cell against a predicate, so a lane holding no seeded row
+  testing every event against a predicate, so a lane holding no seeded row
   costs a binary search and nothing else. A `claims` refinement narrows
   within the row cluster, which is how the parking PA sweep reuses it
   (matching PA type + uuid) instead of hand-rolling a second filtered copy.
-  The seek stands on cells being projected — `ppq` holds the logical row,
+  The seek stands on events being projected — `ppq` holds the logical row,
   so a seed's row is the lane's own sort key, and the cluster at it is
   contiguous whatever the note-before-PA tie-break does inside.
-- **content** — an in-place field write on an already-seated cell goes
-  through `setCell(cell, field, value)`, which renews only when the value
+- **content** — an in-place field write on an already-seated event goes
+  through `setEvent(event, field, value)`, which renews only when the value
   moves. Writing unconditionally would renew every bounded lane on every
   pass, because the tail walk restamps `endppqC` for each note it binds.
-  A record holding no cell is written direct instead: `setCell` reads
+  A record holding no event is written direct instead: `setEvent` reads
   `(chan, lane)` off whatever it is handed, so an off-take fx spec would
-  renew the lane its number names while that lane's own cells stand.
+  renew the lane its number names while that lane's own events stand.
 
 A lane renews at most once a pass. `renewLane` keeps the memo of what it
 has already cloned, and a caller that replaced the table itself records it
@@ -1278,13 +1290,13 @@ through `markRenewed`; `newPass` clears the memo with the channels map it
 belongs to.
 
 The failure is asymmetric — too pessimistic costs a re-place, too
-optimistic silently renders a stale cell — which is why the enumeration,
+optimistic silently renders a stale event — which is why the enumeration,
 not the conditional, is the work. The tail walk is the reach to watch:
 `settleOnset`'s `delayC` and `boundNote`'s `endppqC`/`endppq` land on notes
 no seed covered, in lanes otherwise carried whole.
 
 Two cases need no renewal. Wholesale and stale-swing channels get a
-brand-new `columns.notes`, so their identity is fresh by construction. And
+brand-new `onTake.notes`, so their identity is fresh by construction. And
 a local bound to `col.events` that outlives a renewal operates on the dead
 table — the read-only walks (`eachWindowNote`, `channelStreams`,
 `coverOnsets`) do not care, but the park scan did, which is why a note
@@ -1418,11 +1430,11 @@ wins the disagreement.
 ## Park identity
 
 `fxParked` is one flat list holding every parked type, and `findParked`
-is what an edit to a parked cell resolves through. Notes key by `uuid`;
+is what an edit to a parked event resolves through. Notes key by `uuid`;
 everything else by `(evType, chan, cc, pitch, ppq)`.
 
 `pitch` is there for PAs, which are the only type that can put two
-cells on one `(chan, ppq)` — one per host note. It is `pitch` and not
+events on one `(chan, ppq)` — one per host note. It is `pitch` and not
 `lane` because lane is a display attribute, and keying on it would
 mint a distinction the take cannot hold: two parked PAs differing only
 by lane would collapse into one the moment they were restored.
@@ -1430,17 +1442,17 @@ by lane would collapse into one the moment they were restored.
 A stash spec is **logical only**. It drops realised `ppq`/`endppq` and derives
 them fresh on restore via `fromLogical` under current swing, so a swing change
 under a parked chord reaches it as it reaches everything else. What a parked
-cell carries besides is the fields its backing addresses it by (`chan` +
+event carries besides is the fields its backing addresses it by (`chan` +
 `uuid` for notes, `chan` + `ppqL` for ccs) plus the authored ceiling as
 `endppq` — which is what lets the note move and resize machinery work on
-parked cells unchanged.
+parked events unchanged.
 
 ## Realisation by host
 
 **1** The ghost overlay asks one question — what does *this* chain realise —
 and asks it per frame, off a caret that moves without a rebuild
 (`docs/trackerView.md` § Ghost sampling). Answering at read time would mean
-walking every channel's derived notes and every parked cell in the document,
+walking every channel's derived notes and every parked event in the document,
 per frame, to discard nearly all of both. The rebuild already holds the
 answer: a derived spec carries its host's uuid as it is emitted, a park
 window carries the id of the chain that opened it, and the census names every
@@ -1470,7 +1482,7 @@ can realise on sixteen of them.
 **5** A stored global region is no host of its own (§ Channel & column
 model), so its uuid answers with the union
 of the hosts it expanded into — their derived notes, their claimed targets
-and the cells they parked. The entry therefore names the channels it realises
+and the events they parked. The entry therefore names the channels it realises
 on rather than one channel, and each note in it carries the channel of the
 host that emitted it.
 

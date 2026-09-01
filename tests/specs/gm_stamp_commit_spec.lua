@@ -23,7 +23,7 @@ end
 
 local function chanNotes(h, chan)
   local out = {}
-  for _, ev in ipairs(h.tm:getChannel(chan).columns.notes[1].events) do
+  for _, ev in ipairs(h.tm:getChannel(chan).onTake.notes[1].events) do
     if ev.evType ~= 'pa' then
       out[#out + 1] = { ppq = ev.ppq, pitch = ev.pitch, evt = ev }
     end

@@ -242,7 +242,7 @@ return {
         data = { swing = { global = 'c58' } },
       }
       local ch  = h.tm:getChannel(1)
-      local col = ch.columns.ccs[11]
+      local col = ch.onTake.ccs[11]
       t.truthy(col and col.events[1], 'cc column event present')
       t.eq(col.events[1].rpb, 4,
            'cc.rpb propagated from mm onto tm column event')

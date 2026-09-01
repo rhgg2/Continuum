@@ -173,7 +173,7 @@ return {
       t.eq(ccByCC(h.fm:dump(), 7).ppq, 139, 'cc raw reseated from ppqL')
 
       -- Column event must carry a live loc; route an assign through it.
-      local colE = h.tm:getChannel(1).columns.ccs[7].events[1]
+      local colE = h.tm:getChannel(1).onTake.ccs[7].events[1]
       h.tm:assignEvent(colE, { val = 99 })
       h.tm:flush()
       t.eq(ccByCC(h.fm:dump(), 7).val, 99, 'assign routes via restamped loc')

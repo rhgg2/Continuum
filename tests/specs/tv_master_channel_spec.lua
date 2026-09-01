@@ -453,7 +453,7 @@ return {
 
       t.eq(#(h.ds:get('fxRegions') or {}), 0, 'the chord froze it: the region is gone')
       local authored = 0
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if not e.derived then authored = authored + 1 end
       end
       t.truthy(authored > 1, 'and the arp output stands as authored notes')

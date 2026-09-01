@@ -21,7 +21,7 @@ end
 
 local function pcCol(h, chan)
   local out = {}
-  for _, e in ipairs(h.tm:getChannel(chan).columns.pc.events) do
+  for _, e in ipairs(h.tm:getChannel(chan).onTake.pc.events) do
     out[#out + 1] = { ppq = e.ppq, val = e.val }
   end
   table.sort(out, function(a, b) return a.ppq < b.ppq end)
@@ -30,7 +30,7 @@ end
 
 local function pasInCol(h, chan)
   local out = {}
-  for _, col in ipairs(h.tm:getChannel(chan).columns.notes) do
+  for _, col in ipairs(h.tm:getChannel(chan).onTake.notes) do
     for _, e in ipairs(col.events) do
       if e.evType == 'pa' then out[#out + 1] = e.ppq end
     end
@@ -42,7 +42,7 @@ end
 -- Authored (visible) pbs projected into the pb column, as { ppq, cents }.
 local function authoredPbCol(h, chan)
   local out = {}
-  local col = h.tm:getChannel(chan).columns.pb
+  local col = h.tm:getChannel(chan).onTake.pb
   for _, e in ipairs((col and col.events) or {}) do
     if not e.hidden then out[#out + 1] = { ppq = e.ppq, cents = e.val } end
   end

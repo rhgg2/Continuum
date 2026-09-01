@@ -77,7 +77,7 @@ Rendered channel columns (post-rebuild, logical-frame, view-ready):
 
 ```lua
 local p = page('tracker'); local ch = p.tm:getChannel(2)
-return ch and ch.columns.notes
+return ch and ch.onTake.notes
 ```
 
 Edit-cursor position in ppq: `p.tm:editCursor()`.

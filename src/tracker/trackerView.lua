@@ -561,7 +561,7 @@ local function rowBounds(col, ppq, excludeEvt)
   local diff, same = notePreds(excludeEvt)
 
   local prevD, nextD = neighbourEvents({col}, ppq, diff)
-  local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, ppq, same)
+  local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).onTake.notes, ppq, same)
 
   local fullL      = grid.numRows * logPerRow
   local prevOnsetL = math.max(prevD and prevD.ppq or -1,    prevS and prevS.ppq or -1)
@@ -2788,7 +2788,7 @@ end
 -- Disjoint namespaces: a missed lookup falls through in that order.
 local function parkedByUuid(uuid)
   for chan = 1, 16 do
-    for _, cell in ipairs(tm:getChannel(chan).parked or {}) do
+    for _, cell in ipairs(tm:getChannel(chan).parked.notes or {}) do
       if cell.uuid == uuid then return cell end
     end
   end
@@ -4557,11 +4557,11 @@ function tv:rebuild(takeChanged)
     -- or not, so a global region has somewhere to be authored. see docs/trackerView.md § Addressing a chain
     if masterChannel and addFxCols(0) == 0 then addGridCol(0, 'fx', nil, {}) end
     for chan, channel in tm:channels() do
-      local c = channel.columns
+      local c = channel.onTake
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
       -- Replace-region parked pbs left the take but stay the displayed automation, as the parked
       -- chord/cc are unioned below. see docs/trackerView.md § Backings and parked cells
-      local parkedPb = channel.parkedPb or {}
+      local parkedPb = channel.parked.pb or {}
       if c.pb or #parkedPb > 0 then
         local events = c.pb and c.pb.events or {}
         if #parkedPb > 0 then
@@ -4575,7 +4575,7 @@ function tv:rebuild(takeChanged)
       -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
       -- the displayed chord: union each back into its lane. see docs/trackerView.md § Backings and parked cells
       local parkedByLane = {}
-      for _, m in ipairs(channel.parked or {}) do util.bucket(parkedByLane, m.lane, m) end
+      for _, m in ipairs(channel.parked.notes or {}) do util.bucket(parkedByLane, m.lane, m) end
       for lane, col in ipairs(c.notes) do
         local events = col.events
         if parkedByLane[lane] then
@@ -4590,7 +4590,7 @@ function tv:rebuild(takeChanged)
       -- Replace-region parked ccs left the take but stay the displayed automation: union each
       -- back into its cc column, as the parked chord is unioned above. see docs/trackerView.md § Backings and parked cells
       local parkedCCByNum = {}
-      for _, m in ipairs(channel.parkedCC or {}) do util.bucket(parkedCCByNum, m.cc, m) end
+      for _, m in ipairs(channel.parked.ccs or {}) do util.bucket(parkedCCByNum, m.cc, m) end
       local ccNums = {}
       for n in pairs(c.ccs) do util.add(ccNums, n) end
       table.sort(ccNums)
@@ -4692,7 +4692,7 @@ function tv:rebuild(takeChanged)
     -- edits route to the stash while adds elsewhere in its span stay plain (membership
     -- {self} is closed -- nothing can join a note host, unlike a region window).
     for chan, channel in tm:channels() do
-      for _, cell in ipairs(channel.parked or {}) do
+      for _, cell in ipairs(channel.parked.notes or {}) do
         local col = colFor(cell)
         if col then col.cellKind[ppqRowOf(cell.ppq, chan)] = 'parked' end
       end

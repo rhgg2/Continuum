@@ -87,7 +87,7 @@ return {
       h.tm:flush()
 
       local A
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.pitch == 60 then A = e end
       end
       t.truthy(A, 'OPEN straddler survives the clear')

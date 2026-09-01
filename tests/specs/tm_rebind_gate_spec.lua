@@ -36,7 +36,7 @@ end
 
 -- tm's column cell: its identity dies the moment the channel re-materialises.
 local function firstCell(h, chan)
-  return h.tm:getChannel(chan).columns.notes[1].events[1]
+  return h.tm:getChannel(chan).onTake.notes[1].events[1]
 end
 
 local function pbOn(h, chan)

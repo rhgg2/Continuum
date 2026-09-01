@@ -144,7 +144,7 @@ return {
       addVibHost(h)
       t.truthy(#pbSeatsOf(h.fm:dump(), 1) > 0, 'seats present with fx')
 
-      local hostEvt = h.tm:getChannel(1).columns.notes[1].events[1]
+      local hostEvt = h.tm:getChannel(1).onTake.notes[1].events[1]
       h.tm:assignEvent(hostEvt, { fx = util.REMOVE })
       h.tm:flush()
       t.eq(#pbSeatsOf(h.fm:dump(), 1), 0, 'no seat survives fx removal')
@@ -194,7 +194,7 @@ return {
       -- create-scan must recognise them by region (inside a previous window), not by tag.
       local function roundTrip() h.fm:load(); h.tm:rebuild() end
       local function shrinkTo(endppq)
-        local host = h.tm:getChannel(1).columns.notes[1].events[1]
+        local host = h.tm:getChannel(1).onTake.notes[1].events[1]
         h.tm:assignEvent(host, { endppq = endppq })
         h.tm:flush()
       end
@@ -210,7 +210,7 @@ return {
       local seats = pbSeatsOf(h.fm:dump(), 1)
       t.truthy(#seats > 0, 'seats present (non-vacuous)')
       t.eq(seats[#seats].ppq, 119, 'no stranded pb beyond the shrunk window')
-      t.falsy(h.tm:getChannel(1).columns.pb, 'no phantom authored pbs surface in the pb column')
+      t.falsy(h.tm:getChannel(1).onTake.pb, 'no phantom authored pbs surface in the pb column')
     end,
   },
 
@@ -221,7 +221,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       addVibHost(h)
-      local cols = h.tm:getChannel(1).columns
+      local cols = h.tm:getChannel(1).onTake
       t.falsy(next(cols.ccs or {}), 'no cc column -- pb-augment no longer bakes a carrier')
       t.falsy(cols.pb, 'the derived seats are hidden -- no pb column without an authored breakpoint')
     end,

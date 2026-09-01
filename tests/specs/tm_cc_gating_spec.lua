@@ -73,7 +73,7 @@ return {
       h.tm:addEvent(note(1, 0, 60)); h.tm:flush()
 
       -- Capture the carried cells by object identity: a splice that re-clones swaps these out.
-      local col = h.tm:getChannel(1).columns.ccs[7].events
+      local col = h.tm:getChannel(1).onTake.ccs[7].events
       local carried = {}
       for i, e in ipairs(col) do carried[i] = e end
       t.eq(#carried, 3, 'cc 7 column materialised its three cells')
@@ -82,7 +82,7 @@ return {
       -- A pure note add on chan 1: interval dirt with no cc-family seed.
       h.tm:addEvent(note(1, 720, 64)); h.tm:flush()
 
-      local after = h.tm:getChannel(1).columns.ccs[7].events
+      local after = h.tm:getChannel(1).onTake.ccs[7].events
       t.eq(#after, #carried, 'cc 7 column keeps its three cells')
       for i = 1, #carried do
         t.truthy(after[i] == carried[i], 'cc cell ' .. i .. ' is the carried object, not a re-clone')
@@ -102,18 +102,18 @@ return {
           { ppq = 240, chan = 1, evType = 'cc', cc = 74, val = 50 },
         } },
       }
-      local col7 = h.tm:getChannel(1).columns.ccs[7].events
+      local col7 = h.tm:getChannel(1).onTake.ccs[7].events
       local keep0, edited, keep480 = col7[1], col7[2], col7[3]
-      local sibling = h.tm:getChannel(1).columns.ccs[74].events[1]
+      local sibling = h.tm:getChannel(1).onTake.ccs[74].events[1]
 
       h.tm:assignEvent({ uuid = edited.uuid }, { val = 90 }); h.tm:flush()
 
-      local after7 = h.tm:getChannel(1).columns.ccs[7].events
+      local after7 = h.tm:getChannel(1).onTake.ccs[7].events
       t.eq(#after7, 3, 'cc 7 column keeps three cells')
       t.truthy(after7[1] == keep0,   'row 0 carries by identity')
       t.truthy(after7[3] == keep480, 'row 480 carries by identity')
       t.eq(after7[2].val, 90, 'the edited cell re-clones with the new value')
-      t.truthy(h.tm:getChannel(1).columns.ccs[74].events[1] == sibling,
+      t.truthy(h.tm:getChannel(1).onTake.ccs[74].events[1] == sibling,
         'the sibling column cell at the edited row carries by identity')
     end,
   },
@@ -127,15 +127,15 @@ return {
           { ppq = 240, chan = 1, evType = 'cc', cc = 74, val = 50 },
         } },
       }
-      local col7 = h.tm:getChannel(1).columns.ccs[7].events
+      local col7 = h.tm:getChannel(1).onTake.ccs[7].events
       local cellA, cellB = col7[1], col7[2]
-      local sibling = h.tm:getChannel(1).columns.ccs[74].events[1]
+      local sibling = h.tm:getChannel(1).onTake.ccs[74].events[1]
 
       -- An add's seed has no uuid at snapshot time; the splice must still land it.
       h.tm:addEvent({ evType = 'cc', ppq = 720, chan = 1, cc = 7, val = 40 }); h.tm:flush()
 
       -- Capture cell references, not the live events array: the carried column mutates in place.
-      local after = h.tm:getChannel(1).columns.ccs[7].events
+      local after = h.tm:getChannel(1).onTake.ccs[7].events
       local keptA, deleted, added = after[1], after[2], after[3]
       t.eq(#after, 3, 'the add landed as a third cell')
       t.eq(added.val, 40, 'the added cell carries its value')
@@ -144,11 +144,11 @@ return {
 
       h.tm:deleteEvent(deleted.uuid); h.tm:flush()
 
-      local final = h.tm:getChannel(1).columns.ccs[7].events
+      local final = h.tm:getChannel(1).onTake.ccs[7].events
       t.eq(#final, 2, 'the delete removed exactly its cell')
       t.truthy(final[1] == keptA and final[2] == added,
         'remaining cells carry by identity across the delete')
-      t.truthy(h.tm:getChannel(1).columns.ccs[74].events[1] == sibling,
+      t.truthy(h.tm:getChannel(1).onTake.ccs[74].events[1] == sibling,
         'the sibling column cell at the deleted row carries by identity')
     end,
   },

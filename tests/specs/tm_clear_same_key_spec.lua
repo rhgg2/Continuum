@@ -97,7 +97,7 @@ return {
       t.eq(wire.endppqL, 480, 'endppqL is intent and never sees the clip')
 
       local col
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
         if e.ppq == 0 then col = e end
       end
       t.truthy(col, 'the earlier note holds its column cell')

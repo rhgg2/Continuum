@@ -42,7 +42,7 @@ return {
       h.ds:assign('fxRegions',
         { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
-      t.eq(#h.tm:getChannel(1).parked, 1, 'the covered note parks off the take')
+      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the covered note parks off the take')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
@@ -53,7 +53,7 @@ return {
       t.eq(restored.endppq,  379, 'restored end lands in the raw frame, not at the logical 360')
       t.eq(restored.endppqL, 360, 'and carries the logical ceiling alongside it')
 
-      local cell = h.tm:getChannel(1).columns.notes[1].events[1]
+      local cell = h.tm:getChannel(1).onTake.notes[1].events[1]
       t.eq(cell.uuid, uuid, 'the restored cell is back in its lane')
       t.truthy(cell.endppqC, 'the tail walk reached the restored cell and wrote its ceiling')
       -- Rounded: endppqC is toLogical of the *rounded* raw end, so it lands a fifth of
@@ -88,7 +88,7 @@ return {
       h.ds:assign('fxRegions',
         { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
-      t.eq(#h.tm:getChannel(1).parked, 1, 'only the covered note parks; the clipper sits outside')
+      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'only the covered note parks; the clipper sits outside')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
@@ -99,7 +99,7 @@ return {
       t.eq(restored.endppq,  379, 'the restored end is the lane clip, not the ceiling 619')
       t.eq(restored.endppqL, 600, 'and the authored logical ceiling rides alongside')
 
-      local cell = findBy(h.tm:getChannel(1).columns.notes[1].events, 'uuid', uuid)
+      local cell = findBy(h.tm:getChannel(1).onTake.notes[1].events, 'uuid', uuid)
       t.truthy(cell, 'the restored cell is back in its lane, alongside the clipper')
       t.eq(util.round(cell.endppqC), 360,
         'the walk reached the cell and wrote the clipped ceiling, logical')

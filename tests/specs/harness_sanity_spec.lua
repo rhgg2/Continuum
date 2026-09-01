@@ -26,14 +26,14 @@ return {
     name = 'mm fires callbacks after modify() — tm rebuilds',
     run = function(harness)
       local h = harness.mk()
-      t.eq(#h.tm:getChannel(1).columns.notes[1].events, 0, 'lane 1 empty initially')
+      t.eq(#h.tm:getChannel(1).onTake.notes[1].events, 0, 'lane 1 empty initially')
 
       h.fm:modify(function()
         h.fm:add{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
       end)
 
       -- tm only sees this if the mm callback fired AND tm is attached.
-      t.eq(#h.tm:getChannel(1).columns.notes[1].events, 1, 'note landed via callback chain')
+      t.eq(#h.tm:getChannel(1).onTake.notes[1].events, 1, 'note landed via callback chain')
     end,
   },
 
@@ -90,7 +90,7 @@ return {
 
       local b = harness.mk()
       t.eq(#b.fm:dump().notes, 0, 'scenario B starts empty')
-      t.eq(#b.tm:getChannel(1).columns.notes[1].events, 0, 'tm in B has empty lane 1')
+      t.eq(#b.tm:getChannel(1).onTake.notes[1].events, 0, 'tm in B has empty lane 1')
     end,
   },
 
