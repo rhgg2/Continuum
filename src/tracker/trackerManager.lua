@@ -2857,13 +2857,39 @@ local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
 end
 
--- Off-take render union: parked specs stay visible in-column as render-ready events. Each field is
--- replaced whole, which is what lets an index over one be memoised against the list it indexes.
-local function renderUnion(field, newParked, toEvent)
-  for chan = 1, 16 do frame.channels[chan].parked[field] = {} end
-  for _, spec in ipairs(newParked) do
-    util.add(frame.channels[spec.chan].parked[field], toEvent(spec))
+-- Positional match over contents, not identity; endppqC excluded since it's clipParked's own,
+-- derived after installation. See docs/trackerManager.md § Note-lane renewal.
+local function sameParked(prior, built)
+  if not prior or #prior ~= #built then return false end
+  for i, evt in ipairs(built) do
+    local was = prior[i]
+    for k, v in pairs(evt) do
+      if k ~= 'endppqC' and not util.deepEq(was[k], v) then return false end
+    end
+    for k in pairs(was) do if k ~= 'endppqC' and evt[k] == nil then return false end end
   end
+  return true
+end
+
+-- Off-take render union: parked specs stay visible in-column as render-ready events. A field's list
+-- is replaced only where its contents moved, which is what lets an index over one outlive the pass.
+--invariant: a parked list changes identity iff its contents changed (tv's carry key, as note lanes)
+--post: unsafe result[spec] = its installed event -- the prior list's own wherever contents held
+local function renderUnion(field, newParked, toEvent)
+  local built, specs = {}, {}
+  for _, spec in ipairs(newParked) do
+    util.bucket(built, spec.chan, toEvent(spec))
+    util.bucket(specs, spec.chan, spec)
+  end
+  local installed = {}
+  for chan = 1, 16 do
+    local parked = frame.channels[chan].parked
+    local fresh  = built[chan] or {}
+    local kept   = sameParked(parked[field], fresh) and parked[field] or fresh
+    parked[field] = kept
+    for i, spec in ipairs(specs[chan] or {}) do installed[spec] = kept[i] end
+  end
+  return installed
 end
 
 local function persistParked(key, newParked, prior)
@@ -2890,13 +2916,19 @@ local function parkedUuids()
   return parked
 end
 
+-- The clip comes off the lane's strict-next onset, so it moves with the stash standing still: a list
+-- whose clip moved sheds its table, like any other change to its contents.
 local function clipParked()
   local takeLen = tm:length()
   for chan = 1, 16 do
     local members = frame.channels[chan].parked.notes
     if #members > 0 then
-      local takeLenL = tm:toLogical(chan, takeLen)
-      for _, m in ipairs(members) do m.endppqC = clipEnd(m, takeLenL) end
+      local takeLenL, moved = tm:toLogical(chan, takeLen), false
+      for _, m in ipairs(members) do
+        local clip = clipEnd(m, takeLenL)
+        if m.endppqC ~= clip then m.endppqC = clip; moved = true end
+      end
+      if moved then frame.channels[chan].parked.notes = util.clone(members) end
     end
   end
 end
@@ -3036,11 +3068,12 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
 
     -- Off-take membership for the generator + grid: each is a render-ready logical event
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
-    renderUnion('notes', parkedNotes, function(spec)
-      local evt = parkedEvent(spec)
-      util.bucket(parkedByHost, coveredBy(spec), evt)   -- the overlay suppresses only its own host's
-      return evt
-    end)
+    local installed = renderUnion('notes', parkedNotes, parkedEvent)
+    -- The overlay suppresses only its own host's originals, and gridPane matches them by identity, so
+    -- the share names what the frame installed, not a candidate a kept list dropped.
+    for _, spec in ipairs(parkedNotes) do
+      util.bucket(parkedByHost, coveredBy(spec), installed[spec])
+    end
     clipParked()
   end
 

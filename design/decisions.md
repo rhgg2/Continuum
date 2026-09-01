@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — renderUnion keeps a parked list whose contents held rather than minting all
+  sixteen every pass, so the lane-bucket and union memos span passes and a parked-bearing lane
+  carries tv's cells. Nothing owns a parked list the way a mutator owns a lane, and a pass renders
+  the notes twice from two spec sources, so the discipline is a comparison rather than renewLane's
+  enumeration. All-or-nothing per channel with an early exit, over per-event reuse, which buys
+  nothing while the list is the carry key; positional rather than uuid-keyed, since a PA spec
+  carries no uuid and a population that held arrives in the stash's own order from either render.
+  endppqC stays out of the comparison and sheds the list itself when it moves: the clip is derived
+  after installation from the lane's strict-next onset, which the on-take half can move while the
+  stash stands still.
+
 - **2026-09-01** — A lane's whole authored population -- its on-take events and the parked ones that
   have left the take -- is published as frame.authoredEvents / tm:authoredLanes, and is what a
   renderer addresses. It merges the parked half into the column's own order rather than

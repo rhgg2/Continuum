@@ -1114,9 +1114,8 @@ appended and everything re-sorted, so the note-before-PA tie-break at a shared o
 A lane holding nothing parked is answered with its own `events` table, which is what keeps the cell
 carry (§ Note-lane renewal) intact for the common lane. Where a union is built it is memoised
 against the two lists it joins, and each is replaced whole when its contents change, so the union
-inherits their identity. Today that memo only spans one pass: `renderUnion` mints all sixteen
-parked lists on every rebuild whether or not anything parked, so a lane holding parked events
-cannot carry. Give `renderUnion` `renewLane`'s discipline and it will.
+inherits their identity — and the memo spans passes, since a parked list whose contents held is
+kept rather than re-minted.
 
 Membership reads the whole population; lane allocation reads the on-take half alone. A region's
 members are what sounds on its lanes, and a parked event is one: it is the note the author sees, and
@@ -1136,7 +1135,7 @@ The frame owns both halves. Every channel carries its parked list across the pas
 or clean, since those events are off-take and a wholesale mm re-read has no claim on them; the clip
 therefore reads a true lane from the pass's head, before the park stage rewrites the list. The lane
 buckets the seek reads are memoised against the list they index, and `renderUnion` replaces that
-list whole, so a stale index cannot be reached.
+list whenever its contents change, so a stale index cannot be reached.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column —
 `rebuildInternals` routes it to the fx stage's existing set instead — so a column holds authored
@@ -1319,6 +1318,27 @@ a local bound to `col.events` that outlives a renewal operates on the dead
 table — the read-only walks (`eachWindowNote`, `channelStreams`,
 `coverOnsets`) do not care, but the park scan did, which is why a note
 carry stores its lane index and resolves the table at unlink time.
+
+The parked half obeys the same rule by a different route. Nothing owns a
+parked list the way a mutator owns a lane: `renderUnion` renders it from
+the stash every pass, and twice for notes — once at the pass head from the
+document, once from the park stage's reconciled set. So the discipline is a
+comparison rather than an enumeration. Each render builds its candidate list
+and installs it only where the contents differ from what stands; otherwise
+the standing list, and the events in it, carry. The match is positional,
+since a population that held arrives in the stash's own order from either
+render, and a reordering can only cost a shed.
+
+`endppqC` is why the comparison is over contents and not over the stash.
+The clip is derived after installation — `clipParked` reads the lane's
+strict-next onset, which the on-take half can move while the parked spec
+stands still — so it is left out of the comparison and sheds the list on its
+own when it moves, exactly as `setEvent` does for a seated event.
+
+A caller that keeps what it rendered takes it from `renderUnion`'s answer
+rather than from its own callback, since a kept list drops the candidate. The
+fx share of parked originals is the one such caller, and it must: gridPane
+matches those events by identity to suppress them under their host's ghost.
 
 ## Dormant guard
 
