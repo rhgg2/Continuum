@@ -388,10 +388,10 @@ semantics — what a slot *is*, how factors compose, how
 logical↔realisation works — live in `docs/timing.md`.
 
 tm exposes the resolved transforms as `tm:fromLogical(chan, ppqL, off)`
-and `tm:toLogical(chan, ppq)`, both projecting through the time context
-the rebuild head builds (`docs/timing.md` § The time context).
-`tm:markSwingStale` flags channels whose resolved swing changed so the
-next rebuild rederives their raw ppqs from `ppqL`.
+and `tm:toLogical(chan, ppq)`, cached per `(cm, mm)` in a file-local
+`swing` snapshot and cleared at the head of each rebuild (`clearSwing`). `tm:markSwingStale`
+flags channels whose resolved swing changed so the next rebuild
+rederives their raw ppqs from `ppqL`.
 
 ## Mutation contract
 
@@ -916,8 +916,7 @@ nil pitch.
 The set of notes to re-bound is seed-driven, not span-tested. A note is
 bound if it is disturbed, or if it is the nearest same-lane or same-pitch
 strict predecessor of an *anchor* — a seed position (dead seeds included)
-or a disturbed onset, found by one `util.seek 'before'` probe per axis.
-Probing the predecessor subsumes the old authored-span stale-test: a
+or a disturbed onset. Taking the predecessor subsumes the old authored-span stale-test: a
 shield standing between a seed and an open note behind it is itself that
 seed's nearest same-lane predecessor and holds the clip, and a deleted
 neighbour that can no longer be asked for its onset is reached because its
@@ -936,9 +935,9 @@ the channel's dirt and `rebuildPbs` consumes it later in the same pass.
 
 Two walks share these rules; a seed-count threshold picks between them.
 The **linear walk** is authoritative for dense and wholesale dirt: one
-forward onset pass, one predecessor probe per axis to build the bound
-set, one backward pass to clip and emit — over the whole channel. It is
-the degenerate fallback. The **frontier probe walk** takes the common sparse-seed
+forward onset pass, one ascending sweep answering every anchor's lane and
+pitch predecessor at once, one backward pass to clip and emit — over the
+whole channel. It is the degenerate fallback. The **frontier probe walk** takes the common sparse-seed
 channel: it seeks to each seed by name and probes a bounded few rows for
 its lane and pitch neighbours, with no whole-channel traversal and no
 `mergeIndexed` — the sorted index and the small extras list stay separate

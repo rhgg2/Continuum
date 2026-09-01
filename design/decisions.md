@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The tail walk's bound set takes each anchor's nearest same-lane and same-pitch
+  predecessor from one ascending sweep carrying the running last-in-lane and last-in-pitch, over the
+  per-anchor util.seek pair it replaces. A seek is a scan, and the anchors are every seed plus every
+  disturbed note, so a channel whose fx expansion re-runs wholesale -- a global region tiling the
+  take -- made the pair of them quadratic: 122ms of a 167ms note insert, against 6ms after. It is
+  the forward twin of the successor pass already closing the walk, so the two read alike.
+
 - **2026-09-02** — The projection between the frames is a value: timeContext, built at the head of
   every tm:rebuild and read by everything that projects, over the lazy per-(cm, mm) cache it
   replaces. It resolves against the length the pass derives against -- the pending end while

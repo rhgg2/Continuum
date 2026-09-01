@@ -3954,13 +3954,21 @@ local function linearTails(chan, notes, parkedBoundFor, takeLen, res, clampWrite
   -- every anchor -- the seed-driven replacement for the span stale-test. see design § Span-staleness
   local bound = {}
   for e in pairs(disturbed) do bound[e] = true end
-  -- Wholesale already binds every note, so the predecessor probes add nothing -- and running them per
-  -- note is O(n^2). Only the seeded case needs them, to reach the non-disturbed neighbours dirt shadows.
+  -- Wholesale already binds every note, so the predecessor probes add nothing. Only the seeded case
+  -- needs them, to reach the non-disturbed neighbours dirt shadows.
   if not dirt.wholesale(chan) then
     for e in pairs(disturbed) do util.add(anchors, { pos = e.ppq, lane = e.lane, pitch = e.pitch }) end
+    -- One ascending sweep, tracking running last-in-lane/last-in-pitch, answers every anchor at
+    -- once -- the forward twin of the successor pass below. See docs/trackerManager.md § Tail walk.
+    table.sort(anchors, function(a, b) return a.pos < b.pos end)
+    local lastInLane, lastInPitch, i = {}, {}, 1
     for _, a in ipairs(anchors) do
-      local lanePred  = util.seek(notes, 'before', a.pos, function(e) return e.lane  == a.lane  end)
-      local pitchPred = util.seek(notes, 'before', a.pos, function(e) return e.pitch == a.pitch end)
+      while i <= #notes and notes[i].ppq < a.pos do
+        local e = notes[i]
+        lastInLane[e.lane], lastInPitch[e.pitch] = e, e
+        i = i + 1
+      end
+      local lanePred, pitchPred = lastInLane[a.lane], lastInPitch[a.pitch]
       if lanePred  then bound[lanePred]  = true end
       if pitchPred then bound[pitchPred] = true end
     end
@@ -5094,8 +5102,8 @@ function tm:rebuild(takeChanged)
 
   local prevLength = timeContext:length()   -- rebuild is the (cm, mm) coherence point
   timeContext = newTimeContext()
-  -- A length change re-times every seat near the take's end, and unmarked the rebuild rule reads
-  -- that as an external raw edit; a swap is no length change. see docs/timing.md § Reswing
+  -- A composite's ramps run to the take's end, so a length change re-times every seat near it.
+  -- Unmarked, the rebuild rule reads that as an external raw edit. see docs/timing.md § Reswing
   if not takeChanged and timeContext:length() ~= prevLength then dirt.swing.add(nil) end
   -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
   -- gated stage below skips clean chans so the carried columns stand.
