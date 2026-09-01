@@ -4,7 +4,6 @@
 --invariant: entry is a lattice -- clean < seed list < wholesale; add raises it, never lowers
 --invariant: a list grown past the seed cap collapses to wholesale, bounding per-seed work
 --invariant: swing staleness is the second axis: bindTake marks a reseat carrying no dirt of its own
---invariant: fx-host staleness is the third axis: a restore seats a host before the index knows it
 --shape: entry = nil (clean) | list of birth-snapshot seeds (see trackerManager seeds) | true (wholesale)
 
 local dirt = {}
@@ -15,7 +14,7 @@ local WHOLESALE_SEED_CAP = 64
 
 --contract: one journal per trackerManager: its edit side and its rebuild share the one instance
 function dirt.new()
-  local marks, swing, staleHosts = {}, {}, {}
+  local marks, swing = {}, {}
   local journal = {}
 
   --contract: d is true, one seed, or a list of seeds; chan nil adds to all 16
@@ -60,15 +59,6 @@ function dirt.new()
     has   = function(chan) return swing[chan] == true end,
     --contract: the mid-pipeline clear, once the partition and the cc walk have consumed it
     clear = function() swing = {} end,
-  }
-
-  -- A restored fx host sits in its column before the stamp lands, so the fx-host index can neither
-  -- enumerate nor resolve it. Minted only inside a rebuild, hence no part of pending().
-  journal.staleHosts = {
-    add   = function(chan) staleHosts[chan] = true end,
-    has   = function(chan) return staleHosts[chan] == true end,
-    --contract: the mid-pipeline clear, once the park stage's commit has stamped the restored cells
-    clear = function() staleHosts = {} end,
   }
 
   return journal

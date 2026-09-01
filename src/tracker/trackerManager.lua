@@ -580,26 +580,18 @@ local function buildFxWindows(fxRegions, noteHostClips)
     hold({ uuid = r.uuid, chan = r.chan, startppq = r.startppq, endppq = r.endppq,
            fx = r.fx, hostType = 'region' })
   end
-  -- clipNoteHosts already found every on-take fx host, parked hosts declared out -- no re-filter.
-  -- Sort (chan, lane, ppq): the whole-column scan's emission order, so perTarget stays G4-stable.
+  -- Every fx host, on-take and parked alike, gets a window; sort order matches both halves
+  -- of a lane so parking moves no entry. See docs/trackerManager.md § Fx window census.
   local noteHosts = {}
   for host, clip in pairs(noteHostClips) do util.add(noteHosts, { host = host, endppq = clip }) end
   table.sort(noteHosts, function(a, b)
     local ha, hb = a.host, b.host
     if ha.chan ~= hb.chan then return ha.chan < hb.chan end
     if ha.lane ~= hb.lane then return ha.lane < hb.lane end
-    return ha.ppq < hb.ppq
+    if ha.ppq ~= hb.ppq then return ha.ppq < hb.ppq end
+    return tostring(ha.uuid) < tostring(hb.uuid)
   end)
   for _, nh in ipairs(noteHosts) do hold(windowForNote(nh.host, nh.endppq)) end
-  -- A self-parked host is off-take but still runs its chain, so its continuous (pb/cc) windows must
-  -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
-  local takeLen = tm:length()
-  for chan = 1, 16 do
-    local takeLenL = tm:toLogical(chan, takeLen)
-    for _, cell in ipairs(frame.channels[chan].parked) do
-      if cell.fx then hold(windowForNote(cell, clippedSpanEnd(cell, takeLenL))) end
-    end
-  end
   return windowSet(windows)
 end
 
@@ -2732,10 +2724,47 @@ local function persistParked(key, newParked, prior)
   end
 end
 
+-- A stash spec as its render cell: logical like a projected note, showing the authored ceiling, and
+-- holding a column home for its lane.
+local function parkedCell(spec)
+  local channel = frame.channels[spec.chan]
+  while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
+  return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
+end
+
+-- Which hosts are off-take as of now: the park stage moves a host between the halves of its lane, so
+-- each reader asks at its own moment. see docs/trackerManager.md § Note host clips and windows
+local function parkedUuids()
+  local parked = {}
+  for chan = 1, 16 do
+    for _, cell in ipairs(frame.channels[chan].parked) do parked[cell.uuid] = true end
+  end
+  return parked
+end
+
+local function realiseAllParked()
+  local takeLen = tm:length()
+  for chan = 1, 16 do
+    local members = frame.channels[chan].parked
+    if #members > 0 then realiseParked(members, tm:toLogical(chan, takeLen)) end
+  end
+end
+
+-- The parked half of every lane, rendered from the stash at the head of the pass (a park edit has
+-- already landed in the document). See docs/trackerManager.md § Note host clips and windows.
+local function renderStashedParked(fxParked)
+  local notes = {}
+  for _, spec in ipairs(fxParked or {}) do
+    if spec.evType == 'note' then util.add(notes, spec) end
+  end
+  renderUnion('parked', notes, parkedCell)
+  realiseAllParked()
+end
+
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see docs/generators.md § Emission is ownership
 
-local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostClips, settleWindows)
+local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostClips)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
   -- seat-stamps each cell, so the tail walk meets an ordinary seated entry.
@@ -2743,6 +2772,8 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
   -- The originals each host's chain parked, keyed by the host that parked each: cells by
   -- reference, minted here and handed back for the realisation entries.
   local parkedByHost = {}
+  -- The prior parked set, read before renderUnion replaces the lists.
+  local parkedAtHead = parkedUuids()
 
   -- One predicate for all passes, answering with the host that parks the spec: a window covers it
   -- on the spec's own stream, or (note specs only) spec.fx parks itself. see docs/trackerManager.md § Region-replace parking
@@ -2819,8 +2850,9 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
         end
       end
     end
+    -- On-take hosts only: a host already parked is the prior set's to carry or restore.
     for host in pairs(noteHostClips) do
-      if dirt.has(host.chan) and generators.parksNotes(host) then
+      if dirt.has(host.chan) and generators.parksNotes(host) and not parkedAtHead[host.uuid] then
         candidate(host, host.lane)
       end
     end
@@ -2835,9 +2867,6 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     local takeLen = tm:length()
     for _, spec in ipairs(restores) do
       dirt.add(spec.chan, parkSeed(spec, 'restore'))
-      -- The cell seats below, but its stamp waits for this stage's commit, so the fx-host index
-      -- cannot reach it until then. see docs/trackerManager.md § Lane occupancy
-      if spec.fx then dirt.staleHosts.add(spec.chan) end
       local channel = frame.channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
@@ -2857,16 +2886,11 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
     renderUnion('parked', parkedNotes, function(spec)
-      local channel = frame.channels[spec.chan]
-      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local cell = util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
+      local cell = parkedCell(spec)
       util.bucket(parkedByHost, coveredBy(spec), cell)   -- the overlay suppresses only its own host's
       return cell
     end)
-    for chan = 1, 16 do
-      local members = frame.channels[chan].parked
-      if #members > 0 then realiseParked(members, tm:toLogical(chan, takeLen)) end
-    end
+    realiseAllParked()
   end
 
   -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
@@ -2928,14 +2952,10 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     renderUnion('parkedPA', newParked, util.clone)
   end
 
-  -- Notes are settled (parks unlinked onsets, restores re-entered); re-derive the host set before
-  -- cc/pb membership, so a restored host has its window. see docs/trackerManager.md § Note host clips and windows
-  windows = settleWindows()
-
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating an unrealised projection for the view.
   do
-    -- cc spans from the settled set, so the scan visits any span a note park just exposed.
+    -- cc spans from the window set, which the note pass above left untouched.
     local ccSpans, ccWins = {}, {}
     for _, w in ipairs(windows.windows()) do
       for target in pairs(w.targets) do
@@ -3059,7 +3079,6 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
   for _, cell in ipairs(restoredCells) do
     if index.stampColEvt(cell) then cell.realised = true end
   end
-  dirt.staleHosts.clear()   -- the stamp ends it: the index resolves these uuids from here
   return parkedByHost
 end
 
@@ -3156,11 +3175,12 @@ end
 ----- Rebuild Fx
 
 --shape: clipNoteHosts -> { [cell] = clipEndL }; each clip starts at its cell's own onset
+--contract: every fx host of every channel, the on-take cells and the parked ones alike
 local function clipNoteHosts()
   local clips, takeLen = {}, tm:length()
 
-  -- Column walk where no uuid can be resolved to a cell: a wholesale-dirty channel, or one holding a
-  -- host restored (not yet stamped) this rebuild. see docs/trackerManager.md § Lane occupancy
+  -- Column walk where no uuid can be resolved to a cell: a wholesale-dirty channel.
+  -- see docs/trackerManager.md § Lane occupancy
   local function walkChannel(chan, takeLenL)
     for _, col in ipairs(frame.channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
@@ -3169,8 +3189,8 @@ local function clipNoteHosts()
     end
   end
 
-  -- Per-host seek through the index; the frame's parked half is authoritative since the fx-host
-  -- index lags a park until tail-walk commit (§ Fx window census). Returns false to fall to walkChannel.
+  -- Per-host seek through the index over the on-take half; the frame's parked list says which host
+  -- moved. Returns false to fall to walkChannel. See docs/trackerManager.md § Fx window census.
   local function perHost(chan, takeLenL)
     local parked = {}
     for _, cell in ipairs(frame.channels[chan].parked) do parked[cell.uuid] = true end
@@ -3188,11 +3208,15 @@ local function clipNoteHosts()
     local takeLenL = tm:toLogical(chan, takeLen)
     local hosts    = index.fxHosts(chan)
     local hasHosts = hosts and next(hosts)
-    local stale    = dirt.staleHosts.has(chan)
-    if stale or dirt.wholesale(chan) then
-      if hasHosts or stale then walkChannel(chan, takeLenL) end
+    if dirt.wholesale(chan) then
+      if hasHosts then walkChannel(chan, takeLenL) end
     elseif hasHosts then
       if not perHost(chan, takeLenL) then walkChannel(chan, takeLenL) end
+    end
+    -- The parked half of the lane: a stashed host runs its chain off-take, and a host this pass
+    -- restores is here until the park stage re-enters it.
+    for _, cell in ipairs(frame.channels[chan].parked) do
+      if cell.fx then clips[cell] = clipEnd(cell, takeLenL) end
     end
   end
   return clips
@@ -3207,13 +3231,16 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
 
-  -- noteHostClips' keys are exactly the non-pa fx cells (clipNoteHosts emitted them, on-take + restored);
-  -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads hosts instead of rescanning columns.
+  -- noteHostClips' keys are every fx host; the frame's parked lists say which are off-take, run from
+  -- their stash cells. The rest bucket by channel, (lane, ppq)-sorted. See § Fx window census.
+  local parkedNow = parkedUuids()
   local fxHostsByChan = {}
   for host in pairs(noteHostClips) do
-    local bucket = fxHostsByChan[host.chan]
-    if not bucket then bucket = {}; fxHostsByChan[host.chan] = bucket end
-    util.add(bucket, host)
+    if not parkedNow[host.uuid] then
+      local bucket = fxHostsByChan[host.chan]
+      if not bucket then bucket = {}; fxHostsByChan[host.chan] = bucket end
+      util.add(bucket, host)
+    end
   end
   for _, bucket in pairs(fxHostsByChan) do
     table.sort(bucket, function(a, b)
@@ -4798,34 +4825,22 @@ local function rebuildPipeline(didReload)
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
   perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
 
-  -- Fx window set: fx-regions plus every on-take or still-producing parked note host, as a degenerate
-  -- window (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see docs/generators.md § Offline continuous realisation
-  local function assembleWindows(noteHostClips)
-    return buildFxWindows(sources.fxRegions, noteHostClips)
-  end
-
-  perf.start('noteHostClips'); local headClips = clipNoteHosts(); perf.stop('noteHostClips')
-  perf.start('parkRegions')
-  local currentWindows = assembleWindows(headClips)
-  perf.stop('parkRegions')
-
-  -- Post-settlement clip pass: settledClips feeds fx expansion's host set, settledWindows the tail's maps.
-  -- see docs/trackerManager.md § Note host clips and windows
-  local settledClips, settledWindows
-  local function settleWindows()
-    settledClips = clipNoteHosts()
-    settledWindows = assembleWindows(settledClips)
-    return settledWindows
-  end
+  -- Fx window set: fx-regions plus every note host, on-take or parked, as a degenerate window.
+  -- One pass serves the whole pipeline. See docs/generators.md § Offline continuous realisation.
+  perf.start('parkRender'); renderStashedParked(sources.fxParked); perf.stop('parkRender')
+  perf.start('noteHostClips'); local noteHostClips = clipNoteHosts(); perf.stop('noteHostClips')
+  perf.start('fxWindows')
+  local windows = buildFxWindows(sources.fxRegions, noteHostClips)
+  perf.stop('fxWindows')
 
   perf.start('regionPark')
-  local parkedByHost = rebuildRegionPark(currentWindows, sources.fxParked, realisedWindows,
-                                             headClips, settleWindows)  -- park covered, carry/restore prior
+  local parkedByHost = rebuildRegionPark(windows, sources.fxParked, realisedWindows,
+                                             noteHostClips)  -- park covered, carry/restore prior
   perf.stop('regionPark')
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   perf.start('fx')
-  local fxOut = rebuildFx(noteExisting, ccExisting, settledClips, settledWindows, sources.fxRegions,
+  local fxOut = rebuildFx(noteExisting, ccExisting, noteHostClips, windows, sources.fxRegions,
                           fxNotesByHost)  -- fx expansion: derived notes/CCs
   perf.stop('fx')
 
@@ -4835,22 +4850,22 @@ local function rebuildPipeline(didReload)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('fxRealisedWindows')
-  local windowList = settledWindows.perTarget()
+  local windowList = windows.perTarget()
   if mm:take() and not util.deepEq(sources.fxRealisedWindows or {}, windowList) then
     ds:assign('fxRealisedWindows', #windowList > 0 and windowList or util.REMOVE)
   end
   perf.stop('fxRealisedWindows')
 
-  -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
-  -- the previous rebuild's note lanes. Sibling maps, one site.
-  local maps = { windows = settledWindows }
+  -- Freeze's maps, after the fx pass: a rect built before it would carry the previous rebuild's note
+  -- lanes. Sibling maps, one site.
+  local maps = { windows = windows }
   perf.start('freezeMaps')
-  maps.freezeRect = buildFreezeRects(settledWindows.windows())
+  maps.freezeRect = buildFreezeRects(windows.windows())
   perf.stop('freezeMaps')
   -- The shares the passes above keyed by host, gathered last; only the notes outlive the pass.
   local byHost = { notes = fxNotesByHost, parked = parkedByHost,
-                       targets = buildFxTargets(settledWindows.windows()) }
-  maps.fxRealisation = buildFxRealisation(settledWindows.windows(), globalRegions, byHost)
+                       targets = buildFxTargets(windows.windows()) }
+  maps.fxRealisation = buildFxRealisation(windows.windows(), globalRegions, byHost)
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation

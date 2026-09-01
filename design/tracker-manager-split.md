@@ -165,12 +165,18 @@ decides whether phase 3 is worth taking.**
    one to the fx stage's existing set instead of into a column, so the
    population is authored by construction.
 
+1. The pass renders the parked half from the stash before anything reads
+   it. The frame carries the previous pass's render, and a park edit — a
+   delete, a chain removed, a freeze — has already landed in the
+   document.
+
 1. Parking moves a note between the on-take half of the population and
    the parked half, so the set of onsets a window clips against is
    invariant across the park stage. One `clipNoteHosts` call per
    rebuild therefore serves the note pass, continuous membership and fx
    expansion alike, and `rebuildRegionPark` receives the window set as
-   data.
+   data. Each reader asks the frame which half a host is in at its own
+   moment.
 
 ## Phase 1 — the algebra leaves
 

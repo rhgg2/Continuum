@@ -589,12 +589,10 @@ end, and an OPEN tail stages no mm op, so it leaves no seed to be rediscovered
 from. A demotion to a co-occurring kill's seed would leave that OPEN tail uncut.
 Pinned in `tm_tail_gating_spec`, and the lattice itself in `dirt_spec`.
 
-Beside the per-channel marks the journal carries two staleness axes — a channel needing
+Beside the per-channel marks the journal carries one staleness axis — a channel needing
 re-derivation though its own data is unchanged. Swing staleness comes from a `bindTake` reseat and
 clears once the partition and the CC walk have read it; it counts toward `pending()`, since it can
-start a rebuild. Fx-host staleness is minted by a restore inside the park stage and cleared when that
-stage's commit stamps the restored cells onto the index (§ Lane occupancy); it never starts a
-rebuild, only widens one.
+start a rebuild.
 
 Past the cap the dirt collapses to the whole channel, so `rebuildInternals`' excise-skip and its
 fresh column build agree with the tail walk. `add` enforces the cap, so the tail walk's own
@@ -716,23 +714,27 @@ interval dirt visits just the seeded uuids.
 
 ### Note host clips and windows
 
-`clipNoteHosts` gives each on-take note host its clip, the lane clip of
-§ Lane occupancy. A region's span is authored, so only the note hosts are
-computed. The fx window set is those clips plus the fx regions, each parked
-or still-producing host entering as a degenerate one-note region.
+The pass opens by rendering the parked half of every lane from the stash. The
+frame carries the previous pass's render, where a park edit — a delete, a
+chain removed, a freeze — has already landed in the document, so both halves
+of a lane answer to the document from here on.
 
-The set is assembled twice, and what moves between the two is which hosts are
-on the take: a park unlinks a host's cell, a restore re-enters one. The head
-set serves the note pass, whose membership comes only from authored
-`fxRegions` — `chainTargets` suppresses the note target on a note host's own
-window, and a note host parks itself by predicate — so it reads nothing the
-pass changes. The settled set (`settleWindows`, called from inside the park
-stage) serves cc/pb membership and `rebuildFx`. The clips themselves stand
-either side of the park stage (§ Lane occupancy).
+`clipNoteHosts` then gives each note host its clip, the lane clip of § Lane
+occupancy, on-take cells and stash cells alike. A region's span is authored,
+so only the note hosts are computed. The fx window set is those clips plus
+the fx regions, each host entering as a degenerate one-note region.
 
-`buildFxWindows` holds each set. Every stream a host parks takes the host's
+One pass serves the whole pipeline. Parking moves a host between the halves
+of its lane and moves no window: the clip counts both halves, and a host
+keeps its uuid, span and targets across the move. Each reader asks the frame
+which half a host is in at its own moment — the park scan passes over the
+hosts already parked, and fx expansion runs those from their stash cells.
+
+`buildFxWindows` holds the set. Every stream a host parks takes the host's
 own span, so one window per host is the whole fact — channel, span, host
 type, and the targets its chain reaches, from `generators.chainTargets`. The
+windows are ordered by channel, lane and onset across both halves, so a park
+rewrites no entry of the persisted census. The
 set answers in whichever shape a reader wants: membership for the park
 scans, the windows themselves for the tail's maps, and the per-target list,
 ordered note, pb, then cc ascending, for the `fxRealisedWindows` write.
@@ -1116,14 +1118,11 @@ index reconciliation) back-links a host uuid to its live column cell, so a dirty
 seeking its own lane through `index.colEvtFor(uuid)` rather than the old per-channel walk that built
 every column's successor map up front.
 
-Two paths still walk the channel, and the reason is host discovery, not the cache. A wholesale-dirty
-channel and a channel carrying fx-host staleness (a restore has seated a host the index has yet to
-stamp, § Derivation dirt) both leave the fx-host index unable to reach a live cell, so `walkChannel`
-finds the hosts by scanning the columns — and asks `clipEnd` for each, like every other caller. That
-staleness rides the journal rather than a set threaded through the pass, so both calls to
-`clipNoteHosts` take no argument and what differs between them is what the journal holds. `perHost`
-returns false (forcing the walk) the moment it meets an indexed host with no live cell, so an
-unstamped host is never silently skipped.
+One path still walks the channel, and the reason is host discovery, not the cache. A wholesale-dirty
+channel leaves the fx-host index unable to reach a live cell, so `walkChannel` finds the hosts by
+scanning the columns — and asks `clipEnd` for each, like every other caller. `perHost` returns false
+(forcing the walk) the moment it meets an indexed host with no live cell, so an unstamped host is
+never silently skipped.
 
 The cache is scoped to the bound take. `tm:rebuild` drops it on the branch a take swap or a
 wholesale re-read enters (`forgetCaches`); mm mints uuids per take, so an entry surviving that seam
@@ -1133,8 +1132,9 @@ A take-length change reclips every OPEN span, yet needs no guard of its own. Len
 through `mm:setLength`, which fires a `wholesale=true` reload — that same branch — so every fx
 channel walks afresh at the new `takeLen`.
 
-The two calls per rebuild share the one cache. Park and restore seed the channels they touch, so
-the settlement call recomputes exactly those and reuses the rest.
+A rebuild clips once, and its two readers share the one cache: the stash render asks for every
+parked cell's render clip and `clipNoteHosts` for every host's span end, which for a parked host is
+the same number.
 
 **The reuse arm is unexercised by the suite.** Removing the seed-driven invalidation outright
 (reusing on any cache hit, dropping the seed test) leaves every spec green, so nothing
@@ -1144,15 +1144,15 @@ exists, treat any change to this cache as unguarded.
 
 ## Fx window census
 
-`buildFxWindows` builds the pass's fx windows from three sources — authored `fxRegions`, on-take
-note hosts (the clips from `clipNoteHosts`), and the fx-carrying cells of the frame's
-parked half — and the latter two are disjoint because both arms read that one parked list.
+`buildFxWindows` builds the pass's fx windows from two sources — authored `fxRegions` and the note
+host clips, which `clipNoteHosts` takes over both halves of every lane.
 The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's cell at once,
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
-of it, so without the frame's answer a self-parking host would land in both arms — and fx expansion,
-whose host bucket is the host clips' keys plus `frame.channels[chan].parked`, would run its chain
-twice and `curves.foldChains` would sum the two pb curves to twice the authored depth.
+of it, so the frame's parked list is what declares which arm takes a given host: the clip pass skips
+an indexed uuid the stash holds, and fx expansion hands one to the arm that runs it from its stash
+cell. Without that a self-parking host would run its chain twice, and `curves.foldChains` would sum
+the two pb curves to twice the authored depth.
 
 `buildFxWindows` holds the pass's windows once: the window per host is the fact, and the per-target
 list a view over it. Every window is minted inside the set, so stamping `targets` touches no record

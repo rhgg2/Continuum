@@ -12,6 +12,17 @@ not eight or ten.
   — it holds tautologically today and fails under any rewrite. A table result carries its ownership:
   `fresh` unaliased and the caller's, `live` aliased and safely mutable, `unsafe` aliased, read-only
   and of ephemeral validity — which `--contract:` had no way to say at all.
+- **2026-09-01** — The pass renders the parked half of every lane from the stash at its head, and
+  one clip-and-window pass then serves the whole pipeline. The frame carries the previous pass's
+  render, where a delete, a chain removal or a freeze has already landed in the document, so the
+  second pass was reading the document late over reconciling anything the first could not know;
+  parking itself moves a host between the halves of a lane and moves no window, since the clip
+  counts both halves and the host keeps its uuid, span and targets across the move. Each reader asks
+  the frame which half a host is in at its own moment, over an entry that follows its cell: nothing
+  a chain can see distinguishes a restored host's stash cell from the column cell it re-enters, so a
+  re-key would be unpinned weight. dirt.staleHosts, the journal's third axis, goes with the second
+  pass, its only reader.
+
 - **2026-09-01** — The clip is one function that owns its cache. clipEnd(cell, takeLenL) answers
   with the true clip, reusing the cached one where the rebuild's dirt cannot have moved it -- over a
   factory returning a gate the caller then combined with a reclip and a cache write, three steps at

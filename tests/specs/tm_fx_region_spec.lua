@@ -636,6 +636,35 @@ return {
   },
 
   {
+    -- The pass holds one host set, so a restore moves the host's entry from its stash cell to the
+    -- cell it re-enters. A host that lost its entry would come back running no chain at all.
+    name = 'replace: removing the region restores an fx host, chain and all',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, fx = sine30 })
+      h.tm:flush()
+      injectArp(h)   -- note-replace over the same span: the region parks the sine host
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the region parks the host off-take')
+      local uuid = h.tm:getChannel(1).parked[1].uuid
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+
+      t.deepEq(authoredPitches(h), { 60 }, 'the host is restored to the take')
+      local cell = h.tm:getChannel(1).columns.notes[1].events[1]
+      t.eq(cell.uuid, uuid, 'under the uuid it was parked with')
+      t.truthy(cell.fx, 'carrying the chain it was parked with')
+      t.eq(#derivedNotes(h), 0, 'no arp survives the region removal')
+
+      local windows = h.ds:get('fxRealisedWindows') or {}
+      t.eq(#windows, 1, 'the restored host runs its chain again -- one window')
+      t.eq(windows[1].evType, 'pb', 'the sine arm')
+      t.eq(windows[1].id, uuid, "stamped with the restored host's identity")
+    end,
+  },
+
+  {
     name = 'replace: arp + parked chord are byte-identical across rebuild -> flush',
     run = function(harness)
       local h = harness.mk()
