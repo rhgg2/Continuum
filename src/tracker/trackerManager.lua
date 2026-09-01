@@ -33,7 +33,7 @@
 --shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
 --shape: frame.channels[chan] = { chan, onTake = the half mm holds, parked = the half a replace window took off it }
 --shape: frame.channels[chan].onTake = { notes = { [lane] = { events } }, ccs = { [ccNum] = { events } }, at/pc/pb = { events } }
---shape: frame.channels[chan].parked.notes = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace events (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)
+--shape: frame.channels[chan].parked.notes = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace events (endppq is the authored ceiling the view edits, endppqC the render clip clipParked derives)
 --shape: frame.channels[chan].parked.ccs = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render events
 --shape: frame.channels[chan].parked.pb = { { evType='pb', chan, ppq, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render events
 --shape: frame.channels[chan].parked.pa = { { evType='pa', chan, pitch, ppq, vel, [rpb] }, ... } -- off-take PA events; rebuildPA re-projects them into the host note column
@@ -161,6 +161,31 @@ do
       parkedLanes[parked] = byLane
     end
     return byLane[lane] or noParked
+  end
+
+  -- A lane's whole authored population as one list: its on-take events and the parked ones that
+  -- have left the take, in the column's own order. see docs/trackerManager.md § Lane occupancy
+  local laneUnions = setmetatable({}, { __mode = 'k' })   -- lane events -> parked bucket -> the union
+  --post: unsafe result = the lane's whole population in column order
+  --post: (nothing parked on the lane) → result is the lane's own events table
+  function frame.authoredEvents(chan, lane)
+    local col    = frame.channels[chan].onTake.notes[lane]
+    local parked = frame.parkedOnLane(chan, lane)
+    if #parked == 0 then return col.events end
+    -- Memoised against the two lists it joins. Each is replaced whole when its contents change, so
+    -- the union carries whatever identity they give it (§ Note-lane renewal).
+    local byParked = laneUnions[col.events]
+    if not byParked then
+      byParked = setmetatable({}, { __mode = 'k' })
+      laneUnions[col.events] = byParked
+    end
+    local union = byParked[parked]
+    if not union then
+      union = util.clone(col.events)
+      for _, evt in ipairs(parked) do util.insertSorted(union, evt, noteColumnLess) end
+      byParked[parked] = union
+    end
+    return union
   end
 
   function frame.nextOnLane(chan, lane, ppq)
@@ -371,9 +396,8 @@ end
 -- A lane's whole authored population, on-take and parked alike: what sounds there.
 -- see docs/trackerManager.md § Lane occupancy
 local function authoredOnLane(chan, lane, startL)
-  local events = onTakeOnLane(chan, lane, startL)
-  appendLaneEvents(frame.parkedOnLane(chan, lane), startL, events)
-  util.sortByPPQ(events)
+  local events = {}
+  appendLaneEvents(frame.authoredEvents(chan, lane), startL, events)
   return events
 end
 
@@ -1512,6 +1536,32 @@ end
 ----- Accessors
 
 function tm:getChannel(chan)      return frame.channels[chan] end
+
+-- Each note lane of a channel as its whole authored population -- what a renderer addresses, a
+-- parked event being the note the author sees. see docs/trackerManager.md § Lane occupancy
+--post: fresh result = one unsafe event list per note lane, in lane order
+function tm:authoredLanes(chan)
+  local lanes = {}
+  for lane in ipairs(frame.channels[chan].onTake.notes) do
+    util.add(lanes, frame.authoredEvents(chan, lane))
+  end
+  return lanes
+end
+
+-- Every note host off the take as of now, the stash's render events. Each is self-describing, so a
+-- caller reads its chan and lane off it. see docs/trackerManager.md § Lane occupancy
+--post: result = (channel-ordered) iterator yielding one unsafe parked note event
+function tm:eachParkedHost()
+  local chan, i = 1, 0
+  return function()
+    while chan <= 16 do
+      i = i + 1
+      local evt = frame.channels[chan].parked.notes[i]
+      if evt then return evt end
+      chan, i = chan + 1, 0
+    end
+  end
+end
 
 function tm:channels()
   local i = 0
@@ -2796,13 +2846,6 @@ end
 
 ----- Rebuild region park
 
--- Clip each parked event's tail to its render end -- the one clip every window's end takes, through
--- the one cache. see docs/trackerManager.md § Region-replace parking
---contract: derives each event's endppqC (the render clip); the authored ceiling on endppq stands
-local function realiseParked(members, takeLenL)
-  for _, m in ipairs(members) do m.endppqC = clipEnd(m, takeLenL) end
-end
-
 -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
 -- round-trip untouched; restore mirrors it (clone back, re-derive realisation, incl. sampleShadowed).
 local REALISATION = { delayC = true, endppqC = true, realised = true, derived = true,
@@ -2847,11 +2890,14 @@ local function parkedUuids()
   return parked
 end
 
-local function realiseAllParked()
+local function clipParked()
   local takeLen = tm:length()
   for chan = 1, 16 do
     local members = frame.channels[chan].parked.notes
-    if #members > 0 then realiseParked(members, tm:toLogical(chan, takeLen)) end
+    if #members > 0 then
+      local takeLenL = tm:toLogical(chan, takeLen)
+      for _, m in ipairs(members) do m.endppqC = clipEnd(m, takeLenL) end
+    end
   end
 end
 
@@ -2863,7 +2909,7 @@ local function renderStashedParked(fxParked)
     if spec.evType == 'note' then util.add(notes, spec) end
   end
   renderUnion('notes', notes, parkedEvent)
-  realiseAllParked()
+  clipParked()
 end
 
 -- Region-replace parking: authored events a replace window covers leave the take;
@@ -2995,7 +3041,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       util.bucket(parkedByHost, coveredBy(spec), evt)   -- the overlay suppresses only its own host's
       return evt
     end)
-    realiseAllParked()
+    clipParked()
   end
 
   -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
@@ -4121,7 +4167,7 @@ local function rebuildTails(noteLive, noteOps)
     end
 
     -- Parked members left the columns but still bound a preceding on-take tail in their lane --
-    -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
+    -- the symmetric partner of clipParked's on-take bounds. Bound-only: never rewritten below.
     local parkedBounds = {}
     for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
       util.add(parkedBounds, { ppq = tm:fromLogical(chan, evt.ppq), ppqL = evt.ppq,

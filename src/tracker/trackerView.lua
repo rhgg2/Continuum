@@ -560,6 +560,8 @@ local function rowBounds(col, ppq, excludeEvt)
   local logPerRow = ctx:ppqPerRow()
   local diff, same = notePreds(excludeEvt)
 
+  -- The col-local bound is lane order (governs tail clip); the chan-wide bound is settleOnset's
+  -- same-pitch seat collision, an mm question read from the on-take half alone. see docs/trackerManager.md § Lane occupancy
   local prevD, nextD = neighbourEvents({col}, ppq, diff)
   local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).onTake.notes, ppq, same)
 
@@ -2787,10 +2789,8 @@ end
 -- 'fxp-N' uuid), or a region (ds, 'fxr-N'); the editor addresses all three by uuid.
 -- Disjoint namespaces: a missed lookup falls through in that order.
 local function parkedByUuid(uuid)
-  for chan = 1, 16 do
-    for _, cell in ipairs(tm:getChannel(chan).parked.notes or {}) do
-      if cell.uuid == uuid then return cell end
-    end
+  for evt in tm:eachParkedHost() do
+    if evt.uuid == uuid then return evt end
   end
 end
 
@@ -4572,18 +4572,9 @@ function tv:rebuild(takeChanged)
         end
         addGridCol(chan, 'pb', nil, events)
       end
-      -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
-      -- the displayed chord: union each back into its lane. see docs/trackerView.md § Backings and parked cells
-      local parkedByLane = {}
-      for _, m in ipairs(channel.parked.notes or {}) do util.bucket(parkedByLane, m.lane, m) end
-      for lane, col in ipairs(c.notes) do
-        local events = col.events
-        if parkedByLane[lane] then
-          events = {}
-          for _, e in ipairs(col.events)        do util.add(events, e) end
-          for _, e in ipairs(parkedByLane[lane]) do util.add(events, e) end
-          table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
-        end
+      -- Replace-region parked notes left the take but stay the displayed chord; tm hands each lane
+      -- its whole population in the column's own order. see docs/trackerView.md § Backings and parked cells
+      for lane, events in ipairs(tm:authoredLanes(chan)) do
         addGridCol(chan, 'note', lane, events)
       end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
@@ -4691,11 +4682,9 @@ function tv:rebuild(takeChanged)
     -- A parked note host owns only its own cell: tag its onset row on its lane column, so
     -- edits route to the stash while adds elsewhere in its span stay plain (membership
     -- {self} is closed -- nothing can join a note host, unlike a region window).
-    for chan, channel in tm:channels() do
-      for _, cell in ipairs(channel.parked.notes or {}) do
-        local col = colFor(cell)
-        if col then col.cellKind[ppqRowOf(cell.ppq, chan)] = 'parked' end
-      end
+    for evt in tm:eachParkedHost() do
+      local col = colFor(evt)
+      if col then col.cellKind[ppqRowOf(evt.ppq, evt.chan)] = 'parked' end
     end
     perf.stop('tags')
 

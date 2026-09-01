@@ -94,6 +94,7 @@ local specs = {
   'tm_pb_seam_spec',
   'tm_cc_gating_spec',
   'tm_note_lane_carry_spec',
+  'tm_lane_population_spec',
   'tm_tail_gating_spec',
   'tm_fx_gating_spec',
   'tm_regionpark_gating_spec',

@@ -75,7 +75,7 @@ would recognise — `startRow` is fractional for an off-grid onset — and one
 identity then answers for the cell, its tail and its temper tick alike. A
 hidden cell is invisible, not absent: `col.cells` stays whole, so the host
 lookup, the leaf-edit facade and the caret keep their footing, and stepping
-onto one restores it. The suppression reads `channel.parked` alone, so parked
+onto one restores it. The suppression reads `channel.parked.notes` alone, so parked
 ccs, pbs and PAs stand — nothing ghosts them, and hiding them would take a
 picture away without offering one in its place.
 

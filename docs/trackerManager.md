@@ -765,7 +765,7 @@ left on the take; under uuid addressing the two are distinct events, so
 the fill reconcile deletes that seat by its own handle and the authored
 value stands. A parked event's render clip (`endppqC`) is the lane clip of § Lane
 occupancy, so a parked tail stops at the first successor past its region
-whether that successor is on the take or parked beside it. `realiseParked`
+whether that successor is on the take or parked beside it. `clipParked`
 derives it through the one clip that section describes. Lane bound
 only, never pitch: a parked event never reaches mm, so it carries pure intent
 — the same span an on-take host gets. The note del/adds ride the
@@ -1107,12 +1107,30 @@ Parking takes no onset out of that population, so a window stands where it stood
 between the halves and the lane it occupies is unchanged, and a host's chain stops at a successor
 its region has parked — the note the derived output stands in for.
 
+`frame.authoredEvents(chan, lane)` is that population as one list, and `tm:authoredLanes` publishes
+a channel's set of them — what a renderer addresses, since what the author sees on a lane is its
+whole population. The order is the column's own, the parked half merging into it rather than being
+appended and everything re-sorted, so the note-before-PA tie-break at a shared onset survives.
+A lane holding nothing parked is answered with its own `events` table, which is what keeps the cell
+carry (§ Note-lane renewal) intact for the common lane. Where a union is built it is memoised
+against the two lists it joins, and each is replaced whole when its contents change, so the union
+inherits their identity. Today that memo only spans one pass: `renderUnion` mints all sixteen
+parked lists on every rebuild whether or not anything parked, so a lane holding parked events
+cannot carry. Give `renderUnion` `renewLane`'s discipline and it will.
+
 Membership reads the whole population; lane allocation reads the on-take half alone. A region's
 members are what sounds on its lanes, and a parked event is one: it is the note the author sees, and
 the chain that parked it is a neighbour's business. Allocation asks a narrower question — which
 lanes the derived output may take — and a parked host's own tiles already hold its lane, so counting
 the host as well would push its output off the lane it was written on. `eachLaneSpan` walks either
 population: `membersOf` hands it the whole, `allocateRegionLanes` the column alone.
+
+tv's `rowBounds` reads both, one for each of its two bounds, and the split is the same question
+asked twice. The col-local bound is lane order, which governs the tail clip, so it reads the whole
+population and a parked event constrains a move like any other. The chan-wide same-pitch bound is
+`settleOnset`'s seat collision, which is an mm question, and a parked event is not in mm — so it
+reads the on-take half. Two notes of one pitch on different lanes passing each other is what lanes
+are for.
 
 The frame owns both halves. Every channel carries its parked list across the pass boundary, dirty
 or clean, since those events are off-take and a wholesale mm re-read has no claim on them; the clip

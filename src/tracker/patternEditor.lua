@@ -177,9 +177,9 @@ local function readbackBody()
              lengthPpq = editBody.lengthPpq, rpb = cm:get('rowPerBeat'), points = points }
   end
   local specs = {}
-  for laneIdx, col in ipairs(cols.notes or {}) do
+  for laneIdx, events in ipairs(tm:authoredLanes(1)) do
     local colSpecs = {}
-    for _, e in ipairs(col.events) do
+    for _, e in ipairs(events) do
       if e.evType ~= 'pa' then
         local endppq = (e.endppq == nil or e.endppq == util.OPEN) and editBody.lengthPpq or e.endppq
         util.add(colSpecs, { lane = editPoly and laneIdx or 1, ppq = e.ppq, endppq = endppq,

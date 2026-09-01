@@ -4,6 +4,21 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — A lane's whole authored population -- its on-take events and the parked ones that
+  have left the take -- is published as frame.authoredEvents / tm:authoredLanes, and is what a
+  renderer addresses. It merges the parked half into the column's own order rather than
+  concatenating and re-sorting, so the note-before-PA tie-break at a shared onset survives; a lane
+  holding nothing parked is answered with its own events table, which keeps the cell carry intact
+  for the common lane. The three callers that hand-rolled that union -- the grid build, the pattern
+  editor's readback and tm's own span-scoped walk -- now share it, and the readback stops deleting a
+  parked note from a pattern body. The memo spans one pass only, since renderUnion mints all sixteen
+  parked lists every rebuild; giving it renewLane's replace-only-on-change discipline would unlock
+  the carry for parked lanes. tv's rowBounds reads both halves, one per bound, and that asymmetry is
+  correct rather than an oversight. The col-local bound is lane order, which governs the tail clip,
+  so it reads the whole population. The chan-wide same-pitch bound is settleOnset's seat collision,
+  an mm question that a parked event cannot participate in, so it reads the on-take half. Two notes
+  of one pitch on different lanes passing each other is what lanes are for.
+
 - **2026-09-01** — A channel holds its authored events in two halves named for the side of the take
   they sit on: onTake is what mm holds, parked is what an fx replace window took off it. The old
   `columns` named the rendering rather than the side, and of its four parked siblings three were

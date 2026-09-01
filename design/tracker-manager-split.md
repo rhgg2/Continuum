@@ -156,7 +156,7 @@ decides whether phase 3 is worth taking.**
 
 1. **A window is clipped by the authored onsets on its lane, on the take
    or parked.** One rule covers an on-take host, a parked host and a
-   parked member: `clippedSpanEnd` and `realiseParked` clip against the
+   parked member: `clippedSpanEnd` and `clipParked` clip against the
    same set, and each keeps its own ceiling — the cell's authored
    `endppq`, or the take length.
 

@@ -39,7 +39,9 @@ step.
 ## Write-through commit
 
 Edits persist by write-through, not a discrete save. The mini `tm` fires
-`rebuild` after every flush; a subscriber reads channel 1 back, rebuilds the
+`rebuild` after every flush; a subscriber reads channel 1 back through
+`tm:authoredLanes`, so a note its own chain parked off the take is still in the
+body rather than deleted from it, and rebuilds the
 whitelisted body (notes drop `fx`/`chan` and fix lane 1; a curve normalises
 the pb column's cents back to bipolar by the same `pbRange` factor
 materialise scaled by), and hands it, `deepEq`-guarded, to the `commit`
