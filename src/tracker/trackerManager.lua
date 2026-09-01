@@ -143,49 +143,76 @@ do
     util.insertSorted(col.events, evt, noteColumnLess)
   end
 
-  -- Strict-next authored note on a lane: chord-mates share an onset, so the seek is strict, and a
-  -- PA holds no lane of its own and never answers. See docs/trackerManager.md § Lane occupancy.
-  --invariant: each parked bucket holds its lane's events in ppq order
-  local parkedLanes = setmetatable({}, { __mode = 'k' })   -- parked list -> its lane buckets
+  -- ppq alone orders a cc or pb column: one stream, and no tie-break to preserve.
+  local function ppqLess(a, b) return a.ppq < b.ppq end
+
+  -- A channel's parked list bucketed by the field naming its column: 'lane' for notes, 'cc' for ccs.
+  -- see docs/trackerManager.md § Lane occupancy
+  --invariant: each parked bucket holds its column's events in ppq order
+  local parkedBuckets = setmetatable({}, { __mode = 'k' })   -- parked list -> its column buckets
   local noParked = {}
-  --post: unsafe result = the lane's parked events in ppq order; empty when the lane holds none
-  function frame.parkedOnLane(chan, lane)
-    -- The buckets are memoised against the list they index, and the render union replaces that
-    -- list whole, so a stale index cannot be reached.
-    local parked = frame.channels[chan].parked.notes
-    local byLane = parkedLanes[parked]
-    if not byLane then
-      byLane = {}
-      for _, evt in ipairs(parked) do util.bucket(byLane, evt.lane, evt) end
-      for _, bucket in pairs(byLane) do util.sortByPPQ(bucket) end
-      parkedLanes[parked] = byLane
+  local function bucketedParked(parked, field)
+    local buckets = parkedBuckets[parked]
+    if not buckets then
+      buckets = {}
+      for _, evt in ipairs(parked) do util.bucket(buckets, evt[field], evt) end
+      for _, bucket in pairs(buckets) do util.sortByPPQ(bucket) end
+      parkedBuckets[parked] = buckets
     end
-    return byLane[lane] or noParked
+    return buckets
   end
 
-  -- A lane's whole authored population as one list: its on-take events and the parked ones that
-  -- have left the take, in the column's own order. see docs/trackerManager.md § Lane occupancy
-  local laneUnions = setmetatable({}, { __mode = 'k' })   -- lane events -> parked bucket -> the union
-  --post: unsafe result = the lane's whole population in column order
-  --post: (nothing parked on the lane) → result is the lane's own events table
-  function frame.authoredEvents(chan, lane)
-    local col    = frame.channels[chan].onTake.notes[lane]
-    local parked = frame.parkedOnLane(chan, lane)
-    if #parked == 0 then return col.events end
-    -- Memoised against the two lists it joins. Each is replaced whole when its contents change, so
-    -- the union carries whatever identity they give it (§ Note-lane renewal).
-    local byParked = laneUnions[col.events]
+  -- Strict-next authored note on a lane: chord-mates share an onset, so the seek is strict, and a
+  -- PA holds no lane of its own and never answers. See docs/trackerManager.md § Lane occupancy.
+  --post: unsafe result = the lane's parked events in ppq order; empty when the lane holds none
+  function frame.parkedOnLane(chan, lane)
+    return bucketedParked(frame.channels[chan].parked.notes, 'lane')[lane] or noParked
+  end
+
+  -- A column's whole authored population: on-take events plus parked ones off the take, memoised
+  -- against those two lists, each replaced whole on change. see docs/trackerManager.md § Lane occupancy
+  local unions = setmetatable({}, { __mode = 'k' })   -- on-take events -> parked bucket -> the union
+  local function memoUnion(events, parked, less)
+    if #parked == 0 then return events end
+    local byParked = unions[events]
     if not byParked then
       byParked = setmetatable({}, { __mode = 'k' })
-      laneUnions[col.events] = byParked
+      unions[events] = byParked
     end
     local union = byParked[parked]
     if not union then
-      union = util.clone(col.events)
-      for _, evt in ipairs(parked) do util.insertSorted(union, evt, noteColumnLess) end
+      union = util.clone(events)
+      for _, evt in ipairs(parked) do util.insertSorted(union, evt, less) end
       byParked[parked] = union
     end
     return union
+  end
+
+  --post: unsafe result = the lane's whole population in column order
+  --post: (nothing parked on the lane) → result is the lane's own events table
+  function frame.authoredEvents(chan, lane)
+    local col = frame.channels[chan].onTake.notes[lane]
+    return memoUnion(col.events, frame.parkedOnLane(chan, lane), noteColumnLess)
+  end
+
+  --pre: the cc column exists -- renderUnion mints one for every parked cc
+  --post: unsafe result = the cc column's whole population in ppq order
+  --post: (nothing parked on the column) → result is the column's own events table
+  function frame.authoredCC(chan, ccNum)
+    local channel = frame.channels[chan]
+    local parked  = bucketedParked(channel.parked.ccs, 'cc')[ccNum] or noParked
+    return memoUnion(channel.onTake.ccs[ccNum].events, parked, ppqLess)
+  end
+
+  -- pb is one stream per channel, so the parked list is already the column's own and needs no bucket.
+  local noEvents = {}
+  --post: unsafe result = the channel's whole pb population in ppq order
+  --post: result = nil iff the channel has no pb column and nothing parked
+  function frame.authoredPb(chan)
+    local channel = frame.channels[chan]
+    local col, parked = channel.onTake.pb, channel.parked.pb
+    if not col and #parked == 0 then return nil end
+    return memoUnion(col and col.events or noEvents, parked, ppqLess)
   end
 
   function frame.nextOnLane(chan, lane, ppq)
@@ -1547,6 +1574,24 @@ function tm:authoredLanes(chan)
   end
   return lanes
 end
+
+-- Each cc column of a channel as its whole authored population, keyed by cc number -- the note lanes'
+-- answer for the other keyed stream. see docs/trackerManager.md § Lane occupancy
+--pre: the park stage has run, so its column mint makes a parked cc reachable
+--post: fresh result = { [ccNum] = unsafe event list in ppq order }, one entry per cc column
+function tm:authoredCCs(chan)
+  local cols = {}
+  for ccNum in pairs(frame.channels[chan].onTake.ccs) do
+    cols[ccNum] = frame.authoredCC(chan, ccNum)
+  end
+  return cols
+end
+
+-- The channel's whole authored pb population, nil answering for a channel with no pb at all -- which
+-- is the renderer's test for whether to show the column. see docs/trackerManager.md § Lane occupancy
+--post: unsafe result = the channel's pb events in ppq order
+--post: result = nil iff the channel has no pb column and nothing parked
+function tm:authoredPb(chan) return frame.authoredPb(chan) end
 
 -- Every note host off the take as of now, the stash's render events. Each is self-describing, so a
 -- caller reads its chan and lane off it. see docs/trackerManager.md § Lane occupancy
@@ -5088,10 +5133,10 @@ function tm:rebuild(takeChanged)
   -- gated stage below skips clean chans so the carried columns stand.
   local prevChannels = frame.newPass()
   for i = 1, 16 do
-    -- Parked notes are off-take and only the park stage rewrites them, so a wholesale mm re-read has no
-    -- claim: they carry forward. The other three parked streams re-render or start empty. See § Lane occupancy.
+    -- Parked events are off-take and only the park stage rewrites them, so a wholesale mm re-read has
+    -- no claim: all four streams carry forward, lists and all. See § Lane occupancy.
     local prev   = prevChannels[i]
-    local parked = { notes = prev and prev.parked.notes or {} }
+    local parked = prev and prev.parked or { notes = {}, ccs = {}, pb = {}, pa = {} }
     if dirt.wholesale(i) then
       frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, parked = parked }
     elseif dirt.has(i) then

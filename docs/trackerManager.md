@@ -1117,6 +1117,14 @@ against the two lists it joins, and each is replaced whole when its contents cha
 inherits their identity — and the memo spans passes, since a parked list whose contents held is
 kept rather than re-minted.
 
+A cc column has the same two halves and takes the same answer: `frame.authoredCC(chan, ccNum)` and
+`tm:authoredCCs`, over parked buckets keyed on `cc` as the note buckets are keyed on `lane`. pb is
+one stream per channel, so its parked list is already the column's own and `frame.authoredPb` skips
+the bucketing. Order for both is ppq alone, there being no tie-break to preserve. A channel with no
+pb column and nothing parked is answered with nil, which is what the renderer tests to decide
+whether the channel shows a pb column at all — a parked pb keeps the column its authored breakpoint
+is displayed in.
+
 Membership reads the whole population; lane allocation reads the on-take half alone. A region's
 members are what sounds on its lanes, and a parked event is one: it is the note the author sees, and
 the chain that parked it is a neighbour's business. Allocation asks a narrower question — which
@@ -1131,11 +1139,14 @@ population and a parked event constrains a move like any other. The chan-wide sa
 reads the on-take half. Two notes of one pitch on different lanes passing each other is what lanes
 are for.
 
-The frame owns both halves. Every channel carries its parked list across the pass boundary, dirty
-or clean, since those events are off-take and a wholesale mm re-read has no claim on them; the clip
-therefore reads a true lane from the pass's head, before the park stage rewrites the list. The lane
-buckets the seek reads are memoised against the list they index, and `renderUnion` replaces that
-list whenever its contents change, so a stale index cannot be reached.
+The frame owns both halves. Every channel carries all four of its parked lists across the pass
+boundary, dirty or clean, since those events are off-take and a wholesale mm re-read has no claim on
+them. For notes the carry is load-bearing: the clip therefore reads a true lane from the pass's head,
+before the park stage rewrites the list. For the other three it is the memo that wants it — every
+reader of those runs after the park stage, so a re-mint would cost nothing but identity, which is
+the whole of what the memo is keyed on. The buckets the seeks and unions read are memoised against
+the list they index, and `renderUnion` replaces that list whenever its contents change, so a stale
+index cannot be reached.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column —
 `rebuildInternals` routes it to the fx stage's existing set instead — so a column holds authored
@@ -1334,6 +1345,11 @@ The clip is derived after installation — `clipParked` reads the lane's
 strict-next onset, which the on-take half can move while the parked spec
 stands still — so it is left out of the comparison and sheds the list on its
 own when it moves, exactly as `setEvent` does for a seated event.
+
+The rule reaches cc and pb columns by the same union (§ Lane occupancy).
+Until it did, a column holding anything parked was handed a table the view
+built fresh each pass, so it re-placed its cells every time whatever the
+parked half was doing.
 
 A caller that keeps what it rendered takes it from `renderUnion`'s answer
 rather than from its own callback, since a kept list drops the candidate. The

@@ -4,6 +4,16 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — Every column of a channel, not just its note lanes, is published as its whole
+  authored population: frame.authoredCC / tm:authoredCCs and frame.authoredPb / tm:authoredPb join
+  authoredEvents, and the grid build stops bucketing the channel's parked cc list itself. The three
+  unions share one memo keyed on the two lists they join, and the parked buckets one memo keyed on
+  the list and the field naming its column. Carrying all four parked lists across the pass boundary
+  is what lets those memos span passes: ccs/pb/pa were nil'd for a dirty channel, so their lists
+  re-minted every pass, and a cc or pb column holding anything parked re-placed its cells every pass
+  whether or not anything moved. The carry is safe by inspection — every reader of those three runs
+  after the park stage reinstalls them.
+
 - **2026-09-01** — renderUnion keeps a parked list whose contents held rather than minting all
   sixteen every pass, so the lane-bucket and union memos span passes and a parked-bearing lane
   carries tv's cells. Nothing owns a parked list the way a mutator owns a lane, and a pass renders

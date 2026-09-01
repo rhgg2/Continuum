@@ -4559,43 +4559,23 @@ function tv:rebuild(takeChanged)
     for chan, channel in tm:channels() do
       local c = channel.onTake
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
-      -- Replace-region parked pbs left the take but stay the displayed automation, as the parked
-      -- chord/cc are unioned below. see docs/trackerView.md § Backings and parked cells
-      local parkedPb = channel.parked.pb or {}
-      if c.pb or #parkedPb > 0 then
-        local events = c.pb and c.pb.events or {}
-        if #parkedPb > 0 then
-          events = {}
-          for _, e in ipairs(c.pb and c.pb.events or {}) do util.add(events, e) end
-          for _, e in ipairs(parkedPb) do util.add(events, e) end
-          table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
-        end
-        addGridCol(chan, 'pb', nil, events)
-      end
+      -- Replace-region parked pbs stay the displayed automation; tm hands the whole population,
+      -- nil where none exists. see docs/trackerManager.md § Lane occupancy
+      local pbEvents = tm:authoredPb(chan)
+      if pbEvents then addGridCol(chan, 'pb', nil, pbEvents) end
       -- Replace-region parked notes left the take but stay the displayed chord; tm hands each lane
       -- its whole population in the column's own order. see docs/trackerView.md § Backings and parked cells
       for lane, events in ipairs(tm:authoredLanes(chan)) do
         addGridCol(chan, 'note', lane, events)
       end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
-      -- Replace-region parked ccs left the take but stay the displayed automation: union each
-      -- back into its cc column, as the parked chord is unioned above. see docs/trackerView.md § Backings and parked cells
-      local parkedCCByNum = {}
-      for _, m in ipairs(channel.parked.ccs or {}) do util.bucket(parkedCCByNum, m.cc, m) end
+      -- Replace-region parked ccs left the take but stay the displayed automation, as the parked
+      -- chord is: tm hands each cc column its whole population. see docs/trackerView.md § Backings and parked cells
+      local ccCols = tm:authoredCCs(chan)
       local ccNums = {}
-      for n in pairs(c.ccs) do util.add(ccNums, n) end
+      for n in pairs(ccCols) do util.add(ccNums, n) end
       table.sort(ccNums)
-      for _, n in ipairs(ccNums) do
-        local authored = c.ccs[n]
-        local events   = authored and authored.events or {}
-        if parkedCCByNum[n] then
-          events = {}
-          for _, e in ipairs(authored.events)  do util.add(events, e) end
-          for _, e in ipairs(parkedCCByNum[n]) do util.add(events, e) end
-          table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
-        end
-        addGridCol(chan, 'cc', n, events)
-      end
+      for _, n in ipairs(ccNums) do addGridCol(chan, 'cc', n, ccCols[n]) end
       addFxCols(chan)
     end
     perf.stop('cols')
