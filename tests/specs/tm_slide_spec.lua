@@ -297,6 +297,45 @@ return {
     end,
   },
 
+  {
+    -- The same sentence for a region host. A region's membership is the lane's authored population,
+    -- so a member that parks is a glide target as an on-take one is -- and the chain that parked it
+    -- is a neighbour's, which must not reach into this one. see docs/trackerManager.md § Lane occupancy
+    name = 'a region glides onto a parked member as it does onto an on-take one',
+    run = function(harness)
+      local function glide(park)
+        local h = harness.mk()
+        h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                        detune = 0, delay = 0, lane = 1 })
+        h.tm:flush()
+        h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
+                        detune = 0, delay = 0, lane = 1 })
+        h.tm:flush()
+        local regions = { { uuid = 'fxr-slide', chan = 1, startppq = 0, endppq = 480,
+                            fx = { { kind = 'slide', over = { 1, 2 }, place = 'in' } } } }
+        -- A second region over the successor alone: note-dest, so it parks it and seats no pb.
+        if park then
+          util.add(regions, { uuid = 'fxr-park', chan = 1, startppq = 240, endppq = 480,
+                              fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } })
+        end
+        h.ds:assign('fxRegions', regions)
+        h.tm:rebuild(); h.tm:flush()
+        return pbSeatsOf(h.fm:dump(), 1), #h.tm:getChannel(1).parked
+      end
+      local function valAt(seats, ppq)
+        for _, s in ipairs(seats) do if s.ppq == ppq then return s.val end end
+      end
+
+      local onTake, unparked = glide(false)
+      local parked, off      = glide(true)
+      t.eq(unparked, 0, 'the plain fixture leaves the successor on the take')
+      t.eq(off,      1, 'the second region parks the successor off-take (non-vacuous)')
+      t.eq(valAt(onTake, 240), centsToRaw(-100),
+        'the on-take successor enters a semitone below its own pitch and glides onto it')
+      t.deepEq(parked, onTake, 'and the parked successor gives the same stream, tick for tick')
+    end,
+  },
+
   ----- Disjoint windows each seat their own pb span
 
   {

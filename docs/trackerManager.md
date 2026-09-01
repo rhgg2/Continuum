@@ -1095,6 +1095,13 @@ Parking takes no onset out of that population, so a window stands where it stood
 between the halves and the lane it occupies is unchanged, and a host's chain stops at a successor
 its region has parked — the note the derived output stands in for.
 
+Membership reads the whole population; lane allocation reads the on-take half alone. A region's
+members are what sounds on its lanes, and a parked cell is one: it is the note the author sees, and
+the chain that parked it is a neighbour's business. Allocation asks a narrower question — which
+lanes the derived output may take — and a parked host's own tiles already hold its lane, so counting
+the host as well would push its output off the lane it was written on. `eachLaneSpan` walks either
+population: `membersOf` hands it the whole, `allocateRegionLanes` the column alone.
+
 The frame owns both halves. Every channel carries its parked list across the pass boundary, dirty
 or clean, since those cells are off-take and a wholesale mm re-read has no claim on them; the clip
 therefore reads a true lane from the pass's head, before the park stage rewrites the list. The lane

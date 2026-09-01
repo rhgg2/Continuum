@@ -145,25 +145,32 @@ do
   -- PA holds no lane of its own and never answers. See docs/trackerManager.md § Lane occupancy.
   --invariant: each parked bucket holds its lane's cells in ppq order
   local parkedLanes = setmetatable({}, { __mode = 'k' })   -- parked list -> its lane buckets
+  local noParked = {}
+  --post: unsafe result = the lane's parked cells in ppq order; empty when the lane holds none
+  function frame.parkedOnLane(chan, lane)
+    -- The buckets are memoised against the list they index, and the render union replaces that
+    -- list whole, so a stale index cannot be reached.
+    local parked = frame.channels[chan].parked
+    local byLane = parkedLanes[parked]
+    if not byLane then
+      byLane = {}
+      for _, cell in ipairs(parked) do util.bucket(byLane, cell.lane, cell) end
+      for _, bucket in pairs(byLane) do util.sortByPPQ(bucket) end
+      parkedLanes[parked] = byLane
+    end
+    return byLane[lane] or noParked
+  end
+
   function frame.nextOnLane(chan, lane, ppq)
-    local channel, found = frame.channels[chan], nil
-    local col = channel.columns.notes[lane]
+    local found
+    local col = frame.channels[chan].columns.notes[lane]
     if col then
       for i = util.firstAfter(col.events, ppq), #col.events do
         if col.events[i].evType ~= 'pa' then found = col.events[i]; break end
       end
     end
-    -- The buckets are memoised against the list they index, and the render union replaces that list
-    -- whole, so a stale index cannot be reached.
-    local byLane = parkedLanes[channel.parked]
-    if not byLane then
-      byLane = {}
-      for _, cell in ipairs(channel.parked) do util.bucket(byLane, cell.lane, cell) end
-      for _, bucket in pairs(byLane) do util.sortByPPQ(bucket) end
-      parkedLanes[channel.parked] = byLane
-    end
-    local bucket = byLane[lane]
-    local parked = bucket and bucket[util.firstAfter(bucket, ppq)]
+    local bucket = frame.parkedOnLane(chan, lane)
+    local parked = bucket[util.firstAfter(bucket, ppq)]
     if parked and (not found or parked.ppq < found.ppq) then found = parked end
     return found
   end
@@ -322,28 +329,51 @@ end
 
 -- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
 -- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
-local function eachWindowNote(chan, startL, endL, fn)
-  for laneIdx, col in ipairs(frame.channels[chan].columns.notes) do
+local function appendLaneCells(list, startL, out)
+  local from = util.firstAfter(list, startL)
+  -- The cell already sounding as the window opens leads: its tail reaches in even though its onset
+  -- does not. A PA holds no lane of its own and never answers.
+  for j = from - 1, 1, -1 do
+    if list[j].evType ~= 'pa' then util.add(out, list[j]); break end
+  end
+  for j = from, #list do
+    if list[j].evType ~= 'pa' then util.add(out, list[j]) end
+  end
+end
+
+-- What holds a lane on the take, which a host's own output stands in for once it parks.
+local function onTakeOnLane(chan, lane, startL)
+  local cells = {}
+  appendLaneCells(frame.channels[chan].columns.notes[lane].events, startL, cells)
+  return cells
+end
+
+-- A lane's whole authored population, on-take and parked alike: what sounds there.
+-- see docs/trackerManager.md § Lane occupancy
+local function authoredOnLane(chan, lane, startL)
+  local cells = onTakeOnLane(chan, lane, startL)
+  appendLaneCells(frame.parkedOnLane(chan, lane), startL, cells)
+  util.sortByPPQ(cells)
+  return cells
+end
+
+-- One lane walk over an ordered population: each cell sounds to the next onset or its own ceiling.
+-- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
+--pre: cellsOnLane(chan, lane, startL) returns the lane's population in ppq order
+local function eachLaneSpan(chan, startL, endL, cellsOnLane, fn)
+  for laneIdx in ipairs(frame.channels[chan].columns.notes) do
     -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
     -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
-    local events = col.events
     local pending   -- onset awaiting its tail bound (the next onset's ppq, or endL)
     local function sound(nextOn)
       local ceil = (pending.endppq == nil or pending.endppq == util.OPEN) and endL or pending.endppq
       local hi   = math.min(ceil, nextOn)
       if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
     end
-    local from = util.firstAfter(events, startL)
-    for j = from - 1, 1, -1 do
-      if events[j].evType ~= 'pa' then pending = events[j]; break end
-    end
-    for j = from, #events do
-      local evt = events[j]
-      if evt.evType ~= 'pa' then
-        if pending then sound(evt.ppq) end
-        if evt.ppq >= endL then pending = nil; break end
-        pending = evt
-      end
+    for _, evt in ipairs(cellsOnLane(chan, laneIdx, startL)) do
+      if pending then sound(evt.ppq) end
+      if evt.ppq >= endL then pending = nil; break end
+      pending = evt
     end
     if pending then sound(endL) end
   end
@@ -352,7 +382,7 @@ local function membersOf(chan, startL, endL)
   local out = {}
   -- The lane rides along: a monophonic stage (portamento) glides the lane-1 voice alone, and a
   -- member's column is the only place that is knowable.
-  eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi, evt)
+  eachLaneSpan(chan, startL, endL, authoredOnLane, function(laneIdx, lo, hi, evt)
     util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi, lane = laneIdx }))
   end)
   return out
@@ -386,7 +416,7 @@ end
 -- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
 local function allocateRegionLanes(chan, startL, endL, derived, emitted)
   local occupied = {}
-  eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
+  eachLaneSpan(chan, startL, endL, onTakeOnLane, function(laneIdx, lo, hi)
     util.bucket(occupied, laneIdx, { lo, hi })
   end)
   -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane

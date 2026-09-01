@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-01** — A region's membership is its lanes' whole authored population, parked cells
+  included, over the column-only read it had: a parked cell is the note the author sees, so a
+  neighbouring chain parking it must not silently drop a glide that aimed at it. Lane allocation
+  keeps the column alone, since a parked host's own tiles already hold its lane and counting the
+  host too would push its output off it.
+
 - **2026-09-01** — **Source annotations are `pre`, `post` and `invariant`, each stating a
   predicate.** `--contract:` conflated the caller's obligation with the callee's guarantee, so a
   false line could not say whose bug it was; pre and post split that, and a module, having no call
