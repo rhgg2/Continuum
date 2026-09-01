@@ -507,6 +507,27 @@ already held. So a trigger is not a rebuild: mm's converged rebind fires
 `reload{wholesale=false, chans={}}` precisely so that dirt marked while tm
 was dormant gets consumed, and when there is none this gate stops the pass.
 
+### The frame handle
+
+`frame` is the handle the pipeline mutates and the accessors publish. Its
+`channels` map swaps each pass — `newPass` mints the fresh one and hands the
+old back for the carry-forward loop to read the clean channels out of — and
+the operations that seat cells travel on the handle beside it: `spliceCell`,
+`setCell`, `renewLane`, `markRenewed` and `orderLane`. Cells are
+self-describing, so each takes the frame's own coordinates.
+
+The pipeline mutates what it was handed and returns what it builds. The
+frame, the raw index and the stager (§ Update manager) are handed in; the
+maps a pass builds — the window set, the freeze rects, the fx realisation —
+come back from `rebuildPipeline` for `tm:rebuild` to install. A map with one
+reader inside the pass, like the per-host targets the realisation builder
+folds, stays a pipeline local.
+
+`fxNotesByHost` is the one map handed in rather than returned. A clean
+channel's derived lists carry between passes, so the fx stage writes the
+channels it ran and leaves the rest standing; its lists are built from copies
+of the fx specs, which the tail walk is still settling when the map is made.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* is object identity,

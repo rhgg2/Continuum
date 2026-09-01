@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
 > opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 4 (the seams drawn in place)
+> at phase 5 (one window population)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -197,59 +197,12 @@ the seed minters stay with the structures they read. The model is
    times; sectioned as it already is, 2900 lines is the size of a batch
    derivation pipeline.
 
-1. The frame is passed as a handle and mutated in place, and the
-   published maps come back as a return value. The stages splice into
-   columns that they and later stages both read, so the frame departs
-   from the house sequence of gather, compute, mutate. The rule is that
-   the engine mutates only what it was handed, and everything it
-   *creates* leaves by the return.
-
-1. The fx maps meet that rule directly. `fxRealisationByUuid` and
-   `freezeRectByUuid` are written once at the tail of the pipeline and
-   read only by accessors, so they come back from `run` and tm
-   installs them. `fxTargetsByHost` and `fxParkedByHost` have
-   one reader each, the realisation builder at that same tail, so they
-   are the pipeline's own locals and never reach tm.
-
-1. Freeze eligibility is a decision about what tm will do, and so is
-   not rebuild output. An fx window is one host's span typed by
-   one stream it parks, and every window a host emits takes that
-   host's span, so **`windowSet`** holds one window per host —
-   channel, span, host type, and the targets its chain reaches — and
-   mints the per-target list from it for the readers that scan one. The
-   rebuild publishes the set; `freezeRefused` reads it in one pass over
-   the channel; and both `tm:freezeEligible` and `freezeRegion`'s gate
-   call that on demand, so the button and the verb answer from one
-   source. Freeze's own census goes with them, and a global region
-   reaches the gate as its expansions, so a chain overlapping one is
-   refused.
-
-1. `fxOut` marks the rule's scope. It is created by the engine and
-   never leaves it, so nothing about the boundary bears on it; the one
-   value that does cross, `fxNotesByHost`, is built from copies of
-   the specs because the tail walk is still settling them.
-
-1. Two things are the engine's own and stay with it: `parkedClipEnd`
-   and `noteFxClipEnd`, uuid-keyed caches that outlive a pass. Inside one
-   file their invalidation is implicit — `didReload` flows down from
-   `tm:rebuild` and each cache reads it in passing. Across a boundary
-   it has to be said out loud, most simply as a `forget()` the
-   take-tier path calls. The boundary earns its keep here: a cache that
-   survives a take swap is a bug, and today nothing in the code names
-   the moment it must not.
-
-1. The fx builders are the protocol already working. `buildFreezeMaps`,
-   `buildFxTargets` and `buildFxRealisation` are declared beside the
-   accessors that read their output and called from `rebuildPipeline`.
-   The map lives with its readers and the pipeline reaches out to fill
-   it — that arrow, in production, today. Three of the fx maps are
-   written directly by the fx stage; under the rule they join their
-   siblings.
-
-1. The index and the stager stay in tm, gathered into door tables. They
-   are the edit side's own state and their doors are already declared
-   as explicit lists. Passing `index` and `stager` as tables of those
-   doors costs two names and moves no code.
+1. The seams are drawn in place, all still inside trackerManager: the
+   frame travels as a handle carrying its operations, the raw index and
+   the stager reach the pipeline as door tables, the pass's maps come
+   back by return, and the take-tier path calls `forget()` on the caches
+   that outlive a pass. The model is `docs/trackerManager.md` § The frame
+   handle, § Update manager, § Fx window census and § Note fx span cache.
 
 1. The write surface falls on the same line. `index.assign`,
    `index.stampColEvt` and `index.withDeferredSort` are engine-only, so
@@ -288,24 +241,11 @@ the seed minters stay with the structures they read. The model is
    reconcile skeletons. They move with the engine and stop being names
    at all.
 
-1. The second is operations on structures already being passed. If the
-   frame travels as a handle, then `spliceCell`, `setCell`, `orderLane`
-   and `renewLane` travel on it, with `newPass` and `markRenewed` for the
-   pass boundary and the renewal memo: they are the frame's operations,
-   and each takes the frame's own coordinates or a piece of it. Two of
-   the seven belong elsewhere — `rawThenLogical` to the index, whose
-   lists it orders, and `sortByPPQ` to `util`, beside the seeks that
-   assume the order it makes. Seven names become zero.
-
-1. Two of the seven have a third caller. `setCell` is applied to a bare
-   fx spec and `setRaw` to bare specs, and each carries a branch for
-   it — `setRaw` accepts that a non-member record flags its channel's
-   list spuriously, and `setCell` calls `renewLane` on a lane the spec
-   does not sit in, against the invariant that a note lane's events
-   table changes identity only when its contents change. The cost is a
-   spurious re-render. Naming the travelling record as a thing in its
-   own right lets `setCell` belong to the frame and `setRaw` to the
-   index.
+1. The second is operations on structures already being passed. The
+   frame's operations travel on its handle, lane ordering belongs to the
+   index whose lists it orders, and `sortByPPQ` sits in `util` beside
+   the seeks that assume the order it makes. Seven names become zero
+   (`docs/trackerManager.md` § The frame handle).
 
 1. The two deductions leave the eight named above.
 
