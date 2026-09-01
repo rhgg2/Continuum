@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The projection between the frames is a value: timeContext, built at the head of
+  every tm:rebuild and read by everything that projects, over the lazy per-(cm, mm) cache it
+  replaces. It resolves against the length the pass derives against -- the pending end while
+  setLength's shrink flush runs -- so a shrink seats the events it keeps under the composite the
+  shortened take will have. A length change is thus a swing change, since the composite's ramps run
+  to (length, length): the head marks all sixteen channels stale when the length moves under a bound
+  take. Unmarked, the rebuild rule read the resulting raw/logical disagreement as an external raw
+  edit and let ppqL follow the stale raw, which moved an authored onset past the end of a shrunk
+  take. A take swap is exempt, the take arriving carrying its own projection and its raw being what
+  the frame is read from.
+
 - **2026-09-02** — Every column of a channel, not just its note lanes, is published as its whole
   authored population: frame.authoredCC / tm:authoredCCs and frame.authoredPb / tm:authoredPb join
   authoredEvents, and the grid build stops bucketing the channel's parked cc list itself. The three

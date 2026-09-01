@@ -63,6 +63,29 @@ to ppqL but does not change any event's ppqL. Events placed under
 one rpb appear at non-integer rows under another. Same accepted
 trade-off class as deliberately off-grid notes.
 
+## The time context
+
+1. **The projection between the two frames is a value, built once per
+   rebuild pass from the take's length, its resolution, the swing
+   library and the document's swing assignment.** `timeContext` carries
+   `fromLogical`, `toLogical` and the length it was resolved over.
+
+1. It is the tracker manager's counterpart to `viewContext` one layer
+   up (`docs/viewContext.md`): a pure snapshot, built by the layer that
+   owns it and read by what needs it. A changed input means a new
+   context, and nothing migrates.
+
+1. Construction is eager, at the head of `tm:rebuild` and before any
+   stage runs, so every stage of a pass projects through one value.
+   `tm:fromLogical` and `tm:toLogical` read the context the last head
+   built, which is also what the edit side sees between two passes.
+
+1. The length it resolves against is the one the pass derives against:
+   the pending end while `tm:setLength`'s shrink flush runs, and mm's
+   take length otherwise. A shrink therefore seats the events it keeps
+   under the composite the shortened take will have, and an event that
+   survives it is realised inside the new end.
+
 ## Reswing
 
 The take's swing is held by cm — a take-wide *global* layer and an
@@ -80,10 +103,16 @@ this channel resolves to changed":
 - this channel's per-column swing edited
 - a library entry referenced by either is edited or renamed in place
 - a slot is reassigned to a different library entry
+- the take's length changed, which re-resolves every composite
 
 The configChanged subscriber on tm marks the affected channels via
 `tm:markSwingStale(chan)` (or `nil` for all 16, when the global
-layer changes). Cross-take propagation is `seqMgr:reswingAll`,
+layer changes). The length arrives by a different route: a composite's
+ramps run to `(length, length)` (see Boundary clip), so the rebuild
+head compares the length of the context it builds against the one it
+replaces and marks all 16 when they differ. A take swap is no length
+change — the take arriving carries its own projection, and its raw is
+what the frame is read from. Cross-take propagation is `seqMgr:reswingAll`,
 which visits every take using a renamed library entry and binds
 through `tm:bindTake(opts.markSwingStale=true)` so the visited
 take's rebuild rebuilds raw from ppqL under its current swing.
@@ -163,10 +192,9 @@ phase, and negative-shift atoms (see Boundary clip below).
 on a resolved factor array, used by the editor's QN-space preview;
 take-level callers should not use them directly.
 
-The helper is `tm:swingSnapshot()`, which freezes both layers
-against the current cm config and returns ready-to-use `fromLogical`
-/ `toLogical` closures keyed by channel. The rebuild rule captures
-one snapshot per pass and routes both arms through it.
+One resolved Shape per layer is held by the time context, keyed by
+channel; every consumer projects through it, the rebuild rule
+included (see The time context above).
 
 ### Shape representation
 
@@ -302,8 +330,8 @@ materialises the apply across the take and clips:
 4. Pin `(0,0)` and `(length, length)`; return the resulting Shape.
 
 Consumers eval/invert this Shape rather than calling `applyFactors`
-directly. `tm:swingSnapshot()` carries one Shape per layer
-(`global` + per-channel `column`), recomputed each rebuild.
+directly. The time context carries one Shape per layer (`global` +
+per-channel `column`), rebuilt each pass.
 
 The clip is **load-bearing, not edge-case correction.** Without it,
 identity-with-shift and phase break injectivity at the take edges.

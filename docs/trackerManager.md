@@ -388,10 +388,10 @@ semantics — what a slot *is*, how factors compose, how
 logical↔realisation works — live in `docs/timing.md`.
 
 tm exposes the resolved transforms as `tm:fromLogical(chan, ppqL, off)`
-and `tm:toLogical(chan, ppq)`, cached per `(cm, mm)` in a file-local
-`swing` snapshot and cleared at the head of each rebuild (`clearSwing`). `tm:markSwingStale`
-flags channels whose resolved swing changed so the next rebuild
-rederives their raw ppqs from `ppqL`.
+and `tm:toLogical(chan, ppq)`, both projecting through the time context
+the rebuild head builds (`docs/timing.md` § The time context).
+`tm:markSwingStale` flags channels whose resolved swing changed so the
+next rebuild rederives their raw ppqs from `ppqL`.
 
 ## Mutation contract
 

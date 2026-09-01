@@ -1632,61 +1632,25 @@ function tm:name()                 return mm and mm:name() end
 function tm:timeSigs()             return mm and mm:timeSigs() or {} end
 function tm:interpolate(A, B, ppq, field) return curves.interpolate(A, B, ppq, field) end
 
--- E_c: column is inner, global is outer (see docs/timing.md).
---contract: cached per-(cm, mm) pair; invalidated at rebuild head.
---  fromLogical returns rounded int + optional offset (raw ppqs are integer).
---  toLogical returns the raw float (ppqL is a float frame).
-local clearSwing do
-  local swing = nil
-  local function currentSwing()
-    if not swing then
-      local global, column = nil, {}
-      if mm then
-        local length, ppqPerQN = mm:length() or 0, mm:resolution()
-        local lib = cm:get('swings', { mergeTiers = true })
-        local function resolve(name)
-          local composite = name and lib[name]
-          if timing.isIdentity(composite) or length <= 0 then return nil end
-          return timing.resolveComposite(composite, length, ppqPerQN)
-        end
-        local sw = ds:get('swing') or {}
-        global = resolve(sw.global)
-        for chan, name in pairs(sw) do
-          if chan ~= 'global' then column[chan] = resolve(name) end
-        end
-      end
-      swing = {
-        fromLogical = function(chan, ppqL)
-          local ppqI = ppqL
-          local c = column[chan]
-          if c      then ppqI = timing.eval(c, ppqI) end
-          if global then ppqI = timing.eval(global, ppqI) end
-          return ppqI
-        end,
-        toLogical = function(chan, ppqI)
-          local ppqL = ppqI
-          if global then ppqL = timing.invert(global, ppqL) end
-          local c = column[chan]
-          if c      then ppqL = timing.invert(c, ppqL) end
-          return ppqL
-        end,
-      }
-    end
-    return swing
-  end
+-- The projection the pass runs on, replaced at the rebuild head. The seed is the identity, and
+-- stands until the first rebuild. see docs/timing.md § The time context
+local timeContext = util.instantiate('timeContext', { length = 0, swings = {}, assignment = {} })
 
-  function tm:fromLogical(chan, ppqL, offset)
-    return util.round(currentSwing().fromLogical(chan, ppqL) + (offset or 0))
-  end
-
-  function tm:toLogical(chan, ppqI)
-    return currentSwing().toLogical(chan, ppqI)
-  end
-
-  function clearSwing()
-    swing = nil
-  end
+--post: fresh result = the projection over tm:length(), cm's merged swings and ds's assignment
+local function newTimeContext()
+  return util.instantiate('timeContext', {
+    length     = tm:length(),
+    ppqPerQN   = mm:resolution(),
+    swings     = cm:get('swings', { mergeTiers = true }),
+    assignment = ds:get('swing') or {},
+  })
 end
+
+--post: result = ppqL projected under the context the last rebuild head built
+function tm:fromLogical(chan, ppqL, offset) return timeContext:fromLogical(chan, ppqL, offset) end
+
+--post: result = ppqI projected under the context the last rebuild head built
+function tm:toLogical(chan, ppqI)           return timeContext:toLogical(chan, ppqI) end
 
 --contract: chan==nil marks all 16 channels stale; otherwise just the named channel
 --contract: consumed by the next tm:rebuild, then cleared
@@ -5128,7 +5092,11 @@ function tm:rebuild(takeChanged)
   if didReload or takeChanged then dirt.add(nil, true); forgetCaches() end
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
-  clearSwing()   -- rebuild is the (cm, mm) coherence point
+  local prevLength = timeContext:length()   -- rebuild is the (cm, mm) coherence point
+  timeContext = newTimeContext()
+  -- A length change re-times every seat near the take's end, and unmarked the rebuild rule reads
+  -- that as an external raw edit; a swap is no length change. see docs/timing.md § Reswing
+  if not takeChanged and timeContext:length() ~= prevLength then dirt.swing.add(nil) end
   -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
   -- gated stage below skips clean chans so the carried columns stand.
   local prevChannels = frame.newPass()

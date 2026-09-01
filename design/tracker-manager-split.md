@@ -181,10 +181,10 @@ decides whether phase 3 is worth taking.**
 ## The time context
 
 1. **The projection between the logical and realisation frames is a
-   value, built once per pass from the take's length, its resolution,
-   the swing library and the document's swing assignment.** It carries
-   `fromLogical`, `toLogical` and the length it was built from. A
-   changed input means a new context, and nothing migrates.
+   value, built once per pass from the length the pass derives against,
+   the take's resolution, the swing library and the document's swing
+   assignment.** It carries `fromLogical`, `toLogical` and that length.
+   A changed input means a new context, and nothing migrates.
 
 1. `viewContext` is the same shape one layer up
    (`docs/viewContext.md`): a pure snapshot of coordinates, built by
@@ -312,11 +312,3 @@ the seed minters stay with the structures they read. The model is
 
 1. `rebuildPbs` is pinned at its own seams by `tm_pb_keep_split_spec`,
    `tm_seat_scope_spec` and `tm_pb_seam_spec`.
-
-## Open
-
-1. Which length the context resolves its swing composite against.
-   `tm:setLength`'s shrink flush drives a rebuild with `pendingLen`
-   set, so that pass clips tails to the new end while the take still
-   runs to the old one. The composite is resolved over a span, and
-   which span that pass wants is undecided.
