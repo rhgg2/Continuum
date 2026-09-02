@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — Twenty-five helpers with no edit-side caller move down into the REBUILD region,
+  each landing beside the stage that calls it, so the engine is one contiguous slice and the names
+  it references from above fall from 37 to 21. Four window constructors stay where they are --
+  windowSet, windowForNote, clippedSpanEnd and expandedUuid -- because the freeze path mints a
+  window for a host the pass's census never published, and the module boundary settles the family in
+  one decision. luacheck is the check the move needs: a name dropped below its caller reads as an
+  undefined global.
+
 - **2026-09-02** — tm's rebuild head prepares what the pipeline reads and consumes what it returns.
   The globals expansion needs the in-use channel set, which is read off the raw index, so the
   wholesale reload moves up to the head ahead of the head snapshot of document keys, and the

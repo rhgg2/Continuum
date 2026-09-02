@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: the engine's own names gather at the region (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the rebuild pipeline takes its inputs and returns its state (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: pb cents↔raw arithmetic moves to tuning (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the dirt journal mints its own seeds (design/decisions.md 2026-09-02)
-- 2026-09-02 tm: the rebuild stages take the time context as a parameter (design/decisions.md 2026-09-02)
 
 ## Now
 
@@ -36,19 +36,12 @@
 
 ## Queued (current phase; one-liners)
 
-- **tm: the engine's own names gather at the region.** The twenty-odd
-  engine-only file-scope names move down into the region so it is one
-  contiguous slice: the fx-expansion helper family (`coverInto` through
-  `windowSet`), the reconcile skeletons, `coverOnsets`, `ccGridStep`,
-  the fx map builders `buildFreezeRects`, `buildFxTargets` and
-  `buildFxRealisation`, and the constants `FRONTIER_SEED_CAP` and `EPS`.
-  `windowSet`'s one edit-side use is the empty census the accessors
-  stand on before the first pass, which the move must place. Pure
-  movement otherwise: no signature changes, and the suite is the check.
-
 - **tm: the engine leaves as `trackerRebuild.lua`.** The region becomes
   a module instantiated with `mm`, `cm`, `ds`, `timeContext`, `index`,
   `stager`, `dirt` and `frame`, and `tm:rebuild` calls its pipeline.
+  The four window constructors the freeze path shares —  `windowSet`,
+  `windowForNote`, `clippedSpanEnd`, `expandedUuid` — want a home in the
+  same change (design § Phase 3).
   `tm_pb_gating_spec`'s identity assertion on `onTake.pb` and
   `tm_gate_parity_spec`'s `VOLATILE` set are the two specs a faithful
   move disturbs (§ What the specs hold). `docs/trackerManager.md`

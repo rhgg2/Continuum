@@ -47,9 +47,6 @@ local timing  = require 'timing'
 local voicing = require 'voicing'
 local tuning  = require 'tuning'
 
--- Above this many disturbed seeds (dirt + derived fx events) the frontier's per-seed probes cost more
--- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
-local FRONTIER_SEED_CAP = 16
 local generators = require 'generators'
 local perf       = require 'perf'
 
@@ -84,9 +81,6 @@ local rebuildRequested = false
 -- Held only across tm:setLength's shrink flush: derivation (tail clip, fx windows, parked
 -- realisation) must see the new take end before mm:setLength moves the EOT. see § Length
 local pendingLen
--- ppq tolerance for "raw agrees with its logical projection"; absorbs
--- fromLogical rounding slop, shared by the tail pass and rebuild rule.
-local EPS         = 1
 
 ---------- FRAME
 
@@ -324,26 +318,9 @@ local function pbLim()
   return pbLimCache
 end
 
--- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
-local function ccGridStep()
-  return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
-end
-
--- Onset-membership cover of a ppq-sorted list against disjoint ascending spans: emit each event whose
--- onset falls in [lo, hi). The fx-path rule -- visit window extents, never the whole channel.
-local function coverOnsets(events, spanSet, emit)
-  for _, span in ipairs(spanSet or {}) do
-    for i = util.firstAtOrAfter(events, span[1]), #events do
-      local evt = events[i]
-      if evt.ppq >= span[2] then break end
-      emit(evt)
-    end
-  end
-end
-
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
 
------ Fx expansion helpers
+----- Fx uuids and windows
 
 -- ids are `fxr-N` region / `fxp-N` parked. A mint takes the higher of the store's high-water mark
 -- and its own counter: store alone reissues an unflushed batch's id; counter alone, reset per session, reissues a live one.
@@ -363,153 +340,6 @@ local function newFxUuid(key)
   return prefix .. '-' .. seq
 end
 
--- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
--- see docs/trackerManager.md § Span-covered fx scans
-local function coverInto(list, spanSet, admit, emit)
-  local nextIdx = 1
-  for _, span in ipairs(spanSet) do
-    local govern = util.firstAfter(list, span[1]) - 1
-    while govern >= nextIdx and admit and not admit(list[govern]) do govern = govern - 1 end
-    local i = math.max(govern, nextIdx)
-    while i <= #list do
-      local entry = list[i]
-      i = i + 1
-      if not admit or admit(entry) then
-        emit(entry)
-        if entry.ppq > span[2] then break end
-      end
-    end
-    nextIdx = i
-  end
-end
-
--- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
--- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
-local function appendLaneEvents(list, startL, out)
-  local from = util.firstAfter(list, startL)
-  -- The event already sounding as the window opens leads: its tail reaches in even though its onset
-  -- does not. A PA holds no lane of its own and never answers.
-  for j = from - 1, 1, -1 do
-    if list[j].evType ~= 'pa' then util.add(out, list[j]); break end
-  end
-  for j = from, #list do
-    if list[j].evType ~= 'pa' then util.add(out, list[j]) end
-  end
-end
-
--- What holds a lane on the take, which a host's own output stands in for once it parks.
-local function onTakeOnLane(chan, lane, startL)
-  local events = {}
-  appendLaneEvents(frame.channels[chan].onTake.notes[lane].events, startL, events)
-  return events
-end
-
--- A lane's whole authored population, on-take and parked alike: what sounds there.
--- see docs/trackerManager.md § Lane occupancy
-local function authoredOnLane(chan, lane, startL)
-  local events = {}
-  appendLaneEvents(frame.authoredEvents(chan, lane), startL, events)
-  return events
-end
-
--- One lane walk over an ordered population: each event sounds to the next onset or its own ceiling.
--- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
---pre: eventsOnLane(chan, lane, startL) returns the lane's population in ppq order
-local function eachLaneSpan(chan, startL, endL, eventsOnLane, fn)
-  for laneIdx in ipairs(frame.channels[chan].onTake.notes) do
-    -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
-    -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
-    local pending   -- onset awaiting its tail bound (the next onset's ppq, or endL)
-    local function sound(nextOn)
-      local ceil = (pending.endppq == nil or pending.endppq == util.OPEN) and endL or pending.endppq
-      local hi   = math.min(ceil, nextOn)
-      if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
-    end
-    for _, evt in ipairs(eventsOnLane(chan, laneIdx, startL)) do
-      if pending then sound(evt.ppq) end
-      if evt.ppq >= endL then pending = nil; break end
-      pending = evt
-    end
-    if pending then sound(endL) end
-  end
-end
-local function membersOf(chan, startL, endL)
-  local out = {}
-  -- The lane rides along: a monophonic stage (portamento) glides the lane-1 voice alone, and a
-  -- member's column is the only place that is knowable.
-  eachLaneSpan(chan, startL, endL, authoredOnLane, function(laneIdx, lo, hi, evt)
-    util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi, lane = laneIdx }))
-  end)
-  return out
-end
--- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
--- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
-local function channelStreams(chan, startL, endL, pbBase, ccBases)
-  local cols = frame.channels[chan].onTake
-  local pas, ats = {}, {}
-  for _, col in ipairs(cols.notes) do
-    for j = util.firstAtOrAfter(col.events, startL), #col.events do
-      local evt = col.events[j]
-      if evt.ppq >= endL then break end
-      if evt.evType == 'pa' then util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel }) end
-    end
-  end
-  local atEvents = cols.at and cols.at.events or {}
-  for j = util.firstAtOrAfter(atEvents, startL), #atEvents do
-    local evt = atEvents[j]
-    if evt.ppq >= endL then break end
-    util.add(ats, { ppq = evt.ppq, val = evt.val })
-  end
-  -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
-  -- column's order; bases pre-sorted, slices preserve order).
-  util.sortByPPQ(pas)
-  local ccs = {}
-  for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
-  return pas, ccs, ats, curves.slice(pbBase, startL, endL)
-end
--- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
--- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
-local function allocateRegionLanes(chan, startL, endL, derived, emitted)
-  -- reach tracks each lane's furthest span end, so a start past it clears the lane without
-  -- scanning occupied -- the common case, since region tiling emits notes in span order.
-  local occupied, reach = {}, {}
-  local function occupy(lane, lo, hi)
-    util.bucket(occupied, lane, { lo, hi })
-    reach[lane] = math.max(reach[lane] or hi, hi)
-  end
-  local function laneFree(lane, lo, hi)
-    if reach[lane] == nil or lo >= reach[lane] then return true end
-    for _, span in ipairs(occupied[lane]) do
-      if lo < span[2] and hi > span[1] then return false end
-    end
-    return true
-  end
-  eachLaneSpan(chan, startL, endL, onTakeOnLane, occupy)
-  -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
-  -- (the host itself is off-take, so eachWindowNote no longer sees it).
-  for _, spec in ipairs(emitted) do
-    if spec.ppqL < endL and spec.endppqL > startL then occupy(spec.lane, spec.ppqL, spec.endppqL) end
-  end
-  for _, spec in ipairs(derived) do
-    local lane = 1
-    while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
-    occupy(lane, spec.ppqL, spec.endppqL)
-    spec.lane = lane
-  end
-end
--- A parked event as a generator stream note: it sounds to its render clip, never to the authored
--- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
-local function soundingEvent(evt)
-  return util.assign(util.clone(evt), { endppq = evt.endppqC })
-end
-
--- A note host as fx expansion runs it: derived notes ride the host's lane/delay/sample.
-local function hostFromNote(host, windowEnd, lane)
-  return { window = { host.ppq, windowEnd }, notes = { host }, fx = host.fx,
-           id = host.uuid, lane = lane, delay = host.delay,
-           sample = host.sample, delayPpq = delayToPPQ(host.delay) }
-end
-
 -- Span end: an event's own ceiling (authored endppq or take length) clipped to the lane's strict-next
 -- onset (see docs/trackerManager.md § Lane occupancy); takeLenL is hoisted by the caller, not read from event/mm.
 local function clippedSpanEnd(evt, takeLenL)
@@ -517,34 +347,6 @@ local function clippedSpanEnd(evt, takeLenL)
                or math.min(evt.endppq, takeLenL)
   local successor = frame.nextOnLane(evt.chan, evt.lane, evt.ppq)
   return math.max(evt.ppq + 1, math.min(ceil, successor and successor.ppq or math.huge))
-end
-
-local clipEnd, forgetClipEnds
-do
-  -- uuid -> clipped span end (logical); take-scoped, dropped by forgetCaches at the take-tier seam,
-  -- which a take-length change (mm:setLength) reaches too.
-  local cache = {}
-
-  -- One clip cache, shared by on-take hosts and parked events; reclips on wholesale dirt, a seed
-  -- naming the event, or a seed ppq inside its cached span. See docs/trackerManager.md § Lane occupancy.
-  --contract: always the true clip; the cache is this function's alone to read and write
-  function clipEnd(evt, takeLenL)
-    local seeds, cached = dirt.has(evt.chan), cache[evt.uuid]
-    if cached and seeds ~= true then
-      local stands = true
-      for _, s in ipairs(seeds or {}) do
-        if s.uuid == evt.uuid or (s.ppqL and s.ppqL >= evt.ppq and s.ppqL <= cached) then
-          stands = false; break
-        end
-      end
-      if stands then return cached end
-    end
-    local clipped = clippedSpanEnd(evt, takeLenL)
-    cache[evt.uuid] = clipped
-    return clipped
-  end
-
-  function forgetClipEnds() cache = {} end
 end
 
 -- A note host (on-take or parked) as its degenerate window (note-is-a-region).
@@ -653,55 +455,6 @@ local function windowSet(windows, time)
   return doors
 end
 
--- The pass's fx windows, held once: one window per host -- authored region, on-take note or parked
--- note -- and the per-target list a view over them. see docs/trackerManager.md § Fx window census
---shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
-local function buildFxWindows(fxRegions, noteHostClips, time)
-  local windows = {}
-  -- Every window is minted here rather than taken by reference: a target set is no part of the
-  -- document, and a stored region must not acquire one.
-  local function hold(window)
-    window.targets = generators.chainTargets(window)
-    util.add(windows, window)
-  end
-
-  for _, r in ipairs(fxRegions) do
-    hold({ uuid = r.uuid, chan = r.chan, ppq = r.ppq, endppq = r.endppq,
-           fx = r.fx, hostType = 'region' })
-  end
-  -- Every fx host, on-take and parked alike, gets a window; sort order matches both halves
-  -- of a lane so parking moves no entry. See docs/trackerManager.md § Fx window census.
-  local noteHosts = {}
-  for host, clip in pairs(noteHostClips) do util.add(noteHosts, { host = host, endppq = clip }) end
-  table.sort(noteHosts, function(a, b)
-    local ha, hb = a.host, b.host
-    if ha.chan ~= hb.chan then return ha.chan < hb.chan end
-    if ha.lane ~= hb.lane then return ha.lane < hb.lane end
-    if ha.ppq ~= hb.ppq then return ha.ppq < hb.ppq end
-    return tostring(ha.uuid) < tostring(hb.uuid)
-  end)
-  for _, nh in ipairs(noteHosts) do hold(windowForNote(nh.host, nh.endppq)) end
-  return windowSet(windows, time)
-end
-
--- The stored baseline replayed into the same doors (docs/trackerManager.md § Fx window census).
---shape: replayed window -> { uuid, chan, ppq, endppq, targets }
---invariant: first-appearance order, so perTarget() reproduces the stored list exactly
-local function buildRealisedWindows(entries, time)
-  local windows, byUuid = {}, {}
-  for _, entry in ipairs(entries or {}) do
-    local window = byUuid[entry.id]
-    if not window then
-      window = { uuid = entry.id, chan = entry.chan, targets = {},
-                 ppq = entry.ppq, endppq = entry.endppq }
-      byUuid[entry.id] = window
-      util.add(windows, window)
-    end
-    window.targets[entry.evType == 'cc' and entry.cc or entry.evType] = true
-  end
-  return windowSet(windows, time)
-end
-
 -- Freeze eligibility over the pass's windows: a refusal means some other window would be left
 -- standing over the raw output this freeze creates. see docs/trackerManager.md § Fx window census
 local function freezeRefused(frozen, windows)
@@ -749,95 +502,6 @@ local function forEachEvent(fn)
       end
     end
   end
-end
-
-
------ Derived-event reconcile skeleton (R2)
--- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
---contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
-local function reconcileDerived(a)
-  local byKey, kept = {}, {}
-  for _, e in ipairs(a.existing) do byKey[a.key(e)] = e end
-  for _, spec in ipairs(a.predicted) do
-    local have = byKey[a.key(spec)]
-    if have and (not a.match or a.match(have, spec)) then
-      kept[have] = true
-      if a.onKeep then a.onKeep(spec, have) end
-    else
-      a.sink.add(a.make and a.make(spec) or spec)
-    end
-  end
-  for _, e in ipairs(a.existing) do
-    if not kept[e] then a.sink.del(e) end
-  end
-end
-
------ PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
-
--- Half-open span membership, frame-matched: projected column events always test logical --
--- projectEvent flips their ppq to ppqL and drops the sidecar; mm-frame records test raw.
-local function pcInSpans(seedSpans, ppq, logical)
-  for _, s in ipairs(seedSpans) do
-    local lo, hi = logical and s.sL or s.sRaw, logical and s.eL or s.eRaw
-    if ppq >= lo and ppq < hi then return true end
-  end
-  return false
-end
-
---contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
---contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
---contract: appends removals/adds to the sink {del(event), add(spec)}
---contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
---contract: seedSpans (from pcSeedSpans) narrow existing to in-span events; nil = whole channel
---invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
---invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
-local function reconcilePCsForChan(chan, records, sink, seedSpans)
-  local existing = {}
-  for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
-    if not seedSpans or pcInSpans(seedSpans, e.ppq, true) then util.add(existing, e) end
-  end
-
-  local groups = {}
-  for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
-
-  local winners = {}
-  for _, g in pairs(groups) do
-    table.sort(g, function(a, b) return a.lane < b.lane end)
-    util.add(winners, g[1])
-    for i = 2, #g do
-      local lost = g[i]
-      -- A seated record marks through its column event. An off-take fx spec holds no event, and
-      -- setEvent would renew the lane its number names without that lane's contents having moved.
-      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true)
-      elseif lost.spec then lost.spec.sampleShadowed = true end
-    end
-  end
-
-  reconcileDerived{
-    existing = existing, predicted = winners, sink = sink,
-    key   = function(x) return x.ppq end,
-    match = function(have, w) return have.derived and have.val == w.sample end,
-    make  = function(w) return { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
-                                 evType = 'pc', chan = chan, derived = 'pc' } end,
-  }
-end
-
------ fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
-
--- Identity is geometry and the name it carries: (host, ppq, endppqL, pitch, vel, detune, sample,
--- intentCents); stale endppqL still matches (tail-walk-owned end stays out). A rename with no pitch move leaves every other field the same, so keying the intent is what lets the reconcile see it.
-local function fxKey(spec)
-  return util.key(spec.derived, spec.ppq, spec.endppqL or 0,
-                  spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0, spec.intentCents)
-end
-
--- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
--- kept fxNote is re-clipped in place by the tail walk rather than re-added.
-local function reconcileFx(existing, predicted, sink)
-  reconcileDerived{ existing = existing, predicted = predicted, key = fxKey, sink = sink,
-    onKeep = function(spec, have)
-      spec.uuid, spec.realised, spec.endppq = have.uuid, have.realised, have.endppq
-    end }
 end
 
 ---------- RAW INDEX
@@ -1658,102 +1322,11 @@ local freezeRectByUuid = {}              -- uuid -> the gm rect a freeze-to-grou
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
 local fxNotesByHost = {}
 
--- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
--- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
-local function buildFreezeRects(hosts)
-  local hostChans, lanesByUuid = {}, {}
-  for _, host in ipairs(hosts) do hostChans[host.chan] = true end
-  for chan in pairs(hostChans) do
-    for _, note in ipairs(index.raw(chan).notes) do
-      -- A derived note carries its host's uuid, so the bucketing needs no window arithmetic.
-      if note.derived then
-        local lanes = lanesByUuid[note.derived] or {}
-        lanes[note.lane] = true
-        lanesByUuid[note.derived] = lanes
-      end
-    end
-  end
-  local rects = {}
-  for _, host in ipairs(hosts) do
-    -- A husk host (no fx, no output) claims an empty stream set rather than none: it is still
-    -- a host, and whether an empty footprint is worth minting is the caller's question.
-    local streams = {}
-    -- The note target is a park window, not output: a rect's note lanes are the ones the fx pass wrote.
-    for target in pairs(host.targets) do
-      if     target == 'pb'           then streams['pb:0'] = true
-      elseif type(target) == 'number' then streams['cc:' .. target] = true end
-    end
-    for lane in pairs(lanesByUuid[host.uuid] or {}) do streams['note:' .. lane] = true end
-    -- Single-channel by construction, so chanOffset 0 is the only key; span is the host's own.
-    rects[host.uuid] = { ppq = host.ppq, dur = host.endppq - host.ppq,
-                         chanLo = host.chan, streams = { [0] = streams } }
-  end
-  return rects
-end
-
--- The continuous half of the same window set: which pb/cc targets each host's chains own,
--- logical framed. see docs/trackerManager.md § Realisation by host
---shape: byHost[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
-local function buildFxTargets(hosts)
-  local byHost = {}
-  for _, host in ipairs(hosts) do
-    local targets, any = {}, false
-    for target in pairs(host.targets) do
-      -- One span per target: a window takes its host's span, so there is nothing to merge.
-      if target ~= 'note' then
-        targets[target], any = { { host.ppq, host.endppq } }, true
-      end
-    end
-    if any then byHost[host.uuid] = targets end
-  end
-  return byHost
-end
-
 -- One host's whole output in one place, gathered at the tail where the census has settled: the
 -- passes above each key their share by host uuid, and the ghost overlay draws exactly one entry.
 --shape: fxRealisationByUuid[uuid] = { uuid, chans, notes, targets, parked }
 --   targets' spans are logical; notes and parked are the built lists by reference
 local fxRealisationByUuid = {}
-
--- A stored global region is no host of its own, so its uuid answers with the union of the ones
--- it expanded into: their notes, their claimed targets, the events they parked. see docs/trackerManager.md § Realisation by host
-local function unionRealisation(uuid, byUuid)
-  local union = { uuid = uuid, chans = {}, notes = {}, targets = {}, parked = {} }
-  for chan = 1, 16 do
-    local part = byUuid[expandedUuid(uuid, chan)]
-    if part then
-      util.add(union.chans, chan)
-      for _, note in ipairs(part.notes)  do util.add(union.notes, note) end
-      for _, evt in ipairs(part.parked) do util.add(union.parked, evt) end
-      for target, claimed in pairs(part.targets) do
-        for _, span in ipairs(claimed) do util.bucket(union.targets, target, span) end
-      end
-    end
-  end
-  -- Each channel's list arrives in its own onset order; the union restores one order across them all.
-  table.sort(union.notes, function(a, b)
-    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-    return a.chan < b.chan
-  end)
-  -- The expanded hosts claim one span each over the same logical window, so the merge collapses
-  -- them back to the stored region's own.
-  for target, claimed in pairs(union.targets) do union.targets[target] = spans.merge(claimed) end
-  return union
-end
-
---contract: byHost carries the three shares the passes above keyed by host uuid: notes
--- (channel-keyed first), targets, parked
-local function buildFxRealisation(census, globals, byHost)
-  local out = {}
-  for _, p in ipairs(census) do
-    out[p.uuid] = { uuid = p.uuid, chans = { p.chan },
-                    notes   = (byHost.notes[p.chan] or {})[p.uuid] or {},
-                    targets = byHost.targets[p.uuid] or {},
-                    parked  = byHost.parked[p.uuid] or {} }
-  end
-  for _, region in ipairs(globals or {}) do out[region.uuid] = unionRealisation(region.uuid, out) end
-  return out
-end
 
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
 -- which points get authored at all, rather than cutting a curve back.
@@ -2271,6 +1844,55 @@ end
 
 ----- Rebuild shared helpers
 
+-- ppq tolerance for "raw agrees with its logical projection"; absorbs
+-- fromLogical rounding slop, shared by the tail pass and rebuild rule.
+local EPS         = 1
+
+-- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
+local function ccGridStep()
+  return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
+end
+
+-- Onset-membership cover of a ppq-sorted list against disjoint ascending spans: emit each event whose
+-- onset falls in [lo, hi). The fx-path rule -- visit window extents, never the whole channel.
+local function coverOnsets(events, spanSet, emit)
+  for _, span in ipairs(spanSet or {}) do
+    for i = util.firstAtOrAfter(events, span[1]), #events do
+      local evt = events[i]
+      if evt.ppq >= span[2] then break end
+      emit(evt)
+    end
+  end
+end
+
+local clipEnd, forgetClipEnds
+do
+  -- uuid -> clipped span end (logical); take-scoped, dropped by forgetCaches at the take-tier seam,
+  -- which a take-length change (mm:setLength) reaches too.
+  local cache = {}
+
+  -- One clip cache, shared by on-take hosts and parked events; reclips on wholesale dirt, a seed
+  -- naming the event, or a seed ppq inside its cached span. See docs/trackerManager.md § Lane occupancy.
+  --contract: always the true clip; the cache is this function's alone to read and write
+  function clipEnd(evt, takeLenL)
+    local seeds, cached = dirt.has(evt.chan), cache[evt.uuid]
+    if cached and seeds ~= true then
+      local stands = true
+      for _, s in ipairs(seeds or {}) do
+        if s.uuid == evt.uuid or (s.ppqL and s.ppqL >= evt.ppq and s.ppqL <= cached) then
+          stands = false; break
+        end
+      end
+      if stands then return cached end
+    end
+    local clipped = clippedSpanEnd(evt, takeLenL)
+    cache[evt.uuid] = clipped
+    return clipped
+  end
+
+  function forgetClipEnds() cache = {} end
+end
+
 local function pushNoteCol(channel)
   local notes = channel.onTake.notes
   return util.add(notes, { events = {} }), #notes
@@ -2360,6 +1982,94 @@ local function emptyChans()
   local t = {}
   for i = 1, 16 do t[i] = {} end
   return t
+end
+
+----- Derived-event reconcile skeleton (R2)
+-- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
+--contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
+local function reconcileDerived(a)
+  local byKey, kept = {}, {}
+  for _, e in ipairs(a.existing) do byKey[a.key(e)] = e end
+  for _, spec in ipairs(a.predicted) do
+    local have = byKey[a.key(spec)]
+    if have and (not a.match or a.match(have, spec)) then
+      kept[have] = true
+      if a.onKeep then a.onKeep(spec, have) end
+    else
+      a.sink.add(a.make and a.make(spec) or spec)
+    end
+  end
+  for _, e in ipairs(a.existing) do
+    if not kept[e] then a.sink.del(e) end
+  end
+end
+
+----- PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
+
+-- Half-open span membership, frame-matched: projected column events always test logical --
+-- projectEvent flips their ppq to ppqL and drops the sidecar; mm-frame records test raw.
+local function pcInSpans(seedSpans, ppq, logical)
+  for _, s in ipairs(seedSpans) do
+    local lo, hi = logical and s.sL or s.sRaw, logical and s.eL or s.eRaw
+    if ppq >= lo and ppq < hi then return true end
+  end
+  return false
+end
+
+--contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
+--contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
+--contract: appends removals/adds to the sink {del(event), add(spec)}
+--contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
+--contract: seedSpans (from pcSeedSpans) narrow existing to in-span events; nil = whole channel
+--invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
+--invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
+local function reconcilePCsForChan(chan, records, sink, seedSpans)
+  local existing = {}
+  for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
+    if not seedSpans or pcInSpans(seedSpans, e.ppq, true) then util.add(existing, e) end
+  end
+
+  local groups = {}
+  for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
+
+  local winners = {}
+  for _, g in pairs(groups) do
+    table.sort(g, function(a, b) return a.lane < b.lane end)
+    util.add(winners, g[1])
+    for i = 2, #g do
+      local lost = g[i]
+      -- A seated record marks through its column event. An off-take fx spec holds no event, and
+      -- setEvent would renew the lane its number names without that lane's contents having moved.
+      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true)
+      elseif lost.spec then lost.spec.sampleShadowed = true end
+    end
+  end
+
+  reconcileDerived{
+    existing = existing, predicted = winners, sink = sink,
+    key   = function(x) return x.ppq end,
+    match = function(have, w) return have.derived and have.val == w.sample end,
+    make  = function(w) return { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
+                                 evType = 'pc', chan = chan, derived = 'pc' } end,
+  }
+end
+
+----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
+
+-- Identity is geometry and the name it carries: (host, ppq, endppqL, pitch, vel, detune, sample,
+-- intentCents); stale endppqL still matches (tail-walk-owned end stays out). A rename with no pitch move leaves every other field the same, so keying the intent is what lets the reconcile see it.
+local function fxKey(spec)
+  return util.key(spec.derived, spec.ppq, spec.endppqL or 0,
+                  spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0, spec.intentCents)
+end
+
+-- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
+-- kept fxNote is re-clipped in place by the tail walk rather than re-added.
+local function reconcileFx(existing, predicted, sink)
+  reconcileDerived{ existing = existing, predicted = predicted, key = fxKey, sink = sink,
+    onKeep = function(spec, have)
+      spec.uuid, spec.realised, spec.endppq = have.uuid, have.realised, have.endppq
+    end }
 end
 
 ----- Rebuild internals
@@ -3353,6 +3063,204 @@ local function rebuildPA(time)
   end
 end
 
+----- Fx expansion helpers
+
+-- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
+-- see docs/trackerManager.md § Span-covered fx scans
+local function coverInto(list, spanSet, admit, emit)
+  local nextIdx = 1
+  for _, span in ipairs(spanSet) do
+    local govern = util.firstAfter(list, span[1]) - 1
+    while govern >= nextIdx and admit and not admit(list[govern]) do govern = govern - 1 end
+    local i = math.max(govern, nextIdx)
+    while i <= #list do
+      local entry = list[i]
+      i = i + 1
+      if not admit or admit(entry) then
+        emit(entry)
+        if entry.ppq > span[2] then break end
+      end
+    end
+    nextIdx = i
+  end
+end
+
+-- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
+-- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
+local function appendLaneEvents(list, startL, out)
+  local from = util.firstAfter(list, startL)
+  -- The event already sounding as the window opens leads: its tail reaches in even though its onset
+  -- does not. A PA holds no lane of its own and never answers.
+  for j = from - 1, 1, -1 do
+    if list[j].evType ~= 'pa' then util.add(out, list[j]); break end
+  end
+  for j = from, #list do
+    if list[j].evType ~= 'pa' then util.add(out, list[j]) end
+  end
+end
+
+-- What holds a lane on the take, which a host's own output stands in for once it parks.
+local function onTakeOnLane(chan, lane, startL)
+  local events = {}
+  appendLaneEvents(frame.channels[chan].onTake.notes[lane].events, startL, events)
+  return events
+end
+
+-- A lane's whole authored population, on-take and parked alike: what sounds there.
+-- see docs/trackerManager.md § Lane occupancy
+local function authoredOnLane(chan, lane, startL)
+  local events = {}
+  appendLaneEvents(frame.authoredEvents(chan, lane), startL, events)
+  return events
+end
+
+-- One lane walk over an ordered population: each event sounds to the next onset or its own ceiling.
+-- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
+--pre: eventsOnLane(chan, lane, startL) returns the lane's population in ppq order
+local function eachLaneSpan(chan, startL, endL, eventsOnLane, fn)
+  for laneIdx in ipairs(frame.channels[chan].onTake.notes) do
+    -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
+    -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
+    local pending   -- onset awaiting its tail bound (the next onset's ppq, or endL)
+    local function sound(nextOn)
+      local ceil = (pending.endppq == nil or pending.endppq == util.OPEN) and endL or pending.endppq
+      local hi   = math.min(ceil, nextOn)
+      if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
+    end
+    for _, evt in ipairs(eventsOnLane(chan, laneIdx, startL)) do
+      if pending then sound(evt.ppq) end
+      if evt.ppq >= endL then pending = nil; break end
+      pending = evt
+    end
+    if pending then sound(endL) end
+  end
+end
+local function membersOf(chan, startL, endL)
+  local out = {}
+  -- The lane rides along: a monophonic stage (portamento) glides the lane-1 voice alone, and a
+  -- member's column is the only place that is knowable.
+  eachLaneSpan(chan, startL, endL, authoredOnLane, function(laneIdx, lo, hi, evt)
+    util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi, lane = laneIdx }))
+  end)
+  return out
+end
+-- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
+-- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
+local function channelStreams(chan, startL, endL, pbBase, ccBases)
+  local cols = frame.channels[chan].onTake
+  local pas, ats = {}, {}
+  for _, col in ipairs(cols.notes) do
+    for j = util.firstAtOrAfter(col.events, startL), #col.events do
+      local evt = col.events[j]
+      if evt.ppq >= endL then break end
+      if evt.evType == 'pa' then util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel }) end
+    end
+  end
+  local atEvents = cols.at and cols.at.events or {}
+  for j = util.firstAtOrAfter(atEvents, startL), #atEvents do
+    local evt = atEvents[j]
+    if evt.ppq >= endL then break end
+    util.add(ats, { ppq = evt.ppq, val = evt.val })
+  end
+  -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
+  -- column's order; bases pre-sorted, slices preserve order).
+  util.sortByPPQ(pas)
+  local ccs = {}
+  for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
+  return pas, ccs, ats, curves.slice(pbBase, startL, endL)
+end
+-- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
+-- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
+local function allocateRegionLanes(chan, startL, endL, derived, emitted)
+  -- reach tracks each lane's furthest span end, so a start past it clears the lane without
+  -- scanning occupied -- the common case, since region tiling emits notes in span order.
+  local occupied, reach = {}, {}
+  local function occupy(lane, lo, hi)
+    util.bucket(occupied, lane, { lo, hi })
+    reach[lane] = math.max(reach[lane] or hi, hi)
+  end
+  local function laneFree(lane, lo, hi)
+    if reach[lane] == nil or lo >= reach[lane] then return true end
+    for _, span in ipairs(occupied[lane]) do
+      if lo < span[2] and hi > span[1] then return false end
+    end
+    return true
+  end
+  eachLaneSpan(chan, startL, endL, onTakeOnLane, occupy)
+  -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
+  -- (the host itself is off-take, so eachWindowNote no longer sees it).
+  for _, spec in ipairs(emitted) do
+    if spec.ppqL < endL and spec.endppqL > startL then occupy(spec.lane, spec.ppqL, spec.endppqL) end
+  end
+  for _, spec in ipairs(derived) do
+    local lane = 1
+    while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
+    occupy(lane, spec.ppqL, spec.endppqL)
+    spec.lane = lane
+  end
+end
+-- A parked event as a generator stream note: it sounds to its render clip, never to the authored
+-- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
+local function soundingEvent(evt)
+  return util.assign(util.clone(evt), { endppq = evt.endppqC })
+end
+
+-- A note host as fx expansion runs it: derived notes ride the host's lane/delay/sample.
+local function hostFromNote(host, windowEnd, lane)
+  return { window = { host.ppq, windowEnd }, notes = { host }, fx = host.fx,
+           id = host.uuid, lane = lane, delay = host.delay,
+           sample = host.sample, delayPpq = delayToPPQ(host.delay) }
+end
+
+-- The pass's fx windows, held once: one window per host -- authored region, on-take note or parked
+-- note -- and the per-target list a view over them. see docs/trackerManager.md § Fx window census
+--shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
+local function buildFxWindows(fxRegions, noteHostClips, time)
+  local windows = {}
+  -- Every window is minted here rather than taken by reference: a target set is no part of the
+  -- document, and a stored region must not acquire one.
+  local function hold(window)
+    window.targets = generators.chainTargets(window)
+    util.add(windows, window)
+  end
+
+  for _, r in ipairs(fxRegions) do
+    hold({ uuid = r.uuid, chan = r.chan, ppq = r.ppq, endppq = r.endppq,
+           fx = r.fx, hostType = 'region' })
+  end
+  -- Every fx host, on-take and parked alike, gets a window; sort order matches both halves
+  -- of a lane so parking moves no entry. See docs/trackerManager.md § Fx window census.
+  local noteHosts = {}
+  for host, clip in pairs(noteHostClips) do util.add(noteHosts, { host = host, endppq = clip }) end
+  table.sort(noteHosts, function(a, b)
+    local ha, hb = a.host, b.host
+    if ha.chan ~= hb.chan then return ha.chan < hb.chan end
+    if ha.lane ~= hb.lane then return ha.lane < hb.lane end
+    if ha.ppq ~= hb.ppq then return ha.ppq < hb.ppq end
+    return tostring(ha.uuid) < tostring(hb.uuid)
+  end)
+  for _, nh in ipairs(noteHosts) do hold(windowForNote(nh.host, nh.endppq)) end
+  return windowSet(windows, time)
+end
+
+-- The stored baseline replayed into the same doors (docs/trackerManager.md § Fx window census).
+--shape: replayed window -> { uuid, chan, ppq, endppq, targets }
+--invariant: first-appearance order, so perTarget() reproduces the stored list exactly
+local function buildRealisedWindows(entries, time)
+  local windows, byUuid = {}, {}
+  for _, entry in ipairs(entries or {}) do
+    local window = byUuid[entry.id]
+    if not window then
+      window = { uuid = entry.id, chan = entry.chan, targets = {},
+                 ppq = entry.ppq, endppq = entry.endppq }
+      byUuid[entry.id] = window
+      util.add(windows, window)
+    end
+    window.targets[entry.evType == 'cc' and entry.cc or entry.evType] = true
+  end
+  return windowSet(windows, time)
+end
+
 ----- Rebuild Fx
 
 --shape: clipNoteHosts -> { [event] = clipEndL }; each clip starts at its event's own onset
@@ -3992,6 +3900,10 @@ local function linearTails(chan, notes, parkedBoundFor, time, res, clampWrites, 
 end
 
 ----- Frontier probe walk
+
+-- Above this many disturbed seeds (dirt + derived fx events) the frontier's per-seed probes cost more
+-- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
+local FRONTIER_SEED_CAP = 16
 
 -- First index into the raw-then-logical-sorted `list` with ppq >= `pos`; #list+1 if none. Every frontier
 -- probe binary-searches here, then scans outward a bounded few rows -- the seek that replaces the sweep.
@@ -4954,6 +4866,101 @@ local function rebuildPCs(noteLive, time)
     end
   end
 end
+
+----- Fx output maps
+
+-- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
+-- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
+local function buildFreezeRects(hosts)
+  local hostChans, lanesByUuid = {}, {}
+  for _, host in ipairs(hosts) do hostChans[host.chan] = true end
+  for chan in pairs(hostChans) do
+    for _, note in ipairs(index.raw(chan).notes) do
+      -- A derived note carries its host's uuid, so the bucketing needs no window arithmetic.
+      if note.derived then
+        local lanes = lanesByUuid[note.derived] or {}
+        lanes[note.lane] = true
+        lanesByUuid[note.derived] = lanes
+      end
+    end
+  end
+  local rects = {}
+  for _, host in ipairs(hosts) do
+    -- A husk host (no fx, no output) claims an empty stream set rather than none: it is still
+    -- a host, and whether an empty footprint is worth minting is the caller's question.
+    local streams = {}
+    -- The note target is a park window, not output: a rect's note lanes are the ones the fx pass wrote.
+    for target in pairs(host.targets) do
+      if     target == 'pb'           then streams['pb:0'] = true
+      elseif type(target) == 'number' then streams['cc:' .. target] = true end
+    end
+    for lane in pairs(lanesByUuid[host.uuid] or {}) do streams['note:' .. lane] = true end
+    -- Single-channel by construction, so chanOffset 0 is the only key; span is the host's own.
+    rects[host.uuid] = { ppq = host.ppq, dur = host.endppq - host.ppq,
+                         chanLo = host.chan, streams = { [0] = streams } }
+  end
+  return rects
+end
+
+-- The continuous half of the same window set: which pb/cc targets each host's chains own,
+-- logical framed. see docs/trackerManager.md § Realisation by host
+--shape: byHost[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
+local function buildFxTargets(hosts)
+  local byHost = {}
+  for _, host in ipairs(hosts) do
+    local targets, any = {}, false
+    for target in pairs(host.targets) do
+      -- One span per target: a window takes its host's span, so there is nothing to merge.
+      if target ~= 'note' then
+        targets[target], any = { { host.ppq, host.endppq } }, true
+      end
+    end
+    if any then byHost[host.uuid] = targets end
+  end
+  return byHost
+end
+
+-- A stored global region is no host of its own, so its uuid answers with the union of the ones
+-- it expanded into: their notes, their claimed targets, the events they parked. see docs/trackerManager.md § Realisation by host
+local function unionRealisation(uuid, byUuid)
+  local union = { uuid = uuid, chans = {}, notes = {}, targets = {}, parked = {} }
+  for chan = 1, 16 do
+    local part = byUuid[expandedUuid(uuid, chan)]
+    if part then
+      util.add(union.chans, chan)
+      for _, note in ipairs(part.notes)  do util.add(union.notes, note) end
+      for _, evt in ipairs(part.parked) do util.add(union.parked, evt) end
+      for target, claimed in pairs(part.targets) do
+        for _, span in ipairs(claimed) do util.bucket(union.targets, target, span) end
+      end
+    end
+  end
+  -- Each channel's list arrives in its own onset order; the union restores one order across them all.
+  table.sort(union.notes, function(a, b)
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    return a.chan < b.chan
+  end)
+  -- The expanded hosts claim one span each over the same logical window, so the merge collapses
+  -- them back to the stored region's own.
+  for target, claimed in pairs(union.targets) do union.targets[target] = spans.merge(claimed) end
+  return union
+end
+
+--contract: byHost carries the three shares the passes above keyed by host uuid: notes
+-- (channel-keyed first), targets, parked
+local function buildFxRealisation(census, globals, byHost)
+  local out = {}
+  for _, p in ipairs(census) do
+    out[p.uuid] = { uuid = p.uuid, chans = { p.chan },
+                    notes   = (byHost.notes[p.chan] or {})[p.uuid] or {},
+                    targets = byHost.targets[p.uuid] or {},
+                    parked  = byHost.parked[p.uuid] or {} }
+  end
+  for _, region in ipairs(globals or {}) do out[region.uuid] = unionRealisation(region.uuid, out) end
+  return out
+end
+
+----- Rebuild pipeline
 
 --pre: called inside tm:rebuild's mm nest, with the index already reloaded if this pass is wholesale
 --pre: sources holds the head's ds reads, taken before any write of this pass, fxRegions expanded

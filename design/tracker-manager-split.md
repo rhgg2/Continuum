@@ -249,13 +249,13 @@ gated spine.
 1. The REBUILD region references about 110 names it does not declare.
    Two deductions cut that to eight.
 
-1. The first is material that travels. Twenty-two of those names have
+1. The first is material that travels. Twenty-five of those names have
    *zero* uses outside the engine — they are the engine's own,
    lexically stranded at file scope. The fx-expansion helper family is
    the bulk of it: `coverInto`, `membersOf`, `channelStreams`,
-   `allocateRegionLanes`, `hostFromNote`, `windowSet`, the
-   reconcile skeletons. They move with the engine and stop being names
-   at all.
+   `allocateRegionLanes`, `hostFromNote`, the reconcile skeletons, the
+   fx map builders. They gathered at the region on 2026-09-02, and the
+   move takes them with it.
 
 1. The second is operations on structures already being passed. The
    frame's operations travel on its handle, lane ordering belongs to the
@@ -263,7 +263,18 @@ gated spine.
    the seeks that assume the order it makes. Seven names become zero
    (`docs/trackerManager.md` § The frame handle).
 
-1. The two deductions leave the eight named above.
+1. The two deductions leave the eight named above, and a residue of
+   six. Two the new file declares from what it already holds:
+   `defaultNoteCols` off its own `(...)`, and `delayToPPQ` off `timing`
+   and mm's resolution.
+
+1. The other four are window constructors both sides mint from.
+   `windowSet`, `windowForNote`, `clippedSpanEnd` and `expandedUuid`
+   build the pass's census, and the freeze path builds a window for a
+   host the census never published — an un-flushed note, a stored
+   global. They stay at file scope with `perTargetWindows` and
+   `freezeRefused`, which the freeze path alone calls, and the module
+   boundary settles the family's home in one decision.
 
 ## What the specs hold
 
