@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The dirt journal answers what its seeds cover: covers for one logical position,
+  touches for a span, and ppqs for the sorted array both read. The array is one per channel, built
+  at the first question and dropped by the next add, so the rebuild can seed mid-pass and still be
+  answered truly; the four rederivations of the seed list in the rebuild retire, along with the
+  closure seedCovers allocated per channel. The vocabulary is position, not row, since the values
+  are logical ppq rather than grid indices.
+
 - **2026-09-02** — A seed's dirty rows come from the journal alone. The flush fold keeps the birth
   snapshot and carries the rows its dropped duplicates named onto it, replacing the live byUuid
   lookup the rebuild used to recover a survivor's current row. The fold runs within a channel, so a

@@ -5,7 +5,7 @@
 --invariant: a list grown past the seed cap collapses to wholesale, bounding per-seed work
 --invariant: swing staleness is the second axis: bindTake marks a reseat carrying no dirt of its own
 --shape: entry = nil (clean) | list of birth-snapshot seeds (parkSeed/rawSeed/liveSeed) | true (wholesale)
---shape: seed = { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt, laterRows }; evt is the record the seed was minted from, laterRows the rows its uuid took after the snapshot
+--shape: seed = { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt, laterPpqs }; evt is the record the seed was minted from, laterPpqs the logical positions its uuid took after the snapshot
 
 local dirt = {}
 
@@ -41,6 +41,7 @@ end
 --contract: one journal per trackerManager: its edit side and its rebuild share the one instance
 function dirt.new()
   local marks, swing = {}, {}
+  local memo = {}
   local journal = {}
 
   --contract: d is true, one seed, or a list of seeds; chan nil adds to all 16
@@ -52,6 +53,7 @@ function dirt.new()
     end
     local standing = marks[chan]
     if standing == true then return end
+    memo[chan] = nil   -- past here the write changes what the channel names
     if d == true then marks[chan] = true; return end
     -- A birth snapshot carries the verb that minted it; a list of them does not.
     local incoming = d.verb and { d } or d
@@ -65,6 +67,53 @@ function dirt.new()
   function journal.has(chan)       return marks[chan] end
   function journal.wholesale(chan) return marks[chan] == true end
 
+  ----- What the seeds name
+
+  -- Logical positions a channel's seeds name: each snapshot's ppqL plus those the flush folded
+  -- onto it, distinct and sorted; memoized until the next write invalidates it.
+  local function seeded(chan)
+    local held = memo[chan]
+    if held then return held end
+    local list, seen = {}, {}
+    local function hold(ppq)
+      if ppq ~= nil and not seen[ppq] then seen[ppq] = true; list[#list + 1] = ppq end
+    end
+    for _, seed in ipairs(marks[chan]) do
+      hold(seed.ppqL)
+      for _, later in ipairs(seed.laterPpqs or {}) do hold(later) end
+    end
+    table.sort(list)
+    held = { list = list, seen = seen }
+    memo[chan] = held
+    return held
+  end
+
+  --pre: the channel holds a seed list -- wholesale names no positions, and a clean one holds none
+  --contract: those positions sorted, for a stage that seeks to each; the caller reads, never writes
+  function journal.ppqs(chan) return seeded(chan).list end
+
+  --contract: is this logical position seeded -- wholesale covers every one, a clean channel none
+  function journal.covers(chan, ppq)
+    local standing = marks[chan]
+    if standing == nil then return false end
+    if standing == true then return true end
+    return seeded(chan).seen[ppq] == true
+  end
+
+  --contract: is any seeded position inside this logical span, both edges included
+  function journal.touches(chan, startPpq, endPpq)
+    local standing = marks[chan]
+    if standing == nil then return false end
+    if standing == true then return true end
+    local list = seeded(chan).list
+    local lo, hi = 1, #list + 1
+    while lo < hi do
+      local mid = (lo + hi) // 2
+      if list[mid] < startPpq then lo = mid + 1 else hi = mid end
+    end
+    return list[lo] ~= nil and list[lo] <= endPpq
+  end
+
   --contract: either axis holds something -- the rebuild(∅) gate
   function journal.pending() return next(marks) ~= nil or next(swing) ~= nil end
 
@@ -72,7 +121,7 @@ function dirt.new()
   function journal.clear()
     local consumed = {}
     for chan in pairs(marks) do consumed[chan] = true end
-    marks = {}
+    marks, memo = {}, {}
     return consumed
   end
 

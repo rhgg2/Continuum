@@ -7,6 +7,11 @@
 -- deduped list over whatever stood, which drops seed dirt nothing will restate; the tail walk's
 -- emission never checked the cap, so a large disturbance carried on as an unbounded seed list.
 --
+-- The journal also answers over what it stores: which logical positions its seeds name, and so
+-- which of them a position or a span meets. The answer is one sorted array per channel, built at
+-- the first question and dropped by the next write -- the rebuild seeds mid-pass (park members,
+-- the tail walk's emission) while later stages are still asking.
+--
 -- The journal also mints what it stores. The three minters differ in where the raw frame comes
 -- from and in whether the seed keeps the record it was taken from; the cases below pin both.
 
@@ -118,6 +123,75 @@ return {
       t.deepEq(consumed, { [1] = true, [9] = true }, 'both channels come back for the mute sweep')
       t.eq(journal.has(1), nil, 'and the journal is clean')
       t.eq(journal.has(9), nil, 'on both')
+    end,
+  },
+  {
+    -- A move's seat carries the positions its dropped duplicates named, so the array holds every
+    -- position the uuid stood on during the flush -- both ends of the move, not just its birth.
+    name = 'dirt: the seeded positions are sorted and distinct, and hold what the fold carried',
+    run = function()
+      local journal = dirt.new()
+      journal.add(2, { verb = 'move',   uuid = 'u1', ppqL = 960, laterPpqs = { 240 } })
+      journal.add(2, { verb = 'add',    uuid = 'u2', ppqL = 480 })
+      journal.add(2, { verb = 'delete', uuid = 'u3', ppqL = 480 })
+
+      t.deepEq(journal.ppqs(2), { 240, 480, 960 },
+               'both seats of the move, the add, and one entry for the position two seeds share')
+    end,
+  },
+  {
+    name = 'dirt: covers answers one position, and wholesale covers every one',
+    run = function()
+      local journal = dirt.new()
+      t.eq(journal.covers(1, 480), false, 'a clean channel covers nothing')
+
+      journal.add(1, { verb = 'move', uuid = 'u1', ppqL = 480, laterPpqs = { 1440 } })
+      t.eq(journal.covers(1, 480), true, 'the birth snapshot')
+      t.eq(journal.covers(1, 1440), true, 'and the position the fold carried onto it')
+      t.eq(journal.covers(1, 960), false, 'between the two, the channel stands clean')
+
+      journal.add(1, true)
+      t.eq(journal.covers(1, 960), true, 'wholesale covers what no seed names')
+    end,
+  },
+  {
+    name = 'dirt: touches asks a span, both edges included',
+    run = function()
+      local journal = dirt.new()
+      t.eq(journal.touches(3, 0, 3840), false, 'a clean channel touches nothing')
+
+      journal.add(3, seed(960))
+      t.eq(journal.touches(3, 960, 1920), true, 'the span opens on the seed')
+      t.eq(journal.touches(3, 0, 960), true, 'and closes on it')
+      t.eq(journal.touches(3, 0, 959), false, 'a span short of it misses')
+      t.eq(journal.touches(3, 961, 3840), false, 'as does one past it')
+
+      -- Sixteen positions, so the seek has to land rather than stumble onto the answer.
+      journal.add(5, seedList(16))
+      t.eq(journal.touches(5, 7, 7), true, 'a point span on a middle seed')
+      t.eq(journal.touches(5, 17, 100), false, 'clear of the last')
+      t.eq(journal.touches(5, -10, 0), false, 'and clear of the first')
+
+      journal.add(4, true)
+      t.eq(journal.touches(4, 0, 1), true, 'wholesale touches every span')
+    end,
+  },
+  {
+    name = 'dirt: an answer stands only until the next write',
+    run = function()
+      local journal = dirt.new()
+      journal.add(6, seed(480))
+      t.deepEq(journal.ppqs(6), { 480 }, 'one seed, one position')
+      t.eq(journal.touches(6, 900, 1000), false, 'nothing out there yet')
+
+      journal.add(6, seed(960))   -- the rebuild's own mid-pass seeds arrive like this
+      t.deepEq(journal.ppqs(6), { 480, 960 }, 'the later seed joins the answer')
+      t.eq(journal.touches(6, 900, 1000), true, 'and the span question is asked afresh')
+      t.eq(journal.covers(6, 960), true, 'as is membership')
+
+      journal.clear()
+      journal.add(6, seed(120))
+      t.deepEq(journal.ppqs(6), { 120 }, 'a consumed journal keeps nothing of its old answer')
     end,
   },
   {

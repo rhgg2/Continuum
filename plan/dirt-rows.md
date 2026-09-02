@@ -37,6 +37,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 dirt: the journal answers covers and touches over its own seeds (design/decisions.md 2026-09-02)
 - 2026-09-02 dirt: a seed carries every row its uuid held during the flush (design/decisions.md 2026-09-02)
 
 ## Now
@@ -45,9 +46,6 @@
 
 ## Queued (current phase; one-liners)
 
-- dirt: the journal answers names, covers and touches — a sorted row
-  array per channel, memoised against the journal's own writes.
-- tm: the clip cache reseeks a neighbour moved into its span — `clipEnd`
-  asks the two doors, with a spec over the move.
-- tm: the seed-coverage helpers give way to dirt's doors — `seedRowsFor`,
-  `seedCovers` and `windowSeeded` retire.
+- tm: the clip cache reseeks a neighbour moved into its span — the
+  journal gains `names`, and `clipEnd` asks it and `touches`, with a spec
+  over the move.

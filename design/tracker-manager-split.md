@@ -172,9 +172,8 @@ Landed 2026-08-30 as `spans.lua` and `curves.lua`, with the two seeks in
 
 Landed 2026-08-31 as `dirt.lua`, one journal per tracker: `add` is the
 sole write and the gates are queries. The journal mints the seeds it
-stores, while `seedCovers` and `seedRowsFor` stay with the structures
-they read. The model is `docs/trackerManager.md` § Derivation dirt: the
-gated spine.
+stores and answers over them. The model is `docs/trackerManager.md`
+§ Derivation dirt: the gated spine.
 
 ## Phase 3 — the engine leaves
 

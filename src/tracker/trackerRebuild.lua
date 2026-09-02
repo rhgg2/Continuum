@@ -265,47 +265,19 @@ local function reconcileFx(existing, predicted, sink)
     end }
 end
 
------ Seed coverage
--- What the dirt journal's seeds claim, in the shapes the gated stages ask for. Internals, the CC
--- walk, PA, region park and fx expansion all gate on these; none of them owns them.
+----- Note-lane excision
 
--- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ the rows folded onto it at flush):
--- the one derivation of what the dirt covers, so no consumer of it can drift. see design § phase 5
-local function seedRowsFor(seedList)
-  local rows = {}
-  for _, s in ipairs(seedList) do
-    util.add(rows, s.ppqL)
-    if s.laterRows then
-      for _, row in ipairs(s.laterRows) do util.add(rows, row) end
-    end
-  end
-  return rows
-end
-
--- Seed membership by logical row -- same ppqL any lane, so a deleted shadower re-materialises its
--- row. The fx host query wants the same rows as a range test. see docs § Interval materialisation
-local function seedCovers(chan)
-  if dirt.wholesale(chan) then return function() return true end end
-  local rows = {}
-  for _, row in ipairs(seedRowsFor(dirt.has(chan))) do rows[row] = true end
-  return function(note) return rows[note.ppqL or note.ppq] or false end
-end
-local function windowSeeded(rows, startL, endL)
-  for _, row in ipairs(rows) do if row >= startL and row <= endL then return true end end
-  return false
-end
-
--- Drop the events the seeded rows claim from a channel's note lanes: a seek per row per lane, not a
--- channel scan; `claims` refines within the cluster. see docs/trackerManager.md § The note-lane shed
---invariant: a seated event is projected (ppq == ppqL), so a seed row is the lane's sort key
-local function exciseNotes(chan, rows, claims)
+-- Drop the events the seeded positions claim from a channel's note lanes: a seek per position per
+-- lane, not a channel scan; `claims` refines within the cluster. see docs § The note-lane shed
+--invariant: a seated event is projected (ppq == ppqL), so a seeded position is the lane's sort key
+local function exciseNotes(chan, ppqs, claims)
   for _, col in ipairs(frame.channels[chan].onTake.notes) do
     local events = col.events
     local dropAt
-    for _, row in ipairs(rows) do
-      for i = util.firstAtOrAfter(events, row), #events do
+    for _, ppq in ipairs(ppqs) do
+      for i = util.firstAtOrAfter(events, ppq), #events do
         local evt = events[i]
-        if evt.ppq ~= row then break end
+        if evt.ppq ~= ppq then break end
         if not claims or claims(evt) then
           dropAt = dropAt or {}
           dropAt[i] = true
@@ -335,14 +307,13 @@ local function rebuildInternals(time)
   -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirt.has(chan) then
-      local covers = seedCovers(chan)
-      if not dirt.wholesale(chan) then exciseNotes(chan, seedRowsFor(dirt.has(chan))) end
+      if not dirt.wholesale(chan) then exciseNotes(chan, dirt.ppqs(chan)) end
       for _, raw in mm:notesRaw(chan) do
         -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
         if raw.derived then
           util.add(noteExisting[chan], columnEvent(raw))
-        elseif covers(raw) then
+        elseif dirt.covers(chan, raw.ppqL or raw.ppq) then
           local note = columnEvent(raw)
           if rawDivergesFromLogical(note, time) then util.add(external, note)
           else util.add(internal, note)
@@ -422,11 +393,11 @@ end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
 -- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § CC walk.
-local function buildCcExistingInWindows(chan, realisedWindows, ccExisting, seedRows)
+local function buildCcExistingInWindows(chan, realisedWindows, ccExisting)
   local ccBuckets = index.raw(chan).ccs
   local seen = {}
   for _, window in ipairs(realisedWindows.on(chan)) do
-    if windowSeeded(seedRows, window.ppq, window.endppq) then
+    if dirt.touches(chan, window.ppq, window.endppq) then
       local sRaw, eRaw = realisedWindows.rawSpan(window)
       for target in pairs(window.targets) do
         local list = type(target) == 'number' and ccBuckets[target]
@@ -492,7 +463,7 @@ local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExi
   -- tv's cell carry keys on events-table identity (same table => reuse built cells), so a spliced
   -- column must renew its carried table -- exciseNotes' `col.events = kept` is the note-path twin.
   for col in pairs(touched) do col.events = util.clone(col.events) end
-  buildCcExistingInWindows(chan, realisedWindows, ccExisting, seedRowsFor(seedList))
+  buildCcExistingInWindows(chan, realisedWindows, ccExisting)
 end
 
 -- Wholesale / stale-swing path: re-derive a channel's whole cc/at/pc stream from mm. Verbatim from the
@@ -1025,7 +996,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
               dirt.add(cc.chan, dirt.rawSeed(cc, 'park'))
               batch.delete({ uuid = cc.uuid })
               freshEvents[cc.chan] = freshEvents[cc.chan] or {}
-              freshEvents[cc.chan][cc.uuid] = cc.ppqL or cc.ppq   -- the row the excise seeks
+              freshEvents[cc.chan][cc.uuid] = cc.ppqL or cc.ppq   -- the position the excise seeks
               local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- um index source: evType/chan/pitch/vel/rpb ride, ppq flips logical
               spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
               util.add(newParked, spec)
@@ -1034,12 +1005,12 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
         end
       end
     end
-    -- The parking PA's on-take column event rode past exciseNotes untouched -- its row seeds only here,
-    -- after that pass ran -- so drop it now, or rebuildPA's parked projection doubles the carried event.
-    for chan, rowByUuid in pairs(freshEvents) do
-      local rows = {}
-      for _, row in pairs(rowByUuid) do util.add(rows, row) end
-      exciseNotes(chan, rows, function(e) return e.evType == 'pa' and rowByUuid[e.uuid] ~= nil end)
+    -- The parking PA's on-take column event rode past exciseNotes untouched -- its position seeds only
+    -- here, after that pass ran -- so drop it now, or rebuildPA's parked projection doubles the event.
+    for chan, ppqByUuid in pairs(freshEvents) do
+      local ppqs = {}
+      for _, ppq in pairs(ppqByUuid) do util.add(ppqs, ppq) end
+      exciseNotes(chan, ppqs, function(e) return e.evType == 'pa' and ppqByUuid[e.uuid] ~= nil end)
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
     for _, spec in ipairs(priorByType.pa or {}) do
@@ -1223,9 +1194,8 @@ end
 local function rebuildPA(time)
   for chan = 1, 16 do
     if dirt.has(chan) then   -- clean: PA already sits in the carried note column
-      local covers = seedCovers(chan)   -- wholesale: always-true; interval: seeded rows only
       for _, cc in ipairs(index.raw(chan).pas) do
-        if covers(cc) then
+        if dirt.covers(chan, cc.ppqL or cc.ppq) then
           local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cc.pitch, cc.ppq, time)
           if noteCol then
             local evt = columnEvent(cc, { lane = lane })
@@ -1241,9 +1211,8 @@ local function rebuildPA(time)
   -- projected unrealised into the parked host's lane. see docs/trackerManager.md § PA dispatch
   for chan = 1, 16 do
     if dirt.has(chan) then
-      local covers = seedCovers(chan)
       for _, evt in ipairs(frame.channels[chan].parked.pa or {}) do
-        if covers(evt) then
+        if dirt.covers(chan, evt.ppqL or evt.ppq) then
           local ppq = time:fromLogical(chan, evt.ppq)   -- raw: findNoteColumnForPitch is raw geometry
           local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt.pitch, ppq, time)
           if noteCol then
@@ -1710,10 +1679,9 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds keeps
     -- its output verbatim -- notes self-match by fxKey, seats re-feed the reconcile. see design § phase 5
     local gated = not dirt.wholesale(chan)
-    local keptById, dirtyRows
+    local keptById
     local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     local seeded, emitScope = {}, {}
-    if gated then dirtyRows = seedRowsFor(dirt.has(chan)) end
     -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
     -- noteExisting walk to the first keep.
     local function keptFor()
@@ -1815,7 +1783,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       local targetsOf = {}
       for _, host in ipairs(hosts) do
         targetsOf[host] = generators.continuousTargets(host.fx)
-        seeded[host] = windowSeeded(dirtyRows, host.window[1], host.window[2])
+        seeded[host] = dirt.touches(chan, host.window[1], host.window[2])
       end
       -- Fixpoint: a live lane-1 note-emitter re-detunes the stream from its window start, which can
       -- wake pb windows further right, which may themselves emit lane-1 notes.

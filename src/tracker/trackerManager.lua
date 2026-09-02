@@ -705,7 +705,7 @@ do
   local adds = {}
   local assigns = {}
   local deletes = {}
-  --shape: seeds[chan] = list of birth-snapshot seeds (dirt.lua), folded (one seat per uuid, carrying its later rows) into the dirt journal at flush. see design § The model, inverted
+  --shape: seeds[chan] = list of birth-snapshot seeds (dirt.lua), folded (one seat per uuid, carrying its later positions) into the dirt journal at flush. see design § The model, inverted
   local seeds = {}
   local parkedEdits = {}
 
@@ -1092,25 +1092,25 @@ do
 
   ----- Reload / clear
 
-  -- The kept seat is the birth snapshot, so the rows a later verb moved this uuid to would go with
-  -- the duplicates the dedup drops; they join the seat instead.
-  local function foldRow(seat, row)
-    if row == seat.ppqL then return end
-    seat.laterRows = seat.laterRows or {}
-    for _, held in ipairs(seat.laterRows) do if held == row then return end end
-    util.add(seat.laterRows, row)
+  -- The kept seat is the birth snapshot, so the positions a later verb moved this uuid to would go
+  -- with the duplicates the dedup drops; they join the seat instead.
+  local function foldPpq(seat, ppqL)
+    if ppqL == seat.ppqL then return end
+    seat.laterPpqs = seat.laterPpqs or {}
+    for _, held in ipairs(seat.laterPpqs) do if held == ppqL then return end end
+    util.add(seat.laterPpqs, ppqL)
   end
 
   -- Fold this flush's per-verb seeds into the journal as seed dirt: one seat per uuid (seeded
   -- chans), fold-whole (unseeded payload chans). see docs/trackerManager.md § Interval seeds
-  --post: a channel's dirt names every logical row its seeds held during the flush
+  --post: a channel's dirt names every logical ppq its seeds held during the flush
   function stager.flushDirt(payloadChans)
     for chan, list in pairs(seeds) do
       local deduped, seat = {}, {}
       for _, s in ipairs(list) do
         local kept = s.uuid and seat[s.uuid]
         if kept then
-          foldRow(kept, s.ppqL)
+          foldPpq(kept, s.ppqL)
         else
           if s.uuid then seat[s.uuid] = s end
           util.add(deduped, s)

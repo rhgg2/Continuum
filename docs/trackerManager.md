@@ -266,10 +266,12 @@ the same snapshot without the record, for an event the pass is deleting. `parkSe
 logical park spec and takes the raw seat as an argument, since the journal holds no time context.
 
 A move mints a seed per seat: the vacated one as the verb finds it, then the one it arrives at. The
-fold keeps the birth snapshot and carries the rows its dropped duplicates named onto it, so a seed
-names every logical row its uuid held during the flush. Membership (`seedCovers`) keys on those
-rows, so a move dirties both its seats, an add covers its onset row, and a delete covers the death
-row alone. The snapshot's other fields go stale as the event moves and its uuid dangles as the event
+fold keeps the birth snapshot and carries the positions its dropped duplicates named onto it, so a
+seed names every logical position its uuid held during the flush. The journal answers over them --
+`covers` a position, `touches` a span, and `ppqs` the sorted array both read. So a move dirties both
+its seats, an add covers its onset, and a delete covers its death seat alone. The array is built at
+the first question and dropped by the next `add`, which is what lets a stage seed mid-pass and the
+next question still be answered truly. The snapshot's other fields go stale as the event moves and its uuid dangles as the event
 dies; each consumer reads whichever the seed still answers. The seek walk the snapshot feeds is
 § What the walk visits, and what it emits.
 
@@ -280,13 +282,13 @@ arrival row with the new.
 
 ### Interval materialisation
 
-Materialisation consumes the absorbed seed set directly — there is no closure. `seedCovers` builds
-the set of dirty logical rows from the seeds (each snapshot `ppqL` ∪ the rows folded onto it);
-`exciseNotes` (trackerRebuild.lua) drops every carried column event whose row a seed covers, and
-`rebuildInternals` re-clones that row from mm: an add finds the new note, a delete finds nothing and
-the event vanishes, a move seeded both rows and gets both. Membership keys on the row, not the full
-seat, because same-pitch/PC shadowing is a same-`ppqL` cross-lane relation: a deleted shadower must
-re-materialise the survivor sharing its row, and a seat key (ppqL + lane + pitch) would skip it.
+Materialisation consumes the absorbed seed set directly — there is no closure. The dirty positions
+are the journal's (§ Interval seeds); `exciseNotes` (trackerRebuild.lua) drops every carried column
+event sitting on one, and `rebuildInternals` re-clones that position from mm: an add finds the new
+note, a delete finds nothing and the event vanishes, a move seeded both seats and gets both.
+Membership keys on the position, not the full seat, because same-pitch/PC shadowing is a same-`ppqL`
+cross-lane relation: a deleted shadower must re-materialise the survivor sharing its position, and a
+seat key (ppqL + lane + pitch) would skip it.
 
 A seed covers its own rows and no more. Every raw consumer reads um's raw index, which holds every
 mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its results
@@ -698,12 +700,12 @@ indistinguishable, so it's absorbed the same way (docs/generators.md
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
 `ccExisting` covers only the seed-touched prior cc windows, edge-inclusive
-(`windowSeeded`). A clean window appears in neither the existing set nor the
+(the journal's `touches`). A clean window appears in neither the existing set nor the
 predicted one — emission clips to the emit scope — and the reconcile deletes
 from `existing` alone, so a clean window's seats are never visited and never
 rewritten. Edge inclusion is load-bearing: deleting a window's bounding onset
-seeds exactly its end edge, and admitting `row <= end` keeps that window's
-prior seats in `existing` to be matched rather than duplicated.
+seeds exactly its end edge, and admitting a seed sitting there keeps that
+window's prior seats in `existing` to be matched rather than duplicated.
 
 Derived events are handled separately: absorber pbs by the absorber pass
 (against the post-walk lane-1 layout); synthesised PCs by PC synthesis.
