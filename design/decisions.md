@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The derivation engine is trackerRebuild.lua, instantiated with the seven names
+  the region reaches: mm, cm, ds, the frame, the raw index, the stager and the dirt journal. The
+  time context is an argument and not a dependency, since every stage already takes it as a
+  parameter, and fxNotesByHost is the engine's own state, so the pipeline takes the head's snapshot
+  and returns the maps tm installs. The four window constructors split by what each is an operation
+  on: fxWindows.lua holds the window record and the set over it, clippedSpanEnd joins the frame
+  handle beside nextOnLane, freezeRefused stays with the freeze path that alone calls it, and
+  expandedUuid inlines to util.key at its two sites. The module is named for windows and not hosts
+  because half the sets a pass builds are replayed from the document and carry no host; the set's
+  containment doors become owns and ownsRaw.
+
 - **2026-09-02** — Twenty-five helpers with no edit-side caller move down into the REBUILD region,
   each landing beside the stage that calls it, so the engine is one contiguous slice and the names
   it references from above fall from 37 to 21. Four window constructors stay where they are --

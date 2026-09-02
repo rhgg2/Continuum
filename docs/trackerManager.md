@@ -281,7 +281,7 @@ onset shift.
 
 Materialisation consumes the absorbed seed set directly — there is no closure. `seedCovers` builds
 the set of dirty logical rows from the seeds (snapshot `ppqL` ∪ each survivor's live `ppqL`);
-`exciseNotes` (trackerManager.lua) drops every carried column event whose row a seed covers, and
+`exciseNotes` (trackerRebuild.lua) drops every carried column event whose row a seed covers, and
 `rebuildInternals` re-clones that row from mm: an add finds the new note, a delete finds nothing and
 the event vanishes, a move seeded both rows and gets both. Membership keys on the row, not the full
 seat, because same-pitch/PC shadowing is a same-`ppqL` cross-lane relation: a deleted shadower must
@@ -495,7 +495,9 @@ one, so it can't latch.
 
 **A rebuild is one gated pass.** Each stage reads what the previous one left
 in `channels`, and they share one `fx` accumulator and one deferred mmBatch.
-Which stages run, and on which channels, is decided by dirt.
+Which stages run, and on which channels, is decided by dirt. The pass is
+`trackerRebuild.lua`; tm seeds the dirt, drives the head, and installs what the
+pass returns.
 
 Triggered by:
 - mm `'reload'` signal, carrying the `wholesale` bit that says which axis of
@@ -536,19 +538,24 @@ the operations that seat events travel on the handle beside it: `spliceEvent`,
 `setEvent`, `renewLane`, `markRenewed`, `orderLane` and `nextOnLane`. Events are
 self-describing, so each takes the frame's own coordinates.
 
-The pipeline mutates what it was handed and returns what it builds. The
-frame, the raw index and the stager (§ Update manager) are handed in, as is
-the head's snapshot of the document keys the pass reads, its fx regions
-already expanded to per-channel hosts; the maps a pass builds — the window
-set, the freeze rects, the fx realisation — come back from `rebuildPipeline`
-for `tm:rebuild` to install, and the channels whose mute flags want
-conforming come back beside them. A map with one reader inside the pass, like
-the per-host targets the realisation builder folds, stays a pipeline local.
+The engine is instantiated once with what the two files share: `mm`, `cm`,
+`ds`, the frame, the raw index, the stager (§ Update manager) and the dirt
+journal. tm keeps those true across edits, and the engine is their only writer
+during a pass.
 
-`fxNotesByHost` is the one map handed in rather than returned. A clean
-channel's derived lists carry between passes, so the fx stage writes the
-channels it ran and leaves the rest standing; its lists are built from copies
-of the fx specs, which the tail walk is still settling when the map is made.
+The pipeline mutates what it was handed and returns what it builds. The head's
+snapshot of the document keys the pass reads arrives as an argument, its fx
+regions already expanded to per-channel hosts, and the pass's time context
+beside it. The maps a pass builds — the window set, the freeze rects, the fx
+realisation — come back for `tm:rebuild` to install, and the channels whose
+mute flags want conforming come back beside them. A map with one reader inside
+the pass, like the per-host targets the realisation builder folds, stays a
+pipeline local.
+
+`fxNotesByHost` is the map the engine keeps between passes. A clean channel's
+derived lists carry, so the fx stage writes the channels it ran and leaves the
+rest standing; its lists are built from copies of the fx specs, which the tail
+walk is still settling when the map is made.
 
 ### Derivation dirt: the gated spine
 
@@ -1106,7 +1113,7 @@ replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, n
 ## Lane occupancy
 
 A lane's authored notes are its column's events together with the parked events that have left the
-take, and one clip reads both halves. `clippedSpanEnd` returns an event's own ceiling — its authored
+take, and one clip reads both halves. `frame.clippedSpanEnd` returns an event's own ceiling — its authored
 `endppq`, or the take length — clipped to the strict-next authored onset on its lane. An fx
 host's window end and a parked event's render clip are that same number, and one seek finds the
 successor that bounds both: `frame.nextOnLane` takes the nearer of the column's next event and the
@@ -1165,7 +1172,8 @@ events by construction and the clip needs no filter of its own.
 when its channel is wholesale-dirty, it is uncached, its own uuid is seeded (its move or length
 mutation), or a seed ppq fell inside its cached span (a neighbour onset that becomes the new clip).
 Everything else rides the cached end. Callers ask for a clip and get one; the cache is `clipEnd`'s
-alone to read and write, scoped to a block that exposes only it and `forgetClipEnds`. One cache
+alone to read and write, scoped to a block that exposes only it and `rebuild.forget`, the door the
+take-tier seam calls. One cache
 serves on-take hosts and parked events alike, since a uuid is in one half or the other and the rule
 is the same either way.
 
@@ -1210,12 +1218,13 @@ an indexed uuid the stash holds, and fx expansion hands one to the arm that runs
 event. Without that a self-parking host would run its chain twice, and `curves.foldChains` would sum
 the two pb curves to twice the authored depth.
 
-`buildFxWindows` holds the pass's windows once: the window per host is the fact, and the per-target
-list a view over it. Every window is minted inside the set, so stamping `targets` touches no record
-the document owns.
+`fxWindows.lua` holds the record and the set over it: `fxWindows.fromNote` mints the degenerate
+window a note host presents, and `fxWindows.new` indexes a list of them by uuid and by channel. The
+window per host is the fact, and the per-target list a view over it. Every window is minted rather
+than taken by reference, so stamping `targets` touches no record the document owns.
 
-The set holds logical spans and answers in either frame. `covers` compares a logical onset against
-them directly; `coversRaw` converts a window's bounds and compares raw to raw, which is what every
+The set holds logical spans and answers in either frame. `owns` compares a logical onset against
+them directly; `ownsRaw` converts a window's bounds and compares raw to raw, which is what every
 question asked of an mm record needs (`docs/generators.md` § Route-by-window). The conversion happens
 on first ask and is then held: the set carries the pass's time context, so converting there is the
 same arithmetic as converting at the pass's head.
@@ -1401,13 +1410,13 @@ Fx is a set of phases woven into tm's one rebuild, sharing the `fx`
 accumulator and the deferred mmBatch; the tail walk fuses authored, external
 and derived notes into one atomic commit. Parked edits coordinate with
 `adds`/`assigns`/`deletes` inside `flush` besides (§ Mutation contract). Both
-therefore live where tm's `channels`, `fx` and `deferred` live, since
-lifting either out would mean reaching across a layer for them.
+therefore run against the same frame, index and stager, which the engine and
+the edit side share (§ The frame handle).
 
-Pressure on tm's size goes to `generators`, which takes the *pure* fx logic
-(`docs/generators.md` § The ctx discipline). If size forces a structural
-split, the seam is the whole rebuild pipeline lifted to a `trackerRebuild`
-file with `channels`/`fx`/`deferred` as an explicit ctx.
+Pressure on tm's size goes two ways. The *pure* fx logic is `generators`
+(`docs/generators.md` § The ctx discipline), and the pass itself is
+`trackerRebuild.lua`, which takes the frame, the raw index, the stager and the
+dirt journal as explicit dependencies.
 
 ## Column allocation rules
 
