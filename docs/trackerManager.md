@@ -537,11 +537,13 @@ the operations that seat events travel on the handle beside it: `spliceEvent`,
 self-describing, so each takes the frame's own coordinates.
 
 The pipeline mutates what it was handed and returns what it builds. The
-frame, the raw index and the stager (§ Update manager) are handed in; the
-maps a pass builds — the window set, the freeze rects, the fx realisation —
-come back from `rebuildPipeline` for `tm:rebuild` to install. A map with one
-reader inside the pass, like the per-host targets the realisation builder
-folds, stays a pipeline local.
+frame, the raw index and the stager (§ Update manager) are handed in, as is
+the head's snapshot of the document keys the pass reads, its fx regions
+already expanded to per-channel hosts; the maps a pass builds — the window
+set, the freeze rects, the fx realisation — come back from `rebuildPipeline`
+for `tm:rebuild` to install, and the channels whose mute flags want
+conforming come back beside them. A map with one reader inside the pass, like
+the per-host targets the realisation builder folds, stays a pipeline local.
 
 `fxNotesByHost` is the one map handed in rather than returned. A clean
 channel's derived lists carry between passes, so the fx stage writes the
@@ -1046,12 +1048,12 @@ seated them, and nothing walks a column to re-project — a second projection wo
 The pipeline then persists its own window set: `settledWindows` goes to
 `ds:assign('fxRealisedWindows', …)` when it differs from the set this pass read,
 so the next rebuild recognises seats against it. `stager.clear()` drops
-un-flushed ops, the pass's dirt folds into `muteConform` and clears,
-and `derivedInputs` re-snapshots once the pipeline's own ds writes have
-settled. The index itself needs no tail step: on a wholesale reload
-`stager.reload` re-read it whole at the pipeline head,
-before any stage read it, and the pipeline's own commits maintained it from
-there; edit rebuilds kept the live index throughout (§ Incremental index
+un-flushed ops and the pass's dirt clears, its channels going back to the head
+as the set whose mute flags want conforming. The head re-snapshots
+`derivedInputs` once the pass's ds writes have settled. The index itself needs
+no tail step: on a wholesale reload `stager.reload` re-read it whole at the
+rebuild head, before the pipeline began, and the pass's own commits maintained
+it from there; edit rebuilds kept the live index throughout (§ Incremental index
 reconciliation). tm fires the `'rebuild'` signal carrying the `takeChanged`
 boolean — true only when this rebuild followed a `bindTake` (a take-tier
 reload).

@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — tm's rebuild head prepares what the pipeline reads and consumes what it returns.
+  The globals expansion needs the in-use channel set, which is read off the raw index, so the
+  wholesale reload moves up to the head ahead of the head snapshot of document keys, and the
+  pipeline loses its didReload parameter. The stored globals ride the snapshot beside the expanded
+  regions, the channels wanting a mute conform come back with the pass's maps, and derivedInputs
+  re-snapshots after the mm nest unwinds. The head's own names move below the pipeline, leaving the
+  engine one contiguous slice.
+
 - **2026-09-02** — The pb wire conversions live in tuning, which holds no bend range: each call
   passes the window in cents, so the module stays free of configuration. Two readers supply it --
   the edit side from its cm cache, and the rebuild from one read at the pipeline head, threaded to

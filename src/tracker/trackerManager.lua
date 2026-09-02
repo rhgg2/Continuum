@@ -4955,6 +4955,77 @@ local function rebuildPCs(noteLive, time)
   end
 end
 
+--pre: called inside tm:rebuild's mm nest, with the index already reloaded if this pass is wholesale
+--pre: sources holds the head's ds reads, taken before any write of this pass, fxRegions expanded
+--pre: time is the projection the rebuild head built for this pass
+--post: notesByHost[chan] := the pass's derived notes, for each channel the fx stage ran
+--post: fresh result = the maps tm:rebuild installs, plus the channels whose mute wants conforming
+--invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
+local function rebuildPipeline(sources, notesByHost, time)
+  -- The bend window this pass converts against, in cents per side; the edit side caches its own.
+  local pbLimCents = cm:get('pbRange') * 100
+  -- The take's own window set, replayed once at the head: the three park-side stages recognise seats
+  -- against it, each asking it the same doors the pass's set answers. see docs/generators.md § Route-by-window
+  local realisedWindows = buildRealisedWindows(sources.fxRealisedWindows, time)
+
+  perf.start('internals'); local external, noteExisting = rebuildInternals(time); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
+  perf.start('ccs'); local ccExisting = rebuildCCs(realisedWindows, time); perf.stop('ccs')  -- CC walk; reseat swing CCs
+  dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
+  perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns, sources.paramAutomation); perf.stop('extraCols')  -- reconcile persisted extra columns
+  perf.start('externals'); rebuildExternals(external, time); perf.stop('externals')  -- reintroduce foreign / diverged notes
+  perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
+
+  -- Fx window set: fx-regions plus every note host, on-take or parked, as a degenerate window.
+  -- One pass serves the whole pipeline. See docs/generators.md § Offline continuous realisation.
+  perf.start('parkRender'); renderStashedParked(sources.fxParked, time); perf.stop('parkRender')
+  perf.start('noteHostClips'); local noteHostClips = clipNoteHosts(time); perf.stop('noteHostClips')
+  perf.start('fxWindows')
+  local windows = buildFxWindows(sources.fxRegions, noteHostClips, time)
+  perf.stop('fxWindows')
+
+  perf.start('regionPark')
+  local parkedByHost = rebuildRegionPark(windows, sources.fxParked, realisedWindows,
+                                             noteHostClips, pbLimCents, time)  -- park covered, carry/restore prior
+  perf.stop('regionPark')
+  perf.start('pa'); rebuildPA(time); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
+
+  perf.start('fx')
+  local fxOut = rebuildFx(noteExisting, ccExisting, noteHostClips, windows, sources.fxRegions,
+                          notesByHost, pbLimCents, time)  -- fx expansion: derived notes/CCs
+  perf.stop('fx')
+
+  perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps, time); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, pbLimCents, time); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pcs'); rebuildPCs(fxOut.noteLive, time); perf.stop('pcs')  -- PC synthesis (trackerMode)
+
+  -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
+  perf.start('fxRealisedWindows')
+  local windowList = windows.perTarget()
+  if mm:take() and not util.deepEq(sources.fxRealisedWindows or {}, windowList) then
+    ds:assign('fxRealisedWindows', #windowList > 0 and windowList or util.REMOVE)
+  end
+  perf.stop('fxRealisedWindows')
+
+  -- Freeze's maps, after the fx pass: a rect built before it would carry the previous rebuild's note
+  -- lanes. Sibling maps, one site.
+  local maps = { windows = windows }
+  perf.start('freezeMaps')
+  maps.freezeRect = buildFreezeRects(windows.windows())
+  perf.stop('freezeMaps')
+  -- The shares the passes above keyed by host, gathered last; only the notes outlive the pass.
+  local byHost = { notes = notesByHost, parked = parkedByHost,
+                       targets = buildFxTargets(windows.windows()) }
+  maps.fxRealisation = buildFxRealisation(windows.windows(), sources.globalRegions, byHost)
+
+  -- Drop un-flushed command-path staging; the index itself is already live (head reload on
+  -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
+  perf.start('view'); stager.clear(); perf.stop('view')
+  -- The gated stages consumed the spine; the next edit window accumulates fresh dirt. The channels
+  -- that ran re-read the wire, so their mute flags want conforming: the head folds this in.
+  maps.conform = dirt.clear()
+  return maps
+end
+
 ----- Rebuild
 
 local rebuilding = false
@@ -4985,93 +5056,6 @@ end
 -- uuids per take, so an entry surviving a swap or re-read names an event of the take just left.
 local function forgetCaches()
   forgetClipEnds()
-end
-
---contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
---contract: returns the maps the fx accessors read, for tm:rebuild to install
---invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
---pre: time is the projection the rebuild head built for this pass
-local function rebuildPipeline(didReload, time)
-  -- A wholesale mm re-read strands the incremental index: reload before any stage reads it;
-  -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
-  if didReload then perf.start('reload'); stager.reload(); perf.stop('reload') end
-
-  -- One head snapshot of the ds intent keys the pipeline reads; every key is read before any same-pass
-  -- write. Stages take these as params, with regions already expanded to per-channel hosts.
-  local sources = {
-    fxParked          = ds:get('fxParked'),
-    fxRealisedWindows = ds:get('fxRealisedWindows'),
-    extraColumns      = ds:get('extraColumns'),
-    paramAutomation   = ds:get('paramAutomation'),
-  }
-  -- The take's own window set, replayed once at the head: the three park-side stages recognise seats
-  -- against it, each asking it the same doors the pass's set answers. see docs/generators.md § Route-by-window
-
-  -- The bend window this pass converts against, in cents per side; the edit side caches its own.
-  local pbLimCents = cm:get('pbRange') * 100
-  local realisedWindows = buildRealisedWindows(sources.fxRealisedWindows, time)
-  -- The expansion's channel set comes off the snapshot's own keys, so it is settled before any stage runs.
-  local globalRegions
-  sources.fxRegions, globalRegions = expandGlobals(ds:get('fxRegions'), channelsInUse(sources))
-
-  perf.start('internals'); local external, noteExisting = rebuildInternals(time); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
-  perf.start('ccs'); local ccExisting = rebuildCCs(realisedWindows, time); perf.stop('ccs')  -- CC walk; reseat swing CCs
-  dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
-  perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns, sources.paramAutomation); perf.stop('extraCols')  -- reconcile persisted extra columns
-  perf.start('externals'); rebuildExternals(external, time); perf.stop('externals')  -- reintroduce foreign / diverged notes
-  perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
-
-  -- Fx window set: fx-regions plus every note host, on-take or parked, as a degenerate window.
-  -- One pass serves the whole pipeline. See docs/generators.md § Offline continuous realisation.
-  perf.start('parkRender'); renderStashedParked(sources.fxParked, time); perf.stop('parkRender')
-  perf.start('noteHostClips'); local noteHostClips = clipNoteHosts(time); perf.stop('noteHostClips')
-  perf.start('fxWindows')
-  local windows = buildFxWindows(sources.fxRegions, noteHostClips, time)
-  perf.stop('fxWindows')
-
-  perf.start('regionPark')
-  local parkedByHost = rebuildRegionPark(windows, sources.fxParked, realisedWindows,
-                                             noteHostClips, pbLimCents, time)  -- park covered, carry/restore prior
-  perf.stop('regionPark')
-  perf.start('pa'); rebuildPA(time); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
-
-  perf.start('fx')
-  local fxOut = rebuildFx(noteExisting, ccExisting, noteHostClips, windows, sources.fxRegions,
-                          fxNotesByHost, pbLimCents, time)  -- fx expansion: derived notes/CCs
-  perf.stop('fx')
-
-  perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps, time); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
-  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, pbLimCents, time); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
-  perf.start('pcs'); rebuildPCs(fxOut.noteLive, time); perf.stop('pcs')  -- PC synthesis (trackerMode)
-
-  -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
-  perf.start('fxRealisedWindows')
-  local windowList = windows.perTarget()
-  if mm:take() and not util.deepEq(sources.fxRealisedWindows or {}, windowList) then
-    ds:assign('fxRealisedWindows', #windowList > 0 and windowList or util.REMOVE)
-  end
-  perf.stop('fxRealisedWindows')
-
-  -- Freeze's maps, after the fx pass: a rect built before it would carry the previous rebuild's note
-  -- lanes. Sibling maps, one site.
-  local maps = { windows = windows }
-  perf.start('freezeMaps')
-  maps.freezeRect = buildFreezeRects(windows.windows())
-  perf.stop('freezeMaps')
-  -- The shares the passes above keyed by host, gathered last; only the notes outlive the pass.
-  local byHost = { notes = fxNotesByHost, parked = parkedByHost,
-                       targets = buildFxTargets(windows.windows()) }
-  maps.fxRealisation = buildFxRealisation(windows.windows(), globalRegions, byHost)
-
-  -- Drop un-flushed command-path staging; the index itself is already live (head reload on
-  -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
-  perf.start('view'); stager.clear(); perf.stop('view')
-  -- The gated stages consumed the spine; the next edit window accumulates fresh dirt.
-  for chan in pairs(dirt.clear()) do muteConform[chan] = true end
-  perf.start('derivedInputs')
-  derivedInputs = derivationInputs()   -- after the pipeline's own ds writes have settled
-  perf.stop('derivedInputs')
-  return maps
 end
 
 --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
@@ -5122,14 +5106,33 @@ function tm:rebuild(takeChanged)
     end
   end
 
+  -- A wholesale mm re-read strands the incremental index: reload before the snapshot reads it, and
+  -- the pass's own commits maintain it from there. see docs § Incremental index reconciliation
+  if didReload then perf.start('reload'); stager.reload(); perf.stop('reload') end
+
+  -- One head snapshot of the ds intent keys the pass reads, its regions already expanded to
+  -- per-channel hosts against the channels in use. see docs § Channel & column model
+  local sources = {
+    fxParked          = ds:get('fxParked'),
+    fxRealisedWindows = ds:get('fxRealisedWindows'),
+    extraColumns      = ds:get('extraColumns'),
+    paramAutomation   = ds:get('paramAutomation'),
+  }
+  sources.fxRegions, sources.globalRegions =
+    expandGlobals(ds:get('fxRegions'), channelsInUse(sources))
+
   -- One nest for every staging stage, so the reindex and the take reprojection land once each
   -- rather than once per stage. rebuilding must outlive it: each stage's commit re-enters via 'reload'.
   local maps
-  mm:batch(function() maps = rebuildPipeline(didReload, timeContext) end)
+  mm:batch(function() maps = rebuildPipeline(sources, fxNotesByHost, timeContext) end)
   -- Install what the pass created. Nothing reads these mid-pass, and the accessors read between
   -- rebuilds, so they stand before the signal goes out.
   fxWindows, freezeRectByUuid, fxRealisationByUuid =
     maps.windows, maps.freezeRect, maps.fxRealisation
+  for chan in pairs(maps.conform) do muteConform[chan] = true end
+  perf.start('derivedInputs')
+  derivedInputs = derivationInputs()   -- after the pass's own ds writes have settled
+  perf.stop('derivedInputs')
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean

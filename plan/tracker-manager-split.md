@@ -25,25 +25,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: the rebuild pipeline takes its inputs and returns its state (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: pb cents↔raw arithmetic moves to tuning (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the dirt journal mints its own seeds (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the rebuild stages take the time context as a parameter (design/decisions.md 2026-09-02)
-- 2026-09-02 tm: the frame projection is a context built once per pass (design/decisions.md 2026-09-02)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **tm: the pipeline takes its last ambient reads and returns its
-  closing state.** `rebuildPipeline` receives `fxNotesByHost` and an
-  already globals-expanded `fxRegions` from the rebuild head, so
-  `expandGlobals` stays edit-side with `tm:explodeRegion`. The channels
-  needing a mute conform come back with the pass's maps, and
-  `derivedInputs = derivationInputs()` moves to `tm:rebuild`'s tail.
-  After it the region reads nothing at file scope but the eight
-  dependencies and the required libraries.
 
 - **tm: the engine's own names gather at the region.** The twenty-odd
   engine-only file-scope names move down into the region so it is one
