@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The rebuild engine takes the pass's time context as a parameter. The head hands
+  it to the pipeline, each stage that projects takes it in turn, and the helpers below them read the
+  value they were given, so no stage can be the one that decides the projection. tm's accessors keep
+  the module reference for the edit side, and the engine holds none.
+
 - **2026-09-02** — One merge pass over keys and chunks applies a flush's whole drop/put/repack set
   at once, over the per-key putKey/dropKey/repackKey it retires and over the density cap that stood
   in for this earlier the same day. table.insert/remove shift every key past the one that moved, so

@@ -76,9 +76,12 @@ trade-off class as deliberately off-grid notes.
    context, and nothing migrates.
 
 1. Construction is eager, at the head of `tm:rebuild` and before any
-   stage runs, so every stage of a pass projects through one value.
-   `tm:fromLogical` and `tm:toLogical` read the context the last head
-   built, which is also what the edit side sees between two passes.
+   stage runs. The rebuild passes the context to the pipeline, and each
+   stage takes it as a parameter, so every stage of a pass projects
+   through one value.
+
+1. `tm:fromLogical` and `tm:toLogical` read the context the last head
+   built, which is what the edit side sees between two passes.
 
 1. The length it resolves against is the one the pass derives against:
    the pending end while `tm:setLength`'s shrink flush runs, and mm's

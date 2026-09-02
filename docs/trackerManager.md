@@ -388,10 +388,12 @@ semantics — what a slot *is*, how factors compose, how
 logical↔realisation works — live in `docs/timing.md`.
 
 tm exposes the resolved transforms as `tm:fromLogical(chan, ppqL, off)`
-and `tm:toLogical(chan, ppq)`, cached per `(cm, mm)` in a file-local
-`swing` snapshot and cleared at the head of each rebuild (`clearSwing`). `tm:markSwingStale`
-flags channels whose resolved swing changed so the next rebuild
-rederives their raw ppqs from `ppqL`.
+and `tm:toLogical(chan, ppq)`, which project through the time context
+the last rebuild head built (`docs/timing.md` § The time context). The
+rebuild hands that same context to the pipeline, so a stage projects
+through the value it was given and tm's accessors serve the edit side.
+`tm:markSwingStale` flags channels whose resolved swing changed so the
+next rebuild rederives their raw ppqs from `ppqL`.
 
 ## Mutation contract
 
@@ -1207,9 +1209,8 @@ the document owns.
 The set holds logical spans and answers in either frame. `covers` compares a logical onset against
 them directly; `coversRaw` converts a window's bounds and compares raw to raw, which is what every
 question asked of an mm record needs (`docs/generators.md` § Route-by-window). The conversion happens
-on first ask and is then held: `tm:fromLogical` is stable across a pass, the swing projection being
-memoised and cleared only on a config change, so converting there is the same arithmetic as
-converting at the pass's head.
+on first ask and is then held: the set carries the pass's time context, so converting there is the
+same arithmetic as converting at the pass's head.
 
 The take's own set is that same list persisted, under `fxRealisedWindows`, and `buildRealisedWindows`
 replays it into the same doors — the inverse of the per-target view, grouping in first-appearance

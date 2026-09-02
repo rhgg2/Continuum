@@ -26,10 +26,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: the rebuild stages take the time context as a parameter (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the frame projection is a context built once per pass (design/decisions.md 2026-09-02)
 - 2026-09-01 tm: one window population per rebuild (design/decisions.md 2026-09-01)
 - 2026-09-01 tm: one clip for a lane's authored notes, on-take and parked (design/decisions.md 2026-09-01)
-- 2026-09-01 tm: the park scans ask the window set (design/tracker-manager-split.md § One window population)
 
 ## Now
 
@@ -37,7 +37,7 @@
 
 ## Queued (current phase; one-liners)
 
-- tm: the rebuild stages take the time context as a parameter
+(empty)
 
 ## Follow-up (same file, after the move)
 
