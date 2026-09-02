@@ -28,24 +28,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: replaceWindows and seatScope at file scope (plan § Phase 8)
 - 2026-09-02 tm: the lane-1 union answers through one door (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the engine leaves as trackerRebuild.lua (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the engine's own names gather at the region (design/decisions.md 2026-09-02)
-- 2026-09-02 tm: the rebuild pipeline takes its inputs and returns its state (design/decisions.md 2026-09-02)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **tm: `replaceWindows` and `seatScope` at file scope.** The two are
-   ~120 lines of closure inside `rebuildPbs`, called from one per-channel
-   loop. They close over `pbChains`, `pbBase`, `pbScope`, `gridStep`,
-   `pbLimCents` and the time context; taking those as parameters lifts
-   both to file scope. Follows item 1, which changes `seatScope`'s
-   lane-1 seek. Green-first against `tm_pb_keep_split_spec` and
-   `tm_seat_scope_spec`.
 
 1. **tm: the fx base builders at file scope.** `pbBaseFor` and
    `ccBasesFor` already take their channel and spans, and only the time

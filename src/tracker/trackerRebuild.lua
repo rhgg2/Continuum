@@ -2420,11 +2420,126 @@ local function lane1Union(chan, derived)
            nextAfter = nextAfter, anyDetuneJump = anyDetuneJump }
 end
 
+-- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
+-- bps (no carrier), kept spans recognition-only. see docs/tuning.md § Absorber reconciliation
+local function replaceWindows(chan, fxOut, gridStep, pbLimCents, time)
+  -- Gate split: live ranges (inside the pb emit scope) fold to bps; kept ranges are recognition-
+  -- only -- their seats stand on wire.
+  local emitSpans = fxOut.pbScope[chan]   -- nil = ungated: every range is live
+  local chains, base = fxOut.pbChains[chan], fxOut.pbBase[chan]
+  local liveRecs = {}
+  for _, rec in ipairs(chains) do
+    if not rec.kept then util.add(liveRecs, rec) end
+  end
+  local wins = {}
+  --shape: replaceWin = { bps = [{ ppq, ppqL, cents, shape, tension }], kept, startRaw, endRaw }
+  -- Bounds convert to raw once for zero round-trip drift.
+  local function addWin(sub, bps, kept)
+    util.add(wins, { bps = bps, kept = kept,
+                     startRaw = time:fromLogical(chan, sub[1], 0),
+                     endRaw   = time:fromLogical(chan, sub[2], 0) })
+  end
+  for _, span in ipairs(spans.mergeWindows(chains)) do
+    for _, sub in ipairs(emitSpans and spans.clip(span, emitSpans) or { span }) do
+      local bps = {}
+      for _, point in ipairs(curves.foldChains(liveRecs, sub, base, gridStep)) do
+        -- Fold fast paths return whole curves, and an interior closing edge belongs to the kept
+        -- side (chain cuts align with window edges) -- clip half-open except at the span's true end.
+        if point.ppq >= sub[1] and (point.ppq < sub[2] or sub[2] == span[2]) then
+          util.add(bps, { ppq = time:fromLogical(chan, point.ppq, 0), ppqL = point.ppq,
+                          cents = util.clamp(point.val, -pbLimCents, pbLimCents),
+                          shape = point.shape, tension = point.tension })
+        end
+      end
+      util.sortByPPQ(bps)
+      addWin(sub, bps, nil)
+    end
+    for _, sub in ipairs(emitSpans and spans.subtract(span, emitSpans) or {}) do
+      addWin(sub, {}, true)
+    end
+  end
+
+  -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
+  local function replaceWinAt(ppq)
+    for _, win in ipairs(wins) do
+      if not win.kept and ppq >= win.startRaw and ppq < win.endRaw then return win end
+    end
+  end
+  -- Seat recognition: exclusive ownership means everything on-take in a window is a generated seat
+  -- (authored pbs park off-take). Half-open -- the re-centre seat folds at endRaw-1, inside.
+  local function inSeatWindow(ppq)
+    for _, win in ipairs(wins) do
+      if ppq >= win.startRaw and ppq < win.endRaw then return true end
+    end
+    return false
+  end
+  -- Kept ownership at a shared edge: a live opening edge belongs to the live side, every other
+  -- covered ppq (interior and closing edges) to the kept side. see design § commit 4
+  local function inKeptRange(ppq)
+    local kept = false
+    for _, win in ipairs(wins) do
+      if win.kept then
+        if ppq >= win.startRaw and ppq <= win.endRaw then kept = true end
+      elseif ppq == win.startRaw then
+        return false
+      end
+    end
+    return kept
+  end
+
+  return { wins = wins, replaceWinAt = replaceWinAt,
+           inSeatWindow = inSeatWindow, inKeptRange = inKeptRange }
+end
+
+-- Closes seeds to raw spans that gate the pass's onsets/densify/anchor/absorber-pool; nil = ungated.
+-- Extents come by seek, ahead of the gather.
+local function seatScope(chan, replaceWins, lane1)
+  if dirt.wholesale(chan) then return nil end
+  local seatSpans = {}
+  local function lane1Span(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, lane1.nextAfter(ppq) }) end
+  local function bpSpan(ppq)
+    -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
+    local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
+    local prevBp = util.seek(index.raw(chan).pbs, 'before', ppq, authored)
+    local nextBp = util.seek(index.raw(chan).pbs, 'after',  ppq, authored)
+    util.add(seatSpans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
+  end
+  -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
+  -- cc/at/pc families move no pb seat, so only an unrecognised kind ungates the channel.
+  local function unboundedSeed(seed)
+    return not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
+                or seed.evType == 'at' or seed.evType == 'pc')
+  end
+  for _, seed in ipairs(dirt.has(chan)) do
+    -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
+    -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
+    local live = seed.uuid and index.byUuid(seed.uuid)
+    if not (live and live.chan == chan) then live = nil end
+    if seed.lane == 1 or (live and live.lane == 1) then
+      if seed.lane == 1 then lane1Span(seed.ppq) end
+      if live and live.lane == 1 and live.ppq ~= seed.ppq then lane1Span(live.ppq) end
+    elseif seed.evType == 'pb' then
+      bpSpan(seed.ppq)
+      if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
+    elseif unboundedSeed(seed) then
+      return nil
+    end
+  end
+  for _, win in ipairs(replaceWins.wins) do
+    if not win.kept then util.add(seatSpans, { win.startRaw - DUAL_POINT_TICK, win.endRaw }) end
+  end
+  -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
+  -- need to seat, refresh, or retire it, so its point is always in scope.
+  local first = lane1.first()
+  if first then util.add(seatSpans, { first.ppq - DUAL_POINT_TICK, first.ppq }) end
+  return seatSpans
+end
+
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
   local gridStep = ccGridStep()
-  local noteLive, pbChains, pbBase, pbScope = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase, fxOut.pbScope
+  local noteLive = fxOut.noteLive
   -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
   -- .notes only, so the head snapshot is current for this.
   local extras = extraColumns or {}
@@ -2449,126 +2564,12 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
     end
   end
 
-  -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
-  -- bps (no carrier), kept spans recognition-only. see docs/tuning.md § Absorber reconciliation
-  local function replaceWindows(chan)
-    -- Gate split: live ranges (inside the pb emit scope) fold to bps; kept ranges are recognition-
-    -- only -- their seats stand on wire.
-    local emitSpans = pbScope[chan]   -- nil = ungated: every range is live
-    local liveRecs = {}
-    for _, rec in ipairs(pbChains[chan]) do
-      if not rec.kept then util.add(liveRecs, rec) end
-    end
-    local wins = {}
-    --shape: replaceWin = { bps = [{ ppq, ppqL, cents, shape, tension }], kept, startRaw, endRaw }
-    -- Bounds convert to raw once for zero round-trip drift.
-    local function addWin(sub, bps, kept)
-      util.add(wins, { bps = bps, kept = kept,
-                       startRaw = time:fromLogical(chan, sub[1], 0),
-                       endRaw   = time:fromLogical(chan, sub[2], 0) })
-    end
-    for _, span in ipairs(spans.mergeWindows(pbChains[chan])) do
-      for _, sub in ipairs(emitSpans and spans.clip(span, emitSpans) or { span }) do
-        local bps = {}
-        for _, point in ipairs(curves.foldChains(liveRecs, sub, pbBase[chan], gridStep)) do
-          -- Fold fast paths return whole curves, and an interior closing edge belongs to the kept
-          -- side (chain cuts align with window edges) -- clip half-open except at the span's true end.
-          if point.ppq >= sub[1] and (point.ppq < sub[2] or sub[2] == span[2]) then
-            util.add(bps, { ppq = time:fromLogical(chan, point.ppq, 0), ppqL = point.ppq,
-                            cents = util.clamp(point.val, -pbLimCents, pbLimCents),
-                            shape = point.shape, tension = point.tension })
-          end
-        end
-        util.sortByPPQ(bps)
-        addWin(sub, bps, nil)
-      end
-      for _, sub in ipairs(emitSpans and spans.subtract(span, emitSpans) or {}) do
-        addWin(sub, {}, true)
-      end
-    end
-
-    -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
-    local function replaceWinAt(ppq)
-      for _, win in ipairs(wins) do
-        if not win.kept and ppq >= win.startRaw and ppq < win.endRaw then return win end
-      end
-    end
-    -- Seat recognition: exclusive ownership means everything on-take in a window is a generated seat
-    -- (authored pbs park off-take). Half-open -- the re-centre seat folds at endRaw-1, inside.
-    local function inSeatWindow(ppq)
-      for _, win in ipairs(wins) do
-        if ppq >= win.startRaw and ppq < win.endRaw then return true end
-      end
-      return false
-    end
-    -- Kept ownership at a shared edge: a live opening edge belongs to the live side, every other
-    -- covered ppq (interior and closing edges) to the kept side. see design § commit 4
-    local function inKeptRange(ppq)
-      local kept = false
-      for _, win in ipairs(wins) do
-        if win.kept then
-          if ppq >= win.startRaw and ppq <= win.endRaw then kept = true end
-        elseif ppq == win.startRaw then
-          return false
-        end
-      end
-      return kept
-    end
-
-    return { wins = wins, replaceWinAt = replaceWinAt,
-             inSeatWindow = inSeatWindow, inKeptRange = inKeptRange }
-  end
-
-  -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
-  -- Extents come by seek, ahead of the gather.
-  local function seatScope(chan, replaceWins, lane1)
-    if dirt.wholesale(chan) then return nil end
-    local seatSpans = {}
-    local function lane1Span(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, lane1.nextAfter(ppq) }) end
-    local function bpSpan(ppq)
-      -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
-      local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
-      local prevBp = util.seek(index.raw(chan).pbs, 'before', ppq, authored)
-      local nextBp = util.seek(index.raw(chan).pbs, 'after',  ppq, authored)
-      util.add(seatSpans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
-    end
-    -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
-    -- cc/at/pc families move no pb seat, so only an unrecognised kind ungates the channel.
-    local function unboundedSeed(seed)
-      return not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
-                  or seed.evType == 'at' or seed.evType == 'pc')
-    end
-    for _, seed in ipairs(dirt.has(chan)) do
-      -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
-      -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
-      local live = seed.uuid and index.byUuid(seed.uuid)
-      if not (live and live.chan == chan) then live = nil end
-      if seed.lane == 1 or (live and live.lane == 1) then
-        if seed.lane == 1 then lane1Span(seed.ppq) end
-        if live and live.lane == 1 and live.ppq ~= seed.ppq then lane1Span(live.ppq) end
-      elseif seed.evType == 'pb' then
-        bpSpan(seed.ppq)
-        if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
-      elseif unboundedSeed(seed) then
-        return nil
-      end
-    end
-    for _, win in ipairs(replaceWins.wins) do
-      if not win.kept then util.add(seatSpans, { win.startRaw - DUAL_POINT_TICK, win.endRaw }) end
-    end
-    -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
-    -- need to seat, refresh, or retire it, so its point is always in scope.
-    local first = lane1.first()
-    if first then util.add(seatSpans, { first.ppq - DUAL_POINT_TICK, first.ppq }) end
-    return seatSpans
-  end
-
   -- Replace windows + seat spans per dirty chan, computed ahead of the gather. Fresh (non-kept)
   -- derived lane-1 output ungates the channel (seatSpans nil).
   local winsByChan, seatSpansByChan = {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
-      local replaceWins = replaceWindows(chan)
+      local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents, time)
       winsByChan[chan] = replaceWins
       if not freshLane1[chan] then
         seatSpansByChan[chan] = seatScope(chan, replaceWins, lane1ByChan[chan])
