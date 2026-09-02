@@ -2385,7 +2385,7 @@ return {
       t.truthy(h.tm:freezeRegion('fxr-1'))
       generators.kinds.overrun = nil
       -- Promotion swaps which door the note enters the tail walk by -- extras, to the raw index
-      -- under walkable(). A promoted note that lost its ppqL would read as foreign MIDI and be
+      -- under isAuthored(). A promoted note that lost its ppqL would read as foreign MIDI and be
       -- walked by neither, and its tail would spring back to the authored 480.
       t.eq(pitch60().endppq, 240, 'promoted, it enters by the index instead and the clip stands')
     end,

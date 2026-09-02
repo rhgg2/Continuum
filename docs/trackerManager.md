@@ -1009,11 +1009,13 @@ their own PC each, even if their logical ppqs match.
 
 ### Logical projection
 
-All projection runs through `projectCC(cc, overlay)`: it clones the
-source event, strips only `chan` and `cc`, and applies the caller's
-`overlay` of derived fields. Everything else — including metadata not
-known here — rides through verbatim, so new event fields reach
-`col.events` without a change to this layer.
+A column event starts as `columnEvent(evt, overlay)`: it clones the
+source, drops mm's `loc` stream address, marks the clone realised, and
+applies the caller's `overlay` of derived fields. Everything else —
+including metadata not known here — rides through verbatim, so new event
+fields reach `col.events` without a change to this layer. The clone is
+where a column stops sharing tables with mm's store, and `loc` is the one
+field that must not cross.
 
 Projection is build-time: every note seat projects at ingestion (the
 frame law — a lane is never part-raw, part-logical; interval seats
@@ -1094,7 +1096,7 @@ target a slide aims at. The subject is the *host's* lane rather than the stream 
 region spans lanes, carries none, and resolves to nil, which is also what keeps a region-hosted
 `target='next'` off a member record that carries no channel.
 
-`rebuildRegionPark`'s note/cc scans are span-covered the same way: `coverOnsets` walks each
+`rebuildRegionPark`'s note/cc scans are span-covered the same way: `onsetsIn` walks each
 channel's window spans (merged per-channel for notes, per `(chan, cc)` for ccs) rather than the
 whole column, since a covered event sits inside a current window by definition — the spans are
 the complete cover set. Self-parking fx hosts are the one exception: `chainTargets` suppresses their
@@ -1344,7 +1346,7 @@ Two cases need no renewal. Wholesale and stale-swing channels get a
 brand-new `onTake.notes`, so their identity is fresh by construction. And
 a local bound to `col.events` that outlives a renewal operates on the dead
 table — the read-only walks (`eachWindowNote`, `channelStreams`,
-`coverOnsets`) do not care, but the park scan did, which is why a note
+`onsetsIn`) do not care, but the park scan did, which is why a note
 carry stores its lane index and resolves the table at unlink time.
 
 The parked half obeys the same rule by a different route. Nothing owns a
