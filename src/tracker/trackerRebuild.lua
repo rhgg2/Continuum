@@ -1,30 +1,31 @@
 -- The derivation engine: one gated pass that reconstructs intent from mm, then reauthors raw from it.
+-- Two doors: rebuild.pipeline runs a pass, rebuild.forget drops what outlives one.
 -- See docs/trackerManager.md § Rebuild for the model.
 
 --invariant: the frame, the raw index and the stager are the engine's alone to write during a pass
 --invariant: the pass's time context is handed in; the engine builds no projection of its own
 
-local util    = require 'util'
-local spans   = require 'spans'
-local curves  = require 'curves'
-local timing  = require 'timing'
-local voicing = require 'voicing'
-local tuning  = require 'tuning'
-
+local util       = require 'util'
+local spans      = require 'spans'
+local curves     = require 'curves'
+local timing     = require 'timing'
+local voicing    = require 'voicing'
+local tuning     = require 'tuning'
 local generators = require 'generators'
 local perf       = require 'perf'
 local fxWindows  = require 'fxWindows'
 
 local mm, cm, ds = (...).mm, (...).cm, (...).ds
--- Forced note columns per channel absent an extraColumns entry; tm resolves the default.
-local defaultNoteCols = (...).defaultNoteCols
--- The structures the two files share, each with its own owner: tm keeps them true across edits and
--- the engine is their only mid-pass writer. see docs/trackerManager.md § The frame handle
+local defaultNoteCols = (...).defaultNoteCols -- Forced note columns per channel absent an extraColumns entry
 local index, stager, dirt, frame = (...).index, (...).stager, (...).dirt, (...).frame
 
 local rebuild = {}
 
-local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
+----- Module state and constants
+
+-- ppq tolerance for "raw agrees with its logical projection"; absorbs
+-- fromLogical rounding slop, shared by the tail pass and rebuild rule.
+local EPS = 1
 
 -- The one map that outlives a pass: the fx stage writes only the channels it ran, keyed by host, so
 -- the overlay draws one chain's own. Its lists are built from copies of the fx specs.
@@ -34,9 +35,7 @@ local fxNotesByHost = {}
 
 ----- Rebuild shared helpers
 
--- ppq tolerance for "raw agrees with its logical projection"; absorbs
--- fromLogical rounding slop, shared by the tail pass and rebuild rule.
-local EPS         = 1
+local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
 
 -- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
 local function ccGridStep()
@@ -53,35 +52,6 @@ local function coverOnsets(events, spanSet, emit)
       emit(evt)
     end
   end
-end
-
-local clipEnd
-do
-  -- uuid -> clipped span end (logical); take-scoped, dropped by forgetCaches at the take-tier seam,
-  -- which a take-length change (mm:setLength) reaches too.
-  local cache = {}
-
-  -- One clip cache, shared by on-take hosts and parked events; reclips on wholesale dirt, a seed
-  -- naming the event, or a seed ppq inside its cached span. See docs/trackerManager.md § Lane occupancy.
-  --contract: always the true clip; the cache is this function's alone to read and write
-  function clipEnd(evt, takeLenL)
-    local seeds, cached = dirt.has(evt.chan), cache[evt.uuid]
-    if cached and seeds ~= true then
-      local stands = true
-      for _, s in ipairs(seeds or {}) do
-        if s.uuid == evt.uuid or (s.ppqL and s.ppqL >= evt.ppq and s.ppqL <= cached) then
-          stands = false; break
-        end
-      end
-      if stands then return cached end
-    end
-    local clipped = frame.clippedSpanEnd(evt, takeLenL)
-    cache[evt.uuid] = clipped
-    return clipped
-  end
-
-  --post: the take-tier clip cache is empty
-  function rebuild.forget() cache = {} end
 end
 
 local function pushNoteCol(channel)
@@ -175,6 +145,41 @@ local function emptyChans()
   return t
 end
 
+-- The pass's raw note view is um's index, read in place (entries are live um records, colEvt
+-- their seat stamp), filtered at use to authored, logically seated notes.
+local function walkable(note) return not note.derived and note.ppqL ~= nil end
+
+----- Take-tier clip cache
+
+local clipEnd
+do
+  -- uuid -> clipped span end (logical); take-scoped, dropped by forgetCaches at the take-tier seam,
+  -- which a take-length change (mm:setLength) reaches too.
+  local cache = {}
+
+  -- One clip cache, shared by on-take hosts and parked events; reclips on wholesale dirt, a seed
+  -- naming the event, or a seed ppq inside its cached span. See docs/trackerManager.md § Lane occupancy.
+  --contract: always the true clip; the cache is this function's alone to read and write
+  function clipEnd(evt, takeLenL)
+    local seeds, cached = dirt.has(evt.chan), cache[evt.uuid]
+    if cached and seeds ~= true then
+      local stands = true
+      for _, s in ipairs(seeds or {}) do
+        if s.uuid == evt.uuid or (s.ppqL and s.ppqL >= evt.ppq and s.ppqL <= cached) then
+          stands = false; break
+        end
+      end
+      if stands then return cached end
+    end
+    local clipped = frame.clippedSpanEnd(evt, takeLenL)
+    cache[evt.uuid] = clipped
+    return clipped
+  end
+
+  --post: the take-tier clip cache is empty
+  function rebuild.forget() cache = {} end
+end
+
 ----- Derived-event reconcile skeleton (R2)
 -- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
 --contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
@@ -263,13 +268,9 @@ local function reconcileFx(existing, predicted, sink)
     end }
 end
 
------ Rebuild internals
-
--- (ppqL, lane, pitch) names a seat uniquely -- a lane holds one note per logical row. Delay shifts
--- raw ppq but not ppqL, so the logical seat is the stable key. Shared with the tail walk.
-local function seatKey(ppqL, lane, pitch)
-  return tostring(ppqL) .. '\0' .. tostring(lane) .. '\0' .. tostring(pitch)
-end
+----- Seed coverage
+-- What the dirt journal's seeds claim, in the shapes the gated stages ask for. Internals, the CC
+-- walk, PA, region park and fx expansion all gate on these; none of them owns them.
 
 -- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ each survivor's live ppqL): the one
 -- derivation of what the dirt covers, so no consumer of it can drift. see design § phase 5
@@ -323,6 +324,8 @@ local function exciseNotes(chan, rows, claims)
     end
   end
 end
+
+----- Rebuild internals
 
 -- Partition mm notes stamped/external, lay internal columns logical-born, reseat stale-swing.
 -- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Partition and internal lanes
@@ -736,6 +739,36 @@ local function rebuildExternals(external, time)
     extWrites.assign(colNote, update)
   end
   extWrites.commit()
+end
+
+----- Rebuild sample stamp
+
+-- The bearing rule: under trackerMode every note bears a sample, stamped once from the onset PC;
+-- inheritance freezes at stamp time. Gated on the dirt journal (seed list or wholesale).
+local function stampSamples()
+  if not cm:get('trackerMode') then return end
+  local stampWrites = mmBatch()
+  local function stamp(entry)
+    if entry.evType == 'note' and walkable(entry) and entry.sample == nil then
+      local prevailing = util.seek(index.raw(entry.chan).pcs, 'at-or-before', entry.ppq)
+      local sample = prevailing and prevailing.val or 0
+      index.assign(entry, 'sample', sample)
+      frame.setEvent(entry.colEvt, 'sample', sample)
+      stampWrites.assign(entry, { sample = sample })
+    end
+  end
+  for chan = 1, 16 do
+    if dirt.wholesale(chan) then
+      for _, entry in ipairs(index.raw(chan).notes) do stamp(entry) end
+    elseif dirt.has(chan) then
+      for _, s in ipairs(dirt.has(chan)) do
+        local uuid = s.uuid or (s.evt and s.evt.uuid)
+        local entry = uuid and index.byUuid(uuid)
+        if entry then stamp(entry) end
+      end
+    end
+  end
+  stampWrites.commit()
 end
 
 ----- Rebuild region park
@@ -1162,29 +1195,6 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     if index.stampColEvt(evt) then evt.realised = true end
   end
   return parkedByHost
-end
-
------ Raw working set
-
--- The pass's raw note view is um's index, read in place (entries are live um records, colEvt
--- their seat stamp), filtered at use to authored, logically seated notes.
-local function walkable(note) return not note.derived and note.ppqL ~= nil end
-
--- One-pass merge of the pre-sorted index list (filtered) with a small sorted extras list;
--- replaces the whole-channel sort the per-pass scratch copy used to force.
-local function mergeIndexed(indexNotes, keep, extras)
-  table.sort(extras, index.order)
-  local merged, j = {}, 1
-  for _, entry in ipairs(indexNotes) do
-    if keep(entry) then
-      while extras[j] and index.order(extras[j], entry) do
-        util.add(merged, extras[j]); j = j + 1
-      end
-      util.add(merged, entry)
-    end
-  end
-  for i = j, #extras do util.add(merged, extras[i]) end
-  return merged
 end
 
 ----- Rebuild PA
@@ -1919,11 +1929,31 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   return fxOut
 end
 
------ Rebuild tails
+----- Tail walk: rules and the linear pass
 
--- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
--- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
---contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
+-- (ppqL, lane, pitch) names a seat uniquely -- a lane holds one note per logical row. Delay shifts
+-- raw ppq but not ppqL, so the logical seat is the stable key.
+local function seatKey(ppqL, lane, pitch)
+  return tostring(ppqL) .. '\0' .. tostring(lane) .. '\0' .. tostring(pitch)
+end
+
+-- One-pass merge of the pre-sorted index list (filtered) with a small sorted extras list;
+-- replaces the whole-channel sort the per-pass scratch copy used to force.
+local function mergeIndexed(indexNotes, keep, extras)
+  table.sort(extras, index.order)
+  local merged, j = {}, 1
+  for _, entry in ipairs(indexNotes) do
+    if keep(entry) then
+      while extras[j] and index.order(extras[j], entry) do
+        util.add(merged, extras[j]); j = j + 1
+      end
+      util.add(merged, entry)
+    end
+  end
+  for i = j, #extras do util.add(merged, extras[i]) end
+  return merged
+end
+
 -- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
 -- their batches and marking tables and drive the same rules over their own state.
 --shape: ctx = { chan, res, time, disturbed, nudged, clampWrites, tailWrites, parkedBoundFor }
@@ -2095,31 +2125,15 @@ end
 -- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
 local FRONTIER_SEED_CAP = 16
 
--- First index into the raw-then-logical-sorted `list` with ppq >= `pos`; #list+1 if none. Every frontier
--- probe binary-searches here, then scans outward a bounded few rows -- the seek that replaces the sweep.
-local function lowerBound(list, pos)
-  local lo, hi = 1, #list + 1
-  while lo < hi do
-    local mid = (lo + hi) // 2
-    if list[mid].ppq < pos then lo = mid + 1 else hi = mid end
-  end
-  return lo
-end
--- First index with ppq > `pos`: the far edge of pos's raw cluster.
-local function upperBound(list, pos)
-  local lo, hi = 1, #list + 1
-  while lo < hi do
-    local mid = (lo + hi) // 2
-    if list[mid].ppq <= pos then lo = mid + 1 else hi = mid end
-  end
-  return lo
-end
+-- Every probe below binary-searches the raw-then-logical-sorted index -- util.firstAtOrAfter for the
+-- near edge of pos's raw cluster, util.firstAfter for the far one -- then scans outward a bounded few
+-- rows. The seek that replaces the sweep.
 
 -- Nearest walkable record strictly on one `side` of `pos` (raw ppq) matching `filter`, over the index
 -- (binary-searched, scanned outward) and the small extras. The strict-ppq bound probe; mirrors util.seek.
 local function nearestNote(indexList, extras, pos, side, filter)
   local best
-  local anchor = lowerBound(indexList, pos)
+  local anchor = util.firstAtOrAfter(indexList, pos)
   if side == 'before' then
     for i = anchor - 1, 1, -1 do
       local rec = indexList[i]
@@ -2145,7 +2159,7 @@ end
 -- predecessor. A same-tick same-pitch note counts here (unlike the strict bound probes).
 local function prevSamePitch(indexList, extras, node)
   local best
-  for i = upperBound(indexList, node.ppq) - 1, 1, -1 do
+  for i = util.firstAfter(indexList, node.ppq) - 1, 1, -1 do
     local rec = indexList[i]
     if walkable(rec) and rec ~= node and rec.pitch == node.pitch and index.order(rec, node) then
       best = rec; break
@@ -2163,7 +2177,7 @@ end
 local function nextSamePitch(indexList, extras, node, origPpq)
   local key = { ppq = origPpq, ppqL = node.ppqL, derived = node.derived, lane = node.lane, pitch = node.pitch }
   local best
-  for i = lowerBound(indexList, origPpq), #indexList do
+  for i = util.firstAtOrAfter(indexList, origPpq), #indexList do
     local rec = indexList[i]
     if walkable(rec) and rec ~= node and rec.pitch == node.pitch and index.order(key, rec) then
       best = rec; break
@@ -2183,7 +2197,7 @@ local function seatMatches(indexList, extras, seed)
   local function match(rec)
     return (rec.ppqL or rec.ppq) == key and rec.lane == seed.lane and rec.pitch == seed.pitch
   end
-  for i = lowerBound(indexList, seed.ppq), #indexList do
+  for i = util.firstAtOrAfter(indexList, seed.ppq), #indexList do
     if indexList[i].ppq ~= seed.ppq then break end
     if match(indexList[i]) then util.add(out, indexList[i]) end
   end
@@ -2289,6 +2303,11 @@ local function frontierTails(chan, indexList, extras, parkedBoundFor, time, res,
   return emitted
 end
 
+----- Rebuild tails
+
+-- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
+-- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
+--contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
 local function rebuildTails(noteLive, noteOps, time)
   local res = mm:resolution()
   local clampWrites = mmBatch()
@@ -2919,36 +2938,6 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
   perf.start('commit')
   pbWrites.commit()
   perf.stop('commit')
-end
-
------ Rebuild sample stamp
-
--- The bearing rule: under trackerMode every note bears a sample, stamped once from the onset PC;
--- inheritance freezes at stamp time. Gated on the dirt journal (seed list or wholesale).
-local function stampSamples()
-  if not cm:get('trackerMode') then return end
-  local stampWrites = mmBatch()
-  local function stamp(entry)
-    if entry.evType == 'note' and walkable(entry) and entry.sample == nil then
-      local prevailing = util.seek(index.raw(entry.chan).pcs, 'at-or-before', entry.ppq)
-      local sample = prevailing and prevailing.val or 0
-      index.assign(entry, 'sample', sample)
-      frame.setEvent(entry.colEvt, 'sample', sample)
-      stampWrites.assign(entry, { sample = sample })
-    end
-  end
-  for chan = 1, 16 do
-    if dirt.wholesale(chan) then
-      for _, entry in ipairs(index.raw(chan).notes) do stamp(entry) end
-    elseif dirt.has(chan) then
-      for _, s in ipairs(dirt.has(chan)) do
-        local uuid = s.uuid or (s.evt and s.evt.uuid)
-        local entry = uuid and index.byUuid(uuid)
-        if entry then stamp(entry) end
-      end
-    end
-  end
-  stampWrites.commit()
 end
 
 ----- Rebuild PCs
