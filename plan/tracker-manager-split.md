@@ -19,9 +19,12 @@
    § Note host clips and windows.
 6. **Phase 6 — the time context** — landed 2026-09-02, in two commits;
    the model moved to `docs/timing.md` § The time context.
-7. **Phase 7 — the engine leaves** (§ Phase 3) ← in flight — the shared
-   names find their homes, the engine's own gather at the region, and
-   then `trackerRebuild.lua` takes its eight dependencies.
+7. **Phase 7 — the engine leaves** (§ Phase 3) — landed 2026-09-02, in
+   five commits, as `trackerRebuild.lua` and `fxWindows.lua`; the model
+   is `docs/trackerManager.md` § The frame handle and § Fx window census.
+8. **Phase 8 — the nesting inside the stages** ← in flight — three lifts
+   inside `trackerRebuild.lua`. None changes what crosses a boundary or
+   what any doc states, so the design doc carries no section for it.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -36,12 +39,27 @@
 
 ## Queued (current phase; one-liners)
 
-## Follow-up (same file, after the move)
+1. **tm: the lane-1 union as one stream.** `rebuildPbs` asks five
+   questions of the union of a channel's authored lane-1 notes (the raw
+   index) and the pass's derived lane-1 stream (`liveLane1ByChan`):
+   `lane1DetuneAt`, `lane1Between`, `firstLane1`, `anyDetuneJump`, and
+   `seatScope`'s `nextLane1After`. Three of them merge the two sources by
+   the same nearer-of-two comparison, written out each time. One union
+   door built per dirty channel beside `liveLane1ByChan` answers all
+   five, and `rebuildPbs` loses ~80 lines. Green-first against
+   `tm_seat_scope_spec` and `tm_pb_seam_spec`.
 
-Nesting reduction inside two stages. None of it changes what crosses
-the boundary; each shortens a function too long to read in one pass.
+1. **tm: `replaceWindows` and `seatScope` at file scope.** The two are
+   ~120 lines of closure inside `rebuildPbs`, called from one per-channel
+   loop. They close over `pbChains`, `pbBase`, `pbScope`, `gridStep`,
+   `pbLimCents` and the time context; taking those as parameters lifts
+   both to file scope. Follows item 1, which changes `seatScope`'s
+   lane-1 seek. Green-first against `tm_pb_keep_split_spec` and
+   `tm_seat_scope_spec`.
 
-- tm: the lane-1 union stream as one set of queries, three seek copies to one (rebuildPbs, ~80 lines)
-- tm: replaceWindows and seatScope at file scope (rebuildPbs, ~120 lines)
-- tm: the fx base builders take their channel and spans (rebuildFx, ~40 lines)
+1. **tm: the fx base builders at file scope.** `pbBaseFor` and
+   `ccBasesFor` already take their channel and spans, and only the time
+   context binds them into `rebuildFx`. Passing it lifts ~40 lines out to
+   file scope beside `coverInto`, the scan they both use. Green-first
+   against `tm_gate_parity_spec`.
 

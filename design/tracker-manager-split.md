@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
-> opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 7 (the engine leaves)
+> opened: 2026-08-07 · status: the three phases landed 2026-09-02;
+> plan/tracker-manager-split.md carries the follow-up
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -154,29 +154,8 @@ decides whether phase 3 is worth taking.**
 
 ## One window population
 
-1. **A window is clipped by the authored onsets on its lane, on the take
-   or parked.** One rule covers an on-take host, a parked host and a
-   parked member: `clippedSpanEnd` and `clipParked` clip against the
-   same set, and each keeps its own ceiling — the cell's authored
-   `endppq`, or the take length.
-
-1. Derived notes lie outside the population. A derived note is a
-   host's output and a window is over intent; `rebuildInternals` routes
-   one to the fx stage's existing set instead of into a column, so the
-   population is authored by construction.
-
-1. The pass renders the parked half from the stash before anything reads
-   it. The frame carries the previous pass's render, and a park edit — a
-   delete, a chain removed, a freeze — has already landed in the
-   document.
-
-1. Parking moves a note between the on-take half of the population and
-   the parked half, so the set of onsets a window clips against is
-   invariant across the park stage. One `clipNoteHosts` call per
-   rebuild therefore serves the note pass, continuous membership and fx
-   expansion alike, and `rebuildRegionPark` receives the window set as
-   data. Each reader asks the frame which half a host is in at its own
-   moment.
+Landed 2026-09-01. The model is `docs/trackerManager.md` § Note host
+clips and windows.
 
 ## The time context
 
@@ -199,82 +178,9 @@ gated spine.
 
 ## Phase 3 — the engine leaves
 
-1. The engine leaves as `trackerRebuild.lua`, taking eight
-   dependencies: `mm`, `cm`, `ds`, `timeContext`, `index`, `stager`,
-   `dirt`, `frame`. The first three the file takes via `(...)` exactly
-   as tm does today, `timeContext` is the projection the rebuild head
-   builds (`docs/timing.md` § The time context), which carries the
-   length the pass derives against as well, and `dirt` is phase 2's
-   module, required by both sides. The last three are the decisions
-   below.
-
-1. `trackerRebuild.lua` is one file. Its nine stages need the same
-   substrate, so a file each would carry the same constructor nine
-   times; sectioned as it already is, 2900 lines is the size of a batch
-   derivation pipeline.
-
-1. The seams are drawn in place, all still inside trackerManager: the
-   frame travels as a handle carrying its operations, the raw index and
-   the stager reach the pipeline as door tables, the pass's maps come
-   back by return, and the take-tier path calls `forget()` on the caches
-   that outlive a pass. The model is `docs/trackerManager.md` § The frame
-   handle, § Update manager, § Fx window census and § Lane occupancy.
-
-1. The write surface falls on the same line. `index.assign`,
-   `index.stampColEvt` and `index.withDeferredSort` are engine-only, so
-   the line the handle draws is the line the mutation privilege already
-   has: tm keeps the lists true across edits, the engine is the only
-   writer mid-pass, and `um-index-stager.md` D2's contract governs
-   exactly that. Of the thirty-three calls to `index.raw`, twenty-seven
-   are the engine's and six the edit side's. A structure two modules use
-   needs one owner, and the door table gives it one.
-
-1. Each field of a travelling record has one authoring stage. A record
-   passes from the stage that mints it through the stages that settle
-   it, so no stage owns it, and the boundary needs no rule about what
-   one stage may touch of another's output.
-
-1. The pipeline order follows from the fields. `rebuildPbs` reads `ppq`
-   and `rebuildTails` authors `ppq`, so tails precedes pbs. The two
-   fields with a second writer say the same thing from the other side:
-   `reconcileFx`'s keep path stamps `realised` and `endppq` from the
-   matched mm record so the tail walk's diff has a baseline, which
-   mirrors mm and leaves the field's author unchanged.
-
-1. The move renders the coupling. An ambient upvalue is free to use and
-   impossible to count; an injected dependency is neither. The question
-   is whether making the number visible is worth 2900 lines changing
-   file, and the answer turns on what the number is.
-
-1. The REBUILD region references about 110 names it does not declare.
-   Two deductions cut that to eight.
-
-1. The first is material that travels. Twenty-five of those names have
-   *zero* uses outside the engine — they are the engine's own,
-   lexically stranded at file scope. The fx-expansion helper family is
-   the bulk of it: `coverInto`, `membersOf`, `channelStreams`,
-   `allocateRegionLanes`, `hostFromNote`, the reconcile skeletons, the
-   fx map builders. They gathered at the region on 2026-09-02, and the
-   move takes them with it.
-
-1. The second is operations on structures already being passed. The
-   frame's operations travel on its handle, lane ordering belongs to the
-   index whose lists it orders, and `sortByPPQ` sits in `util` beside
-   the seeks that assume the order it makes. Seven names become zero
-   (`docs/trackerManager.md` § The frame handle).
-
-1. The two deductions leave the eight named above, and a residue of
-   six. Two the new file declares from what it already holds:
-   `defaultNoteCols` off its own `(...)`, and `delayToPPQ` off `timing`
-   and mm's resolution.
-
-1. The other four are window constructors both sides mint from.
-   `windowSet`, `windowForNote`, `clippedSpanEnd` and `expandedUuid`
-   build the pass's census, and the freeze path builds a window for a
-   host the census never published — an un-flushed note, a stored
-   global. They stay at file scope with `perTargetWindows` and
-   `freezeRefused`, which the freeze path alone calls, and the module
-   boundary settles the family's home in one decision.
+Landed 2026-09-02 as `trackerRebuild.lua`, taking eight dependencies,
+with the window constructors as `fxWindows.lua`. The model is
+`docs/trackerManager.md` § The frame handle and § Fx window census.
 
 ## What the specs hold
 
