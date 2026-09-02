@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
 > opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md,
-> at phase 6 (the time context)
+> at phase 7 (the engine leaves)
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.
@@ -180,33 +180,9 @@ decides whether phase 3 is worth taking.**
 
 ## The time context
 
-1. **The projection between the logical and realisation frames is a
-   value, built once per pass from the length the pass derives against,
-   the take's resolution, the swing library and the document's swing
-   assignment.** It carries `fromLogical`, `toLogical` and that length.
-   A changed input means a new context, and nothing migrates.
-
-1. `viewContext` is the same shape one layer up
-   (`docs/viewContext.md`): a pure snapshot of coordinates, built by
-   the layer that owns it, held there, and read by the sibling that
-   needs it. `timeContext` is the tracker manager's.
-
-1. Construction is eager, at the head of `tm:rebuild` and before any
-   stage runs, so a pass has one projection throughout and no stage
-   can be the one that decides it.
-
-1. The engine takes the context as a parameter. Its thirty-six
-   projections then read a value the pass was given, and the edit
-   side's seventeen read the reference tm holds, which the same head
-   replaces.
-
-1. `tm:fromLogical` and `tm:toLogical` have no caller outside
-   trackerManager. The split narrows no API: a module-private function
-   becomes an argument.
-
-1. `timeContext` is what `tm` stood for in § Phase 3's dependency
-   list. The count stays at eight, because the engine's four reads of
-   the take length travel on the same value.
+Landed 2026-09-02 as `timeContext.lua`, built at the rebuild head and
+taken by the stages as a parameter. The model is `docs/timing.md`
+§ The time context.
 
 ## Phase 1 — the algebra leaves
 
@@ -225,9 +201,11 @@ the seed minters stay with the structures they read. The model is
 1. The engine leaves as `trackerRebuild.lua`, taking eight
    dependencies: `mm`, `cm`, `ds`, `timeContext`, `index`, `stager`,
    `dirt`, `frame`. The first three the file takes via `(...)` exactly
-   as tm does today, `timeContext` is § The time context's value, and
-   `dirt` is phase 2's module, required by both sides. The last three
-   are the decisions below.
+   as tm does today, `timeContext` is the projection the rebuild head
+   builds (`docs/timing.md` § The time context), which carries the
+   length the pass derives against as well, and `dirt` is phase 2's
+   module, required by both sides. The last three are the decisions
+   below.
 
 1. `trackerRebuild.lua` is one file. Its nine stages need the same
    substrate, so a file each would carry the same constructor nine

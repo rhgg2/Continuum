@@ -60,9 +60,8 @@ Docs, design docs and the decisions log share the register of
 are generated rather than tracked: built at session start in a tree
 that lacks them, and regenerated on every edit. Besides direct
 reading, the maps can be queried via `mcp__continuum_map__map_query`.
-These are optimised for
-cross-cutting queries you can put a name to; save the `Explore` agent
-for genuinely fuzzy and open-ended queries.
+These are optimised for cross-cutting queries you can put a name to;
+save the `Explore` agent for genuinely fuzzy and open-ended queries.
 
 Use `mcp__reaper_docs__reaper_doc_lookup` for ReaScript/ReaImGui APIs.
 

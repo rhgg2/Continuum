@@ -17,12 +17,11 @@
 5. **Phase 5 — one window population** (§ One window population) — landed
    2026-09-01, in three commits; the model is `docs/trackerManager.md`
    § Note host clips and windows.
-6. **Phase 6 — the time context** (§ The time context) — the frame
-   projection becomes a value built once per pass, and the stages take
-   it as a parameter.
-7. **Phase 7 — the engine leaves** (§ Phase 3) — the engine's own
-   names regrouped in place and the dirt gates onto one door, then
-   `trackerRebuild.lua` and its eight dependencies.
+6. **Phase 6 — the time context** — landed 2026-09-02, in two commits;
+   the model moved to `docs/timing.md` § The time context.
+7. **Phase 7 — the engine leaves** (§ Phase 3) ← in flight — the shared
+   names find their homes, the engine's own gather at the region, and
+   then `trackerRebuild.lua` takes its eight dependencies.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -37,7 +36,47 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+- **tm: the dirt seed minters move to dirt.lua.** `parkSeed` and
+  `rawSeed` become `dirt.parkSeed` and `dirt.rawSeed`, so the journal
+  owns the seed shape its `--shape` annotation already names. `parkSeed`
+  takes the seat's raw ppq as an argument, leaving the projection with
+  the caller. Callers are `seedParkedEdit`, `flushParked` and four sites
+  in `rebuildRegionPark`, plus the cc sites that mint `rawSeed`.
+
+- **tm: pb cents↔raw arithmetic moves to tuning.** `tuning` gains the
+  two conversions, each taking the pb limit in cents; its invariant that
+  raw 14-bit conversion is tm's alone is revised to match. Each side
+  keeps its own `pbRange` cache — tm's `pbLim`, dropped per rebuild.
+  Callers are `tm:flush`, the index's `makeEntry` and `refreshEntry`,
+  and six engine sites across `rebuildPbs`, `rebuildFx` and
+  `rebuildRegionPark`.
+
+- **tm: the pipeline takes its last ambient reads and returns its
+  closing state.** `rebuildPipeline` receives `fxNotesByHost` and an
+  already globals-expanded `fxRegions` from the rebuild head, so
+  `expandGlobals` stays edit-side with `tm:explodeRegion`. The channels
+  needing a mute conform come back with the pass's maps, and
+  `derivedInputs = derivationInputs()` moves to `tm:rebuild`'s tail.
+  After it the region reads nothing at file scope but the eight
+  dependencies and the required libraries.
+
+- **tm: the engine's own names gather at the region.** The twenty-odd
+  engine-only file-scope names move down into the region so it is one
+  contiguous slice: the fx-expansion helper family (`coverInto` through
+  `windowSet`), the reconcile skeletons, `coverOnsets`, `ccGridStep`,
+  the fx map builders `buildFreezeRects`, `buildFxTargets` and
+  `buildFxRealisation`, and the constants `FRONTIER_SEED_CAP` and `EPS`.
+  `windowSet`'s one edit-side use is the empty census the accessors
+  stand on before the first pass, which the move must place. Pure
+  movement otherwise: no signature changes, and the suite is the check.
+
+- **tm: the engine leaves as `trackerRebuild.lua`.** The region becomes
+  a module instantiated with `mm`, `cm`, `ds`, `timeContext`, `index`,
+  `stager`, `dirt` and `frame`, and `tm:rebuild` calls its pipeline.
+  `tm_pb_gating_spec`'s identity assertion on `onTake.pb` and
+  `tm_gate_parity_spec`'s `VOLATILE` set are the two specs a faithful
+  move disturbs (§ What the specs hold). `docs/trackerManager.md`
+  § Rebuild and its subsections name the new file.
 
 ## Follow-up (same file, after the move)
 
