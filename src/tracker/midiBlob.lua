@@ -141,11 +141,8 @@ end
 --shape: rank = 0 note-off | 1 note-on | 2 cc (odd seq2 = its CCBZ rider) | 3 note sidecar | 4 cc sidecar | 5 carried text | 6 passthrough
 --shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot; texts = { noteSidecars = [noteSlot], ccSidecars = [ccSlot], carried = [i] }
 --shape: render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail
---shape: putKey/dropKey/repackKey(wire, kv) -> ok   -- splice one key; the model they pack from rides the wire
 --shape: slotState(wire, stream, slot) -> { ppq, endppq, shape, sidePpq }   -- stream = 'note'|'cc'
 --shape: syncSlots(wire, dirt) -> ok   -- dirt = { note = { [slot] = slotState }, cc = { ... } }
---contract: a splice helper returns false and mutates nothing when kv is already present / absent
---contract: syncSlots returns false when wire and dirt disagree; the caller must full-regen
 --invariant: slot < 5e7: seq2 = slot*2 shares the key's 1e8 band with rank; keys stay int64
 --invariant: parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
@@ -259,6 +256,13 @@ local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
   end
 end
 
+-- A wide cc is two events under one key, and they travel as one chunks entry: the LSB
+-- rides first so the CCBZ rider of a bezier still lands on the MSB in parse.
+local function packChunk(model, kv, dppq)
+  local chunk, chunk2 = chunkOf(kv, dppq, model.notes, model.ccs, model.texts, model.passthrough)
+  return chunk2 and (chunk .. chunk2) or chunk
+end
+
 -- Keys, sorts and packs the model into wire state the caller holds across flushes,
 -- so an edit can replace the chunks it touched instead of rebuilding all of them.
 function midiBlob.buildWire(notes, ccs, texts, passthrough)
@@ -302,18 +306,17 @@ function midiBlob.buildWire(notes, ccs, texts, passthrough)
   -- A chunk's delta comes from its predecessor key, so packing is inherently a walk
   -- over the sorted keys -- which is why it lives here and not in render.
   perf.start('pack')
+  local model = { notes = notes, ccs = ccs, texts = texts, passthrough = passthrough }
   local chunks, prevPpq = {}, 0
   for i = 1, count do
     local kv  = keys[i]
     local ppq = kv // PPQ_STRIDE
-    local chunk, chunk2 = chunkOf(kv, ppq - prevPpq, notes, ccs, texts, passthrough)
-    chunks[i] = chunk2 and (chunk .. chunk2) or chunk   -- wide LSB rides first, MSB at offset 0
+    chunks[i] = packChunk(model, kv, ppq - prevPpq)
     prevPpq = ppq
   end
   perf.stop('pack')
 
-  return { keys = keys, chunks = chunks,
-           model = { notes = notes, ccs = ccs, texts = texts, passthrough = passthrough } }
+  return { keys = keys, chunks = chunks, model = model }
 end
 
 -- First index whose key is >= kv, over the ascending key array.
@@ -324,44 +327,6 @@ local function lowerBound(keys, kv)
     if keys[mid] < kv then lo = mid + 1 else hi = mid end
   end
   return lo
-end
-
--- Re-derives the predecessor's ppq rather than carrying it forward: a splice has no
--- walk to carry it from, which is why buildWire keeps its own loop.
-local function chunkAt(wire, i)
-  local keys, m = wire.keys, wire.model
-  local ppq  = keys[i] // PPQ_STRIDE
-  local prev = i > 1 and keys[i - 1] // PPQ_STRIDE or 0
-  local chunk, chunk2 = chunkOf(keys[i], ppq - prev, m.notes, m.ccs, m.texts, m.passthrough)
-  return chunk2 and (chunk .. chunk2) or chunk   -- wide LSB rides first, MSB at offset 0
-end
-
--- A chunk's delta comes from its predecessor's ppq, so a splice moves only its
--- own delta and its successor's. See docs/midiBlob.md § Splicing a held wire.
-function midiBlob.putKey(wire, kv)
-  local i = lowerBound(wire.keys, kv)
-  if wire.keys[i] == kv then return false end
-  table.insert(wire.keys, i, kv)
-  table.insert(wire.chunks, i, chunkAt(wire, i))
-  if wire.keys[i + 1] then wire.chunks[i + 1] = chunkAt(wire, i + 1) end
-  return true
-end
-
-function midiBlob.dropKey(wire, kv)
-  local i = lowerBound(wire.keys, kv)
-  if wire.keys[i] ~= kv then return false end
-  table.remove(wire.keys, i)
-  table.remove(wire.chunks, i)
-  if wire.keys[i] then wire.chunks[i] = chunkAt(wire, i) end
-  return true
-end
-
--- The property edit: the key does not move, only the bytes under it.
-function midiBlob.repackKey(wire, kv)
-  local i = lowerBound(wire.keys, kv)
-  if wire.keys[i] ~= kv then return false end
-  wire.chunks[i] = chunkAt(wire, i)
-  return true
 end
 
 -- The keys one slot contributes, off a before-snapshot or off the live model alike --
@@ -397,36 +362,87 @@ function midiBlob.slotState(wire, stream, slot)
            shape = evt and evt.shape, sidePpq = row and row.ppq }
 end
 
--- A splice memmoves both arrays from its own index; buildWire wins past
--- SPLICE_CAP structural changes -- see docs/midiBlob.md § Splicing a held wire.
-local SPLICE_CAP = 128
-
--- Carry every dirty slot's keys from the caller's before-snapshots to what the model now
--- says, phased so chunkOf never packs a dead key -- see docs/midiBlob.md § Splicing a held wire.
---contract: true if spliced; false+'dense'|'disagreed' if caller must rebuild, wire untouched
-function midiBlob.syncSlots(wire, dirt)
-  local drops, puts, repacks = {}, {}, {}
+-- Every key the caller's dirt moves, gathered before the wire is touched.
+--shape: delta = { drops = { [kv] = true }, puts = { kv... } ascending, repacks = { [kv] = true }, first = kv, pending = n }
+local function keyDelta(wire, dirt)
+  local delta = { drops = {}, puts = {}, repacks = {}, first = math.maxinteger, pending = 0 }
+  local function changed(kv)
+    delta.pending = delta.pending + 1
+    if kv < delta.first then delta.first = kv end
+  end
   for stream, group in pairs(dirt) do
     for slot, before in pairs(group) do
-      local old = keysOfSlot(stream, slot, before)
-      local new = keysOfSlot(stream, slot, midiBlob.slotState(wire, stream, slot))
-      for i = 1, #old do
-        if not holds(new, old[i]) then util.add(drops, old[i]) end
+      local was = keysOfSlot(stream, slot, before)
+      local now = keysOfSlot(stream, slot, midiBlob.slotState(wire, stream, slot))
+      for i = 1, #was do
+        if not holds(now, was[i]) then delta.drops[was[i]] = true; changed(was[i]) end
       end
-      for i = 1, #new do
-        local landing = holds(old, new[i]) and repacks or puts
-        util.add(landing, new[i])
+      for i = 1, #now do
+        if holds(was, now[i]) then delta.repacks[now[i]] = true else util.add(delta.puts, now[i]) end
+        changed(now[i])
       end
     end
   end
+  table.sort(delta.puts)
+  return delta
+end
 
-  -- Declined before a single key moves, so the caller's rebuild starts from an untouched wire.
-  if #drops + #puts > SPLICE_CAP then return false, 'dense' end
+-- One merge pass carries the whole nest's dirt from the first key it moves to where old and
+-- new agree again -- see docs/midiBlob.md § Splicing a held wire.
+--pre: dirt holds each slot the model moved since the last sync, snapshotted before it moved
+--post: keys, chunks := what buildWire would return for the model as it now stands
+--post: (dirt disagrees with the held keys) -> result = false; keys, chunks unchanged
+function midiBlob.syncSlots(wire, dirt)
+  local delta = keyDelta(wire, dirt)
+  if delta.pending == 0 then return true end
 
-  table.sort(drops, function(a, b) return a > b end)
-  for i = 1, #drops   do if not midiBlob.dropKey(wire, drops[i])     then return false, 'disagreed' end end
-  for i = 1, #puts    do if not midiBlob.putKey(wire, puts[i])       then return false, 'disagreed' end end
-  for i = 1, #repacks do if not midiBlob.repackKey(wire, repacks[i]) then return false, 'disagreed' end end
+  local keys, chunks = wire.keys, wire.chunks
+  local last  = #keys
+  local start = lowerBound(keys, delta.first)
+  -- The ppq a chunk takes its delta from, on each side of the merge: they part company at
+  -- the first key that moves and meet again where the window closes.
+  local newPrevPpq  = start > 1 and keys[start - 1] // PPQ_STRIDE or 0
+  local heldPrevPpq = newPrevPpq
+  local newKeys, newChunks, emitted = {}, {}, 0
+  local i, p, pending, aligned = start, 1, delta.pending, false
+
+  while i <= last or p <= #delta.puts do
+    local held, put = keys[i], delta.puts[p]
+    if held and (not put or held < put) then
+      local ppq = held // PPQ_STRIDE
+      if delta.drops[held] then
+        pending = pending - 1
+      else
+        local repack = delta.repacks[held]
+        emitted = emitted + 1
+        newKeys[emitted]   = held
+        newChunks[emitted] = (heldPrevPpq == newPrevPpq and not repack) and chunks[i]
+                              or packChunk(wire.model, held, ppq - newPrevPpq)
+        if repack then pending = pending - 1 end
+        newPrevPpq = ppq
+      end
+      heldPrevPpq, i = ppq, i + 1
+    else
+      if held == put then return false end   -- a put of a key the wire already holds
+      local ppq = put // PPQ_STRIDE
+      emitted = emitted + 1
+      newKeys[emitted], newChunks[emitted] = put, packChunk(wire.model, put, ppq - newPrevPpq)
+      newPrevPpq, p, pending = ppq, p + 1, pending - 1
+    end
+    -- Nothing left to apply, no shift to propagate, and the two sides packing off the same
+    -- predecessor: every key above here already holds the bytes the merge would write.
+    if pending == 0 and start + emitted == i and newPrevPpq == heldPrevPpq then
+      aligned = true; break
+    end
+  end
+  if pending ~= 0 then return false end   -- a drop or repack of a key the wire never held
+
+  for x = 1, emitted do
+    keys[start + x - 1], chunks[start + x - 1] = newKeys[x], newChunks[x]
+  end
+  if not aligned then
+    for x = start + emitted, last do keys[x], chunks[x] = nil, nil end
+  end
   return true
 end
 

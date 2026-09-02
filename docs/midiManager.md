@@ -439,14 +439,11 @@ Ordering at the verb sites is load-bearing. `markWire` runs *before* `indexDrop`
 and before `sidecarDrop`, because `slotState` reads the live sidecar row: a late
 mark makes the old sidecar key invisible and the row lingers on the wire.
 
-Three paths regenerate wholesale rather than splice. `rebuild` replaces `notes`,
+Two paths regenerate wholesale rather than splice. `rebuild` replaces `notes`,
 `ccs` and both sidecar groups, so every held key is meaningless after it; and the
 same-pitch backstop mutates at the outermost unwind, after the verbs have had
 their say, and fires ~never — a full regeneration there beats maintaining a fifth
-dirt site. The third is arithmetic rather than damage: past `SPLICE_CAP`
-structural changes the whole wire is cheaper re-keyed than spliced
-(`docs/midiBlob.md` § Splicing a held wire), so `syncSlots` declines with
-`'dense'` and this fallback is silent. `'disagreed'` still falls back loudly.
+dirt site. `syncSlots` returning false falls back the same way, loudly.
 
 The grouped `texts` table `buildWire` keys on is mm state for the same reason: the
 wire holds a reference to it, so composing a fresh one per flush would eventually

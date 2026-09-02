@@ -80,65 +80,60 @@ nothing to REAPER; the model side still obeys the add-after-equals rule.
 
 ## Splicing a held wire
 
-`putKey`, `dropKey` and `repackKey` are what a held wire is for: they maintain the
-ascending `keys` array and its index-parallel `chunks` in place, so a flush pays
+`syncSlots` is what a held wire is for: it carries the whole nest's dirt onto the
+ascending `keys` array and its index-parallel `chunks` in one pass, so a flush pays
 for the events an edit touched instead of re-keying and re-packing the take.
 
-Each splice re-packs at most two chunks — its own and its successor's. A chunk's
-delta is the gap from its *predecessor's* ppq, so inserting or removing a key
-changes the delta of the key that now follows it and of nothing else. `repackKey`
-re-packs one, because the key has not moved: it is the property edit (velocity,
-value, mute), the commonest gesture there is, and drop-then-put of the same key
-would reach the same bytes at the cost of two memmoves.
+It thinks in slots, not keys. `slotState` reads the wire's own model for the four
+fields that decide a slot's key set — `ppq`, `endppq`, `shape`, and the sidecar row's
+`sidePpq` — so the key format never leaves this file, and the caller's before-snapshot
+per dirty slot has that same shape. Each slot's two key sets come out of one private
+helper and their difference classifies: a key only in the before set is dropped, one
+only in the after set is put, one in both is repacked. Deriving both sides the same way
+is what keeps them honest. A slot's key set is at most three, so membership is a linear
+scan, and a velocity edit repacks three keys where one would do — microseconds against
+the full re-key it replaces.
+
+Applying that delta as one merge rather than key by key is load-bearing twice over.
+
+**Cost.** `table.insert`/`table.remove` shift every key past the one that moved, so `k`
+individual splices over an `n`-key wire cost `O(k*n)` where `buildWire` costs `O(n)`,
+and a gesture reaches the crossover easily: deleting an fx note host takes every tile
+its chain realised with it, which was 3585 keys and 212ms of splicing on a take whose
+whole wire re-keys in 5. The merge is one pass whatever `k` is, so there is no crossover
+and no constant to tune. At `k=1` it costs a binary search; at `k=n` it costs a shade
+more than the rebuild it replaces, which is the price of having no cliff.
+
+**Ordering.** A per-key sequence transiently holds keys whose model row is already gone
+— a deleted note's slot is nil in `notes` from the moment the verb ran — and every
+splice re-packs its neighbour, so splicing one slot could ask `chunkOf` to pack another
+slot's dead key and index a nil. That forced three phases: drops first and descending,
+then puts, then repacks. A batch has no such window, because a dropped key is never
+emitted and so is never packed.
+
+The merge walks from the first changed key to where the two arrays agree again, merging
+the ascending puts into the surviving old keys. A chunk's delta is the gap from its
+*predecessor's* ppq, which fixes when an old chunk can be reused: only where that
+predecessor's ppq is unchanged and the key is not itself repacked. The walk stops early
+once the delta is spent, the running shift is zero and the two sides pack off the same
+predecessor — past that point the array already holds the bytes the merge would write,
+which is why a property edit near the end of a take costs a binary search and not a
+sweep.
+
+Nothing is written until the whole window is computed, so a disagreement — a key put
+twice, or dropped when it was never there — returns `false` over an untouched wire. The
+caller's guard falls back to a full `buildWire`, because a disagreement means the dirt
+record has lost track of the wire and no further splice can be trusted.
 
 A bezier cc's CCBZ rider is inseparable from its cc by construction rather than by
 rule: the rider's key is its cc's key `+1`, so no key can ever sort between them,
 which is what keeps the rider's hard-coded zero delta valid under any splice.
 
 The wire carries its own model. `buildWire` stashes the four tables it was handed
-on the wire it returns, so a helper takes `(wire, kv)` and cannot be handed a model
-the keys were not built from — the failure mode this rules out is silent and
+on the wire it returns, so `syncSlots` takes `(wire, dirt)` and cannot be handed a
+model the keys were not built from — the failure mode this rules out is silent and
 byte-level. The cost falls on the caller, which must keep one grouped `texts` table
 alive between full rebuilds rather than composing a fresh one per flush.
-
-A helper returns `false` when the wire and the caller's dirt disagree — a key put
-twice, or dropped when it was never there. Nothing is mutated, and the caller's
-guard falls back to a full `buildWire`, because a disagreement means the dirt
-record has lost track of the wire and no further splice can be trusted.
-
-A splice is cheap per key but not free: `table.insert`/`table.remove` shift every
-key past the one that moved, so `k` splices over an `n`-key wire cost `O(k*n)`
-where `buildWire` costs `O(n)`. Measured, the two cross at a hundred-odd keys
-whatever `n` is — the ratio is packing cost against memmove cost, and `n` cancels.
-A gesture reaches that easily: deleting an fx note host takes every tile its chain
-realised with it, which was 3585 keys and 212ms of splicing on a take whose whole
-wire re-keys in 5. So `syncSlots` counts its structural changes first and declines
-past `SPLICE_CAP`, before a single key moves. It says which — `'dense'` or
-`'disagreed'` — because only the second is news about the wire's health.
-
-`slotState` and `syncSlots` sit one level up, where a caller thinks in slots rather
-than keys. `slotState` reads the wire's own model for the four fields that decide a
-slot's key set — `ppq`, `endppq`, `shape`, and the sidecar row's `sidePpq` — so the
-key format never leaves this file. `syncSlots` takes a before-snapshot of that same
-shape per dirty slot, derives each slot's two key sets through one private helper,
-and drops, puts or repacks accordingly; deriving both sides the same way is what
-keeps them honest. A slot's key set is at most three, so membership is a linear
-scan, and a velocity edit repacks three keys where one would do — microseconds
-against the full re-key it replaces.
-
-It takes the whole nest's dirt in one call, and that isn't convenience: sequencing
-across slots is load-bearing. Mid-splice the wire transiently holds keys whose model
-row is already gone — a deleted note's slot is nil in `notes` from the moment the
-verb ran — and every put and drop re-packs its neighbour, so splicing one slot can
-ask `chunkOf` to pack another slot's dead key and index a nil. Hence three phases.
-Drops go first, in **descending** key order, so that when a key is removed every
-dead key above it has already gone and the successor being re-packed is live. Then
-puts, each of which re-packs a successor that is now certainly live. Then repacks,
-last because a repacked chunk's delta is only final once every insertion before it
-has landed. A failure at any phase returns immediately rather than pressing on: the
-caller is going to regenerate anyway, and continuing would walk into the dead key
-the failed drop left behind. Repacks don't count toward the cap: they move no key,
-so they cost what they always did however many there are.
 
 The sidecar key comes off the *row's* ppq rather than its owner's, even though the
 caller keeps the two equal: the row is what `chunkOf` packs, so a row left stale has

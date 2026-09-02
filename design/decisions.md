@@ -4,16 +4,16 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
-- **2026-09-02** — A wire splice past SPLICE_CAP structural changes declines and the caller re-keys
-  the whole take instead. table.insert/remove shift every key past the one that moved, so k splices
-  over an n-key wire cost O(k*n) against buildWire's O(n), and the two cross at a hundred-odd keys
-  whatever n is -- the ratio is packing cost against memmove cost, and n cancels. Deleting an fx
-  note host takes every tile its chain realised with it: 3585 keys, 212ms of splicing on a take
-  whose whole wire re-keys in 5. syncSlots names which of 'dense' and 'disagreed' declined, only the
-  second being news about the wire's health, and declines before a key moves so the rebuild starts
-  from an untouched wire. A cap over the batched merge pass that would be O(n) for any k and
-  dissolve the drop/put/repack phase ordering -- that retires three primitives the blob specs pin
-  one by one, so it waits for the cliff to bite.
+- **2026-09-02** — One merge pass over keys and chunks applies a flush's whole drop/put/repack set
+  at once, over the per-key putKey/dropKey/repackKey it retires and over the density cap that stood
+  in for this earlier the same day. table.insert/remove shift every key past the one that moved, so
+  k splices over an n-key wire cost O(k*n) against buildWire's O(n): deleting an fx note host took
+  every tile its chain realised with it, 3585 keys and 212ms of splicing on a take whose whole wire
+  re-keys in 5. One pass has no crossover and so no constant to tune, and it dissolves the phase
+  ordering the per-key form needed, a batch never packing a dead key because a dropped key is never
+  emitted. It costs ~1.1x buildWire when every key moves, which is the price of having no cliff.
+  The specs that pinned the three primitives one by one now drive gestures through syncSlots, which
+  is the path mm actually takes.
 
 - **2026-09-02** — Region lane allocation carries each lane's furthest reach alongside its spans: a
   candidate starting past the reach clears the lane outright, and only one that could overlap walks

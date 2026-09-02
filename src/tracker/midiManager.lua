@@ -537,13 +537,10 @@ local function flushTake()
     wire, wireFull = midiBlob.buildWire(noteList, ccList, sidecarTexts, carriedPassthrough), false
   else
     perf.start('splice')
-    local spliced, why = midiBlob.syncSlots(wire, wireDirt)
-    if not spliced then
-      -- A dense edit is the wire's own arithmetic, not damage -- see docs/midiBlob.md
-      -- § Splicing a held wire. A disagreement means the dirt has lost track of it.
-      if why == 'disagreed' then
-        print('flushTake: wire splice disagreed with the held wire; regenerating')
-      end
+    if not midiBlob.syncSlots(wire, wireDirt) then
+      -- A disagreement means the dirt has lost track of the wire: no further splice would
+      -- be trustworthy, and a lost key is silent at the byte level.
+      print('flushTake: wire splice disagreed with the held wire; regenerating')
       wire = midiBlob.buildWire(noteList, ccList, sidecarTexts, carriedPassthrough)
     end
     perf.stop('splice')
