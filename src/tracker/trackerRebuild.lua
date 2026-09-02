@@ -1276,6 +1276,49 @@ local function coverInto(list, spanSet, admit, emit)
   end
 end
 
+-- Absolute authored bases per channel (ppq-keyed, logical), covering only the caller's spans.
+-- see docs/trackerManager.md § Span-covered fx scans
+local function pbBaseFor(chan, spanSet, time)
+  local base, seen = {}, {}
+  for _, evt in ipairs(frame.channels[chan].parked.pb or {}) do
+    util.add(base, { ppq = evt.ppq, val = evt.cents, shape = evt.shape or 'step', tension = evt.tension })
+    seen[evt.ppq] = true
+  end
+  -- The maintained pb index is raw-sorted; pbs carry no delay and swing is monotone, so the raw
+  -- cover is the logical cover. Authored = the cents sidecar (seats and foreign pbs carry none).
+  local rawSpans = {}
+  for _, span in ipairs(spanSet) do
+    util.add(rawSpans, { time:fromLogical(chan, span[1]), time:fromLogical(chan, span[2]) })
+  end
+  local function authored(pb) return not pb.derived and pb.cents ~= nil end
+  coverInto(index.raw(chan).pbs, rawSpans, authored, function(pb)
+    local ppq = pb.ppqL or pb.ppq
+    if not seen[ppq] then
+      util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
+    end
+  end)
+  util.sortByPPQ(base)
+  return base
+end
+local function ccBasesFor(chan, spanSet)
+  local bases, seen = {}, {}
+  for _, evt in ipairs(frame.channels[chan].parked.ccs or {}) do
+    util.bucket(bases, evt.cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
+                                  tension = evt.tension })
+    seen[util.key(evt.cc, evt.ppq)] = true
+  end
+  for cc, col in pairs(frame.channels[chan].onTake.ccs) do
+    coverInto(col.events, spanSet, nil, function(evt)
+      if not seen[util.key(cc, evt.ppq)] then
+        util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
+                                 tension = evt.tension })
+      end
+    end)
+  end
+  for _, base in pairs(bases) do util.sortByPPQ(base) end
+  return bases
+end
+
 -- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
 -- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
 local function appendLaneEvents(list, startL, out)
@@ -1528,49 +1571,6 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       if a.lane ~= b.lane then return a.lane < b.lane end
       return a.ppq < b.ppq
     end)
-  end
-
-  -- Absolute authored bases per channel (ppq-keyed, logical), covering only the caller's spans.
-  -- see docs/trackerManager.md § Span-covered fx scans
-  local function pbBaseFor(chan, spanSet)
-    local base, seen = {}, {}
-    for _, evt in ipairs(frame.channels[chan].parked.pb or {}) do
-      util.add(base, { ppq = evt.ppq, val = evt.cents, shape = evt.shape or 'step', tension = evt.tension })
-      seen[evt.ppq] = true
-    end
-    -- The maintained pb index is raw-sorted; pbs carry no delay and swing is monotone, so the raw
-    -- cover is the logical cover. Authored = the cents sidecar (seats and foreign pbs carry none).
-    local rawSpans = {}
-    for _, span in ipairs(spanSet) do
-      util.add(rawSpans, { time:fromLogical(chan, span[1]), time:fromLogical(chan, span[2]) })
-    end
-    local function authored(pb) return not pb.derived and pb.cents ~= nil end
-    coverInto(index.raw(chan).pbs, rawSpans, authored, function(pb)
-      local ppq = pb.ppqL or pb.ppq
-      if not seen[ppq] then
-        util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
-      end
-    end)
-    util.sortByPPQ(base)
-    return base
-  end
-  local function ccBasesFor(chan, spanSet)
-    local bases, seen = {}, {}
-    for _, evt in ipairs(frame.channels[chan].parked.ccs or {}) do
-      util.bucket(bases, evt.cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
-                                    tension = evt.tension })
-      seen[util.key(evt.cc, evt.ppq)] = true
-    end
-    for cc, col in pairs(frame.channels[chan].onTake.ccs) do
-      coverInto(col.events, spanSet, nil, function(evt)
-        if not seen[util.key(cc, evt.ppq)] then
-          util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
-                                   tension = evt.tension })
-        end
-      end)
-    end
-    for _, base in pairs(bases) do util.sortByPPQ(base) end
-    return bases
   end
 
   local res = mm:resolution()
@@ -1847,7 +1847,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       if not gated or seeded[host] or not keepable(host) then util.add(running, host) end
     end
     local runWins = spans.mergeWindows(running)
-    pbBase, ccBases = pbBaseFor(chan, runWins), ccBasesFor(chan, runWins)
+    pbBase, ccBases = pbBaseFor(chan, runWins, time), ccBasesFor(chan, runWins)
     fxOut.pbBase[chan] = pbBase
 
     for _, host in ipairs(hosts) do runOrKeep(host) end

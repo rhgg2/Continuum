@@ -28,10 +28,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: the fx base builders at file scope (plan § Phase 8)
 - 2026-09-02 tm: replaceWindows and seatScope at file scope (plan § Phase 8)
 - 2026-09-02 tm: the lane-1 union answers through one door (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the engine leaves as trackerRebuild.lua (design/decisions.md 2026-09-02)
-- 2026-09-02 tm: the engine's own names gather at the region (design/decisions.md 2026-09-02)
 
 ## Now
 
@@ -39,9 +39,5 @@
 
 ## Queued (current phase; one-liners)
 
-1. **tm: the fx base builders at file scope.** `pbBaseFor` and
-   `ccBasesFor` already take their channel and spans, and only the time
-   context binds them into `rebuildFx`. Passing it lifts ~40 lines out to
-   file scope beside `coverInto`, the scan they both use. Green-first
-   against `tm_gate_parity_spec`.
+(empty)
 

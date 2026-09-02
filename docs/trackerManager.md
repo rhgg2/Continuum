@@ -1079,13 +1079,13 @@ forward through one closing onset past `endL`. Membership is still overlap, not 
 authored notes are re-queried each rebuild, one walk feeding both generator events and fixed lane
 occupancy. See `docs/generators.md` § Hosts and membership.
 
-`pbBaseFor(chan, spanSet)` / `ccBasesFor(chan, spanSet)` build the absolute authored base (ppq-keyed,
+`pbBaseFor` / `ccBasesFor` build the absolute authored base (ppq-keyed,
 logical) covering only the caller's merged host windows, not the whole channel: every read of
 the base — `channelStreams`' slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so
 the cover is exact there and the scan is never O(channel). Parked events are authoritative at
 their ppq (deduped against the cover); the maintained pb index is raw-sorted, and since pbs carry
 no delay and swing is monotone, the raw-frame cover equals the logical-frame cover — spans convert
-via `tm:fromLogical` before the walk. "Authored" means the cents sidecar is present (seats and
+via `time:fromLogical` before the walk. "Authored" means the cents sidecar is present (seats and
 foreign pbs carry none).
 
 `nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane (§ Lane occupancy), so
