@@ -28,26 +28,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: the lane-1 union answers through one door (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the engine leaves as trackerRebuild.lua (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the engine's own names gather at the region (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the rebuild pipeline takes its inputs and returns its state (design/decisions.md 2026-09-02)
-- 2026-09-02 tm: pb cents↔raw arithmetic moves to tuning (design/decisions.md 2026-09-02)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **tm: the lane-1 union as one stream.** `rebuildPbs` asks five
-   questions of the union of a channel's authored lane-1 notes (the raw
-   index) and the pass's derived lane-1 stream (`liveLane1ByChan`):
-   `lane1DetuneAt`, `lane1Between`, `firstLane1`, `anyDetuneJump`, and
-   `seatScope`'s `nextLane1After`. Three of them merge the two sources by
-   the same nearer-of-two comparison, written out each time. One union
-   door built per dirty channel beside `liveLane1ByChan` answers all
-   five, and `rebuildPbs` loses ~80 lines. Green-first against
-   `tm_seat_scope_spec` and `tm_pb_seam_spec`.
 
 1. **tm: `replaceWindows` and `seatScope` at file scope.** The two are
    ~120 lines of closure inside `rebuildPbs`, called from one per-channel

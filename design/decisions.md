@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The lane-1 stream the absorber pass reads is the union of the raw index's
+  authored notes and the pass's derived output, and one door per dirty channel answers every
+  question of it. The union's order is decided in one place, by index.order, so at a coincident
+  authored and derived onset the later of the two carries the prevailing detune, and the detune
+  query agrees with the onset walk.
+
 - **2026-09-02** — The derivation engine is trackerRebuild.lua, instantiated with the seven names
   the region reaches: mm, cm, ds, the frame, the raw index, the stager and the dirt journal. The
   time context is an argument and not a dependency, since every stage already takes it as a
