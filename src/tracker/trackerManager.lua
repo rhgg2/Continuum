@@ -252,18 +252,6 @@ local function suppressingRebuild(fn)
   if not ok then error(err, 0) end
 end
 
--- A birth-snapshot seed for a park member, so its dirt reads like verb dirt downstream: parkSeed from a
--- logical park spec (raw derived), rawSeed from an mm-raw event (raw in hand). Mirror um's snapshot.
-local function parkSeed(spec, verb)
-  return { uuid = spec.uuid, verb = verb, ppq = tm:fromLogical(spec.chan, spec.ppq),
-           ppqL = spec.ppq, lane = spec.lane, pitch = spec.pitch, endppqL = spec.endppq }
-end
-local function rawSeed(evt, verb)
-  return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
-           evType = evt.evType, cc = evt.cc,
-           lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL }
-end
-
 -- A region edit's real dirt is its members, found later by the park reconcile; here we seed one trigger
 -- point per region the uuid diff changed (create/remove/move/fx-change), waking its park scan and its fx expansion.
 local function seedRegionEdit(newRegions)
@@ -308,8 +296,11 @@ local function seedParkedEdit(newParked)
   local old, new = {}, {}
   for _, m in ipairs(derivedInputs.fxParked or {}) do old[key(m)] = m end
   for _, m in ipairs(newParked or {}) do new[key(m)] = m end
-  for k, m in pairs(new) do if not old[k] then dirt.add(m.chan, parkSeed(m, 'park')) end end
-  for k, m in pairs(old) do if not new[k] then dirt.add(m.chan, parkSeed(m, 'restore')) end end
+  local function parkDirt(m, verb)
+    dirt.add(m.chan, dirt.parkSeed(m, verb, tm:fromLogical(m.chan, m.ppq)))
+  end
+  for k, m in pairs(new) do if not old[k] then parkDirt(m, 'park') end end
+  for k, m in pairs(old) do if not new[k] then parkDirt(m, 'restore') end end
 end
 
 -- Everything the pipeline derives from beyond the take itself. Nothing signals when it changes under a
@@ -1143,7 +1134,7 @@ do
   local adds = {}
   local assigns = {}
   local deletes = {}
-  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt = the snapshotted record itself -- an add's uuid is stamped on it at mm commit, so it late-binds. folded (dedup-by-uuid) into the dirt journal. see design § The model, inverted
+  --shape: seeds[chan] = list of birth-snapshot seeds (dirt.lua), folded (dedup-by-uuid) into the dirt journal at flush. see design § The model, inverted
   local seeds = {}
   local parkedEdits = {}
 
@@ -1151,12 +1142,7 @@ do
 
   -- Every low-level verb drops a birth-snapshot seed for the event it touched; flush folds them
   -- into seed-valued dirt (dedup-by-uuid). A dead seed's uuid dangles safely: see docs/trackerManager.md § Interval seeds.
-  local function snapshot(evt, verb)
-    return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
-             lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL,
-             evType = evt.evType, cc = evt.cc, evt = evt }
-  end
-  local function seedEvent(evt, verb) util.bucket(seeds, evt.chan, snapshot(evt, verb)) end
+  local function seedEvent(evt, verb) util.bucket(seeds, evt.chan, dirt.liveSeed(evt, verb)) end
 
   --contract: every staged note (any lane) and pb files into rawIndex; detune reads filter to lane 1
   --contract: caller supplies evt.evType
@@ -1174,7 +1160,7 @@ do
     -- before the assign. See docs/trackerManager.md § Interval seeds for the shape and the chan case.
     local moved = update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil
                   or update.lane ~= nil or update.chan ~= nil
-    local vacated = moved and snapshot(evt, 'assign') or nil
+    local vacated = moved and dirt.liveSeed(evt, 'assign') or nil
     util.assign(evt, update)
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
@@ -1435,7 +1421,8 @@ do
       local ref  = e.spec or e.evt
       -- flushParked runs before the fold, so feed the seed table (stager.flushDirt folds it, or the
       -- parked-only path below does), keeping one seed order for the whole flush.
-      util.bucket(seeds, ref.chan, parkSeed(ref, e.op))
+      util.bucket(seeds, ref.chan,
+                  dirt.parkSeed(ref, e.op, tm:fromLogical(ref.chan, ref.ppq)))
       if e.op == 'add' then
         util.add(parked, e.spec)
       else
@@ -3056,13 +3043,16 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     -- Park removes a blocker; same-lane/pitch neighbours' tails regrow.
     local restores
     parkedNotes, restores = reconcilePark(scan, priorByType.note or {},
-      function(spec) dirt.add(spec.chan, parkSeed(spec, 'park')) end)
+      function(spec)
+        dirt.add(spec.chan, dirt.parkSeed(spec, 'park', time:fromLogical(spec.chan, spec.ppq)))
+      end)
 
     -- Restores re-enter their columns now (unrealised) and land in mm with this stage's commit;
     -- the tail walk then meets each as an ordinary seated entry and clips it in place.
     local takeLen = time:length()
     for _, spec in ipairs(restores) do
-      dirt.add(spec.chan, parkSeed(spec, 'restore'))
+      local ppq = time:fromLogical(spec.chan, spec.ppq)
+      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
       local channel = frame.channels[spec.chan]
       while #channel.onTake.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the event is the spec: both are logical (keeps the parked uuid too)
@@ -3070,7 +3060,6 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       frame.spliceEvent(spec.chan, spec.lane, note)
       -- Provisional raw end: the authored ceiling is all that is known here, since the lane clip is
       -- the tail walk's to find -- boundNote's write-through corrects this in place.
-      local ppq = time:fromLogical(spec.chan, note.ppq)
       local ceiling = note.endppq == util.OPEN and math.huge
                       or note.endppq and time:fromLogical(spec.chan, note.endppq)
                       or math.huge
@@ -3115,7 +3104,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
               seen[cc] = true
               -- Seed the PA's row so rebuildPA's gated parked loop re-projects it: mmBatch.del
               -- accumulates raw ops but seeds no interval dirt, exactly as the pb park seeds its own.
-              dirt.add(cc.chan, rawSeed(cc, 'park'))
+              dirt.add(cc.chan, dirt.rawSeed(cc, 'park'))
               batch.del({ uuid = cc.uuid })
               freshEvents[cc.chan] = freshEvents[cc.chan] or {}
               freshEvents[cc.chan][cc.uuid] = cc.ppqL or cc.ppq   -- the row the excise seeks
@@ -3139,9 +3128,10 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       if hostParked(spec.chan, spec.pitch, spec.ppq) then
         util.add(newParked, spec)
       else
-        dirt.add(spec.chan, parkSeed(spec, 'restore'))
+        local ppq = time:fromLogical(spec.chan, spec.ppq)
+        dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
         batch.add(util.assign(util.clone(spec),   -- back to mm: raw onset, logical sidecar
-          { ppq = time:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq }))
+          { ppq = ppq, ppqL = spec.ppq }))
       end
     end
     for _, spec in ipairs(newParked) do util.add(allParked, spec) end
@@ -3229,7 +3219,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
         if not cc.derived and not realisedWindows.coversRaw('pb', cc.chan, nil, cc.ppq) then
-          dirt.add(cc.chan, rawSeed(cc, 'park'))
+          dirt.add(cc.chan, dirt.rawSeed(cc, 'park'))
           -- val: logical cents from the cents sidecar (restore maps back); entry.val is already the
           -- raw-derived cents, the best-effort fallback for a foreign pre-cents pb.
           local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq,
@@ -3244,9 +3234,10 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     -- Restore re-adds to the take; the absorber (later this rebuild) refines the wire raw with
     -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
     for _, spec in ipairs(restores) do
-      dirt.add(spec.chan, parkSeed(spec, 'restore'))
+      local ppq = time:fromLogical(spec.chan, spec.ppq)
+      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
       batch.add(util.assign(util.clone(spec),
-        { ppq = time:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq,
+        { ppq = ppq, ppqL = spec.ppq,
           cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
     end
 
@@ -3258,7 +3249,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
-        dirt.add(cc.chan, rawSeed(cc, 'delete'))
+        dirt.add(cc.chan, dirt.rawSeed(cc, 'delete'))
         batch.del({ uuid = cc.uuid })
       end
     end

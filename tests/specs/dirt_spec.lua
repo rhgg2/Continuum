@@ -6,6 +6,9 @@
 -- Both rules cost trackerManager a bug before the verb existed. The reload fold assigned its
 -- deduped list over whatever stood, which drops seed dirt nothing will restate; the tail walk's
 -- emission never checked the cap, so a large disturbance carried on as an unbounded seed list.
+--
+-- The journal also mints what it stores. The three minters differ in where the raw frame comes
+-- from and in whether the seed keeps the record it was taken from; the cases below pin both.
 
 local t    = require('support')
 local dirt = require('dirt')
@@ -115,6 +118,60 @@ return {
       t.deepEq(consumed, { [1] = true, [9] = true }, 'both channels come back for the mute sweep')
       t.eq(journal.has(1), nil, 'and the journal is clean')
       t.eq(journal.has(9), nil, 'on both')
+    end,
+  },
+  {
+    -- A park spec is logical throughout, so the seed's row is the spec's own ppq. The raw seat is
+    -- the caller's to project: the journal holds no time context, and the two sides of the split
+    -- reach the pass's projection by different handles.
+    name = 'dirt: a park seed reads the spec as logical and takes its raw seat from the caller',
+    run = function()
+      local journal = dirt.new()
+      local spec = { uuid = 'u1', chan = 3, ppq = 960, endppq = 1920, lane = 2, pitch = 60 }
+
+      local minted = journal.parkSeed(spec, 'park', 1010)
+
+      t.eq(minted.ppqL, 960, "the spec's position is the logical row")
+      t.eq(minted.ppq, 1010, 'and the raw seat is the one the caller projected')
+      t.eq(minted.endppqL, 1920, 'the authored end is logical too')
+      t.eq(minted.verb, 'park', 'the verb that minted it rides')
+      t.eq(minted.uuid, 'u1', 'as does the identity it names')
+    end,
+  },
+  {
+    -- A raw seed comes off an mm record, which is raw with its logical row in a sidecar. A record
+    -- written under no swing carries no sidecar, and then the raw position is the row.
+    name = 'dirt: a raw seed keeps the mm sidecar row, falling back to the raw position',
+    run = function()
+      local journal = dirt.new()
+
+      local swung = journal.rawSeed({ uuid = 'u2', chan = 1, ppq = 1010, ppqL = 960,
+                                      evType = 'cc', cc = 74 }, 'park')
+      t.eq(swung.ppq, 1010, 'the raw position rides')
+      t.eq(swung.ppqL, 960, 'and the sidecar is the logical row')
+      t.eq(swung.cc, 74, 'the cc number discriminates the column')
+
+      local unswung = journal.rawSeed({ uuid = 'u3', ppq = 480, evType = 'pb' }, 'delete')
+      t.eq(unswung.ppqL, 480, 'no sidecar, so the raw position stands for the row')
+    end,
+  },
+  {
+    -- The stager's seeds are born before mm commits, so a fresh add has no uuid to name yet. A live
+    -- seed keeps the record itself and reads the uuid off it late; a raw seed, minted for an event
+    -- the pass is deleting, keeps none.
+    name = 'dirt: a live seed carries its record, so a uuid stamped at commit reads back off it',
+    run = function()
+      local journal = dirt.new()
+      local evt = { chan = 1, ppq = 480, evType = 'note', pitch = 64, lane = 1 }
+
+      local minted = journal.liveSeed(evt, 'add')
+      t.eq(minted.uuid, nil, 'nothing to name at birth')
+
+      evt.uuid = 'stamped-at-commit'
+      t.eq(minted.evt.uuid, 'stamped-at-commit', 'the seed reads the uuid off the record it kept')
+      t.eq(minted.ppq, 480, 'the snapshotted position is the birth one, record or no record')
+
+      t.eq(journal.rawSeed(evt, 'delete').evt, nil, 'a raw seed keeps no record')
     end,
   },
   {

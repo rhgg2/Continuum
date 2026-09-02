@@ -260,6 +260,11 @@ authored span -- into a `seeds[chan]` list separate from `adds`/`assigns`/`delet
 `stager.flushDirt` folds the seeds into the dirt journal, deduped by uuid (first-wins keeps the
 birth state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
 
+The journal mints the seeds, so the shape its lattice stores has one home. `liveSeed` snapshots an
+mm-raw event and keeps the record itself, which is how a fresh add's uuid late-binds. `rawSeed` is
+the same snapshot without the record, for an event the pass is deleting. `parkSeed` mints from a
+logical park spec and takes the raw seat as an argument, since the journal holds no time context.
+
 A move is one seed, not two: its snapshot records the vacated (old) position, while the surviving
 event's current position is recovered live from `byUuid`. Membership (`seedCovers`) keys on the
 logical row -- the snapshot `ppqL`, plus a survivor's live `ppqL` recovered from `byUuid` -- so a

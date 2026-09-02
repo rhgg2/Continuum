@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The dirt journal mints the seeds it stores: parkSeed, rawSeed and liveSeed move
+  to dirt.lua and ride the journal, so both sides of the trackerManager split reach them through the
+  dependency they already hold. parkSeed takes the raw seat as an argument, since the journal holds
+  no time context and the two sides project through different handles. liveSeed replaces the
+  stager's own snapshot, which was rawSeed plus the aliased record that lets a fresh add's uuid
+  late-bind.
+
 - **2026-09-02** — The rebuild engine takes the pass's time context as a parameter. The head hands
   it to the pipeline, each stage that projects takes it in turn, and the helpers below them read the
   value they were given, so no stage can be the one that decides the projection. tm's accessors keep

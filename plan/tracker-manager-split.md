@@ -25,23 +25,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: the dirt journal mints its own seeds (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the rebuild stages take the time context as a parameter (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the frame projection is a context built once per pass (design/decisions.md 2026-09-02)
 - 2026-09-01 tm: one window population per rebuild (design/decisions.md 2026-09-01)
-- 2026-09-01 tm: one clip for a lane's authored notes, on-take and parked (design/decisions.md 2026-09-01)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **tm: the dirt seed minters move to dirt.lua.** `parkSeed` and
-  `rawSeed` become `dirt.parkSeed` and `dirt.rawSeed`, so the journal
-  owns the seed shape its `--shape` annotation already names. `parkSeed`
-  takes the seat's raw ppq as an argument, leaving the projection with
-  the caller. Callers are `seedParkedEdit`, `flushParked` and four sites
-  in `rebuildRegionPark`, plus the cc sites that mint `rawSeed`.
 
 - **tm: pb cents↔raw arithmetic moves to tuning.** `tuning` gains the
   two conversions, each taking the pb limit in cents; its invariant that
