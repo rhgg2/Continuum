@@ -1,9 +1,9 @@
 -- See docs/tuning.md for the model.
 -- @noindex
 
---invariant: pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
+--invariant: pure coordinate-system module: no module state, no take state, no realisation policy
 --invariant: intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
---invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
+--invariant: detune is cents throughout; the pb conversions hold no bend range, taking it per call
 --invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToParts
 --invariant: an octave is period-index + octaveBase; default root makes it MIDI-relative (C4 → 4)
 --shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, rootPitch=int?, rootDetune=cents?, rootStep=int?, rootOctave=int?, cents=number[derived], period=cents[derived], rootCents=cents[derived], octaveBase=int[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
@@ -691,6 +691,20 @@ end
 function tuning.ladderCents(temper, note, steps, residual)
   local step, octave = ladderAnchor(temper, note)
   return stepCents(temper, step + steps, octave) - stepCents(temper, step, octave) + residual
+end
+
+-- The pitch-bend wire is 14-bit signed about centre, a unit short at the top. The range it
+-- spans is configuration, so it arrives as cents. See docs/tuning.md § Orthogonality.
+local PB_RAILS = 8192
+
+--pre: limitCents is the bend range one side reaches, in cents
+function tuning.centsToRaw(cents, limitCents)
+  return util.clamp(util.round(cents * PB_RAILS / limitCents), -PB_RAILS, PB_RAILS - 1)
+end
+
+--pre: limitCents is the bend range one side reaches, in cents
+function tuning.rawToCents(raw, limitCents)
+  return util.round(raw / PB_RAILS * limitCents)
 end
 
 ----- Targets

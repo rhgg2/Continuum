@@ -346,9 +346,10 @@ fulfils that contract, and would change shape if the realisation
 mechanism did:
 
 - **I6 — Cents inside, raw at boundary.** Inside `um`, `pb.val` is
-  always cents. Conversion to raw happens only on load
-  (`rawToCents`) and at flush (`centsToRaw`). The cents window is
-  `cm:get('pbRange') * 100` per side.
+  always cents. Conversion to raw happens only on load and at flush,
+  through `tuning`'s two conversions. The cents window is
+  `cm:get('pbRange') * 100` per side: the edit side caches it, and the
+  rebuild reads it once at the pipeline head.
 - **I7 — Delay topology.** A pure delay change on a lane-1 note
   shifts the absorber along with the host. Pb count and the
   logical stream are preserved; only the realised ppq of host and

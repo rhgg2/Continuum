@@ -906,12 +906,10 @@ local audition, auditionAdd, auditionRelease, killAudition do
   local auditionTime     = 0    -- reaper.time_precise() when a note was last sent
   local AUDITION_TIMEOUT = 0.8  -- seconds
 
-  -- Detune→live pitch-bend on the audition channel; mirrors tm's centsToRaw
-  -- slope so the preview bends like the seated note (synth range = pbRange).
+  -- Detune→live pitch-bend on the audition channel; the preview takes the seated note's
+  -- slope, the synth's bend range being pbRange.
   local function sendBend(chan, cents)
-    local lim  = cm:get('pbRange') * 100
-    local raw  = util.clamp(util.round((cents or 0) * 8192 / lim), -8192, 8191)
-    local wire = raw + 8192
+    local wire = tuning.centsToRaw(cents or 0, cm:get('pbRange') * 100) + 8192
     reaper.StuffMIDIMessage(0, 0xE0 | chan, wire & 0x7F, (wire >> 7) & 0x7F)
   end
 

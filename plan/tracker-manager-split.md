@@ -25,24 +25,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-02 tm: pb cents↔raw arithmetic moves to tuning (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the dirt journal mints its own seeds (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the rebuild stages take the time context as a parameter (design/decisions.md 2026-09-02)
 - 2026-09-02 tm: the frame projection is a context built once per pass (design/decisions.md 2026-09-02)
-- 2026-09-01 tm: one window population per rebuild (design/decisions.md 2026-09-01)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **tm: pb cents↔raw arithmetic moves to tuning.** `tuning` gains the
-  two conversions, each taking the pb limit in cents; its invariant that
-  raw 14-bit conversion is tm's alone is revised to match. Each side
-  keeps its own `pbRange` cache — tm's `pbLim`, dropped per rebuild.
-  Callers are `tm:flush`, the index's `makeEntry` and `refreshEntry`,
-  and six engine sites across `rebuildPbs`, `rebuildFx` and
-  `rebuildRegionPark`.
 
 - **tm: the pipeline takes its last ambient reads and returns its
   closing state.** `rebuildPipeline` receives `fxNotesByHost` and an

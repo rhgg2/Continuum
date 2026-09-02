@@ -46,10 +46,11 @@ their arguments; `spans` depends on `util` alone, `curves` on `util` and
 ## Configuration stays with its reader
 
 1. No name in either module reads `cm` or the take, which is what keeps
-   them a library the project depends on. trackerManager keeps `pbLim`,
-   `centsToRaw` and `rawToCents`, which read `cm:get('pbRange')`, and
-   `ccGridStep`, which reads the take's resolution and its CC-interp
-   setting.
+   them a library the project depends on. tuning holds the pb wire
+   conversions on the same terms, taking the bend window as an
+   argument. trackerManager keeps `pbLim`, which reads
+   `cm:get('pbRange')`, and `ccGridStep`, which reads the take's
+   resolution and its CC-interp setting.
 
 1. So the fold takes its densify step as a parameter and returns
    unrounded values: each emission site rounds and clamps in its own

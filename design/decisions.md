@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — The pb wire conversions live in tuning, which holds no bend range: each call
+  passes the window in cents, so the module stays free of configuration. Two readers supply it --
+  the edit side from its cm cache, and the rebuild from one read at the pipeline head, threaded to
+  the three stages that convert.
+
 - **2026-09-02** — The dirt journal mints the seeds it stores: parkSeed, rawSeed and liveSeed move
   to dirt.lua and ride the journal, so both sides of the trackerManager split reach them through the
   dependency they already hold. parkSeed takes the raw seat as an argument, since the journal holds

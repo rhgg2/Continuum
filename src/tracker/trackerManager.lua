@@ -5,7 +5,7 @@
 --invariant: intentCents is a note's intent -- the cents of the step it was written on
 --invariant: pitch+detune realise the intent; pb realises detune (channel-wide stream)
 --invariant: only lane-1 notes drive detune realisation
---invariant: pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
+--invariant: pb.val is cents inside um; raw↔cents only at load/flush, by tuning's two conversions
 --invariant: cents window = cm:get('pbRange') * 100 per side
 --invariant: absorber pbs absorb lane-1 detune jumps; first onset anchors a pb-active channel
 --invariant: pb.derived=='absorber' marks an absorber (cc sidecar) or in-window seat (RAM-only)
@@ -45,6 +45,7 @@ local spans   = require 'spans'
 local curves  = require 'curves'
 local timing  = require 'timing'
 local voicing = require 'voicing'
+local tuning  = require 'tuning'
 
 -- Above this many disturbed seeds (dirt + derived fx events) the frontier's per-seed probes cost more
 -- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
@@ -315,16 +316,12 @@ local function derivationInputs()
   }
 end
 
--- pbRange resolves through cm's 5 tiers -- too costly to re-fetch per pb in the
--- absorber pass. Cache it; rebuild (the cm coherence point) drops the cache.
-local pbLimCents
+-- The edit side's bend window, in cents per side. pbRange resolves through cm's 5 tiers -- too
+-- costly to re-fetch per pb. Cache it; rebuild (the cm coherence point) drops the cache.
+local pbLimCache
 local function pbLim()
-  if not pbLimCents then pbLimCents = cm:get('pbRange') * 100 end
-  return pbLimCents
-end
-
-local function centsToRaw(cents)
-  return util.clamp(util.round(cents * 8192 / pbLim()), -8192, 8191)
+  if not pbLimCache then pbLimCache = cm:get('pbRange') * 100 end
+  return pbLimCache
 end
 
 -- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
@@ -342,10 +339,6 @@ local function coverOnsets(events, spanSet, emit)
       emit(evt)
     end
   end
-end
-
-local function rawToCents(raw)
-  return util.round(raw / 8192 * pbLim())
 end
 
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
@@ -1024,7 +1017,7 @@ do
       -- Clone (not pick) so arbitrary metadata survives; val reframes raw->cents (um's frame), raw keeps
       -- the wire value for rebuildPbs' delta-gate. cents sidecar is authored logical -- nil for foreign pbs.
       evt = util.clone(e)
-      evt.val, evt.raw, evt.realised = rawToCents(e.val), e.val, true
+      evt.val, evt.raw, evt.realised = tuning.rawToCents(e.val, pbLim()), e.val, true
     else
       evt = e
       evt.realised = true
@@ -1041,7 +1034,7 @@ do
     util.assign(prev, e)
     prev.realised = true
     -- pb reframes val raw->cents and mirrors the wire in raw, matching makeEntry so both doors agree.
-    if e.evType == 'pb' then prev.val, prev.raw = rawToCents(e.val), e.val end
+    if e.evType == 'pb' then prev.val, prev.raw = tuning.rawToCents(e.val, pbLim()), e.val end
   end
 
   -- Incremental index upkeep for one uuid. rawIndex lists are ppq-sorted and rawIndexListFor ignores
@@ -1483,12 +1476,12 @@ do
       -- Rebuild's absorber pass refines with the post-walk layout; this is best-effort for the interim.
       for _, e in ipairs(flushAssigns) do
         if e.evt.evType == 'pb' and e.update.cents ~= nil then
-          e.update.val = centsToRaw(e.update.cents + index.detuneAt(e.evt.chan, e.evt.ppq))
+          e.update.val = tuning.centsToRaw(e.update.cents + index.detuneAt(e.evt.chan, e.evt.ppq), pbLim())
         end
       end
       for _, a in ipairs(flushAdds) do
         if a.evt.evType == 'pb' then
-          a.evt.val = centsToRaw((a.evt.cents or 0) + index.detuneAt(a.evt.chan, a.evt.ppq))
+          a.evt.val = tuning.centsToRaw((a.evt.cents or 0) + index.detuneAt(a.evt.chan, a.evt.ppq), pbLim())
         end
       end
 
@@ -2947,7 +2940,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see docs/generators.md § Emission is ownership
 
-local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostClips, time)
+local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostClips, pbLimCents, time)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
   -- seat-stamps each event, so the tail walk meets an ordinary seated entry.
@@ -3238,7 +3231,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
       batch.add(util.assign(util.clone(spec),
         { ppq = ppq, ppqL = spec.ppq,
-          cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
+          cents = spec.val, val = tuning.centsToRaw(spec.val, pbLimCents) }))   -- spec.val is cents; the wire wants raw + a sidecar
     end
 
     -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every pb
@@ -3414,7 +3407,8 @@ end
 -- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
 --contract: notesByHost is carried between passes, so the stage writes the channels it ran and
 -- leaves a frozen channel's lists standing
-local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxRegions, notesByHost, time)
+local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxRegions, notesByHost,
+                         pbLimCents, time)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
@@ -3481,7 +3475,6 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   end
 
   local res = mm:resolution()
-  local pbRangeCents = pbLim()   -- slide clamps its target to what pb can reach
   -- Strict next same-lane note (slide's only consumer): lane occupancy is column union parked, and
   -- the subject is the host's lane, so a region (no lane) resolves nil. see docs/trackerManager.md § Span-covered fx scans
   local function nextSameLaneNote(host)
@@ -3491,7 +3484,9 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   end
   -- No notation in here: a generator's pitch demands are cents, so the temper is read by the gestures
   -- that author them and never by this pass. see docs/generators.md § The ctx discipline
-  local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
+
+  -- slide clamps its target to what pb can reach
+  local chanCtx = { resolution = res, pbRangeCents = pbLimCents,
                     nextSameLaneNote = nextSameLaneNote }
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
   -- rebuild and bucketed by channel. see docs/generators.md § Hosts and membership
@@ -4260,7 +4255,7 @@ local DUAL_POINT_TICK = 1
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(fxOut, extraColumns, time)
+local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
   local gridStep = ccGridStep()
   local noteLive, pbChains, pbBase, pbScope = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase, fxOut.pbScope
   -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
@@ -4351,7 +4346,6 @@ local function rebuildPbs(fxOut, extraColumns, time)
   -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
   -- bps (no carrier), kept spans recognition-only. see docs/tuning.md § Absorber reconciliation
   local function replaceWindows(chan)
-    local lim = pbLim()
     -- Gate split: live ranges (inside the pb emit scope) fold to bps; kept ranges are recognition-
     -- only -- their seats stand on wire.
     local emitSpans = pbScope[chan]   -- nil = ungated: every range is live
@@ -4375,7 +4369,8 @@ local function rebuildPbs(fxOut, extraColumns, time)
           -- side (chain cuts align with window edges) -- clip half-open except at the span's true end.
           if point.ppq >= sub[1] and (point.ppq < sub[2] or sub[2] == span[2]) then
             util.add(bps, { ppq = time:fromLogical(chan, point.ppq, 0), ppqL = point.ppq,
-                            cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
+                            cents = util.clamp(point.val, -pbLimCents, pbLimCents),
+                            shape = point.shape, tension = point.tension })
           end
         end
         util.sortByPPQ(bps)
@@ -4551,7 +4546,7 @@ local function rebuildPbs(fxOut, extraColumns, time)
     local persistCents = {}
     for _, pb in ipairs(pbs) do
       if pb.cents == nil and not inSeatWindow(pb.ppq) then
-        pb.cents = rawToCents(pb.raw) - lane1DetuneAt(chan, pb.ppq)
+        pb.cents = tuning.rawToCents(pb.raw, pbLimCents) - lane1DetuneAt(chan, pb.ppq)
         persistCents[pb] = true
       end
     end
@@ -4562,7 +4557,8 @@ local function rebuildPbs(fxOut, extraColumns, time)
     for _, entry in ipairs(index.raw(chan).pbs) do
       pbEntryByRaw[entry.ppq] = entry
       if not entry.derived and not inSeatWindow(entry.ppq) then
-        local cents = entry.cents or (rawToCents(entry.raw) - lane1DetuneAt(chan, entry.ppq))
+        local cents = entry.cents
+                      or (tuning.rawToCents(entry.raw, pbLimCents) - lane1DetuneAt(chan, entry.ppq))
         util.add(realPbs, { ppq = entry.ppq, cents = cents, shape = entry.shape, tension = entry.tension })
       end
     end
@@ -4714,7 +4710,7 @@ local function rebuildPbs(fxOut, extraColumns, time)
         local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
                         shape = seat.shape, derived = 'absorber', evType = 'pb' }
         util.add(pbs, fresh)
-        local raw = centsToRaw(fresh.cents + lane1DetuneAt(chan, ppq))
+        local raw = tuning.centsToRaw(fresh.cents + lane1DetuneAt(chan, ppq), pbLimCents)
         if inSeatWindow(ppq) then
           -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
           -- sidecar; recognized next rebuild by its window. see § Route-by-window
@@ -4753,7 +4749,7 @@ local function rebuildPbs(fxOut, extraColumns, time)
     for _, pb in ipairs(pbs) do
       if pb.realised then
         local d         = detuneOf[pb]
-        local newRaw    = centsToRaw(pb.cents + d)
+        local newRaw    = tuning.centsToRaw(pb.cents + d, pbLimCents)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
         local markerless   = pb.derived and inSeatWindow(pb.ppq)
         local update = nil
@@ -5010,6 +5006,9 @@ local function rebuildPipeline(didReload, time)
   }
   -- The take's own window set, replayed once at the head: the three park-side stages recognise seats
   -- against it, each asking it the same doors the pass's set answers. see docs/generators.md § Route-by-window
+
+  -- The bend window this pass converts against, in cents per side; the edit side caches its own.
+  local pbLimCents = cm:get('pbRange') * 100
   local realisedWindows = buildRealisedWindows(sources.fxRealisedWindows, time)
   -- The expansion's channel set comes off the snapshot's own keys, so it is settled before any stage runs.
   local globalRegions
@@ -5032,17 +5031,17 @@ local function rebuildPipeline(didReload, time)
 
   perf.start('regionPark')
   local parkedByHost = rebuildRegionPark(windows, sources.fxParked, realisedWindows,
-                                             noteHostClips, time)  -- park covered, carry/restore prior
+                                             noteHostClips, pbLimCents, time)  -- park covered, carry/restore prior
   perf.stop('regionPark')
   perf.start('pa'); rebuildPA(time); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   perf.start('fx')
   local fxOut = rebuildFx(noteExisting, ccExisting, noteHostClips, windows, sources.fxRegions,
-                          fxNotesByHost, time)  -- fx expansion: derived notes/CCs
+                          fxNotesByHost, pbLimCents, time)  -- fx expansion: derived notes/CCs
   perf.stop('fx')
 
   perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps, time); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
-  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, time); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, pbLimCents, time); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive, time); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
@@ -5094,7 +5093,7 @@ function tm:rebuild(takeChanged)
   -- Wholesale re-read / take swap: fxRealisedWindows (dataStore) carries the recognition baseline, and the
   -- take-tier caches go, since their uuid keys address the take just left.
   if didReload or takeChanged then dirt.add(nil, true); forgetCaches() end
-  pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
+  pbLimCache = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   local prevLength = timeContext:length()   -- rebuild is the (cm, mm) coherence point
   timeContext = newTimeContext()

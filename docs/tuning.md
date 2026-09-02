@@ -178,8 +178,9 @@ below the intent line. Concretely:
 - vm authoring sets `(pitch, detune)` on a note; pb realisation is
   tm's job.
 - Inside tm's `um`, `pb.val` is **always cents**; conversion to raw
-  happens only at load (`rawToCents`) and at flush (`centsToRaw`).
-  The cents window is `cm:get('pbRange') * 100` per side.
+  happens only at load and at flush, through `tuning.rawToCents` and
+  `tuning.centsToRaw`. The cents window is `cm:get('pbRange') * 100`
+  per side, and tm passes it to each conversion.
 - mm holds raw pb only — it has no notion of detune. The raw/cents
   conversion is tm's boundary, parallel to tm's role on the timing
   side (see `docs/timing.md`).
