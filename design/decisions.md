@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-02** — A seed's dirty rows come from the journal alone. The flush fold keeps the birth
+  snapshot and carries the rows its dropped duplicates named onto it, replacing the live byUuid
+  lookup the rebuild used to recover a survivor's current row. The fold runs within a channel, so a
+  chan reassign no longer marks the arrival row on the old channel.
+
 - **2026-09-02** — The lane-1 stream the absorber pass reads is the union of the raw index's
   authored notes and the pass's derived output, and one door per dirty channel answers every
   question of it. The union's order is decided in one place, by index.order, so at a coincident

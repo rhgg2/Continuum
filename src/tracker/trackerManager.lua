@@ -705,7 +705,7 @@ do
   local adds = {}
   local assigns = {}
   local deletes = {}
-  --shape: seeds[chan] = list of birth-snapshot seeds (dirt.lua), folded (dedup-by-uuid) into the dirt journal at flush. see design § The model, inverted
+  --shape: seeds[chan] = list of birth-snapshot seeds (dirt.lua), folded (one seat per uuid, carrying its later rows) into the dirt journal at flush. see design § The model, inverted
   local seeds = {}
   local parkedEdits = {}
 
@@ -1092,14 +1092,27 @@ do
 
   ----- Reload / clear
 
-  -- Fold this flush's per-verb seeds into the journal as seed dirt: dedup-by-uuid (seeded
+  -- The kept seat is the birth snapshot, so the rows a later verb moved this uuid to would go with
+  -- the duplicates the dedup drops; they join the seat instead.
+  local function foldRow(seat, row)
+    if row == seat.ppqL then return end
+    seat.laterRows = seat.laterRows or {}
+    for _, held in ipairs(seat.laterRows) do if held == row then return end end
+    util.add(seat.laterRows, row)
+  end
+
+  -- Fold this flush's per-verb seeds into the journal as seed dirt: one seat per uuid (seeded
   -- chans), fold-whole (unseeded payload chans). see docs/trackerManager.md § Interval seeds
+  --post: a channel's dirt names every logical row its seeds held during the flush
   function stager.flushDirt(payloadChans)
     for chan, list in pairs(seeds) do
-      local deduped, seen = {}, {}
+      local deduped, seat = {}, {}
       for _, s in ipairs(list) do
-        if s.uuid == nil or not seen[s.uuid] then
-          if s.uuid then seen[s.uuid] = true end
+        local kept = s.uuid and seat[s.uuid]
+        if kept then
+          foldRow(kept, s.ppqL)
+        else
+          if s.uuid then seat[s.uuid] = s end
           util.add(deduped, s)
         end
       end

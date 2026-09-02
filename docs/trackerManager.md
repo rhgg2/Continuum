@@ -265,22 +265,23 @@ mm-raw event and keeps the record itself, which is how a fresh add's uuid late-b
 the same snapshot without the record, for an event the pass is deleting. `parkSeed` mints from a
 logical park spec and takes the raw seat as an argument, since the journal holds no time context.
 
-A move is one seed, not two: its snapshot records the vacated (old) position, while the surviving
-event's current position is recovered live from `byUuid`. Membership (`seedCovers`) keys on the
-logical row -- the snapshot `ppqL`, plus a survivor's live `ppqL` recovered from `byUuid` -- so a
-move dirties both rows, an add covers its onset row, and a delete (uuid gone from `byUuid`) covers
-only the death row. Position goes stale as things move and uuid dangles as things die; each consumer
-reads whichever the seed still answers; the seek walk the snapshot feeds is § What the walk
-visits, and what it emits.
+A move mints a seed per seat: the vacated one as the verb finds it, then the one it arrives at. The
+fold keeps the birth snapshot and carries the rows its dropped duplicates named onto it, so a seed
+names every logical row its uuid held during the flush. Membership (`seedCovers`) keys on those
+rows, so a move dirties both its seats, an add covers its onset row, and a delete covers the death
+row alone. The snapshot's other fields go stale as the event moves and its uuid dangles as the event
+dies; each consumer reads whichever the seed still answers. The seek walk the snapshot feeds is
+§ What the walk visits, and what it emits.
 
 A chan reassign counts as a move too: the vacated slot lands in the *old* channel's dirt, which no
 other seed for this pass would otherwise reach, so `assignLowlevel` snapshots it exactly like an
-onset shift.
+onset shift. The fold runs within a channel, so the vacated row stays with the old channel and the
+arrival row with the new.
 
 ### Interval materialisation
 
 Materialisation consumes the absorbed seed set directly — there is no closure. `seedCovers` builds
-the set of dirty logical rows from the seeds (snapshot `ppqL` ∪ each survivor's live `ppqL`);
+the set of dirty logical rows from the seeds (each snapshot `ppqL` ∪ the rows folded onto it);
 `exciseNotes` (trackerRebuild.lua) drops every carried column event whose row a seed covers, and
 `rebuildInternals` re-clones that row from mm: an add finds the new note, a delete finds nothing and
 the event vanishes, a move seeded both rows and gets both. Membership keys on the row, not the full

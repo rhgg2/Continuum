@@ -5,7 +5,7 @@
 --invariant: a list grown past the seed cap collapses to wholesale, bounding per-seed work
 --invariant: swing staleness is the second axis: bindTake marks a reseat carrying no dirt of its own
 --shape: entry = nil (clean) | list of birth-snapshot seeds (parkSeed/rawSeed/liveSeed) | true (wholesale)
---shape: seed = { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt is the record the seed was minted from
+--shape: seed = { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt, laterRows }; evt is the record the seed was minted from, laterRows the rows its uuid took after the snapshot
 
 local dirt = {}
 

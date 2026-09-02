@@ -269,14 +269,15 @@ end
 -- What the dirt journal's seeds claim, in the shapes the gated stages ask for. Internals, the CC
 -- walk, PA, region park and fx expansion all gate on these; none of them owns them.
 
--- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ each survivor's live ppqL): the one
--- derivation of what the dirt covers, so no consumer of it can drift. see design § phase 5
+-- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ the rows folded onto it at flush):
+-- the one derivation of what the dirt covers, so no consumer of it can drift. see design § phase 5
 local function seedRowsFor(seedList)
   local rows = {}
   for _, s in ipairs(seedList) do
     util.add(rows, s.ppqL)
-    local live = s.uuid and index.byUuid(s.uuid)
-    if live then util.add(rows, live.ppqL or live.ppq) end
+    if s.laterRows then
+      for _, row in ipairs(s.laterRows) do util.add(rows, row) end
+    end
   end
   return rows
 end
