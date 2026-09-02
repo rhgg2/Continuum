@@ -1,61 +1,61 @@
--- See docs/trackerManager.md for the model.
+-- See docs/trackerManager.md for the model; docs/timing.md for time, docs/tuning.md for pitch.
 
 --invariant: mm holds raw + a ppqL sidecar; columns and the park stash are logical-only (evt.ppq)
---invariant: rebuild reconciles raw ↔ ppqL each pass (docs/timing.md)
---invariant: intentCents is a note's intent -- the cents of the step it was written on
---invariant: pitch+detune realise the intent; pb realises detune (channel-wide stream)
---invariant: only lane-1 notes drive detune realisation
---invariant: pb.val is cents inside um; raw↔cents only at load/flush, by tuning's two conversions
---invariant: cents window = cm:get('pbRange') * 100 per side
---invariant: absorber pbs absorb lane-1 detune jumps; first onset anchors a pb-active channel
---invariant: pb.derived=='absorber' marks an absorber (cc sidecar) or in-window seat (RAM-only)
---invariant: replace-window seats are markerless; recognized by window, not a derived-tag on wire
---invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
---invariant: col events sort by logical ppq
+--invariant: ppqL/endppqL are tm-private: a caller states logical time in ppq and endppq alone
+--invariant: a rebuild leaves raw and ppqL agreeing on every event (docs/timing.md)
 --invariant: endppq carries no delay; delay shifts only the note-on
---invariant: 16 channels always present; frame.channels[i] non-nil for i in 1..16 after rebuild
+--invariant: col events sort by logical ppq; a note column ties note before pa, then by pitch
+--invariant: frame.channels[i] is non-nil for i in 1..16 after a rebuild
+--invariant: only lane-1 notes drive detune realisation
+--invariant: stager holds a pb's value as cents; raw ↔ cents only at load and at flush
+--invariant: the first onset anchors a pb-active channel
+--invariant: replace-window seats are markerless; recognised by window, not a derived-tag on wire
+--invariant: a pa's cc-routing fields are stripped on projection into the note column
+--invariant: a pb column seat's val + its detune = its index entry's val, the cents it sounds
+--invariant: a park spec is the authored event minus the REALISATION set, so new metadata rides park
+--invariant: a restored park spec re-derives its raw frame
+--invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
+--invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: channel = { chan, onTake = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }
---shape: column = { events=[evt,...], [cc=ccNum] }  -- events sorted by logical ppq
---shape: noteEvent core = { ppq, endppq, pitch, vel, lane, detune, delay }
---invariant: noteEvent optional: muted, sample, sampleShadowed, intentCents, <metadata...>
---shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, ... }
---invariant: pbEventCol optional: delay, shape, tension
---invariant: pbEventCol is the col projection; um cache holds raw cents in val
---shape: paEventCol = { evType='pa', ppq, pitch, vel, ... }
---invariant: paEventCol mixes into note column events
+--shape: frame.channels[chan] = { chan, onTake = the half mm holds, parked = the half a replace window took off it }
+--shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
+--shape: column =   { events = [colEvent, ...], [cc = ccNum] }
+--shape: colEvent = the mm event's own fields (chan, uuid, metadata), logically framed, by kind:
+--shape:   note     { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], [intentCents] }
+--shape:   cc/pc/at { ppq, val, [shape], [tension] }
+--shape:   pb       { ppq, val=cents-minus-detune, detune, hidden, [delay], [shape], [tension] }
+--shape:   pa       { ppq, pitch, vel }
+--shape: a note column's events = its notes and its pas interleaved; evType=='pa' tells them apart
+--shape: pb.derived = 'absorber' on an absorber (cc sidecar) or on an in-window seat (RAM-only)
+--shape: pa on the wire = an mm cc, evType='pa', its vel the aftertouch value
+
+--shape: fxParked = one off-take stash for every replace park; a spec is the authored event, by kind:
+--shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
+--shape:   cc   { evType='cc', chan, cc, ppq, val, shape, [tension] }
+--shape:   pb   { evType='pb', chan, ppq, val (=cents), shape, [tension] }
+--shape:   pa   { evType='pa', chan, pitch, ppq, vel, [rpb] }
+--shape: parked =  { notes, ccs, pb, pa }: flat lists of those specs made render-ready -- a note gains
+--shape:   endppqC (the clip clipParked derives; endppq stays the authored ceiling), a pb gains cents
+
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
---shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
---shape:   event in the logical frame, minus the realisation frame (the REALISATION set),
---shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
---shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
---shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
---shape: frame.channels[chan] = { chan, onTake = the half mm holds, parked = the half a replace window took off it }
---shape: frame.channels[chan].onTake = { notes = { [lane] = { events } }, ccs = { [ccNum] = { events } }, at/pc/pb = { events } }
---shape: frame.channels[chan].parked.notes = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace events (endppq is the authored ceiling the view edits, endppqC the render clip clipParked derives)
---shape: frame.channels[chan].parked.ccs = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render events
---shape: frame.channels[chan].parked.pb = { { evType='pb', chan, ppq, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render events
---shape: frame.channels[chan].parked.pa = { { evType='pa', chan, pitch, ppq, vel, [rpb] }, ... } -- off-take PA events; rebuildPA re-projects them into the host note column
---contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
---invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
-local util    = require 'util'
-local curves  = require 'curves'
-local timing  = require 'timing'
-local voicing = require 'voicing'
-local tuning  = require 'tuning'
-
+local util       = require 'util'
+local curves     = require 'curves'
+local timing     = require 'timing'
+local voicing    = require 'voicing'
+local tuning     = require 'tuning'
 local generators = require 'generators'
 local perf       = require 'perf'
 local fxWindows  = require 'fxWindows'
+local dirt       = require('dirt').new()
 
 local mm, cm, ds = (...).mm, (...).cm, (...).ds
 -- Forced note columns per channel absent an extraColumns entry. Main passes nothing (1: every
 -- channel is note-typeable); the pattern editor passes 0 so only channels with data appear.
 local defaultNoteCols = (...).defaultNoteCols or 1
 
-local tm = {}
+local tm   = {}
 local fire = util.installHooks(tm)
 
 ---------- STATE
@@ -64,9 +64,6 @@ local fire = util.installHooks(tm)
 -- `channels` map swaps each pass, and the operations that seat events in it travel alongside.
 local frame       = { channels = {} }
 local lastMuteSet = {}
--- The derivation journal, and the swing-staleness flag beside it: any edit or config change adds a
--- channel's dirt, and the gated stages read it. Missed dirt writes silent wrong output. see dirt.lua
-local dirt = require('dirt').new()
 -- Deep clone of derivationInputs() as of the last rebuild: what the current frame was derived under.
 -- bindTake diffs against it, because a rebind can find any of it changed with no signal to hear.
 local derivedInputs
@@ -157,8 +154,8 @@ do
     return buckets
   end
 
-  -- Strict-next authored note on a lane: chord-mates share an onset, so the seek is strict, and a
-  -- PA holds no lane of its own and never answers. See docs/trackerManager.md § Lane occupancy.
+  -- A lane's share of the channel's parked stash, bucketed once per stash.
+  -- see docs/trackerManager.md § Lane occupancy
   --post: unsafe result = the lane's parked events in ppq order; empty when the lane holds none
   function frame.parkedOnLane(chan, lane)
     return bucketedParked(frame.channels[chan].parked.notes, 'lane')[lane] or noParked
@@ -219,6 +216,9 @@ do
     return math.max(evt.ppq + 1, math.min(ceil, successor and successor.ppq or math.huge))
   end
 
+  -- Strict-next authored note on a lane: chord-mates share an onset, so the seek is strict, and a
+  -- PA holds no lane of its own and never answers. See docs/trackerManager.md § Lane occupancy.
+  --post: unsafe result = the lane's next authored note strictly after ppq, on take or parked
   function frame.nextOnLane(chan, lane, ppq)
     local found
     local col = frame.channels[chan].onTake.notes[lane]
@@ -715,16 +715,16 @@ do
   -- into seed-valued dirt (dedup-by-uuid). A dead seed's uuid dangles safely: see docs/trackerManager.md § Interval seeds.
   local function seedEvent(evt, verb) util.bucket(seeds, evt.chan, dirt.liveSeed(evt, verb)) end
 
-  --contract: every staged note (any lane) and pb files into rawIndex; detune reads filter to lane 1
-  --contract: caller supplies evt.evType
+  --pre: evt carries evType
+  --post: evt is visible to index readers before the flush that commits it, whatever its lane
   local function addLowlevel(evt)
     seedEvent(evt, 'add')
     index.add(evt)
     util.add(adds, { evt = evt })
   end
 
-  --contract: dedupes by uuid; in-flight assigns to the same event collapse into one mm write
-  --invariant: util.REMOVE markers must survive merging
+  --post: assigns to one uuid within a flush collapse into a single mm write
+  --invariant: a merged update keeps its util.REMOVE markers; collapsed to nil, the clear is lost
   local function assignLowlevel(evt, update)
     local oldChan = evt.chan
     -- A move (onset shifts, or now chan) is delete-at-old + insert-at-new; snapshot the vacated slot
@@ -809,9 +809,9 @@ do
     assignLowlevel(n, { ppq = P1, endppq = P2, ppqL = L1, endppqL = L2 })
   end
 
-  --contract: lane/chan changes accepted; rebuild reseats columns from the note's authored lane
-  --contract: chan change: rebuild's absorber pass reconciles fakes across both channels
-  --contract: ppq/endppq route through resizeNote
+  --post: (update sets lane or chan) → the column seat follows at the next rebuild, not here
+  --post: (update moves ppq or endppq) → attached PAs move with the note, or cull outside its span
+  --invariant: absorber seats are rebuild's; a chan change leaves it both channels to reconcile
   local function assignNote(n, update)
     if update.ppq ~= nil or update.endppq ~= nil then
       resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq,
@@ -850,13 +850,13 @@ do
     end
   end
 
-  --contract: update.ppq/endppq arrive logical
-  --invariant: endppq is the authored ceiling: a finite logical value, or util.OPEN
-  --contract: stamps ppqL and endppqL (OPEN→OPEN, else the logical ceiling)
-  --contract: derives a provisional raw note-off; the universal tail pass owns the real one
-  --invariant: endppqL is tm-private; callers never set it
-  --contract: rawCaller=true bypass: translation skipped, only delay-delta applies
-  --invariant: stager.assign consumes rawTime before calling; never reaches mm (docs/timing.md)
+  --pre: (not rawCaller) → update.ppq and update.endppq are logical
+  --pre: update.endppq is the authored ceiling: a finite logical value, or util.OPEN
+  --post: (rawCaller) → nothing is translated; the onset moves by the delay delta alone
+  --post: update.ppqL/endppqL := the logical seats; update.ppq/endppq := their raw images
+  --post: (endppq = util.OPEN) → endppqL := OPEN, endppq := a provisional raw note-off
+  --post: the staged raw onset is ≥ 0 and the tail ≤ tm:length(); interim mm readers see bounds
+  --invariant: the real raw note-off is the universal tail pass's to derive
   local function realiseNoteUpdate(evt, update, rawCaller)
     -- A delay clear arrives as util.REMOVE (assign honours it downstream); decode
     -- to 0 here so the onset arithmetic below never sees the sentinel table.
@@ -921,13 +921,14 @@ do
     end
   end
 
-  --contract: notes default detune=0, delay=0, lane=1
-  --contract: evt.ppq/endppq arrive logical; endppq is the authored ceiling (or util.OPEN)
-  --contract: stamps ppqL and endppqL (tm-private); rewrites ppq/endppq to raw before mm
-  --contract: evt.rawTime=true bypasses translation (mirrors stager.assign; rescale-only caller)
-  --invariant: rawTime consumed here so it never persists on the record or reaches mm
-  --contract: pb authoring frame is logical cents; val stored as cents on the event
-  --contract: um only stages; rebuild absorber pass reconciles seats, recomputes raw vals at flush
+  --pre: (not evt.rawTime) → evt.ppq/endppq are logical, endppq the authored ceiling or util.OPEN
+  --pre: a pb's evt.val is logical cents
+  --post: (note) → detune, delay and lane default to 0, 0 and 1
+  --post: evt.ppq/endppq := raw; ppqL/endppqL := the logical seats they came from
+  --post: (evt.rawTime) → nothing is translated; evt reaches mm on the raw time the caller stated
+  --post: (a pb already seats at evt.ppq) → that seat is assigned instead, and no rival pb added
+  --invariant: rawTime is consumed here: it lands on no record and reaches no mm write
+  --invariant: a pb's wire value is derived at flush; rebuild's absorber pass reconciles the seats
   function stager.add(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
@@ -973,7 +974,7 @@ do
 
   -- One flat stash holds every type, so evType leads the key and cc/pitch discriminate within it --
   -- the wire's own identity, lane deliberately absent. see docs/trackerManager.md § Park identity
-  --contract: note specs key by uuid; every other type by (evType, chan, cc, pitch, ppq)
+  --invariant: a parked note is keyed by uuid, every other type by (evType, chan, cc, pitch, ppq)
   local function findParked(list, ref)
     local function matches(spec)
       if spec.evType ~= ref.evType then return false end
@@ -1014,15 +1015,15 @@ do
 
   ----- Flush: commit accumulated ops to mm
 
-  --contract: no-op if nothing staged
-  --contract: commits deletes, then assigns, then adds under one mm:modify
-  --contract: pb cents→raw conversion happens here
-  --contract: snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
-  --contract: returns true when nothing reached mm, so the caller drives the rebuild
+  --post: no-op past the preflush iff nothing is staged and no rebuild is requested; result = nil
+  --post: result = (nothing reached mm); true hands the caller the one rebuild
+  --post: deletes commit before assigns, and assigns before adds, under one mm:modify
+  --post: a staged pb's cents convert to wire against the detune prevailing at its seat
+  --post: the batch is snapshotted before mm:modify, so re-entry through mm cannot re-emit it
   --emits: preflush -- (adds, assigns, deletes)
-  --contract: preflush fires before the no-op check so a subscriber can stage peer ops
+  --post: preflush fires before the staging gate, so a subscriber can stage peer ops into the batch
   --emits: postflush -- nil
-  --contract: postflush fires after the commit; subscribers read mm-stamped uuids on staged adds
+  --post: postflush fires after the commit, mm's stamped uuids readable on the staged adds
   function stager.flush()
     fire('preflush', adds, assigns, deletes)
     if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0
@@ -1187,7 +1188,7 @@ function tm:editCursor()
   return reaper.MIDI_GetPPQPosFromProjTime(mm:take(), editCursorTime)
 end
 
---contract: reports the pending end while setLength's shrink flush runs; mm's take length otherwise
+--post: result = the take length, or setLength's pending end while its shrink flush runs
 function tm:length()               return pendingLen or (mm and mm:length()) or 0 end
 function tm:resolution()           return mm and mm:resolution() end
 function tm:name()                 return mm and mm:name() end
@@ -1214,8 +1215,8 @@ function tm:fromLogical(chan, ppqL, offset) return timeContext:fromLogical(chan,
 --post: result = ppqI projected under the context the last rebuild head built
 function tm:toLogical(chan, ppqI)           return timeContext:toLogical(chan, ppqI) end
 
---contract: chan==nil marks all 16 channels stale; otherwise just the named channel
---contract: consumed by the next tm:rebuild, then cleared
+--post: (chan == nil) → all 16 channels are marked stale; else the named channel alone
+--post: the mark stands until the next tm:rebuild, which consumes it
 function tm:markSwingStale(chan)
   dirt.add(chan, true) -- swing move re-times this chan's derivations (raw reseat + absorber seats); not carried by the mm payload
   dirt.swing.add(chan)
@@ -1232,8 +1233,9 @@ local freezeRectByUuid = {}              -- uuid -> the gm rect a freeze-to-grou
 
 -- One host's whole output in one place, gathered at the tail where the census has settled: the
 -- passes above each key their share by host uuid, and the ghost overlay draws exactly one entry.
---shape: fxRealisationByUuid[uuid] = { uuid, chans, notes, targets, parked }
---   targets' spans are logical; notes and parked are the built lists by reference
+--shape: fxRealisationByUuid[uuid] = { uuid, chans = ascending channel list, notes = derived onsets in
+--shape:   logical-onset order, parked = the originals stood in for, targets = { [target] = {{ppqL, ppqL}} } }
+--   notes and parked are the built lists, by reference
 local fxRealisationByUuid = {}
 
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
@@ -1433,24 +1435,23 @@ function tm:assignEvent(evt, update) stager.assign(evt, update) end
 function tm:addParked(spec)           stager.addParked(spec)           end
 function tm:assignParked(evt, update) stager.assignParked(evt, update) end
 function tm:deleteParked(evt)         stager.deleteParked(evt)         end
---contract: one-way; the host's chain, its parked members and its windows are gone after the call
---contract: host = a live region, or a note (parked or on-take) carrying fx; else false
---contract: flushes any staged ops first, so the eligibility census reads a settled take
---contract: any refusal is silent: returns false, stages nothing of its own, raises nothing
---contract: refuses same-target overlap with a neighbour; abutting counts for pb, not cc/note
---contract: refuses a covered fx host, or a note-dest host under another host's note window
---contract: refuses a global region (chan 0): a view surface, running on no channel
+--post: result = (the conversion ran); a refusal stages nothing of its own and raises nothing
+--post: no-op iff refused; else the host's chain, its parked members and its windows go, one-way
+--post: refuses a uuid naming anything but a live region or a note (parked or on-take) carrying fx
+--post: refuses same-target overlap with a neighbour; abutting overlaps for pb, not for cc or note
+--post: refuses a global region (chan 0), a covered fx host, or a note-dest host under a note window
+--post: staged ops flush first, so the census the refusals read is of a settled take
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
---contract: freezeRegion's conversion plus a bounded thin of each continuous stream, one flush
---contract: members are column events (authored frame, no ppqL) for gm:markGroup, else false
---contract: the take is settled on return; no part of the conversion is left for the caller's flush
+--post: tm:freezeRegion's conversion, plus a bounded thin of each continuous stream, under one flush
+--post: result = fresh list of surviving members as column events, authored frame; false if refused
+--post: the take is settled on return; no part of the conversion is left for the caller's flush
 function tm:freezeToGroup(uuid)       return freezeRegion(uuid, true) end
---contract: one-way; the stored global gives way to the hosts it expanded into, uuids kept
---contract: false, staging nothing, for a uuid naming anything but a stored chan-0 region
---contract: false for a chain reaching no channel; the expansion would be empty, losing the chain
---contract: flushes first, rebuilds once; the host list is unchanged, so no channel is dirtied
 -- The expansion, persisted: the passes below the head snapshot read the very list they read before,
 -- and the rebuild is for the maps keyed by the stored region. see docs/trackerManager.md § Channel & column model
+--post: result = (the expansion ran); a refusal stages nothing
+--post: no-op iff uuid names anything but a stored chan-0 region, or its chain reaches no channel
+--post: ds.fxRegions := one stored host per channel the global reached, keeping its expansion uuid
+--post: one flush and one rebuild; no channel is dirtied, the host list being unchanged
 function tm:explodeRegion(uuid)
   tm:flush()
   local region, channelRegions, otherGlobals = nil, {}, {}
@@ -1477,29 +1478,28 @@ function tm:explodeRegion(uuid)
   tm:flush()
   return true
 end
---contract: reads the last rebuild's published windows; staged-not-flushed hosts are invisible
---contract: false for any uuid that is not a live host; never stages
+--post: result = (uuid is a live host whose freeze no neighbouring window refuses); never stages
+--invariant: read off the last rebuild's published windows; a staged, unflushed host is invisible
 function tm:freezeEligible(uuid)
   local frozen = windows.window(uuid)
   return frozen ~= nil and not freezeRefused(frozen, windows)
 end
---contract: reads the last rebuild's settled census; never computes, never stages
---contract: nil for a uuid that hosts no chain; a host with no output gets empty streams
---contract: every member tm:freezeToGroup hands back lies inside the rect
+--post: fresh result = the rect a freeze-to-group mint would claim; nil iff uuid hosts no chain
+--post: every member tm:freezeToGroup hands back lies inside the rect
+--invariant: read off the last rebuild's settled census; computes nothing, stages nothing
 -- A clone per call: gm:markGroup stores the rect by reference and tm replaces its map each rebuild.
 function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r and util.deepClone(r) end
---contract: everything uuid's chain realised this rebuild; nil if uuid runs no chain
---contract: a stored global uuid answers with the union of the hosts it expanded into
---contract: notes = its derived onsets, logical-onset order (a ghost is one row: no tail rides)
---contract: parked = originals it stands in for; targets = its claimed pb/cc spans, logical framed
---contract: chans = the channels it realises on, ascending -- one for an ordinary host
---invariant: read-only; tm rebuilds the map each pass
+--post: unsafe result = everything uuid's chain realised this rebuild; nil iff uuid runs no chain
+--post: (uuid names a stored global) → result is the union over the hosts it expanded into
+--post: (the chain realised nothing) → its lists are empty, uuid being a host all the same
+--invariant: a ghost is one row: result.notes carries onsets, and no tail rides on them
 function tm:fxRealisation(uuid)
   return uuid and fxRealisationByUuid[uuid] or nil
 end
---contract: the host's realised value on target at ppqL; nil outside the spans it claimed
---contract: chan is the channel to read on -- a global chain realises on each of the ones it reaches
---contract: cents-minus-detune for pb, the value itself for cc; interpolated between seats
+--pre: chan is the channel to read on -- a global chain realises on each of the ones it reaches
+--post: result = uuid's realised value on target at ppqL, interpolated between seats
+--post: result = nil iff ppqL lies outside the spans uuid claimed on target
+--post: result = cents-minus-detune for pb, the value itself for cc
 --invariant: read off the take, so a kept host's curve stands where a re-run one's does
 function tm:fxCurveAt(uuid, chan, target, ppqL)
   local realisation = fxRealisationByUuid[uuid]
@@ -1520,7 +1520,8 @@ function tm:fxCurveAt(uuid, chan, target, ppqL)
   -- A pb seat's val is realisation, detune included -- the same subtraction the column projection makes.
   return target == 'pb' and val - index.detuneAt(chan, ppq) or val
 end
---contract: an id no stored region holds and no earlier mint issued; the caller stores the region
+--post: result = an id claimed neither by a stored region nor by any earlier mint
+--post: nothing is stored: the region the id names is the caller's to write
 -- The view authors regions, but the store the mint scans is tm's, and the parked stash mints beside it.
 function tm:newFxRegionUuid() return newFxUuid('fxRegions') end
 
@@ -1570,7 +1571,8 @@ end
 
 -- On shrink, an OPEN ceiling is authored intent, not a casualty of resize: only the realised
 -- tail clips to the new end. See docs/trackerManager.md § Length operations for the ordering.
---contract: a util.OPEN ceiling survives a shrink; only its realised tail comes down
+--post: (shrink) → an event past the new end goes and one astride it clips, in the fx document too
+--post: (shrink) → a util.OPEN ceiling stands; only its realised tail comes down
 function tm:setLength(newPpq)
   if not mm then return end
   local oldPpq = mm:length() or 0
@@ -1726,9 +1728,9 @@ function tm:playPause() reaper.Main_OnCommand(40073, 0) end
 
 ----- Mute
 
---contract: sweeps only chans with a mute delta or rebuild dirt; assign only when n.muted differs
---invariant: lastMuteSet also tags later-added notes (add path stamps muted at insert)
---invariant: PA events ride along in note columns but carry no mute state — skipped
+--post: n.muted := the channel's new state for every note whose flag differs; PAs carry no mute
+--post: only a channel with a mute delta or rebuild dirt is swept
+--invariant: a note added later is stamped at insert, so the set outlives this sweep
 function tm:setMutedChannels(set)
   local prev = lastMuteSet
   lastMuteSet = util.clone(set or {})
@@ -1785,10 +1787,10 @@ local function channelsInUse(sources)
   return inUse
 end
 
---contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
---contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
---contract: dead take (mm:take() nil) is a no-op; tv retains its last frame
---invariant: rebuild(∅) (no dirt/stale swing/reload/takeChanged/request) short-circuits pre-nest
+--post: no-op iff the take is dead or a rebuild is already in flight; tv retains its last frame
+--post: frame.channels := this pass's derivation, a clean channel carrying its own frame forward
+--post: the dirt journal, the swing staleness and the rebuild request are consumed
+--invariant: rebuild(∅) -- no dirt, stale swing, reload, swap or request -- short-circuits pre-nest
 -- see docs/trackerManager.md § Rebuild
 function tm:rebuild(takeChanged)
   if rebuilding then return end
@@ -1863,7 +1865,7 @@ function tm:rebuild(takeChanged)
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
-  --contract: rebuild fires at end of every non-degenerate rebuild after the um cache is reloaded
+  --post: rebuild fires at the end of every non-degenerate pass, the index and the maps settled
   --invariant: takeChanged is true only when rebuild followed bindTake; signals take-tier reload
   perf.start('fire'); fire('rebuild', takeChanged); perf.stop('fire')
 end
@@ -2014,7 +2016,8 @@ do
     reaper.SetMediaTrackInfo_Value(track, 'I_PERFFLAGS', flags | 2)
   end
 
-  --contract: restores the guarded track's prior I_PERFFLAGS, clears the record; no-op if none
+  --post: no-op iff no track is guarded
+  --post: the guarded track's I_PERFFLAGS := its prior value; the record is cleared
   function tm:restoreGuarded()
     local g = ds:get('guardedTrack')
     if not g then return end
@@ -2023,12 +2026,12 @@ do
     ds:delete('guardedTrack')
   end
 
-  --contract: atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild
-  --contract: opts.trackerMode (wiring-derived) seeds trackerMode under the same suppression window
-  --contract: opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
-  --contract: bindTake(nil) is the dormant seam (e.g. samplePage)
-  --contract: opts.skipGuard skips restore/guardTrack; mini stacks never touch the shared guard
-  --invariant: bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
+  -- bindTake(nil) is the dormant seam, for a stack that runs without a take (e.g. samplePage).
+  --post: one rebuild covers the swap: cm:setContext runs suppressed, mm:load fires it
+  --post: (opts.trackerMode) → trackerMode is seeded inside the same suppression window
+  --post: (opts.markSwingStale) → raw time is rederived from ppqL under the new (cm, mm)
+  --post: (opts.skipGuard) → the shared track guard is neither restored nor claimed
+  --post: (take == nil) → cm clears under suppression, mm:load no-ops, tm and tv keep their frame
   function tm:bindTake(take, opts)
     local skipGuard = opts and opts.skipGuard
     if not skipGuard then tm:restoreGuarded() end
@@ -2046,7 +2049,8 @@ do
     snapshotSwingState()
   end
 
-  --contract: take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
+  -- For a take that died under us; bindTake(nil), the dormant seam, is the other way out.
+  --post: tm:currentTake reads nil; the guarded track is restored and cm's context cleared
   function tm:detach()
     tm:restoreGuarded()
     bindingTake = true
@@ -2057,8 +2061,9 @@ do
 
   function tm:currentTake() return mm and mm:take() end
 
-  --contract: re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
-  --invariant: reloadFromReaper does not swap take; for coord's external-mutation watcher
+  -- The seam coordinator's external-mutation watcher pulls on.
+  --post: the bound take is re-read from REAPER, the standard reload → rebuild following
+  --invariant: the bound take is unchanged; only its contents are re-read
   function tm:reloadFromReaper() if mm then mm:reload() end end
 end
 
