@@ -1,7 +1,7 @@
 # trackerManager: the algebra and the engine
 
-> opened: 2026-08-07 · status: the three phases landed 2026-09-02;
-> plan/tracker-manager-split.md carries the follow-up
+> opened: 2026-08-07 · status: in flight — plan/tracker-manager-split.md;
+> the three phases landed 2026-09-02 and the plan carries the follow-up
 >
 > Prior art: `design/archive/um-index-stager.md`, which split the index
 > from the stager in place and deferred extracting either to a module.

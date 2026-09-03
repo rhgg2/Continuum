@@ -1,14 +1,13 @@
 # dirt owns the row questions — plan
 
-> no design doc: one phase, and what it changes in the model belongs in
-> `docs/trackerManager.md` § Lane occupancy and § Interval seeds.
+> source: `docs/trackerManager.md`, which carries the model this built.
+> No design doc: one phase, closed 2026-09-03.
 
 ## Phases
 
 1. **Phase 1 — the row questions move to dirt** — the journal answers
    `names`, `covers` and `touches` over its own seeds, and the four
    readings of the seed list in `trackerRebuild.lua` give way to them.
-   ← in flight
 
 ## Rests on
 
