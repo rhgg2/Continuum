@@ -7,30 +7,7 @@
 > from the stager in place and deferred extracting either to a module.
 > § Phase 3 settles that deferral.
 
-**`trackerManager.lua` holds three tenants: an algebra, an edit side,
-and a derivation engine of about 2900 lines that reconstructs intent
-and then reauthors raw from it. Two of the three leave, in three
-phases, each useful alone; phase 1 is also the measurement that
-decides whether phase 3 is worth taking.**
-
 ## Length and coupling
-
-1. The file's length is the sum of three well-kept jobs. Four couplings
-   join them, and all four travel by mutation. Naming the three is most
-   of the design, and § Two movements gives the record couplings their
-   reason.
-
-1. tm is 5427 lines against a 46230-line codebase, more than one line
-   in nine. `trackerView.lua` follows at 4929, and then there is a
-   cliff to `wiringRender.lua` at 2825. Two outliers, and tm is the
-   larger.
-
-1. Every large section of the rebuild exports exactly one name:
-   `rebuildPbs` for 570 lines, `rebuildFx` for 519, `rebuildTails` for
-   421, `rebuildRegionPark` for 409. Those four are 1919 lines behind
-   four doors, and `rebuildPipeline` hands each stage its inputs as
-   parameters off one head snapshot. No large section calls into
-   another.
 
 1. The first coupling is mid-pass enlargement of the dirt.
    `rebuildTails` adds to a channel's dirt and `rebuildRegionPark` does
@@ -63,22 +40,6 @@ decides whether phase 3 is worth taking.**
    same-pitch cascade.
 
 ## Three tenants
-
-1. **The algebra.** About 325 lines: half-open span sets, and ppq-keyed
-   breakpoint curves with their fold. Strip comments and string
-   literals and the region's free variables number one — `util`. It
-   reaches nothing and holds nothing, and could as easily be a library
-   the project depends on.
-
-1. **The edit side.** The raw index, the stager, the accessors, the
-   mutation API, length, transport, mute, lifecycle. It writes mm and
-   seeds dirt. Roughly 1700 lines.
-
-1. **The derivation engine.** The REBUILD region, plus the fx-expansion
-   helper family that only it calls. It reads mm, the index and the
-   dirt, and produces the frame. Roughly 2900 lines. Its two movements
-   share the frame, the index and the dirt, so they are one tenant
-   (§ Two movements).
 
 1. The seam between the edit side and the engine is checkable.
    `channels` is assigned in five places: its declaration, the reset at
@@ -138,11 +99,6 @@ decides whether phase 3 is worth taking.**
    seats detune before it synthesises pb, which are pitch's second and
    third rungs (`docs/tuning.md`).
 
-1. Measured on the 32-bar `glasswork` fixture, a forced full re-derive
-   spends 15.7ms reconstructing and 11.4ms reauthoring out of 31.7ms.
-   Of `rebuildPbs`'s 8.9ms, 1.9ms is the detune seating, so counted by
-   stage the second movement reads larger than the field cut makes it.
-
 1. A **cue** is a realisation field carried on a logical cell:
    `delayC`, `endppqC`, `sampleShadowed`. `REALISATION` enumerates the
    set, and the park stash is the clone minus it, so one list governs
@@ -152,43 +108,7 @@ decides whether phase 3 is worth taking.**
    Realisation reaches the view only as cues, so the raw frame stays
    inside trackerManager.
 
-## One window population
-
-Landed 2026-09-01. The model is `docs/trackerManager.md` § Note host
-clips and windows.
-
-## The time context
-
-Landed 2026-09-02 as `timeContext.lua`, built at the rebuild head and
-taken by the stages as a parameter. The model is `docs/timing.md`
-§ The time context.
-
-## Phase 1 — the algebra leaves
-
-Landed 2026-08-30 as `spans.lua` and `curves.lua`, with the two seeks in
-`util`. The model is `docs/algebra.md`.
-
-## Phase 2 — the dirt spine becomes `dirt.lua`
-
-Landed 2026-08-31 as `dirt.lua`, one journal per tracker: `add` is the
-sole write and the gates are queries. The journal mints the seeds it
-stores and answers over them. The model is `docs/trackerManager.md`
-§ Derivation dirt: the gated spine.
-
-## Phase 3 — the engine leaves
-
-Landed 2026-09-02 as `trackerRebuild.lua`, taking eight dependencies,
-with the window constructors as `fxWindows.lua`. The model is
-`docs/trackerManager.md` § The frame handle and § Fx window census.
-
 ## What the specs hold
-
-1. A restructure is only as safe as what notices it breaking. The
-   `tm_*` specs address tm through four verbs — `tm:flush`,
-   `tm:addEvent`, `tm:getChannel` and `tm:rebuild`; none requires
-   `trackerManager` directly, and none touches an upvalue. The harness
-   fakes only REAPER, so mm, cm and ds are real. Whatever moves behind
-   which boundary, the suite exercises the same doors.
 
 1. `tm_gate_parity_spec` is the instrument that matters. `assertParity`
    snapshots the projected frame, the view grid and the mm bag, calls
@@ -196,14 +116,3 @@ with the window constructors as `fxWindows.lua`. The model is
    asserts all three unchanged. Gated and ungated agree across view,
    grid and wire. That is the property a stage extraction is likeliest
    to break, and it is already pinned.
-
-1. Two specs would nonetheless go red on a faithful move.
-   `tm_pb_gating_spec` asserts table identity of `onTake.pb`, so
-   anything reconstructing the wrapper fails on equal data. And
-   `VOLATILE` in `tm_gate_parity_spec` enumerates the three fields
-   allowed to differ between a carried and a fresh frame, so a new
-   per-pass scratch field on a column event registers as a spurious
-   diff. Both are cheap to update and expensive to meet unprepared.
-
-1. `rebuildPbs` is pinned at its own seams by `tm_pb_keep_split_spec`,
-   `tm_seat_scope_spec` and `tm_pb_seam_spec`.
