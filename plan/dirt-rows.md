@@ -37,6 +37,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-03 tm: the clip cache reseeks a neighbour moved into its span (design/decisions.md 2026-09-03)
 - 2026-09-02 dirt: the journal answers covers and touches over its own seeds (design/decisions.md 2026-09-02)
 - 2026-09-02 dirt: a seed carries every row its uuid held during the flush (design/decisions.md 2026-09-02)
 
@@ -46,6 +47,4 @@
 
 ## Queued (current phase; one-liners)
 
-- tm: the clip cache reseeks a neighbour moved into its span — the
-  journal gains `names`, and `clipEnd` asks it and `touches`, with a spec
-  over the move.
+(empty)

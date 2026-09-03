@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-03** — The clip cache's reuse test moves to the derivation journal: a cached clip stands
+  while the channel's dirt neither names the event nor touches its cached span. The span question
+  reaches the row a neighbour moved to and not just the seat it left, so a note moving into a cached
+  span now reclips it. `add` resolves a live seed's uuid off the record it kept as it files it,
+  which is past the commit that stamps it, so identity is the journal's own state and `names`
+  memoizes a set beside the sorted rows.
+
 - **2026-09-02** — The dirt journal answers what its seeds cover: covers for one logical position,
   touches for a span, and ppqs for the sorted array both read. The array is one per channel, built
   at the first question and dropped by the next add, so the rebuild can seed mid-pass and still be

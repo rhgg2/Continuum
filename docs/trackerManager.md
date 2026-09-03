@@ -261,19 +261,20 @@ authored span -- into a `seeds[chan]` list separate from `adds`/`assigns`/`delet
 birth state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
 
 The journal mints the seeds, so the shape its lattice stores has one home. `liveSeed` snapshots an
-mm-raw event and keeps the record itself, which is how a fresh add's uuid late-binds. `rawSeed` is
+mm-raw event and keeps the record itself, which is how a fresh add's uuid late-binds; `add` resolves
+that uuid onto the seed as it files it, which is past the commit that stamps it. `rawSeed` is
 the same snapshot without the record, for an event the pass is deleting. `parkSeed` mints from a
 logical park spec and takes the raw seat as an argument, since the journal holds no time context.
 
 A move mints a seed per seat: the vacated one as the verb finds it, then the one it arrives at. The
 fold keeps the birth snapshot and carries the positions its dropped duplicates named onto it, so a
 seed names every logical position its uuid held during the flush. The journal answers over them --
-`covers` a position, `touches` a span, and `ppqs` the sorted array both read. So a move dirties both
-its seats, an add covers its onset, and a delete covers its death seat alone. The array is built at
-the first question and dropped by the next `add`, which is what lets a stage seed mid-pass and the
-next question still be answered truly. The snapshot's other fields go stale as the event moves and its uuid dangles as the event
-dies; each consumer reads whichever the seed still answers. The seek walk the snapshot feeds is
-§ What the walk visits, and what it emits.
+`covers` a position, `touches` a span, `names` a uuid, and `ppqs` the sorted array. So a move
+dirties both its seats, an add covers its onset, and a delete covers its death seat alone. The
+answers are built at the first question and dropped by the next `add`, which is what lets a stage
+seed mid-pass and the next question still be answered truly. The snapshot's other fields go stale as
+the event moves and its uuid dangles as the event dies; each consumer reads whichever the seed still
+answers. The seek walk the snapshot feeds is § What the walk visits, and what it emits.
 
 A chan reassign counts as a move too: the vacated slot lands in the *old* channel's dirt, which no
 other seed for this pass would otherwise reach, so `assignLowlevel` snapshots it exactly like an
@@ -1173,14 +1174,14 @@ Derived notes lie outside the population. A note carrying a `derived` tag never 
 `rebuildInternals` routes it to the fx stage's existing set instead — so a column holds authored
 events by construction and the clip needs no filter of its own.
 
-`clipEnd` answers with a cached clip where the rebuild's dirt cannot have moved it: an event reclips
-when its channel is wholesale-dirty, it is uncached, its own uuid is seeded (its move or length
-mutation), or a seed ppq fell inside its cached span (a neighbour onset that becomes the new clip).
-Everything else rides the cached end. Callers ask for a clip and get one; the cache is `clipEnd`'s
-alone to read and write, scoped to a block that exposes only it and `rebuild.forget`, the door the
-take-tier seam calls. One cache
-serves on-take hosts and parked events alike, since a uuid is in one half or the other and the rule
-is the same either way.
+`clipEnd` answers with a cached clip where the rebuild's dirt cannot have moved it, and the journal
+answers both halves of that. An event reclips when it is uncached, when the channel's dirt names its
+uuid -- its own move or length mutation -- or when that dirt touches its cached span, where a
+neighbour's onset becomes the new clip. A wholesale channel answers both questions, so it needs no
+case of its own, and everything else rides the cached end. Callers ask for a clip and get one; the
+cache is `clipEnd`'s alone to read and write, scoped to a block that exposes only it and
+`rebuild.forget`, the door the take-tier seam calls. One cache serves on-take hosts and parked
+events alike, since a uuid is in one half or the other and the rule is the same either way.
 
 The reclip is walk-free for an on-take host. `byUuid[uuid].colEvt` (the seat stamp, § Incremental
 index reconciliation) back-links a host uuid to its live column event, so a dirty host reclips by
@@ -1205,11 +1206,10 @@ A rebuild clips once, and its two readers share the one cache: the stash render 
 parked event's render clip and `clipNoteHosts` for every host's span end, which for a parked host is
 the same number.
 
-**The reuse arm is unexercised by the suite.** Removing the seed-driven invalidation outright
-(reusing on any cache hit, dropping the seed test) leaves every spec green, so nothing
-distinguishes an event riding a stale cached span from one that recomputes. A fixture reaching the arm
-needs all three of a warm cache, seeded dirt naming the event, and a span end that moves. Until one
-exists, treat any change to this cache as unguarded.
+The span question reaches the row a neighbour moved to as well as the one it left, since a move's
+seat carries both (§ Interval seeds). `tm_clip_cache_spec` is the fixture that pins it: a warm
+cache, a neighbour moved into the cached span from outside it, and a parked host whose clip falls to
+the new onset. Reading the birth snapshot alone strands the stale clip.
 
 ## Fx window census
 

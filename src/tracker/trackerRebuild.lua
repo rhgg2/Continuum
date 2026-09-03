@@ -154,19 +154,14 @@ do
   -- which a take-length change (mm:setLength) reaches too.
   local cache = {}
 
-  -- One clip cache, shared by on-take hosts and parked events; reclips on wholesale dirt, a seed
-  -- naming the event, or a seed ppq inside its cached span. See docs/trackerManager.md § Lane occupancy.
+  -- One clip cache, shared by on-take hosts and parked events; a cached clip stands while the
+  -- journal neither names the event nor touches its span. See docs/trackerManager.md § Lane occupancy.
   --contract: always the true clip; the cache is this function's alone to read and write
   function clipEnd(evt, takeLenL)
-    local seeds, cached = dirt.has(evt.chan), cache[evt.uuid]
-    if cached and seeds ~= true then
-      local stands = true
-      for _, s in ipairs(seeds or {}) do
-        if s.uuid == evt.uuid or (s.ppqL and s.ppqL >= evt.ppq and s.ppqL <= cached) then
-          stands = false; break
-        end
-      end
-      if stands then return cached end
+    local cached = cache[evt.uuid]
+    if cached and not dirt.names(evt.chan, evt.uuid)
+              and not dirt.touches(evt.chan, evt.ppq, cached) then
+      return cached
     end
     local clipped = frame.clippedSpanEnd(evt, takeLenL)
     cache[evt.uuid] = clipped
@@ -724,8 +719,7 @@ local function stampSamples()
       for _, entry in ipairs(index.raw(chan).notes) do stamp(entry) end
     elseif dirt.has(chan) then
       for _, s in ipairs(dirt.has(chan)) do
-        local uuid = s.uuid or (s.evt and s.evt.uuid)
-        local entry = uuid and index.byUuid(uuid)
+        local entry = s.uuid and index.byUuid(s.uuid)
         if entry then stamp(entry) end
       end
     end

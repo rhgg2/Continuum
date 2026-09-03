@@ -7,10 +7,10 @@
 -- deduped list over whatever stood, which drops seed dirt nothing will restate; the tail walk's
 -- emission never checked the cap, so a large disturbance carried on as an unbounded seed list.
 --
--- The journal also answers over what it stores: which logical positions its seeds name, and so
--- which of them a position or a span meets. The answer is one sorted array per channel, built at
--- the first question and dropped by the next write -- the rebuild seeds mid-pass (park members,
--- the tail walk's emission) while later stages are still asking.
+-- The journal also answers over what it stores: which logical positions its seeds name, which of
+-- them a position or a span meets, and which uuids they name. The positions are one sorted array
+-- per channel, built at the first question and dropped by the next write -- the rebuild seeds
+-- mid-pass (park members, the tail walk's emission) while later stages are still asking.
 --
 -- The journal also mints what it stores. The three minters differ in where the raw frame comes
 -- from and in whether the seed keeps the record it was taken from; the cases below pin both.
@@ -174,6 +174,29 @@ return {
 
       journal.add(4, true)
       t.eq(journal.touches(4, 0, 1), true, 'wholesale touches every span')
+    end,
+  },
+  {
+    -- A live seed is minted before mm stamps its uuid and filed after, so `add` resolves the uuid
+    -- off the record the seed kept. What the journal holds then names its own identities.
+    name = 'dirt: names answers identity, resolving a seed uuid off the record it kept',
+    run = function()
+      local journal = dirt.new()
+      t.eq(journal.names(1, 'u1'), false, 'a clean channel names nothing')
+
+      journal.add(1, { verb = 'add', uuid = 'u1', ppqL = 480 })
+      t.eq(journal.names(1, 'u1'), true, 'the seed names its uuid')
+      t.eq(journal.names(1, 'u2'), false, 'and names no other')
+
+      local evt = { chan = 1, ppq = 960, evType = 'note' }
+      local live = journal.liveSeed(evt, 'add')
+      evt.uuid = 'stamped-at-commit'   -- the commit stamps it; the flush files the seed after
+      journal.add(1, live)
+      t.eq(live.uuid, 'stamped-at-commit', 'filing resolved the uuid onto the seed')
+      t.eq(journal.names(1, 'stamped-at-commit'), true, 'so the journal names it')
+
+      journal.add(2, true)
+      t.eq(journal.names(2, 'u1'), true, 'wholesale names every uuid')
     end,
   },
   {
