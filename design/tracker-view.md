@@ -7,8 +7,8 @@
 > reading could not settle. It proposes nothing; the seams are badged so
 > a later design can pick one up.
 >
-> Prior art: `design/tracker-manager-split.md`, whose test for tenancy
-> this review borrowed, applied here, and watched fail.
+> Prior art: the trackerManager split (`docs/trackerManager.md`), whose
+> test for tenancy this review borrowed, applied here, and watched fail.
 
 ## The problem
 
@@ -17,9 +17,9 @@ commits touch it. Second on both axes, with a steep cliff below it to
 `trackerRender.lua` at 1550.
 
 **2** The tempting diagnosis is the one that worked next door.
-`design/tracker-manager-split.md` § Length and coupling argues that tm is long
-because it holds several tenants rather than because it is tangled, and
-offers a test: every large section already exports exactly one name.
+The trackerManager split found tm long because it held several tenants
+rather than because it was tangled, and offered a test: every large
+section already exports exactly one name.
 Apply that test to tv and it fails four times in five. The editing block
 at 741–1293 exports eleven names; the mirror bridge exports fifteen, to
 four different consumers.
@@ -38,8 +38,8 @@ rebuild (3804–3807), and handed to `editCursor` (4123) and `clipboard`
 (4133). Every cluster reads `grid.cols` straight off the upvalue.
 
 **2** So the coupling travels by mutation rather than by call — which is
-the qualification tracker-manager-split raises about dirt, arriving here
-as the main event. tm's `rebuildPipeline` hands each stage its inputs as
+the qualification the trackerManager split raised about dirt, arriving
+here as the main event. tm's `rebuildPipeline` hands each stage its inputs as
 parameters off one head snapshot. `tv:rebuild` takes one boolean across
 291 lines, and every phase communicates by writing `grid`, `ctx` and the
 file-level scalars.

@@ -123,6 +123,14 @@ all of those tm's own forwarders. The index lives inside um because um is
 what keeps it true. `index.raw(chan)` is the single read door, covering
 all six lists.
 
+The edit side and the pass use the index differently. The edit path asks
+semantic questions of it — `index.detuneAt` for the prevailing detune at a
+seat, `index.forEachAttachedPA` for a host's PAs — while the pass takes the
+lists and walks them. The mediated write surface (`index.assign`,
+`index.stampColEvt`, `index.withDeferredSort`) has no edit-side caller at all:
+an edit writes through the staging verbs, and only a pass writes an entry in
+place.
+
 An event's `uuid` is its handle everywhere: durable across rebuilds and
 reloads, stable under any assign, and what `tm:byUuid` and every mm verb
 take. What um's records add is `realised` — set on entries built from an mm
@@ -561,6 +569,12 @@ derived lists carry, so the fx stage writes the channels it ran and leaves the
 rest standing; its lists are built from copies of the fx specs, which the tail
 walk is still settling when the map is made.
 
+The edit side never writes the frame. It stages to mm and seeds dirt; the
+accessors publish the frame, and the mute sweep walks it for cells to mute and
+then routes the edit through `stager.assign`. Every write into
+`frame.channels` is the pass's, and the seam holds by scope, the edit-side file
+having no such variable in it.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* is object identity,
@@ -590,7 +604,10 @@ complete frame at no cost. Sound by I8 (rebuild is a one-pass fixpoint, so a
 channel with no dirty source re-derives nothing) and by blast radius: every
 rule (tail clip/regrow, same-pitch cascades, absorber reseats, PC streams, fx
 windows) is intra-channel, so a whole dirty channel over-approximates the
-closure.
+closure. `tm_gate_parity_spec` is what pins it: it snapshots the projected
+frame, the view grid and the mm bag, forces all sixteen channels to re-derive,
+and asserts all three unchanged, so gated and ungated agree across view, grid
+and wire.
 
 `fx` is the pivot: for a clean channel it skips its generators and leaves
 `noteLive` empty — which is exactly why the downstream stages that read
@@ -630,6 +647,58 @@ start a rebuild.
 Past the cap the dirt collapses to the whole channel, so `rebuildInternals`' excise-skip and its
 fresh column build agree with the tail walk. `add` enforces the cap, so the tail walk's own
 mid-pass emission collapses on the same terms as an edit's seeds.
+
+### Two movements
+
+**The pass reconstructs intent, then reauthors raw from it.** Reconstruction
+settles which events exist, where they sit in the logical frame, and what they
+mean. Reauthoring derives the realisation frame from that and reconciles it
+into mm. The pipeline's order is already the cut: internals, the CC walk, extra
+columns, externals, the sample stamp, region park, PA and fx expansion
+reconstruct; tails, pbs and PCs reauthor.
+
+`projectEvent` is the hinge between the frames. It takes an mm-shaped record,
+overwrites `ppq` with `ppqL` and drops the logical sidecar, so a column cell is
+logical-framed while an index entry is raw-framed and carries logical alongside
+(§ Logical projection). `colEvt` links the two, and the pass is the only thing
+that holds both.
+
+There are three reauthoring stages because a MIDI channel offers three media
+its notes contend for: one raw timeline on which two same-pitch notes cannot
+overlap, one pitch-bend stream, and one program change. An axis earns a
+reauthoring stage exactly when its realisation depends on other events.
+Velocity is per-note and CC lanes are independent streams, so neither needs
+one.
+
+Contention fixes the scope. A shared medium can be allocated only once every
+claimant is known, so reauthoring runs after all reconstruction and over a
+whole channel. Dirt is channel-keyed for the same reason (§ Derivation dirt:
+the gated spine).
+
+The movements divide the fields a stage may author, and stages straddle.
+`rebuildInternals` rederives raw onsets from logical under stale swing, as part
+of a walk it performs anyway; `rebuildPbs` seats detune before it synthesises
+pb, which are pitch's second and third rungs (`docs/tuning.md`).
+
+Every write one stage makes into another's records belongs to reauthoring, and
+the order carries dependencies the signatures do not state. The specs `fxOut`
+carries in `noteLive` are the same tables the tail walk takes as `extras` and
+writes raw onsets and clipped ends into, and `rebuildPbs` reads the moved
+positions, so tails run before pbs. `rebuildInternals` mints `noteExisting`,
+and `reconcileFx`'s keep path stamps `uuid`, `realised` and `endppq` onto those
+same tables seven stages later; `rebuildPCs` writes `sampleShadowed` into an fx
+spec.
+
+The head snapshot takes writes the same way: `rebuildExtraColumns` grows
+`extras[i].notes` on the snapshot's own table, and `rebuildPbs` reads
+`extras[chan].pb` from it.
+
+The frame the layered model hands upward is the logical one, and the raw frame
+stays inside trackerManager. Realisation reaches the view only as cues.
+
+A **cue** is a realisation field carried on a logical cell: `delayC`,
+`endppqC`, `sampleShadowed`. `REALISATION` enumerates the set, and the park
+stash is the clone minus it (§ Park identity), so one list governs both.
 
 ### The pipeline
 
