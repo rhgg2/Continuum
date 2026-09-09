@@ -1,7 +1,8 @@
 # trackerManager: the algebra and the engine — plan
 
-> source: `design/tracker-manager-split.md` — synthesis compiled from
-> there; don't design here.
+> source: the model now lives in `docs/algebra.md`,
+> `docs/trackerManager.md` and `docs/timing.md`; the design doc is gone.
+> Closed 2026-09-09.
 
 ## Phases
 
@@ -22,9 +23,9 @@
 7. **Phase 7 — the engine leaves** (§ Phase 3) — landed 2026-09-02, in
    five commits, as `trackerRebuild.lua` and `fxWindows.lua`; the model
    is `docs/trackerManager.md` § The frame handle and § Fx window census.
-8. **Phase 8 — the nesting inside the stages** ← in flight — three lifts
-   inside `trackerRebuild.lua`. None changes what crosses a boundary or
-   what any doc states, so the design doc carries no section for it.
+8. **Phase 8 — the nesting inside the stages** — landed 2026-09-02, in
+   four commits: three lifts inside `trackerRebuild.lua`, none of which
+   changes what crosses a boundary or what any doc states.
 
 ## Landed  (newest first; prune below ~4)
 
