@@ -13,11 +13,23 @@
 -- Each case snapshots every authored note's `endppqC` before the region is assigned and compares
 -- after the rebuild, over both halves of the population. The region parks its input note, so the
 -- comparison spans the park: parking moves a note between the halves and moves no bound.
+--
+-- The third case turns it around, with the parked half doing the bounding. Its two notes share a
+-- lane, so the region's input is the tail's lane successor and parking it must not release the
+-- clip. That channel is swung, which puts the successor's row and its raw position at different
+-- numbers -- a bound read in the wrong frame lands somewhere else entirely.
 
 local t    = require('support')
 local util = require('util')
 
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
+
+-- classic-55: the principal at x=0.5 maps to 0.55 of the period, so logical 1140 realises at 1148.
+local c55 = {
+  config = { project = { swings = { c55 = {
+    factors = { { atom = 'classic', shift = 0.05, period = 1 } } } } } },
+  data   = { swing = { global = 'c55' } },
+}
 
 local function note(chan, ppq, endppq, pitch, lane)
   return { evType = 'note', ppq = ppq, endppq = endppq, chan = chan, pitch = pitch,
@@ -121,6 +133,39 @@ return {
       t.eq(authoredAt(h, 1, 0).endppqC, 480, 'the tail still ends at its ceiling')
       t.deepEq(boundsOn(h, 1), before,
         'and no authored note on the channel, on take or parked, has moved')
+    end,
+  },
+
+  {
+    -- Both notes on lane 1, so the row-0 tail is clipped by its successor at 1140 well short of
+    -- its own ceiling at 1440. The region then parks that successor. The columns no longer carry
+    -- it, but the lane geometry still does, so the clip stands exactly where it stood.
+    --
+    -- This case asserts over the tail alone, where the other two sweep the whole population. The
+    -- successor's own bound is written two ways -- through the tail walk's raw round trip on take,
+    -- by the stash render once parked -- and under swing those disagree in the last bits. That is
+    -- the drift design/lane-bound.md § Open 3 records, and phase 1's business, not this case's.
+    name = 'a successor parked this pass keeps bounding the tail before it, on a swung channel',
+    run = function(harness)
+      local h = harness.mk(c55)
+      h.tm:addEvent(note(1, 0,    1440, 60, 1))   -- a ceiling well past its lane successor
+      h.tm:addEvent(note(1, 1140, 1320, 67, 1))   -- the region's input, sharing the lane
+      h.tm:flush()
+
+      t.eq(#h.tm:getChannel(1).onTake.notes, 1, 'fixture check: one lane, so one note clips the other')
+      t.truthy(h.tm:fromLogical(1, 1140) ~= 1140, 'fixture check: the swing bites at the clipping row')
+
+      local clipped = authoredAt(h, 1, 0).endppqC
+      t.truthy(clipped < 1440, 'fixture check: the successor clips the tail, its own ceiling never reached')
+
+      region(h)
+
+      local stashed = h.tm:getChannel(1).parked.notes
+      t.eq(#stashed, 1, 'precondition: the region parked its input, so the clipping note left the take')
+      t.eq(stashed[1].ppq, 1140, 'precondition: and it is the lane successor that left')
+
+      t.eq(authoredAt(h, 1, 0).endppqC, clipped, 'the tail keeps the bound its successor gave it')
+      t.eq(stashed[1].endppqC, 1320, 'the successor, off the take, sounds to its own ceiling still')
     end,
   },
 

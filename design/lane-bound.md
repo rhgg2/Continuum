@@ -113,6 +113,12 @@ number reaches mm.
    the floor to bind, on a channel with delay or swing, is where they
    part.
 
+1. Computing a lane bound through raw loses its successor's row under
+   swing. `boundNote` converts the successor's `ppqL` with
+   `time:fromLogical`, which rounds to a whole tick, and writes
+   `endppqC` back through `time:toLogical`, which does not. A successor
+   at logical 1140 on a classic-55 channel leaves a bound of 1139.45.
+
 1. The frontier and linear walks split the cost of a whole-channel
    traversal. Whether the wire pass, asking only about pitch, still
    wants both is a question for after the lane pass lands.

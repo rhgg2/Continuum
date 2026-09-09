@@ -36,7 +36,7 @@ local fxNotesByHost = {}
 
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
 
--- CCINTERP is interpolated points per QN; the densify grid needs a tick step
+-- CCINTERP is interpolated points per QN; densification consumes a tick step
 local function ccGridStep()
   return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
 end

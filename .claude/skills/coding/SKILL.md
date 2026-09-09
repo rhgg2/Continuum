@@ -28,76 +28,39 @@ are the house guidelines for doing so.
 1. Tables crossing a pass boundary get role-named fields (`xLo`/`xHi`,
    `chanLeft`, `pitchWidth`, `viewRows`) rather than bare coordinates.
 
-1. Section banners: `----- Name`. Major: `---------- PUBLIC`.
-
 ## Comments
 
-1. `--KIND:` annotations in source carry single-line claims about the
-   construct they sit above. `docs/CONVENTIONS.md` has the full rules;
-   these are the operative ones.
+1. `--KIND:` annotations carry single-line claims about the construct
+   they sit above. `docs/CONVENTIONS.md` has the rules — the kinds,
+   the predicate notation, the caps. Below are the ones that go wrong
+   quietly.
 
-1. `--pre:` states what the caller is obliged to satisfy before
-   calling, `--post:` what the callee guarantees given the pre, and
-   `--invariant:` what the callee expects to hold and guarantees to
-   preserve. Each states its claim alone, with no commentary.
-
-1. Each states a predicate with a non-trivial truth-value. One that
-   does not constrain behaviour belongs in `--shape:` or `docs/`. Note
-   that `none` is a predicate with a *trivial* truth value.
-   
-1. Use Boolean operators, but carefully. "iff", "if" and "only if"
-   have precise meanings; use reason to determine which the predicate
-   needs. Parenthesise to avoid ambiguity. 
-
-1. The predicates do not restate the call graph or module
-   dependencies, which `.map` derives. Nor do they restate the code,
-   holding tautologically under the callee's current implementation
-   but failing under any rewrite.
-
-1. Rather they state non-local or caller-facing constraints: an
+1. They do not restate the code, holding tautologically under the
+   callee's current implementation but failing under any rewrite.
+   Rather they state non-local or caller-facing constraints: an
    ownership tag, a copy made somewhere else, a silent no-op the
    caller cannot see happen, a promise that binds the next edit.
-
-1. `pre` and `post` want a callable to attach to; a module
-   takes only `invariant`.
 
 1. A post states its own callable's guarantee. A property of the system
    around it is a module invariant, however apt the site.
 
-1. `result` names the return, an iterator being `result = (…)
-   iterator` with the ownership word on what it yields. `fresh result`
-   aliases no callee state and is the caller's; `live result` is
-   aliased and safely mutable; `unsafe result` is aliased, read-only
-   and of ephemeral validity.
-   
-1. State change is assignment, `t[k] := v`, right-hand names being
-   entry values. A conditional post is `(C) → consequence`, and the
-   inert case leads, `no-op iff C; else …`. A boolean is `result =
-   (P)`. One claim per line.
+1. "iff", "if" and "only if" have precise meanings; use reason to
+   determine which the predicate needs.
 
 1. `--contract:` is the legacy kind pre/post replace. Convert one when
    you touch it; don't write new ones.
 
-1. `--pre:`, `--post:`, `--invariant:`, `--contract:`, `--emits:`,
-   `--reaper:`: one line, capped at 100 chars, aim for 90.
-
-1. `--shape:` describes the shape of a table: field names, types, and
-   nesting, but not prose; capped at 400 chars.
-
-1. For specs under `tests/`, the file header and the preamble above each
-   case are the documentation, and can run as long as they need to.
-
-1. Other comment runs cap at 2 lines. Anything longer belongs in
-   `docs/<file>.md` with a one-line pointer at the site (`-- see
-   docs/<file>.md § <section>`).
+1. Annotations cap at one line of 100 chars, `--shape:` at 400, other
+   comment runs at 2 lines — longer belongs in `docs/<file>.md` with a
+   pointer at the site. Specs are exempt: a spec's header and its case
+   preambles are the documentation, and run as long as they need.
 
 ## util.lua
 
 The idioms that recur in the code.
 
 - `util.add(t, v)` for `t[#t+1] = v`
-- `util.bucket(t, k, v)` appends `v` to a table under `t[k]`, creating
-  it if `nil`.
+- `util.bucket(t, k, v)` appends to the list at `t[k]`, creating it if nil.
 - `util.assign(t1, t2)` merges keys of `t2` into `t1`; clear a key with
   the sentinel `util.REMOVE`.
 - `util.clone(src, exclude)` (shallow) and `util.deepClone` (deep).
@@ -114,9 +77,8 @@ The idioms that recur in the code.
 - `util.atomic(label, fn)` wraps a call as one REAPER undo block.
 - `util.instantiate(name, deps)` runs a factory module, and is the test
   seam via `util._stubs`.
-- Persistence: `util.serialise`/`unserialise` for the escaped P_EXT wire
-  form, `util.prettySerialise`/`prettyUnserialise` for a hand-editable
-  Lua literal.
+- Persistence: `util.serialise`/`unserialise` (escaped P_EXT wire form),
+  `util.prettySerialise`/`prettyUnserialise` (hand-editable Lua literal).
 
 ## Tests
 

@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-09** — The lane bound's exactness under swing splits across two phases. Phase 0's net
+  asserts only that parking a lane successor leaves the tail's bound where it stood, because that
+  bound reads 1139.45 against a successor at logical 1140: boundNote converts through
+  time:fromLogical, which rounds to a whole tick, and writes back through time:toLogical, which does
+  not. Asserting the exact bound now would carry a red through phase 0, so it becomes phase 1's
+  red-first spec instead.
+
 - **2026-09-03** — The clip cache's reuse test moves to the derivation journal: a cached clip stands
   while the channel's dirt neither names the event nor touches its cached span. The span question
   reaches the row a neighbour moved to and not just the seat it left, so a note moving into a cached

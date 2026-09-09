@@ -18,7 +18,9 @@
    the successor's `ppqL` plus `overlap`, `takeLenL` and a logical
    floor, writes `endppqC` with no conversion, and converts once for the
    wire bound. No code moves; the two implementations become the same
-   expression.
+   expression. Red-first: on a swung channel a tail clipped by its lane
+   successor bounds exactly at the successor's row, which reads 1139.45
+   today (§ Open 3).
 3. **Phase 2 — one expression** (§ The lane span 4) —
    `frame.clippedSpanEnd` takes the lane population, `boundNote` calls
    it, and `parkedBoundFor` goes: the parked half arrives through
@@ -31,11 +33,12 @@
    its dirt guard and `rebuild.forget` go, the lane pass's output
    carrying with the channel frame. `tm_clip_cache_spec` and
    `tm_fx_window_cache_spec` restate against the carry.
-6. **Phase 5 — the walk shrinks** (§ Open 3) — the frontier and linear
+6. **Phase 5 — the walk shrinks** (§ Open 4) — the frontier and linear
    walks reassessed now that the walk asks only about pitch.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-09 tm: pin a swung tail's lane bound across its successor parking (§ Two populations)
 - 2026-09-09 tm: pin the authored lane bound against the pass's fx output (§ Two populations)
 
 ## Now
@@ -44,5 +47,4 @@
 
 ## Queued (current phase; one-liners)
 
-- Phase 0: spec — a note parked this pass bounds a preceding on-take tail in its lane, on a swung channel
 - Phase 0: spec — one fixture over `FRONTIER_SEED_CAP` and one under it derive the same frame
