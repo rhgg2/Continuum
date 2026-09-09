@@ -806,6 +806,11 @@ splice the column clone. Tagged `evt.fixed = true`: the tail walk freezes its
 onset (the same-pitch clamp skips it) but clips its tail like any other note,
 and it blocks neighbours' tails as a 'next' lookup.
 
+The seat stamp lands after the batch commit. A foreign note enters um's
+index with the write that gives it its logical seat, so an earlier stamp
+would find no entry, and the tail walk would meet a column event it
+cannot reach.
+
 ### Sample stamp
 
 `stampSamples` runs under trackerMode only (§ PC synthesis). Every note
@@ -937,9 +942,10 @@ logical, so it falls on the row it means. The wire bound is the only value
 that reaches mm.
 
 Same-lane uses INTENT (`ppqL`) so authored music geometry wins over
-realisation delays. Same-pitch uses RAW because MIDI physics is realised.
-"Next" is strict-greater on raw ppq — a chord-mate at the same onset is
-not following.
+realisation delays, and the authored population is read in column order,
+so the successor is the next onset drawn. Same-pitch uses RAW because
+MIDI physics is realised. "Next" is strict-greater — a chord-mate at the
+same onset is not following.
 
 Why the split, and why it is not symmetric: a column is monophonic — a
 note ends at the next onset in its own lane — and that would hold if MIDI
@@ -960,12 +966,16 @@ tie-break): the successor is nudged to `prev.ppq + 1`
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 
-Parked members bound on-take tails' lanes too: a parked event has already
-left the columns, but its lane geometry still applies to a preceding
-on-take tail sharing that lane. Parked is off-take, so it never bounds
-the wire (pitch), and a region's own tiles never read parked bounds at
-all — they'd already be cut by the members they replaced. Only on-take
-notes read them.
+An authored note takes its lane bound from `frame.clippedSpanEnd` over
+its lane's authored population (§ Lane occupancy), and the walk states
+the bound only for the derived notes, which sit on lanes the region
+allocator gave them.
+
+The parked half of that population is why: a parked event has left the
+columns, and its lane geometry still applies to a preceding on-take tail
+sharing the lane. Parked is off-take, so it never bounds the wire
+(pitch), and a region's own tiles never read parked bounds at all —
+they'd already be cut by the members they replaced.
 
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any

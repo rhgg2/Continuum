@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-09** — An external's seat stamp lands after the externals batch commits. A foreign note
+  enters um's index with the write that gives it its logical seat, so a stamp before the commit
+  finds no entry and is dropped for good, leaving the tail walk holding a column event it cannot
+  reach.
+
 - **2026-09-10** — The one expression for the lane bound carries `overlap`, so an fx host's window
   end and a parked event's render clip now stand where the note is drawn rather than at the bare
   successor onset. Its spec pins that widening in place of the planned 'one event under two

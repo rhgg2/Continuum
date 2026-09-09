@@ -178,6 +178,27 @@ return {
   },
 
   {
+    -- The externals step adopts a foreign note onto a column, and its tail then clips like any
+    -- other note's. The take length is a term of the lane bound, so a tail seeded past the take end
+    -- is drawn to that end -- the same end the wire already stops at, since mm holds no note-off
+    -- past its take. The two frames state one geometry; a column left at the seeded number would
+    -- draw a tail nothing sounds. See docs/trackerManager.md § Tail walk.
+    name = 'an external note is drawn to the take end its wire stops at',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 1920 } }
+      -- Arriving after tm attached, so the pass that adopts it is a pass of its own.
+      h.fm:modify(function()
+        h.fm:add{ evType = 'note', ppq = 240, endppq = 3000, chan = 1, pitch = 60, vel = 100 }
+      end)
+      local evt  = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local wire = h.fm:dump().notes[1]
+      t.truthy(evt, 'precondition: the note was adopted onto a column')
+      t.eq(wire.endppq, 1920, 'fixture check: the seeded tail ran past the take end, and the wire stops there')
+      t.eq(evt.endppqC, 1920, 'the drawn bound stops there too')
+    end,
+  },
+
+  {
     name = 'distinct pitches on same ppq share a channel in separate lanes',
     run = function(harness)
       local h = harness.mk{

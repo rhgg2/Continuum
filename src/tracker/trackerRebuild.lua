@@ -671,6 +671,7 @@ local function rebuildExternals(external, time)
   util.sortByPPQ(external)
   local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
+  local seated      = {}
   for _, note in ipairs(external) do
     local delay     = note.delay or 0
     local d         = delayToPPQ(delay)
@@ -688,10 +689,13 @@ local function rebuildExternals(external, time)
     colNote.fixed = true
     projectEvent(colNote, note.chan, time)
     frame.spliceEvent(note.chan, lane, colNote)
-    index.stampColEvt(colNote)
+    util.add(seated, colNote)
     extWrites.assign(colNote, update)
   end
   extWrites.commit()
+  -- The seat stamp waits for the commit: a foreign note enters um's index with the write that gives
+  -- it its logical seat, so before that there is no entry to stamp.
+  for _, colNote in ipairs(seated) do index.stampColEvt(colNote) end
 end
 
 ----- Rebuild sample stamp
@@ -1905,12 +1909,12 @@ end
 
 -- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
 -- their batches and marking tables and drive the same rules over their own state.
---shape: ctx = { chan, res, time, disturbed, nudged, clampWrites, tailWrites, parkedBoundFor }
+--shape: ctx = { chan, res, time, disturbed, nudged, clampWrites, tailWrites }
 local function makeTailRules(ctx)
   local chan, res, time = ctx.chan, ctx.res, ctx.time
   local takeLenL = time:toLogical(chan, time:length())
   local disturbed, nudged = ctx.disturbed, ctx.nudged
-  local clampWrites, tailWrites, parkedBoundFor = ctx.clampWrites, ctx.tailWrites, ctx.parkedBoundFor
+  local clampWrites, tailWrites = ctx.clampWrites, ctx.tailWrites
 
   local function settleOnset(e, prev)
     local onset = voicing.separateOnset(e, prev)
@@ -1929,21 +1933,21 @@ local function makeTailRules(ctx)
     return true
   end
 
+  -- An authored note's lane bound is the frame's one expression over its lane's whole authored
+  -- population; a derived note is outside that population and bounds off the walk's own successor.
+  --pre: (not e.derived) → e carries its column event -- every seated note is stamped as it seats
   local function boundNote(e, laneNext, pitchNext)
-    local onTake  = not e.derived
-    local ceiling = e.endppqL == util.OPEN and math.huge or e.endppqL or math.huge
-    -- On-take tails clip against parked members' lanes too -- the columns no longer carry the event,
-    -- but the lane geometry still does. See docs/trackerManager.md § Tail walk.
-    local laneAnchor = laneNext
-    if onTake then
-      local parked = parkedBoundFor(e)
-      if parked and (laneAnchor == nil or parked.ppqL < laneAnchor.ppqL) then laneAnchor = parked end
+    local laneBound
+    if e.derived then
+      local ceiling  = e.endppqL == util.OPEN and math.huge or e.endppqL or math.huge
+      local laneClip = laneNext and laneNext.ppqL + (e.overlap or 0) or math.huge
+      laneBound = math.max(e.ppqL + 1, math.min(ceiling, laneClip, takeLenL))
+    else
+      laneBound = frame.clippedSpanEnd(e.colEvt, takeLenL, frame.authoredEvents(chan, e.lane))
     end
-    local laneClip  = laneAnchor and laneAnchor.ppqL + (e.overlap or 0) or math.huge
     local pitchClip = pitchNext and pitchNext.ppq or math.huge
     -- Two bounds: the lane bound is intent, every term of it logical, and it drives the column; the
     -- wire bound converts it once and alone reaches mm. see docs/trackerManager.md § Tail walk
-    local laneBound = math.max(e.ppqL + 1, math.min(ceiling, laneClip, takeLenL))
     local rawBound  = math.max(e.ppq + 1, math.min(time:fromLogical(chan, laneBound), pitchClip))
     local rounded   = util.round(rawBound)
     if rounded ~= e.endppq then
@@ -1963,12 +1967,12 @@ end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Tail walk
-local function linearTails(chan, notes, parkedBoundFor, time, res, clampWrites, tailWrites, keptDerived)
+local function linearTails(chan, notes, time, res, clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, time = time,
     disturbed = disturbed, nudged = nudged,
-    clampWrites = clampWrites, tailWrites = tailWrites, parkedBoundFor = parkedBoundFor,
+    clampWrites = clampWrites, tailWrites = tailWrites,
   }
 
   -- Disturbed seeded by name: derived membership + the seeds themselves, survivors resolved by uuid,
@@ -2151,13 +2155,13 @@ end
 
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal.
-local function frontierTails(chan, indexList, extras, parkedBoundFor, time, res,
+local function frontierTails(chan, indexList, extras, time, res,
                              clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, time = time,
     disturbed = disturbed, nudged = nudged,
-    clampWrites = clampWrites, tailWrites = tailWrites, parkedBoundFor = parkedBoundFor,
+    clampWrites = clampWrites, tailWrites = tailWrites,
   }
 
   -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
@@ -2271,32 +2275,16 @@ local function rebuildTails(noteLive, noteOps, time)
       if w.kept then keptDerived[w.evt] = true else freshLive = freshLive + 1 end
     end
 
-    -- Parked members left the columns but still bound a preceding on-take tail in their lane --
-    -- the symmetric partner of clipParked's on-take bounds. Bound-only: never rewritten below.
-    local parkedBounds = {}
-    for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-      util.add(parkedBounds, { ppqL = evt.ppq, lane = evt.lane })
-    end
-    -- A handful of events at most, asked only for the notes the walk bounds: scanned, not indexed.
-    local function parkedBoundFor(e)
-      local nearest
-      for _, b in ipairs(parkedBounds) do
-        if b.lane == e.lane and b.ppqL > e.ppqL
-           and (nearest == nil or b.ppqL < nearest.ppqL) then nearest = b end
-      end
-      return nearest
-    end
-
     -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
     -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
     local indexedNotes = index.raw(chan).notes
     local emitted
     if not dirt.wholesale(chan) and #dirt.has(chan) + freshLive <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, indexedNotes, extras, parkedBoundFor, time, res, clampWrites, tailWrites, keptDerived)
+      emitted = frontierTails(chan, indexedNotes, extras, time, res, clampWrites, tailWrites, keptDerived)
     else
       local notes = mergeIndexed(indexedNotes, isAuthored, extras)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, parkedBoundFor, time, res, clampWrites, tailWrites, keptDerived)
+      emitted = linearTails(chan, notes, time, res, clampWrites, tailWrites, keptDerived)
     end
 
     -- The walk's own dirt joins what it was given: past the cap the channel collapses to wholesale,

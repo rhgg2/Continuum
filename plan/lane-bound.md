@@ -37,19 +37,13 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-09 tm: bound an on-take note through the frame's expression (§ The lane span)
 - 2026-09-10 tm: give the lane bound its population (§ The lane span)
 - 2026-09-10 tm: state the lane bound in the logical frame (§ The lane span)
 - 2026-09-10 tm: pin the frontier and linear walks to the same frame (§ The lane pass)
-- 2026-09-09 tm: pin a swung tail's lane bound across its successor parking (§ Two populations)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-- **`boundNote` bounds an on-take note through `frame.clippedSpanEnd`.**
-  Its on-take arm of the expression goes, and the subject is the entry's
-  column event. `parkedBoundFor` and its `parkedBounds` shim go from
-  `rebuildTails` and from both walk signatures; `laneNext` stays for the
-  derived notes. Spec: a lane whose successor is parked and one whose
-  successor is on take get their bounds by the one route.
