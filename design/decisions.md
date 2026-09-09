@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-10** — The frontier and the linear tail walk are held to one frame by varying the
+  granularity of a single edit: the same twenty deletions in one flush seed twenty and route linear,
+  and in four flushes of five route the frontier each time. FRONTIER_SEED_CAP is a local of
+  trackerRebuild, so no spec can observe which walk ran; the seed counts are arithmetic against the
+  value it holds.
+
 - **2026-09-09** — The lane bound's exactness under swing splits across two phases. Phase 0's net
   asserts only that parking a lane successor leaves the tail's bound where it stood, because that
   bound reads 1139.45 against a successor at logical 1140: boundNote converts through

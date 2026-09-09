@@ -38,6 +38,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-10 tm: pin the frontier and linear walks to the same frame (§ The lane pass)
 - 2026-09-09 tm: pin a swung tail's lane bound across its successor parking (§ Two populations)
 - 2026-09-09 tm: pin the authored lane bound against the pass's fx output (§ Two populations)
 
@@ -47,4 +48,4 @@
 
 ## Queued (current phase; one-liners)
 
-- Phase 0: spec — one fixture over `FRONTIER_SEED_CAP` and one under it derive the same frame
+(empty)

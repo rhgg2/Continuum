@@ -113,6 +113,7 @@ local specs = {
   'tm_reseat_collision_spec',
   'tm_interval_walk_spec',
   'tm_seek_walk_spec',
+  'tm_walk_parity_spec',
   'tm_pa_attachment_spec',
   'tm_pa_swung_translation_spec',
   'tm_conform_tail_spec',
