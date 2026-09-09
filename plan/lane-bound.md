@@ -48,4 +48,17 @@
 
 ## Queued (current phase; one-liners)
 
-(empty)
+- **`frame.clippedSpanEnd` takes the lane population.** The successor
+  seek moves off `frame.nextOnLane` onto a strict-next scan of the
+  passed list, skipping the pa events the note column carries, and
+  `overlap` joins the expression. The clip cache, `tm:freezeFx`'s two
+  host-window sites and `clipNoteHosts`'s `nextSameLaneNote` pass
+  `frame.authoredEvents`, and `nextOnLane`'s column-plus-parked merge
+  dissolves into the union it is handed. Spec: one event under two
+  populations gives two bounds.
+- **`boundNote` bounds an on-take note through `frame.clippedSpanEnd`.**
+  Its on-take arm of the expression goes, and the subject is the entry's
+  column event. `parkedBoundFor` and its `parkedBounds` shim go from
+  `rebuildTails` and from both walk signatures; `laneNext` stays for the
+  derived notes. Spec: a lane whose successor is parked and one whose
+  successor is on take get their bounds by the one route.

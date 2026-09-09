@@ -31,6 +31,11 @@ number reaches mm.
    written. It takes the lane's population, so a caller chooses which
    population it asks about.
 
+1. Its subject is a member of a population and carries the same shape:
+   the column event, whose `ppq` is the logical onset and whose
+   `endppq` is the ceiling. A caller holding a raw-frame entry reaches
+   its column event by the seat stamp.
+
 ## Two populations
 
 1. A lane's population has two halves, the column's events and the
