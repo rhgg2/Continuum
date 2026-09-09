@@ -95,6 +95,7 @@ local specs = {
   'tm_cc_gating_spec',
   'tm_note_lane_carry_spec',
   'tm_lane_population_spec',
+  'tm_lane_bound_spec',
   'tm_parked_carry_spec',
   'tm_clip_cache_spec',
   'tm_tail_gating_spec',

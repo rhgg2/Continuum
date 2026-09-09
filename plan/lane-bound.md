@@ -36,7 +36,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(none)
+- 2026-09-09 tm: pin the authored lane bound against the pass's fx output (§ Two populations)
 
 ## Now
 
@@ -44,6 +44,5 @@
 
 ## Queued (current phase; one-liners)
 
-- Phase 0: spec — fx output on a channel leaves every authored note's `endppqC` where the authored population put it
 - Phase 0: spec — a note parked this pass bounds a preceding on-take tail in its lane, on a swung channel
 - Phase 0: spec — one fixture over `FRONTIER_SEED_CAP` and one under it derive the same frame

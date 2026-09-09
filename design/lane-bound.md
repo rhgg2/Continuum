@@ -1,6 +1,6 @@
 # The lane bound — design
 
-> opened: 2026-08-09 · status: in-flight
+> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 0.
 
 **A note's tail is two numbers in two frames: the lane bound is logical
 and the wire bound is raw.** One expression states the lane bound, one
@@ -46,10 +46,12 @@ number reaches mm.
    the `endppqC` of a derived note, which sits on a lane the region
    allocator gave it.
 
-1. `allocateRegionLanes` seeds occupancy from the authored spans, so a
-   derived note takes a lane only where the authored population has
-   already ended. An authored note's lane bound is therefore a function
-   of the authored population alone, and fx expansion cannot move it.
+1. `allocateRegionLanes` seeds occupancy from the on-take spans, and a
+   parked host's tiles occupy the lane it left. A lane's on-take
+   successor is never earlier than its authored one, and derived output
+   lies inside its region's window. So a derived note takes a lane only
+   where the authored population has already ended, and fx expansion
+   cannot move an authored note's lane bound.
 
 ## The lane pass
 
