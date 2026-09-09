@@ -547,7 +547,7 @@ was dormant gets consumed, and when there is none this gate stops the pass.
 `channels` map swaps each pass — `newPass` mints the fresh one and hands the
 old back for the carry-forward loop to read the clean channels out of — and
 the operations that seat events travel on the handle beside it: `spliceEvent`,
-`setEvent`, `renewLane`, `markRenewed`, `orderLane` and `nextOnLane`. Events are
+`setEvent`, `renewLane`, `markRenewed` and `orderLane`. Events are
 self-describing, so each takes the frame's own coordinates.
 
 The engine is instantiated once with what the two files share: `mm`, `cm`,
@@ -1164,7 +1164,7 @@ no delay and swing is monotone, the raw-frame cover equals the logical-frame cov
 via `time:fromLogical` before the walk. "Authored" means the cents sidecar is present (seats and
 foreign pbs carry none).
 
-`nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane (§ Lane occupancy), so
+`nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane population (§ Lane occupancy), so
 a parked host has a successor despite being off-take, and a parked successor is the
 target a slide aims at. The subject is the *host's* lane rather than the stream note's: a
 region spans lanes, carries none, and resolves to nil, which is also what keeps a region-hosted
@@ -1189,11 +1189,11 @@ replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, n
 ## Lane occupancy
 
 A lane's authored notes are its column's events together with the parked events that have left the
-take, and one clip reads both halves. `frame.clippedSpanEnd` returns an event's own ceiling — its authored
-`endppq`, or the take length — clipped to the strict-next authored onset on its lane. An fx
-host's window end and a parked event's render clip are that same number, and one seek finds the
-successor that bounds both: `frame.nextOnLane` takes the nearer of the column's next event and the
-lane's next parked one.
+take, and a clip is asked of that population. `frame.clippedSpanEnd` returns an event's own ceiling
+— its authored `endppq`, or the take length — clipped to the strict-next onset of the population it
+is handed plus the event's own `overlap`. The population is an argument, so a caller chooses which
+lane it asks about, and `frame.nextOnLane` is the seek over it. An fx host's window end and a parked
+event's render clip are that same number.
 
 Parking takes no onset out of that population, so a window stands where it stood. A note moves
 between the halves and the lane it occupies is unchanged, and a host's chain stops at a successor

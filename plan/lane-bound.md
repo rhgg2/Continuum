@@ -37,25 +37,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-10 tm: give the lane bound its population (§ The lane span)
 - 2026-09-10 tm: state the lane bound in the logical frame (§ The lane span)
 - 2026-09-10 tm: pin the frontier and linear walks to the same frame (§ The lane pass)
 - 2026-09-09 tm: pin a swung tail's lane bound across its successor parking (§ Two populations)
-- 2026-09-09 tm: pin the authored lane bound against the pass's fx output (§ Two populations)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **`frame.clippedSpanEnd` takes the lane population.** The successor
-  seek moves off `frame.nextOnLane` onto a strict-next scan of the
-  passed list, skipping the pa events the note column carries, and
-  `overlap` joins the expression. The clip cache, `tm:freezeFx`'s two
-  host-window sites and `clipNoteHosts`'s `nextSameLaneNote` pass
-  `frame.authoredEvents`, and `nextOnLane`'s column-plus-parked merge
-  dissolves into the union it is handed. Spec: one event under two
-  populations gives two bounds.
 - **`boundNote` bounds an on-take note through `frame.clippedSpanEnd`.**
   Its on-take arm of the expression goes, and the subject is the entry's
   column event. `parkedBoundFor` and its `parkedBounds` shim go from

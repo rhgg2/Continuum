@@ -19,16 +19,22 @@
 -- clip. That channel is swung, which puts the successor's row and its raw position at different
 -- numbers -- a bound read in the wrong frame lands somewhere else entirely.
 --
--- The last two cases pin the frame the bound is stated in. Every term of a lane bound is logical --
+-- The next two cases pin the frame the bound is stated in. Every term of a lane bound is logical --
 -- the ceiling, the successor's onset, the take length and the floor -- so the number a note is drawn
 -- to is a row, and the wire bound is that row converted once. Swing separates a row from its raw
 -- position and delay moves a raw onset off its row, so between them the two readings come apart.
 -- See design/lane-bound.md § The lane span and § The wire pass.
+--
+-- The last case pins how far the one expression reaches. `overlap` is a term of the lane bound, so a
+-- note carrying one is drawn past its lane successor -- and the fx window its chain runs in closes on
+-- that same number. The tail walk and the window census are two readers of one statement.
 
 local t    = require('support')
 local util = require('util')
 
-local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
+local arpUp  = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
+-- Continuous, so the host keeps its place on the take: what it writes is a pb stream across its window.
+local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 -- classic-55: the principal at x=0.5 maps to 0.55 of the period, so logical 1140 realises at 1148.
 local c55 = {
@@ -83,6 +89,15 @@ local function lanesWithin(derived, from, to)
   local out = {}
   for _, d in ipairs(derived) do if d.ppq >= from and d.ppq < to then out[d.lane] = true end end
   return out
+end
+
+-- The last pb seat a channel carries: where the chain writing it stopped, and so where its window closed.
+local function lastPbSeat(h, chan)
+  local last
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.chan == chan and (last == nil or c.ppq > last) then last = c.ppq end
+  end
+  return last
 end
 
 -- One arp region over [960, 1920), fed by the lane-2 note the window covers and parks.
@@ -220,6 +235,29 @@ return {
 
       t.eq(evt.endppqC, evt.ppq + 1, 'the lane bound is the row after the onset')
       t.eq(wire.endppq, wire.ppq + 1, 'and the wire bound the tick after the realised onset')
+    end,
+  },
+
+  {
+    -- A host with an open ceiling and an overlap of 120, sharing its lane with a note at 480. The
+    -- overlap overruns that onset, so the host sounds to 600 and is drawn there -- and its chain runs
+    -- the same span, since a host's window end is its lane bound. The pb stream the chain writes is
+    -- where that shows: a seat past 480 says the window followed the tail over its successor's onset.
+    name = "a host's fx window closes at its lane bound, overlap included",
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(util.assign(note(1, 0, util.OPEN, 60, 1), { overlap = 120, fx = sine30 }))
+      h.tm:addEvent(note(1, 480, 600, 62, 1))
+      h.tm:flush()
+
+      local tail = authoredAt(h, 1, 0)
+      t.eq(tail.endppqC, 600,
+        "fixture check: an open ceiling, so the successor's onset plus the overlap is the bound")
+
+      local last = lastPbSeat(h, 1)
+      t.truthy(last, 'precondition: the host ran its chain')
+      t.truthy(last >= 480, "the window follows the tail past its successor's onset")
+      t.truthy(last < tail.endppqC, 'and closes inside the bound the tail is drawn to')
     end,
   },
 

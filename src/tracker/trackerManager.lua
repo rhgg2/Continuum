@@ -207,30 +207,24 @@ do
     return memoUnion(col and col.events or noEvents, parked, ppqLess)
   end
 
-  -- Span end: an event's own ceiling (authored endppq or take length) clipped to the lane's strict-next
-  -- onset (see docs/trackerManager.md § Lane occupancy); takeLenL is hoisted by the caller, not read from event/mm.
-  function frame.clippedSpanEnd(evt, takeLenL)
+  -- Lane bound (docs/trackerManager.md § Lane occupancy); floored a tick past the event's own onset.
+  -- takeLenL is hoisted by the caller, not read from event/mm.
+  function frame.clippedSpanEnd(evt, takeLenL, population)
     local ceil = (evt.endppq == nil or evt.endppq == util.OPEN) and takeLenL
                  or math.min(evt.endppq, takeLenL)
-    local successor = frame.nextOnLane(evt.chan, evt.lane, evt.ppq)
-    return math.max(evt.ppq + 1, math.min(ceil, successor and successor.ppq or math.huge))
+    local successor = frame.nextOnLane(population, evt.ppq)
+    local laneClip  = successor and successor.ppq + (evt.overlap or 0) or math.huge
+    return math.max(evt.ppq + 1, math.min(ceil, laneClip))
   end
 
-  -- Strict-next authored note on a lane: chord-mates share an onset, so the seek is strict, and a
+  -- Strict-next note of a lane population: chord-mates share an onset, so the seek is strict, and a
   -- PA holds no lane of its own and never answers. See docs/trackerManager.md § Lane occupancy.
-  --post: unsafe result = the lane's next authored note strictly after ppq, on take or parked
-  function frame.nextOnLane(chan, lane, ppq)
-    local found
-    local col = frame.channels[chan].onTake.notes[lane]
-    if col then
-      for i = util.firstAfter(col.events, ppq), #col.events do
-        if col.events[i].evType ~= 'pa' then found = col.events[i]; break end
-      end
+  --pre: population holds one lane's events in column order
+  --post: unsafe result = the population's next note strictly after ppq
+  function frame.nextOnLane(population, ppq)
+    for i = util.firstAfter(population, ppq), #population do
+      if population[i].evType ~= 'pa' then return population[i] end
     end
-    local bucket = frame.parkedOnLane(chan, lane)
-    local parked = bucket[util.firstAfter(bucket, ppq)]
-    if parked and (not found or parked.ppq < found.ppq) then found = parked end
-    return found
   end
 
   -- Re-true a lane appended to in bulk: a raw->logical flip crossing two onsets is what disorders
@@ -1333,7 +1327,8 @@ local function freezeRegion(uuid, toGroup)
     end
     if hostSpec then
       hostRegion = fxWindows.fromNote(hostSpec,
-                                      frame.clippedSpanEnd(hostSpec, tm:toLogical(hostSpec.chan, tm:length())))
+                                      frame.clippedSpanEnd(hostSpec, tm:toLogical(hostSpec.chan, tm:length()),
+                                                           frame.authoredEvents(hostSpec.chan, hostSpec.lane)))
     else
       -- byUuid is the raw-frame index entry and .colEvt its stamped logical event, so the window comes
       -- off the event and the assign off the entry. An unstamped (just-restored) host declines.
@@ -1341,7 +1336,8 @@ local function freezeRegion(uuid, toGroup)
       if evt and evt.fx then
         onTakeHost = index.byUuid(uuid)
         hostRegion = fxWindows.fromNote(evt,
-                                        frame.clippedSpanEnd(evt, tm:toLogical(evt.chan, tm:length())))
+                                        frame.clippedSpanEnd(evt, tm:toLogical(evt.chan, tm:length()),
+                                                             frame.authoredEvents(evt.chan, evt.lane)))
       end
     end
   end

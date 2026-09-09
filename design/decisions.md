@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-10** — The one expression for the lane bound carries `overlap`, so an fx host's window
+  end and a parked event's render clip now stand where the note is drawn rather than at the bare
+  successor onset. Its spec pins that widening in place of the planned 'one event under two
+  populations gives two bounds': every caller passes the authored population until the walk's
+  derived half joins in phase 3, and the frame is engine-internal, so two populations have no public
+  surface to assert against yet.
+
 - **2026-09-10** — The frontier and the linear tail walk are held to one frame by varying the
   granularity of a single edit: the same twenty deletions in one flush seed twenty and route linear,
   and in four flushes of five route the frontier each time. FRONTIER_SEED_CAP is a local of

@@ -160,7 +160,7 @@ do
               and not dirt.touches(evt.chan, evt.ppq, cached) then
       return cached
     end
-    local clipped = frame.clippedSpanEnd(evt, takeLenL)
+    local clipped = frame.clippedSpanEnd(evt, takeLenL, frame.authoredEvents(evt.chan, evt.lane))
     cache[evt.uuid] = clipped
     return clipped
   end
@@ -1539,7 +1539,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   local function nextSameLaneNote(host)
     local note = host.notes[1]
     if not note or not host.lane then return nil end
-    return frame.nextOnLane(host.chan, host.lane, note.ppq)
+    return frame.nextOnLane(frame.authoredEvents(host.chan, host.lane), note.ppq)
   end
   -- No notation in here: a generator's pitch demands are cents, so the temper is read by the gestures
   -- that author them and never by this pass. see docs/generators.md § The ctx discipline
