@@ -87,7 +87,7 @@ local function projectEvent(evt, chan, time)
   evt.ppqL, evt.endppqL = nil, nil
 end
 
--- Accumulate mm ops, commit once in delete -> assign -> add order
+-- Accumulate mm ops, then commit in delete -> assign -> add order
 local function mmBatch()
   local deletes, assigns, adds = {}, {}, {}
   return {
@@ -125,7 +125,7 @@ local function mmBatch()
 end
 
 -- True when raw ppq can't be explained by the logical projection: foreign MIDI (no ppqL) or
--- an external raw edit. Swing-stale chans return false -- their divergence is an expected reseat.
+-- an external raw edit. Swing-stale chans return false; their divergence is an expected reseat.
 local function rawDivergesFromLogical(evt, time)
   if evt.ppqL == nil          then return true  end
   if dirt.swing.has(evt.chan) then return false end
@@ -154,9 +154,6 @@ do
   -- which a take-length change (mm:setLength) reaches too.
   local cache = {}
 
-  -- One clip cache, shared by on-take hosts and parked events; a cached clip stands while the
-  -- journal neither names the event nor touches its span. See docs/trackerManager.md § Lane occupancy.
-  --contract: always the true clip; the cache is this function's alone to read and write
   function clipEnd(evt, takeLenL)
     local cached = cache[evt.uuid]
     if cached and not dirt.names(evt.chan, evt.uuid)
@@ -168,7 +165,6 @@ do
     return clipped
   end
 
-  --post: the take-tier clip cache is empty
   function rebuild.forget() cache = {} end
 end
 

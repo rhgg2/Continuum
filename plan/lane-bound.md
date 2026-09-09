@@ -1,0 +1,49 @@
+# The lane bound — plan
+
+> source: `design/lane-bound.md` — synthesis compiled from there;
+> don't design here.
+
+## Phases
+
+1. **Phase 0 — the net** (§ Two populations 4, § The lane pass 1) — the
+   specs that make the split legal, written against the code as it
+   stands and passing before anything moves: an authored note's lane
+   bound is unchanged by the fx output on its channel; a note parked
+   this pass leaves a preceding on-take tail in its lane where it was;
+   and one fixture run through both the frontier and the linear walk
+   gives the same frame. The third closes a standing gap — no spec
+   crosses `FRONTIER_SEED_CAP` today.
+2. **Phase 1 — the lane bound is logical** (§ The lane span 3–4, § The
+   wire pass 4) — `boundNote` computes its lane bound from `endppqL`,
+   the successor's `ppqL` plus `overlap`, `takeLenL` and a logical
+   floor, writes `endppqC` with no conversion, and converts once for the
+   wire bound. No code moves; the two implementations become the same
+   expression.
+3. **Phase 2 — one expression** (§ The lane span 4) —
+   `frame.clippedSpanEnd` takes the lane population, `boundNote` calls
+   it, and `parkedBoundFor` goes: the parked half arrives through
+   `frame.authoredEvents` like the other one.
+4. **Phase 3 — the lane pass** (§ The lane pass) — the authored lane
+   bounds lift out of the walk into a pass at the head over
+   `frame.authoredEvents`. `clipNoteHosts` and the stash render read its
+   output. The walk keeps the derived notes.
+5. **Phase 4 — the cache dissolves** (§ The lane pass 3) — `clipEnd`,
+   its dirt guard and `rebuild.forget` go, the lane pass's output
+   carrying with the channel frame. `tm_clip_cache_spec` and
+   `tm_fx_window_cache_spec` restate against the carry.
+6. **Phase 5 — the walk shrinks** (§ Open 3) — the frontier and linear
+   walks reassessed now that the walk asks only about pitch.
+
+## Landed  (newest first; prune below ~4)
+
+(none)
+
+## Now
+
+(empty — run /plan-next to compile the next brief.)
+
+## Queued (current phase; one-liners)
+
+- Phase 0: spec — fx output on a channel leaves every authored note's `endppqC` where the authored population put it
+- Phase 0: spec — a note parked this pass bounds a preceding on-take tail in its lane, on a swung channel
+- Phase 0: spec — one fixture over `FRONTIER_SEED_CAP` and one under it derive the same frame
