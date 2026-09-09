@@ -1,6 +1,6 @@
 # The lane bound — design
 
-> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 2.
+> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 3.
 
 **A note's tail is two numbers in two frames: the lane bound is logical
 and the wire bound is raw.** One expression states the lane bound, one
@@ -9,54 +9,9 @@ number reaches mm.
 
 ## The lane span
 
-1. A **lane** is monophonic, so its population is a sequence of onsets
-   and each event sounds until the next one. That is the whole of the
-   geometry, and `eachLaneSpan` is the walk that states it.
-
-1. The **lane bound** of an event is its own ceiling — its authored
-   `endppqL`, or the take length where the ceiling is `util.OPEN` —
-   clipped to the strict-next onset in its lane and floored at its own
-   onset plus one. Chord-mates share an onset, so the seek is strict.
-
-1. `overlap` is a per-note legato datum in logical ticks, added to the
-   successor's onset, so a note with one overruns the next onset in its
-   lane. It reaches no further than that lane: the wire bound clips it
-   to the next same-pitch onset like any other tail.
-
-1. Every term is logical: the ceiling, the successor's onset, the
-   overlap, the take length and the floor. The lane bound is intent,
-   and intent is the logical frame.
-
-1. `frame.clippedSpanEnd` is that expression and the only place it is
-   written. It takes the lane's population, so a caller chooses which
-   population it asks about.
-
-1. Its subject is a member of a population and carries the same shape:
-   the column event, whose `ppq` is the logical onset and whose
-   `endppq` is the ceiling. A caller holding a raw-frame entry reaches
-   its column event by the seat stamp.
-
-## Two populations
-
-1. A lane's population has two halves, the column's events and the
-   parked events that have left the take, and `frame.authoredEvents`
-   joins them. Parking moves a note between the halves and moves no
-   onset, so the population's onsets stand for the whole pass.
-
-1. The **authored population** is that join. It answers an fx host's
-   window end, a parked event's render clip, and the `endppqC` of every
-   authored note.
-
-1. The **full population** adds the pass's derived notes. It answers
-   the `endppqC` of a derived note, which sits on a lane the region
-   allocator gave it.
-
-1. `allocateRegionLanes` seeds occupancy from the on-take spans, and a
-   parked host's tiles occupy the lane it left. A lane's on-take
-   successor is never earlier than its authored one, and derived output
-   lies inside its region's window. So a derived note takes a lane only
-   where the authored population has already ended, and fx expansion
-   cannot move an authored note's lane bound.
+Landed: `docs/trackerManager.md` § Lane occupancy holds the lane's
+authored population and the one expression over it, § Tail walk the two
+bounds.
 
 ## The lane pass
 
@@ -84,8 +39,9 @@ number reaches mm.
    its predecessor's tick plus one, and a nudge marks its own note
    disturbed so the cascade carries forward.
 
-1. It gives each derived note its lane bound, over the full
-   population, by the same expression the lane pass uses.
+1. It gives each derived note its lane bound, over the authored
+   population together with the pass's derived notes, by the same
+   expression the lane pass uses.
 
 1. It then converts: `rawBound = max(ppq + 1, min(fromLogical(laneBound),
    nextSamePitch.ppq))`. That is the pass's only conversion of a tail,

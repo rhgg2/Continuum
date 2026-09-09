@@ -1234,6 +1234,11 @@ lanes the derived output may take — and a parked host's own tiles already hold
 the host as well would push its output off the lane it was written on. `eachLaneSpan` walks either
 population: `membersOf` hands it the whole, `allocateRegionLanes` the column alone.
 
+Fx expansion moves no authored lane bound. `allocateRegionLanes` seeds occupancy from the on-take
+spans, and a parked host's tiles occupy the lane it left. A lane's on-take successor is never earlier
+than its authored one, and derived output lies inside its region's window. So a derived note takes a
+lane only where the authored population has already ended.
+
 tv's `rowBounds` reads both, one for each of its two bounds, and the split is the same question
 asked twice. The col-local bound is lane order, which governs the tail clip, so it reads the whole
 population and a parked event constrains a move like any other. The chan-wide same-pitch bound is
