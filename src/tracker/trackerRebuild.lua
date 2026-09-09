@@ -1908,7 +1908,7 @@ end
 --shape: ctx = { chan, res, time, disturbed, nudged, clampWrites, tailWrites, parkedBoundFor }
 local function makeTailRules(ctx)
   local chan, res, time = ctx.chan, ctx.res, ctx.time
-  local takeLen = time:length()
+  local takeLenL = time:toLogical(chan, time:length())
   local disturbed, nudged = ctx.disturbed, ctx.nudged
   local clampWrites, tailWrites, parkedBoundFor = ctx.clampWrites, ctx.tailWrites, ctx.parkedBoundFor
 
@@ -1931,24 +1931,20 @@ local function makeTailRules(ctx)
 
   local function boundNote(e, laneNext, pitchNext)
     local onTake  = not e.derived
-    local ceiling = e.endppqL == util.OPEN and math.huge
-                    or e.endppqL and time:fromLogical(chan, e.endppqL)
-                    or math.huge
+    local ceiling = e.endppqL == util.OPEN and math.huge or e.endppqL or math.huge
     -- On-take tails clip against parked members' lanes too -- the columns no longer carry the event,
     -- but the lane geometry still does. See docs/trackerManager.md § Tail walk.
     local laneAnchor = laneNext
     if onTake then
       local parked = parkedBoundFor(e)
-      if parked and (laneAnchor == nil or parked.ppq < laneAnchor.ppq) then laneAnchor = parked end
+      if parked and (laneAnchor == nil or parked.ppqL < laneAnchor.ppqL) then laneAnchor = parked end
     end
-    local laneClip  = laneAnchor
-      and time:fromLogical(chan, laneAnchor.ppqL) + (e.overlap or 0)
-      or math.huge
+    local laneClip  = laneAnchor and laneAnchor.ppqL + (e.overlap or 0) or math.huge
     local pitchClip = pitchNext and pitchNext.ppq or math.huge
-    -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
-    -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Tail walk
-    local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
-    local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
+    -- Two bounds: the lane bound is intent, every term of it logical, and it drives the column; the
+    -- wire bound converts it once and alone reaches mm. see docs/trackerManager.md § Tail walk
+    local laneBound = math.max(e.ppqL + 1, math.min(ceiling, laneClip, takeLenL))
+    local rawBound  = math.max(e.ppq + 1, math.min(time:fromLogical(chan, laneBound), pitchClip))
     local rounded   = util.round(rawBound)
     if rounded ~= e.endppq then
       local backing = e.colEvt or e
@@ -1957,9 +1953,8 @@ local function makeTailRules(ctx)
     end
     if e.colEvt then
       -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
-      local endppqC = time:toLogical(chan, util.round(laneBound))
-      frame.setEvent(e.colEvt, 'endppqC', endppqC)
-      frame.setEvent(e.colEvt, 'endppq', e.endppqL or endppqC)
+      frame.setEvent(e.colEvt, 'endppqC', laneBound)
+      frame.setEvent(e.colEvt, 'endppq', e.endppqL or laneBound)
     end
   end
 
@@ -2280,15 +2275,14 @@ local function rebuildTails(noteLive, noteOps, time)
     -- the symmetric partner of clipParked's on-take bounds. Bound-only: never rewritten below.
     local parkedBounds = {}
     for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-      util.add(parkedBounds, { ppq = time:fromLogical(chan, evt.ppq), ppqL = evt.ppq,
-                               lane = evt.lane })
+      util.add(parkedBounds, { ppqL = evt.ppq, lane = evt.lane })
     end
     -- A handful of events at most, asked only for the notes the walk bounds: scanned, not indexed.
     local function parkedBoundFor(e)
       local nearest
       for _, b in ipairs(parkedBounds) do
-        if b.lane == e.lane and b.ppq > e.ppq
-           and (nearest == nil or b.ppq < nearest.ppq) then nearest = b end
+        if b.lane == e.lane and b.ppqL > e.ppqL
+           and (nearest == nil or b.ppqL < nearest.ppqL) then nearest = b end
       end
       return nearest
     end

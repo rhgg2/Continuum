@@ -18,6 +18,12 @@
 -- lane, so the region's input is the tail's lane successor and parking it must not release the
 -- clip. That channel is swung, which puts the successor's row and its raw position at different
 -- numbers -- a bound read in the wrong frame lands somewhere else entirely.
+--
+-- The last two cases pin the frame the bound is stated in. Every term of a lane bound is logical --
+-- the ceiling, the successor's onset, the take length and the floor -- so the number a note is drawn
+-- to is a row, and the wire bound is that row converted once. Swing separates a row from its raw
+-- position and delay moves a raw onset off its row, so between them the two readings come apart.
+-- See design/lane-bound.md § The lane span and § The wire pass.
 
 local t    = require('support')
 local util = require('util')
@@ -31,9 +37,16 @@ local c55 = {
   data   = { swing = { global = 'c55' } },
 }
 
-local function note(chan, ppq, endppq, pitch, lane)
+local function note(chan, ppq, endppq, pitch, lane, delay)
   return { evType = 'note', ppq = ppq, endppq = endppq, chan = chan, pitch = pitch,
-           vel = 100, detune = 0, delay = 0, lane = lane }
+           vel = 100, detune = 0, delay = delay or 0, lane = lane }
+end
+
+-- The wire image of an authored note: what the pass left in mm, where the tail is raw.
+local function wireNote(h, chan, pitch)
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.chan == chan and n.pitch == pitch then return n end
+  end
 end
 
 -- Every authored note on a channel, on-take and parked alike, uuid -> lane bound.
@@ -166,6 +179,47 @@ return {
 
       t.eq(authoredAt(h, 1, 0).endppqC, clipped, 'the tail keeps the bound its successor gave it')
       t.eq(stashed[1].endppqC, 1320, 'the successor, off the take, sounds to its own ceiling still')
+    end,
+  },
+
+  {
+    -- Two notes sharing lane 1 of a swung channel, the first with a ceiling well past the second's
+    -- row. Its lane bound is that row, 1140, because that is where the successor is drawn. The wire
+    -- bound is the same row realised, one conversion later.
+    name = "a tail clipped by its lane successor bounds at the successor's row, under swing",
+    run = function(harness)
+      local h = harness.mk(c55)
+      h.tm:addEvent(note(1, 0,    1440, 60, 1))
+      h.tm:addEvent(note(1, 1140, 1320, 67, 1))
+      h.tm:flush()
+
+      local realised = h.tm:fromLogical(1, 1140)
+      t.truthy(realised ~= 1140, 'fixture check: the swing bites at the clipping row')
+      local tail = authoredAt(h, 1, 0)
+      t.truthy(tail.endppqC < 1440, 'fixture check: the successor clips it short of its own ceiling')
+
+      t.eq(tail.endppqC, 1140, "the lane bound is the successor's row")
+      t.eq(wireNote(h, 1, 60).endppq, realised, 'and the wire bound is that row realised')
+    end,
+  },
+
+  {
+    -- One note, its ceiling at its own onset, so nothing but the floor decides its bound: a lane
+    -- bound is at least the row after the onset. The note also carries a delay, which moves its raw
+    -- note-on and no row. A floor taken in raw carries that delay into the drawn bound; the lane
+    -- floor is the next row, and the delay shows only in the wire bound.
+    name = 'a note bound by the floor takes the row after its onset, the wire tick after its own',
+    run = function(harness)
+      local h = harness.mk(c55)
+      h.tm:addEvent(note(1, 1140, 1140, 60, 1, 100))   -- delay in milli-QN, so a good few ticks
+      h.tm:flush()
+
+      local evt, wire = authoredAt(h, 1, 1140), wireNote(h, 1, 60)
+      t.truthy(wire.ppq > h.tm:fromLogical(1, 1140),
+        'fixture check: the delay carries the raw onset past its row, so the two floors differ')
+
+      t.eq(evt.endppqC, evt.ppq + 1, 'the lane bound is the row after the onset')
+      t.eq(wire.endppq, wire.ppq + 1, 'and the wire bound the tick after the realised onset')
     end,
   },
 

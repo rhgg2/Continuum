@@ -1,6 +1,6 @@
 # The lane bound — design
 
-> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 0.
+> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 2.
 
 **A note's tail is two numbers in two frames: the lane bound is logical
 and the wire bound is raw.** One expression states the lane bound, one
@@ -106,18 +106,10 @@ number reaches mm.
    one production site reads it, so the frame it is measured in is
    settled by this model rather than by anything that exercises it.
 
-1. The floor differs between the two current implementations:
-   `frame.clippedSpanEnd` floors at logical `ppq + 1` and `boundNote` at
-   raw `ppq + 1`. The model above takes the logical floor for the lane
-   bound and the raw floor for the wire bound. A note short enough for
-   the floor to bind, on a channel with delay or swing, is where they
-   part.
-
-1. Computing a lane bound through raw loses its successor's row under
-   swing. `boundNote` converts the successor's `ppqL` with
-   `time:fromLogical`, which rounds to a whole tick, and writes
-   `endppqC` back through `time:toLogical`, which does not. A successor
-   at logical 1140 on a classic-55 channel leaves a bound of 1139.45.
+1. The wire pass picks a lane successor in raw order and reads its
+   logical onset. A neighbour delayed far enough is taken for a
+   successor of a note it does not follow. The lane pass walks the
+   population in column order, so the question is settled there.
 
 1. The frontier and linear walks split the cost of a whole-channel
    traversal. Whether the wire pass, asking only about pitch, still

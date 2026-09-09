@@ -919,21 +919,22 @@ run of same-pitch fxNotes, so a per-note rescan would make the walk O(k²)
 inside the group.
 
 Two tail targets per internal note, and the split is the model — the lane
-bound is intent, the raw bound is realisation:
+bound is intent, the wire bound is realisation:
 
 ```
-laneBound = max(onset + 1, min(
-  fromLogical(endppqL),                       -- authored ceiling; math.huge for util.OPEN
-  fromLogical(nextSameLane.ppqL) + overlap,   -- same-lane next (INTENT)
-  takeLen))
+laneBound = max(ppqL + 1, min(          -- every term logical
+  endppqL,                              -- authored ceiling; math.huge for util.OPEN
+  nextSameLane.ppqL + overlap,          -- same-lane next (INTENT)
+  takeLenL))
 
-rawBound  = max(onset + 1, min(
-  laneBound,
-  nextSamePitch.ppq))                         -- same-pitch next (RAW)
+rawBound  = max(ppq + 1, min(
+  fromLogical(laneBound),               -- the pass's one conversion of a tail
+  nextSamePitch.ppq))                   -- same-pitch next (RAW)
 ```
 
-The lane bound drives `endppqC`, and so the screen. The raw bound is the
-only value that reaches mm.
+The lane bound drives `endppqC`, and so the screen; every term of it is
+logical, so it falls on the row it means. The wire bound is the only value
+that reaches mm.
 
 Same-lane uses INTENT (`ppqL`) so authored music geometry wins over
 realisation delays. Same-pitch uses RAW because MIDI physics is realised.
