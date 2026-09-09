@@ -648,7 +648,9 @@ do
         util.bucket(pipeMidi, fromTrackKey, { from = conn.from, consumer = conn.to })
       elseif fromTrackKey ~= '' and toTrackKey ~= '' then
         if toTrackKey == MASTER and fromTrackKey ~= MASTER then
-          group = groupFor(fromTrackKey, 'master', true)  -- width-1 parent send: pre-sum per producer
+          -- Parent send, grouped per (producer track, consumer): pre-sum per producer,
+          -- and the summed feed names the consumer — on master, often a hosted fx.
+          group = groupFor(fromTrackKey, conn.to, true)
         elseif conn.to == 'master' then
           group = groupFor(toTrackKey, 'master', true)    -- in-class master: serial parent send, sum fan-in to one pair
         elseif conduit[edgeIdx] then

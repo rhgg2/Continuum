@@ -903,4 +903,38 @@ return {
       t.deepEq(tracks['guid-b'].outWires, {})
     end,
   },
+  {
+    -- A parent send names the node it feeds, not the track that hosts it. Two
+    -- feeders arriving from one track sum through a CU; addressing that CU's
+    -- output to 'master' leaves a master-hosted fx with no input pin, and the
+    -- read-back then loses the edges into it.
+    name = 'parent send into a master-hosted fx addresses the fx, not the master node',
+    run = function()
+      -- A,B -> P and A,B -> Q put P and Q on one merged track. M feeds master so
+      -- it hosts there, and both its feeders arrive from that single track.
+      local ns = {}
+      local k, v
+      k, v = source('A', 'guid-a'); ns[k] = v
+      k, v = source('B', 'guid-b'); ns[k] = v
+      k, v = fx('P');               ns[k] = v
+      k, v = fx('Q');               ns[k] = v
+      k, v = fx('M');               ns[k] = v
+      local g = mk(ns, {
+        { type = 'audio', from = 'A', to = 'P' },
+        { type = 'audio', from = 'B', to = 'P' },
+        { type = 'audio', from = 'A', to = 'Q' },
+        { type = 'audio', from = 'B', to = 'Q' },
+        { type = 'audio', from = 'P', to = 'M' },
+        { type = 'audio', from = 'Q', to = 'M' },
+        { type = 'audio', from = 'M', to = 'master' },
+      })
+      local tracks = tracksOf(g)
+      local merged = tracks[t.key('guid-a', 'guid-b')]
+      t.eq(merged.parentFeed.toNode, 'M', 'feed names the fx, not the master node')
+      t.eq(merged.parentFeed.sink, '__master__')
+      -- Only then can the allocator find M's slot and pin the arriving pair.
+      local alloc = DAG.allocate(tracks, g.nodes)
+      t.deepEq(alloc['__master__'].pinMaps.M.ins, { [1] = { 1 } }, 'M has an input')
+    end,
+  },
 }

@@ -227,6 +227,9 @@ Feeders reduce to fit the summing model. A *unit* groups one consumer's feeders
 on one track. FX consumers reduce at the consumer track. Master consumers are
 parent sends: an in-class master sums on its own track, and a producer on a
 different track pre-sums on the producer track with its output as the send source.
+A parent send's consumer is the node its wire names — the master node itself, or
+an fx hosted on the master track — and the sum is addressed to that node, so
+`parentFeed.toNode` reaches a pin the allocator can find.
 
 ## allocate — deterministic channel assignment
 
