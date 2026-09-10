@@ -38,39 +38,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-10 tm: bound every lane in one pass (docs § The lane pass)
 - 2026-09-09 tm: bound an on-take note through the frame's expression (docs § Lane occupancy)
 - 2026-09-09 tm: give the lane bound its population (docs § Lane occupancy)
 - 2026-09-10 tm: state the lane bound in the logical frame (docs § Tail walk)
-- 2026-09-10 tm: pin the frontier and linear walks to the same frame (§ The lane pass)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **tm: one pass for the lane bounds.** A new stage between the stash
-  render and the window census (`trackerRebuild.lua` 819–828,
-  1466–1510) walks each dirty channel's lanes over
-  `frame.authoredEvents(chan, lane)`, hoisting `takeLenL` once per
-  channel, and gives every event its `endppqC` through
-  `frame.clippedSpanEnd` — `frame.setEvent` for a column event, direct
-  assign plus the list shed for a parked render event, as `clipParked`
-  does at 804–817. `clipParked` goes. `clipNoteHosts` narrows to
-  gathering each channel's fx hosts, the `index.fxHosts` seek and the
-  `walkChannel` fallback a wholesale-dirty channel needs (1471–1502),
-  and reads `evt.endppqC` for the clip `buildFxWindows` takes at 1432.
-  `clipEnd`, its per-uuid dirt guard and `rebuild.forget` go (151–169;
-  the call site is `trackerManager.lua` 1817), the channel gate
-  standing in for them: a channel the pass has not dirtied carries its
-  column events and its parked lists, and their bounds ride along (docs
-  § Note-lane renewal). Restate `tm_clip_cache_spec` and
-  `tm_fx_window_cache_spec` against that carry — a neighbour moving
-  into a host's span moves its clip, since the move dirties the
-  channel; a clean channel's bounds stand. Hazard: `renderUnion` mints
-  a fresh render event for a note the park stage parks this pass
-  (940–960), which is after the new stage has run, so establish where
-  that event's bound comes from before the next pass's head.
 
 - **tm: the walk takes the lane bound it is given.** `boundNote`
   (`trackerRebuild.lua` 1936–1963) stops computing an authored note's

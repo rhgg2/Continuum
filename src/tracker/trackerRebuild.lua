@@ -1,6 +1,5 @@
--- The derivation engine: one gated pass that reconstructs intent from mm, then reauthors raw from it.
--- Two doors: rebuild.pipeline runs a pass, rebuild.forget drops what outlives one.
--- See docs/trackerManager.md § Rebuild for the model.
+-- The derivation engine: one gated pass reconstructs intent from mm, then reauthors raw from it.
+-- One door: rebuild.pipeline runs a pass. See docs/trackerManager.md § Rebuild for the model.
 
 --invariant: the frame, the raw index and the stager are the engine's alone to write during a pass
 --invariant: the pass's time context is handed in; the engine builds no projection of its own
@@ -81,8 +80,9 @@ local function projectEvent(evt, chan, time)
     evt.ppq = evt.ppqL
   end
   if evt.endppq ~= nil then
-    evt.endppqC = time:toLogical(chan, evt.endppq)
-    evt.endppq = evt.endppqL or evt.endppqC
+    -- endppq shows the authored ceiling, and an event carrying none takes its raw end projected.
+    -- The lane bound is the lane pass's to write. see docs/trackerManager.md § Lane occupancy
+    evt.endppq = evt.endppqL or time:toLogical(chan, evt.endppq)
   end
   evt.ppqL, evt.endppqL = nil, nil
 end
@@ -144,28 +144,6 @@ end
 -- "Authored" means "Continuum authored"
 local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
-end
-
------ Take-tier clip cache
-
-local clipEnd
-do
-  -- uuid -> clipped span end (logical); take-scoped, dropped by forgetCaches at the take-tier seam,
-  -- which a take-length change (mm:setLength) reaches too.
-  local cache = {}
-
-  function clipEnd(evt, takeLenL)
-    local cached = cache[evt.uuid]
-    if cached and not dirt.names(evt.chan, evt.uuid)
-              and not dirt.touches(evt.chan, evt.ppq, cached) then
-      return cached
-    end
-    local clipped = frame.clippedSpanEnd(evt, takeLenL, frame.authoredEvents(evt.chan, evt.lane))
-    cache[evt.uuid] = clipped
-    return clipped
-  end
-
-  function rebuild.forget() cache = {} end
 end
 
 ----- Derived-event reconcile skeleton (R2)
@@ -799,32 +777,40 @@ local function parkedUuids()
   return parked
 end
 
--- The clip comes off the lane's strict-next onset, so it moves with the stash standing still: a list
--- whose clip moved sheds its table, like any other change to its contents.
-local function clipParked(time)
-  local takeLen = time:length()
-  for chan = 1, 16 do
-    local members = frame.channels[chan].parked.notes
-    if #members > 0 then
-      local takeLenL, moved = time:toLogical(chan, takeLen), false
-      for _, m in ipairs(members) do
-        local clip = clipEnd(m, takeLenL)
-        if m.endppqC ~= clip then m.endppqC = clip; moved = true end
+-- The lane pass over one channel: every authored event on every lane takes its bound from that
+-- lane's whole population. see docs/trackerManager.md § The lane pass
+--post: every authored event of the channel's lanes carries its lane bound on endppqC
+--post: the parked list's table identity changes iff one of its own bounds moved (tv's carry key)
+local function boundLanes(chan, time)
+  local channel, parkedMoved = frame.channels[chan], false
+  local takeLenL = time:toLogical(chan, time:length())
+  for lane = 1, #channel.onTake.notes do
+    -- A parked render event holds no lane of its own, so setEvent would renew a lane standing still.
+    local offTake = {}
+    for _, evt in ipairs(frame.parkedOnLane(chan, lane)) do offTake[evt] = true end
+    local population = frame.authoredEvents(chan, lane)
+    for _, evt in ipairs(population) do
+      if not evt.derived and evt.evType ~= 'pa' then
+        local bound = frame.clippedSpanEnd(evt, takeLenL, population)
+        if offTake[evt] then
+          if evt.endppqC ~= bound then evt.endppqC = bound; parkedMoved = true end
+        else
+          frame.setEvent(evt, 'endppqC', bound)
+        end
       end
-      if moved then frame.channels[chan].parked.notes = util.clone(members) end
     end
   end
+  if parkedMoved then channel.parked.notes = util.clone(channel.parked.notes) end
 end
 
 -- The parked half of every lane, rendered from the stash at the head of the pass (a park edit has
 -- already landed in the document). See docs/trackerManager.md § Note host clips and windows.
-local function renderStashedParked(fxParked, time)
+local function renderStashedParked(fxParked)
   local notes = {}
   for _, spec in ipairs(fxParked or {}) do
     if spec.evType == 'note' then util.add(notes, spec) end
   end
   renderUnion('notes', notes, parkedEvent)
-  clipParked(time)
 end
 
 -- Region-replace parking: authored events a replace window covers leave the take;
@@ -959,7 +945,12 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     for _, spec in ipairs(parkedNotes) do
       util.bucket(parkedByHost, coveredBy(spec), installed[spec])
     end
-    clipParked(time)
+    -- The park moved notes between the halves of their lanes and minted fresh render events for the
+    -- off-take half, so every lane it touched takes the bound pass again. see docs § The lane pass
+    local touched = {}
+    for _, spec in ipairs(parkedNotes) do touched[spec.chan] = true end
+    for _, spec in ipairs(restores)     do touched[spec.chan] = true end
+    for chan in pairs(touched) do boundLanes(chan, time) end
   end
 
   -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
@@ -1462,48 +1453,48 @@ end
 ----- Rebuild Fx
 
 --shape: clipNoteHosts -> { [event] = clipEndL }; each clip starts at its event's own onset
---contract: every fx host of every channel, the on-take events and the parked ones alike
-local function clipNoteHosts(time)
-  local clips, takeLen = {}, time:length()
+--pre: the lane pass has run over every dirty channel, so each host carries its lane bound
+--post: fresh result holds every fx host of every channel, the on-take events and the parked alike
+local function clipNoteHosts()
+  local clips = {}
 
   -- Column walk where no uuid can be resolved to an event: a wholesale-dirty channel.
   -- see docs/trackerManager.md § Lane occupancy
-  local function walkChannel(chan, takeLenL)
+  local function walkChannel(chan)
     for _, col in ipairs(frame.channels[chan].onTake.notes) do
       for _, evt in ipairs(col.events) do
-        if evt.fx and evt.evType ~= 'pa' then clips[evt] = clipEnd(evt, takeLenL) end
+        if evt.fx and evt.evType ~= 'pa' then clips[evt] = evt.endppqC end
       end
     end
   end
 
   -- Per-host seek through the index over the on-take half; the frame's parked list says which host
   -- moved. Returns false to fall to walkChannel. See docs/trackerManager.md § Fx window census.
-  local function perHost(chan, takeLenL)
+  local function perHost(chan)
     local parked = {}
     for _, evt in ipairs(frame.channels[chan].parked.notes) do parked[evt.uuid] = true end
     for uuid in pairs(index.fxHosts(chan)) do
       if not parked[uuid] then
         local evt = index.colEvtFor(uuid)
         if not evt then return false end
-        clips[evt] = clipEnd(evt, takeLenL)
+        clips[evt] = evt.endppqC
       end
     end
     return true
   end
 
   for chan = 1, 16 do
-    local takeLenL = time:toLogical(chan, takeLen)
     local hosts    = index.fxHosts(chan)
     local hasHosts = hosts and next(hosts)
     if dirt.wholesale(chan) then
-      if hasHosts then walkChannel(chan, takeLenL) end
+      if hasHosts then walkChannel(chan) end
     elseif hasHosts then
-      if not perHost(chan, takeLenL) then walkChannel(chan, takeLenL) end
+      if not perHost(chan) then walkChannel(chan) end
     end
     -- The parked half of the lane: a stashed host runs its chain off-take, and a host this pass
     -- restores is here until the park stage re-enters it.
     for _, evt in ipairs(frame.channels[chan].parked.notes) do
-      if evt.fx then clips[evt] = clipEnd(evt, takeLenL) end
+      if evt.fx then clips[evt] = evt.endppqC end
     end
   end
   return clips
@@ -3088,8 +3079,13 @@ function rebuild.pipeline(sources, time)
 
   -- Fx window set: fx-regions plus every note host, on-take or parked, as a degenerate window.
   -- One pass serves the whole pipeline. See docs/generators.md § Offline continuous realisation.
-  perf.start('parkRender'); renderStashedParked(sources.fxParked, time); perf.stop('parkRender')
-  perf.start('noteHostClips'); local noteHostClips = clipNoteHosts(time); perf.stop('noteHostClips')
+  perf.start('parkRender'); renderStashedParked(sources.fxParked); perf.stop('parkRender')
+  -- The lane pass: every dirty channel's authored events take their lane bounds, ahead of the three
+  -- readers of them. A clean channel carries its columns and its parked lists, bounds and all.
+  perf.start('laneBounds')
+  for chan = 1, 16 do if dirt.has(chan) then boundLanes(chan, time) end end
+  perf.stop('laneBounds')
+  perf.start('noteHostClips'); local noteHostClips = clipNoteHosts(); perf.stop('noteHostClips')
   perf.start('fxWindows')
   local windows = buildFxWindows(sources.fxRegions, noteHostClips, time)
   perf.stop('fxWindows')

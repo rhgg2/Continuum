@@ -35,7 +35,7 @@
 --shape:   pb   { evType='pb', chan, ppq, val (=cents), shape, [tension] }
 --shape:   pa   { evType='pa', chan, pitch, ppq, vel, [rpb] }
 --shape: parked =  { notes, ccs, pb, pa }: flat lists of those specs made render-ready -- a note gains
---shape:   endppqC (the clip clipParked derives; endppq stays the authored ceiling), a pb gains cents
+--shape:   endppqC (the lane bound the lane pass writes; endppq stays the authored ceiling), a pb gains cents
 
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
@@ -1812,9 +1812,9 @@ function tm:rebuild(takeChanged)
   rebuilding = true
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  -- Wholesale re-read / take swap: fxRealisedWindows (dataStore) carries the recognition baseline, and the
-  -- take-tier caches go, since their uuid keys address the take just left.
-  if didReload or takeChanged then dirt.add(nil, true); rebuild.forget() end
+  -- Wholesale re-read / take swap: fxRealisedWindows (dataStore) carries the recognition baseline,
+  -- and every channel re-derives, the frame it would carry addressing the take just left.
+  if didReload or takeChanged then dirt.add(nil, true) end
   pbLimCache = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   local prevLength = timeContext:length()   -- rebuild is the (cm, mm) coherence point

@@ -710,6 +710,7 @@ runs it.
 1. **Extra columns** (`rebuildExtraColumns`)
 1. **Externals** (`rebuildExternals`)
 1. **Sample stamp** (`stampSamples`)
+1. **Lane bounds** (`boundLanes`)
 1. **Note host clips and windows** (`clipNoteHosts`, `buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)
 1. **PA dispatch** (`rebuildPA`)
@@ -824,11 +825,12 @@ interval dirt visits just the seeded uuids.
 The pass opens by rendering the parked half of every lane from the stash. The
 frame carries the previous pass's render, where a park edit — a delete, a
 chain removed, a freeze — has already landed in the document, so both halves
-of a lane answer to the document from here on.
+of a lane answer to the document from here on. The lane pass then bounds every
+lane of every dirty channel (§ The lane pass).
 
-`clipNoteHosts` then gives each note host its clip, the lane clip of § Lane
-occupancy, on-take events and stash events alike. A region's span is authored,
-so only the note hosts are computed. The fx window set is those clips plus
+`clipNoteHosts` gathers each note host's clip off `endppqC`, the bound that
+pass wrote, on-take events and stash events alike. A region's span is authored,
+so only the note hosts are gathered. The fx window set is those clips plus
 the fx regions, each host entering as a degenerate one-note region.
 
 One pass serves the whole pipeline. Parking moves a host between the halves
@@ -858,10 +860,9 @@ lands them, keeping their uuid and fx. A
 restored cc lands on the exact ppq of the fill seat the wider window
 left on the take; under uuid addressing the two are distinct events, so
 the fill reconcile deletes that seat by its own handle and the authored
-value stands. A parked event's render clip (`endppqC`) is the lane clip of § Lane
+value stands. A parked event's render clip (`endppqC`) is the lane bound of § Lane
 occupancy, so a parked tail stops at the first successor past its region
-whether that successor is on the take or parked beside it. `clipParked`
-derives it through the one clip that section describes. Lane bound
+whether that successor is on the take or parked beside it. Lane bound
 only, never pitch: a parked event never reaches mm, so it carries pure intent
 — the same span an on-take host gets. The note del/adds ride the
 tail walk's atomic commit. See `docs/generators.md` § Output. Each pass's
@@ -1255,46 +1256,44 @@ the whole of what the memo is keyed on. The buckets the seeks and unions read ar
 the list they index, and `renderUnion` replaces that list whenever its contents change, so a stale
 index cannot be reached.
 
-Derived notes lie outside the population. A note carrying a `derived` tag never enters a column —
-`rebuildInternals` routes it to the fx stage's existing set instead — so a column holds authored
-events by construction and the clip needs no filter of its own.
+Derived notes lie outside the population. A note carrying a `derived` tag never enters a column from
+mm — `rebuildInternals` routes it to the fx stage's existing set instead.
 
-`clipEnd` answers with a cached clip where the rebuild's dirt cannot have moved it, and the journal
-answers both halves of that. An event reclips when it is uncached, when the channel's dirt names its
-uuid -- its own move or length mutation -- or when that dirt touches its cached span, where a
-neighbour's onset becomes the new clip. A wholesale channel answers both questions, so it needs no
-case of its own, and everything else rides the cached end. Callers ask for a clip and get one; the
-cache is `clipEnd`'s alone to read and write, scoped to a block that exposes only it and
-`rebuild.forget`, the door the take-tier seam calls. One cache serves on-take hosts and parked
-events alike, since a uuid is in one half or the other and the rule is the same either way.
+Fx expansion seats the pass's own derived output in the columns, so a channel carrying its columns
+holds the previous pass's output at the head of the next one. The lane pass passes over those: the
+lane bound is authored, and a derived note takes its bound off the tail walk's own successor
+(§ Tail walk).
 
-The reclip is walk-free for an on-take host. `byUuid[uuid].colEvt` (the seat stamp, § Incremental
-index reconciliation) back-links a host uuid to its live column event, so a dirty host reclips by
-seeking its own lane through `index.colEvtFor(uuid)` rather than the old per-channel walk that built
-every column's successor map up front.
+## The lane pass
 
-One path still walks the channel, and the reason is host discovery, not the cache. A wholesale-dirty
-channel leaves the fx-host index unable to reach a live event, so `walkChannel` finds the hosts by
-scanning the columns — and asks `clipEnd` for each, like every other caller. `perHost` returns false
-(forcing the walk) the moment it meets an indexed host with no live event, so an unstamped host is
-never silently skipped.
+`boundLanes` gives every authored event its lane bound, one channel at a time. It runs at the head,
+after the stash render and before the fx window census, walking each of the channel's lanes over the
+whole population of § Lane occupancy. `clipNoteHosts` and the grid read what it wrote, off `endppqC`.
 
-The cache is scoped to the bound take. `tm:rebuild` drops it on the branch a take swap or a
-wholesale re-read enters (`forgetCaches`); mm mints uuids per take, so an entry surviving that seam
-addresses an event of the take just left.
+The write obeys the renewal protocol of § Note-lane renewal. A column event takes its bound through
+`setEvent`, which renews the lane where the number moved. A parked render event holds no lane of its
+own, so it takes a direct assign, and its list sheds its table when one of its bounds moved.
 
-A take-length change reclips every OPEN span, yet needs no guard of its own. Length moves only
-through `mm:setLength`, which fires a `wholesale=true` reload — that same branch — so every fx
-channel walks afresh at the new `takeLen`.
+`projectEvent` writes no bound. It keeps the raw end's projection as the authored ceiling of an event
+carrying no `endppqL` stamp, and a freshly seated event holds no `endppqC` until the pass reaches it.
 
-A rebuild clips once, and its two readers share the one cache: the stash render asks for every
-parked event's render clip and `clipNoteHosts` for every host's span end, which for a parked host is
-the same number.
+The pass is gated on channel dirt, and its output carries with the channel frame. A lane bound reads
+its own lane's onsets and its own channel's take length, so a channel the dirt does not name holds
+the bounds it held — the same event tables, under the carry that holds its columns. A take-length
+change needs no guard of its own: length moves only through `mm:setLength`, whose reload dirties
+every channel.
 
-The span question reaches the row a neighbour moved to as well as the one it left, since a move's
-seat carries both (§ Interval seeds). `tm_clip_cache_spec` is the fixture that pins it: a warm
-cache, a neighbour moved into the cached span from outside it, and a parked host whose clip falls to
-the new onset. Reading the birth snapshot alone strands the stale clip.
+The park stage runs the pass again over the lanes it touched. It moves notes between the halves of a
+lane and `renderUnion` mints fresh render events for the off-take half, which carry no bound, while a
+restore re-enters a column event the same way. Parking removes no onset from the population, so every
+bound the second call states is the head pass's own number on a new table.
+
+One path walks a channel's columns, and the reason is host discovery. `clipNoteHosts` resolves each
+indexed fx host to its live column event through `index.colEvtFor(uuid)`, the seat stamp of
+§ Incremental index reconciliation. A wholesale-dirty channel leaves the fx-host index unable to
+reach a live event, so `perHost` returns false the moment it meets an indexed host with none and
+`walkChannel` finds the hosts by scanning the columns instead. An unstamped host is never silently
+skipped.
 
 ## Fx window census
 
@@ -1448,7 +1447,7 @@ since a population that held arrives in the stash's own order from either
 render, and a reordering can only cost a shed.
 
 `endppqC` is why the comparison is over contents and not over the stash.
-The clip is derived after installation — `clipParked` reads the lane's
+The bound is derived after installation — the lane pass reads the lane's
 strict-next onset, which the on-take half can move while the parked spec
 stands still — so it is left out of the comparison and sheds the list on its
 own when it moves, exactly as `setEvent` does for a seated event.

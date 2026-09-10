@@ -179,24 +179,16 @@ return {
   {
     -- A live seed is minted before mm stamps its uuid and filed after, so `add` resolves the uuid
     -- off the record the seed kept. What the journal holds then names its own identities.
-    name = 'dirt: names answers identity, resolving a seed uuid off the record it kept',
+    name = 'dirt: filing a live seed resolves its uuid off the record it kept',
     run = function()
       local journal = dirt.new()
-      t.eq(journal.names(1, 'u1'), false, 'a clean channel names nothing')
-
-      journal.add(1, { verb = 'add', uuid = 'u1', ppqL = 480 })
-      t.eq(journal.names(1, 'u1'), true, 'the seed names its uuid')
-      t.eq(journal.names(1, 'u2'), false, 'and names no other')
-
       local evt = { chan = 1, ppq = 960, evType = 'note' }
       local live = journal.liveSeed(evt, 'add')
+      t.eq(live.uuid, nil, 'the mint found no uuid on the record')
+
       evt.uuid = 'stamped-at-commit'   -- the commit stamps it; the flush files the seed after
       journal.add(1, live)
       t.eq(live.uuid, 'stamped-at-commit', 'filing resolved the uuid onto the seed')
-      t.eq(journal.names(1, 'stamped-at-commit'), true, 'so the journal names it')
-
-      journal.add(2, true)
-      t.eq(journal.names(2, 'u1'), true, 'wholesale names every uuid')
     end,
   },
   {

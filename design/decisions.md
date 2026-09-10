@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-10** — The lane bound is one pass's to write. boundLanes walks a dirty channel's lanes
+  at the head and gives every authored event its endppqC, replacing the per-uuid clip cache and its
+  dirt guard; the park stage runs the pass again over the lanes it touched, since parking mints
+  fresh render events carrying no bound. projectEvent stops writing the bound, because its raw-end
+  projection is a float and setEvent skips a write comparing equal, so a window end of 811008.0
+  stood where the pass computed 811008 and churned twenty pb seats on the glasswork fixture. Where
+  downstream the fx output reads that subtype is unestablished.
+
 - **2026-09-09** — An external's seat stamp lands after the externals batch commits. A foreign note
   enters um's index with the write that gives it its logical seat, so a stamp before the commit
   finds no entry and is dropped for good, leaving the tail walk holding a column event it cannot

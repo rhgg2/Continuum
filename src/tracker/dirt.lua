@@ -74,22 +74,21 @@ function dirt.new()
 
   ----- What the seeds name
 
-  -- What a channel's seeds name: the logical positions -- each snapshot's ppqL plus those the flush
-  -- folded onto it, distinct and sorted -- and the uuids; memoized until the next write invalidates it.
+  -- The logical positions a channel's seeds name: each snapshot's ppqL plus those the flush folded
+  -- onto it, distinct and sorted; memoized until the next write invalidates it.
   local function seeded(chan)
     local held = memo[chan]
     if held then return held end
-    local list, seen, uuids = {}, {}, {}
+    local list, seen = {}, {}
     local function hold(ppq)
       if ppq ~= nil and not seen[ppq] then seen[ppq] = true; list[#list + 1] = ppq end
     end
     for _, seed in ipairs(marks[chan]) do
       hold(seed.ppqL)
       for _, later in ipairs(seed.laterPpqs or {}) do hold(later) end
-      if seed.uuid ~= nil then uuids[seed.uuid] = true end
     end
     table.sort(list)
-    held = { list = list, seen = seen, uuids = uuids }
+    held = { list = list, seen = seen }
     memo[chan] = held
     return held
   end
@@ -97,14 +96,6 @@ function dirt.new()
   --pre: the channel holds a seed list -- wholesale names no positions, and a clean one holds none
   --contract: those positions sorted, for a stage that seeks to each; the caller reads, never writes
   function journal.ppqs(chan) return seeded(chan).list end
-
-  --post: result = (a seed names uuid); wholesale names every uuid, a clean channel none
-  function journal.names(chan, uuid)
-    local standing = marks[chan]
-    if standing == nil then return false end
-    if standing == true then return true end
-    return seeded(chan).uuids[uuid] == true
-  end
 
   --contract: is this logical position seeded -- wholesale covers every one, a clean channel none
   function journal.covers(chan, ppq)

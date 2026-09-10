@@ -28,6 +28,11 @@ bounds.
    pass boundary with the channel frame, under the same carry that
    holds a clean channel's columns.
 
+1. The park stage runs it again over the lanes it touched. Parking mints a
+   fresh render event for the off-take half and a restore re-enters a column
+   event, and neither carries a bound; parking removes no onset, so the
+   second call restates the head pass's own numbers on the new tables.
+
 ## The wire pass
 
 1. The wire pass is `rebuildTails`, narrowed. It runs after fx
@@ -66,6 +71,16 @@ bounds.
 1. `overlap` has no authoring path. Three spec fixtures write it and
    one production site reads it, so the frame it is measured in is
    settled by this model rather than by anything that exercises it.
+
+1. A window end's integer/float subtype changes the fx output. Handing
+   `clipNoteHosts` a float numerically equal to the integer it had before
+   churned twenty pb seats on one fixture, which is why `projectEvent` writes
+   no bound. Where downstream the subtype is read is unestablished.
+
+1. The take end is a fixed point of every swing projection, the boundary clip
+   absorbing the final partial period, so the lane bound's `takeLenL` term
+   converts nothing. Whether the term wants a conversion at all is a question
+   for the walk, which hoists the same number.
 
 1. The wire pass picks a lane successor in raw order and reads its
    logical onset. A neighbour delayed far enough is taken for a
