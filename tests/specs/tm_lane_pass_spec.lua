@@ -19,6 +19,11 @@
 --
 -- A depth-30 sine host seats a pb stream across exactly its window, so the last pb seat tracks the
 -- window end. That is the observable cases two to four lean on.
+--
+-- The park stage runs the pass again over the lanes it touched, and the last case is the restore
+-- side of that. A restore mints a fresh column event carrying no bound of its own, so the number it
+-- draws at can only be the one that second call writes -- and the case moves the bound while the
+-- note is off the take, so the bound it parked with is the wrong answer.
 
 local t    = require('support')
 local util = require('util')
@@ -138,6 +143,35 @@ return {
       h.tm:flush()
 
       t.truthy(lastPbSeat(h, 1) > before, 'the OPEN host followed the grown take')
+    end,
+  },
+
+  {
+    -- A plain note parked by a region covering its onset, authored to 600. The clipper arrives at
+    -- 360 on its lane while it is parked -- outside the region, so it stays on the take -- and then
+    -- the region goes and the note comes back. 600 is what it parked holding; 360 is its lane.
+    name = 'a restored note draws at the bound the pass gives it, not the one it parked with',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(1, 1, 120, 600, 60))
+      h.tm:flush()
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      t.eq(#parkedList(h, 1), 1, 'fixture check: the covered note parked off the take')
+      t.eq(parkedList(h, 1)[1].endppqC, 600, 'fixture check: it parked sounding to its own ceiling')
+
+      h.tm:addEvent(note(1, 1, 360, 480, 62))
+      h.tm:flush()
+      t.eq(parkedList(h, 1)[1].endppqC, 360, 'precondition: the bound moved while the note was parked')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+
+      local cell = onTakeAt(h, 1, 1, 120)
+      t.truthy(cell, 'the note is back on its lane')
+      t.eq(cell.endppqC, 360, 'the restored cell draws at its lane bound')
+      t.eq(cell.endppq,  600, 'while the authored ceiling still shows in the column')
     end,
   },
 

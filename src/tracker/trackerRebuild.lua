@@ -927,8 +927,8 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       local note = util.clone(spec)   -- the event is the spec: both are logical (keeps the parked uuid too)
       util.add(restoredEvents, note)
       frame.spliceEvent(spec.chan, spec.lane, note)
-      -- Provisional raw end: the authored ceiling is all that is known here, since the lane clip is
-      -- the tail walk's to find -- boundNote's write-through corrects this in place.
+      -- Provisional raw end: the authored ceiling is all that is known here. The lane pass below
+      -- gives the re-entered cell its bound, and the tail walk converts that in place.
       local ceiling = note.endppq == util.OPEN and math.huge
                       or note.endppq and time:fromLogical(spec.chan, note.endppq)
                       or math.huge
@@ -1924,9 +1924,9 @@ local function makeTailRules(ctx)
     return true
   end
 
-  -- An authored note's lane bound is the frame's one expression over its lane's whole authored
-  -- population; a derived note is outside that population and bounds off the walk's own successor.
-  --pre: (not e.derived) → e carries its column event -- every seated note is stamped as it seats
+  -- An authored note's lane bound is the lane pass's, read off its column event; a derived note lies
+  -- outside that population and bounds off the walk's own successor. see docs § The lane pass
+  --pre: (not e.derived) → e.colEvt carries its lane bound -- the lane pass ran over this channel
   local function boundNote(e, laneNext, pitchNext)
     local laneBound
     if e.derived then
@@ -1934,7 +1934,7 @@ local function makeTailRules(ctx)
       local laneClip = laneNext and laneNext.ppqL + (e.overlap or 0) or math.huge
       laneBound = math.max(e.ppqL + 1, math.min(ceiling, laneClip, takeLenL))
     else
-      laneBound = frame.clippedSpanEnd(e.colEvt, takeLenL, frame.authoredEvents(chan, e.lane))
+      laneBound = e.colEvt.endppqC
     end
     local pitchClip = pitchNext and pitchNext.ppq or math.huge
     -- Two bounds: the lane bound is intent, every term of it logical, and it drives the column; the
@@ -1947,8 +1947,8 @@ local function makeTailRules(ctx)
       index.assign(e, 'endppq', rounded)
     end
     if e.colEvt then
-      -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
-      frame.setEvent(e.colEvt, 'endppqC', laneBound)
+      -- Mirror projectEvent's endppq rule: the authored ceiling shows in the column, and the lane
+      -- bound it is clipped to rides endppqC, where the lane pass wrote it.
       frame.setEvent(e.colEvt, 'endppq', e.endppqL or laneBound)
     end
   end

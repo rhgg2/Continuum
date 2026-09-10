@@ -967,16 +967,14 @@ tie-break): the successor is nudged to `prev.ppq + 1`
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 
-An authored note takes its lane bound from `frame.clippedSpanEnd` over
-its lane's authored population (§ Lane occupancy), and the walk states
+An authored note's lane bound is on its column event, where the lane pass
+wrote it (§ The lane pass), and the walk reads it there. The walk states
 the bound only for the derived notes, which sit on lanes the region
 allocator gave them.
 
-The parked half of that population is why: a parked event has left the
-columns, and its lane geometry still applies to a preceding on-take tail
-sharing the lane. Parked is off-take, so it never bounds the wire
-(pitch), and a region's own tiles never read parked bounds at all —
-they'd already be cut by the members they replaced.
+The lane bound comes from a population holding both halves of the lane;
+the wire bound never does. A parked note carries no raw record, so the
+same-pitch seek reads the index and finds only what is on the take.
 
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
@@ -1268,7 +1266,8 @@ lane bound is authored, and a derived note takes its bound off the tail walk's o
 
 `boundLanes` gives every authored event its lane bound, one channel at a time. It runs at the head,
 after the stash render and before the fx window census, walking each of the channel's lanes over the
-whole population of § Lane occupancy. `clipNoteHosts` and the grid read what it wrote, off `endppqC`.
+whole population of § Lane occupancy. `clipNoteHosts`, the grid and the tail walk read what it wrote,
+off `endppqC`.
 
 The write obeys the renewal protocol of § Note-lane renewal. A column event takes its bound through
 `setEvent`, which renews the lane where the number moved. A parked render event holds no lane of its

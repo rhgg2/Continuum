@@ -38,10 +38,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-10 tm: the walk takes the lane bound it is given (docs § The lane pass)
 - 2026-09-10 tm: bound every lane in one pass (docs § The lane pass)
 - 2026-09-09 tm: bound an on-take note through the frame's expression (docs § Lane occupancy)
 - 2026-09-09 tm: give the lane bound its population (docs § Lane occupancy)
-- 2026-09-10 tm: state the lane bound in the logical frame (docs § Tail walk)
 
 ## Now
 
@@ -49,18 +49,3 @@
 
 ## Queued (current phase; one-liners)
 
-- **tm: the walk takes the lane bound it is given.** `boundNote`
-  (`trackerRebuild.lua` 1936–1963) stops computing an authored note's
-  lane bound: a seated note reads `e.colEvt.endppqC`, the head pass's
-  write, and the derived branch (1941–1944) and the wire conversion
-  (1951–1957) stand as they are. The `endppqC` write-through at 1960
-  goes with the computation; the `endppq` write at 1961 stays, being
-  the authored ceiling the column displays. The restore path is the one
-  event the head pass bounded on a table the walk does not read:
-  `rebuildRegionPark` re-enters a restored note as a fresh column event
-  (940–948) whose provisional raw end the comment there leaves to
-  `boundNote`, so the restore carries the bound its parked render event
-  was given. Red-first: a note restored this pass draws at its lane
-  bound rather than its authored ceiling. Fallout to expect: fixtures
-  leaning on the walk to bound a note the head pass did not reach — a
-  clean channel, or a note seated after the census.
