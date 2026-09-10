@@ -1101,8 +1101,8 @@ round-trip drops it.
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
 each seed onset to `[onset, next onset)` — the interval over which one note's
 PC prevails — and the existing set, the records and the pc-column splice all
-filter on them. A span carries both frames, since a projected column event tests
-logical where an mm record tests raw. Fresh derived output ungates the channel:
+filter on them. The closure answers a span set per frame, since a projected column
+event tests logical where an mm record tests raw. Fresh derived output ungates the channel:
 an fx-born onset has no verb seed to name it, so a pass holding any unkept
 `noteLive` spec synthesises wholesale.
 

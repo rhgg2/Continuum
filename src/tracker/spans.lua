@@ -3,6 +3,7 @@
 
 --invariant: stateless module: pure functions over spans, no module-level state
 --invariant: a span is half-open [lo, hi): merge joins at a touch, overlapping and intersects do not
+--invariant: merging leaves contains unchanged -- joining a touch adds no tick to the set
 --invariant: every span returned is freshly built, so no caller's span is aliased into a result
 --shape: span = { lo, hi }; span set = disjoint ascending spans; bucket = records carrying .window = span
 local util = require 'util'
@@ -37,6 +38,15 @@ function spans.overlapping(bucket, span)
     if m.window[1] < span[2] and m.window[2] > span[1] then util.add(out, m) end
   end
   return out
+end
+
+-- Is a single tick covered? Half-open, so adjacent spans partition the line without
+-- double-counting, and an absent set covers nothing.
+function spans.contains(set, tick)
+  for _, span in ipairs(set or {}) do
+    if tick >= span[1] and tick < span[2] then return true end
+  end
+  return false
 end
 
 -- Half-open span-set intersection over merged scopes (nil scopes = empty).

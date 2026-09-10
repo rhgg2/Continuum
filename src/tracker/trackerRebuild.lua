@@ -168,27 +168,17 @@ end
 
 ----- PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
 
--- Half-open span membership, frame-matched: projected column events always test logical --
--- projectEvent flips their ppq to ppqL and drops the sidecar; mm-frame records test raw.
-local function pcInSpans(seedSpans, ppq, logical)
-  for _, s in ipairs(seedSpans) do
-    local lo, hi = logical and s.sL or s.sRaw, logical and s.eL or s.eRaw
-    if ppq >= lo and ppq < hi then return true end
-  end
-  return false
-end
-
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the batcher {del(event), add(spec)}
 --contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
---contract: seedSpans (from pcSeedSpans) narrow existing to in-span events; nil = whole channel
+--contract: seedSpans (from pcSeedSpans) narrow existing to its logical spans; nil = whole channel
 --invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
 local function reconcilePCsForChan(chan, records, batcher, seedSpans)
   local existing = {}
   for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
-    if not seedSpans or pcInSpans(seedSpans, e.ppq, true) then util.add(existing, e) end
+    if not seedSpans or spans.contains(seedSpans.logical, e.ppq) then util.add(existing, e) end
   end
 
   local groups = {}
@@ -2917,8 +2907,7 @@ end
 
 ----- Rebuild PCs
 
--- Seed closure for PC synthesis: each seed onset's [onset, next onset) span, both frames.
--- nil = wholesale (also forced by fresh derived output).
+--shape: seedSpans = { raw = span set, logical = span set }; nil = wholesale
 local function pcSeedSpans(chan, noteLive)
   if dirt.wholesale(chan) then return nil end
   for _, w in ipairs(noteLive) do
@@ -2933,23 +2922,15 @@ local function pcSeedSpans(chan, noteLive)
     local live = s.uuid and index.byUuid(s.uuid)
     if live then addPoint(live.ppq, live.ppqL) end
   end
-  local seedSpans, notes = {}, index.raw(chan).notes
+  local raw, logical, notes = {}, {}, index.raw(chan).notes
   for _, point in ipairs(points) do
     local i = util.firstAfter(notes, point.ppq)
     while notes[i] and not isAuthored(notes[i]) do i = i + 1 end
     local nextNote = notes[i]
-    util.add(seedSpans, { sRaw = point.ppq, eRaw = nextNote and nextNote.ppq or math.huge,
-                          sL = point.ppqL, eL = nextNote and nextNote.ppqL or math.huge })
+    util.add(raw, { point.ppq, nextNote and nextNote.ppq or math.huge })
+    util.add(logical, { point.ppqL, nextNote and nextNote.ppqL or math.huge })
   end
-  return seedSpans
-end
-
--- pcSeedSpans' raw extents overlap routinely (two points per seed, shared next-onsets); merge to
--- disjoint ascending so onsetsIn yields each in-span event exactly once. see interval-dirt v2 § 4
-local function rawCoverSpans(seedSpans)
-  local raw = {}
-  for _, s in ipairs(seedSpans) do util.add(raw, { s.sRaw, s.eRaw }) end
-  return spans.merge(raw)
+  return { raw = spans.merge(raw), logical = spans.merge(logical) }
 end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records,
@@ -2957,13 +2938,12 @@ end
 local function rebuildPCs(noteLive, time)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
-  local spansByChan, rawSpansByChan = {}, {}
+  local spansByChan = {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
     if not dirt.has(chan) then goto nextChan end
     local seedSpans = pcSeedSpans(chan, noteLive[chan])
-    local rawSpans = seedSpans and rawCoverSpans(seedSpans)
-    spansByChan[chan], rawSpansByChan[chan] = seedSpans, rawSpans
+    spansByChan[chan] = seedSpans
     local records = {}
     local function recordNote(entry)
       if isAuthored(entry) then
@@ -2971,14 +2951,14 @@ local function rebuildPCs(noteLive, time)
                             sample = entry.sample, evt = entry.colEvt })
       end
     end
-    if rawSpans then
-      for entry in onsetsIn(index.raw(chan).notes, rawSpans) do recordNote(entry) end
+    if seedSpans then
+      for entry in onsetsIn(index.raw(chan).notes, seedSpans.raw) do recordNote(entry) end
     else
       for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
-      if not seedSpans or pcInSpans(seedSpans, n.ppq, false) then
+      if not seedSpans or spans.contains(seedSpans.raw, n.ppq) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, spec = n })
       end
@@ -2996,7 +2976,7 @@ local function rebuildPCs(noteLive, time)
       local events = {}
       if seedSpans then
         for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
-          if not pcInSpans(seedSpans, e.ppq, true) then util.add(events, e) end
+          if not spans.contains(seedSpans.logical, e.ppq) then util.add(events, e) end
         end
       end
       local function projectPc(cc)
@@ -3005,7 +2985,7 @@ local function rebuildPCs(noteLive, time)
         util.add(events, evt)
       end
       if seedSpans then
-        for cc in onsetsIn(index.raw(chan).pcs, rawSpansByChan[chan]) do projectPc(cc) end
+        for cc in onsetsIn(index.raw(chan).pcs, seedSpans.raw) do projectPc(cc) end
       else
         for _, cc in ipairs(index.raw(chan).pcs) do projectPc(cc) end
       end

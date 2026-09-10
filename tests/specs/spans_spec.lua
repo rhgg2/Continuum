@@ -64,6 +64,35 @@ return {
     end,
   },
   {
+    -- The scalar predicate against the oracle, over a set whose spans touch, overlap
+    -- and leave a gap. A boundary tick belongs to the span opening on it and not to
+    -- the one closing there, which is what lets adjacent spans partition the line.
+    name = 'spans: a tick is contained iff the set covers it, boundaries to the right',
+    run = function()
+      local set = { { 0, 5 }, { 5, 8 }, { 12, 14 } }
+      local covered = ticksOf(set)
+      for tick = -2, 16 do
+        t.eq(spans.contains(set, tick), covered[tick] == true, 'tick ' .. tick)
+      end
+      t.falsy(spans.contains(nil, 3), 'an absent set covers nothing')
+    end,
+  },
+  {
+    -- Merging joins a touch, so it can only coarsen the span list -- never the set of
+    -- ticks. The PC seed closure leans on this: its seed extents overlap routinely, and
+    -- it merges each frame before testing membership in it. A width-zero span rides
+    -- through merging alone, since it touches nothing, and covers nothing either way.
+    name = 'spans: merging a set leaves every tick contained exactly as before',
+    run = function()
+      local set = { { 12, 20 }, { 0, 5 }, { 5, 8 }, { 3, 6 }, { 30, 30 } }
+      local merged = spans.merge(set)
+      t.eq(#merged, 3, 'the four spans below 20 must have joined into one')
+      for tick = -2, 34 do
+        t.eq(spans.contains(merged, tick), spans.contains(set, tick), 'tick ' .. tick)
+      end
+    end,
+  },
+  {
     -- Clipping meets the span with each scope in turn and keeps the non-empty
     -- meets. It does not coalesce: two adjacent scopes clip to two adjacent
     -- spans, and the emission sites downstream depend on that granularity. A scope touching an edge meets the span in no
