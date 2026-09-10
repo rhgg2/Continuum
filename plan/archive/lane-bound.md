@@ -1,7 +1,7 @@
 # The lane bound — plan
 
-> source: `design/lane-bound.md` — synthesis compiled from there;
-> don't design here.
+> closed 2026-09-10. The model now lives in `docs/trackerManager.md`;
+> the quirks it left in `docs/oddities.md`.
 
 ## Phases
 
@@ -38,7 +38,8 @@
    population it belongs to, and the lane pass names the bounds it
    moved, so the walk asks only about pitch and raw. The two walks stay
    as they are: the frontier's per-anchor cost halves, and past the cap
-   one channel pass still beats a few hundred probes.  ← in flight
+   one channel pass still beats a few hundred probes. — landed
+   2026-09-10, two commits.
 
 ## Landed  (newest first; prune below ~4)
 
