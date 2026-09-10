@@ -1,6 +1,6 @@
 # The lane bound — design
 
-> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 3.
+> opened: 2026-08-09 · status: in flight — plan/lane-bound.md, phase 4.
 
 **A note's tail is two numbers in two frames: the lane bound is logical
 and the wire bound is raw.** One expression states the lane bound, one
@@ -15,23 +15,8 @@ bounds.
 
 ## The lane pass
 
-1. The lane pass runs at the head, after the stash render and before
-   the fx window census. It walks each dirty channel's lanes ascending
-   over the authored population and gives every event its lane bound.
-
-1. It writes `endppqC` on the column event and on the parked render
-   event, and it is what `clipNoteHosts` reads. One walk answers the
-   three readers that each asked their own way.
-
-1. Its output is channel-local: a lane bound reads its own lane's
-   onsets and its own channel's take length. So it carries across the
-   pass boundary with the channel frame, under the same carry that
-   holds a clean channel's columns.
-
-1. The park stage runs it again over the lanes it touched. Parking mints a
-   fresh render event for the off-take half and a restore re-enters a column
-   event, and neither carries a bound; parking removes no onset, so the
-   second call restates the head pass's own numbers on the new tables.
+Landed: `docs/trackerManager.md` § The lane pass holds the pass, what it
+writes, its gating and its carry.
 
 ## The wire pass
 

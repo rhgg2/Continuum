@@ -32,9 +32,13 @@
    guard and `rebuild.forget` go with it: the pass is gated on channel
    dirt and its output carries with the channel frame, so
    `tm_clip_cache_spec` and `tm_fx_window_cache_spec` restate against
-   the carry.  ← in flight
-5. **Phase 4 — the walk shrinks** (§ Open 2) — the frontier and linear
-   walks reassessed now that the walk asks only about pitch.
+   the carry. — landed 2026-09-10, two commits.
+5. **Phase 4 — the walk shrinks** (§ The wire pass 3, § Open 4) — the
+   derived lane bound comes off `frame.clippedSpanEnd` over the
+   population it belongs to, and the lane pass names the bounds it
+   moved, so the walk asks only about pitch and raw. The two walks stay
+   as they are: the frontier's per-anchor cost halves, and past the cap
+   one channel pass still beats a few hundred probes.  ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -48,4 +52,35 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+- **The derived lane bound comes off the frame's expression.**
+  `rebuildTails` (2250–2291) gathers, for each lane it meets, that
+  lane's `frame.authoredEvents` merged with the pass's derived notes on
+  it, and hands the list to `makeTailRules`. `boundNote`'s derived arm
+  (1930–1938) calls `frame.clippedSpanEnd` over that list and its inline
+  max/min goes, so one expression states every lane bound in the
+  rebuild. The merge is in the column's frame: a derived spec carries
+  raw `ppq` with `ppqL` and `endppqL` beside it, and
+  `frame.clippedSpanEnd` reads `ppq`/`endppq` as logical, so the derived
+  entries need a logical view to merge and seek on. `boundNote` then
+  takes no `laneNext`, and the lane-1 nudge emission in both walks
+  (2049–2054, 2230–2239) reads its successor from `frame.nextOnLane`
+  over the same list. That settles § Open 4 — the successor is picked in
+  column order, so a far-delayed neighbour is no longer taken for one.
+  Spec: a derived tile whose lane successor carries a delay large enough
+  to cross a row bounds on the row and not on the raw position.
+- **The walk asks only about pitch.** `boundLanes` (784–804) names the
+  authored events whose `endppqC` it moved, over the head pass and the
+  park stage's re-run alike, and `rebuildTails` seeds `bound` with them.
+  Both walks then drop their same-lane machinery: the linear walk's
+  `lastInLane` anchor sweep and the `nearestInLane`/`nextAfterLane`
+  state of its backward pass (2019–2047), and the frontier's two lane
+  `nearestNote` probes (2224, 2234). The lane question that remains is
+  over the pass's derived output alone, which is the small `extras`
+  list, so a kept tile whose lane successor moved still re-binds.
+  `tm_walk_parity_spec`'s fixture already turns on a note that no seed
+  names re-binding; the new spec pins the route directly. Spec: an
+  authored note whose lane bound moved under a neighbour's edit takes
+  its new wire bound in mm, on both routes. `decisions.md` records the
+  walks staying two, retiring § Open 5.
 

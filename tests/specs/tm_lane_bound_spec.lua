@@ -1,7 +1,7 @@
 -- An authored note's lane bound is a function of the authored population alone -- the column's own
 -- events together with the parked ones that have left the take. Fx expansion adds derived notes to
 -- the channel and the tail walk meets them in the same pass, yet none of them moves an authored
--- note's `endppqC`. See design/lane-bound.md § Two populations.
+-- note's `endppqC`. See docs/trackerManager.md § Lane occupancy.
 --
 -- What holds it is the region lane allocator: it seeds each lane's occupancy from the spans already
 -- sounding there before placing a derived note, so a derived note lands only where its lane has
@@ -23,7 +23,7 @@
 -- the ceiling, the successor's onset, the take length and the floor -- so the number a note is drawn
 -- to is a row, and the wire bound is that row converted once. Swing separates a row from its raw
 -- position and delay moves a raw onset off its row, so between them the two readings come apart.
--- See design/lane-bound.md § The lane span and § The wire pass.
+-- See docs/trackerManager.md § Tail walk.
 --
 -- The last case pins how far the one expression reaches. `overlap` is a term of the lane bound, so a
 -- note carrying one is drawn past its lane successor -- and the fx window its chain runs in closes on
