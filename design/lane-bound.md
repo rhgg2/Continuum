@@ -29,9 +29,9 @@ writes, its gating and its carry.
    its predecessor's tick plus one, and a nudge marks its own note
    disturbed so the cascade carries forward.
 
-1. It gives each derived note its lane bound, over the authored
-   population together with the pass's derived notes, by the same
-   expression the lane pass uses.
+1. It gives each derived note its lane bound, over the lane's on-take
+   events together with the pass's derived notes — what sounds there —
+   by the same expression the lane pass uses.
 
 1. It then converts: `rawBound = max(ppq + 1, min(fromLogical(laneBound),
    nextSamePitch.ppq))`. That is the pass's only conversion of a tail,
@@ -66,11 +66,6 @@ writes, its gating and its carry.
    absorbing the final partial period, so the lane bound's `takeLenL` term
    converts nothing. Whether the term wants a conversion at all is a question
    for the walk, which hoists the same number.
-
-1. The wire pass picks a lane successor in raw order and reads its
-   logical onset. A neighbour delayed far enough is taken for a
-   successor of a note it does not follow. The lane pass walks the
-   population in column order, so the question is settled there.
 
 1. The frontier and linear walks split the cost of a whole-channel
    traversal. Whether the wire pass, asking only about pitch, still

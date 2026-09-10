@@ -42,10 +42,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-10 tm: bound a derived note through the frame's expression (docs § Tail walk)
 - 2026-09-10 tm: the walk takes the lane bound it is given (docs § The lane pass)
 - 2026-09-10 tm: bound every lane in one pass (docs § The lane pass)
 - 2026-09-09 tm: bound an on-take note through the frame's expression (docs § Lane occupancy)
-- 2026-09-09 tm: give the lane bound its population (docs § Lane occupancy)
 
 ## Now
 
@@ -53,22 +53,6 @@
 
 ## Queued (current phase; one-liners)
 
-- **The derived lane bound comes off the frame's expression.**
-  `rebuildTails` (2250–2291) gathers, for each lane it meets, that
-  lane's `frame.authoredEvents` merged with the pass's derived notes on
-  it, and hands the list to `makeTailRules`. `boundNote`'s derived arm
-  (1930–1938) calls `frame.clippedSpanEnd` over that list and its inline
-  max/min goes, so one expression states every lane bound in the
-  rebuild. The merge is in the column's frame: a derived spec carries
-  raw `ppq` with `ppqL` and `endppqL` beside it, and
-  `frame.clippedSpanEnd` reads `ppq`/`endppq` as logical, so the derived
-  entries need a logical view to merge and seek on. `boundNote` then
-  takes no `laneNext`, and the lane-1 nudge emission in both walks
-  (2049–2054, 2230–2239) reads its successor from `frame.nextOnLane`
-  over the same list. That settles § Open 4 — the successor is picked in
-  column order, so a far-delayed neighbour is no longer taken for one.
-  Spec: a derived tile whose lane successor carries a delay large enough
-  to cross a row bounds on the row and not on the raw position.
 - **The walk asks only about pitch.** `boundLanes` (784–804) names the
   authored events whose `endppqC` it moved, over the head pass and the
   park stage's re-run alike, and `rebuildTails` seeds `bound` with them.

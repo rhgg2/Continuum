@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-10** — A note takes its lane bound over the population it belongs to: an authored note
+  over both halves of its lane, a derived note over what sounds there -- the lane's on-take events
+  with the pass's own output. That settles the walk's derived arm against the planned
+  frame.authoredEvents, under which a parked member would cut the tile that replaced it. The
+  successor comes from that list in column order, so a neighbour whose delay carries its raw onset
+  past the note behind it is still the note that follows. The frontier's seat probe admits authored
+  records only in the same change, a host's seat holding last pass's derived note while this pass's
+  stands in the derived list.
+
 - **2026-09-10** — The lane bound is one pass's to write. boundLanes walks a dirty channel's lanes
   at the head and gives every authored event its endppqC, replacing the per-uuid clip cache and its
   dirt guard; the park stage runs the pass again over the lanes it touched, since parking mints

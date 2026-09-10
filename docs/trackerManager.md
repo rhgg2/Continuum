@@ -943,8 +943,8 @@ logical, so it falls on the row it means. The wire bound is the only value
 that reaches mm.
 
 Same-lane uses INTENT (`ppqL`) so authored music geometry wins over
-realisation delays, and the authored population is read in column order,
-so the successor is the next onset drawn. Same-pitch uses RAW because
+realisation delays, and the population is read in column order, so the
+successor is the next onset drawn. Same-pitch uses RAW because
 MIDI physics is realised. "Next" is strict-greater — a chord-mate at the
 same onset is not following.
 
@@ -970,11 +970,16 @@ in raw becomes the realised predecessor.
 An authored note's lane bound is on its column event, where the lane pass
 wrote it (§ The lane pass), and the walk reads it there. The walk states
 the bound only for the derived notes, which sit on lanes the region
-allocator gave them.
+allocator gave them, and states it through the same expression over the
+lane's sounding population — its on-take events together with the pass's
+own derived notes. A derived note carries its logical seat beside its raw
+one, so it joins that population as a view of itself.
 
-The lane bound comes from a population holding both halves of the lane;
-the wire bound never does. A parked note carries no raw record, so the
-same-pitch seek reads the index and finds only what is on the take.
+Each note bounds against the population it belongs to. An authored note
+reads both halves of its lane, a parked note being drawn where it always
+was; a derived note reads what sounds there, standing in for what its
+region parked. The wire bound never reads a parked note at all: it carries
+no raw record, so the same-pitch seek finds only what is on the take.
 
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
@@ -994,7 +999,9 @@ left it separated and clipped against neighbours that also stood still.
 disturbed if a seed names it, if it is derived, or if a nudge moved it. A
 seed names by uuid where it still answers one — a survivor, recovered
 live from `byUuid` — and by logical seat otherwise: an add, whose uuid
-lands only at commit, and a delete, whose uuid is already gone. Derived
+lands only at commit, and a delete, whose uuid is already gone. The seat
+answers over authored records alone, since last pass's derived note shares
+its host's seat and this pass's stands in the derived list. Derived
 notes seed only where their host re-ran: `rebuildFx` regenerates those
 tiles, so their raw is this pass's news whatever the dirt says. A kept
 host's specs come back verbatim, settled and clipped last pass, so they
@@ -1259,8 +1266,8 @@ mm — `rebuildInternals` routes it to the fx stage's existing set instead.
 
 Fx expansion seats the pass's own derived output in the columns, so a channel carrying its columns
 holds the previous pass's output at the head of the next one. The lane pass passes over those: the
-lane bound is authored, and a derived note takes its bound off the tail walk's own successor
-(§ Tail walk).
+lane bound is authored, and a derived note takes its bound over the population that sounds on its
+lane (§ Tail walk).
 
 ## The lane pass
 

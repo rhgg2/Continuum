@@ -1900,12 +1900,40 @@ end
 
 -- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
 -- their batches and marking tables and drive the same rules over their own state.
---shape: ctx = { chan, res, time, disturbed, nudged, clampWrites, tailWrites }
+--shape: ctx = { chan, res, time, derived, disturbed, nudged, clampWrites, tailWrites }
 local function makeTailRules(ctx)
   local chan, res, time = ctx.chan, ctx.res, ctx.time
   local takeLenL = time:toLogical(chan, time:length())
   local disturbed, nudged = ctx.disturbed, ctx.nudged
   local clampWrites, tailWrites = ctx.clampWrites, ctx.tailWrites
+
+  -- What sounds on a lane, logical frame: on-take events plus this pass's derived notes on it.
+  -- A derived spec is raw-framed, so it joins as a view of itself. see docs/trackerManager.md § Tail walk
+  local viewOf, derivedOnLane = {}, {}
+  for _, e in ipairs(ctx.derived) do
+    local view = { evType = 'note', ppq = e.ppqL, endppq = e.endppqL, overlap = e.overlap }
+    viewOf[e] = view
+    util.bucket(derivedOnLane, e.lane, view)
+  end
+  local populations = {}
+  --post: unsafe result = lane's sounding population in column order; empty if none sounds
+  local function population(lane)
+    local pop = populations[lane]
+    if not pop then
+      local col, views = frame.channels[chan].onTake.notes[lane], derivedOnLane[lane]
+      pop = col and col.events or {}
+      if views then
+        pop = util.clone(pop)   -- the column's own list stays the column's
+        for _, view in ipairs(views) do util.add(pop, view) end
+        util.sortByPPQ(pop)
+      end
+      populations[lane] = pop
+    end
+    return pop
+  end
+
+  -- The lane successor in column order: a neighbour delayed off its row still follows here.
+  local function laneNext(e) return frame.nextOnLane(population(e.lane), e.ppqL) end
 
   local function settleOnset(e, prev)
     local onset = voicing.separateOnset(e, prev)
@@ -1925,14 +1953,12 @@ local function makeTailRules(ctx)
   end
 
   -- An authored note's lane bound is the lane pass's, read off its column event; a derived note lies
-  -- outside that population and bounds off the walk's own successor. see docs § The lane pass
+  -- outside the columns and takes the same expression over what sounds on its lane. see docs § The lane pass
   --pre: (not e.derived) → e.colEvt carries its lane bound -- the lane pass ran over this channel
-  local function boundNote(e, laneNext, pitchNext)
+  local function boundNote(e, pitchNext)
     local laneBound
     if e.derived then
-      local ceiling  = e.endppqL == util.OPEN and math.huge or e.endppqL or math.huge
-      local laneClip = laneNext and laneNext.ppqL + (e.overlap or 0) or math.huge
-      laneBound = math.max(e.ppqL + 1, math.min(ceiling, laneClip, takeLenL))
+      laneBound = frame.clippedSpanEnd(viewOf[e], takeLenL, population(e.lane))
     else
       laneBound = e.colEvt.endppqC
     end
@@ -1953,15 +1979,15 @@ local function makeTailRules(ctx)
     end
   end
 
-  return settleOnset, boundNote
+  return settleOnset, boundNote, laneNext
 end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Tail walk
-local function linearTails(chan, notes, time, res, clampWrites, tailWrites, keptDerived)
+local function linearTails(chan, notes, extras, time, res, clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
-  local settleOnset, boundNote = makeTailRules{
-    chan = chan, res = res, time = time,
+  local settleOnset, boundNote, laneNext = makeTailRules{
+    chan = chan, res = res, time = time, derived = extras,
     disturbed = disturbed, nudged = nudged,
     clampWrites = clampWrites, tailWrites = tailWrites,
   }
@@ -2032,27 +2058,25 @@ local function linearTails(chan, notes, time, res, clampWrites, tailWrites, kept
     end
   end
 
-  -- Bounds + nudge emission: one backward pass hands over next-in-lane and next-in-pitch (running
-  -- state keyed by lane and pitch), the stale test replaced by `bound` membership. see design § Phase 4
+  -- Bounds + nudge emission: one backward pass hands over next-in-pitch (running state keyed by
+  -- pitch), the stale test replaced by `bound` membership. see design § Phase 4
   local emitted = {}
-  local nearestInLane,  nextAfterLane  = {}, {}
   local nearestInPitch, nextAfterPitch = {}, {}
   for i = #notes, 1, -1 do
     local e = notes[i]
-    local laneAbove, pitchAbove = nearestInLane[e.lane], nearestInPitch[e.pitch]
+    local pitchAbove = nearestInPitch[e.pitch]
     -- A neighbour sharing e's raw is no successor of it: it hands over its own.
-    local laneNext  = laneAbove  and (laneAbove.ppq  > e.ppq and laneAbove  or nextAfterLane[e.lane])
     local pitchNext = pitchAbove and (pitchAbove.ppq > e.ppq and pitchAbove or nextAfterPitch[e.pitch])
-    nearestInLane[e.lane],   nextAfterLane[e.lane]   = e, laneNext
     nearestInPitch[e.pitch], nextAfterPitch[e.pitch] = e, pitchNext
 
     -- The walk's own dirt: a nudged lane-1 onset seeds every absorber seat up to the next lane-1
     -- onset, for pbs to consume later this pass. see design § The widen and the emission are the same fact
     if nudged[e] and e.lane == 1 then
+      local nextOnLane = laneNext(e)
       util.add(emitted, { uuid = e.uuid, verb = 'nudge', ppq = e.ppq, ppqL = e.ppqL,
-                          lane = e.lane, pitch = e.pitch, endppqL = laneNext and laneNext.ppqL })
+                          lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
     end
-    if bound[e] then boundNote(e, laneNext, pitchNext) end
+    if bound[e] then boundNote(e, pitchNext) end
   end
 
   return emitted
@@ -2138,7 +2162,9 @@ local function seatMatches(indexList, extras, seed)
   end
   for i = util.firstAtOrAfter(indexList, seed.ppq), #indexList do
     if indexList[i].ppq ~= seed.ppq then break end
-    if match(indexList[i]) then util.add(out, indexList[i]) end
+    -- Authored only, as every other index probe here: a derived record in mm is last pass's, and
+    -- this pass's stands in extras -- a host's own seat holds both.
+    if isAuthored(indexList[i]) and match(indexList[i]) then util.add(out, indexList[i]) end
   end
   for _, rec in ipairs(extras) do if rec.ppq == seed.ppq and match(rec) then util.add(out, rec) end end
   return out
@@ -2149,8 +2175,8 @@ end
 local function frontierTails(chan, indexList, extras, time, res,
                              clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
-  local settleOnset, boundNote = makeTailRules{
-    chan = chan, res = res, time = time,
+  local settleOnset, boundNote, laneNext = makeTailRules{
+    chan = chan, res = res, time = time, derived = extras,
     disturbed = disturbed, nudged = nudged,
     clampWrites = clampWrites, tailWrites = tailWrites,
   }
@@ -2227,17 +2253,17 @@ local function frontierTails(chan, indexList, extras, time, res,
     if pitchPred then bound[pitchPred] = true end
   end
 
-  -- A nudged lane-1 seat emits its closure to the next lane-1 onset -- the lane successor the bound
-  -- probe already fetched. see design § The widen and the emission are the same fact
+  -- A nudged lane-1 seat emits its closure to the next lane-1 onset, which the lane's own
+  -- population answers. see design § The widen and the emission are the same fact
   local emitted = {}
   for e in pairs(bound) do
-    local laneNext  = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.lane  == e.lane  end)
     local pitchNext = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
     if nudged[e] and e.lane == 1 then
+      local nextOnLane = laneNext(e)
       util.add(emitted, { uuid = e.uuid, verb = 'nudge', ppq = e.ppq, ppqL = e.ppqL,
-                          lane = e.lane, pitch = e.pitch, endppqL = laneNext and laneNext.ppqL })
+                          lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
     end
-    boundNote(e, laneNext, pitchNext)
+    boundNote(e, pitchNext)
   end
   return emitted
 end
@@ -2275,7 +2301,7 @@ local function rebuildTails(noteLive, noteOps, time)
     else
       local notes = mergeIndexed(indexedNotes, isAuthored, extras)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, time, res, clampWrites, tailWrites, keptDerived)
+      emitted = linearTails(chan, notes, extras, time, res, clampWrites, tailWrites, keptDerived)
     end
 
     -- The walk's own dirt joins what it was given: past the cap the channel collapses to wholesale,

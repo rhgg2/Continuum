@@ -25,12 +25,19 @@
 -- position and delay moves a raw onset off its row, so between them the two readings come apart.
 -- See docs/trackerManager.md § Tail walk.
 --
--- The last case pins how far the one expression reaches. `overlap` is a term of the lane bound, so a
+-- The next case pins how far the one expression reaches. `overlap` is a term of the lane bound, so a
 -- note carrying one is drawn past its lane successor -- and the fx window its chain runs in closes on
 -- that same number. The tail walk and the window census are two readers of one statement.
+--
+-- The last case takes the other half of that expression. A derived note lies outside the authored
+-- population, so it bounds over the one it belongs to: its lane's on-take events together with the
+-- pass's own output, which is what sounds there. The successor is the next onset in column order
+-- here too, so a neighbour whose delay carries its raw onset past the note behind it is still the
+-- note that follows.
 
-local t    = require('support')
-local util = require('util')
+local t          = require('support')
+local util       = require('util')
+local generators = require('generators')
 
 local arpUp  = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
 -- Continuous, so the host keeps its place on the take: what it writes is a pb stream across its window.
@@ -258,6 +265,42 @@ return {
       t.truthy(last, 'precondition: the host ran its chain')
       t.truthy(last >= 480, "the window follows the tail past its successor's onset")
       t.truthy(last < tail.endppqC, 'and closes inside the bound the tail is drawn to')
+    end,
+  },
+
+  {
+    -- A region on [480, 600) whose stage emits past its own window, onto lane 1, where two authored
+    -- notes follow it. The first of them is the tile's lane successor, drawn at 720; two rows of
+    -- delay carry its raw onset past the second note at 780, so the two readings of "next" name
+    -- different notes. The bound is the row, so the tile stops where its successor is drawn.
+    name = "a derived tile bounds at its lane successor's row, not at the raw order its delay leaves",
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.overrun = {
+        expand = function(stream) return { notes = {
+          { ppq = stream.window[1], endppq = 1440, pitch = 60, vel = 100, detune = 0 },
+        }, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Overrun', defaults = {}, fields = {},
+      }
+      h.tm:addEvent(note(1, 720, 1440, 62, 1, 500))   -- the successor, delayed clear of its own row
+      h.tm:addEvent(note(1, 780, 1440, 64, 1))
+      h.tm:flush()
+      t.truthy(wireNote(h, 1, 62).ppq > wireNote(h, 1, 64).ppq,
+        'fixture check: the delay lands its raw onset past the note behind it, so raw order and row order disagree')
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 600,
+                                   fx = { { kind = 'overrun' } } } })
+      h.tm:rebuild()
+      generators.kinds.overrun = nil
+
+      local tile
+      for _, n in ipairs(h.fm:dump().notes) do if n.derived == 'fxr-1' then tile = n end end
+      local successor = authoredAt(h, 1, 720)
+      t.truthy(tile, 'precondition: the region emitted a tile')
+      t.eq(tile.lane, successor.lane, 'precondition: onto the lane the two authored notes share')
+      t.truthy(tile.endppq < 1440, 'precondition: and past its own window, so a lane successor decides its tail')
+
+      t.eq(tile.endppq, successor.ppq, "the tile bounds at the row its lane successor is drawn on")
     end,
   },
 
