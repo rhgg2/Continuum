@@ -166,67 +166,6 @@ local function diffEvents(a)
   end
 end
 
------ PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
-
---contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
---contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
---contract: appends removals/adds to the batcher {del(event), add(spec)}
---contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
---contract: seedSpans (from pcSeedSpans) narrow existing to its logical spans; nil = whole channel
---invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
---invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
-local function reconcilePCsForChan(chan, records, batcher, seedSpans)
-  local existing = {}
-  for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
-    if not seedSpans or spans.contains(seedSpans.logical, e.ppq) then util.add(existing, e) end
-  end
-
-  local groups = {}
-  for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
-
-  local winners = {}
-  for _, g in pairs(groups) do
-    table.sort(g, function(a, b) return a.lane < b.lane end)
-    util.add(winners, g[1])
-    for i = 2, #g do
-      local lost = g[i]
-      -- A seated record marks through its column event. An off-take fx spec holds no event, and
-      -- setEvent would renew the lane its number names without that lane's contents having moved.
-      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true)
-      elseif lost.spec then lost.spec.sampleShadowed = true end
-    end
-  end
-
-  local predicted = {}
-  for _, w in ipairs(winners) do
-    util.add(predicted, { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
-                          evType = 'pc', chan = chan, derived = 'pc' })
-  end
-
-  diffEvents{
-    existing = existing, predicted = predicted, batcher = batcher,
-    key = function(x) return util.key(x.derived, x.ppq, x.val) end,
-  }
-end
-
------ fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
-
--- Identity is geometry and the name it carries: (host, ppq, endppqL, pitch, vel, detune, sample,
--- intentCents); stale endppqL still matches (tail-walk-owned end stays out). A rename with no pitch move leaves every other field the same, so keying the intent is what lets the reconcile see it.
-local function fxKey(spec)
-  return util.key(spec.derived, spec.ppq, spec.endppqL or 0,
-                  spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0, spec.intentCents)
-end
-
--- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
--- kept fxNote is re-clipped in place by the tail walk rather than re-added.
-local function reconcileFx(existing, predicted, batcher)
-  diffEvents{ existing = existing, predicted = predicted, key = fxKey, batcher = batcher,
-    onKeep = function(spec, have)
-      spec.uuid, spec.realised, spec.endppq = have.uuid, have.realised, have.endppq
-    end }
-end
-
 ----- Note-lane excision
 
 -- Drop the events the seeded positions claim from a channel's note lanes: a seek per position per
@@ -261,7 +200,6 @@ end
 
 -- Partition mm notes stamped/external, lay internal columns logical-born, reseat stale-swing.
 -- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Partition and internal lanes
---contract: interval dirt: non-derived notes carry ppqL -- an external mutation reloads wholesale
 local function rebuildInternals(time)
   local internal, external = {}, {}
   local noteExisting = emptyChans()
@@ -1552,7 +1490,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   local fxOut = { noteLive = emptyChans(), noteOps = { deletes = {}, adds = {} },
                   pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
 
-  -- reconcileFx's batcher: ops cross to the tail walk as inspectable data, not staged batch state --
+  -- ops cross to the tail walk as inspectable data, not staged batch state --
   -- the walk seats them in its own batch.
   local noteOps = fxOut.noteOps
   local noteOpsBatcher = { delete = function(e)    util.add(noteOps.deletes, e) end,
@@ -1806,7 +1744,22 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
     -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
-    reconcileFx(noteExisting[chan], predicted, noteOpsBatcher)
+
+    diffEvents {
+      existing  = noteExisting[chan],
+      predicted = predicted,
+      key       = function(evt)
+        return util.key(evt.derived, evt.ppq, evt.endppqL or 0,
+        evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0, evt.intentCents)
+      end,
+      batcher   = noteOpsBatcher,
+      -- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
+      -- kept fxNote is re-clipped in place by the tail walk rather than re-added.
+      onKeep    = function(spec, evt)
+        spec.uuid, spec.realised, spec.endppq = evt.uuid, evt.realised, evt.endppq
+      end
+    }
+
     local fxNotes = {}
     for _, spec in ipairs(predicted) do
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
@@ -2906,6 +2859,47 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
 end
 
 ----- Rebuild PCs
+
+--contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
+--contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
+--contract: appends removals/adds to the batcher {del(event), add(spec)}
+--contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
+--contract: seedSpans (from pcSeedSpans) narrow existing to its logical spans; nil = whole channel
+--invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
+--invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
+local function reconcilePCsForChan(chan, records, batcher, seedSpans)
+  local existing = {}
+  for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
+    if not seedSpans or spans.contains(seedSpans.logical, e.ppq) then util.add(existing, e) end
+  end
+
+  local groups = {}
+  for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
+
+  local winners = {}
+  for _, g in pairs(groups) do
+    table.sort(g, function(a, b) return a.lane < b.lane end)
+    util.add(winners, g[1])
+    for i = 2, #g do
+      local lost = g[i]
+      -- A seated record marks through its column event. An off-take fx spec holds no event, and
+      -- setEvent would renew the lane its number names without that lane's contents having moved.
+      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true)
+      elseif lost.spec then lost.spec.sampleShadowed = true end
+    end
+  end
+
+  local predicted = {}
+  for _, w in ipairs(winners) do
+    util.add(predicted, { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
+                          evType = 'pc', chan = chan, derived = 'pc' })
+  end
+
+  diffEvents{
+    existing = existing, predicted = predicted, batcher = batcher,
+    key = function(x) return util.key(x.derived, x.ppq, x.val) end,
+  }
+end
 
 --shape: seedSpans = { raw = span set, logical = span set }; nil = wholesale
 local function pcSeedSpans(chan, noteLive)
