@@ -146,23 +146,23 @@ local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
------ Derived-event reconcile skeleton (R2)
--- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
---contract: appends unmatched-existing to sink.delete(event), new/made specs to sink.add(spec)
-local function reconcileDerived(a)
+-- Index existing by `key`, keep on hit, add the rest, remove unkept. 
+local function diffEvents(a)
   local byKey, kept = {}, {}
-  for _, e in ipairs(a.existing) do byKey[a.key(e)] = e end
+  for _, evt in ipairs(a.existing) do
+    byKey[a.key(evt)] = evt
+  end
   for _, spec in ipairs(a.predicted) do
-    local have = byKey[a.key(spec)]
-    if have and (not a.match or a.match(have, spec)) then
-      kept[have] = true
-      if a.onKeep then a.onKeep(spec, have) end
+    local evt = byKey[a.key(spec)]
+    if evt then
+      kept[evt] = true
+      if a.onKeep then a.onKeep(spec, evt) end
     else
-      a.sink.add(a.make and a.make(spec) or spec)
+      a.batcher.add(spec)
     end
   end
   for _, e in ipairs(a.existing) do
-    if not kept[e] then a.sink.delete(e) end
+    if not kept[e] then a.batcher.delete(e) end
   end
 end
 
@@ -180,12 +180,12 @@ end
 
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
---contract: appends removals/adds to the sink {del(event), add(spec)}
+--contract: appends removals/adds to the batcher {del(event), add(spec)}
 --contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
 --contract: seedSpans (from pcSeedSpans) narrow existing to in-span events; nil = whole channel
 --invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
-local function reconcilePCsForChan(chan, records, sink, seedSpans)
+local function reconcilePCsForChan(chan, records, batcher, seedSpans)
   local existing = {}
   for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
     if not seedSpans or pcInSpans(seedSpans, e.ppq, true) then util.add(existing, e) end
@@ -207,12 +207,15 @@ local function reconcilePCsForChan(chan, records, sink, seedSpans)
     end
   end
 
-  reconcileDerived{
-    existing = existing, predicted = winners, sink = sink,
-    key   = function(x) return x.ppq end,
-    match = function(have, w) return have.derived and have.val == w.sample end,
-    make  = function(w) return { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
-                                 evType = 'pc', chan = chan, derived = 'pc' } end,
+  local predicted = {}
+  for _, w in ipairs(winners) do
+    util.add(predicted, { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
+                          evType = 'pc', chan = chan, derived = 'pc' })
+  end
+
+  diffEvents{
+    existing = existing, predicted = predicted, batcher = batcher,
+    key = function(x) return util.key(x.derived, x.ppq, x.val) end,
   }
 end
 
@@ -227,8 +230,8 @@ end
 
 -- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
 -- kept fxNote is re-clipped in place by the tail walk rather than re-added.
-local function reconcileFx(existing, predicted, sink)
-  reconcileDerived{ existing = existing, predicted = predicted, key = fxKey, sink = sink,
+local function reconcileFx(existing, predicted, batcher)
+  diffEvents{ existing = existing, predicted = predicted, key = fxKey, batcher = batcher,
     onKeep = function(spec, have)
       spec.uuid, spec.realised, spec.endppq = have.uuid, have.realised, have.endppq
     end }
@@ -1559,10 +1562,10 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
   local fxOut = { noteLive = emptyChans(), noteOps = { deletes = {}, adds = {} },
                   pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
 
-  -- reconcileFx's sink: ops cross to the tail walk as inspectable data, not staged batch state --
+  -- reconcileFx's batcher: ops cross to the tail walk as inspectable data, not staged batch state --
   -- the walk seats them in its own batch.
   local noteOps = fxOut.noteOps
-  local noteOpsSink = { delete = function(e)    util.add(noteOps.deletes, e) end,
+  local noteOpsBatcher = { delete = function(e)    util.add(noteOps.deletes, e) end,
                         add    = function(spec) util.add(noteOps.adds, spec)  end }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
@@ -1813,7 +1816,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
     -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
-    reconcileFx(noteExisting[chan], predicted, noteOpsSink)
+    reconcileFx(noteExisting[chan], predicted, noteOpsBatcher)
     local fxNotes = {}
     for _, spec in ipairs(predicted) do
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
@@ -1858,14 +1861,11 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     end
 
     local wires = mmBatch()
-    -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the match --
+    -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the key --
     -- it drives REAPER's interpolation. see docs/generators.md § pb and cc
-    reconcileDerived{
-      existing = ccExisting[chan], predicted = ccLive, sink = wires,
-      key   = function(x) return util.key(x.cc, x.ppq) end,
-      match = function(have, spec)
-        return have.val == spec.val and have.shape == spec.shape and have.tension == spec.tension
-      end,
+    diffEvents{
+      existing = ccExisting[chan], predicted = ccLive, batcher = wires,
+      key = function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end,
     }
 
     wires.commit()
