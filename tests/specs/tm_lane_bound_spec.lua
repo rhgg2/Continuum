@@ -29,11 +29,18 @@
 -- note carrying one is drawn past its lane successor -- and the fx window its chain runs in closes on
 -- that same number. The tail walk and the window census are two readers of one statement.
 --
--- The last case takes the other half of that expression. A derived note lies outside the authored
+-- The next case takes the other half of that expression. A derived note lies outside the authored
 -- population, so it bounds over the one it belongs to: its lane's on-take events together with the
 -- pass's own output, which is what sounds there. The successor is the next onset in column order
 -- here too, so a neighbour whose delay carries its raw onset past the note behind it is still the
 -- note that follows.
+--
+-- The last case is the same expression asked of a tile nothing re-derived. A stage emitting past its
+-- own window leaves a tile whose lane successor sits outside that window, so an edit to the
+-- successor leaves the host kept and the tile comes back holding the ceiling it was emitted with.
+-- The walk states a derived note's lane bound, and it is the only thing that can follow the move.
+-- The stage counts its own runs, which is what keeps the case about the kept tile: a host re-running
+-- would emit a fresh tile and bound it whatever the walk asked.
 
 local t          = require('support')
 local util       = require('util')
@@ -301,6 +308,44 @@ return {
       t.truthy(tile.endppq < 1440, 'precondition: and past its own window, so a lane successor decides its tail')
 
       t.eq(tile.endppq, successor.ppq, "the tile bounds at the row its lane successor is drawn on")
+    end,
+  },
+
+  {
+    name = 'a kept tile follows the lane successor that moved under it',
+    run = function(harness)
+      local h, runs = harness.mk(), 0
+      generators.kinds.overrun = {
+        expand = function(stream)
+          runs = runs + 1
+          return { notes = {
+            { ppq = stream.window[1], endppq = 1440, pitch = 60, vel = 100, detune = 0 },
+          }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'Overrun', defaults = {}, fields = {},
+      }
+      h.tm:addEvent(note(1, 960,  1440, 62, 1))   -- the tile's lane successor, well past the window
+      h.tm:addEvent(note(1, 1200, 1440, 64, 1))   -- the note behind it, which the deletion promotes
+      h.tm:flush()
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 600,
+                                   fx = { { kind = 'overrun' } } } })
+      h.tm:rebuild()
+
+      local function tile()
+        for _, n in ipairs(h.fm:dump().notes) do if n.derived == 'fxr-1' then return n end end
+      end
+      t.eq(tile().lane, 1, 'precondition: the tile takes the lane the two authored notes share')
+      t.eq(tile().endppq, 960,
+        'fixture check: clipped by its lane successor, well short of the ceiling it was emitted with')
+      local ran = runs
+
+      h.tm:deleteEvent(authoredAt(h, 1, 960))
+      h.tm:flush()
+      generators.kinds.overrun = nil
+
+      t.eq(runs, ran, 'precondition: the edit fell outside the window, so the host kept its output')
+      t.eq(tile().endppq, 1200, 'the kept tile bounds at the successor the deletion promoted')
     end,
   },
 

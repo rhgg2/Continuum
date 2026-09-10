@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-10** — The lane pass names the on-take bounds it moves and the wire pass re-bounds those
+  by name, replacing the probe for the nearest same-lane predecessor of every anchor: the probe
+  answered conservatively where the name is exact. The walk keeps one lane question, asked of its
+  derived output alone, because a kept tile's lane successor can sit outside its host's window --
+  velPattern passes a member's ceiling through, and the gate sees only the seeds inside the window.
+  Both walks stay: asking only about pitch halves the frontier's per-anchor probes, and past the
+  seed cap one channel pass still beats a few hundred.
+
 - **2026-09-10** — A note takes its lane bound over the population it belongs to: an authored note
   over both halves of its lane, a derived note over what sounds there -- the lane's on-take events
   with the pass's own output. That settles the walk's derived arm against the planned

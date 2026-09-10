@@ -15,6 +15,10 @@
 -- clip and reaches only mm. A walk that missed a lane neighbour moves the first, one that missed a
 -- pitch neighbour moves the second alone.
 --
+-- Each run is also asserted absolutely, before the two are compared: parity holds just as well with
+-- both walks equally stale, so each must be seen to move the bounds the deletions moved -- the lane
+-- bound on the column, and the wire tail that follows it into mm.
+--
 -- Every note's ceiling overruns its lane successor, so every bound in the fixture is a clip and
 -- removing any onset moves the bound before it. Each bar's lane-2 blocker recycles its lane-1
 -- host's pitch, so the host's raw tail is cut far short of its lane bound. Deleting every other
@@ -134,13 +138,20 @@ local function walksAgree(harness, opts)
   t.eq(wireOf(linear, host).endppq, wireOf(linear, noteAt(linear, 2, HOST_PPQ + 120)).ppq,
     "fixture check: the blocker on the host's pitch clips the host's raw tail")
   local laneBefore, rawBefore = filler.endppqC, wireOf(linear, host).endppq
+  local fillerWireBefore = wireOf(linear, filler).endppq
 
   t.eq(deleteBlockers(linear, 20), 20, 'fixture check: twenty seeds in one flush, past the cap')
   t.eq(deleteBlockers(frontier, 5), 20, 'fixture check: and five at a time, under it, four times')
 
-  t.truthy(noteAt(linear, 2, FILLER_PPQ).endppqC > laneBefore,
-    'precondition: the deletions moved a lane bound no seed named')
-  t.truthy(wireOf(linear, host).endppq > rawBefore, 'precondition: and a raw bound likewise')
+  for _, route in ipairs{ { 'the linear walk', linear }, { 'the frontier', frontier } } do
+    local label, h = route[1], route[2]
+    local grownFiller, boundHost = noteAt(h, 2, FILLER_PPQ), noteAt(h, 1, HOST_PPQ)
+    t.truthy(grownFiller.endppqC > laneBefore,
+      label .. ': the deletions moved a lane bound no seed named')
+    t.truthy(wireOf(h, grownFiller).endppq > fillerWireBefore,
+      label .. ': and the wire tail followed that bound into mm')
+    t.truthy(wireOf(h, boundHost).endppq > rawBefore, label .. ': and a raw bound moved likewise')
+  end
 
   t.deepEq(frameNotes(frontier), frameNotes(linear),
     'the two walks leave the same lane bounds on the columns')

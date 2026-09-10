@@ -781,7 +781,8 @@ end
 -- lane's whole population. see docs/trackerManager.md § The lane pass
 --post: every authored event of the channel's lanes carries its lane bound on endppqC
 --post: the parked list's table identity changes iff one of its own bounds moved (tv's carry key)
-local function boundLanes(chan, time)
+--post: movedBounds[chan] names every on-take event whose bound this call moved
+local function boundLanes(chan, time, movedBounds)
   local channel, parkedMoved = frame.channels[chan], false
   local takeLenL = time:toLogical(chan, time:length())
   for lane = 1, #channel.onTake.notes do
@@ -792,10 +793,13 @@ local function boundLanes(chan, time)
     for _, evt in ipairs(population) do
       if not evt.derived and evt.evType ~= 'pa' then
         local bound = frame.clippedSpanEnd(evt, takeLenL, population)
-        if offTake[evt] then
-          if evt.endppqC ~= bound then evt.endppqC = bound; parkedMoved = true end
-        else
-          frame.setEvent(evt, 'endppqC', bound)
+        if evt.endppqC ~= bound then
+          if offTake[evt] then
+            evt.endppqC, parkedMoved = bound, true
+          else
+            util.bucket(movedBounds, chan, evt.uuid)
+            frame.setEvent(evt, 'endppqC', bound)
+          end
         end
       end
     end
@@ -816,7 +820,8 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see docs/generators.md § Emission is ownership
 
-local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostClips, pbLimCents, time)
+local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostClips, pbLimCents, time,
+                                 movedBounds)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
   -- seat-stamps each event, so the tail walk meets an ordinary seated entry.
@@ -950,7 +955,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     local touched = {}
     for _, spec in ipairs(parkedNotes) do touched[spec.chan] = true end
     for _, spec in ipairs(restores)     do touched[spec.chan] = true end
-    for chan in pairs(touched) do boundLanes(chan, time) end
+    for chan in pairs(touched) do boundLanes(chan, time, movedBounds) end
   end
 
   -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
@@ -1898,6 +1903,17 @@ local function mergeIndexed(indexNotes, keep, extras)
   return merged
 end
 
+-- The nearest lane predecessor among this pass's own derived output; the lane pass already named
+-- authored events' new bounds. see docs/trackerManager.md § The lane pass
+--post: unsafe result = the derived record on `lane` nearest before `pos`, nil if the lane has none
+local function derivedLanePred(derived, pos, lane)
+  local best
+  for _, rec in ipairs(derived) do
+    if rec.lane == lane and rec.ppq < pos and (best == nil or index.order(best, rec)) then best = rec end
+  end
+  return best
+end
+
 -- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
 -- their batches and marking tables and drive the same rules over their own state.
 --shape: ctx = { chan, res, time, derived, disturbed, nudged, clampWrites, tailWrites }
@@ -1984,7 +2000,7 @@ end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Tail walk
-local function linearTails(chan, notes, extras, time, res, clampWrites, tailWrites, keptDerived)
+local function linearTails(chan, notes, extras, time, res, clampWrites, tailWrites, keptDerived, reBound)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote, laneNext = makeTailRules{
     chan = chan, res = res, time = time, derived = extras,
@@ -2034,25 +2050,25 @@ local function linearTails(chan, notes, extras, time, res, clampWrites, tailWrit
   -- carries the same stain and re-trues here.
   if anyNudge then table.sort(notes, index.order) end
 
-  -- Bound set: every disturbed note, plus the nearest same-lane and same-pitch strict predecessor of
-  -- every anchor -- the seed-driven replacement for the span stale-test. see design § Span-staleness
+  -- Bound set: every disturbed note, the lane pass's re-bounded events, and each anchor's nearest
+  -- same-lane derived and same-pitch predecessor. see docs/trackerManager.md § Tail walk
   local bound = {}
   for e in pairs(disturbed) do bound[e] = true end
-  -- Wholesale already binds every note, so the predecessor probes add nothing. Only the seeded case
+  for _, rec in ipairs(reBound) do bound[rec] = true end
+  -- Wholesale already bounds every note, so the predecessor probes add nothing. Only the seeded case
   -- needs them, to reach the non-disturbed neighbours dirt shadows.
   if not dirt.wholesale(chan) then
     for e in pairs(disturbed) do util.add(anchors, { pos = e.ppq, lane = e.lane, pitch = e.pitch }) end
-    -- One ascending sweep, tracking running last-in-lane/last-in-pitch, answers every anchor at
-    -- once -- the forward twin of the successor pass below. See docs/trackerManager.md § Tail walk.
+    -- One ascending sweep, tracking the running last-in-pitch, answers every anchor at once -- the
+    -- forward twin of the successor pass below. See docs/trackerManager.md § Tail walk.
     table.sort(anchors, function(a, b) return a.pos < b.pos end)
-    local lastInLane, lastInPitch, i = {}, {}, 1
+    local lastInPitch, i = {}, 1
     for _, a in ipairs(anchors) do
       while i <= #notes and notes[i].ppq < a.pos do
-        local e = notes[i]
-        lastInLane[e.lane], lastInPitch[e.pitch] = e, e
+        lastInPitch[notes[i].pitch] = notes[i]
         i = i + 1
       end
-      local lanePred, pitchPred = lastInLane[a.lane], lastInPitch[a.pitch]
+      local lanePred, pitchPred = derivedLanePred(extras, a.pos, a.lane), lastInPitch[a.pitch]
       if lanePred  then bound[lanePred]  = true end
       if pitchPred then bound[pitchPred] = true end
     end
@@ -2173,7 +2189,7 @@ end
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal.
 local function frontierTails(chan, indexList, extras, time, res,
-                             clampWrites, tailWrites, keptDerived)
+                             clampWrites, tailWrites, keptDerived, reBound)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote, laneNext = makeTailRules{
     chan = chan, res = res, time = time, derived = extras,
@@ -2239,15 +2255,16 @@ local function frontierTails(chan, indexList, extras, time, res,
   -- indexList is um's own and the block's close re-trued it; extras belongs to this walk.
   if anyNudge then table.sort(extras, index.order) end
 
-  -- Phase 2 -- bounds, order-free: every disturbed note plus each anchor's nearest same-lane and same-
-  -- pitch strict predecessor re-bind. Bounds read settled onsets, write only endppq -- no re-disturb.
+  -- Phase 2 -- bounds, order-free: disturbed notes, the lane pass's re-bounded events, and each
+  -- anchor's nearest same-lane derived and same-pitch predecessor; reads settled onsets, writes only endppq.
   local bound = {}
+  for _, rec in ipairs(reBound) do bound[rec] = true end
   for e in pairs(disturbed) do
     bound[e] = true
     util.add(anchors, { pos = e.ppq, lane = e.lane, pitch = e.pitch })
   end
   for _, a in ipairs(anchors) do
-    local lanePred  = nearestNote(indexList, extras, a.pos, 'before', function(r) return r.lane  == a.lane  end)
+    local lanePred  = derivedLanePred(extras, a.pos, a.lane)
     local pitchPred = nearestNote(indexList, extras, a.pos, 'before', function(r) return r.pitch == a.pitch end)
     if lanePred  then bound[lanePred]  = true end
     if pitchPred then bound[pitchPred] = true end
@@ -2272,8 +2289,9 @@ end
 
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
---contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
-local function rebuildTails(noteLive, noteOps, time)
+--post: a note is separated only if it is disturbed; a nudged lane-1 onset emits its seat closure
+--post: the disturbed, the lane pass's named and each anchor's predecessors take fresh bounds
+local function rebuildTails(noteLive, noteOps, time, movedBounds)
   local res = mm:resolution()
   local clampWrites = mmBatch()
   -- The walk's own batch, seeded from fx expansion's existence ops -- a fresh spec is unrealised during the walk, so the
@@ -2291,17 +2309,26 @@ local function rebuildTails(noteLive, noteOps, time)
       util.add(extras, w.evt)
       if w.kept then keptDerived[w.evt] = true else freshLive = freshLive + 1 end
     end
+    -- The lane pass named the authored events whose bound it moved, over both its runs; the walk
+    -- states no lane bound of theirs, so it re-bounds them by name. see docs § The lane pass
+    local reBound = {}
+    for _, uuid in ipairs(movedBounds[chan] or {}) do
+      local rec = index.byUuid(uuid)
+      if rec then util.add(reBound, rec) end
+    end
 
     -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
     -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
     local indexedNotes = index.raw(chan).notes
     local emitted
     if not dirt.wholesale(chan) and #dirt.has(chan) + freshLive <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, indexedNotes, extras, time, res, clampWrites, tailWrites, keptDerived)
+      emitted = frontierTails(chan, indexedNotes, extras, time, res, clampWrites, tailWrites,
+                              keptDerived, reBound)
     else
       local notes = mergeIndexed(indexedNotes, isAuthored, extras)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, extras, time, res, clampWrites, tailWrites, keptDerived)
+      emitted = linearTails(chan, notes, extras, time, res, clampWrites, tailWrites,
+                            keptDerived, reBound)
     end
 
     -- The walk's own dirt joins what it was given: past the cap the channel collapses to wholesale,
@@ -3107,9 +3134,10 @@ function rebuild.pipeline(sources, time)
   -- One pass serves the whole pipeline. See docs/generators.md § Offline continuous realisation.
   perf.start('parkRender'); renderStashedParked(sources.fxParked); perf.stop('parkRender')
   -- The lane pass: every dirty channel's authored events take their lane bounds, ahead of the three
-  -- readers of them. A clean channel carries its columns and its parked lists, bounds and all.
+  -- readers of them; a clean channel carries its columns and parked lists unchanged. What it moves it names, chan -> uuids, for the wire pass. see docs/trackerManager.md § What the walk visits
+  local movedBounds = {}
   perf.start('laneBounds')
-  for chan = 1, 16 do if dirt.has(chan) then boundLanes(chan, time) end end
+  for chan = 1, 16 do if dirt.has(chan) then boundLanes(chan, time, movedBounds) end end
   perf.stop('laneBounds')
   perf.start('noteHostClips'); local noteHostClips = clipNoteHosts(); perf.stop('noteHostClips')
   perf.start('fxWindows')
@@ -3118,7 +3146,7 @@ function rebuild.pipeline(sources, time)
 
   perf.start('regionPark')
   local parkedByHost = rebuildRegionPark(windows, sources.fxParked, realisedWindows,
-                                             noteHostClips, pbLimCents, time)  -- park covered, carry/restore prior
+                                             noteHostClips, pbLimCents, time, movedBounds)  -- park covered, carry/restore prior
   perf.stop('regionPark')
   perf.start('pa'); rebuildPA(time); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
@@ -3127,7 +3155,7 @@ function rebuild.pipeline(sources, time)
                           fxNotesByHost, pbLimCents, time)  -- fx expansion: derived notes/CCs
   perf.stop('fx')
 
-  perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps, time); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+  perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps, time, movedBounds); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, pbLimCents, time); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive, time); perf.stop('pcs')  -- PC synthesis (trackerMode)
 

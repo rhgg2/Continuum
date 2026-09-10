@@ -917,9 +917,9 @@ then clip each realised note-off against its same-lane and same-pitch
 successors. The clips commit with the fxNote del/add in one `mm:modify`.
 
 The universal tail pass resolves each note's realised
-note-off against its same-lane and same-pitch successors. The "strict
-next" — first group member with a strictly greater ppq, chord-mates at
-equal ppq skipped — is precomputed once per ppq-sorted group in a
+note-off against the lane bound it carries and its same-pitch successor.
+The "strict next" — first group member with a strictly greater ppq,
+chord-mates at equal ppq skipped — is precomputed once per pitch group in a
 back-to-front pass, then looked up per note. A retrig host expands to a long
 run of same-pitch fxNotes, so a per-note rescan would make the walk O(k²)
 inside the group.
@@ -1021,20 +1021,29 @@ Seed resolution is scoped to a note on this channel for a neighbouring reason �
 nil pitch.
 
 The set of notes to re-bound is seed-driven, not span-tested. A note is
-bound if it is disturbed, or if it is the nearest same-lane or same-pitch
-strict predecessor of an *anchor* — a seed position (dead seeds included)
-or a disturbed onset. Taking the predecessor subsumes the old authored-span stale-test: a
-shield standing between a seed and an open note behind it is itself that
-seed's nearest same-lane predecessor and holds the clip, and a deleted
+bounded if it is disturbed, if the lane pass named it (§ The lane pass), or
+if it is the nearest same-pitch strict predecessor of an *anchor* — a seed
+position (dead seeds included) or a disturbed onset. Taking the predecessor
+subsumes the old authored-span stale-test on the pitch axis: a deleted
 neighbour that can no longer be asked for its onset is reached because its
 death position is a seed and the note it bounded is that seed's
 predecessor.
 
-Successors come from one backward pass carrying, per lane and per pitch,
-the note last seen and that note's strict next — a neighbour sharing the
-current note's raw is no successor of it, so it hands over its own. Parked
-bounds come from a scan instead of a bucket, parked events being few and read
-only for the notes the sweep bounds.
+The lane axis is named rather than probed, and the naming is exact where a
+probe was conservative. A shield standing between a seed and an open note
+behind it holds the clip because the open note's bound did not move, so the
+lane pass never names it; the walk asks nothing about the lane and re-bounds
+nothing.
+
+One lane question survives, and it belongs to the derived notes. The walk
+states their bounds itself (§ Tail walk), so each anchor's nearest same-lane
+predecessor is sought over the pass's own derived output alone — a kept tile
+whose lane successor moved under it re-bounds. No authored note answers
+there, the lane pass having named those already.
+
+Successors come from one backward pass carrying, per pitch, the note last
+seen and that note's strict next — a neighbour sharing the current note's
+raw is no successor of it, so it hands over its own.
 
 The walk **emits**. A nudged lane-1 onset moved every absorber seat
 between it and the next lane-1 onset, so the walk adds that interval to
@@ -1042,11 +1051,11 @@ the channel's dirt and `rebuildPbs` consumes it later in the same pass.
 
 Two walks share these rules; a seed-count threshold picks between them.
 The **linear walk** is authoritative for dense and wholesale dirt: one
-forward onset pass, one ascending sweep answering every anchor's lane and
-pitch predecessor at once, one backward pass to clip and emit — over the
+forward onset pass, one ascending sweep answering every anchor's pitch
+predecessor at once, one backward pass to clip and emit — over the
 whole channel. It is the degenerate fallback. The **frontier probe walk** takes the common sparse-seed
 channel: it seeks to each seed by name and probes a bounded few rows for
-its lane and pitch neighbours, with no whole-channel traversal and no
+its pitch neighbours, with no whole-channel traversal and no
 `mergeIndexed` — the sorted index and the small extras list stay separate
 probe sources.
 
@@ -1293,6 +1302,11 @@ The park stage runs the pass again over the lanes it touched. It moves notes bet
 lane and `renderUnion` mints fresh render events for the off-take half, which carry no bound, while a
 restore re-enters a column event the same way. Parking removes no onset from the population, so every
 bound the second call states is the head pass's own number on a new table.
+
+The pass names what it moved. An on-take event whose bound the pass writes over a different number
+goes into a per-channel list of uuids, which both runs fill and the tail walk consumes: the walk
+states no lane bound of an authored note, so the list is how one reaches mm (§ What the walk visits,
+and what it emits). A parked event is not named, never having reached mm at all.
 
 One path walks a channel's columns, and the reason is host discovery. `clipNoteHosts` resolves each
 indexed fx host to its live column event through `index.colEvtFor(uuid)`, the seat stamp of

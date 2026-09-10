@@ -33,6 +33,11 @@ writes, its gating and its carry.
    events together with the pass's derived notes — what sounds there —
    by the same expression the lane pass uses.
 
+1. It re-bounds a note the pass has news of: one it disturbed, one the
+   lane pass named, and each anchor's nearest same-pitch predecessor.
+   The lane predecessor it still seeks is sought over its own derived
+   output, that being the only lane bound left for it to state.
+
 1. It then converts: `rawBound = max(ppq + 1, min(fromLogical(laneBound),
    nextSamePitch.ppq))`. That is the pass's only conversion of a tail,
    and the only tail number that reaches mm.
@@ -67,6 +72,8 @@ writes, its gating and its carry.
    converts nothing. Whether the term wants a conversion at all is a question
    for the walk, which hoists the same number.
 
-1. The frontier and linear walks split the cost of a whole-channel
-   traversal. Whether the wire pass, asking only about pitch, still
-   wants both is a question for after the lane pass lands.
+1. A kept host's derived output can outlive its window. `velPattern`
+   passes a member's ceiling through, so a tile's lane successor can
+   sit outside the host's window and move with no seed the gate sees.
+   The wire pass's derived lane probe covers it; whether the gate
+   should see it is a question for the host gate.

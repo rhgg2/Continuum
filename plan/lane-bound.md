@@ -42,10 +42,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-10 tm: name a moved lane bound to the wire pass (docs § What the walk visits)
 - 2026-09-10 tm: bound a derived note through the frame's expression (docs § Tail walk)
 - 2026-09-10 tm: the walk takes the lane bound it is given (docs § The lane pass)
 - 2026-09-10 tm: bound every lane in one pass (docs § The lane pass)
-- 2026-09-09 tm: bound an on-take note through the frame's expression (docs § Lane occupancy)
 
 ## Now
 
@@ -53,18 +53,5 @@
 
 ## Queued (current phase; one-liners)
 
-- **The walk asks only about pitch.** `boundLanes` (784–804) names the
-  authored events whose `endppqC` it moved, over the head pass and the
-  park stage's re-run alike, and `rebuildTails` seeds `bound` with them.
-  Both walks then drop their same-lane machinery: the linear walk's
-  `lastInLane` anchor sweep and the `nearestInLane`/`nextAfterLane`
-  state of its backward pass (2019–2047), and the frontier's two lane
-  `nearestNote` probes (2224, 2234). The lane question that remains is
-  over the pass's derived output alone, which is the small `extras`
-  list, so a kept tile whose lane successor moved still re-binds.
-  `tm_walk_parity_spec`'s fixture already turns on a note that no seed
-  names re-binding; the new spec pins the route directly. Spec: an
-  authored note whose lane bound moved under a neighbour's edit takes
-  its new wire bound in mm, on both routes. `decisions.md` records the
-  walks staying two, retiring § Open 5.
+(empty)
 
