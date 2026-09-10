@@ -183,10 +183,8 @@ return {
     -- its own ceiling at 1440. The region then parks that successor. The columns no longer carry
     -- it, but the lane geometry still does, so the clip stands exactly where it stood.
     --
-    -- This case asserts over the tail alone, where the other two sweep the whole population. The
-    -- successor's own bound is written two ways -- through the tail walk's raw round trip on take,
-    -- by the stash render once parked -- and under swing those disagree in the last bits. That is
-    -- the drift design/lane-bound.md § Open 3 records, and phase 1's business, not this case's.
+    -- Both bounds are exact under swing: the parked half's bound comes off the same logical
+    -- expression as the on-take half's, so crossing between them converts nothing.
     name = 'a successor parked this pass keeps bounding the tail before it, on a swung channel',
     run = function(harness)
       local h = harness.mk(c55)

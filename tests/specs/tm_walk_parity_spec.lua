@@ -1,8 +1,9 @@
 -- The tail walk has two implementations of one rule. `frontierTails` seeks to each dirt seed and
 -- probes a bounded few rows either side for the neighbours that bound it; `linearTails` sweeps the
 -- channel. `rebuildTails` routes on seed count: at most FRONTIER_SEED_CAP seeds, on a channel that
--- is not wholesale, take the frontier. The two must derive the same frame, and design/lane-bound.md
--- lifts the lane bound out of both of them, so this is the net under that move.
+-- is not wholesale, take the frontier. The two must derive the same frame, and the lane bound has
+-- since lifted out of both of them into a pass of its own (docs/trackerManager.md § The lane pass),
+-- so this is the net under that move.
 --
 -- Holding the end state fixed while changing the route means varying the granularity of one edit.
 -- Two harnesses build the same channel and delete the same twenty notes: one in a single flush,
@@ -10,7 +11,8 @@
 -- each time. The two frames are compared before the deletions as well as after, so a divergence
 -- belongs to the deletions and not to the build.
 --
--- Two surfaces carry the answer, and they are the two bounds design/lane-bound.md separates. The
+-- Two surfaces carry the answer, and they are the two bounds docs/trackerManager.md § Tail walk
+-- separates. The
 -- column's `endppqC` is the lane bound and lives in the frame; the raw bound adds the same-pitch
 -- clip and reaches only mm. A walk that missed a lane neighbour moves the first, one that missed a
 -- pitch neighbour moves the second alone.

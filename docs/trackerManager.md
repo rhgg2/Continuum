@@ -939,8 +939,14 @@ rawBound  = max(ppq + 1, min(
 ```
 
 The lane bound drives `endppqC`, and so the screen; every term of it is
-logical, so it falls on the row it means. The wire bound is the only value
-that reaches mm.
+logical, so it falls on the row it means, and a reader wanting to know where
+a note is drawn asks the frame and converts nothing. The wire bound is the
+only value that reaches mm.
+
+`takeLenL` is the one term that reads the same in both frames. The take end
+is a fixed point of every swing projection, the boundary clip absorbing the
+final partial period, so the term converts nothing and the walk hoists the
+same number the lane pass uses.
 
 Same-lane uses INTENT (`ppqL`) so authored music geometry wins over
 realisation delays, and the population is read in column order, so the
