@@ -58,22 +58,7 @@ writes, its gating and its carry.
 
 ## Open
 
-1. `overlap` has no authoring path. Three spec fixtures write it and
-   one production site reads it, so the frame it is measured in is
-   settled by this model rather than by anything that exercises it.
-
-1. A window end's integer/float subtype changes the fx output. Handing
-   `clipNoteHosts` a float numerically equal to the integer it had before
-   churned twenty pb seats on one fixture, which is why `projectEvent` writes
-   no bound. Where downstream the subtype is read is unestablished.
-
 1. The take end is a fixed point of every swing projection, the boundary clip
    absorbing the final partial period, so the lane bound's `takeLenL` term
    converts nothing. Whether the term wants a conversion at all is a question
    for the walk, which hoists the same number.
-
-1. A kept host's derived output can outlive its window. `velPattern`
-   passes a member's ceiling through, so a tile's lane successor can
-   sit outside the host's window and move with no seed the gate sees.
-   The wire pass's derived lane probe covers it; whether the gate
-   should see it is a question for the host gate.

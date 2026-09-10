@@ -67,6 +67,30 @@ while the region covers it. The spec survives untouched and the chain
 returns when the region moves off, so this is a quirk of coverage
 rather than a loss of data.
 
+### A window end's numeric subtype changes the fx output
+
+> **gap** · tm · 2026-09-10
+
+Handing `clipNoteHosts` a window end that is a float, numerically
+equal to the integer it carried before, churned twenty pb seats on one
+fixture. That is why `projectEvent` writes no bound: a projected end
+arrives as a float, and seating it would move output that nothing
+about the music moved. Which downstream read is subtype-sensitive was
+never established, so the avoidance stands in for a diagnosis.
+
+### A kept host's derived output can outlive its window
+
+> **accepted** · tm · 2026-09-10
+
+`velPattern` passes a member's ceiling through, so a tile can end past
+the host's window. Its lane successor then sits outside that window
+and can move with no seed the host gate sees, leaving the gate to keep
+a host whose output the edit reached. The wire pass covers it anyway —
+it seeks each anchor's lane predecessor over the pass's own derived
+output (`docs/trackerManager.md` § What the walk visits, and what it
+emits), so the tile re-bounds whether the gate noticed or not. Whether
+the gate should notice is the gate's own question.
+
 ### A global region copied off the master strip is demoted or lost
 
 > **gap** · tv · 2026-08-27
@@ -114,6 +138,21 @@ Write-through commits on every mini rebuild, so editing a pattern is as chatty
 as editing the host directly — which is precisely the cost it is measured
 against. `setFxField` scopes each rebuild to the owning channel, and a
 `deepEq` against the last committed body drops the no-op writes.
+
+## Tracker
+
+### A note's `overlap` cannot be authored
+
+> **accepted** · tm · 2026-09-10
+
+A lane bound clips a note to its successor's onset plus the note's own
+`overlap`, so the field is how a note is written to sound past the
+next one on its lane. Two production sites read it — the frame's
+`clippedSpanEnd` and the tail walk's rules — and nothing writes it but
+spec fixtures. So the frame it is measured in, logical and beside the
+`ppqL` it is added to, is settled by the lane-bound model rather than
+by anything that exercises it. The first authoring path inherits that
+choice rather than making it.
 
 ## Tuning
 
