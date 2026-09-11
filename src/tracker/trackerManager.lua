@@ -103,17 +103,21 @@ do
     return prev
   end
 
-  -- tv's cell carry keys on a note lane's `events` table identity, so a change to the lane's membership
-  -- or to a seated event's rendered fields must replace that table with a fresh one. see docs/trackerManager.md § Note-lane renewal
-  --invariant: a note lane's events table changes identity iff its contents changed (tv's carry key)
-  function frame.renewLane(chan, lane)
-    local channel = frame.channels[chan]
-    local col = channel and channel.onTake.notes[lane]
+  -- tv's cell carry keys on a column's `events` table identity, so a change to its membership or to
+  -- a seated event's rendered fields must replace that table with a fresh one. see docs/trackerManager.md § Note-lane renewal
+  --invariant: a column's events table changes identity iff its contents changed (tv's carry key)
+  --post: the column is renewed at most once a pass, so a second caller splices the fresh table
+  function frame.renewColumn(col)
     if col and not renewed[col] then
       renewed[col] = true
       col.events = util.clone(col.events)
     end
     return col
+  end
+
+  function frame.renewLane(chan, lane)
+    local channel = frame.channels[chan]
+    return frame.renewColumn(channel and channel.onTake.notes[lane])
   end
 
   -- A caller that replaced a lane's events table itself has done the renewal; recording it keeps a

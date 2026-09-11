@@ -401,6 +401,81 @@ return {
   },
 
   {
+    name = 'cc-family cells: a seeded splice lands where a full re-derive does',
+    run = function(harness)
+      -- The cc/at/pc stage is the one interval-dirt path that clears and refills per *cell* --
+      -- (column, row) -- rather than per row, so parity only bites on a channel holding several cc
+      -- columns with co-row tenants. Swing is on: a row is a non-identity projection of its raw
+      -- seat, so a cell addressed in the wrong frame lands on the wrong events and diverges.
+      local h = harness.mk{
+        config = { project = { swings = { c58 = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+        -- Off-beat raw seats: swing shifts nothing on the quarter grid, so cells seeded at 240/480
+        -- would sit at fixed points where the two frames agree and a mis-framed seek still lands.
+        seed   = { ccs = {
+          { ppq = 120, chan = 1, evType = 'cc', cc = 7,  val = 64 },
+          { ppq = 120, chan = 1, evType = 'cc', cc = 74, val = 20 },
+          { ppq = 600, chan = 1, evType = 'cc', cc = 74, val = 30 },
+          { ppq = 360, chan = 1, evType = 'cc', cc = 7,  val = 80 },
+          { ppq = 120, chan = 1, evType = 'at', val = 33 },
+          { ppq = 360, chan = 1, evType = 'pc', val = 9 },
+          { ppq = 120, chan = 2, evType = 'cc', cc = 7,  val = 10 },
+        } },
+      }
+      h.tm:rebuild(true)   -- settle: the seeding pass stamps ppqL before any parity claim
+
+      local function cells(chan, cc)
+        local col = h.tm:getChannel(chan).onTake.ccs[cc]
+        return col and col.events or {}
+      end
+      local function atCells() return h.tm:getChannel(1).onTake.at.events end
+
+      -- Non-triviality: the fixture holds the co-row shape the claim is about.
+      t.eq(#cells(1, 7),  2, 'cc 7 holds both seeded cells')
+      t.eq(#cells(1, 74), 2, 'cc 74 holds the co-row tenant and one of its own')
+      t.eq(cells(1, 7)[1].ppq, cells(1, 74)[1].ppq, 'cc 7 and cc 74 share a row')
+      t.eq(#atCells(), 1, 'at holds a cell on that row too')
+      local sharedRow = cells(1, 7)[1].ppq
+      t.truthy(h.tm:fromLogical(1, sharedRow) ~= sharedRow,
+        'the shared row is not its own raw seat, so the two frames are distinguishable at the cell')
+
+      -- In-place value edit on the shared row: one cell is seeded, and the co-row tenants in cc 74
+      -- and at are named by no seed of their own, so they have to stand.
+      h.tm:assignEvent(cells(1, 7)[1], { val = 90 }); h.tm:flush()
+      t.eq(cells(1, 74)[1].val, 20, 'co-row tenant in another cc column kept its value')
+      t.eq(atCells()[1].val,    33, 'co-row at tenant kept its value')
+      assertParity(h, 'cc cell value edit == full re-derive')
+
+      -- Row move: the vacated and the arrival cell are both seeded, and the arrival's raw seat is
+      -- the swung projection of the row the caller named.
+      local moved = cells(1, 7)[2]
+      h.tm:assignEvent(moved, { ppq = moved.ppq + 240 }); h.tm:flush()
+      t.eq(#cells(1, 7), 2, 'the move neither dropped nor duplicated the cell')
+      assertParity(h, 'cc cell row move == full re-derive')
+
+      -- Delete on the shared row: that cell empties and its co-row tenants stand. cc 74 keeps a
+      -- cell of its own, because emptying a column outright is a divergence of its own (a carried
+      -- frame keeps the empty shell, a full re-derive never mints it) and not this claim's subject.
+      h.tm:deleteEvent(cells(1, 74)[1]); h.tm:flush()
+      t.eq(#cells(1, 74), 1, 'the deleted cell is gone, the column\'s own cell stands')
+      t.eq(#cells(1, 7),  2, 'cc 7 kept both cells across the neighbour delete')
+      assertParity(h, 'cc cell delete == full re-derive')
+
+      -- Add into a column the carried frame does not hold yet.
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 11, ppq = 720, val = 5 }); h.tm:flush()
+      t.eq(#cells(1, 11), 1, 'the fresh cc column holds the add')
+      assertParity(h, 'cc add into an uncarried column == full re-derive')
+
+      -- Chan move: the vacated cell lands in chan 1's journal and the arrival in chan 2's, so the
+      -- two cells are named by seeds the fold never sees together.
+      h.tm:assignEvent(cells(1, 7)[2], { chan = 2, cc = 7 }); h.tm:flush()
+      t.eq(#cells(1, 7), 1, 'chan 1 released the moved cell')
+      t.eq(#cells(2, 7), 2, 'chan 2 took the arrival')
+      assertParity(h, 'cc cell chan move == full re-derive')
+    end,
+  },
+
+  {
     name = 'rebuild(∅) short-circuits: no fire without dirt; requestRebuild and takeChanged force it',
     run = function(harness)
       local h = harness.mk()

@@ -292,7 +292,7 @@ arrival row with the new.
 ### Interval materialisation
 
 Materialisation consumes the absorbed seed set directly — there is no closure. The dirty positions
-are the journal's (§ Interval seeds); `exciseNotes` (trackerRebuild.lua) drops every carried column
+are the journal's (§ Interval seeds); `exciseCells` (trackerRebuild.lua) drops every carried column
 event sitting on one, and `rebuildInternals` re-clones that position from mm: an add finds the new
 note, a delete finds nothing and the event vanishes, a move seeded both seats and gets both.
 Membership keys on the position, not the full seat, because same-pitch/PC shadowing is a same-`ppqL`
@@ -305,14 +305,32 @@ back through the `colEvt` seat stamp — so a carried event whose mm note did no
 correct. Closure belongs to the tail walk, computed against that same index (§ What the walk
 visits, and what it emits).
 
-The cc family splices seed by seed rather than row by row (`spliceChannelCCs`):
-each cc/at/pc seed excises the event it carries — an exact-row seek matched on
-uuid — and re-clones its survivor from `mm:byUuid`, so neither O(channel) pass
-remains. A fresh add has no uuid when its seed is born, mm stamping one at
-commit, so the seed holds the snapshotted record itself and reads the uuid off
-it late. Resolution goes through `byUuid` rather than a positional query
-because the rebuild runs inside `mm:modify` before the reindex, where a binary
-search cannot see a fresh add or a move.
+The cc family materialises by cell rather than by row (`spliceChannelCCs`). A
+cell is (column, row): the columns a channel's cc-family seeds name, crossed
+with the rows those seeds claimed. Each is excised exactly as a note row is and
+refilled from um's raw index at its own seat, so neither O(channel) pass
+remains. Nothing narrows within the cell — the refill restores whatever the
+index holds there, which is what lets the excise drop the cluster whole and a
+co-row tenant in another column stand untouched. The cell is the unit because a
+channel can hold 130 cc columns where it holds a handful of note lanes: a
+row-wide excise would have to seek every one of them.
+
+The refill asks position where a seed-keyed one asked identity. um's
+per-(chan, cc) lists answer that and mm does not: they seat by raw and are
+maintained across the edit that seeded the dirt (§ Incremental index
+reconciliation), so a fresh add and a move are both visible by the time the
+pass runs. Two frames meet at the seek — the index seats by raw, a cell is
+named by its logical row — so the row converts through the pass's time context,
+EPS-wide for the slack `rawDivergesFromLogical` allows. A carried cc always
+seats at the projection of its raw, the walk having reconciled `ppqL` as it
+cloned, so cell and raw seat are in bijection and the converted seek covers
+exactly what the excise dropped.
+
+A cc's column is stable under every verb — none assigns `cc` — so the flush
+fold loses nothing by keeping one seed per uuid and folding the later rows onto
+it as bare positions: the kept snapshot names the column, the folded positions
+name the rows. A chan move is two cells in two journals, each named by its own
+seed.
 
 ## Pitchbend: tm's role in the tuning model
 
@@ -547,7 +565,7 @@ was dormant gets consumed, and when there is none this gate stops the pass.
 `channels` map swaps each pass — `newPass` mints the fresh one and hands the
 old back for the carry-forward loop to read the clean channels out of — and
 the operations that seat events travel on the handle beside it: `spliceEvent`,
-`setEvent`, `renewLane`, `markRenewed` and `orderLane`. Events are
+`setEvent`, `renewColumn`/`renewLane`, `markRenewed` and `orderLane`. Events are
 self-describing, so each takes the frame's own coordinates.
 
 The engine is instantiated once with what the two files share: `mm`, `cm`,
@@ -1424,7 +1442,7 @@ one.
 
 Renewal is precise, and every mutator of a seated lane owns it:
 
-- **membership** — `exciseNotes` assigns only when it actually dropped a
+- **membership** — `exciseCells` assigns only when it actually dropped an
   event; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
   the park restore) go through `spliceEvent(chan, lane, event)`, which renews
   before it splices, and the park unlink calls `renewLane(chan, lane)` itself.
@@ -1444,9 +1462,11 @@ Renewal is precise, and every mutator of a seated lane owns it:
   `(chan, lane)` off whatever it is handed, so an off-take fx spec would
   renew the lane its number names while that lane's own events stand.
 
-A lane renews at most once a pass. `renewLane` keeps the memo of what it
-has already cloned, and a caller that replaced the table itself records it
-through `markRenewed`; `newPass` clears the memo with the channels map it
+A column renews at most once a pass. `renewColumn` keeps the memo of what it
+has already cloned — `renewLane` is the note-lane door onto it, and the
+cc-family splice renews through the same one, so a cell that is excised and
+then refilled clones once — and a caller that replaced the table itself records
+it through `markRenewed`; `newPass` clears the memo with the channels map it
 belongs to.
 
 The failure is asymmetric — too pessimistic costs a re-place, too

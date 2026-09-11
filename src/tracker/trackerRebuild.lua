@@ -62,9 +62,10 @@ local function pushNoteCol(channel)
   return util.add(notes, { events = {} }), #notes
 end
 
--- Clone an mm event into a column event
+-- Clone an mm record, or the um index entry that holds it, into a column event; um's own seat
+-- stamp never rides along -- the column event it names is the one being replaced.
 local function columnEvent(evt, overlay)
-  local colEvt = util.clone(evt, { loc = true })
+  local colEvt = util.clone(evt, { loc = true, colEvt = true })
   colEvt.realised = true
   if overlay then util.assign(colEvt, overlay) end
   return colEvt
@@ -146,19 +147,15 @@ local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
--- Index existing by `key`, keep on hit, add the rest, remove unkept. 
+-- Index existing by `key`, keep on hit, add the rest, remove unkept.
 local function diffEvents(a)
   local byKey, kept = {}, {}
-  for _, evt in ipairs(a.existing) do
-    byKey[a.key(evt)] = evt
-  end
+  local onKeep = a.onKeep or function (_,_) end
+  for _, evt in ipairs(a.existing) do byKey[a.key(evt)] = evt end
   for _, spec in ipairs(a.predicted) do
     local evt = byKey[a.key(spec)]
-    if evt then
-      kept[evt] = true
-      if a.onKeep then a.onKeep(spec, evt) end
-    else
-      a.batcher.add(spec)
+    if evt then kept[evt] = true; onKeep(spec, evt)
+    else a.batcher.add(spec)
     end
   end
   for _, e in ipairs(a.existing) do
@@ -166,29 +163,25 @@ local function diffEvents(a)
   end
 end
 
------ Note-lane excision
-
--- Drop the events the seeded positions claim from a channel's note lanes: a seek per position per
--- lane, not a channel scan; `claims` refines within the cluster. see docs § The note-lane shed
---invariant: a seated event is projected (ppq == ppqL), so a seeded position is the lane's sort key
-local function exciseNotes(chan, ppqs, claims)
-  for _, col in ipairs(frame.channels[chan].onTake.notes) do
+-- Drop the events the seeded positions claim from the columns handed in: a seek per position per
+-- column, not a channel scan; `claims` refines within the cluster. see docs § The note-lane shed
+--invariant: a seated event is projected (ppq == ppqL), so a seeded position is a column's sort key
+local function exciseCells(cols, ppqs, claims)
+  claims = claims or function (_) return true end
+  for _, col in ipairs(cols) do
     local events = col.events
-    local dropAt
+    local drop = {}
     for _, ppq in ipairs(ppqs) do
       for i = util.firstAtOrAfter(events, ppq), #events do
         local evt = events[i]
         if evt.ppq ~= ppq then break end
-        if not claims or claims(evt) then
-          dropAt = dropAt or {}
-          dropAt[i] = true
-        end
+        if claims(evt) then drop[evt] = true end
       end
     end
-    if dropAt then
+    if next(drop) then
       local kept = {}
-      for i, evt in ipairs(events) do
-        if not dropAt[i] then util.add(kept, evt) end
+      for _, evt in ipairs(events) do
+        if not drop[evt] then util.add(kept, evt) end
       end
       col.events = kept   -- kept is a fresh table: this assignment is the renewal
       frame.markRenewed(col)
@@ -207,10 +200,8 @@ local function rebuildInternals(time)
   -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if not dirt.wholesale(chan) then exciseNotes(chan, dirt.ppqs(chan)) end
+      if not dirt.wholesale(chan) then exciseCells(frame.channels[chan].onTake.notes, dirt.ppqs(chan)) end
       for _, raw in mm:notesRaw(chan) do
-        -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
-        -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
         if raw.derived then
           util.add(noteExisting[chan], columnEvent(raw))
         elseif dirt.covers(chan, raw.ppqL or raw.ppq) then
@@ -266,16 +257,26 @@ end
 
 local function ppqLess(a, b) return a.ppq < b.ppq end
 
--- Clone one covered cc-family event into its column with the CC walk's reconcile + projection, then
--- splice it in ppq-order. Mirror of the walk's per-event body, driven by spliceChannelCCs' row scan.
+local CC_FAMILY = { cc = true, at = true, pc = true }
+
+-- The logical seat an interval-path cc reconciles onto, or nil where its raw already agrees with its
+-- own stamp. Stale-swing implies wholesale, so this is the only reconcile that can fire on the path.
+local function ccReseat(live, time)
+  if live.derived or not rawDivergesFromLogical(live, time) then return nil end
+  return time:toLogical(live.chan, live.ppq)
+end
+
+-- The row a cc-family record seats at once reconciled: its own stamp, or the projection of its raw.
+local function ccRow(live, time)
+  return ccReseat(live, time) or live.ppqL or live.ppq
+end
+
+-- Clone one cc-family record into its column with the CC walk's reconcile + projection, then splice
+-- it in ppq-order. Mirror of the walk's per-event body, driven by the seeded cells' refill.
 local function spliceCcEvent(live, ccWrites, time)
-  local chan = live.chan
-  -- stale-swing implies wholesale, so only the raw-diverges reconcile can fire on the interval path.
-  local movedPpqL
-  if not live.derived and rawDivergesFromLogical(live, time) then
-    movedPpqL = time:toLogical(chan, live.ppq)
-    ccWrites.assign({ uuid = live.uuid }, { ppqL = movedPpqL })
-  end
+  local chan      = live.chan
+  local movedPpqL = ccReseat(live, time)
+  if movedPpqL then ccWrites.assign({ uuid = live.uuid }, { ppqL = movedPpqL }) end
   local event = columnEvent(live, { ppqL = movedPpqL })   -- an unmoved seat is nil, so the clone's own stands
   local channel = frame.channels[chan]
   local col
@@ -287,8 +288,8 @@ local function spliceCcEvent(live, ccWrites, time)
     channel.onTake[live.evType] = col
   end
   projectEvent(event, chan, time)
+  frame.renewColumn(col)   -- a membership change hands out a fresh events table; the excise's twin
   util.insertSorted(col.events, event, ppqLess)
-  return col
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
@@ -324,45 +325,64 @@ local function ccColumnFor(chan, evType, ccNum)
   return cols[evType]
 end
 
--- Excise one event's carried column event: exact-row binary seek (projection makes event ppq == ppqL),
--- then uuid-match within the row cluster, so a co-row tenant's event stands.
-local function removeCellFor(col, row, uuid)
-  local events = col.events
-  local lo, hi = 1, #events + 1
-  while lo < hi do
-    local mid = (lo + hi) // 2
-    if events[mid].ppq < row then lo = mid + 1 else hi = mid end
-  end
-  while events[lo] and events[lo].ppq == row do
-    if events[lo].uuid == uuid then table.remove(events, lo)
-    else lo = lo + 1 end
-  end
+-- The raw index list an (evType, cc) pair names, or nil where the channel indexes nothing there.
+local function ccIndexList(chan, evType, ccNum)
+  local raw = index.raw(chan)
+  if evType == 'cc' then return raw.ccs[ccNum] end
+  if evType == 'at' then return raw.ats end
+  if evType == 'pc' then return raw.pcs end
 end
 
--- Interval-dirt cc path: each cc-family seed excises its own event and re-clones its survivor --
--- O(seeds), no channel scan. see docs/trackerManager.md § Interval materialisation
-local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExisting, time)
-  local seen, touched = {}, {}
+-- The cells a channel's cc-family seeds name: one entry per column, holding every row its seeds
+-- claimed. No verb reassigns `cc`, so a seed's later positions belong to the column its birth
+-- snapshot names, and a chan move seeds the vacated and the arrival cell in their own journals.
+--shape: cell = { evType, cc, rows = { [ppqL] = true }, ppqs = those rows, listed }
+local function seededCcCells(seedList)
+  local cells = {}
   for _, s in ipairs(seedList) do
-    local family = s.evType == 'cc' or s.evType == 'at' or s.evType == 'pc'
-    local uuid = family and (s.uuid or (s.evt and s.evt.uuid)) or nil
-    if uuid and not seen[uuid] then
-      seen[uuid] = true
-      local seedCol = ccColumnFor(chan, s.evType, s.cc)
-      if seedCol then touched[seedCol] = true; removeCellFor(seedCol, s.ppqL, uuid) end
-      local _, live = mm:byUuid(uuid)
-      if live and live.chan == chan then
-        local liveCol = ccColumnFor(chan, live.evType, live.cc)
-        if liveCol then touched[liveCol] = true; removeCellFor(liveCol, live.ppqL or live.ppq, uuid) end
-        if not (live.evType == 'cc' and realisedWindows.ownsRaw('cc', chan, live.cc, live.ppq)) then
-          touched[spliceCcEvent(live, ccWrites, time)] = true
-        end
+    if CC_FAMILY[s.evType] then
+      local key  = s.cc or s.evType   -- the cc number names the column; for at/pc the family does
+      local cell = cells[key]
+      if not cell then cell = { evType = s.evType, cc = s.cc, rows = {} }; cells[key] = cell end
+      cell.rows[s.ppqL] = true
+      for _, later in ipairs(s.laterPpqs or {}) do cell.rows[later] = true end
+    end
+  end
+  for _, cell in pairs(cells) do cell.ppqs = util.keys(cell.rows) end
+  return cells
+end
+
+-- Interval-dirt cc path: the seeded cells are cleared and refilled from the raw index at each cell's
+-- own seat -- O(cells), no channel scan. see docs/trackerManager.md § Interval materialisation
+--invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
+local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExisting, time)
+  local cells   = seededCcCells(seedList)
+  local refills = {}
+
+  -- Gather before mutating: the refill reads the index, the excise and the splices write the frame.
+  for _, cell in pairs(cells) do
+    local list = ccIndexList(chan, cell.evType, cell.cc) or {}
+    for _, row in ipairs(cell.ppqs) do
+      -- The index seats by raw and a cell by row, so seek the row's raw seat -- EPS wide, for the
+      -- slack rawDivergesFromLogical allows -- and keep only what reconciles onto this row.
+      local rawRow = time:fromLogical(chan, row)
+      for i = util.firstAtOrAfter(list, rawRow - EPS), #list do
+        local entry = list[i]
+        if entry.ppq > rawRow + EPS then break end
+        -- An fx cc event is a markerless seat inside a prev cc window: routed out of the columns and
+        -- reconciled at fx expansion instead. see docs/generators.md § Route-by-window
+        local routedOut = entry.evType == 'cc'
+                          and realisedWindows.ownsRaw('cc', chan, entry.cc, entry.ppq)
+        if not routedOut and ccRow(entry, time) == row then util.add(refills, entry) end
       end
     end
   end
-  -- tv's cell carry keys on events-table identity (same table => reuse built cells), so a spliced
-  -- column must renew its carried table -- exciseNotes' `col.events = kept` is the note-path twin.
-  for col in pairs(touched) do col.events = util.clone(col.events) end
+
+  for _, cell in pairs(cells) do
+    local col = ccColumnFor(chan, cell.evType, cell.cc)
+    if col then exciseCells({ col }, cell.ppqs) end
+  end
+  for _, live in ipairs(refills) do spliceCcEvent(live, ccWrites, time) end
   buildCcExistingInWindows(chan, realisedWindows, ccExisting)
 end
 
@@ -926,12 +946,13 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
         end
       end
     end
-    -- The parking PA's on-take column event rode past exciseNotes untouched -- its position seeds only
-    -- here, after that pass ran -- so drop it now, or rebuildPA's parked projection doubles the event.
+    -- The parking PA's on-take column event rode past the note-lane excise untouched -- its position
+    -- seeds only here, after that pass ran -- so drop it now, or rebuildPA's parked projection doubles it.
     for chan, ppqByUuid in pairs(freshEvents) do
       local ppqs = {}
       for _, ppq in pairs(ppqByUuid) do util.add(ppqs, ppq) end
-      exciseNotes(chan, ppqs, function(e) return e.evType == 'pa' and ppqByUuid[e.uuid] ~= nil end)
+      exciseCells(frame.channels[chan].onTake.notes, ppqs,
+                  function(e) return e.evType == 'pa' and ppqByUuid[e.uuid] ~= nil end)
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
     for _, spec in ipairs(priorByType.pa or {}) do
