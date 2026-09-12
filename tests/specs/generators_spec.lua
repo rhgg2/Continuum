@@ -15,9 +15,10 @@ local function slideCtx(nextNote, pbRangeCents)
   return { resolution = 240, pbRangeCents = pbRangeCents or 200,
            nextSameLaneNote = function() return nextNote end }
 end
-local function noteHost(endppq)
-  return { window = { 0, 240 }, lane = 1,
-           notes = { { pitch = 60, vel = 100, detune = 0, ppq = 0, endppq = endppq or 240 } } }
+local function noteHost(endppq, lane)
+  lane = lane or 1
+  return { window = { 0, 240 }, lane = lane,
+           notes = { { pitch = 60, vel = 100, detune = 0, ppq = 0, endppq = endppq or 240, lane = lane } } }
 end
 -- A region owns no lane of its own; its members carry theirs.
 local function regionHost(notes)
@@ -655,6 +656,76 @@ return {
         6000, 'an arp plays the voices it found, names and all')
       t.eq(expand('velPattern', host, { kind = 'velPattern', pattern = { 50 } }, ctx).notes[1].intentCents,
         6000, 'a velocity pass rewrites one field and carries the rest')
+    end,
+  },
+
+  ----- The base voice a derivation inherits: whose detune the channel's pb realises
+
+  {
+    name = 'a retrig over a lane-1 host stamps every hit as the base voice',
+    run = function()
+      local out = expand('retrig', noteHost(), { kind = 'retrig', period = { 1, 4 } }, { resolution = 240 })
+      t.truthy(#out.notes > 1, 'the tiling emitted hits to inspect')
+      for i, n in ipairs(out.notes) do
+        t.eq(n.baseVoice, true, ('hit %d inherits the base voice from the lane-1 host'):format(i))
+      end
+    end,
+  },
+
+  {
+    name = 'a retrig over a higher-lane host stamps no base voice at all',
+    run = function()
+      local out = expand('retrig', noteHost(nil, 2), { kind = 'retrig', period = { 1, 4 } }, { resolution = 240 })
+      t.truthy(#out.notes > 1, 'the tiling emitted hits to inspect')
+      for i, n in ipairs(out.notes) do
+        t.eq(n.baseVoice, nil, ('hit %d carries no field at all -- never a false'):format(i))
+      end
+    end,
+  },
+
+  {
+    name = 'a chained stage reads its predecessor\'s field, and a laneless note without one stays without',
+    run = function()
+      -- A stage's inbound stream mid-chain: its predecessor's output, which carries no lane. The
+      -- absent lane is what tells the stage to read the field rather than infer from lane 1.
+      local stream = { window = { 0, 240 }, notes = {
+        { pitch = 60, vel = 100, detune = 0, ppq = 0,  endppq = 60,  baseVoice = true },
+        { pitch = 64, vel = 100, detune = 0, ppq = 60, endppq = 120 },
+      } }
+      local out = expand('velPattern', stream, { kind = 'velPattern', pattern = { 100 } }, {})
+      t.eq(#out.notes, 2, 'both notes rewritten')
+      t.eq(out.notes[1].baseVoice, true, 'the base voice stays the base voice through the rewrite')
+      t.eq(out.notes[2].baseVoice, nil,
+        'a laneless note the predecessor denied the field does not acquire it by defaulting to lane 1')
+    end,
+  },
+
+  {
+    name = 'a chord stamp keeps the base voice on the root-derived voice alone',
+    run = function()
+      local function baseVoices(notes)
+        local found = {}
+        for _, n in ipairs(notes) do if n.baseVoice then util.add(found, n) end end
+        return found
+      end
+      local chord = { kind = 'notes', specs = {
+        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100, detune = 0 },
+        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 100, detune = -14 },
+        { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 100, detune = 2 },
+      } }
+      local function stampOver(lane)
+        local host = { window = { 0, 240 }, notes = {
+          { pitch = 62, vel = 90, detune = 40, ppq = 0, endppq = 240, lane = lane },
+        } }
+        return expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, {})
+      end
+      local out = stampOver(1)
+      t.eq(#out.notes, 3, 'three voices stamped')
+      local base = baseVoices(out.notes)
+      t.eq(#base, 1, 'exactly one voice of the chord is the base voice')
+      t.eq(base[1].pitch, 62,  'it is the voice sitting on the trigger\'s own pitch')
+      t.eq(base[1].detune, 40, 'and its detune -- what pb has to realise for the trigger to sound right')
+      t.eq(#baseVoices(stampOver(2).notes), 0, 'a higher-lane trigger yields no base voice at all')
     end,
   },
 

@@ -29,22 +29,14 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-09-12 generators: stamp baseVoice on every derived note (§ The base voice)
 
 ## Now
 
-(empty)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 
-1. **`baseVoice` on generator output** — the note stages in `generators.lua`
-   stamp `baseVoice` on every note they emit, inherited from the stream note
-   the emitted note derives from: an inbound note is base voice when it carries
-   `baseVoice`, and otherwise when its lane is 1, so a chained stage reads its
-   predecessor's output. A chord stamp keeps the field on the voice displaced
-   from the pattern's root and drops it on the other voices. Contracts on the
-   stages; `generators_spec` covers the inheritance, a higher-lane host's output
-   carrying none, and the chord's drop.
 2. **The fx pass carries `baseVoice`** — the field rides `rebuildFx`'s predicted
    spec, `noteLive`, the `fxNotes` copy the tail walk clips, and the
    `fxNotesByHost` shape. It sits outside mm's `noteEventFields` strip, so a

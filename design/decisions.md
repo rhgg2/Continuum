@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-12** — A stream note's base-voice test reads its lane where it carries one and the
+  baseVoice field otherwise, rather than defaulting an absent lane to 1. Every authored inbound note
+  carries a lane and no derived note ever arrives as one, so an absent lane is what marks a
+  predecessor stage's output; under the defaulting form a chord tone the stamp denied the field
+  would claim the base voice at the next stage of the chain.
+
 - **2026-09-12** — A derived note's `baseVoice` is inherited from the stream note it derives from,
   with a chord stamp keeping it on the root-displaced voice alone. A stage claiming base voice by
   its kind would put a higher-lane retrig into the pb stream against the channel's authored lane-1
