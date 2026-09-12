@@ -1,6 +1,7 @@
 # Laneless derived notes — one shape for derived reconciliation
 
-> opened: 2026-09-12 · status: working design; not started
+> opened: 2026-09-12 · status: in flight — plan/laneless-derived-notes.md,
+> at phase 1 (the base voice).
 
 **Derived notes carry no lane, so they reconcile as derived ccs do: gathered per touched window and kept by omission.**
 
@@ -20,7 +21,9 @@
 
 1. An authored note in lane 1 is the base voice, which is the monopoly `docs/tuning.md` § Invariants states as I3.
 
-1. A derived note carries `baseVoice`, set by the generator emitting it. A chord stamp sets it on the voice displaced from the pattern's root, so the root's microtonality sounds.
+1. A derived note carries `baseVoice`, set by the generator emitting it. The field is inherited: a note is base voice when the stream note it derives from is, so a stage over a higher-lane host emits none, and a chained stage reads its predecessor's output.
+
+1. A chord stamp keeps the field on the voice displaced from the pattern's root alone, so the root's microtonality sounds.
 
 1. The base-voice door answers over both — the raw index's authored lane-1 notes, and the pass's base-voice derived output. The detune query and the onset walk read the one door, so they agree at a coincident onset.
 

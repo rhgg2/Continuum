@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-12** — A derived note's `baseVoice` is inherited from the stream note it derives from,
+  with a chord stamp keeping it on the root-displaced voice alone. A stage claiming base voice by
+  its kind would put a higher-lane retrig into the pb stream against the channel's authored lane-1
+  notes, which I3's monopoly forbids.
+
 - **2026-09-10** — The lane pass names the on-take bounds it moves and the wire pass re-bounds those
   by name, replacing the probe for the nearest same-lane predecessor of every anchor: the probe
   answered conservatively where the name is exact. The walk keeps one lane question, asked of its
