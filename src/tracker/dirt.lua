@@ -13,6 +13,8 @@ local dirt = {}
 -- collapses to the wholesale sentinel. Was intervals.merge's MAX. see design § Retirement of intervals
 local WHOLESALE_SEED_CAP = 64
 
+local SEED_FAMILY = { note = 'note', pa = 'note', cc = 'cc', at = 'cc', pc = 'cc', pb = 'pb' }
+
 ----- Seeds
 
 -- A birth snapshot of the event a verb disturbed, minted where the disturbance happens and read by
@@ -20,7 +22,7 @@ local WHOLESALE_SEED_CAP = 64
 
 --pre: ppq is spec.ppq projected into the raw frame -- the journal holds no time context
 local function parkSeed(spec, verb, ppq)
-  return { uuid = spec.uuid, verb = verb, ppq = ppq,
+  return { uuid = spec.uuid, verb = verb, ppq = ppq, evType = spec.evType,
            ppqL = spec.ppq, lane = spec.lane, pitch = spec.pitch, endppqL = spec.endppq }
 end
 
@@ -74,35 +76,47 @@ function dirt.new()
 
   ----- What the seeds name
 
-  -- The logical positions a channel's seeds name: each snapshot's ppqL plus those the flush folded
-  -- onto it, distinct and sorted; memoized until the next write invalidates it.
-  local function seeded(chan)
-    local held = memo[chan]
+  -- The logical positions a channel's seeds name, scoped to one stage's family (nil: every family):
+  -- each snapshot's ppqL plus those the flush folded onto it, distinct and sorted; memoized per
+  -- family until the next write invalidates the channel's whole memo.
+  local function seeded(chan, family)
+    family = family or 'all'
+    local byFamily = memo[chan]
+    if not byFamily then byFamily = {}; memo[chan] = byFamily end
+    local held = byFamily[family]
     if held then return held end
     local list, seen = {}, {}
     local function hold(ppq)
       if ppq ~= nil and not seen[ppq] then seen[ppq] = true; list[#list + 1] = ppq end
     end
     for _, seed in ipairs(marks[chan]) do
-      hold(seed.ppqL)
-      for _, later in ipairs(seed.laterPpqs or {}) do hold(later) end
+      -- A seed naming no event type names no family restriction: a region is a span over whatever
+      -- sits inside it. Erring wide costs a re-place; erring narrow renders stale (§ Note-lane renewal).
+      local seedFamily = SEED_FAMILY[seed.evType]
+      if family == 'all' or seedFamily == nil or seedFamily == family then
+        hold(seed.ppqL)
+        for _, later in ipairs(seed.laterPpqs or {}) do hold(later) end
+      end
     end
     table.sort(list)
     held = { list = list, seen = seen }
-    memo[chan] = held
+    byFamily[family] = held
     return held
   end
 
   --pre: the channel holds a seed list -- wholesale names no positions, and a clean one holds none
   --contract: those positions sorted, for a stage that seeks to each; the caller reads, never writes
-  function journal.ppqs(chan) return seeded(chan).list end
+  --contract: family scopes to one stage's own seeds ('note' / 'cc' / 'pb'); nil answers every family
+  function journal.ppqs(chan, family) return seeded(chan, family).list end
 
   --contract: is this logical position seeded -- wholesale covers every one, a clean channel none
-  function journal.covers(chan, ppq)
+  --contract: family as ppqs -- an excise and the refill gating it must scope alike, or the pair
+  --  either strands an event the excise dropped or doubles one it left standing
+  function journal.covers(chan, ppq, family)
     local standing = marks[chan]
     if standing == nil then return false end
     if standing == true then return true end
-    return seeded(chan).seen[ppq] == true
+    return seeded(chan, family).seen[ppq] == true
   end
 
   --contract: is any seeded position inside this logical span, both edges included

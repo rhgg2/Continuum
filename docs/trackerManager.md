@@ -299,7 +299,16 @@ Membership keys on the position, not the full seat, because same-pitch/PC shadow
 cross-lane relation: a deleted shadower must re-materialise the survivor sharing its position, and a
 seat key (ppqL + lane + pitch) would skip it.
 
-A seed covers its own rows and no more. Every raw consumer reads um's raw index, which holds every
+A seed covers its own rows **and its own family**, and no more. Notes and PAs
+share the note lanes, the cc family its three streams, pb its own; `ppqs` and
+`covers` take the family the reading stage belongs to. The excise and the refill
+that gates it must name the same one, or the pair strands an event the excise
+dropped or doubles one it left standing. Unscoped, a cc edit on a row carrying a
+chord excises those notes and re-clones them identical — correct on screen, but
+the lane comes back a fresh table and tv re-places the take (§ Note-lane
+renewal).
+
+Every raw consumer reads um's raw index, which holds every
 mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its results
 back through the `colEvt` seat stamp — so a carried event whose mm note did not change is already
 correct. Closure belongs to the tail walk, computed against that same index (§ What the walk
@@ -564,9 +573,10 @@ was dormant gets consumed, and when there is none this gate stops the pass.
 `frame` is the handle the pipeline mutates and the accessors publish. Its
 `channels` map swaps each pass — `newPass` mints the fresh one and hands the
 old back for the carry-forward loop to read the clean channels out of — and
-the operations that seat events travel on the handle beside it: `spliceEvent`,
-`setEvent`, `renewColumn`/`renewLane`, `markRenewed` and `orderLane`. Events are
-self-describing, so each takes the frame's own coordinates.
+the operations that seat events travel on the handle beside it: the column
+mints (`noteColumn` / `ccColumn` / `streamColumn`), `spliceInto`/`spliceEvent`,
+`setEvent`, `renewColumn`/`renewLane`, `markRenewed` and `orderColumn`. Events
+are self-describing, so each takes the frame's own coordinates.
 
 The engine is instantiated once with what the two files share: `mm`, `cm`,
 `ds`, the frame, the raw index, the stager (§ Update manager) and the dirt
@@ -1444,8 +1454,13 @@ Renewal is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseCells` assigns only when it actually dropped an
   event; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
-  the park restore) go through `spliceEvent(chan, lane, event)`, which renews
+  the park restore) go through `spliceInto(col, event)`, which renews
   before it splices, and the park unlink calls `renewLane(chan, lane)` itself.
+  A column carries the order it is kept in — `less`, set at the mint
+  (`noteColumn` / `ccColumn` / `streamColumn`) — so the splice needs only the
+  column and the event, and resolving *which* column stays with the caller:
+  `spliceEvent(chan, lane, event)` is the note-lane door, a dense index,
+  where the cc family names a sparse number instead.
   It takes the seeded rows and seeks each one into each lane rather than
   testing every event against a predicate, so a lane holding no seeded row
   costs a binary search and nothing else. A `claims` refinement narrows

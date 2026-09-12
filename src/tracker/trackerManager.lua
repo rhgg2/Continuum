@@ -95,6 +95,16 @@ do
     return (a.pitch or 0) < (b.pitch or 0)
   end
 
+  -- ppq alone orders a cc, at, pc or pb column: one stream, and no tie-break to preserve.
+  local function ppqLess(a, b) return a.ppq < b.ppq end
+
+  -- A column carries the order it is kept in, so a splice needs only the column and the event.
+  -- Resolving which column -- a dense lane index, a sparse cc number -- stays with the caller.
+  --invariant: every column is minted here, so col.less stands wherever a column does
+  function frame.noteColumn()         return { events = {}, less = noteColumnLess } end
+  function frame.ccColumn(ccNum)      return { cc = ccNum, events = {}, less = ppqLess } end
+  function frame.streamColumn(events) return { events = events or {}, less = ppqLess } end
+
   -- Open a rebuild pass: the channels map is minted afresh and handed back for the carry-forward
   -- loop to read the clean channels out of.
   function frame.newPass()
@@ -132,15 +142,17 @@ do
     evt[field] = value
   end
 
-  -- Membership write: renew the lane, then splice at its onset to keep it
-  -- ordered; renewal and splice are one act. See docs/trackerManager.md § Note-lane renewal
-  function frame.spliceEvent(chan, lane, evt)
-    local col = frame.renewLane(chan, lane)
-    util.insertSorted(col.events, evt, noteColumnLess)
+  -- Membership write: renew the column, then splice at its onset to keep it in the column's own
+  -- order; renewal and splice are one act. See docs/trackerManager.md § Note-lane renewal
+  function frame.spliceInto(col, evt)
+    frame.renewColumn(col)
+    util.insertSorted(col.events, evt, col.less)
   end
 
-  -- ppq alone orders a cc or pb column: one stream, and no tie-break to preserve.
-  local function ppqLess(a, b) return a.ppq < b.ppq end
+  -- The note-lane door onto it: (chan, lane) is how a note names its column.
+  function frame.spliceEvent(chan, lane, evt)
+    frame.spliceInto(frame.channels[chan].onTake.notes[lane], evt)
+  end
 
   -- A channel's parked list bucketed by the field naming its column: 'lane' for notes, 'cc' for ccs.
   -- see docs/trackerManager.md § Lane occupancy
@@ -231,13 +243,13 @@ do
     end
   end
 
-  -- Re-true a lane appended to in bulk: a raw->logical flip crossing two onsets is what disorders
-  -- one, and a cheap scan lets the common already-ordered lane skip the sort.
-  function frame.orderLane(col)
-    local events = col.events
+  -- Re-true a column appended to in bulk: a raw->logical flip crossing two onsets is what disorders
+  -- one, and a cheap scan lets the common already-ordered column skip the sort.
+  function frame.orderColumn(col)
+    local events, less = col.events, col.less
     for i = 2, #events do
-      if noteColumnLess(events[i], events[i - 1]) then
-        table.sort(events, noteColumnLess)
+      if less(events[i], events[i - 1]) then
+        table.sort(events, less)
         return
       end
     end

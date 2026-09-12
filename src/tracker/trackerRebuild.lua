@@ -59,7 +59,7 @@ end
 
 local function pushNoteCol(channel)
   local notes = channel.onTake.notes
-  return util.add(notes, { events = {} }), #notes
+  return util.add(notes, frame.noteColumn()), #notes
 end
 
 -- Clone an mm record, or the um index entry that holds it, into a column event; um's own seat
@@ -200,11 +200,11 @@ local function rebuildInternals(time)
   -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if not dirt.wholesale(chan) then exciseCells(frame.channels[chan].onTake.notes, dirt.ppqs(chan)) end
+      if not dirt.wholesale(chan) then exciseCells(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
       for _, raw in mm:notesRaw(chan) do
         if raw.derived then
           util.add(noteExisting[chan], columnEvent(raw))
-        elseif dirt.covers(chan, raw.ppqL or raw.ppq) then
+        elseif dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
           local note = columnEvent(raw)
           if rawDivergesFromLogical(note, time) then util.add(external, note)
           else util.add(internal, note)
@@ -247,15 +247,13 @@ local function rebuildInternals(time)
   end
   -- Raw and logical onset order diverge under swing or an authored swap, so only the lanes this pass
   -- appended to can have landed disordered; the splices above stay ordered.
-  for col in pairs(builtCols) do frame.orderLane(col) end
+  for col in pairs(builtCols) do frame.orderColumn(col) end
   reseats.commit()
 
   return external, noteExisting
 end
 
 ----- Rebuild CCs
-
-local function ppqLess(a, b) return a.ppq < b.ppq end
 
 local CC_FAMILY = { cc = true, at = true, pc = true }
 
@@ -281,15 +279,14 @@ local function spliceCcEvent(live, ccWrites, time)
   local channel = frame.channels[chan]
   local col
   if live.evType == 'cc' then
-    col = channel.onTake.ccs[live.cc] or { cc = live.cc, events = {} }
+    col = channel.onTake.ccs[live.cc] or frame.ccColumn(live.cc)
     channel.onTake.ccs[live.cc] = col
   else
-    col = channel.onTake[live.evType] or { events = {} }
+    col = channel.onTake[live.evType] or frame.streamColumn()
     channel.onTake[live.evType] = col
   end
   projectEvent(event, chan, time)
-  frame.renewColumn(col)   -- a membership change hands out a fresh events table; the excise's twin
-  util.insertSorted(col.events, event, ppqLess)
+  frame.spliceInto(col, event)   -- a membership change hands out a fresh events table; the excise's twin
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
@@ -333,11 +330,11 @@ local function ccIndexList(chan, evType, ccNum)
   if evType == 'pc' then return raw.pcs end
 end
 
--- The cells a channel's cc-family seeds name: one entry per column, holding every row its seeds
--- claimed. No verb reassigns `cc`, so a seed's later positions belong to the column its birth
--- snapshot names, and a chan move seeds the vacated and the arrival cell in their own journals.
---shape: cell = { evType, cc, rows = { [ppqL] = true }, ppqs = those rows, listed }
-local function seededCcCells(seedList)
+-- Interval-dirt cc path: the seeded cells are cleared and refilled from the raw index at each cell's
+-- own seat -- O(cells), no channel scan. see docs/trackerManager.md § Interval materialisation
+--invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
+local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExisting, time)
+  --shape: cell = { evType, cc, rows = { [ppqL] = true }, ppqs = those rows, listed }
   local cells = {}
   for _, s in ipairs(seedList) do
     if CC_FAMILY[s.evType] then
@@ -349,14 +346,7 @@ local function seededCcCells(seedList)
     end
   end
   for _, cell in pairs(cells) do cell.ppqs = util.keys(cell.rows) end
-  return cells
-end
 
--- Interval-dirt cc path: the seeded cells are cleared and refilled from the raw index at each cell's
--- own seat -- O(cells), no channel scan. see docs/trackerManager.md § Interval materialisation
---invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
-local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExisting, time)
-  local cells   = seededCcCells(seedList)
   local refills = {}
 
   -- Gather before mutating: the refill reads the index, the excise and the splices write the frame.
@@ -423,10 +413,10 @@ local function fullRebuildChannelCCs(chan, realisedWindows, ccWrites, ccExisting
       local channel = frame.channels[cc.chan]
       local col
       if cc.evType == 'cc' then
-        col = channel.onTake.ccs[cc.cc] or { cc = cc.cc, events = {} }
+        col = channel.onTake.ccs[cc.cc] or frame.ccColumn(cc.cc)
         channel.onTake.ccs[cc.cc] = col
       else
-        col = channel.onTake[cc.evType] or { events = {} }
+        col = channel.onTake[cc.evType] or frame.streamColumn()
         channel.onTake[cc.evType] = col
       end
       projectEvent(event, cc.chan, time)
@@ -478,14 +468,14 @@ local function rebuildExtraColumns(extraColumns, paramAutomation)
       grew = true
     end
     while #c.notes < want.notes do pushNoteCol(frame.channels[i]) end
-    if want.pc then c.pc = c.pc or { events = {} } end
-    if want.pb then c.pb = c.pb or { events = {} } end
-    if want.at then c.at = c.at or { events = {} } end
+    if want.pc then c.pc = c.pc or frame.streamColumn() end
+    if want.pb then c.pb = c.pb or frame.streamColumn() end
+    if want.at then c.at = c.at or frame.streamColumn() end
     for ccNum in pairs(want.ccs or {}) do
-      c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
+      c.ccs[ccNum] = c.ccs[ccNum] or frame.ccColumn(ccNum)
     end
     for lane in pairs(bound[i] or {}) do
-      c.ccs[lane] = c.ccs[lane] or { cc = lane, events = {} }
+      c.ccs[lane] = c.ccs[lane] or frame.ccColumn(lane)
     end
   end
   if grew and mm:take() then ds:assign('extraColumns', extras) end
@@ -1013,7 +1003,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
       batch.add(evt)
       local channel = frame.channels[spec.chan]
       local col = channel.onTake.ccs[spec.cc]
-      if not col then col = { cc = spec.cc, events = {} }; channel.onTake.ccs[spec.cc] = col end
+      if not col then col = frame.ccColumn(spec.cc); channel.onTake.ccs[spec.cc] = col end
       util.add(col.events, util.clone(spec))
       util.sortByPPQ(col.events)
     end
@@ -1022,7 +1012,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.notes.
     renderUnion('ccs', newParked, function(spec)
       local ccs = frame.channels[spec.chan].onTake.ccs
-      ccs[spec.cc] = ccs[spec.cc] or { cc = spec.cc, events = {} }
+      ccs[spec.cc] = ccs[spec.cc] or frame.ccColumn(spec.cc)
       return util.clone(spec)
     end)
   end
@@ -1137,7 +1127,7 @@ local function rebuildPA(time)
   for chan = 1, 16 do
     if dirt.has(chan) then   -- clean: PA already sits in the carried note column
       for _, cc in ipairs(index.raw(chan).pas) do
-        if dirt.covers(chan, cc.ppqL or cc.ppq) then
+        if dirt.covers(chan, cc.ppqL or cc.ppq, 'note') then
           local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cc.pitch, cc.ppq, time)
           if noteCol then
             local evt = columnEvent(cc, { lane = lane })
@@ -1154,7 +1144,7 @@ local function rebuildPA(time)
   for chan = 1, 16 do
     if dirt.has(chan) then
       for _, evt in ipairs(frame.channels[chan].parked.pa or {}) do
-        if dirt.covers(chan, evt.ppqL or evt.ppq) then
+        if dirt.covers(chan, evt.ppqL or evt.ppq, 'note') then
           local ppq = time:fromLogical(chan, evt.ppq)   -- raw: findNoteColumnForPitch is raw geometry
           local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt.pitch, ppq, time)
           if noteCol then
@@ -2053,7 +2043,7 @@ local function linearTails(chan, notes, extras, time, res, clampWrites, tailWrit
     -- onset, for pbs to consume later this pass. see design § The widen and the emission are the same fact
     if nudged[e] and e.lane == 1 then
       local nextOnLane = laneNext(e)
-      util.add(emitted, { uuid = e.uuid, verb = 'nudge', ppq = e.ppq, ppqL = e.ppqL,
+      util.add(emitted, { uuid = e.uuid, verb = 'nudge', evType = 'note', ppq = e.ppq, ppqL = e.ppqL,
                           lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
     end
     if bound[e] then boundNote(e, pitchNext) end
@@ -2241,7 +2231,7 @@ local function frontierTails(chan, indexList, extras, time, res,
     local pitchNext = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
     if nudged[e] and e.lane == 1 then
       local nextOnLane = laneNext(e)
-      util.add(emitted, { uuid = e.uuid, verb = 'nudge', ppq = e.ppq, ppqL = e.ppqL,
+      util.add(emitted, { uuid = e.uuid, verb = 'nudge', evType = 'note', ppq = e.ppq, ppqL = e.ppqL,
                           lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
     end
     boundNote(e, pitchNext)
@@ -2869,7 +2859,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       end
       util.sortByPPQ(pbColEvents)
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
-      frame.channels[chan].onTake.pb = keep and { events = pbColEvents } or nil
+      frame.channels[chan].onTake.pb = keep and frame.streamColumn(pbColEvents) or nil
       perf.stop('project')
     end
   end
@@ -3005,7 +2995,7 @@ local function rebuildPCs(noteLive, time)
         for _, cc in ipairs(index.raw(chan).pcs) do projectPc(cc) end
       end
       util.sortByPPQ(events)
-      frame.channels[chan].onTake.pc = { events = events }
+      frame.channels[chan].onTake.pc = frame.streamColumn(events)
     end
   end
 end
