@@ -1700,12 +1700,6 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
         end
       end
       local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
-      -- A host whose output can be the base voice: a generator stamps it off a lane-1 member, so a
-      -- lane-≥2 note host emits none, while a laneless region host samples whatever it covers.
-      local function emitsBaseVoice(host)
-        if host.lane ~= nil and host.lane ~= 1 then return false end
-        return generators.parksNotes(host)
-      end
       local function holdSensitive(host, targets)
         if targets.pb and host.window[2] > pbHoldFrom then return true end
         for target in pairs(targets) do
@@ -1725,7 +1719,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       while changed do
         changed = false
         for _, host in ipairs(hosts) do
-          if seeded[host] and emitsBaseVoice(host) and host.window[1] < pbHoldFrom then
+          if seeded[host] and generators.emitsBaseVoice(host) and host.window[1] < pbHoldFrom then
             pbHoldFrom = host.window[1]; changed = true
           end
           if not seeded[host] and holdSensitive(host, targetsOf[host]) then

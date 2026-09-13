@@ -657,6 +657,16 @@ function generators.parksNotes(region)
   return false
 end
 
+-- Whether a host's chain can emit the base voice: it parks notes, and its inbound membership holds
+-- the voice the stamp is inherited from -- no base voice in, none out. see docs/tuning.md § Absorber reconciliation
+function generators.emitsBaseVoice(host)
+  if not generators.parksNotes(host) then return false end
+  for _, note in ipairs(host.notes) do
+    if isBaseVoice(note) then return true end
+  end
+  return false
+end
+
 -- Continuous targets a chain touches: set keyed 'pb' | <cc number>, empty for a pure-note
 -- chain -- phase 5's per-target scopes key off it.
 function generators.continuousTargets(fx)

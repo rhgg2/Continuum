@@ -27,6 +27,9 @@ end
 local function member(ppq, endppq, pitch, lane)
   return { ppq = ppq, endppq = endppq, pitch = pitch, vel = 100, detune = 0, lane = lane }
 end
+-- A chain hung on a host record: emitsBaseVoice asks the chain and the membership together.
+local function withFx(host, fx) host.fx = fx; return host end
+local retrigFx = { { kind = 'retrig', period = { 1, 4 } } }
 -- Three lane-1 members abutting across the region: 60 -> 62 -> 64, a whole tone apiece.
 local function abutting()
   return { member(0, 240, 60, 1), member(240, 480, 62, 1), member(480, 720, 64, 1) }
@@ -697,6 +700,42 @@ return {
       t.eq(out.notes[1].baseVoice, true, 'the base voice stays the base voice through the rewrite')
       t.eq(out.notes[2].baseVoice, nil,
         'a laneless note the predecessor denied the field does not acquire it by defaulting to lane 1')
+    end,
+  },
+
+  {
+    name = 'emitsBaseVoice: a note host answers from the lane it sits on',
+    run = function()
+      t.truthy(generators.emitsBaseVoice(withFx(noteHost(nil, 1), retrigFx)),
+        'a lane-1 host is the voice pb realises, so what stands in for it carries the stamp')
+      t.falsy(generators.emitsBaseVoice(withFx(noteHost(nil, 2), retrigFx)),
+        'off lane 1 nothing inbound holds the voice, so nothing outbound can')
+    end,
+  },
+
+  {
+    name = 'emitsBaseVoice: a region answers from the membership it covers, owning no lane itself',
+    run = function()
+      t.truthy(generators.emitsBaseVoice(
+        withFx(regionHost({ member(0, 240, 67, 3), member(0, 240, 60, 1), member(0, 240, 64, 2) }), retrigFx)),
+        'a lane-1 member anywhere in the chord holds the voice -- neither end of the membership is privileged')
+      t.falsy(generators.emitsBaseVoice(
+        withFx(regionHost({ member(0, 240, 64, 2), member(0, 240, 67, 3) }), retrigFx)),
+        'lanes 2 and up hold none of it, whatever the chain does with them')
+      t.falsy(generators.emitsBaseVoice(withFx(regionHost({}), retrigFx)),
+        'and a region covering nothing has no voice to inherit')
+      local laneless = member(0, 240, 60, nil); laneless.baseVoice = true
+      t.truthy(generators.emitsBaseVoice(withFx(regionHost({ laneless }), retrigFx)),
+        'mid-chain the inbound carries no lane, and the stamp its predecessor left answers instead')
+    end,
+  },
+
+  {
+    name = 'emitsBaseVoice: a chain parking no notes emits none, base voice inbound or not',
+    run = function()
+      t.falsy(generators.emitsBaseVoice(withFx(regionHost({ member(0, 240, 60, 1) }),
+        { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } })),
+        'a pb-only chain leaves its members sounding: it stands in for nothing')
     end,
   },
 

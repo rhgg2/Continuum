@@ -585,7 +585,10 @@ Authored pb and cc bases and base-voice detune all hold beyond a window
 edge, so a seed on a hold source forces live every pb window ending
 after it, and that cascades: a live base-voice emitter re-detunes the
 stream from its window start, which can wake a window further right,
-which may emit base voices of its own. The alternative was to force pb
+which may emit base voices of its own. A host is such an emitter when its
+chain parks notes over inbound membership holding the base voice, so a
+region covering only lanes 2 and up emits none and the pb windows after
+it stay frozen. The alternative was to force pb
 edits wholesale, which would have gutted the gate for ordinary lane-1
 editing.
 

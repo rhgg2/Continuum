@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-13** — The pb hold scope's base-voice test asks the host's inbound membership rather
+  than its lane, and moves whole to generators, which owns both halves. A region carries no lane of
+  its own, so the lane form widened the hold point whenever a region parked notes at all; a region
+  over lanes 2 and up now emits no base voice and the pb hosts after it stay kept. Note hosts answer
+  identically either way, their own note being their membership. It reads the inbound stream rather
+  than emitted output because it runs before any host does, and the stamp is inherited at every
+  stage -- no base voice in, none out. A memberless region emits none, which is a gap rather than a
+  choice; design/laneless-derived-notes.md section Open records it.
+
 - **2026-09-13** — I3's monopoly is now stated over the base voice instead of over lane 1: a note
   that is not the base voice moves no pb, covering an authored note on lane >=2 and a derived note
   its generator left unstamped. The two predicates answering it stay separate -- index.isBaseVoice

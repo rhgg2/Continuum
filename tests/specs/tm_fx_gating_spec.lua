@@ -49,6 +49,48 @@ local function curveAt(h, uuid, chan, target, ppqs)
   return out
 end
 
+----- The pb hold point's reach: which seeded host widens it, and so which pb host downstream re-runs
+
+local retrigChain = { { kind = 'retrig', period = { 1, 4 } } }
+local function laneNote(ppq, endppq, pitch, lane, fx)
+  return { evType = 'note', ppq = ppq, endppq = endppq, chan = 1, pitch = pitch,
+           vel = 100, detune = 0, delay = 0, lane = lane, fx = fx }
+ end
+
+-- Seeds the emitter under test at [480,720), then counts a downstream pb host's expansions over one
+-- added note inside that window: a run means the hold point reached back past 480 and woke it, a
+-- count of zero that runOrKeep kept its output. Returns the dirt-flush count and the seeding one,
+-- the latter the guard that the counter host runs at all.
+-- The dirt is pitched and on lane 4, so it moves neither baseHoldFrom nor detuneHoldFrom: the
+-- emitter's own base-voice-ness is the only thing left that can widen pbHoldFrom.
+local function runsOverDirt(h, seedEmitter)
+  local runs = 0
+  generators.kinds.counter = {
+    expand = function() runs = runs + 1; return { notes = {}, delta = {} } end,
+    mode = 'augment', dest = 'pb', label = 'Counter', defaults = {}, fields = {},
+  }
+  h.tm:addEvent(laneNote(960, 1200, 72, 1, { { kind = 'counter' } })); h.tm:flush()
+  seedEmitter(h)
+  local seedRuns = runs
+  runs = 0
+  h.tm:addEvent(laneNote(600, 660, 67, 4)); h.tm:flush()
+  generators.kinds.counter = nil
+  return runs, seedRuns
+end
+
+-- A retrig region over notes on the given lanes. It parks them, and carries no lane of its own.
+local function retrigRegion(lanes)
+  return function(h)
+    for i, lane in ipairs(lanes) do h.tm:addEvent(laneNote(480, 720, 60 + i, lane)) end
+    h.tm:flush()
+    h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 720, fx = retrigChain } })
+    h.tm:rebuild()
+  end
+end
+local function retrigNoteHost(lane)
+  return function(h) h.tm:addEvent(laneNote(480, 720, 60, lane, retrigChain)); h.tm:flush() end
+end
+
 -- A note carrying fx is its own host, and an augment chain leaves it on the take.
 local function hostUuid(h, chan)
   for _, e in ipairs(h.tm:getChannel(chan).onTake.notes[1].events) do
@@ -213,6 +255,42 @@ return {
       t.falsy(h.tm:getChannel(2).onTake.pb, 'chan 2 seats stay hidden -- no pb column surfaces')
       t.deepEq(pbSeatsOf(h.fm:dump(), 2), before,
         'frozen chan 2 pb seat stream is byte-identical -- its generators never re-ran')
+    end,
+  },
+
+  {
+    name = 'hold reach: a region parking a lane-1 note widens the pb hold point, waking the host downstream',
+    run = function(harness)
+      local runs, seedRuns = runsOverDirt(harness.mk(), retrigRegion({ 1, 3 }))
+      t.truthy(seedRuns > 0, 'fixture check: the counter host runs when it is not kept')
+      t.eq(runs, 1, 'the region emits the base voice, so the hold point reaches back to its start')
+    end,
+  },
+
+  {
+    name = 'hold reach: a region covering no lane-1 note emits no base voice, and the pb host downstream stays kept',
+    run = function(harness)
+      local runs, seedRuns = runsOverDirt(harness.mk(), retrigRegion({ 2, 3 }))
+      t.truthy(seedRuns > 0, 'fixture check: the counter host runs when it is not kept')
+      t.eq(runs, 0, 'nothing in its membership holds the voice the stamp is inherited from')
+    end,
+  },
+
+  {
+    name = 'hold reach: a lane-1 note host widens it, its own note being the membership',
+    run = function(harness)
+      local runs, seedRuns = runsOverDirt(harness.mk(), retrigNoteHost(1))
+      t.truthy(seedRuns > 0, 'fixture check: the counter host runs when it is not kept')
+      t.eq(runs, 1, 'the host note is the base voice, so what stands in for it re-detunes the stream')
+    end,
+  },
+
+  {
+    name = 'hold reach: a lane-2 note host does not, and the pb host downstream stays kept',
+    run = function(harness)
+      local runs, seedRuns = runsOverDirt(harness.mk(), retrigNoteHost(2))
+      t.truthy(seedRuns > 0, 'fixture check: the counter host runs when it is not kept')
+      t.eq(runs, 0, 'off lane 1 there is no base voice to re-seat from')
     end,
   },
 }

@@ -27,7 +27,7 @@
 
 1. The base-voice door answers over both — the raw index's authored lane-1 notes, and the pass's base-voice derived output. The detune query and the onset walk read the one door, so they agree at a coincident onset.
 
-1. A host emits base-voice notes when its generator sets the field on its output. The pitchbend hold scope reads that, and widens to the host's window start.
+1. A host emits base-voice notes when its chain parks notes over a membership holding the base voice — the field is inherited, so no base voice in means none out. The pitchbend hold scope reads that, and widens to the host's window start.
 
 ## The derived tail bound
 
@@ -76,5 +76,7 @@
 1. Whether a chord's voices want display lanes stable across frames. The allocator is deterministic over a fixed input, so the voices hold their columns while the host's output holds; a host whose output changes may re-column its neighbours.
 
 1. The per-frame cost of allocation. A global region tiling a take is the dense case, and cost 28ms of a 32ms fx expansion before the reach optimisation (`design/decisions.md`, 2026-09-02). The viewport bounds the work now, and the measurement has not been taken.
+
+1. What a memberless host emits. The base-voice test reads the inbound membership, so a region covering nothing emits no base voice. A generator stamping the field without a member to inherit it from leaves its output outside the pitchbend hold scope that its detune needs.
 
 1. Whether authored notes carry `baseVoice` too, which would retire the lane-1 monopoly and leave the lane a display coordinate throughout.
