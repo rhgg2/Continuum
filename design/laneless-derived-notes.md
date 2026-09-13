@@ -1,7 +1,7 @@
 # Laneless derived notes — one shape for derived reconciliation
 
 > opened: 2026-09-12 · status: in flight — plan/laneless-derived-notes.md,
-> at phase 1 (the base voice).
+> at phase 2 (the display lane).
 
 **Derived notes carry no lane, so they reconcile as derived ccs do: gathered per touched window and kept by omission.**
 
@@ -17,17 +17,8 @@
 
 ## The base voice
 
-1. A channel's **base voice** is the voice whose detune the channel realises through pitchbend. There is one at a time, and the absorber pass seats against its onsets (`docs/tuning.md` § Absorber reconciliation).
-
-1. An authored note in lane 1 is the base voice, which is the monopoly `docs/tuning.md` § Invariants states as I3.
-
-1. A derived note carries `baseVoice`, set by the generator emitting it. The field is inherited: a note is base voice when the stream note it derives from is, so a stage over a higher-lane host emits none, and a chained stage reads its predecessor's output.
-
-1. A chord stamp keeps the field on the voice displaced from the pattern's root alone, so the root's microtonality sounds.
-
-1. The base-voice door answers over both — the raw index's authored lane-1 notes, and the pass's base-voice derived output. The detune query and the onset walk read the one door, so they agree at a coincident onset.
-
-1. A host emits base-voice notes when its chain parks notes over a membership holding the base voice — the field is inherited, so no base voice in means none out. The pitchbend hold scope reads that, and widens to the host's window start.
+Landed. The model stands in `docs/tuning.md` § Intent vs realisation and
+`docs/generators.md` § Output.
 
 ## The derived tail bound
 
@@ -53,9 +44,11 @@
 
 1. A **display lane** is the grid column a derived note draws in. trackerView allocates it.
 
-1. Allocation runs per frame, over the host the caret addresses, and takes the lowest column free of overlap. The channel's authored population seeds occupancy, so a ghost lands clear of the notes already sounding there.
+1. Allocation runs over a host's whole window and takes the lowest column free of overlap. It is asked of a host by uuid, the fx strip's freeze buttons addressing a pinned host the caret has left.
 
-1. One allocation serves the frame. The ghost overlay places its notes by it, and the ghost readout reserves cents columns by it (`docs/trackerView.md` § Ghost sampling).
+1. The channel's authored population seeds occupancy, less the cells the host's ghosts hide. So a ghost lands clear of what the column draws, and may take the column its own parked original left.
+
+1. One allocation serves the frame, and its readers filter it. The ghost overlay places its notes by it over the viewport's rows, and the ghost readout reserves cents columns by it (`docs/trackerView.md` § Ghost sampling).
 
 1. A ghosted row may also carry a real cell. The allocation is a legibility question, and the draw arm settles precedence.
 
@@ -63,11 +56,11 @@
 
 1. A host's freeze rect claims one note stream per display lane its output occupies, alongside the pb and cc streams its targets name.
 
-1. The rect resolves when the freeze path asks for it, from the allocation standing at that moment. The rect a mint would claim and the columns drawn come from the one allocation.
+1. trackerManager publishes the host's span with the streams its targets name. The freeze path adds a note stream per column the allocation gives the host, before the rect reaches groupManager.
+
+1. The rect resolves when the freeze path asks for it, from the allocation standing at that moment. The rect a mint would claim and the columns drawn come from the one allocation, so the claim stands still under scroll.
 
 ## Open
-
-1. What the allocation's unit is. A freeze claim is durable and a viewport moves under scroll, so an allocation restricted to visible rows would give a host different claims at different scroll positions. The likely settlement is the host's whole window as the unit, with the ghost allocation that one filtered to the rows on screen.
 
 1. Whether a generator may set `baseVoice` on more than one note sounding at once, and what the absorber seats if two coincide.
 

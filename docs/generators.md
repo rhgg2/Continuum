@@ -249,7 +249,18 @@ generator truncating its host is the tail walk clamping *realisation*, not
 the generator revising a note. Output is strictly new derived events, and
 that is what preserves the intent/realisation split and the round trip.
 
-**3** **Lane allocation resolves all overlap, and output never self-clips.**
+**3** A derived note carries `baseVoice` where the stream note it derives
+from does, the field naming the voice pitchbend realises (`docs/tuning.md`
+§ Intent vs realisation). It is inherited at every stage, so a chain over a
+host on a higher lane emits none, and a later stage takes the stamp off its
+predecessor's output. The same test over a host's inbound membership scopes
+the pitchbend hold (`docs/tuning.md` § Absorber reconciliation).
+
+**4** A chord stamp is the one narrowing. The voice its pattern's root places
+keeps the field and the tones above it carry none, so the trigger's own
+microtonality sounds while they sound at the bend in force.
+
+**5** **Lane allocation resolves all overlap, and output never self-clips.**
 Discrete output can be polyphonic — a chord arp, a dense fill — so its notes
 need voice allocation within the region's channel. Simultaneous generated
 notes take separate lanes; sequential ones share a lane and abut; authored
@@ -258,19 +269,19 @@ region's span and append a lane only when none is free. This is the packing
 the tracker already runs on authored notes, re-pointed. There is no
 tail-clipping among a generator's own members.
 
-**4** Determinism is the whole ballgame. Because lane allocation is the sole
+**6** Determinism is the whole ballgame. Because lane allocation is the sole
 overlap resolver, it has to be a pure function of the region's occupancy —
 lowest free lane first, deterministic append. Lean on iteration order or on a
 counter and a flush → rebuild → flush cycle reshuffles lanes into permanent
 churn.
 
-**5** One overlap lane separation cannot fix: two generated notes at the
+**7** One overlap lane separation cannot fix: two generated notes at the
 *same pitch* that overlap collide on the wire whatever lane they sit in. That
 is a constraint on kinds — don't emit same-pitch overlap — rather than a
 defect in the allocator, and it would bite a fill or an arp folding back onto
 a pitch.
 
-**6** PA binds to the region: channel × ppq, stable and persisted, with the
+**8** PA binds to the region: channel × ppq, stable and persisted, with the
 degenerate note host binding PA to its note. A PA parks with its host,
 region-parked or self-parked.
 
