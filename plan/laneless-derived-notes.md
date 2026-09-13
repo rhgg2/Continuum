@@ -30,27 +30,16 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-13 tv: allocate a display lane for a host's derived notes (§ The display lane)
 - 2026-09-13 tm: the pb hold scope asks the generator, not the host's lane (§ The base voice)
 - 2026-09-13 tm: seat absorbers against the base voice, not lane 1 (§ The base voice)
 - 2026-09-13 tm: carry baseVoice across the fx pass (§ The derived note record)
-- 2026-09-12 generators: stamp baseVoice on every derived note (§ The base voice)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **The display lane, allocated in trackerView** — a note column per derived
-   note of a host, allocated over the host's whole window: the lowest column
-   free of overlap, with occupancy seeded from the channel's authored
-   population less the cells the host's ghosts hide. The allocation is asked of
-   a host by uuid and held for the frame, since the fx strip's freeze buttons
-   address a pinned host the caret has left. `tv:ghostOverlay` and
-   `tv:reserveGhostReadout` take their columns from it instead of `evt.lane`,
-   the overlay filtering to the viewport's rows; a column the channel does not
-   carry still draws nothing. tm's `allocateRegionLanes` stands until phase 4.
-   Spec: `tests/specs/tv_fx_region_spec.lua`.
 
 1. **The freeze claim from the allocation** — `buildFreezeRects` drops its walk
    over the raw index's derived lanes and publishes each host's span with its

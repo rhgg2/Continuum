@@ -3821,6 +3821,90 @@ function tv:movePreview()
            srcMember = srcMember, destSrc = destSrc }
 end
 
+-- The display lane: which grid column a host's derived notes draw in. Allocated here over the host's
+-- own output, so simultaneous voices spread rather than collapsing onto the take lane they all ride.
+local bumpDisplayLanes do
+  -- The grid the held allocations read their occupancy off; tv:rebuild replaces it wholesale.
+  local gridGeneration = 0
+  local heldByRealisation = setmetatable({}, { __mode = 'k' })
+
+  function bumpDisplayLanes() gridGeneration = gridGeneration + 1 end
+
+  -- Mirrors trackerRebuild's allocateRegionLanes: lowest lane free of overlap, taken in emission
+  -- order for determinism; reach tracks each lane's furthest span end to skip scanning past it.
+  --post: fresh result = { [note] = its display lane }, one entry per note handed in
+  local function allocateOnChannel(chan, notes, parked)
+    local lo, hi = math.huge, -math.huge
+    for _, n in ipairs(notes) do lo, hi = math.min(lo, n.ppq), math.max(hi, n.endppq) end
+
+    local occupied, reach = {}, {}
+    local function occupy(lane, spanLo, spanHi)
+      util.bucket(occupied, lane, { spanLo, spanHi })
+      reach[lane] = math.max(reach[lane] or spanHi, spanHi)
+    end
+    local function laneFree(lane, spanLo, spanHi)
+      if reach[lane] == nil or spanLo >= reach[lane] then return true end
+      for _, span in ipairs(occupied[lane]) do
+        if spanLo < span[2] and spanHi > span[1] then return false end
+      end
+      return true
+    end
+
+    -- The channel's authored population, less every cell this host parked, its own included -- so a
+    -- note host's first voice draws the column it occupies; endppqC bounds on-take and parked alike.
+    for ci = grid.chanFirstCol[chan] or 1, grid.chanLastCol[chan] or 0 do
+      local col = grid.cols[ci]
+      if col.type == 'note' then
+        for _, evt in ipairs(col.events) do
+          if util.isNote(evt) and not evt.derived and not parked[evt]
+             and evt.ppq < hi and evt.endppqC > lo then
+            occupy(col.lane or 1, evt.ppq, evt.endppqC)
+          end
+        end
+      end
+    end
+
+    local laneOf = {}
+    for _, n in ipairs(notes) do
+      local lane = 1
+      while not laneFree(lane, n.ppq, n.endppq) do lane = lane + 1 end
+      occupy(lane, n.ppq, n.endppq)
+      laneOf[n] = lane
+    end
+    return laneOf
+  end
+
+  --post: unsafe result = { [note of uuid's realisation] = its display lane }, keyed on each channel
+  --post: (uuid hosts no chain) → result is empty, so a caller needs no host test of its own
+  --post: a lane past the channel's own columns is a lane all the same; colFor answers nil there
+  --invariant: held while its inputs stand -- the realisation record is fresh per rebuild, and the
+  --  generation names the grid the occupancy came off
+  function tv:displayLanes(uuid)
+    local fx = tm:fxRealisation(uuid)
+    if not fx then return {} end
+    local held = heldByRealisation[fx]
+    if held and held.generation == gridGeneration then return held.lanes end
+
+    local parked = {}
+    for _, cell in ipairs(fx.parked) do parked[cell] = true end
+    -- Per channel, so a global region's channel-union allocates each of its channels on its own.
+    local byChan = {}
+    for _, n in ipairs(fx.notes) do util.bucket(byChan, n.chan, n) end
+    local lanes = {}
+    for chan, notes in pairs(byChan) do
+      for note, lane in pairs(allocateOnChannel(chan, notes, parked)) do lanes[note] = lane end
+    end
+    heldByRealisation[fx] = { generation = gridGeneration, lanes = lanes }
+    return lanes
+  end
+end
+
+-- A locator record standing in for the column a ghost draws in: its channel, and the display lane
+-- the allocation gave it rather than the take lane it carries.
+local function ghostLocator(note, lanes)
+  return { evType = 'note', chan = note.chan, lane = lanes[note] }
+end
+
 -- Derived per frame rather than stored on the column: the gate is the caret and the window
 -- the viewport, and both move without a rebuild. Nothing enters col.cells, so no ghost edits.
 --contract: per-frame overlay for the chain the caret addresses: notes to ghost, cells to suppress
@@ -3835,9 +3919,10 @@ do
   --invariant: runs before the frame's column layout, which reads the widths it writes
   function tv:reserveGhostReadout()
     local wanted = {}
-    local fx = tm:fxRealisation(tv:fxHostAtCursor())
+    local uuid = tv:fxHostAtCursor()
+    local fx, lanes = tm:fxRealisation(uuid), tv:displayLanes(uuid)
     for _, n in ipairs(fx and fx.notes or {}) do
-      local col = colFor(n)
+      local col = colFor(ghostLocator(n, lanes))
       if col and (ctx:noteDeviation(n) or 0) ~= 0 then wanted[col] = true end
     end
     local pitchWidth, octaveWidth = tv:cellWidth(), tv:octaveWidth()
@@ -3860,12 +3945,14 @@ do
 end
 
 --contract: notes[colIndex][row] = tm's record by reference; note columns only; first onset wins
+--contract: a ghost's column is its display lane's, so simultaneous voices land in different ones
 --contract: values[colIndex][row] = { val }; the claimed targets, on every channel the chain reaches
 --contract: hidden[cell] = true for every plain original this chain parked; a host cell never hides
 --invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
 --invariant: the overlay lands in the columns that exist; a claim materialises none of its own
 function tv:ghostOverlay()
-  local fx = tm:fxRealisation(tv:fxHostAtCursor())
+  local uuid = tv:fxHostAtCursor()
+  local fx, lanes = tm:fxRealisation(uuid), tv:displayLanes(uuid)
   if not fx then return nil end
 
   local top, bot      = scrollRow, scrollRow + gridHeight + 1
@@ -3873,7 +3960,7 @@ function tv:ghostOverlay()
   for _, n in ipairs(fx.notes) do
     local row = ppqRowOf(n.ppq, n.chan)
     if row >= top and row < bot then   -- half-open: bot is already the viewport's row of slack
-      local _, x = colFor(n)
+      local _, x = colFor(ghostLocator(n, lanes))
       if x then
         notes[x] = notes[x] or {}
         if notes[x][row] == nil then notes[x][row] = n end
@@ -4399,6 +4486,7 @@ function tv:rebuild(takeChanged)
   if not tm or rebuilding then return end
   if not tm:currentTake() then return end
   rebuilding = true
+  bumpDisplayLanes()   -- the grid below is the one a display lane's occupancy is read off
   takeChanged = takeChanged or false
 
   local LABELS = {

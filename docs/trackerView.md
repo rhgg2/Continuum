@@ -63,7 +63,7 @@ query is a lookup.
 
 **6** The overlay has two halves, because what the ghosts show and what they
 stand in for are one question. `notes` are the chain's derived onsets, and
-they carry no tail: the scalar ghosts this borrows from are a value on a row
+they draw no tail: the scalar ghosts this borrows from are a value on a row
 with no extent, and a retrig ghosted with tails would paint a wall of glyphs
 across the span the parked host's own tail already covers. `hidden` is the
 parked cells the ghosts stand in for, showing both being showing one span
@@ -124,7 +124,18 @@ visible, and tm already grows a channel's columns for a note written above the
 count. What that costs is `docs/oddities.md` § A chain's claim on a column the
 channel lacks shows nothing.
 
-**14** A lane's width follows the ghosts too. A note off its step draws a
+**14** The column a ghost draws in is a **display lane**, allocated by
+`tv:displayLanes` over a host's whole output on a channel: the lowest column free
+of overlap, with the channel's authored population seeding occupancy less every
+cell the host parked. A chain stamping a chord emits its voices on one lane,
+which says where they sound; the display lane says where they read, so each voice
+draws in a column of its own. Both readers take their column from the one
+allocation. The host's own parked cell seeds no occupancy, which leaves a note
+host's first voice in the column the host itself draws in. The allocation covers
+the output rather than the viewport, so scrolling changes none of it, and it
+stands while the realisation and the grid it read occupancy off both stand.
+
+**15** A lane's width follows the ghosts too. A note off its step draws a
 deviation readout (`docs/tuning.md` § Display), and a lane whose own notes all
 stand on their steps reserves no width for one, so `tv:reserveGhostReadout`
 opens that width in every lane drawing an off-step ghost and closes the ones it

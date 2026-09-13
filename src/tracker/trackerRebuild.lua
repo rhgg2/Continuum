@@ -27,8 +27,8 @@ local EPS = 1
 
 -- The one map that outlives a pass: the fx stage writes only the channels it ran, keyed by host, so
 -- the overlay draws one chain's own. Its lists are built from copies of the fx specs.
---shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
---   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
+--shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, lane, ppq, endppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
+--   ppq/endppq are the logical span; derived is the producing region/host uuid; logical-onset order
 local fxNotesByHost = {}
 
 ----- Rebuild shared helpers
@@ -1776,6 +1776,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
                                        kept = keptFx[spec] or nil })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
+                          endppq = spec.endppqL,
                           pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
                           intentCents = spec.intentCents, baseVoice = spec.baseVoice,
                           delay = spec.delay, derived = spec.derived })

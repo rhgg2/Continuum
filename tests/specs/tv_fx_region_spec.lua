@@ -1295,6 +1295,54 @@ return {
     end,
   },
 
+  {
+    name = 'ghostOverlay: a polyphonic note host spreads its voices across the columns',
+    run = function(harness)
+      local h = harness.mk{ data = { extraColumns = { [1] = { notes = 3 } } } }
+      h.vm:setGridSize(80, 40)
+      -- A note host, so the chain's only claim on the channel is the cell it parks: its own.
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1, fx = chord3 }
+      h.tm:flush()
+      local idx = noteColIdx(h, 1)
+      t.truthy(noteColIdx(h, 1, 3), 'fixture check: the channel carries three note columns')
+      h.ec:setPos(0, idx, 1)   -- on the host's own cell: its chain is what ghosts
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
+      local pitches = {}
+      for lane = 1, 3 do
+        local col = noteColIdx(h, 1, lane)
+        pitches[lane] = (col and ghosts[col] and ghosts[col][0] and ghosts[col][0].pitch) or false
+      end
+      t.deepEq(pitches, { 60, 64, 67 },
+        'the three simultaneous voices stand in three columns, none of them shadowed')
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: a voice steps over a lane the author already holds',
+    run = function(harness)
+      local h = harness.mk{ data = { extraColumns = { [1] = { notes = 4 } } } }
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1, fx = chord3 }
+      -- A note host parks its own cell alone, so this one stands: lane 2 is the author's.
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 72,
+                     vel = 100, detune = 0, delay = 0, lane = 2 }
+      h.tm:flush()
+      h.ec:setPos(0, noteColIdx(h, 1), 1)
+      local lane2 = noteColIdx(h, 1, 2)
+      t.truthy(h.vm.grid.cols[lane2].cells[0], 'fixture check: lane 2 still carries its own note')
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
+      local pitches = {}
+      for lane = 1, 4 do
+        local col = noteColIdx(h, 1, lane)
+        pitches[lane] = (col and ghosts[col] and ghosts[col][0] and ghosts[col][0].pitch) or false
+      end
+      t.deepEq(pitches, { 60, false, 64, 67 },
+        'the voices step over the occupied lane and take the free ones above it')
+    end,
+  },
+
   ----- Ghost display: a chain's continuous curve, on the target column it claimed
 
   {
