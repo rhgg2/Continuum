@@ -190,6 +190,77 @@ return {
     end,
   },
 
+  ----- baseVoice — the generator's stamp rides the fx pass onto the seated note
+
+  {
+    name = 'derived notes carry baseVoice iff their host sits on lane 1',
+    run = function(harness)
+      local h = harness.mk()
+      -- Two retrig hosts, one per lane: base voice is the host's lane, not the expansion's shape.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = retrig16 })
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
+                      vel = 100, detune = 0, delay = 0, lane = 2, fx = retrig16 })
+      h.tm:flush()
+
+      local hostByLane = {}
+      for _, p in ipairs(h.tm:getChannel(1).parked.notes) do hostByLane[p.lane] = p end
+      t.truthy(hostByLane[1] and hostByLane[2], 'both hosts parked, one per lane')
+
+      local dump = h.fm:dump()
+      local base  = fxNotesOf(dump, hostByLane[1].uuid)
+      local upper = fxNotesOf(dump, hostByLane[2].uuid)
+      t.eq(#base, 4, 'the lane-1 host expanded')
+      t.eq(#upper, 4, 'the lane-2 host expanded')
+      for _, fn in ipairs(base)  do t.eq(fn.baseVoice, true, 'a lane-1 host derives base voice') end
+      for _, fn in ipairs(upper) do t.eq(fn.baseVoice, nil, 'a lane-2 host derives no base voice') end
+    end,
+  },
+
+  {
+    name = 'baseVoice survives a reindex -- it comes back off the wire, not off a re-expansion',
+    run = function(harness)
+      local h = harness.mk()
+      addPlainHost(h)
+      local host = parkedHost(h)
+
+      h.fm:load()   -- no rebuild: whatever reads now was persisted as mm metadata
+      local fns = fxNotesOf(h.fm:dump(), host.uuid)
+      t.eq(#fns, 4, 'the derived notes came back')
+      for _, fn in ipairs(fns) do t.eq(fn.baseVoice, true, 'the stamp came back with them') end
+    end,
+  },
+
+  {
+    name = 'a host moved onto lane 1 re-emits its derived notes as base voice',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
+                      vel = 100, detune = 0, delay = 0, lane = 2, fx = retrig16 })
+      h.tm:flush()
+      for _, fn in ipairs(fxNotesOf(h.fm:dump(), parkedHost(h).uuid)) do
+        t.falsy(fn.baseVoice, 'not base voice while the host sits on lane 2')
+      end
+
+      -- Every other keyed term is unchanged by the move: same host, onsets, pitches, velocities.
+      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { lane = 1 }); h.tm:flush()
+
+      local host = parkedHost(h)
+      t.eq(host.lane, 1, 'the host moved')
+      local fns = fxNotesOf(h.fm:dump(), host.uuid)
+      t.eq(#fns, 4, 'it still expands')
+      for _, fn in ipairs(fns) do
+        t.eq(fn.lane, 1, 'the derived notes followed the host')
+        t.eq(fn.baseVoice, true, 'and are base voice now')
+      end
+
+      h.fm:load()
+      for _, fn in ipairs(fxNotesOf(h.fm:dump(), host.uuid)) do
+        t.eq(fn.baseVoice, true, 'the re-emitted stamp persisted')
+      end
+    end,
+  },
+
   ----- G3 — ownership
 
   {

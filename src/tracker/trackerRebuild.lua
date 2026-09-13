@@ -27,7 +27,7 @@ local EPS = 1
 
 -- The one map that outlives a pass: the fx stage writes only the channels it ran, keyed by host, so
 -- the overlay draws one chain's own. Its lists are built from copies of the fx specs.
---shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents] }, ... }
+--shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
 local fxNotesByHost = {}
 
@@ -1595,7 +1595,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
         util.add(regionNotes or predicted, {
           evType = 'note', chan = chan, lane = host.lane, derived = host.id,
           pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
-          intentCents = hit.intentCents,
+          intentCents = hit.intentCents, baseVoice = hit.baseVoice,
           delay = host.delay or 0, sample = host.sample,
           ppqL = hit.ppq, endppqL = hit.endppq,
           ppq    = time:fromLogical(chan, hit.ppq,    host.delayPpq),
@@ -1760,8 +1760,11 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       existing  = noteExisting[chan],
       predicted = predicted,
       key       = function(evt)
+        -- baseVoice is keyed: a host moving between lane 1 and elsewhere flips it with every other
+        -- term unchanged, and a kept note would leave stale metadata seated.
         return util.key(evt.derived, evt.ppq, evt.endppqL or 0,
-        evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0, evt.intentCents)
+        evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0, evt.intentCents,
+        evt.baseVoice)
       end,
       batcher   = noteOpsBatcher,
       -- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
@@ -1777,7 +1780,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
                           pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
-                          intentCents = spec.intentCents,
+                          intentCents = spec.intentCents, baseVoice = spec.baseVoice,
                           delay = spec.delay, derived = spec.derived })
     end
     -- One sort per rebuild against many windowed reads; lane then pitch break onset collisions stably.

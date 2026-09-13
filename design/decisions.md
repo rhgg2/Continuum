@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-13** — A derived note's baseVoice joins the fx reconcile key, rather than being carried
+  on a kept note's spec alone. The field flips with every other keyed term unchanged -- a retrig
+  host moving from lane 2 to lane 1 keeps its uuid, onsets, pitches and velocities -- so under a
+  keep the seated note's mm metadata stays as it was, and a later pass that keeps that host re-adds
+  the stale record verbatim.
+
 - **2026-09-12** — A stream note's base-voice test reads its lane where it carries one and the
   baseVoice field otherwise, rather than defaulting an absent lane to 1. Every authored inbound note
   carries a lane and no derived note ever arrives as one, so an absent lane is what marks a

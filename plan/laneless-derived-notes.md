@@ -29,6 +29,7 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-13 tm: carry baseVoice across the fx pass (§ The derived note record)
 - 2026-09-12 generators: stamp baseVoice on every derived note (§ The base voice)
 
 ## Now
@@ -37,12 +38,6 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-2. **The fx pass carries `baseVoice`** — the field rides `rebuildFx`'s predicted
-   spec, `noteLive`, the `fxNotes` copy the tail walk clips, and the
-   `fxNotesByHost` shape. It sits outside mm's `noteEventFields` strip, so a
-   seated derived note holds it as metadata and answers for it on the next
-   pass. Spec: an expansion's seated notes carry the field, and it survives a
-   reindex.
 3. **The base-voice door** — `lane1Union` becomes a base-voice door: authored
    lane-1 notes from the raw index unioned with the pass's base-voice derived
    output. `rebuildPbs`' gather and its `freshLane1` flag select `noteLive`
