@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-13** — I3's monopoly is now stated over the base voice instead of over lane 1: a note
+  that is not the base voice moves no pb, covering an authored note on lane >=2 and a derived note
+  its generator left unstamped. The two predicates answering it stay separate -- index.isBaseVoice
+  discriminates on `derived` over index entries, generators' own reads a stream note's lane --
+  because an inbound stream note's lane is honest where a derived index entry's is not. They
+  converge when derived notes go laneless.
+
 - **2026-09-13** — A derived note's baseVoice joins the fx reconcile key, rather than being carried
   on a kept note's spec alone. The field flips with every other keyed term unchanged -- a retrig
   host moving from lane 2 to lane 1 keeps its uuid, onsets, pitches and velocities -- so under a

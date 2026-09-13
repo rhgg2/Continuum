@@ -1687,8 +1687,8 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     -- Emit scope per target = merged windows of the seeded hosts touching it; the cc fold and
     -- reconcile clip to it. Clean windows never enter ccExisting, so their seats keep untouched.
     if gated then
-      -- Hold-stream reach: authored pb/cc breakpoints and lane-1 detune hold forward past window
-      -- edges, invisible to window-local seeds.
+      -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
+      -- window edges, invisible to window-local seeds.
       local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
       for _, s in ipairs(dirt.has(chan)) do
         if s.pitch == nil or s.lane == 1 then
@@ -1700,7 +1700,9 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
         end
       end
       local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
-      local function emitsLane1Notes(host)
+      -- A host whose output can be the base voice: a generator stamps it off a lane-1 member, so a
+      -- lane-≥2 note host emits none, while a laneless region host samples whatever it covers.
+      local function emitsBaseVoice(host)
         if host.lane ~= nil and host.lane ~= 1 then return false end
         return generators.parksNotes(host)
       end
@@ -1717,13 +1719,13 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
         targetsOf[host] = generators.continuousTargets(host.fx)
         seeded[host] = dirt.touches(chan, host.window[1], host.window[2])
       end
-      -- Fixpoint: a live lane-1 note-emitter re-detunes the stream from its window start, which can
-      -- wake pb windows further right, which may themselves emit lane-1 notes.
+      -- Fixpoint: a live base-voice emitter re-detunes the stream from its window start, which can
+      -- wake pb windows further right, which may themselves emit base voices.
       local changed = true
       while changed do
         changed = false
         for _, host in ipairs(hosts) do
-          if seeded[host] and emitsLane1Notes(host) and host.window[1] < pbHoldFrom then
+          if seeded[host] and emitsBaseVoice(host) and host.window[1] < pbHoldFrom then
             pbHoldFrom = host.window[1]; changed = true
           end
           if not seeded[host] and holdSensitive(host, targetsOf[host]) then
@@ -1776,7 +1778,8 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
 
     local fxNotes = {}
     for _, spec in ipairs(predicted) do
-      util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
+      util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, baseVoice = spec.baseVoice,
+                                       kept = keptFx[spec] or nil })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
                           pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
@@ -2306,13 +2309,15 @@ end
 -- seats), so every span that must contain an onset's seats reaches one tick back.
 local DUAL_POINT_TICK = 1
 
---shape: door = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump() }
--- A channel's lane-1 onset stream: the raw index's authored notes unioned with the pass's derived
--- lane-1 output, which lives off-take in noteLive. see docs/tuning.md § Absorber reconciliation
---pre: derived is ppq-ascending and holds chan's derived lane-1 notes for this pass
-local function lane1Union(chan, derived)
+--shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump() }
+-- A channel's base-voice onset stream: the raw index's authored notes unioned with the pass's
+-- derived base voices, which live off-take in noteLive. see docs/tuning.md § Absorber reconciliation
+--pre: derived is ppq-ascending and holds chan's derived base voices for this pass
+local function baseVoiceUnion(chan, derived)
   local authored = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
-  local function lane1Note(entry) return entry.lane == 1 and isAuthored(entry) end
+  -- isAuthored drops the index's own derived entries: they are seated copies of a prior pass's
+  -- output, superseded by `derived`.
+  local function authoredBaseVoice(entry) return isAuthored(entry) and index.isBaseVoice(entry) end
 
   -- The union from the first entry at-or-after `lo` ('after' starts past it instead), merging the two
   -- sources by index.order -- one cursor pair, and the only place the union's order is decided.
@@ -2321,7 +2326,7 @@ local function lane1Union(chan, derived)
     local from = mode == 'after' and util.firstAfter or util.firstAtOrAfter
     local i, j = from(authored, lo), from(derived, lo)
     return function()
-      while authored[i] and not lane1Note(authored[i]) do i = i + 1 end
+      while authored[i] and not authoredBaseVoice(authored[i]) do i = i + 1 end
       local a, d = authored[i], derived[j]
       if d and (not a or index.order(d, a)) then j = j + 1; return d end
       if a then i = i + 1 end
@@ -2332,7 +2337,7 @@ local function lane1Union(chan, derived)
   -- The detune prevailing at ppq: the last union entry at-or-before it, 0 before the first.
   local function detuneAt(ppq)
     local i = util.firstAfter(authored, ppq) - 1        -- last index at or before ppq
-    while i >= 1 and not lane1Note(authored[i]) do i = i - 1 end
+    while i >= 1 and not authoredBaseVoice(authored[i]) do i = i - 1 end
     local a, d = authored[i], derived[util.firstAfter(derived, ppq) - 1]
     local last = a
     if d and (not a or index.order(a, d)) then last = d end
@@ -2349,16 +2354,16 @@ local function lane1Union(chan, derived)
     return out
   end
 
-  -- The channel's first lane-1 onset, the I2a anchor's point.
+  -- The channel's first base-voice onset, the I2a anchor's point.
   local function first() return walk(0)() end
 
-  -- The next lane-1 onset strictly after ppq; math.huge past the last.
+  -- The next base-voice onset strictly after ppq; math.huge past the last.
   local function nextAfter(ppq)
     local entry = walk(ppq, 'after')()
     return entry and entry.ppq or math.huge
   end
 
-  -- Whether any lane-1 note carries a non-zero detune. With prev seeded 0 an onset exists iff some
+  -- Whether any base voice carries a non-zero detune. With prev seeded 0 an onset exists iff some
   -- detune is non-zero, so this early-exit scan is the whole-channel jump count.
   local function anyDetuneJump()
     for entry in walk(0) do
@@ -2444,10 +2449,10 @@ end
 
 -- Closes seeds to raw spans that gate the pass's onsets/densify/anchor/absorber-pool; nil = ungated.
 -- Extents come by seek, ahead of the gather.
-local function seatScope(chan, replaceWins, lane1)
+local function seatScope(chan, replaceWins, baseVoice)
   if dirt.wholesale(chan) then return nil end
   local seatSpans = {}
-  local function lane1Span(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, lane1.nextAfter(ppq) }) end
+  local function baseVoiceSpan(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, baseVoice.nextAfter(ppq) }) end
   local function bpSpan(ppq)
     -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
     local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
@@ -2466,9 +2471,11 @@ local function seatScope(chan, replaceWins, lane1)
     -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
     local live = seed.uuid and index.byUuid(seed.uuid)
     if not (live and live.chan == chan) then live = nil end
+    -- Lane 1, not the base voice: a seed names an authored event, and authored means lane 1. The
+    -- span it closes to reaches the next base voice, whichever note that is.
     if seed.lane == 1 or (live and live.lane == 1) then
-      if seed.lane == 1 then lane1Span(seed.ppq) end
-      if live and live.lane == 1 and live.ppq ~= seed.ppq then lane1Span(live.ppq) end
+      if seed.lane == 1 then baseVoiceSpan(seed.ppq) end
+      if live and live.lane == 1 and live.ppq ~= seed.ppq then baseVoiceSpan(live.ppq) end
     elseif seed.evType == 'pb' then
       bpSpan(seed.ppq)
       if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
@@ -2479,14 +2486,14 @@ local function seatScope(chan, replaceWins, lane1)
   for _, win in ipairs(replaceWins.wins) do
     if not win.kept then util.add(seatSpans, { win.startRaw - DUAL_POINT_TICK, win.endRaw }) end
   end
-  -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
+  -- The I2a anchor at the first base-voice onset (authored or derived) is channel-global: any pass may
   -- need to seat, refresh, or retire it, so its point is always in scope.
-  local first = lane1.first()
+  local first = baseVoice.first()
   if first then util.add(seatSpans, { first.ppq - DUAL_POINT_TICK, first.ppq }) end
   return seatSpans
 end
 
--- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
+-- Reseat absorber pbs against the post-walk base-voice layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
   local gridStep = ccGridStep()
@@ -2496,34 +2503,34 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
   local extras = extraColumns or {}
 
   perf.start('gather')
-  -- Per-chan lane-1 union door, built for dirty channels alone; clean ones reuse their carried pb
+  -- Per-chan base-voice union, built for dirty channels alone; clean ones reuse their carried pb
   -- column. see docs/tuning.md § Absorber reconciliation
-  local freshLane1, lane1ByChan = {}, {}
+  local freshBaseVoice, baseVoiceByChan = {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
-      -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
+      -- Derived base voices are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
-      local liveLane1 = {}
+      local derivedBaseVoice = {}
       for _, live in ipairs(noteLive[chan]) do
-        if live.lane == 1 then
-          util.add(liveLane1, live.evt)
-          freshLane1[chan] = freshLane1[chan] or not live.kept
+        if live.baseVoice then
+          util.add(derivedBaseVoice, live.evt)
+          freshBaseVoice[chan] = freshBaseVoice[chan] or not live.kept
         end
       end
-      table.sort(liveLane1, index.order)   -- the door's cursors assume ppq order of both sources
-      lane1ByChan[chan] = lane1Union(chan, liveLane1)
+      table.sort(derivedBaseVoice, index.order)   -- the union's cursors assume ppq order of both sources
+      baseVoiceByChan[chan] = baseVoiceUnion(chan, derivedBaseVoice)
     end
   end
 
   -- Replace windows + seat spans per dirty chan, computed ahead of the gather. Fresh (non-kept)
-  -- derived lane-1 output ungates the channel (seatSpans nil).
+  -- derived base voices ungate the channel (seatSpans nil).
   local winsByChan, seatSpansByChan = {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents, time)
       winsByChan[chan] = replaceWins
-      if not freshLane1[chan] then
-        seatSpansByChan[chan] = seatScope(chan, replaceWins, lane1ByChan[chan])
+      if not freshBaseVoice[chan] then
+        seatSpansByChan[chan] = seatScope(chan, replaceWins, baseVoiceByChan[chan])
       end
     end
   end
@@ -2557,19 +2564,19 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
 
   local pbWrites = mmBatch()
 
-  -- Seat the lane-1 detune stream, match absorbers, and stage the consolidated assign feeding the
-  -- projection below. Clean chans skip it wholesale -- I8: rebuild is a fixpoint.
-  local function deriveChan(chan, pbs, replaceWins, seatSpans, lane1)
+  -- Seat the base voice's detune stream, match absorbers, and stage the consolidated assign feeding
+  -- the projection below. Clean chans skip it wholesale -- I8: rebuild is a fixpoint.
+  local function deriveChan(chan, pbs, replaceWins, seatSpans, baseVoice)
     perf.start('seats')
     local replaceWinAt, inSeatWindow, inKeptRange =
       replaceWins.replaceWinAt, replaceWins.inSeatWindow, replaceWins.inKeptRange
 
-    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor, seeded by the
+    -- Detune onsets: every base-voice ppq whose detune differs from its predecessor, seeded by the
     -- carried-in detune and walked per coalesced seat span. see docs/tuning.md § Seat-span-scoped onset walk
     local onsets, onsetAt = {}, {}
     for _, span in ipairs(seatSpans and spans.merge(seatSpans) or { { 0, math.huge } }) do
-      local prev = lane1.detuneAt(span[1] - 1)
-      for _, note in ipairs(lane1.between(span[1], span[2])) do
+      local prev = baseVoice.detuneAt(span[1] - 1)
+      for _, note in ipairs(baseVoice.between(span[1], span[2])) do
         local detune = note.detune or 0
         if detune ~= prev and not onsetAt[note.ppq] then
           util.add(onsets, { ppq = note.ppq, ppqL = note.ppqL }); onsetAt[note.ppq] = true
@@ -2595,7 +2602,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
     local persistCents = {}
     for _, pb in ipairs(pbs) do
       if pb.cents == nil and not inSeatWindow(pb.ppq) then
-        pb.cents = tuning.rawToCents(pb.raw, pbLimCents) - lane1.detuneAt(pb.ppq)
+        pb.cents = tuning.rawToCents(pb.raw, pbLimCents) - baseVoice.detuneAt(pb.ppq)
         persistCents[pb] = true
       end
     end
@@ -2607,7 +2614,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       pbEntryByRaw[entry.ppq] = entry
       if not entry.derived and not inSeatWindow(entry.ppq) then
         local cents = entry.cents
-                      or (tuning.rawToCents(entry.raw, pbLimCents) - lane1.detuneAt(entry.ppq))
+                      or (tuning.rawToCents(entry.raw, pbLimCents) - baseVoice.detuneAt(entry.ppq))
         util.add(realPbs, { ppq = entry.ppq, cents = cents, shape = entry.shape, tension = entry.tension })
       end
     end
@@ -2696,16 +2703,16 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       densify(win.bps)
     end
 
-    -- Anchor a pb-active channel at its first lane-1 onset (I2a):
+    -- Anchor a pb-active channel at its first base-voice onset (I2a):
     -- without it, playback inherits the synth's unknown prior bend.
-    local first = lane1.first()
+    local first = baseVoice.first()
     if first and not seats[first.ppq] and not inKeptRange(first.ppq) and inSeatScope(first.ppq) then
       -- realPbs is ppq-ascending, so its head settles both questions. The jump test is whole-channel:
       -- the span-bounded onset walk above could hide the only jump the channel has.
       local firstReal = realPbs[1]
       local anchored  = firstReal ~= nil and firstReal.ppq <= first.ppq
       local pbActive  = next(seats) ~= nil or firstReal ~= nil
-                        or (seatSpans ~= nil and lane1.anyDetuneJump())
+                        or (seatSpans ~= nil and baseVoice.anyDetuneJump())
       if pbActive and not anchored then
         seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
       end
@@ -2757,7 +2764,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
         local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
                         shape = seat.shape, derived = 'absorber', evType = 'pb' }
         util.add(pbs, fresh)
-        local raw = tuning.centsToRaw(fresh.cents + lane1.detuneAt(ppq), pbLimCents)
+        local raw = tuning.centsToRaw(fresh.cents + baseVoice.detuneAt(ppq), pbLimCents)
         if inSeatWindow(ppq) then
           -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
           -- sidecar; recognized next rebuild by its window. see § Route-by-window
@@ -2789,7 +2796,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
     perf.stop('match')
 
     local detuneOf = {}
-    for _, pb in ipairs(pbs) do detuneOf[pb] = lane1.detuneAt(pb.ppq) end
+    for _, pb in ipairs(pbs) do detuneOf[pb] = baseVoice.detuneAt(pb.ppq) end
     perf.start('assign')
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
@@ -2831,7 +2838,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       local priorPbCol = frame.channels[chan].priorPb
       frame.channels[chan].priorPb = nil
       local seatSpans = seatSpansByChan[chan]
-      local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, pbs, winsByChan[chan], seatSpans, lane1ByChan[chan])
+      local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, pbs, winsByChan[chan], seatSpans, baseVoiceByChan[chan])
 
       perf.start('project')
       -- Column projection. A derived seat is wire-only -- always hidden. This projects the in-scope

@@ -8,7 +8,8 @@
 --     intent. Hidden absorbers don't render, so the divergence is
 --     invisible to consumers (Phase 6 collapses it entirely).
 
-local t = require('support')
+local t          = require('support')
+local generators = require('generators')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
@@ -18,6 +19,16 @@ local function fakeIn(dump)
   for _, c in ipairs(dump.ccs) do
     if c.evType == 'pb' and c.derived then return c end
   end
+end
+
+-- A host's own output on a channel, ppq-ascending.
+local function derivedNotesOn(dump, chan)
+  local out = {}
+  for _, n in ipairs(dump.notes) do
+    if n.chan == chan and n.derived then out[#out + 1] = n end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
 end
 
 return {
@@ -227,6 +238,45 @@ return {
       t.eq(#atOnset, 1, 'one pb at the onset — the seat was adopted, no rival pushed')
       t.eq(atOnset[1].val, 2 * rawFor50, 'authored 100¢ survives (raw 4096), not reset to the seat 0')
       t.falsy(atOnset[1].derived, 'adopted pb sheds its absorber identity')
+    end,
+  },
+
+  -- I2/I3 (docs/tuning.md § Invariants): pb realises the base voice's detune, and for a derived
+  -- note the base voice is the stamp its generator left, not the lane it came to occupy. A note
+  -- host's output rides the host's lane, so a second voice displaced in pitch still sits on lane 1
+  -- beside the base voice -- and its detune must move no seat.
+  {
+    name = 'a derived note that is not the base voice seats no absorber, though it rides lane 1',
+    run = function(harness)
+      local h = harness.mk()
+      -- Two voices off one host: the base voice at the host's own detune, and a second voice a
+      -- detune jump away that only the missing baseVoice stamp tells apart from it.
+      generators.kinds.twoVoice = {
+        expand = function(stream)
+          local from = stream.window[1]
+          return { notes = {
+            { ppq = from,       endppq = from + 120, pitch = 60, vel = 100, detune = 0, baseVoice = true },
+            { ppq = from + 120, endppq = from + 240, pitch = 64, vel = 100, detune = 50 },
+          }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'TwoVoice', defaults = {}, fields = {},
+      }
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, fx = { { kind = 'twoVoice' } } })
+      h.tm:flush()
+      generators.kinds.twoVoice = nil
+
+      local voices = derivedNotesOn(h.fm:dump(), 1)
+      t.eq(#voices, 2, 'fixture check: both voices reached the take')
+      t.eq(voices[1].lane, 1,       'fixture check: the base voice takes lane 1, its host having parked')
+      t.eq(voices[1].baseVoice, true, 'fixture check: and carries the stamp')
+      t.eq(voices[2].lane, 1,       'fixture check: the second voice rides lane 1 beside it')
+      t.falsy(voices[2].baseVoice,  'fixture check: carrying no stamp')
+      t.eq(voices[2].detune, 50,    'fixture check: a detune jump away from the base voice')
+
+      -- The base voice holds detune 0 the whole span and no pb is authored, so the channel is not
+      -- pb-active and I2a mints no anchor either: the absence is total.
+      t.eq(fakeIn(h.fm:dump()), nil, 'no absorber anywhere -- the jump is not the base voice\'s')
     end,
   },
 }

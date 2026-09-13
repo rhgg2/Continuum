@@ -29,6 +29,7 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-13 tm: seat absorbers against the base voice, not lane 1 (§ The base voice)
 - 2026-09-13 tm: carry baseVoice across the fx pass (§ The derived note record)
 - 2026-09-12 generators: stamp baseVoice on every derived note (§ The base voice)
 
@@ -38,15 +39,8 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-3. **The base-voice door** — `lane1Union` becomes a base-voice door: authored
-   lane-1 notes from the raw index unioned with the pass's base-voice derived
-   output. `rebuildPbs`' gather and its `freshLane1` flag select `noteLive`
-   entries by the field, `seatScope`'s onset seeds and `index.detuneAt` read
-   the one predicate — authored means lane 1, derived means `baseVoice`. Spec:
-   the door and `index.detuneAt` agree at an onset an authored and a derived
-   note share.
-4. **The hold scope asks the generator** — `emitsLane1Notes` becomes a
-   base-voice test: a stage that parks notes over a host whose inbound
+4. **The hold scope asks the generator** — `emitsBaseVoice` (renamed already,
+   predicate unchanged) becomes a real base-voice test: a stage that parks notes over a host whose inbound
    membership holds a base voice, widening `pbHoldFrom` to the host's window
    start as it does now. Spec: a higher-lane note host's retrig leaves the pb
    emit scope alone, a lane-1 one widens it.

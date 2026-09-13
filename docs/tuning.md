@@ -99,22 +99,29 @@ descriptions rather than a conversion between things:
 logical(chan, ppq) = raw(chan, ppq) − detune(chan, ppq)
 ```
 
-where `detune(chan, ppq)` is the detune of the latest lane-1 note
+where `detune(chan, ppq)` is the detune of the latest base-voice note
 starting at or before `ppq` (0 if none).
 
 **3** Every note carries a `detune` field, but pb is channel-wide where
-a note column is not. Only *one* note column per channel can drive
-tuning realisation, and by convention that is **lane 1**, the first note
-column of the channel. The choice is arbitrary in origin and not
-arbitrary now: everything downstream is built on it.
+a note column is not. Only *one* voice per channel drives tuning
+realisation, and that voice is the channel's **base voice**. An authored
+note is the base voice when it stands on **lane 1**, the first note
+column of the channel. The choice of column is arbitrary in origin and
+not arbitrary now: everything downstream is built on it.
 
-**4** Higher lanes' detune values are still stored, and display layers
-like the temperament lens consult them. They do not reach the pb stream.
-A higher lane simply inherits whatever bend is in force at its onset.
+**4** A derived note is the base voice when the generator that emitted it
+stamped it one, which it does for output expanded off a base voice. Its
+own lane comes from wherever its host's output fits
+(`docs/trackerManager.md` § Lane occupancy), so the column a derived note
+lands in says nothing about the voice it realises.
+
+**5** The detune of every other note is still stored, and display layers
+like the temperament lens consult it. It does not reach the pb stream:
+such a note sounds at whatever bend is in force at its onset.
 
 ### The fake-pb absorber
 
-**1** When a lane-1 note's detune differs from the detune prevailing
+**1** When a base voice's detune differs from the detune prevailing
 just before it, a step enters the raw stream at the note's seat. Left
 alone, that step surfaces in the logical stream too, and the musician
 sees a jump she did not draw.
@@ -151,8 +158,8 @@ seat. The implementation lives in tm's `reconcileBoundary`; see
 
 **1** The view layer above the realisation line never touches pb
 directly. Detune drives pb seating; pb does not drive detune. Editing a
-lane-1 note's detune seats, removes or shifts absorbers, and tm handles
-it. Editing a pb event does not retro-mutate detune.
+the base voice's detune seats, removes or shifts absorbers, and tm
+handles it. Editing a pb event does not retro-mutate detune.
 
 **2** That direction is what keeps detune durable as intent. Re-temper,
 re-render and re-export all fall out cleanly from intent plus
@@ -163,9 +170,9 @@ the current implementation, not the model — MTS (MIDI Tuning Standard)
 is the obvious candidate to substitute beneath the intent line without
 disturbing anything above it. Each mechanism brings its own limitations:
 
-- **pb** is channel-wide and single-voice, so only lane 1 contributes
-  to realisation. A lane-2 note with `detune ≠ 0` displays as its
-  microtone via the temperament lens and sounds at ambient pb.
+- **pb** is channel-wide and single-voice, so only the base voice
+  contributes to realisation. Any other note with `detune ≠ 0` displays
+  as its microtone via the temperament lens and sounds at ambient pb.
 - **MTS** retunes the 128-pitch grid rather than extending it: each
   scale step has to be assigned to a MIDI pitch, so a cluster of
   microtones near the same pitch forces an artificial allocation
@@ -191,32 +198,33 @@ The realisation layer's contract with everything above it. These
 hold for every channel `c` and every ppq `P`, after every mutation:
 
 - **I1 — Identity.** `logical(c, P) = raw(c, P) − detune(c, P)`,
-  where `detune(c, P)` is the detune of the latest **lane-1** note
+  where `detune(c, P)` is the detune of the latest **base-voice** note
   onset at-or-before P.
-- **I2 — Absorber, both directions.** At every lane-1 note seat S:
+- **I2 — Absorber, both directions.** At every base-voice note seat S:
   - `detune(c, S) ≠ detuneBefore(c, S)` ⇒ ∃ pb at S (real or fake).
   - `detune(c, S) = detuneBefore(c, S)` ⇒ no **fake** pb at S —
-    except the channel's first lane-1 onset (see I2a).
+    except the channel's first base-voice onset (see I2a).
     Real pbs are user-authored and never deleted by reconciliation.
 - **I2a — First-note anchor.** On a channel whose pb stream is ever
-  non-trivial (some detune jump, or a real pb), the first lane-1 onset
+  non-trivial (some detune jump, or a real pb), the first base-voice onset
   carries a pb (real or fake) even when its detune equals the implicit
   0 baseline. The reason is that the absence of a pb is not an
   assertion of zero: before the first pb the take says nothing, and
   playback inherits the synth's unknown prior bend. A pristine all-zero
   channel with no pb needs no anchor — there, saying nothing is safe,
   because nothing has been said either way.
-- **I3 — Lane-1 monopoly.** Adding, editing, or deleting a
-  lane-≥2 note never seats, removes, or moves any pb. Higher-lane
-  detune is dead data *for realisation* and live for display; it
-  persists as metadata so display layers and future lane-promotion
-  paths can read it back.
+- **I3 — Base-voice monopoly.** Adding, editing, or deleting a note
+  that is not the base voice never seats, removes, or moves any pb —
+  an authored note on lane ≥2, or a derived note its generator left
+  unstamped. Its detune is dead data *for realisation* and live for
+  display; it persists as metadata so display layers and future
+  lane-promotion paths can read it back.
 - **I4 — Orthogonality.** Editing a pb never mutates any note's
   detune; editing a note's detune never demotes a real pb to fake
   nor seats a real pb. Detune drives pb seating; pb does not drive
   detune.
 - **I5 — Cleanliness.** No two pbs share `(chan, ppq)`. Fake pbs
-  exist only at lane-1 seats that have a detune jump.
+  exist only at base-voice seats that have a detune jump.
 
 I1-I5 are mechanism-independent: any future realisation layer (MTS
 in place of pb, etc.) inherits the same contract entire. That is what
@@ -518,26 +526,27 @@ Mirrors the swing model in `docs/timing.md`:
 
 ## Absorber reconciliation
 
-The absorber pass of `trackerManager` runs after the tail walk finalises
-lane-1 raw ppqs (same-pitch onset clamps, delay/clamp combinations that
-reorder hosts) and after externals are placed. The ordering is forced: a
-seat is a position, and a position cannot be fixed while the things it
-sits between are still moving.
+The absorber pass of `trackerManager` seats a channel's pb against its
+base voice (§ Intent vs realisation). It runs after the tail walk
+finalises base-voice raw ppqs (same-pitch onset clamps, delay/clamp
+combinations that reorder hosts) and after externals are placed. The
+ordering is forced: a seat is a position, and a position cannot be fixed
+while the things it sits between are still moving.
 
-From the final realised lane-1 sequence it:
+From the final realised base-voice sequence it:
 
 - Back-derives cents for any pb missing it (foreign-MIDI / first load):
   `cents = rawToCents(wire) − detune` at the pb's seat.
 - Covers every detune-jump seat: a real pb at that ppq counts;
   otherwise reuse an existing fake if any (in-place first, else move),
   else create a new fake.
-- Anchors a pb-active channel at its first lane-1 onset (even detune 0)
+- Anchors a pb-active channel at its first base-voice onset (even detune 0)
   unless a real pb already pins it at-or-before (I2a).
 - Drops fakes whose seat is no longer needed.
 - Skips frozen fx channels entirely: freezing already wrote their
   derived output into mm with absorber seats carried, so the dirty gate
   reads them clean and this pass never runs for them.
-- Writes wire raw = `centsToRaw(cents + carrying lane-1 detune)`.
+- Writes wire raw = `centsToRaw(cents + the carrying base voice's detune)`.
 - Projects the pb column from the final set, with `val=cents` (the
   authored value tv displays) and `hidden` for every derived seat.
 
@@ -552,9 +561,9 @@ sub-cent pb, raw carrying some forty times the resolution of cents.
 **1** Under interval dirt (`docs/trackerManager.md § Derivation dirt`) the
 detune-onset walk is scoped to disjoint seat spans rather than the whole
 channel. Each span seeds its running `prev` from the detune carried in
-from just before it (`lane1DetuneAt` at `span[1] - 1`), so a jump
+from just before it (the union's `detuneAt` at `span[1] - 1`), so a jump
 entering a span from outside is still caught without re-walking the
-untouched lane-1 ahead of it. A window may be small provided it knows
+untouched base voice ahead of it. A window may be small provided it knows
 what it is a window onto.
 
 **2** A note without authored detune reads 0 — ingestion's default on
@@ -572,11 +581,11 @@ to the onset just before it.
 tells them apart.
 
 **5** A seed reaches past its own span wherever a stream holds forward.
-Authored pb and cc bases and lane-1 detune all hold beyond a window
+Authored pb and cc bases and base-voice detune all hold beyond a window
 edge, so a seed on a hold source forces live every pb window ending
-after it, and that cascades: a live lane-1 note-emitter re-detunes the
+after it, and that cascades: a live base-voice emitter re-detunes the
 stream from its window start, which can wake a window further right,
-which may emit lane-1 notes of its own. The alternative was to force pb
+which may emit base voices of its own. The alternative was to force pb
 edits wholesale, which would have gutted the gate for ordinary lane-1
 editing.
 

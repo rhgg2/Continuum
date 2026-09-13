@@ -1,7 +1,8 @@
 -- Phase A of the dirt spine (design/archive/dirty-channels.md § Scheme): a clean fx channel freezes and its
 -- derived notes/CCs/pb seats stand in mm; here a channel frozen by another channel's edit keeps its pb seat stream byte-identical and hidden.
 
-local t    = require('support')
+local t          = require('support')
+local generators = require('generators')
 
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
@@ -95,6 +96,51 @@ return {
 
       local vals = curveAt(h, host, 1, 'pb', { 135, 150, 165 })
       t.truthy(math.abs(vals[1] - 30) <= 1, 'crest a quarter cycle past the lane-2 onset')
+      t.truthy(math.abs(vals[2]) <= 1,      'rest at the half cycle')
+      t.truthy(math.abs(vals[3] + 30) <= 1, 'trough at three quarters')
+    end,
+  },
+
+  -- The two readers of the base voice must name the same note. The absorber pass writes its seats
+  -- through the union's detuneAt and fxCurveAt samples them back through index.detuneAt, so a
+  -- divergence between the two predicates is the whole observable here -- and this fixture is where
+  -- they can diverge: lane and the baseVoice stamp classify the second derived note differently.
+  {
+    name = 'fxCurveAt: the union that writes the seats and index.detuneAt agree which derived note is the base voice',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.twoVoice = {
+        expand = function(stream)
+          local from = stream.window[1]
+          return { notes = {
+            { ppq = from,       endppq = from + 120, pitch = 60, vel = 100, detune = 50, baseVoice = true },
+            { ppq = from + 120, endppq = from + 240, pitch = 64, vel = 100, detune = -30 },
+          }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'TwoVoice', defaults = {}, fields = {},
+      }
+      -- A memberless region: nothing occupies a lane, so allocateRegionLanes seats both voices on
+      -- lane 1, where only the stamp separates them.
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
+                                   fx = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 },
+                                          { kind = 'twoVoice' } } } })
+      h.tm:rebuild()
+      generators.kinds.twoVoice = nil
+
+      local voices = {}
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.derived == 'fxr-1' then voices[#voices + 1] = n end
+      end
+      table.sort(voices, function(a, b) return a.ppq < b.ppq end)
+      t.eq(#voices, 2, 'fixture check: both voices reached the take')
+      t.eq(voices[1].lane, 1, 'fixture check: the base voice on lane 1')
+      t.eq(voices[2].lane, 1, 'fixture check: and the second voice on lane 1 with it')
+      t.falsy(voices[2].baseVoice, 'fixture check: distinguished from it by the stamp alone')
+
+      -- Past the second voice's onset, seats written against 50 and sampled back against -30 land
+      -- 80 cents out -- the sine\'s own shape is the only thing that survives agreement.
+      local vals = curveAt(h, 'fxr-1', 1, 'pb', { 135, 150, 165 })
+      t.truthy(math.abs(vals[1] - 30) <= 1, 'crest a quarter cycle past the second voice\'s onset')
       t.truthy(math.abs(vals[2]) <= 1,      'rest at the half cycle')
       t.truthy(math.abs(vals[3] + 30) <= 1, 'trough at three quarters')
     end,

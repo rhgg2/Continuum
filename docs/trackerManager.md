@@ -354,14 +354,14 @@ tm-specific facts:
   moves and the intent stands. A foreign pb arrives with no sidecar,
   but the first rebuild after it lands back-derives one and persists
   it, so from then on it rescales like any other.
-- **Lane-1 drives detune.** Every note has a `detune` field, but
-  only lane-1 notes feed the pb-realisation logic — `index.detuneAt` seeks
-  `rawIndex[chan].notes` (which holds every lane) through a lane-1
-  filter, and the absorber pass reads only lane-1 onsets, so higher-lane
-  detune never reaches the pb stream (I3). It survives as dead data for
-  realisation, readable by display layers and any future lane-promotion
-  path. The seek lands at-or-before
-  `P` by binary search, then walks back to the nearest lane-1 note,
+- **The base voice drives detune.** Every note has a `detune` field, but
+  only the base voice feeds the pb-realisation logic — `index.detuneAt`
+  seeks `rawIndex[chan].notes` (which holds every lane) through
+  `index.isBaseVoice`, and the absorber pass reads only base-voice onsets,
+  so no other note's detune reaches the pb stream (I3). It survives as
+  dead data for realisation, readable by display layers and any future
+  lane-promotion path. The seek lands at-or-before
+  `P` by binary search, then walks back to the nearest base voice,
   because `tm:fxCurveAt` calls it once per row per frame and
   `util.seek`'s head-of-list scan would cost `O(rows × channel notes)`.
 - **Absorber persistence.** `pb.derived == 'absorber'` is the sole
@@ -369,10 +369,10 @@ tm-specific facts:
   Absorbers are hidden from the pb
   column unless an interp shape pulls them into view
   (`hidden = pb.derived and (shape==nil or shape=='step')`); the host
-  note for delay inheritance is the lane-1 note at the absorber's seat
+  note for delay inheritance is the base voice at the absorber's seat
   (`pb.ppq`), recovered geometrically — the host carries no marker.
 - **Upkeep is wholesale.** The absorber pass reseats the whole absorber
-  set against the final post-walk lane-1 layout, toggling no marker per
+  set against the final post-walk base-voice layout, toggling no marker per
   edit. So the mutation entry points (`addNote`, `assignNote`,
   `resizeNote`, `deleteNote`) write detune as plain metadata and let the
   next rebuild realise it.
@@ -397,7 +397,7 @@ mechanism did:
   onset); the absorber pass then reseats the absorber to the new seat.
 - **I8 — Round-trip stability.** flush → rebuild → flush produces
   an identical pb dump. `derived='absorber'` survives via pb-sidecar
-  metadata; an absorber's seat is the host's lane-1 onset, so the logical
+  metadata; an absorber's seat is the host's base-voice onset, so the logical
   projection lands host and absorber onto the same logical row together.
 
 ## Where tm sits in the timing model
@@ -420,7 +420,7 @@ offset on the raw note-on, not a frame of its own. tm's role:
 A delay change with no ppq update pins the logical onset and shifts the
 realised onset by the delta (`realiseNoteUpdate`).
 
-An absorber's seat is its host's lane-1 onset, so logical projection lands host
+An absorber's seat is its host's base-voice onset, so logical projection lands host
 and absorber onto the same logical row. Without this a delayed note and
 its absorber would desynchronise at the tv boundary.
 
@@ -807,7 +807,7 @@ seeds exactly its end edge, and admitting a seed sitting there keeps that
 window's prior seats in `existing` to be matched rather than duplicated.
 
 Derived events are handled separately: absorber pbs by the absorber pass
-(against the post-walk lane-1 layout); synthesised PCs by PC synthesis.
+(against the post-walk base-voice layout); synthesised PCs by PC synthesis.
 Pb column projection is deferred to the absorber pass so it sees the
 final reconciled absorbers and recomputed raw vals.
 
@@ -1095,7 +1095,7 @@ probe sources.
 
 ### Absorber reconciliation
 
-`rebuildPbs` reseats absorber pbs against the post-walk lane-1 layout,
+`rebuildPbs` reseats absorber pbs against the post-walk base-voice layout,
 recomputes their raw vals, and projects the pb column. See
 `docs/tuning.md` § Absorber reconciliation.
 

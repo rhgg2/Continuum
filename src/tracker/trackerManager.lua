@@ -456,12 +456,19 @@ do
 
   ----- Read surface
 
-  -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + index.detuneAt(seat).
+  -- The voice a channel realises through pitchbend: an authored note on lane 1, a derived note
+  -- its generator stamped. see docs/tuning.md § Absorber reconciliation
+  function index.isBaseVoice(note)
+    if note.derived then return note.baseVoice == true end
+    return note.lane == 1
+  end
+
+  -- Prevailing base-voice detune at-or-before ppq; flush derives wire-raw = cents + index.detuneAt(seat).
   -- Best-effort only; full absorber reconciliation is rebuild's absorber pass (docs/trackerManager.md § Pitchbend).
   function index.detuneAt(chan, P)
     local notes = rawIndex[chan].notes
     for i = util.firstAfter(notes, P) - 1, 1, -1 do
-      if notes[i].lane == 1 then return notes[i].detune or 0 end
+      if index.isBaseVoice(notes[i]) then return notes[i].detune or 0 end
     end
     return 0
   end
