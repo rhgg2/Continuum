@@ -1386,7 +1386,7 @@ local function freezeRegion(uuid, toGroup)
 
   -- The frozen window per stream it parks: the group arm's two passes walk it -- the thin in the raw
   -- frame, the member gather in the logical one.
-  local frozenEntries = windows.perTarget(settled)
+  local frozenEntries = fxWindows.perTarget(settled)
   -- Coverage off the published set, narrowed to this uuid: the gate has refused every neighbour
   -- sharing a target inside this span, so whatever the set covers here it covers on our behalf.
   -- Never rebuildRegionPark's covered(): its first clause answers "does this spec park itself", true
@@ -1436,11 +1436,11 @@ local function freezeRegion(uuid, toGroup)
     elseif not drop then util.add(keptParked, spec) end
   end
 
-  -- By stamped id, not window value: a neighbouring host can hold a window identical to the
-  -- frozen one, and identity keeps them apart. See docs/trackerManager.md § Fx window census.
+  -- By uuid, not window value: a neighbouring host can hold a window identical to the frozen one,
+  -- and identity keeps them apart. See docs/trackerManager.md § Fx window census.
   local realisedWindows, keptWindows = ds:get('fxRealisedWindows') or {}, {}
   for _, w in ipairs(realisedWindows) do
-    if w.id ~= uuid then util.add(keptWindows, w) end
+    if w.uuid ~= uuid then util.add(keptWindows, w) end
   end
 
   -- ds:get hands back a copy of its cache slot, so an emptied array reads back as a truthy {}:

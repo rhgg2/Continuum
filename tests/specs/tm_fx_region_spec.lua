@@ -659,8 +659,8 @@ return {
 
       local windows = h.ds:get('fxRealisedWindows') or {}
       t.eq(#windows, 1, 'the restored host runs its chain again -- one window')
-      t.eq(windows[1].evType, 'pb', 'the sine arm')
-      t.eq(windows[1].id, uuid, "stamped with the restored host's identity")
+      t.truthy(windows[1].targets.pb, 'claiming the sine arm')
+      t.eq(windows[1].uuid, uuid, "stamped with the restored host's identity")
     end,
   },
 
@@ -1081,7 +1081,9 @@ return {
       injectArp(h)
       -- The chain ran over the silent span and claimed its note window all the same: a chain that folds
       -- nothing still owns what it claimed. see docs/generators.md § Emission is ownership ¶3
-      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 1, 'the arp registered its note window over the silent span')
+      local windows = h.ds:get('fxRealisedWindows') or {}
+      t.eq(#windows, 1, 'the arp registered its window over the silent span')
+      t.truthy(windows[1].targets.note, 'and the note stream is what it claimed')
       t.eq(#derivedNotes(h), 0, 'no members -> no derived notes (every step rests)')
     end,
   },
@@ -2564,10 +2566,11 @@ return {
 
       local windows = h.ds:get('fxRealisedWindows') or {}
       t.eq(#windows, 1, 'one host, one entry')
-      t.eq(windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
+      t.truthy(windows[1].targets.pb, 'claiming the sine arm')
+      t.falsy(windows[1].targets.note, 'and not the note stream -- a note host seats no note window')
       local hostUuid = h.tm:getChannel(1).parked.notes[1].uuid
       t.truthy(hostUuid, 'the parked host carries a uuid to be stamped with')
-      t.eq(windows[1].id, hostUuid, "and the window is stamped with its host's identity")
+      t.eq(windows[1].uuid, hostUuid, "and the window is stamped with its host's identity")
     end,
   },
 
@@ -2773,7 +2776,7 @@ return {
       local windows = h.ds:get('fxRealisedWindows') or {}
       t.eq(#windows, 2, 'one note window per expanded host')
       local ids, chans = {}, {}
-      for _, w in ipairs(windows) do ids[w.id] = true; chans[w.chan] = true end
+      for _, w in ipairs(windows) do ids[w.uuid] = true; chans[w.chan] = true end
       t.truthy(ids[expanded('fxr-g', 1)] and ids[expanded('fxr-g', 2)],
                'each stamped with the identity its own channel derives')
       t.falsy(ids['fxr-g'], 'the stored uuid names no host of its own')
@@ -2981,7 +2984,7 @@ return {
 
       local baseline = h.ds:get('fxRealisedWindows') or {}
       t.eq(#baseline, 1, "only the frozen host's window leaves the baseline")
-      t.eq(baseline[1] and baseline[1].id, 'fxr-2',
+      t.eq(baseline[1] and baseline[1].uuid, 'fxr-2',
            "the surviving entry carries the neighbour's identity, not just its value")
       t.falsy(h.ds:get('fxParked'), "the survivor's window is not newly created, so it sweeps nothing")
       t.truthy(#derivedPbs(h, 1) > 0, 'and its curve still sounds')
@@ -2996,7 +2999,9 @@ return {
       local h = harness.mk()
       injectRegion(h, { fx = { sine30[1],
                                { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0, dest = 10 } } })
-      t.eq(#(h.ds:get('fxRealisedWindows') or {}), 2, 'one host, a pb window and a cc window')
+      local windows = h.ds:get('fxRealisedWindows') or {}
+      t.eq(#windows, 1, 'one host, one census record')
+      t.truthy(windows[1].targets.pb and windows[1].targets[10], 'claiming a pb stream and a cc stream')
       t.truthy(h.tm:freezeEligible('fxr-1'), 'its own windows are no neighbour in the map either')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'so the freeze goes through')
     end,

@@ -61,12 +61,15 @@ local function onTakeAt(h, chan, lane, ppq)
   end
 end
 
--- A channel's share of the persisted window census, as spans: the baseline the next pass replays.
+-- A channel's share of the persisted window census, one key per stream a window claims: the baseline
+-- the next pass replays.
 local function census(h, chan)
   local out = {}
-  for _, entry in ipairs(h.ds:get('fxRealisedWindows') or {}) do
-    if entry.chan == chan then
-      util.add(out, util.key(entry.evType, entry.cc, entry.ppq, entry.endppq))
+  for _, window in ipairs(h.ds:get('fxRealisedWindows') or {}) do
+    if window.chan == chan then
+      for target in pairs(window.targets) do
+        util.add(out, util.key(target, window.ppq, window.endppq))
+      end
     end
   end
   table.sort(out)

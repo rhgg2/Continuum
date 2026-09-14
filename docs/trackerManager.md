@@ -871,10 +871,10 @@ hosts already parked, and fx expansion runs those from their stash events.
 own span, so one window per host is the whole fact — channel, span, host
 type, and the targets its chain reaches, from `generators.chainTargets`. The
 windows are ordered by channel, lane and onset across both halves, so a park
-rewrites no entry of the persisted census. The
-set answers in whichever shape a reader wants: membership for the park
-scans, the windows themselves for the tail's maps, and the per-target list,
-ordered note, pb, then cc ascending, for the `fxRealisedWindows` write.
+rewrites no entry of the persisted census. The set answers in whichever shape
+a reader wants: membership for the park scans, the windows themselves for the
+tail's maps, and `census()` — those same windows, less what the document holds
+elsewhere — for the `fxRealisedWindows` write.
 
 ### Region-replace parking
 
@@ -1187,7 +1187,7 @@ seated them, and nothing walks a column to re-project — a second projection wo
 
 ### Closing the pass
 
-The pipeline then persists its own window set: `settledWindows` goes to
+The pipeline then persists its own window set: `windows.census()` goes to
 `ds:assign('fxRealisedWindows', …)` when it differs from the set this pass read,
 so the next rebuild recognises seats against it. `stager.clear()` drops
 un-flushed ops and the pass's dirt clears, its channels going back to the head
@@ -1363,8 +1363,9 @@ the two pb curves to twice the authored depth.
 
 `fxWindows.lua` holds the record and the set over it: `fxWindows.fromNote` mints the degenerate
 window a note host presents, and `fxWindows.new` indexes a list of them by uuid and by channel. The
-window per host is the fact, and the per-target list a view over it. Every window is minted rather
-than taken by reference, so stamping `targets` touches no record the document owns.
+window per host is the fact, and `fxWindows.perTarget` splits one into a view per stream it parks,
+which freeze's group arm walks. Every window is minted rather than taken by reference, so stamping
+`targets` touches no record the document owns.
 
 The set holds logical spans and answers in either frame. `owns` compares a logical onset against
 them directly; `ownsRaw` converts a window's bounds and compares raw to raw, which is what every
@@ -1372,22 +1373,22 @@ question asked of an mm record needs (`docs/generators.md` § Route-by-window). 
 on first ask and is then held: the set carries the pass's time context, so converting there is the
 same arithmetic as converting at the pass's head.
 
-The take's own set is that same list persisted, under `fxRealisedWindows`, and `buildRealisedWindows`
-replays it into the same doors — the inverse of the per-target view, grouping in first-appearance
-order so the round trip reproduces the list. A replayed window carries spans, targets, channel and
-uuid: the document persists the per-target view and not the host, so it has no `fx` and no
-`hostType`, and nothing asks the baseline for either. `realised` there says the take already carries
-these windows, having landed on the wire — not the raw frame of `docs/tuning.md`.
+The take's own set is that same set persisted, under `fxRealisedWindows`. `census()` is what goes in:
+each window as the set holds it, less `fx` and less `hostType` — the chain is already on the region
+or on the note record, and a second copy would be a second truth. A window claiming no stream is a
+baseline for nothing and does not enter. Nothing stands between the store and the replay:
+`fxWindows.new` takes the stored list as it takes the pass's own, so the take's set answers in the
+same voice as the current one. `realised` there says the take already carries these windows, having
+landed on the wire — not the raw frame of `docs/tuning.md`.
 
-`freezeRegion`'s resync drops the frozen host's entries from `fxRealisedWindows` (the
-seat-recognition baseline) by their stamped `id`: every per-target entry the set emits carries its
-host's uuid. The stamp is identity for subtraction only — seat recognition still matches on
-spans, so nothing downstream reads it. Identity is what the subtraction needs: two hosts can
-emit identical windows (a same-target overlap, or two on-take hosts riding the same fx), and a
-value match could take a surviving neighbour's entry, leaving the next rebuild to read its seats as
-freshly authored and park them off-take. The `id` drop also holds for a persisted window that no
-longer recomputes field-for-field (a kind deregistered, a clipping context changed): it still
-leaves with its host.
+`freezeRegion`'s resync drops the frozen host's window from `fxRealisedWindows` (the
+seat-recognition baseline) by its `uuid` — one record per host, so one record leaves. The uuid is
+identity for subtraction only — seat recognition still matches on spans, so nothing downstream reads
+it. Identity is what the subtraction needs: two hosts can emit identical windows (a same-target
+overlap, or two on-take hosts riding the same fx), and a value match could take a surviving
+neighbour's record, leaving the next rebuild to read its seats as freshly authored and park them
+off-take. The uuid drop also holds for a persisted window that no longer recomputes field-for-field
+(a kind deregistered, a clipping context changed): it still leaves with its host.
 
 The same census answers freeze eligibility, through the window set the pass holds: the rebuild
 publishes it beside the rects, and it outlives the pass.

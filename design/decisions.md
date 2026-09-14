@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-14** — `fxRealisedWindows` persists windows, over the per-target list the 2026-08-31
+  entry kept for "the readers that scan one": only trackerView's column tagging still scanned one,
+  and a `targets` lookup serves it better than matching an entry's evType and cc. `census()` is the
+  window less `fx` and `hostType`, which the document already holds on the region or the note record,
+  so replay is `fxWindows.new` over the stored list and `buildRealisedWindows` goes with the
+  round-trip invariant it owed the per-target view. Freeze subtracts one record per host by uuid
+  rather than N by stamped id, and `perTarget` becomes a module function on one window, which is all
+  freeze's group arm ever wanted of it.
+
 - **2026-09-13** — The pb hold scope's base-voice test asks the host's inbound membership rather
   than its lane, and moves whole to generators, which owns both halves. A region carries no lane of
   its own, so the lane form widened the hold point whenever a region parked notes at all; a region

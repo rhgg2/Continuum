@@ -4737,8 +4737,9 @@ function tv:rebuild(takeChanged)
     -- them to tm's off-take stash. fxRealisedWindows is the set 4.5 parked over this rebuild (regions + note hosts); parked wins on overlap.
     local park = ds:get('fxRealisedWindows') or {}
     for _, col in ipairs(grid.cols) do
+      local target = col.type == 'cc' and col.cc or col.type
       for _, w in ipairs(park) do
-        if w.evType == col.type and w.chan == col.midiChan and (w.cc == nil or w.cc == col.cc) then
+        if w.chan == col.midiChan and w.targets[target] then
           for row = ppqRowOf(w.ppq, col.midiChan), ppqRowOf(w.endppq, col.midiChan) - 1 do
             col.cellKind[row] = 'parked'
           end

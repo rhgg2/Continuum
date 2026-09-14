@@ -5,6 +5,7 @@
 --invariant: a window's span is logical; a raw answer converts it through the pass's time context
 --shape: window = { uuid, chan, ppq, endppq, targets = { ['note'|'pb'|ccNum] = true }, [fx], [hostType] }
 --shape: per-target entry = { evType, chan, [cc], id = the window's uuid, ppq, endppq }
+--shape: census record = a window less `fx` and `hostType`, which the document already holds
 
 local util = require 'util'
 
@@ -17,9 +18,10 @@ function fxWindows.fromNote(host, endppq)
            endppq = endppq, fx = host.fx, hostType = 'note' }
 end
 
--- One window split per stream it parks: the serialised form, carrying the host's uuid as `id`.
+-- One window split per stream it parks, carrying the host's uuid as `id`. Freeze's group arm walks
+-- this: the thin in the raw frame, the member gather in the logical one, each a pass per stream.
 --post: fresh result runs note, then pb, then cc ascending
-local function perTargetWindows(window)
+function fxWindows.perTarget(window)
   local ccs, entries = {}, {}
   for target in pairs(window.targets) do
     if type(target) == 'number' then util.add(ccs, target) end
@@ -37,12 +39,13 @@ end
 
 -- A set of fx windows, however it was populated -- minted from the pass's hosts, or replayed from
 -- the take's stored list.
---shape: doors -> windows() | window(uuid) | on(chan) | perTarget([window]) | rawSpan(window)
+--shape: doors -> windows() | window(uuid) | on(chan) | rawSpan(window)
+--shape: doors -> census()
 --shape: doors -> owns(evType, chan, cc, ppqL) | ownsRaw(evType, chan, cc, ppq)
 --pre: time is the pass's projection; an empty set may omit it, since the raw doors alone read it
 --post: live result = the doors over `windows`, which the set holds by reference
 function fxWindows.new(windows, time)
-  local byUuid, byChan, targetList, rawSpans = {}, {}, nil, {}
+  local byUuid, byChan, censusList, rawSpans = {}, {}, nil, {}
   for _, window in ipairs(windows) do
     byUuid[window.uuid] = window
     util.bucket(byChan, window.chan, window)
@@ -81,17 +84,18 @@ function fxWindows.new(windows, time)
   --post: result = the uuid of the window covering that raw onset on that stream, nil if none does
   function doors.ownsRaw(evType, chan, cc, ppq) return covering(evType, chan, cc, ppq, true) end
 
-  -- The serialised view, minted once: `fxRealisedWindows` persists it and diffs it by value, so the
-  -- order is the target's own and not the order the chain's stages were authored in.
-  --post: (window given) → fresh entries; else the whole set's, in window order
-  function doors.perTarget(window)
-    if window then return perTargetWindows(window) end
-    if targetList then return targetList end
-    targetList = {}
+  -- The persisted view, minted once: `fxRealisedWindows` is the set less what the document already
+  -- carries elsewhere. See docs/trackerManager.md § Fx window census.
+  --post: fresh result = one record per claiming window, in window order
+  function doors.census()
+    if censusList then return censusList end
+    censusList = {}
     for _, held in ipairs(windows) do
-      for _, entry in ipairs(perTargetWindows(held)) do util.add(targetList, entry) end
+      if next(held.targets) then
+        util.add(censusList, util.clone(held, { fx = true, hostType = true }, true))
+      end
     end
-    return targetList
+    return censusList
   end
   return doors
 end

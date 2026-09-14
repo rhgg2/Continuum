@@ -1373,24 +1373,6 @@ local function buildFxWindows(fxRegions, noteHostClips, time)
   return fxWindows.new(windows, time)
 end
 
--- The stored baseline replayed into the same doors (docs/trackerManager.md § Fx window census).
---shape: replayed window -> { uuid, chan, ppq, endppq, targets }
---invariant: first-appearance order, so perTarget() reproduces the stored list exactly
-local function buildRealisedWindows(entries, time)
-  local windows, byUuid = {}, {}
-  for _, entry in ipairs(entries or {}) do
-    local window = byUuid[entry.id]
-    if not window then
-      window = { uuid = entry.id, chan = entry.chan, targets = {},
-                 ppq = entry.ppq, endppq = entry.endppq }
-      byUuid[entry.id] = window
-      util.add(windows, window)
-    end
-    window.targets[entry.evType == 'cc' and entry.cc or entry.evType] = true
-  end
-  return fxWindows.new(windows, time)
-end
-
 ----- Rebuild Fx
 
 --shape: clipNoteHosts -> { [event] = clipEndL }; each clip starts at its event's own onset
@@ -3084,9 +3066,9 @@ end
 function rebuild.pipeline(sources, time)
   -- The bend window this pass converts against, in cents per side; the edit side caches its own.
   local pbLimCents = cm:get('pbRange') * 100
-  -- The take's own window set, replayed once at the head: the three park-side stages recognise seats
-  -- against it, each asking it the same doors the pass's set answers. see docs/generators.md § Route-by-window
-  local realisedWindows = buildRealisedWindows(sources.fxRealisedWindows, time)
+  -- The take's own window set, replayed once at the head: the census persists the set, so replay is
+  -- the set itself. See docs/trackerManager.md § Fx window census, docs/generators.md § Route-by-window.
+  local realisedWindows = fxWindows.new(sources.fxRealisedWindows or {}, time)
   local external
   local fxIn = {}
   perf.start('internals'); external, fxIn.notes = rebuildInternals(time); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
@@ -3127,9 +3109,9 @@ function rebuild.pipeline(sources, time)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('fxRealisedWindows')
-  local windowList = windows.perTarget()
-  if mm:take() and not util.deepEq(sources.fxRealisedWindows or {}, windowList) then
-    ds:assign('fxRealisedWindows', #windowList > 0 and windowList or util.REMOVE)
+  local census = windows.census()
+  if mm:take() and not util.deepEq(sources.fxRealisedWindows or {}, census) then
+    ds:assign('fxRealisedWindows', #census > 0 and census or util.REMOVE)
   end
   perf.stop('fxRealisedWindows')
 
