@@ -292,7 +292,7 @@ arrival row with the new.
 ### Interval materialisation
 
 Materialisation consumes the absorbed seed set directly — there is no closure. The dirty positions
-are the journal's (§ Interval seeds); `exciseCells` (trackerRebuild.lua) drops every carried column
+are the journal's (§ Interval seeds); `exciseEvents` (trackerRebuild.lua) drops every carried column
 event sitting on one, and `rebuildInternals` re-clones that position from mm: an add finds the new
 note, a delete finds nothing and the event vanishes, a move seeded both seats and gets both.
 Membership keys on the position, not the full seat, because same-pitch/PC shadowing is a same-`ppqL`
@@ -574,7 +574,7 @@ was dormant gets consumed, and when there is none this gate stops the pass.
 `channels` map swaps each pass — `newPass` mints the fresh one and hands the
 old back for the carry-forward loop to read the clean channels out of — and
 the operations that seat events travel on the handle beside it: the column
-mints (`noteColumn` / `ccColumn` / `streamColumn`), `spliceInto`/`spliceEvent`,
+mints (`newNoteColumn` / `newCcColumn` / `newStreamColumn`), `spliceInto`/`spliceEvent`,
 `setEvent`, `renewColumn`/`renewLane`, `markRenewed` and `orderColumn`. Events
 are self-describing, so each takes the frame's own coordinates.
 
@@ -638,8 +638,8 @@ and asserts all three unchanged, so gated and ungated agree across view, grid
 and wire.
 
 `fx` is the pivot: for a clean channel it skips its generators and leaves
-`noteLive` empty — which is exactly why the downstream stages that read
-`noteLive` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
+`fxOut.notes` empty — which is exactly why the downstream stages that read
+`fxOut.notes` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
 dirt plumbing. `regionPark`'s `fxParked`/`fxParkedCC` need no seed:
 `reconcilePark` *partitions the prior set* rather than rebuilding it, so a
 clean channel's parked spec carries through untouched by construction — the
@@ -710,10 +710,10 @@ pb, which are pitch's second and third rungs (`docs/tuning.md`).
 
 Every write one stage makes into another's records belongs to reauthoring, and
 the order carries dependencies the signatures do not state. The specs `fxOut`
-carries in `noteLive` are the same tables the tail walk takes as `extras` and
+carries in `fxOut.notes` are the same tables the tail walk takes as `extras` and
 writes raw onsets and clipped ends into, and `rebuildPbs` reads the moved
-positions, so tails run before pbs. `rebuildInternals` mints `noteExisting`,
-and `reconcileFx`'s keep path stamps `uuid`, `realised` and `endppq` onto those
+positions, so tails run before pbs. `rebuildInternals` mints `fxIn.notes`,
+and `diffEvents`'s keep path stamps `uuid`, `realised` and `endppq` onto those
 same tables seven stages later; `rebuildPCs` writes `sampleShadowed` into an fx
 spec.
 
@@ -798,7 +798,7 @@ indistinguishable, so it's absorbed the same way (docs/generators.md
 § Route-by-window). The window test is half-open, since the re-centre seat folds
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
-`ccExisting` covers only the seed-touched prior cc windows, edge-inclusive
+`fxIn.ccs` covers only the seed-touched prior cc windows, edge-inclusive
 (the journal's `touches`). A clean window appears in neither the existing set nor the
 predicted one — emission clips to the emit scope — and the reconcile deletes
 from `existing` alone, so a clean window's seats are never visited and never
@@ -930,12 +930,12 @@ being its own earlier stage. Every host the gate does not keep runs
 — on-take fx notes (augment hosts), parked
 note hosts (window = the realised parked extent), and fx regions; the
 derived fxNotes reconcile
-against the partition's set (`reconcileFx`), and continuous streams seat
+against the partition's set (`diffEvents`), and continuous streams seat
 offline — cc-augment sums per target into markerless cc seats, pb defers
-to the absorber pass. The note add/del leaves `rebuildFx` as data
-(`fxOut.noteOps`); the tail walk seeds its own batch with it and commits
-atomically, so every stage can read what crosses the boundary.
-`fxOut.noteLive` (the predicted set) feeds the tail walk and PC synthesis. See `docs/generators.md` § Offline continuous realisation.
+to the absorber pass. The note add/del leaves `rebuildFx` staged but
+uncommitted (`fxOut.deferredWrite`); the tail walk adds its clips to that same
+batch and commits it, so a fresh spec reaches mm already clipped.
+`fxOut.notes` (the predicted set) feeds the tail walk and PC synthesis. See `docs/generators.md` § Offline continuous realisation.
 
 ### Tail walk
 
@@ -1018,7 +1018,7 @@ no raw record, so the same-pitch seek finds only what is on the take.
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
 other note, and their onsets appear as 'next' lookups so neighbours clip
-against them. The predicted fxNotes (`fxOut.noteLive`) walk here too; a record
+against them. The predicted fxNotes (`fxOut.notes`) walk here too; a record
 with no token (a new fxNote) carries its clipped geometry into its
 `mm:add` rather than a tail assign, and the clips commit with the fxNote
 del/add in one modify.
@@ -1132,7 +1132,7 @@ PC prevails — and the existing set, the records and the pc-column splice all
 filter on them. The closure answers a span set per frame, since a projected column
 event tests logical where an mm record tests raw. Fresh derived output ungates the channel:
 an fx-born onset has no verb seed to name it, so a pass holding any unkept
-`noteLive` spec synthesises wholesale.
+`fxOut.notes` spec synthesises wholesale.
 
 Group membership is by **realised** ppq, not logical — same-channel
 simultaneity is a MIDI-realisation constraint (one PC stream per
@@ -1423,7 +1423,7 @@ The leading flush is a no-op when nothing is staged, at the price of one empty `
 
 Under seed dirt a host whose window no seed touches does not run. Its
 derived specs come back verbatim from the last pass (`keptFor`), and
-`reconcileFx` self-matches them by `fxKey`, so a kept host writes nothing
+`diffEvents` self-matches them by `fxKey`, so a kept host writes nothing
 to mm and re-derives nothing.
 
 Keeping is decided against the emit scope, not by the kind of chain. A
@@ -1452,12 +1452,12 @@ one.
 
 Renewal is precise, and every mutator of a seated lane owns it:
 
-- **membership** — `exciseCells` assigns only when it actually dropped an
+- **membership** — `exciseEvents` assigns only when it actually dropped an
   event; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
   the park restore) go through `spliceInto(col, event)`, which renews
   before it splices, and the park unlink calls `renewLane(chan, lane)` itself.
   A column carries the order it is kept in — `less`, set at the mint
-  (`noteColumn` / `ccColumn` / `streamColumn`) — so the splice needs only the
+  (`newNoteColumn` / `newCcColumn` / `newStreamColumn`) — so the splice needs only the
   column and the event, and resolving *which* column stays with the caller:
   `spliceEvent(chan, lane, event)` is the note-lane door, a dense index,
   where the cc family names a sparse number instead.

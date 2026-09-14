@@ -59,7 +59,7 @@ end
 
 local function pushNoteCol(channel)
   local notes = channel.onTake.notes
-  return util.add(notes, frame.noteColumn()), #notes
+  return util.add(notes, frame.newNoteColumn()), #notes
 end
 
 -- Clone an mm record, or the um index entry that holds it, into a column event; um's own seat
@@ -136,37 +136,31 @@ local function rawDivergesFromLogical(evt, time)
   return math.abs(evt.ppq - rawFromLogical) > EPS
 end
 
-local function emptyChans()
-  local t = {}
-  for i = 1, 16 do t[i] = {} end
-  return t
-end
-
 -- "Authored" means "Continuum authored"
 local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
 -- Index existing by `key`, keep on hit, add the rest, remove unkept.
-local function diffEvents(a)
+local function diffEvents(existing, predicted, writes, key, onKeep)
   local byKey, kept = {}, {}
-  local onKeep = a.onKeep or function (_,_) end
-  for _, evt in ipairs(a.existing) do byKey[a.key(evt)] = evt end
-  for _, spec in ipairs(a.predicted) do
-    local evt = byKey[a.key(spec)]
+  onKeep = onKeep or function (_,_) end
+  for _, evt in ipairs(existing) do byKey[key(evt)] = evt end
+  for _, spec in ipairs(predicted) do
+    local evt = byKey[key(spec)]
     if evt then kept[evt] = true; onKeep(spec, evt)
-    else a.batcher.add(spec)
+    else writes.add(spec)
     end
   end
-  for _, e in ipairs(a.existing) do
-    if not kept[e] then a.batcher.delete(e) end
+  for _, e in ipairs(existing) do
+    if not kept[e] then writes.delete(e) end
   end
 end
 
 -- Drop the events the seeded positions claim from the columns handed in: a seek per position per
 -- column, not a channel scan; `claims` refines within the cluster. see docs § The note-lane shed
 --invariant: a seated event is projected (ppq == ppqL), so a seeded position is a column's sort key
-local function exciseCells(cols, ppqs, claims)
+local function exciseEvents(cols, ppqs, claims)
   claims = claims or function (_) return true end
   for _, col in ipairs(cols) do
     local events = col.events
@@ -191,19 +185,19 @@ end
 
 ----- Rebuild internals
 
--- Partition mm notes stamped/external, lay internal columns logical-born, reseat stale-swing.
--- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Partition and internal lanes
+-- Partition mm notes stamped/external, write internal columns, reseat stale-swing.
+-- Returns external notes + the per-channel fx notes on the takes. see docs/trackerManager.md § Partition and internal lanes
 local function rebuildInternals(time)
   local internal, external = {}, {}
-  local noteExisting = emptyChans()
+  local fxInNotes = frame.newChannels()
   -- Clean channels carry their columns whole: never visited, so never cloned. Interval-dirty ones
   -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if not dirt.wholesale(chan) then exciseCells(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
+      if not dirt.wholesale(chan) then exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
       for _, raw in mm:notesRaw(chan) do
         if raw.derived then
-          util.add(noteExisting[chan], columnEvent(raw))
+          util.add(fxInNotes[chan], columnEvent(raw))
         elseif dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
           local note = columnEvent(raw)
           if rawDivergesFromLogical(note, time) then util.add(external, note)
@@ -214,8 +208,8 @@ local function rebuildInternals(time)
     end
   end
 
-  local reseats   = mmBatch()
-  local builtCols = {}   -- lanes built by append this pass; ordered once at loop end, splices stay ordered
+  local swingWrites = mmBatch()
+  local builtCols = {}   -- lanes this pass appended to; ordered once at loop end, splices stay ordered
   -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
   -- cloning again. mm's stored note is untouched.
   for _, note in ipairs(internal) do
@@ -229,10 +223,10 @@ local function rebuildInternals(time)
     note.detune = note.detune or 0
     note.delay  = note.delay  or 0
     if dirt.swing.has(note.chan) then
-      -- Rederive realised onset from logical; endppq is the tail walk's. Reswing can collapse two
-      -- distinct-ppqL same-pitch notes onto one raw -- staged to mm; the walk separates it this pass.
+      -- Rederive realised onset only; the tail walk deals with endppq and
+      -- separates any distinct-ppqL same-pitch notes collapsed onto one raw.
       local reswungPpq = time:fromLogical(note.chan, note.ppqL, delayToPPQ(note.delay))
-      if reswungPpq ~= note.ppq then reseats.assign(note, { ppq = reswungPpq }) end
+      if reswungPpq ~= note.ppq then swingWrites.assign(note, { ppq = reswungPpq }) end
       note.ppq = reswungPpq
     end
     -- Columns are logical-born: every seat projects at ingestion.
@@ -248,9 +242,9 @@ local function rebuildInternals(time)
   -- Raw and logical onset order diverge under swing or an authored swap, so only the lanes this pass
   -- appended to can have landed disordered; the splices above stay ordered.
   for col in pairs(builtCols) do frame.orderColumn(col) end
-  reseats.commit()
+  swingWrites.commit()
 
-  return external, noteExisting
+  return external, fxInNotes
 end
 
 ----- Rebuild CCs
@@ -279,19 +273,20 @@ local function spliceCcEvent(live, ccWrites, time)
   local channel = frame.channels[chan]
   local col
   if live.evType == 'cc' then
-    col = channel.onTake.ccs[live.cc] or frame.ccColumn(live.cc)
+    col = channel.onTake.ccs[live.cc] or frame.newCcColumn(live.cc)
     channel.onTake.ccs[live.cc] = col
   else
-    col = channel.onTake[live.evType] or frame.streamColumn()
+    col = channel.onTake[live.evType] or frame.newStreamColumn()
     channel.onTake[live.evType] = col
   end
   projectEvent(event, chan, time)
   frame.spliceInto(col, event)   -- a membership change hands out a fresh events table; the excise's twin
 end
 
--- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
+-- fxInCcs scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their
+-- seats untouched, and cc-family carries merge rather than replace.
 -- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § CC walk.
-local function buildCcExistingInWindows(chan, realisedWindows, ccExisting)
+local function buildFxInCcsInWindows(chan, realisedWindows, fxInCcs)
   local ccBuckets = index.raw(chan).ccs
   local seen = {}
   for _, window in ipairs(realisedWindows.on(chan)) do
@@ -305,7 +300,7 @@ local function buildCcExistingInWindows(chan, realisedWindows, ccExisting)
             if evt.ppq >= eRaw then break end
             if not seen[evt.uuid] then
               seen[evt.uuid] = true
-              util.add(ccExisting[chan],
+              util.add(fxInCcs[chan],
                 { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
             end
           end
@@ -330,10 +325,10 @@ local function ccIndexList(chan, evType, ccNum)
   if evType == 'pc' then return raw.pcs end
 end
 
--- Interval-dirt cc path: the seeded cells are cleared and refilled from the raw index at each cell's
--- own seat -- O(cells), no channel scan. see docs/trackerManager.md § Interval materialisation
+-- Interval-dirt path: the seeded ppqs are cleared and refilled from the raw index.
+-- see docs/trackerManager.md § Interval materialisation
 --invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
-local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExisting, time)
+local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, fxInCcs, time)
   --shape: cell = { evType, cc, rows = { [ppqL] = true }, ppqs = those rows, listed }
   local cells = {}
   for _, s in ipairs(seedList) do
@@ -370,27 +365,26 @@ local function spliceChannelCCs(chan, seedList, realisedWindows, ccWrites, ccExi
 
   for _, cell in pairs(cells) do
     local col = ccColumnFor(chan, cell.evType, cell.cc)
-    if col then exciseCells({ col }, cell.ppqs) end
+    if col then exciseEvents({ col }, cell.ppqs) end
   end
   for _, live in ipairs(refills) do spliceCcEvent(live, ccWrites, time) end
-  buildCcExistingInWindows(chan, realisedWindows, ccExisting)
+  buildFxInCcsInWindows(chan, realisedWindows, fxInCcs)
 end
 
--- Wholesale / stale-swing path: re-derive a channel's whole cc/at/pc stream from mm. Verbatim from the
--- pre-splice CC walk; interval dirt takes spliceChannelCCs. see docs/trackerManager.md § CC walk
-local function fullRebuildChannelCCs(chan, realisedWindows, ccWrites, ccExisting, time)
+-- Wholesale / stale-swing path; see docs/trackerManager.md § CC walk
+local function fullRebuildChannelCCs(chan, realisedWindows, ccWrites, fxInCcs, time)
   for _, cc in mm:ccsRaw(chan) do
     local uuid = cc.uuid
-    -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
-    -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
+    -- any cc event inside a prior fx realisation window is routed out and reconciled fresh at fx
+    -- expansion. A removed window's orphans reconcile away there. see § Route-by-window
     if cc.evType == 'cc' and realisedWindows.ownsRaw('cc', cc.chan, cc.cc, cc.ppq) then
-      util.add(ccExisting[cc.chan],
+      util.add(fxInCcs[cc.chan],
         { ppq = cc.ppq, val = cc.val, shape = cc.shape, tension = cc.tension, cc = cc.cc, uuid = uuid })
       goto continue
     end
 
     -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
-    -- Markerless pb seats in a prior window skip it. see docs/trackerManager.md § CC walk
+    -- Markerless pbs in a prior fx realisation window skip it.
     local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and realisedWindows.ownsRaw('pb', cc.chan, nil, cc.ppq)
     local movedPpq, movedPpqL
     if not cc.derived and not pbSeat then
@@ -413,10 +407,10 @@ local function fullRebuildChannelCCs(chan, realisedWindows, ccWrites, ccExisting
       local channel = frame.channels[cc.chan]
       local col
       if cc.evType == 'cc' then
-        col = channel.onTake.ccs[cc.cc] or frame.ccColumn(cc.cc)
+        col = channel.onTake.ccs[cc.cc] or frame.newCcColumn(cc.cc)
         channel.onTake.ccs[cc.cc] = col
       else
-        col = channel.onTake[cc.evType] or frame.streamColumn()
+        col = channel.onTake[cc.evType] or frame.newStreamColumn()
         channel.onTake[cc.evType] = col
       end
       projectEvent(event, cc.chan, time)
@@ -435,19 +429,19 @@ end
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § CC walk
 local function rebuildCCs(realisedWindows, time)
   local ccWrites = mmBatch()
-  local ccExisting = emptyChans()
+  local fxInCcs = frame.newChannels()
 
   -- Clean channels carry their cc/at/pc columns whole: never visited. Interval-dirty ones splice just
   -- the seeded events (spliceChannelCCs); wholesale/stale-swing chans re-derive the whole stream.
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, realisedWindows, ccWrites, ccExisting, time)
-      else                         spliceChannelCCs(chan, dirt.has(chan), realisedWindows, ccWrites, ccExisting, time)
+      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, realisedWindows, ccWrites, fxInCcs, time)
+      else spliceChannelCCs(chan, dirt.has(chan), realisedWindows, ccWrites, fxInCcs, time)
       end
     end
   end
   ccWrites.commit()
-  return ccExisting
+  return fxInCcs
 end
 
 ----- Rebuild extra columns
@@ -468,14 +462,14 @@ local function rebuildExtraColumns(extraColumns, paramAutomation)
       grew = true
     end
     while #c.notes < want.notes do pushNoteCol(frame.channels[i]) end
-    if want.pc then c.pc = c.pc or frame.streamColumn() end
-    if want.pb then c.pb = c.pb or frame.streamColumn() end
-    if want.at then c.at = c.at or frame.streamColumn() end
+    if want.pc then c.pc = c.pc or frame.newStreamColumn() end
+    if want.pb then c.pb = c.pb or frame.newStreamColumn() end
+    if want.at then c.at = c.at or frame.newStreamColumn() end
     for ccNum in pairs(want.ccs or {}) do
-      c.ccs[ccNum] = c.ccs[ccNum] or frame.ccColumn(ccNum)
+      c.ccs[ccNum] = c.ccs[ccNum] or frame.newCcColumn(ccNum)
     end
     for lane in pairs(bound[i] or {}) do
-      c.ccs[lane] = c.ccs[lane] or frame.ccColumn(lane)
+      c.ccs[lane] = c.ccs[lane] or frame.newCcColumn(lane)
     end
   end
   if grew and mm:take() then ds:assign('extraColumns', extras) end
@@ -941,7 +935,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     for chan, ppqByUuid in pairs(freshEvents) do
       local ppqs = {}
       for _, ppq in pairs(ppqByUuid) do util.add(ppqs, ppq) end
-      exciseCells(frame.channels[chan].onTake.notes, ppqs,
+      exciseEvents(frame.channels[chan].onTake.notes, ppqs,
                   function(e) return e.evType == 'pa' and ppqByUuid[e.uuid] ~= nil end)
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
@@ -998,12 +992,12 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     for _, spec in ipairs(restores) do
       local ppq  = time:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
       local evt = ccWrite(spec, ppq)
-      -- The fill seat at this ppq stays in ccExisting: rebuildFx's reconcile deletes it by its own
+      -- The fill seat at this ppq stays in fxIn.ccs: rebuildFx's reconcile deletes it by its own
       -- uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
       batch.add(evt)
       local channel = frame.channels[spec.chan]
       local col = channel.onTake.ccs[spec.cc]
-      if not col then col = frame.ccColumn(spec.cc); channel.onTake.ccs[spec.cc] = col end
+      if not col then col = frame.newCcColumn(spec.cc); channel.onTake.ccs[spec.cc] = col end
       util.add(col.events, util.clone(spec))
       util.sortByPPQ(col.events)
     end
@@ -1012,7 +1006,7 @@ local function rebuildRegionPark(windows, fxParked, realisedWindows, noteHostCli
     -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.notes.
     renderUnion('ccs', newParked, function(spec)
       local ccs = frame.channels[spec.chan].onTake.ccs
-      ccs[spec.cc] = ccs[spec.cc] or frame.ccColumn(spec.cc)
+      ccs[spec.cc] = ccs[spec.cc] or frame.newCcColumn(spec.cc)
       return util.clone(spec)
     end)
   end
@@ -1448,10 +1442,10 @@ local function clipNoteHosts()
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
--- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
+-- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
 --contract: notesByHost is carried between passes, so the stage writes the channels it ran and
 -- leaves a frozen channel's lists standing
-local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxRegions, notesByHost,
+local function rebuildFx(fxIn, noteHostClips, windows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
@@ -1498,19 +1492,13 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
 
   -- Host-owned outputs: live notes, existence ops (deletes/adds) awaiting the walk, per-chain pb curves, authored
   -- pb base, and the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split.
-  local fxOut = { noteLive = emptyChans(), noteOps = { deletes = {}, adds = {} },
-                  pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
-
-  -- ops cross to the tail walk as inspectable data, not staged batch state --
-  -- the walk seats them in its own batch.
-  local noteOps = fxOut.noteOps
-  local noteOpsBatcher = { delete = function(e)    util.add(noteOps.deletes, e) end,
-                        add    = function(spec) util.add(noteOps.adds, spec)  end }
+  local fxOut = { notes = frame.newChannels(), deferredWrite = mmBatch(),
+                  pbChains = frame.newChannels(), pbBase = frame.newChannels(), pbScope = {} }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see docs/generators.md § The chain
   local function expandChannel(chan)
-    local predicted, ccLive = {}, {}
+    local predicted, fxCCs = {}, {}
     local pbBase, ccBases   -- assigned after host enumeration: bases cover host windows
     -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
     -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
@@ -1615,11 +1603,11 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     local seeded, emitScope = {}, {}
     -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
-    -- noteExisting walk to the first keep.
+    -- fxInNotes walk to the first keep.
     local function keptFor()
       if not keptById then
         keptById = {}
-        for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
+        for _, kept in ipairs(fxIn.notes[chan]) do util.bucket(keptById, kept.derived, kept) end
       end
       return keptById
     end
@@ -1685,7 +1673,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     end
 
     -- Emit scope per target = merged windows of the seeded hosts touching it; the cc fold and
-    -- reconcile clip to it. Clean windows never enter ccExisting, so their seats keep untouched.
+    -- reconcile clip to it. Clean windows never enter fxIn.ccs, so their seats keep untouched.
     if gated then
       -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
       -- window edges, invisible to window-local seeds.
@@ -1750,29 +1738,26 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
     for _, host in ipairs(hosts) do runOrKeep(host) end
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
-    -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
+    -- fxOut.deferredWrite. fxOut.notes holds the predicted specs; the tail walk clips them in place.
 
-    diffEvents {
-      existing  = noteExisting[chan],
-      predicted = predicted,
-      key       = function(evt)
-        -- baseVoice is keyed: a host moving between lane 1 and elsewhere flips it with every other
-        -- term unchanged, and a kept note would leave stale metadata seated.
-        return util.key(evt.derived, evt.ppq, evt.endppqL or 0,
-        evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0, evt.intentCents,
-        evt.baseVoice)
+    diffEvents(fxIn.notes[chan], predicted, fxOut.deferredWrite,
+      -- baseVoice is keyed: a host moving between lane 1 and elsewhere flips it with every other
+      -- term unchanged, and a kept note would leave stale metadata seated.
+      function(evt)
+        return util.key(
+          evt.derived, evt.ppq, evt.endppqL or 0,
+          evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0,
+          evt.intentCents, evt.baseVoice)
       end,
-      batcher   = noteOpsBatcher,
-      -- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
-      -- kept fxNote is re-clipped in place by the tail walk rather than re-added.
-      onKeep    = function(spec, evt)
+      -- copy the matched note's mm handle + realised end onto the spec, so a
+      -- kept fxNote is re-clipped in place by the tail walk, not re-added.
+      function(spec, evt)
         spec.uuid, spec.realised, spec.endppq = evt.uuid, evt.realised, evt.endppq
-      end
-    }
+      end)
 
     local fxNotes = {}
     for _, spec in ipairs(predicted) do
-      util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, baseVoice = spec.baseVoice,
+      util.add(fxOut.notes[chan], { evt = spec, lane = spec.lane, baseVoice = spec.baseVoice,
                                        kept = keptFx[spec] or nil })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
@@ -1805,7 +1790,7 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
         for _, emitSpan in ipairs(gated and spans.clip(span, emitScope[cc]) or { span }) do
           for _, point in ipairs(curves.foldChains(recs, emitSpan, base, gridStep)) do
             if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
-              util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
+              util.add(fxCCs, { evType = 'cc', chan = chan, cc = cc,
                                  ppq = time:fromLogical(chan, point.ppq, 0),
                                  val = util.clamp(util.round(point.val), 0, 127),
                                  shape = point.shape, tension = point.tension })
@@ -1815,19 +1800,17 @@ local function rebuildFx(noteExisting, ccExisting, noteHostClips, windows, fxReg
       end
     end
 
-    local wires = mmBatch()
+    local ccWrites = mmBatch()
     -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the key --
     -- it drives REAPER's interpolation. see docs/generators.md § pb and cc
-    diffEvents{
-      existing = ccExisting[chan], predicted = ccLive, batcher = wires,
-      key = function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end,
-    }
+    diffEvents(fxIn.ccs[chan], fxCCs, ccWrites,
+      function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end)
 
-    wires.commit()
+    ccWrites.commit()
   end
 
   for chan = 1, 16 do
-    -- Frozen: derived notes/CCs stand untouched in mm; leave noteLive empty so tails/pbs/pcs skip too.
+    -- Frozen: derived notes/CCs stand untouched in mm; leave fxOut.notes empty so tails/pbs/pcs skip too.
     if dirt.has(chan) then expandChannel(chan) end
   end
   return fxOut
@@ -2242,25 +2225,22 @@ end
 
 ----- Rebuild tails
 
--- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
+-- Unified tail/onset walk + atomic commit: real notes, fixed externals, fxNotes
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
 --post: a note is separated only if it is disturbed; a nudged lane-1 onset emits its seat closure
 --post: the disturbed, the lane pass's named and each anchor's predecessors take fresh bounds
-local function rebuildTails(noteLive, noteOps, time, movedBounds)
+local function rebuildTails(fxNotes, tailWrites, time, movedBounds)
   local res = mm:resolution()
   local clampWrites = mmBatch()
-  -- The walk's own batch, seeded from fx expansion's existence ops -- a fresh spec is unrealised during the walk, so the
-  -- clip mutates it in place, reaching mm once already clipped.
-  local tailWrites = mmBatch()
-  for _, e in ipairs(noteOps.deletes) do tailWrites.delete(e) end
-  for _, spec in ipairs(noteOps.adds) do tailWrites.add(spec) end
+  -- tailWrites is fx expansion's own batch, still uncommitted and carrying its existence ops -- a fresh
+  -- spec is unrealised during the walk, so the clip mutates it in place, reaching mm already clipped.
   for chan = 1, 16 do
-    -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
+    -- Clean channels freeze: fx left fxNotes empty, real notes converged last rebuild.
     if not dirt.has(chan) then goto nextChan end
     -- A kept fx spec is settled from last pass and rides the walk as a bound anchor only; only fresh
     -- (re-run host) derived notes seed disturbance and count toward the frontier cap.
     local extras, keptDerived, freshLive = {}, {}, 0
-    for _, w in ipairs(noteLive[chan]) do
+    for _, w in ipairs(fxNotes[chan]) do
       util.add(extras, w.evt)
       if w.kept then keptDerived[w.evt] = true else freshLive = freshLive + 1 end
     end
@@ -2306,7 +2286,7 @@ local DUAL_POINT_TICK = 1
 
 --shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump() }
 -- A channel's base-voice onset stream: the raw index's authored notes unioned with the pass's
--- derived base voices, which live off-take in noteLive. see docs/tuning.md § Absorber reconciliation
+-- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
 --pre: derived is ppq-ascending and holds chan's derived base voices for this pass
 local function baseVoiceUnion(chan, derived)
   local authored = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
@@ -2492,7 +2472,7 @@ end
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
   local gridStep = ccGridStep()
-  local noteLive = fxOut.noteLive
+  local fxNotes = fxOut.notes
   -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
   -- .notes only, so the head snapshot is current for this.
   local extras = extraColumns or {}
@@ -2506,7 +2486,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       -- Derived base voices are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
       local derivedBaseVoice = {}
-      for _, live in ipairs(noteLive[chan]) do
+      for _, live in ipairs(fxNotes[chan]) do
         if live.baseVoice then
           util.add(derivedBaseVoice, live.evt)
           freshBaseVoice[chan] = freshBaseVoice[chan] or not live.kept
@@ -2864,7 +2844,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       end
       util.sortByPPQ(pbColEvents)
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
-      frame.channels[chan].onTake.pb = keep and frame.streamColumn(pbColEvents) or nil
+      frame.channels[chan].onTake.pb = keep and frame.newStreamColumn(pbColEvents) or nil
       perf.stop('project')
     end
   end
@@ -2878,12 +2858,12 @@ end
 
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
---contract: appends removals/adds to the batcher {del(event), add(spec)}
+--contract: appends removals/adds to the writes batch {delete(event), add(spec)}
 --contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
 --contract: seedSpans (from pcSeedSpans) narrow existing to its logical spans; nil = whole channel
 --invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
-local function reconcilePCsForChan(chan, records, batcher, seedSpans)
+local function reconcilePCsForChan(chan, records, writes, seedSpans)
   local existing = {}
   for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
     if not seedSpans or spans.contains(seedSpans.logical, e.ppq) then util.add(existing, e) end
@@ -2911,26 +2891,21 @@ local function reconcilePCsForChan(chan, records, batcher, seedSpans)
                           evType = 'pc', chan = chan, derived = 'pc' })
   end
 
-  diffEvents{
-    existing = existing, predicted = predicted, batcher = batcher,
-    key = function(x) return util.key(x.derived, x.ppq, x.val) end,
-  }
+  diffEvents(existing, predicted, writes,
+    function(x) return util.key(x.derived, x.ppq, x.val) end)
 end
 
 --shape: seedSpans = { raw = span set, logical = span set }; nil = wholesale
-local function pcSeedSpans(chan, noteLive)
+local function pcSeedSpans(chan, fxNotes)
   if dirt.wholesale(chan) then return nil end
-  for _, w in ipairs(noteLive) do
+  for _, w in ipairs(fxNotes) do
     if not w.kept then return nil end
   end
   local points = {}
-  local function addPoint(ppq, ppqL)
-    if ppq ~= nil then util.add(points, { ppq = ppq, ppqL = ppqL or ppq }) end
-  end
   for _, s in ipairs(dirt.has(chan)) do
-    addPoint(s.ppq, s.ppqL)
+    util.add(points, { ppq = s.ppq, ppqL = s.ppqL or s.ppq })
     local live = s.uuid and index.byUuid(s.uuid)
-    if live then addPoint(live.ppq, live.ppqL) end
+    if live then util.add(points, { ppq = live.ppq, ppqL = live.ppqL or live.ppq }) end
   end
   local raw, logical, notes = {}, {}, index.raw(chan).notes
   for _, point in ipairs(points) do
@@ -2945,14 +2920,14 @@ end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records,
 -- writes and the column splice all clip to them, so out-of-span PCs stand.
-local function rebuildPCs(noteLive, time)
+local function rebuildPCs(fxNotes, time)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
   local spansByChan = {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
     if not dirt.has(chan) then goto nextChan end
-    local seedSpans = pcSeedSpans(chan, noteLive[chan])
+    local seedSpans = pcSeedSpans(chan, fxNotes[chan])
     spansByChan[chan] = seedSpans
     local records = {}
     local function recordNote(entry)
@@ -2966,7 +2941,7 @@ local function rebuildPCs(noteLive, time)
     else
       for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
     end
-    for _, w in ipairs(noteLive[chan]) do
+    for _, w in ipairs(fxNotes[chan]) do
       local n = w.evt
       if not seedSpans or spans.contains(seedSpans.raw, n.ppq) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
@@ -3000,7 +2975,7 @@ local function rebuildPCs(noteLive, time)
         for _, cc in ipairs(index.raw(chan).pcs) do projectPc(cc) end
       end
       util.sortByPPQ(events)
-      frame.channels[chan].onTake.pc = frame.streamColumn(events)
+      frame.channels[chan].onTake.pc = frame.newStreamColumn(events)
     end
   end
 end
@@ -3112,9 +3087,10 @@ function rebuild.pipeline(sources, time)
   -- The take's own window set, replayed once at the head: the three park-side stages recognise seats
   -- against it, each asking it the same doors the pass's set answers. see docs/generators.md § Route-by-window
   local realisedWindows = buildRealisedWindows(sources.fxRealisedWindows, time)
-
-  perf.start('internals'); local external, noteExisting = rebuildInternals(time); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
-  perf.start('ccs'); local ccExisting = rebuildCCs(realisedWindows, time); perf.stop('ccs')  -- CC walk; reseat swing CCs
+  local external
+  local fxIn = {}
+  perf.start('internals'); external, fxIn.notes = rebuildInternals(time); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
+  perf.start('ccs'); fxIn.ccs = rebuildCCs(realisedWindows, time); perf.stop('ccs')  -- CC walk; reseat swing CCs
   dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns, sources.paramAutomation); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external, time); perf.stop('externals')  -- reintroduce foreign / diverged notes
@@ -3141,13 +3117,13 @@ function rebuild.pipeline(sources, time)
   perf.start('pa'); rebuildPA(time); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   perf.start('fx')
-  local fxOut = rebuildFx(noteExisting, ccExisting, noteHostClips, windows, sources.fxRegions,
+  local fxOut = rebuildFx(fxIn, noteHostClips, windows, sources.fxRegions,
                           fxNotesByHost, pbLimCents, time)  -- fx expansion: derived notes/CCs
   perf.stop('fx')
 
-  perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps, time, movedBounds); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+  perf.start('tails'); rebuildTails(fxOut.notes, fxOut.deferredWrite, time, movedBounds); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, pbLimCents, time); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
-  perf.start('pcs'); rebuildPCs(fxOut.noteLive, time); perf.stop('pcs')  -- PC synthesis (trackerMode)
+  perf.start('pcs'); rebuildPCs(fxOut.notes, time); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('fxRealisedWindows')

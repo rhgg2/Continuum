@@ -101,9 +101,9 @@ do
   -- A column carries the order it is kept in, so a splice needs only the column and the event.
   -- Resolving which column -- a dense lane index, a sparse cc number -- stays with the caller.
   --invariant: every column is minted here, so col.less stands wherever a column does
-  function frame.noteColumn()         return { events = {}, less = noteColumnLess } end
-  function frame.ccColumn(ccNum)      return { cc = ccNum, events = {}, less = ppqLess } end
-  function frame.streamColumn(events) return { events = events or {}, less = ppqLess } end
+  function frame.newNoteColumn()         return { events = {}, less = noteColumnLess } end
+  function frame.newCcColumn(ccNum)      return { cc = ccNum, events = {}, less = ppqLess } end
+  function frame.newStreamColumn(events) return { events = events or {}, less = ppqLess } end
 
   -- Open a rebuild pass: the channels map is minted afresh and handed back for the carry-forward
   -- loop to read the clean channels out of.
@@ -111,6 +111,14 @@ do
     local prev = frame.channels
     frame.channels, renewed = {}, {}
     return prev
+  end
+
+  -- A 16-slot per-channel accumulator for a pass's own lists -- not the frame's channels map, which
+  -- newPass mints. The rebuild's carriers between stages (fxIn, fxOut) are all of this shape.
+  function frame.newChannels()
+    local t = {}
+    for i = 1, 16 do t[i] = {} end
+    return t
   end
 
   -- tv's cell carry keys on a column's `events` table identity, so a change to its membership or to
