@@ -46,7 +46,6 @@ local timing     = require 'timing'
 local voicing    = require 'voicing'
 local tuning     = require 'tuning'
 local generators = require 'generators'
-local perf       = require 'perf'
 local fxWindows  = require 'fxWindows'
 local dirt       = require('dirt').new()
 
@@ -534,9 +533,9 @@ do
   local function setFxHost(evt)
     if evt.evType ~= 'note' or not evt.uuid then return end
     if evt.fx then
-      local set = fxHosts[evt.chan]
-      if not set then set = {}; fxHosts[evt.chan] = set end
+      local set = fxHosts[evt.chan] or {}
       set[evt.uuid] = true
+      fxHosts[evt.chan] = set
     else
       local set = fxHosts[evt.chan]
       if set then set[evt.uuid] = nil end
@@ -1060,15 +1059,11 @@ do
     if #parkedEdits > 0 then flushParked() end
 
     if hadMmOps then
-      perf.start('flush')
 
-      perf.start('collide')
       for _, n in ipairs(collisionKills()) do deleteNote(n) end
-      perf.stop('collide')
 
       local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
       adds, assigns, deletes = {}, {}, {}
-      perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
 
       -- Same-pitch moves transiently share a seat key. assignNote's guard keeps the index correct in
       -- either order; descending only spares the backstop a scan. see docs/trackerManager.md § Same-pitch onset separation
@@ -1089,7 +1084,6 @@ do
         end
       end
 
-      perf.start('mm')
       mm:modify(function()
         for _, o in ipairs(flushDeletes) do
           mm:delete(o.uuid)
@@ -1105,8 +1099,6 @@ do
           if uuid then index.delete(o.evt); index.sync(uuid) end
         end
       end)
-      perf.stop('mm')
-      perf.stop('flush'); perf.report()
     else
       stager.flushDirt({})   -- no mm reload to fold flushParked's seeds; fold them here
     end
@@ -1783,7 +1775,7 @@ function tm:setMutedChannels(set)
     local want = lastMuteSet[chan] == true
     for _, col in ipairs(channel and channel.onTake.notes or {}) do
       for _, evt in ipairs(col.events) do
-        if evt.evType ~= 'pa' and (evt.muted == true) ~= want then
+        if util.isNote(evt) and (evt.muted == true) ~= want then
           stager.assign(evt, { muted = want })
         end
       end
@@ -1877,7 +1869,7 @@ function tm:rebuild(takeChanged)
 
   -- A wholesale mm re-read strands the incremental index: reload before the snapshot reads it, and
   -- the pass's own commits maintain it from there. see docs § Incremental index reconciliation
-  if didReload then perf.start('reload'); stager.reload(); perf.stop('reload') end
+  if didReload then stager.reload() end
 
   -- One head snapshot of the ds intent keys the pass reads, its regions already expanded to
   -- per-channel hosts against the channels in use. see docs § Channel & column model
@@ -1896,18 +1888,15 @@ function tm:rebuild(takeChanged)
   mm:batch(function() maps = rebuild.pipeline(sources, timeContext) end)
   -- Install what the pass created. Nothing reads these mid-pass, and the accessors read between
   -- rebuilds, so they stand before the signal goes out.
-  windows, freezeRectByUuid, fxRealisationByUuid =
-    maps.windows, maps.freezeRect, maps.fxRealisation
-  for chan in pairs(maps.conform) do muteConform[chan] = true end
-  perf.start('derivedInputs')
+  windows, freezeRectByUuid, fxRealisationByUuid = maps.windows, maps.freezeRect, maps.fxRealisation
+  for chan in pairs(maps.dirtyChannels) do muteConform[chan] = true end
   derivedInputs = derivationInputs()   -- after the pass's own ds writes have settled
-  perf.stop('derivedInputs')
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
   --post: rebuild fires at the end of every non-degenerate pass, the index and the maps settled
   --invariant: takeChanged is true only when rebuild followed bindTake; signals take-tier reload
-  perf.start('fire'); fire('rebuild', takeChanged); perf.stop('fire')
+  fire('rebuild', takeChanged)
 end
 
 ----- Lifecycle

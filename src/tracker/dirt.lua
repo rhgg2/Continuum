@@ -136,12 +136,15 @@ function dirt.new()
   --contract: either axis holds something -- the rebuild(∅) gate
   function journal.pending() return next(marks) ~= nil or next(swing) ~= nil end
 
-  --contract: consumes the dirt, returning the channels it held for the caller's mute-conform sweep
+  --contract: the channels the dirt holds, for the caller's mute-conform sweep
+  function journal.byChannel()
+    local isDirty = {}
+    for chan in pairs(marks) do isDirty[chan] = true end
+    return isDirty
+  end
+
   function journal.clear()
-    local consumed = {}
-    for chan in pairs(marks) do consumed[chan] = true end
     marks, memo = {}, {}
-    return consumed
   end
 
   -- The minters ride the journal, so holding the journal is the whole of holding the dirt.

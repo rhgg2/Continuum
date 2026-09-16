@@ -118,7 +118,8 @@ return {
       journal.add(1, true)
       journal.add(9, seed(120))
 
-      local consumed = journal.clear()
+      local consumed = journal.byChannel()
+      journal.clear()
 
       t.deepEq(consumed, { [1] = true, [9] = true }, 'both channels come back for the mute sweep')
       t.eq(journal.has(1), nil, 'and the journal is clean')
