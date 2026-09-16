@@ -12,10 +12,10 @@
 2. **Phase 2 — The display lane** (§ The display lane, § The freeze claim) —
    tv allocates a column per frame over the caret's host; the ghost overlay,
    the cents readout and the freeze rect's note streams read the one
-   allocation.  ← in flight
+   allocation. — landed 2026-09-16, two commits.
 3. **Phase 3 — The derived tail bound** (§ The derived tail bound) — a derived
    note's end clipped by same-pitch successor and host window end, with derived
-   notes joining the tail walk's pitch dimension.
+   notes joining the tail walk's pitch dimension.  ← in flight
 4. **Phase 4 — Laneless emission** (§ The derived note record) — `lane` off the
    emitted spec, `noteLive`, `fxNotesByHost` and the mm metadata;
    `allocateRegionLanes` retires with it. Owes § Open's twin-hit question an
@@ -48,4 +48,20 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-(empty — run /plan-next to refill from the phase.)
+1. **The derived tail bound** — a derived note's logical bound becomes the end
+   its generator gave it clipped by its host's window end, which `boundNote`'s
+   derived arm reads off the pass's window set by `spec.derived` — so
+   `rebuildTails` takes that set, and `frame.clippedSpanEnd` over the lane's
+   population goes. The raw bound keeps its same-pitch term unchanged; that
+   probe already reads authored and derived alike, which is the pitch dimension
+   the design asks for. `derivedLanePred` and its anchor probe retire from both
+   walks, and `makeTailRules`' derived lane views with them, so the lane-1 nudge
+   emission closes on the next authored onset — a wider interval than a derived
+   onset gave, and dirt the absorber pass already tolerates. The generator's end
+   is always a number (emission converts it to raw as it builds the spec), so
+   the bound states no open-end term, which answers § Open's second question.
+   Evidence: a region's derived note is no longer cut by an authored note
+   sharing its allocated lane at another pitch, and a same-pitch one still cuts
+   it. Specs: `tests/specs/tm_fx_region_spec.lua`, `tests/specs/tm_tail_gating_spec.lua`.
+   Docs: `docs/trackerManager.md` § Tail walk and § What the walk visits, and
+   what it emits, whose derived lane-bound paragraphs it replaces.

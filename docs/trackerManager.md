@@ -1406,7 +1406,9 @@ off-take. The uuid drop also holds for a persisted window that no longer recompu
 (a kind deregistered, a clipping context changed): it still leaves with its host.
 
 The same census answers freeze eligibility, through the window set the pass holds: the rebuild
-publishes it beside the rects, and it outlives the pass.
+publishes it beside the rects, and it outlives the pass. A rect carries the host's span and the pb
+and cc streams its chains target; the note streams are composed at freeze time off the display
+allocation (`docs/trackerView.md` § Ghost sampling).
 
 `freezeRefused` makes one pass over the hosts on the frozen one's channel and refuses on
 three counts. An overlapping neighbour claiming a target the frozen host claims would be left

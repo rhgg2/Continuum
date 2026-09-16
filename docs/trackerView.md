@@ -129,8 +129,8 @@ channel lacks shows nothing.
 of overlap, with the channel's authored population seeding occupancy less every
 cell the host parked. A chain stamping a chord emits its voices on one lane,
 which says where they sound; the display lane says where they read, so each voice
-draws in a column of its own. Both readers take their column from the one
-allocation. The host's own parked cell seeds no occupancy, which leaves a note
+draws in a column of its own. The overlay, the readout and the freeze claim
+take their column from the one allocation. The host's own parked cell seeds no occupancy, which leaves a note
 host's first voice in the column the host itself draws in. The allocation covers
 the output rather than the viewport, so scrolling changes none of it, and it
 stands while the realisation and the grid it read occupancy off both stand.
@@ -142,6 +142,17 @@ opens that width in every lane drawing an off-step ghost and closes the ones it
 opened. It runs ahead of the frame's column layout, which reads the widths it
 writes. The readout addresses no stop, so nothing the caret or a selection
 holds moves as the width comes and goes.
+
+**16** A host's freeze rect claims one note stream per display lane its output
+occupies, alongside the pb and cc streams its chains target. trackerManager
+publishes the continuous half off the window set alone
+(`docs/trackerManager.md` § Fx window census), and `tv:freezeRect` adds the
+note streams before the rect reaches groupManager.
+
+**17** The claim resolves when the freeze path asks for it, from the allocation
+standing at that moment. So the rect a mint would take and the columns on
+screen come from the one allocation, and the claim covers output the viewport
+does not show.
 
 ## Grid shape (vm's output to rm)
 

@@ -1,7 +1,7 @@
 # Laneless derived notes — one shape for derived reconciliation
 
 > opened: 2026-09-12 · status: in flight — plan/laneless-derived-notes.md,
-> at phase 2 (the display lane).
+> at phase 3 (the derived tail bound).
 
 **Derived notes carry no lane, so they reconcile as derived ccs do: gathered per touched window and kept by omission.**
 
@@ -42,25 +42,11 @@ Landed. The model stands in `docs/tuning.md` § Intent vs realisation and
 
 ## The display lane
 
-1. A **display lane** is the grid column a derived note draws in. trackerView allocates it.
-
-1. Allocation takes the lowest column free of overlap. It runs over the host's whole output on a channel, so a scrolled viewport changes nothing. It is asked of a host by uuid, the fx strip's freeze buttons addressing a pinned host the caret has left.
-
-1. The channel's authored population seeds occupancy, less every cell the host parked. So a ghost lands clear of what the column draws, and may take the column its own parked original left. A note host parks its own cell alone, so a lane its neighbour holds stands in the way of its voices.
-
-1. Derived notes seed no occupancy. One host's ghosts show at a time, and a derived note carries no lane bound to seed with.
-
-1. One allocation serves the frame, and its readers filter it. The ghost overlay places its notes by it over the viewport's rows, and the ghost readout reserves cents columns by it (`docs/trackerView.md` § Ghost sampling).
-
-1. A ghosted row may also carry a real cell. The allocation is a legibility question, and the draw arm settles precedence.
+Landed. The model stands in `docs/trackerView.md` § Ghost sampling.
 
 ## The freeze claim
 
-1. A host's freeze rect claims one note stream per display lane its output occupies, alongside the pb and cc streams its targets name.
-
-1. trackerManager publishes the host's span with the streams its targets name. The freeze path adds a note stream per column the allocation gives the host, before the rect reaches groupManager.
-
-1. The rect resolves when the freeze path asks for it, from the allocation standing at that moment. The rect a mint would claim and the columns drawn come from the one allocation, so the claim stands still under scroll.
+Landed. The model stands in `docs/trackerView.md` § Ghost sampling.
 
 ## Open
 

@@ -3110,7 +3110,7 @@ return {
     -- tm publishes only the continuous half of a mint's footprint: the streams the chain targets, read
     -- off the window set. A note dest is a park window, and the columns its output draws in are the
     -- display allocation's, so tv:freezeRect composes them on.
-    -- see design/laneless-derived-notes.md § The freeze claim
+    -- see docs/trackerView.md § Ghost sampling
     name = 'freeze rect: a note-dest host claims no note stream of its own',
     run = function(harness)
       local h = harness.mk()

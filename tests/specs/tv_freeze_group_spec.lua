@@ -161,7 +161,7 @@ return {
 
   {
     -- One allocation serves the ghosts, the cents readout and the claim alike, so what a mint would
-    -- take is what the user can see. see design/laneless-derived-notes.md § The freeze claim
+    -- take is what the user can see. see docs/trackerView.md § Ghost sampling
     name = 'freeze rect: a note stream per display column, alongside the chain\'s targets',
     run = function(harness)
       local h = harness.mk{ groups = true }
