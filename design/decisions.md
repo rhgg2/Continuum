@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-16** — The note half of a freeze rect is composed at freeze time, not built in the
+  pipeline. `buildFreezeRects` published a host's span with the take lanes its derived notes landed
+  on, read off `index.raw` -- which phase 4 empties of `lane`; it now publishes the pb and cc
+  streams alone, and `tv:freezeRect` adds a `note:<column>` per display lane before the rect reaches
+  gm. One allocation then serves the ghosts, the cents readout and the claim, so a mint takes what
+  the user can see whether or not the output is on screen. The take lane every rect consumer reads
+  and the display lane the claim now carries agree on every fixture, both allocators being
+  lowest-free, so no test separates them until promotion loses its take lane in phase 4.
+
 - **2026-09-16** — The fx note existence reconcile withholds a kept host instead of self-matching
   it, and keys `lane`. A kept host's specs stood on both sides of `diffEvents` keying to themselves,
   and finding them cost a walk over the channel's derived notes; `fxIn.notes` now arrives bucketed

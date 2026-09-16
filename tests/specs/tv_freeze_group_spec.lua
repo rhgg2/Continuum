@@ -3,8 +3,10 @@
 -- the gate, the mint, the one undo block they share, and what the mint leaves behind: an
 -- ordinary group, which instances, mirrors and deletes like any other.
 -- see design/archive/fx-freeze.md § Freeze to group
-local t    = require('support')
-local util = require('util')
+local t          = require('support')
+local util       = require('util')
+local groups     = require('groups')
+local generators = require('generators')
 
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp  = { { kind = 'arp',  period = { 1, 4 }, dir = 'up' } }
@@ -19,10 +21,39 @@ local function injectMixed(h, over)
   h.tm:rebuild()
 end
 
+-- Two voices at one onset, which the display allocation has to spread over two columns. The built-in
+-- arp is monophonic and yields one, so it cannot show a stream per column. Registered for the rebuild
+-- and dropped straight after, as the kinds table is global.
+local chord = { kind = 'chord' }
+
+local function withChord(h, over)
+  generators.kinds.chord = {
+    expand = function(stream)
+      local from = stream.window[1]
+      return { notes = {
+        { ppq = from, endppq = from + 120, pitch = 60, vel = 100, detune = 0, baseVoice = true },
+        { ppq = from, endppq = from + 120, pitch = 64, vel = 100, detune = 0 },
+      }, delta = {} }
+    end,
+    mode = 'replace', dest = 'note', label = 'Chord', defaults = {}, fields = {},
+  }
+  injectMixed(h, over)
+  generators.kinds.chord = nil
+end
+
 local function addNote(h)
   h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                  vel = 100, detune = 0, delay = 0, lane = 1 }
   h.tm:flush()
+end
+
+-- Ghosted onsets, counted across the overlay: notes is keyed by column, each column by row.
+local function ghostedOnsets(h)
+  local n = 0
+  for _, byRow in pairs(h.vm:ghostOverlay().notes) do
+    for _ in pairs(byRow) do n = n + 1 end
+  end
+  return n
 end
 
 local function fxColFor(h, chan)
@@ -126,6 +157,53 @@ end
 
 return {
 
+  ----- The claim: tm's continuous half, composed with the columns the output draws in
+
+  {
+    -- One allocation serves the ghosts, the cents readout and the claim alike, so what a mint would
+    -- take is what the user can see. see design/laneless-derived-notes.md § The freeze claim
+    name = 'freeze rect: a note stream per display column, alongside the chain\'s targets',
+    run = function(harness)
+      local h = harness.mk{ groups = true }
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      withChord(h, { fx = { chord, sine30[1] } })
+
+      t.deepEq(h.vm:freezeRect('fxr-1'),
+        { ppq = 0, dur = 240, chanLo = 1,
+          streams = { [0] = { [groups.streamId{ evType = 'note', key = 1 }] = true,
+                              [groups.streamId{ evType = 'note', key = 2 }] = true,
+                              [groups.streamId{ evType = 'pb' }]            = true } } },
+        'a stream per column the voices drew in, and the sine\'s pb target beside them')
+    end,
+  },
+
+  {
+    -- The allocation is per-realisation, not per-viewport. Composed off the ghosts instead -- which are
+    -- clipped to the visible rows -- a mint made from off-screen would claim less than it occupies.
+    name = 'freeze rect: the claim stands still under scroll',
+    run = function(harness)
+      local h = harness.mk{ groups = true }
+      h.vm:setGridSize(80, 8)
+      addNote(h)
+      withChord(h, { fx = { chord, sine30[1] }, endppq = 3840 })
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+
+      local onScreen = h.vm:freezeRect('fxr-1')
+      t.truthy(onScreen.streams[0][groups.streamId{ evType = 'note', key = 2 }],
+               'fixture check: at row 0 the claim spans both columns')
+      t.truthy(ghostedOnsets(h) > 0, 'fixture check: and there is a voice on screen to see')
+
+      h.ec:setPos(60, ci, 1)
+      t.eq(ghostedOnsets(h), 0, 'fixture check: the scroll has paged past every onset')
+      t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'while the caret still stands on the host')
+      t.deepEq(h.vm:freezeRect('fxr-1'), onScreen, 'and the claim is the one it made on screen')
+    end,
+  },
+
+  ----- The mint
+
   {
     name = 'freeze to group: the conversion mints one group over its own output',
     run = function(harness)
@@ -203,7 +281,7 @@ return {
       h.vm:setGridSize(80, 40)
       addNote(h)
       injectMixed(h)
-      t.truthy(h.gm:markGroup({}, h.tm:freezeRect('fxr-1')),
+      t.truthy(h.gm:markGroup({}, h.vm:freezeRect('fxr-1')),
                'an empty group squats on the footprint the mint would claim')
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(0, ci, 1)

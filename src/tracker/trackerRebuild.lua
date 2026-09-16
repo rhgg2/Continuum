@@ -2921,32 +2921,19 @@ end
 
 ----- Fx output maps
 
--- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
--- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto.
+-- The continuous half of a freeze rect: the pb/cc streams a host's chains target, off the window set
+-- alone. The note half is tv's, composed at freeze time off the display allocation the ghosts draw in.
 local function buildFreezeRects(hosts)
-  local hostChans, lanesByUuid = {}, {}
-  for _, host in ipairs(hosts) do hostChans[host.chan] = true end
-  for chan in pairs(hostChans) do
-    for _, note in ipairs(index.raw(chan).notes) do
-      -- A derived note carries its host's uuid, so the bucketing needs no window arithmetic.
-      if note.derived then
-        local lanes = lanesByUuid[note.derived] or {}
-        lanes[note.lane] = true
-        lanesByUuid[note.derived] = lanes
-      end
-    end
-  end
   local rects = {}
   for _, host in ipairs(hosts) do
     -- A husk host (no fx, no output) claims an empty stream set rather than none: it is still
     -- a host, and whether an empty footprint is worth minting is the caller's question.
     local streams = {}
-    -- The note target is a park window, not output: a rect's note lanes are the ones the fx pass wrote.
+    -- A note target is a park window, not a stream, so it adds nothing here.
     for target in pairs(host.targets) do
       if     target == 'pb'           then streams['pb:0'] = true
       elseif type(target) == 'number' then streams['cc:' .. target] = true end
     end
-    for lane in pairs(lanesByUuid[host.uuid] or {}) do streams['note:' .. lane] = true end
     -- Single-channel by construction, so chanOffset 0 is the only key; span is the host's own.
     rects[host.uuid] = { ppq = host.ppq, dur = host.endppq - host.ppq,
                          chanLo = host.chan, streams = { [0] = streams } }
@@ -3067,8 +3054,7 @@ function rebuild.pipeline(sources, time)
   local byHost = { notes = fxNotesByHost, parked = parkedByHost,
                        targets = buildFxTargets(fxOutWindows.windows()) }
 
-  -- Freeze's maps, after the fx pass: a rect built before it would carry the previous rebuild's note
-  -- lanes. Sibling maps, one site.
+  -- Freeze's maps: sibling reads of the settled window set, gathered at one site.
   local maps = {
     windows       = fxOutWindows,
     freezeRect    = buildFreezeRects(fxOutWindows.windows()),

@@ -37,10 +37,10 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-16 tm/tv: compose the freeze claim from the display allocation (§ The freeze claim)
 - 2026-09-13 tv: allocate a display lane for a host's derived notes (§ The display lane)
 - 2026-09-13 tm: the pb hold scope asks the generator, not the host's lane (§ The base voice)
 - 2026-09-13 tm: seat absorbers against the base voice, not lane 1 (§ The base voice)
-- 2026-09-13 tm: carry baseVoice across the fx pass (§ The derived note record)
 
 ## Now
 
@@ -48,10 +48,4 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-1. **The freeze claim from the allocation** — `buildFreezeRects` drops its walk
-   over the raw index's derived lanes and publishes each host's span with its
-   pb and cc streams alone; `tv:freezeMode` and `tv:freezeToGroup` add a
-   `note:<column>` stream per allocated column before the rect reaches gm. The
-   evidence is a claim that stands still under scroll. Specs:
-   `tests/specs/tv_freeze_group_spec.lua` and `tests/specs/tm_fx_region_spec.lua`,
-   whose rect assertions lose their note half.
+(empty — run /plan-next to refill from the phase.)

@@ -3107,34 +3107,22 @@ return {
   },
 
   {
-    -- The rect a freeze-to-group mint would claim: the host's own span, and one streamId per
-    -- stream its output actually stands on. see design/archive/fx-freeze.md § Freeze to group
-    name = 'freeze rect: the footprint of a mixed note-and-curve output',
+    -- tm publishes only the continuous half of a mint's footprint: the streams the chain targets, read
+    -- off the window set. A note dest is a park window, and the columns its output draws in are the
+    -- display allocation's, so tv:freezeRect composes them on.
+    -- see design/laneless-derived-notes.md § The freeze claim
+    name = 'freeze rect: a note-dest host claims no note stream of its own',
     run = function(harness)
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
       addNote(h, { pitch = 64, lane = 2 })   -- covered by the window, but nothing is produced onto it
       injectArp(h, { fx = { arpUp[1], sine30[1] } })
+      t.truthy(#derivedNotes(h) > 0, 'fixture check: the arp did produce notes to claim lanes for')
 
       t.deepEq(h.tm:freezeRect('fxr-1'),
         { ppq = 0, dur = 240, chanLo = 1,
-          streams = { [0] = { [groups.streamId{ evType = 'note', key = 1 }] = true,
-                              [groups.streamId{ evType = 'pb' }]            = true } } },
-        'the lane the derived notes landed on plus the pb target, and lane 2 absent')
-    end,
-  },
-
-  {
-    name = 'freeze rect: a continuous-only host claims no note lane',
-    run = function(harness)
-      local h = harness.mk()
-      addNote(h, { fx = sine30 })
-      local uuid = h.tm:getChannel(1).onTake.notes[1].events[1].uuid
-
-      t.deepEq(h.tm:freezeRect(uuid),
-        { ppq = 0, dur = 240, chanLo = 1,
           streams = { [0] = { [groups.streamId{ evType = 'pb' }] = true } } },
-        'the host stays authored rather than becoming output, so its own lane is not in the rect')
+        'the pb target alone, the notes it emitted claiming nothing here')
     end,
   },
 

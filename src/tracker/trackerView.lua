@@ -3084,12 +3084,25 @@ end
 --contract: a stored global region; any other uuid is a silent no-op
 function tv:explodeRegion(uuid) return tm:explodeRegion(uuid) end
 
+--post: fresh result = the footprint a freeze-to-group mint claims; nil iff uuid hosts no chain
+--post: every member tv:freezeToGroup hands back lies inside the rect
+-- tm's continuous half plus one note stream per display column, so claim and ghosts share one allocation.
+-- displayLanes spans every channel reached, but freeze refuses global regions, so the unfiltered walk is exact.
+function tv:freezeRect(uuid)
+  local rect = tm:freezeRect(uuid)
+  if not rect then return nil end
+  for _, lane in pairs(tv:displayLanes(uuid)) do
+    rect.streams[0][groupsCore.streamId{ evType = 'note', key = lane }] = true
+  end
+  return rect
+end
+
 --contract: nil for a uuid that hosts no chain; 'raw' when a live group's footprint blocks it; else 'group'
 -- Not atomic: the whole point is a decline that opens no undo block.
 function tv:freezeMode(uuid)
   if not tm:freezeEligible(uuid) then return nil end
   -- One census walk publishes both maps, so an eligible uuid always has a rect.
-  return gm:rectConflict(tm:freezeRect(uuid)) and 'raw' or 'group'
+  return gm:rectConflict(tv:freezeRect(uuid)) and 'raw' or 'group'
 end
 
 --contract: freezeRegion's conversion, plus a stock gm group over its output
@@ -3097,7 +3110,7 @@ end
 function tv:freezeToGroup(uuid)
   -- Read the rect first: freezeRectByUuid is republished each rebuild from the census, so the
   -- conversion drops the host's own entry on its way out.
-  local rect    = tm:freezeRect(uuid)
+  local rect    = tv:freezeRect(uuid)
   local members = tm:freezeToGroup(uuid)
   -- An empty group is a rect that blocks future placements and outlines nothing.
   if not (members and next(members)) then return end

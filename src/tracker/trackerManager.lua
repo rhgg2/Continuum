@@ -1516,8 +1516,8 @@ function tm:freezeEligible(uuid)
   local frozen = windows.window(uuid)
   return frozen ~= nil and not freezeRefused(frozen, windows)
 end
---post: fresh result = the rect a freeze-to-group mint would claim; nil iff uuid hosts no chain
---post: every member tm:freezeToGroup hands back lies inside the rect
+--post: fresh result = a mint's continuous footprint (pb/cc only); nil iff uuid hosts no chain
+--post: (uuid's chain targets notes) → no note stream all the same: tv:freezeRect composes those
 --invariant: read off the last rebuild's settled census; computes nothing, stages nothing
 -- A clone per call: gm:markGroup stores the rect by reference and tm replaces its map each rebuild.
 function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r and util.deepClone(r) end
