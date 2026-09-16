@@ -739,7 +739,7 @@ runs it.
 1. **Externals** (`rebuildExternals`)
 1. **Sample stamp** (`stampSamples`)
 1. **Lane bounds** (`boundLanes`)
-1. **Note host clips and windows** (`clipNoteHosts`, `buildFxWindows`)
+1. **Note host clips and windows** (`onTakeFxHosts`, `buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)
 1. **PA dispatch** (`rebuildPA`)
 1. **Fx expansion** (`rebuildFx`)
@@ -856,16 +856,19 @@ chain removed, a freeze — has already landed in the document, so both halves
 of a lane answer to the document from here on. The lane pass then bounds every
 lane of every dirty channel (§ The lane pass).
 
-`clipNoteHosts` gathers each note host's clip off `endppqC`, the bound that
-pass wrote, on-take events and stash events alike. A region's span is authored,
-so only the note hosts are gathered. The fx window set is those clips plus
-the fx regions, each host entering as a degenerate one-note region.
+`onTakeFxHosts` names the on-take note hosts of every channel, each carrying its
+clip on `endppqC`, the bound the lane pass wrote. A region's span is authored,
+so only the note hosts are gathered. The census adds the stash's hosts and the
+fx regions to them, each host entering as a degenerate one-note region.
 
-One pass serves the whole pipeline. Parking moves a host between the halves
-of its lane and moves no window: the clip counts both halves, and a host
-keeps its uuid, span and targets across the move. Each reader asks the frame
-which half a host is in at its own moment — the park scan passes over the
-hosts already parked, and fx expansion runs those from their stash events.
+Parking moves a host between the halves of its lane and moves no window: the
+census counts both halves, and a host keeps its uuid, span and targets across
+the move. The stages each want one half, and call at their own moment rather
+than sharing the census's set — the park scan takes it as of its head, where a
+host already parked is the prior parked set's to carry or restore, and fx
+expansion calls afresh below the park stage, where a host parked this pass has
+left the set and one restored resolves to its live column event. Fx expansion
+runs the parked half from their stash events.
 
 `buildFxWindows` holds the set. Every stream a host parks takes the host's
 own span, so one window per host is the whole fact — channel, span, host
@@ -1316,7 +1319,7 @@ lane (§ Tail walk).
 
 `boundLanes` gives every authored event its lane bound, one channel at a time. It runs at the head,
 after the stash render and before the fx window census, walking each of the channel's lanes over the
-whole population of § Lane occupancy. `clipNoteHosts`, the grid and the tail walk read what it wrote,
+whole population of § Lane occupancy. `onTakeFxHosts`, the grid and the tail walk read what it wrote,
 off `endppqC`.
 
 The write obeys the renewal protocol of § Note-lane renewal. A column event takes its bound through
@@ -1342,7 +1345,7 @@ goes into a per-channel list of uuids, which both runs fill and the tail walk co
 states no lane bound of an authored note, so the list is how one reaches mm (§ What the walk visits,
 and what it emits). A parked event is not named, never having reached mm at all.
 
-One path walks a channel's columns, and the reason is host discovery. `clipNoteHosts` resolves each
+One path walks a channel's columns, and the reason is host discovery. `onTakeFxHosts` resolves each
 indexed fx host to its live column event through `index.colEvtFor(uuid)`, the seat stamp of
 § Incremental index reconciliation. A wholesale-dirty channel leaves the fx-host index unable to
 reach a live event, so `perHost` returns false the moment it meets an indexed host with none and
@@ -1351,8 +1354,9 @@ skipped.
 
 ## Fx window census
 
-`buildFxWindows` builds the pass's fx windows from two sources — authored `fxRegions` and the note
-host clips, which `clipNoteHosts` takes over both halves of every lane.
+`buildFxWindows` builds the pass's fx windows from three sources — authored `fxRegions`, the on-take
+note hosts `onTakeFxHosts` names, and the stash's own hosts, read off the frame's parked lists.
+The census is the one reader wanting both halves of a lane, so it is where they are put together.
 The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's event at once,
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out

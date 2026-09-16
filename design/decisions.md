@@ -4,6 +4,16 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-16** — The on-take fx hosts are asked for twice, at each stage's own moment, over one
+  union snapshot passed to three stages. `clipNoteHosts` gathered both halves of every lane and the
+  park scan and fx expansion then filtered the parked half straight back off, each against a parked
+  set read at its own moment — so the union's only true reader was the window census, which now puts
+  the halves together itself. What the union bought fx expansion was a host restored mid-pass, and it
+  bought it with the stale stash event where a second call resolves the live column event. The map's
+  values go with it: every clip was its own host's `endppqC`. This reinstates the two-call shape the
+  2026-09-01 entry describes, without `dirt.staleHosts` — what differs between the calls is the
+  frame's parked lists, which the park stage has already rewritten.
+
 - **2026-09-14** — `fxRealisedWindows` persists windows, over the per-target list the 2026-08-31
   entry kept for "the readers that scan one": only trackerView's column tagging still scanned one,
   and a `targets` lookup serves it better than matching an entry's evType and cc. `census()` is the

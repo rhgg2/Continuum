@@ -484,7 +484,7 @@ do
   -- (filtered at use); entries are live um records.
   function index.raw(chan) return rawIndex[chan] end
 
-  -- The maintained fx-host set for a channel (uuids of on-take .fx notes); clipNoteHosts reads it
+  -- The maintained fx-host set for a channel (uuids of on-take .fx notes); onTakeFxHosts reads it
   -- instead of rescanning columns.
   function index.fxHosts(chan) return fxHosts[chan] end
 
@@ -529,7 +529,7 @@ do
     end
   end
   -- fx-host membership rides the index turnover: set on insert of a .fx note, cleared on removal, so
-  -- clipNoteHosts never rescans columns to find hosts.
+  -- onTakeFxHosts never rescans columns to find hosts.
   local function setFxHost(evt)
     if evt.evType ~= 'note' or not evt.uuid then return end
     if evt.fx then

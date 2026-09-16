@@ -71,7 +71,7 @@ rather than a loss of data.
 
 > **gap** · tm · 2026-09-10
 
-Handing `clipNoteHosts` a window end that is a float, numerically
+Handing the fx-host census a window end that is a float, numerically
 equal to the integer it carried before, churned twenty pb seats on one
 fixture. That is why `projectEvent` writes no bound: a projected end
 arrives as a float, and seating it would move output that nothing

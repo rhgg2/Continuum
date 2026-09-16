@@ -688,16 +688,6 @@ local function parkedEvent(spec)
   return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
 end
 
--- Which hosts are off-take as of now: the park stage moves a host between the halves of its lane, so
--- each reader asks at its own moment. see docs/trackerManager.md § Note host clips and windows
-local function parkedUuids()
-  local parked = {}
-  for chan = 1, 16 do
-    for _, evt in ipairs(frame.channels[chan].parked.notes) do parked[evt.uuid] = true end
-  end
-  return parked
-end
-
 -- The lane pass over one channel: every authored event on every lane takes its bound from that
 -- lane's whole population. see docs/trackerManager.md § The lane pass
 --post: every authored event of the channel's lanes carries its lane bound on endppqC
@@ -741,7 +731,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see docs/generators.md § Emission is ownership
 
-local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, noteHostClips, pbLimCents, time,
+local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents, time,
                                  movedBounds)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
@@ -750,8 +740,6 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, noteHostCl
   -- The originals each host's chain parked, keyed by the host that parked each: events by
   -- reference, minted here and handed back for the realisation entries.
   local parkedByHost = {}
-  -- The prior parked set, read before renderUnion replaces the lists.
-  local parkedAtHead = parkedUuids()
 
   -- One predicate for all passes, answering with the host that parks the spec: a window covers it
   -- on the spec's own stream, or (note specs only) spec.fx parks itself. see docs/trackerManager.md § Region-replace parking
@@ -828,9 +816,10 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, noteHostCl
         end
       end
     end
-    -- On-take hosts only: a host already parked is the prior set's to carry or restore.
-    for host in pairs(noteHostClips) do
-      if dirt.has(host.chan) and generators.parksNotes(host) and not parkedAtHead[host.uuid] then
+    -- The set is on-take as of this stage's head, so a host already parked is absent from it:
+    -- the prior parked set's to carry or restore.
+    for host in pairs(onTakeHosts) do
+      if dirt.has(host.chan) and generators.parksNotes(host) then
         candidate(host, host.lane)
       end
     end
@@ -1331,7 +1320,7 @@ end
 -- The pass's fx windows, held once: one window per host -- authored region, on-take note or parked
 -- note -- and the per-target list a view over them. see docs/trackerManager.md § Fx window census
 --shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
-local function buildFxWindows(fxRegions, noteHostClips, time)
+local function buildFxWindows(fxRegions, onTakeHosts, time)
   local windows = {}
   -- Every window is minted here rather than taken by reference: a target set is no part of the
   -- document, and a stored region must not acquire one.
@@ -1347,7 +1336,14 @@ local function buildFxWindows(fxRegions, noteHostClips, time)
   -- Every fx host, on-take and parked alike, gets a window; sort order matches both halves
   -- of a lane so parking moves no entry. See docs/trackerManager.md § Fx window census.
   local noteHosts = {}
-  for host, clip in pairs(noteHostClips) do util.add(noteHosts, { host = host, endppq = clip }) end
+  for host in pairs(onTakeHosts) do util.add(noteHosts, { host = host, endppq = host.endppqC }) end
+  -- The parked half: a stashed host runs its chain off-take, and one this pass restores is here
+  -- until the park stage re-enters it. Only this census wants both halves; the stages take theirs.
+  for chan = 1, 16 do
+    for _, evt in ipairs(frame.channels[chan].parked.notes) do
+      if evt.fx then util.add(noteHosts, { host = evt, endppq = evt.endppqC }) end
+    end
+  end
   table.sort(noteHosts, function(a, b)
     local ha, hb = a.host, b.host
     if ha.chan ~= hb.chan then return ha.chan < hb.chan end
@@ -1361,18 +1357,20 @@ end
 
 ----- Rebuild Fx
 
---shape: clipNoteHosts -> { [event] = clipEndL }; each clip starts at its event's own onset
+--shape: onTakeFxHosts -> { [event] = true }; each host's lane bound rides its own endppqC
 --pre: the lane pass has run over every dirty channel, so each host carries its lane bound
---post: fresh result holds every fx host of every channel, the on-take events and the parked alike
-local function clipNoteHosts()
-  local clips = {}
+--post: fresh result holds every on-take fx host of every channel; parked hosts are not in it
+-- The park stage moves a host between the halves of its lane, so each reader calls at its own
+-- moment rather than sharing a snapshot. see docs/trackerManager.md § Note host clips and windows
+local function onTakeFxHosts()
+  local hosts = {}
 
   -- Column walk where no uuid can be resolved to an event: a wholesale-dirty channel.
   -- see docs/trackerManager.md § Lane occupancy
   local function walkChannel(chan)
     for _, col in ipairs(frame.channels[chan].onTake.notes) do
       for _, evt in ipairs(col.events) do
-        if evt.fx and util.isNote(evt) then clips[evt] = evt.endppqC end
+        if evt.fx and util.isNote(evt) then hosts[evt] = true end
       end
     end
   end
@@ -1386,46 +1384,38 @@ local function clipNoteHosts()
       if not parked[uuid] then
         local evt = index.colEvtFor(uuid)
         if not evt then return walkChannel(chan) end
-        clips[evt] = evt.endppqC
+        hosts[evt] = true
       end
     end
   end
 
   for chan = 1, 16 do
-    local hosts    = index.fxHosts(chan)
-    if hosts and next(hosts) then
+    local known = index.fxHosts(chan)
+    if known and next(known) then
       if dirt.wholesale(chan) then walkChannel(chan) else perHost(chan) end
     end
-
-    -- The parked half of the lane: a stashed host runs its chain off-take, and a host this pass
-    -- restores is here until the park stage re-enters it.
-    for _, evt in ipairs(frame.channels[chan].parked.notes) do
-      if evt.fx then clips[evt] = evt.endppqC end
-    end
   end
-  return clips
+  return hosts
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
 --contract: notesByHost is carried between passes, so the stage writes the channels it ran and
 -- leaves a frozen channel's lists standing
-local function rebuildFx(fxIn, noteHostClips, fxOutWindows, fxRegions, notesByHost,
+local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
 
-  -- noteHostClips' keys are every fx host; the frame's parked lists say which are off-take, run from
-  -- their stash events. The rest bucket by channel, (lane, ppq)-sorted. See § Fx window census.
-  local parkedNow = parkedUuids()
+  -- Asked again here, not carried from the census: the park stage has run since, so this is the
+  -- on-take set as of now -- a host it parked gone, one it restored resolved to its live column
+  -- event. Bucket by channel, (lane, ppq)-sorted. See § Fx window census.
   local fxHostsByChan = {}
-  for host in pairs(noteHostClips) do
-    if not parkedNow[host.uuid] then
-      local bucket = fxHostsByChan[host.chan]
-      if not bucket then bucket = {}; fxHostsByChan[host.chan] = bucket end
-      util.add(bucket, host)
-    end
+  for host in pairs(onTakeFxHosts()) do
+    local bucket = fxHostsByChan[host.chan]
+    if not bucket then bucket = {}; fxHostsByChan[host.chan] = bucket end
+    util.add(bucket, host)
   end
   for _, bucket in pairs(fxHostsByChan) do
     table.sort(bucket, function(a, b)
@@ -1607,11 +1597,11 @@ local function rebuildFx(fxIn, noteHostClips, fxOutWindows, fxRegions, notesByHo
     -- Note hosts. Only augment ones (continuous kinds) remain on-take -- a discrete-replace host
     -- was parked at 4.5 and runs from its parked event below. Derived notes ride the host lane.
     for _, evt in ipairs(fxHostsByChan[chan] or {}) do
-      util.add(hosts, hostFromNote(evt, noteHostClips[evt], evt.lane))
+      util.add(hosts, hostFromNote(evt, evt.endppqC, evt.lane))
     end
 
     -- Parked note hosts: note-host replace parks (like a region), so every hit is derived output.
-    -- Window is the parked event's realised extent, matching the bounds noteHostClips would apply.
+    -- Window is the parked event's realised extent, matching the bound the lane pass applied.
     for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
       -- A parked event inside a note-park window is region membership, not a note host (own-fx suppressed).
 
@@ -3054,15 +3044,17 @@ function rebuild.pipeline(sources, time)
   -- readers of them; a clean channel carries its columns and parked lists unchanged. What it moves it names, chan -> uuids, for the wire pass. see docs/trackerManager.md § What the walk visits
   local movedBounds = {}
   for chan = 1, 16 do if dirt.has(chan) then boundLanes(chan, time, movedBounds) end end
-  local noteHostClips = clipNoteHosts()
+  -- The on-take fx hosts as of the census; the park stage below moves the halves, so rebuildFx
+  -- asks again rather than taking this forward.
+  local onTakeHosts = onTakeFxHosts()
 
-  local fxOutWindows = buildFxWindows(sources.fxRegions, noteHostClips, time)
+  local fxOutWindows = buildFxWindows(sources.fxRegions, onTakeHosts, time)
 
   local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, fxInWindows,
-                                             noteHostClips, pbRangeCents, time, movedBounds)  -- park covered, carry/restore prior
+                                             onTakeHosts, pbRangeCents, time, movedBounds)  -- park covered, carry/restore prior
   rebuildPA(time)  -- project PAs into settled note columns (each spliced in ppq order)
 
-  local fxOut = rebuildFx(fxIn, noteHostClips, fxOutWindows, sources.fxRegions,
+  local fxOut = rebuildFx(fxIn, fxOutWindows, sources.fxRegions,
                           fxNotesByHost, pbRangeCents, time)  -- fx expansion: derived notes/CCs
 
   rebuildTails(fxOut.notes, fxOut.deferredWrite, time, movedBounds)  -- unified tail/onset walk + atomic note commit
