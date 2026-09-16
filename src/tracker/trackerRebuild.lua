@@ -80,8 +80,6 @@ local function projectEvent(evt, chan, time)
     evt.ppq = evt.ppqL
   end
   if evt.endppq ~= nil then
-    -- endppq shows the authored ceiling, and an event carrying none takes its raw end projected.
-    -- The lane bound is the lane pass's to write. see docs/trackerManager.md § Lane occupancy
     evt.endppq = evt.endppqL or time:toLogical(chan, evt.endppq)
   end
   evt.ppqL, evt.endppqL = nil, nil
@@ -91,9 +89,9 @@ end
 local function mmBatch()
   local deletes, assigns, adds = {}, {}, {}
   return {
-    delete  = function(evt)                util.add(deletes, evt) end,
-    assign  = function(evt, update)        util.add(assigns, { evt = evt, update = update }) end,
-    add     = function(evt)                util.add(adds, evt) end,
+    delete  = function(evt)         util.add(deletes, evt) end,
+    assign  = function(evt, update) util.add(assigns, { evt = evt, update = update }) end,
+    add     = function(evt)         util.add(adds, evt) end,
     commit  = function()
       if #deletes + #assigns + #adds == 0 then return end
       local touched = {}
@@ -179,7 +177,7 @@ end
 ----- Rebuild internals
 
 -- Partition mm notes stamped/external, write internal columns, reseat stale-swing.
--- Returns external notes + the per-channel fx notes on the takes. see docs/trackerManager.md § Partition and internal lanes
+-- see docs/trackerManager.md § Partition and internal lanes
 local function rebuildInternals(time)
   local internal, external = {}, {}
   local fxInNotes = frame.newChannels()
@@ -190,7 +188,7 @@ local function rebuildInternals(time)
       if not dirt.wholesale(chan) then exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
       for _, raw in mm:notesRaw(chan) do
         if raw.derived then
-          util.add(fxInNotes[chan], columnEvent(raw))
+          util.bucket(fxInNotes[chan], raw.derived, columnEvent(raw))
         elseif dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
           local note = columnEvent(raw)
           if rawDivergesFromLogical(note, time) then util.add(external, note)
@@ -226,8 +224,7 @@ local function rebuildInternals(time)
     end
     index.stampColEvt(note)
   end
-  -- Raw and logical onset order diverge under swing or an authored swap, so only the lanes this pass
-  -- appended to can have landed disordered; the splices above stay ordered.
+
   for col in pairs(disordered) do frame.orderColumn(col) end
   swingWrites.commit()
 
@@ -1552,20 +1549,11 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     end
 
     -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds keeps
-    -- its output verbatim -- notes self-match by fxKey, seats re-feed the reconcile. see design § phase 5
+    -- its output verbatim -- notes withhold from the reconcile, seats re-feed it. see design § phase 5
     local gated = not dirt.wholesale(chan)
-    local keptById
-    local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
+    local keptFx     = {}   -- identity set: derived specs re-added verbatim, already settled last pass
+    local keptHostId = {}   -- and the hosts that re-added them, the grain the reconcile withholds at
     local seeded, emitScope = {}, {}
-    -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
-    -- fxInNotes walk to the first keep.
-    local function keptFor()
-      if not keptById then
-        keptById = {}
-        for _, kept in ipairs(fxIn.notes[chan]) do util.bucket(keptById, kept.derived, kept) end
-      end
-      return keptById
-    end
     -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
     -- emission drops its own remainder.
     local function keepable(host)
@@ -1577,7 +1565,8 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     end
     local function runOrKeep(host)
       if gated and not seeded[host] and keepable(host) then
-        for _, kept in ipairs(keptFor()[host.id] or {}) do
+        keptHostId[host.id] = true
+        for _, kept in ipairs(fxIn.notes[chan][host.id] or {}) do
           util.add(predicted, kept); keptFx[kept] = true
         end
         -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
@@ -1692,20 +1681,27 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
 
     for _, host in ipairs(hosts) do runOrKeep(host) end
 
-    -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
-    -- fxOut.deferredWrite. fxOut.notes holds the predicted specs; the tail walk clips them in place.
+    -- Existence reconcile stamps rerun specs with the mm handle + realised end.
+    -- Kept hosts are withheld from both sides; see docs/trackerManager.md § The host gate.
+    local existing, rerun = {}, {}
+    for id, produced in pairs(fxIn.notes[chan]) do
+      if not keptHostId[id] then
+        for _, evt in ipairs(produced) do util.add(existing, evt) end
+      end
+    end
+    for _, spec in ipairs(predicted) do if not keptFx[spec] then util.add(rerun, spec) end end
 
-    diffEvents(fxIn.notes[chan], predicted, fxOut.deferredWrite,
-      -- baseVoice is keyed: a host moving between lane 1 and elsewhere flips it with every other
-      -- term unchanged, and a kept note would leave stale metadata seated.
+    diffEvents(existing, rerun, fxOut.deferredWrite,
+      -- baseVoice and lane are both keyed for reasons the fields alone don't show;
+      -- see docs/trackerManager.md § Fx expansion.
       function(evt)
         return util.key(
-          evt.derived, evt.ppq, evt.endppqL or 0,
+          evt.derived, evt.ppq, evt.endppqL or 0, evt.lane,
           evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0,
           evt.intentCents, evt.baseVoice)
       end,
       -- copy the matched note's mm handle + realised end onto the spec, so a
-      -- kept fxNote is re-clipped in place by the tail walk, not re-added.
+      -- re-emitted fxNote is re-clipped in place by the tail walk, not re-added.
       function(spec, evt)
         spec.uuid, spec.realised, spec.endppq = evt.uuid, evt.realised, evt.endppq
       end)

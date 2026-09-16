@@ -463,6 +463,38 @@ return {
   },
 
   {
+    -- A pattern kind stamps whatever its body holds, so a doubled voice -- the same pitch authored on
+    -- two of a chord's lanes -- emits a pair alike in every field the existence reconcile keys except
+    -- lane. Under a region the allocator hands the twin its own lane and both must seat. Under a note
+    -- host they would share the host's lane and collapse to one, which is right: a lane holds one seat.
+    name = 'a region emitting twin hits seats both -- lane is what tells them apart',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.twin = {
+        expand = function(stream)
+          local ppq, endppq = stream.window[1], stream.window[2]
+          return { notes = {
+            { ppq = ppq, endppq = endppq, pitch = 60, vel = 100, detune = 0 },
+            { ppq = ppq, endppq = endppq, pitch = 60, vel = 100, detune = 0 },
+          }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'Twin', defaults = {}, fields = {},
+      }
+      injectRegion(h, { fx = { { kind = 'twin' } } })
+      local ns = derivedNotes(h)
+      t.eq(#ns, 2, 'the allocator lanes the twin apart, and a first pass adds both outright')
+      t.deepEq(field(ns, 'lane'), { 1, 2 }, 'each hit takes a lane of its own')
+      -- The reconcile only has work on a pass that re-runs the region and meets the pair already
+      -- seated -- so dirty the channel with a note the kind ignores (replace parks it off-take, and
+      -- the twins' lanes are unmoved). Keyed alike, one seat would answer for both predicted hits
+      -- and the other would be kept by nobody, so it would be swept.
+      addNote(h, { pitch = 72, lane = 4 })
+      generators.kinds.twin = nil
+      t.deepEq(derivedNotes(h), ns, 'a re-run pass reconciles each onto its own seat, sweeping neither')
+    end,
+  },
+
+  {
     name = 'replace: arp samples the playing notes continuously, with no collision nudge',
     run = function(harness)
       local h = harness.mk()

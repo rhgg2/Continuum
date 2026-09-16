@@ -18,10 +18,17 @@
    notes joining the tail walk's pitch dimension.
 4. **Phase 4 — Laneless emission** (§ The derived note record) — `lane` off the
    emitted spec, `noteLive`, `fxNotesByHost` and the mm metadata;
-   `allocateRegionLanes` retires with it.
+   `allocateRegionLanes` retires with it. Owes § Open's twin-hit question an
+   answer: the existence reconcile keys `lane`, and
+   `tm_fx_region_spec :: a region emitting twin hits seats both` fails when the
+   term has nothing left to name.
 5. **Phase 5 — Keep by omission** (§ Keep by omission) — the derived existing
-   set gathered per touched host window, as `buildCcExistingInWindows` does,
-   retiring the fx pass's explicit keep branch for notes.
+   set gathered per touched host window, as `buildFxInCcsInWindows` does,
+   retiring the fx pass's explicit keep branch for notes. The existing-side half
+   landed early on 2026-09-16, at bucket rather than window grain: `fxIn.notes`
+   arrives bucketed by producing host and a kept host's bucket is withheld, so
+   the reconcile already passes over a kept host. What remains is the per-window
+   gather and retiring `runOrKeep`.
 
 Sequencing note: the display lane lands before lanelessness so no frame draws
 ghosts or mints a freeze rect without a column to put them in; laneless

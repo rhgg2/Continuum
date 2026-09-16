@@ -75,3 +75,5 @@ Landed. The model stands in `docs/tuning.md` § Intent vs realisation and
 1. What a memberless host emits. The base-voice test reads the inbound membership, so a region covering nothing emits no base voice. A generator stamping the field without a member to inherit it from leaves its output outside the pitchbend hold scope that its detune needs.
 
 1. Whether authored notes carry `baseVoice` too, which would retire the lane-1 monopoly and leave the lane a display coordinate throughout.
+
+1. What tells two identical hits from one host apart once the lane is gone. A pattern kind stamps whatever its body holds, so a doubled voice emits a pair alike in every field the existence reconcile keys, and the lane the region allocator hands each is all that separates them today. A note host's hits share its lane and collapse to one seat already, which is right — a lane holds one seat — but a laneless pair has no such seat to collapse onto.

@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-16** — The fx note existence reconcile withholds a kept host instead of self-matching
+  it, and keys `lane`. A kept host's specs stood on both sides of `diffEvents` keying to themselves,
+  and finding them cost a walk over the channel's derived notes; `fxIn.notes` now arrives bucketed
+  by producing host, so keeping is a lookup and withholding a skipped bucket, and an unclaimed
+  bucket is the orphan sweep for free. That is phase 5's existing-side half of
+  laneless-derived-notes, early and at bucket rather than window grain. `lane` joins the key because
+  `allocateRegionLanes` alone separates two identical hits from one host -- which a pattern kind
+  stamping a doubled voice emits -- and without it one seat answered for both and the other was
+  swept on the next pass that re-ran the host. A note host's hits share its lane and still collapse,
+  which is right. Laneless emission retires that discriminator, so the term is phase 4's to answer.
+
 - **2026-09-16** — The on-take fx hosts are asked for twice, at each stage's own moment, over one
   union snapshot passed to three stages. `clipNoteHosts` gathered both halves of every lane and the
   park scan and fx expansion then filtered the parked half straight back off, each against a parked

@@ -712,10 +712,10 @@ Every write one stage makes into another's records belongs to reauthoring, and
 the order carries dependencies the signatures do not state. The specs `fxOut`
 carries in `fxOut.notes` are the same tables the tail walk takes as `extras` and
 writes raw onsets and clipped ends into, and `rebuildPbs` reads the moved
-positions, so tails run before pbs. `rebuildInternals` mints `fxIn.notes`,
-and `diffEvents`'s keep path stamps `uuid`, `realised` and `endppq` onto those
-same tables seven stages later; `rebuildPCs` writes `sampleShadowed` into an fx
-spec.
+positions, so tails run before pbs. `rebuildInternals` mints `fxIn.notes`, and a
+kept host's specs ride out of it verbatim into `fxOut.notes`, so the tail walk
+clips ends into the very tables the partition minted, eight stages on;
+`rebuildPCs` writes `sampleShadowed` into an fx spec.
 
 The head snapshot takes writes the same way: `rebuildExtraColumns` grows
 `extras[i].notes` on the snapshot's own table, and `rebuildPbs` reads
@@ -759,6 +759,10 @@ columns to reach it — the tail walk clips its note-off, so it can never
 overlap. Stale-swing internals rederive `raw` from `ppqL` under the new
 swing here (`docs/timing.md` § Rebuild rule). Externals are deferred to
 § Externals.
+
+`rebuildInternals` also buckets the derived fx notes on the takes by
+producing host, per channel — the grain `rebuildFx` reads them at, on
+both its keep path and its existence reconcile.
 
 Internal events are stamped (`ppqL ~= nil`) AND have raw ppq consistent
 with `fromLogical(ppqL, delay)`. The main rebuild flows them branchlessly.
@@ -939,6 +943,13 @@ to the absorber pass. The note add/del leaves `rebuildFx` staged but
 uncommitted (`fxOut.deferredWrite`); the tail walk adds its clips to that same
 batch and commits it, so a fresh spec reaches mm already clipped.
 `fxOut.notes` (the predicted set) feeds the tail walk and PC synthesis. See `docs/generators.md` § Offline continuous realisation.
+
+The reconcile key includes `baseVoice`: a host moving between lane 1 and
+elsewhere flips it with every other term unchanged, so without it a kept
+note would leave stale metadata seated. It includes `lane` too, since
+`allocateRegionLanes` separates same-span same-pitch hits by lane alone;
+absent that term the pair collapses to one key and the reconcile seats one
+note where two were emitted.
 
 ### Tail walk
 
@@ -1426,10 +1437,15 @@ The leading flush is a no-op when nothing is staged, at the price of one empty `
 
 ## The host gate
 
-Under seed dirt a host whose window no seed touches does not run. Its
-derived specs come back verbatim from the last pass (`keptFor`), and
-`diffEvents` self-matches them by `fxKey`, so a kept host writes nothing
-to mm and re-derives nothing.
+Under seed dirt a host whose window no seed touches does not run. Its derived
+specs come back verbatim from the last pass, off the `fxIn.notes` bucket its
+uuid names, and the existence reconcile never meets them: the bucket is
+withheld from the existing side and the specs from the predicted one, so a kept
+host writes nothing to mm and re-derives nothing. `rebuildInternals` buckets
+`fxIn.notes` by producing host as it mints them, so keeping is a lookup and
+withholding a skipped bucket -- neither costs a pass over the channel's derived
+notes. A bucket no current host claims is an orphan, its host deleted or parked
+away, and falls in to be swept.
 
 Keeping is decided against the emit scope, not by the kind of chain. A
 continuous host is keepable when no target's emit scope intersects its
@@ -1690,7 +1706,7 @@ them and gathers them into one entry per chain at the pipeline tail;
 emission. Emission is dirt-gated — a host outside the dirty interval is
 kept rather than re-run, and a kept host emits no record — so a target set
 read off it would vanish on the first edit elsewhere in the channel and return
-with the dirt. The note half can ride the emission because the reconcile
+with the dirt. The note half can ride the emission because the keep path
 re-adds a kept host's specs verbatim; nothing re-adds its curve. What does
 not blink is `chainTargets`, which already names a target per continuous cc
 dest and one for pb, blind to dirt and blind to bypass, so the target set is
