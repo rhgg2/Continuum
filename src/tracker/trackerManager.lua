@@ -451,6 +451,15 @@ do
 
   ----- Order
 
+  -- Emission order, the total order's last term: breaks ties between hits alike in every other term.
+  -- Held beside the record, not on it -- a fact about one pass, not the derived spec.
+  local emissionOrd = setmetatable({}, { __mode = 'k' })
+
+  --post: rec sorts after every record stamped below ord on its channel, and before every one above
+  function index.stampEmission(rec, ord) emissionOrd[rec] = ord end
+  --post: result = rec's emission ordinal; 0 for a record no generator emitted
+  function index.emissionOf(rec) return emissionOrd[rec] or 0 end
+
   -- Total order for the raw working set; every list here holds it. See docs/trackerManager.md § Update manager (um).
   function index.order(a, b)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
@@ -458,7 +467,8 @@ do
     if aL ~= bL then return aL < bL end
     if (a.derived or false) ~= (b.derived or false) then return not a.derived end
     if (a.lane or 0) ~= (b.lane or 0) then return (a.lane or 0) < (b.lane or 0) end
-    return (a.pitch or 0) < (b.pitch or 0)
+    if (a.pitch or 0) ~= (b.pitch or 0) then return (a.pitch or 0) < (b.pitch or 0) end
+    return index.emissionOf(a) < index.emissionOf(b)
   end
 
   ----- Read surface
@@ -1323,6 +1333,52 @@ local function groupMembers(frozen, entries, promotedUuids)
   return members
 end
 
+-- The lane a frozen note is authored into: lowest column free of overlap over the channel's authored
+-- population, less cells this host parked. Mirrors tv:displayLanes'; see docs/trackerView.md § Ghost sampling.
+--pre: promoted holds the host's whole output on chan; ourParked is the cells it took off the take
+--post: fresh result = { [note] = its lane }, one entry per note handed in
+local function promotionLanes(chan, promoted, ourParked)
+  local occupied, reach = {}, {}
+  local function occupy(lane, lo, hi)
+    util.bucket(occupied, lane, { lo, hi })
+    reach[lane] = math.max(reach[lane] or hi, hi)
+  end
+  local function laneFree(lane, lo, hi)
+    if reach[lane] == nil or lo >= reach[lane] then return true end
+    for _, span in ipairs(occupied[lane]) do
+      if lo < span[2] and hi > span[1] then return false end
+    end
+    return true
+  end
+  local channel = frame.channels[chan]
+  for lane, col in ipairs(channel.onTake.notes) do
+    for _, evt in ipairs(col.events) do
+      if util.isNote(evt) and not evt.derived then occupy(lane, evt.ppq, evt.endppqC or evt.endppq) end
+    end
+  end
+  -- A neighbour's parked cell still holds its column: the ghosts read it as occupied and the frozen
+  -- note must not be authored on top of it. Only this host's own cells step aside, and they go.
+  for _, cell in ipairs(channel.parked.notes or {}) do
+    if not ourParked[cell] then occupy(cell.lane, cell.ppq, cell.endppqC or cell.endppq) end
+  end
+  -- Logical-span order, which is the order the ghosts were allocated in. Two notes it cannot
+  -- separate are alike in every term the allocation reads, so which takes which lane is no question.
+  local ordered = {}
+  for _, note in ipairs(promoted) do util.add(ordered, note) end
+  table.sort(ordered, function(a, b)
+    if a.ppqL ~= b.ppqL then return a.ppqL < b.ppqL end
+    return a.pitch < b.pitch
+  end)
+  local laneOf = {}
+  for _, note in ipairs(ordered) do
+    local lane = 1
+    while not laneFree(lane, note.ppqL, note.endppqL) do lane = lane + 1 end
+    occupy(lane, note.ppqL, note.endppqL)
+    laneOf[note] = lane
+  end
+  return laneOf
+end
+
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
 -- windows all convert to authored form in one flush.
 local function freezeRegion(uuid, toGroup)
@@ -1388,15 +1444,18 @@ local function freezeRegion(uuid, toGroup)
   end
 
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
-  -- metadata, so each rides mm's lockless path; the note keeps its uuid, lane and detune.
+  -- metadata, so each rides mm's lockless path; the note keeps its uuid and detune.
   local promoted = {}
   for _, note in ipairs(index.raw(frozen.chan).notes) do
     if note.derived == uuid then util.add(promoted, note) end
   end
-  -- The bound the walk clipped for it, restated as the note's own ceiling: it sounded to its host's
-  -- window, and authored it would be re-bounded by the lane rule that never held it.
+  local ourParked = {}
+  for _, cell in ipairs((fxRealisationByUuid[uuid] or {}).parked or {}) do ourParked[cell] = true end
+  local laneOf = promotionLanes(frozen.chan, promoted, ourParked)
+  -- The lane the ghost drew it in, restated as the note's own ceiling: it sounded to its host's window,
+  -- not the lane rule that never held it as authored.
   for _, note in ipairs(promoted) do
-    stager.assign(note, { derived = util.REMOVE,
+    stager.assign(note, { derived = util.REMOVE, lane = laneOf[note],
                           endppq = math.min(note.endppqL, settled.endppq) })
   end
   -- Captured before the flush: the rebuild that follows refiles these entries, and the uuid is what

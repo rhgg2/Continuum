@@ -26,7 +26,7 @@ local EPS = 1
 
 -- The one map that outlives a pass: the fx stage writes only the channels it ran, keyed by host, so
 -- the overlay draws one chain's own. Its lists are built from copies of the fx specs.
---shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, lane, ppq, endppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
+--shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, ppq, endppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
 --   ppq/endppq are the logical span; derived is the producing region/host uuid; logical-onset order
 local fxNotesByHost = {}
 
@@ -1204,13 +1204,6 @@ local function appendLaneEvents(list, startL, out)
   end
 end
 
--- What holds a lane on the take, which a host's own output stands in for once it parks.
-local function onTakeOnLane(chan, lane, startL)
-  local events = {}
-  appendLaneEvents(frame.channels[chan].onTake.notes[lane].events, startL, events)
-  return events
-end
-
 -- A lane's whole authored population, on-take and parked alike: what sounds there.
 -- see docs/trackerManager.md § Lane occupancy
 local function authoredOnLane(chan, lane, startL)
@@ -1219,10 +1212,9 @@ local function authoredOnLane(chan, lane, startL)
   return events
 end
 
--- One lane walk over an ordered population: each event sounds to the next onset or its own ceiling.
--- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
---pre: eventsOnLane(chan, lane, startL) returns the lane's population in ppq order
-local function eachLaneSpan(chan, startL, endL, eventsOnLane, fn)
+-- One lane walk over the channel's whole authored population: each event sounds to the next onset
+-- or its own ceiling. Cover, not scan: see docs/trackerManager.md § Span-covered fx scans.
+local function eachLaneSpan(chan, startL, endL, fn)
   for laneIdx in ipairs(frame.channels[chan].onTake.notes) do
     -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
     -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
@@ -1232,7 +1224,7 @@ local function eachLaneSpan(chan, startL, endL, eventsOnLane, fn)
       local hi   = math.min(ceil, nextOn)
       if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
     end
-    for _, evt in ipairs(eventsOnLane(chan, laneIdx, startL)) do
+    for _, evt in ipairs(authoredOnLane(chan, laneIdx, startL)) do
       if pending then sound(evt.ppq) end
       if evt.ppq >= endL then pending = nil; break end
       pending = evt
@@ -1244,7 +1236,7 @@ local function membersOf(chan, startL, endL)
   local out = {}
   -- The lane rides along: a monophonic stage (portamento) glides the lane-1 voice alone, and a
   -- member's column is the only place that is knowable.
-  eachLaneSpan(chan, startL, endL, authoredOnLane, function(laneIdx, lo, hi, evt)
+  eachLaneSpan(chan, startL, endL, function(laneIdx, lo, hi, evt)
     util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi, lane = laneIdx }))
   end)
   return out
@@ -1273,36 +1265,6 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
   local ccs = {}
   for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
   return pas, ccs, ats, curves.slice(pbBase, startL, endL)
-end
--- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
--- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
-local function allocateRegionLanes(chan, startL, endL, derived, emitted)
-  -- reach tracks each lane's furthest span end, so a start past it clears the lane without
-  -- scanning occupied -- the common case, since region tiling emits notes in span order.
-  local occupied, reach = {}, {}
-  local function occupy(lane, lo, hi)
-    util.bucket(occupied, lane, { lo, hi })
-    reach[lane] = math.max(reach[lane] or hi, hi)
-  end
-  local function laneFree(lane, lo, hi)
-    if reach[lane] == nil or lo >= reach[lane] then return true end
-    for _, span in ipairs(occupied[lane]) do
-      if lo < span[2] and hi > span[1] then return false end
-    end
-    return true
-  end
-  eachLaneSpan(chan, startL, endL, onTakeOnLane, occupy)
-  -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
-  -- (the host itself is off-take, so eachWindowNote no longer sees it).
-  for _, spec in ipairs(emitted) do
-    if spec.ppqL < endL and spec.endppqL > startL then occupy(spec.lane, spec.ppqL, spec.endppqL) end
-  end
-  for _, spec in ipairs(derived) do
-    local lane = 1
-    while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
-    occupy(lane, spec.ppqL, spec.endppqL)
-    spec.lane = lane
-  end
 end
 -- A parked event as a generator stream note: it sounds to its render clip, never to the authored
 -- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
@@ -1405,7 +1367,7 @@ end
 local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
-  -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
+  -- Columns must be ppq-ordered here (eachWindowNote / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
 
   -- Asked again here, not carried from the census: the park stage has run since, so this is the
@@ -1530,13 +1492,12 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
                         mode = generators.chainDestType(host.fx, target) })
         end
       end
-      -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region hosts (lane
-      -- unset) defer to batch lane allocation below; note hosts ride their own lane inline.
+      -- Only a note-dest stage's chain emits (parksNotes mirrors this). A derived note is off-column
+      -- whoever hosts it, so region and note host emit down the one path.
       if not ownsNotes then return end
-      local regionNotes = host.lane == nil and {} or nil
       for _, hit in ipairs(stream.notes) do
-        util.add(regionNotes or predicted, {
-          evType = 'note', chan = chan, lane = host.lane, derived = host.id,
+        util.add(predicted, {
+          evType = 'note', chan = chan, derived = host.id,
           pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
           intentCents = hit.intentCents, baseVoice = hit.baseVoice,
           delay = host.delay or 0, sample = host.sample,
@@ -1544,10 +1505,6 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
           ppq    = time:fromLogical(chan, hit.ppq,    host.delayPpq),
           endppq = time:fromLogical(chan, hit.endppq, host.delayPpq),
         })
-      end
-      if regionNotes then
-        allocateRegionLanes(chan, startL, endL, regionNotes, predicted)
-        for _, spec in ipairs(regionNotes) do util.add(predicted, spec) end
       end
     end
 
@@ -1698,7 +1655,7 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
       -- Logical seat: docs/trackerManager.md § Fx expansion covers the key choice.
       function(evt)
         return util.key(
-          evt.derived, evt.ppqL, evt.endppqL or 0, evt.lane,
+          evt.derived, evt.ppqL, evt.endppqL or 0,
           evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0,
           evt.intentCents, evt.baseVoice)
       end,
@@ -1708,22 +1665,28 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
         spec.uuid, spec.realised, spec.endppq = evt.uuid, evt.realised, evt.endppq
       end)
 
+    -- Where the pass's emission order is stated, spec and copy alike: off the columns it is the only
+    -- thing separating two hits a generator emitted alike, and every order below reads it from here.
     local fxNotes = {}
-    for _, spec in ipairs(predicted) do
-      util.add(fxOut.notes[chan], { evt = spec, lane = spec.lane, baseVoice = spec.baseVoice,
+    for i, spec in ipairs(predicted) do
+      index.stampEmission(spec, i)
+      util.add(fxOut.notes[chan], { evt = spec, baseVoice = spec.baseVoice,
                                        kept = keptFx[spec] or nil })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
-      util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
-                          endppq = spec.endppqL,
-                          pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
-                          intentCents = spec.intentCents, baseVoice = spec.baseVoice,
-                          delay = spec.delay, derived = spec.derived })
+      local copy = { evType = 'note', chan = chan, ppq = spec.ppqL,
+                     endppq = spec.endppqL,
+                     pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
+                     intentCents = spec.intentCents, baseVoice = spec.baseVoice,
+                     delay = spec.delay, derived = spec.derived }
+      index.stampEmission(copy, i)
+      util.add(fxNotes, copy)
     end
-    -- One sort per rebuild against many windowed reads; lane then pitch break onset collisions stably.
+    -- One sort per rebuild against many windowed reads; pitch then emission order break onset
+    -- collisions. table.sort is unstable, so the ordinal is what makes the order total.
     table.sort(fxNotes, function(a, b)
       if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-      if a.lane ~= b.lane then return a.lane < b.lane end
-      return a.pitch < b.pitch
+      if a.pitch ~= b.pitch then return a.pitch < b.pitch end
+      return index.emissionOf(a) < index.emissionOf(b)
     end)
     -- Bucketed after the sort, so each host's list inherits the onset order.
     local byHost = {}
@@ -1946,7 +1909,7 @@ local function linearTails(chan, notes, extras, time, res, windows, clampWrites,
 
     -- The walk's own dirt: a nudged lane-1 onset seeds every absorber seat up to the next lane-1
     -- onset, for pbs to consume later this pass. see design § The widen and the emission are the same fact
-    if nudged[e] and e.lane == 1 then
+    if nudged[e] and isAuthored(e) and e.lane == 1 then
       local nextOnLane = laneNext(e)
       util.add(emitted, { uuid = e.uuid, verb = 'nudge', evType = 'note', ppq = e.ppq, ppqL = e.ppqL,
                           lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
@@ -2014,6 +1977,9 @@ end
 -- this pass nudged it) -- settlement's cascade successor. see design § Nudge probes stop at the tick
 local function nextSamePitch(indexList, extras, node, origPpq)
   local key = { ppq = origPpq, ppqL = node.ppqL, derived = node.derived, lane = node.lane, pitch = node.pitch }
+  -- The probe stands in for node in every term of the order, emission included: without it two hits
+  -- emitted alike tie, and the second is no successor of the first for the cascade to separate.
+  index.stampEmission(key, index.emissionOf(node))
   local best
   for i = util.firstAtOrAfter(indexList, origPpq), #indexList do
     local rec = indexList[i]
@@ -2132,7 +2098,7 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
   local emitted = {}
   for e in pairs(bound) do
     local pitchNext = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
-    if nudged[e] and e.lane == 1 then
+    if nudged[e] and isAuthored(e) and e.lane == 1 then
       local nextOnLane = laneNext(e)
       util.add(emitted, { uuid = e.uuid, verb = 'nudge', evType = 'note', ppq = e.ppq, ppqL = e.ppqL,
                           lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
@@ -2766,7 +2732,7 @@ end
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the writes batch {delete(event), add(spec)}
---contract: marks sampleShadowed=true on the event or the spec of records lost to lane priority
+--contract: marks sampleShadowed=true on the event or the spec of records lost to the onset's rank
 --contract: seedSpans (from pcSeedSpans) narrow existing to its logical spans; nil = whole channel
 --invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
@@ -2781,7 +2747,13 @@ local function reconcilePCsForChan(chan, records, writes, seedSpans)
 
   local winners = {}
   for _, g in pairs(groups) do
-    table.sort(g, function(a, b) return a.lane < b.lane end)
+    -- Authored records rank by lane, derived output after them all: a derived note holds no lane,
+    -- being off-column. table.sort is unstable, so `ord` is what makes the rank total.
+    table.sort(g, function(a, b)
+      local aLane, bLane = a.lane or math.huge, b.lane or math.huge
+      if aLane ~= bLane then return aLane < bLane end
+      return a.ord < b.ord
+    end)
     util.add(winners, g[1])
     for i = 2, #g do
       local lost = g[i]
@@ -2837,10 +2809,16 @@ local function rebuildPCs(fxNotes, time)
     local seedSpans = pcSeedSpans(chan, fxNotes[chan])
     spansByChan[chan] = seedSpans
     local records = {}
+    -- The gather ordinal, and authored notes are gathered first: it is the rank's tie-break under
+    -- the lane, so a laneless derived record falls after every authored one.
+    local function addRecord(rec)
+      rec.ord = #records + 1
+      util.add(records, rec)
+    end
     local function recordNote(entry)
       if isAuthored(entry) then
-        util.add(records, { ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
-                            sample = entry.sample, evt = entry.colEvt })
+        addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
+                   sample = entry.sample, evt = entry.colEvt }
       end
     end
     if seedSpans then
@@ -2852,7 +2830,7 @@ local function rebuildPCs(fxNotes, time)
       local n = w.evt
       if not seedSpans or spans.contains(seedSpans.raw, n.ppq) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
-        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, spec = n })
+        addRecord{ ppq = n.ppq, ppqL = n.ppqL, sample = n.sample or 0, spec = n }
       end
     end
     reconcilePCsForChan(chan, records, pcWrites, seedSpans)

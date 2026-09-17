@@ -140,17 +140,17 @@ local function injectArp(h, over)
 end
 
 -- Derived notes the region produced -- routed out of columns, tagged with the region
--- uuid. Sorted by onset then lane; identity swing, so ppq == the logical step time.
+-- uuid. Sorted by onset then pitch; identity swing, so ppq == the logical step time.
 local function derivedNotes(h)
   local out = {}
   for _, n in ipairs(h.fm:dump().notes) do
     if n.evType == 'note' and n.derived == 'fxr-1' then
-      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, lane = n.lane, vel = n.vel }
+      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, vel = n.vel }
     end
   end
   table.sort(out, function(a, b)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-    return a.lane < b.lane
+    return a.pitch < b.pitch
   end)
   return out
 end
@@ -159,19 +159,30 @@ end
 -- landed on. see docs/trackerManager.md § Channel & column model
 local function expanded(uuid, chan) return util.key(uuid, chan) end
 
--- The notes one host put on one channel, sorted by onset then lane. A global region's hosts
+-- The notes one host put on one channel, sorted by onset then pitch. A global region's hosts
 -- differ per channel, so the read names both.
 local function derivedFor(h, chan, uuid)
   local out = {}
   for _, n in ipairs(h.fm:dump().notes) do
     if n.evType == 'note' and n.chan == chan and n.derived == uuid then
-      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, lane = n.lane }
+      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch }
     end
   end
   table.sort(out, function(a, b)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-    return a.lane < b.lane
+    return a.pitch < b.pitch
   end)
+  return out
+end
+
+-- Every derived note on the take whatever host emitted it, ppq-ascending -- the whole records, so
+-- a field's absence reads as absence rather than as a projection's gap.
+local function allDerived(h)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.derived then out[#out + 1] = n end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
   return out
 end
 
@@ -408,8 +419,6 @@ return {
       injectArp(h)
       local ns = derivedNotes(h)
       t.deepEq(field(ns, 'pitch'), { 60, 64, 67, 60 }, 'ascending cycle through the triad')
-      t.deepEq(field(ns, 'lane'),  { 1, 1, 1, 1 },
-        'members are parked, so no lane is occupied -- the voice packs into lane 1')
       t.deepEq(authoredPitches(h), {}, 'the chord is parked off the take -- only the arp sounds')
     end,
   },
@@ -454,11 +463,33 @@ return {
     end,
   },
 
-  ----- Determinism: lane allocation is a pure function of the region's occupancy, and of nothing else --
-  ----- not mm's array order (§ Output ¶4)
+  ----- The derived note record: off-column, and so laneless (§ Output ¶5)
 
   {
-    name = 'two rebuilds over an arp region allocate byte-identical derived notes + lanes',
+    -- A derived note sits in no column, so it holds no column's number. The region half would read
+    -- nil either way once the allocator went; the note host's half is what proves the emission
+    -- branch collapsed, its output having ridden the host's own lane inline.
+    name = 'a derived note carries no lane, from a region host and from a note host alike',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local fromRegion = allDerived(h)
+      t.eq(#fromRegion, 4, 'fixture check: the region arp cycled the held note')
+      for _, n in ipairs(fromRegion) do t.eq(n.lane, nil, 'a region host\'s output carries no lane') end
+
+      local g = harness.mk()
+      addNote(g, { pitch = 60, lane = 1, fx = arpUp })
+      local fromNote = allDerived(g)
+      t.eq(#fromNote, 4, 'fixture check: the note host arp cycled its own pitch')
+      for _, n in ipairs(fromNote) do t.eq(n.lane, nil, 'a note host\'s output carries no lane either') end
+    end,
+  },
+
+  ----- Determinism: the derived output is a pure function of the generator's own emission order (§ Output ¶6)
+
+  {
+    name = 'two rebuilds over an arp region emit byte-identical derived notes',
     run = function(harness)
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
@@ -475,10 +506,10 @@ return {
 
   {
     -- A pattern kind stamps whatever its body holds, so a doubled voice -- the same pitch authored on
-    -- two of a chord's lanes -- emits a pair alike in every field the existence reconcile keys except
-    -- lane. Under a region the allocator hands the twin its own lane and both must seat. Under a note
-    -- host they would share the host's lane and collapse to one, which is right: a lane holds one seat.
-    name = 'a region emitting twin hits seats both -- lane is what tells them apart',
+    -- two of a chord's lanes -- emits a pair alike in every field the existence reconcile keys. Both
+    -- must seat: the reconcile matches predictions against existing records as a multiset, so records
+    -- alike in every keyed field are alike rather than one.
+    name = 'a region emitting twin hits seats both',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.twin = {
@@ -493,11 +524,10 @@ return {
       }
       injectRegion(h, { fx = { { kind = 'twin' } } })
       local ns = derivedNotes(h)
-      t.eq(#ns, 2, 'the allocator lanes the twin apart, and a first pass adds both outright')
-      t.deepEq(field(ns, 'lane'), { 1, 2 }, 'each hit takes a lane of its own')
+      t.eq(#ns, 2, 'a first pass adds both outright')
       -- The reconcile only has work on a pass that re-runs the region and meets the pair already
       -- seated -- so dirty the channel with a note the kind ignores (replace parks it off-take, and
-      -- the twins' lanes are unmoved). Keyed alike, one seat would answer for both predicted hits
+      -- the twins are unmoved). Keyed alike, one seat would answer for both predicted hits
       -- and the other would be kept by nobody, so it would be swept.
       addNote(h, { pitch = 72, lane = 4 })
       generators.kinds.twin = nil
@@ -723,8 +753,7 @@ return {
       addNote(h, { pitch = 67, lane = 3 })
       injectArp(h)
       t.deepEq(authoredPitches(h), {}, 'chord parked while the region is present')
-      t.deepEq(field(derivedNotes(h), 'lane'), { 1, 1, 1, 1 },
-        'parking frees lanes 1-3, so the arp packs to lane 1 -- the same-pitch nudge dissolves')
+      t.eq(#derivedNotes(h), 4, 'and the arp sounds in its place')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
@@ -2919,12 +2948,13 @@ return {
     -- Storage order is precedence among chains overlapping on one channel, and the expansion emits a
     -- channel's own regions before the hosts expanded onto it, whatever order storage holds them
     -- in. see docs/trackerManager.md § Channel & column model
-    name = 'global region: a global chain packs after a channel region stored before it',
+    name = 'global region: a global chain emits beside a channel region stored before it',
     run = function(harness)
       local h = harness.mk()
       addNote(h)
-      -- Two note-replace chains, each stamping a pitch of its own: both park the member, so the lane
-      -- each lands on is the order the two hosts were emitted in.
+      -- Two note-replace chains, each stamping a pitch of its own. Both park the member and both
+      -- emit onto the channel; which column each output reads in is tv's display allocation, so what
+      -- tm states here is that each chain expands and its output names its own host.
       local function stamp(pitch)
         return { expand = function(stream)
                    return { notes = { { ppq = stream.window[1], endppq = stream.window[2],
@@ -2940,10 +2970,10 @@ return {
       h.tm:rebuild()
       generators.kinds.stampG, generators.kinds.stampC = nil, nil
 
-      t.deepEq(field(derivedFor(h, 1, 'fxr-1'), 'lane'), { 1 },
-               "the channel's own chain takes the free lane")
-      t.deepEq(field(derivedFor(h, 1, expanded('fxr-g', 1)), 'lane'), { 2 },
-               'and the global chain packs after it')
+      t.deepEq(field(derivedFor(h, 1, 'fxr-1'), 'pitch'), { 74 },
+               "the channel's own chain stamps its pitch")
+      t.deepEq(field(derivedFor(h, 1, expanded('fxr-g', 1)), 'pitch'), { 72 },
+               'and the global chain stamps beside it, under its own per-channel host uuid')
     end,
   },
 

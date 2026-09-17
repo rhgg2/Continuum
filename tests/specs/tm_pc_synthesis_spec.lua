@@ -3,7 +3,8 @@
 -- carry `sampleShadowed=true` for renderer dimming. Mutation hooks
 -- keep the synthesised stream in lockstep with note edits.
 
-local t = require('support')
+local t          = require('support')
+local generators = require('generators')
 
 local function pcsOnChan(dump, chan)
   local out = {}
@@ -295,6 +296,62 @@ return {
       local lane2 = laneEvent(h.tm, 1, 2, 1)
       t.falsy(lane1.sampleShadowed, 'lane-1 winner not shadowed')
       t.eq(lane2.sampleShadowed, true, 'lane-2 loser shadowed')
+    end,
+  },
+
+  {
+    -- Leftmost lane wins, and the lane is the rank -- not the order the records happened to be
+    -- gathered in. The two coincide whenever an onset's authored notes share a logical row, so this
+    -- fixture pulls them apart: the lane-2 note is written a row earlier and the lane-1 note delayed
+    -- back onto it, which gathers lane 2 first and leaves lane 1 the leftmost.
+    name = 'leftmost lane wins an onset its two notes reached from different rows',
+    run = function(harness)
+      local h = harness.mk{ config = { transient = { trackerMode = true } } }
+      -- delayToPPQ(-250, 240) = -60, so the logical-240 note realises at 180 beside the other.
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = -250, lane = 1, sample = 0xA })
+      h.tm:addEvent({ evType = 'note', ppq = 180, endppq = 480, chan = 1, pitch = 64, vel = 100,
+                      detune = 0, delay = 0, lane = 2, sample = 0xB })
+      h.tm:flush()
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 180, val = 0xA } },
+        'the lane-1 sample programs the onset the two share')
+      t.eq(laneEvent(h.tm, 1, 2, 1).sampleShadowed, true, 'and the lane-2 note is dimmed behind it')
+    end,
+  },
+
+  {
+    -- Lane ranks the authored records among themselves and says nothing about a derived one, which
+    -- holds no lane at all: authored first, whatever column it was written in, then derived output in
+    -- emission order. The authored note here is on lane 2 precisely so that a rank reading the lane
+    -- number alone would put the derived hit first -- and it sits outside the region's span, with a
+    -- delay carrying its realised onset back onto the hit's, so that the two share a group without
+    -- the region's parking taking the authored half away.
+    name = 'an authored note and a derived note at one onset: the authored sample wins',
+    run = function(harness)
+      local h = harness.mk{ config = { transient = { trackerMode = true } } }
+      generators.kinds.oneHit = {
+        expand = function()
+          return { notes = { { ppq = 180, endppq = 240, pitch = 67, vel = 100, detune = 0 } }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'OneHit', defaults = {}, fields = {},
+      }
+      -- delayToPPQ(-250, 240) = -60, so the logical-240 note realises at 180, the hit's own onset.
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = -250, lane = 2, sample = 0xA })
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
+                                   fx = { { kind = 'oneHit' } } } })
+      h.tm:rebuild()
+      generators.kinds.oneHit = nil
+
+      local derived = {}
+      for _, n in ipairs(h.fm:dump().notes) do if n.derived then derived[#derived + 1] = n end end
+      t.eq(#derived, 1, 'fixture check: the region emitted its one hit')
+      t.eq(derived[1].ppq, 180, 'fixture check: onto the authored note\'s realised onset')
+
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 180, val = 0xA } },
+        'the authored sample is what the onset programs')
+      t.falsy(laneEvent(h.tm, 1, 2, 1).sampleShadowed, 'the authored note won, so nothing dims it')
     end,
   },
 

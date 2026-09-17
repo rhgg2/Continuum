@@ -127,9 +127,9 @@ channel lacks shows nothing.
 **14** The column a ghost draws in is a **display lane**, allocated by
 `tv:displayLanes` over a host's whole output on a channel: the lowest column free
 of overlap, with the channel's authored population seeding occupancy less every
-cell the host parked. A chain stamping a chord emits its voices on one lane,
-which says where they sound; the display lane says where they read, so each voice
-draws in a column of its own. The overlay, the readout and the freeze claim
+cell the host parked. A chain's voices carry no lane of their own — a derived
+note sits in no column — so the display lane is the only column answer there is,
+and each voice draws in one of its own. The overlay, the readout and the freeze claim
 take their column from the one allocation. The host's own parked cell seeds no occupancy, which leaves a note
 host's first voice in the column the host itself draws in. The allocation covers
 the output rather than the viewport, so scrolling changes none of it, and it
@@ -147,7 +147,9 @@ holds moves as the width comes and goes.
 occupies, alongside the pb and cc streams its chains target. trackerManager
 publishes the continuous half off the window set alone
 (`docs/trackerManager.md` § Fx window census), and `tv:freezeRect` adds the
-note streams before the rect reaches groupManager.
+note streams before the rect reaches groupManager. Freezing then authors the
+output into those same columns: tm re-derives this allocation over the promoted
+notes, same rule and same occupancy, so a mint holds what it claimed.
 
 **17** The claim resolves when the freeze path asks for it, from the allocation
 standing at that moment. So the rect a mint would take and the columns on

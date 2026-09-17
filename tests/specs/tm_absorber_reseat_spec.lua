@@ -268,10 +268,8 @@ return {
 
       local voices = derivedNotesOn(h.fm:dump(), 1)
       t.eq(#voices, 2, 'fixture check: both voices reached the take')
-      t.eq(voices[1].lane, 1,       'fixture check: the base voice takes lane 1, its host having parked')
-      t.eq(voices[1].baseVoice, true, 'fixture check: and carries the stamp')
-      t.eq(voices[2].lane, 1,       'fixture check: the second voice rides lane 1 beside it')
-      t.falsy(voices[2].baseVoice,  'fixture check: carrying no stamp')
+      t.eq(voices[1].baseVoice, true, 'fixture check: the base voice carries the stamp')
+      t.falsy(voices[2].baseVoice,  'fixture check: the second voice carries none')
       t.eq(voices[2].detune, 50,    'fixture check: a detune jump away from the base voice')
 
       -- The base voice holds detune 0 the whole span and no pb is authored, so the channel is not

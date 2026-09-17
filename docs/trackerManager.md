@@ -140,12 +140,23 @@ exists in mm, write through to it"; a parked spec keeps its uuid the whole
 time it is off-take.
 
 `index.order` is a total order: raw tick, then logical seat, then authored
-before generated, then lane, then pitch. The tail carries weight. Records can
-share a tick and a pitch — a nudge lands a derived note on an authored one —
-and `(ppq, ppqL)` alone leaves them in Lua's unstable sort order, which is
-exactly the order the frontier walk reconstructs settlement from (§ What the
-walk visits, and what it emits). The tail's one preference is meaningful:
-authored settles before generated.
+before generated, then lane, then pitch, then emission order. The tail carries
+weight. Records can share a tick and a pitch — a nudge lands a derived note on
+an authored one — and `(ppq, ppqL)` alone leaves them in Lua's unstable sort
+order, which is exactly the order the frontier walk reconstructs settlement
+from (§ What the walk visits, and what it emits). The tail's two preferences
+are meaningful: authored settles before generated, and a generator's output
+settles in the order it was emitted.
+
+Emission order is the last term because a derived note carries no lane, so two
+hits a generator emits alike — a pattern kind stamping a doubled voice — are
+alike in every other term. Tied, neither is the other's same-pitch successor:
+the settlement finds no collision to separate, both land on one mm seat and mm
+keeps one of the pair. The ordinal is held beside the record
+(`index.stampEmission`, weak-keyed) rather than on it, because every
+non-structural field on a derived spec becomes mm metadata and this is a fact
+about one pass. The fx stage stamps each spec as it emits, kept hosts' output
+included, so the ordinals span a channel's whole predicted set.
 
 Staging proper: all mutations — from tv and from tm's own rebuild-time
 housekeeping — funnel through `tm:addEvent` / `tm:assignEvent` /
@@ -956,10 +967,8 @@ the other swept.
 
 The key includes `baseVoice`: a host moving between lane 1 and elsewhere
 flips it with every other term unchanged, so without it a kept note would
-leave stale metadata seated. It includes `lane` for the same reason — a
-derived note's lane is mm metadata, and a lane change must reseat it — and
-no longer to tell same-span same-pitch hits apart, which the multiset match
-now carries.
+leave stale metadata seated. Same-span same-pitch hits are told apart by the
+multiset match rather than by any term of the key.
 
 ### Tail walk
 
@@ -1032,10 +1041,10 @@ all: a derived note ends where its generator said, clipped by the end of
 the window its host ran in. Both terms are logical, so the bound enters the
 raw expression above exactly where an authored note's `endppqC` does.
 
-So the lane a derived note sits on — the one the region allocator gave it —
-is where it is drawn and nothing more. It bounds against no lane
-population, and joins none: an authored note reads both halves of its own
-lane, a parked note being drawn where it always was, and finds no derived
+So a derived note sits on no lane at all, and the column it is drawn in is
+the view's own (`docs/trackerView.md` § Ghost sampling). It bounds against no
+lane population, and joins none: an authored note reads both halves of its
+own lane, a parked note being drawn where it always was, and finds no derived
 note in either. The pitch dimension is where the two meet. The wire bound
 never reads a parked note at all — it carries no raw record — but every
 other note on the take answers the same-pitch seek, derived and authored
@@ -1046,6 +1055,16 @@ Freeze promotes a derived note to an authored one, and states the bound the
 walk gave it as that note's authored ceiling (§ Fx window census). A
 promoted note is authored, so the lane rule governs it from then on, and the
 ceiling it carries over is the one it sounded to.
+
+It takes a lane at the same moment, having held none: `promotionLanes` gives
+each note the lowest column free of overlap over the channel's authored
+population in the logical frame, less the cells this host parked and plus the
+ones a neighbour did. That is the rule, the occupancy and the order
+`tv:displayLanes` runs to place the ghosts, so a note is authored into the
+column it was read in — which is the column `tv:freezeRect` claimed for a
+freeze-to-group mint, and the two would otherwise be free to disagree. Two
+notes the ordering cannot separate are alike in every term the allocation
+reads, so which of them takes which column is not a question.
 
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
@@ -1308,17 +1327,14 @@ pb column and nothing parked is answered with nil, which is what the renderer te
 whether the channel shows a pb column at all — a parked pb keeps the column its authored breakpoint
 is displayed in.
 
-Membership reads the whole population; lane allocation reads the on-take half alone. A region's
-members are what sounds on its lanes, and a parked event is one: it is the note the author sees, and
-the chain that parked it is a neighbour's business. Allocation asks a narrower question — which
-lanes the derived output may take — and a parked host's own tiles already hold its lane, so counting
-the host as well would push its output off the lane it was written on. `eachLaneSpan` walks either
-population: `membersOf` hands it the whole, `allocateRegionLanes` the column alone.
+Membership reads the whole population, and that is the only question asked of it. A region's members
+are what sounds on its lanes, and a parked event is one: it is the note the author sees, and the
+chain that parked it is a neighbour's business. `eachLaneSpan` walks that population and `membersOf`
+is its one caller; nothing narrows it to the on-take half, derived output having no lane to take.
 
-Fx expansion moves no authored lane bound. `allocateRegionLanes` seeds occupancy from the on-take
-spans, and a parked host's tiles occupy the lane it left. A lane's on-take successor is never earlier
-than its authored one, and derived output lies inside its region's window. So a derived note takes a
-lane only where the authored population has already ended.
+Fx expansion moves no authored lane bound, and cannot: its output sits in no column, so it is a
+lane-mate of nothing. A lane's successor is the authored event the population carries, whatever else
+sounds alongside it.
 
 tv's `rowBounds` reads both, one for each of its two bounds, and the split is the same question
 asked twice. The col-local bound is lane order, which governs the tail clip, so it reads the whole

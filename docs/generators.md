@@ -260,26 +260,27 @@ the pitchbend hold (`docs/tuning.md` § Absorber reconciliation).
 keeps the field and the tones above it carry none, so the trigger's own
 microtonality sounds while they sound at the bend in force.
 
-**5** **Lane allocation resolves all overlap, and output never self-clips.**
-Discrete output can be polyphonic — a chord arp, a dense fill — so its notes
-need voice allocation within the region's channel. Simultaneous generated
-notes take separate lanes; sequential ones share a lane and abut; authored
-notes are immovable, so derived notes pack into lanes free within the
-region's span and append a lane only when none is free. This is the packing
-the tracker already runs on authored notes, re-pointed. There is no
-tail-clipping among a generator's own members.
+**5** **Derived output takes no allocation, and never self-clips.** Discrete
+output can be polyphonic — a chord arp, a dense fill — and its voices sound
+together with nothing to allocate between them, a derived note sitting in no
+column at all. What simultaneous hits do contend for is mm's own seat, (chan,
+pitch, ppq), which the onset settlement separates by a tick. There is no
+tail-clipping among a generator's own members. The column a voice is *read*
+in is the view's to allocate (`docs/trackerView.md` § Ghost sampling), and
+freezing is where a voice takes a column of its own.
 
-**6** Determinism is the whole ballgame. Because lane allocation is the sole
-overlap resolver, it has to be a pure function of the region's occupancy —
-lowest free lane first, deterministic append. Lean on iteration order or on a
-counter and a flush → rebuild → flush cycle reshuffles lanes into permanent
-churn.
+**6** Determinism is the whole ballgame, and emission order carries it. Two
+hits a generator emits alike are alike in every term but the order it emitted
+them in, so that order is the last term of the record's total order
+(`docs/trackerManager.md` § Update manager (um)) and of every sort the pass
+runs over its output. Lean on iteration order instead, or on a counter and a
+flush → rebuild → flush cycle, and the output reshuffles into permanent churn.
 
-**7** One overlap lane separation cannot fix: two generated notes at the
-*same pitch* that overlap collide on the wire whatever lane they sit in. That
-is a constraint on kinds — don't emit same-pitch overlap — rather than a
-defect in the allocator, and it would bite a fill or an arp folding back onto
-a pitch.
+**7** One overlap the settlement cannot fix: two generated notes at the *same
+pitch* that overlap collide on the wire, and giving way by a tick moves the
+onset without ending the overlap. That is a constraint on kinds — don't emit
+same-pitch overlap — and it would bite a fill or an arp folding back onto a
+pitch.
 
 **8** PA binds to the region: channel × ppq, stable and persisted, with the
 degenerate note host binding PA to its note. A PA parks with its host,

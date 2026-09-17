@@ -185,7 +185,8 @@ return {
       local fns = fxNotesOf(dump, host.uuid)
       t.eq(#fns, 4, 'lane-2 host expands like a lane-1 host')
       for _, fn in ipairs(fns) do
-        t.eq(fn.lane, 2, 'fxNotes inherit the host lane, not lane 1')
+        t.eq(fn.derived, host.uuid, 'and its output names the host, wherever that host sat')
+        t.eq(fn.lane, nil, 'which is the whole of its address -- the host lane rides onto nothing')
       end
     end,
   },
@@ -250,8 +251,7 @@ return {
       local fns = fxNotesOf(h.fm:dump(), host.uuid)
       t.eq(#fns, 4, 'it still expands')
       for _, fn in ipairs(fns) do
-        t.eq(fn.lane, 1, 'the derived notes followed the host')
-        t.eq(fn.baseVoice, true, 'and are base voice now')
+        t.eq(fn.baseVoice, true, 'the derived notes followed the host: they are base voice now')
       end
 
       h.fm:load()
@@ -456,7 +456,7 @@ return {
       local onsets = {}
       for _, fn in ipairs(fx.notes) do
         t.eq(fn.derived, host.uuid, 'each record names its host')
-        t.eq(fn.lane, host.lane, 'each record carries the lane the allocator gave it')
+        t.eq(fn.lane, nil, 'and carries no lane: the column a ghost reads in is tv\'s to allocate')
         onsets[#onsets + 1] = fn.ppq
       end
       t.deepEq(onsets, { 0, 60, 120, 180 }, 'logical onsets tile at the retrig period')

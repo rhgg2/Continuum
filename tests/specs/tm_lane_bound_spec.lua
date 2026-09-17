@@ -99,15 +99,9 @@ end
 local function derivedOn(h, chan)
   local out = {}
   for _, n in ipairs(h.fm:dump().notes) do
-    if n.chan == chan and n.derived then util.add(out, { ppq = n.ppq, lane = n.lane }) end
+    if n.chan == chan and n.derived then util.add(out, { ppq = n.ppq }) end
   end
   table.sort(out, function(a, b) return a.ppq < b.ppq end)
-  return out
-end
-
-local function lanesWithin(derived, from, to)
-  local out = {}
-  for _, d in ipairs(derived) do if d.ppq >= from and d.ppq < to then out[d.lane] = true end end
   return out
 end
 
@@ -129,10 +123,9 @@ end
 return {
 
   {
-    -- The lane-1 tail runs to 1440, well into the region's window, so its lane is occupied where
-    -- the arp would otherwise tile. Were the allocator to seed from nothing, the tiles would take
-    -- lane 1 at 960 and the tail would read as clipped there -- a derived note deciding an authored
-    -- note's bound.
+    -- The lane-1 tail runs to 1440, well into the region's window, so the arp tiles inside it. A
+    -- derived note sits in no column, so it is a lane-mate of nothing and a term of no lane bound:
+    -- were it one, the tail would read as clipped at 960 by output it merely sounds alongside.
     name = "fx output sounding inside an authored tail leaves the tail's lane bound where it was",
     run = function(harness)
       local h = harness.mk()
@@ -152,15 +145,13 @@ return {
       t.eq(authoredAt(h, 1, 0).endppqC, 1440, 'the tail keeps the bound its own ceiling gave it')
       t.deepEq(boundsOn(h, 1), before,
         'and no authored note on the channel, on take or parked, has moved')
-      t.falsy(lanesWithin(derived, 0, 1440)[1],
-        'the derived output taking a lane only where the authored population has ended')
     end,
   },
 
   {
-    -- The same fixture with the lane-1 tail ending at 480: its lane is free where the arp tiles, so
-    -- the output takes lane 1 and the tail walk meets a derived note as the authored note's lane
-    -- successor. It is past the ceiling, so the bound is the ceiling either way.
+    -- The same fixture with the lane-1 tail ending at 480, so the arp tiles past its end rather than
+    -- inside it. The bound is the note's own ceiling either way, no derived note being a successor
+    -- of it in any column.
     name = 'fx output seated on an authored lane past its tail leaves that bound where it was',
     run = function(harness)
       local h = harness.mk()
@@ -175,8 +166,7 @@ return {
 
       local derived = derivedOn(h, 1)
       t.truthy(#derived > 1, 'precondition: the arp tiles its parked member')
-      t.truthy(lanesWithin(derived, 0, math.huge)[1],
-        'precondition: the freed lane takes the output, so a derived note is the lane successor')
+      t.truthy(derived[1].ppq > 480, 'precondition: past the tail it would otherwise have succeeded')
 
       t.eq(authoredAt(h, 1, 0).endppqC, 480, 'the tail still ends at its ceiling')
       t.deepEq(boundsOn(h, 1), before,
@@ -308,11 +298,11 @@ return {
       for _, n in ipairs(h.fm:dump().notes) do if n.derived == 'fxr-1' then tile = n end end
       local successor = authoredAt(h, 1, 720)
       t.truthy(tile, 'precondition: the region emitted a tile')
-      t.eq(tile.lane, successor.lane, 'precondition: onto the lane the two authored notes share')
+      t.eq(tile.lane, nil, 'precondition: off the columns, so no lane-mate of its own to bound it')
       t.truthy(tile.endppq < 1440, 'precondition: and past its own window, so something clipped its tail')
 
       t.eq(tile.endppq, 600, 'the tile bounds at its host window end')
-      t.truthy(tile.endppq < successor.ppq, 'and the lane-mate behind it is no term of the bound')
+      t.truthy(tile.endppq < successor.ppq, 'and the note behind it is no term of the bound')
     end,
   },
 
@@ -340,7 +330,7 @@ return {
       local function tile()
         for _, n in ipairs(h.fm:dump().notes) do if n.derived == 'fxr-1' then return n end end
       end
-      t.eq(tile().lane, 1, 'precondition: the tile takes the lane the two authored notes share')
+      t.eq(tile().lane, nil, 'precondition: the tile sits in no column the two authored notes share')
       t.eq(tile().endppq, 600,
         'fixture check: clipped by its host window, well short of the ceiling it was emitted with')
       local ran = runs

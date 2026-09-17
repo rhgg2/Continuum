@@ -53,10 +53,7 @@ could add a real column once, when it is made, in the fx edit's own
 undo block, at the price of a document write as a side effect of an fx
 edit; or the caret-gated set could be made safe by holding caret and
 selection by column identity throughout, which is a piece of work in
-its own right. One neighbour this would not close: a note host's
-derived notes ride the host's own lane by design, so a three-voice
-stamp on a *note* shows one ghost of three whatever columns exist —
-that is lane sharing, and no column answers it.
+its own right.
 
 ### A note's own fx stays suppressed while a region parks it
 

@@ -38,10 +38,10 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-17 tm: emit derived notes without a lane (§ The derived note record)
 - 2026-09-17 tm: key the fx reconcile on the logical seat, match by multiset (§ The derived note record)
 - 2026-09-17 tm: bound a derived note by its host's window, not its lane (§ The derived tail bound)
 - 2026-09-16 tm/tv: compose the freeze claim from the display allocation (§ The freeze claim)
-- 2026-09-13 tv: allocate a display lane for a host's derived notes (§ The display lane)
 
 ## Now
 
@@ -49,17 +49,5 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-- **Laneless emission.** `lane` leaves the emitted derived spec, `fxOut.notes`,
-  the copies that carry a derived note to mm, and the existence key;
-  `allocateRegionLanes` and `onTakeOnLane` retire with it, `eachLaneSpan`
-  keeping `membersOf` as its one caller, and emission's region/note-host branch
-  (`host.lane == nil`) collapses to one path. The host's own `lane` stays: it
-  belongs to the inbound stream a monophonic stage reads
-  (`docs/generators.md` § Input streams), and slide's same-lane successor seek
-  reads it. PC sample shadowing ranks authored records by lane and derived
-  records after them in emission order, which preserves today's verdicts —
-  the allocator seeds occupancy from the on-take population, so an authored
-  record already wins every mixed onset. `docs/generators.md` § Output,
-  `docs/trackerManager.md` § Fx expansion and § Lane occupancy stand on the
-  allocator; tv's two mirroring comments name it.
+(empty — phase 4's one item is in flight.)
 

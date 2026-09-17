@@ -13,6 +13,12 @@
 
 1. The fx spec, `noteLive` and `fxNotesByHost` carry the record forward unchanged.
 
+1. Derived output takes no allocation. A derived note stands outside the note columns, so simultaneous hits contend for nothing but midiManager's seat — (chan, pitch, ppq) — which the onset settlement separates. Two of a generator's own notes overlapping at one pitch remains a constraint on kinds (`docs/generators.md` § Output).
+
+1. Emission order carries the determinism allocation used to carry, and is the last term of `index.order` (`docs/trackerManager.md` § Update manager (um)). Hosts run in a fixed order and each host's output holds the generator's own, so a pass over unchanged input emits the same set in the same order. Every sort and the settlement itself read that order from the one place: without it two hits a generator emits alike tie, neither is the other's same-pitch successor, and the seat they share goes unseparated.
+
+1. A derived note takes a lane exactly when it stops being one. Freeze promotes it to authored and gives it a column in the same breath, by the rule and the occupancy `tv:displayLanes` placed its ghost with, so it is authored into the column it was read in (`docs/trackerManager.md` § Tail walk).
+
 1. A lane is metadata to midiManager, which names only the (chan, pitch) voice group. A derived note's metadata carries none.
 
 1. The existence reconcile names a derived record by its logical seat and its voice fields, and matches predictions against existing records as a multiset. Two records alike in every keyed field are two seats, and each prediction takes the next unmatched one. The realisation frame stays out of the key — the onset settlement nudges a raw onset off its projection, and a record keyed on the raw would be swept on the pass after the one that wrote it.

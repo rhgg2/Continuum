@@ -110,10 +110,10 @@ column of the channel. The choice of column is arbitrary in origin and
 not arbitrary now: everything downstream is built on it.
 
 **4** A derived note is the base voice when the generator that emitted it
-stamped it one, which it does for output expanded off a base voice. Its
-own lane comes from wherever its host's output fits
-(`docs/trackerManager.md` § Lane occupancy), so the column a derived note
-lands in says nothing about the voice it realises.
+stamped it one, which it does for output expanded off a base voice. It sits
+on no lane of its own, and the column it is drawn in is the view's
+(`docs/trackerView.md` § Ghost sampling), so where a derived note reads says
+nothing about the voice it realises.
 
 **5** The detune of every other note is still stored, and display layers
 like the temperament lens consult it. It does not reach the pb stream:

@@ -3843,8 +3843,8 @@ local bumpDisplayLanes do
 
   function bumpDisplayLanes() gridGeneration = gridGeneration + 1 end
 
-  -- Mirrors trackerRebuild's allocateRegionLanes: lowest lane free of overlap, taken in emission
-  -- order for determinism; reach tracks each lane's furthest span end to skip scanning past it.
+  -- Lowest lane free of overlap, taken in the output's own order for determinism; reach tracks each
+  -- lane's furthest span end. tm re-derives this on freeze; see docs/trackerManager.md § Tail walk.
   --post: fresh result = { [note] = its display lane }, one entry per note handed in
   local function allocateOnChannel(chan, notes, parked)
     local lo, hi = math.huge, -math.huge
@@ -4599,7 +4599,7 @@ function tv:rebuild(takeChanged)
       util.bucket(fxByChan, region.chan, region)
     end
     -- Pack into lanes (storage order): lowest lane free of overlap, so overlapping chains split into
-    -- their own columns while disjoint ones share a lane. Mirrors tm's allocateRegionLanes discipline.
+    -- their own columns while disjoint ones share a lane -- the display lanes' own discipline.
     local function packRegionLanes(regions)
       local spans, byLane = {}, {}
       local function free(lane, s, e)

@@ -161,8 +161,8 @@ return {
         end,
         mode = 'replace', dest = 'note', label = 'TwoVoice', defaults = {}, fields = {},
       }
-      -- A memberless region: nothing occupies a lane, so allocateRegionLanes seats both voices on
-      -- lane 1, where only the stamp separates them.
+      -- A memberless region, and derived notes take no lane at all: only the stamp separates the
+      -- two voices.
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 },
                                           { kind = 'twoVoice' } } } })
@@ -175,8 +175,7 @@ return {
       end
       table.sort(voices, function(a, b) return a.ppq < b.ppq end)
       t.eq(#voices, 2, 'fixture check: both voices reached the take')
-      t.eq(voices[1].lane, 1, 'fixture check: the base voice on lane 1')
-      t.eq(voices[2].lane, 1, 'fixture check: and the second voice on lane 1 with it')
+      t.truthy(voices[1].baseVoice, 'fixture check: the base voice carries the stamp')
       t.falsy(voices[2].baseVoice, 'fixture check: distinguished from it by the stamp alone')
 
       -- Past the second voice's onset, seats written against 50 and sampled back against -30 land

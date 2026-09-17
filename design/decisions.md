@@ -4,6 +4,18 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-17** — Phase 4 answered the two terms the lane was silently supplying, neither of them
+  named in the brief. Emission order becomes index.order's last term, held in a weak-keyed side
+  table rather than on the record -- every non-structural field on a derived spec becomes mm
+  metadata, and this is a fact about one pass. Without it two hits a generator emits alike tie:
+  neither is the other's same-pitch successor, the onset settlement finds no collision to separate,
+  and mm keeps one of the pair. Freeze, which promoted a derived note by removing `derived` alone,
+  now gives it a column in the same breath: promotionLanes re-derives tv:displayLanes' rule,
+  occupancy and order over the promoted notes, so a note is authored into the column its ghost was
+  read in -- the column tv:freezeRect had already claimed for a mint. Plumbing tv's map down was the
+  alternative, and buys nothing: the two allocations take the same inputs, and where the ordering
+  cannot separate two notes they are alike in every term the allocation reads.
+
 - **2026-09-17** — `diffEvents` buckets the existing records per key, and each prediction takes the
   next unmatched one in list order, over the last-wins map that made two alike records one seat. The
   fx-note key names the logical seat (`ppqL`/`endppqL`) over the half-raw key it carried. Together
