@@ -15,6 +15,8 @@
 
 1. A lane is metadata to midiManager, which names only the (chan, pitch) voice group. A derived note's metadata carries none.
 
+1. The existence reconcile names a derived record by its logical seat and its voice fields, and matches predictions against existing records as a multiset. Two records alike in every keyed field are two seats, and each prediction takes the next unmatched one. The realisation frame stays out of the key — the onset settlement nudges a raw onset off its projection, and a record keyed on the raw would be swept on the pass after the one that wrote it.
+
 ## The base voice
 
 Landed. The model stands in `docs/tuning.md` § Intent vs realisation and
@@ -55,4 +57,3 @@ Landed. The model stands in `docs/trackerView.md` § Ghost sampling.
 
 1. Whether authored notes carry `baseVoice` too, which would retire the lane-1 monopoly and leave the lane a display coordinate throughout.
 
-1. What tells two identical hits from one host apart once the lane is gone. A pattern kind stamps whatever its body holds, so a doubled voice emits a pair alike in every field the existence reconcile keys, and the lane the region allocator hands each is all that separates them today. A note host's hits share its lane and collapse to one seat already, which is right — a lane holds one seat — but a laneless pair has no such seat to collapse onto.

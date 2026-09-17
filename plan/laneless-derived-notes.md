@@ -38,27 +38,16 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-17 tm: key the fx reconcile on the logical seat, match by multiset (§ The derived note record)
 - 2026-09-17 tm: bound a derived note by its host's window, not its lane (§ The derived tail bound)
-  — model moved to `docs/trackerManager.md` § Tail walk
 - 2026-09-16 tm/tv: compose the freeze claim from the display allocation (§ The freeze claim)
 - 2026-09-13 tv: allocate a display lane for a host's derived notes (§ The display lane)
-- 2026-09-13 tm: the pb hold scope asks the generator, not the host's lane (§ The base voice)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **The existence reconcile matches by multiset.** `diffEvents` buckets the
-  existing events per key and each predicted spec takes the next unmatched one,
-  so two records alike in every keyed field both seat. This answers § Open's
-  twin-hit question ahead of the lane drop, which leaves a doubled voice's pair
-  identical. The cc, pc and park reconciles share the helper and key uniquely,
-  so only a stray duplicate reads differently there: it survives where the
-  last-wins map deleted it. `tm_fx_region_spec :: a region emitting twin hits
-  seats both` still has its lanes to tell the pair apart, and pins the new path
-  once they go.
 
 - **Laneless emission.** `lane` leaves the emitted derived spec, `fxOut.notes`,
   the copies that carry a derived note to mm, and the existence key;

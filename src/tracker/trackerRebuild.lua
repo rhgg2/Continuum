@@ -132,14 +132,17 @@ local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
--- Index existing by `key`, keep on hit, add the rest, remove unkept.
+-- Bucket existing by `key`, keep on hit, add the rest, remove unkept. Records alike in every
+-- keyed field are alike, not one: each prediction takes the next unmatched one, in list order.
 local function diffEvents(existing, predicted, writes, key, onKeep)
-  local byKey, kept = {}, {}
+  local byKey, taken, kept = {}, {}, {}
   onKeep = onKeep or function (_,_) end
-  for _, evt in ipairs(existing) do byKey[key(evt)] = evt end
+  for _, evt in ipairs(existing) do util.bucket(byKey, key(evt), evt) end
   for _, spec in ipairs(predicted) do
-    local evt = byKey[key(spec)]
-    if evt then kept[evt] = true; onKeep(spec, evt)
+    local k = key(spec)
+    local at = (taken[k] or 0) + 1
+    local evt = byKey[k] and byKey[k][at]
+    if evt then taken[k] = at; kept[evt] = true; onKeep(spec, evt)
     else writes.add(spec)
     end
   end
@@ -1692,11 +1695,10 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     for _, spec in ipairs(predicted) do if not keptFx[spec] then util.add(rerun, spec) end end
 
     diffEvents(existing, rerun, fxOut.deferredWrite,
-      -- baseVoice and lane are both keyed for reasons the fields alone don't show;
-      -- see docs/trackerManager.md § Fx expansion.
+      -- Logical seat: docs/trackerManager.md § Fx expansion covers the key choice.
       function(evt)
         return util.key(
-          evt.derived, evt.ppq, evt.endppqL or 0, evt.lane,
+          evt.derived, evt.ppqL, evt.endppqL or 0, evt.lane,
           evt.pitch, evt.vel, evt.detune or 0, evt.sample or 0,
           evt.intentCents, evt.baseVoice)
       end,

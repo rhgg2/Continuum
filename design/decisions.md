@@ -4,6 +4,19 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-17** — `diffEvents` buckets the existing records per key, and each prediction takes the
+  next unmatched one in list order, over the last-wins map that made two alike records one seat. The
+  fx-note key names the logical seat (`ppqL`/`endppqL`) over the half-raw key it carried. Together
+  they answer the twin-hit question in design § Open ahead of the lane drop. The logical seat also
+  fixes a standing bug: the onset settlement nudges a colliding raw a tick off its projection and
+  writes it through to mm, so a raw-keyed note missed its own prediction and was swept and re-added
+  under a fresh uuid every pass -- 1,2 then 1,4 then 1,6 across three. While the raw sat in the key
+  the multiset half was unobservable for notes, mm's seat being lane-blind and forbidding two alike
+  in (chan, pitch, ppq); a cc chain emitting a duplicate breakpoint pins it instead. `lane` stays in
+  the key as metadata a lane change must reseat, no longer as the term separating a pair of hits.
+  Which of two alike records a prediction takes shows only in which uuid survives, so FIFO stands,
+  with a comment saying so.
+
 - **2026-09-17** — A derived note's logical bound is the end its generator gave it, clipped by its
   host's window end, over the lane-population expression `frame.clippedSpanEnd` gave it. The lane
   term goes and derived notes leave the lane populations with it, so a lane is display coordinate

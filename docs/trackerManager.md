@@ -944,12 +944,22 @@ uncommitted (`fxOut.deferredWrite`); the tail walk adds its clips to that same
 batch and commits it, so a fresh spec reaches mm already clipped.
 `fxOut.notes` (the predicted set) feeds the tail walk and PC synthesis. See `docs/generators.md` § Offline continuous realisation.
 
-The reconcile key includes `baseVoice`: a host moving between lane 1 and
-elsewhere flips it with every other term unchanged, so without it a kept
-note would leave stale metadata seated. It includes `lane` too, since
-`allocateRegionLanes` separates same-span same-pitch hits by lane alone;
-absent that term the pair collapses to one key and the reconcile seats one
-note where two were emitted.
+The reconcile key names a derived note's logical seat — `ppqL`/`endppqL` —
+and its voice fields; the realisation frame stays out of it. The onset
+settlement nudges a colliding raw a tick off its projection and writes that
+raw through to mm, so a key over `ppq` would miss the note's own prediction
+on the next pass, sweeping and re-adding it under a fresh uuid every pass.
+Predictions match `existing` as a multiset, each taking the next unmatched
+record in list order: records alike in every keyed field are alike, not one,
+so a twin pair seats as a pair rather than collapsing to a single seat with
+the other swept.
+
+The key includes `baseVoice`: a host moving between lane 1 and elsewhere
+flips it with every other term unchanged, so without it a kept note would
+leave stale metadata seated. It includes `lane` for the same reason — a
+derived note's lane is mm metadata, and a lane change must reseat it — and
+no longer to tell same-span same-pitch hits apart, which the multiset match
+now carries.
 
 ### Tail walk
 

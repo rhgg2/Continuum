@@ -177,6 +177,17 @@ end
 
 local function field(ns, k) local v = {} for i, n in ipairs(ns) do v[i] = n[k] end return v end
 
+-- The mm handles behind the region's derived notes, in onset order: what churns when a re-run pass
+-- fails to recognize a note it wrote itself.
+local function derivedUuids(h)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.evType == 'note' and n.derived == 'fxr-1' then out[#out + 1] = { ppq = n.ppq, uuid = n.uuid } end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return field(out, 'uuid')
+end
+
 -- The note pitches standing in a channel's note columns -- what the grid shows, as against
 -- fm:dump()'s wire content. Note columns also carry re-projected pa cells, so filter on evType.
 local function columnPitches(h, chan)
@@ -491,6 +502,61 @@ return {
       addNote(h, { pitch = 72, lane = 4 })
       generators.kinds.twin = nil
       t.deepEq(derivedNotes(h), ns, 'a re-run pass reconciles each onto its own seat, sweeping neither')
+    end,
+  },
+
+  {
+    -- Twins collide on mm's seat -- (chan, pitch, ppq), which is lane-blind -- so the onset settlement
+    -- nudges the second's raw a tick off its projection. The existence key names the logical seat, so
+    -- the nudged note still answers to its own prediction. Keyed on the raw it would miss every pass:
+    -- swept and re-added under a fresh handle, with the display and the absorber chasing it.
+    name = 'a nudged derived note holds its seat across a re-run -- the key is the logical onset',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.twin = {
+        expand = function(stream)
+          local ppq, endppq = stream.window[1], stream.window[2]
+          return { notes = {
+            { ppq = ppq, endppq = endppq, pitch = 60, vel = 100, detune = 0 },
+            { ppq = ppq, endppq = endppq, pitch = 60, vel = 100, detune = 0 },
+          }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'Twin', defaults = {}, fields = {},
+      }
+      injectRegion(h, { fx = { { kind = 'twin' } } })
+      local first = derivedUuids(h)
+      t.eq(#first, 2, 'fixture check: both hits seat, the second nudged a tick clear of the first')
+      t.deepEq(field(derivedNotes(h), 'ppq'), { 0, 1 }, 'fixture check: the nudge moved a raw onset')
+
+      addNote(h, { pitch = 72, lane = 4 })
+      generators.kinds.twin = nil
+      t.deepEq(derivedUuids(h), first, 'the nudged note is recognized, not re-minted')
+    end,
+  },
+
+  {
+    -- Two breakpoints alike in every keyed field are two seats, not one: nothing dedupes emission and
+    -- a first pass writes both. The reconcile matches them off as a multiset, so a re-run pass that
+    -- changed nothing reproduces that population. Indexed by key, one would answer for both and the
+    -- other would be kept by nobody -- swept on the pass after the pass that wrote it.
+    name = 'a chain emitting a duplicate breakpoint keeps both seats across a re-run',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.dupCC = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1],      val = 40, shape = 'step' },
+          { ppq = host.window[1] + 60, val = 90, shape = 'step' },
+          { ppq = host.window[1] + 60, val = 90, shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'Dup', defaults = {}, fields = {},
+      }
+      injectRegion(h, { fx = { { kind = 'dupCC' } } })
+      local first = fillsOf(h, 1, 74)
+      t.eq(#first, 4, 'fixture check: the duplicate seats beside its twin, ahead of the window close')
+
+      addNote(h, { pitch = 72, lane = 4 })
+      generators.kinds.dupCC = nil
+      t.deepEq(fillsOf(h, 1, 74), first, 'the re-run pass reproduces the population, duplicate included')
     end,
   },
 
