@@ -32,6 +32,35 @@ local function trillHost(chan)
            fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 } } }
 end
 
+-- The take's derived notes filed by producing host, onset-ordered: what um's per-host file is
+-- asked for, read back off mm so the assertion is over what landed rather than over the file.
+local function derivedOf(h, hostUuid)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.derived == hostUuid then out[#out + 1] = n end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
+-- Every derived onset on the take, for a fixture carrying exactly one host.
+local function derivedOnsets(h)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.derived then out[#out + 1] = n.ppq end
+  end
+  table.sort(out)
+  return out
+end
+
+local function parkedCells(h, chan)
+  local out = {}
+  for _, cell in ipairs(h.tm:getChannel(chan).parked.notes or {}) do
+    if cell.fx then out[#out + 1] = cell end
+  end
+  return out
+end
+
 local function vibHost(chan)
   return { evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
            vel = 100, detune = 0, delay = 0, lane = 1, fx = sine30 }
@@ -290,6 +319,89 @@ return {
       local runs, seedRuns = runsOverDirt(harness.mk(), retrigNoteHost(2))
       t.truthy(seedRuns > 0, 'fixture check: the counter host runs when it is not kept')
       t.eq(runs, 0, 'off lane 1 there is no base voice to re-seat from')
+    end,
+  },
+
+  -- um files a channel's derived notes under the uuid of the host that produced them, and fx
+  -- expansion asks per host that ran. The three cases below are what that addressing buys and
+  -- what it costs: orphans still fall in, a move re-seats, and a kept neighbour is not swept.
+
+  {
+    name = 'the file: a deleted host takes its derived notes off the take with it',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(plainNote(1, 480)); h.tm:flush()   -- seed dirt, so the pass is gated
+      h.tm:addEvent(trillHost(1)); h.tm:flush()
+      local host = parkedHostUuid(h, 1)
+      t.truthy(#derivedOf(h, host) >= 2, 'fixture check: the trill emitted derived notes')
+
+      h.tm:deleteParked(parkedCells(h, 1)[1]); h.tm:flush()
+
+      -- No host of the pass claims the file, so it is an orphan and falls in whole.
+      t.eq(#derivedOf(h, host), 0, 'no note on the take still names the deleted host')
+    end,
+  },
+
+  {
+    -- A region, not a note host: moving a parked note host through the view is a relocate, which
+    -- mints a fresh uuid, so a region is the host form whose identity survives a move.
+    name = 'the file: a moved host re-seats its derived notes rather than doubling them',
+    run = function(harness)
+      local row = 240
+      local h = harness.mk()
+      for _, at in ipairs({ 0, row }) do   -- a chord under each of the two positions
+        h.tm:addEvent({ evType = 'note', ppq = at, endppq = at + 240, chan = 1, pitch = 60,
+                        vel = 100, detune = 0, delay = 0, lane = 1 })
+        h.tm:addEvent({ evType = 'note', ppq = at, endppq = at + 240, chan = 1, pitch = 64,
+                        vel = 100, detune = 0, delay = 0, lane = 2 })
+      end
+      h.tm:flush()
+      local function region(at)
+        return { uuid = 'fxr-1', chan = 1, ppq = at, endppq = at + 240,
+                 fx = { { kind = 'arp', period = { 1, 8 }, pattern = 'up' } } }
+      end
+
+      h.ds:assign('fxRegions', { region(0) }); h.tm:rebuild()
+      local before = derivedOnsets(h)
+      t.truthy(#before >= 2, 'fixture check: the arp emitted derived notes')
+
+      -- The file is keyed by the host's uuid, which the move does not touch. Its prior notes sit
+      -- outside every window and every seed of this pass, and are still found and re-seated.
+      h.ds:assign('fxRegions', { region(row) }); h.tm:rebuild()
+
+      local after = derivedOnsets(h)
+      t.eq(#after, #before, 'the same count: re-seated, not a second set beside the first')
+      for i, ppq in ipairs(after) do
+        t.eq(ppq, before[i] + row, 'derived onset ' .. i .. ' moved with its host')
+      end
+    end,
+  },
+
+  {
+    name = 'the file: a kept host is not swept by a running neighbour overlapping it',
+    run = function(harness)
+      local h = harness.mk()
+      -- Spans overlap in [120, 240): a gather addressing the existing set by dirty window rather
+      -- than by producer would take the kept host's notes out of that overlap.
+      h.tm:addEvent(trillHost(1)); h.tm:flush()
+      h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 360, chan = 1, pitch = 67,
+                      vel = 100, detune = 0, delay = 0, lane = 2,
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 } } })
+      h.tm:flush()
+
+      local cells = parkedCells(h, 1)
+      t.eq(#cells, 2, 'fixture check: both hosts parked themselves')
+      local kept, neighbour = cells[1].uuid, cells[2].uuid
+      local before = derivedOf(h, kept)
+      t.truthy(#before >= 2, 'fixture check: the kept host emitted derived notes')
+      t.truthy(#derivedOf(h, neighbour) >= 2, 'fixture check: so did its neighbour')
+
+      -- ppq 300 sits inside the neighbour's span and outside the kept host's, so the seed wakes
+      -- one host and not the other.
+      h.tm:addEvent(plainNote(1, 300)); h.tm:flush()
+
+      t.deepEq(derivedOf(h, kept), before, 'the kept host\'s notes came through untouched')
+      t.truthy(#derivedOf(h, neighbour) >= 2, 'and the neighbour still has its own')
     end,
   },
 }

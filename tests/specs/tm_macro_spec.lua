@@ -268,20 +268,37 @@ return {
     run = function(harness)
       local h = harness.mk()
       addPlainHost(h)
+      local take = h.fm:take()
 
-      -- Bend fxNote 2 (vel 88) behind tm's back, as a foreign script would.
-      local tok
-      for _, n in h.fm:notes() do
-        if n.derived and n.vel == 88 then tok = n.uuid end
+      -- The route a foreign edit really takes: the ReaScript note verb on the take, behind every
+      -- model Continuum holds, reaching it through the re-read that notices the bytes changed.
+      -- (Reaching into mm instead strands um's index, which no caller does and no re-read repairs.)
+      local bent, i = false, 0
+      while true do
+        local ok, sel, mut, ppq, endppq, chan, pitch, vel = h.reaper.MIDI_GetNote(take, i)
+        if not ok then break end
+        if vel == 88 then
+          h.reaper.MIDI_SetNote(take, i, sel, mut, ppq, endppq, chan, pitch, 17)
+          bent = true
+          break
+        end
+        i = i + 1
       end
-      t.truthy(tok, 'fxNote 2 present at vel 88')
-      h.fm:modify(function() h.fm:assign(tok, { vel = 17 }) end)
+      t.truthy(bent, 'fixture check: fxNote 2 was on the take at vel 88')
 
-      h.tm:rebuild()
-      local dump = h.fm:dump()
+      h.fm:reload()   -- wholesale: every model re-reads, um's index included
+
       local vels = {}
-      for _, fn in ipairs(fxNotesOf(dump, parkedHost(h).uuid)) do vels[#vels + 1] = fn.vel end
+      for _, fn in ipairs(fxNotesOf(h.fm:dump(), parkedHost(h).uuid)) do vels[#vels + 1] = fn.vel end
       t.deepEq(vels, { 100, 88, 76, 64 }, 'generator geometry restored; foreign vel gone')
+      -- And it reached the take the edit landed on, not only the model above it.
+      local onTake, j = {}, 0
+      while true do
+        local ok, _, _, _, _, _, _, vel = h.reaper.MIDI_GetNote(take, j)
+        if not ok then break end
+        onTake[#onTake + 1] = vel; j = j + 1
+      end
+      t.deepEq(onTake, { 100, 88, 76, 64 }, 'the foreign velocity is gone from the take')
     end,
   },
 

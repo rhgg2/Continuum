@@ -183,16 +183,15 @@ end
 -- see docs/trackerManager.md § Partition and internal lanes
 local function rebuildInternals(time)
   local internal, external = {}, {}
-  local fxInNotes = frame.newChannels()
   -- Clean channels carry their columns whole: never visited, so never cloned. Interval-dirty ones
   -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirt.has(chan) then
       if not dirt.wholesale(chan) then exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
+      -- Derived notes are none of the partition's business: um files them by producing host as it
+      -- indexes them, and fx expansion gathers from there. see docs § The host gate
       for _, raw in mm:notesRaw(chan) do
-        if raw.derived then
-          util.bucket(fxInNotes[chan], raw.derived, columnEvent(raw))
-        elseif dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
+        if not raw.derived and dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
           local note = columnEvent(raw)
           if rawDivergesFromLogical(note, time) then util.add(external, note)
           else util.add(internal, note)
@@ -231,7 +230,7 @@ local function rebuildInternals(time)
   for col in pairs(disordered) do frame.orderColumn(col) end
   swingWrites.commit()
 
-  return external, fxInNotes
+  return external
 end
 
 ----- Rebuild CCs
@@ -967,7 +966,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     for _, spec in ipairs(restores) do
       local ppq  = time:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
       local evt = ccWrite(spec, ppq)
-      -- The fill seat at this ppq stays in fxIn.ccs: rebuildFx's reconcile deletes it by its own
+      -- The fill seat at this ppq stays in fxInCCs: rebuildFx's reconcile deletes it by its own
       -- uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
       batch.add(evt)
       local channel = frame.channels[spec.chan]
@@ -1364,7 +1363,7 @@ end
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
 --contract: notesByHost is carried between passes, so the stage writes the channels it ran and
 -- leaves a frozen channel's lists standing
-local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
+local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / membersOf read col.events
@@ -1420,6 +1419,16 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
     -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
     local ccChains = {}
+    -- The existing side of the note reconcile, one host at a time, off um's maintained file. Entries
+    -- come first for um's sort order; clones are left free for reconcile and the tail walk to write into.
+    local function producedBy(id)
+      local entries = {}
+      for _, entry in pairs(index.derivedByHost(chan)[id] or {}) do util.add(entries, entry) end
+      table.sort(entries, index.order)
+      local out = {}
+      for _, entry in ipairs(entries) do util.add(out, columnEvent(entry)) end
+      return out
+    end
     -- One host interface, three sources: an on-take fx note, a parked fx event, or an explicit
     -- fxRegion; the generator sees none of them. see docs/generators.md § Hosts and membership
     local function runHost(host)
@@ -1511,8 +1520,7 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds keeps
     -- its output verbatim -- notes withhold from the reconcile, seats re-feed it. see design § phase 5
     local gated = not dirt.wholesale(chan)
-    local keptFx     = {}   -- identity set: derived specs re-added verbatim, already settled last pass
-    local keptHostId = {}   -- and the hosts that re-added them, the grain the reconcile withholds at
+    local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     local seeded, emitScope = {}, {}
     -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
     -- emission drops its own remainder.
@@ -1525,8 +1533,7 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     end
     local function runOrKeep(host)
       if gated and not seeded[host] and keepable(host) then
-        keptHostId[host.id] = true
-        for _, kept in ipairs(fxIn.notes[chan][host.id] or {}) do
+        for _, kept in ipairs(producedBy(host.id)) do
           util.add(predicted, kept); keptFx[kept] = true
         end
         -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
@@ -1577,7 +1584,7 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     end
 
     -- Emit scope per target = merged windows of the seeded hosts touching it; the cc fold and
-    -- reconcile clip to it. Clean windows never enter fxIn.ccs, so their seats keep untouched.
+    -- reconcile clip to it. Clean windows never enter fxInCCs, so their seats keep untouched.
     if gated then
       -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
       -- window edges, invisible to window-local seeds.
@@ -1641,12 +1648,19 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
 
     for _, host in ipairs(hosts) do runOrKeep(host) end
 
-    -- Existence reconcile stamps rerun specs with the mm handle + realised end.
-    -- Kept hosts are withheld from both sides; see docs/trackerManager.md § The host gate.
+    -- Existence reconcile stamps rerun specs with the mm handle + realised end. A kept host is never
+    -- asked, so its notes stand outside both sides; see docs/trackerManager.md § The host gate.
     local existing, rerun = {}, {}
-    for id, produced in pairs(fxIn.notes[chan]) do
-      if not keptHostId[id] then
-        for _, evt in ipairs(produced) do util.add(existing, evt) end
+    for _, host in ipairs(running) do
+      for _, evt in ipairs(producedBy(host.id)) do util.add(existing, evt) end
+    end
+    -- A file no host of this pass claims -- kept hosts included, so a kept neighbour's notes are not
+    -- swept -- belongs to a host deleted or parked away, and falls in whole.
+    local claimed = {}
+    for _, host in ipairs(hosts) do claimed[host.id] = true end
+    for id in pairs(index.derivedByHost(chan)) do
+      if not claimed[id] then
+        for _, evt in ipairs(producedBy(id)) do util.add(existing, evt) end
       end
     end
     for _, spec in ipairs(predicted) do if not keptFx[spec] then util.add(rerun, spec) end end
@@ -1719,7 +1733,7 @@ local function rebuildFx(fxIn, fxOutWindows, fxRegions, notesByHost,
     local ccWrites = mmBatch()
     -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the key --
     -- it drives REAPER's interpolation. see docs/generators.md § pb and cc
-    diffEvents(fxIn.ccs[chan], fxCCs, ccWrites,
+    diffEvents(fxInCCs[chan], fxCCs, ccWrites,
       function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end)
 
     ccWrites.commit()
@@ -2958,8 +2972,8 @@ function rebuild.pipeline(sources, time)
 
   local fxInWindows = fxWindows.new(sources.fxRealisedWindows or {}, time)
 
-  local external, internalNotes = rebuildInternals(time)  -- partition; internal cols (logical-born); reseat swing notes
-  local fxIn = { notes = internalNotes, ccs = rebuildCCs(fxInWindows, time) }  -- CC walk; reseat swing CCs
+  local external = rebuildInternals(time)       -- partition; internal cols (logical-born); reseat swing notes
+  local fxInCCs  = rebuildCCs(fxInWindows, time)   -- CC walk; reseat swing CCs
   dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
 
   rebuildExtraColumns(sources.extraColumns, sources.paramAutomation)
@@ -2983,7 +2997,7 @@ function rebuild.pipeline(sources, time)
                                              onTakeHosts, pbRangeCents, time, movedBounds)  -- park covered, carry/restore prior
   rebuildPA(time)  -- project PAs into settled note columns (each spliced in ppq order)
 
-  local fxOut = rebuildFx(fxIn, fxOutWindows, sources.fxRegions,
+  local fxOut = rebuildFx(fxInCCs, fxOutWindows, sources.fxRegions,
                           fxNotesByHost, pbRangeCents, time)  -- fx expansion: derived notes/CCs
 
   rebuildTails(fxOut.notes, fxOutWindows, fxOut.deferredWrite, time, movedBounds)  -- unified tail/onset walk + atomic note commit

@@ -4,6 +4,23 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-17** — The existing side of the fx note reconcile comes from a file um maintains -- the
+  channel's derived notes filed under the uuid of the host that produced them, kept true on the
+  index verbs as `fxHosts` is -- over the bucket `rebuildInternals` minted by walking every raw of
+  every dirty channel. Fx expansion asks for the file of each host that *ran*, so a kept host is
+  never asked and its notes stand outside both sides of the reconcile by omission: `keptHostId`
+  goes, and `rebuildInternals` returns `external` alone. Addressing by producer rather than by
+  window is what makes that cheap. A derived note names its host; its prior window would have to be
+  recovered from the host's prior span, the host's prior delay, and slack for the tail walk's
+  collision nudge, which has no principled bound. A file no host of the pass claims -- kept hosts
+  counted as claimants, so a kept host lying inside a running neighbour's span is not swept -- is an
+  orphan and falls in whole. `index.move` takes the caller's prior `derived` beside its prior chan,
+  freezeRegion promoting a derived note by clearing the very field the file is keyed on. One
+  behaviour moved with it: the fx pass used to re-read mm, and so incidentally overwrote a direct
+  `mm:assign` made behind um's back -- a call no production caller makes. A foreign edit's repair
+  now rides the wholesale re-read alone, and tm_macro_spec's G3 moves onto that route, the ReaScript
+  note verb on the take, where it pins the reload it always depended on.
+
 - **2026-09-17** — Phase 4 answered the two terms the lane was silently supplying, neither of them
   named in the brief. Emission order becomes index.order's last term, held in a weak-keyed side
   table rather than on the record -- every non-structural field on a derived spec becomes mm

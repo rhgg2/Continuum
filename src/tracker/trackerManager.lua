@@ -437,8 +437,8 @@ end
 
 ---------- RAW INDEX
 
--- Owns rawIndex/byUuid/fxHosts and the upkeep that keeps them true; knows nothing of staging.
--- `index` is the handle its doors hang on; the three structures stay private to the block.
+-- Owns rawIndex/byUuid/fxHosts/derivedByHost and the upkeep that keeps them true; knows nothing of
+-- staging. `index` is the handle its doors hang on; the four structures stay private to the block.
 local index = {}
 do
 
@@ -448,6 +448,8 @@ do
   local rawIndex = {}
   local byUuid = {}
   local fxHosts = {}   -- chan -> { uuid = true } for on-take .fx notes; maintained, never rescanned. see design § Phase 5.5
+  --shape: derivedByHost[chan] = { [hostUuid] = { [noteUuid] = entry } }; the channel's derived notes filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned -- as fxHosts is. see docs/trackerManager.md § The host gate
+  local derivedByHost = {}
 
   ----- Order
 
@@ -497,6 +499,11 @@ do
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); onTakeFxHosts reads it
   -- instead of rescanning columns.
   function index.fxHosts(chan) return fxHosts[chan] end
+
+  -- Fx expansion asks per host that ran, so a host it kept is never asked and its notes stand
+  -- outside both sides of the reconcile. Entries are live, and a gather clones before writing.
+  --post: result = the channel's derived notes, filed by producing host uuid
+  function index.derivedByHost(chan) return derivedByHost[chan] end
 
   -- Resolve a uuid to its live column event via the seat stamp (byUuid.colEvt), so the clip cache
   -- reseeks a dirty host without a column walk. see docs/trackerManager.md § Lane occupancy
@@ -556,6 +563,26 @@ do
     local set = fxHosts[chan or evt.chan]
     if set then set[evt.uuid] = nil end
   end
+  -- A derived note's file membership rides the index turnover as fx-host membership does, so fx
+  -- expansion gathers its existing set per host without a pass over the channel's raws.
+  local function setDerivedHost(evt)
+    if evt.evType ~= 'note' or not evt.uuid or not evt.derived then return end
+    local file = derivedByHost[evt.chan]
+    local produced = file[evt.derived]
+    if not produced then produced = {}; file[evt.derived] = produced end
+    produced[evt.uuid] = evt
+  end
+  -- `host` names the file to leave when the caller has already overwritten evt.derived. The last
+  -- removal drops the file itself, so the orphan sweep never meets a uuid that produces nothing.
+  local function clearDerivedHost(evt, chan, host)
+    host = host or evt.derived
+    if evt.evType ~= 'note' or not evt.uuid or not host then return end
+    local file = derivedByHost[chan or evt.chan]
+    local produced = file[host]
+    if not produced then return end
+    produced[evt.uuid] = nil
+    if not next(produced) then file[host] = nil end
+  end
   -- During a batched reconcile this holds the lists index.add touched; the batch
   -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
   local deferredSort
@@ -563,6 +590,7 @@ do
     local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
     setFxHost(evt)
+    setDerivedHost(evt)
     -- A lone insert seeks its seat rather than re-sorting the already-ordered list whole.
     -- See docs/trackerManager.md § Incremental index reconciliation.
     if deferredSort then
@@ -576,22 +604,27 @@ do
     local tbl = rawIndexListFor(evt, chan or evt.chan)
     if not tbl then return end
     clearFxHost(evt, chan)
+    clearDerivedHost(evt, chan)
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
   end
 
   -- Keep the index coherent (util.seek and the walk need ascending order): a chan move or an onset
   -- move both reseat via remove-then-place. See docs/trackerManager.md § Incremental index reconciliation.
-  function index.move(evt, oldChan, update)
+  function index.move(evt, oldChan, update, oldDerived)
     local oldList  = rawIndexListFor(evt, oldChan)
     local newList  = rawIndexListFor(evt, evt.chan)
     local migrated = oldList ~= newList
     local reseated = newList ~= nil and (update.ppq ~= nil or update.ppqL ~= nil)
+    -- Rehost/promotion-to-authored: evt.derived is already the new host, so index.delete can't find
+    -- the old file; a bare move touches no list either. Both settled here, at the turnover.
+    if update.derived ~= nil then clearDerivedHost(evt, oldChan, oldDerived) end
     if migrated or reseated then
       index.delete(evt, oldChan)
       index.add(evt)
     end
     -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
     if update.fx ~= nil then setFxHost(evt) end
+    if update.derived ~= nil then setDerivedHost(evt) end
   end
 
   -- The batching door: rawIndex is um's, so um owns the deferral. Inserts and sort-key moves inside
@@ -614,7 +647,9 @@ do
     -- Non-member records (fx specs, restores) flag their channel's list spuriously: one redundant sort
     -- of a list the same walk is about to stain anyway, against an O(n) membership scan per write.
     local tbl = SORT_KEYS[field] and rawIndexListFor(entry, entry.chan)
+    local oldDerived = field == 'derived' and entry.derived or nil
     entry[field] = value
+    if field == 'derived' then clearDerivedHost(entry, nil, oldDerived); setDerivedHost(entry) end
     if not tbl then return end
     if deferredSort then deferredSort[tbl] = true else table.sort(tbl, index.order) end
   end
@@ -641,10 +676,14 @@ do
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
   -- slot in rawIndex, so a same-slot reconcile skips the index.delete scan, reinsert and sort.
   local umDecor = { realised = true, colEvt = true }   -- um's own fields; mm's clone never carries them
+  -- The entry table survives, so its filing is re-stated rather than turned over: the fields it
+  -- re-reads include `derived`.
   local function refreshEntry(prev, e)
+    clearDerivedHost(prev)
     for k in pairs(prev) do if e[k] == nil and not umDecor[k] then prev[k] = nil end end
     util.assign(prev, e)
     prev.realised = true
+    setDerivedHost(prev)
     -- pb reframes val raw->cents and mirrors the wire in raw, matching makeEntry so both doors agree.
     if e.evType == 'pb' then prev.val, prev.raw = tuning.rawToCents(e.val, pbLim()), e.val end
   end
@@ -685,11 +724,14 @@ do
   -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
   function index.load()
     byUuid = {}
-    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }; fxHosts[i] = {} end
+    for i = 1, 16 do
+      rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }
+      fxHosts[i], derivedByHost[i] = {}, {}
+    end
     for _, e in mm:events() do
       local evt = makeEntry(e)
       local tbl = rawIndexListFor(evt, evt.chan)
-      if tbl then util.add(tbl, evt); setFxHost(evt) end
+      if tbl then util.add(tbl, evt); setFxHost(evt); setDerivedHost(evt) end
     end
     -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
     -- one sort per list settles the logical tie-break the incremental path maintains.
@@ -760,7 +802,7 @@ do
   --post: assigns to one uuid within a flush collapse into a single mm write
   --invariant: a merged update keeps its util.REMOVE markers; collapsed to nil, the clear is lost
   local function assignLowlevel(evt, update)
-    local oldChan = evt.chan
+    local oldChan, oldDerived = evt.chan, evt.derived
     -- A move (onset shifts, or now chan) is delete-at-old + insert-at-new; snapshot the vacated slot
     -- before the assign. See docs/trackerManager.md § Interval seeds for the shape and the chan case.
     local moved = update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil
@@ -769,7 +811,7 @@ do
     util.assign(evt, update)
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
-    index.move(evt, oldChan, update)
+    index.move(evt, oldChan, update, oldDerived)
     if not evt.realised then return end
     for _, e in ipairs(assigns) do
       if e.uuid == evt.uuid then

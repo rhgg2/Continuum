@@ -36,10 +36,10 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-17 tm: gather the derived existing set from um's per-host file (§ Keep by omission)
 - 2026-09-17 tm: emit derived notes without a lane (§ The derived note record)
 - 2026-09-17 tm: key the fx reconcile on the logical seat, match by multiset (§ The derived note record)
 - 2026-09-17 tm: bound a derived note by its host's window, not its lane (§ The derived tail bound)
-- 2026-09-16 tm/tv: compose the freeze claim from the display allocation (§ The freeze claim)
 
 ## Now
 
@@ -47,14 +47,6 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-- **Gather the derived existing set per running host's window.** At fx
-  expansion, where the run verdict is made, seek um's raw note index for
-  `derived == host.id` over each running host's window, in place of
-  `rebuildInternals`'s bucket over every derived raw. A prior note window the
-  dirt touched that no current host claims is gathered too, so a deleted or
-  parked-away host's orphans are still swept. The existing-side withhold
-  (`keptHostId`) goes with the bucket, a kept host's notes never being gathered;
-  the predicted-side `keptFx` filter stands.
 - **Take the tail walk's derived anchors from um's index.** `mergeIndexed`'s
   `isAuthored` filter becomes "not emitted this pass", deduped by uuid, and the
   frontier's probes (`nearestNote`, `prevSamePitch`, `nextSamePitch`) read the

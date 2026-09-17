@@ -723,10 +723,11 @@ Every write one stage makes into another's records belongs to reauthoring, and
 the order carries dependencies the signatures do not state. The specs `fxOut`
 carries in `fxOut.notes` are the same tables the tail walk takes as `extras` and
 writes raw onsets and clipped ends into, and `rebuildPbs` reads the moved
-positions, so tails run before pbs. `rebuildInternals` mints `fxIn.notes`, and a
-kept host's specs ride out of it verbatim into `fxOut.notes`, so the tail walk
-clips ends into the very tables the partition minted, eight stages on;
-`rebuildPCs` writes `sampleShadowed` into an fx spec.
+positions, so tails run before pbs. The fx gather clones um's index entries
+through `columnEvent`, and a kept host's specs ride those clones into
+`fxOut.notes`, so the tail walk clips ends into tables the fx stage minted
+rather than into um's own records; `rebuildPCs` writes `sampleShadowed` into an
+fx spec.
 
 The head snapshot takes writes the same way: `rebuildExtraColumns` grows
 `extras[i].notes` on the snapshot's own table, and `rebuildPbs` reads
@@ -948,7 +949,7 @@ being its own earlier stage. Every host the gate does not keep runs
 — on-take fx notes (augment hosts), parked
 note hosts (window = the realised parked extent), and fx regions; the
 derived fxNotes reconcile
-against the partition's set (`diffEvents`), and continuous streams seat
+against the set um files per producing host (`diffEvents`, § The host gate), and continuous streams seat
 offline — cc-augment sums per target into markerless cc seats, pb defers
 to the absorber pass. The note add/del leaves `rebuildFx` staged but
 uncommitted (`fxOut.deferredWrite`); the tail walk adds its clips to that same
@@ -1472,15 +1473,21 @@ The leading flush is a no-op when nothing is staged, at the price of one empty `
 
 ## The host gate
 
-Under seed dirt a host whose window no seed touches does not run. Its derived
-specs come back verbatim from the last pass, off the `fxIn.notes` bucket its
-uuid names, and the existence reconcile never meets them: the bucket is
-withheld from the existing side and the specs from the predicted one, so a kept
-host writes nothing to mm and re-derives nothing. `rebuildInternals` buckets
-`fxIn.notes` by producing host as it mints them, so keeping is a lookup and
-withholding a skipped bucket -- neither costs a pass over the channel's derived
-notes. A bucket no current host claims is an orphan, its host deleted or parked
-away, and falls in to be swept.
+Under seed dirt a host whose window no seed touches does not run. The existing
+side of the note reconcile is gathered per host that *ran*, off the file um
+keeps of the channel's derived notes: `index.derivedByHost(chan)`, filed under
+the uuid each derived note carries in `derived` and maintained on the index
+verbs as `fxHosts` is, never rescanned. A kept host is never asked, so its
+notes stand outside both sides of the reconcile by omission -- it writes nothing
+to mm and re-derives nothing.
+
+Addressing the existing set by producer rather than by window is what makes that
+cheap. A derived note names its host; recovering the window it used to occupy
+would mean recovering the host's prior span, its prior delay, and slack for the
+tail walk's collision nudge, which has no principled bound. A file no host of
+the pass claims -- kept hosts counted as claimants, so a kept host lying inside
+a running neighbour's span is not swept -- is an orphan, its host deleted or
+parked away, and falls in whole.
 
 Keeping is decided against the emit scope, not by the kind of chain. A
 continuous host is keepable when no target's emit scope intersects its
