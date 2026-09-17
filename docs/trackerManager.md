@@ -1032,6 +1032,11 @@ other note on the take answers the same-pitch seek, derived and authored
 alike, because the voice they contend for is `(chan, pitch)` and knows
 nothing of lanes.
 
+Freeze promotes a derived note to an authored one, and states the bound the
+walk gave it as that note's authored ceiling (§ Fx window census). A
+promoted note is authored, so the lane rule governs it from then on, and the
+ceiling it carries over is the one it sounded to.
+
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
 other note, and their onsets appear as 'next' lookups so neighbours clip

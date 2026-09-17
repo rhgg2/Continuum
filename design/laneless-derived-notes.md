@@ -1,7 +1,7 @@
 # Laneless derived notes — one shape for derived reconciliation
 
 > opened: 2026-09-12 · status: in flight — plan/laneless-derived-notes.md,
-> at phase 3 (the derived tail bound).
+> at phase 4 (laneless emission).
 
 **Derived notes carry no lane, so they reconcile as derived ccs do: gathered per touched window and kept by omission.**
 
@@ -22,15 +22,7 @@ Landed. The model stands in `docs/tuning.md` § Intent vs realisation and
 
 ## The derived tail bound
 
-1. A derived note ends at the end its generator gave it, clipped by two bounds.
-
-1. The same-pitch successor is the nearest note of that pitch on the channel, authored or derived. It is the take's own constraint: midiManager resolves voices by (chan, pitch), and two same-pitch notes overlapping on a channel make one voice with two onsets.
-
-1. The host window end is the second. A derived note sounds within the window that produced it.
-
-1. Both terms come from the note, its host and the channel's pitch probe, so the bound is exact from local reads. A derived note takes part in the tail walk's pitch dimension.
-
-1. Freeze promotes a derived note with that bound as its authored ceiling. A promoted note is authored, and the lane bound governs it from then on, so the ceiling it carries over is the one it sounded to.
+Landed. The model stands in `docs/trackerManager.md` § Tail walk.
 
 ## Keep by omission
 

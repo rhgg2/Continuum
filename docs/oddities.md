@@ -78,19 +78,6 @@ arrives as a float, and seating it would move output that nothing
 about the music moved. Which downstream read is subtype-sensitive was
 never established, so the avoidance stands in for a diagnosis.
 
-### A kept host's derived output can outlive its window
-
-> **accepted** · tm · 2026-09-10
-
-`velPattern` passes a member's ceiling through, so a tile can end past
-the host's window. Its lane successor then sits outside that window
-and can move with no seed the host gate sees, leaving the gate to keep
-a host whose output the edit reached. The wire pass covers it anyway —
-it seeks each anchor's lane predecessor over the pass's own derived
-output (`docs/trackerManager.md` § What the walk visits, and what it
-emits), so the tile re-bounds whether the gate noticed or not. Whether
-the gate should notice is the gate's own question.
-
 ### A global region copied off the master strip is demoted or lost
 
 > **gap** · tv · 2026-08-27
