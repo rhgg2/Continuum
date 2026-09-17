@@ -221,9 +221,8 @@ lane it sits.
 **6** That line is read off the **stream**, so an earlier stage's output
 glides as readily as authored notes — `[arp, slide]` slurs the arp,
 `[trill, slide]` slurs the alternations. It falls out of § The chain ¶3
-rather than being arranged for. A derived note carries no lane, lanes
-being allocated after expansion, so a folded stream reads as the line
-entire.
+rather than being arranged for. A derived note carries no lane, so a folded
+stream reads as the line entire.
 
 **7** A region never glides **out** of itself. It could — an abutting
 note past the window end would take its glide inside the span the region
@@ -567,12 +566,13 @@ therefore registers on any surviving `spec.fx` rather than on the
 note-parking predicate, which is true only while a note-replace kind is
 present and would drop the window on exactly this frame.
 
-## Multiplicity — pack, sum, layer
+## Multiplicity — coexist, sum, layer
 
 **1** Every output target folds overlapping contributions, and overlap is
-well-behaved exactly when that fold is order-free. Notes **pack**: any number
-of chains flow into free lanes, and two note-replace chains merge, sharing
-the parked chord and packing into separate lanes. Augment continuous **sums**,
+well-behaved exactly when that fold is order-free. Notes **coexist**: any
+number of chains emit into the channel with nothing to allocate between them,
+and two note-replace chains merge over the parked chord. Augment continuous
+**sums**,
 commutative and offline at seat time. Replace continuous has no commutative
 fold, so it **layers**.
 

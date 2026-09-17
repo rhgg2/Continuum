@@ -19,17 +19,15 @@
    commit.
 4. **Phase 4 — Laneless emission** (§ The derived note record) — `lane` off the
    emitted spec, `fxOut.notes`, `fxNotesByHost` and the mm metadata;
-   `allocateRegionLanes` retires with it. Owes § Open's twin-hit question an
-   answer: the existence reconcile keys `lane`, and
-   `tm_fx_region_spec :: a region emitting twin hits seats both` fails when the
-   term has nothing left to name.  ← in flight
+   `allocateRegionLanes` retires with it, emission order carrying the
+   determinism it carried. — landed 2026-09-17, two commits.
 5. **Phase 5 — Keep by omission** (§ Keep by omission) — the derived existing
-   set gathered per touched host window, as `buildFxInCcsInWindows` does,
-   retiring the fx pass's explicit keep branch for notes. The existing-side half
-   landed early on 2026-09-16, at bucket rather than window grain: `fxIn.notes`
-   arrives bucketed by producing host and a kept host's bucket is withheld, so
-   the reconcile already passes over a kept host. What remains is the per-window
-   gather and retiring `runOrKeep`.
+   set gathered in the fx stage, per running host's window, retiring the fx
+   pass's explicit keep branch for notes. The existing-side half landed early on
+   2026-09-16, at bucket rather than window grain: `fxIn.notes` arrives bucketed
+   by producing host and a kept host's bucket is withheld, so the reconcile
+   already passes over a kept host. What remains is the per-host gather and
+   retiring `runOrKeep`.  ← in flight
 
 Sequencing note: the display lane lands before lanelessness so no frame draws
 ghosts or mints a freeze rect without a column to put them in; laneless
@@ -49,5 +47,24 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 4's one item is in flight.)
+- **Gather the derived existing set per running host's window.** At fx
+  expansion, where the run verdict is made, seek um's raw note index for
+  `derived == host.id` over each running host's window, in place of
+  `rebuildInternals`'s bucket over every derived raw. A prior note window the
+  dirt touched that no current host claims is gathered too, so a deleted or
+  parked-away host's orphans are still swept. The existing-side withhold
+  (`keptHostId`) goes with the bucket, a kept host's notes never being gathered;
+  the predicted-side `keptFx` filter stands.
+- **Take the tail walk's derived anchors from um's index.** `mergeIndexed`'s
+  `isAuthored` filter becomes "not emitted this pass", deduped by uuid, and the
+  frontier's probes (`nearestNote`, `prevSamePitch`, `nextSamePitch`) read the
+  same population. A derived note the pass never saw then bounds its neighbours
+  and is bounded by them, as the wire bound already reads it.
+- **Retire the notes half of `runOrKeep`.** A kept host adds nothing to
+  `predicted`, so `keptFx`, the `kept` flag on `fxOut.notes` entries and
+  `keptDerived` in the tail walk go, and the absorber's `freshBaseVoice` reads
+  every entry as fresh. `fxNotesByHost` merges at host grain, a host that did
+  not run keeping the bucket it last produced. The gate itself stays for
+  continuous targets: the kept pb window's geometry and the bases `runWins`
+  covers.
 
