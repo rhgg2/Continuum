@@ -1393,7 +1393,12 @@ local function freezeRegion(uuid, toGroup)
   for _, note in ipairs(index.raw(frozen.chan).notes) do
     if note.derived == uuid then util.add(promoted, note) end
   end
-  for _, note in ipairs(promoted) do stager.assign(note, { derived = util.REMOVE }) end
+  -- The bound the walk clipped for it, restated as the note's own ceiling: it sounded to its host's
+  -- window, and authored it would be re-bounded by the lane rule that never held it.
+  for _, note in ipairs(promoted) do
+    stager.assign(note, { derived = util.REMOVE,
+                          endppq = math.min(note.endppqL, settled.endppq) })
+  end
   -- Captured before the flush: the rebuild that follows refiles these entries, and the uuid is what
   -- crosses it -- index.colEvtFor is the door back to the settled event.
   local promotedUuids = {}

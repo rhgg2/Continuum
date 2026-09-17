@@ -2414,14 +2414,42 @@ return {
       local function pitch60()
         for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 60 then return n end end
       end
-      t.eq(pitch60().endppq, 240, 'derived, it reaches the walk as an extra and clips at lane 1')
+      t.eq(pitch60().endppq, 120, 'derived, it reaches the walk as an extra and clips at its host window end')
 
       t.truthy(h.tm:freezeRegion('fxr-1'))
       generators.kinds.overrun = nil
       -- Promotion swaps which door the note enters the tail walk by -- extras, to the raw index
       -- under isAuthored(). A promoted note that lost its ppqL would read as foreign MIDI and be
       -- walked by neither, and its tail would spring back to the authored 480.
-      t.eq(pitch60().endppq, 240, 'promoted, it enters by the index instead and the clip stands')
+      t.eq(pitch60().endppq, 120, 'promoted, it enters by the index instead and the clip stands')
+    end,
+  },
+
+  {
+    -- The other half of the promotion's ceiling. A stage may end a note well inside its host's
+    -- window, and the window is then no term of its bound -- so freeze must state the end it
+    -- sounded to and not the window that failed to clip it.
+    name = 'freeze: a promoted note that ended inside its window keeps that end',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.stub = {
+        expand = function(stream) return { notes = {
+          { ppq = stream.window[1], endppq = stream.window[1] + 60, pitch = 64, vel = 100, detune = 0 },
+        }, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Stub', defaults = {}, fields = {},
+      }
+      addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })   -- the region's member
+      injectArp(h, { endppq = 240, fx = { { kind = 'stub' } } })
+
+      local function pitch64()
+        for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 64 then return n end end
+      end
+      t.truthy(pitch64(), 'precondition: the stage emitted its note')
+      t.eq(pitch64().endppq, 60, 'derived, it sounds to its own end, a quarter into the window')
+
+      t.truthy(h.tm:freezeRegion('fxr-1'))
+      generators.kinds.stub = nil
+      t.eq(pitch64().endppq, 60, 'promoted, the ceiling it carries over is that same end')
     end,
   },
 

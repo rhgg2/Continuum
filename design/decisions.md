@@ -4,6 +4,17 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-17** — A derived note's logical bound is the end its generator gave it, clipped by its
+  host's window end, over the lane-population expression `frame.clippedSpanEnd` gave it. The lane
+  term goes and derived notes leave the lane populations with it, so a lane is display coordinate
+  only for them; the raw bound's same-pitch term is untouched, that probe already ranging over
+  authored and derived alike. Freeze's promotion states the walked bound as the note's authored
+  ceiling, a promoted note being authored and the lane rule that never held it standing ready to
+  re-bound it. What makes the retirement safe is that no fixture separates the two: the region
+  allocator only ever seats a derived note where its lane is free across its host's window, so a
+  lane clip min'd with the window clip is dominated everywhere -- restored as a perturbation it
+  leaves all 3087 cases green. The term was not merely unused but unobservable.
+
 - **2026-09-16** — The note half of a freeze rect is composed at freeze time, not built in the
   pipeline. `buildFreezeRects` published a host's span with the take lanes its derived notes landed
   on, read off `index.raw` -- which phase 4 empties of `lane`; it now publishes the pb and cc

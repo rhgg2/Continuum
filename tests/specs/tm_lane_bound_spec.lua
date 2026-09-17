@@ -29,18 +29,24 @@
 -- note carrying one is drawn past its lane successor -- and the fx window its chain runs in closes on
 -- that same number. The tail walk and the window census are two readers of one statement.
 --
--- The next case takes the other half of that expression. A derived note lies outside the authored
--- population, so it bounds over the one it belongs to: its lane's on-take events together with the
--- pass's own output, which is what sounds there. The successor is the next onset in column order
--- here too, so a neighbour whose delay carries its raw onset past the note behind it is still the
--- note that follows.
+-- The next case takes the other half of that expression. A derived note is no part of any lane's
+-- population: its bound is the end its generator stated, clipped by the window its host ran in, and
+-- the lane it is drawn on is a display coordinate. So a tile emitted past its own window stops at
+-- that window, and an authored note further down the lane it took is no term of the bound.
 --
--- The last case is the same expression asked of a tile nothing re-derived. A stage emitting past its
--- own window leaves a tile whose lane successor sits outside that window, so an edit to the
--- successor leaves the host kept and the tile comes back holding the ceiling it was emitted with.
--- The walk states a derived note's lane bound, and it is the only thing that can follow the move.
--- The stage counts its own runs, which is what keeps the case about the kept tile: a host re-running
--- would emit a fresh tile and bound it whatever the walk asked.
+-- The next case asks the same of a tile nothing re-derived. Nothing outside a host's window reaches
+-- its output's end now, so deleting the lane-mate behind the tile leaves it exactly where the window
+-- left it. The stage counts its own runs, which is what keeps the case about the kept tile: a host
+-- re-running would emit a fresh tile and bound it the same way, for a reason the case isn't asking.
+--
+-- The next case states that bound in the frame it belongs to. A window end is logical, so a tile
+-- clipped by one stops on that row and reaches the wire as the row converted once -- the same
+-- discipline the authored cases above pin, asked of the term that replaced the lane.
+--
+-- The last two pin the terms that survive. The end a generator states is the first of them, so a
+-- tile emitted well inside its host's window ends where it was emitted to and the window is no term
+-- of it. The same-pitch successor is the second: a derived note holds a (chan, pitch) voice like any
+-- other, so the next note of its pitch cuts it short whatever lane either of them is drawn on.
 
 local t          = require('support')
 local util       = require('util')
@@ -278,7 +284,7 @@ return {
     -- notes follow it. The first of them is the tile's lane successor, drawn at 720; two rows of
     -- delay carry its raw onset past the second note at 780, so the two readings of "next" name
     -- different notes. The bound is the row, so the tile stops where its successor is drawn.
-    name = "a derived tile bounds at its lane successor's row, not at the raw order its delay leaves",
+    name = "a derived tile bounds at its host's window end, not at the lane-mate behind it",
     run = function(harness)
       local h = harness.mk()
       generators.kinds.overrun = {
@@ -303,14 +309,15 @@ return {
       local successor = authoredAt(h, 1, 720)
       t.truthy(tile, 'precondition: the region emitted a tile')
       t.eq(tile.lane, successor.lane, 'precondition: onto the lane the two authored notes share')
-      t.truthy(tile.endppq < 1440, 'precondition: and past its own window, so a lane successor decides its tail')
+      t.truthy(tile.endppq < 1440, 'precondition: and past its own window, so something clipped its tail')
 
-      t.eq(tile.endppq, successor.ppq, "the tile bounds at the row its lane successor is drawn on")
+      t.eq(tile.endppq, 600, 'the tile bounds at its host window end')
+      t.truthy(tile.endppq < successor.ppq, 'and the lane-mate behind it is no term of the bound')
     end,
   },
 
   {
-    name = 'a kept tile follows the lane successor that moved under it',
+    name = 'a kept tile holds its host window bound when a lane-mate moves under it',
     run = function(harness)
       local h, runs = harness.mk(), 0
       generators.kinds.overrun = {
@@ -334,8 +341,8 @@ return {
         for _, n in ipairs(h.fm:dump().notes) do if n.derived == 'fxr-1' then return n end end
       end
       t.eq(tile().lane, 1, 'precondition: the tile takes the lane the two authored notes share')
-      t.eq(tile().endppq, 960,
-        'fixture check: clipped by its lane successor, well short of the ceiling it was emitted with')
+      t.eq(tile().endppq, 600,
+        'fixture check: clipped by its host window, well short of the ceiling it was emitted with')
       local ran = runs
 
       h.tm:deleteEvent(authoredAt(h, 1, 960))
@@ -343,7 +350,85 @@ return {
       generators.kinds.overrun = nil
 
       t.eq(runs, ran, 'precondition: the edit fell outside the window, so the host kept its output')
-      t.eq(tile().endppq, 1200, 'the kept tile bounds at the successor the deletion promoted')
+      t.eq(tile().endppq, 600, 'the kept tile stands where its host window left it')
+    end,
+  },
+
+  {
+    -- A region closing on a row the swing moves, its stage emitting past it. The bound is the row,
+    -- so the wire tail is that row realised; a window end read in the raw frame lands elsewhere.
+    name = "a derived tile's window bound is a row, and reaches the wire converted once",
+    run = function(harness)
+      local h = harness.mk(c55)
+      generators.kinds.overrun = {
+        expand = function(stream) return { notes = {
+          { ppq = stream.window[1], endppq = 1440, pitch = 60, vel = 100, detune = 0 },
+        }, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Overrun', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 1140,
+                                   fx = { { kind = 'overrun' } } } })
+      h.tm:rebuild()
+      generators.kinds.overrun = nil
+
+      local realised = h.tm:fromLogical(1, 1140)
+      t.truthy(realised ~= 1140, 'fixture check: the swing bites at the row the window closes on')
+
+      local tile
+      for _, n in ipairs(h.fm:dump().notes) do if n.derived == 'fxr-1' then tile = n end end
+      t.truthy(tile, 'precondition: the region emitted a tile')
+      t.truthy(tile.endppq < 1440, 'precondition: past its own window, so the window end clipped it')
+
+      t.eq(tile.endppq, realised, 'the tile bounds on the window end row, realised')
+    end,
+  },
+
+  {
+    -- The other side of the min: the clip is a ceiling, not the bound. A stage emitting a tile a
+    -- quarter of the way through its host's window leaves it ending there, with the window, the
+    -- host's own lane and the take all well past it.
+    name = "a derived note ends where its generator ended it, its host's window no term of that",
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.stamp = {
+        expand = function(stream) return { notes = {
+          { ppq = stream.window[1], endppq = stream.window[1] + 120, pitch = 67, vel = 100, detune = 0 },
+        }, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Stamp', defaults = {}, fields = {},
+      }
+      h.tm:addEvent(util.assign(note(1, 0, 480, 60, 1), { fx = { { kind = 'stamp' } } }))
+      h.tm:flush()
+      generators.kinds.stamp = nil
+
+      local tile
+      for _, n in ipairs(h.fm:dump().notes) do if n.derived then tile = n end end
+      t.truthy(tile, 'precondition: the host stamped a tile inside its own window')
+      t.eq(authoredAt(h, 1, 0).endppqC, 480,
+        "precondition: the host's window closes at its lane bound, well past the tile")
+
+      t.eq(tile.endppq, 120, 'the tile ends where its generator ended it')
+    end,
+  },
+
+  {
+    name = 'a derived note is cut by a same-pitch authored note on another lane',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.stamp = {
+        expand = function(stream) return { notes = {
+          { ppq = stream.window[1], endppq = stream.window[2], pitch = 67, vel = 100, detune = 0 },
+        }, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Stamp', defaults = {}, fields = {},
+      }
+      h.tm:addEvent(util.assign(note(1, 0, 480, 60, 1), { fx = { { kind = 'stamp' } } }))
+      h.tm:addEvent(note(1, 240, 480, 67, 2))   -- the tile's pitch, another lane
+      h.tm:flush()
+      generators.kinds.stamp = nil
+
+      local tile
+      for _, n in ipairs(h.fm:dump().notes) do if n.derived then tile = n end end
+      t.truthy(tile, 'precondition: the host stamped a tile across its own window')
+      t.eq(tile.endppq, 240, 'the tile ends where the next note of its pitch begins')
     end,
   },
 

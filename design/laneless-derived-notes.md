@@ -30,6 +30,8 @@ Landed. The model stands in `docs/tuning.md` § Intent vs realisation and
 
 1. Both terms come from the note, its host and the channel's pitch probe, so the bound is exact from local reads. A derived note takes part in the tail walk's pitch dimension.
 
+1. Freeze promotes a derived note with that bound as its authored ceiling. A promoted note is authored, and the lane bound governs it from then on, so the ceiling it carries over is the one it sounded to.
+
 ## Keep by omission
 
 1. A derived note enters a pass when the dirt touches its host's window.
@@ -52,7 +54,6 @@ Landed. The model stands in `docs/trackerView.md` § Ghost sampling.
 
 1. Whether a generator may set `baseVoice` on more than one note sounding at once, and what the absorber seats if two coincide.
 
-1. What bounds a derived note whose generator emits an open end. The same-pitch successor answers where one exists; the host window end answers otherwise, if an open end is taken to mean the window.
 
 1. Whether a chord's voices want display lanes stable across frames. The allocator is deterministic over a fixed input, so the voices hold their columns while the host's output holds; a host whose output changes may re-column its neighbours.
 

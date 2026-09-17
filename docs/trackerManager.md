@@ -1017,17 +1017,20 @@ in raw becomes the realised predecessor.
 
 An authored note's lane bound is on its column event, where the lane pass
 wrote it (§ The lane pass), and the walk reads it there. The walk states
-the bound only for the derived notes, which sit on lanes the region
-allocator gave them, and states it through the same expression over the
-lane's sounding population — its on-take events together with the pass's
-own derived notes. A derived note carries its logical seat beside its raw
-one, so it joins that population as a view of itself.
+the bound only for the derived notes, and states it with no lane term at
+all: a derived note ends where its generator said, clipped by the end of
+the window its host ran in. Both terms are logical, so the bound enters the
+raw expression above exactly where an authored note's `endppqC` does.
 
-Each note bounds against the population it belongs to. An authored note
-reads both halves of its lane, a parked note being drawn where it always
-was; a derived note reads what sounds there, standing in for what its
-region parked. The wire bound never reads a parked note at all: it carries
-no raw record, so the same-pitch seek finds only what is on the take.
+So the lane a derived note sits on — the one the region allocator gave it —
+is where it is drawn and nothing more. It bounds against no lane
+population, and joins none: an authored note reads both halves of its own
+lane, a parked note being drawn where it always was, and finds no derived
+note in either. The pitch dimension is where the two meet. The wire bound
+never reads a parked note at all — it carries no raw record — but every
+other note on the take answers the same-pitch seek, derived and authored
+alike, because the voice they contend for is `(chan, pitch)` and knows
+nothing of lanes.
 
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
@@ -1083,11 +1086,11 @@ behind it holds the clip because the open note's bound did not move, so the
 lane pass never names it; the walk asks nothing about the lane and re-bounds
 nothing.
 
-One lane question survives, and it belongs to the derived notes. The walk
-states their bounds itself (§ Tail walk), so each anchor's nearest same-lane
-predecessor is sought over the pass's own derived output alone — a kept tile
-whose lane successor moved under it re-bounds. No authored note answers
-there, the lane pass having named those already.
+No lane question survives for the derived notes either. Their bounds carry
+no lane term (§ Tail walk), so no anchor seeks a lane predecessor at all: a
+fresh derived note is disturbed by its host's re-run, and a kept one whose
+bound moved is reached by the same-pitch predecessor probe, which ranges
+over the pass's own output alongside the index.
 
 Successors come from one backward pass carrying, per pitch, the note last
 seen and that note's strict next — a neighbour sharing the current note's
@@ -1323,8 +1326,7 @@ mm — `rebuildInternals` routes it to the fx stage's existing set instead.
 
 Fx expansion seats the pass's own derived output in the columns, so a channel carrying its columns
 holds the previous pass's output at the head of the next one. The lane pass passes over those: the
-lane bound is authored, and a derived note takes its bound over the population that sounds on its
-lane (§ Tail walk).
+lane bound is authored, and a derived note takes no lane bound at all (§ Tail walk).
 
 ## The lane pass
 
