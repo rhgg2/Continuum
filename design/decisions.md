@@ -4,6 +4,15 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-18** — The existing side of the fx cc reconcile is gathered per producing host off
+  `index.derivedByHost`, as the notes are, over the window scan `rebuildCCs` threaded down to it.
+  `buildFxInCcsInWindows` and the `fxInCCs` parameter go, and with them the question of what a stage
+  running between the walk and fx expansion does to a set gathered early: the gather now stands
+  where it is consumed. Where the two sides differ is the clean overlapper -- a host the emit scope
+  wakes but no seed touches -- whose cc gather is clipped to that scope, it re-emitting into the
+  scope alone and its remainder beyond being fed by its own next pass. A seeded host hands its file
+  over whole, its abandoned seats being exactly the ones outside the scope it now names.
+
 - **2026-09-18** — A derived cc files under its producing host in um's derivedByHost, beside the
   derived notes. The file keys on uuid and a plain cc has one in RAM, so the cc side can gather its
   existing set by producer as the note side does, rather than by rescanning windows. Notes and ccs

@@ -207,8 +207,8 @@ return {
       t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'kept window B: seat uuids untouched')
       assertParity(h, 'chan-1 disjoint pair: edit in A, B keeps == full re-derive')
 
-      -- Edit exactly on window A's end edge (ppq 240): windowSeeded is edge-inclusive, so window A's
-      -- prev seats surface in fxIn.ccs and match rather than duplicate. Half-open would miss them.
+      -- Edit exactly on window A's end edge (ppq 240): `touches` is edge-inclusive, so host A is
+      -- seeded and hands its file over whole, to be matched rather than duplicated.
       local edgeA = seatUuids(1, 10, 0, 240)
       h.tm:addEvent(note(1, 240, 65, { lane = 3 })); h.tm:flush()
       t.deepEq(seatUuids(1, 10, 0, 240), edgeA, 'edge-inclusive edit: window A seats keep, no duplicate')

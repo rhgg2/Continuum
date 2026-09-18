@@ -833,13 +833,11 @@ indistinguishable, so it's absorbed the same way (docs/generators.md
 § Route-by-window). The window test is half-open, since the re-centre seat folds
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
-`fxIn.ccs` covers only the seed-touched prior cc windows, edge-inclusive
-(the journal's `touches`). A clean window appears in neither the existing set nor the
-predicted one — emission clips to the emit scope — and the reconcile deletes
-from `existing` alone, so a clean window's seats are never visited and never
-rewritten. Edge inclusion is load-bearing: deleting a window's bounding onset
-seeds exactly its end edge, and admitting a seed sitting there keeps that
-window's prior seats in `existing` to be matched rather than duplicated.
+The routed-out seats go nowhere from the walk. Fx expansion gathers its existing
+cc side off the file the derived notes come off too, per producing host
+(§ The host gate). A kept host's seats appear in neither the existing set nor
+the predicted one — emission clips to the emit scope — and the reconcile deletes
+from `existing` alone, so they are never visited and never rewritten.
 
 Derived events are handled separately: absorber pbs by the absorber pass
 (against the post-walk base-voice layout); synthesised PCs by PC synthesis.
@@ -1519,6 +1517,15 @@ window: emission clips to that scope, so a kept window and a fresh emission can
 never claim the same seat. A kept pb window still records its geometry, tagged
 `kept`, because pb seats are markerless downstream — a window absent from the
 record would leave its seats reading as authored pbs.
+
+A host the scope wakes but no seed touches — a clean overlapper, running because
+its curve is a fold input inside the overlap — emits into that scope alone, and
+its existing cc side is clipped to the same scope, converted to raw, so the
+remainder it no longer covers is not read as unfed and deleted. A seeded host
+hands its file over whole instead: its own geometry is what moved, so the seats
+it has abandoned are exactly the ones now outside the scope it names, and a clip
+would strand them. Notes take no such clip, note emission covering the host's
+window entire.
 
 The gate carries no notes. A kept host emits nothing into the pass, so um's
 entry for each of its derived notes is the only live copy there is, and the

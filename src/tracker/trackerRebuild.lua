@@ -293,35 +293,6 @@ local function spliceCcEvent(live, ccWrites, time)
   frame.spliceInto(col, event)   -- a membership change hands out a fresh events table; the excise's twin
 end
 
--- The walk's one gatherer of routed-out cc seats, whichever path ran: `touches` is unconditionally
--- true on a wholesale channel, so this same window scan yields that channel's whole set.
--- fxInCcs scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their
--- seats untouched, and cc-family carries merge rather than replace.
--- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § CC walk.
-local function buildFxInCcsInWindows(chan, fxInWindows, fxInCcs)
-  local ccBuckets = index.raw(chan).ccs
-  local seen = {}
-  for _, window in ipairs(fxInWindows.on(chan)) do
-    if dirt.touches(chan, window.ppq, window.endppq) then
-      local sRaw, eRaw = fxInWindows.rawSpan(window)
-      for target in pairs(window.targets) do
-        local list = type(target) == 'number' and ccBuckets[target]
-        if list then
-          for i = util.firstAtOrAfter(list, sRaw), #list do
-            local evt = list[i]
-            if evt.ppq >= eRaw then break end
-            if not seen[evt.uuid] then
-              seen[evt.uuid] = true
-              util.add(fxInCcs[chan],
-                { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
-            end
-          end
-        end
-      end
-    end
-  end
-end
-
 -- Interval-dirt path: the ppqs in seedList are cleared and refilled from the raw index.
 -- see docs/trackerManager.md § Interval materialisation
 --invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
@@ -426,11 +397,10 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
   end
 end
 
--- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
--- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § CC walk
+-- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs. The routed-out seats
+-- go nowhere from here: fx expansion gathers them from um's file. see docs/trackerManager.md § CC walk
 local function rebuildCCs(fxInWindows, time)
   local ccWrites = mmBatch()
-  local fxInCcs = frame.newChannels()
 
   -- Clean channels carry their cc/at/pc columns whole: never visited. Interval-dirty ones splice just
   -- the seeded events (spliceChannelCCs); wholesale/stale-swing chans re-derive the whole stream.
@@ -439,11 +409,9 @@ local function rebuildCCs(fxInWindows, time)
       if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
       else spliceChannelCCs(chan, dirt.has(chan), fxInWindows, ccWrites, time)
       end
-      buildFxInCcsInWindows(chan, fxInWindows, fxInCcs)
     end
   end
   ccWrites.commit()
-  return fxInCcs
 end
 
 ----- Rebuild extra columns
@@ -983,8 +951,8 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     for _, spec in ipairs(restores) do
       local ppq  = time:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
       local evt = ccWrite(spec, ppq)
-      -- The fill seat at this ppq stays in fxInCCs: rebuildFx's reconcile deletes it by its own
-      -- uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
+      -- The fill seat at this ppq stays filed under its host: rebuildFx's reconcile deletes it by its
+      -- own uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
       batch.add(evt)
       local channel = frame.channels[spec.chan]
       local col = channel.onTake.ccs[spec.cc]
@@ -1380,7 +1348,7 @@ end
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
 --contract: notesByHost is carried between passes, so the stage rewrites the buckets of the hosts it
 -- ran and leaves a kept host's list -- and a frozen channel's whole map -- standing
-local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
+local function rebuildFx(fxOutWindows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
   -- Columns must be ppq-ordered here (eachWindowNote / membersOf read col.events
@@ -1602,8 +1570,8 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
                             fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
 
-    -- Emit scope per target = merged windows of the seeded hosts touching it; the cc fold and
-    -- reconcile clip to it. Clean windows never enter fxInCCs, so their seats keep untouched.
+    -- Emit scope per target = merged windows of seeded hosts touching it; cc fold and reconcile clip
+    -- to it. A kept host's window is never gathered, so its seats stay untouched.
     if gated then
       -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
       -- window edges, invisible to window-local seeds.
@@ -1667,22 +1635,36 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
 
     for _, host in ipairs(hosts) do runOrKeep(host) end
 
-    -- Existence reconcile stamps matched specs with the mm handle + realised end. A kept host is never
-    -- asked, so its notes stand outside both sides; see docs/trackerManager.md § The host gate.
-    local existing, ran = {}, fxOut.ran[chan]
-    for _, host in ipairs(running) do
-      ran[host.id] = true
-      for _, evt in ipairs(producedBy(host.id, 'note')) do util.add(existing, evt) end
+    -- Convert emitScope to raw (the frame cc seats live in) via fromLogical at each bound; monotone
+    -- projection means converted bounds still bracket the scope's seats. Only cc targets are used.
+    local ccScope = {}
+    for target, wins in pairs(emitScope) do
+      local raw = {}
+      for _, w in ipairs(wins) do
+        util.add(raw, { time:fromLogical(chan, w[1], 0), time:fromLogical(chan, w[2], 0) })
+      end
+      ccScope[target] = raw
     end
-    -- A file belonging to no host of this pass -- kept hosts included, so a kept neighbour's notes are
-    -- not swept -- belongs to a host deleted or parked away, and falls in whole.
+
+    -- Existence reconcile stamps matched specs with the mm handle + realised end; notes and ccs
+    -- gather off the same file so the cc side sees what the note side left. See docs/trackerManager.md § The host gate.
+    local existing, existingCCs, ran = {}, {}, fxOut.ran[chan]
+    -- `clipped` marks the clean overlapper, whose cc gather clips to the emit scope; a seeded host
+    -- hands over its file whole. See docs/trackerManager.md § The host gate.
+    local function gatherFrom(id, clipped)
+      ran[id] = true
+      for _, evt in ipairs(producedBy(id, 'note')) do util.add(existing, evt) end
+      for _, evt in ipairs(producedBy(id, 'cc')) do
+        if not clipped or spans.contains(ccScope[evt.cc], evt.ppq) then util.add(existingCCs, evt) end
+      end
+    end
+    for _, host in ipairs(running) do gatherFrom(host.id, gated and not seeded[host]) end
+    -- A file belonging to no host of this pass -- kept hosts included, so a kept neighbour's records
+    -- are not swept -- belongs to a host deleted or parked away, and falls in whole.
     local hostsOfPass = {}
     for _, host in ipairs(hosts) do hostsOfPass[host.id] = true end
     for id in pairs(index.derivedByHost(chan)) do
-      if not hostsOfPass[id] then
-        ran[id] = true
-        for _, evt in ipairs(producedBy(id, 'note')) do util.add(existing, evt) end
-      end
+      if not hostsOfPass[id] then gatherFrom(id) end
     end
 
     diffEvents(existing, predicted, fxOut.deferredWrite,
@@ -1754,7 +1736,7 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     local ccWrites = mmBatch()
     -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the key --
     -- it drives REAPER's interpolation. see docs/generators.md § pb and cc
-    diffEvents(fxInCCs[chan], fxCCs, ccWrites,
+    diffEvents(existingCCs, fxCCs, ccWrites,
       function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end)
 
     ccWrites.commit()
@@ -3011,7 +2993,7 @@ function rebuild.pipeline(sources, time)
   local fxInWindows = fxWindows.new(sources.fxRealisedWindows or {}, time)
 
   local external = rebuildInternals(time)       -- partition; internal cols (logical-born); reseat swing notes
-  local fxInCCs  = rebuildCCs(fxInWindows, time)   -- CC walk; reseat swing CCs
+  rebuildCCs(fxInWindows, time)                 -- CC walk; reseat swing CCs
   dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
 
   rebuildExtraColumns(sources.extraColumns, sources.paramAutomation)
@@ -3035,7 +3017,7 @@ function rebuild.pipeline(sources, time)
                                              onTakeHosts, pbRangeCents, time, movedBounds)  -- park covered, carry/restore prior
   rebuildPA(time)  -- project PAs into settled note columns (each spliced in ppq order)
 
-  local fxOut = rebuildFx(fxInCCs, fxOutWindows, sources.fxRegions,
+  local fxOut = rebuildFx(fxOutWindows, sources.fxRegions,
                           fxNotesByHost, pbRangeCents, time)  -- fx expansion: derived notes/CCs
 
   rebuildTails(fxOut, fxOutWindows, time, movedBounds)  -- unified tail/onset walk + atomic note commit
@@ -3056,12 +3038,10 @@ function rebuild.pipeline(sources, time)
   local maps = {
     windows       = fxOutWindows,
     freezeRect    = buildFreezeRects(fxOutWindows.windows()),
-    fxRealisation = buildFxRealisation(fxOutWindows.windows(), sources.globalRegions, byHost)
+    fxRealisation = buildFxRealisation(fxOutWindows.windows(), sources.globalRegions, byHost),
+    dirtyChannels = dirt.byChannel()
   }
 
-  -- The gated stages consumed the spine; the next edit window accumulates fresh dirt. The channels
-  -- that ran re-read the wire, so their mute flags want conforming: the head folds this in.
-  maps.dirtyChannels = dirt.byChannel()
   dirt.clear()
   stager.clear()
 
