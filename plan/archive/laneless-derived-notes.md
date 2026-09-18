@@ -1,7 +1,7 @@
 # Laneless derived notes — plan
 
-> source: `design/laneless-derived-notes.md` — synthesis compiled from there;
-> don't design here.
+> closed: 2026-09-18 · the model it landed stands in `docs/trackerManager.md`,
+> `docs/generators.md`, `docs/tuning.md` and `docs/trackerView.md`.
 
 ## Phases
 
@@ -26,8 +26,7 @@
    pass's explicit keep branch for notes. The existing-side half landed early on
    2026-09-16, at bucket rather than window grain: `fxIn.notes` arrives bucketed
    by producing host and a kept host's bucket is withheld, so the reconcile
-   already passes over a kept host. What remains is the per-host gather and
-   retiring `runOrKeep`.  ← in flight
+   already passes over a kept host. — landed 2026-09-18, two commits.
 
 Sequencing note: the display lane lands before lanelessness so no frame draws
 ghosts or mints a freeze rect without a column to put them in; laneless
@@ -43,10 +42,9 @@ lane allocator unable to see the notes it must avoid.
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+(empty — every phase is landed; the plan is ready to close.)
 
 ## Queued (current phase; one-liners)
 
-(empty — the two remaining items compiled together: neither stands alone, since
-retiring the re-emissions is what makes the index admission reachable.)
+(empty — no phase outstanding.)
 
