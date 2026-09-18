@@ -89,6 +89,53 @@ is a wrong implementation of a decided rule — what a copied global
 *is* was never decided, and the clipboard's channel delta cannot carry
 the answer either way.
 
+### Two base voices at one tick seat one detune
+
+> **accepted** · tm · 2026-09-18
+
+The absorber's base-voice union reads the detune prevailing at a tick
+off the last entry at or before it, ordered by `index.order`, so two
+base voices sharing a tick leave the later one's detune in force and
+the earlier sounds at a bend it did not ask for. Nothing stamps two
+today: a chord marks only the voice its pattern's root places, the
+tile kinds alternate, and every other stamp is inherited from a single
+stream note (`docs/generators.md` § Output). So the tie-break is a rule
+waiting for a case rather than a wrong answer to one — and two
+microtonal voices wanting their own bends at once is asking for
+per-voice realisation, which a channel-wide pitchbend stream does not
+have.
+
+### A chord's ghost voices re-column when the host's output changes
+
+> **accepted** · tv · 2026-09-18
+
+`tv:displayLanes` gives each derived voice the lowest column free of
+overlap over the host's whole output (`docs/trackerView.md` § Ghost
+sampling), which is deterministic over a fixed input: a voice holds its
+column while the realisation and the grid it read occupancy off both
+stand. It is not stable across a change to that input. A voice arriving,
+a span widening, or an authored note appearing in the occupancy re-seats
+the voices after it, so a chord that reads top-to-bottom one frame may
+read differently the next. Pinning a voice's column across passes would
+mean a durable identity for a note that has none — derived output is
+matched as a multiset, not by handle (`docs/trackerManager.md`
+§ Fx expansion) — and a ghost is a reading of the realisation rather than
+a place the caret can rest.
+
+### A memberless region emits no base voice
+
+> **gap** · tm · 2026-09-13, against the inbound-membership test
+
+The pitchbend hold scope's base-voice test asks a host's inbound
+membership (`docs/generators.md` § Output), so a region covering no note
+emits no base voice. That is right for every kind as they stand, each
+inheriting the stamp from the member it took its pitch from. A kind
+minting a voice from nothing and stamping it anyway would put its output
+outside the hold scope its own detune needs, and the note would sound at
+whatever bend the channel last held. Closing it means a stamp a
+generator makes on its own authority, which wants a rule for what the
+base voice is where there is no member to be one.
+
 ## Pattern editor
 
 ### A mini-editor edit leaves undo points in the host's history

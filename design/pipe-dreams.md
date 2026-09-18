@@ -228,6 +228,34 @@ pipeline for a divergence a fork already delivers.
 a start QN and a rendered length and nothing else realisation reads, so
 an overlay would be added rather than untangled.
 
+## A stamped authored note — the lane as display coordinate throughout
+
+> Read `docs/tuning.md` § Intent vs realisation for the voice pitchbend
+> realises, and `docs/generators.md` § Output for the stamp a derived
+> note inherits.
+
+A derived note names that voice with `baseVoice`; an authored note does
+not, and lane 1 stands in for the same fact. So the monopoly is stated
+twice, once over a field and once over a column, and two predicates
+answer the one question — `index.isBaseVoice` discriminating on
+`derived`, generators' own falling back to the field only where a stream
+note is laneless. Stamping authored notes too collapses them to one: the
+lane becomes a display coordinate throughout, as it already is for
+derived output, and a channel could carry its bending voice in any column.
+
+What it costs is that the claim becomes authored. Lane 1's uniqueness
+gives for free what a field has to be given — every note already written
+means it by position, so a field needs a migration, an editing gesture
+to move it, and an answer for two stamps sounding at once
+(`docs/oddities.md` § Two base voices at one tick seat one detune) that
+the column cannot be asked for.
+
+**The obligation now:** the two predicates stay separate, and neither
+hardens around lane 1. `index.isBaseVoice` keeps discriminating on
+`derived` rather than on the lane it falls back to, so an authored stamp
+would be a third case in one place rather than a change to what the
+absorber believes.
+
 ## Re-cutting a path — the cheat-sheet as a menu editor
 
 > From `design/archive/lotus-menu.md` § Open. Read
