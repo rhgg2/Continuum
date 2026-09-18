@@ -48,8 +48,10 @@ return {
     run = function(harness)
       local h = mk(harness)
       h.reaper:bindTake('take2', 'take2/item', 'take1/track', 16)
+      -- The cc is on take2 before tm binds it, so the bind's re-read carries it into um's index.
+      -- Seeding through mm afterwards would author behind that index, which the rebuild reads.
+      h.reaper:seedMidi('take2', { ccs = { { ppq = 0, chanmsg = 0xB0, chan = 0, msg2 = 7, msg3 = 0 } } })
       h.tm:bindTake('take2')
-      h.fm:seed{ ccs = { { evType = 'cc', ppq = 0, chan = 1, cc = 7, val = 0, shape = 'linear' } } }
       h.vm:rebuild()
 
       local col = ccCol(h)

@@ -253,6 +253,34 @@ local function ccRow(live, time)
   return ccReseat(live, time) or live.ppqL or live.ppq
 end
 
+-- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
+local function getCcColumn(chan, evType, ccNum)
+  local cols = frame.channels[chan].onTake
+  if evType == 'cc' then return cols.ccs[ccNum]
+  else return cols[evType] end
+end
+
+-- The same column, minted on first demand: both paths fill columns a fresh channel has none of.
+local function getOrSetCcColumn(chan, evType, ccNum)
+  local cols = frame.channels[chan].onTake
+  if evType == 'cc' then
+    cols.ccs[ccNum] = cols.ccs[ccNum] or frame.newCcColumn(ccNum)
+    return cols.ccs[ccNum]
+  else
+    cols[evType] = cols[evType] or frame.newStreamColumn()
+    return cols[evType]
+  end
+end
+
+-- The raw index list an (evType, cc) pair names, or nil where the channel indexes nothing there.
+-- The index-side twin of ccColumnSeat: the same pair, addressed in um's lists.
+local function ccIndexList(chan, evType, ccNum)
+  local raw = index.raw(chan)
+  if evType == 'cc' then return raw.ccs[ccNum] end
+  if evType == 'at' then return raw.ats end
+  if evType == 'pc' then return raw.pcs end
+end
+
 -- Clone one cc-family record into its column with the CC walk's reconcile + projection, then splice
 -- it in ppq-order. Mirror of the walk's per-event body, driven by the seeded cells' refill.
 local function spliceCcEvent(live, ccWrites, time)
@@ -260,15 +288,7 @@ local function spliceCcEvent(live, ccWrites, time)
   local movedPpqL = ccReseat(live, time)
   if movedPpqL then ccWrites.assign({ uuid = live.uuid }, { ppqL = movedPpqL }) end
   local event = columnEvent(live, { ppqL = movedPpqL })   -- an unmoved seat is nil, so the clone's own stands
-  local channel = frame.channels[chan]
-  local col
-  if live.evType == 'cc' then
-    col = channel.onTake.ccs[live.cc] or frame.newCcColumn(live.cc)
-    channel.onTake.ccs[live.cc] = col
-  else
-    col = channel.onTake[live.evType] or frame.newStreamColumn()
-    channel.onTake[live.evType] = col
-  end
+  local col   = getOrSetCcColumn(chan, live.evType, live.cc)
   projectEvent(event, chan, time)
   frame.spliceInto(col, event)   -- a membership change hands out a fresh events table; the excise's twin
 end
@@ -300,21 +320,6 @@ local function buildFxInCcsInWindows(chan, fxInWindows, fxInCcs)
       end
     end
   end
-end
-
--- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
-local function ccColumnFor(chan, evType, ccNum)
-  local cols = frame.channels[chan].onTake
-  if evType == 'cc' then return cols.ccs[ccNum] end
-  return cols[evType]
-end
-
--- The raw index list an (evType, cc) pair names, or nil where the channel indexes nothing there.
-local function ccIndexList(chan, evType, ccNum)
-  local raw = index.raw(chan)
-  if evType == 'cc' then return raw.ccs[ccNum] end
-  if evType == 'at' then return raw.ats end
-  if evType == 'pc' then return raw.pcs end
 end
 
 -- Interval-dirt path: the ppqs in seedList are cleared and refilled from the raw index.
@@ -355,57 +360,64 @@ local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, time)
   end
 
   for _, cell in pairs(cells) do
-    local col = ccColumnFor(chan, cell.evType, cell.cc)
+    local col = getCcColumn(chan, cell.evType, cell.cc)
     if col then exciseEvents({ col }, cell.ppqs) end
   end
   for _, live in ipairs(refills) do spliceCcEvent(live, ccWrites, time) end
 end
 
--- Wholesale / stale-swing path; see docs/trackerManager.md § CC walk
-local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
-  for _, cc in mm:ccsRaw(chan) do
-    local uuid = cc.uuid
-    -- any cc event inside a prior fx realisation window is routed out of the columns and reconciled
-    -- fresh at fx expansion, off the gather below. A removed window's orphans reconcile away there.
-    -- see § Route-by-window
-    if cc.evType == 'cc' and fxInWindows.ownsRaw('cc', chan, cc.cc, cc.ppq) then goto continue end
-
-    -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
-    -- Markerless pbs in a prior fx realisation window skip it.
-    local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and fxInWindows.ownsRaw('pb', chan, nil, cc.ppq)
-    local movedPpq, movedPpqL
-    if not cc.derived and not pbSeat then
-      if dirt.swing.has(chan) and cc.ppqL ~= nil then
-        local newPpq = time:fromLogical(chan, cc.ppqL)
-        if newPpq ~= cc.ppq then
-          ccWrites.assign({ uuid = uuid }, { ppq = newPpq })
-          movedPpq = newPpq
-        end
-      elseif rawDivergesFromLogical(cc, time) then
-        local newPpqL = time:toLogical(chan, cc.ppq)
-        ccWrites.assign({ uuid = uuid }, { ppqL = newPpqL })
-        movedPpqL = newPpqL
-      end
-    end
-
-    -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
-    if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
-      local event = columnEvent(cc, { ppq = movedPpq, ppqL = movedPpqL })   -- an unmoved seat is nil, so the clone's own stands
-      local channel = frame.channels[chan]
-      local col
-      if cc.evType == 'cc' then
-        col = channel.onTake.ccs[cc.cc] or frame.newCcColumn(cc.cc)
-        channel.onTake.ccs[cc.cc] = col
-      else
-        col = channel.onTake[cc.evType] or frame.newStreamColumn()
-        channel.onTake[cc.evType] = col
-      end
-      projectEvent(event, chan, time)
-      util.add(col.events, event)
-    end
-    ::continue::
+-- Reconciles (raw, ppqL) per the swing rules; see docs/trackerManager.md § CC walk.
+-- A markerless pb inside a prior fx window is absorbed there instead.
+--post: result = the seat move the column clone overlays, nil where nothing moved
+local function reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time)
+  local pbSeat = entry.evType == 'pb' and entry.ppqL == nil
+                 and fxInWindows.ownsRaw('pb', chan, nil, entry.ppq)
+  if entry.derived or pbSeat then return nil end
+  if dirt.swing.has(chan) and entry.ppqL ~= nil then
+    local newPpq = time:fromLogical(chan, entry.ppqL)
+    if newPpq == entry.ppq then return nil end
+    ccWrites.assign({ uuid = entry.uuid }, { ppq = newPpq })
+    return { ppq = newPpq }
+  elseif rawDivergesFromLogical(entry, time) then
+    local newPpqL = time:toLogical(chan, entry.ppq)
+    ccWrites.assign({ uuid = entry.uuid }, { ppqL = newPpqL })
+    return { ppqL = newPpqL }
   end
-  -- mm's cc stream is insertion-ordered mid-session (fresh adds append); columns sort by ppq.
+end
+
+-- Clone one reconciled record into the column its (evType, cc) names, projected onto its logical
+-- seat. Appends: the walk sorts the columns it filled once it has them all.
+local function carryCcIntoColumn(entry, chan, moved, time)
+  local event = columnEvent(entry, moved)   -- an unmoved seat is nil, so the clone's own stands
+  local col   = getOrSetCcColumn(chan, entry.evType, entry.cc)
+  projectEvent(event, chan, time)
+  util.add(col.events, event)
+end
+
+-- Wholesale / stale-swing path: re-derive channel ccs from the raw index.
+-- cc buckets, ats and pcs carry a column; pbs and pas reconcile only; see docs/trackerManager.md § CC walk
+local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
+  local raw = index.raw(chan)
+  for _, bucket in pairs(raw.ccs) do
+    for _, entry in ipairs(bucket) do
+      -- cc inside a prior fx window routes out for fresh reconciliation at fx expansion;
+      -- see docs/generators.md § Route-by-window.
+      if not fxInWindows.ownsRaw('cc', chan, entry.cc, entry.ppq) then
+        local moved = reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time)
+        carryCcIntoColumn(entry, chan, moved, time)
+      end
+    end
+  end
+  for _, list in ipairs{ raw.ats, raw.pcs } do
+    for _, entry in ipairs(list) do
+      local moved = reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time)
+      carryCcIntoColumn(entry, chan, moved, time)
+    end
+  end
+  for _, list in ipairs{ raw.pbs, raw.pas } do
+    for _, entry in ipairs(list) do reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time) end
+  end
+  -- The index seats by raw and a column by logical, and swing parts the two orders.
   for _, col in pairs(frame.channels[chan].onTake.ccs) do util.sortByPPQ(col.events) end
   for _, key in ipairs{ 'at', 'pc' } do
     if frame.channels[chan].onTake[key] then util.sortByPPQ(frame.channels[chan].onTake[key].events) end

@@ -803,9 +803,14 @@ The reconcile has two rules:
 - Otherwise, if raw diverges from ppqL: external raw edit; restamp
   `ppqL = toLogical(raw)`.
 
-Reconcile updates are mutated into the live cc record so the subsequent
-column-event clone sees up-to-date values; `mm:assign` propagates them at
-the end of the walk.
+Both paths read um's raw index rather than mm. Where mm holds one flat cc
+stream per channel the index holds five lists, and that split is the walk's
+own branch: cc buckets, `ats` and `pcs` carry a column, `pbs` and `pas`
+reconcile only. The interval path seeks those same lists by row.
+
+A reconcile writes through the walk's mm batch and hands its move back as an
+overlay the column clone carries, rather than mutating the record the walk is
+reading. The batch commits at the end of the walk, and the index syncs with it.
 
 A markerless pb seat (nil `ppqL`) inside a previous pb window skips this
 reconcile: it's a generated seat `deriveChan` owns, not foreign MIDI, so it

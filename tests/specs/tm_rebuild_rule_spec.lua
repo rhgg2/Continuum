@@ -165,11 +165,20 @@ return {
         data = { swing = { global = 'c58' } },
       }
       h.tm:markSwingStale(1)
-      local ccToks = {}
-      for _, c in h.fm:ccs() do ccToks[#ccToks + 1] = c.uuid end
-      h.fm:modify(function()
-        for _, tok in ipairs(ccToks) do h.fm:assign(tok, { ppq = 100 }) end
-      end)
+      -- The external move lands on the take and arrives by re-read, as a REAPER edit does.
+      -- Reaching into mm instead strands um's index, which the cc walk reads.
+      local take = h.fm:take()
+      local i = 0
+      while true do
+        local ok, sel, mut, _, chanmsg, chan, msg2, msg3 = h.reaper.MIDI_GetCC(take, i)
+        if not ok then break end
+        if msg2 == 7 then
+          h.reaper.MIDI_SetCC(take, i, sel, mut, 100, chanmsg, chan, msg2, msg3)
+          break
+        end
+        i = i + 1
+      end
+      h.fm:reload()
       t.eq(ccByCC(h.fm:dump(), 7).ppq, 139, 'cc raw reseated from ppqL')
 
       -- Column event must carry a live loc; route an assign through it.

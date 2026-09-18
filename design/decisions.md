@@ -4,6 +4,16 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-18** — The wholesale cc path reads um's raw index over `mm:ccsRaw(chan)`, joining the
+  interval path already on it: one source for both halves of the walk, and a branch that can test
+  what um maintains rather than only what mm persists. mm's flat per-channel stream is five lists
+  there, and that split becomes the walk's own enumeration in place of a per-record `evType` test --
+  cc buckets, `ats` and `pcs` down the column path, `pbs` and `pas` reconcile-only. Reconcile and
+  column carry separate, and addressing a column is stated once in `ccColumnSeat`, the column-side
+  twin of `ccIndexList`. Two specs moved onto the route tm_macro_spec's G3 took in September: a
+  `mm:modify` made behind um's back reaches mm and not the index, so an external move now goes on
+  the take and arrives by re-read, and a second take's cc is seeded before the bind that reads it.
+
 - **2026-09-18** — The pass's authority over um's derived records is a set of host uuids per
   channel, hung on `fxOut.ran` -- every host that ran, plus every orphan file swept -- over the
   queued item's dedup by note uuid. Host grain is what lets one set answer on both sides of the

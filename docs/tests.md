@@ -219,6 +219,13 @@ unrelated to what they check.
   identity. A window over [0, 240) is degenerate at exactly the two
   points a bounds comparison reads; [120, 360), which converts to
   [139, 379), is not.
+- **An edit after `mk()` goes on the take, not through mm.** A seed at
+  construction predates the stack, so `mm:add` reaches everything. A later
+  `h.fm:modify` does not: it writes mm without reaching um's index, which the
+  rebuild reads, and nothing short of a wholesale re-read repairs the
+  disagreement. Stage a later edit the way REAPER delivers one — `MIDI_SetCC` /
+  `MIDI_SetNote` on the take, then `h.fm:reload()` — or seed the take before the
+  bind that reads it.
 - **Don't pin finer than the computation settles.** A figure off the
   sonority solve is exact for the road the beam took, and the road is a
   discrete choice a thousandth of a cent can flip, so a pin taken to
