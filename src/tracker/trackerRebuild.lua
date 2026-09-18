@@ -132,15 +132,12 @@ local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
--- Which of um's index records survive this pass. A derived record is superseded where its host is in
--- `ran` -- the pass re-emitted that host's output, or swept its file as an orphan -- and survives where
--- it is not: um's entry is then the only live copy there is. Continuum-authored records, owned by no
--- host, always survive; foreign MIDI is nobody's copy, as isAuthored.
---pre: ran is the pass's host authority for the records' channel -- fxOut.ran[chan]
+-- Which index records survive this pass: exclude derived events which re-ran this pass
+-- and foreign MIDI, keep authored events and retained derived events.
 local function survivingEvents(ran)
   return function(rec)
-    if rec.ppqL == nil then return false end        -- foreign MIDI, as isAuthored
-    return not rec.derived or not ran[rec.derived]
+    if rec.ppqL == nil then return false end -- foreign MIDI
+    return not (rec.derived and ran[rec.derived])
   end
 end
 
@@ -193,13 +190,10 @@ end
 -- see docs/trackerManager.md § Partition and internal lanes
 local function rebuildInternals(time)
   local internal, external = {}, {}
-  -- Clean channels carry their columns whole: never visited, so never cloned. Interval-dirty ones
-  -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirt.has(chan) then
       if not dirt.wholesale(chan) then exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
-      -- Derived notes are none of the partition's business: um files them by producing host as it
-      -- indexes them, and fx expansion gathers from there. see docs § The host gate
+      -- Derived notes are filed by the index and fx expansion gathers from there. see docs § The host gate
       for _, raw in mm:notesRaw(chan) do
         if not raw.derived and dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
           local note = columnEvent(raw)
@@ -279,6 +273,8 @@ local function spliceCcEvent(live, ccWrites, time)
   frame.spliceInto(col, event)   -- a membership change hands out a fresh events table; the excise's twin
 end
 
+-- The walk's one gatherer of routed-out cc seats, whichever path ran: `touches` is unconditionally
+-- true on a wholesale channel, so this same window scan yields that channel's whole set.
 -- fxInCcs scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their
 -- seats untouched, and cc-family carries merge rather than replace.
 -- Seeks the maintained um index (current mid-pipeline), not mm. See docs/trackerManager.md § CC walk.
@@ -324,7 +320,7 @@ end
 -- Interval-dirt path: the ppqs in seedList are cleared and refilled from the raw index.
 -- see docs/trackerManager.md § Interval materialisation
 --invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
-local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, fxInCcs, time)
+local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, time)
   local cells = {}
   for _, s in ipairs(seedList) do
     if CC_FAMILY[s.evType] then
@@ -363,34 +359,30 @@ local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, fxInCcs, 
     if col then exciseEvents({ col }, cell.ppqs) end
   end
   for _, live in ipairs(refills) do spliceCcEvent(live, ccWrites, time) end
-  buildFxInCcsInWindows(chan, fxInWindows, fxInCcs)
 end
 
 -- Wholesale / stale-swing path; see docs/trackerManager.md § CC walk
-local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, fxInCcs, time)
+local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
   for _, cc in mm:ccsRaw(chan) do
     local uuid = cc.uuid
-    -- any cc event inside a prior fx realisation window is routed out and reconciled fresh at fx
-    -- expansion. A removed window's orphans reconcile away there. see § Route-by-window
-    if cc.evType == 'cc' and fxInWindows.ownsRaw('cc', cc.chan, cc.cc, cc.ppq) then
-      util.add(fxInCcs[cc.chan],
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, tension = cc.tension, cc = cc.cc, uuid = uuid })
-      goto continue
-    end
+    -- any cc event inside a prior fx realisation window is routed out of the columns and reconciled
+    -- fresh at fx expansion, off the gather below. A removed window's orphans reconcile away there.
+    -- see § Route-by-window
+    if cc.evType == 'cc' and fxInWindows.ownsRaw('cc', chan, cc.cc, cc.ppq) then goto continue end
 
     -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
     -- Markerless pbs in a prior fx realisation window skip it.
-    local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and fxInWindows.ownsRaw('pb', cc.chan, nil, cc.ppq)
+    local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and fxInWindows.ownsRaw('pb', chan, nil, cc.ppq)
     local movedPpq, movedPpqL
     if not cc.derived and not pbSeat then
-      if dirt.swing.has(cc.chan) and cc.ppqL ~= nil then
-        local newPpq = time:fromLogical(cc.chan, cc.ppqL)
+      if dirt.swing.has(chan) and cc.ppqL ~= nil then
+        local newPpq = time:fromLogical(chan, cc.ppqL)
         if newPpq ~= cc.ppq then
           ccWrites.assign({ uuid = uuid }, { ppq = newPpq })
           movedPpq = newPpq
         end
       elseif rawDivergesFromLogical(cc, time) then
-        local newPpqL = time:toLogical(cc.chan, cc.ppq)
+        local newPpqL = time:toLogical(chan, cc.ppq)
         ccWrites.assign({ uuid = uuid }, { ppqL = newPpqL })
         movedPpqL = newPpqL
       end
@@ -399,7 +391,7 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, fxInCcs, time)
     -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
     if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
       local event = columnEvent(cc, { ppq = movedPpq, ppqL = movedPpqL })   -- an unmoved seat is nil, so the clone's own stands
-      local channel = frame.channels[cc.chan]
+      local channel = frame.channels[chan]
       local col
       if cc.evType == 'cc' then
         col = channel.onTake.ccs[cc.cc] or frame.newCcColumn(cc.cc)
@@ -408,7 +400,7 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, fxInCcs, time)
         col = channel.onTake[cc.evType] or frame.newStreamColumn()
         channel.onTake[cc.evType] = col
       end
-      projectEvent(event, cc.chan, time)
+      projectEvent(event, chan, time)
       util.add(col.events, event)
     end
     ::continue::
@@ -430,9 +422,10 @@ local function rebuildCCs(fxInWindows, time)
   -- the seeded events (spliceChannelCCs); wholesale/stale-swing chans re-derive the whole stream.
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, fxInCcs, time)
-      else spliceChannelCCs(chan, dirt.has(chan), fxInWindows, ccWrites, fxInCcs, time)
+      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
+      else spliceChannelCCs(chan, dirt.has(chan), fxInWindows, ccWrites, time)
       end
+      buildFxInCcsInWindows(chan, fxInWindows, fxInCcs)
     end
   end
   ccWrites.commit()
