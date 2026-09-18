@@ -447,7 +447,9 @@ value stream by the window alone.
 **2** Continuous only: a target is pb or a cc number, never a note. A note
 carries a uuid and notation sidecar for identity and round-trip regardless,
 so markerless elides nothing there. Only the continuous streams, whose seats
-are pure realisation, win anything.
+are pure realisation, win anything. The geometry is asked at one site per pass
+and the answer carried on um's record (`docs/trackerManager.md` § CC walk); what
+the *wire* holds is still the window and nothing else.
 
 **3** **The enabling invariant is exclusive ownership.** A markerless seat is
 indistinguishable on the wire from an authored pb or cc, so recognition works

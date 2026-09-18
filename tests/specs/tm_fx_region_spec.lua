@@ -1864,6 +1864,54 @@ return {
     end,
   },
 
+  -- The seat is markerless on the wire and named in RAM: um's entry carries the producing host, so
+  -- every reader downstream tests a field rather than re-asking the geometry. The name is not
+  -- persisted -- a round-trip re-mints every plain cc's uuid -- so the wholesale path re-derives it
+  -- from the census, and the two askings have to agree.
+  {
+    name = 'fx region (cc): a seat names its producing host in RAM, re-derived from the census on reload',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 10, label = 'CcA', defaults = {}, fields = {},
+      }
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 300, val = 5, shape = 'step' })
+      h.tm:flush()   -- authored, beyond the window: the untagged control
+      h.ds:assign('fxRegions', { { uuid = 'r1', chan = 1, ppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccA' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccA = nil
+
+      -- ppq -> the host named on um's entry, read through tm's uuid door.
+      local function named()
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'cc' and c.cc == 10 and c.chan == 1 then
+            local entry = h.tm:byUuid(c.uuid)
+            out[c.ppq] = { host = entry and entry.derived, plain = c.plain }
+          end
+        end
+        return out
+      end
+
+      local born = named()
+      t.truthy(born[0], 'the region seated the window start')
+      t.eq(born[0].host, 'r1',   'a seat born this pass names the host that emitted it')
+      t.eq(born[0].plain, true,  'and the name never reaches the wire -- no eventMeta sidecar')
+      t.eq(born[300].host, nil,  'the authored cc beyond the window names nobody')
+
+      h.fm:reload()   -- take round-trip: index.load re-mints every plain uuid, losing the RAM names
+      local after = named()
+      t.eq(after[0].host, 'r1',  'the wholesale path re-derives the name from the persisted census')
+      t.eq(after[0].plain, true, 'still markerless after the round-trip')
+      t.eq(after[300].host, nil, 'and the authored cc is still nobody\'s')
+    end,
+  },
+
   {
     name = 'fx region: removing a pb replace region sweeps its seats, leaving only the restored authored pb',
     run = function(harness)

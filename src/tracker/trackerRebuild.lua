@@ -350,11 +350,9 @@ local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, time)
       for i = util.firstAtOrAfter(list, rawRow - EPS), #list do
         local entry = list[i]
         if entry.ppq > rawRow + EPS then break end
-        -- An fx cc event is a markerless seat inside a prev cc window: routed out of the columns and
-        -- reconciled at fx expansion instead. see docs/generators.md § Route-by-window
-        local routedOut = entry.evType == 'cc'
-                          and fxInWindows.ownsRaw('cc', chan, entry.cc, entry.ppq)
-        if not routedOut and ccRow(entry, time) == row then util.add(refills, entry) end
+        -- A tagged cc is a markerless seat: routed out of the columns and reconciled at fx
+        -- expansion instead. see docs/generators.md § Route-by-window
+        if not entry.derived and ccRow(entry, time) == row then util.add(refills, entry) end
       end
     end
   end
@@ -398,16 +396,20 @@ end
 -- cc buckets, ats and pcs carry a column; pbs and pas reconcile only; see docs/trackerManager.md § CC walk
 local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
   local raw = index.raw(chan)
-  for _, bucket in pairs(raw.ccs) do
-    for _, entry in ipairs(bucket) do
-      -- cc inside a prior fx window routes out for fresh reconciliation at fx expansion;
-      -- see docs/generators.md § Route-by-window.
-      if not fxInWindows.ownsRaw('cc', chan, entry.cc, entry.ppq) then
-        local moved = reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time)
-        carryCcIntoColumn(entry, chan, moved, time)
+  -- Tag derived ccs in fx windows (RAM-only); see docs/generators.md § Route-by-window
+  -- Defer the sort since `derived` is a sort key.
+  index.withDeferredSort(function()
+    for _, bucket in pairs(raw.ccs) do
+      for _, entry in ipairs(bucket) do
+        index.assign(entry, 'derived', fxInWindows.ownsRaw('cc', chan, entry.cc, entry.ppq))
+        -- A tagged cc routes out for fresh reconciliation at fx expansion.
+        if not entry.derived then
+          local moved = reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time)
+          carryCcIntoColumn(entry, chan, moved, time)
+        end
       end
     end
-  end
+  end)
   for _, list in ipairs{ raw.ats, raw.pcs } do
     for _, entry in ipairs(list) do
       local moved = reconcileCcSeat(entry, chan, fxInWindows, ccWrites, time)
@@ -1754,6 +1756,18 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
       function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end)
 
     ccWrites.commit()
+    -- Seat birth: the same question the wholesale walk asks of the persisted census, asked of this
+    -- pass's windows -- the frame where the emitting host is still live. mm's add stamps the uuid on
+    -- the spec, and only a fresh seat carries one; a kept seat holds the tag it already had.
+    -- `derived` is no cc field, so this reaches um's entry and never the record. see § Route-by-window
+    index.withDeferredSort(function()
+      for _, seat in ipairs(fxCCs) do
+        if seat.uuid then
+          index.assign(index.byUuid(seat.uuid), 'derived',
+                       fxOutWindows.ownsRaw('cc', chan, seat.cc, seat.ppq))
+        end
+      end
+    end)
   end
 
   for chan = 1, 16 do

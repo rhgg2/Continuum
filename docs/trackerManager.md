@@ -808,6 +808,19 @@ stream per channel the index holds five lists, and that split is the walk's
 own branch: cc buckets, `ats` and `pcs` carry a column, `pbs` and `pas`
 reconcile only. The interval path seeks those same lists by row.
 
+A seat is recognised once and then named. The wholesale path asks `ownsRaw` of
+the persisted census over the channel's whole cc set and writes the answer onto
+the entry's `derived` — the uuid of the window owning it, nil where none does —
+and both paths route out on that field rather than re-asking the geometry. The
+name is um's alone: `derived` is no cc field, so mm's clone never restates it,
+and stamping it through an assign would promote the seat off `plain` and mint
+the very sidecar § Route-by-window exists to avoid. A take round-trip re-mints
+every plain cc's uuid and the names go with it, which is why the wholesale path
+re-derives rather than trusting what it holds; an interval-dirty channel carries
+the names it has. Fx expansion stamps a seat it mints from the pass's own window
+set — the same predicate over the set the census is about to become — so birth
+and re-derivation agree by construction.
+
 A reconcile writes through the walk's mm batch and hands its move back as an
 overlay the column clone carries, rather than mutating the record the walk is
 reading. The batch commits at the end of the walk, and the index syncs with it.
