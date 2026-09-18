@@ -469,7 +469,7 @@ return {
     end,
   },
 
-  -- Keep by omission (design/laneless-derived-notes.md): a host the pass keeps re-emits nothing, so
+  -- Keep by omission (docs/trackerManager.md § The host gate): a host the pass keeps re-emits nothing, so
   -- the PCs its derived notes own reach synthesis off um's index or not at all. A neighbour that runs
   -- puts derived output in the pass, which takes the channel's PC reconcile wholesale -- and a record
   -- set missing the kept host's notes then reads its PCs as unclaimed and deletes them.

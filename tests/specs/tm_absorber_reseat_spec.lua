@@ -290,7 +290,7 @@ return {
     end,
   },
 
-  -- Keep by omission (design/laneless-derived-notes.md): a host the pass keeps emits nothing into it,
+  -- Keep by omission (docs/trackerManager.md § The host gate): a host the pass keeps emits nothing into it,
   -- so its base voices reach the union off um's index or not at all. A lane-1 seed closes to the span
   -- reaching the next base voice, so a union blind to the kept host's tiles widens that span over the
   -- whole host and reseats the channel without the detune steps its own output asks for.
