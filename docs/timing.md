@@ -131,18 +131,29 @@ Step 4.7 of `tm:rebuild`. For each non-derived event:
   similarly `endppq = round(swing.fromLogical(endppqL))`. The
   stale-swing flag is cleared mid-pass, once the partition and the CC
   walk have read it.
-- **else** — predicted-check. Compute
+- **else, on a channel marked foreign** — predicted-check. Compute
   `predicted = round(swing.fromLogical(ppqL)) + delayToPPQ(delay)`.
   If `|raw − predicted| ≤ 1 ppq`, no-op. Otherwise rederive
   `ppqL = swing.toLogical(raw − delayToPPQ(delay))` and
-  `endppqL = swing.toLogical(endppq)`. Missing ppqL counts as
-  disagreement.
+  `endppqL = swing.toLogical(endppq)`.
+- **else** — no-op. ppqL stands, however far raw sits from it.
+
+Missing ppqL counts as disagreement under either arm: an unstamped
+record is nobody's writing but the outside world's. A channel is
+*foreign* where raw reached it with no seed of ours behind it — mm
+payload on a channel this flush never seeded, or a wholesale re-read
+(reload, take swap). The mark is `dirt.foreign`, a third axis beside
+the seeds and the stale-swing flag, and it clears mid-pass with it.
 
 The `rpb` mark survives as authorship provenance (it gates reswing
 and clipboard symmetry) but no longer gates this rule. Between
-rebuilds swing cannot change without setting the channel stale, so
-any raw/predicted disagreement on a non-stale channel is an
-external edit and ppqL follows raw. The earlier "rpb-stamped is
+rebuilds swing cannot change without setting the channel stale — but
+a disagreement on a non-stale channel is still no proof of an
+external edit. The tail walk separates same-tick same-pitch voices by
+a tick apiece, so a pile-up four deep stands a voice two ticks off its
+own projection; the tolerance absorbs one tick of that and no more,
+and cannot tell our nudge from anyone else's edit. Only provenance
+can, which is what the foreign mark carries. The earlier "rpb-stamped is
 exempt" arm froze ppqL silently and then wiped the external edit
 the next time the channel went stale — a recoverable disagreement
 turned into a silent loss.
@@ -391,6 +402,15 @@ fake-pb absorber".
   authoring intent.
 - **`endppq` carries no delay.** Only the note-on receives the
   offset, at every layer.
+- **`fromLogical` is monotone on ℤ, not injective.** The clip bounds the
+  composite's slopes to `[1/K, K]` (§ Boundary clip), which keeps the *Shape*
+  invertible — but a slope below 1 seats two adjacent logical ticks on one raw
+  tick once both are rounded. Under a `classic` shift of 0.08, rows 140 and 141
+  both realise onto raw 159. What survives rounding is the round trip from raw:
+  `fromLogical(toLogical(raw)) == raw`. So a raw seat does not name the row that
+  reached it, and anything seeking records by raw parts them by their stamps —
+  as the interval cc refill does (`docs/trackerManager.md` § Interval
+  materialisation).
 - **Float `ppqPerRow`.** vm holds `ppqPerRow = logPerRow(rpb, denom, res)`
   without pre-rounding. Under non-divisor `rpb` (e.g. 7) the rounded
   form would seed ε that compounds through swing inversion; with

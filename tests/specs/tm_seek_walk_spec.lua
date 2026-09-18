@@ -23,6 +23,29 @@ local function pitchRaws(h, pitch)
   return out
 end
 
+-- Every column row a pitch stands on, across the channel's note lanes.
+local function pitchRows(h, pitch)
+  local out = {}
+  for _, col in ipairs(h.tm:getChannel(1).onTake.notes) do
+    for _, e in ipairs(col.events) do
+      if e.pitch == pitch then out[#out + 1] = e.ppq end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+-- Four pitch-60 voices on one tick, each landing in its own flush, so each add
+-- settles against the already-separated pile below it.
+local function pileUp(h)
+  for lane = 1, 4 do
+    h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                    vel = 100, detune = (lane - 1) * 20, delay = 0, lane = lane })
+    h.tm:flush()
+  end
+  t.deepEq(pitchRaws(h, 60), { 0, 1, 2, 3 }, 'the pile-up separated one tick apart')
+end
+
 return {
 
   {
@@ -46,6 +69,39 @@ return {
       h.tm:flush()
       t.deepEq(pitchRaws(h, 60), { 0, 1, 2, 3 },
         'the seed reached past its own onset and pushed the whole column along')
+    end,
+  },
+
+  {
+    name = 'a collision nudge is our own write, not a foreign raw edit',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 3840 } }
+      pileUp(h)
+
+      -- Past EPS the raw no longer agrees with the row, but the disagreement is
+      -- ours: every voice still belongs on the row it was authored at.
+      t.deepEq(pitchRows(h, 60), { 0, 0, 0, 0 },
+        'the nudged voices hold the authored row')
+    end,
+  },
+
+  {
+    name = 'a seed-capped flush re-derives the pile-up without restamping it',
+    run = function(harness)
+      local h = harness.mk{ seed = { length = 3840 } }
+      pileUp(h)
+
+      -- One flush past dirt's seed cap collapses the channel to wholesale. The
+      -- seeds are still ours, so the re-derive must seat the pile where it was.
+      for i = 1, 70 do
+        h.tm:addEvent({ evType = 'note', ppq = 480 * i, endppq = 480 * i + 240, chan = 1,
+                        pitch = 72, vel = 100, detune = 0, delay = 0, lane = 1 })
+      end
+      h.tm:flush()
+
+      t.deepEq(pitchRaws(h, 60), { 0, 1, 2, 3 }, 'the pile-up survived the re-derive')
+      t.deepEq(pitchRows(h, 60), { 0, 0, 0, 0 },
+        'and every voice kept the row it was authored at')
     end,
   },
 

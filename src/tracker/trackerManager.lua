@@ -1188,8 +1188,9 @@ do
       end
       dirt.add(chan, deduped)
     end
+    -- Payload we never seeded is someone else's write: the one place foreign provenance shows.
     for chan in pairs(payloadChans) do
-      if not seeds[chan] then dirt.add(chan, true) end
+      if not seeds[chan] then dirt.add(chan, true); dirt.foreign.add(chan) end
     end
   end
 
@@ -1942,9 +1943,9 @@ function tm:rebuild(takeChanged)
   rebuilding = true
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  -- Wholesale re-read / take swap: fxRealisedWindows (dataStore) carries the recognition baseline,
-  -- and every channel re-derives, the frame it would carry addressing the take just left.
-  if didReload or takeChanged then dirt.add(nil, true) end
+  -- Wholesale re-read/take swap: nothing here came from a seed of ours, so mark every channel
+  -- foreign as well as dirty. see docs/timing.md § Rebuild rule
+  if didReload or takeChanged then dirt.add(nil, true); dirt.foreign.add(nil) end
   pbLimCache = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   local prevLength = timeContext:length()   -- rebuild is the (cm, mm) coherence point

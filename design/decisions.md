@@ -4,6 +4,21 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-18** — The interval cc refill parts a cell from its neighbour by stamp, and seeks that
+  cell's raw seat exactly. Over the ±1 window and the `ccReseat` reconcile behind it: `dirt.foreign`
+  is only ever set alongside wholesale dirt, so nothing the interval path meets can want
+  reconciling. The bijection the old comment claimed was never there to lean on — under `classic58`,
+  rows 140 and 141 both realise onto raw tick 159, and only the stamp tells the two cells apart.
+
+- **2026-09-18** — Whether a raw moved without us is answered by provenance: `dirt.foreign`, a
+  third axis beside the seeds and `dirt.swing`, marked where an unseeded payload channel escalates
+  to wholesale and where a reload or take swap re-reads the lot, and read by
+  `rawDivergesFromLogical` ahead of its arithmetic. What it replaces is the `EPS = 1` tolerance
+  standing alone, which absorbs exactly one tick of collision separation: a fourth same-tick
+  same-pitch voice read as an external edit and was restamped onto the row its own nudge had
+  carried it to -- off its column, and carrying a `delayC` cue for a delay nobody authored. Cleared
+  mid-pass alongside swing, the same two stages consuming both.
+
 - **2026-09-18** — The existing side of the fx cc reconcile is gathered per producing host off
   `index.derivedByHost`, as the notes are, over the window scan `rebuildCCs` threaded down to it.
   `buildFxInCcsInWindows` and the `fxInCCs` parameter go, and with them the question of what a stage

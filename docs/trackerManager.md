@@ -341,10 +341,20 @@ maintained across the edit that seeded the dirt (§ Incremental index
 reconciliation), so a fresh add and a move are both visible by the time the
 pass runs. Two frames meet at the seek — the index seats by raw, a cell is
 named by its logical row — so the row converts through the pass's time context,
-EPS-wide for the slack `rawDivergesFromLogical` allows. A carried cc always
-seats at the projection of its raw, the walk having reconciled `ppqL` as it
-cloned, so cell and raw seat are in bijection and the converted seek covers
-exactly what the excise dropped.
+and the seek is exact. A carried cc always seats on the projection of its stamp,
+the walk having reconciled `ppqL` as it cloned, so the converted seek covers
+everything the excise dropped. It can cover more: swing compresses hard enough
+to seat two adjacent rows on one raw tick, and both of them answer that seek.
+The stamp parts them. The refill keeps what the cell's own row stamped, and the
+neighbour — named by no seed, so never excised — stands where it was.
+
+No record on this path wants reconciling, which is why the seek can be exact.
+A channel reached by raw with no seed of ours behind it is marked foreign, and
+both sites that mark it escalate it to wholesale (`docs/timing.md` § Rebuild
+rule); a stale swing escalates it too. What is left for the interval path is our
+own writing, stamped, seated on the projection of its stamp — so the refill
+seeks that projection and keeps what stands on the row, rather than reconciling
+a divergence that cannot arrive here.
 
 A cc's column is stable under every verb — none assigns `cc` — so the flush
 fold loses nothing by keeping one seed per uuid and folding the later rows onto
@@ -487,7 +497,9 @@ Semantics:
   or a same-row detune cluster) are separated by a +1 nudge — not
   dropped — so each keeps its own pb absorber (§ Same-pitch onset
   separation). The divergence surfaces in the projection's render cues
-  (§ Logical projection). Separation lives entirely on
+  (§ Logical projection), and being our own write it is provenance, not
+  a ppq tolerance, that keeps the rebuild rule from reading it back as
+  someone else's edit (`docs/timing.md` § Rebuild rule). Separation lives entirely on
   the realisation side: the authored ceiling on `endppq` stands. A caller
   staging a coherent monotone plan can
   bypass the per-write logical→raw translation by setting
@@ -776,10 +788,13 @@ swing here (`docs/timing.md` § Rebuild rule). Externals are deferred to
 producing host, per channel — the grain `rebuildFx` reads them at, on
 both its keep path and its existence reconcile.
 
-Internal events are stamped (`ppqL ~= nil`) AND have raw ppq consistent
-with `fromLogical(ppqL, delay)`. The main rebuild flows them branchlessly.
-External events are foreign-MIDI (no `ppqL`) or externally-edited stamped
-records (Ctrl-Z, foreign script made raw diverge from `fromLogical`).
+Internal events are stamped (`ppqL ~= nil`) and, on a channel marked
+foreign, also have raw ppq consistent with `fromLogical(ppqL, delay)`.
+The main rebuild flows them branchlessly. External events are
+foreign-MIDI (no `ppqL`) or, on a foreign channel, stamped records whose
+raw diverges from `fromLogical` (Ctrl-Z, a foreign script). What marks a
+channel foreign — and why the consistency question is asked only there —
+is `docs/timing.md` § Rebuild rule.
 They re-enter at the externals step: notes get a fresh lane pack and
 `ppqL`/`endppqL` stamp; CCs get `ppqL` stamped in-line in the CC walk.
 
@@ -800,13 +815,15 @@ projects `cc`/`at`/`pc` into columns. Pb projection defers to
 The reconcile has two rules:
 
 - A swing-stale channel: ppqL is truth; reseat `raw = fromLogical(ppqL)`.
-- Otherwise, if raw diverges from ppqL: external raw edit; restamp
-  `ppqL = toLogical(raw)`.
+- Otherwise, on a foreign-marked channel, if raw diverges from ppqL:
+  external raw edit; restamp `ppqL = toLogical(raw)`.
 
 Both paths read um's raw index rather than mm. Where mm holds one flat cc
 stream per channel the index holds five lists, and that split is the walk's
 own branch: cc buckets, `ats` and `pcs` carry a column, `pbs` and `pas`
-reconcile only. The interval path seeks those same lists by row.
+reconcile only. The interval path seeks those same lists by row, and reconciles
+nothing: what reaches it is our own writing, seated already (§ Interval
+materialisation).
 
 A seat is recognised once and then named. The wholesale path asks `ownsRaw` of
 the persisted census over the channel's whole cc set and writes the answer onto
@@ -1750,8 +1767,9 @@ The carry is logical for the same reason, and for a sharper one. It moves
 the PA's seat by the host's logical shift and realises that seat through
 `fromLogical`, rather than adding the host's raw delta to the PA's raw.
 Under swing those two disagree — and a PA whose raw and seat disagree is
-not merely imprecise. On a settled channel the CC walk reads the
-divergence as an external raw edit and restamps `ppqL` from the raw
+not merely imprecise. On a settled channel something outside has
+touched, the CC walk reads the divergence as an external raw edit
+and restamps `ppqL` from the raw
 (`rebuildCCs`), so a fabricated realisation silently overwrites the very
 intent the carry set out to preserve. Only a swing-stale channel gets
 the reverse treatment, its seat reswung into raw; everywhere else, raw

@@ -42,7 +42,7 @@ end
 
 --contract: one journal per trackerManager: its edit side and its rebuild share the one instance
 function dirt.new()
-  local marks, swing = {}, {}
+  local marks, swing, foreign = {}, {}, {}
   local memo = {}
   local journal = {}
 
@@ -159,6 +159,19 @@ function dirt.new()
     has   = function(chan) return swing[chan] == true end,
     --contract: the mid-pipeline clear, once the partition and the cc walk have consumed it
     clear = function() swing = {} end,
+  }
+
+  -- Provenance, not arithmetic: raw that moved with no seed of ours behind it. Only on a channel
+  -- marked here may a record's raw outrank its own logical stamp.
+  journal.foreign = {
+    --contract: chan nil marks all 16
+    add   = function(chan)
+      if chan then foreign[chan] = true; return end
+      for i = 1, 16 do foreign[i] = true end
+    end,
+    has   = function(chan) return foreign[chan] == true end,
+    --contract: the mid-pipeline clear, alongside swing's -- the same stages consume both
+    clear = function() foreign = {} end,
   }
 
   return journal

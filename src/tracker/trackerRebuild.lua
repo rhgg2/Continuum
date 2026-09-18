@@ -116,11 +116,12 @@ local function mmBatch()
   }
 end
 
--- True when raw ppq can't be explained by the logical projection: foreign MIDI (no ppqL) or
--- an external raw edit. Swing-stale chans return false; their divergence is an expected reseat.
+-- True when raw ppq can't be explained by the logical projection on a foreign channel, or the
+-- channel has no ppqL at all (foreign MIDI). see docs/timing.md § Rebuild rule
 local function rawDivergesFromLogical(evt, time)
-  if evt.ppqL == nil          then return true  end
-  if dirt.swing.has(evt.chan) then return false end
+  if evt.ppqL == nil             then return true  end
+  if dirt.swing.has(evt.chan)    then return false end
+  if not dirt.foreign.has(evt.chan) then return false end
   local delayPpq = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
   local rawFromLogical = time:fromLogical(evt.chan, evt.ppqL, delayPpq)
   if evt.ppq == 0 and rawFromLogical < 0 then return false end
@@ -241,18 +242,6 @@ end
 
 local CC_FAMILY = { cc = true, at = true, pc = true }
 
--- The logical seat an interval-path cc reconciles onto, or nil where its raw already agrees with its
--- own stamp. Stale-swing implies wholesale, so this is the only reconcile that can fire on the path.
-local function ccReseat(live, time)
-  if live.derived or not rawDivergesFromLogical(live, time) then return nil end
-  return time:toLogical(live.chan, live.ppq)
-end
-
--- The row a cc-family record seats at once reconciled: its own stamp, or the projection of its raw.
-local function ccRow(live, time)
-  return ccReseat(live, time) or live.ppqL or live.ppq
-end
-
 -- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
 local function getCcColumn(chan, evType, ccNum)
   local cols = frame.channels[chan].onTake
@@ -281,22 +270,21 @@ local function ccIndexList(chan, evType, ccNum)
   if evType == 'pc' then return raw.pcs end
 end
 
--- Clone one cc-family record into its column with the CC walk's reconcile + projection, then splice
--- it in ppq-order. Mirror of the walk's per-event body, driven by the seeded cells' refill.
-local function spliceCcEvent(live, ccWrites, time)
-  local chan      = live.chan
-  local movedPpqL = ccReseat(live, time)
-  if movedPpqL then ccWrites.assign({ uuid = live.uuid }, { ppqL = movedPpqL }) end
-  local event = columnEvent(live, { ppqL = movedPpqL })   -- an unmoved seat is nil, so the clone's own stands
+-- Clone one cc-family record into its column with the CC walk's projection, splice it in
+-- ppq-order, and reconcile nothing. see docs/trackerManager.md § Interval materialisation
+local function spliceCcEvent(live, time)
+  local chan  = live.chan
+  local event = columnEvent(live)
   local col   = getOrSetCcColumn(chan, live.evType, live.cc)
   projectEvent(event, chan, time)
   frame.spliceInto(col, event)   -- a membership change hands out a fresh events table; the excise's twin
 end
 
--- Interval-dirt path: the ppqs in seedList are cleared and refilled from the raw index.
--- see docs/trackerManager.md § Interval materialisation
---invariant: a carried cc seats at the projection of its raw, so cell and raw seat are in bijection
-local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, time)
+-- Interval-dirt path: the ppqs in seedList are cleared and refilled from the raw index, seeking
+-- our own stamped writing -- nothing else can reach here. see docs/trackerManager.md § Interval materialisation
+--invariant: the excise and the refill name the same events, and name them by stamp -- swing can
+--seat two rows on one raw, so the raw seat alone does not part a cell from its neighbour
+local function spliceChannelCCs(chan, seedList, time)
   local cells = {}
   for _, s in ipairs(seedList) do
     if CC_FAMILY[s.evType] then
@@ -315,15 +303,15 @@ local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, time)
   for _, cell in pairs(cells) do
     local list = ccIndexList(chan, cell.evType, cell.cc) or {}
     for _, row in ipairs(cell.ppqs) do
-      -- The index seats by raw and a cell by row, so seek the row's raw seat -- EPS wide, for the
-      -- slack rawDivergesFromLogical allows -- and keep only what reconciles onto this row.
+      -- The index seats by raw and a cell by row, so seek the row's raw seat exactly, and keep only
+      -- what stands on this row -- swing need not seat two rows on two raws.
       local rawRow = time:fromLogical(chan, row)
-      for i = util.firstAtOrAfter(list, rawRow - EPS), #list do
+      for i = util.firstAtOrAfter(list, rawRow), #list do
         local entry = list[i]
-        if entry.ppq > rawRow + EPS then break end
+        if entry.ppq > rawRow then break end
         -- A tagged cc is a markerless seat: routed out of the columns and reconciled at fx
         -- expansion instead. see docs/generators.md § Route-by-window
-        if not entry.derived and ccRow(entry, time) == row then util.add(refills, entry) end
+        if not entry.derived and entry.ppqL == row then util.add(refills, entry) end
       end
     end
   end
@@ -332,7 +320,7 @@ local function spliceChannelCCs(chan, seedList, fxInWindows, ccWrites, time)
     local col = getCcColumn(chan, cell.evType, cell.cc)
     if col then exciseEvents({ col }, cell.ppqs) end
   end
-  for _, live in ipairs(refills) do spliceCcEvent(live, ccWrites, time) end
+  for _, live in ipairs(refills) do spliceCcEvent(live, time) end
 end
 
 -- Reconciles (raw, ppqL) per the swing rules; see docs/trackerManager.md § CC walk.
@@ -407,7 +395,7 @@ local function rebuildCCs(fxInWindows, time)
   for chan = 1, 16 do
     if dirt.has(chan) then
       if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, time)
-      else spliceChannelCCs(chan, dirt.has(chan), fxInWindows, ccWrites, time)
+      else spliceChannelCCs(chan, dirt.has(chan), time)
       end
     end
   end
@@ -2995,6 +2983,7 @@ function rebuild.pipeline(sources, time)
   local external = rebuildInternals(time)       -- partition; internal cols (logical-born); reseat swing notes
   rebuildCCs(fxInWindows, time)                 -- CC walk; reseat swing CCs
   dirt.swing.clear()                            -- swing consumers (partition + CC walk) done
+  dirt.foreign.clear()                          -- and the same two consume foreign
 
   rebuildExtraColumns(sources.extraColumns, sources.paramAutomation)
   rebuildExternals(external, time)

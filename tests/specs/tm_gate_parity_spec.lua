@@ -476,6 +476,37 @@ return {
   },
 
   {
+    name = 'cc-family cells: rows sharing one raw seat refill by stamp, not by raw',
+    run = function(harness)
+      -- Swing compresses hard enough to seat adjacent rows on one raw tick: under classic58 both 140
+      -- and 141 realise onto raw 159. The refill seeks the row's raw seat, so both entries answer
+      -- that seek and only the stamp parts them. Take the wrong one and the seeded cell wears its
+      -- neighbour's value, while the neighbour's own cell -- named by no seed, so never excised --
+      -- stands where it was.
+      local h = harness.mk{
+        config = { project = { swings = { c58 = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+      }
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 7, ppq = 140, val = 11 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 7, ppq = 141, val = 22 }); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity before any parity claim
+
+      local function cells() return h.tm:getChannel(1).onTake.ccs[7].events end
+
+      -- Non-triviality: the fixture holds the collision the claim is about.
+      t.eq(h.tm:fromLogical(1, 140), h.tm:fromLogical(1, 141),
+        'the two rows share a raw seat, so the seek alone cannot part them')
+      t.eq(#cells(), 2, 'each row carries a cell of its own')
+
+      h.tm:assignEvent(cells()[1], { val = 99 }); h.tm:flush()
+      t.eq(#cells(), 2, 'the seeded refill neither dropped a cell nor doubled one')
+      t.eq(cells()[1].val, 99, 'the seeded row took the edit')
+      t.eq(cells()[2].val, 22, 'the row sharing its raw seat kept its own value')
+      assertParity(h, 'cc cells sharing a raw seat == full re-derive')
+    end,
+  },
+
+  {
     name = 'rebuild(∅) short-circuits: no fire without dirt; requestRebuild and takeChanged force it',
     run = function(harness)
       local h = harness.mk()
