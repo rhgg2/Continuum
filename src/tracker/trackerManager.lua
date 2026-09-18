@@ -448,7 +448,7 @@ do
   local rawIndex = {}
   local byUuid = {}
   local fxHosts = {}   -- chan -> { uuid = true } for on-take .fx notes; maintained, never rescanned. see design § Phase 5.5
-  --shape: derivedByHost[chan] = { [hostUuid] = { [noteUuid] = entry } }; the channel's derived notes filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned -- as fxHosts is. see docs/trackerManager.md § The host gate
+  --shape: derivedByHost[chan] = { [hostUuid] = { [uuid] = entry } }; the channel's derived records -- notes, and the ccs routed out of the columns -- filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned -- as fxHosts is. see docs/trackerManager.md § The host gate
   local derivedByHost = {}
 
   ----- Order
@@ -502,7 +502,7 @@ do
 
   -- Fx expansion asks per host that ran, so a host it kept is never asked and its notes stand
   -- outside both sides of the reconcile. Entries are live, and a gather clones before writing.
-  --post: result = the channel's derived notes, filed by producing host uuid
+  --post: result = the channel's derived notes and ccs, filed by producing host uuid
   function index.derivedByHost(chan) return derivedByHost[chan] end
 
   -- Resolve a uuid to its live column event via the seat stamp (byUuid.colEvt), so the clip cache
@@ -563,10 +563,11 @@ do
     local set = fxHosts[chan or evt.chan]
     if set then set[evt.uuid] = nil end
   end
-  -- A derived note's file membership rides the index turnover as fx-host membership does, so fx
-  -- expansion gathers its existing set per host without a pass over the channel's raws.
+  -- A derived record's file membership rides index turnover as fx-host membership does; only notes and
+  -- ccs file under a host, since a pb/pc names its own kind. see docs/trackerManager.md § The host gate
+  local HOST_FILED = { note = true, cc = true }
   local function setDerivedHost(evt)
-    if evt.evType ~= 'note' or not evt.uuid or not evt.derived then return end
+    if not HOST_FILED[evt.evType] or not evt.uuid or not evt.derived then return end
     local file = derivedByHost[evt.chan]
     local produced = file[evt.derived]
     if not produced then produced = {}; file[evt.derived] = produced end
@@ -576,7 +577,7 @@ do
   -- removal drops the file itself, so the orphan sweep never meets a uuid that produces nothing.
   local function clearDerivedHost(evt, chan, host)
     host = host or evt.derived
-    if evt.evType ~= 'note' or not evt.uuid or not host then return end
+    if not HOST_FILED[evt.evType] or not evt.uuid or not host then return end
     local file = derivedByHost[chan or evt.chan]
     local produced = file[host]
     if not produced then return end

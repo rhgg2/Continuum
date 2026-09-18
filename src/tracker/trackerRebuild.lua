@@ -1440,11 +1440,13 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
     -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
     local ccChains = {}
-    -- The existing side of the note reconcile, one host at a time, off um's maintained file. Entries
-    -- come first for um's sort order; the clones keep the reconcile off um's live records.
-    local function producedBy(id)
+    -- The existing side of a reconcile, one host at a time, off um's file (notes and ccs together, so
+    -- the caller names the kind). Entries sort first for um's order; clones keep the reconcile off um's live records.
+    local function producedBy(id, evType)
       local entries = {}
-      for _, entry in pairs(index.derivedByHost(chan)[id] or {}) do util.add(entries, entry) end
+      for _, entry in pairs(index.derivedByHost(chan)[id] or {}) do
+        if entry.evType == evType then util.add(entries, entry) end
+      end
       table.sort(entries, index.order)
       local out = {}
       for _, entry in ipairs(entries) do util.add(out, columnEvent(entry)) end
@@ -1670,7 +1672,7 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     local existing, ran = {}, fxOut.ran[chan]
     for _, host in ipairs(running) do
       ran[host.id] = true
-      for _, evt in ipairs(producedBy(host.id)) do util.add(existing, evt) end
+      for _, evt in ipairs(producedBy(host.id, 'note')) do util.add(existing, evt) end
     end
     -- A file belonging to no host of this pass -- kept hosts included, so a kept neighbour's notes are
     -- not swept -- belongs to a host deleted or parked away, and falls in whole.
@@ -1679,7 +1681,7 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     for id in pairs(index.derivedByHost(chan)) do
       if not hostsOfPass[id] then
         ran[id] = true
-        for _, evt in ipairs(producedBy(id)) do util.add(existing, evt) end
+        for _, evt in ipairs(producedBy(id, 'note')) do util.add(existing, evt) end
       end
     end
 

@@ -819,7 +819,8 @@ every plain cc's uuid and the names go with it, which is why the wholesale path
 re-derives rather than trusting what it holds; an interval-dirty channel carries
 the names it has. Fx expansion stamps a seat it mints from the pass's own window
 set — the same predicate over the set the census is about to become — so birth
-and re-derivation agree by construction.
+and re-derivation agree by construction. Either way the name files the seat
+under its host, as a derived note's does (§ The host gate).
 
 A reconcile writes through the walk's mm batch and hands its move back as an
 overlay the column clone carries, rather than mutating the record the walk is
@@ -1493,11 +1494,16 @@ The leading flush is a no-op when nothing is staged, at the price of one empty `
 
 Under seed dirt a host whose window no seed touches does not run. The existing
 side of the note reconcile is gathered per host that *ran*, off the file um
-keeps of the channel's derived notes: `index.derivedByHost(chan)`, filed under
-the uuid each derived note carries in `derived` and maintained on the index
+keeps of the channel's derived records: `index.derivedByHost(chan)`, filed under
+the uuid each derived record carries in `derived` and maintained on the index
 verbs as `fxHosts` is, never rescanned. A kept host is never asked, so its
 notes stand outside both sides of the reconcile by omission -- it writes nothing
 to mm and re-derives nothing.
+
+Notes and the ccs routed out of the columns (§ CC walk) file together, so a
+gather names the kind it reconciles and takes that slice. Those two are the
+types whose `derived` is a host uuid: on a pb it names the absorber pool and on
+a pc its own kind, and a marker is no host to file under.
 
 Addressing the existing set by producer rather than by window is what makes that
 cheap. A derived note names its host; recovering the window it used to occupy

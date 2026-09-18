@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-18** — A derived cc files under its producing host in um's derivedByHost, beside the
+  derived notes. The file keys on uuid and a plain cc has one in RAM, so the cc side can gather its
+  existing set by producer as the note side does, rather than by rescanning windows. Notes and ccs
+  are the types that file, being the two whose `derived` holds a host uuid: on a pb it names the
+  absorber pool and on a pc its own kind, and a marker is no host to file under. A gather therefore
+  names the kind it wants, and takes that slice of the file.
+
 - **2026-09-18** — The wholesale cc path reads um's raw index over `mm:ccsRaw(chan)`, joining the
   interval path already on it: one source for both halves of the walk, and a branch that can test
   what um maintains rather than only what mm persists. mm's flat per-channel stream is five lists
