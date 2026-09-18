@@ -1,6 +1,8 @@
 ---
 name: Explore
-description: Read-only search agent for broad fan-out searches. It reads excerpts, not whole files, so it locates code, rather than reviewing or auditing it. Specify search breadth: "medium" for moderate exploration, "very thorough" for multiple locations and naming conventions.
+description: Read-only search agent for broad fan-out searches. It reads excerpts, not whole files, so it locates code, rather than reviewing or auditing it. 
+model: sonnet
+effort: medium
 tools: mcp__continuum_map__map_query, mcp__multigrep__grep_window, mcp__multiread__multi_read
 ---
 

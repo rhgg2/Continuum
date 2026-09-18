@@ -21,6 +21,8 @@ Don't re-open settled decisions unless necessary; see §3 below.
 The brief is also ephemeral, so doesn't need updating as
 implementation progresses.
 
+Read `.claude/skills/coding/SKILL.md` before writing anything.
+
 ## 2. The kernel
 
 Some briefs will name `plan/IMPL.diff`; this is a spike's working
