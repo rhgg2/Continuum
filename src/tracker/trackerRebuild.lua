@@ -132,13 +132,15 @@ local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
--- The pass's index population: Continuum-authored records, plus the derived records it left standing
--- -- their host kept its output, so um's entry is the only live copy there is.
---pre: claimed is the pass's host authority for the records' channel -- fxOut.claimed[chan]
-local function standing(claimed)
+-- Which of um's index records survive this pass. A derived record is superseded where its host is in
+-- `ran` -- the pass re-emitted that host's output, or swept its file as an orphan -- and survives where
+-- it is not: um's entry is then the only live copy there is. Continuum-authored records, owned by no
+-- host, always survive; foreign MIDI is nobody's copy, as isAuthored.
+--pre: ran is the pass's host authority for the records' channel -- fxOut.ran[chan]
+local function survivingEvents(ran)
   return function(rec)
     if rec.ppqL == nil then return false end        -- foreign MIDI, as isAuthored
-    return not rec.derived or not claimed[rec.derived]
+    return not rec.derived or not ran[rec.derived]
   end
 end
 
@@ -1370,7 +1372,7 @@ end
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
 --contract: notesByHost is carried between passes, so the stage rewrites the buckets of the hosts it
--- claimed and leaves a kept host's list -- and a frozen channel's whole map -- standing
+-- ran and leaves a kept host's list -- and a frozen channel's whole map -- standing
 local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
@@ -1416,12 +1418,12 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
 
   -- Host-owned outputs: live notes, existence ops (deletes/adds) awaiting the walk, per-chain pb curves, authored
   -- pb base, the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split, and the host authority.
-  --shape: fxOut.claimed[chan] = { [hostUuid] = true }; the host files this pass took in hand --
+  --shape: fxOut.ran[chan] = { [hostUuid] = true }; the host files this pass took in hand --
   --   every host that ran, plus every orphan file it swept. A derived record whose host is not
-  --   here is standing: um's entry is the live copy and the pass says nothing about it.
+  --   here survives: um's entry is the live copy and the pass says nothing about it.
   local fxOut = { notes = frame.newChannels(), deferredWrite = mmBatch(),
                   pbChains = frame.newChannels(), pbBase = frame.newChannels(),
-                  pbScope = {}, claimed = frame.newChannels() }
+                  pbScope = {}, ran = frame.newChannels() }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see docs/generators.md § The chain
@@ -1658,18 +1660,18 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
 
     -- Existence reconcile stamps matched specs with the mm handle + realised end. A kept host is never
     -- asked, so its notes stand outside both sides; see docs/trackerManager.md § The host gate.
-    local existing, claimed = {}, fxOut.claimed[chan]
+    local existing, ran = {}, fxOut.ran[chan]
     for _, host in ipairs(running) do
-      claimed[host.id] = true
+      ran[host.id] = true
       for _, evt in ipairs(producedBy(host.id)) do util.add(existing, evt) end
     end
-    -- A file no host of this pass claims -- kept hosts included, so a kept neighbour's notes are not
-    -- swept -- belongs to a host deleted or parked away, and falls in whole.
+    -- A file belonging to no host of this pass -- kept hosts included, so a kept neighbour's notes are
+    -- not swept -- belongs to a host deleted or parked away, and falls in whole.
     local hostsOfPass = {}
     for _, host in ipairs(hosts) do hostsOfPass[host.id] = true end
     for id in pairs(index.derivedByHost(chan)) do
       if not hostsOfPass[id] then
-        claimed[id] = true
+        ran[id] = true
         for _, evt in ipairs(producedBy(id)) do util.add(existing, evt) end
       end
     end
@@ -1711,9 +1713,9 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
       return index.emissionOf(a) < index.emissionOf(b)
     end)
     -- Bucketed after the sort, so each host's list inherits the onset order.
-    -- Clearing only claimed hosts' buckets drops the stale list of a host that emitted nothing, or a swept orphan; a kept host's last output stands.
+    -- Clearing only the buckets of hosts in `ran` drops the stale list of a host that emitted nothing, or a swept orphan; a kept host's last output stands.
     local byHost = notesByHost[chan] or {}
-    for id in pairs(claimed) do byHost[id] = nil end
+    for id in pairs(ran) do byHost[id] = nil end
     for _, n in ipairs(fxNotes) do util.bucket(byHost, n.derived, n) end
     notesByHost[chan] = byHost
 
@@ -2147,12 +2149,12 @@ local function rebuildTails(fxOut, windows, time, movedBounds)
   for chan = 1, 16 do
     -- Clean channels freeze: fx left fxOut.notes empty, real notes converged last rebuild.
     if not dirt.has(chan) then goto nextChan end
-    -- The channel's population: um's index less what this pass claimed, plus the pass's own specs. Every
+    -- The channel's population: um's index less what this pass ran, plus the pass's own specs. Every
     -- spec is fresh -- a kept host emits none -- so all of them seed disturbance and count toward the cap.
     local extras = {}
     for _, w in ipairs(fxOut.notes[chan]) do util.add(extras, w.evt) end
     local pop = { list = index.raw(chan).notes, extras = extras,
-                  keep = standing(fxOut.claimed[chan]) }
+                  keep = survivingEvents(fxOut.ran[chan]) }
     -- The lane pass named the authored events whose bound it moved, over both its runs; the walk
     -- states no lane bound of theirs, so it re-bounds them by name. see docs § The lane pass
     local reBound = {}
@@ -2191,13 +2193,13 @@ end
 local DUAL_POINT_TICK = 1
 
 --shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump() }
--- A channel's base-voice onset stream: the raw index's standing notes unioned with the pass's
+-- A channel's base-voice onset stream: the raw index's surviving notes unioned with the pass's
 -- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
 --pre: derived is ppq-ascending and holds chan's derived base voices for this pass
---pre: keep is the pass's standing predicate for chan, so `derived` supersedes exactly what it drops
+--pre: keep is survivingEvents for chan, so `derived` supersedes exactly what it drops
 local function baseVoiceUnion(chan, derived, keep)
   local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
-  -- keep drops the index entries of the hosts this pass claimed: seated copies of a prior pass's
+  -- keep drops the index entries of the hosts this pass ran: seated copies of a prior pass's
   -- output, superseded by `derived`. A kept host's stand -- they are the only copy of its voices there is.
   local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(entry) end
 
@@ -2399,7 +2401,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
         end
       end
       table.sort(derivedBaseVoice, index.order)   -- the union's cursors assume ppq order of both sources
-      baseVoiceByChan[chan] = baseVoiceUnion(chan, derivedBaseVoice, standing(fxOut.claimed[chan]))
+      baseVoiceByChan[chan] = baseVoiceUnion(chan, derivedBaseVoice, survivingEvents(fxOut.ran[chan]))
     end
   end
 
@@ -2840,7 +2842,7 @@ local function rebuildPCs(fxOut, time)
     end
     -- A host this pass kept owns PCs at onsets no authored note sits on; those records are um's own.
     -- Off-column, they carry no colEvt, so the shadow mark rides the record like a spec's; no note host means no inherited sample.
-    local keep = standing(fxOut.claimed[chan])
+    local keep = survivingEvents(fxOut.ran[chan])
     local function recordNote(entry)
       if not keep(entry) then return end
       if entry.derived then
@@ -2979,7 +2981,7 @@ end
 --pre: called inside tm:rebuild's mm nest, with the index already reloaded if this pass is wholesale
 --pre: sources holds the head's ds reads, taken before any write of this pass, fxRegions expanded
 --pre: time is the projection the rebuild head built for this pass
---post: fxNotesByHost[chan][uuid] := this pass's notes where it claimed uuid, else what it last left
+--post: fxNotesByHost[chan][uuid] := this pass's notes where uuid is in `ran`, else what it last left
 --post: fresh result = the maps tm:rebuild installs, plus the channels whose mute wants conforming
 --invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
 function rebuild.pipeline(sources, time)
