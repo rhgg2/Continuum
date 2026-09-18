@@ -29,6 +29,15 @@ local function laneEvent(tm, chan, lane, i)
   return tm:getChannel(chan).onTake.notes[lane].events[i]
 end
 
+-- The PCs on a channel below `ppq` -- the span the kept host owns in the case at the foot of this file.
+local function pcsBelow(h, chan, ppq)
+  local out = {}
+  for _, p in ipairs(pcsOnChan(h.fm:dump(), chan)) do
+    if p.ppq < ppq then out[#out + 1] = p end
+  end
+  return out
+end
+
 return {
 
   ----- Basic synthesis from per-note sample fields
@@ -457,6 +466,41 @@ return {
       end
       t.truthy(stolen, 'lane-2 note present')
       t.falsy(stolen.sampleShadowed, 'a PA must not shadow a real note')
+    end,
+  },
+
+  -- Keep by omission (design/laneless-derived-notes.md): a host the pass keeps re-emits nothing, so
+  -- the PCs its derived notes own reach synthesis off um's index or not at all. A neighbour that runs
+  -- puts derived output in the pass, which takes the channel's PC reconcile wholesale -- and a record
+  -- set missing the kept host's notes then reads its PCs as unclaimed and deletes them.
+  {
+    name = 'a kept host\'s derived PCs stand while a neighbour re-runs the channel',
+    run = function(harness)
+      local h = harness.mk{ config = { transient = { trackerMode = true } } }
+      -- Both hosts are retrigs: replace-mode, so both park, and every note below 480 is derived.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, sample = 7,
+                      fx = { { kind = 'retrig', period = { 1, 4 } } } })
+      h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 67, vel = 100,
+                      detune = 0, delay = 0, lane = 1, sample = 3,
+                      fx = { { kind = 'retrig', period = { 1, 4 } } } })
+      h.tm:flush()
+
+      local before = pcsBelow(h, 1, 480)
+      t.truthy(#before >= 2, 'fixture check: the first host\'s tiles own PCs of their own')
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.chan == 1 and n.ppq < 480 then
+          t.truthy(n.derived, 'fixture check: no authored note sits under those onsets to hold them up')
+        end
+      end
+
+      -- ppq 700 is inside the second host\'s window and outside the first\'s: the neighbour re-runs,
+      -- the first host is kept, and its output takes the channel\'s PC pass wholesale.
+      h.tm:addEvent({ evType = 'note', ppq = 700, endppq = 720, chan = 1, pitch = 72, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+
+      t.deepEq(pcsBelow(h, 1, 480), before, 'the kept host\'s PCs stand: nothing of the pass names them')
     end,
   },
 }

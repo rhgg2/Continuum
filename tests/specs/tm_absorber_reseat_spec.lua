@@ -21,6 +21,18 @@ local function fakeIn(dump)
   end
 end
 
+-- The channel's whole pb stream, ppq-ascending: what the absorber pass leaves on the wire.
+local function seatsOn(h, chan)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.chan == chan then
+      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
 -- A host's own output on a channel, ppq-ascending.
 local function derivedNotesOn(dump, chan)
   local out = {}
@@ -275,6 +287,46 @@ return {
       -- The base voice holds detune 0 the whole span and no pb is authored, so the channel is not
       -- pb-active and I2a mints no anchor either: the absence is total.
       t.eq(fakeIn(h.fm:dump()), nil, 'no absorber anywhere -- the jump is not the base voice\'s')
+    end,
+  },
+
+  -- Keep by omission (design/laneless-derived-notes.md): a host the pass keeps emits nothing into it,
+  -- so its base voices reach the union off um's index or not at all. A lane-1 seed closes to the span
+  -- reaching the next base voice, so a union blind to the kept host's tiles widens that span over the
+  -- whole host and reseats the channel without the detune steps its own output asks for.
+  {
+    name = 'a kept host\'s derived base voices hold their absorber seats through a neighbouring edit',
+    run = function(harness)
+      local h = harness.mk()
+      -- Both on lane 1: the plain note is the seed target, the host's tiles the base voices after it.
+      -- 150 cents is a step and a half, so alternate tiles sound a detune the pb stream has to seat.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 55, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 150 } } })
+      h.tm:flush()
+
+      local voices = derivedNotesOn(h.fm:dump(), 1)
+      t.truthy(#voices >= 4, 'fixture check: the trill tiled its host window')
+      local jumped = false
+      for _, n in ipairs(voices) do
+        t.eq(n.baseVoice, true, 'fixture check: every tile inherits the host\'s lane-1 base voice')
+        if (n.detune or 0) ~= 0 then jumped = true end
+      end
+      t.truthy(jumped, 'fixture check: the alternation carries a detune for pb to seat')
+
+      local before = seatsOn(h, 1)
+      t.truthy(#before >= 2, 'fixture check: those detune steps are seated on the wire')
+
+      -- The seed is the plain note, outside the host's window and moving no emit scope a trill feeds,
+      -- so the host is kept. Its span closes at the next base voice -- the host's first tile -- and
+      -- every seat the trill asked for lies at or beyond it.
+      local plain = h.tm:getChannel(1).onTake.notes[1].events[1]
+      t.eq(plain.pitch, 55, 'fixture check: the host parked itself, leaving the plain note alone on lane 1')
+      h.tm:assignEvent(plain, { vel = 90 }); h.tm:flush()
+
+      t.deepEq(seatsOn(h, 1), before, 'the kept host\'s seats stand: nothing of the pass names them')
     end,
   },
 }

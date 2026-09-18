@@ -24,8 +24,8 @@ local rebuild = {}
 -- ppq tolerance for "raw agrees with its logical projection"
 local EPS = 1
 
--- The one map that outlives a pass: the fx stage writes only the channels it ran, keyed by host, so
--- the overlay draws one chain's own. Its lists are built from copies of the fx specs.
+-- The one map that outlives a pass: the fx stage merges at host grain into the channels it ran, so a
+-- host it kept keeps the bucket it last produced. Its lists are built from copies of the fx specs.
 --shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, ppq, endppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
 --   ppq/endppq are the logical span; derived is the producing region/host uuid; logical-onset order
 local fxNotesByHost = {}
@@ -132,6 +132,16 @@ local function isAuthored(note)
   return not note.derived and note.ppqL ~= nil
 end
 
+-- The pass's index population: Continuum-authored records, plus the derived records it left standing
+-- -- their host kept its output, so um's entry is the only live copy there is.
+--pre: claimed is the pass's host authority for the records' channel -- fxOut.claimed[chan]
+local function standing(claimed)
+  return function(rec)
+    if rec.ppqL == nil then return false end        -- foreign MIDI, as isAuthored
+    return not rec.derived or not claimed[rec.derived]
+  end
+end
+
 -- Bucket existing by `key`, keep on hit, add the rest, remove unkept. Records alike in every
 -- keyed field are alike, not one: each prediction takes the next unmatched one, in list order.
 local function diffEvents(existing, predicted, writes, key, onKeep)
@@ -151,9 +161,7 @@ local function diffEvents(existing, predicted, writes, key, onKeep)
   end
 end
 
--- Drop the events the seeded positions claim from the columns handed in: a seek per position per
--- column, not a channel scan; `claims` refines within the cluster. see docs § The note-lane shed
---invariant: a seated event is projected (ppq == ppqL), so a seeded position is a column's sort key
+-- Drop events in `cols` at a ppq in `ppqs` for which `claims` is true; see docs § The note-lane shed
 local function exciseEvents(cols, ppqs, claims)
   claims = claims or function (_) return true end
   for _, col in ipairs(cols) do
@@ -1361,8 +1369,8 @@ end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
---contract: notesByHost is carried between passes, so the stage writes the channels it ran and
--- leaves a frozen channel's lists standing
+--contract: notesByHost is carried between passes, so the stage rewrites the buckets of the hosts it
+-- claimed and leaves a kept host's list -- and a frozen channel's whole map -- standing
 local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
                          pbLimCents, time)
   local gridStep = ccGridStep()
@@ -1407,9 +1415,13 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
   end
 
   -- Host-owned outputs: live notes, existence ops (deletes/adds) awaiting the walk, per-chain pb curves, authored
-  -- pb base, and the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split.
+  -- pb base, the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split, and the host authority.
+  --shape: fxOut.claimed[chan] = { [hostUuid] = true }; the host files this pass took in hand --
+  --   every host that ran, plus every orphan file it swept. A derived record whose host is not
+  --   here is standing: um's entry is the live copy and the pass says nothing about it.
   local fxOut = { notes = frame.newChannels(), deferredWrite = mmBatch(),
-                  pbChains = frame.newChannels(), pbBase = frame.newChannels(), pbScope = {} }
+                  pbChains = frame.newChannels(), pbBase = frame.newChannels(),
+                  pbScope = {}, claimed = frame.newChannels() }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see docs/generators.md § The chain
@@ -1420,7 +1432,7 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
     local ccChains = {}
     -- The existing side of the note reconcile, one host at a time, off um's maintained file. Entries
-    -- come first for um's sort order; clones are left free for reconcile and the tail walk to write into.
+    -- come first for um's sort order; the clones keep the reconcile off um's live records.
     local function producedBy(id)
       local entries = {}
       for _, entry in pairs(index.derivedByHost(chan)[id] or {}) do util.add(entries, entry) end
@@ -1517,10 +1529,9 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
       end
     end
 
-    -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds keeps
-    -- its output verbatim -- notes withhold from the reconcile, seats re-feed it. see design § phase 5
+    -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds does not run.
+    -- It names nothing the pass carries -- its notes stand in um's index. see design § Keep by omission
     local gated = not dirt.wholesale(chan)
-    local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     local seeded, emitScope = {}, {}
     -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
     -- emission drops its own remainder.
@@ -1533,9 +1544,6 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     end
     local function runOrKeep(host)
       if gated and not seeded[host] and keepable(host) then
-        for _, kept in ipairs(producedBy(host.id)) do
-          util.add(predicted, kept); keptFx[kept] = true
-        end
         -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
         -- vanished window would read them as authored pbs.
         if generators.continuousTargets(host.fx).pb then
@@ -1636,8 +1644,8 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
       fxOut.pbScope[chan] = emitScope.pb or {}
     end
 
-    -- Bases cover only the hosts runOrKeep will actually run: a kept host reads no base (its
-    -- output re-adds verbatim); every running host's window feeds channelStreams. see design § 5
+    -- Bases cover only the hosts runOrKeep will actually run: a kept host reads no base (it emits
+    -- nothing); every running host's window feeds channelStreams. see design § Keep by omission
     local running = {}
     for _, host in ipairs(hosts) do
       if not gated or seeded[host] or not keepable(host) then util.add(running, host) end
@@ -1648,24 +1656,25 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
 
     for _, host in ipairs(hosts) do runOrKeep(host) end
 
-    -- Existence reconcile stamps rerun specs with the mm handle + realised end. A kept host is never
+    -- Existence reconcile stamps matched specs with the mm handle + realised end. A kept host is never
     -- asked, so its notes stand outside both sides; see docs/trackerManager.md § The host gate.
-    local existing, rerun = {}, {}
+    local existing, claimed = {}, fxOut.claimed[chan]
     for _, host in ipairs(running) do
+      claimed[host.id] = true
       for _, evt in ipairs(producedBy(host.id)) do util.add(existing, evt) end
     end
     -- A file no host of this pass claims -- kept hosts included, so a kept neighbour's notes are not
     -- swept -- belongs to a host deleted or parked away, and falls in whole.
-    local claimed = {}
-    for _, host in ipairs(hosts) do claimed[host.id] = true end
+    local hostsOfPass = {}
+    for _, host in ipairs(hosts) do hostsOfPass[host.id] = true end
     for id in pairs(index.derivedByHost(chan)) do
-      if not claimed[id] then
+      if not hostsOfPass[id] then
+        claimed[id] = true
         for _, evt in ipairs(producedBy(id)) do util.add(existing, evt) end
       end
     end
-    for _, spec in ipairs(predicted) do if not keptFx[spec] then util.add(rerun, spec) end end
 
-    diffEvents(existing, rerun, fxOut.deferredWrite,
+    diffEvents(existing, predicted, fxOut.deferredWrite,
       -- Logical seat: docs/trackerManager.md § Fx expansion covers the key choice.
       function(evt)
         return util.key(
@@ -1684,8 +1693,7 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
     local fxNotes = {}
     for i, spec in ipairs(predicted) do
       index.stampEmission(spec, i)
-      util.add(fxOut.notes[chan], { evt = spec, baseVoice = spec.baseVoice,
-                                       kept = keptFx[spec] or nil })
+      util.add(fxOut.notes[chan], { evt = spec, baseVoice = spec.baseVoice })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       local copy = { evType = 'note', chan = chan, ppq = spec.ppqL,
                      endppq = spec.endppqL,
@@ -1703,7 +1711,9 @@ local function rebuildFx(fxInCCs, fxOutWindows, fxRegions, notesByHost,
       return index.emissionOf(a) < index.emissionOf(b)
     end)
     -- Bucketed after the sort, so each host's list inherits the onset order.
-    local byHost = {}
+    -- Clearing only claimed hosts' buckets drops the stale list of a host that emitted nothing, or a swept orphan; a kept host's last output stands.
+    local byHost = notesByHost[chan] or {}
+    for id in pairs(claimed) do byHost[id] = nil end
     for _, n in ipairs(fxNotes) do util.bucket(byHost, n.derived, n) end
     notesByHost[chan] = byHost
 
@@ -1756,18 +1766,20 @@ end
 
 -- One-pass merge of the pre-sorted index list (filtered) with a small sorted extras list;
 -- replaces the whole-channel sort the per-pass scratch copy used to force.
-local function mergeIndexed(indexNotes, keep, extras)
-  table.sort(extras, index.order)
+--shape: pop = { list = the channel's index notes, extras = the pass's derived specs,
+--   keep = the index predicate }; the tail walk's two probe sources and the filter over the first
+local function mergeIndexed(pop)
+  table.sort(pop.extras, index.order)
   local merged, j = {}, 1
-  for _, entry in ipairs(indexNotes) do
-    if keep(entry) then
-      while extras[j] and index.order(extras[j], entry) do
-        util.add(merged, extras[j]); j = j + 1
+  for _, entry in ipairs(pop.list) do
+    if pop.keep(entry) then
+      while pop.extras[j] and index.order(pop.extras[j], entry) do
+        util.add(merged, pop.extras[j]); j = j + 1
       end
       util.add(merged, entry)
     end
   end
-  for i = j, #extras do util.add(merged, extras[i]) end
+  for i = j, #pop.extras do util.add(merged, pop.extras[i]) end
   return merged
 end
 
@@ -1836,8 +1848,7 @@ end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Tail walk
-local function linearTails(chan, notes, extras, time, res, windows, clampWrites, tailWrites,
-                           keptDerived, reBound)
+local function linearTails(chan, notes, extras, time, res, windows, clampWrites, tailWrites, reBound)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote, laneNext = makeTailRules{
     chan = chan, res = res, time = time, windows = windows,
@@ -1848,9 +1859,9 @@ local function linearTails(chan, notes, extras, time, res, windows, clampWrites,
   -- Disturbed seeded by name: derived membership + the seeds themselves, survivors resolved by uuid,
   -- adds by logical seat. Anchors for the bound probes: seed positions (dead included) plus disturbed onsets.
   local anchors = {}
-  -- A kept fx spec (gate-verbatim, unchanged since last pass) is already settled and clipped: it
-  -- rides as a bound anchor only, never a fresh disturbance. see docs/trackerManager.md § Tail walk
-  for _, e in ipairs(notes) do if e.derived and not keptDerived[e] then disturbed[e] = true end end
+  -- extras are the merged list's own entries, so identity names them. A standing derived record is not
+  -- among them: its host kept, so it was settled and clipped last pass and rides as a bound anchor only.
+  for _, e in ipairs(extras) do disturbed[e] = true end
   if dirt.wholesale(chan) then
     for _, e in ipairs(notes) do disturbed[e] = true end   -- degenerate pass: load, external change
   else
@@ -1944,23 +1955,23 @@ local FRONTIER_SEED_CAP = 16
 -- near edge of pos's raw cluster, util.firstAfter for the far one -- then scans outward a bounded few
 -- rows. The seek that replaces the sweep.
 
--- Nearest authored record strictly on one `side` of `pos` (raw ppq) matching `filter`, over the index
--- (binary-searched, scanned outward) and the small extras. The strict-ppq bound probe; mirrors util.seek.
-local function nearestNote(indexList, extras, pos, side, filter)
+-- Nearest record of the population strictly on one `side` of `pos` (raw ppq) matching `filter`, over the
+-- index (binary-searched, scanned outward) and the small extras. The strict-ppq bound probe; mirrors util.seek.
+local function nearestNote(pop, pos, side, filter)
   local best
-  local anchor = util.firstAtOrAfter(indexList, pos)
+  local anchor = util.firstAtOrAfter(pop.list, pos)
   if side == 'before' then
     for i = anchor - 1, 1, -1 do
-      local rec = indexList[i]
-      if isAuthored(rec) and filter(rec) then best = rec; break end
+      local rec = pop.list[i]
+      if pop.keep(rec) and filter(rec) then best = rec; break end
     end
   else
-    for i = anchor, #indexList do
-      local rec = indexList[i]
-      if rec.ppq > pos and isAuthored(rec) and filter(rec) then best = rec; break end
+    for i = anchor, #pop.list do
+      local rec = pop.list[i]
+      if rec.ppq > pos and pop.keep(rec) and filter(rec) then best = rec; break end
     end
   end
-  for _, rec in ipairs(extras) do
+  for _, rec in ipairs(pop.extras) do
     local onSide = side == 'before' and rec.ppq < pos or side == 'after' and rec.ppq > pos
     local nearer = best == nil
                    or (side == 'before' and index.order(best, rec))
@@ -1972,15 +1983,15 @@ end
 
 -- Same-pitch record immediately before `node` in the total order, over index + extras -- settlement's
 -- predecessor. A same-tick same-pitch note counts here (unlike the strict bound probes).
-local function prevSamePitch(indexList, extras, node)
+local function prevSamePitch(pop, node)
   local best
-  for i = util.firstAfter(indexList, node.ppq) - 1, 1, -1 do
-    local rec = indexList[i]
-    if isAuthored(rec) and rec ~= node and rec.pitch == node.pitch and index.order(rec, node) then
+  for i = util.firstAfter(pop.list, node.ppq) - 1, 1, -1 do
+    local rec = pop.list[i]
+    if pop.keep(rec) and rec ~= node and rec.pitch == node.pitch and index.order(rec, node) then
       best = rec; break
     end
   end
-  for _, rec in ipairs(extras) do
+  for _, rec in ipairs(pop.extras) do
     if rec ~= node and rec.pitch == node.pitch and index.order(rec, node)
        and (best == nil or index.order(best, rec)) then best = rec end
   end
@@ -1989,19 +2000,19 @@ end
 
 -- Same-pitch record immediately after `node` in the total order, keyed on `origPpq` (node's raw before
 -- this pass nudged it) -- settlement's cascade successor. see design § Nudge probes stop at the tick
-local function nextSamePitch(indexList, extras, node, origPpq)
+local function nextSamePitch(pop, node, origPpq)
   local key = { ppq = origPpq, ppqL = node.ppqL, derived = node.derived, lane = node.lane, pitch = node.pitch }
   -- The probe stands in for node in every term of the order, emission included: without it two hits
   -- emitted alike tie, and the second is no successor of the first for the cascade to separate.
   index.stampEmission(key, index.emissionOf(node))
   local best
-  for i = util.firstAtOrAfter(indexList, origPpq), #indexList do
-    local rec = indexList[i]
-    if isAuthored(rec) and rec ~= node and rec.pitch == node.pitch and index.order(key, rec) then
+  for i = util.firstAtOrAfter(pop.list, origPpq), #pop.list do
+    local rec = pop.list[i]
+    if pop.keep(rec) and rec ~= node and rec.pitch == node.pitch and index.order(key, rec) then
       best = rec; break
     end
   end
-  for _, rec in ipairs(extras) do
+  for _, rec in ipairs(pop.extras) do
     if rec ~= node and rec.pitch == node.pitch and index.order(key, rec)
        and (best == nil or index.order(rec, best)) then best = rec end
   end
@@ -2010,25 +2021,24 @@ end
 
 -- On-take records at a seed's logical seat, for adds/deletes carrying no surviving uuid. Scans only the
 -- seed's raw-ppq cluster in the sorted index (plus extras) -- bounded, not a channel sweep.
-local function seatMatches(indexList, extras, seed)
+local function seatMatches(pop, seed)
   local out, key = {}, seed.ppqL or seed.ppq
   local function match(rec)
     return (rec.ppqL or rec.ppq) == key and rec.lane == seed.lane and rec.pitch == seed.pitch
   end
-  for i = util.firstAtOrAfter(indexList, seed.ppq), #indexList do
-    if indexList[i].ppq ~= seed.ppq then break end
-    -- Authored only, as every other index probe here: a derived record in mm is last pass's, and
-    -- this pass's stands in extras -- a host's own seat holds both.
-    if isAuthored(indexList[i]) and match(indexList[i]) then util.add(out, indexList[i]) end
+  for i = util.firstAtOrAfter(pop.list, seed.ppq), #pop.list do
+    if pop.list[i].ppq ~= seed.ppq then break end
+    -- Authored only, unlike the population the bound probes range over: a seat is lane-keyed and a
+    -- derived record carries no lane, so none can answer one.
+    if isAuthored(pop.list[i]) and match(pop.list[i]) then util.add(out, pop.list[i]) end
   end
-  for _, rec in ipairs(extras) do if rec.ppq == seed.ppq and match(rec) then util.add(out, rec) end end
+  for _, rec in ipairs(pop.extras) do if rec.ppq == seed.ppq and match(rec) then util.add(out, rec) end end
   return out
 end
 
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal.
-local function frontierTails(chan, indexList, extras, time, res, windows,
-                             clampWrites, tailWrites, keptDerived, reBound)
+local function frontierTails(chan, pop, time, res, windows, clampWrites, tailWrites, reBound)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote, laneNext = makeTailRules{
     chan = chan, res = res, time = time, windows = windows,
@@ -2039,12 +2049,12 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
   -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
   -- index tick cluster answers; byUuid resolve is note-scoped -- see docs § What the walk visits, and what it emits.
   local anchors = {}
-  for _, rec in ipairs(extras) do if rec.derived and not keptDerived[rec] then disturbed[rec] = true end end
+  for _, rec in ipairs(pop.extras) do disturbed[rec] = true end
   for _, seed in ipairs(dirt.has(chan)) do
     util.add(anchors, { pos = seed.ppq, pitch = seed.pitch })
     local rec = seed.uuid and index.byUuid(seed.uuid)
     if rec and rec.evType == 'note' and rec.chan == chan then disturbed[rec] = true
-    else for _, hit in ipairs(seatMatches(indexList, extras, seed)) do disturbed[hit] = true end end
+    else for _, hit in ipairs(seatMatches(pop, seed)) do disturbed[hit] = true end end
   end
 
   -- Phase 1 -- settle onsets, same-pitch-local (a nudge only collides same-pitch successors). Each
@@ -2056,7 +2066,7 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
     local si = 1
     while si <= #seeds do
       local head = seeds[si]; si = si + 1
-      local prev = prevSamePitch(indexList, extras, head)
+      local prev = prevSamePitch(pop, head)
       local chain = {}
       if prev then util.add(chain, prev) end
       util.add(chain, head)
@@ -2065,7 +2075,7 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
       local reach = (prev and head.ppq <= prev.ppq) and prev.ppq + 1 or head.ppq
       local node = head
       while true do
-        local nxt = nextSamePitch(indexList, extras, node, node.ppq)
+        local nxt = nextSamePitch(pop, node, node.ppq)
         if not nxt then break end
         local isSeed = nxt == seeds[si]
         if nxt.ppq > reach and not isSeed then break end
@@ -2091,8 +2101,8 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
       end
     end
   end)
-  -- indexList is um's own and the block's close re-trued it; extras belongs to this walk.
-  if anyNudge then table.sort(extras, index.order) end
+  -- pop.list is um's own and the block's close re-trued it; extras belongs to this walk.
+  if anyNudge then table.sort(pop.extras, index.order) end
 
   -- Phase 2 -- bounds, order-free: disturbed notes, the lane pass's re-bounded events, and each
   -- anchor's nearest same-pitch predecessor; reads settled onsets, writes only endppq.
@@ -2103,7 +2113,7 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
     util.add(anchors, { pos = e.ppq, pitch = e.pitch })
   end
   for _, a in ipairs(anchors) do
-    local pitchPred = nearestNote(indexList, extras, a.pos, 'before', function(r) return r.pitch == a.pitch end)
+    local pitchPred = nearestNote(pop, a.pos, 'before', function(r) return r.pitch == a.pitch end)
     if pitchPred then bound[pitchPred] = true end
   end
 
@@ -2111,7 +2121,7 @@ local function frontierTails(chan, indexList, extras, time, res, windows,
   -- population answers. see design § The widen and the emission are the same fact
   local emitted = {}
   for e in pairs(bound) do
-    local pitchNext = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
+    local pitchNext = nearestNote(pop, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
     if nudged[e] and isAuthored(e) and e.lane == 1 then
       local nextOnLane = laneNext(e)
       util.add(emitted, { uuid = e.uuid, verb = 'nudge', evType = 'note', ppq = e.ppq, ppqL = e.ppqL,
@@ -2128,21 +2138,21 @@ end
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
 --post: a note is separated only if it is disturbed; a nudged lane-1 onset emits its seat closure
 --post: the disturbed, the lane pass's named and each anchor's predecessors take fresh bounds
-local function rebuildTails(fxNotes, windows, tailWrites, time, movedBounds)
+local function rebuildTails(fxOut, windows, time, movedBounds)
   local res = mm:resolution()
   local clampWrites = mmBatch()
-  -- tailWrites is fx expansion's own batch, still uncommitted and carrying its existence ops -- a fresh
+  -- fx expansion's own batch, still uncommitted and carrying its existence ops -- a fresh
   -- spec is unrealised during the walk, so the clip mutates it in place, reaching mm already clipped.
+  local tailWrites = fxOut.deferredWrite
   for chan = 1, 16 do
-    -- Clean channels freeze: fx left fxNotes empty, real notes converged last rebuild.
+    -- Clean channels freeze: fx left fxOut.notes empty, real notes converged last rebuild.
     if not dirt.has(chan) then goto nextChan end
-    -- A kept fx spec is settled from last pass and rides the walk as a bound anchor only; only fresh
-    -- (re-run host) derived notes seed disturbance and count toward the frontier cap.
-    local extras, keptDerived, freshLive = {}, {}, 0
-    for _, w in ipairs(fxNotes[chan]) do
-      util.add(extras, w.evt)
-      if w.kept then keptDerived[w.evt] = true else freshLive = freshLive + 1 end
-    end
+    -- The channel's population: um's index less what this pass claimed, plus the pass's own specs. Every
+    -- spec is fresh -- a kept host emits none -- so all of them seed disturbance and count toward the cap.
+    local extras = {}
+    for _, w in ipairs(fxOut.notes[chan]) do util.add(extras, w.evt) end
+    local pop = { list = index.raw(chan).notes, extras = extras,
+                  keep = standing(fxOut.claimed[chan]) }
     -- The lane pass named the authored events whose bound it moved, over both its runs; the walk
     -- states no lane bound of theirs, so it re-bounds them by name. see docs § The lane pass
     local reBound = {}
@@ -2152,17 +2162,14 @@ local function rebuildTails(fxNotes, windows, tailWrites, time, movedBounds)
     end
 
     -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
-    -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
-    local indexedNotes = index.raw(chan).notes
+    -- frontier takes the population's two sources as separate probe sources -- no O(channel) merge.
     local emitted
-    if not dirt.wholesale(chan) and #dirt.has(chan) + freshLive <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, indexedNotes, extras, time, res, windows, clampWrites,
-                              tailWrites, keptDerived, reBound)
+    if not dirt.wholesale(chan) and #dirt.has(chan) + #extras <= FRONTIER_SEED_CAP then
+      emitted = frontierTails(chan, pop, time, res, windows, clampWrites, tailWrites, reBound)
     else
-      local notes = mergeIndexed(indexedNotes, isAuthored, extras)
+      local notes = mergeIndexed(pop)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, extras, time, res, windows, clampWrites, tailWrites,
-                            keptDerived, reBound)
+      emitted = linearTails(chan, notes, extras, time, res, windows, clampWrites, tailWrites, reBound)
     end
 
     -- The walk's own dirt joins what it was given: past the cap the channel collapses to wholesale,
@@ -2184,24 +2191,25 @@ end
 local DUAL_POINT_TICK = 1
 
 --shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump() }
--- A channel's base-voice onset stream: the raw index's authored notes unioned with the pass's
+-- A channel's base-voice onset stream: the raw index's standing notes unioned with the pass's
 -- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
 --pre: derived is ppq-ascending and holds chan's derived base voices for this pass
-local function baseVoiceUnion(chan, derived)
-  local authored = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
-  -- isAuthored drops the index's own derived entries: they are seated copies of a prior pass's
-  -- output, superseded by `derived`.
-  local function authoredBaseVoice(entry) return isAuthored(entry) and index.isBaseVoice(entry) end
+--pre: keep is the pass's standing predicate for chan, so `derived` supersedes exactly what it drops
+local function baseVoiceUnion(chan, derived, keep)
+  local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
+  -- keep drops the index entries of the hosts this pass claimed: seated copies of a prior pass's
+  -- output, superseded by `derived`. A kept host's stand -- they are the only copy of its voices there is.
+  local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(entry) end
 
   -- The union from the first entry at-or-after `lo` ('after' starts past it instead), merging the two
   -- sources by index.order -- one cursor pair, and the only place the union's order is decided.
   --post: result = (fresh iterator) yielding unsafe index entries in index.order
   local function walk(lo, mode)
     local from = mode == 'after' and util.firstAfter or util.firstAtOrAfter
-    local i, j = from(authored, lo), from(derived, lo)
+    local i, j = from(indexed, lo), from(derived, lo)
     return function()
-      while authored[i] and not authoredBaseVoice(authored[i]) do i = i + 1 end
-      local a, d = authored[i], derived[j]
+      while indexed[i] and not indexedBaseVoice(indexed[i]) do i = i + 1 end
+      local a, d = indexed[i], derived[j]
       if d and (not a or index.order(d, a)) then j = j + 1; return d end
       if a then i = i + 1 end
       return a
@@ -2210,9 +2218,9 @@ local function baseVoiceUnion(chan, derived)
 
   -- The detune prevailing at ppq: the last union entry at-or-before it, 0 before the first.
   local function detuneAt(ppq)
-    local i = util.firstAfter(authored, ppq) - 1        -- last index at or before ppq
-    while i >= 1 and not authoredBaseVoice(authored[i]) do i = i - 1 end
-    local a, d = authored[i], derived[util.firstAfter(derived, ppq) - 1]
+    local i = util.firstAfter(indexed, ppq) - 1        -- last index at or before ppq
+    while i >= 1 and not indexedBaseVoice(indexed[i]) do i = i - 1 end
+    local a, d = indexed[i], derived[util.firstAfter(derived, ppq) - 1]
     local last = a
     if d and (not a or index.order(a, d)) then last = d end
     return last and last.detune or 0
@@ -2387,16 +2395,16 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents, time)
       for _, live in ipairs(fxNotes[chan]) do
         if live.baseVoice then
           util.add(derivedBaseVoice, live.evt)
-          freshBaseVoice[chan] = freshBaseVoice[chan] or not live.kept
+          freshBaseVoice[chan] = true
         end
       end
       table.sort(derivedBaseVoice, index.order)   -- the union's cursors assume ppq order of both sources
-      baseVoiceByChan[chan] = baseVoiceUnion(chan, derivedBaseVoice)
+      baseVoiceByChan[chan] = baseVoiceUnion(chan, derivedBaseVoice, standing(fxOut.claimed[chan]))
     end
   end
 
-  -- Replace windows + seat spans per dirty chan, computed ahead of the gather. Fresh (non-kept)
-  -- derived base voices ungate the channel (seatSpans nil).
+  -- Replace windows + seat spans per dirty chan, computed ahead of the gather. A derived base voice in
+  -- the pass's own output ungates the channel (seatSpans nil).
   local winsByChan, seatSpansByChan = {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
@@ -2791,9 +2799,9 @@ end
 --shape: seedSpans = { raw = span set, logical = span set }; nil = wholesale
 local function pcSeedSpans(chan, fxNotes)
   if dirt.wholesale(chan) then return nil end
-  for _, w in ipairs(fxNotes) do
-    if not w.kept then return nil end
-  end
+  -- Any derived output at all means a host of this channel re-ran, and its PCs are the pass's to
+  -- decide wholesale; a kept host contributes no entry here.
+  if #fxNotes > 0 then return nil end
   local points = {}
   for _, s in ipairs(dirt.has(chan)) do
     util.add(points, { ppq = s.ppq, ppqL = s.ppqL or s.ppq })
@@ -2813,8 +2821,9 @@ end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records,
 -- writes and the column splice all clip to them, so out-of-span PCs stand.
-local function rebuildPCs(fxNotes, time)
+local function rebuildPCs(fxOut, time)
   if not cm:get('trackerMode') then return end
+  local fxNotes = fxOut.notes
   local pcWrites = mmBatch()
   local spansByChan = {}
   for chan = 1, 16 do
@@ -2829,8 +2838,14 @@ local function rebuildPCs(fxNotes, time)
       rec.ord = #records + 1
       util.add(records, rec)
     end
+    -- A host this pass kept owns PCs at onsets no authored note sits on; those records are um's own.
+    -- Off-column, they carry no colEvt, so the shadow mark rides the record like a spec's; no note host means no inherited sample.
+    local keep = standing(fxOut.claimed[chan])
     local function recordNote(entry)
-      if isAuthored(entry) then
+      if not keep(entry) then return end
+      if entry.derived then
+        addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, sample = entry.sample or 0, spec = entry }
+      else
         addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
                    sample = entry.sample, evt = entry.colEvt }
       end
@@ -2964,7 +2979,7 @@ end
 --pre: called inside tm:rebuild's mm nest, with the index already reloaded if this pass is wholesale
 --pre: sources holds the head's ds reads, taken before any write of this pass, fxRegions expanded
 --pre: time is the projection the rebuild head built for this pass
---post: fxNotesByHost[chan] := the pass's derived notes, for each channel the fx stage ran
+--post: fxNotesByHost[chan][uuid] := this pass's notes where it claimed uuid, else what it last left
 --post: fresh result = the maps tm:rebuild installs, plus the channels whose mute wants conforming
 --invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
 function rebuild.pipeline(sources, time)
@@ -3000,9 +3015,9 @@ function rebuild.pipeline(sources, time)
   local fxOut = rebuildFx(fxInCCs, fxOutWindows, sources.fxRegions,
                           fxNotesByHost, pbRangeCents, time)  -- fx expansion: derived notes/CCs
 
-  rebuildTails(fxOut.notes, fxOutWindows, fxOut.deferredWrite, time, movedBounds)  -- unified tail/onset walk + atomic note commit
+  rebuildTails(fxOut, fxOutWindows, time, movedBounds)  -- unified tail/onset walk + atomic note commit
   rebuildPbs(fxOut, sources.extraColumns, pbRangeCents, time)  -- absorber reconciliation + pb resynthesis
-  rebuildPCs(fxOut.notes, time)  -- PC synthesis (trackerMode)
+  rebuildPCs(fxOut, time)  -- PC synthesis (trackerMode)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   local census = fxOutWindows.census()

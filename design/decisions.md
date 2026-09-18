@@ -4,6 +4,22 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-18** — The pass's authority over um's derived records is a set of host uuids per
+  channel, hung on `fxOut.claimed` -- every host that ran, plus every orphan file swept -- over the
+  queued item's dedup by note uuid. Host grain is what lets one set answer on both sides of the
+  commit: the tail walk asks before it, where um still holds last pass's records, and the absorber's
+  base-voice union and PC synthesis ask after it, where um holds this pass's adds; the two
+  populations share no uuid before the commit and every uuid after it. A derived record whose host
+  is outside the set is standing, and the three readers admit it beside the authored ones.
+  `isAuthored` stays for the readers that mean authorship -- the sample stamp, PA column
+  containment, the lane-1 nudge gate, and pcSeedSpans' span edges -- and `standing(claimed)` serves
+  the three that meant supersession. One thing the pins cost, worth carrying forward: two hosts
+  overlapping in pitch cannot reach the tail walk at all. The reconcile keys on the logical seat, so
+  a collision settled on one pass comes back settled, and flush's collision scan already separates
+  an authored newcomer against existing MIDI. Only a fresh derived spec isolates the walk, reaching
+  mm through the pass's own batch and never past flush -- so the pin emits one long note at a kept
+  trill's alternation pitch, where a standing record is the only thing that can stop it.
+
 - **2026-09-17** — The existing side of the fx note reconcile comes from a file um maintains -- the
   channel's derived notes filed under the uuid of the host that produced them, kept true on the
   index verbs as `fxHosts` is -- over the bucket `rebuildInternals` minted by walking every raw of

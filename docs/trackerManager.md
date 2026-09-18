@@ -954,7 +954,7 @@ offline — cc-augment sums per target into markerless cc seats, pb defers
 to the absorber pass. The note add/del leaves `rebuildFx` staged but
 uncommitted (`fxOut.deferredWrite`); the tail walk adds its clips to that same
 batch and commits it, so a fresh spec reaches mm already clipped.
-`fxOut.notes` (the predicted set) feeds the tail walk and PC synthesis. See `docs/generators.md` § Offline continuous realisation.
+`fxOut.notes` holds what ran and nothing else; it feeds the tail walk, the absorber and PC synthesis beside um's standing records (§ The host gate). See `docs/generators.md` § Offline continuous realisation.
 
 The reconcile key names a derived note's logical seat — `ppqL`/`endppqL` —
 and its voice fields; the realisation frame stays out of it. The onset
@@ -1082,16 +1082,16 @@ news. The channel's dirt arrives as seed dirt (§ Interval seeds), and
 a note the dirt does not name kept its raw and its ceiling — last pass
 left it separated and clipped against neighbours that also stood still.
 `disturbed` is that judgement and it is the whole of the walk: a note is
-disturbed if a seed names it, if it is derived, or if a nudge moved it. A
-seed names by uuid where it still answers one — a survivor, recovered
+disturbed if a seed names it, if this pass derived it, or if a nudge moved
+it. A seed names by uuid where it still answers one — a survivor, recovered
 live from `byUuid` — and by logical seat otherwise: an add, whose uuid
 lands only at commit, and a delete, whose uuid is already gone. The seat
-answers over authored records alone, since last pass's derived note shares
-its host's seat and this pass's stands in the derived list. Derived
-notes seed only where their host re-ran: `rebuildFx` regenerates those
-tiles, so their raw is this pass's news whatever the dirt says. A kept
-host's specs come back verbatim, settled and clipped last pass, so they
-ride as bound anchors only and don't count toward the frontier threshold.
+answers over authored records alone, since a seat is keyed by lane and a
+derived record carries none. Derived notes seed only where their host
+re-ran: `rebuildFx` regenerates those tiles, so their raw is this pass's
+news whatever the dirt says. A kept host emits nothing, so its notes reach
+the walk as um's own standing records (§ The host gate) — settled and
+clipped last pass, they ride as bound anchors and count toward no threshold.
 
 Separation narrows on the same judgement. Only a disturbed note can
 collide, and only onto its same-pitch predecessor — so a nudge marks its
@@ -1123,9 +1123,9 @@ nothing.
 
 No lane question survives for the derived notes either. Their bounds carry
 no lane term (§ Tail walk), so no anchor seeks a lane predecessor at all: a
-fresh derived note is disturbed by its host's re-run, and a kept one whose
-bound moved is reached by the same-pitch predecessor probe, which ranges
-over the pass's own output alongside the index.
+fresh derived note is disturbed by its host's re-run, and a standing one
+whose bound moved is reached by the same-pitch predecessor probe, which
+ranges over um's index alongside the pass's own output.
 
 Successors come from one backward pass carrying, per pitch, the note last
 seen and that note's strict next — a neighbour sharing the current note's
@@ -1496,12 +1496,27 @@ never claim the same seat. A kept pb window still records its geometry, tagged
 `kept`, because pb seats are markerless downstream — a window absent from the
 record would leave its seats reading as authored pbs.
 
-The verdict reaches the tail walk, which is where the gate pays. A kept spec
-was settled and clipped last pass and is identity-kept in mm, so it rides as a
-bound anchor only and does not count toward the frontier threshold (§ What the
-walk visits, and what it emits). Without that, a channel dense in parked hosts
-re-clips every kept derived note on any edit, and a one-note change falls off
-the frontier onto the linear walk.
+The gate carries no notes. A kept host emits nothing into the pass, so um's
+entry for each of its derived notes is the only live copy there is, and the
+three readers that need those notes — the tail walk, the absorber's base-voice
+union, and PC synthesis — take them from the index. What the pass records
+instead is the set of hosts it took in hand, per channel: every host that ran,
+plus every orphan file it swept. A derived record whose host is outside that
+set is **standing**, and each of the three readers admits it beside the
+authored records; a record whose host is inside it belongs to last pass, and
+the pass's own output supersedes it.
+
+Host grain is what lets one set answer on both sides of the commit. The tail
+walk asks before it, where um still holds last pass's records; the absorber and
+PC synthesis ask after it, where um holds this pass's adds. A dedup by note
+uuid answers on neither side, the two populations sharing no uuid before the
+commit and every uuid after it.
+
+The gate pays at the tail walk. A standing note was settled and clipped last
+pass, so it rides as a bound anchor only and does not count toward the frontier
+threshold (§ What the walk visits, and what it emits). Without that, a channel
+dense in parked hosts re-clips every kept derived note on any edit, and a
+one-note change falls off the frontier onto the linear walk.
 
 ## Note-lane renewal
 
@@ -1748,8 +1763,9 @@ them and gathers them into one entry per chain at the pipeline tail;
 emission. Emission is dirt-gated — a host outside the dirty interval is
 kept rather than re-run, and a kept host emits no record — so a target set
 read off it would vanish on the first edit elsewhere in the channel and return
-with the dirt. The note half can ride the emission because the keep path
-re-adds a kept host's specs verbatim; nothing re-adds its curve. What does
+with the dirt. The note half can ride the emission because the per-host map
+merges: the pass rewrites the bucket of every host it claimed and leaves a kept
+host's last output standing. Nothing does the same for its curve. What does
 not blink is `chainTargets`, which already names a target per continuous cc
 dest and one for pb, blind to dirt and blind to bypass, so the target set is
 the window set the rebuild computes for parking anyway.

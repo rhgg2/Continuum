@@ -36,10 +36,10 @@ lane allocator unable to see the notes it must avoid.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-18 tm: take derived anchors from um's index, not the gate (§ Keep by omission)
 - 2026-09-17 tm: gather the derived existing set from um's per-host file (§ Keep by omission)
 - 2026-09-17 tm: emit derived notes without a lane (§ The derived note record)
 - 2026-09-17 tm: key the fx reconcile on the logical seat, match by multiset (§ The derived note record)
-- 2026-09-17 tm: bound a derived note by its host's window, not its lane (§ The derived tail bound)
 
 ## Now
 
@@ -47,16 +47,6 @@ lane allocator unable to see the notes it must avoid.
 
 ## Queued (current phase; one-liners)
 
-- **Take the tail walk's derived anchors from um's index.** `mergeIndexed`'s
-  `isAuthored` filter becomes "not emitted this pass", deduped by uuid, and the
-  frontier's probes (`nearestNote`, `prevSamePitch`, `nextSamePitch`) read the
-  same population. A derived note the pass never saw then bounds its neighbours
-  and is bounded by them, as the wire bound already reads it.
-- **Retire the notes half of `runOrKeep`.** A kept host adds nothing to
-  `predicted`, so `keptFx`, the `kept` flag on `fxOut.notes` entries and
-  `keptDerived` in the tail walk go, and the absorber's `freshBaseVoice` reads
-  every entry as fresh. `fxNotesByHost` merges at host grain, a host that did
-  not run keeping the bucket it last produced. The gate itself stays for
-  continuous targets: the kept pb window's geometry and the bases `runWins`
-  covers.
+(empty — the two remaining items compiled together: neither stands alone, since
+retiring the re-emissions is what makes the index admission reachable.)
 

@@ -404,4 +404,71 @@ return {
       t.truthy(#derivedOf(h, neighbour) >= 2, 'and the neighbour still has its own')
     end,
   },
+
+  {
+    -- The case above has its two hosts overlap in time but not in pitch, so nothing of the pass's
+    -- ever has to give way to the kept host's notes. Here they overlap in pitch too. A kept host
+    -- re-emits nothing, so the running host's fresh output has only um's standing records to clip
+    -- against -- and this clip is the tail walk's alone, a fresh spec reaching mm through the pass's
+    -- own batch rather than past flush's collision scan. see design § Keep by omission
+    name = 'the file: a running host\'s fresh output clips against a kept host\'s notes at its pitch',
+    run = function(harness)
+      local h = harness.mk()
+      -- The running host emits one long note at the trill's alternation pitch, reaching well past the
+      -- trill's window, so what stops it is whatever the walk finds at pitch 62 -- and only the kept
+      -- host holds anything there.
+      generators.kinds.oneLong = {
+        expand = function(stream)
+          return { notes = { { ppq = stream.window[1], endppq = stream.window[2],
+                               pitch = 62, vel = 100, detune = 0 } }, delta = {} }
+        end,
+        mode = 'replace', dest = 'note', label = 'OneLong', defaults = {}, fields = {},
+      }
+      h.tm:addEvent(trillHost(1)); h.tm:flush()            -- pitch 60/62 alternating over [0, 240)
+      h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 360, chan = 1, pitch = 67,
+                      vel = 100, detune = 0, delay = 0, lane = 2, fx = { { kind = 'oneLong' } } })
+      h.tm:flush()
+
+      local kept, neighbour
+      for _, cell in ipairs(parkedCells(h, 1)) do
+        if cell.pitch == 60 then kept = cell.uuid else neighbour = cell.uuid end
+      end
+      t.truthy(kept and neighbour, 'fixture check: both hosts parked themselves')
+      local stops = 0
+      for _, n in ipairs(derivedOf(h, kept)) do
+        if n.pitch == 62 then stops = stops + 1 end
+      end
+      t.truthy(stops >= 2, 'fixture check: the kept host holds notes at the neighbour\'s pitch')
+
+      -- ppq 300 sits inside the neighbour's span and outside the kept host's, so the seed wakes one
+      -- host and not the other. The neighbour re-emits its long note; the kept host emits nothing.
+      h.tm:addEvent({ evType = 'note', ppq = 300, endppq = 360, chan = 1, pitch = 72,
+                      vel = 100, detune = 0, delay = 0, lane = 3 })
+      h.tm:flush()
+      generators.kinds.oneLong = nil
+
+      t.eq(#derivedOf(h, neighbour), 1, 'fixture check: the neighbour still emits its one long note')
+      local onChan = {}
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.chan == 1 then onChan[#onChan + 1] = n end
+      end
+      table.sort(onChan, function(a, b)
+        if a.pitch ~= b.pitch then return a.pitch < b.pitch end
+        return a.ppq < b.ppq
+      end)
+      -- In this order consecutive entries sharing a pitch are exactly "the next note at its pitch".
+      local neighbours = 0
+      for i = 2, #onChan do
+        local prev, n = onChan[i - 1], onChan[i]
+        if prev.pitch == n.pitch then
+          neighbours = neighbours + 1
+          t.truthy(prev.ppq < n.ppq,
+            'pitch ' .. n.pitch .. ': the onset at ' .. n.ppq .. ' stands clear of the one before it')
+          t.truthy(prev.endppq <= n.ppq,
+            'pitch ' .. n.pitch .. ': the note at ' .. prev.ppq .. ' clips to the next onset at its pitch')
+        end
+      end
+      t.truthy(neighbours >= 3, 'fixture check: the two hosts\' output interleaves at the pitch they share')
+    end,
+  },
 }
