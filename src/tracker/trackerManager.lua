@@ -366,26 +366,6 @@ local function newFxUuid(key)
   return prefix .. '-' .. seq
 end
 
--- inUse is channelsInUse's set, taken from the same head snapshot: a channel outside it runs no
--- host, so a chain reaches nothing the document never used; second return is the stored globals, whose own uuids the union answers for. see docs/trackerManager.md § Channel & column model
-local function expandGlobals(regions, inUse)
-  local channelRegions, globals = {}, {}
-  for _, region in ipairs(regions or {}) do
-    util.add(region.chan == 0 and globals or channelRegions, region)
-  end
-  -- Appended after every stored region, so each channel's own regions come first in storage order and
-  -- a global chain takes last precedence there. see docs/trackerManager.md § Channel & column model
-  for _, region in ipairs(globals) do
-    for chan = 1, 16 do
-      if inUse[chan] then
-        util.add(channelRegions, util.assign(util.clone(region),
-                                             { chan = chan, uuid = util.key(region.uuid, chan) }))
-      end
-    end
-  end
-  return channelRegions, globals
-end
-
 -- Freeze eligibility over the pass's windows: a refusal means some other window would be left
 -- standing over the raw output this freeze creates. see docs/trackerManager.md § Fx window census
 local function freezeRefused(frozen, windows)
@@ -1279,6 +1259,14 @@ function tm:name()                 return mm and mm:name() end
 function tm:timeSigs()             return mm and mm:timeSigs() or {} end
 function tm:interpolate(A, B, ppq, field) return curves.interpolate(A, B, ppq, field) end
 
+-- The derivation engine, instantiated with the structures the two files share. It is the frame's only
+-- writer, and the index's between edits. It stands above the edit side, which reaches its one geometry
+-- door. see docs/trackerManager.md § Rebuild
+local rebuild = util.instantiate('trackerRebuild', {
+  mm = mm, cm = cm, ds = ds, defaultNoteCols = defaultNoteCols,
+  index = index, stager = stager, dirt = dirt, frame = frame,
+})
+
 -- The projection the pass runs on, replaced at the rebuild head. The seed is the identity, and
 -- stands until the first rebuild. see docs/timing.md § The time context
 local timeContext = util.instantiate('timeContext', { length = 0, swings = {}, assignment = {} })
@@ -1314,6 +1302,9 @@ function tm:requestRebuild() rebuildRequested = true end
 -- and tm:rebuild installs what comes back; absence = not a host.
 local windows = fxWindows.new({})   -- the pass's fx windows, whole
 local freezeRectByUuid = {}              -- uuid -> the gm rect a freeze-to-group mint would claim
+-- The channels the pass expanded its global chains onto: those carrying an authored note, a note the
+-- park stash holds off the take, or a pb/cc lane of their own. see docs/trackerManager.md § Channel & column model
+local channelsInUse = {}
 
 -- One host's whole output in one place, gathered at the tail where the census has settled: the
 -- passes above each key their share by host uuid, and the ghost overlay draws exactly one entry.
@@ -1600,18 +1591,14 @@ function tm:explodeRegion(uuid)
     else util.add(r.chan == 0 and otherGlobals or channelRegions, r) end
   end
   if not (region and region.chan == 0) then return false end
-  -- The channels the last rebuild expanded onto, which is what the strip ghosts: every expanded
-  -- host is in its census, emitting or not, so the union answers for the whole set.
-  local realisation = fxRealisationByUuid[uuid]
-  local chans = realisation and realisation.chans or {}
-  if #chans == 0 then return false end
-  local inUse = {}
-  for _, chan in ipairs(chans) do inUse[chan] = true end
+  -- The set the last pass expanded onto, published by the pass that expanded: a chain reaching no
+  -- channel refuses, since exploding it would leave nothing behind and lose the chain.
+  if not next(channelsInUse) then return false end
 
   -- Stored where the expansion puts them -- after the channel regions, before any global still
   -- stored -- so precedence on every channel stands where it stood.
   local stored = channelRegions
-  for _, r in ipairs(expandGlobals({ region }, inUse)) do util.add(stored, r) end
+  for _, r in ipairs(rebuild.expandGlobals({ region }, channelsInUse)) do util.add(stored, r) end
   for _, r in ipairs(otherGlobals) do util.add(stored, r) end
   suppressingRebuild(function() ds:assign('fxRegions', stored) end)
   tm:requestRebuild()   -- geometry only: nothing to re-derive, and the output maps still want rebuilding
@@ -1894,13 +1881,6 @@ end
 
 ---------- REBUILD
 
--- The derivation engine, instantiated with the structures the two files share. It is the frame's only
--- writer, and the index's between edits. see docs/trackerManager.md § Rebuild
-local rebuild = util.instantiate('trackerRebuild', {
-  mm = mm, cm = cm, ds = ds, defaultNoteCols = defaultNoteCols,
-  index = index, stager = stager, dirt = dirt, frame = frame,
-})
-
 ----- Rebuild
 
 local rebuilding = false
@@ -1908,27 +1888,9 @@ local rebuilding = false
 -- incremental index; full-reloads when set, else keeps it. see docs § Incremental index reconciliation
 local mmReloaded = false
 
--- The channels a global chain reaches: those carrying an authored note, a note the park stash holds
--- off the take, or a pb/cc lane of their own. Derived output is no evidence -- it never leaves the set. see docs/trackerManager.md § Channel & column model
-local function channelsInUse(sources)
-  local inUse = {}
-  for chan = 1, 16 do
-    for _, note in ipairs(index.raw(chan).notes) do
-      if not note.derived then inUse[chan] = true; break end
-    end
-  end
-  for _, spec in ipairs(sources.fxParked or {}) do inUse[spec.chan] = true end
-  for chan, want in pairs(sources.extraColumns or {}) do
-    if want.pb or want.at or want.pc or next(want.ccs or {}) then inUse[chan] = true end
-  end
-  for chan, lanes in pairs(sources.paramAutomation or {}) do
-    if next(lanes) then inUse[chan] = true end
-  end
-  return inUse
-end
-
 --post: no-op iff the take is dead or a rebuild is already in flight; tv retains its last frame
 --post: frame.channels := this pass's derivation, a clean channel carrying its own frame forward
+--post: channelsInUse := the set this pass expanded its global chains onto
 --post: the dirt journal, the swing staleness and the rebuild request are consumed
 --invariant: rebuild(∅) -- no dirt, stale swing, reload, swap or request -- short-circuits pre-nest
 -- see docs/trackerManager.md § Rebuild
@@ -1977,22 +1939,14 @@ function tm:rebuild(takeChanged)
 
   if didReload then stager.reload() end
 
-  local sources = {
-    fxParked          = ds:get('fxParked'),
-    fxRealisedWindows = ds:get('fxRealisedWindows'),
-    extraColumns      = ds:get('extraColumns'),
-    paramAutomation   = ds:get('paramAutomation'),
-  }
-  sources.fxRegions, sources.globalRegions =
-    expandGlobals(ds:get('fxRegions'), channelsInUse(sources))
-
   -- One nest for every staging stage, so the reindex and the take reprojection land once each
   -- rather than once per stage. rebuilding must outlive it: each stage's commit re-enters via 'reload'.
   local maps
-  mm:batch(function() maps = rebuild.pipeline(sources, timeContext) end)
+  mm:batch(function() maps = rebuild.pipeline(timeContext) end)
   -- Install what the pass created. Nothing reads these mid-pass, and the accessors read between
   -- rebuilds, so they stand before the signal goes out.
   windows, freezeRectByUuid, fxRealisationByUuid = maps.windows, maps.freezeRect, maps.fxRealisation
+  channelsInUse = maps.inUse
   for chan in pairs(maps.dirtyChannels) do muteConform[chan] = true end
   derivedInputs = derivationInputs()   -- after the pass's own ds writes have settled
   rebuilding = false

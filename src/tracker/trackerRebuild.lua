@@ -549,9 +549,9 @@ local function installParked(field, events, clone)
   end
 
   local toInstall, byChan = frame.newChannels(), frame.newChannels()
-  for _, spec in ipairs(events) do
-    util.bucket(toInstall, spec.chan, clone(spec))
-    util.bucket(byChan, spec.chan, spec)
+  for _, event in ipairs(events) do
+    util.bucket(toInstall, event.chan, clone(event))
+    util.bucket(byChan, event.chan, event)
   end
   local installed = {}
   for chan = 1, 16 do
@@ -559,7 +559,7 @@ local function installParked(field, events, clone)
     if not sameParked(parked[field], toInstall[chan]) then
       parked[field] = toInstall[chan]
     end
-    for i, spec in ipairs(byChan[chan]) do installed[spec] = parked[field][i] end
+    for i, event in ipairs(byChan[chan]) do installed[event] = parked[field][i] end
   end
   return installed
 end
@@ -578,16 +578,10 @@ local function parkedEvent(spec)
   return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
 end
 
--- The lane pass over one channel: every authored event on every lane takes its bound from that
--- lane's whole population. see docs/trackerManager.md § The lane pass
---post: every authored event of the channel's lanes carries its lane bound on endppqC
---post: the parked list's table identity changes iff one of its own bounds moved (tv's carry key)
---post: movedBounds[chan] names every on-take event whose bound this call moved
 local function boundLanes(chan, time, movedBounds)
   local channel, parkedMoved = frame.channels[chan], false
   local takeLenL = time:toLogical(chan, time:length())
   for lane = 1, #channel.onTake.notes do
-    -- A parked render event holds no lane of its own, so setEvent would renew a lane standing still.
     local offTake = {}
     for _, evt in ipairs(frame.parkedOnLane(chan, lane)) do offTake[evt] = true end
     local population = frame.authoredEvents(chan, lane)
@@ -2886,14 +2880,67 @@ end
 
 ----- Rebuild pipeline
 
+-- The channels a global chain reaches: those carrying an authored note, a note the park stash holds
+-- off the take, or a pb/cc lane of their own. Derived output is no evidence -- it never leaves the set. see docs/trackerManager.md § Channel & column model
+local function channelsInUse(sources)
+  local inUse = {}
+  for chan = 1, 16 do
+    for _, note in ipairs(index.raw(chan).notes) do
+      if not note.derived then inUse[chan] = true; break end
+    end
+  end
+  for _, spec in ipairs(sources.fxParked or {}) do inUse[spec.chan] = true end
+  for chan, want in pairs(sources.extraColumns or {}) do
+    if want.pb or want.at or want.pc or next(want.ccs or {}) then inUse[chan] = true end
+  end
+  for chan, lanes in pairs(sources.paramAutomation or {}) do
+    if next(lanes) then inUse[chan] = true end
+  end
+  return inUse
+end
+
+-- inUse is channelsInUse's set: a channel outside it runs no host, so a chain reaches nothing the
+-- document never used. Second return is the stored globals, whose own uuids the union answers for.
+-- The pass calls it off its head snapshot; explode calls it off the set that snapshot published.
+-- see docs/trackerManager.md § Channel & column model
+function rebuild.expandGlobals(regions, inUse)
+  local channelRegions, globals = {}, {}
+  for _, region in ipairs(regions or {}) do
+    util.add(region.chan == 0 and globals or channelRegions, region)
+  end
+  -- Appended after every stored region, so each channel's own regions come first in storage order and
+  -- a global chain takes last precedence there. see docs/trackerManager.md § Channel & column model
+  for _, region in ipairs(globals) do
+    for chan = 1, 16 do
+      if inUse[chan] then
+        util.add(channelRegions, util.assign(util.clone(region),
+                                             { chan = chan, uuid = util.key(region.uuid, chan) }))
+      end
+    end
+  end
+  return channelRegions, globals
+end
+
 --pre: called inside tm:rebuild's mm nest, with the index already reloaded if this pass is wholesale
---pre: sources holds the head's ds reads, taken before any write of this pass, fxRegions expanded
 --pre: time is the projection the rebuild head built for this pass
 --post: fxNotesByHost[chan][uuid] := this pass's notes where uuid is in `ran`, else what it last left
---post: fresh result = the maps tm:rebuild installs, plus the channels whose mute wants conforming
+--post: fresh result = the maps tm:rebuild installs, the channels whose mute wants conforming, and
+--post:   the in-use set the globals expanded onto
 --invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
-function rebuild.pipeline(sources, time)
+--invariant: the ds keys the pass reads are snapshotted here, once, ahead of any write of its own
+function rebuild.pipeline(time)
   local pbRangeCents = cm:get('pbRange') * 100
+
+  -- One head snapshot of the ds intent keys the pass reads, its regions already expanded to
+  -- per-channel hosts against the channels in use. see docs/trackerManager.md § Channel & column model
+  local sources = {
+    fxParked          = ds:get('fxParked'),
+    fxRealisedWindows = ds:get('fxRealisedWindows'),
+    extraColumns      = ds:get('extraColumns'),
+    paramAutomation   = ds:get('paramAutomation'),
+  }
+  local inUse = channelsInUse(sources)
+  sources.fxRegions, sources.globalRegions = rebuild.expandGlobals(ds:get('fxRegions'), inUse)
 
   local fxInWindows = fxWindows.new(sources.fxRealisedWindows or {}, time)
 
@@ -2932,7 +2979,8 @@ function rebuild.pipeline(sources, time)
     windows       = fxOutWindows,
     freezeRect    = buildFreezeRects(fxOutWindows.windows()),
     fxRealisation = buildFxRealisation(fxOutWindows.windows(), sources.globalRegions, byHost),
-    dirtyChannels = dirt.byChannel()
+    dirtyChannels = dirt.byChannel(),
+    inUse         = inUse
   }
 
   dirt.clear()
