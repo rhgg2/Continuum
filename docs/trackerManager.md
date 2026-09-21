@@ -764,7 +764,7 @@ runs it.
 1. **Extra columns** (`rebuildExtraColumns`)
 1. **Externals** (`rebuildExternals`)
 1. **Sample stamp** (`stampSamples`)
-1. **Lane bounds** (`boundLanes`)
+1. **Lane bounds** (`clipTails`)
 1. **Note host clips and windows** (`onTakeFxHosts`, `buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)
 1. **PA dispatch** (`rebuildPA`)
@@ -1398,7 +1398,7 @@ lane bound is authored, and a derived note takes no lane bound at all (§ Tail w
 
 ## The lane pass
 
-`boundLanes` gives every authored event its lane bound, one channel at a time. It runs at the head,
+`clipTails` gives every authored event its lane bound, one channel at a time. It runs at the head,
 after the stash render and before the fx window census, walking each of the channel's lanes over the
 whole population of § Lane occupancy. `onTakeFxHosts`, the grid and the tail walk read what it wrote,
 off `endppqC`.

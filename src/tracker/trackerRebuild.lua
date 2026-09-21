@@ -578,7 +578,7 @@ local function parkedEvent(spec)
   return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
 end
 
-local function boundLanes(chan, time, movedBounds)
+local function clipTails(chan, time)
   local channel, parkedMoved = frame.channels[chan], false
   local takeLenL = time:toLogical(chan, time:length())
   for lane = 1, #channel.onTake.notes do
@@ -592,7 +592,7 @@ local function boundLanes(chan, time, movedBounds)
           if offTake[evt] then
             evt.endppqC, parkedMoved = bound, true
           else
-            util.bucket(movedBounds, chan, evt.uuid)
+            dirt.tails.add(chan, evt.uuid)
             frame.setEvent(evt, 'endppqC', bound)
           end
         end
@@ -604,7 +604,7 @@ end
 
 -- The parked half of every lane, rendered from the stash at the head of the pass (a park edit has
 -- already landed in the document). See docs/trackerManager.md § Note host clips and windows.
-local function renderStashedParked(fxParked)
+local function installParkedNotes(fxParked)
   local notes = {}
   for _, spec in ipairs(fxParked or {}) do
     if spec.evType == 'note' then util.add(notes, spec) end
@@ -615,8 +615,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see docs/generators.md § Emission is ownership
 
-local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents, time,
-                                 movedBounds)
+local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents, time)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
   -- seat-stamps each event, so the tail walk meets an ordinary seated entry.
@@ -749,7 +748,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     local touched = {}
     for _, spec in ipairs(parkedNotes) do touched[spec.chan] = true end
     for _, spec in ipairs(restores)     do touched[spec.chan] = true end
-    for chan in pairs(touched) do boundLanes(chan, time, movedBounds) end
+    for chan in pairs(touched) do clipTails(chan, time) end
   end
 
   -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
@@ -2043,14 +2042,13 @@ end
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Tail walk
 --post: a note is separated only if it is disturbed; a nudged lane-1 onset emits its seat closure
 --post: the disturbed, the lane pass's named and each anchor's predecessors take fresh bounds
-local function rebuildTails(fxOut, windows, time, movedBounds)
+local function rebuildTails(fxOut, windows, time)
   local res = mm:resolution()
   local clampWrites = mmBatch()
   -- fx expansion's own batch, still uncommitted and carrying its existence ops -- a fresh
   -- spec is unrealised during the walk, so the clip mutates it in place, reaching mm already clipped.
   local tailWrites = fxOut.deferredWrite
   for chan = 1, 16 do
-    -- Clean channels freeze: fx left fxOut.notes empty, real notes converged last rebuild.
     if not dirt.has(chan) then goto nextChan end
     -- The channel's population: um's index less what this pass ran, plus the pass's own specs. Every
     -- spec is fresh -- a kept host emits none -- so all of them seed disturbance and count toward the cap.
@@ -2060,7 +2058,7 @@ local function rebuildTails(fxOut, windows, time, movedBounds)
     -- The lane pass named the authored events whose bound it moved, over both its runs; the walk
     -- states no lane bound of theirs, so it re-bounds them by name. see docs § The lane pass
     local reBound = {}
-    for _, uuid in ipairs(movedBounds[chan] or {}) do
+    for _, uuid in ipairs(dirt.tails.has(chan) or {}) do
       local rec = index.byUuid(uuid)
       if rec then util.add(reBound, rec) end
     end
@@ -2081,10 +2079,7 @@ local function rebuildTails(fxOut, windows, time, movedBounds)
     dirt.add(chan, emitted)
     ::nextChan::
   end
-  -- Clamps commit first: separating colliding same-pitch onsets settles mm's seat keys before
-  -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
-  -- Delete-first still holds: the fx deletes precede the adds within the one batch.
   tailWrites.commit()
 end
 
@@ -2952,19 +2947,19 @@ function rebuild.pipeline(time)
   rebuildExtraColumns(sources.extraColumns, sources.paramAutomation)
   rebuildExternals(external, time)
   if cm:get('trackerMode') then rebuildSamples() end
+  installParkedNotes(sources.fxParked)
 
-  renderStashedParked(sources.fxParked)
-  local movedBounds = {}
-  for chan = 1, 16 do if dirt.has(chan) then boundLanes(chan, time, movedBounds) end end
+  dirt.tails.clear()
+  for chan = 1, 16 do if dirt.has(chan) then clipTails(chan, time) end end
+
   local onTakeHosts = onTakeFxHosts()
-
   local fxOutWindows = buildFxWindows(sources.fxRegions, onTakeHosts, time)
-  local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, fxInWindows, onTakeHosts, pbRangeCents, time, movedBounds)
+  local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, fxInWindows, onTakeHosts, pbRangeCents, time)
   rebuildPA(time)
 
   local fxOut = rebuildFx(fxOutWindows, sources.fxRegions, fxNotesByHost, pbRangeCents, time)
 
-  rebuildTails(fxOut, fxOutWindows, time, movedBounds)
+  rebuildTails(fxOut, fxOutWindows, time)
   rebuildPbs(fxOut, sources.extraColumns, pbRangeCents, time)
   rebuildPCs(fxOut, time)
 

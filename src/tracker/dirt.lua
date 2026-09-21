@@ -42,7 +42,7 @@ end
 
 --contract: one journal per trackerManager: its edit side and its rebuild share the one instance
 function dirt.new()
-  local marks, swing, foreign = {}, {}, {}
+  local marks, swing, foreign, tails = {}, {}, {}, {}
   local memo = {}
   local journal = {}
 
@@ -204,6 +204,22 @@ function dirt.new()
     has   = function(chan) return swing[chan] == true end,
     --contract: the mid-pipeline clear, once the partition and the cc walk have consumed it
     clear = function() swing = {} end,
+  }
+
+  -- The lane pass's news for the tail walk: the uuids whose lane bound it moved, over both its
+  -- runs. Outside the lattice deliberately -- a moved bound names no position, so it is no reason
+  -- to re-derive anything, and a bulk move (a take-length change, a region park) must not escalate
+  -- its channel to wholesale. see docs/trackerManager.md § The lane pass
+  journal.tails = {
+    add   = function(chan, uuid)
+      local named = tails[chan]
+      if not named then named = {}; tails[chan] = named end
+      named[#named + 1] = uuid
+    end,
+    --contract: the channel's uuid list, nil where the pass moved no bound on it
+    has   = function(chan) return tails[chan] end,
+    --contract: cleared at the head of the lane pass, the one stage that writes it
+    clear = function() tails = {} end,
   }
 
   -- Provenance, not arithmetic: raw that moved with no seed of ours behind it. Only on a channel
