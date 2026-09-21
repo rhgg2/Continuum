@@ -327,7 +327,9 @@ visits, and what it emits).
 
 The cc family materialises by cell rather than by row (`spliceChannelCCs`). A
 cell is (column, row): the columns a channel's cc-family seeds name, crossed
-with the rows those seeds claimed. Each is excised exactly as a note row is and
+with the rows those seeds claimed. The journal buckets them, so `ppqs` answers
+this family in cells where it answers the row families in rows — one place folds
+a seed's later seats onto it and sorts, whatever the shape of the answer. Each is excised exactly as a note row is and
 refilled from um's raw index at its own seat, so neither O(channel) pass
 remains. Nothing narrows within the cell — the refill restores whatever the
 index holds there, which is what lets the excise drop the cluster whole and a

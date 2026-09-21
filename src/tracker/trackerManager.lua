@@ -1975,12 +1975,8 @@ function tm:rebuild(takeChanged)
     end
   end
 
-  -- A wholesale mm re-read strands the incremental index: reload before the snapshot reads it, and
-  -- the pass's own commits maintain it from there. see docs § Incremental index reconciliation
   if didReload then stager.reload() end
 
-  -- One head snapshot of the ds intent keys the pass reads, its regions already expanded to
-  -- per-channel hosts against the channels in use. see docs § Channel & column model
   local sources = {
     fxParked          = ds:get('fxParked'),
     fxRealisedWindows = ds:get('fxRealisedWindows'),

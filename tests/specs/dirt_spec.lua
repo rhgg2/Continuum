@@ -141,6 +141,25 @@ return {
     end,
   },
   {
+    name = 'dirt: the cc family answers in cells, one per column its seeds name',
+    run = function()
+      local journal = dirt.new()
+      journal.add(3, { verb = 'add',  uuid = 'u1', evType = 'cc', cc = 10, ppqL = 480 })
+      journal.add(3, { verb = 'move', uuid = 'u2', evType = 'cc', cc = 10, ppqL = 960, laterPpqs = { 240 } })
+      journal.add(3, { verb = 'add',  uuid = 'u3', evType = 'cc', cc = 11, ppqL = 480 })
+      journal.add(3, { verb = 'add',  uuid = 'u4', evType = 'at', ppqL = 120 })
+      journal.add(3, { verb = 'add',  uuid = 'u5', evType = 'note', ppqL = 720 })
+
+      local cells = journal.ppqs(3, 'cc')
+      t.deepEq(cells[10].ppqs, { 240, 480, 960 }, 'both seats of the move joined the add, sorted')
+      t.eq(cells[10].evType, 'cc', 'the cell names the column it answers for')
+      t.deepEq(cells[11].ppqs, { 480 }, 'a co-row tenant in another column stands on its own')
+      t.deepEq(cells.at.ppqs, { 120 }, 'at keys by evType, carrying one stream')
+      t.eq(cells.note, nil, 'a seed outside the family reaches no cell')
+      t.deepEq(journal.ppqs(3, 'note'), { 720 }, 'and the row families still answer rows')
+    end,
+  },
+  {
     name = 'dirt: covers answers one position, and wholesale covers every one',
     run = function()
       local journal = dirt.new()

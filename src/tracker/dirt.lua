@@ -76,38 +76,83 @@ function dirt.new()
 
   ----- What the seeds name
 
+  -- Hold a logical position on a bucket of them, distinct: the seats a fold carried onto a seed
+  -- join the snapshot's own. The bucket sorts once it is closed.
+  local function hold(bucket, ppq)
+    if ppq ~= nil and not bucket.seen[ppq] then
+      bucket.seen[ppq] = true
+      bucket.ppqs[#bucket.ppqs + 1] = ppq
+    end
+  end
+
+  -- What a channel's seeds name, held until the next write to it drops the lot: a row bucket per
+  -- family, and the cc family's cells.
+  local function memoFor(chan)
+    local held = memo[chan]
+    if not held then held = { families = {} }; memo[chan] = held end
+    return held
+  end
+
   -- The logical positions a channel's seeds name, scoped to one stage's family (nil: every family):
   -- each snapshot's ppqL plus those the flush folded onto it, distinct and sorted; memoized per
   -- family until the next write invalidates the channel's whole memo.
   local function seeded(chan, family)
     family = family or 'all'
-    local byFamily = memo[chan]
-    if not byFamily then byFamily = {}; memo[chan] = byFamily end
+    local byFamily = memoFor(chan).families
     local held = byFamily[family]
     if held then return held end
-    local list, seen = {}, {}
-    local function hold(ppq)
-      if ppq ~= nil and not seen[ppq] then seen[ppq] = true; list[#list + 1] = ppq end
-    end
+    held = { ppqs = {}, seen = {} }
     for _, seed in ipairs(marks[chan]) do
       -- A seed naming no event type names no family restriction: a region is a span over whatever
       -- sits inside it. Erring wide costs a re-place; erring narrow renders stale (§ Note-lane renewal).
       local seedFamily = SEED_FAMILY[seed.evType]
       if family == 'all' or seedFamily == nil or seedFamily == family then
-        hold(seed.ppqL)
-        for _, later in ipairs(seed.laterPpqs or {}) do hold(later) end
+        hold(held, seed.ppqL)
+        for _, later in ipairs(seed.laterPpqs or {}) do hold(held, later) end
       end
     end
-    table.sort(list)
-    held = { list = list, seen = seen }
+    table.sort(held.ppqs)
     byFamily[family] = held
     return held
   end
 
+  -- The cc family's seeds bucketed by the column each names -- its cc number, or its evType where
+  -- it has none, at and pc carrying one stream apiece. Rows folded and sorted as seeded's are.
+  local function ccCells(chan)
+    local memoized = memoFor(chan)
+    if memoized.cells then return memoized.cells end
+    local cells = {}
+    for _, seed in ipairs(marks[chan]) do
+      -- A seed naming no evType names no column either, so it reaches no cell: a region trigger's
+      -- real cc dirt is the fx walk's own emitted seeds, and erring wide here means seeking every
+      -- column the channel carries -- the O(channel) pass the cell exists to retire.
+      if SEED_FAMILY[seed.evType] == 'cc' then
+        local column = seed.cc or seed.evType
+        local cell = cells[column]
+        if not cell then cell = { evType = seed.evType, cc = seed.cc, ppqs = {}, seen = {} }; cells[column] = cell end
+        hold(cell, seed.ppqL)
+        for _, later in ipairs(seed.laterPpqs or {}) do hold(cell, later) end
+      end
+    end
+    for _, cell in pairs(cells) do
+      table.sort(cell.ppqs)
+      cell.seen = nil   -- closed: the cell is an answer now, not a bucket to hold onto
+    end
+    memoized.cells = cells
+    return cells
+  end
+
   --pre: the channel holds a seed list -- wholesale names no positions, and a clean one holds none
-  --contract: those positions sorted, for a stage that seeks to each; the caller reads, never writes
   --contract: family scopes to one stage's own seeds ('note' / 'cc' / 'pb'); nil answers every family
-  function journal.ppqs(chan, family) return seeded(chan, family).list end
+  --contract: the answer has the shape of what that family names, and the caller reads, never writes.
+  --  note and pb name rows: those positions sorted, for a stage that seeks to each. cc names columns
+  --  of rows -- a channel can hold 130 of them, so its stage excises and refills one at a time and
+  --  asks by column where the note lane asks by row.
+  --shape: result = sorted ppqs | cells keyed by cc number or evType, cell = { evType, cc, ppqs }
+  function journal.ppqs(chan, family)
+    if family == 'cc' then return ccCells(chan) end
+    return seeded(chan, family).ppqs
+  end
 
   --contract: is this logical position seeded -- wholesale covers every one, a clean channel none
   --contract: family as ppqs -- an excise and the refill gating it must scope alike, or the pair
@@ -124,7 +169,7 @@ function dirt.new()
     local standing = marks[chan]
     if standing == nil then return false end
     if standing == true then return true end
-    local list = seeded(chan).list
+    local list = seeded(chan).ppqs
     local lo, hi = 1, #list + 1
     while lo < hi do
       local mid = (lo + hi) // 2
