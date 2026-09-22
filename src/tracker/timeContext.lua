@@ -31,7 +31,7 @@ end
 function ctx:length() return length end
 
 --pre: offset is a realisation-frame nudge (a note's delay), never a logical one
---post: result is integer-valued
+--post: result is integer-valued, or OPEN when ppqL is OPEN
 function ctx:fromLogical(chan, ppqL, offset)
   local ppqI = ppqL
   local c    = column[chan]
