@@ -614,6 +614,7 @@ end
 local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents)
   local parkWrites     = mmBatch()
   local restoredEvents = {}
+  local restoredCCs    = {}
   local parkedByHost   = {}
 
   local function hostFor(evt)
@@ -624,7 +625,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
 
   -- Park covered candidates, split the prior set into carry-forward / restore. onPark fires
   -- once per freshly-parked spec. see docs/trackerManager.md § Rebuild
-  --shape: candidates = { evt (the live column/index event), events = <col.events> (non-notes), spec = toParked(evt, {...}) }
+  --shape: candidates = { evt (the live column/index event), col = evt's column (nil off-column), spec = toParked(evt, {...}) }
   local function reconcilePark(candidates, prior, onPark)
     onPark = onPark or function (_) end
     local function unlink(events, evt)
@@ -636,13 +637,9 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
         onPark(candidate.spec)
         util.add(newParked, candidate.spec)
         parkWrites.delete(candidate.evt)
-        -- A note reaches its lane's events table through the lane: renewLane replaces that table
-        -- between the scan and here, and the old one is no longer the lane tv will read.
-        if util.isNote(candidate.evt) then
-          unlink(frame.renewLane(candidate.evt.chan, candidate.evt.lane).events, candidate.evt)
-        elseif candidate.events then
-          unlink(candidate.events, candidate.evt)
-        end
+        -- Unlink through the column, not the table the scan saw: renewal may replace that table
+        -- between the scan and here, and the old one is no longer the one tv will read.
+        if candidate.col then unlink(frame.renewColumn(candidate.col).events, candidate.evt) end
       end
     end
     for _, spec in ipairs(prior) do
@@ -680,7 +677,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     local function candidate(evt)
       if seen[evt] then return end   -- a host under its own region would arrive from both sources
       seen[evt] = true
-      util.add(scan, { evt = evt, spec = toParked(evt) })
+      util.add(scan, { evt = evt, col = frame.channels[evt.chan].onTake.notes[evt.lane], spec = toParked(evt) })
     end
     for chan = 1, 16 do
       local chanSpans = targetSpans[util.key(chan, 'note')]
@@ -803,15 +800,15 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     installParked('pa', parkedPAs)
   end
 
-  -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
-  -- restores add back immediately, seating an unrealised projection for the view.
+  -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane;
+  -- restores add back immediately, no dirt seed. see docs/trackerManager.md § Region-replace parking
   do
     local scan = {}
     for chan = 1, 16 do
       if dirt.has(chan) then
         for cc, col in pairs(frame.channels[chan].onTake.ccs) do
           for evt in onsetsIn(col.events, targetSpans[util.key(chan, cc)]) do
-            util.add(scan, { evt = evt, events = col.events, spec = toParked(evt) })
+            util.add(scan, { evt = evt, col = col, spec = toParked(evt) })
           end
         end
       end
@@ -819,17 +816,15 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     local restores
     parkedCCs, restores = reconcilePark(scan, priorByType.cc or {})
 
-    -- Seat an unrealised projection so the view shows the restored cc this frame; next rebuild
-    -- re-reads the real mm event from the take. The add rides the shared park commit.
+    -- Restores re-enter their columns now (unrealised) and land in mm, under their parked uuid, with
+    -- this stage's commit, as a restored note does.
     for _, spec in ipairs(restores) do
       -- The fill seat at this ppq stays filed under its host: rebuildFx's reconcile deletes it by its
       -- own uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
-      parkWrites.add(fromParked(spec))
-      local channel = frame.channels[spec.chan]
-      local col = channel.onTake.ccs[spec.cc]
-      if not col then col = frame.newCcColumn(spec.cc); channel.onTake.ccs[spec.cc] = col end
-      util.add(col.events, util.clone(spec))   -- the column event is the spec itself: already logical
-      util.sortByPPQ(col.events)
+      parkWrites.add(fromParked(spec, { keepUuid = true }))
+      local restored = util.clone(spec)   -- the column event is the spec itself: already logical
+      util.add(restoredCCs, restored)
+      frame.spliceInto(getOrSetCcColumn(spec.chan, 'cc', spec.cc), restored)
     end
 
     -- Render union: the parked authored cc stays the visible surface (the fill is hidden
@@ -912,6 +907,10 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   -- no setEvent -- see docs/trackerManager.md § Incremental index reconciliation.
   for _, evt in ipairs(restoredEvents) do
     if index.stampColEvt(evt) then evt.realised = true end
+  end
+  -- A cc entry carries no seat stamp, so a restored cc only learns that mm holds it.
+  for _, evt in ipairs(restoredCCs) do
+    if index.byUuid(evt.uuid) then evt.realised = true end
   end
   return parkedByHost
 end

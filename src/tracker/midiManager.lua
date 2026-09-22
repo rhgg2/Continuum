@@ -214,6 +214,19 @@ local function assignNewUUID(evt)
   return maxUUID
 end
 
+-- An unpark restore supplies the event's original uuid under keepUuid so handles on it survive
+-- the round trip; anything else (paste clones, stale ids) mints.
+--post: evt.uuid kept iff evt.keepUuid and the uuid is free, else newly minted; evt.keepUuid cleared
+local function claimUuid(evt)
+  if evt.keepUuid and type(evt.uuid) == 'number' and not eventsByUuid[evt.uuid] then
+    if evt.uuid > maxUUID then maxUUID = evt.uuid end
+    eventsByUuid[evt.uuid] = evt
+  else
+    assignNewUUID(evt)
+  end
+  evt.keepUuid = nil
+end
+
 -- Stable sort by ppq: REAPER's MIDI_Sort used to order the take and the
 -- modify re-read mirrored it back; with the read-back gone mm owns the order,
 -- and tm/view consume notes/ccs strictly in ppq order.
@@ -1162,16 +1175,7 @@ local function addNote(t)
   local note = util.clone(t)
   note.evType = 'note'
   if not note.muted then note.muted = nil end
-  -- An unpark restore supplies the note's original uuid under keepUuid so fx-editor
-  -- handles survive the round trip; anything else (paste clones, stale ids) mints.
-  if note.keepUuid and type(note.uuid) == 'number' and not eventsByUuid[note.uuid] then
-    note.keepUuid = nil
-    if note.uuid > maxUUID then maxUUID = note.uuid end
-    eventsByUuid[note.uuid] = note
-  else
-    note.keepUuid = nil
-    assignNewUUID(note)
-  end
+  claimUuid(note)
   t.uuid = note.uuid
 
   streams.note.admit(note)
@@ -1263,8 +1267,8 @@ local function pushCC(t)
 end
 
 --pre: lock is held; t has ppq, chan, its value field, and an evType in chanMsgLUT
---post: t.uuid := a newly minted uuid
---post: (t has no non-structural key) → msg.plain := true
+--post: t.uuid := t.keepUuid when free, else a newly minted uuid
+--post: (t has no non-structural key besides keepUuid) → msg.plain := true
 local function addCC(t)
   if not (take and checkLock()) then return end
 
@@ -1282,13 +1286,13 @@ local function addCC(t)
   end
 
   local msg = pushCC(t)
+  claimUuid(msg)
+  t.uuid = msg.uuid
 
   local hasMetadata = false
-  for k in pairs(t) do
+  for k in pairs(msg) do
     if not ccEventFields[k] then hasMetadata = true; break end
   end
-  assignNewUUID(msg)
-  t.uuid = msg.uuid
   if hasMetadata then saveMetadatum(msg.uuid)
   else msg.plain = true end
   sidecarPut(msg)   -- here and not in pushCC: the plain decision above is what decides the row

@@ -336,9 +336,13 @@ writes in the same `modify` stay addressable (see § Sidecar index
 maintenance).
 
 `addCC(t)` mirrors the lazy-sidecar pattern: if `t` carries any non-structural
-key it allocates a uuid + inserts a sidecar in the same shot. Plain ccs
-(no metadata) skip the allocation entirely. Symmetric with `addNote`'s
-unconditional uuid, but lazy — most ccs never need one.
+key, it inserts a sidecar in the same shot. A plain cc gets only its in-memory
+uuid (§ Plain ccs — identity without persistence), so most ccs never pay for a
+sidecar.
+
+Both adds mint a uuid unless `t.keepUuid` is set and the uuid `t` carries is
+free, in which case the event takes that uuid. This is the unpark restore's
+path: a parked event returns to the take under the handle it left with.
 
 ### Live-edit note release
 

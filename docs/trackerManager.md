@@ -962,6 +962,11 @@ uuid rather than a bare bool: a `currentWindows` entry is checked
 first, and only then the spec's own `fx`, because a self-parking host
 inside a region's window is that region's membership rather than its
 own host — the same reading `rebuildFx` takes.
+A cc's park and restore write no dirt seed: the fill's end seat carries
+the value the authored stream holds there, parked members included, so
+nothing downstream reads a changed base — the fill stands in for the
+point event's missing tail, and restore re-seats an unrealised
+projection for the view.
 A `pa` rides its host note, so it parks exactly when the host does:
 deleted from the take (silent — a stale PA against a fresh derived
 stream is meaningless; the generator owns any new realisation PAs),
@@ -1582,8 +1587,9 @@ Renewal is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseEvents` assigns only when it actually dropped an
   event; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
-  the park restore) go through `spliceInto(col, event)`, which renews
-  before it splices, and the park unlink calls `renewLane(chan, lane)` itself.
+  the park restores) go through `spliceInto(col, event)`, which renews
+  before it splices, and the park unlink calls `renewColumn` on the column
+  its candidate names.
   A column carries the order it is kept in — `less`, set at the mint
   (`newNoteColumn` / `newCcColumn` / `newStreamColumn`) — so the splice needs only the
   column and the event, and resolving *which* column stays with the caller:

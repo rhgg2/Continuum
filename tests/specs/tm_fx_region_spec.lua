@@ -1083,6 +1083,9 @@ return {
       -- Two authored cc74 inside the window; values distinct from the 100 fill.
       h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 74, val = 30 }); h.tm:flush()
       h.tm:addEvent({ evType = 'cc', ppq = 180, chan = 1, cc = 74, val = 45 }); h.tm:flush()
+      local uuid180 = authoredCC(h, 1, 74, 180).uuid
+      local function column74() return h.tm:getChannel(1).onTake.ccs[74] end
+      local authoredTable = column74().events
 
       -- Replace curve seating a breakpoint every 60t (val 100) -- so each authored ppq sits under a fill seat.
       generators.kinds.ccRep = {
@@ -1101,17 +1104,32 @@ return {
                                    fx = { { kind = 'ccRep' } } } })
       local grown = {}
       for _, s in ipairs(stashOfType(h, 'cc')) do grown[s.ppq] = s.val end
+      local parkedTable = column74().events
 
       -- Shrink so cc74@180 falls outside (restored); cc74@60 stays covered (parked).
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 120,
                                    fx = { { kind = 'ccRep' } } } })
+      local restored = authoredCC(h, 1, 74, 180)
+      local restoredTable = column74().events
+      local cell
+      for _, e in ipairs(restoredTable) do if e.ppq == 180 then cell = e end end
+      local cellUuid, cellRealised = cell and cell.uuid, cell and cell.realised
+      -- An edit through the restored cell, while the region's kind still resolves.
+      if cell then h.tm:assignEvent(cell, { val = 99 }); h.tm:flush() end
       generators.kinds.ccRep = nil   -- generators is shared: restore before asserting
+
+      t.truthy(parkedTable ~= authoredTable, 'parking renews the column it leaves')
+      t.truthy(restoredTable ~= parkedTable, 'restoring renews the column it re-enters')
+      t.eq(cellUuid, uuid180, 'the restored cell names the uuid the cc was parked under')
+      t.truthy(cellRealised, 'and is realised once the park commit lands it')
+      local edited = authoredCC(h, 1, 74, 180)
+      t.eq(edited and edited.val, 99, 'an edit through the restored cell reaches the take')
 
       t.eq(grown[60],  30, 'cc74@60 parked with its authored value')
       t.eq(grown[180], 45, 'cc74@180 parked with its authored value')
 
-      local restored = authoredCC(h, 1, 74, 180)
       t.truthy(restored, 'cc74@180 restored to the take once outside the window')
+      t.eq(restored.uuid, uuid180, 'under the uuid it was parked with')
       t.eq(restored.val, 45, 'the restored cc keeps its authored value, not the fill (100) it sat under')
 
       local stillParked = stashOfType(h, 'cc')

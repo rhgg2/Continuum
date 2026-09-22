@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-22** — Parked ccs return to the take under their parked uuid, through the same
+  `keepUuid` claim as notes, and re-enter their column by `spliceInto`. Over a freshly minted uuid,
+  which left the restored cell naming an event mm no longer held, so an edit through it was lost.
+  The cc park and restore take no dirt seed: the fill's end seat carries the underlying authored
+  value, parked members included, so no downstream host reads a changed base.
+
 - **2026-09-18** — The interval cc refill parts a cell from its neighbour by stamp, and seeks that
   cell's raw seat exactly. Over the ±1 window and the `ccReseat` reconcile behind it: `dirt.foreign`
   is only ever set alongside wholesale dirt, so nothing the interval path meets can want
