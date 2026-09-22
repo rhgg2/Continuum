@@ -552,13 +552,22 @@ end
 ----- Rebuild region park
 
 -- A parked clone removes the realisation frame, re-added on unpark
-local cloneParked do
+local toParked do
   local REALISATION = { delayC = true, endppqC = true, realised = true, derived = true,
-                      frame = true, cents = true, colEvt = true, sampleShadowed = true }
+                      frame = true, cents = true, colEvt = true, sampleShadowed = true,
+                      raw = true }
   --pre: evt is logical-frame; an mm-raw source must override ppq via `adds`
-  function cloneParked(evt, adds)
+  function toParked(evt, adds)
     return util.assign(util.clone(evt, REALISATION), adds)
   end
+end
+
+-- The mm-bound write of a parked spec: raw onset, logical sidecar. `adds` may clear a key with
+-- util.REMOVE.
+--pre: spec is logical-frame
+local function fromParked(spec, adds)
+  local ppq = time:fromLogical(spec.chan, spec.ppq)
+  return util.assign(util.assign(util.clone(spec), { ppq = ppq, ppqL = spec.ppq }), adds)
 end
 
 local function installParked(field, events, onSeat)
@@ -615,8 +624,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
 
   -- Park covered candidates, split the prior set into carry-forward / restore. onPark fires
   -- once per freshly-parked spec. see docs/trackerManager.md § Rebuild
-  --shape: candidates = { evt (the live column/index event), chan, lane = <laneIdx>, events = <col.events>, spec = cloneParked(evt, {...}) }
-  local allParked = {}
+  --shape: candidates = { evt (the live column/index event), events = <col.events> (non-notes), spec = toParked(evt, {...}) }
   local function reconcilePark(candidates, prior, onPark)
     onPark = onPark or function (_) end
     local function unlink(events, evt)
@@ -628,10 +636,10 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
         onPark(candidate.spec)
         util.add(newParked, candidate.spec)
         parkWrites.delete(candidate.evt)
-        -- A note carry names its lane, not the lane's events table: renewLane replaces that table
+        -- A note reaches its lane's events table through the lane: renewLane replaces that table
         -- between the scan and here, and the old one is no longer the lane tv will read.
-        if candidate.lane then
-          unlink(frame.renewLane(candidate.chan, candidate.lane).events, candidate.evt)
+        if util.isNote(candidate.evt) then
+          unlink(frame.renewLane(candidate.evt.chan, candidate.evt.lane).events, candidate.evt)
         elseif candidate.events then
           unlink(candidate.events, candidate.evt)
         end
@@ -641,7 +649,6 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
       if hostFor(spec) then util.add(newParked, spec)
       else util.add(restores, spec) end
     end
-    for _, spec in ipairs(newParked) do util.add(allParked, spec) end
     return newParked, restores
   end
 
@@ -650,31 +657,34 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   local priorByType = {}
   for _, spec in ipairs(fxParked or {}) do util.bucket(priorByType, spec.evType, spec) end
 
-  -- Window spans per target: the fresh note/cc scans visit only these, never the whole channel;
-  -- cc spans come from the settled set below. see docs/trackerManager.md § Span-covered fx scans
-  local noteSpans = {}
+  -- Window spans per (chan, target): the fresh note/cc scans visit only these, never the whole
+  -- channel. No pass touches the window set, so one build serves both.
+  -- see docs/trackerManager.md § Span-covered fx scans
+  local targetSpans = {}
   do
-    local noteWins = {}
+    local wins = {}
     for _, w in ipairs(fxOutWindows.windows()) do
-      if w.targets.note then
-        util.bucket(noteWins, w.chan, { window = { w.ppq, w.endppq } })
+      for target in pairs(w.targets) do
+        util.bucket(wins, util.key(w.chan, target), { window = { w.ppq, w.endppq } })
       end
     end
-    for chan, wins in pairs(noteWins) do noteSpans[chan] = spans.mergeWindows(wins) end
+    for key, bucket in pairs(wins) do targetSpans[key] = spans.mergeWindows(bucket) end
   end
+
+  local parkedNotes, parkedPAs, parkedCCs, parkedPbs
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take, fed
   -- by two bounded sources -- see docs/trackerManager.md § Span-covered fx scans for the note-host split.
-  local parkedNotes
   do
     local scan, seen = {}, {}
     local function candidate(evt)
       if seen[evt] then return end   -- a host under its own region would arrive from both sources
       seen[evt] = true
-      util.add(scan, { evt = evt, chan = evt.chan, lane = evt.lane, spec = cloneParked(evt) })
+      util.add(scan, { evt = evt, spec = toParked(evt) })
     end
-    for chan, chanSpans in pairs(noteSpans) do
-      if dirt.has(chan) then
+    for chan = 1, 16 do
+      local chanSpans = targetSpans[util.key(chan, 'note')]
+      if chanSpans and dirt.has(chan) then
         for _, col in ipairs(frame.channels[chan].onTake.notes) do
           for evt in onsetsIn(col.events, chanSpans) do
             if evt.evType ~= 'pa' then candidate(evt) end
@@ -701,20 +711,21 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     -- the tail walk then meets each as an ordinary seated entry and clips it in place.
     local takeLen = time:length()
     for _, spec in ipairs(restores) do
-      local ppq = time:fromLogical(spec.chan, spec.ppq)
-      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
+      -- Provisional raw end: the authored ceiling is all that is known here. The lane pass below
+      -- gives the re-entered cell its bound, and the tail walk converts that in place.
+      local ceiling = spec.endppq == util.OPEN and math.huge
+                      or spec.endppq and time:fromLogical(spec.chan, spec.endppq)
+                      or math.huge
+      local write = fromParked(spec, { keepUuid = true, endppqL = spec.endppq,
+                                       delayC = util.REMOVE, endppqC = util.REMOVE })
+      write.endppq = util.round(math.max(write.ppq + 1, math.min(ceiling, takeLen)))
+      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', write.ppq))
+      parkWrites.add(write)
+
       ensureLane(spec.chan, spec.lane)
       local note = util.clone(spec)   -- the event is the spec: both are logical (keeps the parked uuid too)
       util.add(restoredEvents, note)
       frame.spliceEvent(spec.chan, spec.lane, note)
-      -- Provisional raw end: the authored ceiling is all that is known here. The lane pass below
-      -- gives the re-entered cell its bound, and the tail walk converts that in place.
-      local ceiling = note.endppq == util.OPEN and math.huge
-                      or note.endppq and time:fromLogical(spec.chan, note.endppq)
-                      or math.huge
-      parkWrites.add(util.assign(util.clone(note, { delayC = true, endppqC = true }),
-        { keepUuid = true, ppq = ppq, ppqL = note.ppq, endppqL = note.endppq,
-          endppq = util.round(math.max(ppq + 1, math.min(ceiling, takeLen))) }))
     end
 
     -- Off-take membership for the generator + grid: each is a render-ready logical event
@@ -743,17 +754,16 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
       return false
     end
 
-    local newParked, seen, freshEvents = {}, {}, {}
+    local seen, freshEvents = {}, {}
+    parkedPAs = {}
     -- Fresh: an on-take PA whose host just parked leaves the take and stashes. Bounded by each parked
     -- member's raw span (its own PAs), not the channel's cc count. see docs/trackerManager.md § Span-covered fx scans
     for chan = 1, 16 do
       if dirt.has(chan) then
         local pas = index.raw(chan).pas
         for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-          local sRaw, eRaw = time:fromLogical(chan, evt.ppq), time:fromLogical(chan, evt.endppqC)
-          for i = util.firstAtOrAfter(pas, sRaw), #pas do
-            local cc = pas[i]
-            if cc.ppq >= eRaw then break end
+          local rawSpan = { time:fromLogical(chan, evt.ppq), time:fromLogical(chan, evt.endppqC) }
+          for cc in onsetsIn(pas, { rawSpan }) do
             if not seen[cc] and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
               seen[cc] = true
               -- Seed the PA's row so rebuildPA's gated parked loop re-projects it: mmBatch.delete
@@ -762,9 +772,10 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
               parkWrites.delete({ uuid = cc.uuid })
               freshEvents[cc.chan] = freshEvents[cc.chan] or {}
               freshEvents[cc.chan][cc.uuid] = cc.ppqL or cc.ppq   -- the position the excise seeks
-              local spec = cloneParked(cc, { ppq = cc.ppqL or cc.ppq })   -- um index source: evType/chan/pitch/vel/rpb ride, ppq flips logical
-              spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
-              util.add(newParked, spec)
+              local spec = toParked(cc)   -- um index source: evType/chan/pitch/vel/rpb ride
+              projectEvent(spec, cc.chan)    -- the clone takes the projection; the live entry keeps its raw frame
+              spec.uuid = nil                -- restore re-mints the rpb sidecar uuid
+              util.add(parkedPAs, spec)
             end
           end
         end
@@ -781,73 +792,53 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
     for _, spec in ipairs(priorByType.pa or {}) do
       if hostParked(spec.chan, spec.pitch, spec.ppq) then
-        util.add(newParked, spec)
+        util.add(parkedPAs, spec)
       else
-        local ppq = time:fromLogical(spec.chan, spec.ppq)
-        dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
-        parkWrites.add(util.assign(util.clone(spec),   -- back to mm: raw onset, logical sidecar
-          { ppq = ppq, ppqL = spec.ppq }))
+        local write = fromParked(spec)
+        dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', write.ppq))
+        parkWrites.add(write)
       end
     end
-    for _, spec in ipairs(newParked) do util.add(allParked, spec) end
 
-    installParked('pa', newParked)
+    installParked('pa', parkedPAs)
   end
 
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating an unrealised projection for the view.
   do
-    -- cc spans from the window set, which the note pass above left untouched.
-    local ccSpans, ccWins = {}, {}
-    for _, w in ipairs(fxOutWindows.windows()) do
-      for target in pairs(w.targets) do
-        if type(target) == 'number' then
-          util.bucket(ccWins, util.key(w.chan, target), { window = { w.ppq, w.endppq } })
-        end
-      end
-    end
-    for key, wins in pairs(ccWins) do ccSpans[key] = spans.mergeWindows(wins) end
-
     local scan = {}
     for chan = 1, 16 do
       if dirt.has(chan) then
         for cc, col in pairs(frame.channels[chan].onTake.ccs) do
-          for evt in onsetsIn(col.events, ccSpans[util.key(chan, cc)]) do
-            util.add(scan, { evt = evt, events = col.events, spec = cloneParked(evt) })
+          for evt in onsetsIn(col.events, targetSpans[util.key(chan, cc)]) do
+            util.add(scan, { evt = evt, events = col.events, spec = toParked(evt) })
           end
         end
       end
     end
-    -- The mm-bound restore of a parked spec: raw onset, logical sidecar. Column and render events
-    -- are the spec itself -- already logical.
-    local function ccWrite(spec, ppq)
-      return util.assign(util.clone(spec), { ppq = ppq, ppqL = spec.ppq })
-    end
-
-    local newParked, restores = reconcilePark(scan, priorByType.cc or {})
+    local restores
+    parkedCCs, restores = reconcilePark(scan, priorByType.cc or {})
 
     -- Seat an unrealised projection so the view shows the restored cc this frame; next rebuild
     -- re-reads the real mm event from the take. The add rides the shared park commit.
     for _, spec in ipairs(restores) do
-      local ppq  = time:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
-      local evt = ccWrite(spec, ppq)
       -- The fill seat at this ppq stays filed under its host: rebuildFx's reconcile deletes it by its
       -- own uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
-      parkWrites.add(evt)
+      parkWrites.add(fromParked(spec))
       local channel = frame.channels[spec.chan]
       local col = channel.onTake.ccs[spec.cc]
       if not col then col = frame.newCcColumn(spec.cc); channel.onTake.ccs[spec.cc] = col end
-      util.add(col.events, util.clone(spec))
+      util.add(col.events, util.clone(spec))   -- the column event is the spec itself: already logical
       util.sortByPPQ(col.events)
     end
 
     -- Render union: the parked authored cc stays the visible surface (the fill is hidden
     -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.notes.
-    for _, spec in pairs(newParked) do
+    for _, spec in pairs(parkedCCs) do
       local ccs = frame.channels[spec.chan].onTake.ccs
       ccs[spec.cc] = ccs[spec.cc] or frame.newCcColumn(spec.cc)
     end
-    installParked('ccs', newParked)
+    installParked('ccs', parkedCCs)
   end
 
   -- pb: seats are markerless, so the scan can't run every rebuild -- it diffs current pb windows against
@@ -868,51 +859,53 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
     local scan = {}
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = fxOutWindows.rawSpan(win)
-      local pbs = index.raw(win.chan).pbs
-      for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
-        local cc = pbs[i]
-        if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
+      for cc in onsetsIn(index.raw(win.chan).pbs, { { sRaw, eRaw } }) do   -- half-open, as coverage and the mm walk are
         if not cc.derived and not fxInWindows.ownsRaw('pb', cc.chan, nil, cc.ppq) then
           dirt.add(cc.chan, dirt.rawSeed(cc, 'park'))
           -- val: logical cents from the cents sidecar (restore maps back); entry.val is already the
           -- raw-derived cents, the best-effort fallback for a foreign pre-cents pb.
-          local spec = cloneParked(cc, { ppq = cc.ppqL or cc.ppq,
-                                      val = cc.cents or cc.val })   -- index entry: evType/chan/shape/tension ride; ppq flips logical, cents->val
+          local spec = toParked(cc, { val = cc.cents or cc.val })   -- index entry: evType/chan/shape/tension ride; cents->val
+          projectEvent(spec, cc.chan)   -- the clone takes the projection; the live entry keeps its raw frame
           util.add(scan, { evt = { uuid = cc.uuid }, spec = spec })   -- the carry's evt is the delete target: uuid is all of it read
         end
       end
     end
 
-    local newParked, restores = reconcilePark(scan, priorByType.pb or {})
+    local restores
+    parkedPbs, restores = reconcilePark(scan, priorByType.pb or {})
 
     -- Restore re-adds to the take; the absorber (later this rebuild) refines the wire raw with
     -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
     for _, spec in ipairs(restores) do
-      local ppq = time:fromLogical(spec.chan, spec.ppq)
-      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', ppq))
-      parkWrites.add(util.assign(util.clone(spec),
-        { ppq = ppq, ppqL = spec.ppq,
-          cents = spec.val, val = tuning.centsToRaw(spec.val, pbLimCents) }))   -- spec.val is cents; the wire wants raw + a sidecar
+      -- spec.val is cents; the wire wants raw + a sidecar
+      local write = fromParked(spec, { cents = spec.val, val = tuning.centsToRaw(spec.val, pbLimCents) })
+      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', write.ppq))
+      parkWrites.add(write)
     end
 
     -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every pb
     -- in the swept raw span. The authored restored above is an unrealised add, so delete-first order is safe.
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = fxInWindows.rawSpan(win)   -- a removed window is the stored set's own
-      local pbs = index.raw(win.chan).pbs
-      for i = util.firstAtOrAfter(pbs, sRaw), #pbs do
-        local cc = pbs[i]
-        if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
+      for cc in onsetsIn(index.raw(win.chan).pbs, { { sRaw, eRaw } }) do   -- half-open, as coverage and the mm walk are
         dirt.add(cc.chan, dirt.rawSeed(cc, 'delete'))
         parkWrites.delete({ uuid = cc.uuid })
       end
     end
 
     -- Render union for the view: the authored breakpoints stay visible in-column though off-take.
-    for _, spec in pairs(newParked) do spec.cents = spec.val end
-    installParked('pb', newParked)
+    -- The cents decoration is realisation, so it rides a copy: parkedPbs is what fxParked persists.
+    local seats = {}
+    for _, spec in ipairs(parkedPbs) do
+      util.add(seats, util.assign(util.clone(spec), { cents = spec.val }))
+    end
+    installParked('pb', seats)
   end
 
+  local allParked = {}
+  for _, parked in ipairs({ parkedNotes, parkedPAs, parkedCCs, parkedPbs }) do
+    for _, spec in ipairs(parked) do util.add(allParked, spec) end
+  end
   persistParked('fxParked', allParked, fxParked)
   parkWrites.commit()
   -- Seat-stamp each restored event like any other seat, now the commit lands it in mm; bare write,
