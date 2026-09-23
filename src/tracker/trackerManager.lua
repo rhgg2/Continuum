@@ -37,6 +37,9 @@
 --shape: parked =  { notes, ccs, pb, pa }: flat lists of those specs made render-ready -- a note gains
 --shape:   endppqC (the lane bound the lane pass writes; endppq stays the authored ceiling), a pb gains cents
 
+--shape: fxRegions = [ { uuid = 'fxr-N', chan (0 = global), ppq, endppq, fx = [stage, ...] } ]: a logical span; storage order is lane precedence among overlapping regions
+--shape:   stage = { kind, [dest], [bypass], ...the kind's fields }
+
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 

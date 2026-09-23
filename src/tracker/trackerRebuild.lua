@@ -181,7 +181,7 @@ local function exciseEvents(cols, ppqs, claims)
   end
 end
 
-local function persistParked(key, new, old)
+local function persistKey(key, new, old)
   if not util.deepEq(old or {}, new) and mm:take() then
     ds:assign(key, #new > 0 and new or util.REMOVE)
   end
@@ -237,7 +237,7 @@ end
 
 ----- Rebuild CCs
 
-local function getOrSetCcColumn(chan, evType, ccNum)
+local function ensureCcColumn(chan, evType, ccNum)
   local cols = frame.channels[chan].onTake
   if evType == 'cc' then
     cols.ccs[ccNum] = cols.ccs[ccNum] or frame.newCcColumn(ccNum)
@@ -250,14 +250,14 @@ end
 
 local function spliceCcEvent(entry)
   local event = columnEvent(entry)
-  local col   = getOrSetCcColumn(entry.chan, entry.evType, entry.cc)
+  local col   = ensureCcColumn(entry.chan, entry.evType, entry.cc)
   projectEvent(event, entry.chan)
   frame.spliceInto(col, event)
 end
 
 local function appendCcEvent(entry, update)
   local event = columnEvent(entry, update)
-  local col   = getOrSetCcColumn(entry.chan, entry.evType, entry.cc)
+  local col   = ensureCcColumn(entry.chan, entry.evType, entry.cc)
   projectEvent(event, entry.chan)
   util.add(col.events, event)
 end
@@ -731,35 +731,30 @@ local function parkNotes(stage, onTakeHosts)
   return parkedNotes, restoredNotes, parkedByHost
 end
 
--- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
--- shown in the host lane by rebuildPA. Reconciled against the parked-note set. see docs/trackerManager.md § Region-replace parking
 --pre: parkNotes has installed this pass's parked notes
 local function parkPAs(stage)
   -- One test for both halves, so a fresh park and the next pass's carry agree.
   local function covers(host, pitch, ppqL)
     return host.pitch == pitch and ppqL >= host.ppq and ppqL < host.endppqC
   end
-  local function hostParked(chan, pitch, ppqL)
+  local function hostIsParked(chan, pitch, ppqL)
     for _, host in ipairs(frame.channels[chan].parked.notes) do
       if covers(host, pitch, ppqL) then return true end
     end
     return false
   end
 
-  -- Fresh: an on-take PA whose host just parked leaves the take. Bounded by each parked host's raw
-  -- span. see docs/trackerManager.md § Span-covered fx scans
+  -- An on-take PA whose host just parked leaves the take.
   local parkedPAs, seen, parkedPpqs, parkedUuids = {}, {}, {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
       local pas = index.raw(chan).pas
       for _, host in ipairs(frame.channels[chan].parked.notes) do
-        local rawSpan = { time:fromLogical(chan, host.ppq), time:fromLogical(chan, host.endppqC) }
-        for pa in onsetsIn(pas, { rawSpan }) do
+        for pa in onsetsIn(pas, { { time:fromLogical(chan, host.ppq), time:fromLogical(chan, host.endppqC) } }) do
           local ppqL = pa.ppqL or pa.ppq
           -- same-pitch parked spans can overlap (lane clips only), so a PA may meet two hosts
           if not seen[pa] and covers(host, pa.pitch, ppqL) then
             seen[pa] = true
-            -- mmBatch.delete seeds no interval dirt, so seed the row for rebuildPA's parked loop.
             dirt.add(chan, dirt.rawSeed(pa, 'park'))
             stage.writes.delete({ uuid = pa.uuid })
             util.bucket(parkedPpqs, chan, ppqL)
@@ -782,7 +777,7 @@ local function parkPAs(stage)
 
   -- Prior: host still parked -> carry; host back on-take -> restore.
   for _, spec in ipairs(stage.prior.pa) do
-    if hostParked(spec.chan, spec.pitch, spec.ppq) then
+    if hostIsParked(spec.chan, spec.pitch, spec.ppq) then
       util.add(parkedPAs, spec)
     else
       local evt = fromParked(spec)
@@ -795,9 +790,6 @@ local function parkPAs(stage)
   return parkedPAs
 end
 
--- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane;
--- restores add back immediately, no dirt seed. see docs/trackerManager.md § Region-replace parking
---post: returns the parked ccs and the restored column events (unrealised until the stage commits)
 local function parkCCs(stage)
   local candidates = {}
   for chan = 1, 16 do
@@ -811,26 +803,20 @@ local function parkCCs(stage)
   end
   local parkedCCs, restores = stage.reconcilePark(candidates, stage.prior.cc)
 
-  -- Restores re-enter their columns now and land in mm, under their parked uuid, with this stage's
-  -- commit. The fill seat at this ppq stays filed under its host, and rebuildFx's reconcile deletes
-  -- it by its own uuid, so a restore needs no delete. see docs/trackerManager.md § Region-replace parking
+  -- Restores re-enter their columns now and land in mm with this stage's commit.
   local restoredCCs = {}
   for _, spec in ipairs(restores) do
-    local restored = util.clone(spec)   -- the event is the spec: both are logical
-    frame.spliceInto(getOrSetCcColumn(spec.chan, 'cc', spec.cc), restored)
+    local evt = util.clone(spec)   -- the event is the spec: both are logical
+    frame.spliceInto(ensureCcColumn(spec.chan, 'cc', spec.cc), evt)
     stage.writes.add(fromParked(spec, { keepUuid = true }))
-    util.add(restoredCCs, restored)
+    util.add(restoredCCs, evt)
   end
 
-  -- The parked cc stays the visible surface (the fill is hidden realisation), so a cc-replace
-  -- region never blanks the lane.
-  for _, spec in ipairs(parkedCCs) do getOrSetCcColumn(spec.chan, 'cc', spec.cc) end
+  for _, spec in ipairs(parkedCCs) do ensureCcColumn(spec.chan, 'cc', spec.cc) end
   installParked('ccs', parkedCCs)
   return parkedCCs, restoredCCs
 end
 
--- pb: seats are markerless, so the scan can't run every rebuild -- it diffs current pb windows against
--- last rebuild's persisted set: a created window parks its authored pbs, a removed one sweeps. see § Route-by-window
 local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   local function pbWindows(windowSet)
     local byKey = {}
@@ -844,8 +830,6 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   for k, window in pairs(curWindows)  do if not prevWindows[k] then util.add(created, window) end end
   for k, window in pairs(prevWindows) do if not curWindows[k]  then util.add(removed, window) end end
 
-  -- Park: only a newly-created window walks mm. `derived` can't spot seats (RAM-only, lost on take
-  -- round-trip); region can: a pb inside a *previous* window is a seat, never authored.
   local candidates = {}
   for _, window in ipairs(created) do
     for pb in onsetsIn(index.raw(window.chan).pbs, { { fxOutWindows.rawSpan(window) } }) do
@@ -854,24 +838,21 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
         -- val: logical cents from the sidecar; the index val (raw-derived cents) is the fallback
         -- for a foreign pre-cents pb.
         local spec = toParked(pb, { val = pb.cents or pb.val })
-        projectEvent(spec, pb.chan)   -- the clone takes the projection; the index entry keeps its raw frame
-        util.add(candidates, { evt = { uuid = pb.uuid }, spec = spec })   -- evt is only the delete target
+        projectEvent(spec, pb.chan)
+        util.add(candidates, { evt = { uuid = pb.uuid }, spec = spec }) -- evt is only the delete target
       end
     end
   end
 
   local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb)
 
-  -- Restores land raw + cents sidecar. The val is detune-free; the absorber (later this rebuild)
-  -- corrects it.
+  -- Restores get raw + cents sidecar. The val is detune-free; rebuildPbs corrects it later.
   for _, spec in ipairs(restores) do
     local evt = fromParked(spec, { cents = spec.val, val = tuning.centsToRaw(spec.val, pbLimCents) })
     dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', evt.ppq))
     stage.writes.add(evt)
   end
 
-  -- Sweep: a removed window's seats orphan (no marker names them), so delete every pb in its raw
-  -- span. The restores above are unrealised adds, so delete-first order is safe.
   for _, window in ipairs(removed) do
     for pb in onsetsIn(index.raw(window.chan).pbs, { { fxInWindows.rawSpan(window) } }) do
       dirt.add(pb.chan, dirt.rawSeed(pb, 'delete'))
@@ -880,7 +861,7 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   end
 
   -- The authored breakpoints stay visible in-column though off-take. The cents decoration is
-  -- realisation, so it rides a copy: parkedPbs is what fxParked persists.
+  -- realisation, so it rides a copy.
   local rendered = {}
   for _, spec in ipairs(parkedPbs) do
     util.add(rendered, util.assign(util.clone(spec), { cents = spec.val }))
@@ -889,12 +870,8 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   return parkedPbs
 end
 
--- Park authored events inside an fx region host, unpark events no longer
--- inside a region host
-
---post: returns the installed parked notes bucketed by host
 local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents)
-  local stage = parkStage(fxOutWindows, fxParked)
+  local stage                                    = parkStage(fxOutWindows, fxParked)
   -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
   local parkedNotes, restoredNotes, parkedByHost = parkNotes(stage, onTakeHosts)
   local parkedPAs                                = parkPAs(stage)
@@ -905,8 +882,9 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   for _, parked in ipairs({ parkedNotes, parkedPAs, parkedCCs, parkedPbs }) do
     for _, spec in ipairs(parked) do util.add(allParked, spec) end
   end
-  persistParked('fxParked', allParked, fxParked)
+  persistKey('fxParked', allParked, fxParked)
   stage.writes.commit()
+
   -- Seat-stamp each restored event like any other seat, now the commit lands it in mm; bare write,
   -- no setEvent -- see docs/trackerManager.md § Incremental index reconciliation.
   for _, evt in ipairs(restoredNotes) do
@@ -923,7 +901,6 @@ end
 
 local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   local notes = channel.onTake.notes
-  -- Containment is raw geometry: scan the index; lowest lane wins, matching column order.
   -- Pre-commit restores can't match -- their endppq is nil until the walk derives it.
   local coveringLane
   for _, rec in ipairs(index.raw(channel.chan).notes) do
@@ -933,14 +910,14 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
     end
   end
   if coveringLane then return notes[coveringLane], coveringLane end
-  -- Parked note hosts left the take (off-take, silent); their PAs park with them but stay
-  -- shown here, anchored to the host's lane -- rebuildPA re-projects them off-take.
-  for _, evt in ipairs(channel.parked.notes or {}) do
+
+  for _, evt in ipairs(channel.parked.notes) do
     if evt.pitch == pitch and time:fromLogical(channel.chan, evt.ppq) <= ppq_pos
        and time:fromLogical(channel.chan, evt.endppqC) > ppq_pos then
       return notes[evt.lane], evt.lane
     end
   end
+
   -- Pitch-only fallback: frame-agnostic, so the columns serve it (projected PAs included).
   for laneIdx, col in ipairs(notes) do
     for _, evt in ipairs(col.events) do
@@ -949,34 +926,25 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   end
 end
 
--- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
--- channelStreams) read it inline. see docs/trackerManager.md § PA dispatch
 local function rebuildPA()
   for chan = 1, 16 do
-    if dirt.has(chan) then   -- clean: PA already sits in the carried note column
-      for _, cc in ipairs(index.raw(chan).pas) do
-        if dirt.covers(chan, cc.ppqL or cc.ppq, 'note') then
-          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], cc.pitch, cc.ppq)
+    if dirt.has(chan) then
+      for _, evt in ipairs(index.raw(chan).pas) do
+        if dirt.covers(chan, evt.ppqL or evt.ppq, 'note') then
+          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt.pitch, evt.ppq)
           if noteCol then
-            local evt = columnEvent(cc, { lane = lane })
-            projectEvent(evt, chan)
-            frame.spliceEvent(chan, lane, evt)
+            local colEvt = columnEvent(evt, { lane = lane })
+            projectEvent(colEvt, chan)
+            frame.spliceEvent(chan, lane, colEvt)
           end
         end
       end
-    end
-  end
-
-  -- Parked PAs left the take (off-take, silent) but still ride their host's note column --
-  -- projected unrealised into the parked host's lane. see docs/trackerManager.md § PA dispatch
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      for _, evt in ipairs(frame.channels[chan].parked.pa or {}) do
-        if dirt.covers(chan, evt.ppqL or evt.ppq, 'note') then
-          local ppq = time:fromLogical(chan, evt.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt.pitch, ppq)
+      for _, spec in ipairs(frame.channels[chan].parked.pa or {}) do
+        if dirt.covers(chan, spec.ppqL or spec.ppq, 'note') then
+          local ppq = time:fromLogical(chan, spec.ppq)   -- raw: findNoteColumnForPitch is raw geometry
+          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], spec.pitch, ppq)
           if noteCol then
-            frame.spliceEvent(chan, lane, columnEvent(evt, {lane = lane}))   -- the event is logical-born
+            frame.spliceEvent(chan, lane, columnEvent(spec, { lane = lane }))   -- the event is logical-born
           end
         end
       end
@@ -984,7 +952,7 @@ local function rebuildPA()
   end
 end
 
------ Fx expansion helpers
+----- Rebuild fx
 
 -- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
 -- see docs/trackerManager.md § Span-covered fx scans
@@ -1138,8 +1106,6 @@ local function hostFromNote(host, windowEnd, lane)
            sample = host.sample, delayPpq = delayToPPQ(host.delay) }
 end
 
--- The pass's fx windows, held once: one window per host -- authored region, on-take note or parked
--- note -- and the per-target list a view over them. see docs/trackerManager.md § Fx window census
 --shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
 local function buildFxWindows(fxRegions, onTakeHosts)
   local windows = {}
@@ -1175,8 +1141,6 @@ local function buildFxWindows(fxRegions, onTakeHosts)
   for _, nh in ipairs(noteHosts) do hold(fxWindows.fromNote(nh.host, nh.endppq)) end
   return fxWindows.new(windows, time)
 end
-
------ Rebuild Fx
 
 --shape: onTakeFxHosts -> { [event] = true }; each host's lane bound rides its own endppqC
 --pre: the lane pass has run over every dirty channel, so each host carries its lane bound
@@ -2873,6 +2837,7 @@ end
 -- document never used. Second return is the stored globals, whose own uuids the union answers for.
 -- The pass calls it off its head snapshot; explode calls it off the set that snapshot published.
 -- see docs/trackerManager.md § Channel & column model
+--shape: expandGlobals -> channelRegions = the stored chan 1..16 regions, then each global cloned onto every in-use channel with uuid = util.key(its uuid, chan); globals = the stored chan-0 records
 function rebuild.expandGlobals(regions, inUse)
   local channelRegions, globals = {}, {}
   for _, region in ipairs(regions or {}) do
@@ -2940,7 +2905,7 @@ function rebuild.pipeline(context)
   rebuildPCs(fxOut)
 
   local census = fxOutWindows.census()
-  persistParked('fxRealisedWindows', census, sources.fxRealisedWindows)
+  persistKey('fxRealisedWindows', census, sources.fxRealisedWindows)
 
   local byHost = { notes = fxNotesByHost, parked = parkedByHost, targets = buildFxTargets(fxOutWindows.windows()) }
 
