@@ -268,8 +268,8 @@ local function slide(stream, host, params, ctx)
     local anchor = b.ppq
     local target = interval(a, b)
     if ctx.pbRangeCents then target = util.clamp(target, -ctx.pbRangeCents, ctx.pbRangeCents) end
-    -- Exact abutment: a region member arrives pre-clipped to its successor's onset, a note host's
-    -- endppq is its unclipped authored ceiling, and util.OPEN reaches everything.
+    -- Exact abutment: a region member arrives clipped to its lane bound, a note host's endppq is its
+    -- unclipped authored ceiling, and util.OPEN reaches everything.
     if a.endppq >= anchor and target ~= 0 then
       local span = glideTicks(params, target, ctx.resolution)
       if anchor < endL and params.place == 'in' then

@@ -249,7 +249,7 @@ do
   --post: unsafe result = the population's next note strictly after ppq
   function frame.nextOnLane(population, ppq)
     for i = util.firstAfter(population, ppq), #population do
-      if population[i].evType ~= 'pa' then return population[i] end
+      if util.isNote(population[i]) then return population[i] end
     end
   end
 

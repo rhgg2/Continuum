@@ -1000,146 +1000,96 @@ end
 
 ----- Rebuild fx
 
--- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
--- see docs/trackerManager.md § Span-covered fx scans
-local function coverInto(list, spanSet, admit, emit)
+-- Curve points relevant to a given set of spans: interior points, plus
+-- the nearest points of the complement; see § Span-covered fx scans
+local function coverOf(evts, spanSet, admit)
   admit = admit or function (_) return true end
-  local nextIdx = 1
+  local cover = {}
+  local resumeFrom = 1   -- entries below this were covered by an earlier span
   for _, span in ipairs(spanSet) do
-    local ppq, endppq = span[1], span[2]
-    local cursor = util.firstAfter(list, ppq) - 1
-    while cursor >= nextIdx and not admit(list[cursor]) do cursor = cursor - 1 end
-    local i = math.max(cursor, nextIdx)
-    while i <= #list do
-      local entry = list[i]
-      i = i + 1
-      if admit(entry) then
-        emit(entry)
-        if entry.ppq > endppq then break end
+    local spanStart, spanEnd = span[1], span[2]
+    -- Governing entry: the last admitted one at-or-before the start, unless an earlier span took it.
+    local governing = math.max(util.firstAfter(evts, spanStart) - 1, resumeFrom)
+    while governing > resumeFrom and not admit(evts[governing]) do governing = governing - 1 end
+    -- Cover through the closing entry: the first admitted one past the end.
+    resumeFrom = #evts + 1
+    for i = governing, #evts do
+      local evt = evts[i]
+      if admit(evt) then
+        util.add(cover, evt)
+        if evt.ppq > spanEnd then resumeFrom = i + 1; break end
       end
     end
-    nextIdx = i
   end
+  return cover
 end
 
--- Absolute authored bases per channel (ppq-keyed, logical), covering only the caller's spans.
--- see docs/trackerManager.md § Span-covered fx scans
+local function basePoint(ppq, val, evt)
+  return { ppq = ppq, val = val, shape = evt.shape or 'step', tension = evt.tension }
+end
+
 local function pbBaseFor(chan, spanSet)
   local base, seen = {}, {}
   for _, evt in ipairs(frame.channels[chan].parked.pb or {}) do
-    util.add(base, { ppq = evt.ppq, val = evt.cents, shape = evt.shape or 'step', tension = evt.tension })
+    util.add(base, basePoint(evt.ppq, evt.cents, evt))
     seen[evt.ppq] = true
   end
   -- The maintained pb index is raw-sorted; pbs carry no delay and swing is monotone, so the raw
-  -- cover is the logical cover. Authored = the cents sidecar (seats and foreign pbs carry none).
+  -- cover is the logical cover.
   local rawSpans = {}
   for _, span in ipairs(spanSet) do
     util.add(rawSpans, { time:fromLogical(chan, span[1]), time:fromLogical(chan, span[2]) })
   end
   local function authored(pb) return not pb.derived and pb.cents ~= nil end
-  coverInto(index.raw(chan).pbs, rawSpans, authored, function(pb)
+  for _, pb in ipairs(coverOf(index.raw(chan).pbs, rawSpans, authored)) do
     local ppq = pb.ppqL or pb.ppq
-    if not seen[ppq] then
-      util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
-    end
-  end)
+    if not seen[ppq] then util.add(base, basePoint(ppq, pb.cents, pb)) end
+  end
   util.sortByPPQ(base)
   return base
 end
+
 local function ccBasesFor(chan, spanSet)
   local bases, seen = {}, {}
   for _, evt in ipairs(frame.channels[chan].parked.ccs or {}) do
-    util.bucket(bases, evt.cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
-                                  tension = evt.tension })
+    util.bucket(bases, evt.cc, basePoint(evt.ppq, evt.val, evt))
     seen[util.key(evt.cc, evt.ppq)] = true
   end
   for cc, col in pairs(frame.channels[chan].onTake.ccs) do
-    coverInto(col.events, spanSet, nil, function(evt)
+    for _, evt in ipairs(coverOf(col.events, spanSet)) do
       if not seen[util.key(cc, evt.ppq)] then
-        util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
-                                 tension = evt.tension })
+        util.bucket(bases, cc, basePoint(evt.ppq, evt.val, evt))
       end
-    end)
+    end
   end
   for _, base in pairs(bases) do util.sortByPPQ(base) end
   return bases
 end
 
--- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
--- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
-local function appendLaneEvents(list, startL, out)
-  local from = util.firstAfter(list, startL)
-  -- The event already sounding as the window opens leads: its tail reaches in even though its onset
-  -- does not. A PA holds no lane of its own and never answers.
-  for j = from - 1, 1, -1 do
-    if list[j].evType ~= 'pa' then util.add(out, list[j]); break end
-  end
-  for j = from, #list do
-    if list[j].evType ~= 'pa' then util.add(out, list[j]) end
-  end
-end
-
--- A lane's whole authored population, on-take and parked alike: what sounds there.
--- see docs/trackerManager.md § Lane occupancy
-local function authoredOnLane(chan, lane, startL)
-  local events = {}
-  appendLaneEvents(frame.authoredEvents(chan, lane), startL, events)
-  return events
-end
-
--- One lane walk over the channel's whole authored population: each event sounds to the next onset
--- or its own ceiling. Cover, not scan: see docs/trackerManager.md § Span-covered fx scans.
-local function eachLaneSpan(chan, startL, endL, fn)
-  for laneIdx in ipairs(frame.channels[chan].onTake.notes) do
-    -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
-    -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
-    local pending   -- onset awaiting its tail bound (the next onset's ppq, or endL)
-    local function sound(nextOn)
-      local ceil = (pending.endppq == nil or pending.endppq == util.OPEN) and endL or pending.endppq
-      local hi   = math.min(ceil, nextOn)
-      if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
-    end
-    for _, evt in ipairs(authoredOnLane(chan, laneIdx, startL)) do
-      if pending then sound(evt.ppq) end
-      if evt.ppq >= endL then pending = nil; break end
-      pending = evt
-    end
-    if pending then sound(endL) end
-  end
-end
-local function membersOf(chan, startL, endL)
-  local out = {}
-  -- The lane rides along: a monophonic stage (portamento) glides the lane-1 voice alone, and a
-  -- member's column is the only place that is knowable.
-  eachLaneSpan(chan, startL, endL, function(laneIdx, lo, hi, evt)
-    util.add(out, util.pick(evt, "pitch vel detune intentCents", { ppq = lo, endppq = hi, lane = laneIdx }))
-  end)
-  return out
-end
--- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
+-- cc-family streams a generator reads; pb/ccs are absolute curves sliced
 -- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
-local function channelStreams(chan, startL, endL, pbBase, ccBases)
+local function channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
   local cols = frame.channels[chan].onTake
   local pas, ats = {}, {}
   for _, col in ipairs(cols.notes) do
-    for j = util.firstAtOrAfter(col.events, startL), #col.events do
+    for j = util.firstAtOrAfter(col.events, spanStart), #col.events do
       local evt = col.events[j]
-      if evt.ppq >= endL then break end
+      if evt.ppq >= spanEnd then break end
       if evt.evType == 'pa' then util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel }) end
     end
   end
   local atEvents = cols.at and cols.at.events or {}
-  for j = util.firstAtOrAfter(atEvents, startL), #atEvents do
+  for j = util.firstAtOrAfter(atEvents, spanStart), #atEvents do
     local evt = atEvents[j]
-    if evt.ppq >= endL then break end
+    if evt.ppq >= spanEnd then break end
     util.add(ats, { ppq = evt.ppq, val = evt.val })
   end
   -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
   -- column's order; bases pre-sorted, slices preserve order).
   util.sortByPPQ(pas)
   local ccs = {}
-  for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, startL, endL) end
-  return pas, ccs, ats, curves.slice(pbBase, startL, endL)
+  for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, spanStart, spanEnd) end
+  return pas, ccs, ats, curves.slice(pbBase, spanStart, spanEnd)
 end
 -- A parked event as a generator stream note: it sounds to its render clip, never to the authored
 -- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
@@ -1160,8 +1110,8 @@ end
 -- ran and leaves a kept host's list -- and a frozen channel's whole map -- standing
 local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
   local gridStep = ccGridStep()
-  -- Columns must be ppq-ordered here (eachWindowNote / membersOf read col.events
-  -- directly); the writers seat in order and nothing since reorders. see docs § Logical projection
+  -- Columns must be ppq-ordered here (membersOf and channelStreams seek col.events by ppq);
+  -- the writers seat in order and nothing since reorders. see docs § Logical projection
 
   -- Asked again here, not carried from the census: the park stage has run since, so this is the
   -- on-take set as of now -- a host it parked gone, one it restored resolved to its live column
@@ -1232,11 +1182,11 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     -- One host interface, three sources: an on-take fx note, a parked fx event, or an explicit
     -- fxRegion; the generator sees none of them. see docs/generators.md § Hosts and membership
     local function runHost(host)
-      local startL, endL = host.window[1], host.window[2]
+      local spanStart, spanEnd = host.window[1], host.window[2]
       -- The same host as a generator sees it (generators' `host` argument): untouched membership plus
       -- the windowed channel streams; stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
-      local pas, ccs, ats, pb = channelStreams(chan, startL, endL, pbBase, ccBases)
-      local original = { window = { startL, endL }, chan = chan, lane = host.lane, id = host.id,
+      local pas, ccs, ats, pb = channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
+      local original = { window = { spanStart, spanEnd }, chan = chan, lane = host.lane, id = host.id,
                          notes = host.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
       local stream = util.pick(original, "window chan lane id notes pas ccs ats pb")
       stream.ccs = util.assign({}, original.ccs)   -- folds replace per-target lists; the original's map stays untouched
@@ -1252,14 +1202,14 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
         -- The stream the stage meets, seeded where the target carries no automation: a cc rests at its
         -- controller's rest, pb at centre (an empty curve evaluates 0, which is that rest).
         if #cur == 0 and target ~= 'pb' then
-          cur = { { ppq = startL, val = generators.restFor(target), shape = 'step' } }
+          cur = { { ppq = spanStart, val = generators.restFor(target), shape = 'step' } }
         end
         local inherited = cur
-        if mode == 'replace' then cur = curves.foldIntoWindow(out.delta, startL, endL)
-        else                      cur = curves.sumStreams(cur, { out.delta }, { startL, endL }, gridStep) end
+        if mode == 'replace' then cur = curves.foldIntoWindow(out.delta, spanStart, spanEnd)
+        else                      cur = curves.sumStreams(cur, { out.delta }, { spanStart, spanEnd }, gridStep) end
         -- One rule for both modes: whatever the stage did inside its window, the target leaves it reading
         -- as the stage found it. A generator cannot bend the channel past its own end.
-        cur = curves.closeAtWindowEnd(cur, curves.eval(inherited, endL), startL, endL)
+        cur = curves.closeAtWindowEnd(cur, curves.eval(inherited, spanEnd), spanStart, spanEnd)
         owned[target] = true
         if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
       end
@@ -1293,11 +1243,11 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
         if target == 'pb' then
           local curve = stream.pb
           if not contributed and not curves.anyNonZero(curve) then curve = {} end
-          util.add(fxOut.pbChains[chan], { window = { startL, endL }, curve = curve,
+          util.add(fxOut.pbChains[chan], { window = { spanStart, spanEnd }, curve = curve,
                                         mode = generators.chainDestType(host.fx, target) })
         else
           util.bucket(ccChains, target,
-                      { window = { startL, endL }, curve = stream.ccs[target] or {},
+                      { window = { spanStart, spanEnd }, curve = stream.ccs[target] or {},
                         mode = generators.chainDestType(host.fx, target) })
         end
       end
@@ -1365,17 +1315,25 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     -- Region hosts: no note behind them. A discrete-replace kind feeds the realised parked chord
     -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
     for _, region in ipairs(fxRegionsByChan[chan] or {}) do
-      local startL, endL = region.ppq, region.endppq
-      local members
+      local spanStart, spanEnd = region.ppq, region.endppq
+      local members = {}
       if generators.parksNotes(region) then
-        members = {}                             -- replace: derived notes stand in for the parked chord
         for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-          if evt.ppq >= startL and evt.ppq < endL then util.add(members, soundingEvent(evt)) end
+          if evt.ppq >= spanStart and evt.ppq < spanEnd then util.add(members, soundingEvent(evt)) end
         end
       else
-        members = membersOf(chan, startL, endL)  -- augment: members still sound
+        for lane in ipairs(frame.channels[chan].onTake.notes) do
+          local population = frame.authoredEvents(chan, lane)
+          for i = util.firstAtOrAfter(population, spanStart), #population do
+            local evt = population[i]
+            if evt.ppq >= spanEnd then break end
+            if util.isNote(evt) then
+              util.add(members, util.pick(evt, "ppq pitch vel detune intentCents", { endppq = evt.endppqC, lane = lane }))
+            end
+          end
+        end
       end
-      util.add(hosts, { window = { startL, endL }, notes = members,
+      util.add(hosts, { window = { spanStart, spanEnd }, notes = members,
                             fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
 
@@ -2727,7 +2685,7 @@ end
 
 -- The continuous half of the same window set: which pb/cc targets each host's chains own,
 -- logical framed. see docs/trackerManager.md § Realisation by host
---shape: byHost[uuid] = { pb = { {startL, endL}, ... }, [ccNum] = { ... } } -- merged, ascending
+--shape: byHost[uuid] = { pb = { {spanStart, spanEnd}, ... }, [ccNum] = { ... } } -- merged, ascending
 local function buildFxTargets(hosts)
   local byHost = {}
   for _, host in ipairs(hosts) do

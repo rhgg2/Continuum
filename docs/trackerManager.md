@@ -1295,17 +1295,17 @@ reload).
 
 ## Span-covered fx scans
 
-`coverInto(list, spanSet, admit, emit)` builds the span cover of a ppq-sorted list: the governing
+`coverOf(list, spanSet, admit)` returns the span cover of a ppq-sorted list: the governing
 entry at-or-before each span's start (so `curves.eval`/`curves.slice` reads within the span see the
 right precursor), every entry through the span, then the closing entry past its end. `admit`
-filters entries out of governance and emission alike — a skipped entry never governs; spans dedup
+filters entries out of governance and the cover alike — a skipped entry never governs; spans dedup
 across a call by resuming from the last consumed index rather than rescanning from 1.
 
-`eachWindowNote(chan, startL, endL, fn)` covers rather than scans a lane's onsets: it seeks the
-governing onset at-or-before `startL` (its sounding tail may reach into the window) and walks
-forward through one closing onset past `endL`. Membership is still overlap, not storage —
-authored notes are re-queried each rebuild, one walk feeding both generator events and fixed lane
-occupancy. See `docs/generators.md` § Hosts and membership.
+`membersOf(chan, startL, endL)` needs no cover. Membership is by onset, so each lane's walk seeks
+the first onset at-or-after `startL` and stops at `endL`; a note sounding into the window from
+before it is not a member. A member is handed over entire, sounding to its lane bound `endppqC`
+(§ Lane occupancy), which the tail clip has stamped by the time fx expansion runs. See
+`docs/generators.md` § Hosts and membership.
 
 `pbBaseFor` / `ccBasesFor` build the absolute authored base (ppq-keyed,
 logical) covering only the caller's merged host windows, not the whole channel: every read of
@@ -1371,8 +1371,8 @@ is displayed in.
 
 Membership reads the whole population, and that is the only question asked of it. A region's members
 are what sounds on its lanes, and a parked event is one: it is the note the author sees, and the
-chain that parked it is a neighbour's business. `eachLaneSpan` walks that population and `membersOf`
-is its one caller; nothing narrows it to the on-take half, derived output having no lane to take.
+chain that parked it is a neighbour's business. `membersOf` walks that population, and nothing
+narrows it to the on-take half, derived output having no lane to take.
 
 Fx expansion moves no authored lane bound, and cannot: its output sits in no column, so it is a
 lane-mate of nothing. A lane's successor is the authored event the population carries, whatever else
@@ -1627,7 +1627,7 @@ no seed covered, in lanes otherwise carried whole.
 Two cases need no renewal. Wholesale and stale-swing channels get a
 brand-new `onTake.notes`, so their identity is fresh by construction. And
 a local bound to `col.events` that outlives a renewal operates on the dead
-table — the read-only walks (`eachWindowNote`, `channelStreams`,
+table — the read-only walks (`membersOf`, `channelStreams`,
 `onsetsIn`) do not care, but the park scan did, which is why a note
 carry stores its lane index and resolves the table at unlink time.
 

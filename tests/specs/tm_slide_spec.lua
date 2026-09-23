@@ -262,6 +262,36 @@ return {
   },
 
   {
+    -- Membership is by onset, so a note sounding into the window is no member and no predecessor.
+    -- see docs/generators.md § Portamento ¶7, § Hosts and membership ¶4
+    name = 'a region never glides into itself from a note sounding in from before its window',
+    run = function(harness)
+      local h = harness.mk()
+      -- Three abutting notes under a region opening at 60. The first sounds through the window start
+      -- and abuts the second inside the window, so only membership keeps a glide off that onset.
+      for _, n in ipairs{ { 0, 60 }, { 120, 62 }, { 240, 64 } } do
+        h.tm:addEvent({ evType = 'note', ppq = n[1], endppq = n[1] + 120, chan = 1, pitch = n[2],
+                        vel = 100, detune = 0, delay = 0, lane = 1 })
+        h.tm:flush()
+      end
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, ppq = 60, endppq = 360,
+                                   fx = { { kind = 'slide', over = { 1, 2 }, place = 'in' } } } })
+      h.tm:rebuild(); h.tm:flush()
+      local dump = h.fm:dump()
+      t.eq(pbSeatAt(dump, 1, 240).val, centsToRaw(-200),
+        'fixture check: the members glide -- the third enters a whole tone below the second')
+      local before = {}
+      for _, seat in ipairs(pbSeatsOf(dump, 1)) do
+        if seat.ppq < 240 then util.add(before, seat.val) end
+      end
+      t.truthy(#before > 0, 'fixture check: the region seats its window ahead of the glide')
+      for _, val in ipairs(before) do
+        t.eq(val, centsToRaw(0), 'every seat ahead of the members\' glide is centre: none enters 120 from below')
+      end
+    end,
+  },
+
+  {
     -- Lane occupancy is the column union the parked cells, so the successor clips the host window
     -- whichever half it sits in. see docs/trackerManager.md § Lane occupancy
     name = 'a parked successor anchors the glide where an on-take one does',

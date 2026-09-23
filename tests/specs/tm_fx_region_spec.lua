@@ -121,7 +121,8 @@ local function anyNoteOnChan(h, chan)
   return false
 end
 
------ Arp: replace parks its members off the take, augment leaves them sounding (§ Hosts and membership ¶5)
+----- Arp: a note-owning region parks its members off the take, a continuous one leaves them sounding
+----- (§ Hosts and membership ¶5)
 
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- step 60 at res 240
 
@@ -187,6 +188,22 @@ local function allDerived(h)
 end
 
 local function field(ns, k) local v = {} for i, n in ipairs(ns) do v[i] = n[k] end return v end
+
+-- The host a region on chan 1 hands its chain, recorded by a spec-only continuous kind: it owns no
+-- notes, so the region parks none and its members come from the take.
+-- The kind is gone again before the caller asserts, generators being a shared module.
+local function captureHost(h, ppq, endppq, dest)
+  local captured
+  generators.kinds.capture = {
+    expand = function(host) captured = host; return { notes = {}, delta = {} } end,
+    mode = 'augment', dest = dest, label = 'Capture', defaults = {}, fields = {},
+  }
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = ppq, endppq = endppq,
+                               fx = { { kind = 'capture' } } } })
+  h.tm:rebuild()
+  generators.kinds.capture = nil
+  return captured
+end
 
 -- The mm handles behind the region's derived notes, in onset order: what churns when a re-run pass
 -- fails to recognize a note it wrote itself.
@@ -526,7 +543,7 @@ return {
       local ns = derivedNotes(h)
       t.eq(#ns, 2, 'a first pass adds both outright')
       -- The reconcile only has work on a pass that re-runs the region and meets the pair already
-      -- seated -- so dirty the channel with a note the kind ignores (replace parks it off-take, and
+      -- seated -- so dirty the channel with a note the kind ignores (the region owns notes, so parks it, and
       -- the twins are unmoved). Keyed alike, one seat would answer for both predicted hits
       -- and the other would be kept by nobody, so it would be swept.
       addNote(h, { pitch = 72, lane = 4 })
@@ -1204,15 +1221,15 @@ return {
     end,
   },
 
-  ----- Augment by kind: a continuous region leaves its members sounding (no parking)
+  ----- A continuous region owns no notes, so its members stay sounding (no parking)
 
   {
-    name = 'augment by kind: a continuous (sine) region leaves its covered notes sounding',
+    name = 'a continuous (sine) region leaves its covered notes sounding',
     run = function(harness)
       local h = harness.mk()
       addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })
-      injectRegion(h)   -- sine over [0,240) covers the note -- augment, so it is not parked
-      t.deepEq(authoredPitches(h), { 60 }, 'the covered note keeps sounding -- a continuous kind augments')
+      injectRegion(h)   -- sine over [0,240) covers the note -- pb-dest, so it is not parked
+      t.deepEq(authoredPitches(h), { 60 }, 'the covered note keeps sounding -- a continuous kind owns no notes')
       t.truthy(#derivedPbs(h, 1) > 0, 'and the sine pb seats are present over the span')
     end,
   },
@@ -1248,17 +1265,7 @@ return {
       h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 77 })
       h.tm:flush()
 
-      -- A spec-only capture kind: augment (parks nothing), records the host it is handed.
-      local captured
-      generators.kinds.capture = {
-        expand = function(host) captured = host; return { notes = {}, delta = {} } end,
-        mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
-      }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
-                                   fx = { { kind = 'capture' } } } })
-      h.tm:rebuild()
-      generators.kinds.capture = nil   -- restore before asserting (generators is a shared module)
-
+      local captured = captureHost(h, 0, 240, 'pb')
       t.truthy(captured, 'the capture kind ran and recorded its host')
       t.eq(#captured.pas, 1, 'one PA in the window, one in host.pas')
       local pa = captured.pas[1]
@@ -1285,21 +1292,60 @@ return {
       addNote(h, { pitch = 60, ppq = 0,   endppq = util.OPEN })
       addNote(h, { pitch = 67, ppq = 120, endppq = 240 })
 
-      local captured
-      generators.kinds.capture = {
-        expand = function(host) captured = host; return { notes = {}, delta = {} } end,
-        mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
-      }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
-                                   fx = { { kind = 'capture' } } } })
-      h.tm:rebuild()
-      generators.kinds.capture = nil
-
+      local captured = captureHost(h, 0, 240, 'pb')
       t.truthy(captured, 'the capture kind ran')
       local byPitch = {}
       for _, n in ipairs(captured.notes) do byPitch[n.pitch] = n end
       t.eq(byPitch[60].endppq, 120, 'the OPEN member clips to the next same-lane onset')
-      t.eq(byPitch[67].endppq, 240, 'the trailing member fills to the window end')
+      t.eq(byPitch[67].endppq, 240, 'the trailing member sounds to its own ceiling')
+    end,
+  },
+
+  ----- Membership is by onset, and a member belongs entire (§ Hosts and membership ¶4)
+
+  {
+    name = 'fx region: membership is by onset over the half-open window, not by sounding overlap',
+    run = function(harness)
+      local h = harness.mk()
+      -- Window [120, 240). Lane 1 sounds into it from before; lane 2 opens on its start; lane 3
+      -- opens on its end. Each lane holds one note, so no lane bound cuts any of them short.
+      addNote(h, { pitch = 60, ppq = 0,   endppq = 200, lane = 1 })
+      addNote(h, { pitch = 64, ppq = 120, endppq = 200, lane = 2 })
+      addNote(h, { pitch = 67, ppq = 240, endppq = 300, lane = 3 })
+
+      local captured = captureHost(h, 120, 240, 'pb')
+      t.truthy(captured, 'the capture kind ran')
+      t.deepEq(field(captured.notes, 'pitch'), { 64 },
+        'only the onset at the window start belongs: the earlier note sustains through, the later one is outside')
+    end,
+  },
+
+  {
+    name = 'fx region: a member belongs entire, sounding past the window end to its own ceiling',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, ppq = 120, endppq = 360 })
+
+      local captured = captureHost(h, 0, 240, 'pb')
+      t.truthy(captured, 'the capture kind ran')
+      t.deepEq(field(captured.notes, 'pitch'), { 60 }, 'fixture check: the note is the membership')
+      t.eq(captured.notes[1].ppq, 120, 'at its own onset')
+      t.eq(captured.notes[1].endppq, 360, 'and to its own ceiling, not the window end')
+    end,
+  },
+
+  {
+    name = 'fx region: an OPEN member sounds to its lane bound past the window end',
+    run = function(harness)
+      local h = harness.mk()
+      -- The successor lies outside the window, so it is no member; it still bounds the lane.
+      addNote(h, { pitch = 60, ppq = 120, endppq = util.OPEN })
+      addNote(h, { pitch = 62, ppq = 400, endppq = 480 })
+
+      local captured = captureHost(h, 0, 240, 'pb')
+      t.truthy(captured, 'the capture kind ran')
+      t.deepEq(field(captured.notes, 'pitch'), { 60 }, 'fixture check: the in-window onset alone is the membership')
+      t.eq(captured.notes[1].endppq, 400, 'the OPEN tail runs to the next same-lane onset, not the window end')
     end,
   },
 
@@ -1313,16 +1359,7 @@ return {
 
       -- A cc-dest probe: host.pb is built independent of the kind's dest, so a cc-augment capture reads
       -- the authored pb without a pb window parking it off (a pb-dest kind would park it, emptying host.pb).
-      local captured
-      generators.kinds.capture = {
-        expand = function(host) captured = host; return { notes = {}, delta = {} } end,
-        mode = 'augment', dest = 10, label = 'Capture', defaults = {}, fields = {},
-      }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
-                                   fx = { { kind = 'capture' } } } })
-      h.tm:rebuild()
-      generators.kinds.capture = nil
-
+      local captured = captureHost(h, 0, 240, 10)
       t.truthy(captured, 'the capture kind ran and recorded its host')
       t.deepEq(captured.pb, { { ppq = 0,   val = 50, shape = 'step' },
                               { ppq = 60,  val = 50, shape = 'step' },
@@ -2262,7 +2299,7 @@ return {
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }
-      -- The note carries its own fx: an augment host stays on the take (unparked) and drives cc over its span.
+      -- The note carries its own fx: a cc-dest host owns no notes, so stays on the take and drives cc over its span.
       local function seatMap()
         local m = {}
         for _, c in ipairs(h.fm:dump().ccs) do
@@ -2273,7 +2310,7 @@ return {
       addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1, fx = { { kind = 'ccCap' } } })
 
       local seat = seatMap()
-      t.deepEq(authoredPitches(h), { 60 }, 'the augment host keeps sounding -- it is not parked')
+      t.deepEq(authoredPitches(h), { 60 }, 'the host keeps sounding -- owning no notes, it is not parked')
       t.eq(seat[0],  ccRest(10),      'the note-host window seats the base rest + macro 0 at the start')
       t.eq(seat[60], ccRest(10) + 25, 'and rest + macro delta 25 at the peak')
 

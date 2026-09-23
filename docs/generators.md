@@ -32,29 +32,30 @@ provenance and dirty-keying bind to whatever holds the fx.
 **3** **Input is membership, not storage**, and the coupling between window
 and input *reverses direction* between the two host kinds. For a note the
 note is primary and the window is derived from it, its effective interval.
-For a region the region is primary and the input is derived from it by an
-overlap query. So the primitive is a region plus a membership rule — `{self}`
-for a note, the overlapping notes on the channel for a region, the empty set
-for a free LFO — and there is no special-casing below the contract.
+For a region the region is primary and the input is derived from it by a
+query over the channel. So the primitive is a region plus a membership rule —
+`{self}` for a note, the channel's notes with onsets in the window for a
+region (¶4), the empty set for a free LFO — and there is no special-casing
+below the contract.
 
 **4** **Membership is by onset.** A note belongs to the region entire if it
 starts inside the window, and a note whose onset precedes the window is not a
 member and sustains through it. The rule reads the same in both directions,
 which is what keeps it a rule rather than a pair of cases.
 
-**5** **Replace absorbs; augment queries.** An augment's members stay in the
-take: they sound, and they feed the generator. Replace cannot leave them
-there, because a member the output stands in for must not also sound — and
-muting won't serve, a muted note still carrying a note-on/off pair that
-`MIDI_Sort` mispairs against a same-pitch derived note, and a CC or PA having
-no mute bit at all. So replace **parks** its members off the take into a
-store, re-homed each rebuild as coverage changes. The parked members are
-still the membership, and — inverted from intuition — they are the *visible,
-editable* surface: you see and edit the chord, while the generated arp is
-hidden realisation. The invariant underneath is that **creating an fx region
-never changes what the user sees**, and it holds for every replace path — the
-note chord, the cc source, and pb. Whether a host parks is read from its
-kinds rather than from a mode toggle on the host.
+**5** **An owned stream parks its members.** A chain owns each stream some
+stage targets, whatever the stage's mode (§ Emission is ownership), and
+re-emits that stream whole as derived output. A member the output stands in
+for must not also sound — and muting won't serve, a muted note still carrying
+a note-on/off pair that `MIDI_Sort` mispairs against a same-pitch derived
+note, and a CC or PA having no mute bit at all. So an owned stream's members
+are **parked** off the take into a store, re-homed each rebuild as coverage
+changes. A stream no stage targets keeps its members on the take, where they
+sound and feed the chain. The parked members are still the membership, and —
+inverted from intuition — they are the *visible, editable* surface: you see
+and edit the chord, while the generated arp is hidden realisation. The
+invariant underneath is that **creating an fx region never changes what the
+user sees**, and it holds for every owned stream — notes, a cc, and pb.
 
 **6** **A note host parks itself.** A note carrying a discrete-replace kind is
 its own membership, `{self}`, so it parks exactly as a region parks a covered
@@ -228,7 +229,9 @@ stream reads as the line entire.
 note past the window end would take its glide inside the span the region
 owns — but a region's business is what it covers, and reaching past it
 would make an fx legible outside its own window in the way §
-Route-by-window ¶7 rules out.
+Route-by-window ¶7 rules out. Nor does a region glide **in**: a note
+sounding into the window from before it is no member (§ Hosts and
+membership ¶4), so the first member has no predecessor to glide from.
 
 **8** One fraction, two readings. `over` is how long a glide takes, or
 how long an **octave** of one takes, and `per` says which. Constant time
@@ -302,7 +305,7 @@ parked base, or, over an all-zero pb base, registers an empty window so stale
 seats sweep.
 
 **4** `chainTargets` returns one target per stream the chain reaches, whatever
-the stage count: `note` for a discrete-replace chord, `pb` and cc for the
+the stage count: `note` for a region whose chain owns notes, `pb` and cc for the
 continuous dests — replace and augment alike, since the summed base and
 macros seat on the target lane.
 
