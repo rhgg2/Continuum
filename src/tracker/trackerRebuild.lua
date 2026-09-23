@@ -1224,6 +1224,35 @@ local function classifyHosts(chan, hosts)
   return status, emitScope
 end
 
+-- cc emission: fold (curves.foldChains) into markerless seats, clipped to the emit scope; half-open --
+-- the closing value belongs to the kept side.
+--pre: emitScope is nil iff chan is ungated
+--post: result = raw-ppq cc seat specs, not yet reconciled against mm
+local function emitCCs(chan, ccChains, ccBases, emitScope, gridStep)
+  local fxCCs = {}
+  for cc, recs in pairs(ccChains) do
+    local base = ccBases[cc] or {}
+    if #base == 0 then
+      local rest, minStart = generators.restFor(cc), math.huge
+      for _, rec in ipairs(recs) do minStart = math.min(minStart, rec.window[1]) end
+      base = { { ppq = minStart, val = rest, shape = 'step' } }
+    end
+    for _, span in ipairs(spans.mergeWindows(recs)) do
+      for _, emitSpan in ipairs(emitScope and spans.clip(span, emitScope[cc]) or { span }) do
+        for _, point in ipairs(curves.foldChains(recs, emitSpan, base, gridStep)) do
+          if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
+            util.add(fxCCs, { evType = 'cc', chan = chan, cc = cc,
+                               ppq = time:fromLogical(chan, point.ppq, 0),
+                               val = util.clamp(util.round(point.val), 0, 127),
+                               shape = point.shape, tension = point.tension })
+          end
+        end
+      end
+    end
+  end
+  return fxCCs
+end
+
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
 --pre: every column is ppq-ordered; channelStreams and the region-member scan seek it by ppq
@@ -1366,17 +1395,18 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see docs/generators.md § The chain
   local function expandChannel(chan)
-    -- The existing side of a reconcile, one host at a time, off um's file (notes and ccs together, so
-    -- the caller names the kind). Entries sort first for um's order; clones keep the reconcile off um's live records.
-    local function producedBy(id, evType)
+    -- The existing side of a reconcile, one host at a time, off um's file, where notes and ccs file
+    -- together. Entries sort first for um's order; clones keep the reconcile off um's live records.
+    local function producedBy(id)
       local entries = {}
-      for _, entry in pairs(index.derivedByHost(chan)[id] or {}) do
-        if entry.evType == evType then util.add(entries, entry) end
-      end
+      for _, entry in pairs(index.derivedByHost(chan)[id] or {}) do util.add(entries, entry) end
       table.sort(entries, index.order)
-      local out = {}
-      for _, entry in ipairs(entries) do util.add(out, columnEvent(entry)) end
-      return out
+      local byType = { note = {}, cc = {} }
+      for _, entry in ipairs(entries) do
+        local bucket = byType[entry.evType]
+        if bucket then util.add(bucket, columnEvent(entry)) end
+      end
+      return byType.note, byType.cc
     end
 
     local hosts = enumerateHosts(chan, fxHostsByChan[chan] or {}, fxRegionsByChan[chan] or {}, fxOutWindows)
@@ -1434,8 +1464,9 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     -- over its file whole. See docs/trackerManager.md § The host gate.
     local function gatherFrom(id, clipped)
       ran[id] = true
-      for _, evt in ipairs(producedBy(id, 'note')) do util.add(existing, evt) end
-      for _, evt in ipairs(producedBy(id, 'cc')) do
+      local notes, ccs = producedBy(id)
+      for _, evt in ipairs(notes) do util.add(existing, evt) end
+      for _, evt in ipairs(ccs) do
         if not clipped or spans.contains(ccScope[evt.cc], evt.ppq) then util.add(existingCCs, evt) end
       end
     end
@@ -1487,30 +1518,7 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     for _, n in ipairs(fxNotes) do util.bucket(byHost, n.derived, n) end
     notesByHost[chan] = byHost
 
-    -- cc emission: fold (curves.foldChains) into markerless seats, clipped to the emit scope; half-open --
-    -- the closing value belongs to the kept side.
-    local fxCCs = {}
-    for cc, recs in pairs(ccChains) do
-      local base = ccBases[cc] or {}
-      if #base == 0 then
-        local rest, minStart = generators.restFor(cc), math.huge
-        for _, rec in ipairs(recs) do minStart = math.min(minStart, rec.window[1]) end
-        base = { { ppq = minStart, val = rest, shape = 'step' } }
-      end
-      for _, span in ipairs(spans.mergeWindows(recs)) do
-        for _, emitSpan in ipairs(gated and spans.clip(span, emitScope[cc]) or { span }) do
-          for _, point in ipairs(curves.foldChains(recs, emitSpan, base, gridStep)) do
-            if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
-              util.add(fxCCs, { evType = 'cc', chan = chan, cc = cc,
-                                 ppq = time:fromLogical(chan, point.ppq, 0),
-                                 val = util.clamp(util.round(point.val), 0, 127),
-                                 shape = point.shape, tension = point.tension })
-            end
-          end
-        end
-      end
-    end
-
+    local fxCCs = emitCCs(chan, ccChains, ccBases, gated and emitScope or nil, gridStep)
     local ccWrites = mmBatch()
     -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the key --
     -- it drives REAPER's interpolation. see docs/generators.md § pb and cc
