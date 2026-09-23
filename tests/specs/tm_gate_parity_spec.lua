@@ -22,6 +22,30 @@ local function note(chan, ppq, pitch, extra)
   return n
 end
 
+local function centsToRaw(cents) return util.round(cents * 8192 / 200) end   -- default 2-semitone range
+
+-- A flat augment kind on `dest`, stepping +10 sixty ticks into each window. probe.ran[windowStart]
+-- names the probe.pass that last expanded that host, so a case reads which hosts the gate ran.
+local function installFlat(name, dest, mode)
+  local probe = { pass = 'setup', ran = {} }
+  generators.kinds[name] = {
+    expand = function(host)
+      probe.ran[host.window[1]] = probe.pass
+      return { notes = {}, delta = {
+        { ppq = host.window[1],      val = 0,  shape = 'step' },
+        { ppq = host.window[1] + 60, val = 10, shape = 'step' },
+        { ppq = host.window[2],      val = 0,  shape = 'step' },
+      } }
+    end,
+    mode = mode or 'augment', dest = dest, label = name, defaults = {}, fields = {},
+  }
+  return probe
+end
+
+local function authoredAt(col, ppq)
+  for _, evt in ipairs(col.events) do if evt.ppq == ppq then return evt end end
+end
+
 -- Volatile per-rebuild identity: mm-side loc, the pb working clone's pre-rewrite shape, and the
 -- reconcile skeleton's key. None render; all legitimately differ between a carried and a fresh frame.
 local VOLATILE = { loc = true, origShape = true, key = true }
@@ -313,18 +337,7 @@ return {
     name = 'continuous gate: a point parked in a kept window governs a running neighbour\'s entering edge',
     run = function(harness)
       local h = harness.mk()
-      local pass, lastRan = 'setup', {}   -- window start -> the pass that last ran it
-      generators.kinds.ccFlat = {
-        expand = function(host)
-          lastRan[host.window[1]] = pass
-          return { notes = {}, delta = {
-            { ppq = host.window[1],      val = 0,  shape = 'step' },
-            { ppq = host.window[1] + 60, val = 10, shape = 'step' },
-            { ppq = host.window[2],      val = 0,  shape = 'step' },
-          } }
-        end,
-        mode = 'augment', dest = 10, label = 'CcFlat', defaults = {}, fields = {},
-      }
+      local probe = installFlat('ccFlat', 10)
       local function seatAt(ppq)
         for _, c in ipairs(h.fm:dump().ccs) do
           if c.evType == 'cc' and c.chan == 1 and c.cc == 10 and c.ppq == ppq then return c end
@@ -343,10 +356,10 @@ return {
       t.eq(seatAt(720).val, 20, 'fixture check: an ungated pass enters window B at 20')
 
       -- A lane-2 note inside window B alone: B runs, A keeps.
-      pass = 'edit'
+      probe.pass = 'edit'
       h.tm:addEvent(note(1, 840, 67, { endppq = 900, lane = 2 })); h.tm:flush()
-      t.eq(lastRan[720], 'edit', 'fixture check: window B ran this pass')
-      t.eq(lastRan[240], 'setup', 'fixture check: window A was kept, so its span is not in the cover')
+      t.eq(probe.ran[720], 'edit', 'fixture check: window B ran this pass')
+      t.eq(probe.ran[240], 'setup', 'fixture check: window A was kept, so its span is not in the cover')
 
       t.eq(seatAt(720).val, 20, 'the parked 20 governs B\'s entering edge, not the on-take 100 before A')
       assertParity(h, 'a kept window\'s parked point feeds a running neighbour == full re-derive')
@@ -360,23 +373,11 @@ return {
     -- dirt on lane 3: a lane-1 edit would set the detune hold and run every window right of it.
     name = 'continuous gate: a pb parked in a kept window governs a running neighbour\'s entering edge',
     run = function(harness)
-      local function centsToRaw(cents) return util.round(cents * 8192 / 200) end   -- default 2-semitone range
       local h = harness.mk{ seed = { ccs = {
         { ppq = 0,   chan = 1, evType = 'pb', val = centsToRaw(100), cents = 100, shape = 'step' },
         { ppq = 300, chan = 1, evType = 'pb', val = centsToRaw(20),  cents = 20,  shape = 'step' },
       } } }
-      local pass, lastRan = 'setup', {}   -- window start -> the pass that last ran it
-      generators.kinds.pbFlat = {
-        expand = function(host)
-          lastRan[host.window[1]] = pass
-          return { notes = {}, delta = {
-            { ppq = host.window[1],      val = 0,  shape = 'step' },
-            { ppq = host.window[1] + 60, val = 10, shape = 'step' },
-            { ppq = host.window[2],      val = 0,  shape = 'step' },
-          } }
-        end,
-        mode = 'augment', dest = 'pb', label = 'PbFlat', defaults = {}, fields = {},
-      }
+      local probe = installFlat('pbFlat', 'pb')
       local function wireAt(ppq)
         for _, c in ipairs(h.fm:dump().ccs) do
           if c.evType == 'pb' and c.chan == 1 and c.ppq == ppq then return c end
@@ -393,14 +394,190 @@ return {
       t.eq(wireAt(720).val, centsToRaw(20), 'fixture check: an ungated pass enters window B at 20')
 
       -- A lane-3 note inside window B alone: B runs, A keeps.
-      pass = 'edit'
+      probe.pass = 'edit'
       h.tm:addEvent(note(1, 840, 67, { endppq = 900, lane = 3 })); h.tm:flush()
-      t.eq(lastRan[720], 'edit', 'fixture check: window B ran this pass')
-      t.eq(lastRan[240], 'setup', 'fixture check: window A was kept, so its span is not in the cover')
+      t.eq(probe.ran[720], 'edit', 'fixture check: window B ran this pass')
+      t.eq(probe.ran[240], 'setup', 'fixture check: window A was kept, so its span is not in the cover')
 
       t.eq(wireAt(720).val, centsToRaw(20), 'the parked 20 governs B\'s entering edge, not the 100 before A')
       assertParity(h, 'a kept window\'s parked pb feeds a running neighbour == full re-derive')
       generators.kinds.pbFlat = nil
+    end,
+  },
+
+  {
+    -- Hold reach (docs/trackerManager.md § The host gate): a host reads its base through its window's
+    -- cover, and a breakpoint's shape governs the segment up to the next. Retargeting the point a ramp
+    -- closes on reshapes the ramp across a host that no seed touches and that ends before the seed.
+    name = 'hold reach: retargeting the point a cc ramp closes on re-runs a host inside the ramp',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlat', 10)
+      -- cc 10 ramps 0 -> 100 across [0, 960]; the host's window [240, 480) sits inside the ramp.
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 0,   val = 0, shape = 'linear' }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 960, val = 100 }); h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      probe.pass = 'edit'
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 960), { val = 0 }); h.tm:flush()
+      t.eq(probe.ran[240], 'edit', 'the host inside the ramp ran')
+      assertParity(h, 'cc ramp retarget: the host inside the ramp == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- The pb twin: pb's base is the union of the parked list's cover and the pb index's, so the reach
+    -- has to be read off the same union.
+    name = 'hold reach: retargeting the point a pb ramp closes on re-runs a host inside the ramp',
+    run = function(harness)
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0,   chan = 1, evType = 'pb', val = 0,               cents = 0,   shape = 'linear' },
+        { ppq = 960, chan = 1, evType = 'pb', val = centsToRaw(100), cents = 100, shape = 'step' },
+      } } }
+      local probe = installFlat('pbFlat', 'pb')
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'pbFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      probe.pass = 'edit'
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.pb, 960), { val = 0 }); h.tm:flush()
+      t.eq(probe.ran[240], 'edit', 'the host inside the ramp ran')
+      assertParity(h, 'pb ramp retarget: the host inside the ramp == full re-derive')
+      generators.kinds.pbFlat = nil
+    end,
+  },
+
+  {
+    -- A window with no point closing it reads the last one held open to the right, so its cover runs
+    -- to the end of the take: deleting the one point that closed it is a seed inside, however far out.
+    name = 'hold reach: deleting the only point past a host re-runs it',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlat', 10)
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 0,    val = 0, shape = 'linear' }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 1920, val = 100 }); h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      probe.pass = 'edit'
+      h.tm:deleteEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 1920)); h.tm:flush()
+      t.eq(probe.ran[240], 'edit', 'the host the ramp crossed ran')
+      assertParity(h, 'closer deleted: the host == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- The governing point reaches the host from before its window: its value is the ramp's start.
+    name = 'hold reach: retargeting the point a ramp starts from re-runs a host inside the ramp',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlat', 10)
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 120, val = 0, shape = 'linear' }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 960, val = 100 }); h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      probe.pass = 'edit'
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 120), { val = 100 }); h.tm:flush()
+      t.eq(probe.ran[240], 'edit', 'the host inside the ramp ran')
+      assertParity(h, 'ramp start retarget: the host == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- A move seeds where the point went as well as where it was: from outside the host's cover to
+    -- inside it, only the live seat names the ramp it now closes.
+    name = 'hold reach: moving a point into a host\'s cover re-runs it',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlat', 10)
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 0,    val = 0, shape = 'linear' }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 960,  val = 100 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 1200, val = 0 }); h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      probe.pass = 'edit'
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 1200), { ppq = 600 }); h.tm:flush()
+      t.eq(probe.ran[240], 'edit', 'the host the moved point now closes ran')
+      assertParity(h, 'point moved into the cover: the host == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- Hold reach is per stream and ends at the cover: a seed before the governing point, past the
+    -- closing one, or on a stream the host does not read cannot change what it reads, and it stays kept.
+    name = 'hold reach: a seed outside a host\'s cover, or on a stream it does not read, keeps it',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlat', 10)
+      -- cc 10's cover of [240, 480) is [120, 960], leaving 0 and 1200 outside. cc 11 sits inside the
+      -- cover's span, but the host does not read it.
+      for _, point in ipairs({ { 0, 100 }, { 120, 50 }, { 960, 0 }, { 1200, 30 } }) do
+        h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = point[1], val = point[2], shape = 'linear' })
+        h.tm:flush()
+      end
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 11, ppq = 600, val = 64 }); h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+      t.eq(probe.ran[240], 'setup', 'fixture check: the settling pass ran the host')
+
+      probe.pass = 'edit'
+      for _, edit in ipairs({ { cc = 10, ppq = 0 }, { cc = 10, ppq = 1200 }, { cc = 11, ppq = 600 } }) do
+        h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[edit.cc], edit.ppq), { val = 7 })
+        h.tm:flush()
+        t.eq(probe.ran[240], 'setup', ('cc %d at %d leaves the host kept'):format(edit.cc, edit.ppq))
+      end
+      assertParity(h, 'out-of-cover seeds: the kept host == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- A parked point is on its stream as an on-take one is (§ Span-covered fx scans), so editing it
+    -- seeds that stream: here it governs the entering edge of a window right of the one it sits in.
+    name = 'hold reach: editing a parked point re-runs the host whose cover it governs',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlat', 10)
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 0,   val = 100 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 300, val = 20 });  h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:addEvent(note(1, 720, 64, { endppq = 960, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+      local parked = h.tm:getChannel(1).parked.ccs
+      t.truthy(#parked == 1 and parked[1].ppq == 300, 'fixture check: window A parks the authored 20')
+
+      probe.pass = 'edit'
+      h.tm:assignParked(parked[1], { val = 50 }); h.tm:flush()
+      t.eq(probe.ran[720], 'edit', 'the host the parked point governs ran')
+      assertParity(h, 'parked edit: the governed host == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- A replace hands its target back at its window end reading as it found it (docs/generators.md
+    -- § Route-by-window), so it reads its base there: a seed in its cover past the window re-runs it.
+    name = 'hold reach: a cc replace re-runs when the base it hands back changes',
+    run = function(harness)
+      local h = harness.mk()
+      local probe = installFlat('ccFlatReplace', 10, 'replace')
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 0,   val = 0, shape = 'linear' }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 960, val = 100 }); h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlatReplace' } } }))
+      h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      probe.pass = 'edit'
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 960), { val = 0 }); h.tm:flush()
+      t.eq(probe.ran[240], 'edit', 'the replace host ran')
+      assertParity(h, 'replace hand-back: the host == full re-derive')
+      generators.kinds.ccFlatReplace = nil
     end,
   },
 

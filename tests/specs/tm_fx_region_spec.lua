@@ -1301,6 +1301,34 @@ return {
     end,
   },
 
+  {
+    -- A note host parks itself exactly as a region parks a covered chord (docs/generators.md § Hosts
+    -- and membership ¶6), so its {self} membership is handed over as a region member is: sounding to
+    -- its lane bound, not its authored ceiling. A stage copying its input's end (chordStamp,
+    -- velPattern) carries whatever it is handed into the host's realisation, which the ghost
+    -- allocation and the freeze claim read; the tail walk clips only the wire copy.
+    name = 'note host: a self-parked OPEN host hands its chain itself clipped to the next same-lane onset',
+    run = function(harness)
+      local h = harness.mk()
+      local captured
+      generators.kinds.capture = {
+        -- The chain reassigns stream.notes to a replace stage's output, so hold the list as handed in.
+        expand = function(stream) captured = { window = stream.window, notes = stream.notes }
+                                  return { notes = {}, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Capture', defaults = {}, fields = {},
+      }
+      addNote(h, { pitch = 60, ppq = 0, endppq = util.OPEN, fx = { { kind = 'capture' } } })
+      addNote(h, { pitch = 67, ppq = 120, endppq = 240 })
+      generators.kinds.capture = nil
+
+      t.truthy(captured, 'the capture kind ran')
+      t.deepEq(authoredPitches(h), { 67 }, 'the host parked itself -- a replace note-dest stage owns its note')
+      t.eq(#captured.notes, 1, 'a note host is its own membership')
+      t.eq(captured.window[2], 120, 'the window closes at the successor')
+      t.eq(captured.notes[1].endppq, 120, 'the host note sounds to its lane bound, not its OPEN ceiling')
+    end,
+  },
+
   ----- Membership is by onset, and a member belongs entire (§ Hosts and membership ¶4)
 
   {

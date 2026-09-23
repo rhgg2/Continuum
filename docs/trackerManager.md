@@ -1526,13 +1526,27 @@ The leading flush is a no-op when nothing is staged, at the price of one empty `
 
 ## The host gate
 
-Under seed dirt a host whose window no seed touches does not run. The existing
+Under seed dirt a host runs when a seed touches its window or reaches it along a
+hold stream it reads; every other host is kept. The existing
 side of the note reconcile is gathered per host that *ran*, off the file um
 keeps of the channel's derived records: `index.derivedByHost(chan)`, filed under
 the uuid each derived record carries in `derived` and maintained on the index
 verbs as `fxHosts` is, never rescanned. A kept host is never asked, so its
 notes stand outside both sides of the reconcile by omission -- it writes nothing
 to mm and re-derives nothing.
+
+A host reads each continuous target's authored base through its window's cover
+(§ Span-covered fx scans) — an augment for the curve it sums onto, a replace for
+the value it hands back at its window end. A seed on that stream from the
+cover's governing point through its closing one therefore reaches the host. With
+no governing or no closing point the curve holds outward, and the cover is open
+on that side.
+
+A seed names its stream by event type and cc number, parked or on the take, and
+a move seeds both the seat it left and the one it took. Base-voice detune is no
+point list, so its reach is coarser: a lane-1 or region seed runs every pb host
+ending after it, and a running base-voice emitter pulls that bound back to its
+own window start (`docs/tuning.md` § Seat-span-scoped onset walk).
 
 Notes and the ccs routed out of the columns (§ CC walk) file together, so a
 gather names the kind it reconciles and takes that slice. Those two are the

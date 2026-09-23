@@ -22,7 +22,7 @@ local SEED_FAMILY = { note = 'note', pa = 'note', cc = 'cc', at = 'cc', pc = 'cc
 
 --pre: ppq is spec.ppq projected into the raw frame -- the journal holds no time context
 local function parkSeed(spec, verb, ppq)
-  return { uuid = spec.uuid, verb = verb, ppq = ppq, evType = spec.evType,
+  return { uuid = spec.uuid, verb = verb, ppq = ppq, evType = spec.evType, cc = spec.cc,
            ppqL = spec.ppq, lane = spec.lane, pitch = spec.pitch, endppqL = spec.endppq }
 end
 

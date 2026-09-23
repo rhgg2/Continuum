@@ -262,6 +262,36 @@ return {
   },
 
   {
+    -- see docs/generators.md § Portamento ¶5: a region takes its lane-1 voice, and a chord's upper
+    -- lanes contribute nothing. The upper note lands between the two lane-1 onsets and abuts both, so
+    -- a membership that lost its lanes would glide up into it and back down out of it.
+    name = 'a region glides along its lane-1 line alone: an upper-lane note changes no seat',
+    run = function(harness)
+      local function seatsWith(upper)
+        local h = harness.mk()
+        for _, n in ipairs{ { 0, 60 }, { 120, 62 } } do
+          h.tm:addEvent({ evType = 'note', ppq = n[1], endppq = n[1] + 120, chan = 1, pitch = n[2],
+                          vel = 100, detune = 0, delay = 0, lane = 1 })
+        end
+        if upper then
+          h.tm:addEvent({ evType = 'note', ppq = 60, endppq = 180, chan = 1, pitch = 67,
+                          vel = 100, detune = 0, delay = 0, lane = 2 })
+        end
+        h.tm:flush()
+        h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, ppq = 0, endppq = 240,
+                                     fx = { { kind = 'slide', over = { 1, 2 }, place = 'in' } } } })
+        h.tm:rebuild(); h.tm:flush()
+        return h.fm:dump()
+      end
+      local lineAlone = seatsWith(false)
+      t.eq(pbSeatAt(lineAlone, 1, 120).val, centsToRaw(-200),
+        'fixture check: the lane-1 pair glides -- the second enters a whole tone below its own pitch')
+      t.deepEq(pbSeatsOf(seatsWith(true), 1), pbSeatsOf(lineAlone, 1),
+        'the lane-2 note under the same region changes no pb seat')
+    end,
+  },
+
+  {
     -- Membership is by onset, so a note sounding into the window is no member and no predecessor.
     -- see docs/generators.md § Portamento ¶7, § Hosts and membership ¶4
     name = 'a region never glides into itself from a note sounding in from before its window',

@@ -898,9 +898,9 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   end
 
   -- Pitch-only fallback: frame-agnostic, so the columns serve it (projected PAs included).
-  for laneIdx, col in ipairs(notes) do
+  for lane, col in ipairs(notes) do
     for _, evt in ipairs(col.events) do
-      if evt.pitch == pitch then return col, laneIdx end
+      if evt.pitch == pitch then return col, lane end
     end
   end
 end
@@ -1001,9 +1001,9 @@ end
 
 ----- Rebuild fx
 
--- Curve points relevant to a given set of spans: interior points, plus
+-- Curve events relevant to a given set of spans: interior points, plus
 -- the nearest points of the complement; see § Span-covered fx scans
-local function coverOf(evts, spanSet, admit)
+local function pointsFor(evts, spanSet, admit)
   admit = admit or function (_) return true end
   local cover = {}
   local resumeFrom = 1   -- entries below this were covered by an earlier span
@@ -1029,12 +1029,11 @@ local function basePoint(ppq, val, evt)
   return { ppq = ppq, val = val, shape = evt.shape or 'step', tension = evt.tension }
 end
 
--- The covers of the parked pbs and the index's authored ones, parked winning at a shared ppq; see
--- § Span-covered fx scans
---pre: parked.pb is in ppq order, as parkPbs installs it
+-- The covers of all authored pbs; see § Span-covered fx scans pre:
+-- parked.pb is in ppq order, as parkPbs installs it
 local function pbBaseFor(chan, spanSet)
   local base, seen = {}, {}
-  for _, evt in ipairs(coverOf(frame.channels[chan].parked.pb, spanSet)) do
+  for _, evt in ipairs(pointsFor(frame.channels[chan].parked.pb, spanSet)) do
     util.add(base, basePoint(evt.ppq, evt.cents, evt))
     seen[evt.ppq] = true
   end
@@ -1045,7 +1044,7 @@ local function pbBaseFor(chan, spanSet)
     util.add(rawSpans, { time:fromLogical(chan, span[1]), time:fromLogical(chan, span[2]) })
   end
   local function authored(pb) return not pb.derived and pb.cents ~= nil end
-  for _, pb in ipairs(coverOf(index.raw(chan).pbs, rawSpans, authored)) do
+  for _, pb in ipairs(pointsFor(index.raw(chan).pbs, rawSpans, authored)) do
     local ppq = pb.ppqL or pb.ppq
     if not seen[ppq] then util.add(base, basePoint(ppq, pb.cents, pb)) end
   end
@@ -1053,24 +1052,23 @@ local function pbBaseFor(chan, spanSet)
   return base
 end
 
--- The cover of each cc column's whole population, parked half included; see § Span-covered fx scans
+-- The cover of each cc column's authored events; see § Span-covered fx scans
 --pre: the park stage has run: parked ccs are unlinked from, and have, a column
 --post: each base is in ppq order
 local function ccBasesFor(chan, spanSet)
   local bases = {}
   for cc in pairs(frame.channels[chan].onTake.ccs) do
-    for _, evt in ipairs(coverOf(frame.authoredCC(chan, cc), spanSet)) do
+    for _, evt in ipairs(pointsFor(frame.authoredCC(chan, cc), spanSet)) do
       util.bucket(bases, cc, basePoint(evt.ppq, evt.val, evt))
     end
   end
   return bases
 end
 
--- cc-family streams a generator reads; pb/ccs are absolute curves sliced
--- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
-local function channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
+-- cc-family streams a generator reads; see docs/generators.md § Input streams
+local function continuousStreams(chan, spanStart, spanEnd, pbBase, ccBases)
   local cols = frame.channels[chan].onTake
-  local pas, ats = {}, {}
+  local pas = {}
   for _, col in ipairs(cols.notes) do
     for j = util.firstAtOrAfter(col.events, spanStart), #col.events do
       local evt = col.events[j]
@@ -1078,21 +1076,23 @@ local function channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
       if evt.evType == 'pa' then util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel }) end
     end
   end
+  -- ats ride their column's order and bases are pre-sorted, but pas need sorting
+  util.sortByPPQ(pas)
+
+  local ats = {}
   local atEvents = cols.at and cols.at.events or {}
   for j = util.firstAtOrAfter(atEvents, spanStart), #atEvents do
     local evt = atEvents[j]
     if evt.ppq >= spanEnd then break end
     util.add(ats, { ppq = evt.ppq, val = evt.val })
   end
-  -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
-  -- column's order; bases pre-sorted, slices preserve order).
-  util.sortByPPQ(pas)
+
   local ccs = {}
   for cc, base in pairs(ccBases) do ccs[cc] = curves.slice(base, spanStart, spanEnd) end
   return pas, ccs, ats, curves.slice(pbBase, spanStart, spanEnd)
 end
--- A parked event as a generator stream note: it sounds to its render clip, never to the authored
--- ceiling on endppq -- the field the view edits. On-take region members sound to endppqC alike.
+
+-- A parked event as a generator stream note: it sounds to its render clip.
 local function soundingEvent(evt)
   return util.assign(util.clone(evt), { endppq = evt.endppqC })
 end
@@ -1100,99 +1100,108 @@ end
 -- A derived spec's logical-frame copy, as notesByHost carries it; runs per derived note.
 local logicalCopyOf = util.picker("evType chan pitch vel detune intentCents baseVoice delay derived")
 
--- A note host as fx expansion runs it: derived notes ride the host's lane/delay/sample.
-local function hostFromNote(note, windowEnd, lane)
-  return { window = { note.ppq, windowEnd }, notes = { note }, fx = note.fx,
-           targets = generators.continuousTargets(note.fx), id = note.uuid, lane = lane, delay = note.delay,
-           sample = note.sample, delayPpq = delayToPPQ(note.delay) }
-end
-
--- Every fx host of a channel, whether or not it will run: the gate classifies each against the full set.
+-- Every fx host of a channel, since the gate classifies each against the full set.
 --pre: noteHosts is chan's on-take fx hosts, (lane, ppq)-sorted
 local function enumerateHosts(chan, noteHosts, regions, fxOutWindows)
   local hosts = {}
-
-  -- Note hosts. Only augment ones (continuous kinds) remain on-take -- a discrete-replace host
-  -- was parked at 4.5 and runs from its parked event below. Derived notes ride the host lane.
-  for _, evt in ipairs(noteHosts) do
-    util.add(hosts, hostFromNote(evt, evt.endppqC, evt.lane))
+  local function addNoteHost(note)
+    util.add(hosts, {
+      window = { note.ppq, note.endppqC }, notes = { note }, fx = note.fx,
+      targets = generators.continuousTargets(note.fx), id = note.uuid, lane = note.lane,
+      delay = note.delay, sample = note.sample, delayPpq = delayToPPQ(note.delay)
+    })
   end
 
-  -- Parked note hosts: note-host replace parks (like a region), so every hit is derived output.
-  -- Window is the parked event's realised extent, matching the bound the lane pass applied.
-  for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
+  for _, note in ipairs(noteHosts) do addNoteHost(note) end
+
+  for _, spec in ipairs(frame.channels[chan].parked.notes or {}) do
     -- A parked event inside a note-park window is region membership, not a note host (own-fx suppressed).
-    if evt.fx and not fxOutWindows.owns('note', chan, nil, evt.ppq) then
-      util.add(hosts, hostFromNote(soundingEvent(evt), evt.endppqC, evt.lane))
-    end
+    if spec.fx and not fxOutWindows.owns('note', chan, nil, spec.ppq) then addNoteHost(soundingEvent(spec)) end
   end
 
-  -- Region hosts: no note behind them. A discrete-replace kind feeds the realised parked chord
-  -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
   for _, region in ipairs(regions) do
-    local spanStart, spanEnd = region.ppq, region.endppq
-    local members = {}
-    if generators.parksNotes(region) then
-      for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-        if evt.ppq >= spanStart and evt.ppq < spanEnd then util.add(members, soundingEvent(evt)) end
-      end
-    else
-      for lane in ipairs(frame.channels[chan].onTake.notes) do
-        local population = frame.authoredEvents(chan, lane)
-        for i = util.firstAtOrAfter(population, spanStart), #population do
-          local evt = population[i]
-          if evt.ppq >= spanEnd then break end
-          if util.isNote(evt) then
-            util.add(members, util.pick(evt, "ppq pitch vel detune intentCents", { endppq = evt.endppqC, lane = lane }))
-          end
+    local notes = {}
+    for lane in ipairs(frame.channels[chan].onTake.notes) do
+      local population = frame.authoredEvents(chan, lane)
+      for i = util.firstAtOrAfter(population, region.ppq), #population do
+        local evt = population[i]
+        if evt.ppq >= region.endppq then break end
+        if util.isNote(evt) then
+          util.add(notes, util.pick(soundingEvent(evt), "ppq endppq pitch vel detune intentCents lane"))
         end
       end
     end
-    util.add(hosts, { window = { spanStart, spanEnd }, notes = members, fx = region.fx,
-                      targets = generators.continuousTargets(region.fx),
-                      id = region.uuid, lane = nil, delayPpq = 0 })
+    util.add(hosts, {
+      window = { region.ppq, region.endppq }, notes = notes, fx = region.fx,
+      targets = generators.continuousTargets(region.fx),
+      id = region.uuid, delayPpq = 0
+    })
   end
   return hosts
 end
 
--- Host gate: under interval dirt an unseeded host outside every emit scope it feeds does not run.
--- It names nothing the pass carries -- its notes stand in um's index. see design § Keep by omission
+-- Host gate: which hosts re-run under interval dirt. A kept host neither runs nor emits, and um's
+-- index holds its output as it stands. see docs/trackerManager.md § The host gate
 --pre: chan's dirt is interval, not wholesale
+--post: status[host] = 'kept' → no dirt can change host's output, directly or via a hold stream
+--post: status[host] = 'kept' → host.window meets no emitScope[target] for any of host.targets
 --shape: status = { [host] = 'seeded' | 'overlap' | 'kept' }; emitScope = { [target] = span set }
 local function classifyHosts(chan, hosts)
-  -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
-  -- window edges, invisible to window-local seeds.
-  local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
+  -- A breakpoint seeds its stream at its snapshot and at its live seat, so a move names both the
+  -- cover it left and the one it joined.
+  local seedsOn, detuneHoldFrom = {}, math.huge
   for _, s in ipairs(dirt.has(chan)) do
-    if s.pitch == nil or s.lane == 1 then
-      local from = s.ppqL
-      local liveEvt = s.uuid and index.byUuid(s.uuid)
-      if liveEvt then from = math.min(from, liveEvt.ppqL or liveEvt.ppq) end
-      if s.pitch == nil then baseHoldFrom   = math.min(baseHoldFrom, from) end
-      if s.lane  == 1   then detuneHoldFrom = math.min(detuneHoldFrom, from) end
+    local liveEvt = s.uuid and index.byUuid(s.uuid)
+    local livePpq = liveEvt and (liveEvt.ppqL or liveEvt.ppq)
+    local stream = (s.evType == 'pb' and 'pb') or (s.evType == 'cc' and s.cc) or nil
+    if stream then
+      util.bucket(seedsOn, stream, s.ppqL)
+      if livePpq then util.bucket(seedsOn, stream, livePpq) end
+    end
+    -- Base-voice detune holds forward past every window edge, and a region seed (no event type) can
+    -- add or drop the base voices its host emits. see docs/tuning.md § Seat-span-scoped onset walk
+    if s.lane == 1 or s.evType == nil then
+      detuneHoldFrom = math.min(detuneHoldFrom, s.ppqL, livePpq or s.ppqL)
     end
   end
-  local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
-  local function holdSensitive(host)
-    if host.targets.pb and host.window[2] > pbHoldFrom then return true end
+
+  local function baseOf(target, window)
+    if target == 'pb' then return pbBaseFor(chan, { window }) end
+    if not frame.channels[chan].onTake.ccs[target] then return {} end
+    return pointsFor(frame.authoredCC(chan, target), { window })
+  end
+  -- Every mode reads its target's base, a replace for the value it hands back at its window end.
+  -- It reads through its window's cover (§ Span-covered fx scans), held outward past a missing end.
+  local function readsSeededBase(host)
     for target in pairs(host.targets) do
-      if target ~= 'pb' and host.window[2] > baseHoldFrom
-         and generators.chainDestType(host.fx, target) == 'augment' then return true end
+      if seedsOn[target] then
+        local lo, hi = -math.huge, math.huge
+        for _, point in ipairs(baseOf(target, host.window)) do
+          if point.ppq <= host.window[1] then lo = math.max(lo, point.ppq) end
+          if point.ppq >  host.window[2] then hi = math.min(hi, point.ppq) end
+        end
+        for _, ppq in ipairs(seedsOn[target]) do
+          if ppq >= lo and ppq <= hi then return true end
+        end
+      end
     end
     return false
   end
+
   local seeded = {}
-  for _, host in ipairs(hosts) do seeded[host] = dirt.touches(chan, host.window[1], host.window[2]) end
+  for _, host in ipairs(hosts) do
+    seeded[host] = dirt.touches(chan, host.window[1], host.window[2]) or readsSeededBase(host)
+  end
   -- Fixpoint: a live base-voice emitter re-detunes the stream from its window start, which can
   -- wake pb windows further right, which may themselves emit base voices.
   local changed = true
   while changed do
     changed = false
     for _, host in ipairs(hosts) do
-      if seeded[host] and generators.emitsBaseVoice(host) and host.window[1] < pbHoldFrom then
-        pbHoldFrom = host.window[1]; changed = true
+      if seeded[host] and generators.emitsBaseVoice(host) and host.window[1] < detuneHoldFrom then
+        detuneHoldFrom = host.window[1]; changed = true
       end
-      if not seeded[host] and holdSensitive(host) then
+      if not seeded[host] and host.targets.pb and host.window[2] > detuneHoldFrom then
         seeded[host] = true; changed = true
       end
     end
@@ -1255,7 +1264,7 @@ end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
---pre: every column is ppq-ordered; channelStreams and the region-member scan seek it by ppq
+--pre: every column is ppq-ordered; continuousStreams and the region-member scan seek it by ppq
 --post: notesByHost[chan][id] is rewritten iff id is in fxOut.ran[chan]; every other list stands
 local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
   local gridStep = ccGridStep()
@@ -1300,7 +1309,7 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     local spanStart, spanEnd = host.window[1], host.window[2]
     -- The same host as a generator sees it (generators' `host` argument): untouched membership plus
     -- the windowed channel streams; stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
-    local pas, ccs, ats, pb = channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
+    local pas, ccs, ats, pb = continuousStreams(chan, spanStart, spanEnd, pbBase, ccBases)
     local original = { window = { spanStart, spanEnd }, chan = chan, lane = host.lane, id = host.id,
                        notes = host.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
     local stream = util.pick(original, "window chan lane id notes pas ccs ats pb")
@@ -1421,7 +1430,7 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     end
 
     -- Bases cover only the hosts that run: a kept host reads no base (it emits nothing); every
-    -- running host's window feeds channelStreams. see design § Keep by omission
+    -- running host's window feeds continuousStreams. see docs/trackerManager.md § The host gate
     local running = {}
     for _, host in ipairs(hosts) do
       if status[host] ~= 'kept' then util.add(running, host) end

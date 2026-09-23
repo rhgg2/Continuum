@@ -581,9 +581,10 @@ to the onset just before it.
 tells them apart.
 
 **5** A seed reaches past its own span wherever a stream holds forward.
-Authored pb and cc bases and base-voice detune all hold beyond a window
-edge, so a seed on a hold source forces live every pb window ending
-after it, and that cascades: a live base-voice emitter re-detunes the
+An authored pb or cc base reaches the hosts whose covers hold the seed
+(`docs/trackerManager.md` § The host gate). Base-voice detune holds to
+the right without bound, so a lane-1 seed forces live every pb window
+ending after it, and that cascades: a live base-voice emitter re-detunes the
 stream from its window start, which can wake a window further right,
 which may emit base voices of its own. A host is such an emitter when its
 chain parks notes over inbound membership holding the base voice, so a

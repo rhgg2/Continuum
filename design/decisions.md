@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-23** — The host gate reaches a host along a hold stream when a seed on that stream lies
+  in the host's window cover, the same cover its base is built from, open on a side with no
+  governing or closing point. Over a scalar hold-from per family, which woke every later host on any
+  non-note seed and missed the ramp into a seed from its predecessor. Every mode reads its base, a
+  replace for the value it hands back at its window end. Base-voice detune, being no point list,
+  keeps its open-ended hold and fixpoint.
+
 - **2026-09-23** — The fx pb and cc bases cover the parked half over the running hosts' windows, as
   they cover the on-take half. Over walking the parked lists whole, which was cheap but let the base
   reach past what any read of it needs. A cc base is the cover of the column's whole population,
