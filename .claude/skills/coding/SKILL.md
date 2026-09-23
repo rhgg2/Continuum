@@ -1,7 +1,6 @@
 ---
 name: coding
-description: House dialect and test design. Dropped in by hand when discussion turns into code.
-disable-model-invocation: true
+description: House dialect, comment rules and test design, plus a fresh test baseline. Invoke once per session before the first edit to src/ or tests/, however small the edit.
 allowed-tools: Bash(python3 ${CLAUDE_PROJECT_DIR}/.claude/context/test-baseline.py)
 ---
 
