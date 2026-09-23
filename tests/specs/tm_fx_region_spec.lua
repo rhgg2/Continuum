@@ -1287,7 +1287,7 @@ return {
     name = 'fx region: an OPEN member clips to the next same-lane onset, not the window end',
     run = function(harness)
       local h = harness.mk()
-      -- First note is OPEN, successor at ppq 120: membersOf must clip the OPEN tail to 120,
+      -- First note is OPEN, successor at ppq 120: the region-member scan must clip the OPEN tail to 120,
       -- else the generator sees a phantom [0,240) overlapping [120,240).
       addNote(h, { pitch = 60, ppq = 0,   endppq = util.OPEN })
       addNote(h, { pitch = 67, ppq = 120, endppq = 240 })

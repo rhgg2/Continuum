@@ -1092,36 +1092,150 @@ local function channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
   return pas, ccs, ats, curves.slice(pbBase, spanStart, spanEnd)
 end
 -- A parked event as a generator stream note: it sounds to its render clip, never to the authored
--- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
+-- ceiling on endppq -- the field the view edits. On-take region members sound to endppqC alike.
 local function soundingEvent(evt)
   return util.assign(util.clone(evt), { endppq = evt.endppqC })
 end
 
+-- A derived spec's logical-frame copy, as notesByHost carries it; runs per derived note.
+local logicalCopyOf = util.picker("evType chan pitch vel detune intentCents baseVoice delay derived")
+
 -- A note host as fx expansion runs it: derived notes ride the host's lane/delay/sample.
-local function hostFromNote(host, windowEnd, lane)
-  return { window = { host.ppq, windowEnd }, notes = { host }, fx = host.fx,
-           id = host.uuid, lane = lane, delay = host.delay,
-           sample = host.sample, delayPpq = delayToPPQ(host.delay) }
+local function hostFromNote(note, windowEnd, lane)
+  return { window = { note.ppq, windowEnd }, notes = { note }, fx = note.fx,
+           targets = generators.continuousTargets(note.fx), id = note.uuid, lane = lane, delay = note.delay,
+           sample = note.sample, delayPpq = delayToPPQ(note.delay) }
+end
+
+-- Every fx host of a channel, whether or not it will run: the gate classifies each against the full set.
+--pre: noteHosts is chan's on-take fx hosts, (lane, ppq)-sorted
+local function enumerateHosts(chan, noteHosts, regions, fxOutWindows)
+  local hosts = {}
+
+  -- Note hosts. Only augment ones (continuous kinds) remain on-take -- a discrete-replace host
+  -- was parked at 4.5 and runs from its parked event below. Derived notes ride the host lane.
+  for _, evt in ipairs(noteHosts) do
+    util.add(hosts, hostFromNote(evt, evt.endppqC, evt.lane))
+  end
+
+  -- Parked note hosts: note-host replace parks (like a region), so every hit is derived output.
+  -- Window is the parked event's realised extent, matching the bound the lane pass applied.
+  for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
+    -- A parked event inside a note-park window is region membership, not a note host (own-fx suppressed).
+    if evt.fx and not fxOutWindows.owns('note', chan, nil, evt.ppq) then
+      util.add(hosts, hostFromNote(soundingEvent(evt), evt.endppqC, evt.lane))
+    end
+  end
+
+  -- Region hosts: no note behind them. A discrete-replace kind feeds the realised parked chord
+  -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
+  for _, region in ipairs(regions) do
+    local spanStart, spanEnd = region.ppq, region.endppq
+    local members = {}
+    if generators.parksNotes(region) then
+      for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
+        if evt.ppq >= spanStart and evt.ppq < spanEnd then util.add(members, soundingEvent(evt)) end
+      end
+    else
+      for lane in ipairs(frame.channels[chan].onTake.notes) do
+        local population = frame.authoredEvents(chan, lane)
+        for i = util.firstAtOrAfter(population, spanStart), #population do
+          local evt = population[i]
+          if evt.ppq >= spanEnd then break end
+          if util.isNote(evt) then
+            util.add(members, util.pick(evt, "ppq pitch vel detune intentCents", { endppq = evt.endppqC, lane = lane }))
+          end
+        end
+      end
+    end
+    util.add(hosts, { window = { spanStart, spanEnd }, notes = members, fx = region.fx,
+                      targets = generators.continuousTargets(region.fx),
+                      id = region.uuid, lane = nil, delayPpq = 0 })
+  end
+  return hosts
+end
+
+-- Host gate: under interval dirt an unseeded host outside every emit scope it feeds does not run.
+-- It names nothing the pass carries -- its notes stand in um's index. see design § Keep by omission
+--pre: chan's dirt is interval, not wholesale
+--shape: status = { [host] = 'seeded' | 'overlap' | 'kept' }; emitScope = { [target] = span set }
+local function classifyHosts(chan, hosts)
+  -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
+  -- window edges, invisible to window-local seeds.
+  local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
+  for _, s in ipairs(dirt.has(chan)) do
+    if s.pitch == nil or s.lane == 1 then
+      local from = s.ppqL
+      local liveEvt = s.uuid and index.byUuid(s.uuid)
+      if liveEvt then from = math.min(from, liveEvt.ppqL or liveEvt.ppq) end
+      if s.pitch == nil then baseHoldFrom   = math.min(baseHoldFrom, from) end
+      if s.lane  == 1   then detuneHoldFrom = math.min(detuneHoldFrom, from) end
+    end
+  end
+  local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
+  local function holdSensitive(host)
+    if host.targets.pb and host.window[2] > pbHoldFrom then return true end
+    for target in pairs(host.targets) do
+      if target ~= 'pb' and host.window[2] > baseHoldFrom
+         and generators.chainDestType(host.fx, target) == 'augment' then return true end
+    end
+    return false
+  end
+  local seeded = {}
+  for _, host in ipairs(hosts) do seeded[host] = dirt.touches(chan, host.window[1], host.window[2]) end
+  -- Fixpoint: a live base-voice emitter re-detunes the stream from its window start, which can
+  -- wake pb windows further right, which may themselves emit base voices.
+  local changed = true
+  while changed do
+    changed = false
+    for _, host in ipairs(hosts) do
+      if seeded[host] and generators.emitsBaseVoice(host) and host.window[1] < pbHoldFrom then
+        pbHoldFrom = host.window[1]; changed = true
+      end
+      if not seeded[host] and holdSensitive(host) then
+        seeded[host] = true; changed = true
+      end
+    end
+  end
+
+  -- Emit scope per target = merged windows of seeded hosts touching it; cc fold and reconcile clip
+  -- to it. A kept host's window is never gathered, so its seats stay untouched.
+  local emitWins, emitScope = {}, {}
+  for _, host in ipairs(hosts) do
+    if seeded[host] then
+      for target in pairs(host.targets) do util.bucket(emitWins, target, host) end
+    end
+  end
+  for target, group in pairs(emitWins) do emitScope[target] = spans.mergeWindows(group) end
+  local function meetsEmitScope(host)
+    for target in pairs(host.targets) do
+      if spans.intersects(emitScope[target], host.window) then return true end
+    end
+    return false
+  end
+
+  -- 'seeded' runs and emits whole; a clean 'overlap' runs as a fold input inside an emit scope, its
+  -- own remainder dropped; 'kept' does not run.
+  local status = {}
+  for _, host in ipairs(hosts) do
+    if seeded[host] then status[host] = 'seeded'
+    else status[host] = meetsEmitScope(host) and 'overlap' or 'kept' end
+  end
+  return status, emitScope
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
 -- note existence ops staged uncommitted on fxOut.deferredWrite for the tail walk. see docs/generators.md § Offline continuous realisation
---contract: notesByHost is carried between passes, so the stage rewrites the buckets of the hosts it
--- ran and leaves a kept host's list -- and a frozen channel's whole map -- standing
+--pre: every column is ppq-ordered; channelStreams and the region-member scan seek it by ppq
+--post: notesByHost[chan][id] is rewritten iff id is in fxOut.ran[chan]; every other list stands
 local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
   local gridStep = ccGridStep()
-  -- Columns must be ppq-ordered here (membersOf and channelStreams seek col.events by ppq);
-  -- the writers seat in order and nothing since reorders. see docs § Logical projection
 
   -- Asked again here, not carried from the census: the park stage has run since, so this is the
   -- on-take set as of now -- a host it parked gone, one it restored resolved to its live column
   -- event. Bucket by channel, (lane, ppq)-sorted. See § Fx window census.
   local fxHostsByChan = {}
-  for host in pairs(onTakeFxHosts()) do
-    local bucket = fxHostsByChan[host.chan]
-    if not bucket then bucket = {}; fxHostsByChan[host.chan] = bucket end
-    util.add(bucket, host)
-  end
+  for host in pairs(onTakeFxHosts()) do util.bucket(fxHostsByChan, host.chan, host) end
   for _, bucket in pairs(fxHostsByChan) do
     table.sort(bucket, function(a, b)
       if a.lane ~= b.lane then return a.lane < b.lane end
@@ -1150,6 +1264,96 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     util.bucket(fxRegionsByChan, region.chan, region)
   end
 
+  -- One host interface, three sources: an on-take fx note, a parked fx event, or an explicit
+  -- fxRegion; the generator sees none of them. see docs/generators.md § Hosts and membership
+  --shape: emission = { notes = [derived spec], pb = chain record | nil, ccs = { [cc] = chain record } }
+  local function runHost(chan, host, pbBase, ccBases)
+    local spanStart, spanEnd = host.window[1], host.window[2]
+    -- The same host as a generator sees it (generators' `host` argument): untouched membership plus
+    -- the windowed channel streams; stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
+    local pas, ccs, ats, pb = channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
+    local original = { window = { spanStart, spanEnd }, chan = chan, lane = host.lane, id = host.id,
+                       notes = host.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
+    local stream = util.pick(original, "window chan lane id notes pas ccs ats pb")
+    stream.ccs = util.assign({}, original.ccs)   -- folds replace per-target lists; the original's map stays untouched
+    local ownsNotes = false
+    local owned = {}   -- continuous target ('pb' | cc number) -> true once a stage folded a curve in
+
+    -- Fold a continuous stage into its stream channel: replace overwrites, augment sums its delta on
+    -- (exact breakpoint-union). Either way the curve stays absolute over the whole window.
+    local function foldContinuous(target, mode, out)
+      if owned[target] == nil then owned[target] = false end
+      if #out.delta == 0 then return end
+      local cur = target == 'pb' and stream.pb or stream.ccs[target] or {}
+      -- The stream the stage meets, seeded where the target carries no automation: a cc rests at its
+      -- controller's rest, pb at centre (an empty curve evaluates 0, which is that rest).
+      if #cur == 0 and target ~= 'pb' then
+        cur = { { ppq = spanStart, val = generators.restFor(target), shape = 'step' } }
+      end
+      local inherited = cur
+      if mode == 'replace' then cur = curves.foldIntoWindow(out.delta, spanStart, spanEnd)
+      else                      cur = curves.sumStreams(cur, { out.delta }, { spanStart, spanEnd }, gridStep) end
+      -- One rule for both modes: whatever the stage did inside its window, the target leaves it reading
+      -- as the stage found it. A generator cannot bend the channel past its own end.
+      cur = curves.closeAtWindowEnd(cur, curves.eval(inherited, spanEnd), spanStart, spanEnd)
+      owned[target] = true
+      if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
+    end
+
+    for _, params in ipairs(host.fx) do
+      local meta = generators.kinds[params.kind]
+      if meta then
+        local dest = generators.destOf(params)
+        -- Ownership is registered below, so an early skip would drop the chain's record; both modes'
+        -- identity is augment-with-no-output. See docs/generators.md § The chain.
+        local out  = params.bypass and { notes = {}, delta = {} } or meta.expand(stream, original, params, chanCtx)
+        local mode = params.bypass and 'augment' or meta.mode
+        if dest == 'note' then
+          ownsNotes = true
+          if mode == 'replace' then stream.notes = out.notes
+          else
+            local merged = {}
+            for _, hit in ipairs(stream.notes) do util.add(merged, hit) end
+            for _, hit in ipairs(out.notes)    do util.add(merged, hit) end
+            stream.notes = merged
+          end
+        else
+          foldContinuous(dest, mode, out)
+        end
+      end
+    end
+
+    -- Emission is ownership: one record per owned continuous target, the chain's final curve. An
+    -- untouched chain re-seats its parked base; an all-zero pb curve empties to a pure re-centre record.
+    local emission = { notes = {}, ccs = {} }
+    for target, contributed in pairs(owned) do
+      if target == 'pb' then
+        local curve = stream.pb
+        if not contributed and not curves.anyNonZero(curve) then curve = {} end
+        emission.pb = { window = { spanStart, spanEnd }, curve = curve,
+                        mode = generators.chainDestType(host.fx, target) }
+      else
+        emission.ccs[target] = { window = { spanStart, spanEnd }, curve = stream.ccs[target] or {},
+                                 mode = generators.chainDestType(host.fx, target) }
+      end
+    end
+    -- Only a note-dest stage's chain emits (parksNotes mirrors this). A derived note is off-column
+    -- whoever hosts it, so region and note host emit down the one path.
+    if not ownsNotes then return emission end
+    for _, hit in ipairs(stream.notes) do
+      util.add(emission.notes, {
+        evType = 'note', chan = chan, derived = host.id,
+        pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
+        intentCents = hit.intentCents, baseVoice = hit.baseVoice,
+        delay = host.delay or 0, sample = host.sample,
+        ppqL = hit.ppq, endppqL = hit.endppq,
+        ppq    = time:fromLogical(chan, hit.ppq,    host.delayPpq),
+        endppq = time:fromLogical(chan, hit.endppq, host.delayPpq),
+      })
+    end
+    return emission
+  end
+
   -- Host-owned outputs: live notes, existence ops (deletes/adds) awaiting the walk, per-chain pb curves, authored
   -- pb base, the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split, and the host authority.
   --shape: fxOut.ran[chan] = { [hostUuid] = true }; the host files this pass took in hand --
@@ -1162,11 +1366,6 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see docs/generators.md § The chain
   local function expandChannel(chan)
-    local predicted, fxCCs = {}, {}
-    local pbBase, ccBases   -- assigned after host enumeration: bases cover host windows
-    -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
-    -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
-    local ccChains = {}
     -- The existing side of a reconcile, one host at a time, off um's file (notes and ccs together, so
     -- the caller names the kind). Entries sort first for um's order; clones keep the reconcile off um's live records.
     local function producedBy(id, evType)
@@ -1179,228 +1378,43 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
       for _, entry in ipairs(entries) do util.add(out, columnEvent(entry)) end
       return out
     end
-    -- One host interface, three sources: an on-take fx note, a parked fx event, or an explicit
-    -- fxRegion; the generator sees none of them. see docs/generators.md § Hosts and membership
-    local function runHost(host)
-      local spanStart, spanEnd = host.window[1], host.window[2]
-      -- The same host as a generator sees it (generators' `host` argument): untouched membership plus
-      -- the windowed channel streams; stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
-      local pas, ccs, ats, pb = channelStreams(chan, spanStart, spanEnd, pbBase, ccBases)
-      local original = { window = { spanStart, spanEnd }, chan = chan, lane = host.lane, id = host.id,
-                         notes = host.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
-      local stream = util.pick(original, "window chan lane id notes pas ccs ats pb")
-      stream.ccs = util.assign({}, original.ccs)   -- folds replace per-target lists; the original's map stays untouched
-      local ownsNotes = false
-      local owned = {}   -- continuous target ('pb' | cc number) -> true once a stage folded a curve in
 
-      -- Fold a continuous stage into its stream channel: replace overwrites, augment sums its delta on
-      -- (exact breakpoint-union). Either way the curve stays absolute over the whole window.
-      local function foldContinuous(target, mode, out)
-        if owned[target] == nil then owned[target] = false end
-        if #out.delta == 0 then return end
-        local cur = target == 'pb' and stream.pb or stream.ccs[target] or {}
-        -- The stream the stage meets, seeded where the target carries no automation: a cc rests at its
-        -- controller's rest, pb at centre (an empty curve evaluates 0, which is that rest).
-        if #cur == 0 and target ~= 'pb' then
-          cur = { { ppq = spanStart, val = generators.restFor(target), shape = 'step' } }
-        end
-        local inherited = cur
-        if mode == 'replace' then cur = curves.foldIntoWindow(out.delta, spanStart, spanEnd)
-        else                      cur = curves.sumStreams(cur, { out.delta }, { spanStart, spanEnd }, gridStep) end
-        -- One rule for both modes: whatever the stage did inside its window, the target leaves it reading
-        -- as the stage found it. A generator cannot bend the channel past its own end.
-        cur = curves.closeAtWindowEnd(cur, curves.eval(inherited, spanEnd), spanStart, spanEnd)
-        owned[target] = true
-        if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
-      end
-
-      for _, params in ipairs(host.fx) do
-        local meta = generators.kinds[params.kind]
-        if meta then
-          local dest = generators.destOf(params)
-          -- Ownership is registered below, so an early skip would drop the chain's record; both modes'
-          -- identity is augment-with-no-output. See docs/generators.md § The chain.
-          local out  = params.bypass and { notes = {}, delta = {} } or meta.expand(stream, original, params, chanCtx)
-          local mode = params.bypass and 'augment' or meta.mode
-          if dest == 'note' then
-            ownsNotes = true
-            if mode == 'replace' then stream.notes = out.notes
-            else
-              local merged = {}
-              for _, hit in ipairs(stream.notes) do util.add(merged, hit) end
-              for _, hit in ipairs(out.notes)    do util.add(merged, hit) end
-              stream.notes = merged
-            end
-          else
-            foldContinuous(dest, mode, out)
-          end
-        end
-      end
-
-      -- Emission is ownership: one record per owned continuous target, the chain's final curve. An
-      -- untouched chain re-seats its parked base; an all-zero pb curve empties to a pure re-centre record.
-      for target, contributed in pairs(owned) do
-        if target == 'pb' then
-          local curve = stream.pb
-          if not contributed and not curves.anyNonZero(curve) then curve = {} end
-          util.add(fxOut.pbChains[chan], { window = { spanStart, spanEnd }, curve = curve,
-                                        mode = generators.chainDestType(host.fx, target) })
-        else
-          util.bucket(ccChains, target,
-                      { window = { spanStart, spanEnd }, curve = stream.ccs[target] or {},
-                        mode = generators.chainDestType(host.fx, target) })
-        end
-      end
-      -- Only a note-dest stage's chain emits (parksNotes mirrors this). A derived note is off-column
-      -- whoever hosts it, so region and note host emit down the one path.
-      if not ownsNotes then return end
-      for _, hit in ipairs(stream.notes) do
-        util.add(predicted, {
-          evType = 'note', chan = chan, derived = host.id,
-          pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
-          intentCents = hit.intentCents, baseVoice = hit.baseVoice,
-          delay = host.delay or 0, sample = host.sample,
-          ppqL = hit.ppq, endppqL = hit.endppq,
-          ppq    = time:fromLogical(chan, hit.ppq,    host.delayPpq),
-          endppq = time:fromLogical(chan, hit.endppq, host.delayPpq),
-        })
-      end
-    end
-
-    -- Host gate: under interval dirt an unseeded host outside every emit scope it feeds does not run.
-    -- It names nothing the pass carries -- its notes stand in um's index. see design § Keep by omission
+    local hosts = enumerateHosts(chan, fxHostsByChan[chan] or {}, fxRegionsByChan[chan] or {}, fxOutWindows)
+    -- Wholesale dirt runs the gate open: every host is seeded, no emit scope narrows, pbScope stays nil.
     local gated = not dirt.wholesale(chan)
-    local seeded, emitScope = {}, {}
-    -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
-    -- emission drops its own remainder.
-    local function keepable(host)
-      local targets = generators.continuousTargets(host.fx)
-      for target in pairs(targets) do
-        if spans.intersects(emitScope[target], host.window) then return false end
-      end
-      return true
-    end
-    local function runOrKeep(host)
-      if gated and not seeded[host] and keepable(host) then
-        -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
-        -- vanished window would read them as authored pbs.
-        if generators.continuousTargets(host.fx).pb then
-          util.add(fxOut.pbChains[chan], { window = { host.window[1], host.window[2] }, kept = true })
-        end
-      else
-        runHost(host)
-      end
-    end
-
-    -- Host enumeration precedes every run: the continuous-gate scopes below classify each
-    -- host against the full set, so the set must exist first.
-    local hosts = {}
-
-    -- Note hosts. Only augment ones (continuous kinds) remain on-take -- a discrete-replace host
-    -- was parked at 4.5 and runs from its parked event below. Derived notes ride the host lane.
-    for _, evt in ipairs(fxHostsByChan[chan] or {}) do
-      util.add(hosts, hostFromNote(evt, evt.endppqC, evt.lane))
-    end
-
-    -- Parked note hosts: note-host replace parks (like a region), so every hit is derived output.
-    -- Window is the parked event's realised extent, matching the bound the lane pass applied.
-    for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-      -- A parked event inside a note-park window is region membership, not a note host (own-fx suppressed).
-
-      if evt.fx and not fxOutWindows.owns('note', chan, nil, evt.ppq) then
-        util.add(hosts, hostFromNote(soundingEvent(evt), evt.endppqC, evt.lane))
-      end
-    end
-
-    -- Region hosts: no note behind them. A discrete-replace kind feeds the realised parked chord
-    -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
-    for _, region in ipairs(fxRegionsByChan[chan] or {}) do
-      local spanStart, spanEnd = region.ppq, region.endppq
-      local members = {}
-      if generators.parksNotes(region) then
-        for _, evt in ipairs(frame.channels[chan].parked.notes or {}) do
-          if evt.ppq >= spanStart and evt.ppq < spanEnd then util.add(members, soundingEvent(evt)) end
-        end
-      else
-        for lane in ipairs(frame.channels[chan].onTake.notes) do
-          local population = frame.authoredEvents(chan, lane)
-          for i = util.firstAtOrAfter(population, spanStart), #population do
-            local evt = population[i]
-            if evt.ppq >= spanEnd then break end
-            if util.isNote(evt) then
-              util.add(members, util.pick(evt, "ppq pitch vel detune intentCents", { endppq = evt.endppqC, lane = lane }))
-            end
-          end
-        end
-      end
-      util.add(hosts, { window = { spanStart, spanEnd }, notes = members,
-                            fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
-    end
-
-    -- Emit scope per target = merged windows of seeded hosts touching it; cc fold and reconcile clip
-    -- to it. A kept host's window is never gathered, so its seats stay untouched.
+    local status, emitScope = {}, {}
     if gated then
-      -- Hold-stream reach: authored pb/cc breakpoints and base-voice detune hold forward past
-      -- window edges, invisible to window-local seeds.
-      local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
-      for _, s in ipairs(dirt.has(chan)) do
-        if s.pitch == nil or s.lane == 1 then
-          local from = s.ppqL
-          local liveEvt = s.uuid and index.byUuid(s.uuid)
-          if liveEvt then from = math.min(from, liveEvt.ppqL or liveEvt.ppq) end
-          if s.pitch == nil then baseHoldFrom   = math.min(baseHoldFrom, from) end
-          if s.lane  == 1   then detuneHoldFrom = math.min(detuneHoldFrom, from) end
-        end
-      end
-      local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
-      local function holdSensitive(host, targets)
-        if targets.pb and host.window[2] > pbHoldFrom then return true end
-        for target in pairs(targets) do
-          if target ~= 'pb' and host.window[2] > baseHoldFrom
-             and generators.chainDestType(host.fx, target) == 'augment' then return true end
-        end
-        return false
-      end
-      local targetsOf = {}
-      for _, host in ipairs(hosts) do
-        targetsOf[host] = generators.continuousTargets(host.fx)
-        seeded[host] = dirt.touches(chan, host.window[1], host.window[2])
-      end
-      -- Fixpoint: a live base-voice emitter re-detunes the stream from its window start, which can
-      -- wake pb windows further right, which may themselves emit base voices.
-      local changed = true
-      while changed do
-        changed = false
-        for _, host in ipairs(hosts) do
-          if seeded[host] and generators.emitsBaseVoice(host) and host.window[1] < pbHoldFrom then
-            pbHoldFrom = host.window[1]; changed = true
-          end
-          if not seeded[host] and holdSensitive(host, targetsOf[host]) then
-            seeded[host] = true; changed = true
-          end
-        end
-      end
-      local emitWins = {}
-      for _, host in ipairs(hosts) do
-        if seeded[host] then
-          for target in pairs(targetsOf[host]) do util.bucket(emitWins, target, host) end
-        end
-      end
-      for target, group in pairs(emitWins) do emitScope[target] = spans.mergeWindows(group) end
+      status, emitScope = classifyHosts(chan, hosts)
       fxOut.pbScope[chan] = emitScope.pb or {}
+    else
+      for _, host in ipairs(hosts) do status[host] = 'seeded' end
     end
 
-    -- Bases cover only the hosts runOrKeep will actually run: a kept host reads no base (it emits
-    -- nothing); every running host's window feeds channelStreams. see design § Keep by omission
+    -- Bases cover only the hosts that run: a kept host reads no base (it emits nothing); every
+    -- running host's window feeds channelStreams. see design § Keep by omission
     local running = {}
     for _, host in ipairs(hosts) do
-      if not gated or seeded[host] or not keepable(host) then util.add(running, host) end
+      if status[host] ~= 'kept' then util.add(running, host) end
     end
     local runWins = spans.mergeWindows(running)
-    pbBase, ccBases = pbBaseFor(chan, runWins), ccBasesFor(chan, runWins)
+    local pbBase, ccBases = pbBaseFor(chan, runWins), ccBasesFor(chan, runWins)
     fxOut.pbBase[chan] = pbBase
 
-    for _, host in ipairs(hosts) do runOrKeep(host) end
+    -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
+    -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
+    local predicted, ccChains = {}, {}
+    for _, host in ipairs(hosts) do
+      if status[host] ~= 'kept' then
+        local emission = runHost(chan, host, pbBase, ccBases)
+        for _, spec in ipairs(emission.notes) do util.add(predicted, spec) end
+        if emission.pb then util.add(fxOut.pbChains[chan], emission.pb) end
+        for cc, record in pairs(emission.ccs) do util.bucket(ccChains, cc, record) end
+      elseif host.targets.pb then
+        -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
+        -- vanished window would read them as authored pbs.
+        util.add(fxOut.pbChains[chan], { window = { host.window[1], host.window[2] }, kept = true })
+      end
+    end
 
     -- Convert emitScope to raw (the frame cc seats live in) via fromLogical at each bound; monotone
     -- projection means converted bounds still bracket the scope's seats. Only cc targets are used.
@@ -1416,8 +1430,8 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     -- Existence reconcile stamps matched specs with the mm handle + realised end; notes and ccs
     -- gather off the same file so the cc side sees what the note side left. See docs/trackerManager.md § The host gate.
     local existing, existingCCs, ran = {}, {}, fxOut.ran[chan]
-    -- `clipped` marks the clean overlapper, whose cc gather clips to the emit scope; a seeded host
-    -- hands over its file whole. See docs/trackerManager.md § The host gate.
+    -- `clipped` marks an overlap host, whose cc gather clips to the emit scope; a seeded host hands
+    -- over its file whole. See docs/trackerManager.md § The host gate.
     local function gatherFrom(id, clipped)
       ran[id] = true
       for _, evt in ipairs(producedBy(id, 'note')) do util.add(existing, evt) end
@@ -1425,7 +1439,7 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
         if not clipped or spans.contains(ccScope[evt.cc], evt.ppq) then util.add(existingCCs, evt) end
       end
     end
-    for _, host in ipairs(running) do gatherFrom(host.id, gated and not seeded[host]) end
+    for _, host in ipairs(running) do gatherFrom(host.id, status[host] == 'overlap') end
     -- A file belonging to no host of this pass -- kept hosts included, so a kept neighbour's records
     -- are not swept -- belongs to a host deleted or parked away, and falls in whole.
     local hostsOfPass = {}
@@ -1453,13 +1467,9 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
     local fxNotes = {}
     for i, spec in ipairs(predicted) do
       index.stampEmission(spec, i)
-      util.add(fxOut.notes[chan], { evt = spec, baseVoice = spec.baseVoice })
+      util.add(fxOut.notes[chan], spec)
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
-      local copy = { evType = 'note', chan = chan, ppq = spec.ppqL,
-                     endppq = spec.endppqL,
-                     pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
-                     intentCents = spec.intentCents, baseVoice = spec.baseVoice,
-                     delay = spec.delay, derived = spec.derived }
+      local copy = logicalCopyOf(spec, { ppq = spec.ppqL, endppq = spec.endppqL })
       index.stampEmission(copy, i)
       util.add(fxNotes, copy)
     end
@@ -1479,6 +1489,7 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
 
     -- cc emission: fold (curves.foldChains) into markerless seats, clipped to the emit scope; half-open --
     -- the closing value belongs to the kept side.
+    local fxCCs = {}
     for cc, recs in pairs(ccChains) do
       local base = ccBases[cc] or {}
       if #base == 0 then
@@ -1921,7 +1932,7 @@ local function rebuildTails(fxOut, windows)
     -- The channel's population: um's index less what this pass ran, plus the pass's own specs. Every
     -- spec is fresh -- a kept host emits none -- so all of them seed disturbance and count toward the cap.
     local extras = {}
-    for _, w in ipairs(fxOut.notes[chan]) do util.add(extras, w.evt) end
+    for _, spec in ipairs(fxOut.notes[chan]) do util.add(extras, spec) end
     local pop = { list = index.raw(chan).notes, extras = extras, keep = survivingEvents(fxOut.ran[chan]) }
     -- The lane pass named the authored events whose bound it moved, over both its runs; the walk
     -- states no lane bound of theirs, so it re-bounds them by name. see docs § The lane pass
@@ -2159,9 +2170,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       -- Derived base voices are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
       local derivedBaseVoice = {}
-      for _, live in ipairs(fxNotes[chan]) do
-        if live.baseVoice then
-          util.add(derivedBaseVoice, live.evt)
+      for _, spec in ipairs(fxNotes[chan]) do
+        if spec.baseVoice then
+          util.add(derivedBaseVoice, spec)
           freshBaseVoice[chan] = true
         end
       end
@@ -2622,8 +2633,7 @@ local function rebuildPCs(fxOut)
     else
       for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
     end
-    for _, w in ipairs(fxNotes[chan]) do
-      local n = w.evt
+    for _, n in ipairs(fxNotes[chan]) do
       if not seedSpans or spans.contains(seedSpans.raw, n.ppq) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
         addRecord{ ppq = n.ppq, ppqL = n.ppqL, sample = n.sample or 0, spec = n }

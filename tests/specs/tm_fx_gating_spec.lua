@@ -88,7 +88,7 @@ local function laneNote(ppq, endppq, pitch, lane, fx)
 
 -- Seeds the emitter under test at [480,720), then counts a downstream pb host's expansions over one
 -- added note inside that window: a run means the hold point reached back past 480 and woke it, a
--- count of zero that runOrKeep kept its output. Returns the dirt-flush count and the seeding one,
+-- count of zero that the gate kept its output. Returns the dirt-flush count and the seeding one,
 -- the latter the guard that the counter host runs at all.
 -- The dirt is pitched and on lane 4, so it moves neither baseHoldFrom nor detuneHoldFrom: the
 -- emitter's own base-voice-ness is the only thing left that can widen pbHoldFrom.
