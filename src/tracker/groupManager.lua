@@ -778,7 +778,7 @@ function gm:assignEvent(uuid, update)
   if update.chan or update.lane or update.ppq then
     local rec = projOf(loc.groupId, loc.instId)[vuid]
     if rec and rec.evt then
-      local moved = util.clone(rec.evt, { uuid = true, realised = true })
+      local moved = util.clone(rec.evt, { uuid = true, committed = true })
       util.assign(moved, update)
       local newG, newI = classifyCreate(moved)
       if newG and (newG ~= loc.groupId or newI ~= loc.instId) then

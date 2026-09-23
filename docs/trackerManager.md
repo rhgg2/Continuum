@@ -133,7 +133,7 @@ place.
 
 An event's `uuid` is its handle everywhere: durable across rebuilds and
 reloads, stable under any assign, and what `tm:byUuid` and every mm verb
-take. What um's records add is `realised` — set on entries built from an mm
+take. What um's records add is `committed` — set on entries built from an mm
 clone, absent on staged adds and on restored parked events until the park
 stage's `mm:add` lands. Presence, and not the uuid, is what says "this event
 exists in mm, write through to it"; a parked spec keeps its uuid the whole
@@ -192,7 +192,7 @@ that is the whole set:
 
 Three further writes sit outside the contract: `rebuildPbs` clones at the
 boundary, `rebuildInternals` writes mm's own column clones, and
-`colEvt`/`realised` are um's own decoration, set through `index.stampColEvt` and
+`colEvt`/`committed` are um's own decoration, set through `index.stampColEvt` and
 the entry lifecycle.
 
 All three go through `index.assign(entry, field, value)`, the entry-side twin of
@@ -263,12 +263,12 @@ column event (internals, externals, or a restored parked note as the park
 stage's own commit lands it), it files the event on the note's entry via
 `index.stampColEvt`. The stamp is how raw consumers reach the pass's live event
 without a per-pass column scan, and it must outlive reconciliation:
-`refreshEntry`'s sweep spares um's own decoration (`realised`, `colEvt`),
+`refreshEntry`'s sweep spares um's own decoration (`committed`, `colEvt`),
 and the remove-and-reinsert path carries the stamp onto the fresh entry.
 Re-seating overwrites it; a wholesale reload rebuilds entries bare, and the
 same pass's seating restamps them (the head reload runs before any stage).
 A restored park event's stamp is likewise a bare write rather than a `setEvent`:
-`realised` is bookkeeping no renderer reads, and the restore already renewed
+`committed` is bookkeeping no renderer reads, and the restore already renewed
 its lane when it re-entered the column.
 
 ### Interval seeds
@@ -1451,9 +1451,9 @@ an indexed uuid the stash holds, and fx expansion hands one to the arm that runs
 event. Without that a self-parking host would run its chain twice, and `curves.foldChains` would sum
 the two pb curves to twice the authored depth.
 
-`fxWindows.lua` holds the record and the set over it: `fxWindows.fromNote` mints the degenerate
-window a note host presents, and `fxWindows.new` indexes a list of them by uuid and by channel. The
-window per host is the fact, and `fxWindows.perTarget` splits one into a view per stream it parks,
+`buildFxWindows` mints the pass's windows, a note host's as the degenerate one from its onset to its
+lane bound, and `fxWindows.new` indexes the list by uuid and by channel. Freeze mints none: it reads
+its host's window back off the published set, whatever the host's shape. The window per host is the fact, and `fxWindows.perTarget` splits one into a view per stream it parks,
 which freeze's group arm walks. Every window is minted rather than taken by reference, so stamping
 `targets` touches no record the document owns.
 

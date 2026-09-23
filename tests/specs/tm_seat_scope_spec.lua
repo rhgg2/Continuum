@@ -224,7 +224,7 @@ return {
       local after = column(h)
       t.eq(after[1000], before[1000], 'the out-of-scope seat is the prior pass\'s own table')
       t.eq(after[1000].uuid, mmPb(h, 1000).uuid, 'and its uuid is refreshed from the index')
-      t.eq(after[1000].realised, true, 'as is realised, which the fresh projection had not set')
+      t.eq(after[1000].committed, true, 'as is committed, which the fresh projection had not set')
       t.eq(after[3000].val, FRACTIONAL, 'a carried value stands, untouched by a centsToRaw round trip')
     end,
   },

@@ -1,10 +1,6 @@
 -- The derivation engine: one gated pass reconstructs intent from mm, then reauthors raw from it.
 -- One door: rebuild.pipeline runs a pass. See docs/trackerManager.md § Rebuild for the model.
 
---invariant: the frame, the raw index and the stager are the engine's alone to write during a pass
---invariant: the pass's time context is handed in at the head and dropped at its tail; the engine
---invariant:   builds no projection of its own, and holds none between passes
-
 local util       = require 'util'
 local spans      = require 'spans'
 local curves     = require 'curves'
@@ -22,11 +18,7 @@ local rebuild = {}
 
 ----- Module state and constants
 
-
--- The one map that outlives a pass: the fx stage merges at host grain into the channels it ran, so a
--- host it kept keeps the bucket it last produced. Its lists are built from copies of the fx specs.
---shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, ppq, endppq, pitch, vel, detune, delay, derived, [intentCents], [baseVoice] }, ... }
---   ppq/endppq are the logical span; derived is the producing region/host uuid; logical-onset order
+--shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, ppq (logical), endppq (logical), pitch, vel, detune, delay, derived (= host's uuid), [intentCents], [baseVoice] }, ... }; logical-onset order
 local fxNotesByHost = {}
 local time
 
@@ -62,15 +54,13 @@ local function ensureLane(chan, lane)
   return notes[lane]
 end
 
--- Clone an event into a column event
 local function columnEvent(evt, overlay)
   local colEvt = util.clone(evt, { loc = true, colEvt = true })
-  colEvt.realised = true
+  colEvt.committed = true
   if overlay then util.assign(colEvt, overlay) end
   return colEvt
 end
 
--- Strip realised ppq and replace with logical ppq
 local function projectEvent(evt, chan)
   if evt.ppqL ~= nil then
     if evt.delay ~= nil then
@@ -132,8 +122,8 @@ local function isAuthored(note) -- "authored" means "Continuum authored"
   return not note.derived and note.ppqL ~= nil
 end
 
--- Which index records survive this pass: exclude derived events which re-ran this pass
--- and foreign MIDI, keep authored events and retained derived events.
+-- Exclude derived events which re-ran this pass and foreign MIDI,
+-- keep authored events and retained derived events.
 local function survivingEvents(ran)
   return function(rec)
     if rec.ppqL == nil then return false end -- foreign MIDI
@@ -189,8 +179,8 @@ end
 
 ----- Rebuild internals
 
--- Partition mm notes stamped/external, write internal columns, reseat stale-swing.
--- see docs/trackerManager.md § Partition and internal lanes
+-- Partition mm notes stamped/external, write internal columns, reseat
+-- stale-swing.
 local function rebuildInternals()
   local internal, external = {}, {}
   for chan = 1, 16 do
@@ -262,7 +252,7 @@ local function appendCcEvent(entry, update)
   util.add(col.events, event)
 end
 
--- Interval-dirt path: the rows in each seeded cc cell are cleared and refilled from the raw index,
+-- Interval-dirt path: the rows in each seeded cc cell are cleared and refilled from the raw index.
 -- See docs/trackerManager.md § Interval materialisation
 local function spliceChannelCCs(chan)
   local cells   = dirt.ppqs(chan, 'cc')
@@ -555,7 +545,7 @@ end
 -- is removed, and re-added on unpark
 --pre: evt is logical-frame; an mm-raw source must override ppq via `adds`
 local toParked do
-  local REALISATION = { delayC = true, endppqC = true, realised = true, derived = true,
+  local REALISATION = { delayC = true, endppqC = true, committed = true, derived = true,
                       frame = true, cents = true, colEvt = true, sampleShadowed = true,
                       raw = true }
   function toParked(evt, adds)
@@ -608,10 +598,9 @@ local function installParkedNotes(fxParked)
   installParked('notes', notes)
 end
 
--- Shared context for the four passes: an mm batcher, the host test, the prior fxParked
--- stash split by evType, and the window spans the fresh note/cc scans visit.
+-- Shared context for the four passes.
 --shape: stage = { writes = mmBatch, hostFor, reconcilePark, prior = { [evType] = specs },
---   windowSpans = { [util.key(chan, target)] = merged spans } }
+--                 windowSpans = { [util.key(chan, target)] = merged spans } }
 local function parkStage(fxOutWindows, fxParked)
   local writes = mmBatch()
 
@@ -621,8 +610,6 @@ local function parkStage(fxOutWindows, fxParked)
     if evt.fx and generators.parksNotes(evt) then return evt.uuid end
   end
 
-  -- Park covered candidates, split the prior set into carry-forward / restore. onPark fires
-  -- once per freshly-parked spec. see docs/trackerManager.md § Rebuild
   --shape: candidates = { evt (the live column/index event), col = evt's column (nil off-column), spec = toParked(evt, {...}) }
   local function reconcilePark(candidates, prior, onPark)
     onPark = onPark or function (_) end
@@ -651,7 +638,6 @@ local function parkStage(fxOutWindows, fxParked)
   for _, spec in ipairs(fxParked or {}) do util.bucket(prior, spec.evType, spec) end
 
   -- Window spans per (chan, target) for the fresh note/cc scans.
-  -- see docs/trackerManager.md § Span-covered fx scans
   local buckets = {}
   for _, window in ipairs(fxOutWindows.windows()) do
     for target in pairs(window.targets) do
@@ -683,21 +669,18 @@ local function parkNotes(stage, onTakeHosts)
       end
     end
   end
-  -- The set is on-take as of this stage's head, so a host already parked is absent from it:
-  -- the prior parked set's to carry or restore.
   for host in pairs(onTakeHosts) do
     if dirt.has(host.chan) and generators.parksNotes(host) then
       addCandidate(host)
     end
   end
 
-  -- Park removes a blocker; same-lane/pitch neighbours' tails regrow.
+  -- If park removes a note, same-lane/pitch neighbours' tails should regrow.
   local parkedNotes, restores = stage.reconcilePark(candidates, stage.prior.note,
     function(spec)
       dirt.add(spec.chan, dirt.parkSeed(spec, 'park', time:fromLogical(spec.chan, spec.ppq)))
     end)
 
-  -- Restores re-enter their columns now and land in mm with this stage's commit.
   local restoredNotes = {}
   local takeLen = time:length()
   for _, spec in ipairs(restores) do
@@ -733,7 +716,6 @@ end
 
 --pre: parkNotes has installed this pass's parked notes
 local function parkPAs(stage)
-  -- One test for both halves, so a fresh park and the next pass's carry agree.
   local function covers(host, pitch, ppqL)
     return host.pitch == pitch and ppqL >= host.ppq and ppqL < host.endppqC
   end
@@ -760,22 +742,20 @@ local function parkPAs(stage)
             util.bucket(parkedPpqs, chan, ppqL)
             parkedUuids[pa.uuid] = true
             local spec = toParked(pa)
-            projectEvent(spec, chan)   -- the clone takes the projection; the index entry keeps its raw frame
-            spec.uuid = nil            -- restore re-mints the rpb sidecar uuid
+            projectEvent(spec, chan)
+            spec.uuid = nil -- restore re-mints the rpb sidecar uuid
             util.add(parkedPAs, spec)
           end
         end
       end
     end
   end
-  -- The parking PA's column event rode past the note-lane excise (its position seeds only here), so
-  -- drop it now, or rebuildPA's parked projection doubles it.
+  -- The parking PA wasn't excised by note-excision, so do it now.
   for chan, ppqs in pairs(parkedPpqs) do
     exciseEvents(frame.channels[chan].onTake.notes, ppqs,
                  function(e) return e.evType == 'pa' and parkedUuids[e.uuid] end)
   end
 
-  -- Prior: host still parked -> carry; host back on-take -> restore.
   for _, spec in ipairs(stage.prior.pa) do
     if hostIsParked(spec.chan, spec.pitch, spec.ppq) then
       util.add(parkedPAs, spec)
@@ -803,7 +783,6 @@ local function parkCCs(stage)
   end
   local parkedCCs, restores = stage.reconcilePark(candidates, stage.prior.cc)
 
-  -- Restores re-enter their columns now and land in mm with this stage's commit.
   local restoredCCs = {}
   for _, spec in ipairs(restores) do
     local evt = util.clone(spec)   -- the event is the spec: both are logical
@@ -835,8 +814,8 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
     for pb in onsetsIn(index.raw(window.chan).pbs, { { fxOutWindows.rawSpan(window) } }) do
       if not pb.derived and not fxInWindows.ownsRaw('pb', pb.chan, nil, pb.ppq) then
         dirt.add(pb.chan, dirt.rawSeed(pb, 'park'))
-        -- val: logical cents from the sidecar; the index val (raw-derived cents) is the fallback
-        -- for a foreign pre-cents pb.
+        -- val: logical cents from the sidecar, with index val
+        -- (raw-derived cents) as the fallback for a foreign pb.
         local spec = toParked(pb, { val = pb.cents or pb.val })
         projectEvent(spec, pb.chan)
         util.add(candidates, { evt = { uuid = pb.uuid }, spec = spec }) -- evt is only the delete target
@@ -860,8 +839,7 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
     end
   end
 
-  -- The authored breakpoints stay visible in-column though off-take. The cents decoration is
-  -- realisation, so it rides a copy.
+  -- The cents decoration is realisation, so it decorates a copy.
   local rendered = {}
   for _, spec in ipairs(parkedPbs) do
     util.add(rendered, util.assign(util.clone(spec), { cents = spec.val }))
@@ -872,8 +850,8 @@ end
 
 local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents)
   local stage                                    = parkStage(fxOutWindows, fxParked)
-  -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
   local parkedNotes, restoredNotes, parkedByHost = parkNotes(stage, onTakeHosts)
+  -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
   local parkedPAs                                = parkPAs(stage)
   local parkedCCs, restoredCCs                   = parkCCs(stage)
   local parkedPbs                                = parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
@@ -888,11 +866,11 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   -- Seat-stamp each restored event like any other seat, now the commit lands it in mm; bare write,
   -- no setEvent -- see docs/trackerManager.md § Incremental index reconciliation.
   for _, evt in ipairs(restoredNotes) do
-    if index.stampColEvt(evt) then evt.realised = true end
+    if index.stampColEvt(evt) then evt.committed = true end
   end
   -- A cc entry carries no seat stamp, so a restored cc only learns that mm holds it.
   for _, evt in ipairs(restoredCCs) do
-    if index.byUuid(evt.uuid) then evt.realised = true end
+    if index.byUuid(evt.uuid) then evt.committed = true end
   end
   return parkedByHost
 end
@@ -952,22 +930,92 @@ local function rebuildPA()
   end
 end
 
+----- Rebuild fx helpers
+
+--shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
+local function buildFxWindows(fxRegions, onTakeHosts)
+  local windows = {}
+  local function addWindow(window)
+    window.targets = generators.chainTargets(window)
+    util.add(windows, window)
+  end
+
+  for _, region in ipairs(fxRegions) do
+    addWindow(util.assign(util.clone(region), { hostType = 'region' }))
+  end
+
+  local noteHosts = {}
+  for host in pairs(onTakeHosts) do util.add(noteHosts, host) end
+  for chan = 1, 16 do
+    for _, evt in ipairs(frame.channels[chan].parked.notes) do
+      if evt.fx then util.add(noteHosts, evt) end
+    end
+  end
+  table.sort(noteHosts, function(a, b)
+    if a.chan ~= b.chan then return a.chan < b.chan end
+    if a.lane ~= b.lane then return a.lane < b.lane end
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    return tostring(a.uuid) < tostring(b.uuid)
+  end)
+  -- A note host's window is the degenerate one (note-is-a-region): its onset to its lane bound.
+  for _, host in ipairs(noteHosts) do
+    addWindow(util.pick(host, 'uuid chan ppq fx', { endppq = host.endppqC, hostType = 'note' }))
+  end
+  return fxWindows.new(windows, time)
+end
+
+--pre: endppqC has been written by tailClip
+--post: returns { [event] = true }
+local function onTakeFxHosts()
+  local hosts = {}
+
+  local function walkChannel(chan)
+    for _, col in ipairs(frame.channels[chan].onTake.notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.fx and util.isNote(evt) then hosts[evt] = true end
+      end
+    end
+  end
+
+  local function perHost(chan)
+    local parked = {}
+    for _, evt in ipairs(frame.channels[chan].parked.notes) do parked[evt.uuid] = true end
+    for uuid in pairs(index.fxHosts(chan)) do
+      if not parked[uuid] then
+        local evt = index.colEvtFor(uuid)
+        if not evt then return walkChannel(chan) end
+        hosts[evt] = true
+      end
+    end
+  end
+
+  for chan = 1, 16 do
+    local known = index.fxHosts(chan)
+    if known and next(known) then
+      if dirt.wholesale(chan) then walkChannel(chan) else perHost(chan) end
+    end
+  end
+  return hosts
+end
+
 ----- Rebuild fx
 
 -- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
 -- see docs/trackerManager.md § Span-covered fx scans
 local function coverInto(list, spanSet, admit, emit)
+  admit = admit or function (_) return true end
   local nextIdx = 1
   for _, span in ipairs(spanSet) do
-    local govern = util.firstAfter(list, span[1]) - 1
-    while govern >= nextIdx and admit and not admit(list[govern]) do govern = govern - 1 end
-    local i = math.max(govern, nextIdx)
+    local ppq, endppq = span[1], span[2]
+    local cursor = util.firstAfter(list, ppq) - 1
+    while cursor >= nextIdx and not admit(list[cursor]) do cursor = cursor - 1 end
+    local i = math.max(cursor, nextIdx)
     while i <= #list do
       local entry = list[i]
       i = i + 1
-      if not admit or admit(entry) then
+      if admit(entry) then
         emit(entry)
-        if entry.ppq > span[2] then break end
+        if entry.ppq > endppq then break end
       end
     end
     nextIdx = i
@@ -1104,83 +1152,6 @@ local function hostFromNote(host, windowEnd, lane)
   return { window = { host.ppq, windowEnd }, notes = { host }, fx = host.fx,
            id = host.uuid, lane = lane, delay = host.delay,
            sample = host.sample, delayPpq = delayToPPQ(host.delay) }
-end
-
---shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
-local function buildFxWindows(fxRegions, onTakeHosts)
-  local windows = {}
-  -- Every window is minted here rather than taken by reference: a target set is no part of the
-  -- document, and a stored region must not acquire one.
-  local function hold(window)
-    window.targets = generators.chainTargets(window)
-    util.add(windows, window)
-  end
-
-  for _, r in ipairs(fxRegions) do
-    hold({ uuid = r.uuid, chan = r.chan, ppq = r.ppq, endppq = r.endppq,
-           fx = r.fx, hostType = 'region' })
-  end
-  -- Every fx host, on-take and parked alike, gets a window; sort order matches both halves
-  -- of a lane so parking moves no entry. See docs/trackerManager.md § Fx window census.
-  local noteHosts = {}
-  for host in pairs(onTakeHosts) do util.add(noteHosts, { host = host, endppq = host.endppqC }) end
-  -- The parked half: a stashed host runs its chain off-take, and one this pass restores is here
-  -- until the park stage re-enters it. Only this census wants both halves; the stages take theirs.
-  for chan = 1, 16 do
-    for _, evt in ipairs(frame.channels[chan].parked.notes) do
-      if evt.fx then util.add(noteHosts, { host = evt, endppq = evt.endppqC }) end
-    end
-  end
-  table.sort(noteHosts, function(a, b)
-    local ha, hb = a.host, b.host
-    if ha.chan ~= hb.chan then return ha.chan < hb.chan end
-    if ha.lane ~= hb.lane then return ha.lane < hb.lane end
-    if ha.ppq ~= hb.ppq then return ha.ppq < hb.ppq end
-    return tostring(ha.uuid) < tostring(hb.uuid)
-  end)
-  for _, nh in ipairs(noteHosts) do hold(fxWindows.fromNote(nh.host, nh.endppq)) end
-  return fxWindows.new(windows, time)
-end
-
---shape: onTakeFxHosts -> { [event] = true }; each host's lane bound rides its own endppqC
---pre: the lane pass has run over every dirty channel, so each host carries its lane bound
---post: fresh result holds every on-take fx host of every channel; parked hosts are not in it
--- The park stage moves a host between the halves of its lane, so each reader calls at its own
--- moment rather than sharing a snapshot. see docs/trackerManager.md § Note host clips and windows
-local function onTakeFxHosts()
-  local hosts = {}
-
-  -- Column walk where no uuid can be resolved to an event: a wholesale-dirty channel.
-  -- see docs/trackerManager.md § Lane occupancy
-  local function walkChannel(chan)
-    for _, col in ipairs(frame.channels[chan].onTake.notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.fx and util.isNote(evt) then hosts[evt] = true end
-      end
-    end
-  end
-
-  -- Per-host seek through the index over the on-take half; the frame's parked list says which host
-  -- moved. Returns false to fall to walkChannel. See docs/trackerManager.md § Fx window census.
-  local function perHost(chan)
-    local parked = {}
-    for _, evt in ipairs(frame.channels[chan].parked.notes) do parked[evt.uuid] = true end
-    for uuid in pairs(index.fxHosts(chan)) do
-      if not parked[uuid] then
-        local evt = index.colEvtFor(uuid)
-        if not evt then return walkChannel(chan) end
-        hosts[evt] = true
-      end
-    end
-  end
-
-  for chan = 1, 16 do
-    local known = index.fxHosts(chan)
-    if known and next(known) then
-      if dirt.wholesale(chan) then walkChannel(chan) else perHost(chan) end
-    end
-  end
-  return hosts
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
@@ -1516,7 +1487,7 @@ local function rebuildFx(fxOutWindows, fxRegions, notesByHost, pbLimCents)
       -- copy the matched note's mm handle + realised end onto the spec, so a
       -- re-emitted fxNote is re-clipped in place by the tail walk, not re-added.
       function(spec, evt)
-        spec.uuid, spec.realised, spec.endppq = evt.uuid, evt.realised, evt.endppq
+        spec.uuid, spec.committed, spec.endppq = evt.uuid, evt.committed, evt.endppq
       end)
 
     -- Where the pass's emission order is stated, spec and copy alike: off the columns it is the only
@@ -1654,7 +1625,7 @@ local function makeTailRules(ctx)
       local shift = e.ppq - time:fromLogical(chan, e.ppqL)
       frame.setEvent(e.colEvt, 'delayC', util.round(timing.ppqToDelay(shift, res)))
     end
-    if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
+    if backing.committed then clampWrites.assign(backing, { ppq = e.ppq }) end
     return true
   end
 
@@ -1676,7 +1647,7 @@ local function makeTailRules(ctx)
     local rounded   = util.round(rawBound)
     if rounded ~= e.endppq then
       local backing = e.colEvt or e
-      if backing.realised then tailWrites.assign(backing, { endppq = rounded }) end
+      if backing.committed then tailWrites.assign(backing, { endppq = rounded }) end
       index.assign(e, 'endppq', rounded)
     end
     if e.colEvt then
@@ -2514,7 +2485,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
-      if pb.realised then
+      if pb.committed then
         local d         = detuneOf[pb]
         local newRaw    = tuning.centsToRaw(pb.cents + d, pbLimCents)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
@@ -2568,12 +2539,12 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
         util.add(pbColEvents, pb)
       end
       -- Carry the whole out-of-scope remainder verbatim -- re-deriving from the wire would quantise through
-      -- centsToRaw. Each refreshes uuid/realised since a carried event predates its committed uuid.
+      -- centsToRaw. Each refreshes uuid/committed since a carried event predates its committed uuid.
       for _, evt in ipairs(priorPbCol and priorPbCol.events or {}) do
         local carry = evt.ppqRaw and (not inSpans(seatSpans, evt.ppqRaw) or fenced[evt.ppqRaw])
         local entry = carry and pbEntryByRaw[evt.ppqRaw]
         if entry then
-          evt.uuid, evt.realised = entry.uuid, entry.realised
+          evt.uuid, evt.committed = entry.uuid, entry.committed
           anyVisible = anyVisible or not evt.hidden
           util.add(pbColEvents, evt)
         end

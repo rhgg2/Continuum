@@ -21,7 +21,7 @@ local CLIP_RESERVED = {
   -- destination identity
   chan = true, rpb = true, lane = true, cc = true,
   -- mm/REAPER bookkeeping
-  uuid = true, realised = true,
+  uuid = true, committed = true,
   -- envelope-level
   type = true, evType = true,
 }

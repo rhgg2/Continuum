@@ -648,10 +648,10 @@ do
       -- Clone (not pick) so arbitrary metadata survives; val reframes raw->cents (um's frame), raw keeps
       -- the wire value for rebuildPbs' delta-gate. cents sidecar is authored logical -- nil for foreign pbs.
       evt = util.clone(e)
-      evt.val, evt.raw, evt.realised = tuning.rawToCents(e.val, pbLim()), e.val, true
+      evt.val, evt.raw, evt.committed = tuning.rawToCents(e.val, pbLim()), e.val, true
     else
       evt = e
-      evt.realised = true
+      evt.committed = true
     end
     byUuid[evt.uuid] = evt
     return evt
@@ -659,14 +659,14 @@ do
 
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
   -- slot in rawIndex, so a same-slot reconcile skips the index.delete scan, reinsert and sort.
-  local umDecor = { realised = true, colEvt = true }   -- um's own fields; mm's clone never carries them
+  local umDecor = { committed = true, colEvt = true }   -- um's own fields; mm's clone never carries them
   -- The entry table survives, so its filing is re-stated rather than turned over: the fields it
   -- re-reads include `derived`.
   local function refreshEntry(prev, e)
     clearDerivedHost(prev)
     for k in pairs(prev) do if e[k] == nil and not umDecor[k] then prev[k] = nil end end
     util.assign(prev, e)
-    prev.realised = true
+    prev.committed = true
     setDerivedHost(prev)
     -- pb reframes val raw->cents and mirrors the wire in raw, matching makeEntry so both doors agree.
     if e.evType == 'pb' then prev.val, prev.raw = tuning.rawToCents(e.val, pbLim()), e.val end
@@ -796,7 +796,7 @@ do
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
     index.move(evt, oldChan, update, oldDerived)
-    if not evt.realised then return end
+    if not evt.committed then return end
     for _, e in ipairs(assigns) do
       if e.uuid == evt.uuid then
         -- Plain copy, not util.assign: util.assign collapses util.REMOVE → nil-the-key.
@@ -814,7 +814,7 @@ do
     index.delete(evt.uuid and index.byUuid(evt.uuid) or evt)
     if evt.uuid then index.forget(evt.uuid) end
 
-    if evt.realised then
+    if evt.committed then
       util.add(deletes, { uuid = evt.uuid, evt = evt })
       for j = #assigns, 1, -1 do
         if assigns[j].uuid == evt.uuid then table.remove(assigns, j) end
@@ -1435,44 +1435,32 @@ local function freezeRegion(uuid, toGroup)
   if region and region.chan == 0 then return false end
   local stash, keptParked = ds:get('fxParked') or {}, {}
 
-  -- The other host shape: a note carrying its own chain, parked or still on the take, resolves
-  -- through fxWindows, the window set's own builder.
-  local hostSpec, onTakeHost, hostRegion
+  -- The other host shape: a note carrying its own chain, parked or still on the take.
+  local hostSpec, onTakeHost
   if not region then
     for _, spec in ipairs(stash) do
       if spec.evType == 'note' and spec.uuid == uuid and spec.fx then hostSpec = spec end
     end
-    if hostSpec then
-      hostRegion = fxWindows.fromNote(hostSpec,
-                                      frame.clippedSpanEnd(hostSpec, tm:toLogical(hostSpec.chan, tm:length()),
-                                                           frame.authoredEvents(hostSpec.chan, hostSpec.lane)))
-    else
-      -- byUuid is the raw-frame index entry and .colEvt its stamped logical event, so the window comes
+    if not hostSpec then
+      -- byUuid is the raw-frame index entry and .colEvt its stamped logical event, so the fx test comes
       -- off the event and the assign off the entry. An unstamped (just-restored) host declines.
       local evt = index.colEvtFor(uuid)
-      if evt and evt.fx then
-        onTakeHost = index.byUuid(uuid)
-        hostRegion = fxWindows.fromNote(evt,
-                                        frame.clippedSpanEnd(evt, tm:toLogical(evt.chan, tm:length()),
-                                                             frame.authoredEvents(evt.chan, evt.lane)))
-      end
+      if evt and evt.fx then onTakeHost = index.byUuid(uuid) end
     end
   end
-  -- One window-shaped record from here down: nothing below knows which host shape it froze.
-  local frozen = region or hostRegion
-  if not frozen then return false end
+  if not (region or hostSpec or onTakeHost) then return false end
+
+  -- The host's window as the last rebuild published it, whatever the host's shape; gated before
+  -- anything is gathered, so a refusal stages nothing. see docs/trackerManager.md § Fx window census
+  local frozen = windows.window(uuid)
+  if not frozen or freezeRefused(frozen, windows) then return false end
   -- Ownership by dest, not mode: a note-dest kind's output stands in for the host note, so freezing
   -- destroys it. A continuous-only chain leaves the note where it is.
-  local destroysHost = hostRegion and generators.parksNotes(hostRegion)
-
-  -- The windows the last rebuild published, gated before anything is gathered so a refusal leaves
-  -- the pass having staged nothing. see docs/trackerManager.md § Fx window census
-  local settled = windows.window(uuid)
-  if not settled or freezeRefused(settled, windows) then return false end
+  local destroysHost = not region and generators.parksNotes(frozen)
 
   -- The frozen window per stream it parks: the group arm's two passes walk it -- the thin in the raw
   -- frame, the member gather in the logical one.
-  local frozenEntries = fxWindows.perTarget(settled)
+  local frozenEntries = fxWindows.perTarget(frozen)
   -- Coverage off the published set, narrowed to this uuid: the gate has refused every neighbour
   -- sharing a target inside this span, so whatever the set covers here it covers on our behalf.
   -- Never rebuildRegionPark's covered(): its first clause answers "does this spec park itself", true
@@ -1494,7 +1482,7 @@ local function freezeRegion(uuid, toGroup)
   -- not the lane rule that never held it as authored.
   for _, note in ipairs(promoted) do
     stager.assign(note, { derived = util.REMOVE, lane = laneOf[note],
-                          endppq = math.min(note.endppqL, settled.endppq) })
+                          endppq = math.min(note.endppqL, frozen.endppq) })
   end
   -- Captured before the flush: the rebuild that follows refiles these entries, and the uuid is what
   -- crosses it -- index.colEvtFor is the door back to the settled event.

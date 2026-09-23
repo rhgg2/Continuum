@@ -1,7 +1,7 @@
 -- The pass's fx windows: one half-open logical span per host, the streams it claims, and the
 -- lookups over the set. See docs/trackerManager.md § Fx window census for the model.
 
---invariant: stateless module -- a set holds its own state, and the record mint is pure
+--invariant: stateless module -- a set holds its own state
 --invariant: a window's span is logical; a raw answer converts it through the pass's time context
 --shape: window = { uuid, chan, ppq, endppq, targets = { ['note'|'pb'|ccNum] = true }, [fx], [hostType] }
 --shape: per-target entry = { evType, chan, [cc], id = the window's uuid, ppq, endppq }
@@ -10,13 +10,6 @@
 local util = require 'util'
 
 local fxWindows = {}
-
--- A note host (on-take or parked) as its degenerate window (note-is-a-region).
---post: fresh result spans the host's own onset to endppq, carrying its uuid, channel and chain
-function fxWindows.fromNote(host, endppq)
-  return { uuid = host.uuid, chan = host.chan, ppq = host.ppq,
-           endppq = endppq, fx = host.fx, hostType = 'note' }
-end
 
 -- One window split per stream it parks, carrying the host's uuid as `id`. Freeze's group arm walks
 -- this: the thin in the raw frame, the member gather in the logical one, each a pass per stream.

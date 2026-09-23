@@ -1113,7 +1113,7 @@ return {
       local restoredTable = column74().events
       local cell
       for _, e in ipairs(restoredTable) do if e.ppq == 180 then cell = e end end
-      local cellUuid, cellRealised = cell and cell.uuid, cell and cell.realised
+      local cellUuid, cellCommitted = cell and cell.uuid, cell and cell.committed
       -- An edit through the restored cell, while the region's kind still resolves.
       if cell then h.tm:assignEvent(cell, { val = 99 }); h.tm:flush() end
       generators.kinds.ccRep = nil   -- generators is shared: restore before asserting
@@ -1121,7 +1121,7 @@ return {
       t.truthy(parkedTable ~= authoredTable, 'parking renews the column it leaves')
       t.truthy(restoredTable ~= parkedTable, 'restoring renews the column it re-enters')
       t.eq(cellUuid, uuid180, 'the restored cell names the uuid the cc was parked under')
-      t.truthy(cellRealised, 'and is realised once the park commit lands it')
+      t.truthy(cellCommitted, 'and is committed once the park commit lands it')
       local edited = authoredCC(h, 1, 74, 180)
       t.eq(edited and edited.val, 99, 'an edit through the restored cell reaches the take')
 

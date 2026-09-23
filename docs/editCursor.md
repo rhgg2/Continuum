@@ -195,7 +195,7 @@ clipboard layer needing to know what it is.
 Each reserved group has its own reason: position (`ppq`/`endppq`)
 rebuilds from `row` at paste; identity (`chan`/`rpb`/`lane`/`cc`) and
 kind (`type`/`evType`) are the destination's to decide, not the
-source's; REAPER bookkeeping (`idx`/`uuid`/`uuidIdx`/`realised`) must
+source's; REAPER bookkeeping (`idx`/`uuid`/`uuidIdx`/`committed`) must
 not round-trip regardless. Do not allowlist event payload instead —
 the list stays small and rule-based so unknown fields keep riding
 through.
