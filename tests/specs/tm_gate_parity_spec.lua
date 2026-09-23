@@ -7,6 +7,7 @@
 
 local t = require('support')
 local util = require('util')
+local generators = require('generators')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
@@ -302,6 +303,107 @@ return {
       assertParity(h, 'chan-1 detune edit: hold reach re-derives B, A keeps == full re-derive')
     end,
   },
+  {
+    -- A running window's base is the authored curve as parked (docs/generators.md § Input streams):
+    -- inside another window the park stash is authoritative, and a point parked there governs this
+    -- window's entering edge as an on-take point would. The claim only bites where that other window
+    -- is kept -- a running one puts its own span in the cover -- so the pass has to be gated. Between
+    -- the two windows the take holds nothing, so the on-take point governing there is the stale one
+    -- from before the first window.
+    name = 'continuous gate: a point parked in a kept window governs a running neighbour\'s entering edge',
+    run = function(harness)
+      local h = harness.mk()
+      local pass, lastRan = 'setup', {}   -- window start -> the pass that last ran it
+      generators.kinds.ccFlat = {
+        expand = function(host)
+          lastRan[host.window[1]] = pass
+          return { notes = {}, delta = {
+            { ppq = host.window[1],      val = 0,  shape = 'step' },
+            { ppq = host.window[1] + 60, val = 10, shape = 'step' },
+            { ppq = host.window[2],      val = 0,  shape = 'step' },
+          } }
+        end,
+        mode = 'augment', dest = 10, label = 'CcFlat', defaults = {}, fields = {},
+      }
+      local function seatAt(ppq)
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'cc' and c.chan == 1 and c.cc == 10 and c.ppq == ppq then return c end
+        end
+      end
+
+      -- Authored cc 10: 100 before either window, 20 inside window A [240,480). Window B is [720,960).
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 0,   val = 100 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', chan = 1, cc = 10, ppq = 300, val = 20 });  h.tm:flush()
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:addEvent(note(1, 720, 64, { endppq = 960, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      local parked = h.tm:getChannel(1).parked.ccs
+      t.truthy(#parked == 1 and parked[1].ppq == 300, 'fixture check: window A parks the authored 20')
+      t.eq(seatAt(720).val, 20, 'fixture check: an ungated pass enters window B at 20')
+
+      -- A lane-2 note inside window B alone: B runs, A keeps.
+      pass = 'edit'
+      h.tm:addEvent(note(1, 840, 67, { endppq = 900, lane = 2 })); h.tm:flush()
+      t.eq(lastRan[720], 'edit', 'fixture check: window B ran this pass')
+      t.eq(lastRan[240], 'setup', 'fixture check: window A was kept, so its span is not in the cover')
+
+      t.eq(seatAt(720).val, 20, 'the parked 20 governs B\'s entering edge, not the on-take 100 before A')
+      assertParity(h, 'a kept window\'s parked point feeds a running neighbour == full re-derive')
+      generators.kinds.ccFlat = nil
+    end,
+  },
+
+  {
+    -- The pb twin of the case above. pb's base reads the parked list and mm's pb index as two covers,
+    -- so the parked point has to survive its own list's cover to govern. Hosts sit on lane 2 and the
+    -- dirt on lane 3: a lane-1 edit would set the detune hold and run every window right of it.
+    name = 'continuous gate: a pb parked in a kept window governs a running neighbour\'s entering edge',
+    run = function(harness)
+      local function centsToRaw(cents) return util.round(cents * 8192 / 200) end   -- default 2-semitone range
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0,   chan = 1, evType = 'pb', val = centsToRaw(100), cents = 100, shape = 'step' },
+        { ppq = 300, chan = 1, evType = 'pb', val = centsToRaw(20),  cents = 20,  shape = 'step' },
+      } } }
+      local pass, lastRan = 'setup', {}   -- window start -> the pass that last ran it
+      generators.kinds.pbFlat = {
+        expand = function(host)
+          lastRan[host.window[1]] = pass
+          return { notes = {}, delta = {
+            { ppq = host.window[1],      val = 0,  shape = 'step' },
+            { ppq = host.window[1] + 60, val = 10, shape = 'step' },
+            { ppq = host.window[2],      val = 0,  shape = 'step' },
+          } }
+        end,
+        mode = 'augment', dest = 'pb', label = 'PbFlat', defaults = {}, fields = {},
+      }
+      local function wireAt(ppq)
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and c.chan == 1 and c.ppq == ppq then return c end
+        end
+      end
+
+      -- Authored pb: 100 cents before either window, 20 inside window A [240,480). B is [720,960).
+      h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'pbFlat' } } })); h.tm:flush()
+      h.tm:addEvent(note(1, 720, 64, { endppq = 960, lane = 2, fx = { { kind = 'pbFlat' } } })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      local parked = h.tm:getChannel(1).parked.pb
+      t.truthy(#parked == 1 and parked[1].ppq == 300, 'fixture check: window A parks the authored 20')
+      t.eq(wireAt(720).val, centsToRaw(20), 'fixture check: an ungated pass enters window B at 20')
+
+      -- A lane-3 note inside window B alone: B runs, A keeps.
+      pass = 'edit'
+      h.tm:addEvent(note(1, 840, 67, { endppq = 900, lane = 3 })); h.tm:flush()
+      t.eq(lastRan[720], 'edit', 'fixture check: window B ran this pass')
+      t.eq(lastRan[240], 'setup', 'fixture check: window A was kept, so its span is not in the cover')
+
+      t.eq(wireAt(720).val, centsToRaw(20), 'the parked 20 governs B\'s entering edge, not the 100 before A')
+      assertParity(h, 'a kept window\'s parked pb feeds a running neighbour == full re-derive')
+      generators.kinds.pbFlat = nil
+    end,
+  },
+
   {
     name = 'seat gate: detune closure keeps out-of-closure absorbers; a cascade nudge reseats via the walk emission',
     run = function(harness)

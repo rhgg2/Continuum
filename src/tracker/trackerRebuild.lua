@@ -844,6 +844,7 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   for _, spec in ipairs(parkedPbs) do
     util.add(rendered, util.assign(util.clone(spec), { cents = spec.val }))
   end
+  util.sortByPPQ(rendered)   -- pbBaseFor covers the parked list, and a cover bisects
   installParked('pb', rendered)
   return parkedPbs
 end
@@ -1028,9 +1029,12 @@ local function basePoint(ppq, val, evt)
   return { ppq = ppq, val = val, shape = evt.shape or 'step', tension = evt.tension }
 end
 
+-- The covers of the parked pbs and the index's authored ones, parked winning at a shared ppq; see
+-- § Span-covered fx scans
+--pre: parked.pb is in ppq order, as parkPbs installs it
 local function pbBaseFor(chan, spanSet)
   local base, seen = {}, {}
-  for _, evt in ipairs(frame.channels[chan].parked.pb or {}) do
+  for _, evt in ipairs(coverOf(frame.channels[chan].parked.pb, spanSet)) do
     util.add(base, basePoint(evt.ppq, evt.cents, evt))
     seen[evt.ppq] = true
   end
@@ -1049,20 +1053,16 @@ local function pbBaseFor(chan, spanSet)
   return base
 end
 
+-- The cover of each cc column's whole population, parked half included; see § Span-covered fx scans
+--pre: the park stage has run: parked ccs are unlinked from, and have, a column
+--post: each base is in ppq order
 local function ccBasesFor(chan, spanSet)
-  local bases, seen = {}, {}
-  for _, evt in ipairs(frame.channels[chan].parked.ccs or {}) do
-    util.bucket(bases, evt.cc, basePoint(evt.ppq, evt.val, evt))
-    seen[util.key(evt.cc, evt.ppq)] = true
-  end
-  for cc, col in pairs(frame.channels[chan].onTake.ccs) do
-    for _, evt in ipairs(coverOf(col.events, spanSet)) do
-      if not seen[util.key(cc, evt.ppq)] then
-        util.bucket(bases, cc, basePoint(evt.ppq, evt.val, evt))
-      end
+  local bases = {}
+  for cc in pairs(frame.channels[chan].onTake.ccs) do
+    for _, evt in ipairs(coverOf(frame.authoredCC(chan, cc), spanSet)) do
+      util.bucket(bases, cc, basePoint(evt.ppq, evt.val, evt))
     end
   end
-  for _, base in pairs(bases) do util.sortByPPQ(base) end
   return bases
 end
 

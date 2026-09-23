@@ -1308,13 +1308,25 @@ before it is not a member. A member is handed over entire, sounding to its lane 
 `docs/generators.md` § Hosts and membership.
 
 `pbBaseFor` / `ccBasesFor` build the absolute authored base (ppq-keyed,
-logical) covering only the caller's merged host windows, not the whole channel: every read of
-the base — `channelStreams`' slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so
-the cover is exact there and the scan is never O(channel). Parked events are authoritative at
-their ppq (deduped against the cover); the maintained pb index is raw-sorted, and since pbs carry
-no delay and swing is monotone, the raw-frame cover equals the logical-frame cover — spans convert
-via `time:fromLogical` before the walk. "Authored" means the cents sidecar is present (seats and
-foreign pbs carry none).
+logical) over the caller's merged host windows: every read of the base — `channelStreams`'
+slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so the cover is exact there.
+A parked point governs an entering edge exactly as an on-take one does, so parked windows the
+caller is not running still feed the base where they border one it is.
+
+A cc base is the cover of the column's whole population, `frame.authoredCC` (§ Lane occupancy):
+by the time fx expansion runs, the park stage has unlinked every parked cc from its column and
+spliced every restore back, so the union is exact. Building it can cost O(column), which the view
+pays each frame for the same union regardless.
+
+pb cannot take that route: its column is projected in § Absorber reconciliation, after fx
+expansion, so here it is still the previous pass's. pb instead unions two covers, one of the
+parked list and one of the maintained pb index, the parked point winning at a shared ppq. Each
+cover holds its own list's governing and closing points, so the union holds the later governor
+and the earlier closer, which are the whole population's. The parked list is ppq-sorted as the
+park stage installs it. The index is raw-sorted, and since pbs carry no delay and swing is
+monotone, the raw-frame cover equals the logical-frame cover — spans convert via
+`time:fromLogical` before the walk.
+"Authored" means the cents sidecar is present (seats and foreign pbs carry none).
 
 `nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane population (§ Lane occupancy), so
 a parked host has a successor despite being off-take, and a parked successor is the

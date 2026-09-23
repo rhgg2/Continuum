@@ -4,6 +4,14 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-23** — The fx pb and cc bases cover the parked half over the running hosts' windows, as
+  they cover the on-take half. Over walking the parked lists whole, which was cheap but let the base
+  reach past what any read of it needs. A cc base is the cover of the column's whole population,
+  `frame.authoredCC`: the union costs O(column) on a memo miss, which the view pays each frame for
+  the same union. pb unions a cover of the ppq-sorted parked list with a cover of mm's pb index,
+  since its column projects only after fx expansion. Either way a point parked in a kept window
+  still governs a running neighbour's entering edge.
+
 - **2026-09-22** — Parked ccs return to the take under their parked uuid, through the same
   `keepUuid` claim as notes, and re-enter their column by `spliceInto`. Over a freshly minted uuid,
   which left the restored cell naming an event mm no longer held, so an edit through it was lost.
