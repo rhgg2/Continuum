@@ -25,6 +25,10 @@
 -- position and delay moves a raw onset off its row, so between them the two readings come apart.
 -- See docs/trackerManager.md § Tail walk.
 --
+-- The case after them asks the same of a note mm holds no ceiling for. With no `endppqL` stamp there
+-- is no authored end to draw, so the column shows the lane bound in its place -- and that is a row
+-- like every other term, not the wire bound it realises to. See docs/trackerManager.md § Columns.
+--
 -- The next case pins how far the one expression reaches. `overlap` is a term of the lane bound, so a
 -- note carrying one is drawn past its lane successor -- and the fx window its chain runs in closes on
 -- that same number. The tail walk and the window census are two readers of one statement.
@@ -243,6 +247,29 @@ return {
 
       t.eq(evt.endppqC, evt.ppq + 1, 'the lane bound is the row after the onset')
       t.eq(wire.endppq, wire.ppq + 1, 'and the wire bound the tick after the realised onset')
+    end,
+  },
+
+  {
+    -- The tail is seeded straight into mm without an `endppqL` stamp, its raw end at 1440 (a period
+    -- boundary, so the same number in both frames). Its lane successor at row 1140 clips it, so what
+    -- the column draws is that row, and only the wire carries the swung 1148.
+    name = "an uncached tail is drawn to its lane bound's row, not to the wire bound",
+    run = function(harness)
+      local h = harness.mk{ config = c55.config, data = c55.data, seed = { notes = {
+        { ppq = 0,    endppq = 1440, ppqL = 0, chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+        { ppq = 1148, endppq = 1332, ppqL = 1140, endppqL = 1320,
+          chan = 1, pitch = 67, vel = 100, lane = 1, uuid = 2 },
+      } } }
+
+      local realised = h.tm:fromLogical(1, 1140)
+      t.truthy(realised ~= 1140, 'fixture check: the swing bites at the clipping row')
+      t.eq(wireNote(h, 1, 60).endppqL, nil, 'fixture check: mm holds no ceiling for the tail')
+      local tail = authoredAt(h, 1, 0)
+      t.eq(tail.endppqC, 1140, "fixture check: the lane bound is the successor's row")
+
+      t.eq(tail.endppq, 1140, 'the column draws the tail to that row')
+      t.eq(wireNote(h, 1, 60).endppq, realised, 'and the wire bound is the row realised')
     end,
   },
 
