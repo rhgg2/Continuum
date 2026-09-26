@@ -707,12 +707,12 @@ mid-pass emission collapses on the same terms as an edit's seeds.
 
 ### Two movements
 
-**The pass reconstructs intent, then reauthors raw from it.** Reconstruction
-settles which events exist, where they sit in the logical frame, and what they
-mean. Reauthoring derives the realisation frame from that and reconciles it
-into mm. The pipeline's order is already the cut: internals, the CC walk, extra
-columns, externals, the sample stamp, region park, PA and fx expansion
-reconstruct; tails, pbs and PCs reauthor.
+**The pass reconstructs a take's intent, then emits the take from it.**
+Reconstruction settles which authored events exist, where they sit in the
+logical frame, and what they mean. Emission settles which of them sound,
+allocates what sounds among each channel's contended media, and reconciles the
+result into mm. Every reconstruction stage runs before any emission stage
+(§ The pipeline).
 
 `projectEvent` is the hinge between the frames. It takes an mm-shaped record,
 overwrites `ppq` with `ppqL` and drops the logical sidecar, so a column cell is
@@ -720,16 +720,24 @@ logical-framed while an index entry is raw-framed and carries logical alongside
 (§ Logical projection). `colEvt` links the two, and the pass is the only thing
 that holds both.
 
-There are three reauthoring stages because a MIDI channel offers three media
-its notes contend for: one raw timeline on which two same-pitch notes cannot
-overlap, one pitch-bend stream, and one program change. An axis earns a
-reauthoring stage exactly when its realisation depends on other events.
-Velocity is per-note and CC lanes are independent streams, so neither needs
-one.
+The **sounding set** is the authored events emission sends to mm, together
+with fx expansion's derived events. Lane bounds, host windows, parking and fx
+expansion settle it in that order, each reading what the one before settled.
+
+**Allocation** divides a channel's contended media among the sounding set, one
+stage per medium. A MIDI channel offers three media its notes contend for:
+- one raw timeline on which two same-pitch notes cannot overlap, which the tail
+  walk allocates;
+- one pitch-bend stream, which absorber reconciliation allocates;
+- one program change, which PC synthesis allocates.
+
+An axis earns an allocation stage exactly when its realisation depends on other
+events. Velocity is per-note and CC lanes are independent streams, so neither
+needs one.
 
 Contention fixes the scope. A shared medium can be allocated only once every
-claimant is known, so reauthoring runs after all reconstruction and over a
-whole channel. Dirt is channel-keyed for the same reason (§ Derivation dirt:
+claimant is known, so allocation runs after the sounding set is settled and
+over a whole channel. Dirt is channel-keyed for the same reason (§ Derivation dirt:
 the gated spine).
 
 The movements divide the fields a stage may author, and stages straddle.
@@ -737,7 +745,7 @@ The movements divide the fields a stage may author, and stages straddle.
 of a walk it performs anyway; `rebuildPbs` seats detune before it synthesises
 pb, which are pitch's second and third rungs (`docs/tuning.md`).
 
-Every write one stage makes into another's records belongs to reauthoring, and
+Every write one stage makes into another's records belongs to emission, and
 the order carries dependencies the signatures do not state. The specs `fxOut`
 carries in `fxOut.notes` are the same tables the tail walk takes as `extras` and
 writes raw onsets and clipped ends into, and `rebuildPbs` reads the moved
@@ -762,7 +770,7 @@ seated event in place, so one list governs the cues, the stash and the seat.
 ### The pipeline
 
 The stages run in this order, each stage named for the helper that
-runs it.
+runs it. The reconstruction stages:
 
 1. **Partition and internal lanes** (`rebuildInternals`)
 1. **CC walk** (`rebuildCCs`)
@@ -771,6 +779,9 @@ runs it.
 1. **Sample stamp** (`stampSamples`)
 1. **Stash seat** (`seatStash`)
 1. **PA dispatch** (`rebuildPA`)
+
+The emission stages:
+
 1. **Lane bounds** (`clipTails`)
 1. **Note host clips and windows** (`onTakeFxHosts`, `buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)

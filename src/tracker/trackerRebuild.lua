@@ -1,4 +1,4 @@
--- The derivation engine: one gated pass reconstructs intent from mm, then reauthors raw from it.
+-- The derivation engine: one gated pass reconstructs intent from mm, then emits the take from it.
 -- One door: rebuild.pipeline runs a pass. See docs/trackerManager.md § Rebuild for the model.
 
 local util       = require 'util'

@@ -1,6 +1,6 @@
 # Intent and emission — the frame as a take's intent
 
-> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 1 (PA intent).
+> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 2 (pb and pc columns in the CC walk).
 
 **The frame holds a take's intent — every authored event in its logical column, sounding or not. A
 pass reconstructs that intent from mm and the stash, then emits the take from it; parking, fx
@@ -28,19 +28,7 @@ expansion, pb detune and absorbers all belong to emission.**
 
 ## Emission
 
-1. **Emission** settles which intent sounds, allocates what sounds among each channel's contended
-   media, and reconciles the result into mm (`docs/trackerManager.md` § Two movements).
-
-1. The **sounding set** is the authored events emission sends to mm, together with fx expansion's
-   derived events.
-
-1. Settling the sounding set runs lane bounds, host windows, parking and fx expansion in that
-   order, each reading what the one before settled (`docs/trackerManager.md` § The pipeline).
-
-1. **Allocation** divides a channel's three contended media among the sounding set:
-   - the tail walk allocates the raw note timeline;
-   - absorber reconciliation allocates the pb stream;
-   - PC synthesis allocates the program change.
+Moved to `docs/trackerManager.md` § Two movements.
 
 ## Emission's output
 
@@ -101,26 +89,7 @@ expansion, pb detune and absorbers all belong to emission.**
 
 ## The stages
 
-1. Every pipeline stage belongs to reconstruction or to emission, and every reconstruction stage
-   runs before any emission stage.
-
-1. The reconstruction stages, in order:
-   1. Partition and internal lanes (`rebuildInternals`)
-   1. CC walk (`rebuildCCs`)
-   1. Extra columns (`rebuildExtraColumns`)
-   1. Externals (`rebuildExternals`)
-   1. Sample stamp (`rebuildSamples`)
-   1. Stash seat (`seatStash`)
-   1. PA dispatch (`rebuildPA`)
-
-1. The emission stages, in order:
-   1. Lane bounds (`clipTails`)
-   1. Note host clips and windows (`onTakeFxHosts`, `buildFxWindows`)
-   1. Parking (`rebuildRegionPark`)
-   1. Fx expansion (`rebuildFx`)
-   1. Tail walk (`rebuildTails`)
-   1. Absorber reconciliation (`rebuildPbs`)
-   1. PC synthesis (`rebuildPCs`)
+Moved to `docs/trackerManager.md` § The pipeline.
 
 ## Open
 
