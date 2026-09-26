@@ -906,10 +906,10 @@ interval dirt visits just the seeded uuids.
 
 ### Note host clips and windows
 
-The pass opens by seating the stash's parked notes in their lanes and rendering
-the parked ccs, pb and pas. The frame carries the previous pass's, where a park
+The pass opens by seating the stash's parked notes and ccs in their columns.
+The frame carries the previous pass's, where a park
 edit — a delete, a chain removed, a freeze — has already landed in the
-document, so every lane answers to the document from here on. The lane pass then bounds every
+document, so every column answers to the document from here on. The lane pass then bounds every
 lane of every dirty channel (§ The lane pass).
 
 `onTakeFxHosts` names the on-take note hosts of every channel, each carrying its
@@ -943,8 +943,8 @@ hosting its own discrete-replace kind (note-host replace parks the
 host; see `docs/generators.md` § Hosts and membership). The
 prior parked set splits into still-covered carry-forward and restores
 that return to the take unrealised until the same stage's commit
-lands them, keeping their uuid and fx — a note by clearing its flag
-where it sits, a cc by re-entering its column. A
+lands them, keeping their uuid and fx — each by clearing its flag
+where it sits. A
 restored cc lands on the exact ppq of the fill seat the wider window
 left on the take; under uuid addressing the two are distinct events, so
 the fill reconcile deletes that seat by its own handle and the authored
@@ -970,8 +970,8 @@ own host — the same reading `rebuildFx` takes.
 A cc's park and restore write no dirt seed: the fill's end seat carries
 the value the authored stream holds there, parked members included, so
 nothing downstream reads a changed base — the fill stands in for the
-point event's missing tail, and restore re-seats an unrealised
-projection for the view.
+point event's missing tail, and restore flips the seated projection
+back onto the take.
 A `pa` rides its host note, so it parks exactly when the host does:
 deleted from the take (silent — a stale PA against a fresh derived
 stream is meaningless; the generator owns any new realisation PAs),
@@ -1318,10 +1318,9 @@ slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so the cover
 A parked point governs an entering edge exactly as an on-take one does, so parked windows the
 caller is not running still feed the base where they border one it is.
 
-A cc base is the cover of the column's whole population, `frame.authoredCC` (§ Lane occupancy):
-by the time fx expansion runs, the park stage has unlinked every parked cc from its column and
-spliced every restore back, so the union is exact. Building it can cost O(column), which the view
-pays each frame for the same union regardless.
+A cc base is the cover of the column's own events, parked ones included (§ Lane occupancy): by the
+time fx expansion runs, the park stage has seated every parked cc and flipped every restore, so the
+population is exact.
 
 pb cannot take that route: its column is projected in § Absorber reconciliation, after fx
 expansion, so here it is still the previous pass's. pb instead unions two covers, one of the
@@ -1374,13 +1373,12 @@ column's and the cell carry (§ Note-lane renewal) holds for every lane, parked 
 wants the take alone skips flagged events, and `frame.parkedNotes(chan)` collects a channel's
 flagged ones.
 
-A cc column keeps its parked events apart and takes a union instead: `frame.authoredCC(chan, ccNum)`
-and `tm:authoredCCs`, over parked buckets keyed on `cc`. The union is memoised against the two lists
-it joins, and each is replaced whole when its contents change, so the union inherits their identity
-— and the memo spans passes, since a parked list whose contents held is kept rather than re-minted.
-pb is one stream per channel, so its parked list is already the column's own and
-`frame.authoredPb` skips the bucketing. Order for both is ppq alone, there being no tie-break to
-preserve. A channel with no
+A cc column seats its parked events the same way, and `tm:authoredCCs` hands back each column's own
+`events` table. pb keeps its parked events apart and takes a union instead: `frame.authoredPb` joins
+the channel's pb column to its parked list. The union is memoised against the two lists it joins,
+and each is replaced whole when its contents change, so the union inherits their identity — and the
+memo spans passes, since a parked list whose contents held is kept rather than re-minted. Order is
+ppq alone, there being no tie-break to preserve. A channel with no
 pb column and nothing parked is answered with nil, which is what the renderer tests to decide
 whether the channel shows a pb column at all — a parked pb keeps the column its authored breakpoint
 is displayed in.
@@ -1401,14 +1399,13 @@ population and a parked event constrains a move like any other. The chan-wide sa
 skips flagged events. Two notes of one pitch on different lanes passing each other is what lanes
 are for.
 
-The frame owns both sides. A parked note carries with its lane, and a wholesale channel, whose lanes
-are re-read from mm, has its parked notes seated again from the stash at the pass head — so the clip
-reads a true lane before the park stage touches it. Every channel carries its three parked lists
-across the pass boundary, dirty or clean, since those events are off-take and a wholesale mm re-read
-has no claim on them. Every reader of those runs after the park stage, so a re-mint would cost
-nothing but identity, which is the whole of what the memo is keyed on. The buckets the seeks and
-unions read are memoised against the list they index, and `installParked` replaces that list
-whenever its contents change, so a stale index cannot be reached.
+The frame owns both sides. A parked note or cc carries with its column, and a wholesale channel,
+whose columns are re-read from mm, has them seated again from the stash at the pass head — so the
+clip reads a true lane before the park stage touches it. Every channel carries its parked pb and pa
+lists across the pass boundary, dirty or clean, since those events are off-take and a wholesale mm
+re-read has no claim on them. Every reader of those runs after the park stage, so a re-mint would
+cost nothing but identity, which is the whole of what the memo is keyed on. `installParked` replaces
+a list whenever its contents change, so a stale union cannot be reached.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column from
 mm — `rebuildInternals` routes it to the fx stage's existing set instead.
@@ -1660,25 +1657,28 @@ table — the read-only walks (`enumerateHosts`, `channelStreams`,
 `onsetsIn`) do not care, but the park scan did, which is why a note
 carry stores its lane index and resolves the table at unlink time.
 
-Parked notes obey the same rule, seated in the lane, by a different route.
-Nothing owns them the way a mutator owns a lane: `seatParkedNotes` seats
-the stash every pass, twice — once at the pass head from the document, once
-from the park stage's reconciled set. So the discipline is a comparison
-rather than an enumeration. A seated note whose spec and lane held stays
-where it is; one whose spec moved, or that the stash no longer holds, is
-dropped and its lane renewed; a spec with nothing seated is spliced in.
-`endppqC` and the flag are the seat's own and stay out of the comparison,
-the lane pass writing the bound through `setEvent` as for any column event.
+Parked notes and ccs obey the same rule, seated in their columns, by a
+different route. Nothing owns them the way a mutator owns a column:
+`seatParked` seats the stash every pass, twice — once at the pass head from
+the document, once from the park stage's reconciled set. So the discipline
+is a comparison rather than an enumeration, a seat meeting its spec by park
+identity (§ Park identity). A seated event whose spec held stays where it
+is; one whose spec moved, or that the stash no longer holds, is dropped and
+its column renewed; a spec with nothing seated is spliced in. `endppqC` and
+the flag are the seat's own and stay out of the comparison, the lane pass
+writing the bound through `setEvent` as for any column event. A restore
+clears the flag through `setEvent` too, which renews a cc column as it does
+a lane.
 
-The parked cc, pb and pa lists take the rule as a whole-list comparison.
+The parked pb and pa lists take the rule as a whole-list comparison.
 `installParked` builds each channel's candidate list and installs it only
 where the contents differ from what stands; otherwise the standing list, and
 the events in it, carry. The match is positional, since a population that
 held arrives in the stash's own order from either render, and a reordering
-can only cost a shed. The rule reaches cc and pb columns through the union
+can only cost a shed. The rule reaches the pb column through the union
 (§ Lane occupancy).
 
-The park stage takes the notes it seated from `seatParkedNotes`'s answer
+The park stage takes the notes it seated from `seatParked`'s answer
 rather than from its own specs, since a held spec keeps the event already
 standing. The fx share of parked originals must: gridPane matches those
 events by identity to suppress them under their host's ghost.
@@ -1811,8 +1811,9 @@ wins the disagreement.
 
 ## Park identity
 
-`fxParked` is one flat list holding every parked type, and `findParked`
-is what an edit to a parked event resolves through. Notes key by `uuid`;
+`fxParked` is one flat list holding every parked type, and `frame.parkKey`
+is its identity: an edit to a parked event resolves through it, and so does
+the pass matching a seated event to its spec. Notes key by `uuid`;
 everything else by `(evType, chan, cc, pitch, ppq)`.
 
 `pitch` is there for PAs, which are the only type that can put two

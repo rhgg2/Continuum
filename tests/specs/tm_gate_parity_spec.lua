@@ -77,7 +77,8 @@ local function projectFrame(tm)
     f.pb = projCol(c.pb); f.pc = projCol(c.pc); f.at = projCol(c.at)
     local parkedNotes = require('harness').parkedNotes(tm, chan)
     f.parked.notes = #parkedNotes > 0 and projCol(parkedNotes) or nil
-    f.parked.ccs   = channel.parked.ccs   and projCol(channel.parked.ccs)   or nil
+    local parkedCCs = require('harness').parkedCCs(tm, chan)
+    f.parked.ccs   = #parkedCCs > 0 and projCol(parkedCCs) or nil
     frame[chan] = f
   end
   return frame
@@ -352,7 +353,7 @@ return {
       h.tm:addEvent(note(1, 720, 64, { endppq = 960, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
       h.tm:rebuild(true)   -- settle creation-pass identity
 
-      local parked = h.tm:getChannel(1).parked.ccs
+      local parked = require('harness').parkedCCs(h.tm, 1)
       t.truthy(#parked == 1 and parked[1].ppq == 300, 'fixture check: window A parks the authored 20')
       t.eq(seatAt(720).val, 20, 'fixture check: an ungated pass enters window B at 20')
 
@@ -550,7 +551,7 @@ return {
       h.tm:addEvent(note(1, 240, 60, { endppq = 480, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
       h.tm:addEvent(note(1, 720, 64, { endppq = 960, lane = 2, fx = { { kind = 'ccFlat' } } })); h.tm:flush()
       h.tm:rebuild(true)   -- settle creation-pass identity
-      local parked = h.tm:getChannel(1).parked.ccs
+      local parked = require('harness').parkedCCs(h.tm, 1)
       t.truthy(#parked == 1 and parked[1].ppq == 300, 'fixture check: window A parks the authored 20')
 
       probe.pass = 'edit'

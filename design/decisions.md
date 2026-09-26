@@ -8,7 +8,8 @@ not eight or ten.
   parked list unioned with the lane on read. Parking and restore become a flip within one population,
   so the lane is its own carry key and the union, its memo and the lane buckets go; a reader wanting
   the take alone skips the flag. tm's write doors shed the flag, since a clone of a parked cell would
-  otherwise carry it to mm. ccs, pb and pa keep their lists for now.
+  otherwise carry it to mm. ccs followed the same day, a seat meeting its stash spec by park identity
+  since a view-added cc spec has no uuid. pb and pa keep their lists for now.
 
 - **2026-09-23** — The host gate reaches a host along a hold stream when a seed on that stream lies
   in the host's window cover, the same cover its base is built from, open on a side with no

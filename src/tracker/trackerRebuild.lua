@@ -273,7 +273,7 @@ local function spliceChannelCCs(chan)
     local col
     if cell.evType == 'cc' then col = cols.ccs[cell.cc]
     else col = cols[cell.evType] end
-    if col then exciseEvents({ col }, cell.ppqs) end
+    if col then exciseEvents({ col }, cell.ppqs, function(e) return not e.parked end) end
   end
   for _, evt in ipairs(refills) do spliceCcEvent(evt) end
 end
@@ -581,23 +581,30 @@ local function installParked(field, specs, onSeat)
   end
 end
 
--- Seat the parked notes in their own lanes, flagged; a seated event whose spec held keeps its table,
--- so the lane's carry holds. see docs/trackerManager.md § Lane occupancy
---post: fresh result = { [chan] = the channel's parked note events as seated, in specs order }
-local function seatParkedNotes(specs)
+-- Where a parked spec of each seated kind sits: the field its columns live under, and its own column.
+local parkHomes = {
+  note = { field = 'notes', column = function(spec) return ensureLane(spec.chan, spec.lane) end },
+  cc   = { field = 'ccs',   column = function(spec) return ensureCcColumn(spec.chan, 'cc', spec.cc) end },
+}
+
+-- Seat a kind's parked specs in their own columns, flagged; a seated event whose spec held keeps its
+-- table, so the column's carry holds. see docs/trackerManager.md § Lane occupancy
+--post: fresh result = { [chan] = the channel's parked events of kind as seated, in specs order }
+local function seatParked(kind, specs)
+  local home = parkHomes[kind]
   local wanted = frame.newChannels()
   for _, spec in ipairs(specs) do
-    wanted[spec.chan][spec.uuid] = spec
-    ensureLane(spec.chan, spec.lane)
+    wanted[spec.chan][frame.parkKey(spec)] = spec
+    home.column(spec)
   end
   local held = {}
   for chan = 1, 16 do
-    for _, col in ipairs(frame.channels[chan].onTake.notes) do
+    for _, col in pairs(frame.channels[chan].onTake[home.field]) do
       local stale = {}
       for _, evt in ipairs(col.events) do
         if evt.parked then
-          local spec = wanted[chan][evt.uuid]
-          if spec and spec.lane == evt.lane and sameSpec(evt, spec) then held[evt.uuid] = evt
+          local spec = wanted[chan][frame.parkKey(evt)]
+          if spec and not held[spec] and sameSpec(evt, spec) then held[spec] = evt
           else stale[evt] = true end
         end
       end
@@ -611,22 +618,32 @@ local function seatParkedNotes(specs)
   end
   local seated = frame.newChannels()
   for _, spec in ipairs(specs) do
-    local evt = held[spec.uuid]
+    local evt = held[spec]
     if not evt then
       evt = util.assign(util.clone(spec), { parked = true })
-      frame.spliceEvent(spec.chan, spec.lane, evt)
+      frame.spliceInto(home.column(spec), evt)
     end
     util.add(seated[spec.chan], evt)
   end
   return seated
 end
 
-local function installParkedNotes(fxParked)
-  local notes = {}
-  for _, evt in ipairs(fxParked or {}) do
-    if evt.evType == 'note' then util.add(notes, evt) end
+-- The event seated from a parked spec, which a restore flips in place.
+--pre: the spec is seated
+local function seatedOf(spec)
+  local key = frame.parkKey(spec)
+  for _, evt in ipairs(parkHomes[spec.evType].column(spec).events) do
+    if evt.parked and frame.parkKey(evt) == key then return evt end
   end
-  seatParkedNotes(notes)
+end
+
+-- The pass head seats the stash as it stands, which a wholesale channel's fresh columns lack.
+local function seatStash(fxParked)
+  local byKind = { note = {}, cc = {} }
+  for _, spec in ipairs(fxParked or {}) do
+    if byKind[spec.evType] then util.add(byKind[spec.evType], spec) end
+  end
+  for kind, specs in pairs(byKind) do seatParked(kind, specs) end
 end
 
 -- Shared context for the four passes.
@@ -716,10 +733,7 @@ local function parkNotes(stage, onTakeHosts)
   local takeLen = time:length()
   for _, spec in ipairs(restores) do
     -- Restore flips the seated event in place: it is logical, and keeps the parked uuid too.
-    local note
-    for _, evt in ipairs(frame.channels[spec.chan].onTake.notes[spec.lane].events) do
-      if evt.parked and evt.uuid == spec.uuid then note = evt; break end
-    end
+    local note = seatedOf(spec)
     frame.setEvent(note, 'parked', nil)
 
     -- Provisional raw end; the tail clip below fills in endppqC, and rebuildTails
@@ -735,7 +749,7 @@ local function parkNotes(stage, onTakeHosts)
   end
 
   local parkedByHost = {}
-  for _, seated in ipairs(seatParkedNotes(parkedNotes)) do
+  for _, seated in ipairs(seatParked('note', parkedNotes)) do
     for _, evt in ipairs(seated) do util.bucket(parkedByHost, stage.hostFor(evt), evt) end
   end
 
@@ -814,7 +828,7 @@ local function parkCCs(stage)
     if dirt.has(chan) then
       for cc, col in pairs(frame.channels[chan].onTake.ccs) do
         for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, cc)]) do
-          util.add(candidates, { evt = evt, col = col, spec = toParked(evt) })
+          if not evt.parked then util.add(candidates, { evt = evt, col = col, spec = toParked(evt) }) end
         end
       end
     end
@@ -823,14 +837,13 @@ local function parkCCs(stage)
 
   local restoredCCs = {}
   for _, spec in ipairs(restores) do
-    local evt = util.clone(spec)   -- the event is the spec: both are logical
-    frame.spliceInto(ensureCcColumn(spec.chan, 'cc', spec.cc), evt)
+    local evt = seatedOf(spec)   -- flipped in place: the event is the spec, both logical
+    frame.setEvent(evt, 'parked', nil)
     stage.writes.add(fromParked(spec, { keepUuid = true }))
     util.add(restoredCCs, evt)
   end
 
-  for _, spec in ipairs(parkedCCs) do ensureCcColumn(spec.chan, 'cc', spec.cc) end
-  installParked('ccs', parkedCCs)
+  seatParked('cc', parkedCCs)
   return parkedCCs, restoredCCs
 end
 
@@ -1111,12 +1124,12 @@ local function pbBaseFor(chan, spanSet)
 end
 
 -- The cover of each cc column's authored events; see § Span-covered fx scans
---pre: the park stage has run: parked ccs are unlinked from, and have, a column
+--pre: the park stage has run: parked ccs are seated in their columns
 --post: each base is in ppq order
 local function ccBasesFor(chan, spanSet)
   local bases = {}
-  for cc in pairs(frame.channels[chan].onTake.ccs) do
-    for _, evt in ipairs(pointsFor(frame.authoredCC(chan, cc), spanSet)) do
+  for cc, col in pairs(frame.channels[chan].onTake.ccs) do
+    for _, evt in ipairs(pointsFor(col.events, spanSet)) do
       util.bucket(bases, cc, basePoint(evt.ppq, evt.val, evt))
     end
   end
@@ -1215,7 +1228,7 @@ local function classifyHosts(chan, hosts)
           local lo2, hi2 = boundsFor(index.raw(chan).pbs, toRawSpan(chan, host.window), isAuthoredPb)
           lo, hi = math.max(lo1, lo2), math.min(hi1, hi2)
         else
-          lo, hi = boundsFor(frame.authoredCC(chan, target), host.window)
+          lo, hi = boundsFor(frame.channels[chan].onTake.ccs[target].events, host.window)
         end
         for _, ppq in ipairs(seedsOn[target]) do
           if ppq >= lo and ppq <= hi then return true end
@@ -2833,7 +2846,7 @@ function rebuild.pipeline(context)
   rebuildExtraColumns(sources.extraColumns, sources.paramAutomation)
   rebuildExternals(external)
   if cm:get('trackerMode') then rebuildSamples() end
-  installParkedNotes(sources.fxParked)
+  seatStash(sources.fxParked)
 
   dirt.tails.clear()
   for chan = 1, 16 do if dirt.has(chan) then clipTails(chan) end end

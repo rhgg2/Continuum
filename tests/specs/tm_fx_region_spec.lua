@@ -874,7 +874,7 @@ return {
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       generators.kinds.ccRep = nil
-      local parked = h.tm:getChannel(1).parked.ccs
+      local parked = require('harness').parkedCCs(h.tm, 1)
       t.eq(#parked, 1, 'the covered cc parks')
       t.eq(parked[1].chan, 1, 'the render cell knows its channel')
       t.eq(parked[1].ppq, 60, 'the render cell carries the logical onset (the backing key)')
@@ -1013,13 +1013,14 @@ return {
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
 
-      h.tm:assignParked(h.tm:getChannel(1).parked.ccs[1], { val = 81 }); h.tm:flush()
+      local parkedCCs = require('harness').parkedCCs
+      h.tm:assignParked(parkedCCs(h.tm, 1)[1], { val = 81 }); h.tm:flush()
       t.eq(stashOfType(h, 'cc')[1].val, 81, 'the cc stash carries the edited value')
-      t.eq(h.tm:getChannel(1).parked.ccs[1].val, 81, 'the render cell shows the edit')
+      t.eq(parkedCCs(h.tm, 1)[1].val, 81, 'the render cell shows the edit')
 
-      h.tm:deleteParked(h.tm:getChannel(1).parked.ccs[1]); h.tm:flush()
+      h.tm:deleteParked(parkedCCs(h.tm, 1)[1]); h.tm:flush()
       generators.kinds.ccRep = nil
-      t.eq(#h.tm:getChannel(1).parked.ccs, 0, 'the parked cc is gone from the render union')
+      t.eq(#parkedCCs(h.tm, 1), 0, 'the parked cc is gone from its column')
       t.eq(#stashOfType(h, 'cc'), 0, 'the cc stash empties')
     end,
   },
@@ -2775,10 +2776,12 @@ return {
       local uuid = h.tm:getChannel(1).onTake.notes[1].events[1].uuid
       t.eq(#stashOfType(h, 'cc'), 2, 'sine parks both authored cc off-take')
       -- The authored cc parked out of it and the summed seats route out of columns, so cc10 shows
-      -- nothing before the freeze. Whether the emptied column shell survives its last event is
-      -- representation rather than model -- nothing states it -- so read the content, not the shell.
+      -- nothing on the take before the freeze. Whether the emptied column shell survives its last
+      -- event is representation rather than model -- nothing states it -- so read the content.
       local live = h.tm:getChannel(1).onTake.ccs[10]
-      t.eq(#((live and live.events) or {}), 0, 'live, nothing on cc10 is on screen -- seats and authored both off')
+      local onTake = 0
+      for _, e in ipairs((live and live.events) or {}) do if not e.parked then onTake = onTake + 1 end end
+      t.eq(onTake, 0, 'live, nothing on cc10 is on the take -- seats route out, authored parked')
 
       t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
 

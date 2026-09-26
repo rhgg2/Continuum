@@ -158,4 +158,18 @@ function harness.parkedNotes(tm, chan)
   return out
 end
 
+-- A channel's parked ccs, read off its cc columns in cc order, where they sit flagged among the
+-- on-take ones.
+function harness.parkedCCs(tm, chan)
+  local cols, ccNums, out = tm:authoredCCs(chan), {}, {}
+  for ccNum in pairs(cols) do ccNums[#ccNums + 1] = ccNum end
+  table.sort(ccNums)
+  for _, ccNum in ipairs(ccNums) do
+    for _, evt in ipairs(cols[ccNum]) do
+      if evt.parked then out[#out + 1] = evt end
+    end
+  end
+  return out
+end
+
 return harness

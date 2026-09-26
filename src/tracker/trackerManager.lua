@@ -17,9 +17,9 @@
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: frame.channels[chan] = { chan, onTake = the columns, parked = the ccs, pb and pas a replace window took off the take }
+--shape: frame.channels[chan] = { chan, onTake = the columns, parked = the pb and pas a replace window took off the take }
 --shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
---shape: a note lane also seats its parked notes, flagged parked = true; every other colEvent is on the take
+--shape: a note lane or cc column also seats its parked events, flagged parked = true; every other colEvent is on the take
 --shape: column =   { events = [colEvent, ...], [cc = ccNum] }
 --shape: colEvent = the mm event's own fields (chan, uuid, metadata), logically framed, by kind:
 --shape:   note     { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], [intentCents] }
@@ -35,7 +35,8 @@
 --shape:   cc   { evType='cc', chan, cc, ppq, val, shape, [tension] }
 --shape:   pb   { evType='pb', chan, ppq, val (=cents), shape, [tension] }
 --shape:   pa   { evType='pa', chan, pitch, ppq, vel, [rpb] }
---shape: parked =  { ccs, pb, pa }: flat lists of those specs made render-ready -- a pb gains cents
+--shape: parked =  { pb, pa }: flat lists of those specs made render-ready -- a pb gains cents
+--shape: a seated parked cc = its spec plus parked = true
 --shape: a seated parked note = its spec plus parked = true and endppqC (the lane bound; endppq stays the authored ceiling)
 
 --shape: fxRegions = [ { uuid = 'fxr-N', chan (0 = global), ppq, endppq, fx = [stage, ...] } ]: a logical span; storage order is lane precedence among overlapping regions
@@ -146,10 +147,11 @@ do
   function frame.markRenewed(col) renewed[col] = true end
 
   -- Field write on a seated event: renew only where the value actually moves, or the tail walk's
-  -- restamp renews every bounded lane every pass. Events are self-describing, so (chan, lane) is here.
+  -- restamp renews every bounded lane every pass. Events are self-describing, so their column is here.
   function frame.setEvent(evt, field, value)
     if evt[field] == value then return end
-    frame.renewLane(evt.chan, evt.lane)
+    if evt.evType == 'cc' then frame.renewColumn(frame.channels[evt.chan].onTake.ccs[evt.cc])
+    else frame.renewLane(evt.chan, evt.lane) end
     evt[field] = value
   end
 
@@ -165,20 +167,12 @@ do
     frame.spliceInto(frame.channels[chan].onTake.notes[lane], evt)
   end
 
-  -- A channel's parked list bucketed by the field naming its column: 'lane' for notes, 'cc' for ccs.
-  -- see docs/trackerManager.md § Lane occupancy
-  --invariant: each parked bucket holds its column's events in ppq order
-  local parkedBuckets = setmetatable({}, { __mode = 'k' })   -- parked list -> its column buckets
-  local noParked = {}
-  local function bucketedParked(parked, field)
-    local buckets = parkedBuckets[parked]
-    if not buckets then
-      buckets = {}
-      for _, evt in ipairs(parked) do util.bucket(buckets, evt[field], evt) end
-      for _, bucket in pairs(buckets) do util.sortByPPQ(bucket) end
-      parkedBuckets[parked] = buckets
-    end
-    return buckets
+  -- The stash's identity for a spec, or for the event seated from it; lane is deliberately absent.
+  -- see docs/trackerManager.md § Park identity
+  --invariant: a parked note is keyed by uuid, every other type by (evType, chan, cc, pitch, ppq)
+  function frame.parkKey(spec)
+    if spec.evType == 'note' then return spec.uuid end
+    return util.key(spec.evType, spec.chan, spec.cc, spec.pitch, spec.ppq)
   end
 
   -- A channel's parked notes, collected off its lanes, where they sit flagged among the on-take ones.
@@ -193,9 +187,9 @@ do
     return out
   end
 
-  -- A column's whole authored population: on-take events plus parked ones off the take, memoised
+  -- The pb stream's whole authored population: on-take events plus parked ones off the take, memoised
   -- against those two lists, each replaced whole on change. see docs/trackerManager.md § Lane occupancy
-  local unions = setmetatable({}, { __mode = 'k' })   -- on-take events -> parked bucket -> the union
+  local unions = setmetatable({}, { __mode = 'k' })   -- on-take events -> parked list -> the union
   local function memoUnion(events, parked, less)
     if #parked == 0 then return events end
     local byParked = unions[events]
@@ -212,16 +206,6 @@ do
     return union
   end
 
-  --pre: the cc column exists -- renderUnion mints one for every parked cc
-  --post: unsafe result = the cc column's whole population in ppq order
-  --post: (nothing parked on the column) → result is the column's own events table
-  function frame.authoredCC(chan, ccNum)
-    local channel = frame.channels[chan]
-    local parked  = bucketedParked(channel.parked.ccs, 'cc')[ccNum] or noParked
-    return memoUnion(channel.onTake.ccs[ccNum].events, parked, ppqLess)
-  end
-
-  -- pb is one stream per channel, so the parked list is already the column's own and needs no bucket.
   local noEvents = {}
   --post: unsafe result = the channel's whole pb population in ppq order
   --post: result = nil iff the channel has no pb column and nothing parked
@@ -413,7 +397,9 @@ local function forEachEvent(fn)
         end
       end
       for ccNum, col in pairs(cols.ccs) do
-        for _, evt in ipairs(col.events) do fn('cc', evt, chan, false, ccNum) end
+        for _, evt in ipairs(col.events) do
+          if not evt.parked then fn('cc', evt, chan, false, ccNum) end
+        end
       end
     end
   end
@@ -1035,17 +1021,10 @@ do
     util.add(parkedEdits, { op = 'delete', evt = evt })
   end
 
-  -- One flat stash holds every type, so evType leads the key and cc/pitch discriminate within it --
-  -- the wire's own identity, lane deliberately absent. see docs/trackerManager.md § Park identity
-  --invariant: a parked note is keyed by uuid, every other type by (evType, chan, cc, pitch, ppq)
+  -- One flat stash holds every type, and parkKey tells them apart within it.
   local function findParked(list, ref)
-    local function matches(spec)
-      if spec.evType ~= ref.evType then return false end
-      if ref.evType == 'note' then return spec.uuid == ref.uuid end
-      return spec.chan == ref.chan and spec.cc == ref.cc
-         and spec.pitch == ref.pitch and spec.ppq == ref.ppq
-    end
-    for i, spec in ipairs(list) do if matches(spec) then return i end end
+    local key = frame.parkKey(ref)
+    for i, spec in ipairs(list) do if frame.parkKey(spec) == key then return i end end
   end
 
   -- Apply staged edits to cloned stashes, then write back under suppressingRebuild so the inline
@@ -1208,13 +1187,10 @@ end
 
 -- Each cc column of a channel as its whole authored population, keyed by cc number -- the note lanes'
 -- answer for the other keyed stream. see docs/trackerManager.md § Lane occupancy
---pre: the park stage has run, so its column mint makes a parked cc reachable
 --post: fresh result = { [ccNum] = unsafe event list in ppq order }, one entry per cc column
 function tm:authoredCCs(chan)
   local cols = {}
-  for ccNum in pairs(frame.channels[chan].onTake.ccs) do
-    cols[ccNum] = frame.authoredCC(chan, ccNum)
-  end
+  for ccNum, col in pairs(frame.channels[chan].onTake.ccs) do cols[ccNum] = col.events end
   return cols
 end
 
@@ -1366,7 +1342,9 @@ local function groupMembers(frozen, entries, promotedUuids)
       for _, e in ipairs(col and col.events or {}) do
         -- Half-open for pb too: the conversion pulls the closing seat inside the window, so nothing legitimate stands on endppq and every member lies inside the rect the mint claims.
         -- An absorber seated around a detune onset is hidden realisation, not group material.
-        if not e.hidden and e.ppq >= entry.ppq and e.ppq < entry.endppq then util.add(members, e) end
+        if not e.hidden and not e.parked and e.ppq >= entry.ppq and e.ppq < entry.endppq then
+          util.add(members, e)
+        end
       end
     end
   end
@@ -1911,10 +1889,10 @@ function tm:rebuild(takeChanged)
   -- gated stage below skips clean chans so the carried columns stand.
   local prevChannels = frame.newPass()
   for i = 1, 16 do
-    -- Parked events are off-take and only the park stage rewrites them, so a wholesale mm re-read has
-    -- no claim: all four streams carry forward, lists and all. See § Lane occupancy.
+    -- Parked pbs and pas are off-take and only the park stage rewrites them, so a wholesale mm re-read
+    -- has no claim: their lists carry forward. Parked notes and ccs reseat from the stash. See § Lane occupancy.
     local prev   = prevChannels[i]
-    local parked = prev and prev.parked or { ccs = {}, pb = {}, pa = {} }
+    local parked = prev and prev.parked or { pb = {}, pa = {} }
     if dirt.wholesale(i) then
       frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, parked = parked }
     elseif dirt.has(i) then

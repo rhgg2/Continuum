@@ -8,11 +8,11 @@
 -- `endppqC` is derived from the lane's strict-next onset, so a parked host's clip moves only when
 -- its own lane's membership does. Case 3 is that case: the lane renews on the one change.
 --
--- The rule is the column's, not the note lane's. A cc column and a channel's pb stream still hold
--- their parked events in a list of their own, and tm publishes each one's whole population
--- (`tm:authoredCCs`, `tm:authoredPb`) as it publishes a lane's. Their carry needs the parked list
--- itself to carry across the pass boundary, or a dirty channel re-mints it every pass and any column
--- holding one re-places its cells.
+-- The rule is the column's, not the note lane's. A cc column seats its parked ccs as a lane seats its
+-- parked notes, and a restore flips the seated cc in place, which is a content change like any other.
+-- A channel's pb stream still holds its parked events in a list of its own, and tm publishes the
+-- stream's whole population (`tm:authoredPb`) as it publishes a lane's. Its carry needs that list to
+-- carry across the pass boundary, or a dirty channel re-mints it every pass and re-places its cells.
 --
 -- The fixture is a self-parking arp host at 480 on chan 1 lane 1, alone on its lane, and a plain
 -- note on chan 2 -- a second channel to dirty, so a pass can run without touching chan 1. The cc and
@@ -67,8 +67,9 @@ local function parkedCC(harness)
   }
   h.ds:assign('fxRegions', region)
   h.tm:rebuild()
-  t.eq(#h.tm:getChannel(1).parked.ccs, 1, 'fixture check: the covered cc parked off the take')
-  return h
+  local parked = require('harness').parkedCCs(h.tm, 1)
+  t.eq(#parked, 1, 'fixture check: the covered cc parked off the take')
+  return h, parked[1]
 end
 
 -- The same, on pb: the authored breakpoint at 0 leaves the take and the region's own curve seats.
@@ -135,44 +136,55 @@ return {
   },
 
   {
-    -- The added note dirties chan 1 without touching cc 74, so neither half of that column moved.
-    name = 'a cc column holding a parked event answers with the same population across a pass',
+    -- The added note dirties chan 1 without touching cc 74, so nothing in that column moved.
+    name = 'a cc column holding a parked cc keeps its table and its seated cc across a pass',
     run = function(harness)
-      local h = parkedCC(harness)
-      local parked = h.tm:getChannel(1).parked.ccs[1]
+      local h, parked = parkedCC(harness)
       local column = h.tm:authoredCCs(1)[74]
       t.truthy(holds(column, parked), 'fixture check: the parked cc is part of the column population')
 
       h.tm:addEvent(note(960, 60, 1)); h.tm:flush()
 
-      t.truthy(h.tm:authoredCCs(1)[74] == column, "the union carried, so tv's cell carry stands")
+      t.truthy(h.tm:authoredCCs(1)[74] == column, "the column carried, so tv's cell carry stands")
+      t.truthy(require('harness').parkedCCs(h.tm, 1)[1] == parked,
+        'and the cc stayed seated rather than being reseated')
       generators.kinds.rep = nil
     end,
   },
 
   {
-    name = 'a cc column holding nothing parked is answered with its own events table',
+    name = 'a cc column whose parked cc took an edit sheds its table',
     run = function(harness)
-      local h = harness.mk()
-      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
-      t.eq(#h.tm:getChannel(1).parked.ccs, 0, 'fixture check: nothing is parked on the channel')
+      local h, parked = parkedCC(harness)
+      local column = h.tm:authoredCCs(1)[74]
 
-      t.truthy(h.tm:authoredCCs(1)[74] == h.tm:getChannel(1).onTake.ccs[74].events,
-        'the common column pays nothing for a union it has no need of')
+      h.tm:assignParked(parked, { val = 81 }); h.tm:flush()
+
+      t.eq(require('harness').parkedCCs(h.tm, 1)[1].val, 81, 'fixture check: the edit reached the parked cc')
+      t.truthy(h.tm:authoredCCs(1)[74] ~= column, 'the column whose parked cc moved shed its table')
+      generators.kinds.rep = nil
     end,
   },
 
   {
-    name = 'a cc column whose parked half took an edit sheds its population table',
+    -- Dropping the region takes its window, so the cc comes back onto the take. Membership holds --
+    -- the same cc at the same onset -- but the cell now renders as on-take, so the table must go.
+    name = 'a cc column whose parked cc was restored sheds its table',
     run = function(harness)
       local h = parkedCC(harness)
       local column = h.tm:authoredCCs(1)[74]
 
-      h.tm:assignParked(h.tm:getChannel(1).parked.ccs[1], { val = 81 }); h.tm:flush()
-
-      t.eq(h.tm:getChannel(1).parked.ccs[1].val, 81, 'fixture check: the edit reached the parked cc')
-      t.truthy(h.tm:authoredCCs(1)[74] ~= column, 'the column whose parked half moved shed its table')
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
       generators.kinds.rep = nil
+
+      t.eq(#require('harness').parkedCCs(h.tm, 1), 0, 'fixture check: nothing is parked any more')
+      local restored
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 74 and c.ppq == 60 then restored = c end
+      end
+      t.truthy(restored and restored.val == 30, 'fixture check: the authored cc is back on the take')
+      t.truthy(h.tm:authoredCCs(1)[74] ~= column, 'the column whose cc came back shed its table')
     end,
   },
 
@@ -195,13 +207,12 @@ return {
   },
 
   {
-    -- Order is the column's own, as it is for a note lane: the parked half merges into it rather
-    -- than being appended and everything re-sorted. The ghost interpolation walks successive events,
-    -- so a population out of order interpolates between the wrong pair.
-    name = 'a cc column reads its parked and on-take halves in one ppq order',
+    -- Order is the column's own, as it is for a note lane: a parked cc is spliced in at its onset
+    -- rather than appended. The ghost interpolation walks successive events, so a population out of
+    -- order interpolates between the wrong pair.
+    name = 'a cc column seats its parked cc in ppq order among its on-take ones',
     run = function(harness)
-      local h = parkedCC(harness)
-      local parked = h.tm:getChannel(1).parked.ccs[1]
+      local h, parked = parkedCC(harness)
       h.tm:addEvent({ evType = 'cc', ppq = 600, chan = 1, cc = 74, val = 90 }); h.tm:flush()
 
       local column, parkedAt, followerAt = h.tm:authoredCCs(1)[74]
@@ -219,8 +230,8 @@ return {
   },
 
   {
-    -- What the carry is for. tv keys its built cells on the events table a column hands back, and
-    -- until the union was memoised it built a fresh one for any column holding a parked event.
+    -- What the carry is for. tv keys its built cells on the events table a column hands back, so a
+    -- column that renewed every pass would re-place its cells every pass.
     name = 'a parked-bearing cc column keeps its built cells across a pass',
     run = function(harness)
       local h = parkedCC(harness)
