@@ -434,7 +434,7 @@ return {
       t.eq(#stash, 1, 'one parked note in the stash')
       t.eq(stash[1].pitch, 61, 'the stash pitch was edited (not the take)')
       t.deepEq(authoredPitches(h), {}, 'still parked -- the edit did not push it to the take')
-      t.eq(h.tm:getChannel(1).parked.notes[1].pitch, 61, 'the render cell shows the new pitch')
+      t.eq(require('harness').parkedNotes(h.tm, 1)[1].pitch, 61, 'the render cell shows the new pitch')
     end,
   },
 
@@ -485,6 +485,10 @@ return {
       h.cmgr:invoke('nudgeForward')                   -- -> row 2 (ppq 120), past the window
       t.deepEq(authoredPitches(h), { 60 }, 'the note crossed back onto the take')
       t.eq(#(h.ds:get('fxParked') or {}), 0, 'and left the parked stash')
+      -- `parked` is frame vocabulary: the moved-out clone must not write it into the take.
+      local written = h.fm:dump().notes
+      t.eq(#written, 1, 'fixture check: the one note is on the take')
+      t.eq(written[1].parked, nil, 'and the take holds it unflagged')
     end,
   },
 
@@ -1474,7 +1478,7 @@ return {
                      vel = 90, detune = 0, delay = 0, lane = 2 }
       h.tm:flush()
       injectRegion(h, { fx = arpUp })   -- discrete replace: both notes park
-      local parked = h.tm:getChannel(1).parked.notes
+      local parked = require('harness').parkedNotes(h.tm, 1)
       t.eq(#parked, 2, 'fixture check: the chord parked off-take')
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(2, ci, 1)             -- caret in the fx column, mid-window
@@ -1497,7 +1501,7 @@ return {
       h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 2, pitch = 67,
                      vel = 90, detune = 0, delay = 0, lane = 1, fx = arpUp }
       h.tm:flush()
-      local mine, other = h.tm:getChannel(1).parked.notes[1], h.tm:getChannel(2).parked.notes[1]
+      local mine, other = require('harness').parkedNotes(h.tm, 1)[1], require('harness').parkedNotes(h.tm, 2)[1]
       t.truthy(mine and other, 'fixture check: both note hosts parked themselves')
       h.ec:setPos(0, noteColIdx(h, 1), 1)   -- caret on the host cell
       local overlay = h.vm:ghostOverlay()
@@ -1566,7 +1570,7 @@ return {
       noteAt(h, 1, 960, 64)
       injectRegions(h, { { fx = arpUp }, { ppq = 960, endppq = 1200, fx = arpUp } })
       local mine, theirs
-      for _, cell in ipairs(h.tm:getChannel(1).parked.notes) do
+      for _, cell in ipairs(require('harness').parkedNotes(h.tm, 1)) do
         if cell.ppq == 0 then mine = cell else theirs = cell end
       end
       t.truthy(mine and theirs, 'fixture check: each region parked the note it covers')

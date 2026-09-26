@@ -176,7 +176,10 @@ local function rebuildInternals()
   local internal, external = {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if not dirt.wholesale(chan) then exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note')) end
+      if not dirt.wholesale(chan) then
+        exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note'),
+                     function(e) return not e.parked end)
+      end
       for _, raw in mm:notesRaw(chan) do
         if not raw.derived and dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
           local note = columnEvent(raw)
@@ -507,27 +510,19 @@ end
 ----- Logical tail-clip
 
 local function clipTails(chan)
-  local channel, parkedMoved = frame.channels[chan], false
   local takeLenL = time:toLogical(chan, time:length())
-  for lane = 1, #channel.onTake.notes do
-    local offTake = {}
-    for _, evt in ipairs(frame.parkedOnLane(chan, lane)) do offTake[evt] = true end
-    local population = frame.authoredEvents(chan, lane)
+  for _, col in ipairs(frame.channels[chan].onTake.notes) do
+    local population = col.events
     for _, evt in ipairs(population) do
       if not evt.derived and util.isNote(evt) then
         local bound = frame.clippedSpanEnd(evt, takeLenL, population)
         if evt.endppqC ~= bound then
-          if offTake[evt] then
-            evt.endppqC, parkedMoved = bound, true
-          else
-            dirt.tails.add(chan, evt.uuid)
-            frame.setEvent(evt, 'endppqC', bound)
-          end
+          if not evt.parked then dirt.tails.add(chan, evt.uuid) end
+          frame.setEvent(evt, 'endppqC', bound)
         end
       end
     end
   end
-  if parkedMoved then channel.parked.notes = util.clone(channel.parked.notes) end
 end
 
 ----- Rebuild region park
@@ -551,16 +546,22 @@ local function fromParked(spec, adds)
   return util.assign(util.assign(util.clone(spec), { ppq = ppq, ppqL = spec.ppq }), adds)
 end
 
+-- A seated parked event against the spec it renders: endppqC is derived after seating, and the
+-- parked flag is the seat's own.
+local function sameSpec(seated, spec)
+  local ignored = { endppqC = true, parked = true }
+  for k, v in pairs(spec) do
+    if not ignored[k] and not util.deepEq(seated[k], v) then return false end
+  end
+  for k in pairs(seated) do if not ignored[k] and spec[k] == nil then return false end end
+  return true
+end
+
 local function installParked(field, specs, onSeat)
   local function sameParked(old, new)
     if not old or #old ~= #new then return false end
     for i, newSpec in ipairs(new) do
-      local oldSpec = old[i]
-      for k, v in pairs(newSpec) do
-        -- endppqC excluded since it's derived after installation.
-        if k ~= 'endppqC' and not util.deepEq(oldSpec[k], v) then return false end
-      end
-      for k in pairs(oldSpec) do if k ~= 'endppqC' and newSpec[k] == nil then return false end end
+      if not sameSpec(old[i], newSpec) then return false end
     end
     return true
   end
@@ -580,13 +581,52 @@ local function installParked(field, specs, onSeat)
   end
 end
 
+-- Seat the parked notes in their own lanes, flagged; a seated event whose spec held keeps its table,
+-- so the lane's carry holds. see docs/trackerManager.md § Lane occupancy
+--post: fresh result = { [chan] = the channel's parked note events as seated, in specs order }
+local function seatParkedNotes(specs)
+  local wanted = frame.newChannels()
+  for _, spec in ipairs(specs) do
+    wanted[spec.chan][spec.uuid] = spec
+    ensureLane(spec.chan, spec.lane)
+  end
+  local held = {}
+  for chan = 1, 16 do
+    for _, col in ipairs(frame.channels[chan].onTake.notes) do
+      local stale = {}
+      for _, evt in ipairs(col.events) do
+        if evt.parked then
+          local spec = wanted[chan][evt.uuid]
+          if spec and spec.lane == evt.lane and sameSpec(evt, spec) then held[evt.uuid] = evt
+          else stale[evt] = true end
+        end
+      end
+      if next(stale) then
+        local kept = {}
+        for _, evt in ipairs(col.events) do if not stale[evt] then util.add(kept, evt) end end
+        col.events = kept   -- kept is a fresh table: this assignment is the renewal
+        frame.markRenewed(col)
+      end
+    end
+  end
+  local seated = frame.newChannels()
+  for _, spec in ipairs(specs) do
+    local evt = held[spec.uuid]
+    if not evt then
+      evt = util.assign(util.clone(spec), { parked = true })
+      frame.spliceEvent(spec.chan, spec.lane, evt)
+    end
+    util.add(seated[spec.chan], evt)
+  end
+  return seated
+end
+
 local function installParkedNotes(fxParked)
   local notes = {}
   for _, evt in ipairs(fxParked or {}) do
     if evt.evType == 'note' then util.add(notes, evt) end
   end
-  for _, note in ipairs(notes) do ensureLane(note.chan, note.lane) end
-  installParked('notes', notes)
+  seatParkedNotes(notes)
 end
 
 -- Shared context for the four passes.
@@ -655,7 +695,7 @@ local function parkNotes(stage, onTakeHosts)
     if windowSpans and dirt.has(chan) then
       for _, col in ipairs(frame.channels[chan].onTake.notes) do
         for evt in onsetsIn(col.events, windowSpans) do
-          if util.isNote(evt) then addCandidate(evt) end
+          if util.isNote(evt) and not evt.parked then addCandidate(evt) end
         end
       end
     end
@@ -675,9 +715,12 @@ local function parkNotes(stage, onTakeHosts)
   local restoredNotes = {}
   local takeLen = time:length()
   for _, spec in ipairs(restores) do
-    ensureLane(spec.chan, spec.lane)
-    local note = util.clone(spec)   -- the event is the spec: both are logical (keeps the parked uuid too)
-    frame.spliceEvent(spec.chan, spec.lane, note)
+    -- Restore flips the seated event in place: it is logical, and keeps the parked uuid too.
+    local note
+    for _, evt in ipairs(frame.channels[spec.chan].onTake.notes[spec.lane].events) do
+      if evt.parked and evt.uuid == spec.uuid then note = evt; break end
+    end
+    frame.setEvent(note, 'parked', nil)
 
     -- Provisional raw end; the tail clip below fills in endppqC, and rebuildTails
     -- back-fills raw from that.
@@ -691,11 +734,10 @@ local function parkNotes(stage, onTakeHosts)
     util.add(restoredNotes, note)
   end
 
-  for _, spec in ipairs(parkedNotes) do ensureLane(spec.chan, spec.lane) end
   local parkedByHost = {}
-  installParked('notes', parkedNotes, function(spec)
-    util.bucket(parkedByHost, stage.hostFor(spec), spec)
-  end)
+  for _, seated in ipairs(seatParkedNotes(parkedNotes)) do
+    for _, evt in ipairs(seated) do util.bucket(parkedByHost, stage.hostFor(evt), evt) end
+  end
 
   local touched = {}
   for _, spec in ipairs(parkedNotes) do touched[spec.chan] = true end
@@ -710,8 +752,13 @@ local function parkPAs(stage)
   local function covers(host, pitch, ppqL)
     return host.pitch == pitch and ppqL >= host.ppq and ppqL < host.endppqC
   end
+  local parkedNotes = {}
+  local function parkedOn(chan)
+    parkedNotes[chan] = parkedNotes[chan] or frame.parkedNotes(chan)
+    return parkedNotes[chan]
+  end
   local function hostIsParked(chan, pitch, ppqL)
-    for _, host in ipairs(frame.channels[chan].parked.notes) do
+    for _, host in ipairs(parkedOn(chan)) do
       if covers(host, pitch, ppqL) then return true end
     end
     return false
@@ -722,7 +769,7 @@ local function parkPAs(stage)
   for chan = 1, 16 do
     if dirt.has(chan) then
       local pas = index.raw(chan).pas
-      for _, host in ipairs(frame.channels[chan].parked.notes) do
+      for _, host in ipairs(parkedOn(chan)) do
         for pa in onsetsIn(pas, { { time:fromLogical(chan, host.ppq), time:fromLogical(chan, host.endppqC) } }) do
           local ppqL = pa.ppqL or pa.ppq
           -- same-pitch parked spans can overlap (lane clips only), so a PA may meet two hosts
@@ -881,7 +928,7 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   end
   if coveringLane then return notes[coveringLane], coveringLane end
 
-  for _, evt in ipairs(channel.parked.notes) do
+  for _, evt in ipairs(frame.parkedNotes(channel.chan)) do
     if evt.pitch == pitch and time:fromLogical(channel.chan, evt.ppq) <= ppq_pos
        and time:fromLogical(channel.chan, evt.endppqC) > ppq_pos then
       return notes[evt.lane], evt.lane
@@ -891,7 +938,7 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   -- Pitch-only fallback: frame-agnostic, so the columns serve it (projected PAs included).
   for lane, col in ipairs(notes) do
     for _, evt in ipairs(col.events) do
-      if evt.pitch == pitch then return col, lane end
+      if evt.pitch == pitch and not evt.parked then return col, lane end
     end
   end
 end
@@ -939,7 +986,7 @@ local function buildFxWindows(fxRegions, onTakeHosts)
   local noteHosts = {}
   for host in pairs(onTakeHosts) do util.add(noteHosts, host) end
   for chan = 1, 16 do
-    for _, evt in ipairs(frame.channels[chan].parked.notes) do
+    for _, evt in ipairs(frame.parkedNotes(chan)) do
       if evt.fx then util.add(noteHosts, evt) end
     end
   end
@@ -964,14 +1011,14 @@ local function onTakeFxHosts()
   local function walkChannel(chan)
     for _, col in ipairs(frame.channels[chan].onTake.notes) do
       for _, evt in ipairs(col.events) do
-        if evt.fx and util.isNote(evt) then hosts[evt] = true end
+        if evt.fx and util.isNote(evt) and not evt.parked then hosts[evt] = true end
       end
     end
   end
 
   local function perHost(chan)
     local parked = {}
-    for _, evt in ipairs(frame.channels[chan].parked.notes) do parked[evt.uuid] = true end
+    for _, evt in ipairs(frame.parkedNotes(chan)) do parked[evt.uuid] = true end
     for uuid in pairs(index.fxHosts(chan)) do
       if not parked[uuid] then
         local evt = index.colEvtFor(uuid)
@@ -1122,15 +1169,15 @@ local function enumerateHosts(chan, noteHosts, regions, fxOutWindows)
 
   for _, note in ipairs(noteHosts) do addNoteHost(note) end
 
-  for _, spec in ipairs(frame.channels[chan].parked.notes or {}) do
+  for _, spec in ipairs(frame.parkedNotes(chan)) do
     -- A parked event inside a note-park window is region membership, not a note host (own-fx suppressed).
     if spec.fx and not fxOutWindows.owns('note', chan, nil, spec.ppq) then addNoteHost(soundingEvent(spec)) end
   end
 
   for _, region in ipairs(regions) do
     local notes = {}
-    for lane in ipairs(frame.channels[chan].onTake.notes) do
-      local population = frame.authoredEvents(chan, lane)
+    for _, col in ipairs(frame.channels[chan].onTake.notes) do
+      local population = col.events
       for i = util.firstAtOrAfter(population, region.ppq), #population do
         local evt = population[i]
         if evt.ppq >= region.endppq then break end
@@ -1376,7 +1423,7 @@ local function rebuildFx(fxOutWindows, fxRegions, pbLimCents)
     nextSameLaneNote = function (host)
       local note = host.notes[1]
       if not note or not host.lane then return nil end
-      return frame.nextOnLane(frame.authoredEvents(host.chan, host.lane), note.ppq)
+      return frame.nextOnLane(frame.channels[host.chan].onTake.notes[host.lane].events, note.ppq)
     end
   }
 
@@ -1543,7 +1590,11 @@ local function makeTailRules(chan, res, windows, writes)
   -- population is the column's own: no derived note bounds by a lane, so none joins one.
   local function laneNext(e)
     local col = frame.channels[chan].onTake.notes[e.lane]
-    return col and frame.nextOnLane(col.events, e.ppqL)
+    if not col then return end
+    for i = util.firstAfter(col.events, e.ppqL), #col.events do
+      local evt = col.events[i]
+      if util.isNote(evt) and not evt.parked then return evt end
+    end
   end
 
   local function settleOnset(e, prev)

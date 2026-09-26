@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — A parked note is seated in its own lane under a `parked` flag, over a separate
+  parked list unioned with the lane on read. Parking and restore become a flip within one population,
+  so the lane is its own carry key and the union, its memo and the lane buckets go; a reader wanting
+  the take alone skips the flag. tm's write doors shed the flag, since a clone of a parked cell would
+  otherwise carry it to mm. ccs, pb and pa keep their lists for now.
+
 - **2026-09-23** — The host gate reaches a host along a hold stream when a seed on that stream lies
   in the host's window cover, the same cover its base is built from, open on a side with no
   governing or closing point. Over a scalar hold-from per family, which woke every later host on any

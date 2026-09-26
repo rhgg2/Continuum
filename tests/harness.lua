@@ -147,4 +147,15 @@ function harness.mk(opts)
            clipboard = vm:clipboard(), cmgr = cmgr, reaper = fakeReaper }
 end
 
+-- A channel's parked notes, read off its lanes, where they sit flagged among the on-take ones.
+function harness.parkedNotes(tm, chan)
+  local out = {}
+  for _, events in ipairs(tm:authoredLanes(chan)) do
+    for _, evt in ipairs(events) do
+      if evt.parked and evt.evType ~= 'pa' then out[#out + 1] = evt end
+    end
+  end
+  return out
+end
+
 return harness

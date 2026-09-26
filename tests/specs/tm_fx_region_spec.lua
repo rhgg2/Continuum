@@ -721,7 +721,7 @@ return {
       addNote(h, { pitch = 60, ppq = 240, endppq = 480, lane = 1 })   -- past the window -> stays on the take
       injectArp(h, { endppq = 120 })                                  -- region covers only [0,120)
       local parked
-      for _, m in ipairs(h.tm:getChannel(1).parked.notes) do
+      for _, m in ipairs(require('harness').parkedNotes(h.tm, 1)) do
         if m.pitch == 60 and m.ppq == 0 then parked = m end
       end
       t.truthy(parked, 'the note at onset 0 is parked off the take')
@@ -742,7 +742,7 @@ return {
       })
       h.tm:rebuild()
       local parked
-      for _, m in ipairs(h.tm:getChannel(1).parked.notes) do
+      for _, m in ipairs(require('harness').parkedNotes(h.tm, 1)) do
         if m.pitch == 60 and m.ppq == 0 then parked = m end
       end
       t.truthy(parked, 'the note at onset 0 is parked by region A')
@@ -789,8 +789,8 @@ return {
                       detune = 0, delay = 0, lane = 1, fx = sine30 })
       h.tm:flush()
       injectArp(h)   -- note-replace over the same span: the region parks the sine host
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the region parks the host off-take')
-      local uuid = h.tm:getChannel(1).parked.notes[1].uuid
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the region parks the host off-take')
+      local uuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
@@ -832,7 +832,7 @@ return {
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
       injectArp(h)
-      local parked = h.tm:getChannel(1).parked.notes
+      local parked = require('harness').parkedNotes(h.tm, 1)
       t.eq(#parked, 1, 'the covered note parks')
       t.eq(parked[1].chan, 1, 'the render cell knows its channel (the backing addresses by it)')
       t.truthy(parked[1].uuid, 'the render cell carries the durable note uuid')
@@ -891,8 +891,8 @@ return {
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
       injectArp(h)
-      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { pitch = 67 }); h.tm:flush()
-      local parked = h.tm:getChannel(1).parked.notes
+      h.tm:assignParked(require('harness').parkedNotes(h.tm, 1)[1], { pitch = 67 }); h.tm:flush()
+      local parked = require('harness').parkedNotes(h.tm, 1)
       t.eq(#parked, 1, 'still parked under the region')
       t.eq(parked[1].pitch, 67, 'the render cell shows the edited pitch')
       t.eq(h.ds:get('fxParked')[1].pitch, 67, 'the stash carries the edit')
@@ -906,8 +906,8 @@ return {
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
       injectArp(h)
-      h.tm:deleteParked(h.tm:getChannel(1).parked.notes[1]); h.tm:flush()
-      t.eq(#h.tm:getChannel(1).parked.notes, 0, 'the parked note is gone from the render union')
+      h.tm:deleteParked(require('harness').parkedNotes(h.tm, 1)[1]); h.tm:flush()
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 0, 'the parked note is gone from the render union')
       t.falsy(h.ds:get('fxParked'), 'the stash empties -- no parked notes remain')
       t.deepEq(authoredPitches(h), {}, 'deleting a parked note does not resurrect it on the take')
     end,
@@ -931,7 +931,7 @@ return {
       t.eq(typed.ppq, 120, 'the stashed spec keeps the logical onset it was typed at')
       t.deepEq(authoredPitches(h), {}, 'the typed note never enters the take -- it is parked')
       local pitches = {}
-      for _, m in ipairs(h.tm:getChannel(1).parked.notes) do pitches[#pitches + 1] = m.pitch end
+      for _, m in ipairs(require('harness').parkedNotes(h.tm, 1)) do pitches[#pitches + 1] = m.pitch end
       table.sort(pitches)
       t.deepEq(pitches, { 60, 72 }, 'both parked notes render')
     end,
@@ -966,7 +966,7 @@ return {
       -- What a collision would cost: findParked takes the first uuid match, so the note
       -- already stashed would die in the newly typed one's place.
       local typed
-      for _, cell in ipairs(reopened.tm:getChannel(1).parked.notes) do
+      for _, cell in ipairs(require('harness').parkedNotes(reopened.tm, 1)) do
         if cell.pitch == 76 then typed = cell end
       end
       reopened.tm:deleteParked(typed); reopened.tm:flush()
@@ -1163,12 +1163,12 @@ return {
       injectArp(h)
       local rebuilds = 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
-      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { pitch = 67 })
+      h.tm:assignParked(require('harness').parkedNotes(h.tm, 1)[1], { pitch = 67 })
       h.tm:addEvent({ evType = 'note', ppq = 300, endppq = 480, chan = 1, pitch = 50,
                       vel = 100, detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
       t.eq(rebuilds, 1, 'a single flush drives exactly one rebuild -- the staged parked edit is not discarded')
-      t.eq(h.tm:getChannel(1).parked.notes[1].pitch, 67, 'the parked edit landed')
+      t.eq(require('harness').parkedNotes(h.tm, 1)[1].pitch, 67, 'the parked edit landed')
       t.deepEq(authoredPitches(h), { 50 }, 'the normal note landed on the take in the same flush')
     end,
   },
@@ -1182,10 +1182,10 @@ return {
       local rebuilds, postflushes = 0, 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
       h.tm:subscribe('postflush', function() postflushes = postflushes + 1 end)
-      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { pitch = 67 }); h.tm:flush()
+      h.tm:assignParked(require('harness').parkedNotes(h.tm, 1)[1], { pitch = 67 }); h.tm:flush()
       t.eq(rebuilds, 1, 'a parked-only flush still rebuilds exactly once')
       t.eq(postflushes, 1, 'flush has one exit, so postflush fires exactly once')
-      t.eq(h.tm:getChannel(1).parked.notes[1].pitch, 67, 'the edit is visible after the rebuild')
+      t.eq(require('harness').parkedNotes(h.tm, 1)[1].pitch, 67, 'the edit is visible after the rebuild')
     end,
   },
 
@@ -1210,7 +1210,7 @@ return {
       injectArp(h)
       local boom = function(change) if change.name == 'fxParked' then error('subscriber blew up') end end
       h.ds:subscribe('dataChanged', boom)
-      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { pitch = 67 })
+      h.tm:assignParked(require('harness').parkedNotes(h.tm, 1)[1], { pitch = 67 })
       local ok = pcall(function() h.tm:flush() end)
       t.falsy(ok, 'the subscriber error propagates out of flush')
       h.ds:unsubscribe('dataChanged', boom)
@@ -2406,7 +2406,7 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 240, endppq = 480,
                                    fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
       h.tm:rebuild()
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the region parked the successor off-take (non-vacuous)')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the region parked the successor off-take (non-vacuous)')
 
       local within, beyond = 0, 0
       for _, c in ipairs(h.fm:dump().ccs) do
@@ -2440,11 +2440,11 @@ return {
         return out
       end
       t.truthy(#allPbs() > 0, 'the parked host seats a sine pb stream')
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the trill host is parked off-take')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the trill host is parked off-take')
 
       h.tm:rebuild()   -- settle: parked host is now off-take when the window set is recomputed
 
-      h.tm:deleteParked(h.tm:getChannel(1).parked.notes[1]); h.tm:flush()
+      h.tm:deleteParked(require('harness').parkedNotes(h.tm, 1)[1]); h.tm:flush()
       t.falsy(h.ds:get('fxParked'), 'the parked host is gone from the stash')
       t.eq(#allPbs(), 0, 'no sine seat orphans as an authored pb after the host is deleted')
     end,
@@ -2492,7 +2492,7 @@ return {
 
       -- Add trill: the host now self-parks as a note; the sine cc window must persist.
       h.vm:addFxStage(uuid, { kind = 'trill', period = { 1, 4 }, cents = 200 })
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the host self-parks once a note-replace kind joins the chain')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the host self-parks once a note-replace kind joins the chain')
       t.eq(#stashOfType(h, 'cc'), 2, 'the authored cc stay parked under the persisting sine window')
 
       -- Remove trill: the host un-parks as a note; sine still governs cc10, so its window must
@@ -2746,12 +2746,12 @@ return {
       t.truthy(#before > 0, 'the parked host seats a sine pb stream')
       t.falsy(h.tm:getChannel(1).onTake.pb, 'live, the seats are wire-only -- off screen')
 
-      local uuid = h.tm:getChannel(1).parked.notes[1].uuid
+      local uuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
       t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
 
       t.truthy(#authoredPitches(h) > 0, 'the trill output stands as authored notes')
       t.falsy(h.ds:get('fxParked'), 'the host leaves the stash -- nil, not an empty array')
-      t.eq(#h.tm:getChannel(1).parked.notes, 0, 'and nothing is parked off-take any more')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 0, 'and nothing is parked off-take any more')
       t.truthy(h.tm:getChannel(1).onTake.pb, 'the pb curve comes on screen as authored automation')
       t.deepEq(pbSeats(), before, 'and the same breakpoints still sound')
 
@@ -2803,8 +2803,8 @@ return {
                       detune = 0, delay = 0, lane = 1, fx = sine30 })
       h.tm:flush()
       injectArp(h)   -- note-replace over the same span: the region parks the sine host
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the region parks the host off-take')
-      local uuid = h.tm:getChannel(1).parked.notes[1].uuid
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the region parks the host off-take')
+      local uuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
 
       t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
 
@@ -2848,13 +2848,13 @@ return {
                              { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:flush()
       h.tm:rebuild()   -- settle: the host is off-take when the window set is recomputed
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the trill parks its own host')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the trill parks its own host')
 
       local windows = h.ds:get('fxRealisedWindows') or {}
       t.eq(#windows, 1, 'one host, one entry')
       t.truthy(windows[1].targets.pb, 'claiming the sine arm')
       t.falsy(windows[1].targets.note, 'and not the note stream -- a note host seats no note window')
-      local hostUuid = h.tm:getChannel(1).parked.notes[1].uuid
+      local hostUuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
       t.truthy(hostUuid, 'the parked host carries a uuid to be stamped with')
       t.eq(windows[1].uuid, hostUuid, "and the window is stamped with its host's identity")
     end,
@@ -3220,7 +3220,7 @@ return {
                       detune = 0, delay = 0, lane = 1, fx = sine30 })
       h.tm:flush()
       injectArp(h)   -- note-replace over the same span: the region parks the sine host
-      local uuid = h.tm:getChannel(1).parked.notes[1].uuid
+      local uuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
 
       t.falsy(h.tm:freezeEligible('fxr-1'), 'the map refuses the covering region')
       t.truthy(h.tm:freezeEligible(uuid), 'but clears the covered host itself')
@@ -3244,7 +3244,7 @@ return {
                       fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 } } })
       h.tm:flush()
       h.tm:rebuild()   -- settle: the trill parks its own host
-      local uuid = h.tm:getChannel(1).parked.notes[1].uuid
+      local uuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
       injectArp(h, { ppq = 120, endppq = 360 })
 
       t.falsy(h.tm:freezeEligible(uuid), 'the map refuses the note-dest host under the note window')

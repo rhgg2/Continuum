@@ -53,7 +53,7 @@ local function lastPbSeat(h, chan)
   return last
 end
 
-local function parkedList(h, chan) return h.tm:getChannel(chan).parked.notes end
+local function parkedList(h, chan) return require('harness').parkedNotes(h.tm, chan) end
 
 local function onTakeAt(h, chan, lane, ppq)
   for _, evt in ipairs(h.tm:getChannel(chan).onTake.notes[lane].events) do

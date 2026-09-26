@@ -85,7 +85,7 @@ local function boundsOn(h, chan)
   for _, col in ipairs(h.tm:getChannel(chan).onTake.notes) do
     for _, evt in ipairs(col.events) do out[evt.uuid] = evt.endppqC end
   end
-  for _, evt in ipairs(h.tm:getChannel(chan).parked.notes) do out[evt.uuid] = evt.endppqC end
+  for _, evt in ipairs(require('harness').parkedNotes(h.tm, chan)) do out[evt.uuid] = evt.endppqC end
   return out
 end
 
@@ -94,7 +94,7 @@ local function authoredAt(h, chan, ppq)
   for _, col in ipairs(h.tm:getChannel(chan).onTake.notes) do
     for _, evt in ipairs(col.events) do if evt.ppq == ppq then return evt end end
   end
-  for _, evt in ipairs(h.tm:getChannel(chan).parked.notes) do
+  for _, evt in ipairs(require('harness').parkedNotes(h.tm, chan)) do
     if evt.ppq == ppq then return evt end
   end
 end
@@ -200,7 +200,7 @@ return {
 
       region(h)
 
-      local stashed = h.tm:getChannel(1).parked.notes
+      local stashed = require('harness').parkedNotes(h.tm, 1)
       t.eq(#stashed, 1, 'precondition: the region parked its input, so the clipping note left the take')
       t.eq(stashed[1].ppq, 1140, 'precondition: and it is the lane successor that left')
 

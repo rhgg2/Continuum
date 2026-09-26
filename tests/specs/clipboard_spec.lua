@@ -245,9 +245,9 @@ return {
       h.tm:flush()
       h.vm:setGridSize(80, 80)
 
-      -- The host parks (note-host replace): it lives in channels[1].parked.notes, not the take.
+      -- The host parks (note-host replace): it sits in its lane flagged parked, not on the take.
       local function parkedAt(ppq)
-        for _, cell in ipairs(h.tm:getChannel(1).parked.notes) do
+        for _, cell in ipairs(require('harness').parkedNotes(h.tm, 1)) do
           if cell.ppq == ppq then return cell end
         end
       end

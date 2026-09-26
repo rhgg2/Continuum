@@ -20,7 +20,7 @@ end
 -- A trill parks its host and stands its own notes in the lane, so the host's uuid comes off
 -- the parked cell.
 local function parkedHostUuid(h, chan)
-  for _, cell in ipairs(h.tm:getChannel(chan).parked.notes or {}) do
+  for _, cell in ipairs(require('harness').parkedNotes(h.tm, chan) or {}) do
     if cell.fx then return cell.uuid end
   end
 end
@@ -55,7 +55,7 @@ end
 
 local function parkedCells(h, chan)
   local out = {}
-  for _, cell in ipairs(h.tm:getChannel(chan).parked.notes or {}) do
+  for _, cell in ipairs(require('harness').parkedNotes(h.tm, chan) or {}) do
     if cell.fx then out[#out + 1] = cell end
   end
   return out

@@ -17,8 +17,9 @@
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: frame.channels[chan] = { chan, onTake = the half mm holds, parked = the half a replace window took off it }
+--shape: frame.channels[chan] = { chan, onTake = the columns, parked = the ccs, pb and pas a replace window took off the take }
 --shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
+--shape: a note lane also seats its parked notes, flagged parked = true; every other colEvent is on the take
 --shape: column =   { events = [colEvent, ...], [cc = ccNum] }
 --shape: colEvent = the mm event's own fields (chan, uuid, metadata), logically framed, by kind:
 --shape:   note     { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], [intentCents] }
@@ -34,8 +35,8 @@
 --shape:   cc   { evType='cc', chan, cc, ppq, val, shape, [tension] }
 --shape:   pb   { evType='pb', chan, ppq, val (=cents), shape, [tension] }
 --shape:   pa   { evType='pa', chan, pitch, ppq, vel, [rpb] }
---shape: parked =  { notes, ccs, pb, pa }: flat lists of those specs made render-ready -- a note gains
---shape:   endppqC (the lane bound the lane pass writes; endppq stays the authored ceiling), a pb gains cents
+--shape: parked =  { ccs, pb, pa }: flat lists of those specs made render-ready -- a pb gains cents
+--shape: a seated parked note = its spec plus parked = true and endppqC (the lane bound; endppq stays the authored ceiling)
 
 --shape: fxRegions = [ { uuid = 'fxr-N', chan (0 = global), ppq, endppq, fx = [stage, ...] } ]: a logical span; storage order is lane precedence among overlapping regions
 --shape:   stage = { kind, [dest], [bypass], ...the kind's fields }
@@ -180,11 +181,16 @@ do
     return buckets
   end
 
-  -- A lane's share of the channel's parked stash, bucketed once per stash.
-  -- see docs/trackerManager.md § Lane occupancy
-  --post: unsafe result = the lane's parked events in ppq order; empty when the lane holds none
-  function frame.parkedOnLane(chan, lane)
-    return bucketedParked(frame.channels[chan].parked.notes, 'lane')[lane] or noParked
+  -- A channel's parked notes, collected off its lanes, where they sit flagged among the on-take ones.
+  --post: fresh result = the channel's parked note events, in lane then column order
+  function frame.parkedNotes(chan)
+    local out = {}
+    for _, col in ipairs(frame.channels[chan].onTake.notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.parked and util.isNote(evt) then util.add(out, evt) end
+      end
+    end
+    return out
   end
 
   -- A column's whole authored population: on-take events plus parked ones off the take, memoised
@@ -204,13 +210,6 @@ do
       byParked[parked] = union
     end
     return union
-  end
-
-  --post: unsafe result = the lane's whole population in column order
-  --post: (nothing parked on the lane) → result is the lane's own events table
-  function frame.authoredEvents(chan, lane)
-    local col = frame.channels[chan].onTake.notes[lane]
-    return memoUnion(col.events, frame.parkedOnLane(chan, lane), noteColumnLess)
   end
 
   --pre: the cc column exists -- renderUnion mints one for every parked cc
@@ -402,8 +401,10 @@ local function forEachEvent(fn)
       local chan, cols = channel.chan, channel.onTake
       for lane, col in ipairs(cols.notes) do
         for _, evt in ipairs(col.events) do
-          local isNote = evt.evType ~= 'pa'
-          fn(isNote and 'note' or 'pa', evt, chan, isNote, nil, lane)
+          if not evt.parked then
+            local isNote = evt.evType ~= 'pa'
+            fn(isNote and 'note' or 'pa', evt, chan, isNote, nil, lane)
+          end
         end
       end
       for _, t in ipairs{'pb', 'at', 'pc'} do
@@ -968,7 +969,7 @@ do
     local evt = lookup(evtOrUuid)
     if not evt then return end
     local rawCaller = update.rawTime
-    update.rawTime = nil
+    update.rawTime, update.parked = nil, nil
     if evt.evType == 'note' then
       realiseNoteUpdate(evt, update, rawCaller)
       assignNote(evt, update)
@@ -988,10 +989,11 @@ do
   --post: (evt.rawTime) → nothing is translated; evt reaches mm on the raw time the caller stated
   --post: (a pb already seats at evt.ppq) → that seat is assigned instead, and no rival pb added
   --invariant: rawTime is consumed here: it lands on no record and reaches no mm write
+  --invariant: parked is frame vocabulary: write doors shed it; no mm write or stash spec holds it
   --invariant: a pb's wire value is derived at flush; rebuild's absorber pass reconciles the seats
   function stager.add(evt)
     local rawCaller = evt.rawTime
-    evt.rawTime = nil
+    evt.rawTime, evt.parked = nil, nil
     if evt.evType == 'note' then
       evt.detune = evt.detune or 0
       evt.delay  = evt.delay  or 0
@@ -1025,6 +1027,7 @@ do
   end
 
   function stager.assignParked(evt, update)
+    update.parked = nil
     util.add(parkedEdits, { op = 'assign', evt = evt, update = update })
   end
 
@@ -1199,9 +1202,7 @@ function tm:getChannel(chan)      return frame.channels[chan] end
 --post: fresh result = one unsafe event list per note lane, in lane order
 function tm:authoredLanes(chan)
   local lanes = {}
-  for lane in ipairs(frame.channels[chan].onTake.notes) do
-    util.add(lanes, frame.authoredEvents(chan, lane))
-  end
+  for _, col in ipairs(frame.channels[chan].onTake.notes) do util.add(lanes, col.events) end
   return lanes
 end
 
@@ -1227,13 +1228,14 @@ function tm:authoredPb(chan) return frame.authoredPb(chan) end
 -- caller reads its chan and lane off it. see docs/trackerManager.md § Lane occupancy
 --post: result = (channel-ordered) iterator yielding one unsafe parked note event
 function tm:eachParkedHost()
-  local chan, i = 1, 0
+  local chan, i, parked = 1, 0, frame.parkedNotes(1)
   return function()
     while chan <= 16 do
       i = i + 1
-      local evt = frame.channels[chan].parked.notes[i]
+      local evt = parked[i]
       if evt then return evt end
       chan, i = chan + 1, 0
+      parked = chan <= 16 and frame.parkedNotes(chan)
     end
   end
 end
@@ -1389,15 +1391,14 @@ local function promotionLanes(chan, promoted, ourParked)
     return true
   end
   local channel = frame.channels[chan]
-  for lane, col in ipairs(channel.onTake.notes) do
-    for _, evt in ipairs(col.events) do
-      if util.isNote(evt) and not evt.derived then occupy(lane, evt.ppq, evt.endppqC or evt.endppq) end
-    end
-  end
   -- A neighbour's parked cell still holds its column: the ghosts read it as occupied and the frozen
   -- note must not be authored on top of it. Only this host's own cells step aside, and they go.
-  for _, cell in ipairs(channel.parked.notes or {}) do
-    if not ourParked[cell] then occupy(cell.lane, cell.ppq, cell.endppqC or cell.endppq) end
+  for lane, col in ipairs(channel.onTake.notes) do
+    for _, evt in ipairs(col.events) do
+      if util.isNote(evt) and not evt.derived and not ourParked[evt] then
+        occupy(lane, evt.ppq, evt.endppqC or evt.endppq)
+      end
+    end
   end
   -- Logical-span order, which is the order the ghosts were allocated in. Two notes it cannot
   -- separate are alike in every term the allocation reads, so which takes which lane is no question.
@@ -1502,7 +1503,7 @@ local function freezeRegion(uuid, toGroup)
   -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
   -- behind. Host resolution is hostParked's, over live render events.
   local function hostDropped(pa)
-    for _, evt in ipairs(frame.channels[pa.chan].parked.notes or {}) do
+    for _, evt in ipairs(frame.parkedNotes(pa.chan)) do
       if evt.pitch == pa.pitch and pa.ppq >= evt.ppq and pa.ppq < evt.endppqC then
         return droppedHosts[evt.uuid] == true
       end
@@ -1861,7 +1862,7 @@ function tm:setMutedChannels(set)
     local want = lastMuteSet[chan] == true
     for _, col in ipairs(channel and channel.onTake.notes or {}) do
       for _, evt in ipairs(col.events) do
-        if util.isNote(evt) and (evt.muted == true) ~= want then
+        if util.isNote(evt) and not evt.parked and (evt.muted == true) ~= want then
           stager.assign(evt, { muted = want })
         end
       end
@@ -1913,7 +1914,7 @@ function tm:rebuild(takeChanged)
     -- Parked events are off-take and only the park stage rewrites them, so a wholesale mm re-read has
     -- no claim: all four streams carry forward, lists and all. See § Lane occupancy.
     local prev   = prevChannels[i]
-    local parked = prev and prev.parked or { notes = {}, ccs = {}, pb = {}, pa = {} }
+    local parked = prev and prev.parked or { ccs = {}, pb = {}, pa = {} }
     if dirt.wholesale(i) then
       frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, parked = parked }
     elseif dirt.has(i) then

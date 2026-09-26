@@ -53,7 +53,7 @@ end
 -- Note-host replace parks: the authored note leaves the take and remains the
 -- visible, editable surface in channels[chan].parked.
 local function parkedHost(h)
-  return h.tm:getChannel(1).parked.notes[1]
+  return require('harness').parkedNotes(h.tm, 1)[1]
 end
 
 -- Host + retrig under swing and delay. Shared across the G-tests.
@@ -128,7 +128,7 @@ return {
       h.tm:flush()
 
       t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 0, 'no fxNote survives fx removal')
-      t.falsy(h.tm:getChannel(1).parked.notes[1], 'nothing left parked')
+      t.falsy(require('harness').parkedNotes(h.tm, 1)[1], 'nothing left parked')
       local restored
       for _, n in ipairs(h.fm:dump().notes) do
         if not n.derived then restored = n end
@@ -205,7 +205,7 @@ return {
       h.tm:flush()
 
       local hostByLane = {}
-      for _, p in ipairs(h.tm:getChannel(1).parked.notes) do hostByLane[p.lane] = p end
+      for _, p in ipairs(require('harness').parkedNotes(h.tm, 1)) do hostByLane[p.lane] = p end
       t.truthy(hostByLane[1] and hostByLane[2], 'both hosts parked, one per lane')
 
       local dump = h.fm:dump()
@@ -244,7 +244,7 @@ return {
       end
 
       -- Every other keyed term is unchanged by the move: same host, onsets, pitches, velocities.
-      h.tm:assignParked(h.tm:getChannel(1).parked.notes[1], { lane = 1 }); h.tm:flush()
+      h.tm:assignParked(require('harness').parkedNotes(h.tm, 1)[1], { lane = 1 }); h.tm:flush()
 
       local host = parkedHost(h)
       t.eq(host.lane, 1, 'the host moved')

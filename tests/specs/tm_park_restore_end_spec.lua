@@ -42,7 +42,7 @@ return {
       h.ds:assign('fxRegions',
         { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the covered note parks off the take')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the covered note parks off the take')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
@@ -88,7 +88,7 @@ return {
       h.ds:assign('fxRegions',
         { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
       h.tm:rebuild()
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'only the covered note parks; the clipper sits outside')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'only the covered note parks; the clipper sits outside')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()

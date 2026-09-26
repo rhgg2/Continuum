@@ -458,8 +458,8 @@ the *wire* holds is still the window and nothing else.
 indistinguishable on the wire from an authored pb or cc, so recognition works
 only if *everything* on-take inside a replace window is generated. The
 authored events are stashed off-take into one `evType`-tagged list, and stay
-visible through a render union the view folds in — symmetric with how it
-unions the parked chord. Audibly a no-op: an authored bend already sounded as
+visible: tm seats a parked chord back in its lanes, flagged, and hands a
+parked pb or cc to the view in its column's union. Audibly a no-op: an authored bend already sounded as
 the curve.
 
 **4** **Live recognition needs no standing record.** A live region

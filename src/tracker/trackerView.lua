@@ -544,7 +544,7 @@ end
 local function notePreds(excludeEvt)
   local pitch = excludeEvt and excludeEvt.pitch
   return function(e) return util.isNote(e) and e ~= excludeEvt and e.pitch ~= pitch end,
-         function(e) return util.isNote(e) and e ~= excludeEvt and e.pitch == pitch end
+         function(e) return util.isNote(e) and e ~= excludeEvt and e.pitch == pitch and not e.parked end
 end
 
 -- Row-space onset band for a moved note: the inclusive [minRow, maxRow]

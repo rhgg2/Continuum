@@ -75,7 +75,8 @@ local function projectFrame(tm)
     for lane, col in ipairs(c.notes) do f.notes[lane] = projCol(col) end
     for ccNum, col in pairs(c.ccs)    do f.ccs[ccNum] = projCol(col) end
     f.pb = projCol(c.pb); f.pc = projCol(c.pc); f.at = projCol(c.at)
-    f.parked.notes = channel.parked.notes and projCol(channel.parked.notes) or nil
+    local parkedNotes = require('harness').parkedNotes(tm, chan)
+    f.parked.notes = #parkedNotes > 0 and projCol(parkedNotes) or nil
     f.parked.ccs   = channel.parked.ccs   and projCol(channel.parked.ccs)   or nil
     frame[chan] = f
   end

@@ -209,7 +209,7 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
                       detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the trill parked its own host (non-vacuous)')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the trill parked its own host (non-vacuous)')
       local arrival = pbSeatAt(h.fm:dump(), 1, 225)
       t.truthy(arrival, 'the chain seats a glide at all -- an off-take host is still a slide host')
       t.eq(arrival.val, centsToRaw(-100),
@@ -234,7 +234,7 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, ppq = 120, endppq = 240,
                                    fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
       h.tm:rebuild(); h.tm:flush()
-      t.eq(#h.tm:getChannel(1).parked.notes, 1, 'the region parked the successor off-take (non-vacuous)')
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the region parked the successor off-take (non-vacuous)')
       t.eq(pbSeatAt(h.fm:dump(), 1, 105).val, centsToRaw(100),
         'glides +100c to the parked cell, not the +1200c decoy (which would clamp to the ceiling)')
     end,
@@ -342,7 +342,7 @@ return {
                                        fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
         end
         h.tm:rebuild(); h.tm:flush()
-        return pbSeatsOf(h.fm:dump(), 1), #h.tm:getChannel(1).parked.notes
+        return pbSeatsOf(h.fm:dump(), 1), #require('harness').parkedNotes(h.tm, 1)
       end
       local function valAt(seats, ppq)
         for _, s in ipairs(seats) do if s.ppq == ppq then return s.val end end
@@ -380,7 +380,7 @@ return {
         end
         h.ds:assign('fxRegions', regions)
         h.tm:rebuild(); h.tm:flush()
-        return pbSeatsOf(h.fm:dump(), 1), #h.tm:getChannel(1).parked.notes
+        return pbSeatsOf(h.fm:dump(), 1), #require('harness').parkedNotes(h.tm, 1)
       end
       local function valAt(seats, ppq)
         for _, s in ipairs(seats) do if s.ppq == ppq then return s.val end end
