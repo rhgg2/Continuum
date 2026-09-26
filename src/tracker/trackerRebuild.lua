@@ -530,12 +530,19 @@ end
 -- The parked clone of a column event; the realisation frame
 -- is removed, and re-added on unpark
 --pre: evt is logical-frame; an mm-raw source must override ppq via `adds`
-local toParked do
+local toParked, parkInPlace do
   local REALISATION = { delayC = true, endppqC = true, committed = true, derived = true,
                       frame = true, cents = true, colEvt = true, sampleShadowed = true,
                       raw = true }
   function toParked(evt, adds)
     return util.assign(util.clone(evt, REALISATION), adds)
+  end
+
+  -- Park flips the column event where it stands, shedding the realisation frame there too.
+  --post: evt is its toParked spec plus parked = true, so the next head seat holds it
+  function parkInPlace(evt)
+    for field in pairs(REALISATION) do frame.setEvent(evt, field, nil) end
+    frame.setEvent(evt, 'parked', true)
   end
 end
 
@@ -589,7 +596,6 @@ local parkHomes = {
 
 -- Seat a kind's parked specs in their own columns, flagged; a seated event whose spec held keeps its
 -- table, so the column's carry holds. see docs/trackerManager.md § Lane occupancy
---post: fresh result = { [chan] = the channel's parked events of kind as seated, in specs order }
 local function seatParked(kind, specs)
   local home = parkHomes[kind]
   local wanted = frame.newChannels()
@@ -616,20 +622,13 @@ local function seatParked(kind, specs)
       end
     end
   end
-  local seated = frame.newChannels()
   for _, spec in ipairs(specs) do
-    local evt = held[spec]
-    if not evt then
-      evt = util.assign(util.clone(spec), { parked = true })
-      frame.spliceInto(home.column(spec), evt)
-    end
-    util.add(seated[spec.chan], evt)
+    if not held[spec] then frame.spliceInto(home.column(spec), util.assign(util.clone(spec), { parked = true })) end
   end
-  return seated
 end
 
 -- The event seated from a parked spec, which a restore flips in place.
---pre: the spec is seated
+--pre: the spec is seated, from the stash at the pass head or parked in place this pass
 local function seatedOf(spec)
   local key = frame.parkKey(spec)
   for _, evt in ipairs(parkHomes[spec.evType].column(spec).events) do
@@ -658,21 +657,16 @@ local function parkStage(fxOutWindows, fxParked)
     if evt.fx and generators.parksNotes(evt) then return evt.uuid end
   end
 
-  --shape: candidates = { evt (the live column/index event), col = evt's column (nil off-column), spec = toParked(evt, {...}) }
+  --shape: candidates = { evt (the live column/index event), seated = evt is a column event, spec = toParked(evt, {...}) }
   local function reconcilePark(candidates, prior, onPark)
     onPark = onPark or function (_) end
-    local function unlink(events, evt)
-      for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
-    end
     local newParked, restores = {}, {}
     for _, candidate in ipairs(candidates) do
       if hostFor(candidate.spec) then
         onPark(candidate.spec)
         util.add(newParked, candidate.spec)
         writes.delete(candidate.evt)
-        -- Unlink through the column, not the table the scan saw: renewal may replace that table
-        -- between the scan and here, and the old one is no longer the one tv will read.
-        if candidate.col then unlink(frame.renewColumn(candidate.col).events, candidate.evt) end
+        if candidate.seated then parkInPlace(candidate.evt) end
       end
     end
     for _, spec in ipairs(prior) do
@@ -704,7 +698,7 @@ local function parkNotes(stage, onTakeHosts)
   local function addCandidate(evt)
     if not seen[evt] then  -- a host under its own region would arrive from both sources
       seen[evt] = true
-      util.add(candidates, { evt = evt, col = frame.channels[evt.chan].onTake.notes[evt.lane], spec = toParked(evt) })
+      util.add(candidates, { evt = evt, seated = true, spec = toParked(evt) })
     end
   end
   for chan = 1, 16 do
@@ -749,9 +743,7 @@ local function parkNotes(stage, onTakeHosts)
   end
 
   local parkedByHost = {}
-  for _, seated in ipairs(seatParked('note', parkedNotes)) do
-    for _, evt in ipairs(seated) do util.bucket(parkedByHost, stage.hostFor(evt), evt) end
-  end
+  for _, spec in ipairs(parkedNotes) do util.bucket(parkedByHost, stage.hostFor(spec), seatedOf(spec)) end
 
   local touched = {}
   for _, spec in ipairs(parkedNotes) do touched[spec.chan] = true end
@@ -828,7 +820,7 @@ local function parkCCs(stage)
     if dirt.has(chan) then
       for cc, col in pairs(frame.channels[chan].onTake.ccs) do
         for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, cc)]) do
-          if not evt.parked then util.add(candidates, { evt = evt, col = col, spec = toParked(evt) }) end
+          if not evt.parked then util.add(candidates, { evt = evt, seated = true, spec = toParked(evt) }) end
         end
       end
     end
@@ -843,7 +835,6 @@ local function parkCCs(stage)
     util.add(restoredCCs, evt)
   end
 
-  seatParked('cc', parkedCCs)
   return parkedCCs, restoredCCs
 end
 

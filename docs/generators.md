@@ -630,8 +630,9 @@ cell.
 **3** **cc reaches the same place by a slightly different route** — no
 absorber, no detune residual. Augment sums offline and seats markerless as pb
 does. Replace parks the authored cc off-take and writes the generated curve
-as literal cc events on the target lane; the parked cc is re-seated for
-display, so it stays the visible, editable surface and the fill never shows.
+as literal cc events on the target lane; the parked cc stays seated in its
+column for display, so it stays the visible, editable surface and the fill
+never shows.
 Creating a cc-replace region leaves the lane looking unchanged, and that is
 the invariant.
 

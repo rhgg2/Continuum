@@ -9,7 +9,7 @@
 -- its own lane's membership does. Case 3 is that case: the lane renews on the one change.
 --
 -- The rule is the column's, not the note lane's. A cc column seats its parked ccs as a lane seats its
--- parked notes, and a restore flips the seated cc in place, which is a content change like any other.
+-- parked notes, and park and restore flip the event in place, which is a content change like any other.
 -- A channel's pb stream still holds its parked events in a list of its own, and tm publishes the
 -- stream's whole population (`tm:authoredPb`) as it publishes a lane's. Its carry needs that list to
 -- carry across the pass boundary, or a dirty channel re-mints it every pass and re-places its cells.
@@ -56,10 +56,7 @@ local region = { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = { { kin
 -- A cc-replace region parking the authored cc 74 at ppq 60 on chan 1. The kind stays registered
 -- across the case's passes -- dropping it would take the window with it and restore the cc -- so
 -- each case clears it at the end.
-local function parkedCC(harness)
-  local h = harness.mk()
-  h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 })
-  h.tm:flush()
+local function coverCC(h)
   generators.kinds.rep = {
     expand = function(host) return { notes = {}, delta = {
       { ppq = host.window[1], val = 100, shape = 'step' } } } end,
@@ -69,7 +66,14 @@ local function parkedCC(harness)
   h.tm:rebuild()
   local parked = require('harness').parkedCCs(h.tm, 1)
   t.eq(#parked, 1, 'fixture check: the covered cc parked off the take')
-  return h, parked[1]
+  return parked[1]
+end
+
+local function parkedCC(harness)
+  local h = harness.mk()
+  h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 })
+  h.tm:flush()
+  return h, coverCC(h)
 end
 
 -- The same, on pb: the authored breakpoint at 0 leaves the take and the region's own curve seats.
@@ -148,6 +152,21 @@ return {
       t.truthy(h.tm:authoredCCs(1)[74] == column, "the column carried, so tv's cell carry stands")
       t.truthy(require('harness').parkedCCs(h.tm, 1)[1] == parked,
         'and the cc stayed seated rather than being reseated')
+      generators.kinds.rep = nil
+    end,
+  },
+
+  {
+    -- Park is a flip within the column's population, as restore is: the event the region covers is
+    -- the event the column seats parked, with no clone standing in for it.
+    name = 'a covered cc parks where it stands, the on-take event itself flagged',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      local onTake = h.tm:authoredCCs(1)[74][1]
+      t.truthy(onTake and not onTake.parked, 'fixture check: the cc sits on the take')
+
+      t.truthy(coverCC(h) == onTake, 'the parked cc is the on-take event, flipped where it stood')
       generators.kinds.rep = nil
     end,
   },

@@ -11,6 +11,10 @@ not eight or ten.
   otherwise carry it to mm. ccs followed the same day, a seat meeting its stash spec by park identity
   since a view-added cc spec has no uuid. pb and pa keep their lists for now.
 
+- **2026-09-26** — Park flips the on-take event where it stands, shedding its realisation fields
+  there, over unlinking it and seating a fresh clone of its spec. The flipped event equals its spec,
+  so the next head seat holds it, and the head seat is the only one a pass makes.
+
 - **2026-09-23** — The host gate reaches a host along a hold stream when a seed on that stream lies
   in the host's window cover, the same cover its base is built from, open on a side with no
   governing or closing point. Over a scalar hold-from per family, which woke every later host on any

@@ -23,11 +23,11 @@ Every column has `events` (array sorted by **logical** ppq). `cc` columns
 additionally carry `cc` (the controller number). Presentation order is a
 tv concern — tm imposes none.
 
-A note lane seats both sides of the take. A parked note sits in its lane at
-its onset like any other event, flagged `parked`, so a lane's events are its
-whole authored population. The other kinds keep their parked events apart:
-`parked` holds `ccs`, `pb` and `pa` as flat lists of render-ready events,
-each carrying the CC number or pitch that places it. Nothing about the
+A note lane or cc column seats both sides of the take. A parked note or cc
+sits in its column at its onset like any other event, flagged `parked`, so a
+column's events are its whole authored population. pb and pa keep their
+parked events apart: `parked` holds `pb` and `pa` as flat lists of
+render-ready events, a pa carrying the pitch that places it. Nothing about the
 population differs between the two representations.
 
 `parked` on an event is frame vocabulary. tm's write doors shed it, so a
@@ -755,8 +755,9 @@ The frame the layered model hands upward is the logical one, and the raw frame
 stays inside trackerManager. Realisation reaches the view only as cues.
 
 A **cue** is a realisation field carried on a logical cell: `delayC`,
-`endppqC`, `sampleShadowed`. `REALISATION` enumerates the set, and the park
-stash is the clone minus it (§ Park identity), so one list governs both.
+`endppqC`, `sampleShadowed`. `REALISATION` enumerates the set. The park
+stash is the clone minus it (§ Park identity), and park sheds it from the
+seated event in place, so one list governs the cues, the stash and the seat.
 
 ### The pipeline
 
@@ -1434,9 +1435,8 @@ the bounds it held — the same event tables, under the carry that holds its col
 change needs no guard of its own: length moves only through `mm:setLength`, whose reload dirties
 every channel.
 
-The park stage runs the pass again over the lanes it touched. A park unlinks the on-take event and
-seats its spec in its place, flagged and holding no bound; a restore clears the flag on the seated
-event where it stands. Parking removes no onset from the population, so every bound the second call
+The park stage runs the pass again over the lanes it touched. A park flags the on-take event where it
+stands and sheds its realisation fields, the bound among them; a restore clears the flag the same way. Parking removes no onset from the population, so every bound the second call
 states is the head pass's own number.
 
 The pass names what it moved. An on-take event whose bound the pass writes over a different number
@@ -1455,7 +1455,7 @@ skipped.
 
 `buildFxWindows` builds the pass's fx windows from three sources — authored `fxRegions`, the on-take
 note hosts `onTakeFxHosts` names, and the stash's own hosts, read off the lanes' flagged notes.
-The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's event at once,
+The fx-host index turns over a rebuild late: `reconcilePark` flags a parked host's event at once,
 but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
 in between the index still names a host that has left the take. `perHost` resolves uuids straight out
 of it, so the parked flag is what declares which arm takes a given host: the clip pass skips
@@ -1613,9 +1613,8 @@ Renewal is precise, and every mutator of a seated lane owns it:
 
 - **membership** — `exciseEvents` assigns only when it actually dropped an
   event; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
-  the park restores) go through `spliceInto(col, event)`, which renews
-  before it splices, and the park unlink calls `renewColumn` on the column
-  its candidate names.
+  `seatParked`) go through `spliceInto(col, event)`, which renews
+  before it splices.
   A column carries the order it is kept in — `less`, set at the mint
   (`newNoteColumn` / `newCcColumn` / `newStreamColumn`) — so the splice needs only the
   column and the event, and resolving *which* column stays with the caller:
@@ -1654,21 +1653,24 @@ Two cases need no renewal. Wholesale and stale-swing channels get a
 brand-new `onTake.notes`, so their identity is fresh by construction. And
 a local bound to `col.events` that outlives a renewal operates on the dead
 table — the read-only walks (`enumerateHosts`, `channelStreams`,
-`onsetsIn`) do not care, but the park scan did, which is why a note
-carry stores its lane index and resolves the table at unlink time.
+`onsetsIn`) do not care, and neither does park, which flips the event the
+scan saw rather than removing it from the table.
 
 Parked notes and ccs obey the same rule, seated in their columns, by a
 different route. Nothing owns them the way a mutator owns a column:
-`seatParked` seats the stash every pass, twice — once at the pass head from
-the document, once from the park stage's reconciled set. So the discipline
-is a comparison rather than an enumeration, a seat meeting its spec by park
-identity (§ Park identity). A seated event whose spec held stays where it
-is; one whose spec moved, or that the stash no longer holds, is dropped and
-its column renewed; a spec with nothing seated is spliced in. `endppqC` and
-the flag are the seat's own and stay out of the comparison, the lane pass
-writing the bound through `setEvent` as for any column event. A restore
-clears the flag through `setEvent` too, which renews a cc column as it does
-a lane.
+`seatParked` seats the stash once a pass, at the pass head, from the
+document. So the discipline is a comparison rather than an enumeration, a
+seat meeting its spec by park identity (§ Park identity). A seated event
+whose spec held stays where it is; one whose spec moved, or that the stash
+no longer holds, is dropped and its column renewed; a spec with nothing
+seated is spliced in. `endppqC` and the flag are the seat's own and stay out
+of the comparison, the lane pass writing the bound through `setEvent` as for
+any column event.
+
+The park stage flips events where they stand, through `setEvent`, which
+renews a cc column as it does a lane. A park sets the flag on the on-take
+event and sheds its realisation fields, which leaves the event equal to the
+spec it stashes, so the next head seat holds it; a restore clears the flag.
 
 The parked pb and pa lists take the rule as a whole-list comparison.
 `installParked` builds each channel's candidate list and installs it only
@@ -1678,10 +1680,10 @@ held arrives in the stash's own order from either render, and a reordering
 can only cost a shed. The rule reaches the pb column through the union
 (§ Lane occupancy).
 
-The park stage takes the notes it seated from `seatParked`'s answer
-rather than from its own specs, since a held spec keeps the event already
-standing. The fx share of parked originals must: gridPane matches those
-events by identity to suppress them under their host's ghost.
+The park stage hands fx the seated notes rather than its own specs,
+resolving each through `seatedOf`. The fx share of parked originals must:
+gridPane matches those events by identity to suppress them under their
+host's ghost.
 
 ## Dormant guard
 
