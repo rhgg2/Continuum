@@ -25,25 +25,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-26 tm: fx expansion reads the pb base off the pb column (design § Pitchbend and program change intent 1)
 - 2026-09-26 tm: sweep synthesised pcs outside tracker mode (design § Pitchbend and program change intent)
 - 2026-09-26 tm: parked note hosts run their chain (design § Parking)
 - 2026-09-26 tm: the CC walk projects the pb column as intent (design § Pitchbend and program change intent)
-- 2026-09-26 tm: the pc column holds authored pcs alone (design § Pitchbend and program change intent)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **tm: fx expansion reads the pb base off the pb column** — `pbBaseFor` and `classifyHosts`'
-   `baseIsDirty` read a channel's sounding pbs from its pb column, `val` as cents and logical ppq,
-   rather than from um's index, so `isAuthoredPb` and the raw-span conversion of the pb cover
-   retire. The parked list stays the base's other half until the next item. docs:
-   `docs/trackerManager.md` § Span-covered fx scans, `docs/generators.md` § Offline continuous
-   realisation. Spec: a host's pb base reads an authored pb's `val` at its logical onset under
-   swing; a foreign pb enters the base on the pass that derives its cents; an edit to a column pb
-   inside a host's window dirties its base.
 
 1. **tm: seat parked pbs in the pb column under the parked flag** — pb joins `parkHomes`, so the
    stash seat takes parked pbs into the pb column flagged `parked`. `parkPbs` scans the pb column

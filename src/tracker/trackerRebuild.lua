@@ -1083,45 +1083,33 @@ end
 
 -- Curve events relevant to a given set of spans: interior points, plus
 -- the nearest points of the complement; see § Span-covered fx scans
-local function pointsFor(evts, spanSet, admit)
-  admit = admit or function (_) return true end
+local function pointsFor(evts, spanSet)
   local cover = {}
   local resumeFrom = 1   -- entries below this were covered by an earlier span
   for _, span in ipairs(spanSet) do
     local spanStart, spanEnd = span[1], span[2]
-    -- Governing entry: the last admitted one at-or-before the start, unless an earlier span took it.
+    -- Governing entry: the last one at-or-before the start, unless an earlier span took it.
     local governing = math.max(util.firstAfter(evts, spanStart) - 1, resumeFrom)
-    while governing > resumeFrom and not admit(evts[governing]) do governing = governing - 1 end
-    -- Cover through the closing entry: the first admitted one past the end.
+    -- Cover through the closing entry: the first one past the end.
     resumeFrom = #evts + 1
     for i = governing, #evts do
       local evt = evts[i]
-      if admit(evt) then
-        util.add(cover, evt)
-        if evt.ppq > spanEnd then resumeFrom = i + 1; break end
-      end
+      util.add(cover, evt)
+      if evt.ppq > spanEnd then resumeFrom = i + 1; break end
     end
   end
   return cover
 end
 
-local function boundsFor(evts, span, admit)
-  admit = admit or function (_) return true end
-  local spanStart, spanEnd = span[1], span[2]
-  local lo = util.firstAfter(evts, spanStart) - 1
-  while lo >= 1 and not admit(evts[lo]) do lo = lo - 1 end
-  local hi = util.firstAfter(evts, spanEnd)
-  while hi <= #evts and not admit(evts[hi]) do hi = hi + 1 end
+local function boundsFor(evts, span)
+  local lo = util.firstAfter(evts, span[1]) - 1
+  local hi = util.firstAfter(evts, span[2])
   local function ppqFor(i)
     if i < 1     then return -math.huge end
     if i > #evts then return math.huge end
-    return evts[i].ppqL or evts[i].ppq
+    return evts[i].ppq
   end
   return ppqFor(lo), ppqFor(hi)
-end
-
-local function toRawSpan(chan, span)
-  return { time:fromLogical(chan, span[1]), time:fromLogical(chan, span[2]) }
 end
 
 local function basePoint(ppq, val, evt)
@@ -1130,23 +1118,22 @@ end
 
 local function isAuthoredPb(pb) return not pb.derived and pb.cents ~= nil end
 
--- The covers of all authored pbs; see § Span-covered fx scans pre:
--- parked.pb is in ppq order, as parkPbs installs it
+-- The column's pb events, or none; the column holds the sounding authored pbs.
+local function pbColumnEvents(chan)
+  local col = frame.channels[chan].onTake.pb
+  return col and col.events or {}
+end
+
+-- The covers of the parked list and the pb column; see § Span-covered fx scans
+--pre: the park stage has run: parked.pb is in ppq order and the column holds no parked pb
 local function pbBaseFor(chan, spanSet)
   local base, seen = {}, {}
   for _, evt in ipairs(pointsFor(frame.channels[chan].parked.pb, spanSet)) do
-    util.add(base, basePoint(evt.ppq, evt.cents, evt))
+    util.add(base, basePoint(evt.ppq, evt.val, evt))
     seen[evt.ppq] = true
   end
-  -- The maintained pb index is raw-sorted; pbs carry no delay and swing is monotone, so the raw
-  -- cover is the logical cover.
-  local rawSpans = {}
-  for _, span in ipairs(spanSet) do
-    util.add(rawSpans, toRawSpan(chan, span))
-  end
-  for _, pb in ipairs(pointsFor(index.raw(chan).pbs, rawSpans, isAuthoredPb)) do
-    local ppq = pb.ppqL or pb.ppq
-    if not seen[ppq] then util.add(base, basePoint(ppq, pb.cents, pb)) end
+  for _, evt in ipairs(pointsFor(pbColumnEvents(chan), spanSet)) do
+    if not seen[evt.ppq] then util.add(base, basePoint(evt.ppq, evt.val, evt)) end
   end
   util.sortByPPQ(base)
   return base
@@ -1253,7 +1240,7 @@ local function classifyHosts(chan, hosts)
         local lo, hi
         if target == 'pb' then
           local lo1, hi1 = boundsFor(frame.channels[chan].parked.pb, host.window)
-          local lo2, hi2 = boundsFor(index.raw(chan).pbs, toRawSpan(chan, host.window), isAuthoredPb)
+          local lo2, hi2 = boundsFor(pbColumnEvents(chan), host.window)
           lo, hi = math.max(lo1, lo2), math.min(hi1, hi2)
         else
           lo, hi = boundsFor(frame.channels[chan].onTake.ccs[target].events, host.window)
@@ -1529,7 +1516,7 @@ local function rebuildFx(fxOutWindows, fxRegions, pbLimCents)
     for target, windows in pairs(emitScope) do
       local raw = {}
       for _, window in ipairs(windows) do
-        util.add(raw, toRawSpan(chan, window))
+        util.add(raw, { time:fromLogical(chan, window[1]), time:fromLogical(chan, window[2]) })
       end
       ccScope[target] = raw
     end

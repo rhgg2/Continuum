@@ -33,6 +33,42 @@ local function mmPbs(h, chan)
   return out
 end
 
+-- An fx seat is markerless: it carries no ppqL.
+local function earliestSeat(h, chan)
+  for _, c in ipairs(mmPbs(h, chan)) do
+    if c.ppqL == nil then return c end
+  end
+end
+
+-- A depth-0 sine over [120, 360): its contribution is zero, so each seat samples the pb base.
+local function zeroSineHost()
+  return { evType = 'note', ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
+           detune = 0, delay = 0, lane = 1,
+           fx = { { kind = 'sine', period = { 1, 4 }, depth = 0, onset = 0 } } }
+end
+
+-- classic, shift 0.08 over a 1 QN tile: logical 120 sits at raw 139, logical 600 at raw 619.
+local swungConfig = { project = { swings = { c58 = { factors = {
+  { atom = 'classic', shift = 0.08, period = 1 } } } } } }
+
+-- Linear pbs at logical 0 (0c) and 600 (100c) under swing, and the zero-sine host between them.
+local function swungRampWithHost(harness)
+  local h = harness.mk{ config = swungConfig }
+  h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 0,   shape = 'linear' })
+  h.tm:addEvent({ evType = 'pb', ppq = 600, chan = 1, val = 100, shape = 'linear' })
+  h.tm:flush()
+  h.ds:assign('swing', { global = 'c58' })
+  h.tm:addEvent(zeroSineHost())
+  h.tm:flush()
+  return h
+end
+
+local function mmPbAtLogical(h, chan, ppqL)
+  for _, c in ipairs(mmPbs(h, chan)) do
+    if c.ppqL == ppqL then return c end
+  end
+end
+
 -- A pb-replace region over [0, 240) on chan 1, holding a flat 30c curve.
 local function pbReplaceRegion(h)
   local generators = require('generators')
@@ -220,6 +256,59 @@ return {
       local evt = columnPbAt(h, 1, 120)
       t.truthy(evt, 'the restored pb is back in the column')
       t.eq(evt.val, 40, 'with its intent')
+    end,
+  },
+
+  ----- The pb base: fx expansion reads the authored pb curve off the column
+  --
+  -- A host's pb base is the authored curve over its window (docs/trackerManager.md § Span-covered fx
+  -- scans). Its on-take half is the pb column's cover, logical and in cents; the depth-0 sine host
+  -- makes each seat a pure sample of it.
+
+  -- The base is logical: under swing the ramp is interpolated between logical onsets. The host's
+  -- first seat, logical 120, lies 120/600 of the way along the 0c → 100c ramp, so reads 20c. A
+  -- raw-frame slip interpolates 120/619 of the way.
+  {
+    name = 'a host\'s pb base reads an authored pb\'s val at its logical onset under swing',
+    run = function(harness)
+      local h = swungRampWithHost(harness)
+      local ramp = mmPbAtLogical(h, 1, 600)
+      t.truthy(ramp and ramp.ppq ~= 600, 'fixture check: swing moves the ramp\'s raw seat')
+
+      local seat = earliestSeat(h, 1)
+      t.truthy(seat, 'fixture check: the host seats pbs')
+      t.eq(seat.val, cents2raw(20), 'the first seat samples the ramp at its logical onset')
+    end,
+  },
+
+  -- A foreign pb's intent is derived on the pass that first sees it, and the base holds it on that
+  -- same pass: the host sounds the foreign pb's 100c from the start.
+  {
+    name = 'a foreign pb enters the base on the pass that derives its cents',
+    run = function(harness)
+      local h = harness.mk{ seed = {
+        notes = { zeroSineHost() },
+        ccs   = { { ppq = 0, chan = 1, evType = 'pb', val = 4096 } },   -- sounds 100c
+      } }
+      local seat = earliestSeat(h, 1)
+      t.truthy(seat and seat.ppq > 0, 'fixture check: the host seats pbs apart from the foreign pb')
+      t.eq(seat.val, 4096, 'the seat samples the foreign pb\'s intent')
+    end,
+  },
+
+  -- A gated pass wakes a host whose base an edit changes, though the edit lies outside its window:
+  -- the ramp's closing point at 600 bounds the window [120, 360). Doubling it doubles the first seat.
+  {
+    name = 'an edit to a column pb bounding a host\'s window dirties its base',
+    run = function(harness)
+      local h = swungRampWithHost(harness)
+      h.tm:addEvent({ evType = 'pb', ppq = 900, chan = 1, val = 0, shape = 'linear' })
+      h.tm:flush()
+      t.eq(earliestSeat(h, 1).val, cents2raw(20), 'fixture check: the first seat reads 20c')
+
+      h.tm:assignEvent(columnPbAt(h, 1, 600), { val = 200 })
+      h.tm:flush()
+      t.eq(earliestSeat(h, 1).val, cents2raw(40), 'the first seat follows the doubled ramp')
     end,
   },
 }

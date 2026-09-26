@@ -1371,15 +1371,13 @@ time fx expansion runs, the park stage has seated every parked cc and flipped ev
 population is exact.
 
 pb cannot take that route: its parked events sit apart from its column, in the channel's parked
-list, rather than seated in it. pb instead unions two covers, one of the
-parked list and one of the maintained pb index, the parked point winning at a shared ppq. Each
-cover holds its own list's governing and closing points, so the union holds the later governor
-and the earlier closer, which are the whole population's. The parked list is ppq-sorted as the
-park stage installs it. The index is raw-sorted, and since pbs carry no delay and swing is
-monotone, the raw-frame cover equals the logical-frame cover — spans convert via
-`time:fromLogical` before the walk.
-"Authored" means the cents sidecar is present: seats carry none, and the CC walk gives a foreign pb
-its cents.
+list, rather than seated in it. pb instead unions two covers, one of the parked list and one of the
+pb column, the parked point winning at a shared ppq. Each cover holds its own list's governing and
+closing points, so the union holds the later governor and the earlier closer, which are the whole
+population's. Both lists are logical and ppq-sorted, and both carry intent cents as `val`. The
+column holds exactly the sounding authored pbs — seats and derived pbs never enter it, the park
+stage has excised newly parked pbs and spliced restores back, and the CC walk has projected a
+foreign pb's derived cents — so membership is authorship.
 
 `nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane population (§ Lane occupancy), so
 a parked host has a successor despite being off-take, and a parked successor is the
