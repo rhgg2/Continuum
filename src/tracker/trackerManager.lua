@@ -1632,12 +1632,35 @@ function tm:flush() if stager.flush() then tm:rebuild(false) end end
 -- events through. see docs/trackerManager.md § Length operations
 local fxSpanKeys = { 'fxRegions', 'fxParked', 'fxRealisedWindows' }
 
+-- A seat is raw-only and the census alone recognises it, so a seat the mapped census no longer covers
+-- would read as authored for good. see docs/trackerManager.md § Length operations
+--post: each raw-only pb or cc stored covers and mapped does not is staged for delete
+local function retireUncoveredSeats(stored, mapped)
+  local before, after = fxWindows.new(stored, timeContext), fxWindows.new(mapped, timeContext)
+  local uncovered = {}
+  for _, window in ipairs(stored) do
+    local startRaw, endRaw = before.rawSpan(window)
+    local raw = index.raw(window.chan)
+    for _, target in ipairs(fxWindows.perTarget(window)) do
+      local stream = target.evType == 'pb' and raw.pbs or target.evType == 'cc' and raw.ccs[target.cc]
+      for _, entry in ipairs(stream or {}) do
+        if entry.ppqL == nil and entry.ppq >= startRaw and entry.ppq < endRaw
+           and not after.ownsRaw(target.evType, window.chan, target.cc, entry.ppq) then
+          util.add(uncovered, entry)
+        end
+      end
+    end
+  end
+  for _, entry in ipairs(uncovered) do stager.delete(entry) end
+end
+
 --pre: keys name the stores the verb maps; one it omits stands as it is
 --pre: mapSpan(ppq, endppq) -> the span's images in order; an empty list drops the record
 --pre: mapSpan concretes no util.OPEN ceiling, an open tail being intent that no resize edits
 --post: ds[key] := its mapped records, for each named key whose records the map changed
 --post: the first image keeps the record's id and every later one mints its own
 --post: a parked delay scales by slope, the map being linear across the span the verb rewrites
+--post: (census mapped) → the seats it uncovers are staged for delete, the rest left to the pass
 --invariant: the write is suppressed, so the caller's own flush drives the one rebuild that reads it
 local function mapFxDocument(keys, mapSpan, slope)
   local writes = {}
@@ -1656,6 +1679,9 @@ local function mapFxDocument(keys, mapSpan, slope)
     if not util.deepEq(stored, mapped) then writes[key] = mapped end
   end
   if not next(writes) then return end
+  if writes.fxRealisedWindows then
+    retireUncoveredSeats(ds:get('fxRealisedWindows'), writes.fxRealisedWindows)
+  end
   -- All sixteen: a length verb moves the whole document, and the regions' own dirt would otherwise
   -- come from the ds observer this write suppresses.
   dirt.add(nil, true)

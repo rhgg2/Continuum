@@ -2025,7 +2025,12 @@ since nothing links a copy to what it was copied from.
 The census is the piece with teeth. Its spans key the pb create/remove
 diff of § Region-replace parking, so a census left where the seats no
 longer are reads as one window removed and another created; the removal
-then sweeps pbs from a span nothing occupies. A region left behind is
+then sweeps pbs from a span nothing occupies. The seats themselves stay
+where they are, being raw-only and outside every take walk, so a mapped
+census can uncover some: a shrink clips or drops their window, a stretch
+moves it off them. An uncovered seat would read as authored to the next
+pass and never retire, so the map deletes those as it writes the census;
+the seats it still covers are the closing pass's to reconcile. A region left behind is
 merely visible — it keeps deriving at the rows it was authored on while
 the music around it has moved. A tile is the one verb that leaves the
 census out, and § tileLength says why.

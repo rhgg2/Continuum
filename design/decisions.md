@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — A length verb that maps the census deletes the pb and cc seats the mapped census
+  no longer covers, over moving the seats through the verb's time map alongside it. Seats stay
+  raw-only and outside every take walk; moving them would round the hand-back tick onto its window's
+  end under a shrinking stretch, where it escapes recognition. The seats still covered are left for
+  the closing pass to reconcile.
+
 - **2026-09-26** — A parked note is seated in its own lane under a `parked` flag, over a separate
   parked list unioned with the lane on read. Parking and restore become a flip within one population,
   so the lane is its own carry key and the union, its memo and the lane buckets go; a reader wanting

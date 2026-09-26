@@ -7,8 +7,9 @@
 -- Each case asserts on the authored span and on the derived output together, since the output is
 -- what the author hears: a region whose span did not move keeps deriving at the old rows.
 
-local t    = require('support')
-local util = require('util')
+local t          = require('support')
+local util       = require('util')
+local generators = require('generators')
 
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
 
@@ -55,6 +56,64 @@ end
 local function shiftedBy(list, delta)
   local out = {}
   for _, v in ipairs(list) do util.add(out, v + delta) end
+  return out
+end
+
+-- A replace stage per continuous stream, stepping to 100 at the window onset: the machinery hands the
+-- inherited value back on the window's last tick, so each window seats two points per stream.
+-- Registers the kinds; the caller clears them.
+local CC = 74
+local function stepChain()
+  local function step(stream)
+    return { notes = {}, delta = { { ppq = stream.window[1], val = 100, shape = 'step' } } }
+  end
+  generators.kinds.stepPb = { expand = step, mode = 'replace', dest = 'pb', label = 'Step Pb',
+                              defaults = {}, fields = {} }
+  generators.kinds.stepCc = { expand = step, mode = 'replace', dest = CC, label = 'Step Cc',
+                              defaults = {}, fields = {} }
+  return { { kind = 'stepPb' }, { kind = 'stepCc' } }
+end
+local function clearStepChain() generators.kinds.stepPb, generators.kinds.stepCc = nil, nil end
+
+-- The take's pb or cc onsets on channel 1, ascending, less those inside any of the given spans.
+local function streamOutside(h, evType, spans)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.chan == 1 and c.evType == evType and (evType == 'pb' or c.cc == CC) then
+      local inside = false
+      for _, span in ipairs(spans) do
+        if c.ppq >= span[1] and c.ppq < span[2] then inside = true end
+      end
+      if not inside then util.add(out, c.ppq) end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+local function streamAt(h, evType, ppq)
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.chan == 1 and c.evType == evType and (evType == 'pb' or c.cc == CC) and c.ppq == ppq then
+      return c
+    end
+  end
+end
+
+-- An authored point either side of where a region will sit, on both streams.
+local function seedStreams(h, ppqs)
+  for _, ppq in ipairs(ppqs) do
+    h.tm:addEvent({ evType = 'pb', ppq = ppq, chan = 1, val = 30 })
+    h.tm:addEvent({ evType = 'cc', ppq = ppq, chan = 1, cc = CC, val = 30 })
+  end
+  h.tm:flush()
+end
+
+local function mapped(list, fn)
+  local out = {}
+  for _, v in ipairs(list) do
+    local image = fn(v)
+    if image then util.add(out, image) end
+  end
   return out
 end
 
@@ -137,6 +196,69 @@ return {
 
       t.truthy(lastOf(derivedOnsets(h, 1)) < 1920,
         'nothing derives past the new end -- no region is left there to derive it')
+    end,
+  },
+
+  {
+    -- A region's pb and cc seats are raw-only and recognised by the census alone, so a census that maps
+    -- while its seats stay put leaves any seat the mapped span no longer covers reading as authored,
+    -- and it is never retired. Past its window a stream reads as it would with no region at all
+    -- (docs/generators.md § Route-by-window **8**): outside the region, the stream after the verb is
+    -- the stream before it, mapped. Both directions, since a shrinking or a moving span uncovers.
+    name = 'rescale leaves no pb or cc seat behind outside the mapped region',
+    run = function(harness)
+      for _, f in ipairs({ 0.5, 2 }) do
+        local h = harness.mk()
+        seedStreams(h, { 60, 1000 })
+        h.ds:assign('fxRegions',
+          { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 720, fx = stepChain() } })
+        h.tm:rebuild()
+
+        local before = { pb = streamOutside(h, 'pb', { { 480, 720 } }),
+                         cc = streamOutside(h, 'cc', { { 480, 720 } }) }
+        t.truthy(streamAt(h, 'cc', 719) and streamAt(h, 'pb', 719),
+          'precondition: the region seats its hand-back on its last tick, on both streams')
+
+        h.tm:rescaleLength(h.fm:length() * f)
+        local span = { 480 * f, 720 * f }
+        t.eq(regionOf(h, 'fxr-1').ppq, span[1], 'precondition: the region scaled by ' .. f)
+
+        for _, evType in ipairs({ 'pb', 'cc' }) do
+          t.deepEq(streamOutside(h, evType, { span }), mapped(before[evType], function(p) return p * f end),
+            evType .. ' outside the region is what it was, scaled by ' .. f .. ' -- no seat left behind')
+          t.truthy(streamAt(h, evType, span[1]), 'and the region derives at its scaled onset')
+        end
+        clearStepChain()
+      end
+    end,
+  },
+
+  {
+    -- The same under a shrink, which clips a straddling region and drops one wholly past the end:
+    -- the seats either held past the new end are no census's to recognise afterwards.
+    name = 'a shrink leaves no pb or cc seat behind from a clipped or a dropped region',
+    run = function(harness)
+      local h = harness.mk()
+      seedStreams(h, { 60, 1000 })
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-astride', chan = 1, ppq = 1800, endppq = 2040, fx = stepChain() },
+        { uuid = 'fxr-past',    chan = 1, ppq = 2400, endppq = 2640, fx = stepChain() } })
+      h.tm:rebuild()
+
+      local spans = { { 1800, 2040 }, { 2400, 2640 } }
+      local before = { pb = streamOutside(h, 'pb', spans), cc = streamOutside(h, 'cc', spans) }
+      t.truthy(streamAt(h, 'cc', 2039) and streamAt(h, 'cc', 2639),
+        'precondition: both regions seat a hand-back past the coming end')
+
+      h.tm:setLength(1920)
+
+      for _, evType in ipairs({ 'pb', 'cc' }) do
+        t.deepEq(streamOutside(h, evType, { { 1800, 1920 } }),
+          mapped(before[evType], function(p) return p < 1920 and p or nil end),
+          evType .. ' outside the clipped region is what it was, short of the new end')
+        t.truthy(streamAt(h, evType, 1800), 'and the clipped region still derives at its onset')
+      end
+      clearStepChain()
     end,
   },
 
