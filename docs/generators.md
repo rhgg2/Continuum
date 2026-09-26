@@ -315,9 +315,9 @@ macros seat on the target lane.
 the logical frame and in intent units.
 
 **2** The continuous channels are **absolute closed curves**, seeded from the
-authored base *as parked* — the park stash authoritative inside its windows,
-the on-take stream elsewhere — and sliced to the window with entering and
-closing edge values, so a curve is total over the closed window. A stage can
+authored base — the target's column, parked and sounding events alike
+(`docs/trackerManager.md` § Span-covered fx scans) — and sliced to the window
+with entering and closing edge values, so a curve is total over the closed window. A stage can
 therefore read `stream.pb` and `stream.ccs` as real summed curves, and
 `stream ≡ host` holds for the continuous channels, not just for notes.
 

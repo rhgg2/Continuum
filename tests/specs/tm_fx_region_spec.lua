@@ -2840,7 +2840,7 @@ return {
   {
     -- Every parked note carrying fx runs its chain, whichever host parks it: a sine host parked by an
     -- arp region sounds the same curve it sounds on the take, and holds it across a rebuild.
-    -- see design/intent-emission.md § Parking
+    -- see docs/trackerManager.md § Fx expansion
     name = 'a continuous-only host parked by a region runs its chain',
     run = function(harness)
       local sineHost = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
@@ -2864,7 +2864,7 @@ return {
     -- A note-dest member runs its own chain beside the region's: a trill+sine host under an arp sounds
     -- its own trill hits, and the arp still sounds every step. Where a trill hit lands on an arp step
     -- at the same pitch the two are one voice and one survives (docs/voicing.md), so each step is
-    -- pinned as a sounding onset, not as an arp-tagged record. see design/intent-emission.md § Parking
+    -- pinned as a sounding onset, not as an arp-tagged record. see docs/trackerManager.md § Fx expansion
     name = 'a note-dest member runs its own chain beside the region',
     run = function(harness)
       local h = harness.mk()

@@ -729,6 +729,10 @@ stage per medium. A MIDI channel offers three media its notes contend for:
 - one pitch-bend stream, which absorber reconciliation allocates;
 - one program change, which PC synthesis allocates.
 
+A parked event lies outside the sounding set, so it claims no medium. It
+bounds no absorber's reach on lane 1, and the tail walk places no raw onset
+for it.
+
 An axis earns an allocation stage exactly when its realisation depends on other
 events. Velocity is per-note and CC lanes are independent streams, so neither
 needs one.
@@ -1036,7 +1040,8 @@ overlaid at dispatch.
 being its own earlier stage. Every host the gate does not keep runs
 (§ The host gate)
 — on-take fx notes (augment hosts), parked
-note hosts (window = the realised parked extent), and fx regions; the
+note hosts whichever host parked them (window = the realised parked extent),
+and fx regions; the
 derived fxNotes reconcile
 against the set um files per producing host (`diffEvents`, § The host gate), and continuous streams seat
 offline — cc-augment sums per target into markerless cc seats, pb defers

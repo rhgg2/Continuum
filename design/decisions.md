@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — An emission stage takes intent fields off the columns and an event's raw position
+  by uuid off um's index, over rederiving raw from logical; the tail walk keeps reading um's index,
+  since it refines the sounding set the stages before it settled. The frame keeps each channel's fx
+  hosts, over um's `fxHosts`, which also retires the whole-lane walks 4d87774b put on every rebuild
+  through `frame.parkedNotes`.
+
 - **2026-09-26** — A pb park writes no dirt seed, over seeding its row as a note park does. Whatever
   puts a pb under a window, whether a region edit or the pb's own add or move, has already seeded
   its row or the window, so rebuildPbs redoes the absorbers around it either way; removing the seed

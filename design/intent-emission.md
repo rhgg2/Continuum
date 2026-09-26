@@ -1,6 +1,6 @@
 # Intent and emission — the frame as a take's intent
 
-> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 3 (parked pbs in the pb column).
+> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 4 (cues and the realisation map).
 
 **The frame holds a take's intent — every authored event in its logical column, sounding or not. A
 pass reconstructs that intent from mm and the stash, then emits the take from it; parking, fx
@@ -51,40 +51,22 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 1. Emission reads intent from the frame alone, and um's index only for the previous emission.
 
+1. A raw position is emission. A stage takes membership and intent fields from the columns, and an
+   event's raw position by uuid from um's index.
+
+1. The tail walk refines the sounding set the stages before it settled, so it reads that set from
+   um's index.
+
 1. Emission reconciles its output against the previous emission — an absorber already seated, a
    raw onset already in place.
 
 ## Parking
 
-1. **Parking** is emission's decision that an authored event does not sound. An event parks when a
-   replace window owns it, or when its own fx chain replaces it (`docs/trackerManager.md`
-   § Region-replace parking).
-
-1. A parked event stays in its column — notes, pas, ccs and pbs alike.
-
-1. A parked event's **spec** is the event minus its cues (`docs/trackerManager.md` § Park identity).
-
-1. To park an event, emission sets `parked` on it in place, sheds its other cues, adds its spec to
-   the stash and deletes it from mm.
-
-1. To **restore** an event, emission clears `parked`, drops its spec from the stash and writes it
-   back to mm with its realisation frame re-derived.
-
-1. A parked note carrying `fx` runs its chain like any other host, whichever host parks it.
-
-1. A parked event does not claim a medium. It does not bound an absorber's reach on lane 1, and the
-   tail walk does not place a raw onset for it.
-
-1. Reconstruction reseats a parked event from its spec on the next pass, flagged `parked`, so the
-   seat equals the event that parked.
+Moved to `docs/trackerManager.md` § Region-replace parking, § Park identity and § Lane occupancy.
 
 ## Pitchbend and program change intent
 
-1. Fx expansion reads a channel's pb base from its pb column, parked and sounding events alike
-   (`docs/generators.md` § Offline continuous realisation).
-
-1. The pb and pc columns' projection moved to `docs/trackerManager.md` § CC walk, and PC synthesis
-   of them to `docs/trackerManager.md` § PC synthesis.
+Moved to `docs/trackerManager.md` § Span-covered fx scans, § CC walk and § PC synthesis.
 
 ## The stages
 
