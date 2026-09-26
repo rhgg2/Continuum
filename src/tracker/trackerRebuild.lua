@@ -232,26 +232,45 @@ local function ensureCcColumn(chan, evType, ccNum)
   end
 end
 
-local function spliceCcEvent(entry)
-  local event = columnEvent(entry)
-  local col   = ensureCcColumn(entry.chan, entry.evType, entry.cc)
+-- A pb's column event is its intent: val is the cents sidecar and the wire value stays in mm. It
+-- carries a seat stamp, through which rebuildPbs stamps its detune cue.
+local function ccColumnEvent(entry, update)
+  local event = columnEvent(entry, update)
+  if entry.evType == 'pb' then
+    event.val, event.raw = event.cents, nil
+    index.stampColEvt(event)
+  end
   projectEvent(event, entry.chan)
-  frame.spliceInto(col, event)
+  return event
+end
+
+local function spliceCcEvent(entry)
+  frame.spliceInto(ensureCcColumn(entry.chan, entry.evType, entry.cc), ccColumnEvent(entry))
 end
 
 local function appendCcEvent(entry, update)
-  local event = columnEvent(entry, update)
-  local col   = ensureCcColumn(entry.chan, entry.evType, entry.cc)
-  projectEvent(event, entry.chan)
-  util.add(col.events, event)
+  util.add(ensureCcColumn(entry.chan, entry.evType, entry.cc).events, ccColumnEvent(entry, update))
 end
 
--- Interval-dirt path: the rows in each seeded cc cell are cleared and refilled from the raw index.
--- See docs/trackerManager.md § Interval materialisation
+-- Interval-dirt path: the rows in each seeded cc cell, and each seeded pb row, are cleared and
+-- refilled from the raw index. See docs/trackerManager.md § Interval materialisation
 local function spliceChannelCCs(chan)
   local cells   = dirt.ppqs(chan, 'cc')
   local refills = {}
   local cols = frame.channels[chan].onTake
+
+  -- pbs carry no delay, so a row's raw seat is its logical one reswung; a markerless seat has no
+  -- ppqL, so the match leaves it out.
+  local pbRows, pbs = dirt.ppqs(chan, 'pb'), index.raw(chan).pbs
+  for _, ppqL in ipairs(pbRows) do
+    local ppq = time:fromLogical(chan, ppqL)
+    for i = util.firstAtOrAfter(pbs, ppq), #pbs do
+      local entry = pbs[i]
+      if entry.ppq > ppq then break end
+      if not entry.derived and entry.ppqL == ppqL then util.add(refills, entry) end
+    end
+  end
+  if cols.pb then exciseEvents({ cols.pb }, pbRows) end
 
   for _, cell in pairs(cells) do
     local raw = index.raw(chan)
@@ -278,11 +297,15 @@ local function spliceChannelCCs(chan)
   for _, evt in ipairs(refills) do spliceCcEvent(evt) end
 end
 
+-- A markerless seat a previous window left on the wire: realisation, recognised by the window alone.
+local function isPbSeat(entry, fxInWindows)
+  return entry.evType == 'pb' and entry.ppqL == nil and fxInWindows.ownsRaw('pb', entry.chan, nil, entry.ppq)
+end
+
 -- Reconciles ppq and ppqL per the swing rules; see docs/trackerManager.md § CC walk.
 local function reconcileCcPpq(entry, fxInWindows, ccWrites)
   local chan = entry.chan
-  local pbSeat = entry.evType == 'pb' and entry.ppqL == nil and fxInWindows.ownsRaw('pb', chan, nil, entry.ppq)
-  if entry.derived or pbSeat then return nil end
+  if entry.derived or isPbSeat(entry, fxInWindows) then return nil end
   if dirt.swing.has(chan) and entry.ppqL ~= nil then
     local newPpq = time:fromLogical(chan, entry.ppqL)
     if newPpq == entry.ppq then return nil end
@@ -296,8 +319,8 @@ local function reconcileCcPpq(entry, fxInWindows, ccWrites)
 end
 
 -- Wholesale / stale-swing path: re-derive channel ccs from the raw index.
--- pbs and pas reconcile only; see docs/trackerManager.md § CC walk
-local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites)
+-- pas reconcile only; see docs/trackerManager.md § CC walk
+local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
   local raw = index.raw(chan)
   index.withDeferredSort(function()
     for cc, list in pairs(raw.ccs) do
@@ -318,20 +341,31 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites)
       end
     end
   end
-  for _, list in ipairs{ raw.pbs, raw.pas } do
-    for _, entry in ipairs(list) do reconcileCcPpq(entry, fxInWindows, ccWrites) end
+  for _, entry in ipairs(raw.pbs) do
+    if not entry.derived and not isPbSeat(entry, fxInWindows) then
+      local update = reconcileCcPpq(entry, fxInWindows, ccWrites)
+      -- A foreign pb has no cents sidecar: its intent is what it sounds less the previous emission's
+      -- detune. see docs/trackerManager.md § CC walk
+      if entry.cents == nil then
+        local cents = tuning.rawToCents(entry.raw, pbLimCents) - index.detuneAt(chan, entry.ppq)
+        ccWrites.assign({ uuid = entry.uuid }, { cents = cents })
+        update = util.assign(update or {}, { cents = cents })
+      end
+      appendCcEvent(entry, update)
+    end
   end
+  for _, entry in ipairs(raw.pas) do reconcileCcPpq(entry, fxInWindows, ccWrites) end
   for _, col in pairs(frame.channels[chan].onTake.ccs) do util.sortByPPQ(col.events) end
-  for _, key in ipairs{ 'at', 'pc' } do
+  for _, key in ipairs{ 'at', 'pc', 'pb' } do
     if frame.channels[chan].onTake[key] then util.sortByPPQ(frame.channels[chan].onTake[key].events) end
   end
 end
 
-local function rebuildCCs(fxInWindows)
+local function rebuildCCs(fxInWindows, pbLimCents)
   local ccWrites = mmBatch()
   for chan = 1, 16 do
     if dirt.has(chan) then
-      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites)
+      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
       else spliceChannelCCs(chan)
       end
     end
@@ -849,22 +883,33 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
     for pb in onsetsIn(index.raw(window.chan).pbs, { { fxOutWindows.rawSpan(window) } }) do
       if not pb.derived and not fxInWindows.ownsRaw('pb', pb.chan, nil, pb.ppq) then
         dirt.add(pb.chan, dirt.rawSeed(pb, 'park'))
-        -- val: logical cents from the sidecar, with index val
-        -- (raw-derived cents) as the fallback for a foreign pb.
-        local spec = toParked(pb, { val = pb.cents or pb.val })
+        local spec = toParked(pb, { val = pb.cents })
         projectEvent(spec, pb.chan)
         util.add(candidates, { evt = { uuid = pb.uuid }, spec = spec }) -- evt is only the delete target
       end
     end
   end
 
-  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb)
+  -- Until the stash seats pbs in their column, a pb parks off it and restores back into it.
+  local newlyParked, parkedRows = {}, frame.newChannels()
+  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb, function(spec)
+    newlyParked[spec.uuid] = true
+    util.add(parkedRows[spec.chan], spec.ppq)
+  end)
+  for chan, rows in ipairs(parkedRows) do
+    local col = frame.channels[chan].onTake.pb
+    if col and #rows > 0 then exciseEvents({ col }, rows, function(e) return newlyParked[e.uuid] end) end
+  end
 
   -- Restores get raw + cents sidecar. The val is detune-free; rebuildPbs corrects it later.
+  local restoredPbs = {}
   for _, spec in ipairs(restores) do
     local evt = fromParked(spec, { cents = spec.val, val = tuning.centsToRaw(spec.val, pbLimCents) })
     dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', evt.ppq))
     stage.writes.add(evt)
+    local colEvt = util.assign(util.clone(spec), { cents = spec.val })
+    frame.spliceInto(ensureCcColumn(spec.chan, 'pb'), colEvt)
+    util.add(restoredPbs, colEvt)
   end
 
   for _, window in ipairs(removed) do
@@ -881,7 +926,7 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   end
   util.sortByPPQ(rendered)   -- pbBaseFor covers the parked list, and a cover bisects
   installParked('pb', rendered)
-  return parkedPbs
+  return parkedPbs, restoredPbs
 end
 
 local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHosts, pbLimCents)
@@ -890,7 +935,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
   local parkedPAs, restoredPAs                   = parkPAs(stage)
   local parkedCCs, restoredCCs                   = parkCCs(stage)
-  local parkedPbs                                = parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
+  local parkedPbs, restoredPbs                   = parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
 
   local allParked = {}
   for _, parked in ipairs({ parkedNotes, parkedPAs, parkedCCs, parkedPbs }) do
@@ -901,8 +946,10 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
 
   -- Seat-stamp each restored event like any other seat, now the commit lands it in mm; bare write,
   -- no setEvent -- see docs/trackerManager.md § Incremental index reconciliation.
-  for _, evt in ipairs(restoredNotes) do
-    if index.stampColEvt(evt) then evt.committed = true end
+  for _, restored in ipairs({ restoredNotes, restoredPbs }) do
+    for _, evt in ipairs(restored) do
+      if index.stampColEvt(evt) then evt.committed = true end
+    end
   end
   -- A cc or pa entry carries no seat stamp, so a restored one only learns that mm holds it.
   for _, restored in ipairs({ restoredCCs, restoredPAs }) do
@@ -2116,7 +2163,7 @@ local function seatScope(chan, replaceWins, baseVoice)
   local function baseVoiceSpan(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, baseVoice.nextAfter(ppq) }) end
   local function bpSpan(ppq)
     -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
-    local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
+    local function authored(pb) return isAuthoredPb(pb) and not replaceWins.inSeatWindow(pb.ppq) end
     local prevBp = util.seek(index.raw(chan).pbs, 'before', ppq, authored)
     local nextBp = util.seek(index.raw(chan).pbs, 'after',  ppq, authored)
     util.add(seatSpans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
@@ -2155,7 +2202,7 @@ local function seatScope(chan, replaceWins, baseVoice)
 end
 
 -- Reseat absorber pbs against the post-walk base-voice layout, recompute their raw vals,
--- and project the pb column. see docs/tuning.md § Absorber reconciliation
+-- and stamp the detune cue on column pbs. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns, pbLimCents)
   local gridStep = ccGridStep()
   local fxNotes = fxOut.notes
@@ -2163,8 +2210,8 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
   -- .notes only, so the head snapshot is current for this.
   local extras = extraColumns or {}
 
-  -- Per-chan base-voice union, built for dirty channels alone; clean ones reuse their carried pb
-  -- column. see docs/tuning.md § Absorber reconciliation
+  -- Per-chan base-voice union, built for dirty channels alone; clean ones carry their pb column
+  -- whole. see docs/tuning.md § Absorber reconciliation
   local freshBaseVoice, baseVoiceByChan = {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
@@ -2196,7 +2243,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
   end
 
   -- A ppq's membership in a channel's seat scope; nil spans (ungated) puts everything in scope. The
-  -- clone/carry partition: the gather clones only in-scope pbs, projection carries the rest verbatim.
+  -- gather clones only in-scope pbs, and only their column events take a fresh detune cue.
   local function inSpans(spanSet, ppq)
     if not spanSet then return true end
     for _, s in ipairs(spanSet) do
@@ -2207,7 +2254,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
 
   -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone still
   -- names its source; origShape is held because the pass rewrites shape.
-  local pbsByChan = {}
+  local pbsByChan, cuedByChan = {}, frame.newChannels()
   for chan = 1, 16 do
     if dirt.has(chan) then
       local seatSpans = seatSpansByChan[chan]
@@ -2216,6 +2263,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
           local pb = util.clone(entry, { colEvt = true })
           pb.origShape = entry.shape
           util.bucket(pbsByChan, pb.chan, pb)
+          if not entry.derived and entry.colEvt then
+            util.add(cuedByChan[chan], { colEvt = entry.colEvt, ppq = entry.ppq })
+          end
         end
       end
     end
@@ -2249,31 +2299,21 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       return inKeptRange(ppq)
     end
     -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
-    -- generates no seat here; those kept-boundary seats carry from the prior column.
-    local fenced = {}   -- raw ppq -> true: carried (identity refresh via pbEntryByRaw), not projected fresh
+    -- generates no seat here; those kept-boundary seats stand from last pass.
     for i = #pbs, 1, -1 do
-      if fencedPb(pbs[i].ppq) then fenced[pbs[i].ppq] = true; table.remove(pbs, i) end
+      if fencedPb(pbs[i].ppq) then table.remove(pbs, i) end
     end
 
-    -- Back-derive cents for any authored pb missing it (foreign-MIDI/pre-cents pbs carry raw only) so the
-    -- assign carries cents to the sidecar; an in-window seat must not acquire cents or it stops looking like a seat.
-    local persistCents = {}
-    for _, pb in ipairs(pbs) do
-      if pb.cents == nil and not inSeatWindow(pb.ppq) then
-        pb.cents = tuning.rawToCents(pb.raw, pbLimCents) - baseVoice.detuneAt(pb.ppq)
-        persistCents[pb] = true
-      end
-    end
+    -- The CC walk gave every authored pb its cents, so a centless one is a seat, whether a live window
+    -- covers it or its window's host no longer runs.
+    local function isRealPb(pb) return isAuthoredPb(pb) and not inSeatWindow(pb.ppq) end
 
     -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
-    -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs.
-    local realPbs, pbEntryByRaw = {}, {}
+    -- bounded clone set.
+    local realPbs = {}
     for _, entry in ipairs(index.raw(chan).pbs) do
-      pbEntryByRaw[entry.ppq] = entry
-      if not entry.derived and not inSeatWindow(entry.ppq) then
-        local cents = entry.cents
-                      or (tuning.rawToCents(entry.raw, pbLimCents) - baseVoice.detuneAt(entry.ppq))
-        util.add(realPbs, { ppq = entry.ppq, cents = cents, shape = entry.shape, tension = entry.tension })
+      if isRealPb(entry) then
+        util.add(realPbs, { ppq = entry.ppq, cents = entry.cents, shape = entry.shape, tension = entry.tension })
       end
     end
 
@@ -2350,7 +2390,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     end
     densify(realPbs)
 
-    -- Seat each replace curve as derived (hidden) seats carrying its shape; see docs/tuning.md §
+    -- Seat each replace curve as derived seats carrying its shape; see docs/tuning.md §
     -- Value-aware seats and densification for the rule. Onset seats above take priority.
     for _, win in ipairs(replaceWins.wins) do
       for _, bp in ipairs(win.bps) do
@@ -2380,9 +2420,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- consume any already at a seat, move the remaining ones to fill the rest, delete the leftovers.
     local realAt, availAbsorbers = {}, {}
     for _, pb in ipairs(pbs) do
-      -- A markerless in-window pb is a generated seat (recognized by window, no marker); tag it in RAM
-      -- so projection hides it and the fungible-absorber machinery below reseats it.
-      if not pb.derived and inSeatWindow(pb.ppq) then pb.derived = 'absorber' end
+      -- A markerless pb is a generated seat (recognized by window, no marker); tag it in RAM so the
+      -- fungible-absorber machinery below reseats it.
+      if not pb.derived and not isRealPb(pb) then pb.derived = 'absorber' end
       if pb.derived then
         -- Pool = in-scope absorbers plus any absorber standing at a computed seat, so a seat can
         -- never miss its standing absorber and mint a duplicate.
@@ -2453,7 +2493,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     local detuneOf = {}
     for _, pb in ipairs(pbs) do detuneOf[pb] = baseVoice.detuneAt(pb.ppq) end
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
-    -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
+    -- restamped, raw changed, derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
       if pb.committed then
         local d         = detuneOf[pb]
@@ -2466,20 +2506,21 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
                      cents = pb.cents, val = newRaw }
         elseif restampPpqL[pb] then
           update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
-        elseif pb.raw ~= newRaw or persistCents[pb] or shapeChanged then
+        elseif pb.raw ~= newRaw or shapeChanged then
           update = { cents = pb.cents, val = newRaw }
         end
         if update then
-          if pb.derived then update.shape = pb.shape end
+          -- The marker lands with the sidecar: a seat tagged in RAM that takes cents outside every window
+          -- must not read as authored next pass.
+          if pb.derived then update.shape, update.derived = pb.shape, pb.derived end
           -- A markerless seat persists native MIDI only; strip the sidecar fields so the assign
           -- stamps no metadata and the seat stays plain. Its ppq/val/shape still land.
-          if markerless then update.cents, update.ppqL = nil, nil end
+          if markerless then update.cents, update.ppqL, update.derived = nil, nil, nil end
           pb.raw = newRaw
           pbWrites.assign({ uuid = pb.uuid }, update)
         end
       end
     end
-    return detuneOf, pbEntryByRaw, fenced
   end
 
   for chan = 1, 16 do
@@ -2487,41 +2528,18 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     if dirt.has(chan) then
       local pbs = pbsByChan[chan] or {}
       util.sortByPPQ(pbs)
+      local baseVoice = baseVoiceByChan[chan]
+      deriveChan(chan, pbs, winsByChan[chan], seatSpansByChan[chan], baseVoice)
 
-      local priorPbCol = frame.channels[chan].priorPb
-      frame.channels[chan].priorPb = nil
-      local seatSpans = seatSpansByChan[chan]
-      local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, pbs, winsByChan[chan], seatSpans, baseVoiceByChan[chan])
-
-      -- Column projection. A derived seat is wire-only -- always hidden. This projects the in-scope
-      -- clones fresh; the out-of-scope remainder carries below.
-      --invariant: one pb per raw ppq in the column -- the projected and carried sets partition it
-      local anyVisible, pbColEvents = false, {}
-      for _, pb in ipairs(pbs) do
-        local hidden = pb.derived ~= nil
-        anyVisible = anyVisible or not hidden
-        -- pb is our own working clone, done being read by the assign above -- reuse it as the
-        -- column event rather than cloning again.
-        pb.ppqRaw = pb.ppq   -- survives projectEvent's logical flip; the carry partition keys on it
-        pb.val, pb.detune, pb.hidden = pb.cents, detuneOf[pb], hidden
-        pb.raw = nil   -- derive-only wire mirror for the delta-gate; never rides into the cents-framed column
-        projectEvent(pb, chan)
-        util.add(pbColEvents, pb)
+      -- An out-of-scope column pb keeps last pass's cue: no base voice around it moved.
+      for _, cued in ipairs(cuedByChan[chan]) do
+        frame.setEvent(cued.colEvt, 'detune', baseVoice.detuneAt(cued.ppq))
       end
-      -- Carry the whole out-of-scope remainder verbatim -- re-deriving from the wire would quantise through
-      -- centsToRaw. Each refreshes uuid/committed since a carried event predates its committed uuid.
-      for _, evt in ipairs(priorPbCol and priorPbCol.events or {}) do
-        local carry = evt.ppqRaw and (not inSpans(seatSpans, evt.ppqRaw) or fenced[evt.ppqRaw])
-        local entry = carry and pbEntryByRaw[evt.ppqRaw]
-        if entry then
-          evt.uuid, evt.committed = entry.uuid, entry.committed
-          anyVisible = anyVisible or not evt.hidden
-          util.add(pbColEvents, evt)
-        end
+      -- A pb column exists when it holds an event or extraColumns asks for it.
+      local onTake = frame.channels[chan].onTake
+      if onTake.pb and #onTake.pb.events == 0 and not (extras[chan] and extras[chan].pb) then
+        onTake.pb = nil
       end
-      util.sortByPPQ(pbColEvents)
-      local keep = anyVisible or (extras[chan] and extras[chan].pb)
-      frame.channels[chan].onTake.pb = keep and frame.newStreamColumn(pbColEvents) or nil
     end
   end
 
@@ -2811,7 +2829,7 @@ function rebuild.pipeline(context)
   local fxInWindows = fxWindows.new(sources.fxRealisedWindows or {}, time)
 
   local external = rebuildInternals()
-  rebuildCCs(fxInWindows)
+  rebuildCCs(fxInWindows, pbRangeCents)
   dirt.swing.clear()
   dirt.foreign.clear()
 

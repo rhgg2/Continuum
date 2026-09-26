@@ -25,6 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-26 tm: the CC walk projects the pb column as intent (design § Pitchbend and program change intent)
 - 2026-09-26 tm: the pc column holds authored pcs alone (design § Pitchbend and program change intent)
 - 2026-09-26 tm: park pas in place in their host's lane (design § Parking)
 
@@ -34,18 +35,11 @@
 
 ## Queued (current phase; one-liners)
 
-1. **tm: the CC walk projects the pb column as intent** — both CC walk paths project authored pbs
-   with `val` as cents, leaving out absorbers and the markerless seats a window owns (the walk's
-   `pbSeat` test). `rebuildPbs` stops projecting the column and stamps `detune` on each column pb it
-   re-derives. A foreign pb projects with no `val`; the pass that back-derives its cents writes
-   them to mm and seeds the pb's cell, so the next pass's CC walk projects them as `val`. The
-   `priorPb` carry, `ppqRaw`, the `anyVisible` keep rule and the `hidden` flag retire — `hidden`
-   with its filters in trackerView, gridPane, `groupMembers` and groupManager's field list. docs:
-   `docs/tuning.md` § Absorber reconciliation, `docs/trackerManager.md` § CC walk, § Absorber
-   reconciliation. Spec: an authored pb sits in the column with `val` as its cents and `detune` as
-   its base voice's detune; an absorber is in mm and absent from the column; a clean pass carries
-   the column; a detune change restamps `detune` and leaves `val`; a foreign pb gains its `val` on
-   the pass after the one that derives its cents.
+1. **Parked continuous hosts run their producer** — a continuous-only host parked by another
+   live region keeps its window in the census, but `rebuildFx` runs on-take hosts alone, so its
+   pb seats are orphaned and swept as absorbers and its freeze finds no curve to author
+   (`tm_fx_region_spec` pending case). design/archive/fx-freeze.md § Implementation notes says
+   such a host still runs; the gather needs to include it.
 
 1. **Synthesised pcs outside tracker mode** — a take that leaves `trackerMode` keeps its
    synthesised pcs in mm, where they sound with no seat in the pc column, which the grid shows

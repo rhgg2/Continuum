@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — A pb the CC walk leaves without cents is a seat: the absorber pass reseats or
+  drops it as an absorber, over back-deriving its cents, which promoted the orphaned seats of a
+  parked continuous host to authored automation. The absorber pass writes derived with any sidecar
+  it stamps, so a seat reused outside a window never reads as authored. Freezing such a parked host
+  finds no curve until parked continuous hosts run their producer, which is queued.
+
 - **2026-09-26** — PC synthesis reads its previous emission from um's raw index clipped to raw
   spans, over the pc column clipped to logical ones; the column's logical ppq never keyed equal to a
   raw prediction, so a delayed or swung note's pc was deleted and re-minted every pass over it. The

@@ -3,10 +3,8 @@
 --
 --   - mm-side: absorber.ppq is host's raw, set by reconcileBoundary on
 --     edits and reseated post-rule when the rule moves the host.
---   - column-side: no delay field → tidyCol is a no-op for absorbers.
---     They surface at host raw, while the host note surfaces at host
---     intent. Hidden absorbers don't render, so the divergence is
---     invisible to consumers (Phase 6 collapses it entirely).
+--   - column-side: absorbers are realisation and live in mm alone; the
+--     pb column holds authored pbs only.
 
 local t          = require('support')
 local generators = require('generators')
@@ -46,11 +44,11 @@ end
 return {
 
   {
-    name = 'delayed lane-1 host with detune jump → absorber tracks host logical (Phase 6)',
+    name = 'delayed lane-1 host with detune jump → absorber tracks host logical, off the column',
     run = function(harness)
       -- Host: ppqL=0, delay=500 mQN at res=240 → 120 ppq nudge → raw=120.
-      -- Seeded absorber co-located at raw=120 in mm; col-event projects
-      -- to the host's logical (0) under Phase 6.
+      -- Seeded absorber co-located at raw=120 in mm, stamped with the
+      -- host's ppqL; the pb column holds the authored pb alone.
       local h = harness.mk{
         seed = {
           notes = {
@@ -59,7 +57,7 @@ return {
           },
           ccs = {
             { ppq = 120, chan = 1, evType = 'pb', val = rawFor50, derived = 'absorber' },
-            { ppq = 480, chan = 1, evType = 'pb', val = 0 },  -- visible, surfaces column
+            { ppq = 480, chan = 1, evType = 'pb', val = 0 },  -- authored, surfaces column
           },
         },
       }
@@ -67,14 +65,9 @@ return {
       t.eq(fk.ppq, 120, 'mm absorber stays at host raw')
       t.eq(fk.ppqL, 0,  'mm absorber stamped with host ppqL by the tail walk')
 
-      local ch = h.tm:getChannel(1)
-      local fakeDisp
-      for _, e in ipairs(ch.onTake.pb.events) do
-        if e.hidden then fakeDisp = e end
-      end
-      t.truthy(fakeDisp, 'fake pb projected into pb column as hidden display event')
-      t.eq(fakeDisp.ppq, 0,    'column projection at host logical')
-      t.eq(fakeDisp.delay, nil, 'no delay field on absorber column event')
+      local events = h.tm:getChannel(1).onTake.pb.events
+      t.eq(#events, 1, 'the absorber stays out of the pb column')
+      t.eq(events[1].ppq, 480, 'which holds the authored pb alone')
     end,
   },
 
@@ -222,8 +215,8 @@ return {
   {
     name = 'authoring a pb onto an anchor seat adopts it, no rival at the same tick (stuck-digit bug)',
     run = function(harness)
-      -- I2a anchor plants a hidden absorber seat at a pb-active onset. Authoring there must
-      -- adopt that seat, not push a rival onto the same tick — see docs/tuning.md § Authoring onto a hidden seat.
+      -- I2a anchor plants an absorber seat at a pb-active onset. Authoring there must
+      -- adopt that seat, not push a rival onto the same tick — see docs/tuning.md § Authoring onto a seat.
       local h = harness.mk{
         seed = {
           notes = {

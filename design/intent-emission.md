@@ -82,6 +82,9 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 1. A pb event's `val` is its intent in cents, and `val + detune` is the cents it sounds.
 
+1. A **foreign pb** carries no cents sidecar. Reconstruction derives its intent from its raw value
+   less the previous emission's base-voice detune at its onset, and writes the cents to mm.
+
 1. Fx expansion reads a channel's pb base from its pb column, parked and sounding events alike
    (`docs/generators.md` § Offline continuous realisation).
 
@@ -111,10 +114,6 @@ Moved to `docs/trackerManager.md` § The pipeline.
 
 1. **The pattern editor's curve readback.** It reads `val + detune` off the pb column. Whether a
    readback of intent should include the cue is unsettled.
-
-1. **Foreign pbs.** A pb with no cents sidecar has no intent in cents until emission back-derives it
-   from raw and detune, so its event carries no `val` and the pb base leaves it out. Whether
-   reconstruction can give it cents is unsettled.
 
 1. **The pb park scan.** Parking looks for pbs to park only in windows created this pass. Whether it
    scans the pb column over every window, as it scans a cc column, is unsettled.

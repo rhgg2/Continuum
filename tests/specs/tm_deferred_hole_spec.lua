@@ -24,12 +24,12 @@ local function pasInCol(h, chan)
   return out
 end
 
--- Authored (visible) pbs projected into the pb column, as { ppq, cents }.
+-- The authored pbs projected into the pb column, as { ppq, cents }.
 local function authoredPbCol(h, chan)
   local out = {}
   local col = h.tm:getChannel(chan).onTake.pb
   for _, e in ipairs((col and col.events) or {}) do
-    if not e.hidden then out[#out + 1] = { ppq = e.ppq, cents = e.val } end
+    out[#out + 1] = { ppq = e.ppq, cents = e.val }
   end
   table.sort(out, function(a, b) return a.ppq < b.ppq end)
   return out
@@ -68,9 +68,8 @@ return {
           },
         },
       }
-      -- The initial load seats a hidden absorber pb at ppq 0, so deleting cc7@10 holes
-      -- mid-array with both authored pbs past it. rebuildPbs snapshots every pb from
-      -- ccsRaw() (:2063) to build the pb column; a truncation at the hole drops them.
+      -- The initial load seats an absorber pb at ppq 0, so deleting cc7@10 holes
+      -- mid-array with both authored pbs past it; a truncation at the hole drops them.
       h.tm:deleteEvent(ccUuidAt(h.fm, 1, 'cc', 10))
       h.tm:flush()
       t.deepEq(authoredPbCol(h, 1), { { ppq = 240, cents = 25 }, { ppq = 480, cents = 50 } },

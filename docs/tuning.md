@@ -128,8 +128,8 @@ sees a jump she did not draw.
 
 **2** So a pb seats at the note boundary and takes the step onto itself:
 raw moves, logical does not. That pb is tagged `fake=true`, persisted as
-cc metadata, and hidden from the pb column unless an interp shape pulls
-it into view.
+cc metadata, and lives in mm alone: the pb column holds authored pbs,
+and the absorber is realisation.
 
 **3** Nothing is being counterfeited — *derived* is what the rest of the
 system calls the same property. The pb is fake in virtue of its
@@ -533,10 +533,14 @@ combinations that reorder hosts) and after externals are placed. The
 ordering is forced: a seat is a position, and a position cannot be fixed
 while the things it sits between are still moving.
 
+It reads authored pbs with their cents already in place: the CC walk gives
+a foreign pb its cents, `rawToCents(wire)` less the previous emission's
+base-voice detune at its seat (`docs/trackerManager.md` § CC walk). A pb
+with no cents is therefore a seat, whether a live window covers it or not,
+and the pass reseats or drops it as an absorber.
+
 From the final realised base-voice sequence it:
 
-- Back-derives cents for any pb missing it (foreign-MIDI / first load):
-  `cents = rawToCents(wire) − detune` at the pb's seat.
 - Covers every detune-jump seat: a real pb at that ppq counts;
   otherwise reuse an existing fake if any (in-place first, else move),
   else create a new fake.
@@ -547,8 +551,10 @@ From the final realised base-voice sequence it:
   derived output into mm with absorber seats carried, so the dirty gate
   reads them clean and this pass never runs for them.
 - Writes wire raw = `centsToRaw(cents + the carrying base voice's detune)`.
-- Projects the pb column from the final set, with `val=cents` (the
-  authored value tv displays) and `hidden` for every derived seat.
+- Stamps `detune` on the column event of every authored pb in its seat
+  scope: the cue that makes `val + detune` the cents the pb sounds. A
+  column pb outside the scope keeps last pass's cue, since no base voice
+  around it moved.
 
 Reads pbs from um's raw index, which the pipeline's own commits keep
 current mid-rebuild where mm's set is a commit behind. The gate on
@@ -593,14 +599,14 @@ it stay frozen. The alternative was to force pb
 edits wholesale, which would have gutted the gate for ordinary lane-1
 editing.
 
-### Authoring onto a hidden seat
+### Authoring onto a seat
 
 **1** Pitchbend is one value per tick, so two pb events at one
 (chan, ppq) are not a hard case to adjudicate — they are a contradiction
 on the wire whatever names them.
 
-**2** An anchored or detune-seated onset already holds a hidden absorber
-pb, and the projection hides it, so the pitchbend cell reads empty.
+**2** An anchored or detune-seated onset already holds an absorber pb,
+which is absent from the pb column, so the pitchbend cell reads empty.
 Authoring there must therefore **adopt** that seat: `stager.add` seeks
 `chans[chan].pbs` for a pb at that onset and assigns it (new cents,
 `derived` cleared) rather than pushing a rival.

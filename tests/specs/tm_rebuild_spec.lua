@@ -99,7 +99,7 @@ return {
   },
 
   {
-    name = 'rebuild from a seeded detuned note + matching fake pb keeps pb hidden',
+    name = 'rebuild from a seeded detuned note + matching absorber surfaces no pb column',
     run = function(harness)
       -- Cents-to-raw under default pbRange=2 semitones: 50¢ → raw 2048.
       local rawFor50 = 2048
@@ -114,22 +114,21 @@ return {
           },
         },
       }
-      -- pb column hidden because the only pb is the absorber.
+      -- No pb column: the only pb is the absorber, which lives in mm alone.
       local ch = h.tm:getChannel(1)
-      t.falsy(ch.onTake.pb, 'pb column hidden for fake-only pb')
+      t.falsy(ch.onTake.pb, 'no pb column for an absorber-only channel')
       -- Note still visible in col-1 with its detune intact.
       t.eq(ch.onTake.notes[1].events[1].detune, 50)
     end,
   },
 
   {
-    name = 'fake pb sits at host logical (Phase 6 col-event projection)',
+    name = 'an absorber under a delayed host stays out of the pb column',
     run = function(harness)
       -- Host note: intent ppq=0, delay=500 → 120 ppq nudge at res=240,
       -- so mm stores both the note and its absorber at ppq=120. The
-      -- column event projects to the logical frame: host surfaces at
-      -- ppqL=0 and the absorber follows, stamped with host's ppqL by
-      -- the tail walk.
+      -- host surfaces at ppqL=0; the absorber is realisation and the
+      -- column holds only the authored pb.
       local rawFor50 = 2048
       local h = harness.mk{
         seed = {
@@ -139,7 +138,7 @@ return {
           },
           ccs = {
             { ppq = 120, chan = 1, evType = 'pb', val = rawFor50, derived = 'absorber' },
-            -- A visible pb later on so the pb column surfaces at all.
+            -- An authored pb later on so the pb column surfaces at all.
             { ppq = 480, chan = 1, evType = 'pb', val = 0 },
           },
         },
@@ -148,14 +147,9 @@ return {
       t.eq(ch.onTake.notes[1].events[1].ppq, 0,
         'note surfaces at logical ppq=0')
 
-      t.truthy(ch.onTake.pb, 'pb column surfaces (visible pb present)')
-      local fakeDisp
-      for _, e in ipairs(ch.onTake.pb.events) do
-        if e.hidden then fakeDisp = e end
-      end
-      t.truthy(fakeDisp, 'fake pb display event present in column')
-      t.eq(fakeDisp.ppq,   0,   'absorber tracks host logical')
-      t.eq(fakeDisp.delay, nil, 'no delay field on absorber column event')
+      t.truthy(ch.onTake.pb, 'pb column surfaces (authored pb present)')
+      t.eq(#ch.onTake.pb.events, 1, 'the column holds the authored pb alone')
+      t.eq(ch.onTake.pb.events[1].ppq, 480, 'at its own row')
     end,
   },
 
@@ -306,13 +300,10 @@ return {
       t.eq(ccEvt.tag,  42,     'cc tag rides through projection')
 
       t.truthy(ch.onTake.pb, 'pb column surfaces')
-      -- The first-note anchor adds a hidden pb=0 at ppq 0; the authored
-      -- pb is the visible one.
-      local pbEvt
-      for _, e in ipairs(ch.onTake.pb.events) do
-        if not e.hidden then pbEvt = e end
-      end
-      t.truthy(pbEvt, 'authored pb projected')
+      -- The first-note anchor adds an absorber at ppq 0 in mm alone; the
+      -- column holds the authored pb.
+      t.eq(#ch.onTake.pb.events, 1, 'the column holds the authored pb alone')
+      local pbEvt = ch.onTake.pb.events[1]
       t.eq(pbEvt.mood, 'green', 'pb custom field rides through projection')
       t.eq(pbEvt.tag,  7,       'pb tag rides through projection')
 

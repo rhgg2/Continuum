@@ -150,7 +150,7 @@ local function renderNote(evt, col, row)
 end
 
 local function renderPB(evt)
-  if evt and not evt.hidden and evt.val then
+  if evt and evt.val then
     if evt.val < 0 then return string.format('%04d', math.floor(math.abs(evt.val))), 'negative'
     else return string.format('%04d', math.floor(evt.val)) end
   else return '····' end
@@ -377,10 +377,6 @@ local LANE_ROW_MAX = 32
 -- true iff it consumed the mouse. Shared by the lane strip and the pattern editor's curve pane.
 local function curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)
   local chan = col.midiChan
-  local visible = {}
-  for _, evt in ipairs(col.events) do
-    if not evt.hidden then util.add(visible, evt) end
-  end
 
   local vMin, vMax
   if col.type == 'pb' then
@@ -394,7 +390,7 @@ local function curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)
     rect      = rect,
     vMin = vMin, vMax = vMax,
     tMin = tMin, tMax = tMax,
-    events    = visible,
+    events    = col.events,
     tOf       = function(evt) return tv:ppqToRow(evt.ppq, chan) end,
     -- t is in row-space; map fracT back to ppq before sampling so
     -- tv:rowToPPQ's integer rounding doesn't plateau the curve.

@@ -157,17 +157,15 @@ return {
     end,
   },
 
-  -- Hidden fake pbs (absorbers seated by tm at lane-1 note seats) live
-  -- in col.events but are invisible to the user. Drag identity must be
-  -- the *visible* sequence: the lane strip hovers, anchors, and clamps
-  -- speak in those terms, and a real pb must be free to cross a hidden
-  -- fake pb. The clamp neighbours are the next visible pbs on either
-  -- side; fake pbs in between don't restrict horizontal motion.
+  -- An absorber (seated by tm at a lane-1 detune onset) is realisation and
+  -- lives in mm alone, so the pb column the lane strip indexes holds the
+  -- authored pbs only. A pb drags past the absorber's seat: the clamp
+  -- neighbours are the authored pbs either side.
   {
-    name = 'real pb drags past hidden fake pb at lane-1 note seat',
+    name = 'an authored pb drags past the absorber at a lane-1 note seat',
     run = function(harness)
       -- Seed empty; build the scenario via tm so reconcile seats the
-      -- fake pb at the note onset. cents stays in tm units (raw conversion
+      -- absorber at the note onset. cents stays in tm units (raw conversion
       -- happens at flush).
       local h = harness.mk{
         config = { take = { rowPerBeat = 4 } },
@@ -186,44 +184,35 @@ return {
           if col.type == 'pb' and col.midiChan == 1 then return col end
         end
       end
-      local function visible(col)
-        local out = {}
-        for _, e in ipairs(col.events) do
-          if not e.hidden then out[#out + 1] = e end
-        end
-        return out
+      local absorbed = false
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.ppq == 240 and c.derived then absorbed = true end
       end
+      t.truthy(absorbed, 'fixture check: an absorber seats the detune onset at 240')
 
       local col = pbCol()
       t.truthy(col, 'pb col present')
-      -- Sanity: three events in storage (real@60, fake@240 hidden, real@600);
-      -- two visible.
-      t.eq(#col.events,    3, 'three pb events in storage')
-      t.eq(#visible(col),  2, 'two visible (fake@240 hidden)')
-      t.eq(visible(col)[1].ppq, 60)
-      t.eq(visible(col)[2].ppq, 600)
+      t.eq(#col.events, 2, 'the column holds the two authored pbs alone')
+      t.eq(col.events[1].ppq, 60)
+      t.eq(col.events[2].ppq, 600)
 
-      -- Drag the visible pb at row 1 to row 5 (ppq 300) — past the hidden
-      -- fake@240. Expected: lands at 300; clamp uses next visible (@600).
+      -- Drag the pb at index 1 to row 5 (ppq 300) — past the absorber
+      -- at 240. Expected: lands at 300; clamp uses the next authored (@600).
       h.vm:moveLaneEvent(col, 1, 5, 0)
 
       col = pbCol()
-      local vis = visible(col)
-      t.eq(#vis,        2,   'still two visible after drag')
-      t.eq(vis[1].ppq,  300, 'real pb landed at ppq=300, past hidden fake@240')
-      t.eq(vis[2].ppq,  600, 'far visible neighbour untouched')
+      t.eq(#col.events,        2,   'still two after drag')
+      t.eq(col.events[1].ppq,  300, 'the pb landed at ppq=300, past the absorber at 240')
+      t.eq(col.events[2].ppq,  600, 'far neighbour untouched')
     end,
   },
 
-  -- Dragging a real pb directly onto a hidden fake pb's seat is not a
-  -- collision: the fake is the absorber for that note seat, and the
-  -- right semantics is "real pb wins over fake" — the fake's raw value
-  -- (which already absorbs the detune) is exactly what a real pb at that
-  -- seat should carry to preserve the user's intended logical line.
-  -- After the drag, one pb at the seat (real, not fake), real@source
-  -- gone, no dedup-style loss.
+  -- Dragging an authored pb directly onto an absorber's seat is not a
+  -- collision: pb is one value per tick, so the authored pb adopts the
+  -- seat. After the drag, one pb at the seat (authored, not derived),
+  -- the source gone, no dedup-style loss.
   {
-    name = 'real pb dropped exactly on hidden fake pb seat — fake gets promoted, no loss',
+    name = 'an authored pb dropped exactly on an absorber seat adopts it, no loss',
     run = function(harness)
       local h = harness.mk{
         config = { take = { rowPerBeat = 4 } },
@@ -242,23 +231,20 @@ return {
           if col.type == 'pb' and col.midiChan == 1 then return col end
         end
       end
-      local function visible(col)
-        local out = {}
-        for _, e in ipairs(col.events) do
-          if not e.hidden then out[#out + 1] = e end
-        end
-        return out
-      end
-
-      -- Drag visible[1] (real@60) exactly onto the fake's seat (row 4 = ppq 240).
+      -- Drag the pb at index 1 (@60) exactly onto the absorber's seat (row 4 = ppq 240).
       h.vm:moveLaneEvent(pbCol(), 1, 4, 0)
 
-      -- After the drag: a single visible pb at ppq=240, plus the far one at 600.
+      -- After the drag: a single pb at ppq=240, plus the far one at 600.
       local col = pbCol()
-      local vis = visible(col)
-      t.eq(#vis,        2,   'two visible: pb at 240 (was fake, now real) + pb at 600')
-      t.eq(vis[1].ppq,  240, 'visible pb is now at the former fake seat')
-      t.eq(vis[2].ppq,  600, 'far neighbour untouched')
+      t.eq(#col.events,        2,   'two: pb at 240 (the adopted seat) + pb at 600')
+      t.eq(col.events[1].ppq,  240, 'the pb is now at the former absorber seat')
+      t.eq(col.events[2].ppq,  600, 'far neighbour untouched')
+      local atSeat = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.ppq == 240 then atSeat[#atSeat + 1] = c end
+      end
+      t.eq(#atSeat, 1, 'one pb on the wire at the seat')
+      t.falsy(atSeat[1].derived, 'and it is authored')
 
       -- And the source is gone — no orphaned pb at ppq=60.
       local atSource = 0
@@ -293,18 +279,10 @@ return {
           if col.type == 'pb' and col.midiChan == 1 then return col end
         end
       end
-      local function visible(col)
-        local out = {}
-        for _, e in ipairs(col.events) do
-          if not e.hidden then out[#out + 1] = e end
-        end
-        return out
-      end
-
       -- Move pb@60 to ppq=180 (row 3). Expected: shape and tension stick.
       h.vm:moveLaneEvent(pbCol(), 1, 3, 0)
 
-      local vis = visible(pbCol())
+      local vis = pbCol().events
       t.eq(vis[1].ppq,     180,      'pb landed at new ppq')
       t.eq(vis[1].shape,   'bezier', 'shape preserved across drag')
       t.eq(vis[1].tension, 0.5,      'tension preserved across drag')
@@ -312,9 +290,9 @@ return {
   },
 
   -- vm:addLaneEvent — inserts a new cc/pb/at event at (ppq, val), inheriting
-  -- envelope shape from the previous *visible* event (so the existing curve
+  -- envelope shape from the previous event (so the existing curve
   -- shape from prev→next is preserved across the new midpoint). Returns
-  -- the new event's visible index after flush so the lane-strip can seed
+  -- the new event's index after flush so the lane-strip can seed
   -- a drag on it.
 
   {
@@ -387,10 +365,10 @@ return {
     end,
   },
 
-  -- vm:deleteLaneEvent — removes the i-th visible event in cc/pb/at.
+  -- vm:deleteLaneEvent — removes the i-th event in cc/pb/at.
 
   {
-    name = 'deleteLaneEvent removes the named visible event',
+    name = 'deleteLaneEvent removes the named event',
     run = function(harness)
       local h = harness.mk{
         seed = {
@@ -437,7 +415,7 @@ return {
   -- shapeCycle = step → linear → slow → fast-start → fast-end → bezier.
 
   {
-    name = 'cycleLaneShape advances shape on the named visible event',
+    name = 'cycleLaneShape advances shape on the named event',
     run = function(harness)
       local h = harness.mk{
         seed = {

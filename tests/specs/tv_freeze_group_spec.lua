@@ -236,10 +236,8 @@ return {
       t.truthy(pbCol, 'the frozen sine left a pb column')
       local survivors = 0
       for _, e in ipairs(pbCol.events) do
-        if not e.hidden then
-          survivors = survivors + 1
-          t.truthy(h.gm:stateOf(e.uuid), 'each surviving breakpoint is a member of the mint')
-        end
+        survivors = survivors + 1
+        t.truthy(h.gm:stateOf(e.uuid), 'each surviving breakpoint is a member of the mint')
       end
       t.truthy(survivors > 0, 'and breakpoints to be members of')
     end,

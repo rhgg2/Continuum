@@ -393,9 +393,7 @@ tm-specific facts:
   `util.seek`'s head-of-list scan would cost `O(rows × channel notes)`.
 - **Absorber persistence.** `pb.derived == 'absorber'` is the sole
   absorber marker, carried as pb metadata via mm's lazy-sidecar path.
-  Absorbers are hidden from the pb
-  column unless an interp shape pulls them into view
-  (`hidden = pb.derived and (shape==nil or shape=='step')`); the host
+  Absorbers live in mm alone and never enter the pb column; the host
   note for delay inheritance is the base voice at the absorber's seat
   (`pb.ppq`), recovered geometrically — the host carries no marker.
 - **Upkeep is wholesale.** The absorber pass reseats the whole absorber
@@ -828,8 +826,8 @@ retain the intent. This divergence is intentional and surfaces as
 `rebuildCCs` routes markerless cc seats (a cc inside a prior cc window) out
 of columns for fresh reconciliation, reconciles each non-derived CC's
 `(raw, ppqL)` under the current swing — stale-swing CCs reseat here — then
-projects `cc`/`at`/`pc` into columns. Pb projection defers to
-§ Absorber reconciliation, pa dispatch to § PA dispatch.
+projects `cc`/`at`/`pc`/`pb` into columns. Pa dispatch defers to
+§ PA dispatch.
 
 The reconcile has two rules:
 
@@ -839,11 +837,21 @@ The reconcile has two rules:
 
 Both paths read um's raw index rather than mm. Where mm holds one flat cc
 stream per channel the index holds five lists, and that split is the walk's
-own branch: cc buckets, `ats` and `pcs` carry a column, `pbs` and `pas`
+own branch: cc buckets, `ats`, `pcs` and `pbs` carry a column, `pas`
 reconcile only. A synthesised pc is emission output, so it routes out of the
-pc column as a derived cc routes out of its own. The interval path seeks those same lists by row, and reconciles
+pc column as a derived cc routes out of its own, and an absorber routes out of
+the pb column alike. The interval path seeks those same lists by row, and reconciles
 nothing: what reaches it is our own writing, seated already (§ Interval
 materialisation).
+
+A pb's column event is its intent: `val` is the cents sidecar, and the wire
+value stays in mm. The walk seat-stamps it (`index.stampColEvt`), and
+§ Absorber reconciliation stamps its `detune` cue through that stamp. A
+foreign pb carries no cents, so the wholesale path derives them — its raw value
+in cents, less the previous emission's base-voice detune at its onset
+(`index.detuneAt`) — writes them to mm through the walk's batch, and projects
+them as `val` on the same pass. Foreign pbs reach only the wholesale path, so
+the interval path derives nothing.
 
 A seat is recognised once and then named. The wholesale path asks `ownsRaw` of
 the persisted census over the channel's whole cc set and writes the answer onto
@@ -864,8 +872,8 @@ overlay the column clone carries, rather than mutating the record the walk is
 reading. The batch commits at the end of the walk, and the index syncs with it.
 
 A markerless pb seat (nil `ppqL`) inside a previous pb window skips this
-reconcile: it's a generated seat `deriveChan` owns, not foreign MIDI, so it
-stays markerless — and a genuine in-window pb from the user is
+reconcile and the projection: it's a generated seat `deriveChan` owns, not
+foreign MIDI, so it stays markerless and takes no cents — and a genuine in-window pb from the user is
 indistinguishable, so it's absorbed the same way (docs/generators.md
 § Route-by-window). The window test is half-open, since the re-centre seat folds
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
@@ -879,8 +887,6 @@ from `existing` alone, so they are never visited and never rewritten.
 Derived events are handled separately: absorber pbs by the absorber pass
 (against the post-walk base-voice layout); synthesised PCs by PC synthesis,
 and they live in mm alone.
-Pb column projection is deferred to the absorber pass so it sees the
-final reconciled absorbers and recomputed raw vals.
 
 ### Extra columns
 
@@ -1223,8 +1229,10 @@ probe sources.
 ### Absorber reconciliation
 
 `rebuildPbs` reseats absorber pbs against the post-walk base-voice layout,
-recomputes their raw vals, and projects the pb column. See
-`docs/tuning.md` § Absorber reconciliation.
+recomputes their raw vals, and stamps the `detune` cue on the column pbs in
+its seat scope. It writes no pb column membership: it only drops a column
+left empty that `extraColumns` does not ask for. See `docs/tuning.md`
+§ Absorber reconciliation.
 
 ### PC synthesis
 
@@ -1359,15 +1367,16 @@ A cc base is the cover of the column's own events, parked ones included (§ Lane
 time fx expansion runs, the park stage has seated every parked cc and flipped every restore, so the
 population is exact.
 
-pb cannot take that route: its column is projected in § Absorber reconciliation, after fx
-expansion, so here it is still the previous pass's. pb instead unions two covers, one of the
+pb cannot take that route: its parked events sit apart from its column, in the channel's parked
+list, rather than seated in it. pb instead unions two covers, one of the
 parked list and one of the maintained pb index, the parked point winning at a shared ppq. Each
 cover holds its own list's governing and closing points, so the union holds the later governor
 and the earlier closer, which are the whole population's. The parked list is ppq-sorted as the
 park stage installs it. The index is raw-sorted, and since pbs carry no delay and swing is
 monotone, the raw-frame cover equals the logical-frame cover — spans convert via
 `time:fromLogical` before the walk.
-"Authored" means the cents sidecar is present (seats and foreign pbs carry none).
+"Authored" means the cents sidecar is present: seats carry none, and the CC walk gives a foreign pb
+its cents.
 
 `nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane population (§ Lane occupancy), so
 a parked host has a successor despite being off-take, and a parked successor is the
@@ -1410,7 +1419,8 @@ flagged ones.
 
 A cc column seats its parked events the same way, and `tm:authoredCCs` hands back each column's own
 `events` table. pb keeps its parked events apart and takes a union instead: `frame.authoredPb` joins
-the channel's pb column to its parked list. The union is memoised against the two lists it joins,
+the channel's pb column to its parked list. A park excises the pb from its column and a restore
+splices it back, so no pb stands in both. The union is memoised against the two lists it joins,
 and each is replaced whole when its contents change, so the union inherits their identity — and the
 memo spans passes, since a parked list whose contents held is kept rather than re-minted. Order is
 ppq alone, there being no tie-break to preserve. A channel with no

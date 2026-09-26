@@ -40,8 +40,6 @@ local masterChannel = (...).masterChannel ~= false
 
 local function arrange() return facade.get('arrange') end
 
-local function notHidden(evt) return not evt.hidden end
-
 -- Leaf-edit facade: colFor reads an event's self-describing column, kindAt the region tag, and the pair
 -- route it to 'member' (gm), 'parked' (tm fx off-take) or 'plain' (tm). see docs/trackerView.md § Backings and parked cells
 local colFor, kindAt   -- data-derived column + cell-kind helpers, defined below
@@ -1140,7 +1138,7 @@ do
   local function inheritedSign(col, row)
     local ghost = col.ghosts and col.ghosts[row]
     if ghost then return ghost.val < 0 and -1 or 1 end
-    local prev = util.seek(col.events, 'before', row * logPerRowFor(currentRpb()), notHidden)
+    local prev = util.seek(col.events, 'before', row * logPerRowFor(currentRpb()))
     return (prev and prev.val < 0) and -1 or 1
   end
 
@@ -1385,7 +1383,7 @@ do
       update.evType = type
       -- Inherit the governing (previous visible) breakpoint's shape, as the curve pane's
       -- insert does, so a seeded-linear curve keeps interpolating on grid entry.
-      local prev = util.seek(col.events, 'before', cursorppq, notHidden)
+      local prev = util.seek(col.events, 'before', cursorppq)
       update.shape = prev and prev.shape or nil
       edit.add(update)
     end
@@ -1630,33 +1628,17 @@ end
 
 ----- Lane-strip edits (drag, add, delete, shape, tension)
 
--- Skips hidden absorbers; returns nil if i out of range.
-local function visibleAt(col, i)
-  if not col or not col.events then return end
-  local k = 0
-  for _, e in ipairs(col.events) do
-    if not e.hidden then
-      k = k + 1
-      if k == i then return e end
-    end
-  end
-end
-
 --contract: clamps newppq strictly inside (prev.ppq, next.ppq) by ±1
---invariant: ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild
+--invariant: ±1 clamp is necessary-and-sufficient for identity-by-index across rebuild
 function tv:moveLaneEvent(col, i, toRow, toVal)
   if not col or not col.events then return end
   if not util.oneOf('cc pb at', col.type) then return end
 
-  local visible = {}
-  for _, e in ipairs(col.events) do
-    if not e.hidden then util.add(visible, e) end
-  end
-  local evt = visible[i]
+  local evt = col.events[i]
   if not evt then return end
 
   local chan       = col.midiChan
-  local prev, next = visible[i-1], visible[i+1]
+  local prev, next = col.events[i-1], col.events[i+1]
   local newppq     = ctx:rowToPPQ(toRow, chan)
   if prev and newppq <= prev.ppq then newppq = prev.ppq + 1 end
   if next and newppq >= next.ppq then newppq = next.ppq - 1 end
@@ -1666,12 +1648,12 @@ function tv:moveLaneEvent(col, i, toRow, toVal)
   tm:flush()
 end
 
--- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
--- Returns the new event's visible index post-flush for drag-seed.
+-- Inherits prev's envelope shape so prev→next curve survives the new midpoint.
+-- Returns the new event's index post-flush for drag-seed.
 function tv:addLaneEvent(col, colIdx, ppq, val)
   if not col or not util.oneOf('cc pb at', col.type) then return end
   local chan = col.midiChan
-  local prev = util.seek(col.events, 'before', ppq, notHidden)
+  local prev = util.seek(col.events, 'before', ppq)
   local update = {
     val   = val,
     ppq   = ppq,
@@ -1686,28 +1668,24 @@ function tv:addLaneEvent(col, colIdx, ppq, val)
 
   local newCol = grid.cols[colIdx]
   if not newCol then return end
-  local idx = 0
-  for _, e in ipairs(newCol.events) do
-    if not e.hidden then
-      idx = idx + 1
-      if e.ppq == ppq then return idx end
-    end
+  for idx, e in ipairs(newCol.events) do
+    if e.ppq == ppq then return idx end
   end
 end
 
 function tv:deleteLaneEvent(col, i)
   if not col or not util.oneOf('cc pb at', col.type) then return end
-  local evt = visibleAt(col, i)
+  local evt = col.events[i]
   if not evt then return end
   edit.delete(evt)
   tm:flush()
 end
 
--- Set bezier tension on the i-th visible event. Forces shape to bezier
+-- Set bezier tension on the i-th event. Forces shape to bezier
 -- so the tension is honoured (REAPER ignores tension on other shapes).
 function tv:setLaneTension(col, i, tension)
   if not col or not util.oneOf('cc pb at', col.type) then return end
-  local A = visibleAt(col, i)
+  local A = col.events[i]
   if not A then return end
   edit.assign(A, { tension = tension, shape = 'bezier' })
   tm:flush()
@@ -1731,12 +1709,11 @@ local interpolate, interpolateValues do
     edit.assign(A, { shape = nextShape(A.shape or 'step') })
   end
 
-  -- Cycle the segment-owner's shape on the i-th visible event in a
-  -- cc/pb/at column. Segment-owner = left endpoint (REAPER convention:
-  -- A.shape governs the curve from A to next).
+  -- Cycles the i-th event's segment-owner shape (left endpoint;
+  -- REAPER: A.shape governs the curve to the next event).
   function tv:cycleLaneShape(col, i)
     if not col or not interpolable[col.type] then return end
-    local A = visibleAt(col, i)
+    local A = col.events[i]
     if not A then return end
     cycleShape(col, A)
     tm:flush()
@@ -1751,9 +1728,7 @@ local interpolate, interpolateValues do
           local startppq = ctx:rowToPPQ(r1,     col.midiChan)
           local endppq   = ctx:rowToPPQ(r2 + 1, col.midiChan)
           local evts = {}
-          for evt in util.between(col.events, startppq, endppq) do
-            if notHidden(evt) then util.add(evts, evt) end
-          end
+          for evt in util.between(col.events, startppq, endppq) do util.add(evts, evt) end
           util.add(plans, { col = col, evts = evts })
         end
       end
@@ -1770,7 +1745,7 @@ local interpolate, interpolateValues do
     local ghost = col.ghosts and col.ghosts[r]
     local A = ghost and ghost.fromEvt
       or (col.cells and col.cells[r])
-      or util.seek(col.events, 'before', ctx:rowToPPQ(r + 1, col.midiChan), notHidden)
+      or util.seek(col.events, 'before', ctx:rowToPPQ(r + 1, col.midiChan))
     if not A then return end
     cycleShape(col, A); tm:flush()
   end
@@ -1779,10 +1754,7 @@ local interpolate, interpolateValues do
   function interpolateValues(col)
     if not interpolable[col.type] then return end
     local chan, occupied = col.midiChan, col.cells
-    -- Ghosts span the visible authored breakpoints; hidden derived seats
-    -- (the absorber wire stream) are skipped so the curve rides the onset.
-    local events = {}
-    for _, e in ipairs(col.events) do if not e.hidden then util.add(events, e) end end
+    local events = col.events
     local ghosts = {}
     for i = 1, #events - 1 do
       local A, B = events[i], events[i + 1]
@@ -4697,7 +4669,6 @@ function tv:rebuild(takeChanged)
       if gridCol.type == 'note' or gridCol.type == 'fx' then gridCol.tails = {} end
       local chan = gridCol.midiChan
       for _, evt in ipairs(gridCol.events) do
-        if evt.hidden then goto continue end  -- derived absorber seats are wire-only
         local startRow, y, onGrid = ctx:placeRow(evt.ppq or 0, chan)
         if y >= 0 and y < numRows then
           if gridCol.cells[y] then
@@ -4716,7 +4687,6 @@ function tv:rebuild(takeChanged)
           if evt.stages then tail.stack, tail.clipped = chainStack(evt.stages, y, endRow) end
           util.add(gridCol.tails, tail)
         end
-        ::continue::
       end
       ::nextPlaceCol::
     end

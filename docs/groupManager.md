@@ -373,7 +373,7 @@ rpb-drop bug). Three categories of denied key:
   (mm's `ppqL`/`endppqL` never reach this layer to be denied.)
 - **regenerated** — `tm` re-derives these every rebuild; they must
   never persist into the shared group template.
-- **absorber synth** — `derived`/`hidden` pbs are re-seated from note
+- **absorber synth** — `derived` pbs are re-seated from note
   onsets each rebuild; carrying them into the group frame would corrupt
   the template with ephemeral realisation state.
 

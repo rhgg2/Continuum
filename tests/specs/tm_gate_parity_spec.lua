@@ -46,9 +46,9 @@ local function authoredAt(col, ppq)
   for _, evt in ipairs(col.events) do if evt.ppq == ppq then return evt end end
 end
 
--- Volatile per-rebuild identity: mm-side loc, the pb working clone's pre-rewrite shape, and the
--- reconcile skeleton's key. None render; all legitimately differ between a carried and a fresh frame.
-local VOLATILE = { loc = true, origShape = true, key = true }
+-- Volatile per-rebuild identity: mm-side loc and the reconcile skeleton's key. Neither renders; both
+-- legitimately differ between a carried and a fresh frame.
+local VOLATILE = { loc = true, key = true }
 
 local function projEvt(e)
   local out = {}
@@ -263,8 +263,8 @@ return {
       local h = harness.mk{
         config = { project = { swings = { c58 = classic58 } } },
         data   = { swing = { global = 'c58' } },
-        -- A visible authored pb outside every window keeps chan 1's pb column alive, so the
-        -- kept-range prior-slice carry is actually exercised (an all-hidden column projects nil).
+        -- An authored pb outside every window keeps chan 1's pb column alive, so its carry and
+        -- detune cue are compared across the kept and live ranges.
         seed   = { ccs = {
           { ppq = 600, chan = 1, evType = 'pb', val = 0, cents = 50, shape = 'step' },
         } },
@@ -295,10 +295,6 @@ return {
       -- chan 2: overlapping sine pair on lanes 1/2 -- windows [0,960) and [480,1920).
       h.tm:addEvent(note(2, 0,   60, { endppq = 960,  fx = sine30 }));           h.tm:flush()
       h.tm:addEvent(note(2, 480, 64, { endppq = 1920, fx = sine30, lane = 2 })); h.tm:flush()
-      -- Settle: a creation pass projects fresh seats before their uuids land at commit, so a column
-      -- carried straight from creation lacks them. One full re-derive reaches the steady state every
-      -- later carry preserves (the rich fixture crosses it via its fxRegions all-16 rebuild).
-      h.tm:rebuild(true)
 
       t.truthy(#pbsIn(1, 0, 240) > 0,    'chan-1 window A has pb seats')
       t.truthy(#pbsIn(1, 960, 1200) > 0, 'chan-1 window B has pb seats')
@@ -323,9 +319,6 @@ return {
       h.tm:addEvent(note(1, 480, 62, { detune = 25, endppq = 720 })); h.tm:flush()
       t.deepEq(pbsIn(1, 0, 240), keptA, 'window A upstream of the hold seed: kept')
       t.truthy(#pbsIn(1, 480, 480) > 0, 'detune onset reseated its absorber')
-      -- One more gated edit settles the fresh absorber pair (creation-pass projection precedes the
-      -- commit that mints uuids -- same gap as the setup settle) before the parity claim.
-      h.tm:addEvent(note(1, 60, 65, { lane = 2 })); h.tm:flush()
       assertParity(h, 'chan-1 detune edit: hold reach re-derives B, A keeps == full re-derive')
     end,
   },

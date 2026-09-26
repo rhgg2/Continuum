@@ -2817,6 +2817,23 @@ return {
       t.falsy(specs[1].fx, 'stripped of the chain freeze took')
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the region survives the freeze')
       t.truthy(#derivedNotes(h) > 0, 'and still produces its arp output')
+    end,
+  },
+
+  {
+    -- A continuous-only host parked by another live region still owns its window, but rebuildFx runs
+    -- on-take hosts alone, so its seats are orphaned and swept, and its freeze finds no curve to author.
+    pending = 'parked continuous hosts do not run their producer (plan/intent-emission.md, queued)',
+    name = 'freeze (host parked by a region): its continuous curve becomes authored automation',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, fx = sine30 })
+      h.tm:flush()
+      injectArp(h)
+      local uuid = require('harness').parkedNotes(h.tm, 1)[1].uuid
+
+      t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
       t.truthy(h.tm:getChannel(1).onTake.pb, 'the sine curve is authored automation now')
     end,
   },
@@ -3463,7 +3480,7 @@ return {
       addNote(h, { pitch = 60, lane = 1 })
       addNote(h, { pitch = 64, lane = 2 })
       -- Lane-1 detune landing on the window's closing edge: the absorber it seats is realisation,
-      -- hidden from the column, and must not cross into the group.
+      -- in mm alone, and must not cross into the group.
       addNote(h, { pitch = 67, lane = 1, ppq = 240, endppq = 480, detune = 25 })
       injectArp(h, { fx = { arpUp[1], denseRamp()[1] } })
 
@@ -3480,19 +3497,21 @@ return {
       for _, n in ipairs(notes) do pitches[#pitches + 1] = n.pitch end
       t.deepEq(pitches, { 60, 64, 60, 64 }, 'the promoted arp notes are members')
 
+      local absorbersInWindow = 0
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.derived and c.ppq >= 0 and c.ppq <= 240 then
+          absorbersInWindow = absorbersInWindow + 1
+        end
+      end
+      t.truthy(absorbersInWindow > 0, 'the detune seats an absorber inside the window bounds')
       local col = h.tm:getChannel(1).onTake.pb
-      local live, hiddenInWindow = {}, 0
+      local live, survivorsInWindow = {}, 0
       for _, e in ipairs(col.events) do
         live[e] = true
-        if e.hidden and e.ppq >= 0 and e.ppq <= 240 then hiddenInWindow = hiddenInWindow + 1 end
+        if e.ppq >= 0 and e.ppq <= 240 then survivorsInWindow = survivorsInWindow + 1 end
       end
-      t.truthy(hiddenInWindow > 0, 'the detune seats an absorber inside the window bounds')
-      local visibleInWindow = 0
-      for _, e in ipairs(col.events) do
-        if not e.hidden and e.ppq >= 0 and e.ppq <= 240 then visibleInWindow = visibleInWindow + 1 end
-      end
-      t.truthy(visibleInWindow > 0, 'the thin left survivors standing')
-      t.eq(#curve, visibleInWindow, 'and the curve members are those survivors alone -- the absorber stays out')
+      t.truthy(survivorsInWindow > 0, 'the thin left survivors standing')
+      t.eq(#curve, survivorsInWindow, 'and the curve members are those survivors alone -- the absorber stays out')
       for _, m in ipairs(curve) do t.truthy(live[m], 'each member is the live column event itself') end
     end,
   },

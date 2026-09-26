@@ -1,16 +1,14 @@
 -- The keep/live split of a clipped pb window. Under seed dirt a pb replace window is clipped
 -- against the emit scope of the hosts that re-ran (docs/trackerManager.md § The host gate).
--- The live part refolds from the chain curve; the kept part's seats stand on the wire and its
--- column cells carry verbatim from the prior pass. Where the two parts touch, the tick belongs to
--- whichever side opens on it -- two pb events at one (chan, ppq) are a contradiction on the wire
--- (docs/tuning.md § Authoring onto a hidden seat).
+-- The live part refolds from the chain curve; the kept part's seats stand on the wire. Where the
+-- two parts touch, the tick belongs to whichever side opens on it -- two pb events at one
+-- (chan, ppq) are a contradiction on the wire (docs/tuning.md § Authoring onto a seat).
 --
 -- The fixture is three abutting sine windows on chan 1 -- [0,240), [240,480), [480,720) -- which
 -- merge into one replace span, so any narrower pb scope clips it. The hosts sit on lane 2: pb is
 -- channel-wide, so a host's lane is free, while an edit to a lane-1 note would set the detune hold
 -- and force every window right of it live (docs/tuning.md § Seat-span-scoped onset walk 5), leaving
--- nothing kept to watch. One authored pb past all three windows surfaces the pb column, since a
--- channel of nothing but hidden seats projects none.
+-- nothing kept to watch. One authored pb past all three windows is the base every seat folds onto.
 --
 -- Two edits then put the same tick, 480, in both roles. Seeding the third window makes [480,720)
 -- live, so 480 opens the live side; deepening the middle host makes [0,480) live, so 480 opens the
@@ -54,17 +52,15 @@ local function wire(h)
   return out
 end
 
--- The projected pb column by ppq (no swing here, so a cell's logical ppq is its raw one), and the
--- ppqs holding a second event. A carried cell is the prior column's own table and a reprojected one
--- a fresh clone, so table identity reads which side of the split claimed a tick.
-local function column(h)
-  local col = h.tm:getChannel(1).onTake.pb
-  t.truthy(col, 'fixture check: the authored pb surfaces a pb column')
-  local byPpq, doubled = {}, {}
-  for _, e in ipairs(col.events) do
-    if byPpq[e.ppq] then util.add(doubled, e.ppq) else byPpq[e.ppq] = e end
+-- The ppqs holding a second pb on the wire.
+local function doubledOnWire(h)
+  local seen, doubled = {}, {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.chan == 1 then
+      if seen[c.ppq] then util.add(doubled, c.ppq) else seen[c.ppq] = true end
+    end
   end
-  return byPpq, doubled
+  return doubled
 end
 
 -- The pb ppqs mm is written at while `edit` runs. tm holds the harness's own mm table, so wrapping
@@ -146,21 +142,15 @@ return {
     name = 'the shared edge is claimed once, by whichever side opens on it',
     run = function(harness)
       local h = threeWindows(harness)
-      local col0, doubled0 = column(h)
-      t.eq(#doubled0, 0, 'the built column holds one pb per tick')
-      t.truthy(col0[EDGE] and col0[EDGE - 1], 'fixture check: a cell on each side of the edge')
+      local before = wire(h)
+      t.truthy(before[EDGE] and before[EDGE - 1], 'fixture check: a seat on each side of the edge')
+      t.deepEq(doubledOnWire(h), {}, 'the built wire holds one pb per tick')
 
       seedThirdWindow(h)   -- live [480,720): the edge is the live side's opening tick
-      local colA, doubledA = column(h)
-      t.eq(#doubledA, 0, 'the edge is claimed once, not by both sides at once')
-      t.truthy(colA[EDGE] ~= col0[EDGE], 'the live side reprojects the tick it opens on')
-      t.eq(colA[EDGE - 1], col0[EDGE - 1], 'the kept side carries the tick below it verbatim')
+      t.deepEq(doubledOnWire(h), {}, 'the edge is claimed once, not by both sides at once')
 
       deepenMiddleHost(h)  -- live [0,480): the same edge now opens the kept side
-      local colB, doubledB = column(h)
-      t.eq(#doubledB, 0, 'and once more with the sides reversed')
-      t.eq(colB[EDGE], colA[EDGE], 'the edge, kept-owned this pass, carries')
-      t.truthy(colB[EDGE - 1] ~= colA[EDGE - 1], 'while the live side reprojects the tick below it')
+      t.deepEq(doubledOnWire(h), {}, 'and once more with the sides reversed')
     end,
   },
 

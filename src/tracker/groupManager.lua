@@ -19,7 +19,7 @@ local tm, ds = deps.tm, deps.ds
 local DERIVED = {
   evType=true, chan=true, chanDelta=true, lane=true, key=true, cc=true,
   ppq=true, endppq=true, dur=true,
-  sampleShadowed=true, derived=true, hidden=true, uuid=true,
+  sampleShadowed=true, derived=true, uuid=true,
 }
 
 local gm = {}

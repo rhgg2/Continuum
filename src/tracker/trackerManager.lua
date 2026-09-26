@@ -24,10 +24,10 @@
 --shape: colEvent = the mm event's own fields (chan, uuid, metadata), logically framed, by kind:
 --shape:   note     { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], [intentCents] }
 --shape:   cc/pc/at { ppq, val, [shape], [tension] }
---shape:   pb       { ppq, val=cents-minus-detune, detune, hidden, [delay], [shape], [tension] }
+--shape:   pb       { ppq, val=intent cents, cents, detune, [shape], [tension] }; detune is emission's cue
 --shape:   pa       { ppq, pitch, vel }
 --shape: a note column's events = its notes and its pas interleaved; evType=='pa' tells them apart
---shape: pb.derived = 'absorber' on an absorber (cc sidecar) or on an in-window seat (RAM-only)
+--shape: pb.derived = 'absorber' on an absorber (cc sidecar) or on a markerless seat (RAM-only)
 --shape: pa on the wire = an mm cc, evType='pa', its vel the aftertouch value
 
 --shape: fxParked = one off-take stash for every replace park; a spec is the authored event, by kind:
@@ -151,7 +151,9 @@ do
   -- restamp renews every bounded lane every pass. Events are self-describing, so their column is here.
   function frame.setEvent(evt, field, value)
     if evt[field] == value then return end
-    if evt.evType == 'cc' then frame.renewColumn(frame.channels[evt.chan].onTake.ccs[evt.cc])
+    local onTake = frame.channels[evt.chan].onTake
+    if evt.evType == 'cc' then frame.renewColumn(onTake.ccs[evt.cc])
+    elseif evt.evType == 'pb' or evt.evType == 'pc' or evt.evType == 'at' then frame.renewColumn(onTake[evt.evType])
     else frame.renewLane(evt.chan, evt.lane) end
     evt[field] = value
   end
@@ -990,8 +992,8 @@ do
     else
       if not rawCaller then realiseAddPpq(evt, false) end
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
-      -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
-      -- absorber seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
+      -- pb is one value per tick: adopt a pb already at this slot -- including an absorber
+      -- seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
       local seat = evt.evType == 'pb' and util.seek(index.raw(evt.chan).pbs, 'at-or-before', evt.ppq)
       if seat and seat.ppq == evt.ppq then
         assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
@@ -1308,7 +1310,7 @@ local function thinSeats(chan, entries)
       local points   = {}
       for _, e in ipairs((isPb and raw.pbs or raw.ccs[entry.cc]) or {}) do
         -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
-        -- and not freeze's to delete. groupMembers' `hidden` is this partition.
+        -- and not freeze's to delete. The pb column holds no absorber, so groupMembers agrees.
         if not e.derived and e.ppq >= startRaw and e.ppq < endRaw then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
@@ -1342,8 +1344,7 @@ local function groupMembers(frozen, entries, promotedUuids)
       local col = entry.evType == 'pb' and onTake.pb or (onTake.ccs or {})[entry.cc]
       for _, e in ipairs(col and col.events or {}) do
         -- Half-open for pb too: the conversion pulls the closing seat inside the window, so nothing legitimate stands on endppq and every member lies inside the rect the mint claims.
-        -- An absorber seated around a detune onset is hidden realisation, not group material.
-        if not e.hidden and not e.parked and e.ppq >= entry.ppq and e.ppq < entry.endppq then
+        if not e.parked and e.ppq >= entry.ppq and e.ppq < entry.endppq then
           util.add(members, e)
         end
       end
@@ -1923,12 +1924,12 @@ function tm:rebuild(takeChanged)
     if dirt.wholesale(i) then
       frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, parked = parked }
     elseif dirt.has(i) then
-      -- Interval dirt carries note AND cc/at/pc columns; both splice just their seeded events. Park and
-      -- pb still want the fresh channel; priorPb feeds the kept-range carry. see design § phase 3
+      -- Interval dirt carries every column; each family splices just its seeded events. Park still
+      -- wants the fresh channel.
       local prevOnTake = prev.onTake
       frame.channels[i] = { chan = i, onTake = { notes = prevOnTake.notes, ccs = prevOnTake.ccs,
-                                                 at = prevOnTake.at, pc = prevOnTake.pc },
-                            priorPb = prevOnTake.pb, parked = parked }
+                                                 at = prevOnTake.at, pc = prevOnTake.pc, pb = prevOnTake.pb },
+                            parked = parked }
     else
       frame.channels[i] = prev
     end
