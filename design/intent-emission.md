@@ -95,6 +95,9 @@ Moved to `docs/trackerManager.md` § Two movements.
 1. Under `trackerMode`, PC synthesis consumes authored PCs. The sample stamp reads each into the
    bare notes it prevails over, and synthesis deletes it from mm and from its column.
 
+1. Outside `trackerMode` emission synthesises no PCs, so the previous emission's synthesised PCs
+   leave mm.
+
 ## The stages
 
 Moved to `docs/trackerManager.md` § The pipeline.

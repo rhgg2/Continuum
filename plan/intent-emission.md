@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-26 tm: sweep synthesised pcs outside tracker mode (design § Pitchbend and program change intent)
 - 2026-09-26 tm: parked note hosts run their chain (design § Parking)
 - 2026-09-26 tm: the CC walk projects the pb column as intent (design § Pitchbend and program change intent)
 - 2026-09-26 tm: the pc column holds authored pcs alone (design § Pitchbend and program change intent)
-- 2026-09-26 tm: park pas in place in their host's lane (design § Parking)
 
 ## Now
 
@@ -36,6 +36,3 @@
 
 ## Queued (current phase; one-liners)
 
-1. **Synthesised pcs outside tracker mode** — a take that leaves `trackerMode` keeps its
-   synthesised pcs in mm, where they sound with no seat in the pc column, which the grid shows
-   outside tracker mode. The fix is undesigned.

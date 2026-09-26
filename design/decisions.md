@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — Outside trackerMode, PC synthesis deletes every synthesised pc of a dirty channel
+  from mm. It does not promote them to authored pcs or project them into the pc column. note.sample
+  holds the intent, so a rebind back into the mode synthesises the same stream, and a wiring change
+  never writes pcs the user did not author.
+
 - **2026-09-26** — Every parked note carrying fx runs its chain, whichever host parks it, over
   suppressing a member's own chain while a region's note window parks it; the census already counted
   such a host's window, so its seats were swept as chainless absorbers and freezing it found no

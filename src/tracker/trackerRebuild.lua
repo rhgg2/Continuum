@@ -2622,10 +2622,23 @@ local function pcSeedSpans(chan, fxNotes)
   return spans.merge(raw)
 end
 
--- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records
--- and writes clip to them, so out-of-span PCs stand. see docs/trackerManager.md § PC synthesis
+-- Outside trackerMode emission synthesises no PCs, so the previous emission's leave mm whole-channel.
+local function sweepSynthesisedPCs()
+  local pcWrites = mmBatch()
+  for chan = 1, 16 do
+    if dirt.has(chan) then
+      for _, e in ipairs(index.raw(chan).pcs) do
+        if e.derived then pcWrites.delete(e) end
+      end
+    end
+  end
+  pcWrites.commit()
+end
+
+-- PC synthesis, after the sample stamp. Seed-list dirt closes to spans; records and writes clip to
+-- them, so out-of-span PCs stand. see docs/trackerManager.md § PC synthesis
 local function rebuildPCs(fxOut, extraColumns)
-  if not cm:get('trackerMode') then return end
+  if not cm:get('trackerMode') then return sweepSynthesisedPCs() end
   local fxNotes = fxOut.notes
   local pcWrites = mmBatch()
   local consumedByChan = {}

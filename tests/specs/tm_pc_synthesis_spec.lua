@@ -611,6 +611,52 @@ return {
     end,
   },
 
+  -- Outside trackerMode emission synthesises no pcs, so the synthesised pcs of the previous
+  -- emission leave mm (design/intent-emission.md § Pitchbend and program change intent). The
+  -- mode is wiring-derived per bind, so a rebind is how a take leaves it; note.sample is the
+  -- intent, and a rebind back into the mode synthesises the same stream again.
+  {
+    name = 'leaving trackerMode deletes the synthesised pcs, and re-entering restores them',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = {
+          { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 3 },
+          { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 5 },
+        } },
+        config = { transient = { trackerMode = true } },
+      }
+      local synthesised = { { ppq = 0, val = 3 }, { ppq = 240, val = 5 } }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), synthesised, 'fixture check: the mode synthesised both pcs')
+      local take = h.tm:currentTake()
+
+      h.tm:bindTake(nil)
+      h.tm:bindTake(take, { trackerMode = false })
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), {}, 'out of the mode, no pc sounds')
+      t.eq(pcColumn(h, 1), nil, 'and the column has nothing to seat')
+
+      h.tm:bindTake(nil)
+      h.tm:bindTake(take, { trackerMode = true })
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), synthesised, 'back in the mode, the samples synthesise again')
+    end,
+  },
+
+  -- A take saved under the mode and opened outside it: the sweep takes the synthesised pc on the
+  -- first pass and leaves the authored one where it was.
+  {
+    name = 'trackerMode off: a loaded synthesised pc leaves mm, an authored pc stands',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 3 } },
+          ccs   = { { ppq = 0,   evType = 'pc', chan = 1, val = 3,  derived = 'pc' },
+                    { ppq = 100, evType = 'pc', chan = 1, val = 42 } },
+        },
+      }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 100, val = 42 } }, 'only the authored pc is left in mm')
+      t.deepEq(pcColumn(h, 1), { { ppq = 100, val = 42 } }, 'and it keeps its seat in the column')
+    end,
+  },
+
   -- Under trackerMode synthesis consumes an authored pc: the stamp reads it into the bare notes it
   -- prevails over, and synthesis deletes it from mm and its column (design/intent-emission.md
   -- § Pitchbend and program change intent). A pc column then exists only where extraColumns asks.

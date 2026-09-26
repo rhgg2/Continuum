@@ -1236,9 +1236,12 @@ left empty that `extraColumns` does not ask for. See `docs/tuning.md`
 
 ### PC synthesis
 
-`rebuildPCs` re-derives each channel's PC stream from current note state,
-under trackerMode only. It runs after externals so a foreign-MIDI note
-inherits its sample from the prevailing PC.
+`rebuildPCs` re-derives each channel's PC stream from current note state
+under trackerMode. It runs after externals so a foreign-MIDI note
+inherits its sample from the prevailing PC. Outside trackerMode emission
+synthesises no PCs, so the stage deletes every synthesised PC of a dirty
+channel from mm, and a take that leaves the mode sounds its authored PCs
+alone.
 
 `note.sample` is per-note authoring intent (which sample the note
 plays); the PC stream is the realisation MIDI synths consume. tm owns
