@@ -1,6 +1,6 @@
 # Intent and emission — the frame as a take's intent
 
-> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 2 (pb and pc columns in the CC walk).
+> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 3 (parked pbs in the pb column).
 
 **The frame holds a take's intent — every authored event in its logical column, sounding or not. A
 pass reconstructs that intent from mm and the stash, then emits the take from it; parking, fx
@@ -42,7 +42,7 @@ Moved to `docs/trackerManager.md` § Two movements.
    host emits, the events it parks and the channels it realises on. The view renders a host's output
    from it, and a freeze reads from it the events its host parked.
 
-1. Absorbers and synthesised PCs live in mm alone.
+1. Where absorbers and synthesised PCs live moved to `docs/trackerManager.md` § CC walk.
 
 ## Reading intent
 
@@ -80,23 +80,11 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 ## Pitchbend and program change intent
 
-1. The CC walk projects the pb and pc columns beside cc and at (`docs/trackerManager.md` § CC walk).
-
-1. A pb event's `val` is its intent in cents, and `val + detune` is the cents it sounds.
-
-1. A **foreign pb** carries no cents sidecar. Reconstruction derives its intent from its raw value
-   less the previous emission's base-voice detune at its onset, and writes the cents to mm.
-
 1. Fx expansion reads a channel's pb base from its pb column, parked and sounding events alike
    (`docs/generators.md` § Offline continuous realisation).
 
-1. A pb or pc column exists when it holds an event or `extraColumns` asks for it.
-
-1. Under `trackerMode`, PC synthesis consumes authored PCs. The sample stamp reads each into the
-   bare notes it prevails over, and synthesis deletes it from mm and from its column.
-
-1. Outside `trackerMode` emission synthesises no PCs, so the previous emission's synthesised PCs
-   leave mm.
+1. The pb and pc columns' projection moved to `docs/trackerManager.md` § CC walk, and PC synthesis
+   of them to `docs/trackerManager.md` § PC synthesis.
 
 ## The stages
 
@@ -119,6 +107,3 @@ Moved to `docs/trackerManager.md` § The pipeline.
 
 1. **The pattern editor's curve readback.** It reads `val + detune` off the pb column. Whether a
    readback of intent should include the cue is unsettled.
-
-1. **The pb park scan.** Parking looks for pbs to park only in windows created this pass. Whether it
-   scans the pb column over every window, as it scans a cc column, is unsettled.

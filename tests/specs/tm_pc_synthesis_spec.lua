@@ -526,8 +526,8 @@ return {
 
   ----- The pc column holds authored pcs alone
 
-  -- Synthesised pcs are emission output and live in mm alone (design/intent-emission.md § Emission's
-  -- output); the pc column is intent, so a take whose every pc is synthesised carries none. The load
+  -- Synthesised pcs are emission output and live in mm alone (docs/trackerManager.md § CC walk);
+  -- the pc column is intent, so a take whose every pc is synthesised carries none. The load
   -- pass walks before synthesis mints anything, so it is the wholesale re-pass that meets them.
   {
     name = 'synthesised pcs sit in mm and not in the pc column',
@@ -612,7 +612,7 @@ return {
   },
 
   -- Outside trackerMode emission synthesises no pcs, so the synthesised pcs of the previous
-  -- emission leave mm (design/intent-emission.md § Pitchbend and program change intent). The
+  -- emission leave mm (docs/trackerManager.md § PC synthesis). The
   -- mode is wiring-derived per bind, so a rebind is how a take leaves it; note.sample is the
   -- intent, and a rebind back into the mode synthesises the same stream again.
   {
@@ -658,8 +658,8 @@ return {
   },
 
   -- Under trackerMode synthesis consumes an authored pc: the stamp reads it into the bare notes it
-  -- prevails over, and synthesis deletes it from mm and its column (design/intent-emission.md
-  -- § Pitchbend and program change intent). A pc column then exists only where extraColumns asks.
+  -- prevails over, and synthesis deletes it from mm and its column (docs/trackerManager.md
+  -- § PC synthesis). A pc column then exists only where extraColumns asks.
   {
     name = 'a consumed authored pc leaves mm and the pc column',
     run = function(harness)

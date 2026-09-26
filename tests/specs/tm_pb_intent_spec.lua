@@ -1,6 +1,6 @@
--- The pb column is the take's pb intent (design/intent-emission.md § Pitchbend and program change
--- intent): authored pbs alone, projected by the CC walk, each event's `val` its intent in cents. The
--- base voice's detune at a pb's onset is a cue emission stamps on it (§ Emission's output), so
+-- The pb column is the take's pb intent (docs/trackerManager.md § CC walk): authored pbs alone,
+-- projected by the CC walk, each event's `val` its intent in cents. The base voice's detune at a
+-- pb's onset is a cue emission stamps on it (design/intent-emission.md § Emission's output), so
 -- `val + detune` is the cents it sounds. Absorbers are realisation and live in mm alone.
 --
 -- Under the default 2-semitone pbRange, 200 cents span 8192 raw, so 50 cents is raw 2048 exactly.
