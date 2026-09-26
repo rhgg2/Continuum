@@ -1,6 +1,6 @@
 # Intent and emission — the frame as a take's intent
 
-> opened: 2026-09-26 · status: working design; not started
+> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 1 (PA intent).
 
 **The frame holds a take's intent — every authored event in its logical column, sounding or not. A
 pass reconstructs that intent from mm and the stash, then emits the take from it; parking, fx

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — PA dispatch binds an on-take pa to a parked host over the host's lane bound,
+  computed at dispatch with frame.clippedSpanEnd over the lane's events, since dispatch runs ahead
+  of the lane bounds that stamp endppqC. Parking leaves lane membership alone, so the computed bound
+  equals the later stamp. Phase 1 lands as one commit, since the in-place pa park needs dispatch
+  ahead of parking and the lane seat together.
+
 - **2026-09-26** — A length verb that maps the census deletes the pb and cc seats the mapped census
   no longer covers, over moving the seats through the verb's time map alongside it. Seats stay
   raw-only and outside every take walk; moving them would round the hand-back tick onto its window's
