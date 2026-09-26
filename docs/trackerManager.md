@@ -764,10 +764,18 @@ The head snapshot takes writes the same way: `rebuildExtraColumns` grows
 The frame the layered model hands upward is the logical one, and the raw frame
 stays inside trackerManager. Realisation reaches the view only as cues.
 
-A **cue** is a realisation field carried on a logical cell: `delayC`,
-`endppqC`, `sampleShadowed`. `REALISATION` enumerates the set. The park
-stash is the clone minus it (§ Park identity), and park sheds it from the
-seated event in place, so one list governs the cues, the stash and the seat.
+A **cue** is a field emission derives and carries on an authored event:
+`delayC`, `endppqC`, `sampleShadowed` and `parked` on every kind, and
+`detune` on a pb. A note's `detune` is authored, so the set is keyed by the
+event's kind, and `frame.isCue(kind, field)` is its one test.
+
+The view relocates a cell by adding a clone of its seat, so cues reach the
+write doors, and every door sheds them before mm sees the event. The park
+stash is the event minus its cues and um's bookkeeping — `committed`,
+`colEvt`, `raw`, `cents`, `derived` (§ Park identity) — and park sheds both
+from the seated event in place. So one set governs the cues on the writes,
+the stash and the seat. The write doors leave the bookkeeping alone, since
+freeze promotes a derived note by assigning `derived` away.
 
 ### The pipeline
 
@@ -1711,10 +1719,9 @@ any column event.
 
 The park stage flips events where they stand, through `setEvent`, which
 renews a cc column as it does a lane. A park sets the flag on the on-take
-event and sheds its realisation fields, which leaves the event equal to the
-spec it stashes, so the next head seat holds it; a restore clears the flag.
-A park sheds its kind's cues too — a pb's `detune` — since a parked event
-sounds nothing for emission to cue.
+event and sheds its cues and um's bookkeeping (§ Two movements), which
+leaves the event equal to the spec it stashes, so the next head seat holds
+it; a restore clears the flag.
 
 The park stage hands fx the seated notes rather than its own specs,
 resolving each through `seatedOf`. The fx share of parked originals must:

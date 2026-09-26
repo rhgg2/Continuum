@@ -485,12 +485,11 @@ return {
     name = 'PA stamped under swing is reachable and deletable',
     run = function(harness)
       local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
-      local hostFrame = { swing = 'c58', colSwing = nil, rpb = 4 }
       local h = harness.mk{
         seed = {
           notes = {
             { ppq = 0, endppq = 960, chan = 1, pitch = 60, vel = 100,
-              detune = 0, delay = 0, frame = hostFrame },
+              detune = 0, delay = 0 },
           },
         },
         config = {

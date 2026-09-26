@@ -12,7 +12,7 @@
 --invariant: replace-window seats are markerless; recognised by window, not a derived-tag on wire
 --invariant: a pa's cc-routing fields are stripped on projection into the note column
 --invariant: a pb column seat's val + its detune = its index entry's val, the cents it sounds
---invariant: a park spec is the authored event minus the REALISATION set, so new metadata rides park
+--invariant: a park spec is the authored event minus cues and um's bookkeeping; new fields ride it
 --invariant: a restored park spec re-derives its raw frame
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
@@ -176,6 +176,19 @@ do
   function frame.parkKey(spec)
     if spec.evType == 'note' then return spec.uuid end
     return util.key(spec.evType, spec.chan, spec.cc, spec.pitch, spec.ppq)
+  end
+
+  -- The fields emission derives and carries on an authored event, by kind: a note's detune is
+  -- authored, a pb's the lane-1 note's. see docs/trackerManager.md § Two movements
+  local REALISATION = {
+    any = { delayC = true, endppqC = true, sampleShadowed = true, parked = true },
+    pb  = { detune = true },
+  }
+
+  --post: result = field is a cue on an event of kind evType
+  function frame.isCue(evType, field)
+    local ofKind = REALISATION[evType]
+    return REALISATION.any[field] or (ofKind and ofKind[field]) or false
   end
 
   -- A channel's parked notes, collected off its lanes, where they sit flagged among the on-take ones.
@@ -852,6 +865,16 @@ do
     return index.byUuid(uuid), uuid
   end
 
+  -- A relocated cell reaches the doors as a clone of its seat, cues and all; a door clears them
+  -- from the caller's table.
+  local function shedCues(evType, fields)
+    local cues = {}
+    for field in pairs(fields) do
+      if frame.isCue(evType, field) then util.add(cues, field) end
+    end
+    for _, field in ipairs(cues) do fields[field] = nil end
+  end
+
   ----- Public interface
 
   function stager.delete(evtOrUuid)
@@ -929,7 +952,8 @@ do
     local evt = lookup(evtOrUuid)
     if not evt then return end
     local rawCaller = update.rawTime
-    update.rawTime, update.parked = nil, nil
+    update.rawTime = nil
+    shedCues(evt.evType, update)
     if evt.evType == 'note' then
       realiseNoteUpdate(evt, update, rawCaller)
       assignNote(evt, update)
@@ -949,11 +973,12 @@ do
   --post: (evt.rawTime) → nothing is translated; evt reaches mm on the raw time the caller stated
   --post: (a pb already seats at evt.ppq) → that seat is assigned instead, and no rival pb added
   --invariant: rawTime is consumed here: it lands on no record and reaches no mm write
-  --invariant: parked is frame vocabulary: write doors shed it; no mm write or stash spec holds it
+  --invariant: write doors shed every cue; no mm write or stash spec holds one
   --invariant: a pb's wire value is derived at flush; rebuild's absorber pass reconciles the seats
   function stager.add(evt)
     local rawCaller = evt.rawTime
-    evt.rawTime, evt.parked = nil, nil
+    evt.rawTime = nil
+    shedCues(evt.evType, evt)
     if evt.evType == 'note' then
       evt.detune = evt.detune or 0
       evt.delay  = evt.delay  or 0
@@ -987,7 +1012,7 @@ do
   end
 
   function stager.assignParked(evt, update)
-    update.parked = nil
+    shedCues(evt.evType, update)
     util.add(parkedEdits, { op = 'assign', evt = evt, update = update })
   end
 

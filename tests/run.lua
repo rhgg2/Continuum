@@ -97,6 +97,7 @@ local specs = {
   'tm_lane_population_spec',
   'tm_lane_bound_spec',
   'tm_parked_carry_spec',
+  'tm_cues_spec',
   'tm_lane_pass_spec',
   'tm_tail_gating_spec',
   'tm_length_swing_spec',

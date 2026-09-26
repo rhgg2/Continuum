@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: shed every cue at the write doors and at park (design § Emission's output 1–3)
 - 2026-09-26 tm: seat parked pbs in the pb column under the parked flag (§ Parking)
 - 2026-09-26 tm: fx expansion reads the pb base off the pb column (design § Pitchbend and program change intent 1)
 - 2026-09-26 tm: sweep synthesised pcs outside tracker mode (design § Pitchbend and program change intent)
-- 2026-09-26 tm: parked note hosts run their chain (design § Parking)
 
 ## Now
 
@@ -36,11 +36,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **`REALISATION` is the cue set** (§ Emission's output 1–2) — `parked` and a pb's `detune` join
-   `REALISATION`, keyed by kind so a note's `detune` stays authored, and the separate `CUES` table
-   retires. `toParked`, `parkInPlace` and tm's write doors — which shed `parked` by hand at
-   `trackerManager.lua` ~932, ~956, ~990 — all shed the one set, so the set moves where both modules
-   reach it. Spec: a parked pb's spec and a write-door clone of a parked cell carry no cue.
 1. **The realisation map's parked share covers every kind** (§ Emission's output 3) — `parkPAs`,
    `parkCCs` and `parkPbs` bucket their parks by host into `parkedByHost`, as `parkNotes` does. The
    freeze reads its drop set off its entry's parked share by `parkKey`, so its `covered()` and

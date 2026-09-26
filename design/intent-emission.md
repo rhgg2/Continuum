@@ -38,6 +38,9 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 1. `parked` is a cue, and so is a pb event's `detune` — the base voice's detune at its onset.
 
+1. No cue reaches mm or the stash. Every write door sheds the cues, and a park spec is its event
+   minus the cues and um's bookkeeping — `committed`, `colEvt`, `raw`, `cents` and `derived`.
+
 1. The **realisation map** carries emission's output to the view, keyed by host: the derived notes a
    host emits, the events it parks and the channels it realises on. The view renders a host's output
    from it, and a freeze reads from it the events its host parked.

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — The cues and um's bookkeeping are two sets, over the one REALISATION strip. Every
+  write door and park shed the cues, which frame.isCue tests keyed by the event's kind so a note's
+  detune stays authored; only park sheds the bookkeeping (committed, colEvt, raw, cents, derived),
+  since freeze promotes a derived note by assigning derived away through a write door. The vestigial
+  `frame` field leaves the strip.
+
 - **2026-09-27** — An emission stage takes intent fields off the columns and an event's raw position
   by uuid off um's index, over rederiving raw from logical; the tail walk keeps reading um's index,
   since it refines the sounding set the stages before it settled. The frame keeps each channel's fx

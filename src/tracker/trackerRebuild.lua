@@ -563,29 +563,31 @@ end
 
 ----- Rebuild region park
 
--- The parked clone of a column event; the realisation frame
--- is removed, and re-added on unpark
+-- The parked clone of a column event: its cues and um's bookkeeping are removed, and emission
+-- re-derives the cues on unpark
 --pre: evt is logical-frame; an mm-raw source must override ppq via `adds`
 local toParked, parkInPlace do
-  local REALISATION = { delayC = true, endppqC = true, committed = true, derived = true,
-                      frame = true, cents = true, colEvt = true, sampleShadowed = true,
-                      raw = true }
-  -- Emission's cues on a sounding event, by kind: authored elsewhere, so not REALISATION, but a
-  -- parked event sounds nothing to cue.
-  local CUES = { pb = { detune = true } }
-  local noCues = {}
+  -- um's bookkeeping on a seated event: neither authored nor a cue, and no part of a spec.
+  local BOOKKEEPING = { committed = true, colEvt = true, raw = true, cents = true, derived = true }
+
+  local function sheds(evType, field) return BOOKKEEPING[field] or frame.isCue(evType, field) end
 
   function toParked(evt, adds)
-    local spec = util.clone(evt, REALISATION)
-    for field in pairs(CUES[evt.evType] or noCues) do spec[field] = nil end
+    local spec = {}
+    for field, value in pairs(evt) do
+      if not sheds(evt.evType, field) then spec[field] = value end
+    end
     return util.assign(spec, adds)
   end
 
-  -- Park flips the column event where it stands, shedding the realisation frame there too.
+  -- Park flips the column event where it stands, shedding its cues and bookkeeping there too.
   --post: evt is its toParked spec plus parked = true, so the next head seat holds it
   function parkInPlace(evt)
-    for field in pairs(REALISATION) do frame.setEvent(evt, field, nil) end
-    for field in pairs(CUES[evt.evType] or noCues) do frame.setEvent(evt, field, nil) end
+    local shed = {}
+    for field in pairs(evt) do
+      if sheds(evt.evType, field) then util.add(shed, field) end
+    end
+    for _, field in ipairs(shed) do frame.setEvent(evt, field, nil) end
     frame.setEvent(evt, 'parked', true)
   end
 end
