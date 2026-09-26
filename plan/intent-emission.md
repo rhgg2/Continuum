@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: the realisation map's parked share covers every kind (design § Emission's output 4)
 - 2026-09-27 tm: shed every cue at the write doors and at park (design § Emission's output 1–3)
 - 2026-09-26 tm: seat parked pbs in the pb column under the parked flag (§ Parking)
 - 2026-09-26 tm: fx expansion reads the pb base off the pb column (design § Pitchbend and program change intent 1)
-- 2026-09-26 tm: sweep synthesised pcs outside tracker mode (design § Pitchbend and program change intent)
 
 ## Now
 
@@ -36,12 +36,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The realisation map's parked share covers every kind** (§ Emission's output 3) — `parkPAs`,
-   `parkCCs` and `parkPbs` bucket their parks by host into `parkedByHost`, as `parkNotes` does. The
-   freeze reads its drop set off its entry's parked share by `parkKey`, so its `covered()` and
-   `hostDropped` re-derivation over the stash retires. The view's `fx.parked` readers take the notes
-   they want. Spec: a freeze of a cc-replace and a pb-replace region restores exactly the events
-   the entry names, and a pa under a dropped host goes with it.
 1. **Absorber reconciliation reads the authored pb stream off the pb column** (§ Reading intent
    2) — `realPbs` and `seatScope`'s `bpSpan` read the column's sounding events, `val` as intent
    cents and raw position by uuid off um's index, and the `detune` cue is stamped by iterating the

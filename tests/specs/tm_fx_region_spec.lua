@@ -26,7 +26,7 @@ end
 local function ccRest(cc) return generators.ccDefaultRest[cc] end
 
 -- A seat is recognized purely by region membership, on pb and cc alike: anything inside a live region's
--- span, half-open (as production's covered()). The close folds to endppq-1, so the end row is never
+-- span, half-open (as the park stage's hostFor). The close folds to endppq-1, so the end row is never
 -- seat territory. see docs/generators.md § Route-by-window
 local function inLiveRegion(h, chan, ppq)
   for _, r in ipairs(h.ds:get('fxRegions') or {}) do
@@ -299,6 +299,44 @@ local function edgePair()
     mode = 'replace', dest = 'pb', label = 'Edge Pair', defaults = {}, fields = {},
   }
   return { { kind = 'edgePair' } }
+end
+
+-- Three disjoint hosts on channel 1, one per target: fxr-1 a cc10 sine over two authored cc10, fxr-2 a
+-- pb sine over an authored pb, fxr-3 an arp over a note carrying a PA. Disjoint and target-distinct, so
+-- no freeze gate refuses any of them.
+local function threeHosts(h)
+  h.tm:addEvent{ evType = 'cc', ppq = 60,  chan = 1, cc = 10, val = 20 };  h.tm:flush()
+  h.tm:addEvent{ evType = 'cc', ppq = 180, chan = 1, cc = 10, val = 100 }; h.tm:flush()
+  h.tm:addEvent{ evType = 'pb', ppq = 540, chan = 1, val = 40 };           h.tm:flush()
+  addNote(h, { ppq = 960, endppq = 1200 })
+  h.tm:addEvent{ evType = 'pa', ppq = 1020, chan = 1, pitch = 60, vel = 64, lane = 1 }; h.tm:flush()
+  local sineCc = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0, dest = 10 } }
+  h.ds:assign('fxRegions', {
+    { uuid = 'fxr-1', chan = 1, ppq = 0,   endppq = 240,  fx = sineCc },
+    { uuid = 'fxr-2', chan = 1, ppq = 480, endppq = 720,  fx = sine30 },
+    { uuid = 'fxr-3', chan = 1, ppq = 960, endppq = 1200, fx = arpUp },
+  })
+  h.tm:rebuild()
+end
+
+-- Channel 1's parked-flagged column events, whichever column seats them.
+local function parkedSeats(h)
+  local channel, out = h.tm:getChannel(1), {}
+  local cols = {}
+  for _, col in ipairs(channel.onTake.notes) do util.add(cols, col) end
+  for _, col in pairs(channel.onTake.ccs) do util.add(cols, col) end
+  if channel.onTake.pb then util.add(cols, channel.onTake.pb) end
+  for _, col in ipairs(cols) do
+    for _, evt in ipairs(col.events) do if evt.parked then util.add(out, evt) end end
+  end
+  return out
+end
+
+-- The stash as a set of 'evType@ppq' names.
+local function stashNames(h)
+  local out = {}
+  for _, spec in ipairs(h.ds:get('fxParked') or {}) do out[spec.evType .. '@' .. spec.ppq] = true end
+  return out
 end
 
 return {
@@ -2901,6 +2939,87 @@ return {
       t.falsy(h.tm:freezeRegion(uuid), 'a note carrying no chain is not a host')
       t.deepEq(authoredPitches(h), { 60 }, 'the note stands')
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'and so does the region')
+    end,
+  },
+
+  {
+    -- A host's realisation entry carries every event it took off the take, of every kind, as the
+    -- seated column events the grid draws. A PA goes with its host note, so it sits in the share of
+    -- whichever host parked that note. A prior carried through a pass that never touched its channel
+    -- stays in its host's share. see design/intent-emission.md § Emission's output 4
+    name = "fxRealisation parked: a host's entry names every kind it parked",
+    run = function(harness)
+      local h = harness.mk()
+      threeHosts(h)
+      local hostOfKind = { cc = 'fxr-1', pb = 'fxr-2', note = 'fxr-3', pa = 'fxr-3' }
+      local function checkShares(when)
+        local expected, seats = { ['fxr-1'] = {}, ['fxr-2'] = {}, ['fxr-3'] = {} }, parkedSeats(h)
+        for _, evt in ipairs(seats) do expected[hostOfKind[evt.evType]][evt] = true end
+        local counts = {}
+        for _, evt in ipairs(seats) do counts[evt.evType] = (counts[evt.evType] or 0) + 1 end
+        t.deepEq(counts, { cc = 2, pb = 1, note = 1, pa = 1 },
+                 'fixture check (' .. when .. '): both cc, the pb, the note and its PA are seated parked')
+        for uuid, want in pairs(expected) do
+          local share = h.tm:fxRealisation(uuid).parked
+          local got = {}
+          for _, evt in ipairs(share) do got[evt] = true end
+          t.eq(#share, #util.keys(want), uuid .. ' (' .. when .. '): its share holds each of its seats once')
+          local missing, stray = 0, 0
+          for evt in pairs(want) do if not got[evt] then missing = missing + 1 end end
+          for evt in pairs(got) do if not want[evt] then stray = stray + 1 end end
+          t.eq(missing, 0, uuid .. ' (' .. when .. '): its share names every seat it parked, by identity')
+          t.eq(stray, 0, uuid .. ' (' .. when .. '): and nothing another host parked')
+        end
+        return seats
+      end
+
+      local before = checkShares('parked this pass')
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 2, pitch = 67,
+                     vel = 90, detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
+      local after = checkShares('carried as priors')
+      local kept = {}
+      for _, evt in ipairs(before) do kept[evt] = true end
+      for _, evt in ipairs(after) do
+        t.truthy(kept[evt], 'channel 1 is kept: the ' .. evt.evType .. ' seat is the same event it was')
+      end
+    end,
+  },
+
+  {
+    -- Freeze destroys what the frozen host parked and nothing else: a neighbour's parks stay in the
+    -- stash for its own restore. A PA goes with its host note. see docs/trackerManager.md § Realisation by host
+    name = "freeze: the drop set is the host's own parked share",
+    run = function(harness)
+      local h = harness.mk()
+      threeHosts(h)
+      t.deepEq(stashNames(h), { ['cc@60'] = true, ['cc@180'] = true, ['pb@540'] = true,
+                                ['note@960'] = true, ['pa@1020'] = true }, 'fixture check: all five parked')
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'the cc host freezes')
+      t.deepEq(stashNames(h), { ['pb@540'] = true, ['note@960'] = true, ['pa@1020'] = true },
+               "both ccs leave the stash; the pb, the note and its PA are other hosts' and stay")
+      -- The stash alone cannot tell a drop from a restore: with the region gone, the next pass would
+      -- restore whatever freeze kept. The augment authors a seat on each parked cc's onset, so a
+      -- restored original shows as a second cc there.
+      local ccsAt = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 10 then ccsAt[c.ppq] = (ccsAt[c.ppq] or 0) + 1 end
+      end
+      t.eq(ccsAt[60], 1, 'one cc10 at 60: the frozen seat, and the parked original destroyed')
+      t.eq(ccsAt[180], 1, 'one cc10 at 180, likewise')
+
+      h = harness.mk()
+      threeHosts(h)
+      t.truthy(h.tm:freezeRegion('fxr-3'), 'the arp host freezes')
+      t.deepEq(stashNames(h), { ['cc@60'] = true, ['cc@180'] = true, ['pb@540'] = true },
+               'the note and the PA riding it leave the stash; the ccs and the pb stay')
+      local onsets = {}
+      for _, n in ipairs(h.fm:dump().notes) do util.add(onsets, n.ppq) end
+      table.sort(onsets)
+      t.deepEq(onsets, { 960, 1020, 1080, 1140 }, 'the promoted arp steps alone: the original note was not restored')
+      for _, c in ipairs(h.fm:dump().ccs) do
+        t.falsy(c.evType == 'pa', 'and neither was the PA')
+      end
     end,
   },
 

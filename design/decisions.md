@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — Every park pass files what it parks under the host that parked it, as the seated
+  column event, and a PA files under the host that parked its host note. Freeze's drop set is the
+  frozen host's parked share, matched by park key, over re-deriving window coverage and a host-note
+  walk from the stash; one filing serves the ghost overlay, promotion lanes and freeze alike. The
+  overlay's hidden set filters that share to notes.
+
 - **2026-09-27** — The cues and um's bookkeeping are two sets, over the one REALISATION strip. Every
   write door and park shed the cues, which frame.isCue tests keyed by the event's kind so a note's
   detune stays authored; only park sheds the bookkeeping (committed, colEvt, raw, cents, derived),

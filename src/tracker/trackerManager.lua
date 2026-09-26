@@ -1292,7 +1292,8 @@ local channelsInUse = {}
 -- One host's whole output in one place, gathered at the tail where the census has settled: the
 -- passes above each key their share by host uuid, and the ghost overlay draws exactly one entry.
 --shape: fxRealisationByUuid[uuid] = { uuid, chans = ascending channel list, notes = derived onsets in
---shape:   logical-onset order, parked = the originals stood in for, targets = { [target] = {{ppqL, ppqL}} } }
+--shape:   logical-onset order, parked = the seated column events it took off the take, every kind,
+--shape:   targets = { [target] = {{ppqL, ppqL}} } }
 --   notes and parked are the built lists, by reference
 local fxRealisationByUuid = {}
 
@@ -1441,13 +1442,6 @@ local function freezeRegion(uuid, toGroup)
   -- The frozen window per stream it parks: the group arm's two passes walk it -- the thin in the raw
   -- frame, the member gather in the logical one.
   local frozenEntries = fxWindows.perTarget(frozen)
-  -- Coverage off the published set, narrowed to this uuid: the gate has refused every neighbour
-  -- sharing a target inside this span, so whatever the set covers here it covers on our behalf.
-  -- Never rebuildRegionPark's covered(): its first clause answers "does this spec park itself", true
-  -- of every self-parked note host on the channel, and would take theirs too.
-  local function covered(spec)
-    return windows.owns(spec.evType, spec.chan, spec.cc, spec.ppq) == uuid
-  end
 
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
   -- metadata, so each rides mm's lockless path; the note keeps its uuid and detune.
@@ -1455,8 +1449,13 @@ local function freezeRegion(uuid, toGroup)
   for _, note in ipairs(index.raw(frozen.chan).notes) do
     if note.derived == uuid then util.add(promoted, note) end
   end
-  local ourParked = {}
-  for _, cell in ipairs((fxRealisationByUuid[uuid] or {}).parked or {}) do ourParked[cell] = true end
+  -- What this host parked, every kind: its cells step aside for the promotion, and its specs are
+  -- the stash's drop set. see docs/trackerManager.md § Realisation by host
+  local ourParked, dropKeys = {}, {}
+  for _, cell in ipairs((fxRealisationByUuid[uuid] or {}).parked or {}) do
+    ourParked[cell] = true
+    dropKeys[frame.parkKey(cell)] = true
+  end
   local laneOf = promotionLanes(frozen.chan, promoted, ourParked)
   -- The lane the ghost drew it in, restated as the note's own ceiling: it sounded to its host's window,
   -- not the lane rule that never held it as authored.
@@ -1472,25 +1471,8 @@ local function freezeRegion(uuid, toGroup)
   -- host in the stash arm; an on-take host's is continuous-only, and index.move de-registers it, so nothing regenerates.
   if onTakeHost then stager.assign(onTakeHost, { fx = util.REMOVE }) end
 
-  local droppedHosts = {}
   for _, spec in ipairs(stash) do
-    if spec.evType == 'note' and covered(spec) then droppedHosts[spec.uuid] = true end
-  end
-  -- A note host parks no note window of its own, so window coverage cannot reach it:
-  -- seeding it here is what carries its parked PAs along through hostDropped below.
-  if hostSpec and destroysHost then droppedHosts[uuid] = true end
-  -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
-  -- behind. Host resolution is hostParked's, over live render events.
-  local function hostDropped(pa)
-    for _, evt in ipairs(frame.parkedNotes(pa.chan)) do
-      if evt.pitch == pa.pitch and pa.ppq >= evt.ppq and pa.ppq < evt.endppqC then
-        return droppedHosts[evt.uuid] == true
-      end
-    end
-    return false
-  end
-  for _, spec in ipairs(stash) do
-    local drop = spec.evType == 'pa' and hostDropped(spec) or covered(spec)
+    local drop = dropKeys[frame.parkKey(spec)]
     if hostSpec and spec.uuid == uuid then
       -- Freeze takes the chain, not the note: a host parked by another live region's note window stays
       -- parked, stripped, so nothing runs its chain over the frozen curve.

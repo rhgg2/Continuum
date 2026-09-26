@@ -3969,11 +3969,11 @@ function tv:ghostOverlay()
       end
     end
   end
-  -- Originals of a replace park stand beside their own realisation; keyed by the event, which
-  -- answers for cell, tail and temper tick. A host cell (own fx) always keeps its row. see docs/trackerView.md § Ghost sampling
+  -- Parked notes stand beside their own realisation; keyed by the event, which answers for cell, tail
+  -- and temper tick. A host cell (own fx) always keeps its row. see docs/trackerView.md § Ghost sampling
   local hidden = {}
   for _, cell in ipairs(fx.parked) do
-    if not cell.fx then hidden[cell] = true end
+    if util.isNote(cell) and not cell.fx then hidden[cell] = true end
   end
   return { notes = notes, values = values, hidden = hidden }
 end

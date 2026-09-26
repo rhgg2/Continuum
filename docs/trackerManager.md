@@ -943,6 +943,9 @@ interval dirt visits just the seeded uuids.
 columns, flagged, through `seatParked` (§ Lane occupancy). Notes and pas
 share a lane, so each kind's run touches only seats of its own `evType`.
 
+It hands the park stage each spec's seat. A restore flips that seat in
+place, and a carried spec files it under its host (§ Region-replace parking).
+
 ### PA dispatch
 
 `rebuildPA` attaches each on-take `pa` to the note column whose voice it
@@ -1008,15 +1011,13 @@ tail walk's atomic commit. See `docs/generators.md` § Output. Each pass's
 `chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
 callback fires only for specs newly parked this rebuild (e.g. marking
 the note pass's channel dirty), never for carried-forward priors.
-`covered()` — the same predicate `reconcilePark` applies — gates both
-scan loops before they clone a `parkSpec`, so a take with no fx
-windows builds an empty scan and pays nothing per event; it accepts a
-stash spec or a column event — both logical, so it keys `ppq` directly.
-`covered()` wraps `coveredBy()`, which answers the parking host's
-uuid rather than a bare bool: a `currentWindows` entry is checked
-first, and only then the spec's own `fx`, so a self-parking host
-inside a region's window is parked by that region — its own chain
-still runs.
+Each pass files what it parks under the host that parked it, as the
+seated column event — a new park's own event, which it flips in place, or a
+carried spec's seat from the stash seat. `hostFor` names that host: a window
+owning the spec's onset first, and only then the spec's own `fx`, so a
+self-parking host inside a region's window is parked by that region — its
+own chain still runs. The filed events are each host's parked share of
+§ Realisation by host.
 A cc's park and restore write no dirt seed: the fill's end seat carries
 the value the authored stream holds there, parked members included, so
 nothing downstream reads a changed base — the fill stands in for the
@@ -1036,7 +1037,8 @@ stream is meaningless; the generator owns any new realisation PAs),
 flipped in place in its host's lane as a cc is, and stashed in `fxParked`
 with its lane and uuid. It is reconciled against the parked notes in its
 own lane rather than in a window pass: it parks only under a parked host
-of its pitch whose clip covers its onset. Its park and restore write no
+of its pitch whose clip covers its onset. It files under whichever host
+parked that note. Its park and restore write no
 dirt seed, as a cc's don't: a parked PA stays in the lane, so the
 continuous streams read the same population either way. Restore returns
 it to `mm` under its uuid and without its lane, which is display-only and
@@ -1723,10 +1725,10 @@ event and sheds its cues and um's bookkeeping (§ Two movements), which
 leaves the event equal to the spec it stashes, so the next head seat holds
 it; a restore clears the flag.
 
-The park stage hands fx the seated notes rather than its own specs,
-resolving each through `seatedOf`. The fx share of parked originals must:
-gridPane matches those events by identity to suppress them under their
-host's ghost.
+The park stage files the seated events under their hosts rather than its
+own specs. The realisation share needs them by identity: the ghost overlay
+suppresses a parked note's cell under its host's ghost, and a freeze moves
+its own host's cells out of the way of the promotion.
 
 ## Dormant guard
 
@@ -1884,13 +1886,17 @@ and asks it per frame, off a caret that moves without a rebuild
 (`docs/trackerView.md` § Ghost sampling). Answering at read time would mean
 walking every channel's derived notes and every parked event in the document,
 per frame, to discard nearly all of both. The rebuild already holds the
-answer: a derived spec carries its host's uuid as it is emitted, a park
-window carries the id of the chain that opened it, and the census names every
-host on the take. So tm keys those three outputs by host as it builds
-them and gathers them into one entry per chain at the pipeline tail;
+answer: a derived spec carries its host's uuid as it is emitted, the park
+stage files every event it parks under the host that parked it, and the
+census names every host on the take. So tm keys those three outputs by host as
+it builds them and gathers them into one entry per chain at the pipeline tail;
 `tm:fxRealisation` hands a host its entry and the view's query is a lookup.
 
-**2** The claimed continuous targets come off the **census**, not the
+**2** The parked share holds every kind a host parked — notes, PAs, ccs and
+pbs. Freeze reads its drop set from it: a stash spec leaves with the frozen
+host iff its park key names an event in that host's share.
+
+**3** The claimed continuous targets come off the **census**, not the
 emission. Emission is dirt-gated — a host outside the dirty interval is
 kept rather than re-run, and a kept host emits no record — so a target set
 read off it would vanish on the first edit elsewhere in the channel and return
@@ -1901,23 +1907,23 @@ not blink is `chainTargets`, which already names a target per continuous cc
 dest and one for pb, blind to dirt and blind to bypass, so the target set is
 the window set the rebuild computes for parking anyway.
 
-**3** One thing follows from taking the census whole: a note host claims its
+**4** One thing follows from taking the census whole: a note host claims its
 targets exactly as a region does, so a note carrying an lfo ghosts into the cc
 column it modulates, wherever the channel carries one.
 
-**4** `tm:fxCurveAt` is the sampling half — what one chain realises on one
+**5** `tm:fxCurveAt` is the sampling half — what one chain realises on one
 claimed target at one logical ppq, called once per row per frame. The channel
 it reads on comes in as an argument rather than off the entry, since one chain
 can realise on sixteen of them.
 
-**5** A stored global region is no host of its own (§ Channel & column
+**6** A stored global region is no host of its own (§ Channel & column
 model), so its uuid answers with the union
 of the hosts it expanded into — their derived notes, their claimed targets
 and the events they parked. The entry therefore names the channels it realises
 on rather than one channel, and each note in it carries the channel of the
 host that emitted it.
 
-**6** The claimed spans are logical, not raw. Each expanded host claims its
+**7** The claimed spans are logical, not raw. Each expanded host claims its
 target over the same logical window, so the union merges back to the stored
 region's own span, while raw spans would be as many different intervals as
 there are channels under per-channel swing. The conversion to raw happens at

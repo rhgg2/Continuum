@@ -1524,6 +1524,26 @@ return {
     end,
   },
 
+  {
+    -- The host's parked share covers every kind, but suppression reaches parked notes alone: a
+    -- parked pb is drawn by its own column's seat. see docs/trackerView.md § Ghost sampling
+    name = 'ghostOverlay: a parked pb in the share is not hidden',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent({ evType = 'pb', ppq = 60, chan = 1, val = 40 }); h.tm:flush()
+      injectRegion(h)                   -- sine over [0, 240): parks the authored pb
+      local shared = {}
+      for _, evt in ipairs(h.tm:fxRealisation('fxr-1').parked) do
+        if evt.evType == 'pb' then util.add(shared, evt) end
+      end
+      t.eq(#shared, 1, "fixture check: the parked pb seat is in the host's share")
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)             -- caret on the host
+      t.deepEq(h.vm:ghostOverlay().hidden, {}, 'the pb seat keeps its cell')
+    end,
+  },
+
   ----- Scope: the overlay is one host's realisation, not the take's
 
   {
