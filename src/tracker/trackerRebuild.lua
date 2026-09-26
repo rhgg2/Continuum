@@ -232,14 +232,10 @@ local function ensureCcColumn(chan, evType, ccNum)
   end
 end
 
--- A pb's column event is its intent: val is the cents sidecar and the wire value stays in mm. It
--- carries a seat stamp, through which rebuildPbs stamps its detune cue.
+-- A pb's column event is its intent: val is the cents sidecar and the wire value stays in mm.
 local function ccColumnEvent(entry, update)
   local event = columnEvent(entry, update)
-  if entry.evType == 'pb' then
-    event.val, event.raw = event.cents, nil
-    index.stampColEvt(event)
-  end
+  if entry.evType == 'pb' then event.val, event.raw = event.cents, nil end
   projectEvent(event, entry.chan)
   return event
 end
@@ -878,8 +874,7 @@ local function parkCCs(stage)
   return parkedCCs, restoredCCs
 end
 
--- A pb parks and restores in place in its column, as a cc does. A park seeds no dirt: whatever put
--- the pb under a window -- a region edit, the pb's own add or move -- has seeded its row or the window.
+-- A pb parks and restores in place in its column, as a cc does.
 local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
   local candidates = {}
   for chan = 1, 16 do
@@ -890,7 +885,11 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
       end
     end
   end
-  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb)
+  -- A parked pb's value no longer holds past its window, so the absorbers it held into must reseat.
+  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb,
+    function(spec)
+      dirt.add(spec.chan, dirt.parkSeed(spec, 'park', time:fromLogical(spec.chan, spec.ppq)))
+    end)
 
   -- A restore goes to mm detune-free; rebuildPbs corrects the wire value and stamps the seat's cue.
   local restoredPbs = {}
@@ -943,15 +942,13 @@ local function rebuildRegionPark(fxOutWindows, fxParked, seats, fxInWindows, onT
   persistKey('fxParked', allParked, fxParked)
   stage.writes.commit()
 
-  -- Seat-stamp each restored event like any other seat, now the commit lands it in mm; bare write,
+  -- Seat-stamp each restored note like any other seat, now the commit lands it in mm; bare write,
   -- no setEvent -- see docs/trackerManager.md § Incremental index reconciliation.
-  for _, restored in ipairs({ restoredNotes, restoredPbs }) do
-    for _, evt in ipairs(restored) do
-      if index.stampColEvt(evt) then evt.committed = true end
-    end
+  for _, evt in ipairs(restoredNotes) do
+    if index.stampColEvt(evt) then evt.committed = true end
   end
-  -- A cc or pa entry carries no seat stamp, so a restored one only learns that mm holds it.
-  for _, restored in ipairs({ restoredCCs, restoredPAs }) do
+  -- Only a note entry carries a seat stamp, so a restored cc, pa or pb only learns that mm holds it.
+  for _, restored in ipairs({ restoredCCs, restoredPAs, restoredPbs }) do
     for _, evt in ipairs(restored) do
       if index.byUuid(evt.uuid) then evt.committed = true end
     end
@@ -1115,12 +1112,26 @@ local function basePoint(ppq, val, evt)
   return { ppq = ppq, val = val, shape = evt and evt.shape or 'step', tension = evt and evt.tension }
 end
 
-local function isAuthoredPb(pb) return not pb.derived and pb.cents ~= nil end
-
 -- The column's pb events, or none; the column holds every authored pb, sounding or parked.
 local function pbColumnEvents(chan)
   local col = frame.channels[chan].onTake.pb
   return col and col.events or {}
+end
+
+-- The column's unparked pbs, the authored stream the pass realises, at raw ppqs off um's index.
+--shape: unparkedPb = { ppq (raw), cents (= evt.val), shape, tension, evt (the column event) }
+--pre: the park stage has run and committed: every unparked pb has an index entry
+--post: ppq-ascending
+local function unparkedPbsFor(chan)
+  local unparked = {}
+  for _, evt in ipairs(pbColumnEvents(chan)) do
+    if not evt.parked then
+      util.add(unparked, { ppq = index.byUuid(evt.uuid).ppq, cents = evt.val,
+                           shape = evt.shape, tension = evt.tension, evt = evt })
+    end
+  end
+  util.sortByPPQ(unparked)
+  return unparked
 end
 
 -- The cover of the pb column's authored events; see § Span-covered fx scans
@@ -2136,15 +2147,13 @@ end
 
 -- Closes seeds to raw spans that gate the pass's onsets/densify/anchor/absorber-pool; nil = ungated.
 -- Extents come by seek, ahead of the gather.
-local function seatScope(chan, replaceWins, baseVoice)
+local function seatScope(chan, replaceWins, baseVoice, unparked)
   if dirt.wholesale(chan) then return nil end
   local seatSpans = {}
   local function baseVoiceSpan(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, baseVoice.nextAfter(ppq) }) end
   local function bpSpan(ppq)
-    -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
-    local function authored(pb) return isAuthoredPb(pb) and not replaceWins.inSeatWindow(pb.ppq) end
-    local prevBp = util.seek(index.raw(chan).pbs, 'before', ppq, authored)
-    local nextBp = util.seek(index.raw(chan).pbs, 'after',  ppq, authored)
+    local prevBp = util.seek(unparked, 'before', ppq)
+    local nextBp = util.seek(unparked, 'after',  ppq)
     util.add(seatSpans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
   end
   -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
@@ -2208,15 +2217,16 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     end
   end
 
-  -- Replace windows + seat spans per dirty chan, computed ahead of the gather. A derived base voice in
-  -- the pass's own output ungates the channel (seatSpans nil).
-  local winsByChan, seatSpansByChan = {}, {}
+  -- Replace windows, unparked pbs and seat spans per dirty chan, computed ahead of the gather. A
+  -- derived base voice in the pass's own output ungates the channel (seatSpans nil).
+  local winsByChan, unparkedByChan, seatSpansByChan = {}, {}, {}
   for chan = 1, 16 do
     if dirt.has(chan) then
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
       winsByChan[chan] = replaceWins
+      unparkedByChan[chan] = unparkedPbsFor(chan)
       if not freshBaseVoice[chan] then
-        seatSpansByChan[chan] = seatScope(chan, replaceWins, baseVoiceByChan[chan])
+        seatSpansByChan[chan] = seatScope(chan, replaceWins, baseVoiceByChan[chan], unparkedByChan[chan])
       end
     end
   end
@@ -2231,20 +2241,17 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     return false
   end
 
-  -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone still
-  -- names its source; origShape is held because the pass rewrites shape.
-  local pbsByChan, cuedByChan = {}, frame.newChannels()
+  -- Each pb of the previous emission rides its own clone through the pass, carrying the index entry's
+  -- uuid so a mutated clone still names its source; origShape is held because the pass rewrites shape.
+  local pbsByChan = {}
   for chan = 1, 16 do
     if dirt.has(chan) then
       local seatSpans = seatSpansByChan[chan]
       for _, entry in ipairs(index.raw(chan).pbs) do
         if inSpans(seatSpans, entry.ppq) then
-          local pb = util.clone(entry, { colEvt = true })
+          local pb = util.clone(entry)
           pb.origShape = entry.shape
           util.bucket(pbsByChan, pb.chan, pb)
-          if not entry.derived and entry.colEvt then
-            util.add(cuedByChan[chan], { colEvt = entry.colEvt, ppq = entry.ppq })
-          end
         end
       end
     end
@@ -2254,7 +2261,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
 
   -- Seat the base voice's detune stream, match absorbers, and stage the consolidated assign feeding
   -- the projection below. Clean chans skip it wholesale -- I8: rebuild is a fixpoint.
-  local function deriveChan(chan, pbs, replaceWins, seatSpans, baseVoice)
+  local function deriveChan(chan, pbs, replaceWins, seatSpans, baseVoice, unparked)
     local replaceWinAt, inSeatWindow, inKeptRange =
       replaceWins.replaceWinAt, replaceWins.inSeatWindow, replaceWins.inKeptRange
 
@@ -2283,26 +2290,18 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       if fencedPb(pbs[i].ppq) then table.remove(pbs, i) end
     end
 
-    -- The CC walk gave every authored pb its cents, so a centless one is a seat, whether a live window
-    -- covers it or its window's host no longer runs.
-    local function isRealPb(pb) return isAuthoredPb(pb) and not inSeatWindow(pb.ppq) end
-
-    -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
-    -- bounded clone set.
-    local realPbs = {}
-    for _, entry in ipairs(index.raw(chan).pbs) do
-      if isRealPb(entry) then
-        util.add(realPbs, { ppq = entry.ppq, cents = entry.cents, shape = entry.shape, tension = entry.tension })
-      end
-    end
+    -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
+    -- live window covers it or its window's host no longer runs.
+    local unparkedUuid = {}
+    for _, p in ipairs(unparked) do unparkedUuid[p.evt.uuid] = true end
 
     local function inSeatScope(ppq) return inSpans(seatSpans, ppq) end
 
-    -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
+    -- Prevailing cents at any ppq: the replace curve inside a window, else the unparked authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
     local function streamValue(ppq)
       local win  = replaceWinAt(ppq)
-      local src  = win and win.bps or realPbs
+      local src  = win and win.bps or unparked
       local i    = util.firstAfter(src, ppq)
       local A, B = src[i - 1], src[i]
       if not A then return 0 end
@@ -2310,11 +2309,11 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       return curves.interpolate(A, B, ppq, 'cents')
     end
 
-    -- The stream governing M, whichever owns it: a window's own curve inside one, the authored
-    -- breakpoints outside. `into` is the segment M is entered on, `at` a breakpoint standing on it.
+    -- The stream governing M, whichever owns it: a window's own curve inside one, the unparked
+    -- authored breakpoints outside. `into` is the segment M is entered on, `at` a breakpoint standing on it.
     local function streamAround(M)
       local win = replaceWinAt(M)
-      local src = win and win.bps or realPbs
+      local src = win and win.bps or unparked
       local i   = util.firstAtOrAfter(src, M)
       local at  = src[i]
       return src[i - 1], (at and at.ppq == M) and at or nil
@@ -2367,7 +2366,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
         end
       end
     end
-    densify(realPbs)
+    densify(unparked)
 
     -- Seat each replace curve as derived seats carrying its shape; see docs/tuning.md §
     -- Value-aware seats and densification for the rule. Onset seats above take priority.
@@ -2384,11 +2383,11 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- without it, playback inherits the synth's unknown prior bend.
     local first = baseVoice.first()
     if first and not seats[first.ppq] and not inKeptRange(first.ppq) and inSeatScope(first.ppq) then
-      -- realPbs is ppq-ascending, so its head settles both questions. The jump test is whole-channel:
-      -- the span-bounded onset walk above could hide the only jump the channel has.
-      local firstReal = realPbs[1]
-      local anchored  = firstReal ~= nil and firstReal.ppq <= first.ppq
-      local pbActive  = next(seats) ~= nil or firstReal ~= nil
+      -- The unparked pbs are ppq-ascending, so their head settles both questions. The jump test is
+      -- whole-channel: the span-bounded onset walk above could hide the only jump the channel has.
+      local firstUnparked = unparked[1]
+      local anchored  = firstUnparked ~= nil and firstUnparked.ppq <= first.ppq
+      local pbActive  = next(seats) ~= nil or firstUnparked ~= nil
                         or (seatSpans ~= nil and baseVoice.anyDetuneJump())
       if pbActive and not anchored then
         seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
@@ -2399,9 +2398,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- consume any already at a seat, move the remaining ones to fill the rest, delete the leftovers.
     local realAt, availAbsorbers = {}, {}
     for _, pb in ipairs(pbs) do
-      -- A markerless pb is a generated seat (recognized by window, no marker); tag it in RAM so the
+      -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
       -- fungible-absorber machinery below reseats it.
-      if not pb.derived and not isRealPb(pb) then pb.derived = 'absorber' end
+      if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
       if pb.derived then
         -- Pool = in-scope absorbers plus any absorber standing at a computed seat, so a seat can
         -- never miss its standing absorber and mint a duplicate.
@@ -2508,11 +2507,12 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       local pbs = pbsByChan[chan] or {}
       util.sortByPPQ(pbs)
       local baseVoice = baseVoiceByChan[chan]
-      deriveChan(chan, pbs, winsByChan[chan], seatSpansByChan[chan], baseVoice)
+      local seatSpans, unparked = seatSpansByChan[chan], unparkedByChan[chan]
+      deriveChan(chan, pbs, winsByChan[chan], seatSpans, baseVoice, unparked)
 
       -- An out-of-scope column pb keeps last pass's cue: no base voice around it moved.
-      for _, cued in ipairs(cuedByChan[chan]) do
-        frame.setEvent(cued.colEvt, 'detune', baseVoice.detuneAt(cued.ppq))
+      for _, p in ipairs(unparked) do
+        if inSpans(seatSpans, p.ppq) then frame.setEvent(p.evt, 'detune', baseVoice.detuneAt(p.ppq)) end
       end
       -- A pb column exists when it holds an event or extraColumns asks for it.
       local onTake = frame.channels[chan].onTake

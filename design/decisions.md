@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — A pb park seeds its row as a note park does, reversing 2026-09-26. The parked
+  pb's value held past its window to the next unparked pb, so a gated pass left the absorbers there
+  carrying it until a full re-derive; the earlier check missed this because no spec had a detune
+  onset past the window. The absorber pass recognises a seat by absence from the pb column's
+  unparked events, over inSeatWindow, since column membership is authorship.
+
 - **2026-09-27** — Every park pass files what it parks under the host that parked it, as the seated
   column event, and a PA files under the host that parked its host note. Freeze's drop set is the
   frozen host's parked share, matched by park key, over re-deriving window coverage and a host-note

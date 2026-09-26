@@ -630,6 +630,59 @@ return {
       assertParity(h, 'cascade nudge: emission-covered seat == full re-derive')
     end,
   },
+
+  -- A parked pb lies outside the sounding set, so it holds no value into the absorber pass's
+  -- stream (docs/trackerManager.md § Two movements). The 120 pb parks under a pb-replace region over
+  -- [0, 240); the detune onset at 480 sits outside that window, and no sounding pb precedes it, so
+  -- its absorber carries 0c. A parked pb leaking into the stream would hold 40c there, and so would
+  -- a parking pass whose seat scope stops at the window's end.
+  {
+    name = 'seat gate: a parked pb holds no value into the absorber stream; park and restore == full re-derive',
+    run = function(harness)
+      local h = harness.mk{}
+      local function pbAt(ppq)
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == 'pb' and e.chan == 1 and e.ppq == ppq then return e end
+        end
+      end
+      generators.kinds.pbFlatReplace = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'PbFlatReplace', defaults = {}, fields = {},
+      }
+
+      h.tm:addEvent(note(1, 0, 60))
+      h.tm:addEvent(note(1, 480, 62, { detune = 25 }))
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:addEvent({ evType = 'pb', ppq = 960, chan = 1, val = 10 })
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
+                                   fx = { { kind = 'pbFlatReplace' } } } })
+      h.tm:rebuild()
+      local parked = authoredAt(h.tm:getChannel(1).onTake.pb, 120)
+      t.truthy(parked and parked.parked, 'fixture check: the 120 pb parked in place')
+      t.truthy(not authoredAt(h.tm:getChannel(1).onTake.pb, 960).parked, 'fixture check: the 960 pb sounds')
+      t.eq(pbAt(480).val, centsToRaw(25), 'the absorber at 480 carries 0c plus detune')
+      assertParity(h, 'parked pb: the parking pass == full re-derive')
+
+      -- A detune edit gates the pass to the onset's closure.
+      local n480 = h.tm:getChannel(1).onTake.notes[1].events[2]
+      h.tm:assignEvent(n480, { detune = 35 }); h.tm:flush()
+      t.eq(pbAt(480).val, centsToRaw(35), 'the gated pass reseats it at 0c plus the new detune')
+      assertParity(h, 'parked pb: gated absorber pass == full re-derive')
+
+      -- Retiring the region restores the pb, and its 40c holds into 480 again.
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+      local restored = authoredAt(h.tm:getChannel(1).onTake.pb, 120)
+      t.truthy(restored and not restored.parked, 'fixture check: the 120 pb restored')
+      t.eq(pbAt(480).val, centsToRaw(75), 'the restoring pass reseats it at 40c plus detune')
+      assertParity(h, 'restored pb: the restoring pass == full re-derive')
+      generators.kinds.pbFlatReplace = nil
+    end,
+  },
   {
     name = 'seat gate: a reseated onset samples the whole authored ramp, not just in-scope pbs',
     run = function(harness)

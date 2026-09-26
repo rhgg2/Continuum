@@ -857,9 +857,8 @@ nothing: what reaches it is our own writing, seated already (§ Interval
 materialisation).
 
 A pb's column event is its intent: `val` is the cents sidecar, and the wire
-value stays in mm. The walk seat-stamps it (`index.stampColEvt`), and
-§ Absorber reconciliation stamps its `detune` cue through that stamp. A
-foreign pb carries no cents, so the wholesale path derives them — its raw value
+value stays in mm. § Absorber reconciliation reads its value stream off the
+unparked ones and stamps their `detune` cue. A foreign pb carries no cents, so the wholesale path derives them — its raw value
 in cents, less the previous emission's base-voice detune at its onset
 (`index.detuneAt`) — writes them to mm through the walk's batch, and projects
 them as `val` on the same pass. Foreign pbs reach only the wholesale path, so
@@ -1026,9 +1025,8 @@ back onto the take.
 A pb parks and restores in place as a cc does. Its scan reads the column
 under every window on a dirty channel, new or standing, so a pb that
 reaches mm inside a standing window parks on the pass that seats it.
-Its park writes no dirt seed of its own: whatever put the pb under a
-window — a region edit, the pb's own add or move — has already seeded
-its row or the window, and `rebuildPbs` redoes the absorbers from those.
+Its park seeds its row, as a note's does. The parked pb's value held past
+the window to the next unparked pb, so the absorbers there reseat too.
 A restore seeds its row, reaches mm detune-free, and `rebuildPbs`
 corrects its wire value and stamps the seat's cue on the same pass.
 A `pa` rides its host note, so it parks exactly when the host does:
@@ -1253,8 +1251,9 @@ probe sources.
 
 `rebuildPbs` reseats absorber pbs against the post-walk base-voice layout,
 recomputes their raw vals, and stamps the `detune` cue on the column pbs in
-its seat scope. It reads um's index, so a parked seat takes no cue. It writes no pb column membership: it only drops a column
-left empty that `extraColumns` does not ask for. See `docs/tuning.md`
+its seat scope. It reads the column's unparked events, so a parked pb takes
+no cue. It writes no pb column membership: it only drops a
+column left empty that `extraColumns` does not ask for. See `docs/tuning.md`
 § Absorber reconciliation.
 
 ### PC synthesis

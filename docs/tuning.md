@@ -556,7 +556,9 @@ From the final realised base-voice sequence it:
   column pb outside the scope keeps last pass's cue, since no base voice
   around it moved.
 
-Reads pbs from um's raw index, which the pipeline's own commits keep
+Reads the authored value stream from the pb column — its unparked events,
+each at the raw position um's index holds under its uuid — and um's raw index
+only for the previous emission, which the pipeline's own commits keep
 current mid-rebuild where mm's set is a commit behind. The gate on
 rewriting a seat compares the wire (`pb.raw ~= newRaw`) and so is
 byte-exact; reframing it to cents would be lossy for a foreign or
@@ -687,8 +689,9 @@ sidecar — a dense curve costs zero metadata.
 **7** Recognition is then purely by region: exclusive ownership means
 every on-take pb inside a live window is a seat, so `inSeatWindow` (raw
 bounds, inclusive of `endRaw` for the terminal re-centre) classifies a
-loaded markerless pb as a seat and tags `derived='absorber'` in RAM
-only. The criterion has moved from the thing to its situation, which is
+loaded markerless pb as a seat, and the walk routes it out of the pb
+column. The absorber pass takes column membership as authorship, so it
+tags such a pb `derived='absorber'` in RAM only. The criterion has moved from the thing to its situation, which is
 available only where the situation has exactly one owner: detune
 absorbers *outside* any window have no such owner, so they keep their
 marker + cents sidecar.
