@@ -840,7 +840,8 @@ The reconcile has two rules:
 Both paths read um's raw index rather than mm. Where mm holds one flat cc
 stream per channel the index holds five lists, and that split is the walk's
 own branch: cc buckets, `ats` and `pcs` carry a column, `pbs` and `pas`
-reconcile only. The interval path seeks those same lists by row, and reconciles
+reconcile only. A synthesised pc is emission output, so it routes out of the
+pc column as a derived cc routes out of its own. The interval path seeks those same lists by row, and reconciles
 nothing: what reaches it is our own writing, seated already (§ Interval
 materialisation).
 
@@ -876,7 +877,8 @@ the predicted one — emission clips to the emit scope — and the reconcile del
 from `existing` alone, so they are never visited and never rewritten.
 
 Derived events are handled separately: absorber pbs by the absorber pass
-(against the post-walk base-voice layout); synthesised PCs by PC synthesis.
+(against the post-walk base-voice layout); synthesised PCs by PC synthesis,
+and they live in mm alone.
 Pb column projection is deferred to the absorber pass so it sees the
 final reconciled absorbers and recomputed raw vals.
 
@@ -1251,11 +1253,19 @@ the spec as `spec` and the field is written direct (§ Note-lane
 renewal). The flag is realisation, re-derived every rebuild, so a park
 round-trip drops it.
 
+The previous emission is the channel's pcs in um's raw index — raw, the
+frame the prediction carries, so a delayed or swung note's pc keys equal to
+its prediction and stands. Under `trackerMode` synthesis consumes authored
+pcs: the sample stamp has already read each into the bare notes it prevails
+over, and the reconcile's key never matches an authored pc, so it deletes
+it. The walk has projected that pc into the column, so the stage excises it
+there after its commit, and a column left empty goes unless `extraColumns`
+asks for it. Nothing else here writes the pc column.
+
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
-each seed onset to `[onset, next onset)` — the interval over which one note's
-PC prevails — and the existing set, the records and the pc-column splice all
-filter on them. The closure answers a span set per frame, since a projected column
-event tests logical where an mm record tests raw. Fresh derived output ungates the channel:
+each seed onset to the raw span `[onset, next onset)` — the interval over
+which one note's PC prevails — and the existing set and the records both
+filter on them. Fresh derived output ungates the channel:
 an fx-born onset has no verb seed to name it, so a pass holding any unkept
 `fxOut.notes` spec synthesises wholesale.
 

@@ -87,6 +87,9 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 1. A pb or pc column exists when it holds an event or `extraColumns` asks for it.
 
+1. Under `trackerMode`, PC synthesis consumes authored PCs. The sample stamp reads each into the
+   bare notes it prevails over, and synthesis deletes it from mm and from its column.
+
 ## The stages
 
 Moved to `docs/trackerManager.md` § The pipeline.

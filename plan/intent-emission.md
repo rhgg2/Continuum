@@ -25,6 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-26 tm: the pc column holds authored pcs alone (design § Pitchbend and program change intent)
 - 2026-09-26 tm: park pas in place in their host's lane (design § Parking)
 
 ## Now
@@ -32,14 +33,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **tm: the pc column holds authored pcs alone** — the CC walk's wholesale path skips derived pcs,
-   as its splice path already does. `reconcilePCsForChan` reads the previous emission's synthesised
-   pcs from um's index, clipped to the seed spans, and `rebuildPCs` drops its column splice, so the
-   column exists only when it holds an event or `extraColumns` asks for it. docs:
-   `docs/trackerManager.md` § CC walk, § PC synthesis. Spec: in tracker mode a synthesised pc is in
-   mm and absent from the pc column; an authored pc sits in the column; a clean re-pass leaves the
-   synthesised pcs unchurned; a seed-span edit reconciles only the pcs in its spans.
 
 1. **tm: the CC walk projects the pb column as intent** — both CC walk paths project authored pbs
    with `val` as cents, leaving out absorbers and the markerless seats a window owns (the walk's
@@ -53,3 +46,7 @@
    its base voice's detune; an absorber is in mm and absent from the column; a clean pass carries
    the column; a detune change restamps `detune` and leaves `val`; a foreign pb gains its `val` on
    the pass after the one that derives its cents.
+
+1. **Synthesised pcs outside tracker mode** — a take that leaves `trackerMode` keeps its
+   synthesised pcs in mm, where they sound with no seat in the pc column, which the grid shows
+   outside tracker mode. The fix is undesigned.

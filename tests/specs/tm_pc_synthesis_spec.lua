@@ -38,6 +38,26 @@ local function pcsBelow(h, chan, ppq)
   return out
 end
 
+-- The chan's pcs in mm keyed by ppq, as { uuid, val, derived }.
+local function pcsByPpq(h, chan)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pc' and c.chan == chan then
+      out[c.ppq] = { uuid = c.uuid, val = c.val, derived = c.derived }
+    end
+  end
+  return out
+end
+
+-- The chan's pc column as { ppq, val }, or nil when the channel carries none.
+local function pcColumn(h, chan)
+  local col = h.tm:getChannel(chan).onTake.pc
+  if not col then return nil end
+  local out = {}
+  for _, e in ipairs(col.events) do out[#out + 1] = { ppq = e.ppq, val = e.val } end
+  return out
+end
+
 return {
 
   ----- Basic synthesis from per-note sample fields
@@ -501,6 +521,151 @@ return {
       h.tm:flush()
 
       t.deepEq(pcsBelow(h, 1, 480), before, 'the kept host\'s PCs stand: nothing of the pass names them')
+    end,
+  },
+
+  ----- The pc column holds authored pcs alone
+
+  -- Synthesised pcs are emission output and live in mm alone (design/intent-emission.md § Emission's
+  -- output); the pc column is intent, so a take whose every pc is synthesised carries none. The load
+  -- pass walks before synthesis mints anything, so it is the wholesale re-pass that meets them.
+  {
+    name = 'synthesised pcs sit in mm and not in the pc column',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 1 },
+            { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 2 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 1 }, { ppq = 240, val = 2 } },
+        'fixture check: both notes synthesised their pcs')
+      h.tm:rebuild(true)
+      t.eq(pcColumn(h, 1), nil, 'no pc column: nothing authored sits in it')
+    end,
+  },
+
+  -- Reconcile keys its previous emission in the raw frame the prediction carries: a pc whose note
+  -- is delayed sits at a raw onset its logical row does not name, and a pass over its span keeps it.
+  {
+    name = 'a delayed note\'s pc survives a re-pass over its span with its uuid',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0,   sample = 1 },
+            { ppq = 250, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 100, sample = 2 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      local before = pcsByPpq(h, 1)[250]
+      t.truthy(before, 'fixture check: the delayed note synthesised a pc at its raw onset')
+      local note = h.tm:getChannel(1).onTake.notes[1].events[2]
+      t.truthy(note.ppq ~= 250, 'fixture check: the note\'s logical row differs from its raw onset')
+
+      h.tm:assignEvent({ uuid = uuidOfNote(h.fm, 1, 62) }, { vel = 90 })
+      h.tm:flush()
+
+      local after = pcsByPpq(h, 1)[250]
+      t.eq(after and after.uuid, before.uuid, 'the pc stands: not deleted and re-minted')
+    end,
+  },
+
+  {
+    name = 'a sample edit reconciles its own span: neighbours keep their pcs',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 1 },
+            { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 2 },
+            { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0, sample = 3 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      local before = pcsByPpq(h, 1)
+      h.tm:assignEvent({ uuid = uuidOfNote(h.fm, 1, 62) }, { sample = 9 })
+      h.tm:flush()
+      local after = pcsByPpq(h, 1)
+      t.eq(after[0].uuid,   before[0].uuid,   'the first pc stands')
+      t.eq(after[480].uuid, before[480].uuid, 'the last pc stands')
+      t.eq(after[240].val, 9, 'the middle pc takes the new sample')
+    end,
+  },
+
+  {
+    name = 'trackerMode off: an authored pc sits in the pc column at its row',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
+          ccs   = { { ppq = 100, evType = 'pc', chan = 1, val = 42 } },
+        },
+      }
+      t.deepEq(pcColumn(h, 1), { { ppq = 100, val = 42 } })
+    end,
+  },
+
+  -- Under trackerMode synthesis consumes an authored pc: the stamp reads it into the bare notes it
+  -- prevails over, and synthesis deletes it from mm and its column (design/intent-emission.md
+  -- § Pitchbend and program change intent). A pc column then exists only where extraColumns asks.
+  {
+    name = 'a consumed authored pc leaves mm and the pc column',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
+          ccs   = { { ppq = 0,   evType = 'pc', chan = 1, val = 11 } },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 240, val = 11 } },
+        'the authored pc is gone; the note it stamped programs its onset')
+      t.eq(pcColumn(h, 1), nil, 'and no column is left to hold nothing')
+    end,
+  },
+
+  {
+    name = 'a consumed authored pc leaves a wanted pc column empty',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 } },
+          ccs   = { { ppq = 0,   evType = 'pc', chan = 1, val = 11 } },
+        },
+        data   = { extraColumns = { [1] = { notes = 1, pc = true } } },
+        config = { transient = { trackerMode = true } },
+      }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 240, val = 11 } },
+        'fixture check: the authored pc was consumed')
+      t.deepEq(pcColumn(h, 1), {}, 'extraColumns keeps the column, and it holds nothing')
+    end,
+  },
+
+  {
+    name = 'an authored pc written mid-session is consumed on its flush',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 1 },
+            { ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 2 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      h.tm:addEvent({ evType = 'pc', ppq = 240, chan = 1, val = 42 })
+      h.tm:flush()
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 1 }, { ppq = 480, val = 2 } },
+        'the authored pc is gone from mm')
+      for _, e in ipairs((pcColumn(h, 1)) or {}) do
+        t.truthy(e.ppq ~= 240, 'and absent from the pc column')
+      end
     end,
   },
 }

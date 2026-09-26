@@ -1,31 +1,16 @@
 -- Phase D pins - design/archive/deferred-reindex.md item 1. With the reindex deferred to
 -- one rebuild at the outermost unwind, the whole tm:rebuild pipeline runs against
--- the sparse (holed) cc array a mid-pipeline delete leaves behind. Three pipeline
+-- the sparse (holed) cc array a mid-pipeline delete leaves behind. Two pipeline
 -- stages read mm:ccsRaw() downstream of such a delete; each must see the survivors
 -- past the hole, not truncate at it. Green today rests on Phase B's hole-tolerant
 -- iterators AND Phase D's deferral - revert either and a survivor vanishes.
 
 local t = require('support')
 
-local function uuidOfNote(mm, chan, pitch)
-  for _, n in mm:notes() do
-    if n.chan == chan and n.pitch == pitch then return n.uuid end
-  end
-end
-
 local function ccUuidAt(mm, chan, evType, ppq)
   for _, c in mm:ccsRaw() do
     if c.chan == chan and c.evType == evType and c.ppq == ppq then return c.uuid end
   end
-end
-
-local function pcCol(h, chan)
-  local out = {}
-  for _, e in ipairs(h.tm:getChannel(chan).onTake.pc.events) do
-    out[#out + 1] = { ppq = e.ppq, val = e.val }
-  end
-  table.sort(out, function(a, b) return a.ppq < b.ppq end)
-  return out
 end
 
 local function pasInCol(h, chan)
@@ -51,25 +36,6 @@ local function authoredPbCol(h, chan)
 end
 
 return {
-
-  {
-    name = 'PC re-projection reads past a mid-pipeline PC-delete hole (:2362)',
-    run = function(harness)
-      local h = harness.mk{
-        seed = { notes = {
-          { ppq =   0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 1 },
-          { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 2 },
-          { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0, sample = 3 },
-        } },
-        config = { transient = { trackerMode = true } },
-      }
-      -- Delete the lowest-ppq note: reconcile deletes its PC (hole at the first cc
-      -- loc), then :2362 rebuilds the pc column from ccsRaw() past that hole.
-      h.tm:deleteEvent(uuidOfNote(h.fm, 1, 60))
-      h.tm:flush()
-      t.deepEq(pcCol(h, 1), { { ppq = 240, val = 2 }, { ppq = 480, val = 3 } })
-    end,
-  },
 
   {
     name = 'PA dispatch reads past a mid-pipeline cc-delete hole (:1598)',

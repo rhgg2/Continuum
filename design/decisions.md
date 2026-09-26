@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — PC synthesis reads its previous emission from um's raw index clipped to raw
+  spans, over the pc column clipped to logical ones; the column's logical ppq never keyed equal to a
+  raw prediction, so a delayed or swung note's pc was deleted and re-minted every pass over it. The
+  pc column holds authored pcs alone: the CC walk skips derived pcs, and synthesis excises the
+  authored pcs it consumes from the column after its commit, dropping a column left empty unless
+  extraColumns asks for it.
+
 - **2026-09-26** — A pa parks only under a parked host of its pitch in its own lane, over any
   same-pitch parked span on its channel; the cross-lane match could park a pa that belongs to an
   on-take note in another lane. Its spec keeps its uuid and lane, and restore returns it to mm under

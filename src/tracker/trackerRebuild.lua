@@ -312,8 +312,10 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites)
   end)
   for _, list in ipairs{ raw.ats, raw.pcs } do
     for _, entry in ipairs(list) do
-      local update = reconcileCcPpq(entry, fxInWindows, ccWrites)
-      appendCcEvent(entry, update)
+      if not entry.derived then
+        local update = reconcileCcPpq(entry, fxInWindows, ccWrites)
+        appendCcEvent(entry, update)
+      end
     end
   end
   for _, list in ipairs{ raw.pbs, raw.pas } do
@@ -2532,13 +2534,20 @@ end
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the writes batch {delete(event), add(spec)}
 --contract: marks sampleShadowed=true on the event or the spec of records lost to the onset's rank
---contract: seedSpans (from pcSeedSpans) narrow existing to its logical spans; nil = whole channel
+--pre: seedSpans (from pcSeedSpans) narrow existing to its raw spans; nil = whole channel
+--post: returns the logical seats of the authored pcs it deletes, read before writes commit
 --invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
---invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
 local function reconcilePCsForChan(chan, records, writes, seedSpans)
-  local existing = {}
-  for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
-    if not seedSpans or spans.contains(seedSpans.logical, e.ppq) then util.add(existing, e) end
+  -- The previous emission is um's raw index, in the frame the prediction carries.
+  local pcs, existing = index.raw(chan).pcs, {}
+  if seedSpans then
+    for e in onsetsIn(pcs, seedSpans) do util.add(existing, e) end
+  else
+    for _, e in ipairs(pcs) do util.add(existing, e) end
+  end
+  local consumed = {}
+  for _, e in ipairs(existing) do
+    if not e.derived then util.add(consumed, e.ppqL) end
   end
 
   local groups = {}
@@ -2571,9 +2580,10 @@ local function reconcilePCsForChan(chan, records, writes, seedSpans)
 
   diffEvents(existing, predicted, writes,
     function(x) return util.key(x.derived, x.ppq, x.val) end)
+  return consumed
 end
 
---shape: seedSpans = { raw = span set, logical = span set }; nil = wholesale
+--shape: pcSeedSpans(chan, fxNotes) -> raw span set ({ {lo, hi}, ... }, merged); nil = wholesale
 local function pcSeedSpans(chan, fxNotes)
   if dirt.wholesale(chan) then return nil end
   -- Any derived output at all means a host of this channel re-ran, and its PCs are the pass's to
@@ -2581,33 +2591,31 @@ local function pcSeedSpans(chan, fxNotes)
   if #fxNotes > 0 then return nil end
   local points = {}
   for _, s in ipairs(dirt.has(chan)) do
-    util.add(points, { ppq = s.ppq, ppqL = s.ppqL or s.ppq })
+    util.add(points, s.ppq)
     local live = s.uuid and index.byUuid(s.uuid)
-    if live then util.add(points, { ppq = live.ppq, ppqL = live.ppqL or live.ppq }) end
+    if live then util.add(points, live.ppq) end
   end
-  local raw, logical, notes = {}, {}, index.raw(chan).notes
-  for _, point in ipairs(points) do
-    local i = util.firstAfter(notes, point.ppq)
+  local raw, notes = {}, index.raw(chan).notes
+  for _, ppq in ipairs(points) do
+    local i = util.firstAfter(notes, ppq)
     while notes[i] and not isAuthored(notes[i]) do i = i + 1 end
     local nextNote = notes[i]
-    util.add(raw, { point.ppq, nextNote and nextNote.ppq or math.huge })
-    util.add(logical, { point.ppqL, nextNote and nextNote.ppqL or math.huge })
+    util.add(raw, { ppq, nextNote and nextNote.ppq or math.huge })
   end
-  return { raw = spans.merge(raw), logical = spans.merge(logical) }
+  return spans.merge(raw)
 end
 
--- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records,
--- writes and the column splice all clip to them, so out-of-span PCs stand.
-local function rebuildPCs(fxOut)
+-- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans; records
+-- and writes clip to them, so out-of-span PCs stand. see docs/trackerManager.md § PC synthesis
+local function rebuildPCs(fxOut, extraColumns)
   if not cm:get('trackerMode') then return end
   local fxNotes = fxOut.notes
   local pcWrites = mmBatch()
-  local spansByChan = {}
+  local consumedByChan = {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
     if not dirt.has(chan) then goto nextChan end
     local seedSpans = pcSeedSpans(chan, fxNotes[chan])
-    spansByChan[chan] = seedSpans
     local records = {}
     -- The gather ordinal, and authored notes are gathered first: it is the rank's tie-break under
     -- the lane, so a laneless derived record falls after every authored one.
@@ -2628,45 +2636,29 @@ local function rebuildPCs(fxOut)
       end
     end
     if seedSpans then
-      for entry in onsetsIn(index.raw(chan).notes, seedSpans.raw) do recordNote(entry) end
+      for entry in onsetsIn(index.raw(chan).notes, seedSpans) do recordNote(entry) end
     else
       for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
     end
     for _, n in ipairs(fxNotes[chan]) do
-      if not seedSpans or spans.contains(seedSpans.raw, n.ppq) then
+      if not seedSpans or spans.contains(seedSpans, n.ppq) then
         -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
         addRecord{ ppq = n.ppq, ppqL = n.ppqL, sample = n.sample or 0, spec = n }
       end
     end
-    reconcilePCsForChan(chan, records, pcWrites, seedSpans)
+    local consumed = reconcilePCsForChan(chan, records, pcWrites, seedSpans)
+    if #consumed > 0 then consumedByChan[chan] = consumed end
     ::nextChan::
   end
   pcWrites.commit()
 
-  -- pc column splice: out-of-span events carry; in-span (or wholesale) events re-read from the
-  -- committed stream. Always a fresh events table -- tv's cell carry keys on table identity.
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      local seedSpans = spansByChan[chan]
-      local events = {}
-      if seedSpans then
-        for _, e in ipairs((frame.channels[chan].onTake.pc and frame.channels[chan].onTake.pc.events) or {}) do
-          if not spans.contains(seedSpans.logical, e.ppq) then util.add(events, e) end
-        end
-      end
-      local function projectPc(cc)
-        local evt = columnEvent(cc)
-        projectEvent(evt, chan)
-        util.add(events, evt)
-      end
-      if seedSpans then
-        for cc in onsetsIn(index.raw(chan).pcs, seedSpans.raw) do projectPc(cc) end
-      else
-        for _, cc in ipairs(index.raw(chan).pcs) do projectPc(cc) end
-      end
-      util.sortByPPQ(events)
-      frame.channels[chan].onTake.pc = frame.newStreamColumn(events)
-    end
+  -- Synthesis consumes authored pcs, so they leave the column the walk projected them into; a
+  -- column left empty stands only where extraColumns asks for it.
+  for chan, ppqLs in pairs(consumedByChan) do
+    local onTake = frame.channels[chan].onTake
+    exciseEvents({ onTake.pc }, ppqLs)
+    local wanted = extraColumns and extraColumns[chan] and extraColumns[chan].pc
+    if #onTake.pc.events == 0 and not wanted then onTake.pc = nil end
   end
 end
 
@@ -2840,7 +2832,7 @@ function rebuild.pipeline(context)
 
   rebuildTails(fxOut, fxOutWindows)
   rebuildPbs(fxOut, sources.extraColumns, pbRangeCents)
-  rebuildPCs(fxOut)
+  rebuildPCs(fxOut, sources.extraColumns)
 
   local census = fxOutWindows.census()
   persistKey('fxRealisedWindows', census, sources.fxRealisedWindows)
