@@ -4630,8 +4630,8 @@ function tv:rebuild(takeChanged)
     for chan, channel in tm:channels() do
       local c = channel.onTake
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
-      -- Replace-region parked pbs stay the displayed automation; tm hands the whole population,
-      -- nil where none exists. see docs/trackerManager.md § Lane occupancy
+      -- Replace-region parked pbs stay the displayed automation, seated flagged in the pb column;
+      -- tm hands the column, nil where none exists. see docs/trackerManager.md § Lane occupancy
       local pbEvents = tm:authoredPb(chan)
       if pbEvents then addGridCol(chan, 'pb', nil, pbEvents) end
       -- Replace-region parked notes left the take but stay the displayed chord; tm hands each lane

@@ -14,9 +14,8 @@
 -- the lane, so the stash alone says where it sits. A pa parks with its host, so it parks only under a
 -- parked host in its own lane, and restore returns it to mm under the uuid it left with.
 --
--- pb alone keeps its parked events in a list of its own, and tm publishes the stream's whole
--- population (`tm:authoredPb`) as it publishes a lane's. Its carry needs that list to carry across
--- the pass boundary, or a dirty channel re-mints it every pass and re-places its cells.
+-- A parked pb is seated flagged in the pb column the same way, and tm publishes that column
+-- (`tm:authoredPb`) as it publishes a lane, so the column's own table is what carries.
 --
 -- The fixture is a self-parking arp host at 480 on chan 1 lane 1, alone on its lane, and a plain
 -- note on chan 2 -- a second channel to dirty, so a pass can run without touching chan 1. The cc and
@@ -94,7 +93,7 @@ local function parkedPb(harness)
   }
   h.ds:assign('fxRegions', region)
   h.tm:rebuild()
-  t.eq(#h.tm:getChannel(1).parked.pb, 1, 'fixture check: the authored pb parked off the take')
+  t.eq(#require('harness').parkedPbs(h.tm, 1), 1, 'fixture check: the authored pb parked off the take')
   return h
 end
 
@@ -256,19 +255,19 @@ return {
   },
 
   {
-    -- pb is one stream per channel, so its population needs no bucketing; it carries by the same
-    -- rule, and a channel holding neither half is answered with nil rather than an empty column.
+    -- pb is one stream per channel, so its column is the whole population; it carries by the same
+    -- rule, and a channel with no pb column is answered with nil rather than an empty one.
     name = 'a channel holding a parked pb answers with the same population across a pass',
     run = function(harness)
       local h = parkedPb(harness)
-      local parked = h.tm:getChannel(1).parked.pb[1]
+      local parked = require('harness').parkedPbs(h.tm, 1)[1]
       local column = h.tm:authoredPb(1)
       t.truthy(holds(column, parked), 'fixture check: the parked pb is part of the channel population')
 
       h.tm:addEvent(note(960, 60, 1)); h.tm:flush()
 
-      t.truthy(h.tm:authoredPb(1) == column, "the union carried, so tv's cell carry stands")
-      t.eq(h.tm:authoredPb(2), nil, 'a channel with neither half shows no pb column at all')
+      t.truthy(h.tm:authoredPb(1) == column, "the column's table carried, so tv's cell carry stands")
+      t.eq(h.tm:authoredPb(2), nil, 'a channel with no pb shows no pb column at all')
       generators.kinds.rep = nil
     end,
   },

@@ -458,8 +458,7 @@ the *wire* holds is still the window and nothing else.
 indistinguishable on the wire from an authored pb or cc, so recognition works
 only if *everything* on-take inside a replace window is generated. The
 authored events are stashed off-take into one `evType`-tagged list, and stay
-visible: tm seats a parked chord or cc back in its columns, flagged, and
-hands a parked pb to the view in its column's union. Audibly a no-op: an authored bend already sounded as
+visible: tm seats a parked chord, cc or pb back in its columns, flagged. Audibly a no-op: an authored bend already sounded as
 the curve.
 
 **4** **Live recognition needs no standing record.** A live region
@@ -532,13 +531,12 @@ would read with no region at all.
 
 ## Transitions and edges
 
-**1** **Diff windows, don't mirror.** A markerless seat is invisible to the
-park scan, so the scan cannot run every rebuild — it would re-park the seats.
-It fires at the create and remove instants only: the current windows are
-diffed against a RAM baseline and a one-shot transition staged for the next
-rebuild to drain. A new window **parks** its authored events off-take, a
-removed one **sweeps** its orphaned seats, and the queue is transient rather
-than persisted.
+**1** **Park by the column, sweep by the diff.** A markerless seat never
+enters a column, so the park scan reads the columns and runs every rebuild
+without re-parking the seats: an authored event on-take inside a window
+**parks**, whether the window is new or the event is. Only the sweep fires at
+an instant: the current windows are diffed against the previous pass's, and a
+removed one **sweeps** its orphaned seats.
 
 **2** **The diff lives in tm rather than at the view's edit site, because the
 edit site cannot see undo.** Take, regions and park stash revert atomically,

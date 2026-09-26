@@ -170,6 +170,15 @@ function harness.parkedPAs(tm, chan)
   return out
 end
 
+-- A channel's parked pbs, read off its pb column, where they sit flagged among the on-take ones.
+function harness.parkedPbs(tm, chan)
+  local out = {}
+  for _, evt in ipairs(tm:authoredPb(chan) or {}) do
+    if evt.parked then out[#out + 1] = evt end
+  end
+  return out
+end
+
 -- A channel's parked ccs, read off its cc columns in cc order, where they sit flagged among the
 -- on-take ones.
 function harness.parkedCCs(tm, chan)

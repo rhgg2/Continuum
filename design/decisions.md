@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — A pb park writes no dirt seed, over seeding its row as a note park does. Whatever
+  puts a pb under a window, whether a region edit or the pb's own add or move, has already seeded
+  its row or the window, so rebuildPbs redoes the absorbers around it either way; removing the seed
+  broke nothing in the suite, and a gated pass after a region extension matched a full re-derive
+  with or without it.
+
 - **2026-09-26** — Outside trackerMode, PC synthesis deletes every synthesised pc of a dirty channel
   from mm. It does not promote them to authored pcs or project them into the pc column. note.sample
   holds the intent, so a rebind back into the mode synthesises the same stream, and a wiring change

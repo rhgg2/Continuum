@@ -548,7 +548,7 @@ return {
       for i, c in ipairs(h.vm.grid.cols) do
         if c.type == 'pb' and c.midiChan == 1 then ci = i end
       end
-      t.truthy(ci, 'the parked pb column exists (built from the parkedPb union)')
+      t.truthy(ci, 'the pb column exists (it seats the parked pb)')
       local pbcol = h.vm.grid.cols[ci]
       local ev0
       for _, e in ipairs(pbcol.events) do if (e.ppq or 0) == 0 then ev0 = e end end

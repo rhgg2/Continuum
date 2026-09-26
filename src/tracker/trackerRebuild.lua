@@ -270,7 +270,7 @@ local function spliceChannelCCs(chan)
       if not entry.derived and entry.ppqL == ppqL then util.add(refills, entry) end
     end
   end
-  if cols.pb then exciseEvents({ cols.pb }, pbRows) end
+  if cols.pb then exciseEvents({ cols.pb }, pbRows, function(e) return not e.parked end) end
 
   for _, cell in pairs(cells) do
     local raw = index.raw(chan)
@@ -570,14 +570,22 @@ local toParked, parkInPlace do
   local REALISATION = { delayC = true, endppqC = true, committed = true, derived = true,
                       frame = true, cents = true, colEvt = true, sampleShadowed = true,
                       raw = true }
+  -- Emission's cues on a sounding event, by kind: authored elsewhere, so not REALISATION, but a
+  -- parked event sounds nothing to cue.
+  local CUES = { pb = { detune = true } }
+  local noCues = {}
+
   function toParked(evt, adds)
-    return util.assign(util.clone(evt, REALISATION), adds)
+    local spec = util.clone(evt, REALISATION)
+    for field in pairs(CUES[evt.evType] or noCues) do spec[field] = nil end
+    return util.assign(spec, adds)
   end
 
   -- Park flips the column event where it stands, shedding the realisation frame there too.
   --post: evt is its toParked spec plus parked = true, so the next head seat holds it
   function parkInPlace(evt)
     for field in pairs(REALISATION) do frame.setEvent(evt, field, nil) end
+    for field in pairs(CUES[evt.evType] or noCues) do frame.setEvent(evt, field, nil) end
     frame.setEvent(evt, 'parked', true)
   end
 end
@@ -600,34 +608,30 @@ local function sameSpec(seated, spec)
   return true
 end
 
-local function installParked(field, specs)
-  local function sameParked(old, new)
-    if not old or #old ~= #new then return false end
-    for i, newSpec in ipairs(new) do
-      if not sameSpec(old[i], newSpec) then return false end
-    end
-    return true
+-- Where a parked spec of each kind sits: the columns a channel seats that kind in, and its own column.
+local parkHomes do
+  local function lanes(chan) return frame.channels[chan].onTake.notes end
+  local function lane(spec)  return ensureLane(spec.chan, spec.lane) end
+  local function ccColumns(chan)
+    local cols = {}
+    for _, col in pairs(frame.channels[chan].onTake.ccs) do util.add(cols, col) end
+    return cols
   end
-
-  local fresh = frame.newChannels()
-  for _, spec in ipairs(specs) do util.bucket(fresh, spec.chan, util.clone(spec)) end
-
-  for chan = 1, 16 do
-    local parked = frame.channels[chan].parked
-    if not sameParked(parked[field], fresh[chan]) then parked[field] = fresh[chan] end
+  local function pbColumns(chan)
+    local col = frame.channels[chan].onTake.pb
+    return col and { col } or {}
   end
+  parkHomes = {
+    note = { columns = lanes,     column = lane },
+    pa   = { columns = lanes,     column = lane },
+    cc   = { columns = ccColumns, column = function(spec) return ensureCcColumn(spec.chan, 'cc', spec.cc) end },
+    pb   = { columns = pbColumns, column = function(spec) return ensureCcColumn(spec.chan, 'pb') end },
+  }
 end
-
--- Where a parked spec of each seated kind sits: the field its columns live under, and its own column.
-local parkHomes = {
-  note = { field = 'notes', column = function(spec) return ensureLane(spec.chan, spec.lane) end },
-  cc   = { field = 'ccs',   column = function(spec) return ensureCcColumn(spec.chan, 'cc', spec.cc) end },
-  pa   = { field = 'notes', column = function(spec) return ensureLane(spec.chan, spec.lane) end },
-}
 
 -- Seat a kind's parked specs in their own columns, flagged; a seated event whose spec held keeps its
 -- table, so the column's carry holds. see docs/trackerManager.md § Lane occupancy
---pre: kinds sharing a field (notes, pas) are distinguished by evType, leaving the other's seats
+--pre: kinds sharing columns (notes, pas) are distinguished by evType, leaving the other's seats
 local function seatParked(kind, specs)
   local home = parkHomes[kind]
   local wanted = frame.newChannels()
@@ -637,7 +641,7 @@ local function seatParked(kind, specs)
   end
   local held = {}
   for chan = 1, 16 do
-    for _, col in pairs(frame.channels[chan].onTake[home.field]) do
+    for _, col in ipairs(home.columns(chan)) do
       local stale = {}
       for _, evt in ipairs(col.events) do
         if evt.parked and evt.evType == kind then
@@ -670,7 +674,7 @@ end
 
 -- The pass head seats the stash as it stands, which a wholesale channel's fresh columns lack.
 local function seatStash(fxParked)
-  local byKind = { note = {}, cc = {}, pa = {} }
+  local byKind = { note = {}, cc = {}, pa = {}, pb = {} }
   for _, spec in ipairs(fxParked or {}) do
     if byKind[spec.evType] then util.add(byKind[spec.evType], spec) end
   end
@@ -711,7 +715,7 @@ local function parkStage(fxOutWindows, fxParked)
   local prior = { note = {}, pa = {}, cc = {}, pb = {} }
   for _, spec in ipairs(fxParked or {}) do util.bucket(prior, spec.evType, spec) end
 
-  -- Window spans per (chan, target) for the fresh note/cc scans.
+  -- Window spans per (chan, target) for the fresh scans.
   local buckets = {}
   for _, window in ipairs(fxOutWindows.windows()) do
     for target in pairs(window.targets) do
@@ -865,7 +869,34 @@ local function parkCCs(stage)
   return parkedCCs, restoredCCs
 end
 
+-- A pb parks and restores in place in its column, as a cc does. A park seeds no dirt: whatever put
+-- the pb under a window -- a region edit, the pb's own add or move -- has seeded its row or the window.
 local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
+  local candidates = {}
+  for chan = 1, 16 do
+    local col = frame.channels[chan].onTake.pb
+    if col and dirt.has(chan) then
+      for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, 'pb')]) do
+        if not evt.parked then util.add(candidates, { evt = evt, seated = true, spec = toParked(evt) }) end
+      end
+    end
+  end
+  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb)
+
+  -- A restore goes to mm detune-free; rebuildPbs corrects the wire value and stamps the seat's cue.
+  local restoredPbs = {}
+  for _, spec in ipairs(restores) do
+    local evt = seatedOf(spec)   -- flipped in place: the event is the spec, both logical
+    frame.setEvent(evt, 'parked', nil)
+    frame.setEvent(evt, 'cents', spec.val)
+    local write = fromParked(spec, { keepUuid = true, cents = spec.val,
+                                     val = tuning.centsToRaw(spec.val, pbLimCents) })
+    dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', write.ppq))
+    stage.writes.add(write)
+    util.add(restoredPbs, evt)
+  end
+
+  -- A window gone since the last pass leaves its markerless seats in mm for this sweep.
   local function pbWindows(windowSet)
     local byKey = {}
     for _, window in ipairs(windowSet.windows()) do
@@ -873,59 +904,16 @@ local function parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
     end
     return byKey
   end
-  local prevWindows, curWindows = pbWindows(fxInWindows), pbWindows(fxOutWindows)
-  local created, removed = {}, {}
-  for k, window in pairs(curWindows)  do if not prevWindows[k] then util.add(created, window) end end
-  for k, window in pairs(prevWindows) do if not curWindows[k]  then util.add(removed, window) end end
-
-  local candidates = {}
-  for _, window in ipairs(created) do
-    for pb in onsetsIn(index.raw(window.chan).pbs, { { fxOutWindows.rawSpan(window) } }) do
-      if not pb.derived and not fxInWindows.ownsRaw('pb', pb.chan, nil, pb.ppq) then
-        dirt.add(pb.chan, dirt.rawSeed(pb, 'park'))
-        local spec = toParked(pb, { val = pb.cents })
-        projectEvent(spec, pb.chan)
-        util.add(candidates, { evt = { uuid = pb.uuid }, spec = spec }) -- evt is only the delete target
+  local curWindows = pbWindows(fxOutWindows)
+  for key, window in pairs(pbWindows(fxInWindows)) do
+    if not curWindows[key] then
+      for pb in onsetsIn(index.raw(window.chan).pbs, { { fxInWindows.rawSpan(window) } }) do
+        dirt.add(pb.chan, dirt.rawSeed(pb, 'delete'))
+        stage.writes.delete({ uuid = pb.uuid })
       end
     end
   end
 
-  -- Until the stash seats pbs in their column, a pb parks off it and restores back into it.
-  local newlyParked, parkedRows = {}, frame.newChannels()
-  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb, function(spec)
-    newlyParked[spec.uuid] = true
-    util.add(parkedRows[spec.chan], spec.ppq)
-  end)
-  for chan, rows in ipairs(parkedRows) do
-    local col = frame.channels[chan].onTake.pb
-    if col and #rows > 0 then exciseEvents({ col }, rows, function(e) return newlyParked[e.uuid] end) end
-  end
-
-  -- Restores get raw + cents sidecar. The val is detune-free; rebuildPbs corrects it later.
-  local restoredPbs = {}
-  for _, spec in ipairs(restores) do
-    local evt = fromParked(spec, { cents = spec.val, val = tuning.centsToRaw(spec.val, pbLimCents) })
-    dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', evt.ppq))
-    stage.writes.add(evt)
-    local colEvt = util.assign(util.clone(spec), { cents = spec.val })
-    frame.spliceInto(ensureCcColumn(spec.chan, 'pb'), colEvt)
-    util.add(restoredPbs, colEvt)
-  end
-
-  for _, window in ipairs(removed) do
-    for pb in onsetsIn(index.raw(window.chan).pbs, { { fxInWindows.rawSpan(window) } }) do
-      dirt.add(pb.chan, dirt.rawSeed(pb, 'delete'))
-      stage.writes.delete({ uuid = pb.uuid })
-    end
-  end
-
-  -- The cents decoration is realisation, so it decorates a copy.
-  local rendered = {}
-  for _, spec in ipairs(parkedPbs) do
-    util.add(rendered, util.assign(util.clone(spec), { cents = spec.val }))
-  end
-  util.sortByPPQ(rendered)   -- pbBaseFor covers the parked list, and a cover bisects
-  installParked('pb', rendered)
   return parkedPbs, restoredPbs
 end
 
@@ -1118,24 +1106,20 @@ end
 
 local function isAuthoredPb(pb) return not pb.derived and pb.cents ~= nil end
 
--- The column's pb events, or none; the column holds the sounding authored pbs.
+-- The column's pb events, or none; the column holds every authored pb, sounding or parked.
 local function pbColumnEvents(chan)
   local col = frame.channels[chan].onTake.pb
   return col and col.events or {}
 end
 
--- The covers of the parked list and the pb column; see § Span-covered fx scans
---pre: the park stage has run: parked.pb is in ppq order and the column holds no parked pb
+-- The cover of the pb column's authored events; see § Span-covered fx scans
+--pre: the park stage has run: parked pbs are seated in the column
+--post: the base is in ppq order
 local function pbBaseFor(chan, spanSet)
-  local base, seen = {}, {}
-  for _, evt in ipairs(pointsFor(frame.channels[chan].parked.pb, spanSet)) do
-    util.add(base, basePoint(evt.ppq, evt.val, evt))
-    seen[evt.ppq] = true
-  end
+  local base = {}
   for _, evt in ipairs(pointsFor(pbColumnEvents(chan), spanSet)) do
-    if not seen[evt.ppq] then util.add(base, basePoint(evt.ppq, evt.val, evt)) end
+    util.add(base, basePoint(evt.ppq, evt.val, evt))
   end
-  util.sortByPPQ(base)
   return base
 end
 
@@ -1239,9 +1223,7 @@ local function classifyHosts(chan, hosts)
       if seedsOn[target] then
         local lo, hi
         if target == 'pb' then
-          local lo1, hi1 = boundsFor(frame.channels[chan].parked.pb, host.window)
-          local lo2, hi2 = boundsFor(pbColumnEvents(chan), host.window)
-          lo, hi = math.max(lo1, lo2), math.min(hi1, hi2)
+          lo, hi = boundsFor(pbColumnEvents(chan), host.window)
         else
           lo, hi = boundsFor(frame.channels[chan].onTake.ccs[target].events, host.window)
         end

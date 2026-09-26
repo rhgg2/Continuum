@@ -23,12 +23,9 @@ Every column has `events` (array sorted by **logical** ppq). `cc` columns
 additionally carry `cc` (the controller number). Presentation order is a
 tv concern — tm imposes none.
 
-A note lane or cc column seats both sides of the take. A parked note or cc
-sits in its column at its onset like any other event, flagged `parked`, so a
-column's events are its whole authored population. pb and pa keep their
-parked events apart: `parked` holds `pb` and `pa` as flat lists of
-render-ready events, a pa carrying the pitch that places it. Nothing about the
-population differs between the two representations.
+A note lane, cc column or pb column seats both sides of the take. A parked
+note, pa, cc or pb sits in its column at its onset like any other event,
+flagged `parked`, so a column's events are its whole authored population.
 
 `parked` on an event is frame vocabulary. tm's write doors shed it, so a
 clone of a parked cell — a move out of its window, a paste — reaches mm or
@@ -322,6 +319,9 @@ dropped or doubles one it left standing. Unscoped, a cc edit on a row carrying a
 chord excises those notes and re-clones them identical — correct on screen, but
 the lane comes back a fresh table and tv re-places the take (§ Note-lane
 renewal).
+
+A parked seat stands on no mm event, so no refill could return it: the excise
+spares it, and the stash seat alone owns it (§ Stash seat).
 
 Every raw consumer reads um's raw index, which holds every
 mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its results
@@ -927,7 +927,7 @@ interval dirt visits just the seeded uuids.
 
 ### Stash seat
 
-`seatStash` seats the stash's parked notes, ccs and pas in their own
+`seatStash` seats the stash's parked notes, pas, ccs and pbs in their own
 columns, flagged, through `seatParked` (§ Lane occupancy). Notes and pas
 share a lane, so each kind's run touches only seats of its own `evType`.
 
@@ -944,7 +944,7 @@ downstream re-sorts.
 
 ### Note host clips and windows
 
-The pass opens by seating the stash's parked notes and ccs in their columns.
+The pass opens by seating the stash's parked events in their columns.
 The frame carries the previous pass's, where a park
 edit — a delete, a chain removed, a freeze — has already landed in the
 document, so every column answers to the document from here on. The lane pass then bounds every
@@ -975,7 +975,7 @@ elsewhere — for the `fxRealisedWindows` write.
 
 ### Region-replace parking
 
-Under `rebuildRegionPark` the authored notes and ccs a replace-region
+Under `rebuildRegionPark` the authored notes, ccs and pbs a replace-region
 covers leave the take — and so does any note
 hosting its own discrete-replace kind (note-host replace parks the
 host; see `docs/generators.md` § Hosts and membership). The
@@ -1010,6 +1010,14 @@ the value the authored stream holds there, parked members included, so
 nothing downstream reads a changed base — the fill stands in for the
 point event's missing tail, and restore flips the seated projection
 back onto the take.
+A pb parks and restores in place as a cc does. Its scan reads the column
+under every window on a dirty channel, new or standing, so a pb that
+reaches mm inside a standing window parks on the pass that seats it.
+Its park writes no dirt seed of its own: whatever put the pb under a
+window — a region edit, the pb's own add or move — has already seeded
+its row or the window, and `rebuildPbs` redoes the absorbers from those.
+A restore seeds its row, reaches mm detune-free, and `rebuildPbs`
+corrects its wire value and stamps the seat's cue on the same pass.
 A `pa` rides its host note, so it parks exactly when the host does:
 deleted from the take (silent — a stale PA against a fresh derived
 stream is meaningless; the generator owns any new realisation PAs),
@@ -1230,7 +1238,7 @@ probe sources.
 
 `rebuildPbs` reseats absorber pbs against the post-walk base-voice layout,
 recomputes their raw vals, and stamps the `detune` cue on the column pbs in
-its seat scope. It writes no pb column membership: it only drops a column
+its seat scope. It reads um's index, so a parked seat takes no cue. It writes no pb column membership: it only drops a column
 left empty that `extraColumns` does not ask for. See `docs/tuning.md`
 § Absorber reconciliation.
 
@@ -1366,18 +1374,11 @@ slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so the cover
 A parked point governs an entering edge exactly as an on-take one does, so parked windows the
 caller is not running still feed the base where they border one it is.
 
-A cc base is the cover of the column's own events, parked ones included (§ Lane occupancy): by the
-time fx expansion runs, the park stage has seated every parked cc and flipped every restore, so the
-population is exact.
-
-pb cannot take that route: its parked events sit apart from its column, in the channel's parked
-list, rather than seated in it. pb instead unions two covers, one of the parked list and one of the
-pb column, the parked point winning at a shared ppq. Each cover holds its own list's governing and
-closing points, so the union holds the later governor and the earlier closer, which are the whole
-population's. Both lists are logical and ppq-sorted, and both carry intent cents as `val`. The
-column holds exactly the sounding authored pbs — seats and derived pbs never enter it, the park
-stage has excised newly parked pbs and spliced restores back, and the CC walk has projected a
-foreign pb's derived cents — so membership is authorship.
+A cc or pb base is the cover of its column's own events, parked ones included (§ Lane occupancy): by
+the time fx expansion runs, the park stage has seated every parked event and flipped every restore,
+so the population is exact. A pb column carries intent cents as `val`, parked or sounding. Seats
+and derived pbs never enter it, and the CC walk has projected a foreign pb's derived cents, so
+membership is authorship.
 
 `nextSameLaneNote(host)` is `frame.nextOnLane` asked of the host's own lane population (§ Lane occupancy), so
 a parked host has a successor despite being off-take, and a parked successor is the
@@ -1385,9 +1386,9 @@ target a slide aims at. The subject is the *host's* lane rather than the stream 
 region spans lanes, carries none, and resolves to nil, which is also what keeps a region-hosted
 `target='next'` off a member record that carries no channel.
 
-`rebuildRegionPark`'s note/cc scans are span-covered the same way: `onsetsIn` walks each
-channel's window spans (merged per-channel for notes, per `(chan, cc)` for ccs) rather than the
-whole column, since a covered event sits inside a current window by definition — the spans are
+`rebuildRegionPark`'s note, cc and pb scans are span-covered the same way: `onsetsIn` walks each
+channel's window spans (merged per-channel for notes and for pb, per `(chan, cc)` for ccs) rather
+than the whole column, since a covered event sits inside a current window by definition — the spans are
 the complete cover set. Self-parking fx hosts are the one exception: `chainTargets` suppresses their
 own note target, so they carry no note window, and the note pass sources them separately from the
 fx-host set (the host clips), gated by `generators.parksNotes` and deduped against the
@@ -1419,15 +1420,10 @@ wants the take alone skips flagged events, and `frame.parkedNotes(chan)` collect
 flagged ones.
 
 A cc column seats its parked events the same way, and `tm:authoredCCs` hands back each column's own
-`events` table. pb keeps its parked events apart and takes a union instead: `frame.authoredPb` joins
-the channel's pb column to its parked list. A park excises the pb from its column and a restore
-splices it back, so no pb stands in both. The union is memoised against the two lists it joins,
-and each is replaced whole when its contents change, so the union inherits their identity — and the
-memo spans passes, since a parked list whose contents held is kept rather than re-minted. Order is
-ppq alone, there being no tie-break to preserve. A channel with no
-pb column and nothing parked is answered with nil, which is what the renderer tests to decide
-whether the channel shows a pb column at all — a parked pb keeps the column its authored breakpoint
-is displayed in.
+`events` table; so does the pb column, through `tm:authoredPb`, where order is ppq alone, there
+being no tie-break to preserve. A channel with no pb column is answered with nil, which is what the
+renderer tests to decide whether the channel shows a pb column at all. A parked pb is an event of
+the column, so it keeps the column its authored breakpoint is displayed in.
 
 Membership reads the whole population, and that is the only question asked of it. A region's members
 are what sounds on its lanes, and a parked event is one: it is the note the author sees, and the
@@ -1445,13 +1441,9 @@ population and a parked event constrains a move like any other. The chan-wide sa
 skips flagged events. Two notes of one pitch on different lanes passing each other is what lanes
 are for.
 
-The frame owns both sides. A parked note, cc or pa carries with its column, and a wholesale channel,
-whose columns are re-read from mm, has them seated again from the stash at the pass head — so the
-clip reads a true lane before the park stage touches it. Every channel carries its parked pb list
-across the pass boundary, dirty or clean, since those events are off-take and a wholesale mm re-read
-has no claim on them. Every reader of it runs after the park stage, so a re-mint would cost nothing
-but identity, which is the whole of what the memo is keyed on. `installParked` replaces the list
-whenever its contents change, so a stale union cannot be reached.
+The frame owns both sides. A parked note, pa, cc or pb carries with its column, and a wholesale
+channel, whose columns are re-read from mm, has them seated again from the stash at the pass head —
+so the clip reads a true lane before the park stage touches it.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column from
 mm — `rebuildInternals` routes it to the fx stage's existing set instead.
@@ -1701,7 +1693,7 @@ table — the read-only walks (`enumerateHosts`, `channelStreams`,
 `onsetsIn`) do not care, and neither does park, which flips the event the
 scan saw rather than removing it from the table.
 
-Parked notes, ccs and pas obey the same rule, seated in their columns, by a
+Parked notes, pas, ccs and pbs obey the same rule, seated in their columns, by a
 different route. Nothing owns them the way a mutator owns a column:
 `seatParked` seats the stash once a pass, at the pass head, from the
 document. So the discipline is a comparison rather than an enumeration, a
@@ -1716,14 +1708,8 @@ The park stage flips events where they stand, through `setEvent`, which
 renews a cc column as it does a lane. A park sets the flag on the on-take
 event and sheds its realisation fields, which leaves the event equal to the
 spec it stashes, so the next head seat holds it; a restore clears the flag.
-
-The parked pb list takes the rule as a whole-list comparison.
-`installParked` builds each channel's candidate list and installs it only
-where the contents differ from what stands; otherwise the standing list, and
-the events in it, carry. The match is positional, since a population that
-held arrives in the stash's own order from either render, and a reordering
-can only cost a shed. The rule reaches the pb column through the union
-(§ Lane occupancy).
+A park sheds its kind's cues too — a pb's `detune` — since a parked event
+sounds nothing for emission to cue.
 
 The park stage hands fx the seated notes rather than its own specs,
 resolving each through `seatedOf`. The fx share of parked originals must:

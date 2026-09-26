@@ -17,9 +17,9 @@
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: frame.channels[chan] = { chan, onTake = the columns, parked = the pbs a replace window took off the take }
+--shape: frame.channels[chan] = { chan, onTake = the columns }
 --shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
---shape: a note lane or cc column also seats its parked events, flagged parked = true; every other colEvent is on the take
+--shape: a note lane, cc column or the pb column also seats its parked events, flagged parked = true; every other colEvent is on the take
 --shape: column =   { events = [colEvent, ...], [cc = ccNum] }
 --shape: colEvent = the mm event's own fields (chan, uuid, metadata), logically framed, by kind:
 --shape:   note     { ppq, endppq, pitch, vel, lane, detune, delay, [muted], [sample], [sampleShadowed], [intentCents] }
@@ -33,10 +33,10 @@
 --shape: fxParked = one off-take stash for every replace park; a spec is the authored event, by kind:
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
 --shape:   cc   { evType='cc', chan, cc, ppq, val, shape, [tension] }
---shape:   pb   { evType='pb', chan, ppq, val (=cents), shape, [tension] }
+--shape:   pb   { evType='pb', chan, uuid, ppq, val (=cents), shape, [tension] }
 --shape:   pa   { evType='pa', chan, lane, pitch, ppq, vel, uuid, [shape], [rpb] }
---shape: parked =  { pb }: a flat list of those specs made render-ready -- a pb gains cents
 --shape: a seated parked cc = its spec plus parked = true
+--shape: a seated parked pb = its spec plus parked = true (no cents, no detune)
 --shape: a seated parked pa = its spec plus parked = true, in its host's lane (spec.lane)
 --shape: a seated parked note = its spec plus parked = true and endppqC (the lane bound; endppq stays the authored ceiling)
 
@@ -188,35 +188,6 @@ do
       end
     end
     return out
-  end
-
-  -- The pb stream's whole authored population: on-take events plus parked ones off the take, memoised
-  -- against those two lists, each replaced whole on change. see docs/trackerManager.md § Lane occupancy
-  local unions = setmetatable({}, { __mode = 'k' })   -- on-take events -> parked list -> the union
-  local function memoUnion(events, parked, less)
-    if #parked == 0 then return events end
-    local byParked = unions[events]
-    if not byParked then
-      byParked = setmetatable({}, { __mode = 'k' })
-      unions[events] = byParked
-    end
-    local union = byParked[parked]
-    if not union then
-      union = util.clone(events)
-      for _, evt in ipairs(parked) do util.insertSorted(union, evt, less) end
-      byParked[parked] = union
-    end
-    return union
-  end
-
-  local noEvents = {}
-  --post: unsafe result = the channel's whole pb population in ppq order
-  --post: result = nil iff the channel has no pb column and nothing parked
-  function frame.authoredPb(chan)
-    local channel = frame.channels[chan]
-    local col, parked = channel.onTake.pb, channel.parked.pb
-    if not col and #parked == 0 then return nil end
-    return memoUnion(col and col.events or noEvents, parked, ppqLess)
   end
 
   -- Lane bound (docs/trackerManager.md § Lane occupancy); floored a tick past the event's own onset.
@@ -1197,11 +1168,14 @@ function tm:authoredCCs(chan)
   return cols
 end
 
--- The channel's whole authored pb population, nil answering for a channel with no pb at all -- which
--- is the renderer's test for whether to show the column. see docs/trackerManager.md § Lane occupancy
---post: unsafe result = the channel's pb events in ppq order
---post: result = nil iff the channel has no pb column and nothing parked
-function tm:authoredPb(chan) return frame.authoredPb(chan) end
+-- The channel's whole authored pb population, parked seats included, nil answering for a channel
+-- with no pb column -- the renderer's test for whether to show one. see docs/trackerManager.md § Lane occupancy
+--post: unsafe result = the pb column's own events table, in ppq order
+--post: result = nil iff the channel has no pb column
+function tm:authoredPb(chan)
+  local col = frame.channels[chan].onTake.pb
+  return col and col.events
+end
 
 -- Every note host off the take as of now, the stash's render events. Each is self-describing, so a
 -- caller reads its chan and lane off it. see docs/trackerManager.md § Lane occupancy
@@ -1917,19 +1891,16 @@ function tm:rebuild(takeChanged)
   -- gated stage below skips clean chans so the carried columns stand.
   local prevChannels = frame.newPass()
   for i = 1, 16 do
-    -- Parked pbs are off-take and only the park stage rewrites them, so a wholesale mm re-read has no
-    -- claim: their list carries forward. Parked notes, ccs and pas reseat from the stash. See § Lane occupancy.
-    local prev   = prevChannels[i]
-    local parked = prev and prev.parked or { pb = {} }
+    -- Parked events reseat from the stash, so a wholesale channel starts from empty columns. See § Lane occupancy.
+    local prev = prevChannels[i]
     if dirt.wholesale(i) then
-      frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, parked = parked }
+      frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} } }
     elseif dirt.has(i) then
       -- Interval dirt carries every column; each family splices just its seeded events. Park still
       -- wants the fresh channel.
       local prevOnTake = prev.onTake
       frame.channels[i] = { chan = i, onTake = { notes = prevOnTake.notes, ccs = prevOnTake.ccs,
-                                                 at = prevOnTake.at, pc = prevOnTake.pc, pb = prevOnTake.pb },
-                            parked = parked }
+                                                 at = prevOnTake.at, pc = prevOnTake.pc, pb = prevOnTake.pb } }
     else
       frame.channels[i] = prev
     end

@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-26 tm: seat parked pbs in the pb column under the parked flag (§ Parking)
 - 2026-09-26 tm: fx expansion reads the pb base off the pb column (design § Pitchbend and program change intent 1)
 - 2026-09-26 tm: sweep synthesised pcs outside tracker mode (design § Pitchbend and program change intent)
 - 2026-09-26 tm: parked note hosts run their chain (design § Parking)
-- 2026-09-26 tm: the CC walk projects the pb column as intent (design § Pitchbend and program change intent)
 
 ## Now
 
@@ -36,18 +36,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **tm: seat parked pbs in the pb column under the parked flag** — pb joins `parkHomes`, so the
-   stash seat takes parked pbs into the pb column flagged `parked`. `parkPbs` scans the pb column
-   over every window on a dirty channel, as `parkCCs` does, parks a candidate in place, and restores
-   by flipping its seat through `seatedOf`, writing raw and the cents sidecar back to mm. The
-   created/removed window diff survives only to sweep a removed window's seats. `installParked`, the
-   per-channel `parked` table and its carry at the pass head, and `frame.authoredPb`'s memoised
-   union retire: `tm:authoredPb` answers the column's own events, nil where the channel has no pb
-   column. `rebuildPbs`' detune stamp skips parked pbs, and `pbBaseFor` reads the column alone.
-   docs: `docs/trackerManager.md` § The frame handle, § Lane occupancy, § Region-replace parking,
-   § Span-covered fx scans; `docs/generators.md` § Route-by-window. Spec: a parked pb sits in its
-   column flagged `parked`, carries no `detune` and is absent from mm; a pb typed into a standing
-   window parks; a restore flips the seat in place and mm regains the pb with raw and cents; a clean
-   pass carries the column's table; a parked pb keeps its column; fx expansion's base covers a
-   parked pb.
 

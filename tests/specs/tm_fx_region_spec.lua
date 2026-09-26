@@ -1043,12 +1043,12 @@ return {
       t.eq(#stashOfType(h, 'note'), 1, 'the note parked')
       t.eq(#stashOfType(h, 'pb'), 1, 'and the coincident pb parked alongside it')
 
-      h.tm:assignParked(h.tm:getChannel(1).parked.pb[1], { val = -40 }); h.tm:flush()
+      h.tm:assignParked(require('harness').parkedPbs(h.tm, 1)[1], { val = -40 }); h.tm:flush()
       t.eq(stashOfType(h, 'pb')[1].val, -40, 'the edit landed on the pb')
       t.eq(stashOfType(h, 'note')[1].pitch, 60, 'the note at the same ppq is untouched')
       t.falsy(stashOfType(h, 'note')[1].val, 'and did not absorb the pb-shaped update')
 
-      h.tm:deleteParked(h.tm:getChannel(1).parked.pb[1]); h.tm:flush()
+      h.tm:deleteParked(require('harness').parkedPbs(h.tm, 1)[1]); h.tm:flush()
       generators.kinds.pbRep = nil
       t.eq(#stashOfType(h, 'pb'), 0, 'the pb left the stash')
       t.eq(#stashOfType(h, 'note'), 1, 'the note at the same ppq stayed parked')
@@ -1424,15 +1424,15 @@ return {
       generators.kinds.capRep = nil
 
       -- Authored pbs inside the window park off-take (exclusive ownership), so the curve is realised
-      -- purely by derived seats; the authored breakpoints stay visible via the parkedPb render union.
+      -- purely by derived seats; the authored breakpoints stay visible, seated parked in the pb column.
       t.falsy(authoredPb(h, 1, 0),   'the authored base at the window start parked off the take')
       t.falsy(authoredPb(h, 1, 120), 'the authored pb mid-window parked off the take')
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'a derived seat carries the curve at the window start (50c)')
       t.eq(derivedPb(h, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
       t.eq(derivedPb(h, 1, 239).val, centsToRaw(40), 'the close hands the channel back to the authored base the region parked')
       local at120
-      for _, p in ipairs(h.tm:getChannel(1).parked.pb) do if p.ppq == 120 then at120 = p end end
-      t.eq(at120 and at120.val, 40, 'the authored 40c stays visible via the parkedPb render union')
+      for _, p in ipairs(require('harness').parkedPbs(h.tm, 1)) do if p.ppq == 120 then at120 = p end end
+      t.eq(at120 and at120.val, 40, 'the authored 40c stays visible, seated parked in the pb column')
     end,
   },
 
@@ -1833,13 +1833,13 @@ return {
       generators.kinds.capRep = nil
 
       -- The wire is curve + detune (I1): the 30c curve rides on the 25c detune. The authored pb
-      -- parks off-take (the curve owns the wire) and stays visible via parkedPb.
+      -- parks off-take (the curve owns the wire) and stays visible, seated parked in the pb column.
       t.falsy(authoredPb(h, 1, 60), 'the authored pb parked off the take')
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve 30c + detune 25c')
       -- The region parks the authored 40c, so handing back detune alone would let the fx suppress an
       -- authored value past its own end. The close is the wire as it reads with no region at all.
       t.eq(derivedPb(h, 1, 239).val, centsToRaw(65), 'the close hands back authored 40c + detune 25c (I1)')
-      t.eq(h.tm:getChannel(1).parked.pb[1].val, 40, 'the authored 40c stays visible via the parkedPb render union')
+      t.eq(require('harness').parkedPbs(h.tm, 1)[1].val, 40, 'the authored 40c stays visible, seated parked in the pb column')
     end,
   },
 
@@ -1859,16 +1859,16 @@ return {
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       -- While the region is present the authored pb parks off-take (the curve owns the wire) and
-      -- stays visible via parkedPb; removing the region restores it to the take.
+      -- stays visible, seated parked in the pb column; removing the region restores it to the take.
       t.falsy(authoredPb(h, 1, 120), 'the authored pb parks while the region is present')
-      t.eq(h.tm:getChannel(1).parked.pb[1].val, 40, 'its 40c stays visible via the parkedPb render union')
+      t.eq(require('harness').parkedPbs(h.tm, 1)[1].val, 40, 'its 40c stays visible, seated parked in the pb column')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
       generators.kinds.capRep = nil
       t.eq(authoredPb(h, 1, 120).val, centsToRaw(40),
         'the authored wire (40c) is restored once the region is gone')
-      t.eq(#h.tm:getChannel(1).parked.pb, 0, 'and the parkedPb render set empties')
+      t.eq(#require('harness').parkedPbs(h.tm, 1), 0, 'and no parked pb is left in the column')
     end,
   },
 

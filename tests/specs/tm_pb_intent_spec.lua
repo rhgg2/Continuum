@@ -24,6 +24,12 @@ local function columnPbAt(h, chan, ppq)
   end
 end
 
+local function stashPbAt(h, chan, ppq)
+  for _, spec in ipairs(h.ds:get('fxParked') or {}) do
+    if spec.evType == 'pb' and spec.chan == chan and spec.ppq == ppq then return spec end
+  end
+end
+
 local function mmPbs(h, chan)
   local out = {}
   for _, c in ipairs(h.fm:dump().ccs) do
@@ -235,27 +241,152 @@ return {
     end,
   },
 
-  -- Until the stash seat takes pbs into the pb column (plan phase 3), a parked pb is off-take: it
-  -- leaves the column as it parks and returns as it restores.
+  ----- Parking: a parked pb is seated in the pb column, flagged
+  --
+  -- A parked pb stays in the pb column flagged `parked`, as a parked note, pa or cc stays in its own
+  -- (docs/trackerManager.md § Lane occupancy). Park and restore flip the seat in place, so the
+  -- column is the whole authored pb population, sounding and parked.
+
+  -- The seat keeps its table across the park and the restore, and comes back carrying the intent
+  -- it went out with, as both val and cents.
   {
-    name = 'a pb parked by a new replace window leaves the column and returns with its intent',
+    name = 'a pb parked by a new replace window stays in the column flagged and restores in place',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
       h.tm:addEvent({ evType = 'pb', ppq = 480, chan = 1, val = 10 })
       h.tm:flush()
-      t.truthy(columnPbAt(h, 1, 120), 'fixture check: the pb is seated')
+      local before = columnPbAt(h, 1, 120)
+      t.truthy(before, 'fixture check: the pb is seated')
 
       local cleanup = pbReplaceRegion(h)
-      t.eq(#h.tm:getChannel(1).parked.pb, 1, 'fixture check: the window parked the pb')
-      t.eq(columnPbAt(h, 1, 120), nil, 'the parked pb left the column')
+      local seat = columnPbAt(h, 1, 120)
+      t.truthy(seat == before, 'the parked pb keeps its seat in the column')
+      t.truthy(seat.parked, 'flagged parked')
+      t.falsy(columnPbAt(h, 1, 480).parked, 'the pb outside the window stays unflagged')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
       cleanup()
       local evt = columnPbAt(h, 1, 120)
-      t.truthy(evt, 'the restored pb is back in the column')
-      t.eq(evt.val, 40, 'with its intent')
+      t.truthy(evt == seat, 'the restore finds the same table')
+      t.falsy(evt.parked, 'unflagged')
+      t.eq(evt.val, 40, 'with its intent as val')
+      t.eq(evt.cents, 40, 'and as cents')
+    end,
+  },
+
+  -- Park scans every window on a dirty channel, not just a new one: a pb that reaches mm inside a
+  -- standing window parks on the pass that seats it.
+  {
+    name = 'a pb added inside a standing replace window parks',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 480, chan = 1, val = 10 })
+      h.tm:flush()
+      local cleanup = pbReplaceRegion(h)
+      t.eq(#require('harness').parkedPbs(h.tm, 1), 0, 'fixture check: the window opened over no pb')
+
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+      cleanup()
+      local seat = columnPbAt(h, 1, 120)
+      t.truthy(seat, 'the pb is seated in the column')
+      t.truthy(seat.parked, 'flagged parked')
+      t.truthy(stashPbAt(h, 1, 120), 'the stash holds it')
+      t.eq(mmPbAtLogical(h, 1, 120), nil, 'and mm no longer sounds it')
+    end,
+  },
+
+  -- detune is a cue emission stamps on a sounding pb, so a parked pb sheds it along with the
+  -- realisation frame; its seat and its stash spec alike.
+  {
+    name = 'a parked pb seat carries no detune cue, nor does its stash spec',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = { lane1Note(0, 480, 25) } } }
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+      t.eq(columnPbAt(h, 1, 120).detune, 25, 'fixture check: the pb carries a cue before the window opens')
+
+      local cleanup = pbReplaceRegion(h)
+      cleanup()
+      local seat = columnPbAt(h, 1, 120)
+      t.truthy(seat and seat.parked, 'fixture check: the pb parked in place')
+      t.eq(seat.detune, nil, 'the seat has no detune')
+      t.eq(seat.cents, nil, 'nor cents')
+      local spec = stashPbAt(h, 1, 120)
+      t.truthy(spec, 'fixture check: the stash holds the pb')
+      t.eq(spec.detune, nil, 'the stash spec has no detune')
+    end,
+  },
+
+  -- A restored pb sounds again: mm regains it at its intent plus the base voice's detune, and the
+  -- seat regains its cue once rebuildPbs has run.
+  {
+    name = 'a restored pb flips in place, sounds its intent plus detune, and regains its cue',
+    run = function(harness)
+      local h = harness.mk{ seed = { notes = { lane1Note(0, 480, 25) } } }
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+      local cleanup = pbReplaceRegion(h)
+      local seat = columnPbAt(h, 1, 120)
+      t.truthy(seat and seat.parked, 'fixture check: the pb parked in place')
+      t.eq(mmPbAtLogical(h, 1, 120), nil, 'fixture check: mm lost it')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+      cleanup()
+      t.truthy(columnPbAt(h, 1, 120) == seat, 'the restore keeps the table')
+      t.eq(seat.detune, 25, 'the seat regains its detune cue')
+      local wire = mmPbAtLogical(h, 1, 120)
+      t.truthy(wire, 'mm regains the pb')
+      t.eq(wire.cents, 40, 'its cents are the intent')
+      t.eq(wire.val, cents2raw(65), 'its wire value sounds intent plus detune')
+    end,
+  },
+
+  -- The renewal rule holds for a parked seat (docs/trackerManager.md § Note-lane renewal): a pass
+  -- that leaves it parked as it was carries it and its column. An edit to the covering region's fx
+  -- seeds dirt at the region's onset, which names the pb row of a seat parked there; the CC walk's
+  -- splice of that row must leave the seat, or the stash reseats it as a fresh table.
+  {
+    name = 'a region edit leaves a pb parked at its onset seated, and the column carried',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 40 })
+      h.tm:addEvent({ evType = 'pb', ppq = 480, chan = 1, val = 10 })
+      h.tm:flush()
+      local cleanup = pbReplaceRegion(h)
+      local events = pbColumn(h, 1).events
+      local seat = columnPbAt(h, 1, 0)
+      t.truthy(seat and seat.parked, 'fixture check: the pb at the region onset parked')
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
+                                   fx = { { kind = 'flatRep', level = 2 } } } })
+      h.tm:rebuild()
+      cleanup()
+      t.truthy(columnPbAt(h, 1, 0) == seat, 'the parked seat keeps its table')
+      t.truthy(seat.parked, 'still parked')
+      t.truthy(pbColumn(h, 1).events == events, 'the column carried')
+    end,
+  },
+
+  -- A pb column exists when it holds an event, and a parked seat is an event.
+  {
+    name = 'a channel whose only pb is parked keeps its pb column',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+      local cleanup = pbReplaceRegion(h)
+      cleanup()
+      t.falsy(((h.ds:get('extraColumns') or {})[1] or {}).pb, 'fixture check: extraColumns asks for no pb column')
+
+      local col = pbColumn(h, 1)
+      t.truthy(col, 'the column stands')
+      t.eq(#col.events, 1, 'fixture check: it holds one event')
+      t.truthy(col.events[1].parked, 'fixture check: which is the parked pb')
+      t.truthy(h.tm:authoredPb(1) == col.events, 'tm:authoredPb answers the column')
     end,
   },
 

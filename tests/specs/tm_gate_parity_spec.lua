@@ -363,9 +363,9 @@ return {
   },
 
   {
-    -- The pb twin of the case above. pb's base reads the parked list and mm's pb index as two covers,
-    -- so the parked point has to survive its own list's cover to govern. Hosts sit on lane 2 and the
-    -- dirt on lane 3: a lane-1 edit would set the detune hold and run every window right of it.
+    -- The pb twin of the case above. pb's base is the pb column's cover, parked seats included, so
+    -- the parked point governs from its seat. Hosts sit on lane 2 and the dirt on lane 3: a lane-1
+    -- edit would set the detune hold and run every window right of it.
     name = 'continuous gate: a pb parked in a kept window governs a running neighbour\'s entering edge',
     run = function(harness)
       local h = harness.mk{ seed = { ccs = {
@@ -384,7 +384,7 @@ return {
       h.tm:addEvent(note(1, 720, 64, { endppq = 960, lane = 2, fx = { { kind = 'pbFlat' } } })); h.tm:flush()
       h.tm:rebuild(true)   -- settle creation-pass identity
 
-      local parked = h.tm:getChannel(1).parked.pb
+      local parked = require('harness').parkedPbs(h.tm, 1)
       t.truthy(#parked == 1 and parked[1].ppq == 300, 'fixture check: window A parks the authored 20')
       t.eq(wireAt(720).val, centsToRaw(20), 'fixture check: an ungated pass enters window B at 20')
 
@@ -423,8 +423,8 @@ return {
   },
 
   {
-    -- The pb twin: pb's base is the union of the parked list's cover and the pb index's, so the reach
-    -- has to be read off the same union.
+    -- The pb twin: pb's base is the pb column's cover, parked seats included, so the reach has to be
+    -- read off the same column.
     name = 'hold reach: retargeting the point a pb ramp closes on re-runs a host inside the ramp',
     run = function(harness)
       local h = harness.mk{ seed = { ccs = {
