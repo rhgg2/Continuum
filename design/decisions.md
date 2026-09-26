@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — Every parked note carrying fx runs its chain, whichever host parks it, over
+  suppressing a member's own chain while a region's note window parks it; the census already counted
+  such a host's window, so its seats were swept as chainless absorbers and freezing it found no
+  curve. A note-dest member thus sounds its own hits beside the region's, and where a hit coincides
+  with a region hit in pitch and intent the voicing policy keeps one. This retires the accepted
+  oddity of 2026-08-04.
+
 - **2026-09-26** — A pb the CC walk leaves without cents is a seat: the absorber pass reseats or
   drops it as an absorber, over back-deriving its cents, which promoted the orphaned seats of a
   parked continuous host to authored automation. The absorber pass writes derived with any sidecar

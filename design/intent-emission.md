@@ -70,6 +70,8 @@ Moved to `docs/trackerManager.md` § Two movements.
 1. To **restore** an event, emission clears `parked`, drops its spec from the stash and writes it
    back to mm with its realisation frame re-derived.
 
+1. A parked note carrying `fx` runs its chain like any other host, whichever host parks it.
+
 1. A parked event does not claim a medium. It does not bound an absorber's reach on lane 1, and the
    tail walk does not place a raw onset for it.
 

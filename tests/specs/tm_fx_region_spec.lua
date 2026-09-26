@@ -2821,9 +2821,8 @@ return {
   },
 
   {
-    -- A continuous-only host parked by another live region still owns its window, but rebuildFx runs
-    -- on-take hosts alone, so its seats are orphaned and swept, and its freeze finds no curve to author.
-    pending = 'parked continuous hosts do not run their producer (plan/intent-emission.md, queued)',
+    -- A continuous-only host parked by another live region runs its chain, so its window holds a curve
+    -- and freezing it authors that curve onto the take.
     name = 'freeze (host parked by a region): its continuous curve becomes authored automation',
     run = function(harness)
       local h = harness.mk()
@@ -2835,6 +2834,59 @@ return {
 
       t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
       t.truthy(h.tm:getChannel(1).onTake.pb, 'the sine curve is authored automation now')
+    end,
+  },
+
+  {
+    -- Every parked note carrying fx runs its chain, whichever host parks it: a sine host parked by an
+    -- arp region sounds the same curve it sounds on the take, and holds it across a rebuild.
+    -- see design/intent-emission.md § Parking
+    name = 'a continuous-only host parked by a region runs its chain',
+    run = function(harness)
+      local sineHost = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                         detune = 0, delay = 0, lane = 1, fx = sine30 }
+      local unparked = harness.mk()
+      unparked.tm:addEvent(util.clone(sineHost)); unparked.tm:flush()
+      local onTakeCurve = wirePbs(unparked, 1, 0, 239)
+      t.truthy(#onTakeCurve > 0, 'the host sounds a curve on the take')
+
+      local h = harness.mk()
+      h.tm:addEvent(util.clone(sineHost)); h.tm:flush()
+      injectArp(h)
+      t.eq(#require('harness').parkedNotes(h.tm, 1), 1, 'the region parks the host off-take')
+      t.deepEq(wirePbs(h, 1, 0, 239), onTakeCurve, 'parked, it sounds the curve it sounds on the take')
+      h.tm:rebuild()
+      t.deepEq(wirePbs(h, 1, 0, 239), onTakeCurve, 'and a further rebuild leaves the curve standing')
+    end,
+  },
+
+  {
+    -- A note-dest member runs its own chain beside the region's: a trill+sine host under an arp sounds
+    -- its own trill hits, and the arp still sounds every step. Where a trill hit lands on an arp step
+    -- at the same pitch the two are one voice and one survives (docs/voicing.md), so each step is
+    -- pinned as a sounding onset, not as an arp-tagged record. see design/intent-emission.md § Parking
+    name = 'a note-dest member runs its own chain beside the region',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, cents = 200 }, sine30[1] } })
+      h.tm:flush()
+      injectArp(h)
+      local parked = require('harness').parkedNotes(h.tm, 1)
+      t.eq(#parked, 1, 'the region parks the host off-take')
+
+      local hostPitches, onsetsAt60 = {}, {}
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.derived == parked[1].uuid then hostPitches[n.pitch] = true end
+        if n.chan == 1 and n.pitch == 60 then onsetsAt60[n.ppq] = true end
+      end
+      t.truthy(next(hostPitches), 'the member sounds derived notes of its own')
+      t.truthy(hostPitches[62], 'among them its trill hits')
+      t.truthy(#derivedNotes(h) > 0, 'the arp still produces')
+      for _, step in ipairs({ 0, 60, 120, 180 }) do
+        t.truthy(onsetsAt60[step], 'and its step at ' .. step .. ' sounds')
+      end
     end,
   },
 

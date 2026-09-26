@@ -1199,7 +1199,7 @@ end
 
 -- Every fx host of a channel, since the gate classifies each against the full set.
 --pre: noteHosts is chan's on-take fx hosts, (lane, ppq)-sorted
-local function enumerateHosts(chan, noteHosts, regions, fxOutWindows)
+local function enumerateHosts(chan, noteHosts, regions)
   local hosts = {}
   local function addNoteHost(note)
     util.add(hosts, {
@@ -1212,8 +1212,7 @@ local function enumerateHosts(chan, noteHosts, regions, fxOutWindows)
   for _, note in ipairs(noteHosts) do addNoteHost(note) end
 
   for _, spec in ipairs(frame.parkedNotes(chan)) do
-    -- A parked event inside a note-park window is region membership, not a note host (own-fx suppressed).
-    if spec.fx and not fxOutWindows.owns('note', chan, nil, spec.ppq) then addNoteHost(soundingEvent(spec)) end
+    if spec.fx then addNoteHost(soundingEvent(spec)) end
   end
 
   for _, region in ipairs(regions) do
@@ -1492,7 +1491,7 @@ local function rebuildFx(fxOutWindows, fxRegions, pbLimCents)
                   pbScope = {}, ran = frame.newChannels() }
 
   local function expandChannel(chan)
-    local hosts = enumerateHosts(chan, fxHostsByChan[chan] or {}, fxRegionsByChan[chan] or {}, fxOutWindows)
+    local hosts = enumerateHosts(chan, fxHostsByChan[chan] or {}, fxRegionsByChan[chan] or {})
     local gated = not dirt.wholesale(chan)
     local status, emitScope = {}, {}
     if gated then

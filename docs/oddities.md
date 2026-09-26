@@ -55,15 +55,6 @@ edit; or the caret-gated set could be made safe by holding caret and
 selection by column identity throughout, which is a piece of work in
 its own right.
 
-### A note's own fx stays suppressed while a region parks it
-
-> **accepted** · tm · 2026-08-04
-
-A region-parked note is off the take, and its own chain does not run
-while the region covers it. The spec survives untouched and the chain
-returns when the region moves off, so this is a quirk of coverage
-rather than a loss of data.
-
 ### A window end's numeric subtype changes the fx output
 
 > **gap** · tm · 2026-09-10

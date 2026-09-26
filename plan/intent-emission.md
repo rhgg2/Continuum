@@ -25,6 +25,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-26 tm: parked note hosts run their chain (design § Parking)
 - 2026-09-26 tm: the CC walk projects the pb column as intent (design § Pitchbend and program change intent)
 - 2026-09-26 tm: the pc column holds authored pcs alone (design § Pitchbend and program change intent)
 - 2026-09-26 tm: park pas in place in their host's lane (design § Parking)
@@ -34,12 +35,6 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-1. **Parked continuous hosts run their producer** — a continuous-only host parked by another
-   live region keeps its window in the census, but `rebuildFx` runs on-take hosts alone, so its
-   pb seats are orphaned and swept as absorbers and its freeze finds no curve to author
-   (`tm_fx_region_spec` pending case). design/archive/fx-freeze.md § Implementation notes says
-   such a host still runs; the gather needs to include it.
 
 1. **Synthesised pcs outside tracker mode** — a take that leaves `trackerMode` keeps its
    synthesised pcs in mm, where they sound with no seat in the pc column, which the grid shows

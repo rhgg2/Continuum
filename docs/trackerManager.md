@@ -1002,9 +1002,9 @@ windows builds an empty scan and pays nothing per event; it accepts a
 stash spec or a column event — both logical, so it keys `ppq` directly.
 `covered()` wraps `coveredBy()`, which answers the parking host's
 uuid rather than a bare bool: a `currentWindows` entry is checked
-first, and only then the spec's own `fx`, because a self-parking host
-inside a region's window is that region's membership rather than its
-own host — the same reading `rebuildFx` takes.
+first, and only then the spec's own `fx`, so a self-parking host
+inside a region's window is parked by that region — its own chain
+still runs.
 A cc's park and restore write no dirt seed: the fill's end seat carries
 the value the authored stream holds there, parked members included, so
 nothing downstream reads a changed base — the fill stands in for the
