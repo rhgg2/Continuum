@@ -135,10 +135,9 @@ return {
     end,
   },
   {
-    -- rebuildPA's parked loop is now seed-gated per dirty channel. A region parks its host and
-    -- carries the host's on-take PA off-take, but the region edit seeds only its ppq -- not
-    -- the PA's own row. So the fresh-park scan must seed the parked PA's row, or the gated loop
-    -- drops its off-take cell. PA sits at row 120, region trigger at row 0: red without the reseed.
+    -- A region parks its host and the host's on-take PA with it, but the region edit seeds only its
+    -- own ppq, not the PA's row. The PA parks where it stands in the host's lane, so no seed is
+    -- needed for it to render, and it must render once: not dropped, and not seated twice.
     name = 'a freshly-parked PA still renders once in the host lane under an arp region',
     run = function(harness)
       local h = harness.mk()

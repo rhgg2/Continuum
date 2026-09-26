@@ -158,6 +158,18 @@ function harness.parkedNotes(tm, chan)
   return out
 end
 
+-- A channel's parked pas, read off its lanes in lane then column order, where each sits flagged in
+-- its host's lane.
+function harness.parkedPAs(tm, chan)
+  local out = {}
+  for _, events in ipairs(tm:authoredLanes(chan)) do
+    for _, evt in ipairs(events) do
+      if evt.parked and evt.evType == 'pa' then out[#out + 1] = evt end
+    end
+  end
+  return out
+end
+
 -- A channel's parked ccs, read off its cc columns in cc order, where they sit flagged among the
 -- on-take ones.
 function harness.parkedCCs(tm, chan)

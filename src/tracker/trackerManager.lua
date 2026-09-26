@@ -17,7 +17,7 @@
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: frame.channels[chan] = { chan, onTake = the columns, parked = the pb and pas a replace window took off the take }
+--shape: frame.channels[chan] = { chan, onTake = the columns, parked = the pbs a replace window took off the take }
 --shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
 --shape: a note lane or cc column also seats its parked events, flagged parked = true; every other colEvent is on the take
 --shape: column =   { events = [colEvent, ...], [cc = ccNum] }
@@ -34,9 +34,10 @@
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [intentCents], [fx] }
 --shape:   cc   { evType='cc', chan, cc, ppq, val, shape, [tension] }
 --shape:   pb   { evType='pb', chan, ppq, val (=cents), shape, [tension] }
---shape:   pa   { evType='pa', chan, pitch, ppq, vel, [rpb] }
---shape: parked =  { pb, pa }: flat lists of those specs made render-ready -- a pb gains cents
+--shape:   pa   { evType='pa', chan, lane, pitch, ppq, vel, uuid, [shape], [rpb] }
+--shape: parked =  { pb }: a flat list of those specs made render-ready -- a pb gains cents
 --shape: a seated parked cc = its spec plus parked = true
+--shape: a seated parked pa = its spec plus parked = true, in its host's lane (spec.lane)
 --shape: a seated parked note = its spec plus parked = true and endppqC (the lane bound; endppq stays the authored ceiling)
 
 --shape: fxRegions = [ { uuid = 'fxr-N', chan (0 = global), ppq, endppq, fx = [stage, ...] } ]: a logical span; storage order is lane precedence among overlapping regions
@@ -1915,10 +1916,10 @@ function tm:rebuild(takeChanged)
   -- gated stage below skips clean chans so the carried columns stand.
   local prevChannels = frame.newPass()
   for i = 1, 16 do
-    -- Parked pbs and pas are off-take and only the park stage rewrites them, so a wholesale mm re-read
-    -- has no claim: their lists carry forward. Parked notes and ccs reseat from the stash. See § Lane occupancy.
+    -- Parked pbs are off-take and only the park stage rewrites them, so a wholesale mm re-read has no
+    -- claim: their list carries forward. Parked notes, ccs and pas reseat from the stash. See § Lane occupancy.
     local prev   = prevChannels[i]
-    local parked = prev and prev.parked or { pb = {}, pa = {} }
+    local parked = prev and prev.parked or { pb = {} }
     if dirt.wholesale(i) then
       frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, parked = parked }
     elseif dirt.has(i) then

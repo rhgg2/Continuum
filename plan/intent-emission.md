@@ -24,21 +24,12 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-09-26 tm: park pas in place in their host's lane (design § Parking)
 
 ## Now
 
-(empty)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 
-1. **tm: park pas in place in their host's lane** — `seatStash` seats pa specs in their lanes under
-   `parked`, each spec carrying its `lane` as the column event minus its cues. `rebuildPA` moves to
-   directly after `seatStash` and dispatches on-take pas alone. Its parked-host branch binds over the
-   host's lane bound, computed at dispatch with `frame.clippedSpanEnd` over the lane's events, since
-   `endppqC` is unstamped there. `parkPAs` flips a covered pa in place in its host's lane and restores
-   one by clearing `parked`, so the index scan, the `exciseEvents` sweep, `installParked('pa')` and the
-   carried `parked.pa` slot retire. docs: `docs/trackerManager.md` § PA dispatch, § The pipeline and
-   the PA scan paragraph. Spec: in `tm_parked_carry_spec`, a newly parked host's pa flips in place
-   and leaves mm; a clean pass carries the seat; a wholesale pass reseats it from the stash in its
-   lane; a restore returns it to mm; and an mm pa under an already-parked host parks the same pass.
+(empty)

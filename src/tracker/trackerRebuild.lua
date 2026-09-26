@@ -564,7 +564,7 @@ local function sameSpec(seated, spec)
   return true
 end
 
-local function installParked(field, specs, onSeat)
+local function installParked(field, specs)
   local function sameParked(old, new)
     if not old or #old ~= #new then return false end
     for i, newSpec in ipairs(new) do
@@ -580,22 +580,18 @@ local function installParked(field, specs, onSeat)
     local parked = frame.channels[chan].parked
     if not sameParked(parked[field], fresh[chan]) then parked[field] = fresh[chan] end
   end
-
-  if onSeat then
-    for chan = 1, 16 do
-      for _, spec in ipairs(frame.channels[chan].parked[field]) do onSeat(spec) end
-    end
-  end
 end
 
 -- Where a parked spec of each seated kind sits: the field its columns live under, and its own column.
 local parkHomes = {
   note = { field = 'notes', column = function(spec) return ensureLane(spec.chan, spec.lane) end },
   cc   = { field = 'ccs',   column = function(spec) return ensureCcColumn(spec.chan, 'cc', spec.cc) end },
+  pa   = { field = 'notes', column = function(spec) return ensureLane(spec.chan, spec.lane) end },
 }
 
 -- Seat a kind's parked specs in their own columns, flagged; a seated event whose spec held keeps its
 -- table, so the column's carry holds. see docs/trackerManager.md § Lane occupancy
+--pre: kinds sharing a field (notes, pas) are distinguished by evType, leaving the other's seats
 local function seatParked(kind, specs)
   local home = parkHomes[kind]
   local wanted = frame.newChannels()
@@ -608,7 +604,7 @@ local function seatParked(kind, specs)
     for _, col in pairs(frame.channels[chan].onTake[home.field]) do
       local stale = {}
       for _, evt in ipairs(col.events) do
-        if evt.parked then
+        if evt.parked and evt.evType == kind then
           local spec = wanted[chan][frame.parkKey(evt)]
           if spec and not held[spec] and sameSpec(evt, spec) then held[spec] = evt
           else stale[evt] = true end
@@ -638,7 +634,7 @@ end
 
 -- The pass head seats the stash as it stands, which a wholesale channel's fresh columns lack.
 local function seatStash(fxParked)
-  local byKind = { note = {}, cc = {} }
+  local byKind = { note = {}, cc = {}, pa = {} }
   for _, spec in ipairs(fxParked or {}) do
     if byKind[spec.evType] then util.add(byKind[spec.evType], spec) end
   end
@@ -753,65 +749,60 @@ local function parkNotes(stage, onTakeHosts)
   return parkedNotes, restoredNotes, parkedByHost
 end
 
---pre: parkNotes has installed this pass's parked notes
+-- A pa parks with its host: park and restore flip it in place in the host's lane, as a cc's do.
+-- No dirt seed: the lane's pa population is the same either way. see docs/trackerManager.md § Region-replace parking
+--pre: parkNotes has parked this pass's hosts in place and clipped their lanes
 local function parkPAs(stage)
-  local function covers(host, pitch, ppqL)
-    return host.pitch == pitch and ppqL >= host.ppq and ppqL < host.endppqC
+  local hostsByCol = {}
+  local function parkedHostsIn(col)
+    if not hostsByCol[col] then
+      local hosts = {}
+      for _, evt in ipairs(col.events) do
+        if evt.parked and util.isNote(evt) then util.add(hosts, evt) end
+      end
+      hostsByCol[col] = hosts
+    end
+    return hostsByCol[col]
   end
-  local parkedNotes = {}
-  local function parkedOn(chan)
-    parkedNotes[chan] = parkedNotes[chan] or frame.parkedNotes(chan)
-    return parkedNotes[chan]
-  end
-  local function hostIsParked(chan, pitch, ppqL)
-    for _, host in ipairs(parkedOn(chan)) do
-      if covers(host, pitch, ppqL) then return true end
+  local function underParkedHost(pa, col)
+    for _, host in ipairs(parkedHostsIn(col)) do
+      if host.pitch == pa.pitch and host.ppq <= pa.ppq and pa.ppq < host.endppqC then return true end
     end
     return false
   end
 
-  -- An on-take PA whose host just parked leaves the take.
-  local parkedPAs, seen, parkedPpqs, parkedUuids = {}, {}, {}, {}
+  local candidates = {}
   for chan = 1, 16 do
     if dirt.has(chan) then
-      local pas = index.raw(chan).pas
-      for _, host in ipairs(parkedOn(chan)) do
-        for pa in onsetsIn(pas, { { time:fromLogical(chan, host.ppq), time:fromLogical(chan, host.endppqC) } }) do
-          local ppqL = pa.ppqL or pa.ppq
-          -- same-pitch parked spans can overlap (lane clips only), so a PA may meet two hosts
-          if not seen[pa] and covers(host, pa.pitch, ppqL) then
-            seen[pa] = true
-            dirt.add(chan, dirt.rawSeed(pa, 'park'))
-            stage.writes.delete({ uuid = pa.uuid })
-            util.bucket(parkedPpqs, chan, ppqL)
-            parkedUuids[pa.uuid] = true
-            local spec = toParked(pa)
-            projectEvent(spec, chan)
-            spec.uuid = nil -- restore re-mints the rpb sidecar uuid
-            util.add(parkedPAs, spec)
+      for _, col in ipairs(frame.channels[chan].onTake.notes) do
+        if #parkedHostsIn(col) > 0 then
+          for _, evt in ipairs(col.events) do
+            if evt.evType == 'pa' and not evt.parked and underParkedHost(evt, col) then util.add(candidates, evt) end
           end
         end
       end
     end
   end
-  -- The parking PA wasn't excised by note-excision, so do it now.
-  for chan, ppqs in pairs(parkedPpqs) do
-    exciseEvents(frame.channels[chan].onTake.notes, ppqs,
-                 function(e) return e.evType == 'pa' and parkedUuids[e.uuid] end)
-  end
-
+  local parkedPAs, restores = {}, {}
   for _, spec in ipairs(stage.prior.pa) do
-    if hostIsParked(spec.chan, spec.pitch, spec.ppq) then
-      util.add(parkedPAs, spec)
-    else
-      local evt = fromParked(spec)
-      dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', evt.ppq))
-      stage.writes.add(evt)
-    end
+    util.add(underParkedHost(spec, parkHomes.pa.column(spec)) and parkedPAs or restores, spec)
   end
 
-  installParked('pa', parkedPAs)
-  return parkedPAs
+  for _, evt in ipairs(candidates) do
+    util.add(parkedPAs, toParked(evt))
+    stage.writes.delete(evt)
+    parkInPlace(evt)
+  end
+  local restoredPAs = {}
+  for _, spec in ipairs(restores) do
+    local evt = seatedOf(spec)
+    frame.setEvent(evt, 'parked', nil)
+    -- lane is display-only, overlaid at dispatch; mm would persist it
+    stage.writes.add(fromParked(spec, { keepUuid = true, lane = util.REMOVE }))
+    util.add(restoredPAs, evt)
+  end
+
+  return parkedPAs, restoredPAs
 end
 
 local function parkCCs(stage)
@@ -895,7 +886,7 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   local stage                                    = parkStage(fxOutWindows, fxParked)
   local parkedNotes, restoredNotes, parkedByHost = parkNotes(stage, onTakeHosts)
   -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
-  local parkedPAs                                = parkPAs(stage)
+  local parkedPAs, restoredPAs                   = parkPAs(stage)
   local parkedCCs, restoredCCs                   = parkCCs(stage)
   local parkedPbs                                = parkPbs(stage, fxOutWindows, fxInWindows, pbLimCents)
 
@@ -911,30 +902,35 @@ local function rebuildRegionPark(fxOutWindows, fxParked, fxInWindows, onTakeHost
   for _, evt in ipairs(restoredNotes) do
     if index.stampColEvt(evt) then evt.committed = true end
   end
-  -- A cc entry carries no seat stamp, so a restored cc only learns that mm holds it.
-  for _, evt in ipairs(restoredCCs) do
-    if index.byUuid(evt.uuid) then evt.committed = true end
+  -- A cc or pa entry carries no seat stamp, so a restored one only learns that mm holds it.
+  for _, restored in ipairs({ restoredCCs, restoredPAs }) do
+    for _, evt in ipairs(restored) do
+      if index.byUuid(evt.uuid) then evt.committed = true end
+    end
   end
   return parkedByHost
 end
 
 ----- Rebuild PA
 
-local function findNoteColumnForPitch(channel, pitch, ppq_pos)
+-- takeLenL is hoisted by the caller: a parked host's lane bound is derived here, as its endppqC
+-- is stamped only by the lane-bound pass after dispatch.
+local function findNoteColumnForPitch(channel, pa, takeLenL)
   local notes = channel.onTake.notes
   -- Pre-commit restores can't match -- their endppq is nil until the walk derives it.
   local coveringLane
   for _, rec in ipairs(index.raw(channel.chan).notes) do
-    if isAuthored(rec) and rec.endppq and rec.pitch == pitch and rec.ppq <= ppq_pos
-       and rec.endppq > ppq_pos and (coveringLane == nil or rec.lane < coveringLane) then
+    if isAuthored(rec) and rec.endppq and rec.pitch == pa.pitch and rec.ppq <= pa.ppq
+       and rec.endppq > pa.ppq and (coveringLane == nil or rec.lane < coveringLane) then
       coveringLane = rec.lane
     end
   end
   if coveringLane then return notes[coveringLane], coveringLane end
 
+  local ppqL = pa.ppqL or pa.ppq
   for _, evt in ipairs(frame.parkedNotes(channel.chan)) do
-    if evt.pitch == pitch and time:fromLogical(channel.chan, evt.ppq) <= ppq_pos
-       and time:fromLogical(channel.chan, evt.endppqC) > ppq_pos then
+    if evt.pitch == pa.pitch and evt.ppq <= ppqL
+       and frame.clippedSpanEnd(evt, takeLenL, notes[evt.lane].events) > ppqL then
       return notes[evt.lane], evt.lane
     end
   end
@@ -942,30 +938,23 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   -- Pitch-only fallback: frame-agnostic, so the columns serve it (projected PAs included).
   for lane, col in ipairs(notes) do
     for _, evt in ipairs(col.events) do
-      if evt.pitch == pitch and not evt.parked then return col, lane end
+      if evt.pitch == pa.pitch and not evt.parked then return col, lane end
     end
   end
 end
 
+-- Dispatches on-take pas only; a parked one is seated from the stash.
 local function rebuildPA()
   for chan = 1, 16 do
     if dirt.has(chan) then
+      local takeLenL = time:toLogical(chan, time:length())
       for _, evt in ipairs(index.raw(chan).pas) do
         if dirt.covers(chan, evt.ppqL or evt.ppq, 'note') then
-          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt.pitch, evt.ppq)
+          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt, takeLenL)
           if noteCol then
             local colEvt = columnEvent(evt, { lane = lane })
             projectEvent(colEvt, chan)
             frame.spliceEvent(chan, lane, colEvt)
-          end
-        end
-      end
-      for _, spec in ipairs(frame.channels[chan].parked.pa or {}) do
-        if dirt.covers(chan, spec.ppqL or spec.ppq, 'note') then
-          local ppq = time:fromLogical(chan, spec.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], spec.pitch, ppq)
-          if noteCol then
-            frame.spliceEvent(chan, lane, columnEvent(spec, { lane = lane }))   -- the event is logical-born
           end
         end
       end
@@ -2838,6 +2827,7 @@ function rebuild.pipeline(context)
   rebuildExternals(external)
   if cm:get('trackerMode') then rebuildSamples() end
   seatStash(sources.fxParked)
+  rebuildPA()
 
   dirt.tails.clear()
   for chan = 1, 16 do if dirt.has(chan) then clipTails(chan) end end
@@ -2845,7 +2835,6 @@ function rebuild.pipeline(context)
   local onTakeHosts  = onTakeFxHosts()
   local fxOutWindows = buildFxWindows(sources.fxRegions, onTakeHosts)
   local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, fxInWindows, onTakeHosts, pbRangeCents)
-  rebuildPA()
 
   local fxOut = rebuildFx(fxOutWindows, sources.fxRegions, pbRangeCents)
 

@@ -10,9 +10,13 @@
 --
 -- The rule is the column's, not the note lane's. A cc column seats its parked ccs as a lane seats its
 -- parked notes, and park and restore flip the event in place, which is a content change like any other.
--- A channel's pb stream still holds its parked events in a list of its own, and tm publishes the
--- stream's whole population (`tm:authoredPb`) as it publishes a lane's. Its carry needs that list to
--- carry across the pass boundary, or a dirty channel re-mints it every pass and re-places its cells.
+-- A parked pa is seated the same way, flagged in its host's lane beside the host: its spec carries
+-- the lane, so the stash alone says where it sits. A pa parks with its host, so it parks only under a
+-- parked host in its own lane, and restore returns it to mm under the uuid it left with.
+--
+-- pb alone keeps its parked events in a list of its own, and tm publishes the stream's whole
+-- population (`tm:authoredPb`) as it publishes a lane's. Its carry needs that list to carry across
+-- the pass boundary, or a dirty channel re-mints it every pass and re-places its cells.
 --
 -- The fixture is a self-parking arp host at 480 on chan 1 lane 1, alone on its lane, and a plain
 -- note on chan 2 -- a second channel to dirty, so a pass can run without touching chan 1. The cc and
@@ -21,6 +25,7 @@
 
 local t = require('support')
 local generators = require('generators')
+local util = require('util')
 
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- replace-mode: parks its host
 
@@ -91,6 +96,49 @@ local function parkedPb(harness)
   h.tm:rebuild()
   t.eq(#h.tm:getChannel(1).parked.pb, 1, 'fixture check: the authored pb parked off the take')
   return h
+end
+
+local function lanePAs(h, lane)
+  local out = {}
+  for _, e in ipairs(h.tm:authoredLanes(1)[lane] or {}) do
+    if e.evType == 'pa' then out[#out + 1] = e end
+  end
+  return out
+end
+
+local function stashPAs(h)
+  local out = {}
+  for _, spec in ipairs(h.ds:get('fxParked') or {}) do
+    if spec.evType == 'pa' then out[#out + 1] = spec end
+  end
+  return out
+end
+
+local function mmPAs(h)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do if c.evType == 'pa' then out[#out + 1] = c end end
+  return out
+end
+
+local arpRegion = { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } }
+
+-- A plain host on chan 1 lane 2 (so a pa's lane is observable) carrying one pa at 120, then parked
+-- by an arp region; chan 2 holds one plain note. Hands back the pa's on-take event and its uuid.
+local function parkedHostWithPA(harness)
+  local h = harness.mk()
+  h.tm:addEvent(note(0, 60, 1, { lane = 2 }))
+  h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 70 })
+  h.tm:addEvent(note(0, 60, 2))
+  h.tm:flush()
+  local onTake = lanePAs(h, 2)[1]
+  t.truthy(onTake and not onTake.parked and onTake.uuid,
+    "fixture check: the pa sits on the take in its host's lane")
+  local uuid = onTake.uuid
+
+  h.ds:assign('fxRegions', arpRegion)
+  h.tm:rebuild()
+  t.eq(#harness.parkedNotes(h.tm, 1), 1, 'fixture check: the region parked the host')
+  return h, onTake, uuid
 end
 
 return {
@@ -266,6 +314,135 @@ return {
 
       t.truthy(ccColumn().cells == cells, 'the column carried its built cells rather than re-placing')
       generators.kinds.rep = nil
+    end,
+  },
+
+  {
+    -- Park flips the pa where it stands, as it does a cc: the event the lane held on the take is
+    -- the event it now holds parked. The stash spec carries the lane, so it can reseat there.
+    name = "a newly parked host's pa flips in place in its lane and leaves mm",
+    run = function(harness)
+      local h, onTake, uuid = parkedHostWithPA(harness)
+
+      local parked = harness.parkedPAs(h.tm, 1)
+      t.eq(#parked, 1, 'one parked pa on chan 1')
+      t.truthy(parked[1] == onTake, 'the parked pa is the on-take event, flipped where it stood')
+      t.truthy(holds(h.tm:authoredLanes(1)[2], onTake), "it sits in its host's lane")
+      t.eq(#mmPAs(h), 0, 'the pa left mm')
+      local stash = stashPAs(h)
+      t.eq(#stash, 1, 'the stash holds the pa')
+      t.eq(stash[1].lane, 2, 'with its lane')
+      t.eq(stash[1].uuid, uuid, 'and its uuid')
+    end,
+  },
+
+  {
+    name = 'a pass that leaves the parked pa alone keeps its lane table and its seat',
+    run = function(harness)
+      local h, pa = parkedHostWithPA(harness)
+      local lane = h.tm:authoredLanes(1)[2]
+      t.truthy(pa.parked and holds(lane, pa), 'fixture check: the pa sits parked in lane 2')
+
+      h.tm:addEvent(note(960, 64, 2)); h.tm:flush()
+
+      t.truthy(h.tm:authoredLanes(1)[2] == lane, "the lane carried, so tv's cell carry stands")
+      t.truthy(harness.parkedPAs(h.tm, 1)[1] == pa, 'and the pa stayed seated rather than being reseated')
+    end,
+  },
+
+  {
+    -- A wholesale pass starts from fresh columns, so the stash is the only source for the seat.
+    name = 'a wholesale pass reseats a parked pa from the stash in its lane',
+    run = function(harness)
+      local h = parkedHostWithPA(harness)
+
+      h.tm:rebuild(true)
+
+      local pas = lanePAs(h, 2)
+      t.eq(#pas, 1, "exactly one pa in the host's lane")
+      t.truthy(pas[1].parked, 'and it is flagged parked')
+      local spec = stashPAs(h)[1]
+      t.truthy(spec, 'fixture check: the stash still holds the pa')
+      t.truthy(util.deepEq(util.clone(pas[1], { parked = true }), spec),
+        'the seat is the stash spec, field for field')
+    end,
+  },
+
+  {
+    -- lane is display-only: rebuildPA overlays it at dispatch, so mm must not hold a stale copy.
+    name = 'restoring a parked pa returns it to mm under its own uuid, once in its lane',
+    run = function(harness)
+      local h, _, uuid = parkedHostWithPA(harness)
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+
+      local restored = mmPAs(h)
+      t.eq(#restored, 1, 'mm holds the one pa again')
+      t.eq(restored[1].uuid, uuid, 'under its original uuid')
+      t.eq(restored[1].lane, nil, 'and with no lane')
+      local pas = lanePAs(h, 2)
+      t.eq(#pas, 1, 'lane 2 holds exactly one pa')
+      t.falsy(pas[1].parked, 'and it is on the take')
+    end,
+  },
+
+  {
+    name = 'an mm pa added under an already-parked host parks the same pass',
+    run = function(harness)
+      local h = parkedHostWithPA(harness)
+
+      h.tm:addEvent({ evType = 'pa', ppq = 180, chan = 1, pitch = 60, vel = 90 }); h.tm:flush()
+
+      t.eq(#mmPAs(h), 0, 'the new pa is not in mm')
+      local seated
+      for _, e in ipairs(lanePAs(h, 2)) do if e.ppq == 180 then seated = e end end
+      t.truthy(seated and seated.parked, 'it sits flagged in the host\'s lane')
+      local stashed
+      for _, spec in ipairs(stashPAs(h)) do if spec.ppq == 180 then stashed = spec end end
+      t.truthy(stashed, 'and the stash holds it')
+    end,
+  },
+
+  {
+    -- A wholesale pass seats the host from the stash with no lane bound yet, and dispatch runs before
+    -- the lane-bound pass stamps one. So a foreign pa meeting that host on the same pass must bind
+    -- against the host's span as the lane defines it, not against a clip that is not there.
+    name = 'a foreign mm pa under a parked host parks on a wholesale pass',
+    run = function(harness)
+      local h = parkedHostWithPA(harness)
+
+      -- A foreign write behind mm's back (chan 1 is 0 on the wire), so load genuinely re-reads.
+      h.reaper.MIDI_InsertCC(h.fm:take(), false, false, 180, 0xA0, 0, 60, 90)
+      h.fm:load(h.fm:take())
+
+      local seated
+      for _, e in ipairs(lanePAs(h, 2)) do if e.ppq == 180 then seated = e end end
+      t.truthy(seated and seated.parked, "the foreign pa sits flagged in the host's lane")
+      t.eq(#mmPAs(h), 0, 'and has left mm')
+    end,
+  },
+
+  {
+    -- The parked host's span covers the pa, but the pa belongs to the on-take same-pitch note in
+    -- lane 1, which sits past the region: a pa parks with its host, not with any span over its pitch.
+    name = "a pa in another lane's on-take note stays on the take under a parked host's span",
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(0, 60, 1, { lane = 2, endppq = 480 }))
+      h.tm:addEvent(note(240, 60, 1, { lane = 1, endppq = 480 }))
+      h.tm:addEvent({ evType = 'pa', ppq = 300, chan = 1, pitch = 60, vel = 70 })
+      h.tm:flush()
+      t.eq(#lanePAs(h, 1), 1, 'fixture check: the pa sits in lane 1')
+
+      h.ds:assign('fxRegions', arpRegion)
+      h.tm:rebuild()
+      local parkedHosts = harness.parkedNotes(h.tm, 1)
+      t.truthy(#parkedHosts == 1 and parkedHosts[1].lane == 2 and parkedHosts[1].endppqC > 300,
+        "fixture check: the lane-2 host parked, its span over the pa's onset")
+
+      t.eq(#mmPAs(h), 1, 'the pa stays in mm')
+      t.eq(#stashPAs(h), 0, 'and out of the stash')
     end,
   },
 

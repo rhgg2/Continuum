@@ -769,10 +769,11 @@ runs it.
 1. **Extra columns** (`rebuildExtraColumns`)
 1. **Externals** (`rebuildExternals`)
 1. **Sample stamp** (`stampSamples`)
+1. **Stash seat** (`seatStash`)
+1. **PA dispatch** (`rebuildPA`)
 1. **Lane bounds** (`clipTails`)
 1. **Note host clips and windows** (`onTakeFxHosts`, `buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)
-1. **PA dispatch** (`rebuildPA`)
 1. **Fx expansion** (`rebuildFx`)
 1. **Tail walk** (`rebuildTails`)
 1. **Absorber reconciliation** (`rebuildPbs`)
@@ -905,6 +906,23 @@ inheritance freezes at stamp time. Only a note with no sample is stamped,
 and the sweep is dirt-gated: a wholesale channel walks every note, where
 interval dirt visits just the seeded uuids.
 
+### Stash seat
+
+`seatStash` seats the stash's parked notes, ccs and pas in their own
+columns, flagged, through `seatParked` (§ Lane occupancy). Notes and pas
+share a lane, so each kind's run touches only seats of its own `evType`.
+
+### PA dispatch
+
+`rebuildPA` attaches each on-take `pa` to the note column whose voice it
+modulates. It runs after column layout so the view and fx expansion read
+PAs inline, after externals so foreign-MIDI PAs find their host, and after
+the stash seat so a PA under an already-parked host finds that host's lane.
+Lane bounds have not run, so that host's span is bound by `clippedSpanEnd`
+rather than read off its `endppqC`. A parked PA is not dispatched: the stash
+seat holds it. Dispatch splices in order (`spliceEvent`), so nothing
+downstream re-sorts.
+
 ### Note host clips and windows
 
 The pass opens by seating the stash's parked notes and ccs in their columns.
@@ -976,17 +994,14 @@ back onto the take.
 A `pa` rides its host note, so it parks exactly when the host does:
 deleted from the take (silent — a stale PA against a fresh derived
 stream is meaningless; the generator owns any new realisation PAs),
-stashed in `fxParked` tagged `pa`, reconciled against the parked-note
-set rather than in its own window pass.
-
-### PA dispatch
-
-`rebuildPA` attaches each `pa` to the note column whose voice it
-modulates. It runs after column layout so the view and fx expansion read
-PAs inline, and after externals so foreign-MIDI PAs find their host. A parked PA is gone from `mm`, so it is re-projected from
-`frame.channels[chan].parked.pa` into its parked host's lane — visible
-off-take, riding the note column as an on-take PA would. Both passes
-splice in order (`spliceEvent`), so nothing downstream re-sorts.
+flipped in place in its host's lane as a cc is, and stashed in `fxParked`
+with its lane and uuid. It is reconciled against the parked notes in its
+own lane rather than in a window pass: it parks only under a parked host
+of its pitch whose clip covers its onset. Its park and restore write no
+dirt seed, as a cc's don't: a parked PA stays in the lane, so the
+continuous streams read the same population either way. Restore returns
+it to `mm` under its uuid and without its lane, which is display-only and
+overlaid at dispatch.
 
 ### Fx expansion
 
@@ -1347,13 +1362,11 @@ own note target, so they carry no note window, and the note pass sources them se
 fx-host set (the host clips), gated by `generators.parksNotes` and deduped against the
 window-driven scan by event identity.
 
-The PA scan closes the rule from the mm side: a PA rides its host note, so a newly parked host's PAs
-are exactly those in the host's logical span. `mm:ccsRawBetween(chan, loPpq, hiPpq)` binary-searches
-the maintained cc index (raw-sorted, hole-free right after the pipeline's last reindex — every
-committed stage ends in one) for that channel's slice; each parked member's span converts to raw via
-`tm:fromLogical` before the query, and since PAs carry no delay the raw bound equals the logical
-span. The member's own pitch and logical span still gate each candidate — the bound only
-replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, not channel cc count.
+The PA scan closes the rule from the lane side: a PA rides its host note, so a newly parked host's
+PAs are exactly the on-take PAs in its lane at its pitch, inside its logical clip. Dispatch has
+already seated every PA in a lane, so the scan reads the lanes rather than mm, all in the logical
+frame. It gathers each lane's parked hosts once and skips a lane holding none, so work scales with
+the lanes that hold parked hosts, not the channel's PA count.
 
 ## Lane occupancy
 
@@ -1400,13 +1413,13 @@ population and a parked event constrains a move like any other. The chan-wide sa
 skips flagged events. Two notes of one pitch on different lanes passing each other is what lanes
 are for.
 
-The frame owns both sides. A parked note or cc carries with its column, and a wholesale channel,
+The frame owns both sides. A parked note, cc or pa carries with its column, and a wholesale channel,
 whose columns are re-read from mm, has them seated again from the stash at the pass head — so the
-clip reads a true lane before the park stage touches it. Every channel carries its parked pb and pa
-lists across the pass boundary, dirty or clean, since those events are off-take and a wholesale mm
-re-read has no claim on them. Every reader of those runs after the park stage, so a re-mint would
-cost nothing but identity, which is the whole of what the memo is keyed on. `installParked` replaces
-a list whenever its contents change, so a stale union cannot be reached.
+clip reads a true lane before the park stage touches it. Every channel carries its parked pb list
+across the pass boundary, dirty or clean, since those events are off-take and a wholesale mm re-read
+has no claim on them. Every reader of it runs after the park stage, so a re-mint would cost nothing
+but identity, which is the whole of what the memo is keyed on. `installParked` replaces the list
+whenever its contents change, so a stale union cannot be reached.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column from
 mm — `rebuildInternals` routes it to the fx stage's existing set instead.
@@ -1656,7 +1669,7 @@ table — the read-only walks (`enumerateHosts`, `channelStreams`,
 `onsetsIn`) do not care, and neither does park, which flips the event the
 scan saw rather than removing it from the table.
 
-Parked notes and ccs obey the same rule, seated in their columns, by a
+Parked notes, ccs and pas obey the same rule, seated in their columns, by a
 different route. Nothing owns them the way a mutator owns a column:
 `seatParked` seats the stash once a pass, at the pass head, from the
 document. So the discipline is a comparison rather than an enumeration, a
@@ -1672,7 +1685,7 @@ renews a cc column as it does a lane. A park sets the flag on the on-take
 event and sheds its realisation fields, which leaves the event equal to the
 spec it stashes, so the next head seat holds it; a restore clears the flag.
 
-The parked pb and pa lists take the rule as a whole-list comparison.
+The parked pb list takes the rule as a whole-list comparison.
 `installParked` builds each channel's candidate list and installs it only
 where the contents differ from what stands; otherwise the standing list, and
 the events in it, carry. The match is positional, since a population that
@@ -1762,9 +1775,10 @@ above is defence in depth.
 
 ## PA binding
 
-`findNoteColumnForPitch(chan, pitch, ppq)` prefers the **active voice**
-— a note whose interval contains `ppq` with matching pitch. If no voice
-is active, any column containing any note of that pitch accepts. PAs
+`findNoteColumnForPitch(channel, pa, takeLenL)` prefers the **active voice**
+— an on-take note whose interval contains the PA's onset with matching
+pitch, then a parked one whose lane bound does. If no voice is active,
+any column containing any on-take note of that pitch accepts. PAs
 with no matching pitch anywhere in the channel are dropped.
 
 Ownership in um is a separate question from column binding, and um tests
@@ -1822,7 +1836,8 @@ everything else by `(evType, chan, cc, pitch, ppq)`.
 events on one `(chan, ppq)` — one per host note. It is `pitch` and not
 `lane` because lane is a display attribute, and keying on it would
 mint a distinction the take cannot hold: two parked PAs differing only
-by lane would collapse into one the moment they were restored.
+by lane would collapse into one the moment they were restored. A PA spec
+carries its lane all the same, as the seat's address, and restore strips it.
 
 A stash spec is **logical only**. It drops realised `ppq`/`endppq` and derives
 them fresh on restore via `fromLogical` under current swing, so a swing change

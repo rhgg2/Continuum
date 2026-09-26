@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-26** — A pa parks only under a parked host of its pitch in its own lane, over any
+  same-pitch parked span on its channel; the cross-lane match could park a pa that belongs to an
+  on-take note in another lane. Its spec keeps its uuid and lane, and restore returns it to mm under
+  that uuid with the lane stripped, since lane is display-only. Park and restore write no dirt seed,
+  as a cc's don't: the parked pa stays in the lane, so the continuous streams read the same
+  population.
+
 - **2026-09-26** — PA dispatch binds an on-take pa to a parked host over the host's lane bound,
   computed at dispatch with frame.clippedSpanEnd over the lane's events, since dispatch runs ahead
   of the lane bounds that stamp endppqC. Parking leaves lane membership alone, so the computed bound

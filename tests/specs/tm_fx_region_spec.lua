@@ -1073,7 +1073,7 @@ return {
         for _, spec in ipairs(stashOfType(h, 'pa')) do if spec.pitch == pitch then return spec end end
       end
       local function parkedCell(pitch)
-        for _, cell in ipairs(h.tm:getChannel(1).parked.pa) do if cell.pitch == pitch then return cell end end
+        for _, cell in ipairs(harness.parkedPAs(h.tm, 1)) do if cell.pitch == pitch then return cell end end
       end
       t.eq(#stashOfType(h, 'pa'), 2, 'both PAs parked with their hosts')
 
