@@ -340,6 +340,35 @@ local function denseRamp()
   return { { kind = 'denseRamp' } }
 end
 
+-- denseRamp's cc twin: a cc10-replace stage seating RAMP_N collinear breakpoints, 2 apart in value.
+-- Registers the kind; the caller clears it after the freeze.
+local function denseCcRamp()
+  generators.kinds.denseCcRamp = {
+    expand = function(stream)
+      local startL, endL, delta = stream.window[1], stream.window[2], {}
+      for i = 0, RAMP_N - 1 do
+        util.add(delta, { ppq = startL + (endL - startL) * i / (RAMP_N - 1),
+                          val = 20 + i * 2, shape = 'linear' })
+      end
+      return { notes = {}, delta = delta }
+    end,
+    mode = 'replace', dest = 10, label = 'Dense Cc Ramp', defaults = {}, fields = {},
+  }
+  return { { kind = 'denseCcRamp' } }
+end
+
+-- Every cc on the wire for one controller in a ppq span, sorted, as { ppq, val }.
+local function wireCcs(h, chan, cc, fromPpq, toPpq)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'cc' and c.chan == chan and c.cc == cc and c.ppq >= fromPpq and c.ppq <= toPpq then
+      out[#out + 1] = { ppq = c.ppq, val = c.val }
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
 -- A pb-replace stage seating distinguishable values on the window's last two ticks, so both compete for
 -- the one tick material may hold once the close takes its own. Steps 40 cents apart:
 -- neither is droppable inside tolerance. Registers the kind; the caller clears it after the freeze.
@@ -2155,12 +2184,11 @@ return {
     end,
   },
 
-  -- The seat is markerless on the wire and named in RAM: um's entry carries the producing host, so
-  -- every reader downstream tests a field rather than re-asking the geometry. The name is not
-  -- persisted -- a round-trip re-mints every plain cc's uuid -- so the wholesale path re-derives it
-  -- from the census, and the two askings have to agree.
+  -- A seat carries no name, on the wire or in RAM: the census alone recognises it. A round-trip
+  -- re-mints every plain cc's uuid, so the wholesale path meets the seats as strangers and has only
+  -- the persisted census to go on. see docs/generators.md § Route-by-window
   {
-    name = 'fx region (cc): a seat names its producing host in RAM, re-derived from the census on reload',
+    name = 'fx region (cc): a seat stays out of the column by the census alone, across a reload',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.ccA = {
@@ -2175,31 +2203,36 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'r1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'ccA' } } } })
       h.tm:rebuild()
-      generators.kinds.ccA = nil
 
-      -- ppq -> the host named on um's entry, read through tm's uuid door.
-      local function named()
+      -- The wire's cc10 by ppq, and the ppqs the cc10 column holds, parked included: a seat that
+      -- reached the column would sit in the window, and the park stage would take it for authored.
+      local function wire()
         local out = {}
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.evType == 'cc' and c.cc == 10 and c.chan == 1 then
-            local entry = h.tm:byUuid(c.uuid)
-            out[c.ppq] = { host = entry and entry.derived, plain = c.plain }
-          end
+          if c.evType == 'cc' and c.cc == 10 and c.chan == 1 then out[c.ppq] = c end
         end
         return out
       end
+      local function column()
+        local out = {}
+        for _, e in ipairs(h.tm:getChannel(1).onTake.ccs[10].events) do util.add(out, e.ppq) end
+        return out
+      end
 
-      local born = named()
-      t.truthy(born[0], 'the region seated the window start')
-      t.eq(born[0].host, 'r1',   'a seat born this pass names the host that emitted it')
-      t.eq(born[0].plain, true,  'and the name never reaches the wire -- no eventMeta sidecar')
-      t.eq(born[300].host, nil,  'the authored cc beyond the window names nobody')
+      t.truthy(wire()[0], 'the region seated the window start')
+      t.eq(wire()[0].plain, true,  'markerless -- no eventMeta sidecar')
+      t.deepEq(column(), { 300 },  'the column holds the authored cc beyond the window and no seat')
 
-      h.fm:reload()   -- take round-trip: index.load re-mints every plain uuid, losing the RAM names
-      local after = named()
-      t.eq(after[0].host, 'r1',  'the wholesale path re-derives the name from the persisted census')
-      t.eq(after[0].plain, true, 'still markerless after the round-trip')
-      t.eq(after[300].host, nil, 'and the authored cc is still nobody\'s')
+      -- An unchanged take converges without a re-read, so the take gains a cc elsewhere first, as a
+      -- REAPER edit would land it; a changed take re-reads every channel wholesale. The stranger is
+      -- markerless too, outside any window: the census is what tells it from a seat.
+      h.reaper.MIDI_InsertCC(h.fm:take(), false, false, 960, 0xB0, 2, 7, 64)
+      h.fm:reload()
+      t.eq(wire()[0].plain, true,  'still markerless after the round-trip')
+      t.deepEq(column(), { 300 },  'and the census still keeps the seat out, the authored cc in')
+      t.eq(h.tm:getChannel(3).onTake.ccs[7].events[1].ppq, 960,
+        'a markerless cc no window covers is foreign, not a seat: it reaches its column')
+      generators.kinds.ccA = nil   -- registered to here: the reload re-expands the region
     end,
   },
 
@@ -3788,6 +3821,24 @@ return {
       -- Every seat is inside the window to begin with, where the rect a mint claims can cover it --
       -- freeze moves nothing. see docs/generators.md § Route-by-window
       t.deepEq(wirePbs(h, 1, 0, 240), { before[1], before[RAMP_N], before[RAMP_N + 1] },
+        'a collinear run inside tolerance comes back as its endpoints, plus the close that breaks the run')
+    end,
+  },
+
+  {
+    -- A cc seat is curve material as a pb seat is: both are recognised by the window alone, so the
+    -- thin reads the one stream as it reads the other. see docs/generators.md § Route-by-window
+    name = 'freeze to group: a dense cc curve re-seats sparse, as a pb curve does',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h, { fx = denseCcRamp() })
+      local before = wireCcs(h, 1, 10, 0, 240)
+      t.eq(#before, RAMP_N + 1, 'the ramp seats a breakpoint every 10 ticks, and tm closes to rest above them')
+
+      t.truthy(h.tm:freezeToGroup('fxr-1'), 'the freeze reports its members')
+      generators.kinds.denseCcRamp = nil
+
+      t.deepEq(wireCcs(h, 1, 10, 0, 240), { before[1], before[RAMP_N], before[RAMP_N + 1] },
         'a collinear run inside tolerance comes back as its endpoints, plus the close that breaks the run')
     end,
   },

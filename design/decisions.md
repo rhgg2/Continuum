@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — A cc seat is recognised as a pb seat is, geometrically each time it is met (no
+  ppqL, and a census window covers its raw onset), over the host uuid the wholesale walk and
+  expansion wrote onto um's entry in RAM. One test serves both streams and nothing needs re-deriving
+  after a round-trip; the name also kept every cc seat out of freeze's thin, which read it as an
+  absorber tag.
+
 - **2026-09-27** — Fx expansion takes the orphan diff per dirty channel ahead of the host gate, and
   a pb orphan's delete seeds its stream, over the pb sweep keyed by whole-window geometry. The sweep
   churned every seat of a shrunk window and deleted the absorbers inside it; the seed is what brings

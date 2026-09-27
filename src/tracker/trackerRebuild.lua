@@ -243,8 +243,8 @@ local function spliceChannelCCs(chan)
   local refills = {}
   local cols = frame.channels[chan].onTake
 
-  -- pbs carry no delay, so a row's raw seat is its logical one reswung; a markerless seat has no
-  -- ppqL, so the match leaves it out.
+  -- pbs carry no delay, so a row's raw seat is its logical one reswung. A seat has no ppqL, so the
+  -- match leaves it out, here and in the cells below.
   local pbRows, pbs = dirt.ppqs(chan, 'pb'), index.raw(chan).pbs
   for _, ppqL in ipairs(pbRows) do
     local ppq = time:fromLogical(chan, ppqL)
@@ -283,15 +283,15 @@ local function spliceChannelCCs(chan)
   end
 end
 
--- A markerless seat a previous window left on the wire: realisation, recognised by the window alone.
-local function isPbSeat(entry, fxInWindows)
-  return entry.evType == 'pb' and entry.ppqL == nil and fxInWindows.ownsRaw('pb', entry.chan, nil, entry.ppq)
+-- A markerless pb or cc a previous window left on the wire: realisation, recognised by the window alone.
+local function isSeat(entry, fxInWindows)
+  return entry.ppqL == nil and fxInWindows.ownsRaw(entry.evType, entry.chan, entry.cc, entry.ppq) ~= nil
 end
 
 -- Reconciles ppq and ppqL per the swing rules; see docs/trackerManager.md § CC walk.
 local function reconcileCcPpq(entry, fxInWindows, ccWrites)
   local chan = entry.chan
-  if entry.derived or isPbSeat(entry, fxInWindows) then return nil end
+  if entry.derived or isSeat(entry, fxInWindows) then return nil end
   if dirt.swing.has(chan) and entry.ppqL ~= nil then
     local newPpq = time:fromLogical(chan, entry.ppqL)
     if newPpq == entry.ppq then return nil end
@@ -308,17 +308,14 @@ end
 -- pas reconcile only; see docs/trackerManager.md § CC walk
 local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
   local raw = index.raw(chan)
-  index.withDeferredSort(function()
-    for cc, list in pairs(raw.ccs) do
-      for _, entry in ipairs(list) do
-        index.assign(entry, 'derived', fxInWindows.ownsRaw('cc', chan, cc, entry.ppq))
-        if not entry.derived then
-          local update = reconcileCcPpq(entry, fxInWindows, ccWrites)
-          appendCcEvent(entry, update)
-        end
+  for _, list in pairs(raw.ccs) do
+    for _, entry in ipairs(list) do
+      if not isSeat(entry, fxInWindows) then
+        local update = reconcileCcPpq(entry, fxInWindows, ccWrites)
+        appendCcEvent(entry, update)
       end
     end
-  end)
+  end
   for _, list in ipairs{ raw.ats, raw.pcs } do
     for _, entry in ipairs(list) do
       if not entry.derived then
@@ -328,7 +325,7 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
     end
   end
   for _, entry in ipairs(raw.pbs) do
-    if not entry.derived and not isPbSeat(entry, fxInWindows) then
+    if not entry.derived and not isSeat(entry, fxInWindows) then
       local update = reconcileCcPpq(entry, fxInWindows, ccWrites)
       -- A foreign pb has no cents sidecar: its intent is what it sounds less the previous emission's
       -- detune. see docs/trackerManager.md § CC walk
@@ -1537,16 +1534,6 @@ local function rebuildFx(fxOutWindows, fxInWindows, fxRegions, pbLimCents)
     diffEvents(fxInCCs, fxCCs, ccWrites,
       function(x) return util.key(x.cc, x.ppq, x.val, x.shape, x.tension) end)
     ccWrites.commit()
-    -- Only a fresh seat has a uuid from mm:add, so a kept seat keeps its tag. `derived` is no cc
-    -- field, so it goes on um's entry and never reaches the record. see § Route-by-window
-    index.withDeferredSort(function()
-      for _, entry in ipairs(fxCCs) do
-        if entry.uuid then
-          index.assign(index.byUuid(entry.uuid), 'derived',
-                       fxOutWindows.ownsRaw('cc', chan, entry.cc, entry.ppq))
-        end
-      end
-    end)
   end
 
   for chan = 1, 16 do

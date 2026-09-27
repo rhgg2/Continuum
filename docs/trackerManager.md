@@ -887,19 +887,11 @@ in cents, less the previous emission's base-voice detune at its onset
 them as `val` on the same pass. Foreign pbs reach only the wholesale path, so
 the interval path derives nothing.
 
-A seat is recognised once and then named. The wholesale path asks `ownsRaw` of
-the persisted census over the channel's whole cc set and writes the answer onto
-the entry's `derived` — the uuid of the window owning it, nil where none does —
-and both paths route out on that field rather than re-asking the geometry. The
-name is um's alone: `derived` is no cc field, so mm's clone never restates it,
-and stamping it through an assign would promote the seat off `plain` and mint
-the very sidecar § Route-by-window exists to avoid. A take round-trip re-mints
-every plain cc's uuid and the names go with it, which is why the wholesale path
-re-derives rather than trusting what it holds; an interval-dirty channel carries
-the names it has. Fx expansion stamps a seat it mints from the pass's own window
-set — the same predicate over the set the census is about to become — so birth
-and re-derivation agree by construction. Either way the name files the seat
-under its host, as a derived note's does (§ The host gate).
+A seat is recognised by its geometry each time it is met: pb and cc alike, it
+is a markerless record whose raw onset a window of the persisted census covers
+(`ownsRaw`). The wholesale path asks that of every cc and pb it walks, so its
+answer survives a take round-trip, which re-mints every plain cc's uuid. The
+interval path refills by `ppqL` match, which a markerless seat never meets.
 
 A reconcile writes through the walk's mm batch and hands its move back as an
 overlay the column clone carries, rather than mutating the record the walk is
@@ -913,8 +905,8 @@ indistinguishable, so it's absorbed the same way (docs/generators.md
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
 The routed-out seats go nowhere from the walk. Fx expansion gathers its existing
-cc side off the file the derived notes come off too, per producing host
-(§ The host gate). A kept host's seats appear in neither the existing set nor
+cc side by the same test, per running host: the markerless ccs inside its
+window. A kept host's seats appear in neither the existing set nor
 the predicted one — emission clips to the emit scope — and the reconcile deletes
 from `existing` alone, so they are never visited and never rewritten.
 
@@ -1619,10 +1611,9 @@ point list, so its reach is coarser: a lane-1 or region seed runs every pb host
 ending after it, and a running base-voice emitter pulls that bound back to its
 own window start (`docs/tuning.md` § Seat-span-scoped onset walk).
 
-Notes and the ccs routed out of the columns (§ CC walk) file together, so a
-gather names the kind it reconciles and takes that slice. Those two are the
-types whose `derived` is a host uuid: on a pb it names the absorber pool and on
-a pc its own kind, and a marker is no host to file under.
+Only notes file, a note being the one type whose `derived` is a host uuid: on a
+pb it names the absorber pool and on a pc its own kind. Expansion finds a host's
+cc seats by geometry, inside its window (§ CC walk).
 
 Addressing the existing set by producer rather than by window is what makes that
 cheap. A derived note names its host; recovering the window it used to occupy

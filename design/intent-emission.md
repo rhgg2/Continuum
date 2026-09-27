@@ -48,6 +48,9 @@ Moved to `docs/trackerManager.md` § Two movements.
    absorber and `'pc'` on a synthesised pc, and a cc carries none. um's host file thus holds derived
    notes alone (`docs/trackerManager.md` § The host gate).
 
+1. A synthesised pc carries no `ppqL`. The pass synthesises it at its winning note's raw onset, and
+   its `derived` marks it as realisation.
+
 1. The CC walk leaves seats out of the columns. The wholesale path applies the seat test to each pb
    and cc, and the interval path matches its refills by `ppqL`, which no seat has.
 

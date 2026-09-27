@@ -28,7 +28,7 @@
 --shape:   pb       { ppq, val=intent cents, cents, detune, [shape], [tension] }; detune is emission's cue
 --shape:   pa       { ppq, pitch, vel }
 --shape: a note column's events = its notes and its pas interleaved; evType=='pa' tells them apart
---shape: pb.derived = 'absorber' on an absorber (cc sidecar) or on a markerless seat (RAM-only)
+--shape: pb.derived = 'absorber' on an absorber (cc sidecar); the pb pass tags its own clones of seats too, never um's
 --shape: pa on the wire = an mm cc, evType='pa', its vel the aftertouch value
 
 --shape: fxParked = one off-take stash for every replace park; a spec is the authored event, by kind:
@@ -1319,9 +1319,9 @@ local function thinSeats(chan, entries)
       local endRaw   = tm:fromLogical(chan, entry.endppq, 0)
       local points   = {}
       for _, e in ipairs((isPb and raw.pbs or raw.ccs[entry.cc]) or {}) do
-        -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
-        -- and not freeze's to delete. The pb column holds no absorber, so groupMembers agrees.
-        if not e.derived and e.ppq >= startRaw and e.ppq < endRaw then
+        -- Curve material is the window's seats, markerless. An absorber carries a ppqL: the pb pass
+        -- re-derives it after the freeze, so it is not freeze's to delete.
+        if e.ppqL == nil and e.ppq >= startRaw and e.ppq < endRaw then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
           util.add(points, { ppq = e.ppq, shape = e.shape, tension = e.tension, evt = e,

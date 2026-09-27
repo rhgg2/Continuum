@@ -39,16 +39,10 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+**One seat test recognises pb and cc seats**, then synthesised pcs drop `ppqL` — brief in
+`plan/IMPL.md`. (design § Continuous seats 1–3)
 
 ## Queued (current phase; one-liners)
 
-1. **One seat test recognises pb and cc seats** (§ Continuous seats 1–3) — `ppqL == nil` and
-   `ownsRaw` over the previous census replaces `isPbSeat` and the CC walk's cc tag
-   (`trackerRebuild.lua` ~290, ~317). The wholesale path applies the test to each pb and cc, the
-   interval path matches its refills by `ppqL`, and fx expansion stamps no `derived` on the seats it
-   mints. A cc then carries no `derived`, so `thinSeats` takes cc seats as curve material. Spec,
-   written red first: freeze-to-group thins a cc curve as it thins a pb one (`tm_fx_region_spec`,
-   beside "freeze to group: the dense curve re-seats sparse in one flush").
 
 
