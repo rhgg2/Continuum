@@ -79,28 +79,3 @@ Moved to `docs/trackerManager.md` § Span-covered fx scans, § CC walk and § PC
 ## The stages
 
 Moved to `docs/trackerManager.md` § The pipeline.
-
-## Open
-
-1. **Edits write intent.** tv's edit verbs write authored events into the frame directly, and the pass emits from the
-   frame; reconstruction runs only on a wholesale read, undo included. This is the direction the
-   model grows in, and it would retire most of interval materialisation and `colEvt` stamping. It
-   costs the rule that only the pass writes `frame.channels` (`docs/trackerManager.md` § The frame
-   handle), and the edit side's eager logical-to-raw translation.
-
-1. **Raw rederivation under stale swing.** `rebuildInternals` and the CC walk rederive raw onsets
-   from logical under stale swing. By this model that is emission; which stage takes it is
-   unsettled.
-
-1. **The column table's name.** `onTake` names the intent that sounds, and the columns hold all of
-   it.
-
-1. **The pattern editor's curve readback.** It reads `val + detune` off the pb column. Whether a
-   readback of intent should include the cue is unsettled.
-
-1. **PAs ahead of a delayed note-on.** A PA belongs to the note whose logical span covers it
-   (`docs/trackerManager.md` § PA binding), yet it realises at its own seat, with no delay. A delay
-   reaches 9999 millibeats, so a host's PAs on the rows before its delayed note-on reach the take
-   before its voice exists. The lead candidate is the prevailing value — the last such PA realises
-   at the note-on, and those before it do not sound. A PA seated off `fromLogical(ppqL)` meets the
-   rebuild rule (`docs/timing.md` § Rebuild rule), which reads the divergence as stale swing.

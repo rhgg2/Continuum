@@ -281,3 +281,26 @@ command that still exists.
 from the tree's own letters and nothing else mints or caches one, so a
 re-cut would change the declaration and restamp rather than teach a
 second party how a route is spelled.
+
+## Edits write intent — reconstruction only on a wholesale read
+
+> From `design/intent-emission.md` § Open. Read `docs/trackerManager.md`
+> § Two movements for intent and emission, and § Interval materialisation
+> for how a pass reconstructs the spans an edit dirtied.
+
+The frame holds a take's intent, and a pass rebuilds it from mm and the
+stash before emitting from it. tv's edit verbs could write authored
+events into the frame directly instead, so the pass emits from the frame
+as it stands and reconstruction runs only on a wholesale read, undo
+included. This is the direction the model grows in, and it would retire
+most of interval materialisation and `colEvt` stamping.
+
+What it costs is the rule that only the pass writes `frame.channels`
+(`docs/trackerManager.md` § The frame handle), and with it the edit
+side's eager logical-to-raw translation, which would move into emission.
+
+**The obligation now:** each edit verb keeps recording the spans it
+changed as it stages its mm writes, and nothing outside the pass writes
+`frame.channels`. The dirt journal then stays the diff between
+successive intents, which is the record an edit writing intent would
+hand the pass in place of reconstruction.

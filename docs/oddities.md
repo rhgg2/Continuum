@@ -176,6 +176,29 @@ spec fixtures. So the frame it is measured in, logical and beside the
 by anything that exercises it. The first authoring path inherits that
 choice rather than making it.
 
+### A PA ahead of its host's delayed note-on does not sound
+
+> **gap** · tm · 2026-09-27
+
+A PA belongs to the note whose logical span covers it (`docs/trackerManager.md`
+§ PA binding), yet it realises at its own seat with no delay. A delay
+reaches 9999 millibeats, so a host's PAs on the rows before its delayed
+note-on reach the take before its voice exists. The lead candidate is
+the prevailing value — the last such PA realises at the note-on, and
+those before it do not sound. Seating a PA off `fromLogical(ppqL)`
+instead meets the rebuild rule (`docs/timing.md` § Rebuild rule), which
+reads the divergence as stale swing.
+
+### Raw rederivation under stale swing sits outside emission
+
+> **accepted** · tm · 2026-09-27
+
+`rebuildInternals` and the CC walk rederive raw onsets from logical
+under stale swing. Turning intent into raw is emission's work
+(`docs/trackerManager.md` § Two movements), yet both run as part of
+reading intent in, and no emission stage owns it. Nothing misbehaves by
+it; which stage should take it is unsettled.
+
 ## Tuning
 
 ### The octave field's budget ignores the `octaveStep` bump
