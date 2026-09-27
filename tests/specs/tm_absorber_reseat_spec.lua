@@ -322,4 +322,40 @@ return {
       t.deepEq(seatsOn(h, 1), before, 'the kept host\'s seats stand: nothing of the pass names them')
     end,
   },
+
+  -- Every seat is covered by a real pb, else by the fake already standing there, else a new one
+  -- (docs/tuning.md § Absorber reconciliation) -- whichever side of the seat scope it falls on. A
+  -- ramping onset's dual point sits one tick below the onset, and a pb seed's gap opens on the
+  -- authored pb before it: where that pb stands on the onset, the gap holds the onset but not its
+  -- dual point.
+  {
+    name = 'a dual point one tick below its seat span adopts the fake standing there, no rival',
+    run = function(harness)
+      -- 0 -> 100 cents ramps into the detune onset at 480, where the authored 100 stands and covers
+      -- the onset seat itself. Only the dual point at 479 takes a fake.
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0,   chan = 1, evType = 'pb', val = 0,        cents = 0,   shape = 'linear' },
+        { ppq = 480, chan = 1, evType = 'pb', val = 2 * rawFor50, cents = 100, shape = 'step' },
+      } } }
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 100,
+                      detune = 20, delay = 0, lane = 1 })
+      h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      local function seatsAt(ppq)
+        local out = {}
+        for _, seat in ipairs(seatsOn(h, 1)) do
+          if seat.ppq == ppq then out[#out + 1] = seat end
+        end
+        return out
+      end
+      t.eq(#seatsAt(479), 1, 'fixture check: the ramping onset seats its dual point')
+
+      -- An authored pb past 480: its gap opens on the 100 at the onset, so 479 lies outside it.
+      h.tm:addEvent({ evType = 'pb', ppq = 960, chan = 1, val = 30 }); h.tm:flush()
+      t.eq(#seatsAt(479), 1, 'one pb at the dual point: the standing fake was adopted, no rival minted')
+    end,
+  },
 }

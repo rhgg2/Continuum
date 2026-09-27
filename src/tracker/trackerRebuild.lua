@@ -2115,9 +2115,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
   local extras = extraColumns or {}
   local pbWrites = mmBatch()
 
-  -- Seat the base voice's detune stream, match absorbers to the seats, and stage the consolidated
-  -- assign.
-  local function deriveChan(chan, pbs, replaceWins, seatSpans, baseVoice, unparked)
+  -- Seat the base voice's detune stream, match the previous emission's pbs to the seats, and stage
+  -- the consolidated assign.
+  local function deriveChan(chan, replaceWins, seatSpans, baseVoice, unparked)
     local replaceWinAt, inSeatWindow, inKeptRange =
       replaceWins.replaceWinAt, replaceWins.inSeatWindow, replaceWins.inKeptRange
 
@@ -2140,16 +2140,6 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       if onsetAt[ppq + DUAL_POINT_TICK] then return inKeptRange(ppq + DUAL_POINT_TICK) end
       return inKeptRange(ppq)
     end
-    -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
-    -- generates no seat here; those kept-boundary seats stand from last pass.
-    for i = #pbs, 1, -1 do
-      if fencedPb(pbs[i].ppq) then table.remove(pbs, i) end
-    end
-
-    -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
-    -- live window covers it or its window's host no longer runs.
-    local unparkedUuid = {}
-    for _, p in ipairs(unparked) do unparkedUuid[p.evt.uuid] = true end
 
     -- Prevailing cents at any ppq: the replace curve inside a window, else the unparked authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
@@ -2249,6 +2239,25 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       end
     end
 
+    -- Clones carry the index entry's uuid and origShape, naming their source as the pass rewrites shape.
+    -- The gather also takes whatever stands at a seat (a dual point can fall a tick below its span), so a seat never mints a rival pb.
+    local pbs = {}
+    for _, entry in ipairs(index.raw(chan).pbs) do
+      -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
+      -- generates no seat here; those kept-boundary seats stand from last pass.
+      if (inSeatScope(seatSpans, entry.ppq) or seats[entry.ppq]) and not fencedPb(entry.ppq) then
+        local pb = util.clone(entry)
+        pb.origShape = entry.shape
+        util.add(pbs, pb)
+      end
+    end
+    util.sortByPPQ(pbs)
+
+    -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
+    -- live window covers it or its window's host no longer runs.
+    local unparkedUuid = {}
+    for _, p in ipairs(unparked) do unparkedUuid[p.evt.uuid] = true end
+
     -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); an absorber
     -- standing at a seat is adopted, an unfilled seat mints one, and the leftovers are deleted.
     local realAt, pool = {}, {}
@@ -2256,11 +2265,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
       -- absorber matching below adopts or deletes it.
       if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
-      if pb.derived then
-        -- Pool = in-scope absorbers plus any absorber standing at a computed seat, so a seat can
-        -- never miss its standing absorber and mint a duplicate.
-        if inSeatScope(seatSpans, pb.ppq) or seats[pb.ppq] then util.add(pool, pb) end
-      else realAt[pb.ppq] = true end
+      if pb.derived then util.add(pool, pb) else realAt[pb.ppq] = true end
     end
     for ppq in pairs(realAt) do seats[ppq] = nil end
 
@@ -2330,25 +2335,13 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       table.sort(derivedBaseVoice, index.order)   -- the union's cursors assume ppq order of both sources
       local baseVoice = baseVoiceUnion(chan, derivedBaseVoice, carriedFor(fxOut.ran[chan]))
 
-      -- Replace windows, unparked pbs and seat spans come ahead of the gather. A derived base voice
-      -- in the pass's own output ungates the channel (seatSpans nil).
+      -- A derived base voice in the pass's own output ungates the channel (seatSpans nil).
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
       local unparked    = unparkedPbsFor(chan)
       local seatSpans   -- nil = ungated
       if #derivedBaseVoice == 0 then seatSpans = seatScope(chan, replaceWins, baseVoice, unparked) end
 
-      -- Each pb of the previous emission rides its own clone through the pass, carrying the index
-      -- entry's uuid so a mutated clone still names its source; origShape, as the pass rewrites shape.
-      local pbs = {}
-      for _, entry in ipairs(index.raw(chan).pbs) do
-        if inSeatScope(seatSpans, entry.ppq) then
-          local pb = util.clone(entry)
-          pb.origShape = entry.shape
-          util.add(pbs, pb)
-        end
-      end
-      util.sortByPPQ(pbs)
-      deriveChan(chan, pbs, replaceWins, seatSpans, baseVoice, unparked)
+      deriveChan(chan, replaceWins, seatSpans, baseVoice, unparked)
 
       -- An out-of-scope column pb keeps last pass's cue: no base voice around it moved.
       for _, p in ipairs(unparked) do
