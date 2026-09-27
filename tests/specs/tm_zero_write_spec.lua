@@ -10,12 +10,14 @@
 -- themselves. The deepEq guards at the fxParked/fxRealisedWindows assign sites and
 -- the content-keyed reconcile are the production mechanism; this pins they hold.
 --
--- Pinned on both interval-dirt phase-0 fixtures so the property spans both take
--- shapes: the macro-heavy glasswork (fx/pbs/ccs-bound -- all 9 generators, an
--- fx chain, a canon group, 53EDO detune) and the dense single-channel
--- HAMMERKLAVIER (internals/tails-bound -- thousands of notes on one channel,
--- injected as a raw-MIDI import). See design/interval-dirt.md § Phase 0 and
--- docs/bridge-cookbook.md § Import.
+-- Pinned on two take shapes: the macro-heavy glasswork (all 9 generators, an fx
+-- chain, a canon group, 53EDO detune -- Continuum-authored throughout) and the
+-- opening of HAMMERKLAVIER (a foreign single-channel take, injected as a raw-MIDI
+-- import). Only the import exercises convergence after the externals stamp and
+-- the foreign-cc ppqL reconcile; density is not what it pins, so the fixture is
+-- the first 200 notes of tests/fixtures/hammerklavier.rawmidi (the full take,
+-- kept for profiling) with their note-offs and the ccs that precede the 200th
+-- onset. See docs/bridge-cookbook.md § Import.
 
 local t = require('support')
 local glasswork = require('fixtures.glasswork')
@@ -92,9 +94,9 @@ return {
   },
 
   {
-    name = 'converged HAMMERKLAVIER (dense single-channel import) re-derives with zero writes',
+    name = 'converged HAMMERKLAVIER opening (foreign single-channel import) re-derives with zero writes',
     run = function(harness)
-      local raw, maxPpq = readBlob('../fixtures/hammerklavier.rawmidi')
+      local raw, maxPpq = readBlob('../fixtures/hammerklavier_opening.rawmidi')
       local h = harness.mk{ seed = { resolution = RES, length = maxPpq + RES } }
 
       -- Inject the stripped raw-MIDI blob and drive the import (mm re-reads the
@@ -106,10 +108,16 @@ return {
       h.reaper.MIDI_Sort(take)
       h.tm:reloadFromReaper()
 
+      -- Liveness for what the import brings: foreign ccs to reconcile, and
+      -- overlapping notes the stamp spills past lane 1.
       local dump = h.fm:dump()
-      local perChan = {}
-      for _, n in ipairs(dump.notes) do perChan[n.chan] = (perChan[n.chan] or 0) + 1 end
-      t.truthy((perChan[1] or 0) > 1000, 'the dense take imported: >1000 notes on chan 1')
+      local nCh1, nSpilled, nCcs = 0, 0, 0
+      for _, n in ipairs(dump.notes) do if n.chan == 1 then nCh1 = nCh1 + 1 end
+                                         if n.lane > 1 then nSpilled = nSpilled + 1 end end
+      for _, c in ipairs(dump.ccs)   do if c.evType == 'cc' then nCcs = nCcs + 1 end end
+      t.truthy(nCh1 > 100,   'the take imported onto chan 1')
+      t.truthy(nSpilled > 0, 'overlapping notes spilled past lane 1')
+      t.truthy(nCcs > 0,     'foreign ccs imported')
 
       assertConverges(h, 'HAMMERKLAVIER')
     end,
