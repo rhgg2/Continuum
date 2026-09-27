@@ -1307,33 +1307,39 @@ local channelsInUse = {}
 --   notes and parked are the built lists, by reference
 local fxRealisationByUuid = {}
 
--- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
--- which points get authored at all, rather than cutting a curve back.
-local function thinSeats(chan, entries)
+-- Decide which of a frozen window's breakpoints get authored, raw frame, before freeze's own flush.
+-- A group's are first subtracted by a bounded thin, rather than a curve being cut back after.
+--post: every breakpoint in the window is staged deleted or authored; nothing stays an absorber
+local function authorSeats(chan, entries, thin)
   local raw = index.raw(chan)
   for _, entry in ipairs(entries) do
     if entry.evType ~= 'note' then
       local isPb     = entry.evType == 'pb'
-      local tol      = cm:get('freezeThin.' .. generators.destProfile(isPb and 'pb' or entry.cc).unit)
       local startRaw = tm:fromLogical(chan, entry.ppq, 0)
       local endRaw   = tm:fromLogical(chan, entry.endppq, 0)
       local points   = {}
       for _, e in ipairs((isPb and raw.pbs or raw.ccs[entry.cc]) or {}) do
-        -- Curve material is the window's seats, markerless. An absorber carries a ppqL: the pb pass
-        -- re-derives it after the freeze, so it is not freeze's to delete.
-        if e.ppqL == nil and e.ppq >= startRaw and e.ppq < endRaw then
+        -- Everything in the window sounds the curve, an absorber sharing a seat's tick included.
+        if e.ppq >= startRaw and e.ppq < endRaw then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
           util.add(points, { ppq = e.ppq, shape = e.shape, tension = e.tension, evt = e,
                              val = isPb and (e.val - index.detuneAt(chan, e.ppq)) or e.val })
         end
       end
-      local kept = {}
-      for _, p in ipairs(generators.thinCurve(points, tol)) do kept[p] = true end
+      local kept = points
+      if thin then
+        kept = generators.thinCurve(points, cm:get('freezeThin.' .. generators.destProfile(isPb and 'pb' or entry.cc).unit))
+      end
       -- By identity, not value: two breakpoints can carry the same number, and it is this one that
       -- lost its place.
+      local isKept = {}
+      for _, p in ipairs(kept) do isKept[p] = true end
       for _, p in ipairs(points) do
-        if not kept[p] then stager.delete(p.evt) end
+        if not isKept[p] then stager.delete(p.evt)
+        -- The closing rebuild back-derives a seat's cents once its window is gone. An absorber it would
+        -- reseat instead, so freeze adopts it as authoring on its tick does.
+        elseif p.evt.derived then stager.assign(p.evt, { val = p.val, derived = util.REMOVE }) end
       end
     end
   end
@@ -1510,7 +1516,7 @@ local function freezeRegion(uuid, toGroup)
   end)
 
   -- Inside this same staging block, so the closing rebuild back-derives cents on the survivors alone.
-  if toGroup then thinSeats(frozen.chan, frozenEntries) end
+  authorSeats(frozen.chan, frozenEntries, toGroup)
 
   dirt.add(frozen.chan, true)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
   -- A continuous-only or husk region stages no mm ops at all, and flush's no-op gate would swallow

@@ -1173,6 +1173,14 @@ walk gave it as that note's authored ceiling (§ Fx window census). A
 promoted note is authored, so the lane rule governs it from then on, and the
 ceiling it carries over is the one it sounded to.
 
+A continuous window's breakpoints are authored alike. Every pb or cc inside
+the frozen window sounds the curve, so all of it is curve material, and
+freeze-to-group first thins it to what a bounded tolerance can spare. A seat
+is authored by the closing rebuild, which meets it as a foreign pb or cc once
+the census has dropped its window and back-derives its intent. An absorber
+would reseat instead, so freeze adopts it as authoring on its tick does:
+`derived` goes, and its intent is what it sounded less the base voice's detune.
+
 It takes a lane at the same moment, having held none: `promotionLanes` gives
 each note the lowest column free of overlap over the channel's authored
 population in the logical frame, less the cells this host parked and plus the

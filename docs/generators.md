@@ -450,13 +450,15 @@ value stream by the window alone.
 **2** Continuous only: a target is pb or a cc number, never a note. A note
 carries a uuid and notation sidecar for identity and round-trip regardless,
 so markerless elides nothing there. Only the continuous streams, whose seats
-are pure realisation, win anything. The geometry is asked at one site per pass
-and the answer carried on um's record (`docs/trackerManager.md` § CC walk); what
-the *wire* holds is still the window and nothing else.
+are pure realisation, win anything. The geometry is asked each time a seat is
+met (`docs/trackerManager.md` § CC walk), so what the wire holds is the window
+and nothing else.
 
 **3** **The enabling invariant is exclusive ownership.** A markerless seat is
 indistinguishable on the wire from an authored pb or cc, so recognition works
-only if *everything* on-take inside a replace window is generated. The
+only if *everything* on-take inside a replace window is realisation: its seats,
+and on pb the absorbers the base voice's detune holds there, which keep their
+marker (`docs/tuning.md` § Value-aware seats and densification ¶7). The
 authored events are stashed off-take into one `evType`-tagged list, and stay
 visible: tm seats a parked chord, cc or pb back in its columns, flagged. Audibly a no-op: an authored bend already sounded as
 the curve.

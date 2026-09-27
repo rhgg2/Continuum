@@ -680,8 +680,8 @@ the step, which dragged the arrival value back across the whole
 preceding note.
 
 **5** Authored pbs the window covers **park off-take** (the unified
-`fxParked` stash, `evType='pb'`) so every on-take pb in the window is a
-derived seat — exclusive ownership. They stay visible in-column, seated
+`fxParked` stash, `evType='pb'`) so every on-take pb in the window is
+realisation, a seat or an absorber — exclusive ownership. They stay visible in-column, seated
 flagged `parked`, and restore to the take when the region leaves.
 Each wire raw is `centsToRaw(curve + detune)` — no carrier, no add-bank
 slot. See `docs/generators.md` § pb and cc.
@@ -690,15 +690,17 @@ slot. See `docs/generators.md` § pb and cc.
 only (`{ppq, val, shape}`), so `addCC` mints no uuid and no `eventMeta`
 sidecar — a dense curve costs zero metadata.
 
-**7** Recognition is then purely by region: exclusive ownership means
-every on-take pb inside a live window is a seat, so `inSeatWindow` (raw
-bounds, inclusive of `endRaw` for the terminal re-centre) classifies a
-loaded markerless pb as a seat, and the walk routes it out of the pb
+**7** Recognition is then by region: exclusive ownership means every
+markerless pb inside a live window is a seat, so `inSeatWindow` (raw
+bounds, half-open; the terminal re-centre folds to `endRaw - 1`) classifies
+a loaded markerless pb as a seat, and the walk routes it out of the pb
 column. The absorber pass takes column membership as authorship, so it
 tags such a pb `derived='absorber'` in RAM only. The criterion has moved from the thing to its situation, which is
-available only where the situation has exactly one owner: detune
-absorbers *outside* any window have no such owner, so they keep their
-marker + cents sidecar.
+available only where the situation has exactly one owner. A detune absorber
+has two — the base voice's onset as well as the window — so it keeps its
+marker + cents sidecar inside a window as outside one. When the window goes it
+stands, and reseats in place; where it shares a tick with a seat, the one
+record sounds the curve and carries the marker.
 
 **8** The create/remove transition — park authored in, sweep seats out —
 is diffed by tm's `fxRegions` observer, not carried as a standing

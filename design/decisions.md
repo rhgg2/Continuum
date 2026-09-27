@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — A detune absorber keeps its marker inside a pb window, and freeze adopts it as
+  curve material, over demoting it to a plain seat when a window comes to cover it. The absorber has
+  two owners, the base voice's onset and the window, so it must survive the window going and reseat
+  in place; where it shares a tick with a seat the one record sounds the curve, and freeze was
+  dropping that breakpoint by reading it as an absorber.
+
 - **2026-09-27** — A synthesised pc carries no ppqL, over inheriting its winning note's. It is
   realisation, re-synthesised at the note's raw onset every pass and diffed on (derived, ppq, val),
   so the logical seat was read by nothing and only restated what the note already holds.

@@ -357,6 +357,28 @@ local function denseCcRamp()
   return { { kind = 'denseCcRamp' } }
 end
 
+-- A pb-replace region over a pb-active channel whose curve opens on the anchor absorber's tick. The
+-- lane-1 detune makes the channel pb-active, so the anchor stands at the first onset, marked, before
+-- the region arrives; the window's opening seat then lands on that tick, one record in both roles.
+-- The curve opens at 40 cents so that it and the anchor's 0 disagree, over a base voice detuned 10,
+-- so what the tick sounds (50) and what it means (40) disagree too. Registers the kind; the caller
+-- clears it after the freeze.
+local function curveOverAnchor(h)
+  addNote(h, { pitch = 60, lane = 1, detune = 10 })
+  addNote(h, { pitch = 67, lane = 1, ppq = 240, endppq = 480, detune = 25 })
+  local anchor = wirePb(h, 1, 0)
+  t.truthy(anchor and anchor.ppqL == 0, 'fixture check: the anchor stands at the first onset, marked')
+  generators.kinds.rampFrom40 = {
+    expand = function(stream) return { notes = {}, delta = {
+      { ppq = stream.window[1], val = 40,  shape = 'linear' },
+      { ppq = stream.window[2], val = 120, shape = 'linear' },
+    } } end,
+    mode = 'replace', dest = 'pb', label = 'Ramp From 40', defaults = {}, fields = {},
+  }
+  injectArp(h, { fx = { { kind = 'rampFrom40' } } })
+  t.eq(rawToCents(wirePb(h, 1, 0).val), 50, 'fixture check: the tick-0 pb sounds the curve\'s opening value, detuned')
+end
+
 -- Every cc on the wire for one controller in a ppq span, sorted, as { ppq, val }.
 local function wireCcs(h, chan, cc, fromPpq, toPpq)
   local out = {}
@@ -3904,6 +3926,41 @@ return {
       t.truthy(survivorsInWindow > 0, 'the thin left survivors standing')
       t.eq(#curve, survivorsInWindow, 'and the curve members are those survivors alone -- the absorber stays out')
       for _, m in ipairs(curve) do t.truthy(live[m], 'each member is the live column event itself') end
+    end,
+  },
+
+  {
+    -- Every pb inside a frozen window sounds the curve, so all of it is curve material, a marked
+    -- absorber included: freeze adopts it rather than leaving it to reseat. see docs/generators.md
+    -- § Route-by-window
+    name = 'freeze to group: a curve point sharing its tick with an absorber is kept',
+    run = function(harness)
+      local h = harness.mk()
+      curveOverAnchor(h)
+
+      local members = h.tm:freezeToGroup('fxr-1')
+      generators.kinds.rampFrom40 = nil
+      local opening
+      for _, m in ipairs(members) do if not m.pitch and m.ppq == 0 then opening = m end end
+      t.truthy(opening,        'the frozen curve keeps its opening breakpoint')
+      t.eq(opening.val, 40,    'at the value the region sounded there')
+      t.eq(rawToCents(wirePb(h, 1, 0).val), 50, 'and the wire still sounds it')
+    end,
+  },
+
+  {
+    -- The plain freeze thins nothing, and adopts the same way.
+    name = 'freeze: a curve point sharing its tick with an absorber is kept',
+    run = function(harness)
+      local h = harness.mk()
+      curveOverAnchor(h)
+
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze ran')
+      generators.kinds.rampFrom40 = nil
+      local pb = wirePb(h, 1, 0)
+      t.eq(rawToCents(pb.val), 50, 'the wire still sounds the curve\'s opening value, detuned')
+      t.eq(pb.derived, nil,        'as an authored pb, no longer an absorber')
+      t.eq(pb.cents, 40,           'carrying that value as its intent')
     end,
   },
 
