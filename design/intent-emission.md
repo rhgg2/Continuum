@@ -1,6 +1,7 @@
 # Intent and emission — the frame as a take's intent
 
-> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 4 (cues and the realisation map).
+> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 4 (cues and the realisation map);
+> phase 5 (continuous seats) queued.
 
 **The frame holds a take's intent — every authored event in its logical column, sounding or not. A
 pass reconstructs that intent from mm and the stash, then emits the take from it; parking, fx
@@ -62,6 +63,28 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 1. Emission reconciles its output against the previous emission — an absorber already seated, a
    raw onset already in place.
+
+## Continuous seats
+
+1. A **continuous seat** is a pb or cc on the take with no `ppqL`, inside a window of the previous
+   census (`docs/trackerManager.md` § Fx window census). One test recognises seats on both streams —
+   `ppqL == nil` and `ownsRaw` over that census (`docs/generators.md` § Route-by-window).
+
+1. A seat carries no name. `derived` holds a host uuid on a derived note, `'absorber'` on an
+   absorber and `'pc'` on a synthesised pc, and a cc carries none. um's host file thus holds derived
+   notes alone (`docs/trackerManager.md` § The host gate).
+
+1. The CC walk leaves seats out of the columns. The wholesale path applies the seat test to each pb
+   and cc, and the interval path matches its refills by `ppqL`, which no seat has.
+
+1. Fx expansion reads a running host's existing cc seats off um's raw index — the seats inside its
+   window in the pass's own set, per cc target. A clean overlapper's read is clipped to the emit
+   scope, as its emission is, and a kept host's window is not read. The existing side of the cc
+   reconcile is the union of those reads.
+
+1. A seat the previous census covers and the pass's own set does not is an **orphan**, and the pass
+   deletes every orphan, pb and cc alike. The length verbs retire seats by the same diff, taken
+   between the stored census and its mapped image (`docs/trackerManager.md` § Length operations).
 
 ## Parking
 

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — A cc seat is recognised by window geometry as a pb seat is, over filing it under
+  its host in um's derivedByHost, superseding the two 2026-09-18 cc-filing entries. A continuous
+  seat emits at zero delay and the previous census persists its window, so the file only cached
+  `ownsRaw`. Orphans go by one census diff over both streams, and freeze-to-group thins cc curves,
+  which `thinSeats` skipped as derived.
+
 - **2026-09-27** — An absorber never changes seat: the pass adopts one standing at a seat, mints for
   an unfilled seat and deletes the rest, over moving a spare to an opened seat. The move preserved
   mm's content tokens, and mm addresses by uuid now, so nothing reads an absorber's identity across

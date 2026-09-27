@@ -22,6 +22,13 @@
    `REALISATION` becomes the cue set with `parked` and pb `detune` in it, the realisation map's
    parked share covers every kind a host parks, and each emission stage reads um's index only for
    the previous emission.  ← in flight
+5. **Phase 5 — Continuous seats** (§ Continuous seats) — red first: freeze-to-group thins a cc curve
+   as it thins a pb one (`tm_fx_region_spec`, beside "freeze to group: the dense curve re-seats
+   sparse in one flush"). One seat test replaces `isPbSeat` and the CC walk's cc tag; fx expansion
+   reads its existing cc side off the raw index by window, keeping the kept-host exclusion and the
+   overlapper's scope clip; one census-diff sweep, shared with `retireUncoveredSeats`, replaces
+   `parkPbs`'s pb sweep and the absent-host file sweep; cc leaves `HOST_FILED`. The docs transfer
+   also corrects `docs/generators.md` § pb and cc ¶2–3, which predate pb parking.
 
 ## Landed  (newest first; prune below ~4)
 
