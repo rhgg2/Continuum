@@ -2455,7 +2455,7 @@ end
 
 ----- Rebuild PCs
 
---contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
+--post: a synthesised PC carries derived='pc', its winning record's raw onset, and no ppqL
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the writes batch {delete(event), add(spec)}
 --contract: marks sampleShadowed=true on the event or the spec of records lost to the onset's rank
@@ -2499,8 +2499,7 @@ local function reconcilePCsForChan(chan, records, writes, seedSpans)
 
   local predicted = {}
   for _, w in ipairs(winners) do
-    util.add(predicted, { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
-                          evType = 'pc', chan = chan, derived = 'pc' })
+    util.add(predicted, { ppq = w.ppq, val = w.sample, evType = 'pc', chan = chan, derived = 'pc' })
   end
 
   diffEvents(existing, predicted, writes,

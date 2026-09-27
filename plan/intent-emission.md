@@ -32,15 +32,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: one seat test recognises pb and cc seats; synthesised pcs drop ppqL (design § Continuous seats 1–3)
 - 2026-09-27 tm: seats reconcile by window, and orphans go by one census diff (§ Continuous seats 4–6)
 - 2026-09-27 tm: PA dispatch seeks its covering note per lane, logically (§ Reading intent 2)
 - 2026-09-27 tm: base-voice union and PC synthesis read intent through the seat stamp (§ Reading intent 3, § Emission's output 3)
-- 2026-09-27 tm: keep each channel's fx hosts on the frame, retire index.fxHosts (§ Reading intent 2)
 
 ## Now
 
-**One seat test recognises pb and cc seats**, then synthesised pcs drop `ppqL` — brief in
-`plan/IMPL.md`. (design § Continuous seats 1–3)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 

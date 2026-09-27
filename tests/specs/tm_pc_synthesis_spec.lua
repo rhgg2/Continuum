@@ -80,6 +80,45 @@ return {
     end,
   },
 
+  -- A synthesised pc is realisation: re-synthesised at its note's raw onset every pass and keyed by
+  -- (derived, ppq, val), so no logical seat is carried for anything to read. Checked at birth, across
+  -- a real re-read of the take, and after a note edit re-synthesises one.
+  {
+    name = 'a synthesised pc carries its derived kind and no logical seat',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 1 },
+            { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 2 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      local function checkPcs(when)
+        local pcs = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pc' and c.chan == 1 then pcs[#pcs + 1] = c end
+        end
+        t.eq(#pcs, 2, when .. ': one pc per note onset')
+        for _, c in ipairs(pcs) do
+          t.eq(c.derived, 'pc', when .. ': the pc at ' .. c.ppq .. ' is synthesised')
+          t.eq(c.ppqL, nil,     when .. ': the pc at ' .. c.ppq .. ' carries no logical seat')
+        end
+      end
+      checkPcs('at birth')
+
+      -- An unchanged take converges without a re-read, so the take gains a cc elsewhere first.
+      h.reaper.MIDI_InsertCC(h.fm:take(), false, false, 960, 0xB0, 2, 7, 64)
+      h.fm:reload()
+      checkPcs('after a reload')
+
+      h.tm:assignEvent({ uuid = uuidOfNote(h.fm, 1, 62) }, { sample = 9 })
+      h.tm:flush()
+      checkPcs('after a note edit')
+    end,
+  },
+
   {
     name = 'PC lands at realised ppq, not intent (delay shifts the PC too)',
     run = function(harness)

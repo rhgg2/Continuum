@@ -4,6 +4,10 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — A synthesised pc carries no ppqL, over inheriting its winning note's. It is
+  realisation, re-synthesised at the note's raw onset every pass and diffed on (derived, ppq, val),
+  so the logical seat was read by nothing and only restated what the note already holds.
+
 - **2026-09-27** — A cc seat is recognised as a pb seat is, geometrically each time it is met (no
   ppqL, and a census window covers its raw onset), over the host uuid the wholesale walk and
   expansion wrote onto um's entry in RAM. One test serves both streams and nothing needs re-deriving
