@@ -173,11 +173,11 @@ return {
   },
 
   -- The two readers of the base voice must name the same note. The absorber pass writes its seats
-  -- through the union's detuneAt and fxCurveAt samples them back through index.detuneAt, so a
+  -- through makeBaseVoice's detuneAt and fxCurveAt samples them back through index.detuneAt, so a
   -- divergence between the two predicates is the whole observable here -- and this fixture is where
   -- they can diverge: lane and the baseVoice stamp classify the second derived note differently.
   {
-    name = 'fxCurveAt: the union that writes the seats and index.detuneAt agree which derived note is the base voice',
+    name = 'fxCurveAt: the base voice that writes the seats and index.detuneAt agree which derived note is it',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.twoVoice = {

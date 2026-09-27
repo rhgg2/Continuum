@@ -671,9 +671,8 @@ and asserts all three unchanged, so gated and ungated agree across view, grid
 and wire.
 
 `fx` is the pivot: for a clean channel it skips its generators and leaves
-`fxOut.notes` empty — which is exactly why the downstream stages that read
-`fxOut.notes` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
-dirt plumbing. `regionPark`'s `fxParked`/`fxParkedCC` need no seed:
+`fxOut.notes` empty, and the downstream stages (`tails`, `pbs`, `pcs`) skip it
+on the same dirt test. One gate, no cross-stage dirt plumbing. `regionPark`'s `fxParked`/`fxParkedCC` need no seed:
 `parkKind` *partitions the prior set* rather than rebuilding it, so a
 clean channel's parked spec carries through untouched by construction — the
 gate skips only the scan that hunts new parks. (`extraColumns` is grow-only,
@@ -764,14 +763,14 @@ pb, which are pitch's second and third rungs (`docs/tuning.md`).
 Every write one stage makes into another's records belongs to emission, and
 the order carries dependencies the signatures do not state. The specs `fxOut`
 carries in `fxOut.notes` are the same tables the tail walk takes as `extras` and
-writes raw onsets and clipped ends into, and `rebuildPbs` and `rebuildPCs` read
-the moved positions, so tails run before both. Settlement moves an authored
-note's raw onset in um's index as well, and a pc sits at its note's settled
-onset and ranks the notes that share it. The fx gather clones um's index entries
-through `columnEvent`, and a kept host's specs ride those clones into
-`fxOut.notes`, so the tail walk clips ends into tables the fx stage minted
-rather than into um's own records; `rebuildPCs` writes `sampleShadowed` into an
-fx spec.
+writes raw onsets and clipped ends into, and its commit lands them in um's index
+at those positions. Settlement moves an authored note's raw onset there as well.
+`rebuildPbs` and `rebuildPCs` read every note off the index after that commit,
+so tails run before both: a pc sits at its note's settled onset and ranks the
+notes that share it. The fx gather clones um's index entries through
+`columnEvent`, and a kept host's specs ride those clones into `fxOut.notes`, so
+the tail walk clips ends into tables the fx stage minted rather than into um's
+own records.
 
 The head snapshot takes writes the same way: `rebuildExtraColumns` grows
 `extras[i].notes` on the snapshot's own table, and `rebuildPbs` reads
@@ -1081,7 +1080,7 @@ offline — cc-augment sums per target into markerless cc seats, pb defers
 to the absorber pass. The note add/del leaves `rebuildFx` staged but
 uncommitted (`fxOut.deferredWrite`); the tail walk adds its clips to that same
 batch and commits it, so a fresh spec reaches mm already clipped.
-`fxOut.notes` holds what ran and nothing else; it feeds the tail walk, the absorber and PC synthesis beside um's standing records (§ The host gate). See `docs/generators.md` § Offline continuous realisation.
+`fxOut.notes` holds what ran and nothing else; it feeds the tail walk beside um's standing records (§ The host gate), and the walk's commit hands it on to the absorber and PC synthesis through um's index. See `docs/generators.md` § Offline continuous realisation.
 
 The reconcile key names a derived note's logical seat — `ppqL`/`endppqL` —
 and its voice fields; the realisation frame stays out of it. The onset
@@ -1310,15 +1309,16 @@ tier inside the bind's suppression window. So the mode tracks the
 bug that leaked synthetic PCs onto a non-tracker take's note-ons).
 
 Synthesis runs in one place, and this stage is it. The delta goes to mm.
-Its `records` list comes from the channel's raw-index notes plus the
-fx-derived live ones, and feeds through the pure `reconcilePCsForChan`
-helper; records lost to lane priority get `sampleShadowed = true` for
-renderer dimming. Records walk um's raw index for raw order, and an
-authored note's lane, sample and logical onset come through its seat stamp;
-a kept host's standing derived record carries its own. A raw-index note
-carries its column event as `evt` and marks through `setEvent`; an fx-derived note holds no event, so it carries
-the spec as `spec` and the field is written direct (§ Note-lane
-renewal). The flag is realisation, re-derived every rebuild, so a park
+Its `records` list is the channel's raw-index notes, which the tail walk's
+commit has brought up to this pass's derived output, and feeds through the
+pure `reconcilePCsForChan` helper; records lost to the rank get
+`sampleShadowed = true` for renderer dimming. Authored records rank by lane
+and derived ones after them all, in index order. Records walk um's raw index
+for raw order, and an authored note's lane, sample and logical onset come
+through its seat stamp; a derived record carries its own. An authored note
+carries its column event as `evt` and marks through `setEvent` (§ Note-lane
+renewal). A derived note takes no mark: the view draws it only as a ghost, off
+a copy of its fx spec, and a ghost shows no shadow. The flag is realisation, re-derived every rebuild, so a park
 round-trip drops it.
 
 The previous emission is the channel's pcs in um's raw index — raw, the

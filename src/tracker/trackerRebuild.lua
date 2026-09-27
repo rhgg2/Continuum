@@ -18,7 +18,7 @@ local rebuild = {}
 
 ----- Module state and constants
 
---shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, ppq (logical), endppq (logical), pitch, vel, detune, delay, derived (= host's uuid), [intentCents], [baseVoice] }, ... }; logical-onset order
+--shape: fxNotesByHost[chan][uuid] = { { evType='note', chan, ppq (logical), endppq (logical), pitch, vel, detune, delay, derived (= host's uuid), [intentCents], [baseVoice], [sample] }, ... }; logical-onset order
 local fxNotesByHost = {}
 local time
 
@@ -1296,7 +1296,7 @@ local function runHost(chan, host, pbBase, ccBases, chanCtx, gridStep)
 end
 
 -- A derived spec's logical-frame copy, as fxNotesByHost carries it; runs per derived note.
-local logicalCopyOf = util.picker("evType chan pitch vel detune intentCents baseVoice delay derived")
+local logicalCopyOf = util.picker("evType chan pitch vel detune intentCents baseVoice delay derived sample")
 
 --pre: every column is ppq-ordered
 --post: fxNotesByHost[chan][id] is rewritten iff id is in fxOut.ran[chan]; all other inputs unchanged
@@ -1775,7 +1775,7 @@ end
 ----- Rebuild tails
 
 -- Exclude derived events re-run this pass and foreign MIDI, keep authored events and retained
--- derived events; rebuildPbs and rebuildPCs read the same population.
+-- derived events: the tail walk's view of um's index before its commit replaces the re-run ones.
 local function carriedFor(ran)
   return function(rec)
     if rec.ppqL == nil then return false end -- foreign MIDI
@@ -1826,44 +1826,33 @@ end
 -- seats), so every span that must contain an onset's seats reaches one tick back.
 local DUAL_POINT_TICK = 1
 
--- A channel's base-voice notes: raw index lane-1 plus this pass's derived base voices from
--- fxOut.notes. see docs/tuning.md § Absorber reconciliation
+-- A channel's base voice off um's index, where the tail walk's commit left this pass's derived
+-- voices settled beside the authored ones. see docs/tuning.md § Absorber reconciliation
+--pre: the tail walk has committed
 --shape: makeBaseVoice = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
 local function makeBaseVoice(chan, fxOut)
   local indexed = index.raw(chan).notes
-  local derived = util.filter(fxOut.notes[chan], function(spec) return spec.baseVoice end)
-  table.sort(derived, index.order)
-  local keep = carriedFor(fxOut.ran[chan])
-  -- keep drops the index entries of the hosts this pass ran: seated copies of a prior pass's
-  -- output, superseded by `derived`. A kept host's stand -- they are the only copy of its voices there is.
-  local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(entry) end
+  local function isBaseVoice(entry) return entry.ppqL ~= nil and index.isBaseVoice(entry) end -- not foreign
 
-  -- The union from the first entry at-or-after `lo` ('after' starts past it instead), merging the two
-  -- sources by index.order -- one cursor pair, and the only place the union's order is decided.
-  --post: result = (fresh iterator) yielding index entries and derived specs in index.order; unsafe
+  -- The base voice from the first entry at-or-after `lo` ('after' starts past it instead).
+  --post: result = (fresh iterator) yielding index entries in index.order; unsafe
   local function walk(lo, mode)
     local from = mode == 'after' and util.firstAfter or util.firstAtOrAfter
-    local i, j = from(indexed, lo), from(derived, lo)
+    local i = from(indexed, lo)
     return function()
-      while indexed[i] and not indexedBaseVoice(indexed[i]) do i = i + 1 end
-      local a, d = indexed[i], derived[j]
-      if d and (not a or index.order(d, a)) then j = j + 1; return d end
-      if a then i = i + 1 end
-      return a
+      while indexed[i] and not isBaseVoice(indexed[i]) do i = i + 1 end
+      local entry = indexed[i]
+      if entry then i = i + 1 end
+      return entry
     end
   end
 
-  -- The detune prevailing at ppq: the last union entry at-or-before it, 0 before the first.
   local function detuneAt(ppq)
-    local i = util.firstAfter(indexed, ppq) - 1        -- last index at or before ppq
-    while i >= 1 and not indexedBaseVoice(indexed[i]) do i = i - 1 end
-    local a, d = indexed[i], derived[util.firstAfter(derived, ppq) - 1]
-    local last = a
-    if d and (not a or index.order(a, d)) then last = d end
-    return last and last.detune or 0
+    local i = util.firstAfter(indexed, ppq) - 1
+    while i >= 1 and not isBaseVoice(indexed[i]) do i = i - 1 end
+    return indexed[i] and indexed[i].detune or 0
   end
 
-  -- The union's entries with ppq in [lo, hi] -- the onset walk's per-span slice.
   local function between(lo, hi)
     local out = {}
     for entry in walk(lo) do
@@ -1873,7 +1862,6 @@ local function makeBaseVoice(chan, fxOut)
     return out
   end
 
-  -- The channel's first base-voice onset, the I2a anchor's point.
   local function first() return walk(0)() end
 
   -- The next base-voice onset strictly after ppq; math.huge past the last.
@@ -1891,8 +1879,13 @@ local function makeBaseVoice(chan, fxOut)
     return false
   end
 
+  local hasDerived = false
+  for _, spec in ipairs(fxOut.notes[chan]) do
+    if spec.baseVoice then hasDerived = true; break end
+  end
+
   return { detuneAt = detuneAt, between = between, first = first,
-           nextAfter = nextAfter, anyDetuneJump = anyDetuneJump, hasDerived = #derived > 0 }
+           nextAfter = nextAfter, anyDetuneJump = anyDetuneJump, hasDerived = hasDerived }
 end
 
 -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
@@ -2268,10 +2261,10 @@ end
 --post: a synthesised PC carries derived='pc', its winning record's raw onset, and no ppqL
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the writes batch {delete(event), add(spec)}
---contract: marks sampleShadowed=true on the event or the spec of records lost to the onset's rank
+--post: every seated record lost to its onset's rank has sampleShadowed set on its column event
 --pre: seedSpans (from pcSeedSpans) narrow existing to its raw spans; nil = whole channel
 --post: returns the logical seats of the authored pcs it deletes, read before writes commit
---invariant: seated marks via setEvent; off-take direct; no lane renews an event it lacks
+--invariant: marks go through setEvent, so no lane renews an event it lacks
 local function reconcilePCsForChan(chan, records, writes, seedSpans)
   -- The previous emission is um's raw index, in the frame the prediction carries.
   local pcs, existing = index.raw(chan).pcs, {}
@@ -2300,10 +2293,9 @@ local function reconcilePCsForChan(chan, records, writes, seedSpans)
     util.add(winners, g[1])
     for i = 2, #g do
       local lost = g[i]
-      -- A seated record marks through its column event. An off-take fx spec holds no event, and
-      -- setEvent would renew the lane its number names without that lane's contents having moved.
-      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true)
-      elseif lost.spec then lost.spec.sampleShadowed = true end
+      -- A derived note is drawn only as a ghost, which shows no shadow, so only a seated record
+      -- takes the mark.
+      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true) end
     end
   end
 
@@ -2364,19 +2356,17 @@ local function rebuildPCs(fxOut, extraColumns)
     if not dirt.has(chan) then goto nextChan end
     local seedSpans = pcSeedSpans(chan, fxNotes[chan])
     local records = {}
-    -- The gather ordinal, and authored notes are gathered first: it is the rank's tie-break under
-    -- the lane, so a laneless derived record falls after every authored one.
+    -- The gather ordinal is index order: the rank's tie-break under the lane, which a derived
+    -- record lacks, so derived records sharing an onset rank as the index orders them.
     local function addRecord(rec)
       rec.ord = #records + 1
       util.add(records, rec)
     end
-    -- A host this pass kept owns PCs at onsets no authored note sits on; those records are um's own.
-    -- Off-column, they carry no colEvt, so the shadow mark rides the record like a spec's; no note host means no inherited sample.
-    local carried = carriedFor(fxOut.ran[chan])
+    -- A region's notes ride no note host, so inherit no sample.
     local function recordNote(entry)
-      if not carried(entry) then return end
+      if entry.ppqL == nil then return end -- foreign MIDI
       if entry.derived then
-        addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, sample = entry.sample or 0, spec = entry }
+        addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, sample = entry.sample or 0 }
       else
         -- Raw order is the index's; the note's intent is its seat stamp's (colEvt.ppq is logical).
         local evt = entry.colEvt
@@ -2387,12 +2377,6 @@ local function rebuildPCs(fxOut, extraColumns)
       for entry in onsetsIn(index.raw(chan).notes, seedSpans) do recordNote(entry) end
     else
       for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
-    end
-    for _, n in ipairs(fxNotes[chan]) do
-      if not seedSpans or spans.contains(seedSpans, n.ppq) then
-        -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
-        addRecord{ ppq = n.ppq, ppqL = n.ppqL, sample = n.sample or 0, spec = n }
-      end
     end
     local consumed = reconcilePCsForChan(chan, records, pcWrites, seedSpans)
     if #consumed > 0 then consumedByChan[chan] = consumed end

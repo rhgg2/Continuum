@@ -284,9 +284,9 @@ return {
   },
 
   -- Keep by omission (docs/trackerManager.md § The host gate): a host the pass keeps emits nothing into it,
-  -- so its base voices reach the union off um's index or not at all. A lane-1 seed closes to the span
-  -- reaching the next base voice, so a union blind to the kept host's tiles widens that span over the
-  -- whole host and reseats the channel without the detune steps its own output asks for.
+  -- so its base voices reach the absorber pass off um's index or not at all. A lane-1 seed closes to the
+  -- span reaching the next base voice, so a base voice blind to the kept host's tiles widens that span
+  -- over the whole host and reseats the channel without the detune steps its own output asks for.
   {
     name = 'a kept host\'s derived base voices hold their absorber seats through a neighbouring edit',
     run = function(harness)

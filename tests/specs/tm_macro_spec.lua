@@ -349,6 +349,26 @@ return {
     end,
   },
 
+  -- A ghost draws the realisation's record, sample readout and all, so each record carries the
+  -- sample its note sounds: the host's, which the tiles on the take hold.
+  {
+    name = 'under trackerMode each realised record carries the sample its tile sounds',
+    run = function(harness)
+      local h = harness.mk{ config = { transient = { trackerMode = true } } }
+      addPlainHost(h, { sample = 5 })
+      local host = parkedHost(h)
+      local tiles = fxNotesOf(h.fm:dump(), host.uuid)
+      t.eq(#tiles, 4, 'fixture check: the host tiled')
+      for _, n in ipairs(tiles) do t.eq(n.sample, 5, 'fixture check: the tile on the take holds the host sample') end
+
+      local fx = h.tm:fxRealisation(host.uuid)
+      t.eq(#fx.notes, #tiles, 'fixture check: one record per tile')
+      for _, fn in ipairs(fx.notes) do
+        t.eq(fn.sample, 5, 'the record at ' .. fn.ppq .. ' carries the host sample')
+      end
+    end,
+  },
+
   ----- Effective window — a same-pitch note bounds the host, and survives
 
   {

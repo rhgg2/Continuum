@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-28** — The absorber pass and PC synthesis read every note off um's index after the tail
+  walk's commit, over unioning the index with fxOut.notes at each stage. The commit lands the pass's
+  derived notes settled, so the tail walk is the one stage that must see the specs beside the index.
+  Derived records sharing an onset now rank for PCs in index order rather than emission order, an
+  accepted quirk.
+
 - **2026-09-28** — The absorber pass reads the base voice's lane and detune off um's index, over
   reading them through the seat stamp, superseding that half of the 2026-09-27 stamp entry. Like the
   tail walk it transforms the previous emission, and every intent edit reaches mm before it runs,

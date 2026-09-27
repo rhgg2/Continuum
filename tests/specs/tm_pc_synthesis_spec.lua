@@ -390,7 +390,7 @@ return {
   {
     -- Lane ranks the authored records among themselves and says nothing about a derived one, which
     -- holds no lane at all: authored first, whatever column it was written in, then derived output in
-    -- emission order. The authored note here is on lane 2 precisely so that a rank reading the lane
+    -- index order. The authored note here is on lane 2 precisely so that a rank reading the lane
     -- number alone would put the derived hit first -- and it sits outside the region's span, with a
     -- delay carrying its realised onset back onto the hit's, so that the two share a group without
     -- the region's parking taking the authored half away.
