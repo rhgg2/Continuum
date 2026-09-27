@@ -674,7 +674,7 @@ and wire.
 `fxOut.notes` empty — which is exactly why the downstream stages that read
 `fxOut.notes` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
 dirt plumbing. `regionPark`'s `fxParked`/`fxParkedCC` need no seed:
-`reconcilePark` *partitions the prior set* rather than rebuilding it, so a
+`parkKind` *partitions the prior set* rather than rebuilding it, so a
 clean channel's parked spec carries through untouched by construction — the
 gate skips only the scan that hunts new parks. (`extraColumns` is grow-only,
 so it is merge-safe too.)
@@ -1026,12 +1026,12 @@ occupancy, so a parked tail stops at the first successor past its region
 whether that successor is on the take or parked beside it. Lane bound
 only, never pitch: a parked event never reaches mm, so it carries pure intent
 — the same span an on-take host gets. The note del/adds ride the
-tail walk's atomic commit. See `docs/generators.md` § Output. Each pass's
-`scan` builds its `spec` inline at the scan site, where that pass's
-`chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
-callback fires only for specs newly parked this rebuild (e.g. marking
-the note pass's channel dirty), never for carried-forward priors.
-Each pass files what it parks under the host that parked it, as the
+tail walk's atomic commit. See `docs/generators.md` § Output. Every kind parks through the one driver `parkKind`, run over its
+`parkKinds` entry, which names the kind's candidates, the host that
+claims a spec, and what a restore adds to its mm write. A kind that
+seeds dirt seeds a park only for a spec newly parked this rebuild, never
+for a carried-forward prior.
+Each kind files what it parks under the host that parked it, as the
 seated column event — a new park's own event, which it flips in place, or a
 carried spec's seat from the stash seat. `hostFor` names that host: a window
 owning the spec's onset first, and only then the spec's own `fx`, so a

@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — Region park runs every kind (note, pa, cc, pb) through one driver over a per-kind
+  table of slots with defaults, over four parallel passes. The pa pass had copied the shared
+  reconcile by hand only because its host is found through the parked note covering it; a hostOf
+  slot absorbs that, so the kinds cannot drift apart.
+
 - **2026-09-27** — A detune absorber keeps its marker inside a pb window, and freeze adopts it as
   curve material, over demoting it to a plain seat when a window comes to cover it. The absorber has
   two owners, the base voice's onset and the window, so it must survive the window going and reseat

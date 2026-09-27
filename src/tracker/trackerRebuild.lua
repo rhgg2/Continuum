@@ -572,11 +572,11 @@ local toParked, parkInPlace do
   end
 end
 
--- The mm-bound clone of a parked spec: raw onset, logical sidecar.
+-- The mm-bound clone of a parked spec: raw onset, logical sidecar, and a claim on its own uuid.
 --pre: spec is logical-frame
 local function fromParked(spec, adds)
   local ppq = time:fromLogical(spec.chan, spec.ppq)
-  return util.assign(util.assign(util.clone(spec), { ppq = ppq, ppqL = spec.ppq }), adds)
+  return util.assign(util.assign(util.clone(spec), { ppq = ppq, ppqL = spec.ppq, keepUuid = true }), adds)
 end
 
 -- A seated parked event against the spec it renders: endppqC is derived after seating, and the
@@ -590,8 +590,10 @@ local function sameSpec(seated, spec)
   return true
 end
 
--- Where a parked spec of each kind sits: the columns a channel seats that kind in, and its own column.
-local parkHomes do
+-- Each kind's park, as parkKind runs it; an entry omits a slot that takes its default. seeds: a
+-- park or restore reseats what the event held. stamps: a restored seat takes a seat stamp.
+--shape: kind = { evType, columns(chan), column(spec) = its own, ensured, scan(stage, kind) = fresh candidates, hostOf(stage, spec), restore(stage, spec, seat) = its mm write's adds, after(parked, restored), seeds, stamps }
+local parkKinds do
   local function lanes(chan) return frame.channels[chan].authored.notes end
   local function lane(spec)  return ensureLane(spec.chan, spec.lane) end
   local function ccColumns(chan)
@@ -603,12 +605,105 @@ local parkHomes do
     local col = frame.channels[chan].authored.pb
     return col and { col } or {}
   end
-  parkHomes = {
-    note = { columns = lanes,     ensureColumn = lane },
-    pa   = { columns = lanes,     ensureColumn = lane },
-    cc   = { columns = ccColumns, ensureColumn = function(spec) return ensureCcColumn(spec.chan, 'cc', spec.cc) end },
-    pb   = { columns = pbColumns, ensureColumn = function(spec) return ensureCcColumn(spec.chan, 'pb') end },
+  local function ccColumn(spec) return ensureCcColumn(spec.chan, 'cc', spec.cc) end
+  local function pbColumn(spec) return ensureCcColumn(spec.chan, 'pb') end
+
+  -- The kind's unparked events on dirty channels with onsets under a window on their column.
+  local function scanWindows(stage, kind)
+    local candidates = {}
+    for chan = 1, 16 do
+      if dirt.has(chan) then
+        for _, col in ipairs(kind.columns(chan)) do
+          for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, col.cc or kind.evType)]) do
+            if evt.evType == kind.evType and not evt.parked then util.add(candidates, evt) end
+          end
+        end
+      end
+    end
+    return candidates
+  end
+
+  -- A note parks under a window, or as a host whose own generator parks it.
+  local function scanNotes(stage, kind)
+    local candidates = scanWindows(stage, kind)
+    local seen = {}
+    for _, evt in ipairs(candidates) do seen[evt] = true end
+    for chan = 1, 16 do
+      if dirt.has(chan) then
+        for host in pairs(frame.channels[chan].fxHosts) do
+          -- a host under its own region has already arrived from the window
+          if not seen[host] and not host.parked and generators.parksNotes(host) then util.add(candidates, host) end
+        end
+      end
+    end
+    return candidates
+  end
+
+  -- A pa rides its host note, so only a lane holding a parked note has any to offer.
+  local function scanPas(stage, kind)
+    local candidates = {}
+    for chan = 1, 16 do
+      if dirt.has(chan) then
+        for _, col in ipairs(kind.columns(chan)) do
+          if #stage.parkedNotesIn(col) > 0 then
+            for _, evt in ipairs(col.events) do
+              if evt.evType == 'pa' and not evt.parked then util.add(candidates, evt) end
+            end
+          end
+        end
+      end
+    end
+    return candidates
+  end
+
+  -- The host of the parked note of spec's pitch whose clip covers spec's onset.
+  local function paHost(stage, spec)
+    for _, note in ipairs(stage.parkedNotesIn(lane(spec))) do
+      if note.pitch == spec.pitch and note.ppq <= spec.ppq and spec.ppq < note.endppqC then
+        return stage.hostFor(note)
+      end
+    end
+  end
+
+  -- Provisional raw end; reclipTails fills in endppqC, and rebuildTails back-fills raw from it.
+  local function restoreNote(_, spec)
+    local rawPpq  = time:fromLogical(spec.chan, spec.ppq)
+    local ceiling = math.min(time:fromLogical(spec.chan, spec.endppq or util.OPEN), time:length())
+    return { endppqL = spec.endppq, endppq = util.round(math.max(rawPpq + 1, ceiling)) }
+  end
+
+  -- lane is display-only, overlaid at dispatch; mm would persist it
+  local function restorePa() return { lane = util.REMOVE } end
+
+  -- A restore goes to mm detune-free; rebuildPbs corrects the wire value and stamps the seat's cue.
+  local function restorePb(stage, spec, seat)
+    frame.setEvent(seat, 'cents', spec.val)
+    return { cents = spec.val, val = tuning.centsToRaw(spec.val, stage.pbLimCents) }
+  end
+
+  -- A park takes a note out of its lane and a restore puts one back, so the lane's tails clip anew.
+  local function reclipTails(parked, restored)
+    local touched = {}
+    for _, spec in ipairs(parked)   do touched[spec.chan] = true end
+    for _, seat in ipairs(restored) do touched[seat.chan] = true end
+    for chan in pairs(touched)      do clipTails(chan) end
+  end
+
+  local defaults = {
+    scan    = scanWindows,
+    hostOf  = function(stage, spec) return stage.hostFor(spec) end,
+    restore = function() end,
+    after   = function() end,
   }
+
+  -- Order matters: a pa reconciles against the parked notes the note pass leaves.
+  parkKinds = {
+    { evType = 'note', columns = lanes, column = lane, scan = scanNotes, restore = restoreNote, after = reclipTails, seeds = true, stamps = true },
+    { evType = 'pa', columns = lanes, column = lane, scan = scanPas, hostOf = paHost, restore = restorePa },
+    { evType = 'cc', columns = ccColumns, column = ccColumn },
+    { evType = 'pb', columns = pbColumns, column = pbColumn, restore = restorePb, seeds = true },
+  }
+  for i, kind in ipairs(parkKinds) do parkKinds[i] = util.assign(util.clone(defaults), kind) end
 end
 
 -- Install a kind's parked specs in their own columns, flagged; an installed event whose spec held keeps its
@@ -616,17 +711,16 @@ end
 --pre: kinds sharing columns (notes, pas) are distinguished by evType
 --post: result = { [spec] = its column event }, over every spec given
 local function installParked(kind, specs)
-  local home = parkHomes[kind]
   local wanted = frame.newChannels()
   for _, spec in ipairs(specs) do
     wanted[spec.chan][frame.parkKey(spec)] = spec
   end
   local held = {}
   for chan = 1, 16 do
-    for _, col in ipairs(home.columns(chan)) do
+    for _, col in ipairs(kind.columns(chan)) do
       local stale = {}
       for _, evt in ipairs(col.events) do
-        if evt.parked and evt.evType == kind then
+        if evt.parked and evt.evType == kind.evType then
           local spec = wanted[chan][frame.parkKey(evt)]
           if spec and not held[spec] and sameSpec(evt, spec) then held[spec] = evt
           else stale[evt] = true end
@@ -638,7 +732,7 @@ local function installParked(kind, specs)
   for _, spec in ipairs(specs) do
     if not held[spec] then
       held[spec] = util.assign(util.clone(spec), { parked = true })
-      frame.spliceInto(home.ensureColumn(spec), held[spec])
+      frame.spliceInto(kind.column(spec), held[spec])
     end
   end
   return held
@@ -647,53 +741,34 @@ end
 -- The pass head seats the stash as it stands, which a wholesale channel's fresh columns lack.
 --post: result = { [stash spec] = its seat }, the event a restore flips in place
 local function installStash(fxParked)
-  local byKind = { note = {}, cc = {}, pa = {}, pb = {} }
-  for _, spec in ipairs(fxParked or {}) do
-    if byKind[spec.evType] then util.add(byKind[spec.evType], spec) end
-  end
   local parkedColEvts = {}
-  for kind, specs in pairs(byKind) do util.assign(parkedColEvts, installParked(kind, specs)) end
+  for _, kind in ipairs(parkKinds) do
+    local specs = util.filter(fxParked or {}, function(spec) return spec.evType == kind.evType end)
+    util.assign(parkedColEvts, installParked(kind, specs))
+  end
   return parkedColEvts
 end
 
--- Shared context for the four passes. Each files what it parks under the host that parked it.
---shape: stage = { writes = mmBatch, hostFor, reconcilePark, prior = { [evType] = specs }, windowSpans = { [util.key(chan, target)] = merged spans }, parkedColEvts = { [prior spec] = its seated column event }, parkedByHost = { [host uuid] = { seated column event, ... } } }
-local function parkStage(fxOutWindows, fxParked, parkedColEvts)
-  local writes = mmBatch()
-
+-- Shared context for the kinds' parks. Each files what it parks under the host that parked it.
+--shape: stage = { writes = mmBatch, hostFor, parkedNotesIn, pbLimCents, prior = { [evType] = specs }, windowSpans = { [util.key(chan, target)] = merged spans }, parkedColEvts = { [prior spec] = its seated column event }, parkedByHost = { [host uuid] = { seated column event, ... } } }
+local function parkStage(fxOutWindows, fxParked, parkedColEvts, pbLimCents)
   local function hostFor(evt)
     local host = fxOutWindows.owns(evt.evType, evt.chan, evt.cc, evt.ppq)
     if host then return host end
     if evt.fx and generators.parksNotes(evt) then return evt.uuid end
   end
 
-  local parkedByHost = {}
-
-  --shape: candidates = { evt (the live column event), spec = toParked(evt, {...}) }
-  local function reconcilePark(candidates, prior, onPark)
-    onPark = onPark or function (_) end
-    local newParked, restores = {}, {}
-    for _, candidate in ipairs(candidates) do
-      local host = hostFor(candidate.spec)
-      if host then
-        onPark(candidate.spec)
-        util.add(newParked, candidate.spec)
-        writes.delete(candidate.evt)
-        parkInPlace(candidate.evt)
-        util.bucket(parkedByHost, host, candidate.evt)
-      end
-    end
-    for _, spec in ipairs(prior) do
-      local host = hostFor(spec)
-      if host then
-        util.add(newParked, spec)
-        util.bucket(parkedByHost, host, parkedColEvts[spec])
-      else util.add(restores, spec) end
-    end
-    return newParked, restores
+  -- Memoised per column, so it holds each lane's parked notes as of its first asking.
+  --pre: the note pass has parked what it will
+  local parkedNotesByCol = {}
+  local function parkedNotesIn(col)
+    parkedNotesByCol[col] = parkedNotesByCol[col]
+      or util.filter(col.events, function(evt) return evt.parked and util.isNote(evt) end)
+    return parkedNotesByCol[col]
   end
 
-  local prior = { note = {}, pa = {}, cc = {}, pb = {} }
+  local prior = {}
+  for _, kind in ipairs(parkKinds) do prior[kind.evType] = {} end
   for _, spec in ipairs(fxParked or {}) do util.bucket(prior, spec.evType, spec) end
 
   -- Window spans per (chan, target) for the fresh scans.
@@ -706,211 +781,63 @@ local function parkStage(fxOutWindows, fxParked, parkedColEvts)
   local windowSpans = {}
   for key, bucket in pairs(buckets) do windowSpans[key] = spans.mergeWindows(bucket) end
 
-  return { writes = writes, hostFor = hostFor, reconcilePark = reconcilePark,
-           prior = prior, windowSpans = windowSpans, parkedColEvts = parkedColEvts, parkedByHost = parkedByHost }
+  return { writes = mmBatch(), hostFor = hostFor, parkedNotesIn = parkedNotesIn, pbLimCents = pbLimCents,
+           prior = prior, windowSpans = windowSpans, parkedColEvts = parkedColEvts, parkedByHost = {} }
 end
 
-local function parkNotes(stage)
-  local candidates, seen = {}, {}
-  local function addCandidate(evt)
-    if not seen[evt] then  -- a host under its own region would arrive from both sources
-      seen[evt] = true
-      util.add(candidates, { evt = evt, spec = toParked(evt) })
+-- Park each fresh candidate a host claims and keep each prior a host still claims, filing both
+-- under that host; restore every other prior, flipping its seat in place.
+local function parkKind(stage, kind)
+  local parked, restored = {}, {}
+  for _, evt in ipairs(kind.scan(stage, kind)) do
+    local spec = toParked(evt)
+    local host = kind.hostOf(stage, spec)
+    if host then
+      if kind.seeds then dirt.add(spec.chan, dirt.parkSeed(spec, 'park', time:fromLogical(spec.chan, spec.ppq))) end
+      util.add(parked, spec)
+      stage.writes.delete(evt)
+      parkInPlace(evt)
+      util.bucket(stage.parkedByHost, host, evt)
     end
   end
-  for chan = 1, 16 do
-    local windowSpans = stage.windowSpans[util.key(chan, 'note')]
-    if windowSpans and dirt.has(chan) then
-      for _, col in ipairs(frame.channels[chan].authored.notes) do
-        for evt in onsetsIn(col.events, windowSpans) do
-          if util.isNote(evt) and not evt.parked then addCandidate(evt) end
-        end
-      end
+  for _, spec in ipairs(stage.prior[kind.evType]) do
+    local seat = stage.parkedColEvts[spec]   -- the seat is the spec, both logical
+    local host = kind.hostOf(stage, spec)
+    if host then
+      util.add(parked, spec)
+      util.bucket(stage.parkedByHost, host, seat)
+    else
+      frame.setEvent(seat, 'parked', nil)
+      local write = fromParked(spec, kind.restore(stage, spec, seat))
+      if kind.seeds then dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', write.ppq)) end
+      stage.writes.add(write)
+      util.add(restored, seat)
     end
   end
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      for host in pairs(frame.channels[chan].fxHosts) do
-        if not host.parked and generators.parksNotes(host) then addCandidate(host) end
-      end
-    end
-  end
-
-  -- If park removes a note, same-lane/pitch neighbours' tails should regrow.
-  local parkedNotes, restores = stage.reconcilePark(candidates, stage.prior.note,
-    function(spec)
-      dirt.add(spec.chan, dirt.parkSeed(spec, 'park', time:fromLogical(spec.chan, spec.ppq)))
-    end)
-
-  local restoredNotes = {}
-  local takeLen = time:length()
-  for _, spec in ipairs(restores) do
-    -- Restore flips the seated event in place: it is logical, and keeps the parked uuid too.
-    local note = stage.parkedColEvts[spec]
-    frame.setEvent(note, 'parked', nil)
-
-    -- Provisional raw end; the tail clip below fills in endppqC, and rebuildTails
-    -- back-fills raw from that.
-    local rawPpq  = time:fromLogical(spec.chan, spec.ppq)
-    local ceiling = math.min(time:fromLogical(spec.chan, spec.endppq or util.OPEN), takeLen)
-    local evt = fromParked(spec, { keepUuid = true, endppqL = spec.endppq,
-                                   endppq = util.round(math.max(rawPpq + 1, ceiling)) })
-    dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', evt.ppq))
-    stage.writes.add(evt)
-
-    util.add(restoredNotes, note)
-  end
-
-  local touched = {}
-  for _, spec in ipairs(parkedNotes) do touched[spec.chan] = true end
-  for _, spec in ipairs(restores)    do touched[spec.chan] = true end
-  for chan in pairs(touched)         do clipTails(chan) end
-
-  return parkedNotes, restoredNotes
-end
-
--- A pa parks with its host note, filed under whichever host parked it: park/restore flip it in place, as a cc would. No dirt seed needed: the lane's pa population is unchanged either way. See docs/trackerManager.md § Region-replace parking.
---pre: parkNotes has parked this pass's hosts in place and clipped their lanes
-local function parkPAs(stage)
-  local hostsByCol = {}
-  local function parkedHostsIn(col)
-    if not hostsByCol[col] then
-      hostsByCol[col] = util.filter(col.events, function(evt)
-        return evt.parked and util.isNote(evt)
-      end)
-    end
-    return hostsByCol[col]
-  end
-  -- The parked note a pa rides, or nil.
-  local function underParkedHost(pa, col)
-    for _, host in ipairs(parkedHostsIn(col)) do
-      if host.pitch == pa.pitch and host.ppq <= pa.ppq and pa.ppq < host.endppqC then return host end
-    end
-  end
-
-  local candidates = {}
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      for _, col in ipairs(frame.channels[chan].authored.notes) do
-        if #parkedHostsIn(col) > 0 then
-          for _, evt in ipairs(col.events) do
-            local note = evt.evType == 'pa' and not evt.parked and underParkedHost(evt, col)
-            if note then util.add(candidates, { evt = evt, note = note }) end
-          end
-        end
-      end
-    end
-  end
-  local parkedPAs, restores = {}, {}
-  for _, spec in ipairs(stage.prior.pa) do
-    local note = underParkedHost(spec, parkHomes.pa.ensureColumn(spec))
-    if note then
-      util.add(parkedPAs, spec)
-      util.bucket(stage.parkedByHost, stage.hostFor(note), stage.parkedColEvts[spec])
-    else util.add(restores, spec) end
-  end
-
-  for _, candidate in ipairs(candidates) do
-    util.add(parkedPAs, toParked(candidate.evt))
-    stage.writes.delete(candidate.evt)
-    parkInPlace(candidate.evt)
-    util.bucket(stage.parkedByHost, stage.hostFor(candidate.note), candidate.evt)
-  end
-  local restoredPAs = {}
-  for _, spec in ipairs(restores) do
-    local evt = stage.parkedColEvts[spec]
-    frame.setEvent(evt, 'parked', nil)
-    -- lane is display-only, overlaid at dispatch; mm would persist it
-    stage.writes.add(fromParked(spec, { keepUuid = true, lane = util.REMOVE }))
-    util.add(restoredPAs, evt)
-  end
-
-  return parkedPAs, restoredPAs
-end
-
-local function parkCCs(stage)
-  local candidates = {}
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      for cc, col in pairs(frame.channels[chan].authored.ccs) do
-        for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, cc)]) do
-          if not evt.parked then util.add(candidates, { evt = evt, spec = toParked(evt) }) end
-        end
-      end
-    end
-  end
-  local parkedCCs, restores = stage.reconcilePark(candidates, stage.prior.cc)
-
-  local restoredCCs = {}
-  for _, spec in ipairs(restores) do
-    local evt = stage.parkedColEvts[spec]   -- flipped in place: the event is the spec, both logical
-    frame.setEvent(evt, 'parked', nil)
-    stage.writes.add(fromParked(spec, { keepUuid = true }))
-    util.add(restoredCCs, evt)
-  end
-
-  return parkedCCs, restoredCCs
-end
-
--- A pb parks and restores in place in its column, as a cc does.
-local function parkPbs(stage, pbLimCents)
-  local candidates = {}
-  for chan = 1, 16 do
-    local col = frame.channels[chan].authored.pb
-    if col and dirt.has(chan) then
-      for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, 'pb')]) do
-        if not evt.parked then util.add(candidates, { evt = evt, spec = toParked(evt) }) end
-      end
-    end
-  end
-  -- A parked pb's value no longer holds past its window, so the absorbers it held into must reseat.
-  local parkedPbs, restores = stage.reconcilePark(candidates, stage.prior.pb,
-    function(spec)
-      dirt.add(spec.chan, dirt.parkSeed(spec, 'park', time:fromLogical(spec.chan, spec.ppq)))
-    end)
-
-  -- A restore goes to mm detune-free; rebuildPbs corrects the wire value and stamps the seat's cue.
-  local restoredPbs = {}
-  for _, spec in ipairs(restores) do
-    local evt = stage.parkedColEvts[spec]   -- flipped in place: the event is the spec, both logical
-    frame.setEvent(evt, 'parked', nil)
-    frame.setEvent(evt, 'cents', spec.val)
-    local write = fromParked(spec, { keepUuid = true, cents = spec.val,
-                                     val = tuning.centsToRaw(spec.val, pbLimCents) })
-    dirt.add(spec.chan, dirt.parkSeed(spec, 'restore', write.ppq))
-    stage.writes.add(write)
-    util.add(restoredPbs, evt)
-  end
-
-  return parkedPbs, restoredPbs
+  kind.after(parked, restored)
+  return parked, restored
 end
 
 --pre: parkedColEvts is installStash's map over this same fxParked
 --post: result = { [host uuid] = the seated column events it parked, of every kind }
 local function rebuildRegionPark(fxOutWindows, fxParked, parkedColEvts, pbLimCents)
-  local stage                      = parkStage(fxOutWindows, fxParked, parkedColEvts)
-  local parkedNotes, restoredNotes = parkNotes(stage)
-  -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
-  local parkedPAs, restoredPAs     = parkPAs(stage)
-  local parkedCCs, restoredCCs     = parkCCs(stage)
-  local parkedPbs, restoredPbs     = parkPbs(stage, pbLimCents)
-
-  local allParked = {}
-  for _, parked in ipairs({ parkedNotes, parkedPAs, parkedCCs, parkedPbs }) do
+  local stage = parkStage(fxOutWindows, fxParked, parkedColEvts, pbLimCents)
+  local allParked, restoredByKind = {}, {}
+  for _, kind in ipairs(parkKinds) do
+    local parked, restored = parkKind(stage, kind)
     for _, spec in ipairs(parked) do util.add(allParked, spec) end
+    restoredByKind[kind] = restored
   end
   persistKey('fxParked', allParked, fxParked)
   stage.writes.commit()
 
-  -- Seat-stamp each restored note like any other seat, now the commit lands it in mm; bare write,
-  -- no setEvent -- see docs/trackerManager.md § Incremental index reconciliation.
-  for _, evt in ipairs(restoredNotes) do
-    if index.stampColEvt(evt) then evt.committed = true end
-  end
-  -- Only a note entry carries a seat stamp, so a restored cc, pa or pb only learns that mm holds it.
-  for _, restored in ipairs({ restoredCCs, restoredPAs, restoredPbs }) do
-    for _, evt in ipairs(restored) do
-      if index.byUuid(evt.uuid) then evt.committed = true end
+  -- Now the commit lands them in mm, a stamping kind's restores take a seat stamp as any seat does,
+  -- by bare write; see docs/trackerManager.md § Incremental index reconciliation.
+  for kind, restored in pairs(restoredByKind) do
+    for _, seat in ipairs(restored) do
+      local landed
+      if kind.stamps then landed = index.stampColEvt(seat) else landed = index.byUuid(seat.uuid) end
+      if landed then seat.committed = true end
     end
   end
   return stage.parkedByHost
