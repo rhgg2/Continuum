@@ -1907,13 +1907,19 @@ end
 -- seats), so every span that must contain an onset's seats reaches one tick back.
 local DUAL_POINT_TICK = 1
 
---shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump() }
+--shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
 -- A channel's base-voice onset stream: the raw index's surviving notes unioned with the pass's
 -- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
---pre: derived is ppq-ascending and holds chan's derived base voices for this pass
---pre: keep is carriedFor for chan, so `derived` supersedes exactly what it drops
-local function baseVoiceUnion(chan, derived, keep)
+local function baseVoiceUnion(chan, fxOut)
   local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
+  -- Derived base voices are routed out of columns; union them so the absorber pass seats their
+  -- detune jumps.
+  local derived = {}
+  for _, spec in ipairs(fxOut.notes[chan]) do
+    if spec.baseVoice then util.add(derived, spec) end
+  end
+  table.sort(derived, index.order)   -- the union's cursors assume ppq order of both sources
+  local keep = carriedFor(fxOut.ran[chan])
   -- An authored entry's intent (lane, detune, logical onset) is its seat stamp's; a kept host's
   -- standing record is the previous emission and carries its own.
   local function intentOf(entry) return isAuthored(entry) and entry.colEvt or entry end
@@ -1978,7 +1984,7 @@ local function baseVoiceUnion(chan, derived, keep)
   end
 
   return { detuneAt = detuneAt, between = between, first = first,
-           nextAfter = nextAfter, anyDetuneJump = anyDetuneJump }
+           nextAfter = nextAfter, anyDetuneJump = anyDetuneJump, hasDerived = #derived > 0 }
 end
 
 -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
@@ -2055,7 +2061,8 @@ end
 -- Closes seeds to raw spans that gate the pass's onsets/densify/anchor/absorber-pool; nil = ungated.
 -- Extents come by seek, ahead of the gather.
 local function seatScope(chan, replaceWins, baseVoice, unparked)
-  if dirt.wholesale(chan) then return nil end
+  -- A derived base voice in the pass's own output ungates the channel.
+  if dirt.wholesale(chan) or baseVoice.hasDerived then return nil end
   local seatSpans = {}
   local function baseVoiceSpan(ppq) util.add(seatSpans, { ppq - DUAL_POINT_TICK, baseVoice.nextAfter(ppq) }) end
   local function bpSpan(ppq)
@@ -2134,13 +2141,6 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
         prev = detune
       end
     end
-    -- Both of a dual point's seats follow the onset's ownership, so a pb sitting one tick under an
-    -- onset is classified by that onset's side.
-    local function fencedPb(ppq)
-      if onsetAt[ppq + DUAL_POINT_TICK] then return inKeptRange(ppq + DUAL_POINT_TICK) end
-      return inKeptRange(ppq)
-    end
-
     -- Prevailing cents at any ppq: the replace curve inside a window, else the unparked authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
     local function streamValue(ppq)
@@ -2153,14 +2153,14 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       return curves.interpolate(A, B, ppq, 'cents')
     end
 
-    -- The stream governing M, whichever owns it: a window's own curve inside one, the unparked
-    -- authored breakpoints outside. `into` is the segment M is entered on, `at` a breakpoint standing on it.
-    local function streamAround(M)
-      local win = replaceWinAt(M)
+    -- The stream governing ppq, whichever owns it: a window's own curve inside one, the unparked
+    -- authored breakpoints outside. `into` is the segment ppq is entered on, `at` a breakpoint standing on it.
+    local function streamAround(ppq)
+      local win = replaceWinAt(ppq)
       local src = win and win.bps or unparked
-      local i   = util.firstAtOrAfter(src, M)
+      local i   = util.firstAtOrAfter(src, ppq)
       local at  = src[i]
-      return src[i - 1], (at and at.ppq == M) and at or nil
+      return src[i - 1], (at and at.ppq == ppq) and at or nil
     end
 
     -- Seats to realise: ppq -> { cents, ppqL, shape }; assign turns each into wire raw = centsToRaw(cents + detune).
@@ -2195,11 +2195,8 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     local function densify(list)
       for i = 1, #list - 1 do
         local A, B = list[i], list[i + 1]
-        local hasOnset = false
-        for _, onset in ipairs(onsets) do
-          if onset.ppq > A.ppq and onset.ppq < B.ppq then hasOnset = true break end
-        end
-        if curves.isCurved(A.shape) and hasOnset then
+        local nextOnset = onsets[util.firstAfter(onsets, A.ppq)]   -- onsets are ppq-ascending
+        if curves.isCurved(A.shape) and nextOnset and nextOnset.ppq < B.ppq then
           local p = A.ppq + gridStep
           while p < B.ppq do
             if not seats[p] and not inKeptRange(p) and inSeatScope(seatSpans, p) then
@@ -2240,18 +2237,25 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     end
 
     -- Clones carry the index entry's uuid and origShape, naming their source as the pass rewrites shape.
-    -- The gather also takes whatever stands at a seat (a dual point can fall a tick below its span), so a seat never mints a rival pb.
-    local pbs = {}
+    -- The gather takes whatever stands at a seat too, since a dual point can fall a tick below its span.
+
+    -- Both of a dual point's seats follow the onset's ownership: a pb one tick under an onset is
+    -- classified by that onset's side, so a seat never mints a rival pb.
+    local function keptOwned(ppq)
+      if onsetAt[ppq + DUAL_POINT_TICK] then return inKeptRange(ppq + DUAL_POINT_TICK) end
+      return inKeptRange(ppq)
+    end
+    local gathered = {}
     for _, entry in ipairs(index.raw(chan).pbs) do
       -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
       -- generates no seat here; those kept-boundary seats stand from last pass.
-      if (inSeatScope(seatSpans, entry.ppq) or seats[entry.ppq]) and not fencedPb(entry.ppq) then
+      if (inSeatScope(seatSpans, entry.ppq) or seats[entry.ppq]) and not keptOwned(entry.ppq) then
         local pb = util.clone(entry)
         pb.origShape = entry.shape
-        util.add(pbs, pb)
+        util.add(gathered, pb)
       end
     end
-    util.sortByPPQ(pbs)
+    util.sortByPPQ(gathered)
 
     -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
     -- live window covers it or its window's host no longer runs.
@@ -2260,19 +2264,17 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
 
     -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); an absorber
     -- standing at a seat is adopted, an unfilled seat mints one, and the leftovers are deleted.
-    local realAt, pool = {}, {}
-    for _, pb in ipairs(pbs) do
+    local pool = {}
+    for _, pb in ipairs(gathered) do
       -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
       -- absorber matching below adopts or deletes it.
       if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
-      if pb.derived then util.add(pool, pb) else realAt[pb.ppq] = true end
+      if pb.derived then util.add(pool, pb) else seats[pb.ppq] = nil end
     end
-    for ppq in pairs(realAt) do seats[ppq] = nil end
 
     -- Each pooled absorber adopts the seat it stands at, or has none left to fill and leaves the take.
     local restampPpqL, dropped = {}, {}  -- restampPpqL: absorber -> the seat's ppqL, where stale
-    for i = #pool, 1, -1 do
-      local absorber = pool[i]
+    for _, absorber in ipairs(pool) do
       local seat = seats[absorber.ppq]
       if seat then
         absorber.cents, absorber.shape = seat.cents, seat.shape
@@ -2301,7 +2303,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
 
     -- Consolidated assign: one entry per surviving pb where any of (ppqL restamped, raw changed,
     -- derived shape changed) needs to land.
-    for _, pb in ipairs(pbs) do
+    for _, pb in ipairs(gathered) do
       if pb.committed and not dropped[pb] then
         local newRaw       = tuning.centsToRaw(pb.cents + baseVoice.detuneAt(pb.ppq), pbLimCents)
         local restamp      = restampPpqL[pb]
@@ -2326,20 +2328,10 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild
     -- entry). I8: rebuild is a fixpoint.
     if dirt.has(chan) then
-      -- Derived base voices are routed out of columns; union them so the absorber pass seats
-      -- their detune jumps.
-      local derivedBaseVoice = {}
-      for _, spec in ipairs(fxOut.notes[chan]) do
-        if spec.baseVoice then util.add(derivedBaseVoice, spec) end
-      end
-      table.sort(derivedBaseVoice, index.order)   -- the union's cursors assume ppq order of both sources
-      local baseVoice = baseVoiceUnion(chan, derivedBaseVoice, carriedFor(fxOut.ran[chan]))
-
-      -- A derived base voice in the pass's own output ungates the channel (seatSpans nil).
+      local baseVoice   = baseVoiceUnion(chan, fxOut)
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
       local unparked    = unparkedPbsFor(chan)
-      local seatSpans   -- nil = ungated
-      if #derivedBaseVoice == 0 then seatSpans = seatScope(chan, replaceWins, baseVoice, unparked) end
+      local seatSpans   = seatScope(chan, replaceWins, baseVoice, unparked)   -- nil = ungated
 
       deriveChan(chan, replaceWins, seatSpans, baseVoice, unparked)
 
