@@ -2113,6 +2113,216 @@ local function inSeatScope(seatSpans, ppq)
   return false
 end
 
+-- The seats a channel's pbs must realise: detune onsets, densified curved segments, replace-curve
+-- breakpoints and the I2a anchor. see docs/tuning.md § Value-aware seats
+--post: result = seats, onsetAt (the set of detune-onset ppqs); writes nothing
+local function seatsFor(chan, replaceWins, seatSpans, baseVoice, unparked, gridStep)
+  local replaceWinAt, inKeptRange = replaceWins.replaceWinAt, replaceWins.inKeptRange
+
+  -- Detune onsets: every base-voice ppq whose detune differs from its predecessor, seeded by the
+  -- carried-in detune and walked per coalesced seat span. see docs/tuning.md § Seat-span-scoped onset walk
+  local onsets, onsetAt = {}, {}
+  for _, span in ipairs(seatSpans and spans.merge(seatSpans) or { { 0, math.huge } }) do
+    local prev = baseVoice.detuneAt(span[1] - 1)
+    for _, note in ipairs(baseVoice.between(span[1], span[2])) do
+      local detune = note.detune or 0
+      if detune ~= prev and not onsetAt[note.ppq] then
+        util.add(onsets, { ppq = note.ppq, ppqL = note.ppqL }); onsetAt[note.ppq] = true
+      end
+      prev = detune
+    end
+  end
+  -- Prevailing cents at any ppq: the replace curve inside a window, else the unparked authored
+  -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
+  local function streamValue(ppq)
+    local win  = replaceWinAt(ppq)
+    local src  = win and win.bps or unparked
+    local i    = util.firstAfter(src, ppq)
+    local A, B = src[i - 1], src[i]
+    if not A then return 0 end
+    if not B then return A.cents end
+    return curves.interpolate(A, B, ppq, 'cents')
+  end
+
+  -- The stream governing ppq, whichever owns it: a window's own curve inside one, the unparked
+  -- authored breakpoints outside. `into` is the segment ppq is entered on, `at` a breakpoint standing on it.
+  local function streamAround(ppq)
+    local win = replaceWinAt(ppq)
+    local src = win and win.bps or unparked
+    local i   = util.firstAtOrAfter(src, ppq)
+    local at  = src[i]
+    return src[i - 1], (at and at.ppq == ppq) and at or nil
+  end
+
+  -- Seats to realise: ppq -> { cents, ppqL, shape }; assign turns each into wire raw = centsToRaw(cents + detune).
+  -- Flat/held/absent needs one step seat; a ramping value splits onto a dual point plus a curved segment. see docs/tuning.md
+  local seats = {}
+  for _, onset in ipairs(onsets) do
+    if inKeptRange(onset.ppq) then goto nextOnset end   -- kept side: its seats stand from last pass
+    local cents    = streamValue(onset.ppq)
+    local into, at = streamAround(onset.ppq)
+    -- The segment the stream enters the onset on decides: a moving one smears the detune step
+    -- back across the preceding event (see docs/tuning.md § Value-aware seats).
+    local ramps = into and into.shape and into.shape ~= 'step'
+                  and (curves.isCurved(into.shape) or into.cents ~= cents)
+    if ramps then
+      -- Dual point (see docs/tuning.md § Value-aware seats): before/at carry old/new detune, both
+      -- linear so the curve rides through; a window-start onset (ppq 0) has no prior event.
+      if onset.ppq > 0 then
+        local dual = onset.ppq - DUAL_POINT_TICK
+        seats[dual] = { cents = cents, ppqL = time:toLogical(chan, dual), shape = 'linear' }
+      end
+      seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = 'linear' }
+    else
+      -- A breakpoint standing on the onset owns the segment leaving it, so the seat carries its
+      -- shape; with nothing there the stream is held and the seat steps.
+      seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = at and at.shape or 'step' }
+    end
+    ::nextOnset::
+  end
+
+  -- Densify each curved segment of `list` that contains an onset into a linear polyline on the
+  -- fixed CCINTERP grid -- stable keys (from authored ppqs) keep it churn-free.
+  local function densify(list)
+    for i = 1, #list - 1 do
+      local A, B = list[i], list[i + 1]
+      local nextOnset = onsets[util.firstAfter(onsets, A.ppq)]   -- onsets are ppq-ascending
+      if curves.isCurved(A.shape) and nextOnset and nextOnset.ppq < B.ppq then
+        local p = A.ppq + gridStep
+        while p < B.ppq do
+          if not seats[p] and not inKeptRange(p) and inSeatScope(seatSpans, p) then
+            seats[p] = { cents = streamValue(p), ppqL = time:toLogical(chan, p), shape = 'linear' }
+          end
+          p = p + gridStep
+        end
+      end
+    end
+  end
+  densify(unparked)
+
+  -- Seat each replace curve as derived seats carrying its shape; see docs/tuning.md §
+  -- Value-aware seats and densification for the rule. Onset seats above take priority.
+  for _, win in ipairs(replaceWins.wins) do
+    for _, bp in ipairs(win.bps) do
+      if not seats[bp.ppq] then
+        seats[bp.ppq] = { cents = bp.cents, ppqL = bp.ppqL, shape = bp.shape }
+      end
+    end
+    densify(win.bps)
+  end
+
+  -- Anchor a pb-active channel at its first base-voice onset (I2a):
+  -- without it, playback inherits the synth's unknown prior bend.
+  local first = baseVoice.first()
+  if first and not seats[first.ppq] and not inKeptRange(first.ppq)
+     and inSeatScope(seatSpans, first.ppq) then
+    -- The unparked pbs are ppq-ascending, so their head settles both questions. The jump test is
+    -- whole-channel: the span-bounded onset walk above could hide the only jump the channel has.
+    local firstUnparked = unparked[1]
+    local anchored  = firstUnparked ~= nil and firstUnparked.ppq <= first.ppq
+    local pbActive  = next(seats) ~= nil or firstUnparked ~= nil
+                      or (seatSpans ~= nil and baseVoice.anyDetuneJump())
+    if pbActive and not anchored then
+      seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
+    end
+  end
+  return seats, onsetAt
+end
+
+-- Match the channel's in-scope take pbs to the seats and stage every write that lands them.
+-- see docs/tuning.md § Absorber reconciliation
+local function reconcileSeats(chan, seats, onsetAt, replaceWins, seatSpans, baseVoice, unparked,
+                              pbLimCents, pbWrites)
+  local inSeatWindow, inKeptRange = replaceWins.inSeatWindow, replaceWins.inKeptRange
+
+  -- Both of a dual point's seats follow the onset's ownership: a pb one tick under an onset is
+  -- classified by that onset's side, so a seat never mints a rival pb.
+  local function keptOwned(ppq)
+    if onsetAt[ppq + DUAL_POINT_TICK] then return inKeptRange(ppq + DUAL_POINT_TICK) end
+    return inKeptRange(ppq)
+  end
+
+  -- Clones carry the index entry's uuid and origShape, naming their source as the pass rewrites shape.
+  -- The gather takes whatever stands at a seat too, since a dual point can fall a tick below its span.
+  local gathered = {}
+  for _, entry in ipairs(index.raw(chan).pbs) do
+    -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
+    -- generates no seat here; those kept-boundary seats stand from last pass.
+    if (inSeatScope(seatSpans, entry.ppq) or seats[entry.ppq]) and not keptOwned(entry.ppq) then
+      local pb = util.clone(entry)
+      pb.origShape = entry.shape
+      util.add(gathered, pb)
+    end
+  end
+  util.sortByPPQ(gathered)
+
+  -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
+  -- live window covers it or its window's host no longer runs.
+  local unparkedUuid = {}
+  for _, p in ipairs(unparked) do unparkedUuid[p.evt.uuid] = true end
+
+  -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); an absorber
+  -- standing at a seat is adopted, an unfilled seat mints one, and the leftovers are deleted.
+  local pool = {}
+  for _, pb in ipairs(gathered) do
+    -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
+    -- absorber matching below adopts or deletes it.
+    if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
+    if pb.derived then util.add(pool, pb) else seats[pb.ppq] = nil end
+  end
+
+  -- Each pooled absorber adopts the seat it stands at, or has none left to fill and leaves the take.
+  local restampPpqL, dropped = {}, {}  -- restampPpqL: absorber -> the seat's ppqL, where stale
+  for _, absorber in ipairs(pool) do
+    local seat = seats[absorber.ppq]
+    if seat then
+      absorber.cents, absorber.shape = seat.cents, seat.shape
+      -- A markerless seat (inside a window) carries no ppqL sidecar to restamp.
+      if absorber.ppqL ~= seat.ppqL and not inSeatWindow(absorber.ppq) then
+        restampPpqL[absorber] = seat.ppqL
+      end
+      seats[absorber.ppq] = nil
+    else
+      pbWrites.delete({ uuid = absorber.uuid })
+      dropped[absorber] = true
+    end
+  end
+
+  for ppq, seat in pairs(seats) do
+    local raw = tuning.centsToRaw(seat.cents + baseVoice.detuneAt(ppq), pbLimCents)
+    if inSeatWindow(ppq) then
+      -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
+      -- sidecar; recognized next rebuild by its window. see § Route-by-window
+      pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = seat.shape })
+    else
+      pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = seat.shape,
+                     cents = seat.cents, ppqL = seat.ppqL, derived = 'absorber' })
+    end
+  end
+
+  -- Consolidated assign: one entry per surviving pb where any of (ppqL restamped, raw changed,
+  -- derived shape changed) needs to land.
+  for _, pb in ipairs(gathered) do
+    if pb.committed and not dropped[pb] then
+      local newRaw       = tuning.centsToRaw(pb.cents + baseVoice.detuneAt(pb.ppq), pbLimCents)
+      local restamp      = restampPpqL[pb]
+      local shapeChanged = pb.derived and pb.shape ~= pb.origShape
+      if restamp or pb.raw ~= newRaw or shapeChanged then
+        local update = { ppqL = restamp, cents = pb.cents, val = newRaw }
+        -- The marker lands with the sidecar: a seat tagged in RAM that takes cents outside every window
+        -- must not read as authored next pass.
+        if pb.derived then update.shape, update.derived = pb.shape, pb.derived end
+        -- A markerless seat persists native MIDI only; strip the sidecar fields so the assign
+        -- stamps no metadata and the seat stays plain. Its ppq/val/shape still land.
+        if pb.derived and inSeatWindow(pb.ppq) then
+          update.cents, update.ppqL, update.derived = nil, nil, nil
+        end
+        pbWrites.assign({ uuid = pb.uuid }, update)
+      end
+    end
+  end
+end
+
 -- Reseat absorber pbs against the post-walk base-voice layout, recompute their raw vals,
 -- and stamp the detune cue on column pbs. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns, pbLimCents)
@@ -2121,208 +2331,6 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
   -- .notes only, so the head snapshot is current for this.
   local extras = extraColumns or {}
   local pbWrites = mmBatch()
-
-  -- Seat the base voice's detune stream, match the previous emission's pbs to the seats, and stage
-  -- the consolidated assign.
-  local function deriveChan(chan, replaceWins, seatSpans, baseVoice, unparked)
-    local replaceWinAt, inSeatWindow, inKeptRange =
-      replaceWins.replaceWinAt, replaceWins.inSeatWindow, replaceWins.inKeptRange
-
-    -- Detune onsets: every base-voice ppq whose detune differs from its predecessor, seeded by the
-    -- carried-in detune and walked per coalesced seat span. see docs/tuning.md § Seat-span-scoped onset walk
-    local onsets, onsetAt = {}, {}
-    for _, span in ipairs(seatSpans and spans.merge(seatSpans) or { { 0, math.huge } }) do
-      local prev = baseVoice.detuneAt(span[1] - 1)
-      for _, note in ipairs(baseVoice.between(span[1], span[2])) do
-        local detune = note.detune or 0
-        if detune ~= prev and not onsetAt[note.ppq] then
-          util.add(onsets, { ppq = note.ppq, ppqL = note.ppqL }); onsetAt[note.ppq] = true
-        end
-        prev = detune
-      end
-    end
-    -- Prevailing cents at any ppq: the replace curve inside a window, else the unparked authored
-    -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
-    local function streamValue(ppq)
-      local win  = replaceWinAt(ppq)
-      local src  = win and win.bps or unparked
-      local i    = util.firstAfter(src, ppq)
-      local A, B = src[i - 1], src[i]
-      if not A then return 0 end
-      if not B then return A.cents end
-      return curves.interpolate(A, B, ppq, 'cents')
-    end
-
-    -- The stream governing ppq, whichever owns it: a window's own curve inside one, the unparked
-    -- authored breakpoints outside. `into` is the segment ppq is entered on, `at` a breakpoint standing on it.
-    local function streamAround(ppq)
-      local win = replaceWinAt(ppq)
-      local src = win and win.bps or unparked
-      local i   = util.firstAtOrAfter(src, ppq)
-      local at  = src[i]
-      return src[i - 1], (at and at.ppq == ppq) and at or nil
-    end
-
-    -- Seats to realise: ppq -> { cents, ppqL, shape }; assign turns each into wire raw = centsToRaw(cents + detune).
-    -- Flat/held/absent needs one step seat; a ramping value splits onto a dual point plus a curved segment. see docs/tuning.md
-    local seats = {}
-    for _, onset in ipairs(onsets) do
-      if inKeptRange(onset.ppq) then goto nextOnset end   -- kept side: its seats stand from last pass
-      local cents    = streamValue(onset.ppq)
-      local into, at = streamAround(onset.ppq)
-      -- The segment the stream enters the onset on decides: a moving one smears the detune step
-      -- back across the preceding event (see docs/tuning.md § Value-aware seats).
-      local ramps = into and into.shape and into.shape ~= 'step'
-                    and (curves.isCurved(into.shape) or into.cents ~= cents)
-      if ramps then
-        -- Dual point (see docs/tuning.md § Value-aware seats): before/at carry old/new detune, both
-        -- linear so the curve rides through; a window-start onset (ppq 0) has no prior event.
-        if onset.ppq > 0 then
-          local dual = onset.ppq - DUAL_POINT_TICK
-          seats[dual] = { cents = cents, ppqL = time:toLogical(chan, dual), shape = 'linear' }
-        end
-        seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = 'linear' }
-      else
-        -- A breakpoint standing on the onset owns the segment leaving it, so the seat carries its
-        -- shape; with nothing there the stream is held and the seat steps.
-        seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = at and at.shape or 'step' }
-      end
-      ::nextOnset::
-    end
-
-    -- Densify each curved segment of `list` that contains an onset into a linear polyline on the
-    -- fixed CCINTERP grid -- stable keys (from authored ppqs) keep it churn-free.
-    local function densify(list)
-      for i = 1, #list - 1 do
-        local A, B = list[i], list[i + 1]
-        local nextOnset = onsets[util.firstAfter(onsets, A.ppq)]   -- onsets are ppq-ascending
-        if curves.isCurved(A.shape) and nextOnset and nextOnset.ppq < B.ppq then
-          local p = A.ppq + gridStep
-          while p < B.ppq do
-            if not seats[p] and not inKeptRange(p) and inSeatScope(seatSpans, p) then
-              seats[p] = { cents = streamValue(p), ppqL = time:toLogical(chan, p), shape = 'linear' }
-            end
-            p = p + gridStep
-          end
-        end
-      end
-    end
-    densify(unparked)
-
-    -- Seat each replace curve as derived seats carrying its shape; see docs/tuning.md §
-    -- Value-aware seats and densification for the rule. Onset seats above take priority.
-    for _, win in ipairs(replaceWins.wins) do
-      for _, bp in ipairs(win.bps) do
-        if not seats[bp.ppq] then
-          seats[bp.ppq] = { cents = bp.cents, ppqL = bp.ppqL, shape = bp.shape }
-        end
-      end
-      densify(win.bps)
-    end
-
-    -- Anchor a pb-active channel at its first base-voice onset (I2a):
-    -- without it, playback inherits the synth's unknown prior bend.
-    local first = baseVoice.first()
-    if first and not seats[first.ppq] and not inKeptRange(first.ppq)
-       and inSeatScope(seatSpans, first.ppq) then
-      -- The unparked pbs are ppq-ascending, so their head settles both questions. The jump test is
-      -- whole-channel: the span-bounded onset walk above could hide the only jump the channel has.
-      local firstUnparked = unparked[1]
-      local anchored  = firstUnparked ~= nil and firstUnparked.ppq <= first.ppq
-      local pbActive  = next(seats) ~= nil or firstUnparked ~= nil
-                        or (seatSpans ~= nil and baseVoice.anyDetuneJump())
-      if pbActive and not anchored then
-        seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
-      end
-    end
-
-    -- Clones carry the index entry's uuid and origShape, naming their source as the pass rewrites shape.
-    -- The gather takes whatever stands at a seat too, since a dual point can fall a tick below its span.
-
-    -- Both of a dual point's seats follow the onset's ownership: a pb one tick under an onset is
-    -- classified by that onset's side, so a seat never mints a rival pb.
-    local function keptOwned(ppq)
-      if onsetAt[ppq + DUAL_POINT_TICK] then return inKeptRange(ppq + DUAL_POINT_TICK) end
-      return inKeptRange(ppq)
-    end
-    local gathered = {}
-    for _, entry in ipairs(index.raw(chan).pbs) do
-      -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
-      -- generates no seat here; those kept-boundary seats stand from last pass.
-      if (inSeatScope(seatSpans, entry.ppq) or seats[entry.ppq]) and not keptOwned(entry.ppq) then
-        local pb = util.clone(entry)
-        pb.origShape = entry.shape
-        util.add(gathered, pb)
-      end
-    end
-    util.sortByPPQ(gathered)
-
-    -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
-    -- live window covers it or its window's host no longer runs.
-    local unparkedUuid = {}
-    for _, p in ipairs(unparked) do unparkedUuid[p.evt.uuid] = true end
-
-    -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); an absorber
-    -- standing at a seat is adopted, an unfilled seat mints one, and the leftovers are deleted.
-    local pool = {}
-    for _, pb in ipairs(gathered) do
-      -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
-      -- absorber matching below adopts or deletes it.
-      if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
-      if pb.derived then util.add(pool, pb) else seats[pb.ppq] = nil end
-    end
-
-    -- Each pooled absorber adopts the seat it stands at, or has none left to fill and leaves the take.
-    local restampPpqL, dropped = {}, {}  -- restampPpqL: absorber -> the seat's ppqL, where stale
-    for _, absorber in ipairs(pool) do
-      local seat = seats[absorber.ppq]
-      if seat then
-        absorber.cents, absorber.shape = seat.cents, seat.shape
-        -- A markerless seat (inside a window) carries no ppqL sidecar to restamp.
-        if absorber.ppqL ~= seat.ppqL and not inSeatWindow(absorber.ppq) then
-          restampPpqL[absorber] = seat.ppqL
-        end
-        seats[absorber.ppq] = nil
-      else
-        pbWrites.delete({ uuid = absorber.uuid })
-        dropped[absorber] = true
-      end
-    end
-
-    for ppq, seat in pairs(seats) do
-      local raw = tuning.centsToRaw(seat.cents + baseVoice.detuneAt(ppq), pbLimCents)
-      if inSeatWindow(ppq) then
-        -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
-        -- sidecar; recognized next rebuild by its window. see § Route-by-window
-        pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = seat.shape })
-      else
-        pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = seat.shape,
-                       cents = seat.cents, ppqL = seat.ppqL, derived = 'absorber' })
-      end
-    end
-
-    -- Consolidated assign: one entry per surviving pb where any of (ppqL restamped, raw changed,
-    -- derived shape changed) needs to land.
-    for _, pb in ipairs(gathered) do
-      if pb.committed and not dropped[pb] then
-        local newRaw       = tuning.centsToRaw(pb.cents + baseVoice.detuneAt(pb.ppq), pbLimCents)
-        local restamp      = restampPpqL[pb]
-        local shapeChanged = pb.derived and pb.shape ~= pb.origShape
-        if restamp or pb.raw ~= newRaw or shapeChanged then
-          local update = { ppqL = restamp, cents = pb.cents, val = newRaw }
-          -- The marker lands with the sidecar: a seat tagged in RAM that takes cents outside every window
-          -- must not read as authored next pass.
-          if pb.derived then update.shape, update.derived = pb.shape, pb.derived end
-          -- A markerless seat persists native MIDI only; strip the sidecar fields so the assign
-          -- stamps no metadata and the seat stays plain. Its ppq/val/shape still land.
-          if pb.derived and inSeatWindow(pb.ppq) then
-            update.cents, update.ppqL, update.derived = nil, nil, nil
-          end
-          pbWrites.assign({ uuid = pb.uuid }, update)
-        end
-      end
-    end
-  end
 
   for chan = 1, 16 do
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild
@@ -2333,7 +2341,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       local unparked    = unparkedPbsFor(chan)
       local seatSpans   = seatScope(chan, replaceWins, baseVoice, unparked)   -- nil = ungated
 
-      deriveChan(chan, replaceWins, seatSpans, baseVoice, unparked)
+      local seats, onsetAt = seatsFor(chan, replaceWins, seatSpans, baseVoice, unparked, gridStep)
+      reconcileSeats(chan, seats, onsetAt, replaceWins, seatSpans, baseVoice, unparked,
+                     pbLimCents, pbWrites)
 
       -- An out-of-scope column pb keeps last pass's cue: no base voice around it moved.
       for _, p in ipairs(unparked) do
