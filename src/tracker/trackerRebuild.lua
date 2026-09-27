@@ -1903,17 +1903,14 @@ end
 
 ----- Rebuild Pbs
 
--- A ramp onset's dual point rides one tick before the onset (see docs/tuning.md § Value-aware
--- seats), so every span that must contain an onset's seats reaches one tick back.
+-- A ramp onset's dual point rides one tick before the onset (see docs/tuning.md § Value-aware seats).
 local DUAL_POINT_TICK = 1
 
---shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
--- A channel's base-voice onset stream: the raw index's surviving notes unioned with the pass's
--- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
-local function baseVoiceUnion(chan, fxOut)
-  local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
-  -- Derived base voices are routed out of columns; union them so the absorber pass seats their
-  -- detune jumps.
+-- Accessors for a channel's base-voice notes: the raw index's lane-1 plus the pass's
+-- derived base voices. see docs/tuning.md § Absorber reconciliation
+--shape: makeBaseVoice = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
+local function makeBaseVoice(chan, fxOut)
+  local indexed = index.raw(chan).notes
   local derived = {}
   for _, spec in ipairs(fxOut.notes[chan]) do
     if spec.baseVoice then util.add(derived, spec) end
@@ -2242,19 +2239,16 @@ local function reconcileSeats(chan, seats, onsetAt, replaceWins, seatSpans, base
     return inKeptRange(ppq)
   end
 
-  -- Clones carry the index entry's uuid and origShape, naming their source as the pass rewrites shape.
   -- The gather takes whatever stands at a seat too, since a dual point can fall a tick below its span.
+  -- It inherits the raw index's order, so a same-ppq pair meets the seats in index.order.
   local gathered = {}
   for _, entry in ipairs(index.raw(chan).pbs) do
     -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
     -- generates no seat here; those kept-boundary seats stand from last pass.
     if (inSeatScope(seatSpans, entry.ppq) or seats[entry.ppq]) and not keptOwned(entry.ppq) then
-      local pb = util.clone(entry)
-      pb.origShape = entry.shape
-      util.add(gathered, pb)
+      util.add(gathered, entry)
     end
   end
-  util.sortByPPQ(gathered)
 
   -- Column membership is authorship: a take pb the column doesn't hold is a seat, whether a
   -- live window covers it or its window's host no longer runs.
@@ -2263,28 +2257,21 @@ local function reconcileSeats(chan, seats, onsetAt, replaceWins, seatSpans, base
 
   -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); an absorber
   -- standing at a seat is adopted, an unfilled seat mints one, and the leftovers are deleted.
-  local pool = {}
-  for _, pb in ipairs(gathered) do
-    -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
-    -- absorber matching below adopts or deletes it.
-    if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
-    if pb.derived then util.add(pool, pb) else seats[pb.ppq] = nil end
+  local reals, pool = {}, {}
+  for _, entry in ipairs(gathered) do
+    -- A markerless pb is a generated seat, so it pools with the absorbers.
+    if entry.derived or not unparkedUuid[entry.uuid] then util.add(pool, entry)
+    else util.add(reals, entry); seats[entry.ppq] = nil end
   end
 
   -- Each pooled absorber adopts the seat it stands at, or has none left to fill and leaves the take.
-  local restampPpqL, dropped = {}, {}  -- restampPpqL: absorber -> the seat's ppqL, where stale
+  local adopted = {}   -- absorber -> the seat it adopts
   for _, absorber in ipairs(pool) do
     local seat = seats[absorber.ppq]
     if seat then
-      absorber.cents, absorber.shape = seat.cents, seat.shape
-      -- A markerless seat (inside a window) carries no ppqL sidecar to restamp.
-      if absorber.ppqL ~= seat.ppqL and not inSeatWindow(absorber.ppq) then
-        restampPpqL[absorber] = seat.ppqL
-      end
-      seats[absorber.ppq] = nil
+      adopted[absorber], seats[absorber.ppq] = seat, nil
     else
       pbWrites.delete({ uuid = absorber.uuid })
-      dropped[absorber] = true
     end
   end
 
@@ -2300,24 +2287,30 @@ local function reconcileSeats(chan, seats, onsetAt, replaceWins, seatSpans, base
     end
   end
 
-  -- Consolidated assign: one entry per surviving pb where any of (ppqL restamped, raw changed,
-  -- derived shape changed) needs to land.
-  for _, pb in ipairs(gathered) do
-    if pb.committed and not dropped[pb] then
-      local newRaw       = tuning.centsToRaw(pb.cents + baseVoice.detuneAt(pb.ppq), pbLimCents)
-      local restamp      = restampPpqL[pb]
-      local shapeChanged = pb.derived and pb.shape ~= pb.origShape
-      if restamp or pb.raw ~= newRaw or shapeChanged then
-        local update = { ppqL = restamp, cents = pb.cents, val = newRaw }
-        -- The marker lands with the sidecar: a seat tagged in RAM that takes cents outside every window
+  -- A real pb keeps its cents and shape; only its wire value follows the detune under it.
+  for _, real in ipairs(reals) do
+    local newRaw = tuning.centsToRaw(real.cents + baseVoice.detuneAt(real.ppq), pbLimCents)
+    if real.committed and real.raw ~= newRaw then
+      pbWrites.assign({ uuid = real.uuid }, { cents = real.cents, val = newRaw })
+    end
+  end
+
+  -- An adopted absorber takes its seat's cents and shape, and its ppqL where stale.
+  for _, absorber in ipairs(pool) do
+    local seat = adopted[absorber]
+    if seat and absorber.committed then
+      local newRaw     = tuning.centsToRaw(seat.cents + baseVoice.detuneAt(absorber.ppq), pbLimCents)
+      local markerless = inSeatWindow(absorber.ppq)
+      local restamp    = not markerless and absorber.ppqL ~= seat.ppqL and seat.ppqL or nil
+      if restamp or absorber.raw ~= newRaw or absorber.shape ~= seat.shape then
+        -- The marker lands with the sidecar: a markerless pb that takes cents outside every window
         -- must not read as authored next pass.
-        if pb.derived then update.shape, update.derived = pb.shape, pb.derived end
+        local update = { ppqL = restamp, cents = seat.cents, val = newRaw,
+                         shape = seat.shape, derived = absorber.derived or 'absorber' }
         -- A markerless seat persists native MIDI only; strip the sidecar fields so the assign
         -- stamps no metadata and the seat stays plain. Its ppq/val/shape still land.
-        if pb.derived and inSeatWindow(pb.ppq) then
-          update.cents, update.ppqL, update.derived = nil, nil, nil
-        end
-        pbWrites.assign({ uuid = pb.uuid }, update)
+        if markerless then update.cents, update.ppqL, update.derived = nil, nil, nil end
+        pbWrites.assign({ uuid = absorber.uuid }, update)
       end
     end
   end
@@ -2336,7 +2329,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild
     -- entry). I8: rebuild is a fixpoint.
     if dirt.has(chan) then
-      local baseVoice   = baseVoiceUnion(chan, fxOut)
+      local baseVoice   = makeBaseVoice(chan, fxOut)
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
       local unparked    = unparkedPbsFor(chan)
       local seatSpans   = seatScope(chan, replaceWins, baseVoice, unparked)   -- nil = ungated
