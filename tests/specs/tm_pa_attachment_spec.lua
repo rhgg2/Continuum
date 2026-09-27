@@ -7,6 +7,12 @@
 -- to move or cull them with their host. see docs/trackerManager.md § PA binding
 --
 -- Delay is the cheap reachable case; the same hole opens under the tail walk's nudge.
+--
+-- Lane binding is the same relation read from the columns: dispatch seats a PA in the lane of the
+-- note whose logical span covers its onset, the span being the note's lane bound. A delayed host
+-- keeps the PAs in its own delay gap, a negatively delayed one takes none from the note ahead of
+-- it, and a PA no span covers is seated nowhere. The bound includes the note's overlap past its
+-- lane successor, so a PA under that overrun still binds, though a later onset sits between them.
 
 local t = require('support')
 
@@ -34,6 +40,28 @@ local function delayedHostWithPA(harness)
   h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 70 })
   h.tm:flush()
   return h
+end
+
+local function note(lane, ppq, endppq, pitch, extra)
+  local n = { evType = 'note', ppq = ppq, endppq = endppq, chan = 1, pitch = pitch,
+              vel = 100, detune = 0, lane = lane }
+  for k, v in pairs(extra or {}) do n[k] = v end
+  return n
+end
+
+local function paAt(ppq, pitch)
+  return { evType = 'pa', ppq = ppq, chan = 1, pitch = pitch, vel = 70 }
+end
+
+-- The lane each chan-1 PA is seated in, keyed by its column onset; a PA no lane holds is absent.
+local function paLanes(h)
+  local out = {}
+  for lane, events in ipairs(h.tm:authoredLanes(1)) do
+    for _, e in ipairs(events) do
+      if e.evType == 'pa' then out[e.ppq] = lane end
+    end
+  end
+  return out
 end
 
 -- Two PAs under one undelayed host, so a resize strands both at once.
@@ -90,6 +118,74 @@ return {
       h.tm:flush()
 
       t.deepEq(pasOf(h.fm), {}, 'both PAs died with the shrink, neither was skipped')
+    end,
+  },
+
+  -- Lane 2's host is authored at [0, 480) and delayed a row, so it sounds from raw 240. Lane 1
+  -- holds a same-pitch note far off, which a pitch-only guess would seize.
+  {
+    name = "a delayed host's PAs in its delay gap land in its lane",
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(1, 960, 1440, 60))
+      h.tm:addEvent(note(2, 0, 480, 60, { delay = 1000 }))
+      for _, ppq in ipairs({ 0, 120, 360 }) do h.tm:addEvent(paAt(ppq, 60)) end
+      h.tm:flush()
+
+      t.deepEq(paLanes(h), { [0] = 2, [120] = 2, [360] = 2 },
+        "every PA sits in the delayed host's lane, the two ahead of its raw onset included")
+    end,
+  },
+
+  -- Lane 2's host is authored at 480 and delayed a row early, so it sounds from raw 240 -- over
+  -- the PA at 360, which lane 1's note covers logically. The second pass re-dispatches the PA.
+  {
+    name = "a negatively delayed host does not take its neighbour's PA, across passes",
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(1, 0, 480, 60))
+      h.tm:addEvent(note(2, 480, 960, 60, { delay = -1000 }))
+      h.tm:addEvent(paAt(360, 60))
+      h.tm:flush()
+      t.deepEq(paLanes(h), { [360] = 1 }, 'the PA sits in the lane of the note covering it')
+
+      local uuid
+      for _, c in h.fm:ccsRaw() do if c.evType == 'pa' then uuid = c.uuid end end
+      h.tm:assignEvent(uuid, { vel = 71 })
+      h.tm:flush()
+
+      t.deepEq(paLanes(h), { [360] = 1 }, 'and stays there when the next pass dispatches it again')
+    end,
+  },
+
+  {
+    name = 'a PA no note covers is seated in no lane',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(1, 0, 240, 60))
+      h.tm:addEvent(paAt(480, 60))
+      h.tm:flush()
+
+      t.deepEq(pasOf(h.fm), { 480 }, 'mm holds the PA')
+      t.deepEq(paLanes(h), {}, 'but no lane does, though a note of its pitch is on the channel')
+    end,
+  },
+
+  -- The pitch-60 host's bound is its successor's onset at 240 plus its overlap of 20, so it covers
+  -- the PA at 250 from behind the pitch-62 note, the latest onset on the lane.
+  {
+    name = "a PA under a host's overlap binds to the host past the successor's onset",
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(1, 0, 480, 60, { overlap = 20 }))
+      h.tm:addEvent(note(1, 240, 480, 62))
+      h.tm:addEvent(paAt(250, 60))
+      h.tm:flush()
+      local host = h.tm:authoredLanes(1)[1][1]
+      t.truthy(host.pitch == 60 and host.endppqC == 260,
+        "fixture check: the host leads lane 1, bound at its successor's onset plus its overlap")
+
+      t.deepEq(paLanes(h), { [250] = 1 }, "the PA sits in the host's lane")
     end,
   },
 

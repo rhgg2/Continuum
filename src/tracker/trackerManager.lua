@@ -213,18 +213,6 @@ do
     return REALISATION.any[field] or (ofKind and ofKind[field]) or false
   end
 
-  -- A channel's parked notes, collected off its lanes, where they sit flagged among the on-take ones.
-  --post: fresh result = the channel's parked note events, in lane then column order
-  function frame.parkedNotes(chan)
-    local out = {}
-    for _, col in ipairs(frame.channels[chan].onTake.notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.parked and util.isNote(evt) then util.add(out, evt) end
-      end
-    end
-    return out
-  end
-
   -- Lane bound (docs/trackerManager.md § Lane occupancy); floored a tick past the event's own onset.
   -- takeLenL is hoisted by the caller, not read from event/mm.
   function frame.clippedSpanEnd(evt, takeLenL, population)

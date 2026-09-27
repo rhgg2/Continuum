@@ -954,13 +954,13 @@ place, and a carried spec files it under its host (§ Region-replace parking).
 ### PA dispatch
 
 `rebuildPA` attaches each on-take `pa` to the note column whose voice it
-modulates. It runs after column layout so the view and fx expansion read
+modulates (§ PA binding). It runs after column layout so the view and fx expansion read
 PAs inline, after externals so foreign-MIDI PAs find their host, and after
 the stash seat so a PA under an already-parked host finds that host's lane.
-Lane bounds have not run, so that host's span is bound by `clippedSpanEnd`
+Lane bounds have not run, so every note's span is bound by `clippedSpanEnd`
 rather than read off its `endppqC`. A parked PA is not dispatched: the stash
-seat holds it. Dispatch splices in order (`spliceEvent`), so nothing
-downstream re-sorts.
+seat holds it. A PA no note covers is not dispatched either, and no lane holds it.
+Dispatch splices in order (`spliceEvent`), so nothing downstream re-sorts.
 
 ### Note host clips and windows
 
@@ -1426,7 +1426,8 @@ the lanes that hold parked hosts, not the channel's PA count.
 A lane's authored notes are its column's events, the parked ones that have left the take seated among
 them under the `parked` flag, and a clip is asked of that population. `frame.clippedSpanEnd` returns an event's own ceiling
 — its authored `endppq`, or the take length — clipped to the strict-next onset of the population it
-is handed plus the event's own `overlap`. The population is an argument, so a caller chooses which
+is handed plus the event's own `overlap`, which is at most 1/8 beat — a ceiling the PA seek
+relies on (§ PA binding). The population is an argument, so a caller chooses which
 lane it asks about, and `frame.nextOnLane` is the seek over it. An fx host's window end and a parked
 event's render clip are that same number.
 
@@ -1437,8 +1438,7 @@ parked — the note the derived output stands in for.
 `tm:authoredLanes` publishes a channel's lanes — what a renderer addresses, since what the author
 sees on a lane is its whole population. Each is the column's own `events` table, so the order is the
 column's and the cell carry (§ Note-lane renewal) holds for every lane, parked or not. A reader that
-wants the take alone skips flagged events, and `frame.parkedNotes(chan)` collects a channel's
-flagged ones.
+wants the take alone skips flagged events.
 
 A cc column seats its parked events the same way, and `tm:authoredCCs` hands back each column's own
 `events` table; so does the pb column, through `tm:authoredPb`, where order is ppq alone, there
@@ -1809,13 +1809,17 @@ above is defence in depth.
 
 ## PA binding
 
-`findNoteColumnForPitch(channel, pa, takeLenL)` prefers the **active voice**
-— an on-take note whose interval contains the PA's onset with matching
-pitch, then a parked one whose lane bound does. If no voice is active,
-any column containing any on-take note of that pitch accepts. PAs
-with no matching pitch anywhere in the channel are dropped.
+A PA binds to the lane of the **covering voice**: a note of its pitch whose lane bound covers
+the PA's logical onset, `note.ppq <= pa.ppqL < clippedSpanEnd(note)`. The test reads the columns,
+so it is logical for on-take and parked notes alike. On-take cover beats parked cover whatever the
+lane, and among either the lowest lane wins. A PA no note covers binds to no lane, and stays in `mm`.
 
-Ownership in um is a separate question from column binding, and um tests
+Each lane is a seek. The walk goes back from the PA's onset, and stops once it has passed an onset
+group whose onset plus the overlap ceiling (§ Lane occupancy) is at or before the PA's: every
+earlier note's bound ends by then. So a PA costs a bisection per lane and a walk over the ceiling's
+reach, whatever the channel holds.
+
+Ownership in um is a separate question from column binding, though um also tests
 it in the **logical** frame (`index.forEachAttachedPA`). A PA carries its own
 `ppqL` and the CC walk reswings it from that seat, exactly as it does a
 note. So a host's realisation moves independently of the PAs it owns: a

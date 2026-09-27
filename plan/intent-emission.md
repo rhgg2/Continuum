@@ -32,10 +32,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: PA dispatch seeks its covering note per lane, logically (§ Reading intent 2)
 - 2026-09-27 tm: base-voice union and PC synthesis read intent through the seat stamp (§ Reading intent 3, § Emission's output 3)
 - 2026-09-27 tm: keep each channel's fx hosts on the frame, retire index.fxHosts (§ Reading intent 2)
 - 2026-09-27 tm: absorbers read pbs off the column; pb park seeds its row (§ Reading intent 2)
-- 2026-09-27 tm: the realisation map's parked share covers every kind (design § Emission's output 4)
 
 ## Now
 
@@ -43,9 +43,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **PA dispatch finds its note without walking the channel** (§ Reading intent 2) —
-   `findNoteColumnForPitch` scans the whole of um's note index and then `frame.parkedNotes` for every
-   PA it dispatches, so it is O(channel) per PA. Rewrite it to seek the covering note by pitch and
-   onset, and `frame.parkedNotes` retires with its last caller. Spec: a PA under a parked host and one
-   under an on-take note each land in their host's lane.
 

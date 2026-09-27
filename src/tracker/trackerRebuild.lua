@@ -948,44 +948,48 @@ end
 
 ----- Rebuild PA
 
--- takeLenL is hoisted by the caller: a parked host's lane bound is derived here, as its endppqC
--- is stamped only by the lane-bound pass after dispatch.
-local function findNoteColumnForPitch(channel, pa, takeLenL)
-  local notes = channel.onTake.notes
-  -- Pre-commit restores can't match -- their endppq is nil until the walk derives it.
-  local coveringLane
-  for _, rec in ipairs(index.raw(channel.chan).notes) do
-    if isAuthored(rec) and rec.endppq and rec.pitch == pa.pitch and rec.ppq <= pa.ppq
-       and rec.endppq > pa.ppq and (coveringLane == nil or rec.lane < coveringLane) then
-      coveringLane = rec.lane
+local OVERLAP_CEILING_BEATS = 1/8   -- no note's overlap exceeds it; see docs/trackerManager.md § Lane occupancy
+
+-- A lane's cover of pa's onset, by the lane bound; the walk back stops past an onset group whose
+-- successors' bounds cannot reach pa. endppqC is stamped after dispatch, so the bound is derived.
+--post: 'onTake' if an on-take note of pa's pitch covers, else 'parked' if a parked one does
+local function coverOnLane(events, pa, takeLenL, reachPpq)
+  local parkedCovers, floor = false, -math.huge
+  for i = util.firstAfter(events, pa.ppqL) - 1, 1, -1 do
+    local evt = events[i]
+    if evt.ppq < floor then break end
+    if util.isNote(evt) then
+      if evt.pitch == pa.pitch and pa.ppqL < frame.clippedSpanEnd(evt, takeLenL, events) then
+        if not evt.parked then return 'onTake' end
+        parkedCovers = true
+      end
+      if evt.ppq + reachPpq <= pa.ppqL then floor = evt.ppq end
     end
   end
-  if coveringLane then return notes[coveringLane], coveringLane end
+  return parkedCovers and 'parked' or nil
+end
 
-  local ppqL = pa.ppqL or pa.ppq
-  for _, evt in ipairs(frame.parkedNotes(channel.chan)) do
-    if evt.pitch == pa.pitch and evt.ppq <= ppqL
-       and frame.clippedSpanEnd(evt, takeLenL, notes[evt.lane].events) > ppqL then
-      return notes[evt.lane], evt.lane
-    end
-  end
-
-  -- Pitch-only fallback: frame-agnostic, so the columns serve it (projected PAs included).
+-- The note column whose voice pa modulates: on-take cover beats parked, then the lowest lane wins.
+--post: result = nil iff no note of pa's pitch covers pa's logical onset
+local function findNoteColumnForPitch(channel, pa, takeLenL, reachPpq)
+  local notes, parkedLane = channel.onTake.notes, nil
   for lane, col in ipairs(notes) do
-    for _, evt in ipairs(col.events) do
-      if evt.pitch == pa.pitch and not evt.parked then return col, lane end
-    end
+    local cover = coverOnLane(col.events, pa, takeLenL, reachPpq)
+    if cover == 'onTake' then return col, lane end
+    if cover == 'parked' then parkedLane = parkedLane or lane end
   end
+  if parkedLane then return notes[parkedLane], parkedLane end
 end
 
 -- Dispatches on-take pas only; a parked one is seated from the stash.
 local function rebuildPA()
+  local reachPpq = OVERLAP_CEILING_BEATS * mm:resolution()
   for chan = 1, 16 do
     if dirt.has(chan) then
       local takeLenL = time:toLogical(chan, time:length())
       for _, evt in ipairs(index.raw(chan).pas) do
-        if dirt.covers(chan, evt.ppqL or evt.ppq, 'note') then
-          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt, takeLenL)
+        if dirt.covers(chan, evt.ppqL, 'note') then
+          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt, takeLenL, reachPpq)
           if noteCol then
             local colEvt = columnEvent(evt, { lane = lane })
             projectEvent(colEvt, chan)

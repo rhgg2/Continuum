@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — PA lane binding reads logical cover off the columns, a seek per lane, over um's
+  raw note scan, the parked walk and the pitch-only fallback. Raw cover disagreed with um's logical
+  ownership under delay, and the fallback's guess shifted between passes. On-take cover beats
+  parked, within a lane as across lanes, and an uncovered PA binds nowhere. The seek's stop relies
+  on overlap staying under 1/8 beat, unenforced until overlap is authored.
+
 - **2026-09-27** — The write doors shed um's decoration (`committed`, `colEvt`) along with cues,
   over filtering it where `refreshEntry` and `makeEntry` read mm. groupManager's clipboard clones
   index entries, so mm held another note's `colEvt`, and a reconcile during a rebuild copied it over

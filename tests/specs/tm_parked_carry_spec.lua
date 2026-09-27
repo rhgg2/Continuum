@@ -445,4 +445,27 @@ return {
     end,
   },
 
+  {
+    -- Two same-pitch spans cover the pa: a parked host's in lane 1, and an on-take note's in lane 2.
+    -- The pa rides the voice that sounds, so the on-take note takes it though its lane is higher.
+    name = 'a pa covered by a parked host and an on-take note binds to the on-take one',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(0, 60, 1, { lane = 1, endppq = 480 }))
+      h.tm:addEvent(note(240, 60, 1, { lane = 2, endppq = 480 }))
+      h.tm:flush()
+      h.ds:assign('fxRegions', arpRegion)
+      h.tm:rebuild()
+      local parkedHosts = harness.parkedNotes(h.tm, 1)
+      t.truthy(#parkedHosts == 1 and parkedHosts[1].lane == 1 and parkedHosts[1].endppqC > 300,
+        "fixture check: the lane-1 host parked, its span over the pa's onset")
+
+      h.tm:addEvent({ evType = 'pa', ppq = 300, chan = 1, pitch = 60, vel = 70 }); h.tm:flush()
+
+      local pas = lanePAs(h, 2)
+      t.truthy(#pas == 1 and not pas[1].parked, "the pa sits on the take in the on-take note's lane")
+      t.eq(#mmPAs(h), 1, 'and mm holds it')
+    end,
+  },
+
 }

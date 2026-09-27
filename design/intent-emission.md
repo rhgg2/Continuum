@@ -118,3 +118,10 @@ Moved to `docs/trackerManager.md` § The pipeline.
 
 1. **The pattern editor's curve readback.** It reads `val + detune` off the pb column. Whether a
    readback of intent should include the cue is unsettled.
+
+1. **PAs ahead of a delayed note-on.** A PA belongs to the note whose logical span covers it
+   (`docs/trackerManager.md` § PA binding), yet it realises at its own seat, with no delay. A delay
+   reaches 9999 millibeats, so a host's PAs on the rows before its delayed note-on reach the take
+   before its voice exists. The lead candidate is the prevailing value — the last such PA realises
+   at the note-on, and those before it do not sound. A PA seated off `fromLogical(ppqL)` meets the
+   rebuild rule (`docs/timing.md` § Rebuild rule), which reads the divergence as stale swing.
