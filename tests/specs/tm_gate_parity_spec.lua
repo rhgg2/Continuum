@@ -725,14 +725,15 @@ return {
       generators.kinds.pbFlatReplace = nil
     end,
   },
-  -- The base-voice union and PC synthesis walk um's index in raw order but read an authored note's
-  -- lane, detune and sample through its seat stamp (docs/tuning.md § Absorber reconciliation,
-  -- docs/trackerManager.md § PC synthesis). The note at 0 parks under an arp region, so the pass
-  -- runs beside a parked note; the pb at 120 makes the channel pb-active. The last step adds a
-  -- clone of 480's index entry -- gm's clipboard shape -- whose stamp must name its own seat, or
-  -- the absorber and pc at 1440 would read 480's detune and sample. The clone's tail is open, so
-  -- the tail walk writes its note-off to mm mid-rebuild: that write reconciles the entry after its
-  -- column stamped it, and is where a leaked colEvt would overwrite the stamp before emission.
+  -- The absorber pass reads the base voice off um's index, lane and detune included, and PC
+  -- synthesis walks um's index in raw order but reads an authored note's lane and sample through
+  -- its seat stamp (docs/tuning.md § Absorber reconciliation, docs/trackerManager.md § PC
+  -- synthesis). The note at 0 parks under an arp region, so the pass runs beside a parked note; the
+  -- pb at 120 makes the channel pb-active. The last step adds a clone of 480's index entry -- gm's
+  -- clipboard shape -- whose stamp must name its own seat, or the pc at 1440 would read 480's
+  -- sample. The clone's tail is open, so the tail walk writes its note-off to mm mid-rebuild: that
+  -- write reconciles the entry after its column stamped it, and is where a leaked colEvt would
+  -- overwrite the stamp before emission.
   {
     name = 'base voice and PC synthesis: detune and sample edits beside a parked note == full re-derive',
     run = function(harness)

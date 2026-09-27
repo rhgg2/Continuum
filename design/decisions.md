@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-28** — The absorber pass reads the base voice's lane and detune off um's index, over
+  reading them through the seat stamp, superseding that half of the 2026-09-27 stamp entry. Like the
+  tail walk it transforms the previous emission, and every intent edit reaches mm before it runs,
+  so the two agreed at every read and the stamp only restated the entry.
+
 - **2026-09-27** — Region park runs every kind (note, pa, cc, pb) through one driver over a per-kind
   table of slots with defaults, over four parallel passes. The pa pass had copied the shared
   reconcile by hand only because its host is found through the parked note covering it; a hostOf

@@ -1826,26 +1826,21 @@ end
 -- seats), so every span that must contain an onset's seats reaches one tick back.
 local DUAL_POINT_TICK = 1
 
---shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
--- A channel's base-voice onset stream: the raw index's surviving notes unioned with the pass's
--- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
-local function baseVoiceUnion(chan, fxOut)
-  local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
-  -- Derived base voices are routed out of columns; union them so the absorber pass seats their
-  -- detune jumps.
+-- A channel's base-voice notes: raw index lane-1 plus this pass's derived base voices from
+-- fxOut.notes. see docs/tuning.md § Absorber reconciliation
+--shape: makeBaseVoice = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
+local function makeBaseVoice(chan, fxOut)
+  local indexed = index.raw(chan).notes
   local derived = util.filter(fxOut.notes[chan], function(spec) return spec.baseVoice end)
-  table.sort(derived, index.order)   -- the union's cursors assume ppq order of both sources
+  table.sort(derived, index.order)
   local keep = carriedFor(fxOut.ran[chan])
-  -- An authored entry's intent (lane, detune, logical onset) is its seat stamp's; a kept host's
-  -- standing record is the previous emission and carries its own.
-  local function intentOf(entry) return isAuthored(entry) and entry.colEvt or entry end
   -- keep drops the index entries of the hosts this pass ran: seated copies of a prior pass's
   -- output, superseded by `derived`. A kept host's stand -- they are the only copy of its voices there is.
-  local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(intentOf(entry)) end
+  local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(entry) end
 
   -- The union from the first entry at-or-after `lo` ('after' starts past it instead), merging the two
   -- sources by index.order -- one cursor pair, and the only place the union's order is decided.
-  --post: result = (fresh iterator) yielding { ppq, ppqL, detune } records in index.order; unsafe
+  --post: result = (fresh iterator) yielding index entries and derived specs in index.order; unsafe
   local function walk(lo, mode)
     local from = mode == 'after' and util.firstAfter or util.firstAtOrAfter
     local i, j = from(indexed, lo), from(derived, lo)
@@ -1853,11 +1848,8 @@ local function baseVoiceUnion(chan, fxOut)
       while indexed[i] and not indexedBaseVoice(indexed[i]) do i = i + 1 end
       local a, d = indexed[i], derived[j]
       if d and (not a or index.order(d, a)) then j = j + 1; return d end
-      if not a then return nil end
-      i = i + 1
-      if not isAuthored(a) then return a end
-      local evt = a.colEvt
-      return { ppq = a.ppq, ppqL = evt.ppq, detune = evt.detune }
+      if a then i = i + 1 end
+      return a
     end
   end
 
@@ -1868,7 +1860,7 @@ local function baseVoiceUnion(chan, fxOut)
     local a, d = indexed[i], derived[util.firstAfter(derived, ppq) - 1]
     local last = a
     if d and (not a or index.order(a, d)) then last = d end
-    return last and intentOf(last).detune or 0
+    return last and last.detune or 0
   end
 
   -- The union's entries with ppq in [lo, hi] -- the onset walk's per-span slice.
@@ -2245,7 +2237,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild
     -- entry). I8: rebuild is a fixpoint.
     if dirt.has(chan) then
-      local baseVoice   = baseVoiceUnion(chan, fxOut)
+      local baseVoice   = makeBaseVoice(chan, fxOut)
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
       local unparked    = unparkedPbsFor(chan)
       local seatSpans   = seatScope(chan, replaceWins, baseVoice, unparked)   -- nil = ungated

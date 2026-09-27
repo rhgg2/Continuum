@@ -447,6 +447,33 @@ return {
     end,
   },
 
+  -- A pc sits at its note's settled raw onset, and the rank groups notes by that onset
+  -- (docs/trackerManager.md § Two movements). The lane-2 note is delayed onto the lane-1 note's raw
+  -- onset at the same pitch, so the tail walk's onset settlement gives it way forward: the two part,
+  -- and each programs its own onset. A synthesis reading the unsettled onsets would group them at 0,
+  -- shadow lane 2, and leave its note sounding lane 1's sample a tick later.
+  {
+    name = 'a same-pitch onset the tail walk gives way programs its own pc at the settled onset',
+    run = function(harness)
+      local h = harness.mk{ config = { transient = { trackerMode = true } } }
+      -- delayToPPQ(-500, 240) = -120, so the logical-120 note realises at 0 beside the other.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, sample = 0xA })
+      h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = -500, lane = 2, sample = 0xB })
+      h.tm:flush()
+
+      local settled
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.sample == 0xB then settled = n.ppq end
+      end
+      t.truthy(settled and settled > 0, 'fixture check: the lane-2 onset gave way off 0')
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 0xA }, { ppq = settled, val = 0xB } },
+        'each note programs its own settled onset')
+      t.falsy(laneEvent(h.tm, 1, 2, 1).sampleShadowed, 'the lane-2 note shares no onset, so nothing dims it')
+    end,
+  },
+
   {
     name = 'deleting the shadower un-shadows the survivor and PC val flips',
     run = function(harness)

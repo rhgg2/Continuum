@@ -764,8 +764,10 @@ pb, which are pitch's second and third rungs (`docs/tuning.md`).
 Every write one stage makes into another's records belongs to emission, and
 the order carries dependencies the signatures do not state. The specs `fxOut`
 carries in `fxOut.notes` are the same tables the tail walk takes as `extras` and
-writes raw onsets and clipped ends into, and `rebuildPbs` reads the moved
-positions, so tails run before pbs. The fx gather clones um's index entries
+writes raw onsets and clipped ends into, and `rebuildPbs` and `rebuildPCs` read
+the moved positions, so tails run before both. Settlement moves an authored
+note's raw onset in um's index as well, and a pc sits at its note's settled
+onset and ranks the notes that share it. The fx gather clones um's index entries
 through `columnEvent`, and a kept host's specs ride those clones into
 `fxOut.notes`, so the tail walk clips ends into tables the fx stage minted
 rather than into um's own records; `rebuildPCs` writes `sampleShadowed` into an
@@ -802,12 +804,14 @@ it: each authored event that sounds, and every derived event (`docs/timing.md`
 only for the previous emission, which the pipeline's own commits keep current
 mid-rebuild.
 
-A raw position is emission. A stage that needs raw order walks um's index and
-reads each authored note's intent fields through its seat stamp (§ Incremental
-index reconciliation). Any other stage takes membership and intent fields from
-the columns, and an event's raw position by uuid from um's index. The tail walk
-refines the sounding set the stages before it settled, so it reads that set
-from um's index.
+A raw position is emission. The absorber pass and the tail walk transform the
+previous emission, so they read it from um's index, intent fields and all: the
+tail walk refines the raw onsets and tails the stages before it emitted, and
+the absorber pass reseats pbs around the base voice's settled onsets. PC
+synthesis follows the tail walk, and walks um's index for raw order and reads each authored note's intent fields through its
+seat stamp (§ Incremental index reconciliation). Any other stage takes
+membership and intent fields from the columns, and an event's raw position by
+uuid from um's index.
 
 Emission reconciles its output against the previous emission — an absorber
 already seated, a raw onset already in place.
