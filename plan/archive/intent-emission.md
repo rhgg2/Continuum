@@ -1,7 +1,7 @@
 # Intent and emission — plan
 
-> source: `design/intent-emission.md` — synthesis compiled from there;
-> don't design here.
+> source: `docs/trackerManager.md`, `docs/generators.md` — the model
+> this plan realised.
 
 ## Phases
 
@@ -28,10 +28,11 @@
    reads its existing cc side off the raw index by window, keeping the kept-host exclusion and the
    overlapper's scope clip; one census-diff sweep, shared with `retireUncoveredSeats`, replaces
    `parkPbs`'s pb sweep and the absent-host file sweep; cc leaves `HOST_FILED`. The docs transfer
-   also corrects `docs/generators.md` § pb and cc ¶2–3, which predate pb parking.  ← in flight
+   also corrects `docs/generators.md` § pb and cc ¶2–3, which predate pb parking. Landed 2026-09-27, 4 commits.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: freeze adopts the absorbers inside its window as curve material
 - 2026-09-27 tm: one seat test recognises pb and cc seats; synthesised pcs drop ppqL (design § Continuous seats 1–3)
 - 2026-09-27 tm: seats reconcile by window, and orphans go by one census diff (§ Continuous seats 4–6)
 - 2026-09-27 tm: PA dispatch seeks its covering note per lane, logically (§ Reading intent 2)
