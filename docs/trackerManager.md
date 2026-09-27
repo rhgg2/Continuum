@@ -1269,7 +1269,7 @@ the channel's dirt and `rebuildPbs` consumes it later in the same pass.
 Two walks share these rules; a seed-count threshold picks between them.
 The **linear walk** is authoritative for dense and wholesale dirt: one
 forward onset pass, one ascending sweep answering every anchor's pitch
-predecessor at once, one backward pass to clip and emit — over the
+predecessor at once, one backward pass to clip — over the
 whole channel. It is the degenerate fallback. The **frontier probe walk** takes the common sparse-seed
 channel: it seeks to each seed by name and probes a bounded few rows for
 its pitch neighbours, with no whole-channel traversal and no

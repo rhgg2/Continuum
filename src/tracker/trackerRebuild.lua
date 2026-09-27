@@ -1546,41 +1546,41 @@ end
 
 ----- Tail walk
 
--- One channel's per-note settle, bound and emission rules: the linear and frontier walks drive the
--- same rules over their own traversals, and read back the disturbed set the rules mark.
---shape: rules = { disturbed = set, settleOnset(e, prev), boundNote(note, pitchNext), emitNudge(emitted, e) }
+-- One channel's per-note settle and bound rules, and the dirt settlement leaves: the linear and
+-- frontier walks drive the same rules over their own traversals.
+--shape: rules = { settleOnset(note, prev) -> whether it nudged, boundNote(note, pitchNext), nudgeSeeds() -> seed list }
 local function makeTailRules(chan, res, windows, writes)
-  local disturbed, nudged = {}, {}
+  local nudged = {}
 
   -- The lane successor in column order: a neighbour delayed off its row still follows here. The
   -- population is the column's own: no derived note bounds by a lane, so none joins one.
-  local function laneNext(e)
-    local col = frame.channels[chan].authored.notes[e.lane]
+  local function laneNext(note)
+    local col = frame.channels[chan].authored.notes[note.lane]
     if not col then return end
-    for i = util.firstAfter(col.events, e.ppqL), #col.events do
+    for i = util.firstAfter(col.events, note.ppqL), #col.events do
       local evt = col.events[i]
       if util.isNote(evt) and not evt.parked then return evt end
     end
   end
 
-  local function settleOnset(e, prev)
-    local onset = voicing.separateOnset(e, prev)
+  local function settleOnset(note, prev)
+    local onset = voicing.separateOnset(note, prev)
     if not onset then return false end
     -- Notes only ever give way forward, so a nudge is final and its writes can stage here.
-    disturbed[e], nudged[e] = true, true
-    index.assign(e, 'ppq', onset)
-    local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
-    if backing.committed then writes.assign(backing, { ppq = e.ppq }) end
-    if e.colEvt and e.colEvt.delay ~= nil then
+    nudged[note] = true
+    index.assign(note, 'ppq', onset)
+    local backing = note.colEvt or note   -- seated entries write through to their column note; fxNotes ride bare
+    if backing.committed then writes.assign(backing, { ppq = note.ppq }) end
+    if note.colEvt and note.colEvt.delay ~= nil then
       -- The column stays logical, so the raw shift reaches it only as the delayC give-way cue.
-      local shift = e.ppq - time:fromLogical(chan, e.ppqL)
-      frame.setEvent(e.colEvt, 'delayC', util.round(timing.ppqToDelay(shift, res)))
+      local shift = note.ppq - time:fromLogical(chan, note.ppqL)
+      frame.setEvent(note.colEvt, 'delayC', util.round(timing.ppqToDelay(shift, res)))
     end
     return true
   end
 
-  --pre: (not e.derived) → e.colEvt carries its lane bound -- the lane pass ran over this channel
-  --pre: e.derived → the pass's window set holds that host's window
+  --pre: (not note.derived) → note.colEvt carries its lane bound -- the lane pass ran over this channel
+  --pre: note.derived → the pass's window set holds that host's window
   local function boundNote(note, pitchNext)
     local laneBound  = note.derived and math.min(note.endppqL, windows.window(note.derived).endppq)
                        or note.colEvt.endppqC
@@ -1595,258 +1595,225 @@ local function makeTailRules(chan, res, windows, writes)
       if backing.committed then writes.assign(backing, { endppq = rawBound }) end
     end
     if note.colEvt then
-      -- An uncached note has no authored ceiling to draw, so the column shows its lane bound.
+      -- An uncached note has no authored ceiling, so the column shows its lane bound.
       frame.setEvent(note.colEvt, 'endppq', note.endppqL or laneBound)
     end
   end
 
-  -- The walk's own dirt: a nudged lane-1 onset seeds every absorber seat up to the next lane-1
-  -- onset, for pbs to consume later this pass. see design § The widen and the emission are the same fact
-  local function emitNudge(emitted, e)
-    if nudged[e] and isAuthored(e) and e.lane == 1 then
-      local nextOnLane = laneNext(e)
-      util.add(emitted, { uuid = e.uuid, verb = 'nudge', evType = 'note', ppq = e.ppq, ppqL = e.ppqL,
-                          lane = e.lane, pitch = e.pitch, endppqL = nextOnLane and nextOnLane.ppq })
+  -- The walk's own dirt: a nudged lane-1 onset seeds every absorber seat up to the next lane-1 onset,
+  -- for pbs to consume this pass. see docs/trackerManager.md § What the walk visits, and what it emits
+  --pre: settlement has run, so each seed carries its note's final onset
+  local function nudgeSeeds()
+    local seeds = {}
+    for note in pairs(nudged) do
+      if isAuthored(note) and note.lane == 1 then
+        local nextOnLane = laneNext(note)
+        util.add(seeds, { uuid = note.uuid, verb = 'nudge', evType = 'note', ppq = note.ppq, ppqL = note.ppqL,
+                          lane = note.lane, pitch = note.pitch, endppqL = nextOnLane and nextOnLane.ppq })
+      end
     end
+    return seeds
   end
 
-  return { disturbed = disturbed, settleOnset = settleOnset, boundNote = boundNote, emitNudge = emitNudge }
+  return { settleOnset = settleOnset, boundNote = boundNote, nudgeSeeds = nudgeSeeds }
 end
 
---shape: notes = { onTake = raw index notes, reran = the pass's derived specs,
---                 carried = filter over the raw index }
+-- The walk's population as one list in index.order: the carried index merged with reran.
 local function mergeIndexed(notes)
   table.sort(notes.reran, index.order)
   local merged, j = {}, 1
-  for _, entry in ipairs(notes.onTake) do
-    if notes.carried(entry) then
-      while notes.reran[j] and index.order(notes.reran[j], entry) do
+  for _, note in ipairs(notes.onTake) do
+    if notes.carried(note) then
+      while notes.reran[j] and index.order(notes.reran[j], note) do
         util.add(merged, notes.reran[j]); j = j + 1
       end
-      util.add(merged, entry)
+      util.add(merged, note)
     end
   end
   for i = j, #notes.reran do util.add(merged, notes.reran[i]) end
   return merged
 end
 
--- Linear tail walk for dense and wholesale dirt; see docs § Tail walk
+-- The linear walk, for dense and wholesale dirt: each phase is one pass over the whole channel.
+-- see docs/trackerManager.md § What the walk visits, and what it emits
 local function linearTails(chan, rules, notes, bound)
-  local disturbed = rules.disturbed
+  local disturbed = {}
   local merged    = mergeIndexed(notes)
 
-  -- Disturbed seeded by name: derived membership + the seeds themselves, survivors resolved by uuid,
-  -- adds by logical seat. Anchors for the bound probes: seed positions (dead included) plus disturbed onsets.
+  -- A note is disturbed if this pass derived it or a dirt seed names it: by uuid while the note
+  -- survives, else by its logical seat. Each seed's position also anchors the bound set below.
   local anchors = {}
-  -- reran's entries are the merged list's own, so identity names them. A standing derived record is not
-  -- among them: its host kept, so it was settled and clipped last pass and rides as a bound anchor only.
   for _, note in ipairs(notes.reran) do disturbed[note] = true end
   if dirt.wholesale(chan) then
-    for _, note in ipairs(merged) do disturbed[note] = true end   -- degenerate pass: load, external change
+    for _, note in ipairs(merged) do disturbed[note] = true end   -- a load or external change moved everything
   else
-    local byUuid, byKey = {}, {}
+    local byUuid, bySeat = {}, {}
     for _, note in ipairs(merged) do
       if note.uuid then byUuid[note.uuid] = note end
-      util.bucket(byKey, util.key(note.ppqL or note.ppq, note.lane, note.pitch), note)
+      util.bucket(bySeat, util.key(note.ppqL or note.ppq, note.lane, note.pitch), note)
     end
     for _, seed in ipairs(dirt.has(chan)) do
       util.add(anchors, { pos = seed.ppq, pitch = seed.pitch })
-      local note = seed.uuid and byUuid[seed.uuid]
-      if note then disturbed[note] = true
+      local named = seed.uuid and byUuid[seed.uuid]
+      if named then disturbed[named] = true
       else
-        for _, evt in ipairs(byKey[util.key(seed.ppqL or seed.ppq, seed.lane, seed.pitch)] or {}) do
-          disturbed[evt] = true
+        for _, note in ipairs(bySeat[util.key(seed.ppqL or seed.ppq, seed.lane, seed.pitch)] or {}) do
+          disturbed[note] = true
         end
       end
     end
   end
 
-  -- Onset settlement: only a disturbed note collides, onto its same-pitch predecessor; a landed nudge
-  -- marks itself disturbed so the cascade carries forward.
-  local anyNudge, lastByPitch = false, {}
-  index.withDeferredSort(function()
-    for _, note in ipairs(merged) do
-      local prev = lastByPitch[note.pitch]
-      if disturbed[note] or (prev and disturbed[prev]) then
-        if rules.settleOnset(note, prev) then anyNudge = true end
+  -- Separate each note from its same-pitch predecessor if either is disturbed. A nudged note becomes
+  -- disturbed itself, so the nudge cascades forward through the notes it now collides with.
+  do
+    local anyNudge, lastByPitch = false, {}
+    index.withDeferredSort(function()
+      for _, note in ipairs(merged) do
+        local prev = lastByPitch[note.pitch]
+        if (disturbed[note] or (prev and disturbed[prev])) and rules.settleOnset(note, prev) then
+          disturbed[note], anyNudge = true, true
+        end
+        lastByPitch[note.pitch] = note
       end
-      lastByPitch[note.pitch] = note
-    end
-  end)
-  if anyNudge then table.sort(merged, index.order) end
+    end)
+    -- A nudge can reorder notes, and both passes below need index order.
+    if anyNudge then table.sort(merged, index.order) end
+  end
 
-  -- Bound set: the lane pass's re-bounded events it arrives with, every disturbed note, and each
-  -- anchor's nearest same-pitch predecessor. see docs/trackerManager.md § Tail walk
-  for e in pairs(disturbed) do bound[e] = true end
-  -- Wholesale already bounds every note, so the predecessor probes add nothing. Only the seeded case
-  -- needs them, to reach the non-disturbed neighbours dirt shadows.
+  -- Notes needing a fresh tail bound: those the lane pass re-bounded (already in `bound`), every
+  -- disturbed note, and the nearest earlier same-pitch note to each anchor, whose bound it may move.
+  for note in pairs(disturbed) do bound[note] = true end
+  -- Wholesale has already disturbed every note, so the anchors could add nothing.
   if not dirt.wholesale(chan) then
-    for e in pairs(disturbed) do util.add(anchors, { pos = e.ppq, pitch = e.pitch }) end
-    -- One ascending sweep, tracking the running last-in-pitch, answers every anchor at once -- the
-    -- forward twin of the successor pass below. See docs/trackerManager.md § Tail walk.
+    for note in pairs(disturbed) do util.add(anchors, { pos = note.ppq, pitch = note.pitch }) end
+    -- Step through merged and the sorted anchors together, holding the last note of each pitch
+    -- strictly before the current anchor.
     table.sort(anchors, function(a, b) return a.pos < b.pos end)
-    local lastInPitch, i = {}, 1
-    for _, a in ipairs(anchors) do
-      while i <= #merged and merged[i].ppq < a.pos do
-        lastInPitch[merged[i].pitch] = merged[i]
+    local predByPitch, i = {}, 1
+    for _, anchor in ipairs(anchors) do
+      while i <= #merged and merged[i].ppq < anchor.pos do
+        predByPitch[merged[i].pitch] = merged[i]
         i = i + 1
       end
-      local pitchPred = lastInPitch[a.pitch]
+      local pitchPred = predByPitch[anchor.pitch]
       if pitchPred then bound[pitchPred] = true end
     end
   end
 
-  -- Bounds + nudge emission: one backward pass hands over next-in-pitch (running state keyed by
-  -- pitch), the stale test replaced by `bound` membership. see design § Phase 4
-  local emitted = {}
-  local nearestInPitch, nextAfterPitch = {}, {}
+  -- Clip tails in one backward pass, holding per pitch the nearest note above and that note's own
+  -- pitchNext, so each note's pitchNext is the first same-pitch note at a strictly later raw ppq.
+  local aboveByPitch, nextOfAbove = {}, {}
   for i = #merged, 1, -1 do
-    local e = merged[i]
-    local pitchAbove = nearestInPitch[e.pitch]
-    -- A neighbour sharing e's raw is no successor of it: it hands over its own.
-    local pitchNext = pitchAbove and (pitchAbove.ppq > e.ppq and pitchAbove or nextAfterPitch[e.pitch])
-    nearestInPitch[e.pitch], nextAfterPitch[e.pitch] = e, pitchNext
-
-    rules.emitNudge(emitted, e)
-    if bound[e] then rules.boundNote(e, pitchNext) end
+    local note = merged[i]
+    local above = aboveByPitch[note.pitch]
+    -- A note above at the same raw ppq doesn't bound this one, so take the note after it instead.
+    local pitchNext = above and (above.ppq > note.ppq and above or nextOfAbove[note.pitch])
+    aboveByPitch[note.pitch], nextOfAbove[note.pitch] = note, pitchNext
+    if bound[note] then rules.boundNote(note, pitchNext) end
   end
-
-  return emitted
 end
 
 ----- Frontier probe walk
 
 -- Above this many disturbed seeds (dirt + derived fx events) the frontier's per-seed probes cost more
--- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
+-- than the linear walk's single channel pass, so the tail rebuild routes to linear.
 local FRONTIER_SEED_CAP = 16
 
--- Every probe below binary-searches the raw-then-logical-sorted index -- util.firstAtOrAfter for the
--- near edge of pos's raw cluster, util.firstAfter for the far one -- then scans outward a bounded few
--- rows. The seek that replaces the sweep.
-
--- Nearest record of the population strictly on one `side` of `pos` (raw ppq) matching `filter`, over the
--- index (binary-searched, scanned outward) and the small reran list. The strict-ppq bound probe; mirrors util.seek.
-local function nearestNote(notes, pos, side, filter)
+-- Nearest `pitch` record passing `test` on `side` of raw `pos`: the index scanned outward from the
+-- far edge of pos's raw cluster (so through it), then the reran list read whole. Mirrors util.seek.
+--pre: test(note) → note lies on `side` of pos; reran has no position to place its records, so test must
+local function nearestNote(notes, pos, pitch, side, test)
+  local from, last, step
+  if     side == 'after'  then from, last, step = util.firstAtOrAfter(notes.onTake, pos), #notes.onTake, 1
+  elseif side == 'before' then from, last, step = util.firstAfter(notes.onTake, pos) - 1, 1, -1 end
   local best
-  local anchor = util.firstAtOrAfter(notes.onTake, pos)
-  if side == 'before' then
-    for i = anchor - 1, 1, -1 do
-      local rec = notes.onTake[i]
-      if notes.carried(rec) and filter(rec) then best = rec; break end
-    end
-  else
-    for i = anchor, #notes.onTake do
-      local rec = notes.onTake[i]
-      if rec.ppq > pos and notes.carried(rec) and filter(rec) then best = rec; break end
-    end
+  for i = from, last, step do
+    local note = notes.onTake[i]
+    if notes.carried(note) and note.pitch == pitch and test(note) then best = note; break end
   end
-  for _, rec in ipairs(notes.reran) do
-    local onSide = side == 'before' and rec.ppq < pos or side == 'after' and rec.ppq > pos
-    local nearer = best == nil
-                   or (side == 'before' and index.order(best, rec))
-                   or (side == 'after'  and index.order(rec, best))
-    if onSide and filter(rec) and nearer then best = rec end
+  for _, note in ipairs(notes.reran) do
+    if note.pitch == pitch and test(note) then
+      if best == nil
+        or (side == 'before' and index.order(best, note))
+        or (side == 'after'  and index.order(note, best))
+      then best = note end
+    end
   end
   return best
 end
 
--- Same-pitch record immediately before `node` in the total order, over index + reran -- settlement's
--- predecessor. A same-tick same-pitch note counts here (unlike the strict bound probes).
-local function prevSamePitch(notes, node)
-  local best
-  for i = util.firstAfter(notes.onTake, node.ppq) - 1, 1, -1 do
-    local rec = notes.onTake[i]
-    if notes.carried(rec) and rec ~= node and rec.pitch == node.pitch and index.order(rec, node) then
-      best = rec; break
-    end
-  end
-  for _, rec in ipairs(notes.reran) do
-    if rec ~= node and rec.pitch == node.pitch and index.order(rec, node)
-       and (best == nil or index.order(best, rec)) then best = rec end
-  end
-  return best
+-- Same-pitch record immediately before `note` in the total order -- settlement's predecessor. A
+-- same-tick same-pitch note counts here (unlike the strict bound probes).
+local function prevSamePitch(notes, note)
+  return nearestNote(notes, note.ppq, note.pitch, 'before',
+    function(candidate) return index.order(candidate, note) end)
 end
 
--- Same-pitch record immediately after `node` in the total order, keyed on `origPpq` (node's raw before
--- this pass nudged it) -- settlement's cascade successor. see design § Nudge probes stop at the tick
-local function nextSamePitch(notes, node, origPpq)
-  local key = { ppq = origPpq, ppqL = node.ppqL, derived = node.derived, lane = node.lane, pitch = node.pitch }
-  -- The probe stands in for node in every term of the order, emission included: without it two hits
-  -- emitted alike tie, and the second is no successor of the first for the cascade to separate.
-  index.stampEmission(key, index.emissionOf(node))
-  local best
-  for i = util.firstAtOrAfter(notes.onTake, origPpq), #notes.onTake do
-    local rec = notes.onTake[i]
-    if notes.carried(rec) and rec ~= node and rec.pitch == node.pitch and index.order(key, rec) then
-      best = rec; break
-    end
-  end
-  for _, rec in ipairs(notes.reran) do
-    if rec ~= node and rec.pitch == node.pitch and index.order(key, rec)
-       and (best == nil or index.order(rec, best)) then best = rec end
-  end
-  return best
+-- Same-pitch record immediately after `note` in the total order -- settlement's cascade successor.
+local function nextSamePitch(notes, note)
+  return nearestNote(notes, note.ppq, note.pitch, 'after',
+    function(candidate) return index.order(note, candidate) end)
 end
 
 -- On-take records at a seed's logical seat, for adds/deletes carrying no surviving uuid. Scans only the
--- seed's raw-ppq cluster in the sorted index (plus reran) -- bounded, not a channel sweep.
+-- seed's raw-ppq cluster in the sorted index -- bounded, not a channel sweep.
 local function seatMatches(notes, seed)
-  local out, key = {}, seed.ppqL or seed.ppq
-  local function match(rec)
-    return (rec.ppqL or rec.ppq) == key and rec.lane == seed.lane and rec.pitch == seed.pitch
-  end
+  local out, seatPpq = {}, seed.ppqL or seed.ppq
   for i = util.firstAtOrAfter(notes.onTake, seed.ppq), #notes.onTake do
-    if notes.onTake[i].ppq ~= seed.ppq then break end
+    local note = notes.onTake[i]
+    if note.ppq ~= seed.ppq then break end
     -- Authored only, unlike the notes the bound probes range over: a seat is lane-keyed and a
-    -- derived record carries no lane, so none can answer one.
-    if isAuthored(notes.onTake[i]) and match(notes.onTake[i]) then util.add(out, notes.onTake[i]) end
+    -- derived record carries no lane, so none can answer one -- nor can reran, which is all derived.
+    if isAuthored(note) and note.ppqL == seatPpq
+       and note.lane == seed.lane and note.pitch == seed.pitch then
+      util.add(out, note)
+    end
   end
-  for _, rec in ipairs(notes.reran) do if rec.ppq == seed.ppq and match(rec) then util.add(out, rec) end end
   return out
 end
 
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal.
+--pre: no dirt seed's uuid names a note that notes.carried drops
 local function frontierTails(chan, rules, notes, bound)
-  local disturbed = rules.disturbed
+  local disturbed = {}
 
-  -- Disturbed seeded by name: derived membership is all of reran; adds/deletes name a seat the
-  -- index tick cluster answers; byUuid resolve is note-scoped -- see docs § What the walk visits, and what it emits.
-  local anchors = {}
-  for _, rec in ipairs(notes.reran) do disturbed[rec] = true end
+  -- Disturbed seeded by name: all of reran, and each seed's note by uuid (index.byUuid spans every
+  -- channel and type), else its seat. see docs/trackerManager.md § What the walk visits
+  for _, note in ipairs(notes.reran) do disturbed[note] = true end
   for _, seed in ipairs(dirt.has(chan)) do
-    util.add(anchors, { pos = seed.ppq, pitch = seed.pitch })
-    local rec = seed.uuid and index.byUuid(seed.uuid)
-    if rec and rec.evType == 'note' and rec.chan == chan then disturbed[rec] = true
-    else for _, hit in ipairs(seatMatches(notes, seed)) do disturbed[hit] = true end end
+    local named = seed.uuid and index.byUuid(seed.uuid)
+    if named and named.evType == 'note' and named.chan == chan then disturbed[named] = true
+    else for _, note in ipairs(seatMatches(notes, seed)) do disturbed[note] = true end end
   end
 
   -- Phase 1 -- settle onsets, same-pitch-local (a nudge only collides same-pitch successors). Each
-  -- pitch's cascade chain gathers on the pristine index, then settles by position. See docs § What the walk visits.
+  -- pitch's cascade chain gathers on the pristine index, then settles by position. See docs as above.
   local byPitch, chains = {}, {}
-  for e in pairs(disturbed) do util.bucket(byPitch, e.pitch, e) end
-  for _, seeds in pairs(byPitch) do
-    table.sort(seeds, index.order)
-    local si = 1
-    while si <= #seeds do
-      local head = seeds[si]; si = si + 1
-      local prev = prevSamePitch(notes, head)
-      local chain = {}
-      if prev then util.add(chain, prev) end
-      util.add(chain, head)
+  for note in pairs(disturbed) do util.bucket(byPitch, note.pitch, note) end
+  for _, pending in pairs(byPitch) do
+    table.sort(pending, index.order)
+    local nextPending = 1
+    while nextPending <= #pending do
+      local head = pending[nextPending]; nextPending = nextPending + 1
       -- reach = the running worst-case settled tick; a same-pitch successor cascades only while it can
-      -- still collide (separateOnset gives way by one tick), or when it is itself a pending seed.
-      local reach = (prev and head.ppq <= prev.ppq) and prev.ppq + 1 or head.ppq
-      local node = head
-      while true do
-        local nxt = nextSamePitch(notes, node, node.ppq)
-        if not nxt then break end
-        local isSeed = nxt == seeds[si]
-        if nxt.ppq > reach and not isSeed then break end
-        util.add(chain, nxt)
-        reach = nxt.ppq <= reach and reach + 1 or nxt.ppq
-        if isSeed then si = si + 1 end
-        node = nxt
+      -- still collide (separateOnset gives way by one tick), or when it is itself pending.
+      local chain, reach = {}, -math.huge
+      local function extend(note)
+        util.add(chain, note)
+        reach = note.ppq <= reach and reach + 1 or note.ppq
+      end
+      local prev = prevSamePitch(notes, head)
+      if prev then extend(prev) end
+      extend(head)
+      local successor = nextSamePitch(notes, head)
+      while successor do
+        local isPending = successor == pending[nextPending]
+        if successor.ppq > reach and not isPending then break end
+        extend(successor)
+        if isPending then nextPending = nextPending + 1 end
+        successor = nextSamePitch(notes, successor)
       end
       util.add(chains, chain)
     end
@@ -1854,38 +1821,36 @@ local function frontierTails(chan, rules, notes, bound)
 
   -- The block wraps settlement alone: the chains above gathered against the pristine index, and phase
   -- 2's bound probes below need it true again, so a block around the whole walk would be too late.
-  local anyNudge = false
   index.withDeferredSort(function()
     for _, chain in ipairs(chains) do
-      for i, node in ipairs(chain) do
+      for i, note in ipairs(chain) do
         local prev = chain[i - 1]
-        if disturbed[node] or (prev and disturbed[prev]) then
-          if rules.settleOnset(node, prev) then anyNudge = true end
+        if (disturbed[note] or (prev and disturbed[prev])) and rules.settleOnset(note, prev) then
+          disturbed[note] = true
         end
       end
     end
   end)
-  -- notes.onTake is um's own and the block's close re-trued it; reran belongs to this walk.
-  if anyNudge then table.sort(notes.reran, index.order) end
 
   -- Phase 2 -- bounds, order-free: the lane pass's re-bounded events it arrives with, disturbed notes,
   -- and each anchor's nearest same-pitch predecessor; reads settled onsets, writes only endppq.
-  for e in pairs(disturbed) do
-    bound[e] = true
-    util.add(anchors, { pos = e.ppq, pitch = e.pitch })
-  end
-  for _, a in ipairs(anchors) do
-    local pitchPred = nearestNote(notes, a.pos, 'before', function(r) return r.pitch == a.pitch end)
+  -- An anchor is a seed's position or a disturbed note's settled onset.
+  local function boundPitchPred(pos, pitch)
+    local pitchPred = nearestNote(notes, pos, pitch, 'before',
+      function(candidate) return candidate.ppq < pos end)
     if pitchPred then bound[pitchPred] = true end
   end
-
-  local emitted = {}
-  for e in pairs(bound) do
-    local pitchNext = nearestNote(notes, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
-    rules.emitNudge(emitted, e)
-    rules.boundNote(e, pitchNext)
+  for _, seed in ipairs(dirt.has(chan)) do boundPitchPred(seed.ppq, seed.pitch) end
+  for note in pairs(disturbed) do
+    bound[note] = true
+    boundPitchPred(note.ppq, note.pitch)
   end
-  return emitted
+
+  for note in pairs(bound) do
+    local pitchNext = nearestNote(notes, note.ppq, note.pitch, 'after',
+      function(candidate) return candidate.ppq > note.ppq end)
+    rules.boundNote(note, pitchNext)
+  end
 end
 
 ----- Rebuild tails
@@ -1910,6 +1875,7 @@ local function rebuildTails(fxOut, windows)
 
   for chan = 1, 16 do
     if dirt.has(chan) then
+      --shape: notes = { onTake = raw index notes, reran = the pass's derived specs, carried = filter over onTake }
       local notes = {
         onTake  = index.raw(chan).notes,
         reran   = util.clone(fxOut.notes[chan]),
@@ -1918,17 +1884,18 @@ local function rebuildTails(fxOut, windows)
       -- Seeded with the lane pass's re-bounded events; each walk adds what it disturbs and probes.
       local bound = {}
       for _, uuid in ipairs(dirt.tails.has(chan) or {}) do
-        local evt = index.byUuid(uuid)
-        if evt then bound[evt] = true end
+        local note = index.byUuid(uuid)
+        if note then bound[note] = true end
       end
       local rules = makeTailRules(chan, resolution, windows, writes)
 
       -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once.
-      local sparse  = not dirt.wholesale(chan) and #dirt.has(chan) + #notes.reran <= FRONTIER_SEED_CAP
-      local emitted = (sparse and frontierTails or linearTails)(chan, rules, notes, bound)
+      local sparse    = not dirt.wholesale(chan) and #dirt.has(chan) + #notes.reran <= FRONTIER_SEED_CAP
+      local walkTails = sparse and frontierTails or linearTails
+      walkTails(chan, rules, notes, bound)
 
       -- Past the cap this collapses the channel to wholesale
-      dirt.add(chan, emitted)
+      dirt.add(chan, rules.nudgeSeeds())
     end
   end
   writes.commit()
