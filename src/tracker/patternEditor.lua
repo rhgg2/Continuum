@@ -169,7 +169,7 @@ local function readbackBody()
       end
     else
       for _, e in ipairs(cols.pb and cols.pb.events or {}) do
-        util.add(points, { ppq = e.ppq, val = (e.val + (e.detune or 0)) / 1000,
+        util.add(points, { ppq = e.ppq, val = e.val / 1000,
                            shape = e.shape, tension = e.tension })
       end
     end
