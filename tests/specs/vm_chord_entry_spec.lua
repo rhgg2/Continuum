@@ -13,9 +13,9 @@ local function mk(harness, seedNotes)
   return h
 end
 
--- Onset lookup straight from tm (getChannel(chan).onTake.notes[lane]).
+-- Onset lookup straight from tm (getChannel(chan).authored.notes[lane]).
 local function chanNoteAt(h, chan, lane, ppq)
-  local laneCol = h.tm:getChannel(chan).onTake.notes[lane]
+  local laneCol = h.tm:getChannel(chan).authored.notes[lane]
   for _, evt in ipairs(laneCol and laneCol.events or {}) do
     if evt.ppq == ppq then return evt end
   end

@@ -31,7 +31,7 @@ local function note(ppq, extra)
                        vel = 100, detune = 0, delay = 0, lane = 1 }, extra)
 end
 
-local function colNote(h) return h.tm:getChannel(1).onTake.notes[1].events[1] end
+local function colNote(h) return h.tm:getChannel(1).authored.notes[1].events[1] end
 
 local function mmNotes(h) return h.fm:dump().notes end
 

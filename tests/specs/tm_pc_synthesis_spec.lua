@@ -26,7 +26,7 @@ local function uuidOfNote(mm, chan, pitch)
 end
 
 local function laneEvent(tm, chan, lane, i)
-  return tm:getChannel(chan).onTake.notes[lane].events[i]
+  return tm:getChannel(chan).authored.notes[lane].events[i]
 end
 
 -- The PCs on a channel below `ppq` -- the span the kept host owns in the case at the foot of this file.
@@ -51,7 +51,7 @@ end
 
 -- The chan's pc column as { ppq, val }, or nil when the channel carries none.
 local function pcColumn(h, chan)
-  local col = h.tm:getChannel(chan).onTake.pc
+  local col = h.tm:getChannel(chan).authored.pc
   if not col then return nil end
   local out = {}
   for _, e in ipairs(col.events) do out[#out + 1] = { ppq = e.ppq, val = e.val } end
@@ -467,7 +467,7 @@ return {
       -- Walk all chan-1 lane events; the surviving pitch-64 note should
       -- have sampleShadowed cleared.
       local survivor
-      for _, lane in ipairs(h.tm:getChannel(1).onTake.notes) do
+      for _, lane in ipairs(h.tm:getChannel(1).authored.notes) do
         for _, evt in ipairs(lane.events) do
           if evt.pitch == 64 then survivor = evt end
         end
@@ -518,7 +518,7 @@ return {
       }
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 5 }, { ppq = 480, val = 3 } })
       local stolen
-      for _, lane in ipairs(h.tm:getChannel(1).onTake.notes) do
+      for _, lane in ipairs(h.tm:getChannel(1).authored.notes) do
         for _, evt in ipairs(lane.events) do
           if evt.pitch == 64 and evt.evType ~= 'pa' then stolen = evt end
         end
@@ -603,7 +603,7 @@ return {
       }
       local before = pcsByPpq(h, 1)[250]
       t.truthy(before, 'fixture check: the delayed note synthesised a pc at its raw onset')
-      local note = h.tm:getChannel(1).onTake.notes[1].events[2]
+      local note = h.tm:getChannel(1).authored.notes[1].events[2]
       t.truthy(note.ppq ~= 250, 'fixture check: the note\'s logical row differs from its raw onset')
 
       h.tm:assignEvent({ uuid = uuidOfNote(h.fm, 1, 62) }, { vel = 90 })

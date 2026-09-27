@@ -155,7 +155,7 @@ return {
       h.tm:flush()
 
       local cell
-      for _, ev in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, ev in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if ev.uuid == uuid then cell = ev end
       end
       t.truthy(cell, 'the restored note is present as a grid cell')
@@ -449,7 +449,7 @@ return {
       h.tm:addEvent({ evType = 'pa', ppq = 30, chan = 1, pitch = 60, vel = 90 })
       h.tm:flush()
       local pa
-      for _, evt in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, evt in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if evt.evType == 'pa' and evt.ppq == 30 then pa = evt end
       end
       t.truthy(pa, "the PA seats in the parked host's lane column")
@@ -488,7 +488,7 @@ return {
 
       t.eq(h.tm:fxRealisation('fxr-nope'), nil, 'a uuid that runs no chain has no realisation at all')
 
-      for lane, column in ipairs(h.tm:getChannel(1).onTake.notes) do
+      for lane, column in ipairs(h.tm:getChannel(1).authored.notes) do
         for _, evt in ipairs(column.events) do
           t.falsy(evt.derived, 'lane ' .. lane .. ' column carries no derived event')
         end

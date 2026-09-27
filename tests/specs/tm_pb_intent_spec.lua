@@ -14,7 +14,7 @@ local function lane1Note(ppq, endppq, detune)
 end
 
 local function pbColumn(h, chan)
-  return h.tm:getChannel(chan).onTake.pb
+  return h.tm:getChannel(chan).authored.pb
 end
 
 local function columnPbAt(h, chan, ppq)
@@ -147,7 +147,7 @@ return {
       local before = pbColumn(h, 1).events
       t.eq(columnPbAt(h, 1, 120).detune, 25, 'fixture check: the cue reads the first detune')
 
-      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local note = h.tm:getChannel(1).authored.notes[1].events[1]
       h.tm:assignEvent(note, { detune = 10 })
       h.tm:flush()
 

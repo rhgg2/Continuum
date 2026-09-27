@@ -126,7 +126,7 @@ return {
 
       -- Removing it seeds its onset (== the cached clip): the gate fires and the clip regrows.
       local neighbour
-      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if e.ppq == 480 and e.pitch == 64 then neighbour = e end
       end
       t.truthy(neighbour, 'the neighbour note is on the take')
@@ -149,7 +149,7 @@ return {
       h.tm:rebuild()
 
       local pas = 0
-      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if e.evType == 'pa' and e.pitch == 60 then pas = pas + 1 end
       end
       t.eq(pas, 1, 'the parked PA renders exactly once in the host lane')

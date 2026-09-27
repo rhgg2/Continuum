@@ -56,7 +56,7 @@ end
 local function parkedList(h, chan) return require('harness').parkedNotes(h.tm, chan) end
 
 local function onTakeAt(h, chan, lane, ppq)
-  for _, evt in ipairs(h.tm:getChannel(chan).onTake.notes[lane].events) do
+  for _, evt in ipairs(h.tm:getChannel(chan).authored.notes[lane].events) do
     if evt.ppq == ppq and not evt.derived then return evt end
   end
 end

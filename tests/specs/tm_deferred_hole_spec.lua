@@ -15,7 +15,7 @@ end
 
 local function pasInCol(h, chan)
   local out = {}
-  for _, col in ipairs(h.tm:getChannel(chan).onTake.notes) do
+  for _, col in ipairs(h.tm:getChannel(chan).authored.notes) do
     for _, e in ipairs(col.events) do
       if e.evType == 'pa' then out[#out + 1] = e.ppq end
     end
@@ -27,7 +27,7 @@ end
 -- The authored pbs projected into the pb column, as { ppq, cents }.
 local function authoredPbCol(h, chan)
   local out = {}
-  local col = h.tm:getChannel(chan).onTake.pb
+  local col = h.tm:getChannel(chan).authored.pb
   for _, e in ipairs((col and col.events) or {}) do
     out[#out + 1] = { ppq = e.ppq, cents = e.val }
   end

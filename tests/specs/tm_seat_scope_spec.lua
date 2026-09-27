@@ -40,7 +40,7 @@ end
 
 -- The channel's pb column by ppq. No swing here, so a cell's logical ppq is its raw one.
 local function column(h)
-  local col = h.tm:getChannel(1).onTake.pb
+  local col = h.tm:getChannel(1).authored.pb
   t.truthy(col, 'fixture check: the channel surfaces a pb column')
   local byPpq = {}
   for _, e in ipairs(col.events) do byPpq[e.ppq] = e end
@@ -49,13 +49,13 @@ end
 
 -- Overwrite every column pb's cue with the sentinel, so the next pass shows which it restamped.
 local function plantSentinel(h)
-  for _, e in ipairs(h.tm:getChannel(1).onTake.pb.events) do e.detune = SENTINEL end
+  for _, e in ipairs(h.tm:getChannel(1).authored.pb.events) do e.detune = SENTINEL end
 end
 
 local function restamped(h, ppq) return column(h)[ppq].detune ~= SENTINEL end
 
 local function noteCell(h, ppq)
-  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+  for _, e in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
     if e.ppq == ppq then return e end
   end
   t.truthy(false, 'fixture check: a lane-1 note stands at ' .. ppq)

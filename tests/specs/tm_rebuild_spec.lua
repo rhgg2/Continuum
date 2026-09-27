@@ -10,8 +10,8 @@ return {
       for chan = 1, 16 do
         local ch = h.tm:getChannel(chan)
         t.truthy(ch, 'channel exists')
-        t.eq(#ch.onTake.notes, 1, 'one note lane by default')
-        t.eq(#ch.onTake.notes[1].events, 0, 'lane is empty')
+        t.eq(#ch.authored.notes, 1, 'one note lane by default')
+        t.eq(#ch.authored.notes[1].events, 0, 'lane is empty')
       end
     end,
   },
@@ -25,8 +25,8 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.onTake.notes, 1, 'one note column')
-      local col = ch.onTake.notes[1]
+      t.eq(#ch.authored.notes, 1, 'one note column')
+      local col = ch.authored.notes[1]
       -- tm strips `chan` and `lane` from column events — channel is
       -- implied by the column's position in the grid.
       t.eventsMatch(col.events, { { ppq = 0, endppq = 240, pitch = 60, vel = 100 } })
@@ -116,9 +116,9 @@ return {
       }
       -- No pb column: the only pb is the absorber, which lives in mm alone.
       local ch = h.tm:getChannel(1)
-      t.falsy(ch.onTake.pb, 'no pb column for an absorber-only channel')
+      t.falsy(ch.authored.pb, 'no pb column for an absorber-only channel')
       -- Note still visible in col-1 with its detune intact.
-      t.eq(ch.onTake.notes[1].events[1].detune, 50)
+      t.eq(ch.authored.notes[1].events[1].detune, 50)
     end,
   },
 
@@ -144,12 +144,12 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(ch.onTake.notes[1].events[1].ppq, 0,
+      t.eq(ch.authored.notes[1].events[1].ppq, 0,
         'note surfaces at logical ppq=0')
 
-      t.truthy(ch.onTake.pb, 'pb column surfaces (authored pb present)')
-      t.eq(#ch.onTake.pb.events, 1, 'the column holds the authored pb alone')
-      t.eq(ch.onTake.pb.events[1].ppq, 480, 'at its own row')
+      t.truthy(ch.authored.pb, 'pb column surfaces (authored pb present)')
+      t.eq(#ch.authored.pb.events, 1, 'the column holds the authored pb alone')
+      t.eq(ch.authored.pb.events[1].ppq, 480, 'at its own row')
     end,
   },
 
@@ -184,7 +184,7 @@ return {
       h.fm:modify(function()
         h.fm:add{ evType = 'note', ppq = 240, endppq = 3000, chan = 1, pitch = 60, vel = 100 }
       end)
-      local evt  = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local evt  = h.tm:getChannel(1).authored.notes[1].events[1]
       local wire = h.fm:dump().notes[1]
       t.truthy(evt, 'precondition: the note was adopted onto a column')
       t.eq(wire.endppq, 1920, 'fixture check: the seeded tail ran past the take end, and the wire stops there')
@@ -204,7 +204,7 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.onTake.notes, 2, 'two lanes allocated for coincident notes')
+      t.eq(#ch.authored.notes, 2, 'two lanes allocated for coincident notes')
     end,
   },
 
@@ -217,9 +217,9 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.truthy(ch.onTake.pb, 'pb column exists')
+      t.truthy(ch.authored.pb, 'pb column exists')
       -- Default pbRange = 2 semitones = 200 cents. val 4096 / 8192 * 200 = 100.
-      t.eventsMatch(ch.onTake.pb.events, { { ppq = 0, val = 100 } })
+      t.eventsMatch(ch.authored.pb.events, { { ppq = 0, val = 100 } })
     end,
   },
 
@@ -240,7 +240,7 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.onTake.notes, 2,
+      t.eq(#ch.authored.notes, 2,
         'shared intent onset spills to a second lane even when delays differ')
     end,
   },
@@ -262,9 +262,9 @@ return {
         },
       }
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.onTake.notes, 1,
+      t.eq(#ch.authored.notes, 1,
         'intent-disjoint notes share a lane despite realised collision')
-      t.eq(#ch.onTake.notes[1].events, 2, 'both notes live in lane 1')
+      t.eq(#ch.authored.notes[1].events, 2, 'both notes live in lane 1')
     end,
   },
 
@@ -295,21 +295,21 @@ return {
       }
       local ch = h.tm:getChannel(1)
 
-      local ccEvt = ch.onTake.ccs[74].events[1]
+      local ccEvt = ch.authored.ccs[74].events[1]
       t.eq(ccEvt.mood, 'blue', 'cc custom field rides through projection')
       t.eq(ccEvt.tag,  42,     'cc tag rides through projection')
 
-      t.truthy(ch.onTake.pb, 'pb column surfaces')
+      t.truthy(ch.authored.pb, 'pb column surfaces')
       -- The first-note anchor adds an absorber at ppq 0 in mm alone; the
       -- column holds the authored pb.
-      t.eq(#ch.onTake.pb.events, 1, 'the column holds the authored pb alone')
-      local pbEvt = ch.onTake.pb.events[1]
+      t.eq(#ch.authored.pb.events, 1, 'the column holds the authored pb alone')
+      local pbEvt = ch.authored.pb.events[1]
       t.eq(pbEvt.mood, 'green', 'pb custom field rides through projection')
       t.eq(pbEvt.tag,  7,       'pb tag rides through projection')
 
       -- pa is attached to the host note's column, alongside the note.
       local paEvt
-      for _, e in ipairs(ch.onTake.notes[1].events) do
+      for _, e in ipairs(ch.authored.notes[1].events) do
         if e.evType == 'pa' then paEvt = e end
       end
       t.truthy(paEvt, 'pa event projected onto host-pitch note col')
@@ -330,7 +330,7 @@ return {
       t.eventsMatch(dump.notes, { { ppq = 0, endppq = 240, pitch = 60, vel = 100 } })
 
       local ch = h.tm:getChannel(1)
-      t.eq(#ch.onTake.notes[1].events, 1, 'tm sees the new note on rebuild')
+      t.eq(#ch.authored.notes[1].events, 1, 'tm sees the new note on rebuild')
     end,
   },
 
@@ -342,7 +342,7 @@ return {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
         },
       }
-      local before = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local before = h.tm:getChannel(1).authored.notes[1].events[1]
       h.tm:deleteEvent(before)
       h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 90, detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
@@ -364,7 +364,7 @@ return {
                        delay = 0, ppqL = 0, endppqL = 240 } },
         },
       }
-      t.eq(#h.tm:getChannel(1).onTake.notes[1].events, 1, 'note present before take death')
+      t.eq(#h.tm:getChannel(1).authored.notes[1].events, 1, 'note present before take death')
 
       -- Take deleted under us: mm self-heals take() to nil but keeps stale
       -- notes (the dangling-take seam). resolution() now reads nil.
@@ -375,7 +375,7 @@ return {
       -- subscriber. A dormant (dead-take) tracker must not rebuild.
       h.cm:set('project', 'defaultSwing', {})
 
-      t.eq(#h.tm:getChannel(1).onTake.notes[1].events, 1,
+      t.eq(#h.tm:getChannel(1).authored.notes[1].events, 1,
         'last frame retained, no crash on dead-take rebuild')
     end,
   },
@@ -394,7 +394,7 @@ return {
           },
         },
       }
-      local note = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local note = h.tm:getChannel(1).authored.notes[1].events[1]
       h.tm:assignEvent(note, { endppq = util.OPEN })
       h.tm:flush()
 
@@ -424,7 +424,7 @@ return {
       }
       local function paByRow()
         local out = {}
-        for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+        for _, e in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
           if e.evType == 'pa' then out[e.ppq] = e end
         end
         return out
@@ -460,7 +460,7 @@ return {
       }
       local function paRows()
         local rows = {}
-        for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+        for _, e in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
           if e.evType == 'pa' then rows[#rows + 1] = e.ppq end
         end
         table.sort(rows)

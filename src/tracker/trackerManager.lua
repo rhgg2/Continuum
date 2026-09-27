@@ -17,9 +17,9 @@
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: frame.channels[chan] = { chan, onTake = the columns, fxHosts = { [colEvent] = true } }
+--shape: frame.channels[chan] = { chan, authored = the columns, fxHosts = { [colEvent] = true } }
 --shape: fxHosts = every note seated in the channel's lanes that carries fx, parked or on the take
---shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
+--shape: authored = { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
 --shape: a note lane, cc column or the pb column also seats its parked events, flagged parked = true; every other colEvent is on the take
 --shape: column =   { events = [colEvent, ...], [cc = ccNum] }
 --shape: colEvent = the mm event's own fields (chan, uuid, metadata), logically framed, by kind:
@@ -141,16 +141,16 @@ do
 
   function frame.renewLane(chan, lane)
     local channel = frame.channels[chan]
-    return frame.renewColumn(channel and channel.onTake.notes[lane])
+    return frame.renewColumn(channel and channel.authored.notes[lane])
   end
 
   -- Field write on a seated event: renew only where the value actually moves, or the tail walk's
   -- restamp renews every bounded lane every pass. Events are self-describing, so their column is here.
   function frame.setEvent(evt, field, value)
     if evt[field] == value then return end
-    local onTake = frame.channels[evt.chan].onTake
-    if evt.evType == 'cc' then frame.renewColumn(onTake.ccs[evt.cc])
-    elseif evt.evType == 'pb' or evt.evType == 'pc' or evt.evType == 'at' then frame.renewColumn(onTake[evt.evType])
+    local authored = frame.channels[evt.chan].authored
+    if evt.evType == 'cc' then frame.renewColumn(authored.ccs[evt.cc])
+    elseif evt.evType == 'pb' or evt.evType == 'pc' or evt.evType == 'at' then frame.renewColumn(authored[evt.evType])
     else frame.renewLane(evt.chan, evt.lane) end
     evt[field] = value
   end
@@ -189,7 +189,7 @@ do
 
   -- The note-lane door onto it: (chan, lane) is how a note names its column.
   function frame.spliceEvent(chan, lane, evt)
-    frame.spliceInto(frame.channels[chan].onTake.notes[lane], evt)
+    frame.spliceInto(frame.channels[chan].authored.notes[lane], evt)
   end
 
   -- The stash's identity for a spec, or for the event seated from it; lane is deliberately absent.
@@ -379,7 +379,7 @@ local function forEachEvent(fn)
   for i=1,16 do
     local channel = frame.channels[i]
     if channel then
-      local chan, cols = channel.chan, channel.onTake
+      local chan, cols = channel.chan, channel.authored
       for lane, col in ipairs(cols.notes) do
         for _, evt in ipairs(col.events) do
           if not evt.parked then
@@ -1192,7 +1192,7 @@ function tm:getChannel(chan)      return frame.channels[chan] end
 --post: fresh result = one unsafe event list per note lane, in lane order
 function tm:authoredLanes(chan)
   local lanes = {}
-  for _, col in ipairs(frame.channels[chan].onTake.notes) do util.add(lanes, col.events) end
+  for _, col in ipairs(frame.channels[chan].authored.notes) do util.add(lanes, col.events) end
   return lanes
 end
 
@@ -1201,7 +1201,7 @@ end
 --post: fresh result = { [ccNum] = unsafe event list in ppq order }, one entry per cc column
 function tm:authoredCCs(chan)
   local cols = {}
-  for ccNum, col in pairs(frame.channels[chan].onTake.ccs) do cols[ccNum] = col.events end
+  for ccNum, col in pairs(frame.channels[chan].authored.ccs) do cols[ccNum] = col.events end
   return cols
 end
 
@@ -1210,7 +1210,7 @@ end
 --post: unsafe result = the pb column's own events table, in ppq order
 --post: result = nil iff the channel has no pb column
 function tm:authoredPb(chan)
-  local col = frame.channels[chan].onTake.pb
+  local col = frame.channels[chan].authored.pb
   return col and col.events
 end
 
@@ -1354,10 +1354,10 @@ local function groupMembers(frozen, entries, promotedUuids)
     local evt = index.colEvtFor(uuid)
     if evt then util.add(members, evt) end
   end
-  local onTake = frame.channels[frozen.chan].onTake
+  local authored = frame.channels[frozen.chan].authored
   for _, entry in ipairs(entries) do
     if entry.evType ~= 'note' then
-      local col = entry.evType == 'pb' and onTake.pb or (onTake.ccs or {})[entry.cc]
+      local col = entry.evType == 'pb' and authored.pb or (authored.ccs or {})[entry.cc]
       for _, e in ipairs(col and col.events or {}) do
         -- Half-open for pb too: the conversion pulls the closing seat inside the window, so nothing legitimate stands on endppq and every member lies inside the rect the mint claims.
         if not e.parked and e.ppq >= entry.ppq and e.ppq < entry.endppq then
@@ -1389,7 +1389,7 @@ local function promotionLanes(chan, promoted, ourParked)
   local channel = frame.channels[chan]
   -- A neighbour's parked cell still holds its column: the ghosts read it as occupied and the frozen
   -- note must not be authored on top of it. Only this host's own cells step aside, and they go.
-  for lane, col in ipairs(channel.onTake.notes) do
+  for lane, col in ipairs(channel.authored.notes) do
     for _, evt in ipairs(col.events) do
       if util.isNote(evt) and not evt.derived and not ourParked[evt] then
         occupy(lane, evt.ppq, evt.endppqC or evt.endppq)
@@ -1849,7 +1849,7 @@ function tm:setMutedChannels(set)
   for chan in pairs(sweep) do
     local channel = frame.channels[chan]
     local want = lastMuteSet[chan] == true
-    for _, col in ipairs(channel and channel.onTake.notes or {}) do
+    for _, col in ipairs(channel and channel.authored.notes or {}) do
       for _, evt in ipairs(col.events) do
         if util.isNote(evt) and not evt.parked and (evt.muted == true) ~= want then
           stager.assign(evt, { muted = want })
@@ -1903,13 +1903,13 @@ function tm:rebuild(takeChanged)
     -- Parked events reseat from the stash, so a wholesale channel starts from empty columns. See § Lane occupancy.
     local prev = prevChannels[i]
     if dirt.wholesale(i) then
-      frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, fxHosts = {} }
+      frame.channels[i] = { chan = i, authored = { notes = {}, ccs = {} }, fxHosts = {} }
     elseif dirt.has(i) then
       -- Interval dirt carries every column, and the host set with them; each family splices just its
       -- seeded events. Park still wants the fresh channel.
-      local prevOnTake = prev.onTake
-      frame.channels[i] = { chan = i, onTake = { notes = prevOnTake.notes, ccs = prevOnTake.ccs,
-                                                 at = prevOnTake.at, pc = prevOnTake.pc, pb = prevOnTake.pb },
+      local prevAuthored = prev.authored
+      frame.channels[i] = { chan = i, authored = { notes = prevAuthored.notes, ccs = prevAuthored.ccs,
+                                                   at = prevAuthored.at, pc = prevAuthored.pc, pb = prevAuthored.pb },
                             fxHosts = prev.fxHosts }
     else
       frame.channels[i] = prev

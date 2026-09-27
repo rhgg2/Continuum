@@ -50,7 +50,7 @@ return {
                'fixture check: of the authored notes, only the plain two are on the take')
 
       local lane = h.tm:authoredLanes(1)[1]
-      t.truthy(lane == h.tm:getChannel(1).onTake.notes[1].events,
+      t.truthy(lane == h.tm:getChannel(1).authored.notes[1].events,
                'the lane is answered with its own events table, parked host and all')
       t.deepEq(shapeOf(lane),
                { { ppq = 0, evType = 'note' }, { ppq = 480, evType = 'note' },

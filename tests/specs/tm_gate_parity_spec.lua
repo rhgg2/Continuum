@@ -70,7 +70,7 @@ local function projectFrame(tm)
   local frame = {}
   for chan = 1, 16 do
     local channel = tm:getChannel(chan)
-    local c = channel.onTake
+    local c = channel.authored
     local f = { notes = {}, ccs = {}, parked = {} }
     for lane, col in ipairs(c.notes) do f.notes[lane] = projCol(col) end
     for ccNum, col in pairs(c.ccs)    do f.ccs[ccNum] = projCol(col) end
@@ -182,7 +182,7 @@ return {
       assertParity(h, 'chan-1 edit: frozen 2/3/4 re-read == full re-derive')
 
       -- Edit the sine host itself: chan 3 re-derives (dirty path), 2/4 stay frozen.
-      local vibNote = h.tm:getChannel(3).onTake.notes[1].events[1]
+      local vibNote = h.tm:getChannel(3).authored.notes[1].events[1]
       h.tm:assignEvent(vibNote, { pitch = 69 }); h.tm:flush()
       assertParity(h, 'chan-3 fx edit: dirty re-derive + frozen 2/4 == full re-derive')
 
@@ -250,7 +250,7 @@ return {
 
       -- Remove window A's fx outright: its orphan seats are fed by nothing and delete; B still keeps.
       keptB = seatUuids(1, 10, 960, 1200)
-      local hostA = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local hostA = h.tm:getChannel(1).authored.notes[1].events[1]
       h.tm:assignEvent(hostA, { fx = util.REMOVE }); h.tm:flush()
       t.deepEq(seatUuids(1, 10, 0, 960), {}, 'removed host: orphan seats deleted')
       t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'window B still keeps across the removal')
@@ -269,7 +269,7 @@ return {
         data   = { swing = { global = 'c58' } },
       }
       local both = { sine30[1], pan[1] }
-      local function host(lane, nth) return h.tm:getChannel(1).onTake.notes[lane].events[nth] end
+      local function host(lane, nth) return h.tm:getChannel(1).authored.notes[lane].events[nth] end
       local function seatCount(evType)
         local n = 0
         for _, c in ipairs(h.fm:dump().ccs) do
@@ -457,7 +457,7 @@ return {
       h.tm:rebuild(true)   -- settle creation-pass identity
 
       probe.pass = 'edit'
-      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 960), { val = 0 }); h.tm:flush()
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).authored.ccs[10], 960), { val = 0 }); h.tm:flush()
       t.eq(probe.ran[240], 'edit', 'the host inside the ramp ran')
       assertParity(h, 'cc ramp retarget: the host inside the ramp == full re-derive')
       generators.kinds.ccFlat = nil
@@ -478,7 +478,7 @@ return {
       h.tm:rebuild(true)   -- settle creation-pass identity
 
       probe.pass = 'edit'
-      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.pb, 960), { val = 0 }); h.tm:flush()
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).authored.pb, 960), { val = 0 }); h.tm:flush()
       t.eq(probe.ran[240], 'edit', 'the host inside the ramp ran')
       assertParity(h, 'pb ramp retarget: the host inside the ramp == full re-derive')
       generators.kinds.pbFlat = nil
@@ -498,7 +498,7 @@ return {
       h.tm:rebuild(true)   -- settle creation-pass identity
 
       probe.pass = 'edit'
-      h.tm:deleteEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 1920)); h.tm:flush()
+      h.tm:deleteEvent(authoredAt(h.tm:getChannel(1).authored.ccs[10], 1920)); h.tm:flush()
       t.eq(probe.ran[240], 'edit', 'the host the ramp crossed ran')
       assertParity(h, 'closer deleted: the host == full re-derive')
       generators.kinds.ccFlat = nil
@@ -517,7 +517,7 @@ return {
       h.tm:rebuild(true)   -- settle creation-pass identity
 
       probe.pass = 'edit'
-      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 120), { val = 100 }); h.tm:flush()
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).authored.ccs[10], 120), { val = 100 }); h.tm:flush()
       t.eq(probe.ran[240], 'edit', 'the host inside the ramp ran')
       assertParity(h, 'ramp start retarget: the host == full re-derive')
       generators.kinds.ccFlat = nil
@@ -538,7 +538,7 @@ return {
       h.tm:rebuild(true)   -- settle creation-pass identity
 
       probe.pass = 'edit'
-      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 1200), { ppq = 600 }); h.tm:flush()
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).authored.ccs[10], 1200), { ppq = 600 }); h.tm:flush()
       t.eq(probe.ran[240], 'edit', 'the host the moved point now closes ran')
       assertParity(h, 'point moved into the cover: the host == full re-derive')
       generators.kinds.ccFlat = nil
@@ -565,7 +565,7 @@ return {
 
       probe.pass = 'edit'
       for _, edit in ipairs({ { cc = 10, ppq = 0 }, { cc = 10, ppq = 1200 }, { cc = 11, ppq = 600 } }) do
-        h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[edit.cc], edit.ppq), { val = 7 })
+        h.tm:assignEvent(authoredAt(h.tm:getChannel(1).authored.ccs[edit.cc], edit.ppq), { val = 7 })
         h.tm:flush()
         t.eq(probe.ran[240], 'setup', ('cc %d at %d leaves the host kept'):format(edit.cc, edit.ppq))
       end
@@ -611,7 +611,7 @@ return {
       h.tm:rebuild(true)   -- settle creation-pass identity
 
       probe.pass = 'edit'
-      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).onTake.ccs[10], 960), { val = 0 }); h.tm:flush()
+      h.tm:assignEvent(authoredAt(h.tm:getChannel(1).authored.ccs[10], 960), { val = 0 }); h.tm:flush()
       t.eq(probe.ran[240], 'edit', 'the replace host ran')
       assertParity(h, 'replace hand-back: the host == full re-derive')
       generators.kinds.ccFlatReplace = nil
@@ -655,7 +655,7 @@ return {
       -- Detune edit at 480: the closure is [480, next lane-1 onset 960] inclusive. The absorbers
       -- at 0 and 1440 sit outside it and must stand verbatim, uuid included.
       local before = pbBag(1)
-      local n480 = h.tm:getChannel(1).onTake.notes[1].events[2]
+      local n480 = h.tm:getChannel(1).authored.notes[1].events[2]
       h.tm:assignEvent(n480, { detune = 45 }); h.tm:flush()
       local after = pbBag(1)
       t.deepEq(after[1], before[1], 'absorber at 0: outside the closure, verbatim')
@@ -703,14 +703,14 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240,
                                    fx = { { kind = 'pbFlatReplace' } } } })
       h.tm:rebuild()
-      local parked = authoredAt(h.tm:getChannel(1).onTake.pb, 120)
+      local parked = authoredAt(h.tm:getChannel(1).authored.pb, 120)
       t.truthy(parked and parked.parked, 'fixture check: the 120 pb parked in place')
-      t.truthy(not authoredAt(h.tm:getChannel(1).onTake.pb, 960).parked, 'fixture check: the 960 pb sounds')
+      t.truthy(not authoredAt(h.tm:getChannel(1).authored.pb, 960).parked, 'fixture check: the 960 pb sounds')
       t.eq(pbAt(480).val, centsToRaw(25), 'the absorber at 480 carries 0c plus detune')
       assertParity(h, 'parked pb: the parking pass == full re-derive')
 
       -- A detune edit gates the pass to the onset's closure.
-      local n480 = h.tm:getChannel(1).onTake.notes[1].events[2]
+      local n480 = h.tm:getChannel(1).authored.notes[1].events[2]
       h.tm:assignEvent(n480, { detune = 35 }); h.tm:flush()
       t.eq(pbAt(480).val, centsToRaw(35), 'the gated pass reseats it at 0c plus the new detune')
       assertParity(h, 'parked pb: gated absorber pass == full re-derive')
@@ -718,7 +718,7 @@ return {
       -- Retiring the region restores the pb, and its 40c holds into 480 again.
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
-      local restored = authoredAt(h.tm:getChannel(1).onTake.pb, 120)
+      local restored = authoredAt(h.tm:getChannel(1).authored.pb, 120)
       t.truthy(restored and not restored.parked, 'fixture check: the 120 pb restored')
       t.eq(pbAt(480).val, centsToRaw(75), 'the restoring pass reseats it at 40c plus detune')
       assertParity(h, 'restored pb: the restoring pass == full re-derive')
@@ -742,7 +742,7 @@ return {
           if e.evType == evType and e.chan == 1 and e.ppq == ppq then return e end
         end
       end
-      local function laneOne() return h.tm:getChannel(1).onTake.notes[1] end
+      local function laneOne() return h.tm:getChannel(1).authored.notes[1] end
 
       h.tm:addEvent(note(1, 0, 60))
       h.tm:addEvent(note(1, 480, 62, { detune = 25, sample = 3 }))
@@ -807,7 +807,7 @@ return {
 
       -- Reseat the onset with a detune edit -- a lane-1 seed whose span is {999, 1300}, excluding both
       -- authored pbs. cents stays 60 (the value stream is detune-independent); only the wire moves.
-      local onsetNote = h.tm:getChannel(1).onTake.notes[1].events[2]
+      local onsetNote = h.tm:getChannel(1).authored.notes[1].events[2]
       h.tm:assignEvent(onsetNote, { detune = 40 }); h.tm:flush()
       t.eq(pbAt(1, 1000).cents, 60, 'reseated onset still samples the ramp, not a truncated 0')
       -- The reseat turns 1300 into a fresh onset (40->20 step) whose absorbers project before commit
@@ -842,10 +842,10 @@ return {
       h.tm:rebuild(true)   -- settle: the seeding pass stamps ppqL before any parity claim
 
       local function cells(chan, cc)
-        local col = h.tm:getChannel(chan).onTake.ccs[cc]
+        local col = h.tm:getChannel(chan).authored.ccs[cc]
         return col and col.events or {}
       end
-      local function atCells() return h.tm:getChannel(1).onTake.at.events end
+      local function atCells() return h.tm:getChannel(1).authored.at.events end
 
       -- Non-triviality: the fixture holds the co-row shape the claim is about.
       t.eq(#cells(1, 7),  2, 'cc 7 holds both seeded cells')
@@ -908,7 +908,7 @@ return {
       h.tm:addEvent({ evType = 'cc', chan = 1, cc = 7, ppq = 141, val = 22 }); h.tm:flush()
       h.tm:rebuild(true)   -- settle creation-pass identity before any parity claim
 
-      local function cells() return h.tm:getChannel(1).onTake.ccs[7].events end
+      local function cells() return h.tm:getChannel(1).authored.ccs[7].events end
 
       -- Non-triviality: the fixture holds the collision the claim is about.
       t.eq(h.tm:fromLogical(1, 140), h.tm:fromLogical(1, 141),

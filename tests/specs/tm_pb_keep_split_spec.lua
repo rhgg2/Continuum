@@ -92,7 +92,7 @@ end
 -- Dirt on the middle host itself: its chain re-runs at twice the depth, and [0,480) is live.
 local function deepenMiddleHost(h)
   local mid
-  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[2].events) do
+  for _, e in ipairs(h.tm:getChannel(1).authored.notes[2].events) do
     if e.ppq == WIN then mid = e end
   end
   t.truthy(mid, 'fixture check: the middle host stands on lane 2')

@@ -78,7 +78,7 @@ end
 -- The channel's note columns, each canonically ordered so a same-ppq tie cannot decide equality.
 local function frameNotes(h)
   local out = {}
-  for lane, col in ipairs(h.tm:getChannel(1).onTake.notes) do
+  for lane, col in ipairs(h.tm:getChannel(1).authored.notes) do
     local evs = {}
     for _, e in ipairs(col.events) do util.add(evs, project(e)) end
     table.sort(evs, function(a, b) return t.repr(a) < t.repr(b) end)
@@ -95,7 +95,7 @@ local function wireNotes(h)
 end
 
 local function noteAt(h, lane, ppq)
-  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[lane].events) do
+  for _, e in ipairs(h.tm:getChannel(1).authored.notes[lane].events) do
     if e.ppq == ppq then return e end
   end
 end
@@ -108,7 +108,7 @@ end
 -- entry of each four is one.
 local function blockers(h)
   local lane2 = {}
-  for _, e in ipairs(h.tm:getChannel(1).onTake.notes[2].events) do util.add(lane2, e) end
+  for _, e in ipairs(h.tm:getChannel(1).authored.notes[2].events) do util.add(lane2, e) end
   table.sort(lane2, function(a, b) return a.ppq < b.ppq end)
   local out = {}
   for i = 1, #lane2, 4 do util.add(out, lane2[i]) end

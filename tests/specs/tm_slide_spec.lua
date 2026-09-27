@@ -167,7 +167,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       addSlidePair(h, 61)
-      t.falsy(next(h.tm:getChannel(1).onTake.ccs or {}), 'no carrier cc column (carrier retired)')
+      t.falsy(next(h.tm:getChannel(1).authored.ccs or {}), 'no carrier cc column (carrier retired)')
     end,
   },
 

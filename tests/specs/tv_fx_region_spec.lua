@@ -1430,7 +1430,7 @@ return {
       t.truthy((h.vm:ghostOverlay() or {}).values[ctsColIdx(h, 1, 'cc', 10)], 'fixture check: the curve is up')
 
       local far
-      for _, e in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, e in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if e.ppq == 1920 then far = e end
       end
       h.tm:assignEvent(far, { pitch = 65 })

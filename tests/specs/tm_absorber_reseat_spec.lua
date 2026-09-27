@@ -65,7 +65,7 @@ return {
       t.eq(fk.ppq, 120, 'mm absorber stays at host raw')
       t.eq(fk.ppqL, 0,  'mm absorber stamped with host ppqL by the tail walk')
 
-      local events = h.tm:getChannel(1).onTake.pb.events
+      local events = h.tm:getChannel(1).authored.pb.events
       t.eq(#events, 1, 'the absorber stays out of the pb column')
       t.eq(events[1].ppq, 480, 'which holds the authored pb alone')
     end,
@@ -127,7 +127,7 @@ return {
           },
         },
       }
-      local n = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local n = h.tm:getChannel(1).authored.notes[1].events[1]
       h.tm:assignEvent(n, { delay = 250 })
       h.tm:flush()
 
@@ -158,7 +158,7 @@ return {
 
       -- Flatten the jump: set the second note's detune to 0.
       local second
-      for _, n in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, n in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if n.pitch == 62 then second = n end
       end
       h.tm:assignEvent(second, { detune = 0 })
@@ -201,7 +201,7 @@ return {
       -- Sparse edit inside the run: bump note 2's velocity. Its dirty span sits on a note whose
       -- detune (50) equals the detune carried in from note 1.
       local second
-      for _, n in ipairs(h.tm:getChannel(1).onTake.notes[1].events) do
+      for _, n in ipairs(h.tm:getChannel(1).authored.notes[1].events) do
         if n.pitch == 62 then second = n end
       end
       h.tm:assignEvent(second, { vel = 90 })
@@ -315,7 +315,7 @@ return {
       -- The seed is the plain note, outside the host's window and moving no emit scope a trill feeds,
       -- so the host is kept. Its span closes at the next base voice -- the host's first tile -- and
       -- every seat the trill asked for lies at or beyond it.
-      local plain = h.tm:getChannel(1).onTake.notes[1].events[1]
+      local plain = h.tm:getChannel(1).authored.notes[1].events[1]
       t.eq(plain.pitch, 55, 'fixture check: the host parked itself, leaving the plain note alone on lane 1')
       h.tm:assignEvent(plain, { vel = 90 }); h.tm:flush()
 

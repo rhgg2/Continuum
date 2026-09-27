@@ -561,7 +561,7 @@ local function rowBounds(col, ppq, excludeEvt)
   -- The col-local bound is lane order (governs tail clip); the chan-wide bound is settleOnset's
   -- same-pitch seat collision, an mm question read from the on-take half alone. see docs/trackerManager.md § Lane occupancy
   local prevD, nextD = neighbourEvents({col}, ppq, diff)
-  local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).onTake.notes, ppq, same)
+  local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).authored.notes, ppq, same)
 
   local fullL      = grid.numRows * logPerRow
   local prevOnsetL = math.max(prevD and prevD.ppq or -1,    prevS and prevS.ppq or -1)
@@ -4631,7 +4631,7 @@ function tv:rebuild(takeChanged)
     -- or not, so a global region has somewhere to be authored. see docs/trackerView.md § Addressing a chain
     if masterChannel and addFxCols(0) == 0 then addGridCol(0, 'fx', nil, {}) end
     for chan, channel in tm:channels() do
-      local c = channel.onTake
+      local c = channel.authored
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
       -- Replace-region parked pbs stay the displayed automation, seated flagged in the pb column;
       -- tm hands the column, nil where none exists. see docs/trackerManager.md § Lane occupancy

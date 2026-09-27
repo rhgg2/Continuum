@@ -9,7 +9,7 @@ automatically whenever mm or cm fires.
 
 16 channels, numbered 1..16 as in mm, one per MIDI channel. A channel's
 authored events are what mm holds together with what an fx replace window
-took off the take (§ Lane occupancy). `onTake` holds the columns:
+took off the take (§ Lane occupancy). `authored` holds the columns:
 
 | kind     | shape                                  | source                    |
 |----------|----------------------------------------|---------------------------|
@@ -81,7 +81,7 @@ under the `lane` key. Lane counts are stable across rebuilds via
 
 `extraColumns` is also the single source of "columns the user has opened
 per channel" — columns present in extras but not backed by events are
-materialised as empty, so consumers see a uniform `channel.onTake`
+materialised as empty, so consumers see a uniform `channel.authored`
 irrespective of whether a column is data-driven or user-opened.
 
 One kind of column is opened from elsewhere: a cc lane driving an fx param.
@@ -1720,7 +1720,7 @@ not the conditional, is the work. The tail walk is the reach to watch:
 no seed covered, in lanes otherwise carried whole.
 
 Two cases need no renewal. Wholesale and stale-swing channels get a
-brand-new `onTake.notes`, so their identity is fresh by construction. And
+brand-new `authored.notes`, so their identity is fresh by construction. And
 a local bound to `col.events` that outlives a renewal operates on the dead
 table — the read-only walks (`enumerateHosts`, `channelStreams`,
 `onsetsIn`) do not care, and neither does park, which flips the event the

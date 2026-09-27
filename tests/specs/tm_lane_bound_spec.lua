@@ -82,7 +82,7 @@ end
 -- Every authored note on a channel, on-take and parked alike, uuid -> lane bound.
 local function boundsOn(h, chan)
   local out = {}
-  for _, col in ipairs(h.tm:getChannel(chan).onTake.notes) do
+  for _, col in ipairs(h.tm:getChannel(chan).authored.notes) do
     for _, evt in ipairs(col.events) do out[evt.uuid] = evt.endppqC end
   end
   for _, evt in ipairs(require('harness').parkedNotes(h.tm, chan)) do out[evt.uuid] = evt.endppqC end
@@ -91,7 +91,7 @@ end
 
 -- The authored note at an onset, wherever the pass left it: on its column or in the stash.
 local function authoredAt(h, chan, ppq)
-  for _, col in ipairs(h.tm:getChannel(chan).onTake.notes) do
+  for _, col in ipairs(h.tm:getChannel(chan).authored.notes) do
     for _, evt in ipairs(col.events) do if evt.ppq == ppq then return evt end end
   end
   for _, evt in ipairs(require('harness').parkedNotes(h.tm, chan)) do
@@ -192,7 +192,7 @@ return {
       h.tm:addEvent(note(1, 1140, 1320, 67, 1))   -- the region's input, sharing the lane
       h.tm:flush()
 
-      t.eq(#h.tm:getChannel(1).onTake.notes, 1, 'fixture check: one lane, so one note clips the other')
+      t.eq(#h.tm:getChannel(1).authored.notes, 1, 'fixture check: one lane, so one note clips the other')
       t.truthy(h.tm:fromLogical(1, 1140) ~= 1140, 'fixture check: the swing bites at the clipping row')
 
       local clipped = authoredAt(h, 1, 0).endppqC

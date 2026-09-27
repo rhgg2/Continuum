@@ -26,7 +26,7 @@ end
 -- Every column row a pitch stands on, across the channel's note lanes.
 local function pitchRows(h, pitch)
   local out = {}
-  for _, col in ipairs(h.tm:getChannel(1).onTake.notes) do
+  for _, col in ipairs(h.tm:getChannel(1).authored.notes) do
     for _, e in ipairs(col.events) do
       if e.pitch == pitch then out[#out + 1] = e.ppq end
     end

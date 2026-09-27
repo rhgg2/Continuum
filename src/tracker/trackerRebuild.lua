@@ -49,13 +49,13 @@ local function onsetsIn(events, spanSet)
 end
 
 local function ensureLane(chan, lane)
-  local notes = frame.channels[chan].onTake.notes
+  local notes = frame.channels[chan].authored.notes
   while #notes < lane do util.add(notes, frame.newNoteColumn()) end
   return notes[lane]
 end
 
 local function ensureCcColumn(chan, evType, ccNum)
-  local cols = frame.channels[chan].onTake
+  local cols = frame.channels[chan].authored
   if evType == 'cc' then
     cols.ccs[ccNum] = cols.ccs[ccNum] or frame.newCcColumn(ccNum)
     return cols.ccs[ccNum]
@@ -183,7 +183,7 @@ local function rebuildInternals()
   for chan = 1, 16 do
     if dirt.has(chan) then
       if not dirt.wholesale(chan) then
-        exciseEvents(frame.channels[chan].onTake.notes, dirt.ppqs(chan, 'note'), notParked)
+        exciseEvents(frame.channels[chan].authored.notes, dirt.ppqs(chan, 'note'), notParked)
       end
       for _, raw in mm:notesRaw(chan) do
         if not raw.derived and dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
@@ -241,7 +241,7 @@ end
 local function spliceChannelCCs(chan)
   local cells   = dirt.ppqs(chan, 'cc')
   local refills = {}
-  local cols = frame.channels[chan].onTake
+  local cols = frame.channels[chan].authored
 
   -- pbs carry no delay, so a row's raw seat is its logical one reswung. A seat has no ppqL, so the
   -- match leaves it out, here and in the cells below.
@@ -338,9 +338,9 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
     end
   end
   for _, entry in ipairs(raw.pas) do reconcileCcPpq(entry, fxInWindows, ccWrites) end
-  for _, col in pairs(frame.channels[chan].onTake.ccs) do util.sortByPPQ(col.events) end
+  for _, col in pairs(frame.channels[chan].authored.ccs) do util.sortByPPQ(col.events) end
   for _, key in ipairs{ 'at', 'pc', 'pb' } do
-    if frame.channels[chan].onTake[key] then util.sortByPPQ(frame.channels[chan].onTake[key].events) end
+    if frame.channels[chan].authored[key] then util.sortByPPQ(frame.channels[chan].authored[key].events) end
   end
 end
 
@@ -363,7 +363,7 @@ local function rebuildExtraColumns(extraColumns, paramAutomation)
   local bound  = paramAutomation or {}
   local grew   = false
   for chan = 1, 16 do
-    local cols = frame.channels[chan].onTake
+    local cols = frame.channels[chan].authored
     local want = extras[chan] or { notes = defaultNoteCols }
     if #cols.notes > want.notes then
       want.notes = #cols.notes
@@ -458,7 +458,7 @@ local function externalLanePacker(external)
       util.insertSorted(laneList(note.chan, lane), note, byRawOnset)
       return col, lane
     end
-    local notes = channel.onTake.notes
+    local notes = channel.authored.notes
     if note.lane then
       local col = ensureLane(note.chan, note.lane)
       if laneAccepts(laneList(note.chan, note.lane), note) then return place(col, note.lane) end
@@ -530,7 +530,7 @@ end
 
 local function clipTails(chan)
   local takeLenL = time:toLogical(chan, time:length())
-  for _, col in ipairs(frame.channels[chan].onTake.notes) do
+  for _, col in ipairs(frame.channels[chan].authored.notes) do
     local population = col.events
     for _, evt in ipairs(population) do
       if util.isNote(evt) then
@@ -595,15 +595,15 @@ end
 
 -- Where a parked spec of each kind sits: the columns a channel seats that kind in, and its own column.
 local parkHomes do
-  local function lanes(chan) return frame.channels[chan].onTake.notes end
+  local function lanes(chan) return frame.channels[chan].authored.notes end
   local function lane(spec)  return ensureLane(spec.chan, spec.lane) end
   local function ccColumns(chan)
     local cols = {}
-    for _, col in pairs(frame.channels[chan].onTake.ccs) do util.add(cols, col) end
+    for _, col in pairs(frame.channels[chan].authored.ccs) do util.add(cols, col) end
     return cols
   end
   local function pbColumns(chan)
-    local col = frame.channels[chan].onTake.pb
+    local col = frame.channels[chan].authored.pb
     return col and { col } or {}
   end
   parkHomes = {
@@ -724,7 +724,7 @@ local function parkNotes(stage)
   for chan = 1, 16 do
     local windowSpans = stage.windowSpans[util.key(chan, 'note')]
     if windowSpans and dirt.has(chan) then
-      for _, col in ipairs(frame.channels[chan].onTake.notes) do
+      for _, col in ipairs(frame.channels[chan].authored.notes) do
         for evt in onsetsIn(col.events, windowSpans) do
           if util.isNote(evt) and not evt.parked then addCandidate(evt) end
         end
@@ -796,7 +796,7 @@ local function parkPAs(stage)
   local candidates = {}
   for chan = 1, 16 do
     if dirt.has(chan) then
-      for _, col in ipairs(frame.channels[chan].onTake.notes) do
+      for _, col in ipairs(frame.channels[chan].authored.notes) do
         if #parkedHostsIn(col) > 0 then
           for _, evt in ipairs(col.events) do
             local note = evt.evType == 'pa' and not evt.parked and underParkedHost(evt, col)
@@ -837,7 +837,7 @@ local function parkCCs(stage)
   local candidates = {}
   for chan = 1, 16 do
     if dirt.has(chan) then
-      for cc, col in pairs(frame.channels[chan].onTake.ccs) do
+      for cc, col in pairs(frame.channels[chan].authored.ccs) do
         for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, cc)]) do
           if not evt.parked then util.add(candidates, { evt = evt, spec = toParked(evt) }) end
         end
@@ -861,7 +861,7 @@ end
 local function parkPbs(stage, pbLimCents)
   local candidates = {}
   for chan = 1, 16 do
-    local col = frame.channels[chan].onTake.pb
+    local col = frame.channels[chan].authored.pb
     if col and dirt.has(chan) then
       for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, 'pb')]) do
         if not evt.parked then util.add(candidates, { evt = evt, spec = toParked(evt) }) end
@@ -947,7 +947,7 @@ end
 -- The note column whose voice pa modulates: on-take cover beats parked, then the lowest lane wins.
 --post: result = nil iff no note of pa's pitch covers pa's logical onset
 local function findNoteColumnForPitch(channel, pa, takeLenL, reachPpq)
-  local notes, parkedLane = channel.onTake.notes, nil
+  local notes, parkedLane = channel.authored.notes, nil
   for lane, col in ipairs(notes) do
     local cover = coverOnLane(col.events, pa, takeLenL, reachPpq)
     if cover == 'onTake' then return col, lane end
@@ -1052,7 +1052,7 @@ end
 
 -- The column's pb events, or none; the column holds every authored pb, sounding or parked.
 local function pbColumnEvents(chan)
-  local col = frame.channels[chan].onTake.pb
+  local col = frame.channels[chan].authored.pb
   return col and col.events or {}
 end
 
@@ -1088,7 +1088,7 @@ end
 --post: each base is in ppq order
 local function ccBasesFor(chan, spanSet)
   local bases = {}
-  for cc, col in pairs(frame.channels[chan].onTake.ccs) do
+  for cc, col in pairs(frame.channels[chan].authored.ccs) do
     for _, evt in ipairs(pointsFor(col.events, spanSet)) do
       util.bucket(bases, cc, basePoint(evt.ppq, evt.val, evt))
     end
@@ -1098,7 +1098,7 @@ end
 
 -- cc-family streams a generator reads; see docs/generators.md § Input streams
 local function continuousStreams(chan, spanStart, spanEnd, pbBase, ccBases)
-  local cols = frame.channels[chan].onTake
+  local cols = frame.channels[chan].authored
   local pas = {}
   for _, col in ipairs(cols.notes) do
     for j = util.firstAtOrAfter(col.events, spanStart), #col.events do
@@ -1145,7 +1145,7 @@ local function enumerateHosts(chan, regions)
 
   for _, region in ipairs(regions) do
     local notes = {}
-    for _, col in ipairs(frame.channels[chan].onTake.notes) do
+    for _, col in ipairs(frame.channels[chan].authored.notes) do
       local population = col.events
       for i = util.firstAtOrAfter(population, region.ppq), #population do
         local evt = population[i]
@@ -1182,7 +1182,7 @@ local function classifyHosts(chan, hosts)
         if target == 'pb' then
           lo, hi = boundsFor(pbColumnEvents(chan), host.window)
         else
-          lo, hi = boundsFor(frame.channels[chan].onTake.ccs[target].events, host.window)
+          lo, hi = boundsFor(frame.channels[chan].authored.ccs[target].events, host.window)
         end
         for _, ppq in ipairs(seedsOn[target]) do
           if ppq >= lo and ppq <= hi then return true end
@@ -1390,7 +1390,7 @@ local function rebuildFx(fxOutWindows, fxInWindows, fxRegions, pbLimCents)
     nextSameLaneNote = function (host)
       local note = host.notes[1]
       if not note or not host.lane then return nil end
-      return frame.nextOnLane(frame.channels[host.chan].onTake.notes[host.lane].events, note.ppq)
+      return frame.nextOnLane(frame.channels[host.chan].authored.notes[host.lane].events, note.ppq)
     end
   }
 
@@ -1555,7 +1555,7 @@ local function makeTailRules(chan, res, windows, writes)
   -- The lane successor in column order: a neighbour delayed off its row still follows here. The
   -- population is the column's own: no derived note bounds by a lane, so none joins one.
   local function laneNext(e)
-    local col = frame.channels[chan].onTake.notes[e.lane]
+    local col = frame.channels[chan].authored.notes[e.lane]
     if not col then return end
     for i = util.firstAfter(col.events, e.ppqL), #col.events do
       local evt = col.events[i]
@@ -2443,9 +2443,9 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
         if inSpans(seatSpans, p.ppq) then frame.setEvent(p.evt, 'detune', baseVoice.detuneAt(p.ppq)) end
       end
       -- A pb column exists when it holds an event or extraColumns asks for it.
-      local onTake = frame.channels[chan].onTake
-      if onTake.pb and #onTake.pb.events == 0 and not (extras[chan] and extras[chan].pb) then
-        onTake.pb = nil
+      local authored = frame.channels[chan].authored
+      if authored.pb and #authored.pb.events == 0 and not (extras[chan] and extras[chan].pb) then
+        authored.pb = nil
       end
     end
   end
@@ -2593,10 +2593,10 @@ local function rebuildPCs(fxOut, extraColumns)
   -- Synthesis consumes authored pcs, so they leave the column the walk projected them into; a
   -- column left empty stands only where extraColumns asks for it.
   for chan, ppqLs in pairs(consumedByChan) do
-    local onTake = frame.channels[chan].onTake
-    exciseEvents({ onTake.pc }, ppqLs)
+    local authored = frame.channels[chan].authored
+    exciseEvents({ authored.pc }, ppqLs)
     local wanted = extraColumns and extraColumns[chan] and extraColumns[chan].pc
-    if #onTake.pc.events == 0 and not wanted then onTake.pc = nil end
+    if #authored.pc.events == 0 and not wanted then authored.pc = nil end
   end
 end
 
