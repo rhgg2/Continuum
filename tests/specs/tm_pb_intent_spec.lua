@@ -1,6 +1,6 @@
 -- The pb column is the take's pb intent (docs/trackerManager.md § CC walk): authored pbs alone,
 -- projected by the CC walk, each event's `val` its intent in cents. The base voice's detune at a
--- pb's onset is a cue emission stamps on it (design/intent-emission.md § Emission's output), so
+-- pb's onset is a cue emission stamps on it (docs/trackerManager.md § Two movements), so
 -- `val + detune` is the cents it sounds. Absorbers are realisation and live in mm alone.
 --
 -- Under the default 2-semitone pbRange, 200 cents span 8192 raw, so 50 cents is raw 2048 exactly.
@@ -93,7 +93,7 @@ end
 
 return {
 
-  -- Absorbers and synthesised PCs live in mm alone (§ Emission's output): the column holds no
+  -- Absorbers and synthesised PCs live in mm alone (§ CC walk): the column holds no
   -- derived pb, so it has nothing to hide.
   {
     name = 'an absorber is in mm and absent from the pb column',

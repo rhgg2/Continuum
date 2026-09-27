@@ -21,14 +21,14 @@
 4. **Phase 4 — Cues and the realisation map** (§ Emission's output, § Reading intent) —
    `REALISATION` becomes the cue set with `parked` and pb `detune` in it, the realisation map's
    parked share covers every kind a host parks, and each emission stage reads um's index only for
-   the previous emission.  ← in flight
+   the previous emission. Landed 2026-09-27, 6 commits.
 5. **Phase 5 — Continuous seats** (§ Continuous seats) — red first: freeze-to-group thins a cc curve
    as it thins a pb one (`tm_fx_region_spec`, beside "freeze to group: the dense curve re-seats
    sparse in one flush"). One seat test replaces `isPbSeat` and the CC walk's cc tag; fx expansion
    reads its existing cc side off the raw index by window, keeping the kept-host exclusion and the
    overlapper's scope clip; one census-diff sweep, shared with `retireUncoveredSeats`, replaces
    `parkPbs`'s pb sweep and the absent-host file sweep; cc leaves `HOST_FILED`. The docs transfer
-   also corrects `docs/generators.md` § pb and cc ¶2–3, which predate pb parking.
+   also corrects `docs/generators.md` § pb and cc ¶2–3, which predate pb parking.  ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
@@ -42,5 +42,26 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+1. **Seats reconcile by window, and orphans go by one census diff** (§ Continuous seats 4–5) — fx
+   expansion reads each running host's existing cc seats off um's raw index: the raw-only ccs inside
+   its window in the pass's own set, per cc target. The union, deduped by uuid, replaces
+   `gatherFrom`'s cc share of `index.derivedByHost` (`trackerRebuild.lua` ~1479). A clean
+   overlapper's read clips to `ccScope` as now, and a kept host's window is not read. One sweep
+   deletes each raw-only pb and cc the previous census covers and the pass's own set does not. It
+   replaces `parkPbs`'s vanished-window sweep (~897) and the absent-host sweep's cc share, and
+   `retireUncoveredSeats` (`trackerManager.lua` ~1604) calls it over the stored and mapped census,
+   so it lives where both modules reach it. The two land together: a window read leaves a moved
+   host's abandoned seats unread, and the sweep is what takes them. No cc reader is left on the
+   file, so cc leaves `HOST_FILED`. Spec: a moved cc-augment window leaves no seat outside its new
+   span; shrinking a pb or cc window deletes the seats past its new end without churning those it
+   still covers; a deleted cc host's seats go; gated passes match a full re-derive.
+1. **One seat test recognises pb and cc seats** (§ Continuous seats 1–3) — `ppqL == nil` and
+   `ownsRaw` over the previous census replaces `isPbSeat` and the CC walk's cc tag
+   (`trackerRebuild.lua` ~290, ~317). The wholesale path applies the test to each pb and cc, the
+   interval path matches its refills by `ppqL`, and fx expansion stamps no `derived` on the seats it
+   mints. A cc then carries no `derived`, so `thinSeats` takes cc seats as curve material. Spec,
+   written red first: freeze-to-group thins a cc curve as it thins a pb one (`tm_fx_region_spec`,
+   beside "freeze to group: the dense curve re-seats sparse in one flush").
 
 

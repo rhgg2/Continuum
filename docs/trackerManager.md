@@ -769,7 +769,8 @@ stays inside trackerManager. Realisation reaches the view only as cues.
 A **cue** is a field emission derives and carries on an authored event:
 `delayC`, `endppqC`, `sampleShadowed` and `parked` on every kind, and
 `detune` on a pb. A note's `detune` is authored, so the set is keyed by the
-event's kind, and `frame.isCue(kind, field)` is its one test.
+event's kind, and `frame.isCue(kind, field)` is its one test. Reconstruction
+writes an authored event's own fields, and emission writes only its cues.
 
 The view relocates a cell by adding a clone of its seat, and gm's clipboard
 adds clones of index entries, so cues and um's decoration — `committed`,
@@ -782,6 +783,22 @@ from the seated event in place. So one set governs the cues on the writes,
 the stash and the seat. The write doors let `derived`, `raw` and `cents`
 through: freeze promotes a derived note by assigning `derived` away, and the
 pb door reframes `cents` itself.
+
+The **previous emission** is the take in the realisation frame as mm now holds
+it: each authored event that sounds, and every derived event (`docs/timing.md`
+§ The two frames). Emission reads intent from the frame alone, and um's index
+only for the previous emission, which the pipeline's own commits keep current
+mid-rebuild.
+
+A raw position is emission. A stage that needs raw order walks um's index and
+reads each authored note's intent fields through its seat stamp (§ Incremental
+index reconciliation). Any other stage takes membership and intent fields from
+the columns, and an event's raw position by uuid from um's index. The tail walk
+refines the sounding set the stages before it settled, so it reads that set
+from um's index.
+
+Emission reconciles its output against the previous emission — an absorber
+already seated, a raw onset already in place.
 
 ### The pipeline
 

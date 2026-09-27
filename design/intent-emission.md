@@ -1,7 +1,6 @@
 # Intent and emission — the frame as a take's intent
 
-> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 4 (cues and the realisation map);
-> phase 5 (continuous seats) queued.
+> opened: 2026-09-26 · status: in flight — plan/intent-emission.md, phase 5 (continuous seats).
 
 **The frame holds a take's intent — every authored event in its logical column, sounding or not. A
 pass reconstructs that intent from mm and the stash, then emits the take from it; parking, fx
@@ -33,39 +32,11 @@ Moved to `docs/trackerManager.md` § Two movements.
 
 ## Emission's output
 
-1. Reconstruction writes an authored event's own fields, and emission writes only its cues. A
-   **cue** is a field emission derives, carried on an authored event, and `REALISATION` enumerates
-   the set.
-
-1. `parked` is a cue, and so is a pb event's `detune` — the base voice's detune at its onset.
-
-1. No cue reaches mm or the stash, and neither does um's decoration — `committed` and the seat
-   stamp `colEvt`. Every write door sheds both. A park spec is its event minus the cues and um's
-   bookkeeping — `committed`, `colEvt`, `raw`, `cents` and `derived`.
-
-1. The **realisation map** carries emission's output to the view, keyed by host: the derived notes a
-   host emits, the events it parks and the channels it realises on. The view renders a host's output
-   from it, and a freeze reads from it the events its host parked.
-
-1. Where absorbers and synthesised PCs live moved to `docs/trackerManager.md` § CC walk.
+Moved to `docs/trackerManager.md` § Two movements, § CC walk and § Realisation by host.
 
 ## Reading intent
 
-1. The **previous emission** is the take in the realisation frame as mm now holds it: each authored
-   event that sounds, and every derived event (`docs/timing.md` § The two frames).
-
-1. Emission reads intent from the frame alone, and um's index only for the previous emission.
-
-1. A raw position is emission. A stage that needs raw order walks um's index and reads each
-   authored note's intent fields through its seat stamp (`docs/trackerManager.md` § Incremental
-   index reconciliation). Any other stage takes membership and intent fields from the columns, and
-   an event's raw position by uuid from um's index.
-
-1. The tail walk refines the sounding set the stages before it settled, so it reads that set from
-   um's index.
-
-1. Emission reconciles its output against the previous emission — an absorber already seated, a
-   raw onset already in place.
+Moved to `docs/trackerManager.md` § Two movements.
 
 ## Continuous seats
 

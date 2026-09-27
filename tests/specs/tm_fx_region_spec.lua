@@ -2946,7 +2946,7 @@ return {
     -- A host's realisation entry carries every event it took off the take, of every kind, as the
     -- seated column events the grid draws. A PA goes with its host note, so it sits in the share of
     -- whichever host parked that note. A prior carried through a pass that never touched its channel
-    -- stays in its host's share. see design/intent-emission.md § Emission's output 4
+    -- stays in its host's share. see docs/trackerManager.md § Realisation by host
     name = "fxRealisation parked: a host's entry names every kind it parked",
     run = function(harness)
       local h = harness.mk()
