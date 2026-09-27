@@ -2755,12 +2755,15 @@ end
 -- The fx editor addresses hosts by durable uuid (survives rebuilds) and
 -- writes through setNoteFx (whole list) / setFxField (one field).
 
--- An fx host is a note (mm, integer uuid), a parked note host (off-take, original or minted
--- 'fxp-N' uuid), or a region (ds, 'fxr-N'); the editor addresses all three by uuid.
--- Disjoint namespaces: a missed lookup falls through in that order.
+-- An fx host is a note (mm), a parked note host ('fxp-N'), or a region (ds, 'fxr-N') --
+-- disjoint namespaces, so a miss falls through in that order; a parked non-host can be the target too, reaching the stash.
 local function parkedByUuid(uuid)
-  for evt in tm:eachParkedHost() do
-    if evt.uuid == uuid then return evt end
+  for chan = 1, 16 do
+    for _, events in ipairs(tm:authoredLanes(chan)) do
+      for _, evt in ipairs(events) do
+        if evt.parked and evt.uuid == uuid and util.isNote(evt) then return evt end
+      end
+    end
   end
 end
 

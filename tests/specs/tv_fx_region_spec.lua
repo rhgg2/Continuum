@@ -262,6 +262,31 @@ return {
   },
 
   {
+    -- A region-parked member is a parked cell the editor can address like any other: the grid shows
+    -- it, so the caret can land on it, and a chain written to it rides the stash spec. The member is
+    -- a plain note until the write, so a lookup narrowed to fx hosts would miss it.
+    name = 'replace region: setNoteFx on a parked plain member writes its stash spec',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      injectRegion(h, { fx = arpUp })
+      local parked = require('harness').parkedNotes(h.tm, 1)
+      t.eq(#parked, 1, 'fixture check: the region parked its one member')
+      t.falsy(parked[1].fx, 'fixture check: the member carries no chain of its own')
+      local uuid = parked[1].uuid
+
+      h.vm:setNoteFx(uuid, sine30)
+
+      local fx = h.vm:noteFx(uuid)
+      t.eq(fx and fx[1].kind, 'sine', 'the editor reads the chain back')
+      local spec
+      for _, s in ipairs(h.ds:get('fxParked') or {}) do if s.uuid == uuid then spec = s end end
+      t.truthy(spec, 'the member is still parked')
+      t.eq(spec.fx and spec.fx[1].kind, 'sine', 'the stash spec carries the chain')
+    end,
+  },
+
+  {
     name = 'replace region: a parked cc still renders in its cc column',
     run = function(harness)
       local h = harness.mk()

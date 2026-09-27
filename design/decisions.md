@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — The fx host set moves from um's index to the frame: each channel keeps `fxHosts`,
+  every seated note carrying a chain, parked or on the take, kept by the frame's seat and drop
+  operations. The census, the park scan, expansion and `tm:eachParkedHost` read it, expansion
+  sorting by (lane, ppq, uuid) since overlapping pb chains fold in run order; `index.fxHosts`
+  retires. The view's `parkedByUuid` stays broad, as a region-parked plain member is addressable
+  too.
+
 - **2026-09-27** — A pb park seeds its row as a note park does, reversing 2026-09-26. The parked
   pb's value held past its window to the next unparked pb, so a gated pass left the absorbers there
   carrying it until a full re-derive; the earlier check missed this because no spec had a detune

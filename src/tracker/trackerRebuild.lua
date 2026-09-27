@@ -151,14 +151,7 @@ local function exciseEvents(cols, ppqs, claims)
         if claims(evt) then drop[evt] = true end
       end
     end
-    if next(drop) then
-      local kept = {}
-      for _, evt in ipairs(events) do
-        if not drop[evt] then util.add(kept, evt) end
-      end
-      col.events = kept   -- kept is a fresh table: this assignment is the renewal
-      frame.markRenewed(col)
-    end
+    frame.dropEvents(col, drop)
   end
 end
 
@@ -207,7 +200,7 @@ local function rebuildInternals()
     if not dirt.wholesale(note.chan) and not dirt.swing.has(note.chan) then
       frame.spliceEvent(note.chan, note.lane, note) -- into the carried logical lane; stays ordered
     else
-      util.add(col.events, note)
+      frame.appendTo(col, note)
       disordered[col] = true
     end
     index.stampColEvt(note)
@@ -649,12 +642,7 @@ local function seatParked(kind, specs)
           else stale[evt] = true end
         end
       end
-      if next(stale) then
-        local kept = {}
-        for _, evt in ipairs(col.events) do if not stale[evt] then util.add(kept, evt) end end
-        col.events = kept   -- kept is a fresh table: this assignment is the renewal
-        frame.markRenewed(col)
-      end
+      frame.dropEvents(col, stale)
     end
   end
   for _, spec in ipairs(specs) do
@@ -732,7 +720,7 @@ local function parkStage(fxOutWindows, fxParked, seats)
            prior = prior, windowSpans = windowSpans, seats = seats, parkedByHost = parkedByHost }
 end
 
-local function parkNotes(stage, onTakeHosts)
+local function parkNotes(stage)
   local candidates, seen = {}, {}
   local function addCandidate(evt)
     if not seen[evt] then  -- a host under its own region would arrive from both sources
@@ -750,9 +738,11 @@ local function parkNotes(stage, onTakeHosts)
       end
     end
   end
-  for host in pairs(onTakeHosts) do
-    if dirt.has(host.chan) and generators.parksNotes(host) then
-      addCandidate(host)
+  for chan = 1, 16 do
+    if dirt.has(chan) then
+      for host in pairs(frame.channels[chan].fxHosts) do
+        if not host.parked and generators.parksNotes(host) then addCandidate(host) end
+      end
     end
   end
 
@@ -927,9 +917,9 @@ end
 
 --pre: seats is seatStash's map over this same fxParked
 --post: result = { [host uuid] = the seated column events it parked, of every kind }
-local function rebuildRegionPark(fxOutWindows, fxParked, seats, fxInWindows, onTakeHosts, pbLimCents)
+local function rebuildRegionPark(fxOutWindows, fxParked, seats, fxInWindows, pbLimCents)
   local stage                      = parkStage(fxOutWindows, fxParked, seats)
-  local parkedNotes, restoredNotes = parkNotes(stage, onTakeHosts)
+  local parkedNotes, restoredNotes = parkNotes(stage)
   -- Order matters: parkPAs reconciles against the parked notes parkNotes installs.
   local parkedPAs, restoredPAs     = parkPAs(stage)
   local parkedCCs, restoredCCs     = parkCCs(stage)
@@ -1009,8 +999,22 @@ end
 
 ----- Rebuild fx helpers
 
+-- A channel's note hosts in the order expansion runs them, parked and on the take together; an
+-- overlapping pb fold is order-dependent, so the order is fixed here, not by the set.
+--post: fresh result = chan's fx hosts, sorted by (lane, ppq, uuid)
+local function sortedHosts(chan)
+  local hosts = util.keys(frame.channels[chan].fxHosts)
+  table.sort(hosts, function(a, b)
+    if a.lane ~= b.lane then return a.lane < b.lane end
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    return tostring(a.uuid) < tostring(b.uuid)
+  end)
+  return hosts
+end
+
+--pre: endppqC has been written by tailClip
 --shape: window -> { uuid, chan, ppq, endppq, fx, hostType = 'note'|'region', targets }
-local function buildFxWindows(fxRegions, onTakeHosts)
+local function buildFxWindows(fxRegions)
   local windows = {}
   local function addWindow(window)
     window.targets = generators.chainTargets(window)
@@ -1021,58 +1025,13 @@ local function buildFxWindows(fxRegions, onTakeHosts)
     addWindow(util.assign(util.clone(region), { hostType = 'region' }))
   end
 
-  local noteHosts = {}
-  for host in pairs(onTakeHosts) do util.add(noteHosts, host) end
-  for chan = 1, 16 do
-    for _, evt in ipairs(frame.parkedNotes(chan)) do
-      if evt.fx then util.add(noteHosts, evt) end
-    end
-  end
-  table.sort(noteHosts, function(a, b)
-    if a.chan ~= b.chan then return a.chan < b.chan end
-    if a.lane ~= b.lane then return a.lane < b.lane end
-    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-    return tostring(a.uuid) < tostring(b.uuid)
-  end)
   -- A note host's window is the degenerate one (note-is-a-region): its onset to its lane bound.
-  for _, host in ipairs(noteHosts) do
-    addWindow(util.pick(host, 'uuid chan ppq fx', { endppq = host.endppqC, hostType = 'note' }))
+  for chan = 1, 16 do
+    for _, host in ipairs(sortedHosts(chan)) do
+      addWindow(util.pick(host, 'uuid chan ppq fx', { endppq = host.endppqC, hostType = 'note' }))
+    end
   end
   return fxWindows.new(windows, time)
-end
-
---pre: endppqC has been written by tailClip
---post: returns { [event] = true }
-local function onTakeFxHosts()
-  local hosts = {}
-
-  local function walkChannel(chan)
-    for _, col in ipairs(frame.channels[chan].onTake.notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.fx and util.isNote(evt) and not evt.parked then hosts[evt] = true end
-      end
-    end
-  end
-
-  local function perHost(chan)
-    local parked = {}
-    for _, evt in ipairs(frame.parkedNotes(chan)) do parked[evt.uuid] = true end
-    for uuid in pairs(index.fxHosts(chan)) do
-      if not parked[uuid] then
-        local evt = index.colEvtFor(uuid)
-        if not evt then return walkChannel(chan) end
-        hosts[evt] = true
-      end
-    end
-  end
-
-  for chan = 1, 16 do
-    local known = index.fxHosts(chan)
-    if known and next(known) then
-      if dirt.wholesale(chan) then walkChannel(chan) else perHost(chan) end
-    end
-  end
-  return hosts
 end
 
 ----- Rebuild fx
@@ -1191,8 +1150,7 @@ local function soundingEvent(evt)
 end
 
 -- Every fx host of a channel, since the gate classifies each against the full set.
---pre: noteHosts is chan's on-take fx hosts, (lane, ppq)-sorted
-local function enumerateHosts(chan, noteHosts, regions)
+local function enumerateHosts(chan, regions)
   local hosts = {}
   local function addNoteHost(note)
     util.add(hosts, {
@@ -1202,10 +1160,8 @@ local function enumerateHosts(chan, noteHosts, regions)
     })
   end
 
-  for _, note in ipairs(noteHosts) do addNoteHost(note) end
-
-  for _, spec in ipairs(frame.parkedNotes(chan)) do
-    if spec.fx then addNoteHost(soundingEvent(spec)) end
+  for _, note in ipairs(sortedHosts(chan)) do
+    addNoteHost(note.parked and soundingEvent(note) or note)
   end
 
   for _, region in ipairs(regions) do
@@ -1459,16 +1415,6 @@ local function rebuildFx(fxOutWindows, fxRegions, pbLimCents)
     end
   }
 
-  -- Recompute, since rebuildRegionPark may have moved fx note hosts. See § Fx window census.
-  local fxHostsByChan = {}
-  for host in pairs(onTakeFxHosts()) do util.bucket(fxHostsByChan, host.chan, host) end
-  for _, bucket in pairs(fxHostsByChan) do
-    table.sort(bucket, function(a, b)
-      if a.lane ~= b.lane then return a.lane < b.lane end
-      return a.ppq < b.ppq
-    end)
-  end
-
   local fxRegionsByChan = {}
   for _, region in ipairs(fxRegions or {}) do
     util.bucket(fxRegionsByChan, region.chan, region)
@@ -1482,7 +1428,7 @@ local function rebuildFx(fxOutWindows, fxRegions, pbLimCents)
                   pbScope = {}, ran = frame.newChannels() }
 
   local function expandChannel(chan)
-    local hosts = enumerateHosts(chan, fxHostsByChan[chan] or {}, fxRegionsByChan[chan] or {})
+    local hosts = enumerateHosts(chan, fxRegionsByChan[chan] or {})
     local gated = not dirt.wholesale(chan)
     local status, emitScope = {}, {}
     if gated then
@@ -2834,10 +2780,8 @@ function rebuild.pipeline(context)
   dirt.tails.clear()
   for chan = 1, 16 do if dirt.has(chan) then clipTails(chan) end end
 
-  local onTakeHosts  = onTakeFxHosts()
-  local fxOutWindows = buildFxWindows(sources.fxRegions, onTakeHosts)
-  local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, seats, fxInWindows, onTakeHosts,
-                                         pbRangeCents)
+  local fxOutWindows = buildFxWindows(sources.fxRegions)
+  local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, seats, fxInWindows, pbRangeCents)
 
   local fxOut = rebuildFx(fxOutWindows, sources.fxRegions, pbRangeCents)
 

@@ -17,7 +17,8 @@
 --invariant: a discrete-replace kind parks its host: a region its covered chord, a note itself
 --invariant: parked members feed the generator and the grid only; nothing parked sounds
 
---shape: frame.channels[chan] = { chan, onTake = the columns }
+--shape: frame.channels[chan] = { chan, onTake = the columns, fxHosts = { [colEvent] = true } }
+--shape: fxHosts = every note seated in the channel's lanes that carries fx, parked or on the take
 --shape: onTake =   { notes = [lane] = column (dense), ccs = { [ccNum] = column }, [pb], [pc], [at] }
 --shape: a note lane, cc column or the pb column also seats its parked events, flagged parked = true; every other colEvent is on the take
 --shape: column =   { events = [colEvent, ...], [cc = ccNum] }
@@ -143,10 +144,6 @@ do
     return frame.renewColumn(channel and channel.onTake.notes[lane])
   end
 
-  -- A caller that replaced a lane's events table itself has done the renewal; recording it keeps a
-  -- later renewLane from cloning the fresh table on top.
-  function frame.markRenewed(col) renewed[col] = true end
-
   -- Field write on a seated event: renew only where the value actually moves, or the tail walk's
   -- restamp renews every bounded lane every pass. Events are self-describing, so their column is here.
   function frame.setEvent(evt, field, value)
@@ -158,11 +155,36 @@ do
     evt[field] = value
   end
 
+  -- The channel's host set follows its lanes' membership, so every seat and drop below keeps it and
+  -- no reader rescans a lane. see docs/trackerManager.md § Lane occupancy
+  local function isFxHost(evt) return util.isNote(evt) and evt.fx end
+
   -- Membership write: renew the column, then splice at its onset to keep it in the column's own
   -- order; renewal and splice are one act. See docs/trackerManager.md § Note-lane renewal
   function frame.spliceInto(col, evt)
     frame.renewColumn(col)
     util.insertSorted(col.events, evt, col.less)
+    if isFxHost(evt) then frame.channels[evt.chan].fxHosts[evt] = true end
+  end
+
+  -- A bulk seat into a column its caller has renewed and will order once, via frame.orderColumn.
+  function frame.appendTo(col, evt)
+    util.add(col.events, evt)
+    if isFxHost(evt) then frame.channels[evt.chan].fxHosts[evt] = true end
+  end
+
+  --post: col.events is replaced iff drop names one of its events; each dropped host leaves its set
+  function frame.dropEvents(col, drop)
+    if not next(drop) then return end
+    local kept = {}
+    for _, evt in ipairs(col.events) do
+      if not drop[evt] then util.add(kept, evt)
+      elseif isFxHost(evt) then frame.channels[evt.chan].fxHosts[evt] = nil end
+    end
+    -- kept is a fresh table, so this assignment is the renewal; the memo keeps a later renewLane
+    -- from cloning it again.
+    col.events = kept
+    renewed[col] = true
   end
 
   -- The note-lane door onto it: (chan, lane) is how a note names its column.
@@ -394,8 +416,8 @@ end
 
 ---------- RAW INDEX
 
--- Owns rawIndex/byUuid/fxHosts/derivedByHost and the upkeep that keeps them true; knows nothing of
--- staging. `index` is the handle its doors hang on; the four structures stay private to the block.
+-- Owns rawIndex/byUuid/derivedByHost and the upkeep that keeps them true; knows nothing of
+-- staging. `index` is the handle its doors hang on; the three structures stay private to the block.
 local index = {}
 do
 
@@ -404,8 +426,7 @@ do
   --shape: rawIndex[chan] = { notes, pbs, pcs, pas, ats, ccs = { [ccNum] = list } }; every event on the channel, one list per type -- notes and pbs flat across all lanes, pcs/pas/ats flat, ccs bucketed by cc number. Each list raw-then-logical sorted; readers filter at use.
   local rawIndex = {}
   local byUuid = {}
-  local fxHosts = {}   -- chan -> { uuid = true } for on-take .fx notes; maintained, never rescanned. see design § Phase 5.5
-  --shape: derivedByHost[chan] = { [hostUuid] = { [uuid] = entry } }; the channel's derived records -- notes, and the ccs routed out of the columns -- filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned -- as fxHosts is. see docs/trackerManager.md § The host gate
+  --shape: derivedByHost[chan] = { [hostUuid] = { [uuid] = entry } }; the channel's derived records -- notes, and the ccs routed out of the columns -- filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned. see docs/trackerManager.md § The host gate
   local derivedByHost = {}
 
   ----- Order
@@ -453,17 +474,13 @@ do
   -- (filtered at use); entries are live um records.
   function index.raw(chan) return rawIndex[chan] end
 
-  -- The maintained fx-host set for a channel (uuids of on-take .fx notes); onTakeFxHosts reads it
-  -- instead of rescanning columns.
-  function index.fxHosts(chan) return fxHosts[chan] end
-
   -- Fx expansion asks per host that ran, so a host it kept is never asked and its notes stand
   -- outside both sides of the reconcile. Entries are live, and a gather clones before writing.
   --post: result = the channel's derived notes and ccs, filed by producing host uuid
   function index.derivedByHost(chan) return derivedByHost[chan] end
 
-  -- Resolve a uuid to its live column event via the seat stamp (byUuid.colEvt), so the clip cache
-  -- reseeks a dirty host without a column walk. see docs/trackerManager.md § Lane occupancy
+  -- Resolve a uuid to its live column event via the seat stamp (byUuid.colEvt), without a column
+  -- walk. see docs/trackerManager.md § Incremental index reconciliation
   function index.colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
 
   -- The live index entry for a uuid, valid until the next rebuild.
@@ -502,26 +519,8 @@ do
       return bucket
     end
   end
-  -- fx-host membership rides the index turnover: set on insert of a .fx note, cleared on removal, so
-  -- onTakeFxHosts never rescans columns to find hosts.
-  local function setFxHost(evt)
-    if evt.evType ~= 'note' or not evt.uuid then return end
-    if evt.fx then
-      local set = fxHosts[evt.chan] or {}
-      set[evt.uuid] = true
-      fxHosts[evt.chan] = set
-    else
-      local set = fxHosts[evt.chan]
-      if set then set[evt.uuid] = nil end
-    end
-  end
-  local function clearFxHost(evt, chan)
-    if evt.evType ~= 'note' or not evt.uuid then return end
-    local set = fxHosts[chan or evt.chan]
-    if set then set[evt.uuid] = nil end
-  end
-  -- A derived record's file membership rides index turnover as fx-host membership does; only notes and
-  -- ccs file under a host, since a pb/pc names its own kind. see docs/trackerManager.md § The host gate
+  -- A derived record's file membership rides index turnover: set on insert, cleared on removal. Only
+  -- notes and ccs file under a host, since a pb/pc names its own kind. see docs/trackerManager.md § The host gate
   local HOST_FILED = { note = true, cc = true }
   local function setDerivedHost(evt)
     if not HOST_FILED[evt.evType] or not evt.uuid or not evt.derived then return end
@@ -547,7 +546,6 @@ do
   function index.add(evt)
     local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
-    setFxHost(evt)
     setDerivedHost(evt)
     -- A lone insert seeks its seat rather than re-sorting the already-ordered list whole.
     -- See docs/trackerManager.md § Incremental index reconciliation.
@@ -561,7 +559,6 @@ do
   function index.delete(evt, chan)
     local tbl = rawIndexListFor(evt, chan or evt.chan)
     if not tbl then return end
-    clearFxHost(evt, chan)
     clearDerivedHost(evt, chan)
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
   end
@@ -580,8 +577,6 @@ do
       index.delete(evt, oldChan)
       index.add(evt)
     end
-    -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
-    if update.fx ~= nil then setFxHost(evt) end
     if update.derived ~= nil then setDerivedHost(evt) end
   end
 
@@ -684,12 +679,12 @@ do
     byUuid = {}
     for i = 1, 16 do
       rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }
-      fxHosts[i], derivedByHost[i] = {}, {}
+      derivedByHost[i] = {}
     end
     for _, e in mm:events() do
       local evt = makeEntry(e)
       local tbl = rawIndexListFor(evt, evt.chan)
-      if tbl then util.add(tbl, evt); setFxHost(evt); setDerivedHost(evt) end
+      if tbl then util.add(tbl, evt); setDerivedHost(evt) end
     end
     -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
     -- one sort per list settles the logical tie-break the incremental path maintains.
@@ -1202,18 +1197,16 @@ function tm:authoredPb(chan)
   return col and col.events
 end
 
--- Every note host off the take as of now, the stash's render events. Each is self-describing, so a
--- caller reads its chan and lane off it. see docs/trackerManager.md § Lane occupancy
---post: result = (channel-ordered) iterator yielding one unsafe parked note event
+-- Every fx host off the take as of now, read off the channels' host sets. Each is self-describing,
+-- so a caller reads its chan and lane off it. see docs/trackerManager.md § Lane occupancy
+--post: result = (channel-ordered) iterator yielding one unsafe parked fx host event
 function tm:eachParkedHost()
-  local chan, i, parked = 1, 0, frame.parkedNotes(1)
+  local chan, host = 1, nil
   return function()
     while chan <= 16 do
-      i = i + 1
-      local evt = parked[i]
-      if evt then return evt end
-      chan, i = chan + 1, 0
-      parked = chan <= 16 and frame.parkedNotes(chan)
+      host = next(frame.channels[chan].fxHosts, host)
+      if not host then chan = chan + 1
+      elseif host.parked then return host end
     end
   end
 end
@@ -1901,13 +1894,14 @@ function tm:rebuild(takeChanged)
     -- Parked events reseat from the stash, so a wholesale channel starts from empty columns. See § Lane occupancy.
     local prev = prevChannels[i]
     if dirt.wholesale(i) then
-      frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} } }
+      frame.channels[i] = { chan = i, onTake = { notes = {}, ccs = {} }, fxHosts = {} }
     elseif dirt.has(i) then
-      -- Interval dirt carries every column; each family splices just its seeded events. Park still
-      -- wants the fresh channel.
+      -- Interval dirt carries every column, and the host set with them; each family splices just its
+      -- seeded events. Park still wants the fresh channel.
       local prevOnTake = prev.onTake
       frame.channels[i] = { chan = i, onTake = { notes = prevOnTake.notes, ccs = prevOnTake.ccs,
-                                                 at = prevOnTake.at, pc = prevOnTake.pc, pb = prevOnTake.pb } }
+                                                 at = prevOnTake.at, pc = prevOnTake.pc, pb = prevOnTake.pb },
+                            fxHosts = prev.fxHosts }
     else
       frame.channels[i] = prev
     end

@@ -102,7 +102,7 @@ extraColumns[chan] = {
 
 Two `do ... end` blocks folded into tm's own scope, not separate objects:
 the source banners them `-- RAW INDEX` and `-- STAGER`. The index owns
-`rawIndex`/`byUuid`/`fxHosts` and the upkeep that keeps them true, and
+`rawIndex`/`byUuid`/`derivedByHost` and the upkeep that keeps them true, and
 hangs its doors on one `index` table; the stager accumulates mm-facing
 ops and commits them, hanging its own on `stager`. The arrow runs one way — staging reaches the index
 through its doors (`index.add`, `index.delete`, `index.move`,
@@ -602,7 +602,7 @@ was dormant gets consumed, and when there is none this gate stops the pass.
 old back for the carry-forward loop to read the clean channels out of — and
 the operations that seat events travel on the handle beside it: the column
 mints (`newNoteColumn` / `newCcColumn` / `newStreamColumn`), `spliceInto`/`spliceEvent`,
-`setEvent`, `renewColumn`/`renewLane`, `markRenewed` and `orderColumn`. Events
+`appendTo`, `dropEvents`, `setEvent`, `renewColumn`/`renewLane` and `orderColumn`. Events
 are self-describing, so each takes the frame's own coordinates.
 
 The engine is instantiated once with what the two files share: `mm`, `cm`,
@@ -793,7 +793,7 @@ runs it. The reconstruction stages:
 The emission stages:
 
 1. **Lane bounds** (`clipTails`)
-1. **Note host clips and windows** (`onTakeFxHosts`, `buildFxWindows`)
+1. **Note host clips and windows** (`buildFxWindows`)
 1. **Region-replace parking** (`rebuildRegionPark`)
 1. **Fx expansion** (`rebuildFx`)
 1. **Tail walk** (`rebuildTails`)
@@ -964,19 +964,18 @@ edit — a delete, a chain removed, a freeze — has already landed in the
 document, so every column answers to the document from here on. The lane pass then bounds every
 lane of every dirty channel (§ The lane pass).
 
-`onTakeFxHosts` names the on-take note hosts of every channel, each carrying its
-clip on `endppqC`, the bound the lane pass wrote. A region's span is authored,
-so only the note hosts are gathered. The census adds the stash's hosts and the
-fx regions to them, each host entering as a degenerate one-note region.
+The census reads every channel's host set (§ Lane occupancy), each host carrying
+its clip on `endppqC`, the bound the lane pass wrote. A region's span is
+authored, so only the note hosts take a clip. The census adds the fx regions to
+the hosts, each host entering as a degenerate one-note region.
 
 Parking flips a host's flag where it sits in its lane and moves no window: the
 census counts parked and on-take hosts alike, and a host keeps its uuid, span
-and targets across the flip. The stages each want one side, and call at their own moment rather
-than sharing the census's set — the park scan takes it as of its head, where a
-host already parked is the prior parked set's to carry or restore, and fx
-expansion calls afresh below the park stage, where a host parked this pass has
-left the set and one restored resolves to its live column event. Fx expansion
-runs the parked side from their stash events.
+and targets across the flip. The stages each want one side, and read the flag at
+their own moment — the park scan at its head, where a host already parked is the
+prior parked set's to carry or restore, and fx expansion below the park stage,
+where a host parked this pass carries the flag and one restored has shed it. Fx
+expansion runs a parked host from its seated event, sounding to its lane bound.
 
 `buildFxWindows` holds the set. Every stream a host parks takes the host's
 own span, so one window per host is the whole fact — channel, span, host
@@ -1460,17 +1459,20 @@ channel, whose columns are re-read from mm, has them seated again from the stash
 so the clip reads a true lane before the park stage touches it.
 
 Derived notes lie outside the population. A note carrying a `derived` tag never enters a column from
-mm — `rebuildInternals` routes it to the fx stage's existing set instead.
+mm — `rebuildInternals` routes it to the fx stage's existing set instead — and it takes no lane bound
+at all (§ Tail walk).
 
-Fx expansion seats the pass's own derived output in the columns, so a channel carrying its columns
-holds the previous pass's output at the head of the next one. The lane pass passes over those: the
-lane bound is authored, and a derived note takes no lane bound at all (§ Tail walk).
+Each channel keeps the set of its fx hosts beside its columns: every note seated in its lanes that
+carries a chain, parked or on the take, the `parked` flag saying which side it is on. The frame's own
+seat and drop operations keep it, so no reader walks a lane to find a host. A park or restore flips
+the flag in place and leaves the set as it stands. The set carries with the channel's columns, and a
+wholesale channel starts with an empty one.
 
 ## The lane pass
 
 `clipTails` gives every authored event its lane bound, one channel at a time. It runs at the head,
 after the parked notes are seated and before the fx window census, walking each of the channel's lanes over the
-whole population of § Lane occupancy. `onTakeFxHosts`, the grid and the tail walk read what it wrote,
+whole population of § Lane occupancy. The fx window census, the grid and the tail walk read what it wrote,
 off `endppqC`.
 
 The write obeys the renewal protocol of § Note-lane renewal. A column event takes its bound through
@@ -1495,24 +1497,17 @@ goes into a per-channel list of uuids, which both runs fill and the tail walk co
 states no lane bound of an authored note, so the list is how one reaches mm (§ What the walk visits,
 and what it emits). A parked event is not named, never having reached mm at all.
 
-One path walks a channel's columns, and the reason is host discovery. `onTakeFxHosts` resolves each
-indexed fx host to its live column event through `index.colEvtFor(uuid)`, the seat stamp of
-§ Incremental index reconciliation. A wholesale-dirty channel leaves the fx-host index unable to
-reach a live event, so `perHost` returns false the moment it meets an indexed host with none and
-`walkChannel` finds the hosts by scanning the columns instead. An unstamped host is never silently
-skipped.
-
 ## Fx window census
 
-`buildFxWindows` builds the pass's fx windows from three sources — authored `fxRegions`, the on-take
-note hosts `onTakeFxHosts` names, and the stash's own hosts, read off the lanes' flagged notes.
-The fx-host index turns over a rebuild late: `reconcilePark` flags a parked host's event at once,
-but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
-in between the index still names a host that has left the take. `perHost` resolves uuids straight out
-of it, so the parked flag is what declares which arm takes a given host: the clip pass skips
-an indexed uuid the stash holds, and fx expansion hands one to the arm that runs it from its stash
-event. Without that a self-parking host would run its chain twice, and `curves.foldChains` would sum
-the two pb curves to twice the authored depth.
+`buildFxWindows` builds the pass's fx windows from two sources — authored `fxRegions`, and every
+channel's host set, parked hosts and on-take ones alike. The `parked` flag declares which arm runs a
+host: the park scan takes on-take hosts only, and fx expansion runs a parked one from its seated
+event. A self-parking host thus runs its chain once; run by both arms, `curves.foldChains` would sum
+its two pb curves to twice the authored depth.
+
+Fx expansion runs a channel's note hosts in lane, onset and uuid order, the order the census sorts
+by within a channel. Overlapping pb chains fold in the order they run, so the set, which holds no
+order, is sorted wherever a reader runs its hosts.
 
 `buildFxWindows` mints the pass's windows, a note host's as the degenerate one from its onset to its
 lane bound, and `fxWindows.new` indexes the list by uuid and by channel. Freeze mints none: it reads
@@ -1568,8 +1563,8 @@ this: it expands into one host per channel and is none of them, so no one channe
 (§ Channel & column model). Its expansions are hosts of their own, so a chain overlapping a
 global chain's output is refused like any other neighbour's.
 
-The published set states *what is committed* — `fxRegions`, the maintained fx-host index, the stash,
-as the last rebuild settled them — so `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
+The published set states *what is committed* — `fxRegions`, the channels' host sets, the stash,
+as the last rebuild settled them — so `freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the sets and
 invisible to the gate, and freeze's own closing flush would then commit it: a live window over the
 seats just frozen, which are markerless, so its host re-derives them — with success reported.
 The leading flush is a no-op when nothing is staged, at the price of one empty `preflush` (which
@@ -1582,7 +1577,7 @@ hold stream it reads; every other host is kept. The existing
 side of the note reconcile is gathered per host that *ran*, off the file um
 keeps of the channel's derived records: `index.derivedByHost(chan)`, filed under
 the uuid each derived record carries in `derived` and maintained on the index
-verbs as `fxHosts` is, never rescanned. A kept host is never asked, so its
+verbs, never rescanned. A kept host is never asked, so its
 notes stand outside both sides of the reconcile by omission -- it writes nothing
 to mm and re-derives nothing.
 
@@ -1690,9 +1685,9 @@ Renewal is precise, and every mutator of a seated lane owns it:
 A column renews at most once a pass. `renewColumn` keeps the memo of what it
 has already cloned — `renewLane` is the note-lane door onto it, and the
 cc-family splice renews through the same one, so a cell that is excised and
-then refilled clones once — and a caller that replaced the table itself records
-it through `markRenewed`; `newPass` clears the memo with the channels map it
-belongs to.
+then refilled clones once — and `dropEvents`, which replaces the table with the
+events it keeps, records the renewal itself; `newPass` clears the memo with the
+channels map it belongs to.
 
 The failure is asymmetric — too pessimistic costs a re-place, too
 optimistic silently renders a stale event — which is why the enumeration,

@@ -25,10 +25,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: keep each channel's fx hosts on the frame, retire index.fxHosts (§ Reading intent 2)
 - 2026-09-27 tm: absorbers read pbs off the column; pb park seeds its row (§ Reading intent 2)
 - 2026-09-27 tm: the realisation map's parked share covers every kind (design § Emission's output 4)
 - 2026-09-27 tm: shed every cue at the write doors and at park (design § Emission's output 1–3)
-- 2026-09-26 tm: seat parked pbs in the pb column under the parked flag (§ Parking)
 
 ## Now
 
@@ -36,16 +36,14 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The frame holds each channel's fx hosts** (§ Reading intent 2) — parked and sounding, kept
-   current at the column writes. `onTakeFxHosts`, `buildFxWindows`, `enumerateHosts`, and the view's
-   `tm:eachParkedHost` readers (cell-kind tags, `parkedByUuid`) read it, so none walks every lane.
-   This repairs the O(channel) floor 4d87774b reintroduced when `frame.parkedNotes` replaced the
-   parked list, and `index.fxHosts` retires with no emission reader left. Spec: the set equals a
-   lane scan across seat, park, restore, fx toggle and wholesale reload.
 1. **The base-voice union and PC synthesis read note intent off the lanes** (§ Reading intent 2)
    — `baseVoiceUnion` takes base-voice membership and detune, and `rebuildPCs`/`pcSeedSpans` take
    `lane` and `sample`, from the column events, with raw positions by uuid off um's index. The tail
    walk keeps reading um's index: it refines the sounding set the stages before it settled. Spec:
    gated passes match a full re-derive for detune and sample edits under a parked host.
-
+1. **PA dispatch finds its note without walking the channel** (§ Reading intent 2) —
+   `findNoteColumnForPitch` scans the whole of um's note index and then `frame.parkedNotes` for every
+   PA it dispatches, so it is O(channel) per PA. Rewrite it to seek the covering note by pitch and
+   onset, and `frame.parkedNotes` retires with its last caller. Spec: a PA under a parked host and one
+   under an on-take note each land in their host's lane.
 
