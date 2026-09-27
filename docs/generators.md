@@ -463,14 +463,15 @@ authored events are stashed off-take into one `evType`-tagged list, and stay
 visible: tm seats a parked chord, cc or pb back in its columns, flagged. Audibly a no-op: an authored bend already sounded as
 the curve.
 
-**4** **Live recognition needs no standing record.** A live region
-recognises its own seats by its own current window, in hand every rebuild,
-and reconciles churn-free against the freshly computed curve by
-`(ppq, val, shape)`. The absorber's back-derivation must **skip** in-window
-pbs: a seat has no cents and must not acquire any, or it stops looking like a
-seat. A *deleted* region's orphans are swept by a one-shot cleanup with the
-bounds the delete site still knows — no persisted window mirror, which would
-be redundant every rebuild the region lives.
+**4** **Recognition reads the take's own census.** The windows the last
+pass realised persist as `fxRealisedWindows`, and a seat is recognised
+against them rather than against the current set, so a window removed still
+recognises what it left. Seats reconcile churn-free against the freshly
+computed curve by `(ppq, val, shape)`. The absorber's back-derivation must
+**skip** in-window pbs: a seat has no cents and must not acquire any, or it
+stops looking like a seat. A seat the census covers and the current set does
+not is an orphan, deleted by the diff between the two
+(`docs/trackerManager.md` § Continuous seats).
 
 **5** **Bounds are logical; convert once, compare raw to raw.** A region's
 bounds are logical and its seats are raw-only — that absence is the win — so
@@ -537,23 +538,23 @@ would read with no region at all.
 enters a column, so the park scan reads the columns and runs every rebuild
 without re-parking the seats: an authored event on-take inside a window
 **parks**, whether the window is new or the event is. Only the sweep fires at
-an instant: the current windows are diffed against the previous pass's, and a
-removed one **sweeps** its orphaned seats.
+an instant: a seat the previous census covers and the current set does not is
+an orphan, and fx expansion **sweeps** it.
 
 **2** **The diff lives in tm rather than at the view's edit site, because the
-edit site cannot see undo.** Take, regions and park stash revert atomically,
-and REAPER's undo watcher delivers the rewind as a data change carrying
-`invalidate`; the observer reads the flag and only resyncs its baseline,
-enqueueing nothing — a stray sweep is exactly what would delete the
-just-restored authored pb. Reload resyncs the same way, and on a plain remove
-the parked authored restores on its own, being no longer covered.
+edit site cannot see undo.** Take, regions, park stash and census revert
+atomically, so the pass after an undo diffs the restored census against its
+own set, and a stray sweep — exactly what would delete the just-restored
+authored pb — has nothing to fire on. Reload reads the census the same way,
+and on a plain remove the parked authored restores on its own, being no
+longer covered.
 
-**3** **cc drains earlier than pb.** The CC walk runs *before* the park, so
-cc cannot park-then-recognise the way pb does. The same transition is staged,
-but the walk drains it itself: a freshly created window is excluded from the
-fill-recognition set, its authored ccs left in columns for the following park
-pass to stash — recognising them as fill first would let the reconcile delete
-them — and a removed window's orphans are deleted inline.
+**3** **A fresh window recognises nothing.** The CC walk runs *before* the
+park, so recognising a new window's authored ccs as fill would let the
+reconcile delete them before the park could stash them. Recognition reads the
+previous census, which holds no window created this pass, so they stay in the
+columns for the park scan, and a removed window's orphans go by fx
+expansion's diff, pb and cc alike.
 
 **4** **Swing at a boundary.** A seat is raw-only, so a swing change moves it
 while its logical window stands still, and a seat within a few ticks of an
@@ -620,21 +621,17 @@ needs more than breakpoints.
 records the replace window with its curve, and inside the window the stream
 value is the *curve* rather than the authored breakpoints; the curve's
 breakpoints become derived seats carrying their shape. An authored pb inside
-the window rides the curve on its wire with its column cents untouched and
-visible, and a curved segment split by a detune onset densifies exactly as an
-authored one does. Two bounded artifacts come with it: the boundary from
-authored base to curve can step, and a non-step authored pb inside the window
-rides the curve in value while keeping its own outgoing shape over the next
-cell.
+the window parks, and stays seated in its column with its cents visible and
+editable (§ Route-by-window ¶3). A curved segment split by a detune onset
+densifies exactly as an authored one does. One bounded artifact comes with
+it: the boundary from authored base to curve can step.
 
-**3** **cc reaches the same place by a slightly different route** — no
-absorber, no detune residual. Augment sums offline and seats markerless as pb
-does. Replace parks the authored cc off-take and writes the generated curve
-as literal cc events on the target lane; the parked cc stays seated in its
-column for display, so it stays the visible, editable surface and the fill
-never shows.
-Creating a cc-replace region leaves the lane looking unchanged, and that is
-the invariant.
+**3** **cc takes the same route, less the absorber and the detune residual.**
+Augment sums offline and seats markerless as pb does. Replace parks the
+authored cc and writes the generated curve as literal cc events on the target
+lane; the parked cc stays seated in its column, so it stays the visible,
+editable surface and the fill never shows. Creating a replace region leaves
+its column looking unchanged, on pb and cc alike, and that is the invariant.
 
 **4** **Rest is the base when nothing is authored.** A cc-augment target with
 no authored automation has nothing to sum onto, so the fold seeds from the

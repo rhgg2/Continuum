@@ -189,16 +189,6 @@ those before it do not sound. Seating a PA off `fromLogical(ppqL)`
 instead meets the rebuild rule (`docs/timing.md` § Rebuild rule), which
 reads the divergence as stale swing.
 
-### Raw rederivation under stale swing sits outside emission
-
-> **accepted** · tm · 2026-09-27
-
-`rebuildInternals` and the CC walk rederive raw onsets from logical
-under stale swing. Turning intent into raw is emission's work
-(`docs/trackerManager.md` § Two movements), yet both run as part of
-reading intent in, and no emission stage owns it. Nothing misbehaves by
-it; which stage should take it is unsettled.
-
 ## Tuning
 
 ### The octave field's budget ignores the `octaveStep` bump

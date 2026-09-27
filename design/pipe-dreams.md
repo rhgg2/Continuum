@@ -284,7 +284,7 @@ second party how a route is spelled.
 
 ## Edits write intent — reconstruction only on a wholesale read
 
-> From `design/intent-emission.md` § Open. Read `docs/trackerManager.md`
+> From `plan/archive/intent-emission.md`. Read `docs/trackerManager.md`
 > § Two movements for intent and emission, and § Interval materialisation
 > for how a pass reconstructs the spans an edit dirtied.
 

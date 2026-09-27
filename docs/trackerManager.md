@@ -27,6 +27,10 @@ A note lane, cc column or pb column seats both sides of the take. A parked
 note, pa, cc or pb sits in its column at its onset like any other event,
 flagged `parked`, so a column's events are its whole authored population.
 
+The columns thus hold the take's **intent** — every authored event, sounding
+or not, seated in the logical frame. mm stores the intent that sounds, and the
+**stash** — the `fxParked` ds key — stores the rest.
+
 `parked` on an event is frame vocabulary. tm's write doors shed it, so a
 clone of a parked cell — a move out of its window, a paste — reaches mm or
 the stash unflagged.
@@ -714,6 +718,14 @@ allocates what sounds among each channel's contended media, and reconciles the
 result into mm. Every reconstruction stage runs before any emission stage
 (§ The pipeline).
 
+Reconstruction projects each authored event in mm from um's index into its
+column (§ Logical projection), and seats each event the stash holds in its
+column (§ Stash seat). A wholesale read reconstructs the whole channel.
+Otherwise reconstruction covers only the spans the dirt journal names, and
+every other event carries (§ Interval materialisation). The journal is thus
+the diff between successive intents: each edit verb records the spans it
+changed as it stages its mm writes, and the next pass reads that record.
+
 `projectEvent` is the hinge between the frames. It takes an mm-shaped record,
 overwrites `ppq` with `ppqL` and drops the logical sidecar, so a column cell is
 logical-framed while an index entry is raw-framed and carries logical alongside
@@ -858,8 +870,7 @@ retain the intent. This divergence is intentional and surfaces as
 
 ### CC walk
 
-`rebuildCCs` routes markerless cc seats (a cc inside a prior cc window) out
-of columns for fresh reconciliation, reconciles each non-derived CC's
+`rebuildCCs` routes seats (§ Continuous seats) out of the columns, reconciles each non-derived CC's
 `(raw, ppqL)` under the current swing — stale-swing CCs reseat here — then
 projects `cc`/`at`/`pc`/`pb` into columns. Pa dispatch defers to
 § PA dispatch.
@@ -873,9 +884,8 @@ The reconcile has two rules:
 Both paths read um's raw index rather than mm. Where mm holds one flat cc
 stream per channel the index holds five lists, and that split is the walk's
 own branch: cc buckets, `ats`, `pcs` and `pbs` carry a column, `pas`
-reconcile only. A synthesised pc is emission output, so it routes out of the
-pc column as a derived cc routes out of its own, and an absorber routes out of
-the pb column alike. The interval path seeks those same lists by row, and reconciles
+reconcile only. A synthesised pc and an absorber are emission output, and each
+routes out of its column by its `derived` mark. The interval path seeks those same lists by row, and reconciles
 nothing: what reaches it is our own writing, seated already (§ Interval
 materialisation).
 
@@ -887,22 +897,19 @@ in cents, less the previous emission's base-voice detune at its onset
 them as `val` on the same pass. Foreign pbs reach only the wholesale path, so
 the interval path derives nothing.
 
-A seat is recognised by its geometry each time it is met: pb and cc alike, it
-is a markerless record whose raw onset a window of the persisted census covers
-(`ownsRaw`). The wholesale path asks that of every cc and pb it walks, so its
-answer survives a take round-trip, which re-mints every plain cc's uuid. The
-interval path refills by `ppqL` match, which a markerless seat never meets.
+A seat is recognised by its geometry each time it is met. The wholesale path
+asks the seat test of every cc and pb it walks, so its answer survives a take
+round-trip, which re-mints every plain cc's uuid. The interval path refills by
+`ppqL` match, which a seat never meets. A seat skips the reconcile and the
+projection, and a pb seat takes no cents: it is realisation, not foreign MIDI.
+A genuine in-window pb or cc from the user is indistinguishable, so it goes
+the same way (`docs/generators.md` § Route-by-window). The window test is
+half-open, since the re-centre seat folds at `endRaw - 1` and the end row
+carries no seat (mirrors `inSeatWindow`).
 
 A reconcile writes through the walk's mm batch and hands its move back as an
 overlay the column clone carries, rather than mutating the record the walk is
 reading. The batch commits at the end of the walk, and the index syncs with it.
-
-A markerless pb seat (nil `ppqL`) inside a previous pb window skips this
-reconcile and the projection: it's a generated seat `deriveChan` owns, not
-foreign MIDI, so it stays markerless and takes no cents — and a genuine in-window pb from the user is
-indistinguishable, so it's absorbed the same way (docs/generators.md
-§ Route-by-window). The window test is half-open, since the re-centre seat folds
-at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
 The routed-out seats go nowhere from the walk. Fx expansion gathers its existing
 cc side by the same test, per running host: the markerless ccs inside its
@@ -1595,6 +1602,27 @@ seats just frozen, which are markerless, so its host re-derives them — with su
 The leading flush is a no-op when nothing is staged, at the price of one empty `preflush` (which
 `flush` fires ahead of its no-op check).
 
+## Continuous seats
+
+A **continuous seat** is a pb or cc on the take with no `ppqL`, inside a window of the previous
+census (§ Fx window census). One test recognises seats on both streams — `ppqL == nil` and `ownsRaw`
+over that census (`docs/generators.md` § Route-by-window) — and the CC walk leaves them out of the
+columns (§ CC walk). Since recognition reads the previous census, a window created this pass
+recognises nothing yet, and its authored events stay in the columns for the park scan.
+
+A seat carries no name. `derived` holds a host uuid on a derived note, `'absorber'` on an absorber
+and `'pc'` on a synthesised pc, and a cc carries none. um's host file thus holds derived notes alone
+(§ The host gate). A synthesised pc carries no `ppqL` either: the pass synthesises it at its winning
+note's raw onset, and its `derived` marks it as realisation (§ PC synthesis).
+
+A seat the previous census covers and the pass's own set does not is an **orphan**, and fx
+expansion deletes every orphan, pb and cc alike (`index.orphanSeats`). The length verbs retire seats
+by the same diff, taken between the stored census and its mapped image (§ Length operations).
+
+A pb orphan's delete seeds the pb stream, since the absorbers its value held into reseat against the
+stream that now prevails there. A cc orphan seeds nothing, since no value is computed against a cc
+seat.
+
 ## The host gate
 
 Under seed dirt a host runs when a seed touches its window or reaches it along a
@@ -1619,9 +1647,9 @@ point list, so its reach is coarser: a lane-1 or region seed runs every pb host
 ending after it, and a running base-voice emitter pulls that bound back to its
 own window start (`docs/tuning.md` § Seat-span-scoped onset walk).
 
-Only notes file, a note being the one type whose `derived` is a host uuid: on a
-pb it names the absorber pool and on a pc its own kind. Expansion finds a host's
-cc seats by geometry, inside its window (§ CC walk).
+Only notes file, a note being the one type whose `derived` is a host uuid
+(§ Continuous seats). Expansion finds a host's cc seats by geometry, inside its
+window (§ CC walk).
 
 Addressing the existing set by producer rather than by window is what makes that
 cheap. A derived note names its host; recovering the window it used to occupy
@@ -2095,14 +2123,15 @@ images: none to drop the record, one for a resize, several for a tile.
 The first image keeps the record's id and every later one mints its own,
 since nothing links a copy to what it was copied from.
 
-The census is the piece with teeth. Its spans key the pb create/remove
-diff of § Region-replace parking, so a census left where the seats no
-longer are reads as one window removed and another created; the removal
-then sweeps pbs from a span nothing occupies. The seats themselves stay
+The census is the piece with teeth. Its spans key fx expansion's orphan
+diff (§ Continuous seats), so a census left where the seats no longer are
+reads as one window removed and another created; the removal then sweeps
+seats from a span nothing occupies. The seats themselves stay
 where they are, being raw-only and outside every take walk, so a mapped
 census can uncover some: a shrink clips or drops their window, a stretch
 moves it off them. An uncovered seat would read as authored to the next
-pass and never retire, so the map deletes those as it writes the census;
+pass and never retire, so the map retires those as it writes the census,
+by the same diff taken between the stored census and its mapped image;
 the seats it still covers are the closing pass's to reconcile. A region left behind is
 merely visible — it keeps deriving at the rows it was authored on while
 the music around it has moved. A tile is the one verb that leaves the
