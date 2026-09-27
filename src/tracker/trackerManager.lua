@@ -416,6 +416,9 @@ end
 
 ---------- RAW INDEX
 
+-- um's own fields on an index entry: the write doors shed them, so mm's records never carry them.
+local umDecor = { committed = true, colEvt = true }
+
 -- Owns rawIndex/byUuid/derivedByHost and the upkeep that keeps them true; knows nothing of
 -- staging. `index` is the handle its doors hang on; the three structures stay private to the block.
 local index = {}
@@ -628,7 +631,6 @@ do
 
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
   -- slot in rawIndex, so a same-slot reconcile skips the index.delete scan, reinsert and sort.
-  local umDecor = { committed = true, colEvt = true }   -- um's own fields; mm's clone never carries them
   -- The entry table survives, so its filing is re-stated rather than turned over: the fields it
   -- re-reads include `derived`.
   local function refreshEntry(prev, e)
@@ -860,14 +862,14 @@ do
     return index.byUuid(uuid), uuid
   end
 
-  -- A relocated cell reaches the doors as a clone of its seat, cues and all; a door clears them
-  -- from the caller's table.
-  local function shedCues(evType, fields)
-    local cues = {}
+  -- A relocated cell reaches the doors as a clone of its seat or its index entry, cues and um's
+  -- decoration and all; a door clears them from the caller's table.
+  local function shedCuesAndDecor(evType, fields)
+    local shed = {}
     for field in pairs(fields) do
-      if frame.isCue(evType, field) then util.add(cues, field) end
+      if umDecor[field] or frame.isCue(evType, field) then util.add(shed, field) end
     end
-    for _, field in ipairs(cues) do fields[field] = nil end
+    for _, field in ipairs(shed) do fields[field] = nil end
   end
 
   ----- Public interface
@@ -948,7 +950,7 @@ do
     if not evt then return end
     local rawCaller = update.rawTime
     update.rawTime = nil
-    shedCues(evt.evType, update)
+    shedCuesAndDecor(evt.evType, update)
     if evt.evType == 'note' then
       realiseNoteUpdate(evt, update, rawCaller)
       assignNote(evt, update)
@@ -968,12 +970,12 @@ do
   --post: (evt.rawTime) → nothing is translated; evt reaches mm on the raw time the caller stated
   --post: (a pb already seats at evt.ppq) → that seat is assigned instead, and no rival pb added
   --invariant: rawTime is consumed here: it lands on no record and reaches no mm write
-  --invariant: write doors shed every cue; no mm write or stash spec holds one
+  --invariant: write doors shed every cue and umDecor field; no mm write or stash spec holds one
   --invariant: a pb's wire value is derived at flush; rebuild's absorber pass reconciles the seats
   function stager.add(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
-    shedCues(evt.evType, evt)
+    shedCuesAndDecor(evt.evType, evt)
     if evt.evType == 'note' then
       evt.detune = evt.detune or 0
       evt.delay  = evt.delay  or 0
@@ -1007,7 +1009,7 @@ do
   end
 
   function stager.assignParked(evt, update)
-    shedCues(evt.evType, update)
+    shedCuesAndDecor(evt.evType, update)
     util.add(parkedEdits, { op = 'assign', evt = evt, update = update })
   end
 

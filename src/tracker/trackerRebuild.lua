@@ -1959,13 +1959,16 @@ local DUAL_POINT_TICK = 1
 --pre: keep is carriedFor for chan, so `derived` supersedes exactly what it drops
 local function baseVoiceUnion(chan, derived, keep)
   local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
+  -- An authored entry's intent (lane, detune, logical onset) is its seat stamp's; a kept host's
+  -- standing record is the previous emission and carries its own.
+  local function intentOf(entry) return isAuthored(entry) and entry.colEvt or entry end
   -- keep drops the index entries of the hosts this pass ran: seated copies of a prior pass's
   -- output, superseded by `derived`. A kept host's stand -- they are the only copy of its voices there is.
-  local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(entry) end
+  local function indexedBaseVoice(entry) return keep(entry) and index.isBaseVoice(intentOf(entry)) end
 
   -- The union from the first entry at-or-after `lo` ('after' starts past it instead), merging the two
   -- sources by index.order -- one cursor pair, and the only place the union's order is decided.
-  --post: result = (fresh iterator) yielding unsafe index entries in index.order
+  --post: result = (fresh iterator) yielding { ppq, ppqL, detune } records in index.order; unsafe
   local function walk(lo, mode)
     local from = mode == 'after' and util.firstAfter or util.firstAtOrAfter
     local i, j = from(indexed, lo), from(derived, lo)
@@ -1973,8 +1976,11 @@ local function baseVoiceUnion(chan, derived, keep)
       while indexed[i] and not indexedBaseVoice(indexed[i]) do i = i + 1 end
       local a, d = indexed[i], derived[j]
       if d and (not a or index.order(d, a)) then j = j + 1; return d end
-      if a then i = i + 1 end
-      return a
+      if not a then return nil end
+      i = i + 1
+      if not isAuthored(a) then return a end
+      local evt = a.colEvt
+      return { ppq = a.ppq, ppqL = evt.ppq, detune = evt.detune }
     end
   end
 
@@ -1985,7 +1991,7 @@ local function baseVoiceUnion(chan, derived, keep)
     local a, d = indexed[i], derived[util.firstAfter(derived, ppq) - 1]
     local last = a
     if d and (not a or index.order(a, d)) then last = d end
-    return last and last.detune or 0
+    return last and intentOf(last).detune or 0
   end
 
   -- The union's entries with ppq in [lo, hi] -- the onset walk's per-span slice.
@@ -2575,8 +2581,9 @@ local function rebuildPCs(fxOut, extraColumns)
       if entry.derived then
         addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, sample = entry.sample or 0, spec = entry }
       else
-        addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
-                   sample = entry.sample, evt = entry.colEvt }
+        -- Raw order is the index's; the note's intent is its seat stamp's (colEvt.ppq is logical).
+        local evt = entry.colEvt
+        addRecord{ ppq = entry.ppq, ppqL = evt.ppq, lane = evt.lane, sample = evt.sample, evt = evt }
       end
     end
     if seedSpans then

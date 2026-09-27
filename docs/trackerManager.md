@@ -265,7 +265,9 @@ stage's own commit lands it), it files the event on the note's entry via
 `index.stampColEvt`. The stamp is how raw consumers reach the pass's live event
 without a per-pass column scan, and it must outlive reconciliation:
 `refreshEntry`'s sweep spares um's own decoration (`committed`, `colEvt`),
-and the remove-and-reinsert path carries the stamp onto the fresh entry.
+and the remove-and-reinsert path carries the stamp onto the fresh entry. mm
+never holds the stamp, since the write doors shed it (§ Two movements), so a
+reconcile's copy from mm cannot overwrite it.
 Re-seating overwrites it; a wholesale reload rebuilds entries bare, and the
 same pass's seating restamps them (the head reload runs before any stage).
 A restored park event's stamp is likewise a bare write rather than a `setEvent`:
@@ -769,13 +771,17 @@ A **cue** is a field emission derives and carries on an authored event:
 `detune` on a pb. A note's `detune` is authored, so the set is keyed by the
 event's kind, and `frame.isCue(kind, field)` is its one test.
 
-The view relocates a cell by adding a clone of its seat, so cues reach the
-write doors, and every door sheds them before mm sees the event. The park
-stash is the event minus its cues and um's bookkeeping — `committed`,
+The view relocates a cell by adding a clone of its seat, and gm's clipboard
+adds clones of index entries, so cues and um's decoration — `committed`,
+`colEvt` — reach the write doors, and every door sheds both before mm sees
+the event. An mm record holding a `colEvt` would be copied back over its entry
+at every reconcile, and the entry's stamp would name another note's seat. The
+park stash is the event minus its cues and um's bookkeeping — `committed`,
 `colEvt`, `raw`, `cents`, `derived` (§ Park identity) — and park sheds both
 from the seated event in place. So one set governs the cues on the writes,
-the stash and the seat. The write doors leave the bookkeeping alone, since
-freeze promotes a derived note by assigning `derived` away.
+the stash and the seat. The write doors let `derived`, `raw` and `cents`
+through: freeze promotes a derived note by assigning `derived` away, and the
+pb door reframes `cents` itself.
 
 ### The pipeline
 
@@ -1279,8 +1285,10 @@ Synthesis runs in one place, and this stage is it. The delta goes to mm.
 Its `records` list comes from the channel's raw-index notes plus the
 fx-derived live ones, and feeds through the pure `reconcilePCsForChan`
 helper; records lost to lane priority get `sampleShadowed = true` for
-renderer dimming. A raw-index note carries its column event as `evt` and
-marks through `setEvent`; an fx-derived note holds no event, so it carries
+renderer dimming. Records walk um's raw index for raw order, and an
+authored note's lane, sample and logical onset come through its seat stamp;
+a kept host's standing derived record carries its own. A raw-index note
+carries its column event as `evt` and marks through `setEvent`; an fx-derived note holds no event, so it carries
 the spec as `spec` and the field is written direct (§ Note-lane
 renewal). The flag is realisation, re-derived every rebuild, so a park
 round-trip drops it.

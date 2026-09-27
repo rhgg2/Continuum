@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — The write doors shed um's decoration (`committed`, `colEvt`) along with cues,
+  over filtering it where `refreshEntry` and `makeEntry` read mm. groupManager's clipboard clones
+  index entries, so mm held another note's `colEvt`, and a reconcile during a rebuild copied it over
+  the entry after its column stamped it. The door owns what reaches mm, so mm never holds a stamp,
+  and the base-voice union and PC synthesis read an authored note's lane, detune and sample through
+  it.
+
 - **2026-09-27** — A cc seat is recognised by window geometry as a pb seat is, over filing it under
   its host in um's derivedByHost, superseding the two 2026-09-18 cc-filing entries. A continuous
   seat emits at zero delay and the previous census persists its window, so the file only cached

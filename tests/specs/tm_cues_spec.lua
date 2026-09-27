@@ -11,6 +11,11 @@
 -- The set is keyed by the event's kind: a pb's `detune` is emission's cue (the lane-1 note's detune
 -- it realises under), but a note's `detune` is authored and rides every write and every park.
 --
+-- The doors shed um's decoration too -- `committed` and the seat stamp `colEvt` -- which is um's
+-- own and never mm's. gm's clipboard clones index entries, not column events, so its clones carry
+-- both; an mm record holding a `colEvt` would copy it back over the entry at every reconcile, and
+-- the entry's stamp would name another note's seat.
+--
 -- Assertions name the cue fields rather than asking tm which fields are cues, so a change to the
 -- set is a change these cases see.
 
@@ -94,6 +99,38 @@ return {
       t.eq(notes[1].endppqC, nil, 'mm holds no endppqC')
       t.eq(notes[1].detune, 50, 'the authored detune rides the write')
       t.eq(notes[1].delay, 30, 'the authored delay rides the write')
+    end,
+  },
+
+  {
+    name = "a note added from a clone of its index entry reaches mm without um's decoration, and its entry stamps its own seat",
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(0, { detune = 25 }))
+      h.tm:flush()
+      local original = mmNotes(h)[1]
+      local source = h.tm:byUuid(original.uuid)
+      t.truthy(source.colEvt ~= nil and source.committed, 'fixture check: the entry carries um decoration')
+
+      -- gm's shape: an index entry cloned minus its uuid. The open tail has the tail walk write the
+      -- note-off mid-rebuild, reconciling the entry after its column stamped it.
+      local clone = util.clone(source, { uuid = true })
+      clone.ppq, clone.endppq, clone.detune = 480, util.OPEN, 50
+      h.tm:addEvent(clone)
+      h.tm:flush()
+
+      local added
+      for _, n in ipairs(mmNotes(h)) do if n.uuid ~= original.uuid then added = n end end
+      t.truthy(added, 'fixture check: the clone landed in mm')
+      t.eq(added.colEvt, nil, 'mm holds no colEvt')
+      t.eq(added.committed, nil, 'mm holds no committed')
+      t.eq(h.tm:byUuid(added.uuid).colEvt.uuid, added.uuid, 'the entry stamps its own seat')
+
+      -- An assign reconciles the entry from mm (index.sync), where a leaked colEvt re-applied.
+      h.tm:assignEvent(h.tm:byUuid(added.uuid).colEvt, { vel = 90 })
+      h.tm:flush()
+      t.eq(h.tm:byUuid(added.uuid).vel, 90, 'fixture check: the assign landed')
+      t.eq(h.tm:byUuid(added.uuid).colEvt.uuid, added.uuid, 'the stamp still names its own seat')
     end,
   },
 

@@ -560,7 +560,10 @@ From the final realised base-voice sequence it:
 Reads the authored value stream from the pb column — its unparked events,
 each at the raw position um's index holds under its uuid — and um's raw index
 only for the previous emission, which the pipeline's own commits keep
-current mid-rebuild where mm's set is a commit behind. The gate on
+current mid-rebuild where mm's set is a commit behind. The base voice is
+walked in raw order off um's index, and an authored note's lane and detune
+are read through its seat stamp, the column event the rebuild filed on its
+entry; a kept host's standing derived voice carries its own. The gate on
 rewriting a seat compares the wire (`pb.raw ~= newRaw`) and so is
 byte-exact; reframing it to cents would be lossy for a foreign or
 sub-cent pb, raw carrying some forty times the resolution of cents.

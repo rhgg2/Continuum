@@ -683,6 +683,54 @@ return {
       generators.kinds.pbFlatReplace = nil
     end,
   },
+  -- The base-voice union and PC synthesis walk um's index in raw order but read an authored note's
+  -- lane, detune and sample through its seat stamp (docs/tuning.md § Absorber reconciliation,
+  -- docs/trackerManager.md § PC synthesis). The note at 0 parks under an arp region, so the pass
+  -- runs beside a parked note; the pb at 120 makes the channel pb-active. The last step adds a
+  -- clone of 480's index entry -- gm's clipboard shape -- whose stamp must name its own seat, or
+  -- the absorber and pc at 1440 would read 480's detune and sample. The clone's tail is open, so
+  -- the tail walk writes its note-off to mm mid-rebuild: that write reconciles the entry after its
+  -- column stamped it, and is where a leaked colEvt would overwrite the stamp before emission.
+  {
+    name = 'base voice and PC synthesis: detune and sample edits beside a parked note == full re-derive',
+    run = function(harness)
+      local h = harness.mk{ config = { transient = { trackerMode = true } } }
+      local function ccAt(evType, ppq)
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == evType and e.chan == 1 and e.ppq == ppq then return e end
+        end
+      end
+      local function laneOne() return h.tm:getChannel(1).onTake.notes[1] end
+
+      h.tm:addEvent(note(1, 0, 60))
+      h.tm:addEvent(note(1, 480, 62, { detune = 25, sample = 3 }))
+      h.tm:addEvent(note(1, 960, 64, { sample = 5 }))
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 10 })
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+      local parked = authoredAt(laneOne(), 0)
+      t.truthy(parked and parked.parked, 'fixture check: the note at 0 parked')
+      t.eq(ccAt('pb', 480).val, centsToRaw(10 + 25), 'fixture check: the absorber at 480 carries detune')
+      assertParity(h, 'base voice: the parking pass == full re-derive')
+
+      h.tm:assignEvent(authoredAt(laneOne(), 480), { detune = 35 }); h.tm:flush()
+      t.eq(ccAt('pb', 480).val, centsToRaw(10 + 35), 'the absorber at 480 carries the new detune')
+      assertParity(h, 'base voice: a detune edit == full re-derive')
+
+      h.tm:assignEvent(authoredAt(laneOne(), 960), { sample = 6 }); h.tm:flush()
+      t.eq(ccAt('pc', 960).val, 6, 'the pc at 960 carries the new sample')
+      assertParity(h, 'pc synthesis: a sample edit == full re-derive')
+
+      local source = h.tm:byUuid(authoredAt(laneOne(), 480).uuid)
+      local clone = util.clone(source, { uuid = true })
+      clone.ppq, clone.endppq, clone.detune, clone.sample = 1440, util.OPEN, 50, 7
+      h.tm:addEvent(clone); h.tm:flush()
+      t.eq(ccAt('pb', 1440).val, centsToRaw(10 + 50), "the absorber at 1440 carries the clone's detune")
+      t.eq(ccAt('pc', 1440).val, 7, "the pc at 1440 carries the clone's sample")
+      assertParity(h, "an entry clone's own intent == full re-derive")
+    end,
+  },
   {
     name = 'seat gate: a reseated onset samples the whole authored ramp, not just in-scope pbs',
     run = function(harness)
