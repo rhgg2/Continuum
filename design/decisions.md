@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — An absorber never changes seat: the pass adopts one standing at a seat, mints for
+  an unfilled seat and deletes the rest, over moving a spare to an opened seat. The move preserved
+  mm's content tokens, and mm addresses by uuid now, so nothing reads an absorber's identity across
+  passes.
+
 - **2026-09-27** — The fx host set moves from um's index to the frame: each channel keeps `fxHosts`,
   every seated note carrying a chain, parked or on the take, kept by the frame's seat and drop
   operations. The census, the park scan, expansion and `tm:eachParkedHost` read it, expansion

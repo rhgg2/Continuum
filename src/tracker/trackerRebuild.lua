@@ -539,7 +539,7 @@ local function clipTails(chan)
   for _, col in ipairs(frame.channels[chan].onTake.notes) do
     local population = col.events
     for _, evt in ipairs(population) do
-      if not evt.derived and util.isNote(evt) then
+      if util.isNote(evt) then
         local bound = frame.clippedSpanEnd(evt, takeLenL, population)
         if evt.endppqC ~= bound then
           if not evt.parked then dirt.tails.add(chan, evt.uuid) end
@@ -2340,12 +2340,12 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       end
     end
 
-    -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); absorbers
-    -- consume any already at a seat, move the remaining ones to fill the rest, delete the leftovers.
+    -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); an absorber
+    -- standing at a seat is adopted, an unfilled seat mints one, and the leftovers are deleted.
     local realAt, availAbsorbers = {}, {}
     for _, pb in ipairs(pbs) do
       -- A markerless pb is a generated seat (the column doesn't hold it); tag it in RAM so the
-      -- fungible-absorber machinery below reseats it.
+      -- absorber matching below adopts or deletes it.
       if not pb.derived and not unparkedUuid[pb.uuid] then pb.derived = 'absorber' end
       if pb.derived then
         -- Pool = in-scope absorbers plus any absorber standing at a computed seat, so a seat can
@@ -2372,28 +2372,19 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
       end
     end
 
-    local moved = {}  -- pb -> newPpq
     for ppq, seat in pairs(seats) do
-      local absorber = table.remove(availAbsorbers)
-      if absorber then
-        moved[absorber] = ppq
-        absorber.ppq, absorber.cents = ppq, seat.cents
-        absorber.ppqL, absorber.shape = seat.ppqL, seat.shape
-        util.add(pbs, absorber)
+      local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
+                      shape = seat.shape, derived = 'absorber', evType = 'pb' }
+      util.add(pbs, fresh)
+      local raw = tuning.centsToRaw(fresh.cents + baseVoice.detuneAt(ppq), pbLimCents)
+      if inSeatWindow(ppq) then
+        -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
+        -- sidecar; recognized next rebuild by its window. see § Route-by-window
+        pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = fresh.shape })
       else
-        local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
-                        shape = seat.shape, derived = 'absorber', evType = 'pb' }
-        util.add(pbs, fresh)
-        local raw = tuning.centsToRaw(fresh.cents + baseVoice.detuneAt(ppq), pbLimCents)
-        if inSeatWindow(ppq) then
-          -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
-          -- sidecar; recognized next rebuild by its window. see § Route-by-window
-          pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = fresh.shape })
-        else
-          local writeEvt = util.clone(fresh)
-          writeEvt.val = raw
-          pbWrites.add(writeEvt)
-        end
+        local writeEvt = util.clone(fresh)
+        writeEvt.val = raw
+        pbWrites.add(writeEvt)
       end
     end
 
@@ -2416,8 +2407,8 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
 
     local detuneOf = {}
     for _, pb in ipairs(pbs) do detuneOf[pb] = baseVoice.detuneAt(pb.ppq) end
-    -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
-    -- restamped, raw changed, derived shape changed) needs to land.
+    -- Consolidated assign: one entry per existing pb where any of (ppqL restamped, raw changed,
+    -- derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
       if pb.committed then
         local d         = detuneOf[pb]
@@ -2425,10 +2416,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
         local markerless   = pb.derived and inSeatWindow(pb.ppq)
         local update = nil
-        if moved[pb] then
-          update = { ppq = pb.ppq, ppqL = pb.ppqL,
-                     cents = pb.cents, val = newRaw }
-        elseif restampPpqL[pb] then
+        if restampPpqL[pb] then
           update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
         elseif pb.raw ~= newRaw or shapeChanged then
           update = { cents = pb.cents, val = newRaw }

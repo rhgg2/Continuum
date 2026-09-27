@@ -542,8 +542,9 @@ and the pass reseats or drops it as an absorber.
 From the final realised base-voice sequence it:
 
 - Covers every detune-jump seat: a real pb at that ppq counts;
-  otherwise reuse an existing fake if any (in-place first, else move),
-  else create a new fake.
+  otherwise the fake already standing there is adopted, else a new one
+  is created. A fake never changes seat, since nothing reads its
+  identity across passes.
 - Anchors a pb-active channel at its first base-voice onset (even detune 0)
   unless a real pb already pins it at-or-before (I2a).
 - Drops fakes whose seat is no longer needed.

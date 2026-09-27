@@ -1,17 +1,15 @@
 -- The seam between seating and synthesis in the absorber pass. Seating asks which seats a detune
 -- arrangement calls for: from the realised lane-1 sequence and the prevailing authored pb stream it
 -- derives a seat per detune jump, carrying the stream's value at that tick. Synthesis answers with
--- the absorbers the channel already holds -- one standing at a seat is adopted, a spare moves to an
--- unfilled seat, a shortfall mints, and the leftovers are deleted -- and writes each seat to the
--- wire as raw = centsToRaw(cents + the detune carried there).
+-- the absorbers the channel already holds -- one standing at a seat is adopted, an unfilled seat
+-- mints, and the leftovers are deleted -- and writes each seat to the wire as
+-- raw = centsToRaw(cents + the detune carried there).
 -- see docs/tuning.md § Absorber reconciliation
 --
 -- The two halves are told apart by what each is a function of. Seating depends on the arrangement
 -- alone, so a channel edited into an arrangement lands on the same seats as one built with it.
--- Synthesis depends on the standing pool, and uuids read it: an adopted or moved absorber keeps the
--- uuid it had, a minted one is a uuid the channel has not held before, and a deleted one is gone.
--- Which spare fills which seat is not fixed where several of each are in play, so the assertions
--- here are over the pool as a set.
+-- Synthesis depends on the standing pool, and uuids read it: an adopted absorber keeps the uuid it
+-- had, a minted one is a uuid the channel has not held before, and a deleted one is gone.
 --
 -- The base fixture is lane-1 notes a row apart under a pb holding the stream flat, so a seat's value
 -- is known without interpolating anything; the cases that need a value to change step the stream
@@ -84,8 +82,8 @@ return {
     name = 'the seats an arrangement calls for do not depend on how the channel reached it',
     run = function(harness)
       -- Built with its detunes, against edited into them from a different set. The first channel
-      -- mints its absorbers fresh and the second moves the ones it already stands, so the two
-      -- differ in everything synthesis decides and in nothing seating does.
+      -- mints its absorbers fresh and the second answers with the ones it already stands, so the
+      -- two differ in everything synthesis decides and in nothing seating does.
       local built  = arrangement(harness, { 0, 50, 0 })
       local edited = arrangement(harness, { 0, 0, 50 })
       local _, standing = pool(edited)
@@ -166,28 +164,21 @@ return {
   },
 
   {
-    name = 'a spare moves to the seat the arrangement opened',
+    name = 'an absorber never changes seat: a vacated one goes and the opened seat mints',
     run = function(harness)
-      -- A second authored pb steps the stream up between the two seats, so the one the absorber
-      -- moves to is worth something the one it leaves is not.
       local h = arrangement(harness, { 0, 50 })
-      h.tm:addEvent({ evType = 'pb', ppq = 400, chan = 1, val = 2 * BASE_CENTS, shape = 'step' })
-      h.tm:flush()
-      local before, beforeUuids = pool(h)
+      local before = pool(h)
       t.truthy(before[ROW], 'fixture check: the lone jump seats one absorber')
-      t.eq(wire(h)[ROW].val, centsToRaw(BASE_CENTS + 50), 'fixture check: seated on the lower step')
 
-      -- The jump travels with its note, vacating one seat and opening another.
+      -- The jump travels with its note, vacating one seat and opening another in the same pass.
       h.tm:assignEvent(lane1Cell(h, ROW), { ppq = 2 * ROW })
       h.tm:flush()
 
       local after, afterUuids = pool(h)
       t.falsy(after[ROW], 'the vacated seat holds nothing')
-      t.eq(after[2 * ROW], before[ROW], 'the absorber moved to the opened seat, keeping its uuid')
-      t.deepEq(afterUuids, beforeUuids, 'the pool is the one it was: nothing minted, nothing deleted')
-      t.eq(wire(h)[2 * ROW].val, centsToRaw(2 * BASE_CENTS + 50),
-           'and it holds what the seat is worth, not what it carried there')
-      t.eq(wire(h)[2 * ROW].ppqL, 2 * ROW, 'and the seat\'s logical tick, not the one it left')
+      t.falsy(afterUuids[before[ROW]], 'the absorber that stood there is gone, not carried along')
+      t.truthy(after[2 * ROW], 'the opened seat is filled')
+      t.falsy(after[2 * ROW] == before[ROW], 'by an absorber of its own')
     end,
   },
 
