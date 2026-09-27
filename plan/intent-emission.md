@@ -32,10 +32,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-27 tm: seats reconcile by window, and orphans go by one census diff (§ Continuous seats 4–6)
 - 2026-09-27 tm: PA dispatch seeks its covering note per lane, logically (§ Reading intent 2)
 - 2026-09-27 tm: base-voice union and PC synthesis read intent through the seat stamp (§ Reading intent 3, § Emission's output 3)
 - 2026-09-27 tm: keep each channel's fx hosts on the frame, retire index.fxHosts (§ Reading intent 2)
-- 2026-09-27 tm: absorbers read pbs off the column; pb park seeds its row (§ Reading intent 2)
 
 ## Now
 
@@ -43,19 +43,6 @@
 
 ## Queued (current phase; one-liners)
 
-1. **Seats reconcile by window, and orphans go by one census diff** (§ Continuous seats 4–5) — fx
-   expansion reads each running host's existing cc seats off um's raw index: the raw-only ccs inside
-   its window in the pass's own set, per cc target. The union, deduped by uuid, replaces
-   `gatherFrom`'s cc share of `index.derivedByHost` (`trackerRebuild.lua` ~1479). A clean
-   overlapper's read clips to `ccScope` as now, and a kept host's window is not read. One sweep
-   deletes each raw-only pb and cc the previous census covers and the pass's own set does not. It
-   replaces `parkPbs`'s vanished-window sweep (~897) and the absent-host sweep's cc share, and
-   `retireUncoveredSeats` (`trackerManager.lua` ~1604) calls it over the stored and mapped census,
-   so it lives where both modules reach it. The two land together: a window read leaves a moved
-   host's abandoned seats unread, and the sweep is what takes them. No cc reader is left on the
-   file, so cc leaves `HOST_FILED`. Spec: a moved cc-augment window leaves no seat outside its new
-   span; shrinking a pb or cc window deletes the seats past its new end without churning those it
-   still covers; a deleted cc host's seats go; gated passes match a full re-derive.
 1. **One seat test recognises pb and cc seats** (§ Continuous seats 1–3) — `ppqL == nil` and
    `ownsRaw` over the previous census replaces `isPbSeat` and the CC walk's cc tag
    (`trackerRebuild.lua` ~290, ~317). The wholesale path applies the test to each pb and cc, the

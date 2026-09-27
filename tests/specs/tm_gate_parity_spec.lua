@@ -258,6 +258,48 @@ return {
     end,
   },
   {
+    -- A seat belongs to whichever window covers it on its stream, so a window that moves, shrinks
+    -- or goes gives up what it seated in the span it left. Swing makes the raw span the seats live
+    -- in differ from the logical one the windows are written in. The overlapping pair C/D goes in
+    -- one pass, so the seats both windows covered are given up by two windows at once.
+    name = 'continuous gate: moving and shrinking pb and cc windows == full re-derive',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { c58 = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+      }
+      local both = { sine30[1], pan[1] }
+      local function host(lane, nth) return h.tm:getChannel(1).onTake.notes[lane].events[nth] end
+      local function seatCount(evType)
+        local n = 0
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.chan == 1 and c.evType == evType then n = n + 1 end
+        end
+        return n
+      end
+
+      -- Lane 2: A [0,480), B [960,1440), C [1920,2400). Lane 3: D [2160,2880), overlapping C.
+      h.tm:addEvent(note(1, 0,    60, { endppq = 480,  lane = 2, fx = both })); h.tm:flush()
+      h.tm:addEvent(note(1, 960,  62, { endppq = 1440, lane = 2, fx = both })); h.tm:flush()
+      h.tm:addEvent(note(1, 1920, 64, { endppq = 2400, lane = 2, fx = both })); h.tm:flush()
+      h.tm:addEvent(note(1, 2160, 67, { endppq = 2880, lane = 3, fx = both })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+      t.truthy(seatCount('pb') > 0 and seatCount('cc') > 0, 'fixture check: the hosts seat both streams')
+      t.truthy(h.tm:fromLogical(1, 120) ~= 120, 'fixture check: swing is active')
+
+      h.tm:assignEvent(host(2, 1), { ppq = 120 }); h.tm:flush()
+      assertParity(h, 'A\'s onset moved')
+
+      h.tm:assignEvent(host(2, 2), { endppq = 1200 }); h.tm:flush()
+      assertParity(h, 'B\'s end shrunk')
+
+      h.tm:assignEvent(host(2, 3), { fx = util.REMOVE })
+      h.tm:assignEvent(host(3, 1), { fx = util.REMOVE })
+      h.tm:flush()
+      assertParity(h, 'overlapping C and D removed together')
+    end,
+  },
+  {
     name = 'continuous gate: pb half -- kept windows carry, overlap clips, hold seeds re-derive',
     run = function(harness)
       local h = harness.mk{

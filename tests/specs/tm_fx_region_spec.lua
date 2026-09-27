@@ -121,6 +121,63 @@ local function anyNoteOnChan(h, chan)
   return false
 end
 
+----- Seats -----
+-- A replace stage per stream steps to 100 at window onset, then reports the inherited value on the
+-- window's last tick, seating two points per window. stepChain registers the kinds; caller clears them.
+
+local STEP_CC = 74
+
+local function stepChain(streams)
+  local chain = {}
+  for _, dest in ipairs(streams) do
+    local kind = 'step' .. tostring(dest)
+    generators.kinds[kind] = {
+      expand = function(stream)
+        return { notes = {}, delta = { { ppq = stream.window[1], val = 100, shape = 'step' } } }
+      end,
+      mode = 'replace', dest = dest, label = kind, defaults = {}, fields = {},
+    }
+    util.add(chain, { kind = kind })
+  end
+  return chain
+end
+local function clearStepChain()
+  generators.kinds.steppb, generators.kinds['step' .. STEP_CC] = nil, nil
+end
+
+-- `stream` is 'pb' or a cc number; channel 1 throughout.
+local function onStream(c, stream)
+  if stream == 'pb' then return c.evType == 'pb' end
+  return c.evType == 'cc' and c.cc == stream
+end
+
+local function streamAt(h, stream, ppq)
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.chan == 1 and onStream(c, stream) and c.ppq == ppq then return c end
+  end
+end
+
+-- The stream's points in [from, to) as { ppq, val }, ascending.
+local function streamIn(h, stream, from, to)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.chan == 1 and onStream(c, stream) and c.ppq >= from and c.ppq < to then
+      util.add(out, { ppq = c.ppq, val = c.val })
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
+-- The stream's raw-only points, as um holds them: an authored point carries its logical seat.
+local function seatsOn(h, stream)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.chan == 1 and onStream(c, stream) and h.tm:byUuid(c.uuid).ppqL == nil then util.add(out, c) end
+  end
+  return out
+end
+
 ----- Arp: a note-owning region parks its members off the take, a continuous one leaves them sounding
 ----- (§ Hosts and membership ¶5)
 
@@ -1191,6 +1248,118 @@ return {
       local stillParked = stashOfType(h, 'cc')
       t.eq(#stillParked, 1, 'cc74@60 stays parked under the shrunk window')
       t.eq(stillParked[1].ppq, 60, 'the still-covered cc is the one left parked')
+    end,
+  },
+
+  {
+    -- A seat is a pb or cc no live window covers on its stream once the window goes: a window that
+    -- shrinks gives up only the span it left, so a seat it still covers is the same record after.
+    -- see docs/trackerManager.md § Fx window census
+    name = 'shrinking a pb or cc window keeps the seats it still covers',
+    run = function(harness)
+      local h = harness.mk()
+      for _, ppq in ipairs({ 60, 1200 }) do
+        h.tm:addEvent({ evType = 'pb', ppq = ppq, chan = 1, val = 30 })
+        h.tm:addEvent({ evType = 'cc', ppq = ppq, chan = 1, cc = STEP_CC, val = 30 })
+      end
+      h.tm:flush()
+
+      local chain = stepChain({ 'pb', STEP_CC })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 960, fx = chain } })
+      h.tm:rebuild()
+      local pbOnset, ccOnset = streamAt(h, 'pb', 480), streamAt(h, STEP_CC, 480)
+      t.truthy(pbOnset and ccOnset, 'fixture check: the window seats its onset on both streams')
+      t.truthy(streamAt(h, 'pb', 959) and streamAt(h, STEP_CC, 959),
+               'fixture check: and its hand-back on its last tick')
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 720, fx = chain } })
+      h.tm:rebuild()
+      clearStepChain()
+
+      -- Onset and hand-back alone: nothing left in the span given up, and no second seat beside one kept.
+      local function ppqsIn(stream)
+        local out = {}
+        for _, point in ipairs(streamIn(h, stream, 480, 960)) do util.add(out, point.ppq) end
+        return out
+      end
+      t.deepEq(ppqsIn('pb'), { 480, 719 }, 'the old span holds the shrunk window\'s two pb points')
+      t.deepEq(ppqsIn(STEP_CC), { 480, 719 }, 'the old span holds the shrunk window\'s two cc points')
+      t.eq(streamAt(h, 'pb', 480).uuid, pbOnset.uuid, 'the pb seat at the onset is the same record')
+      t.eq(streamAt(h, STEP_CC, 480).uuid, ccOnset.uuid, 'the cc seat at the onset is the same record')
+    end,
+  },
+
+  {
+    -- An absorber carries its logical seat, so it is authored-side and no seat: a pb window that goes
+    -- leaves it standing, and it reseats in place to the value it held before the window came.
+    -- see docs/tuning.md § Absorber reconciliation
+    name = 'removing a pb window reseats the absorbers under it in place',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 60, chan = 1, val = 30 })
+      addNote(h, { ppq = 0,    endppq = 240 })
+      addNote(h, { ppq = 600,  endppq = 700, detune = 20 })
+      addNote(h, { ppq = 1200, endppq = 1440 })
+      local bare = streamAt(h, 'pb', 600)
+      t.truthy(bare, 'fixture check: the detuned onset seats an absorber')
+
+      local chain = stepChain({ 'pb' })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = 480, endppq = 960, fx = chain } })
+      h.tm:rebuild()
+      local covered = streamAt(h, 'pb', 600)
+      t.truthy(covered and covered.val ~= bare.val,
+               'fixture check: under the window the absorber reseats against the window\'s value')
+
+      h.ds:assign('fxRegions', util.REMOVE)
+      h.tm:rebuild()
+      clearStepChain()
+
+      local after = streamAt(h, 'pb', 600)
+      t.eq(after and after.uuid, bare.uuid, 'the absorber is the same record')
+      t.eq(after and after.val, bare.val, 'and holds the value it had before the window came')
+    end,
+  },
+
+  {
+    -- Moving a window moves its claim: what it seated in the span it left is no seat of any window,
+    -- so the stream there is what it would be had the window never been.
+    name = 'a moved cc-augment window leaves no seat outside its new span',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 60,   chan = 1, cc = STEP_CC, val = 30 })
+      h.tm:addEvent({ evType = 'cc', ppq = 1500, chan = 1, cc = STEP_CC, val = 90 })
+      h.tm:flush()
+      local bare = streamIn(h, STEP_CC, 0, math.huge)
+
+      generators.kinds.ccLift = {
+        expand = function(host)
+          return { notes = {}, delta = {
+            { ppq = host.window[1],      val = 10, shape = 'step' },
+            { ppq = host.window[1] + 60, val = 20, shape = 'step' },
+          } }
+        end,
+        mode = 'augment', dest = STEP_CC, label = 'CcLift', defaults = {}, fields = {},
+      }
+      local function place(ppq, endppq)
+        h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, ppq = ppq, endppq = endppq,
+                                     fx = { { kind = 'ccLift' } } } })
+        h.tm:rebuild()
+      end
+      place(480, 960)
+      t.truthy(#seatsOn(h, STEP_CC) > 0, 'fixture check: the window seats its cc')
+      place(720, 1200)
+      generators.kinds.ccLift = nil
+
+      local seats = seatsOn(h, STEP_CC)
+      t.truthy(#seats > 0, 'the moved window seats its cc')
+      for _, seat in ipairs(seats) do
+        t.truthy(seat.ppq >= 720 and seat.ppq < 1200, ('the seat at %d lies in the new span'):format(seat.ppq))
+      end
+      local outside = {}
+      for _, point in ipairs(streamIn(h, STEP_CC, 0, math.huge)) do
+        if point.ppq < 720 or point.ppq >= 1200 then util.add(outside, point) end
+      end
+      t.deepEq(outside, bare, 'outside the new span the stream is the one no window touched')
     end,
   },
 

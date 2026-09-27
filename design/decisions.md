@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-27** — Fx expansion takes the orphan diff per dirty channel ahead of the host gate, and
+  a pb orphan's delete seeds its stream, over the pb sweep keyed by whole-window geometry. The sweep
+  churned every seat of a shrunk window and deleted the absorbers inside it; the seed is what brings
+  a vanished window's span into the absorber pass, so an absorber it covered reseats in place to the
+  value that prevails there now.
+
 - **2026-09-27** — PA lane binding reads logical cover off the columns, a seek per lane, over um's
   raw note scan, the parked walk and the pitch-only fallback. Raw cover disagreed with um's logical
   ownership under delay, and the fallback's guess shifted between passes. On-take cover beats

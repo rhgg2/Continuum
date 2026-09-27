@@ -56,9 +56,14 @@ Moved to `docs/trackerManager.md` § Two movements.
    scope, as its emission is, and a kept host's window is not read. The existing side of the cc
    reconcile is the union of those reads.
 
-1. A seat the previous census covers and the pass's own set does not is an **orphan**, and the pass
-   deletes every orphan, pb and cc alike. The length verbs retire seats by the same diff, taken
-   between the stored census and its mapped image (`docs/trackerManager.md` § Length operations).
+1. A seat the previous census covers and the pass's own set does not is an **orphan**, and fx
+   expansion deletes every orphan, pb and cc alike. The length verbs retire seats by the same diff,
+   taken between the stored census and its mapped image (`docs/trackerManager.md` § Length
+   operations).
+
+1. A pb orphan's delete seeds the pb stream, since the absorbers its value held into reseat against
+   the stream that now prevails there. A cc orphan seeds nothing, since no value is computed against
+   a cc seat.
 
 ## Parking
 

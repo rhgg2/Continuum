@@ -417,7 +417,7 @@ do
   --shape: rawIndex[chan] = { notes, pbs, pcs, pas, ats, ccs = { [ccNum] = list } }; every event on the channel, one list per type -- notes and pbs flat across all lanes, pcs/pas/ats flat, ccs bucketed by cc number. Each list raw-then-logical sorted; readers filter at use.
   local rawIndex = {}
   local byUuid = {}
-  --shape: derivedByHost[chan] = { [hostUuid] = { [uuid] = entry } }; the channel's derived records -- notes, and the ccs routed out of the columns -- filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned. see docs/trackerManager.md § The host gate
+  --shape: derivedByHost[chan] = { [hostUuid] = { [uuid] = entry } }; the channel's derived notes, filed under the uuid of the host that produced them. Maintained on the index verbs, never rescanned. see docs/trackerManager.md § The host gate
   local derivedByHost = {}
 
   ----- Order
@@ -467,8 +467,35 @@ do
 
   -- Fx expansion asks per host that ran, so a host it kept is never asked and its notes stand
   -- outside both sides of the reconcile. Entries are live, and a gather clones before writing.
-  --post: result = the channel's derived notes and ccs, filed by producing host uuid
+  --post: result = the channel's derived notes, filed by producing host uuid
   function index.derivedByHost(chan) return derivedByHost[chan] end
+
+  -- A seat carries no logical sidecar and only the census recognises it, so one no window covers
+  -- any longer would read as authored for good. see docs/trackerManager.md § Fx window census
+  --pre: walk lists windows `before` holds; before/after are fxWindows sets over one time context
+  --post: fresh result = the raw-only pbs and ccs a walk window covers raw, and no after window does
+  --post: an entry appears once, however many walk windows cover it
+  function index.orphanSeats(walk, before, after)
+    local orphans, seen = {}, {}
+    for _, window in ipairs(walk) do
+      local startRaw, endRaw = before.rawSpan(window)
+      local raw = rawIndex[window.chan]
+      for _, target in ipairs(fxWindows.perTarget(window)) do
+        local stream = (target.evType == 'pb' and raw.pbs)
+                    or (target.evType == 'cc' and raw.ccs[target.cc]) or {}
+        for i = util.firstAtOrAfter(stream, startRaw), #stream do
+          local entry = stream[i]
+          if entry.ppq >= endRaw then break end
+          if entry.ppqL == nil and not seen[entry.uuid]
+             and not after.ownsRaw(target.evType, window.chan, target.cc, entry.ppq) then
+            seen[entry.uuid] = true
+            util.add(orphans, entry)
+          end
+        end
+      end
+    end
+    return orphans
+  end
 
   -- Resolve a uuid to its live column event via the seat stamp (byUuid.colEvt), without a column
   -- walk. see docs/trackerManager.md § Incremental index reconciliation
@@ -511,8 +538,8 @@ do
     end
   end
   -- A derived record's file membership rides index turnover: set on insert, cleared on removal. Only
-  -- notes and ccs file under a host, since a pb/pc names its own kind. see docs/trackerManager.md § The host gate
-  local HOST_FILED = { note = true, cc = true }
+  -- notes file under a host; a seat's window names it. see docs/trackerManager.md § The host gate
+  local HOST_FILED = { note = true }
   local function setDerivedHost(evt)
     if not HOST_FILED[evt.evType] or not evt.uuid or not evt.derived then return end
     local file = derivedByHost[evt.chan]
@@ -1598,26 +1625,12 @@ function tm:flush() if stager.flush() then tm:rebuild(false) end end
 -- events through. see docs/trackerManager.md § Length operations
 local fxSpanKeys = { 'fxRegions', 'fxParked', 'fxRealisedWindows' }
 
--- A seat is raw-only and the census alone recognises it, so a seat the mapped census no longer covers
--- would read as authored for good. see docs/trackerManager.md § Length operations
+-- The pass's orphan diff reads the census the verb is about to overwrite, so the seats the mapped
+-- census drops are retired here. see docs/trackerManager.md § Length operations
 --post: each raw-only pb or cc stored covers and mapped does not is staged for delete
 local function retireUncoveredSeats(stored, mapped)
   local before, after = fxWindows.new(stored, timeContext), fxWindows.new(mapped, timeContext)
-  local uncovered = {}
-  for _, window in ipairs(stored) do
-    local startRaw, endRaw = before.rawSpan(window)
-    local raw = index.raw(window.chan)
-    for _, target in ipairs(fxWindows.perTarget(window)) do
-      local stream = target.evType == 'pb' and raw.pbs or target.evType == 'cc' and raw.ccs[target.cc]
-      for _, entry in ipairs(stream or {}) do
-        if entry.ppqL == nil and entry.ppq >= startRaw and entry.ppq < endRaw
-           and not after.ownsRaw(target.evType, window.chan, target.cc, entry.ppq) then
-          util.add(uncovered, entry)
-        end
-      end
-    end
-  end
-  for _, entry in ipairs(uncovered) do stager.delete(entry) end
+  for _, entry in ipairs(index.orphanSeats(stored, before, after)) do stager.delete(entry) end
 end
 
 --pre: keys name the stores the verb maps; one it omits stands as it is
