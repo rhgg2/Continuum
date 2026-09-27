@@ -117,10 +117,7 @@ end
 
 -- Notes sounding at logical tick `t`, ascending by realised pitch (semitone*100 + detune cents).
 local function playingAt(events, t)
-  local active = {}
-  for _, n in ipairs(events) do
-    if n.ppq <= t and t < n.endppq then util.add(active, n) end
-  end
+  local active = util.filter(events, function(n) return n.ppq <= t and t < n.endppq end)
   table.sort(active, function(a, b)
     return a.pitch * 100 + (a.detune or 0) < b.pitch * 100 + (b.detune or 0)
   end)
@@ -228,10 +225,9 @@ end
 
 -- The monophonic sequence a host presents, in ppq order. see docs/generators.md § Portamento ¶5-6
 local function glideSequence(stream, host, ctx)
-  local seq = {}
-  for _, note in ipairs(stream.notes) do
-    if stream.lane or (note.lane or 1) == 1 then util.add(seq, note) end
-  end
+  local seq = util.filter(stream.notes, function(note)
+    return stream.lane or (note.lane or 1) == 1
+  end)
   util.sortByPPQ(seq)
   -- The successor is keyed on the original host note's identity, so it reads host, not the folded stream.
   local beyond = stream.lane and ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)

@@ -2862,10 +2862,9 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
   local doomed = {}
   eachFxRegionInRect(r1, r2, c1, c2, function(region) doomed[region.uuid] = true end)
   if not next(doomed) then return end
-  local out = {}
-  for _, region in ipairs(ds:get('fxRegions') or {}) do
-    if not doomed[region.uuid] then util.add(out, region) end
-  end
+  local out = util.filter(ds:get('fxRegions') or {}, function(region)
+    return not doomed[region.uuid]
+  end)
   ds:assign('fxRegions', next(out) and out or util.REMOVE)
   pa:apply()
 end
@@ -4884,10 +4883,9 @@ do
     goLeft=true, goRight=true, colLeft=true, colRight=true,
     channelLeft=true, channelRight=true }
   for i = 0, 9 do keep['advBy' .. i] = true end
-  local clearOn = {}
-  for name in pairs(tracker.registered) do
-    if not keep[name] then util.add(clearOn, name) end
-  end
+  local clearOn = util.filter(util.keys(tracker.registered), function(name)
+    return not keep[name]
+  end)
   cmgr:doBefore(clearOn, function() dupeState = nil end)
 end
 

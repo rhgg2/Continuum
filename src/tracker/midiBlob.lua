@@ -113,8 +113,7 @@ function midiBlob.parse(blob)
     end
   end
   if drop then
-    local kept = {}
-    for _, c in ipairs(ccs) do if not drop[c] then util.add(kept, c) end end
+    local kept = util.filter(ccs, function(c) return not drop[c] end)
     for i, c in ipairs(kept) do c.idx = i - 1 end
     ccs = kept
   end

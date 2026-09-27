@@ -566,10 +566,7 @@ local toParked, parkInPlace do
   -- Park flips the column event where it stands, shedding its cues and bookkeeping there too.
   --post: evt is its toParked spec plus parked = true, so the next head seat holds it
   function parkInPlace(evt)
-    local shed = {}
-    for field in pairs(evt) do
-      if sheds(evt.evType, field) then util.add(shed, field) end
-    end
+    local shed = util.filter(util.keys(evt), function(field) return sheds(evt.evType, field) end)
     for _, field in ipairs(shed) do frame.setEvent(evt, field, nil) end
     frame.setEvent(evt, 'parked', true)
   end
@@ -778,11 +775,9 @@ local function parkPAs(stage)
   local hostsByCol = {}
   local function parkedHostsIn(col)
     if not hostsByCol[col] then
-      local hosts = {}
-      for _, evt in ipairs(col.events) do
-        if evt.parked and util.isNote(evt) then util.add(hosts, evt) end
-      end
-      hostsByCol[col] = hosts
+      hostsByCol[col] = util.filter(col.events, function(evt)
+        return evt.parked and util.isNote(evt)
+      end)
     end
     return hostsByCol[col]
   end
@@ -1420,10 +1415,7 @@ local function rebuildFx(fxOutWindows, fxInWindows, fxRegions, pbLimCents)
       fxOut.pbScope[chan] = emitScope.pb or {}
     end
 
-    local running = {}
-    for _, host in ipairs(hosts) do
-      if status[host] ~= 'kept' then util.add(running, host) end
-    end
+    local running = util.filter(hosts, function(host) return status[host] ~= 'kept' end)
     local runWindows = spans.mergeWindows(running)
     local pbBase, ccBases = pbBaseFor(chan, runWindows), ccBasesFor(chan, runWindows)
     fxOut.pbBase[chan] = pbBase
@@ -1903,18 +1895,18 @@ end
 
 ----- Rebuild Pbs
 
--- A ramp onset's dual point rides one tick before the onset (see docs/tuning.md § Value-aware seats).
+-- A ramp onset's dual point rides one tick before the onset (see docs/tuning.md § Value-aware
+-- seats), so every span that must contain an onset's seats reaches one tick back.
 local DUAL_POINT_TICK = 1
 
--- Accessors for a channel's base-voice notes: the raw index's lane-1 plus the pass's
--- derived base voices. see docs/tuning.md § Absorber reconciliation
---shape: makeBaseVoice = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
-local function makeBaseVoice(chan, fxOut)
-  local indexed = index.raw(chan).notes
-  local derived = {}
-  for _, spec in ipairs(fxOut.notes[chan]) do
-    if spec.baseVoice then util.add(derived, spec) end
-  end
+--shape: baseVoiceUnion = { detuneAt(ppq), between(lo, hi), first(), nextAfter(ppq), anyDetuneJump(), hasDerived }
+-- A channel's base-voice onset stream: the raw index's surviving notes unioned with the pass's
+-- derived base voices, which live off-take in fxOut.notes. see docs/tuning.md § Absorber reconciliation
+local function baseVoiceUnion(chan, fxOut)
+  local indexed = index.raw(chan).notes   -- every lane, authored and derived alike; filtered at use
+  -- Derived base voices are routed out of columns; union them so the absorber pass seats their
+  -- detune jumps.
+  local derived = util.filter(fxOut.notes[chan], function(spec) return spec.baseVoice end)
   table.sort(derived, index.order)   -- the union's cursors assume ppq order of both sources
   local keep = carriedFor(fxOut.ran[chan])
   -- An authored entry's intent (lane, detune, logical onset) is its seat stamp's; a kept host's
@@ -1991,10 +1983,7 @@ local function replaceWindows(chan, fxOut, gridStep, pbLimCents)
   -- only -- their seats stand on wire.
   local emitSpans = fxOut.pbScope[chan]   -- nil = ungated: every range is live
   local chains, base = fxOut.pbChains[chan], fxOut.pbBase[chan]
-  local liveRecs = {}
-  for _, rec in ipairs(chains) do
-    if not rec.kept then util.add(liveRecs, rec) end
-  end
+  local liveRecs = util.filter(chains, function(rec) return not rec.kept end)
   local wins = {}
   --shape: replaceWin = { bps = [{ ppq, ppqL, cents, shape, tension }], kept, startRaw, endRaw }
   -- Bounds convert to raw once for zero round-trip drift.
@@ -2329,7 +2318,7 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild
     -- entry). I8: rebuild is a fixpoint.
     if dirt.has(chan) then
-      local baseVoice   = makeBaseVoice(chan, fxOut)
+      local baseVoice   = baseVoiceUnion(chan, fxOut)
       local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
       local unparked    = unparkedPbsFor(chan)
       local seatSpans   = seatScope(chan, replaceWins, baseVoice, unparked)   -- nil = ungated

@@ -784,10 +784,7 @@ local function hopInstance(step)
   local gm = gmgr(); if not gm then return end
   local at = groupBridge and groupBridge.instanceAt and groupBridge.instanceAt()
   if not at then return end
-  local sibs = {}
-  for _, e in ipairs(gm:eachInstance()) do
-    if e.groupId == at.groupId then util.add(sibs, e) end
-  end
+  local sibs = util.filter(gm:eachInstance(), function(e) return e.groupId == at.groupId end)
   table.sort(sibs, function(a, b) return a.anchor.ppq < b.anchor.ppq end)
   local i
   for k, e in ipairs(sibs) do if e.instId == at.instId then i = k end end

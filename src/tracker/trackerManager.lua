@@ -880,10 +880,9 @@ do
   -- A relocated cell reaches the doors as a clone of its seat or its index entry, cues and um's
   -- decoration and all; a door clears them from the caller's table.
   local function shedCuesAndDecor(evType, fields)
-    local shed = {}
-    for field in pairs(fields) do
-      if umDecor[field] or frame.isCue(evType, field) then util.add(shed, field) end
-    end
+    local shed = util.filter(util.keys(fields), function(field)
+      return umDecor[field] or frame.isCue(evType, field)
+    end)
     for _, field in ipairs(shed) do fields[field] = nil end
   end
 
@@ -1461,10 +1460,9 @@ local function freezeRegion(uuid, toGroup)
 
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
   -- metadata, so each rides mm's lockless path; the note keeps its uuid and detune.
-  local promoted = {}
-  for _, note in ipairs(index.raw(frozen.chan).notes) do
-    if note.derived == uuid then util.add(promoted, note) end
-  end
+  local promoted = util.filter(index.raw(frozen.chan).notes, function(note)
+    return note.derived == uuid
+  end)
   -- What this host parked, every kind: its cells step aside for the promotion, and its specs are
   -- the stash's drop set. see docs/trackerManager.md § Realisation by host
   local ourParked, dropKeys = {}, {}

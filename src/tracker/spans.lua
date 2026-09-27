@@ -33,11 +33,7 @@ function spans.mergeWindows(bucket)
   return spans.merge(wins)
 end
 function spans.overlapping(bucket, span)
-  local out = {}
-  for _, m in ipairs(bucket) do
-    if m.window[1] < span[2] and m.window[2] > span[1] then util.add(out, m) end
-  end
-  return out
+  return util.filter(bucket, function(m) return m.window[1] < span[2] and m.window[2] > span[1] end)
 end
 
 -- Is a single tick covered? Half-open, so adjacent spans partition the line without

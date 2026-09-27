@@ -148,6 +148,15 @@ function util.keys(t)
   return out
 end
 
+--post: fresh result
+function util.filter(list, keep)
+  local out = {}
+  for _, v in ipairs(list) do
+    if keep(v) then util.add(out, v) end
+  end
+  return out
+end
+
 -- Sparse → dense; n is the pre-sparse length.
 function util.compact(t, n)
   local out = {}

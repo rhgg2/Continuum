@@ -951,10 +951,9 @@ end
 --contract: batch per-FX MIDI routing for one track in one chunk Get+Set; writes={{id,midi},...};
 --contract: drops writes the cache says are current; all-unchanged skips the chunk read entirely
 function rm:writeChainMidi(trackId, writes)
-  local pending = {}
-  for _, w in ipairs(writes) do
-    if not midiUnchanged(midiCache[w.id], w.midi) then util.add(pending, w) end
-  end
+  local pending = util.filter(writes, function(w)
+    return not midiUnchanged(midiCache[w.id], w.midi)
+  end)
   if #pending == 0 then return end
   local track = locateTrack(trackId)
   if not track then return end

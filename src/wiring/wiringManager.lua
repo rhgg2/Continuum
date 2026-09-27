@@ -615,11 +615,7 @@ function wm:deleteSource(nodeId, force)
   rm:transaction('wiring: delete source', function()
     self:mutate(function(g)
       g.nodes[nodeId] = nil
-      local kept = {}
-      for _, e in ipairs(g.edges) do
-        if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
-      end
-      g.edges = kept
+      g.edges = util.filter(g.edges, function(e) return e.from ~= nodeId and e.to ~= nodeId end)
     end)
     if node.trackId then rm:deleteTrack(node.trackId) end
   end)
@@ -636,11 +632,7 @@ function wm:deleteBus(nodeId)
   rm:transaction('wiring: delete buss', function()
     self:mutate(function(g)
       g.nodes[nodeId] = nil
-      local kept = {}
-      for _, e in ipairs(g.edges) do
-        if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
-      end
-      g.edges = kept
+      g.edges = util.filter(g.edges, function(e) return e.from ~= nodeId and e.to ~= nodeId end)
     end)
     rm:assignMeta('bus', nodeId, nil)
   end)
@@ -1241,8 +1233,7 @@ local function readGraph(snap, busMeta)
         if indeg[c] == 0 then util.add(ready, c) end
       end
     end
-    local cyclic = {}
-    for _, k in ipairs(keys) do if not placed[k] then util.add(cyclic, k) end end
+    local cyclic = util.filter(keys, function(k) return not placed[k] end)
     table.sort(cyclic)
     return out, cyclic
   end
@@ -1425,10 +1416,7 @@ local function readGraph(snap, busMeta)
 
   -- Sub-threshold busses have no carrier track: the record's taps mint the node + its
   -- edges, and each in×out crossing consumes the direct send the splice realized it as.
-  local mintIds = {}
-  for busId in pairs(busMeta or {}) do
-    if not nodes[busId] then util.add(mintIds, busId) end
-  end
+  local mintIds = util.filter(util.keys(busMeta or {}), function(busId) return not nodes[busId] end)
   if #mintIds > 0 then
     table.sort(mintIds)  -- deterministic minted-edge order
     local byKey = {}
@@ -1445,11 +1433,7 @@ local function readGraph(snap, busMeta)
     end
     -- Taps whose node vanished are skipped here and GC'd at the next mutate's mirror.
     local function liveTaps(list)
-      local out = {}
-      for _, tap in ipairs(list or {}) do
-        if nodes[tap.node] then util.add(out, tap) end
-      end
-      return out
+      return util.filter(list or {}, function(tap) return nodes[tap.node] end)
     end
     local consumed, busTaps = {}, {}
     for _, busId in ipairs(mintIds) do

@@ -888,10 +888,9 @@ function tuning.shortlist(notation, target, keyStep, note, widen)
     if nearest > reach then reach = nearest end
   end
 
-  local candidates = {}
-  for _, point in ipairs(points) do
-    if point.strain <= reach + REACH_TOL then util.add(candidates, point) end
-  end
+  local candidates = util.filter(points, function(point)
+    return point.strain <= reach + REACH_TOL
+  end)
 
   table.sort(candidates, function(a, b)
     if a.strain ~= b.strain then return a.strain < b.strain end

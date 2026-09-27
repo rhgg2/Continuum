@@ -824,10 +824,9 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if not slotIdx then return end
 
   -- Captured before placing: the new take starts at qnPos too, so it must not be in this list.
-  local occupants = {}
-  for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.startQN == qnPos then util.add(occupants, other) end
-  end
+  local occupants = util.filter(am:tracksTakes(trackIdx), function(other)
+    return other.startQN == qnPos
+  end)
 
   local item = reaper.CreateNewMIDIItemInProj(track, qnPos, qnPos + lengthQN, true)
   local take = item and reaper.GetActiveTake(item)
@@ -896,10 +895,9 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
 
   -- Captured before placing: the new take starts at qnPos too, so it must not
   -- be in this list; for MIDI it also keeps the clone source alive until cloned.
-  local occupants = {}
-  for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.startQN == qnPos then util.add(occupants, other) end
-  end
+  local occupants = util.filter(am:tracksTakes(trackIdx), function(other)
+    return other.startQN == qnPos
+  end)
 
   local take
   if entry.kind == 'midi' then

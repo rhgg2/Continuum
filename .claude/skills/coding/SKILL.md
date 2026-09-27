@@ -66,6 +66,8 @@ The idioms that recur in the code.
 - `util.deepEq(t1, t2)`.
 - `util.key(...)` builds an opaque NUL-joined compound key; also
   `util.keys(t)` for the key list of a table.
+- `util.filter(list, keep)` for the fresh list of elements passing `keep`;
+  compose with `util.keys` to filter a table's keys.
 - For ppq-sorted dense tables: `util.seek` for the event before/after a
   ppq, `util.between` for a half-open window, `util.insertSorted` to
   splice without a re-sort.

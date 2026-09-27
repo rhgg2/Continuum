@@ -554,8 +554,7 @@ local function topoIntraTrack(members, conns)
       return a < b
     end)
   end
-  local ready = {}
-  for id in pairs(memberSet) do if indeg[id] == 0 then util.add(ready, id) end end
+  local ready = util.filter(util.keys(memberSet), function(id) return indeg[id] == 0 end)
   sortReady(ready)
   local out = {}
   while #ready > 0 do
@@ -864,10 +863,7 @@ do
       if trackKey ~= '' then util.bucket(cusByTrack, trackKey, cuId) end
     end
     local function chainOf(members, trackKey)
-      local chain = {}
-      for _, id in ipairs(members) do
-        if isChainMember(nodes[id]) then util.add(chain, id) end
-      end
+      local chain = util.filter(members, function(id) return isChainMember(nodes[id]) end)
       for _, cuId in ipairs(cusByTrack[trackKey] or {}) do util.add(chain, cuId) end
       return chain
     end

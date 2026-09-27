@@ -499,8 +499,7 @@ local function activeEntries()
   local takeName = sw.global
   if takeName == 'identity' then takeName = nil end
   if takeName then util.add(out, { col = 'take', name = takeName }) end
-  local chans = {}
-  for chan in pairs(sw) do if chan ~= 'global' then util.add(chans, chan) end end
+  local chans = util.filter(util.keys(sw), function(chan) return chan ~= 'global' end)
   table.sort(chans)
   for _, chan in ipairs(chans) do
     util.add(out, { col = 'ch' .. chan, name = sw[chan] })

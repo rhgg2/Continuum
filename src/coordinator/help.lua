@@ -343,10 +343,7 @@ end
 
 -- Rewrites cmd's bindings: drop `drop` (a spec ref, or nil), append `add` (or nil).
 local function rebindWithout(cmd, drop, add)
-  local specs = {}
-  for _, spec in ipairs(cmgr:keysFor(cmd) or {}) do
-    if spec ~= drop then util.add(specs, spec) end
-  end
+  local specs = util.filter(cmgr:keysFor(cmd) or {}, function(spec) return spec ~= drop end)
   if add then util.add(specs, add) end
   cmgr:rebind(cmgr:bindingSite(cmd), cmd, specs, ImGui)
 end

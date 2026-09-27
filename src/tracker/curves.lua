@@ -294,10 +294,9 @@ function curves.foldChains(recs, span, base, grid)
     out = {}
     for i = 1, #cuts - 1 do
       local a, b = cuts[i], cuts[i + 1]
-      local active = {}
-      for _, rec in ipairs(covering) do
-        if rec.window[1] <= a and rec.window[2] >= b then util.add(active, rec) end
-      end
+      local active = util.filter(covering, function(rec)
+        return rec.window[1] <= a and rec.window[2] >= b
+      end)
       local closeHere = i == #cuts - 1   -- every window closes: only the last sub-span keeps its edge
       for _, point in ipairs(foldSub(active, a, b, base, closeHere, grid)) do util.add(out, point) end
     end

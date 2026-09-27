@@ -107,11 +107,7 @@ local function selectedTakes()
 end
 
 local function setSelection(handles)
-  local kept = {}
-  for _, handle in ipairs(handles or {}) do
-    if handle then util.add(kept, handle) end
-  end
-  selection = kept
+  selection = util.filter(handles or {}, function(handle) return handle end)
   selAnchor = nil
 end
 
@@ -231,11 +227,7 @@ end
 
 -- MIDI slots on a track — for the tracker's pickers/nav via the arrange facade.
 local function midiSlots(trackIdx)
-  local out = {}
-  for _, slot in ipairs(am:trackSlots(trackIdx)) do
-    if slot.kind == 'midi' then util.add(out, slot) end
-  end
-  return out
+  return util.filter(am:trackSlots(trackIdx), function(slot) return slot.kind == 'midi' end)
 end
 
 ----- Take edits — move / resize / delete / dive the action targets

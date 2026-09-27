@@ -59,10 +59,7 @@ local function membersOf(node)
   end
   -- The surface unions two scopes, whose groups the manifest orders separately, so the
   -- leaves of one level read by title.
-  local leaves = {}
-  for _, entry in ipairs(surface) do
-    if entry.path and entry.node == node then util.add(leaves, entry) end
-  end
+  local leaves = util.filter(surface, function(entry) return entry.path and entry.node == node end)
   table.sort(leaves, function(entryA, entryB) return entryA.title < entryB.title end)
   for _, entry in ipairs(leaves) do
     util.add(members, { letter = entry.letter, title = entry.title,

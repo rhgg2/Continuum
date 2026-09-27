@@ -48,10 +48,7 @@ end
 ----- Names
 
 local function sortedNames(tier, drop)
-  local out = {}
-  for name in pairs(tier) do
-    if not drop[name] then util.add(out, name) end
-  end
+  local out = util.filter(util.keys(tier), function(name) return not drop[name] end)
   table.sort(out)
   return out
 end

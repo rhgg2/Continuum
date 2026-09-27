@@ -1485,8 +1485,7 @@ local function bussablePorts(nv, dir, wireViews)
       end
     end
   end
-  local ports = {}
-  for port in pairs(wired) do if not bussed[port] then util.add(ports, port) end end
+  local ports = util.filter(util.keys(wired), function(port) return not bussed[port] end)
   table.sort(ports)
   return ports
 end
@@ -1899,10 +1898,7 @@ end
 local function gatherViews(frame)
   -- Sources have no body (sourceSegments renders each out-edge as a normal
   -- wire). Drop source nodes from every body pass: draw, drag, band, hit-test.
-  local nodeViews = {}
-  for _, nv in ipairs(wv:nodeViews()) do
-    if nv.category ~= 'source' then util.add(nodeViews, nv) end
-  end
+  local nodeViews = util.filter(wv:nodeViews(), function(nv) return nv.category ~= 'source' end)
 
   local nodesById = {}
   for _, nv in ipairs(nodeViews) do nodesById[nv.id] = nv end

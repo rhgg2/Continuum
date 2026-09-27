@@ -228,11 +228,7 @@ end
 function wv:deleteNode(nodeId)
   return wm:mutate(function(g)
     g.nodes[nodeId] = nil
-    local kept = {}
-    for _, e in ipairs(g.edges) do
-      if e.from ~= nodeId and e.to ~= nodeId then util.add(kept, e) end
-    end
-    g.edges = kept
+    g.edges = util.filter(g.edges, function(e) return e.from ~= nodeId and e.to ~= nodeId end)
   end)
 end
 
