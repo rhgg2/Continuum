@@ -479,7 +479,19 @@ function tv:duplicateBelow()
   return take
 end
 
---contract: the current instance moved ±1 along its family, varying past the last; nil with none
+--post: result = the name a fork of inst under `name` carries
+function tv:forkName(inst, name) return arrange().forkName(inst, name) end
+
+--post: inst forked in place under forkName(inst, name); the fork's slot, nil where it refuses
+--invariant: the tracker rebinds to that slot, and its placement becomes the current instance
+function tv:fork(inst, name)
+  local slot, take = arrange().fork(inst, name); if not slot then return end
+  self:selectSlot(slot)
+  self:nameInstance(take)
+  return slot
+end
+
+--post: the current instance moved ±1 along its family; nil with none, or off either end
 --invariant: the tracker rebinds to that slot, and its placement becomes the current instance
 function tv:stepVariant(dir)
   local inst = self:currentInstance(); if not inst then return end
@@ -4127,7 +4139,17 @@ local paletteCursor   = nil
 local stripCursor     = nil
 --shape: tabOverride = { tab, anchor, serial } — a tab claim ('parameters'|'fx'|'map'); the caret anchor clears it, and a raise's command-serial anchor clears it at the next command
 local tabOverride  = { tab = nil, anchor = nil, serial = nil }
-local mapPinned    = false   -- Alt-M holds the mini-map up as the palette's default tab
+local mapPinned    = false   -- the mini-map held up as the palette's default tab, past map mode
+local mapMode      = false   -- Alt-M's session on the map, its scope on the stack
+
+-- Modal over the tracker's scope, so a plain key reaches a map verb and never the grid.
+-- See docs/trackerRender.md § Map mode.
+local mapScope = cmgr:scope('map')
+mapScope.modal = true
+
+-- The transport and travel stay live, as under the menu, and undo reaches what a map verb did.
+local MAP_LIVE_GROUPS = { Transport = true, Pages = true }
+local MAP_LIVE_NAMES  = { switchPage = true, undo = true, redo = true, toggleHelp = true }
 
 -- Learn-touched params float above pa's frecency order until the bound
 -- take changes; validated lazily against cm:boundTake, no lifecycle hook.
@@ -4194,11 +4216,34 @@ function raiseMapTab()
   local _, serial = cmgr:lastCommand()
   tabOverride.tab, tabOverride.anchor, tabOverride.serial = 'map', tv:caretKey(), serial
 end
--- Alt-M's map pin ranks under an override and over the derivation. Only the key drops it, so
--- an override lapsing on a caret move falls back to the map rather than to a chain.
-function tv:mapPinned()      return mapPinned end
-function tv:setMapPinned(on) mapPinned = on end
+--post: result = (map mode stands)
+function tv:inMapMode() return mapMode end
+
+-- The passthrough is read off the stack before the scope goes on, as the menu reads its own.
+--post: no-op iff map mode stands; else mapMode := true, the map scope on top of the stack
+function tv:enterMapMode()
+  if mapMode then return end
+  local pass = util.clone(MAP_LIVE_NAMES)
+  for _, entry in ipairs(cmgr:surface()) do
+    if MAP_LIVE_GROUPS[entry.group] then pass[entry.name] = true end
+  end
+  mapScope.passthrough = pass
+  mapMode = true
+  cmgr:push(mapScope)
+end
+
+--pre: the map scope is on top of the stack wherever map mode stands
+--post: no-op iff map mode is down; else mapMode := false, mapPinned := pin, the scope popped
+function tv:leaveMapMode(pin)
+  if not mapMode then return end
+  mapMode, mapPinned = false, pin
+  cmgr:pop(mapScope)
+end
+
+-- Map mode holds the pane outright. The pin ranks under an override and over the derivation,
+-- so an override lapsing on a caret move falls back to the map rather than to a chain.
 function tv:paletteTab(caretKey, fxAvailable)
+  if mapMode then return 'map' end
   return self:tabOverride(caretKey) or (mapPinned and 'map')
       or (fxAvailable and 'fx' or 'parameters')
 end

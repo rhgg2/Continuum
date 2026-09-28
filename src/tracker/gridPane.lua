@@ -1129,7 +1129,7 @@ function gridPane:handleMouse()
 end
 
 --contract: no-op unless inputAllowed(); host folds the item-active state
---contract: no-op while a scope captures letters -- the menu's walk owns the keyboard, note entry included
+--invariant: no-op under a modal scope -- the menu's walk and map mode own the keyboard
 --contract: every fresh press enters; only lastEditKey autorepeats, and a stale repeat goes back
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 --contract: a note key typed while armed exits region mode then enters (execute-through)
@@ -1143,9 +1143,9 @@ function gridPane:handleKeys()
   if tv:chordActive()  and shiftGone then tv:chordCommit()  end
   if tv:digitsActive() and shiftGone then tv:digitsCommit() end
 
-  -- A scope owning the letters (the menu's walk) owns the whole keyboard: the grid types
+  -- A modal scope (the menu's walk, map mode) owns the whole keyboard: the grid types
   -- nothing while it is up. See docs/commandManager.md § Scope stack.
-  if not inputAllowed() or cmgr:letterCapture() then return end
+  if not inputAllowed() or cmgr:isModal() then return end
   local mods = keyQueue:frameMods()
 
   -- Backspace deletes the last chord note, or steps the value gesture back one place

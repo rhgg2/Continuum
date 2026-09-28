@@ -1035,7 +1035,7 @@ return {
   },
 
   {
-    name = 'arrangeNextVariant past the last of the family swaps the target for a fresh variant',
+    name = 'arrangeFork opens on the family\'s next name and swaps the target for the fork',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -1048,11 +1048,13 @@ return {
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeNextVariant')
+      h.cmgr:invoke('arrangeFork')
+      t.eq(fakeModalHost.last.buf, 'Bass (var 1)', 'the name opens on the family\'s next')
+      fakeModalHost.last.callback(fakeModalHost.last.buf)
       local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'the instance was replaced, not added to')
-      t.eq(#am:trackSlots(0), 2, 'the palette grew by the variant slot')
+      t.eq(#am:trackSlots(0), 2, 'the palette grew by the fork\'s slot')
       local varied, parent
       for _, take in ipairs(takes) do
         if take.startQN == 0 then varied = take else parent = take end
@@ -1071,8 +1073,8 @@ return {
 
   {
     -- The pooled duplicate leaves the caret on the copy's bottom edge, so takeAtCursor
-    -- adopts it and the variant step forks it onto a slot of its own.
-    name = 'arrangeDuplicateBelow then arrangeNextVariant forks the copy onto a fresh slot',
+    -- adopts it and the fork moves it onto a slot of its own.
+    name = 'arrangeDuplicateBelow then arrangeFork forks the copy onto a fresh slot',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
@@ -1084,7 +1086,8 @@ return {
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeDuplicateBelow')
-      h.cmgr:invoke('arrangeNextVariant')
+      h.cmgr:invoke('arrangeFork')
+      fakeModalHost.last.callback(fakeModalHost.last.buf)
       local am    = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'the source and its copy')

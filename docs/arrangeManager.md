@@ -70,7 +70,7 @@ the genuine forever-gone case, reached only through `deleteSlot`.
 `am:mintParkedTake` reaches the same end-state forward: it mints a fresh
 slot whose sole instance is born on the scratch track, never grid-placed.
 The tracker's new take uses it to add a slot the user edits in place and
-drops onto the grid later; `am:vary` uses it to fork a placement onto a
+drops onto the grid later; `am:fork` uses it to move a placement onto a
 slot of its own. A new MIDI item already carries its own pool, so the
 clone is unpooled by construction.
 
@@ -454,13 +454,6 @@ on a track never overlap.
 
 ## Variants
 
-1. A **variant slot** is a slot minted from one instance of another
-   slot, carrying a copy of that source's events and pool metadata and
-   standing in the instance's place. `am:vary(take)` mints it, deletes
-   the instance and drops the variant at the vacated start QN,
-   returning `(slotIdx, take)`. An edit then reaches that placement
-   alone, and the original slot keeps its other instances.
-
 1. The **family** is a slot's name and nothing else records it: the
    slots on a track whose names share a **root**, the name with a
    trailing ` (var N)` removed, one holding the root plain and the rest
@@ -469,44 +462,59 @@ on a track never overlap.
    in REAPER, and the name is already the only place a slot's name
    lives (§ Renaming and name drift).
 
-1. A variant's ordinal is the family's highest plus one, so a deleted
-   variant keeps its name out of circulation. The scan covers parked
-   slots too, since a parked variant still holds its number. A variant
-   of a variant joins the same family — varying `Bassline (var 1)`
-   gives `Bassline (var 3)` where `(var 2)` stands — since the
-   departures from an idea are a list and not a tree.
-
-1. `am:vary` refuses on a slot with fewer than two live instances on
-   the track. Nothing propagates from a lone instance, so the fork
-   would leave a source nothing else shares. The rule also keeps the
-   delete plain: the slot has a sibling, so the item goes rather than
-   parking (§ Parking).
-
-1. The variant is minted parked, and `dropInstance` moves its keeper
-   onto the grid. The drop names no length, so the keeper carries the
-   source's natural length, and relayout caps it at the neighbour just
-   as it capped the instance replaced.
-
 1. `am:stepVariant(take, dir)` moves a placement one step along its
    family: the neighbouring slot's instance stands in its place, dropped
-   at the same start QN and on the same terms of length. A step back off
-   the first of the family does nothing, and a step forward off the last
-   varies. A run of forward presses therefore walks the family and mints
-   one variant at the end of it — where that variant is the placement's
-   only instance, the vary refuses and the walk stops there.
+   at the same start QN and on the same terms of length. A step off
+   either end of the family does nothing, so a held key walks the family
+   and mints nothing.
 
 1. The step order is the family in ordinal order, the plain root first.
    Where two slots hold the root plain they are namesakes (§ Renaming and
    name drift): each steps forward into the variants, and a variant has no
    base to step back to. The unnamed slot falls out the same way, sharing
-   its empty root with every other, so it steps alone and a forward step
-   varies it.
+   its empty root with every other, so it steps alone.
 
 1. Stepping off a variant that holds no other instance parks it rather
    than losing it (§ Parking), and stepping back onto it moves the keeper
    out again. A walk is therefore reversible: the slots a placement has
    passed through survive with their events, whether or not anything
    stands on them.
+
+## Forking
+
+1. A **fork** is a slot minted from one instance of another slot,
+   carrying a copy of that source's events and pool metadata and
+   standing in the instance's place. `am:fork(take, name)` mints it,
+   deletes the instance and drops the fork at the vacated start QN,
+   returning `(slotIdx, take)`. An edit then reaches that placement
+   alone, and the source slot keeps its other instances.
+
+1. The fork's name is `am:forkName(take, name)`. A name whose root
+   names a family on the take's track (§ Variants) joins that family,
+   whatever ordinal it was typed with. Any other name stands as typed,
+   and founds a family of its own. One verb therefore both varies and
+   founds, and the views seed its prompt with the take's own root
+   resolved, so that Enter varies and a typed name replaces the seed.
+
+1. A joining fork's ordinal is the family's highest plus one, so a
+   deleted variant keeps its name out of circulation. The scan covers
+   parked slots too, since a parked variant still holds its number.
+   Forking any member joins the one family — forking `Bassline` or
+   `Bassline (var 1)` where `(var 2)` stands gives `Bassline (var 3)` —
+   since the departures from an idea are a list and not a tree.
+
+1. The empty root names no family, being shared by every unnamed slot
+   on the track, so an unnamed take forks to an unnamed slot unless it
+   is given a name.
+
+1. A fork of a slot's lone instance parks the source (§ Parking), so a
+   fork loses no slot's events, and a step back onto the source moves
+   its keeper out again.
+
+1. The fork is minted parked, and `dropInstance` moves its keeper onto
+   the grid. The drop names no length, so the keeper carries the
+   source's natural length, and relayout caps it at the neighbour just
+   as it capped the instance replaced.
 
 1. Divergence is structural, so it is a verb pressed once rather than a
    mode left on. One level down a group instance is a table with

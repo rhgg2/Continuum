@@ -103,6 +103,22 @@ return {
   },
 
   {
+    -- A modal scope owns the whole keyboard: the menu's walk and map mode alike. A letter
+    -- it binds nothing to is still no note, so the scan is not asked at all.
+    name = 'a modal scope stands note entry off, leaving its press in the queue',
+    run = function(harness)
+      local h, pane = mk(harness)
+      local modal = h.cmgr:scope('modalOverlay')
+      modal.modal = true
+      h.cmgr:push(modal)
+      setKeys{ pressed = { letterKey('z') } }
+      pane:handleKeys()
+      t.eq(noteAt(h, 1, 120), nil, 'nothing was entered at the cursor')
+      t.truthy(kq:take(letterKey('z')), 'and the press is still in the queue')
+    end,
+  },
+
+  {
     -- Only the newest edit key autorepeats; without that a held chord re-enters all
     -- its keys interleaved. A repeat of any other key is declined, and declining
     -- means handing the press back.

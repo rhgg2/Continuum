@@ -1266,10 +1266,10 @@ return {
   },
 
   --------------------------------------------------------------------
-  -- vary
+  -- fork
   --------------------------------------------------------------------
   {
-    name = 'vary replaces the instance with one of a fresh variant slot',
+    name = 'fork replaces the instance with one of a fresh slot',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -1278,8 +1278,8 @@ return {
       })
       local src = am:tracksTakes(0)[2]
       t.seedMeta(src.take, 1, { detune = -50 })
-      local slotIdx, take = am:vary(src)
-      t.truthy(slotIdx, 'a variant slot was minted')
+      local slotIdx, take = am:fork(src, 'Bassline')
+      t.truthy(slotIdx, 'a slot was minted')
       local takes = am:tracksTakes(0)
       t.eq(#takes, 2, 'the instance was replaced, not added to')
       local below
@@ -1287,15 +1287,15 @@ return {
       t.truthy(below, 'a take still stands at the start QN')
       t.eq(below.take, take, 'the returned take is the one on the grid')
       t.eq(below.slotIdx, slotIdx, 'it is an instance of the variant slot')
-      t.eq(below.name, 'Bassline (var 1)', 'named from the parent root')
-      t.eq(below.lengthQN, 4, 'the variant carries the source length')
+      t.eq(below.name, 'Bassline (var 1)', 'the root named its own family, so the fork joined it')
+      t.eq(below.lengthQN, 4, 'the fork carries the source length')
       t.eq(#am:trackSlots(0), 2, 'the parent slot survives with its other instance')
       t.eq(t.loadMeta(below.take)[1].detune, -50, 'the fresh pool forked the metadata')
     end,
   },
 
   {
-    name = 'vary numbers from the family high-water mark; a variant of a variant joins the family',
+    name = 'a fork of any member joins past the family high-water mark, whatever ordinal was typed',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -1303,21 +1303,61 @@ return {
                     { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
                     { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline (var 3)' } } },
       })
-      local src = am:tracksTakes(0)[2]
-      local _, take = am:vary(src)
+      local root = am:tracksTakes(0)[2]
+      t.eq(root.name, 'Bassline', 'forking the plain root, not the last of the family')
+      local _, take = am:fork(root, 'Bassline (var 1)')
       t.eq(am:findTake(take).name, 'Bassline (var 4)', 'one past the family high-water mark')
     end,
   },
 
   {
-    name = 'vary refuses on a slot with a single instance',
+    name = 'a forked name naming no family on its track stands as typed, and the next joins it',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p9}', takeName = 'Lead' } } },
+      })
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
+      end
+      am:fork(takeAt(4), 'Lead')
+      t.eq(takeAt(4).name, 'Lead', 'a Lead on another track founds no family here')
+      am:fork(takeAt(8), 'Lead')
+      t.eq(takeAt(8).name, 'Lead (var 1)', 'the second joins the family the first founded')
+      t.eq(takeAt(0).name, 'Bassline', 'the source slot keeps its name')
+    end,
+  },
+
+  {
+    name = 'a fork of a lone instance parks the source rather than losing it',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
         { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
       })
-      t.eq(am:vary(am:tracksTakes(0)[1]), nil, 'nothing to diverge from')
-      t.eq(#am:trackSlots(0), 1, 'no slot minted')
+      local src = am:tracksTakes(0)[1]
+      local srcSlot = src.slotIdx
+      local slotIdx = am:fork(src, 'Lead')
+      t.truthy(slotIdx, 'a slot was minted')
+      t.eq(#am:tracksTakes(0), 1, 'one placement still stands')
+      t.eq(am:tracksTakes(0)[1].slotIdx, slotIdx, 'and it plays the fork')
+      t.eq(slotAt(am, 0, srcSlot).parked, true, 'the source survives, parked')
+    end,
+  },
+
+  {
+    name = 'an empty name names no family, so a fork of an unnamed take stays unnamed',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = '' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = '' } } },
+      })
+      local src = am:tracksTakes(0)[2]
+      t.eq(am:forkName(src, ''), '', 'the shared empty root is no family to join')
     end,
   },
 
@@ -1348,7 +1388,7 @@ return {
   },
 
   {
-    name = 'stepVariant past the last of the family varies',
+    name = 'stepVariant past the last of the family does nothing',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -1357,10 +1397,9 @@ return {
                     { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bassline (var 1)' } } },
       })
       local last = am:tracksTakes(0)[3]
-      local slotIdx, take = am:stepVariant(last, 1)
-      t.truthy(slotIdx, 'a variant slot was minted')
-      t.eq(#am:trackSlots(0), 3, 'the palette grew by it')
-      t.eq(am:findTake(take).name, 'Bassline (var 2)', 'one past the family high-water mark')
+      t.eq(am:stepVariant(last, 1), nil, 'the last of the family has nothing after it')
+      t.eq(#am:trackSlots(0), 2, 'no slot minted')
+      t.eq(am:tracksTakes(0)[3].name, 'Bassline (var 1)', 'the placement stands as it was')
     end,
   },
 
@@ -1387,7 +1426,7 @@ return {
         { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' },
                     { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Bassline' } } },
       })
-      local varSlot = am:vary(am:tracksTakes(0)[2])
+      local varSlot = am:fork(am:tracksTakes(0)[2], 'Bassline')
       local function takeAt(qn)
         for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
       end

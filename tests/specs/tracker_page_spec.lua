@@ -720,7 +720,71 @@ return {
     end,
   },
 
-  -- stepVariant: the current instance moved along its family, varying past the last.
+  -- fork: the current instance forked in place, under the name its modal commits.
+  -- see docs/trackerPage.md § Forking
+  {
+    name = 'fork opens on the family\'s next name, forks the instance it opened on, and follows it',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'f0' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.slotsByIdx[0] = { { idx = 0, name = 'Bassline', kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 4, lengthQN = 4, name = 'Bassline' },
+      }
+      -- am:forkName joins a family the name's root names (am_spec pins the real rule).
+      fakeArrange.forkName = function(_, name)
+        return name == 'Bassline' and 'Bassline (var 1)' or name
+      end
+      fakeArrange.fork = function(inst, name)
+        fakeArrange.calls.fork = { take = inst.take, name = name }
+        fakeArrange.instances = {
+          { take = 'f0', trackIdx = 0, slotIdx = 9, startQN = 4, lengthQN = 4, name = name },
+        }
+        util.add(fakeArrange.slotsByIdx[0], { idx = 9, name = name, kind = 'midi' })
+        fakeArrange.takeByKey['0:9'] = 'f0'
+        return 9, 'f0'
+      end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind i0
+      h.cm:set('global', 'trackerLoopToItem', true)
+
+      h.cmgr:invoke('fork')
+      t.eq(fakeModalHost.last.buf, 'Bassline (var 1)', 'the name opens on the family\'s next')
+      t.eq(fakeModalHost.last.selectTo, #'Bassline (var 1)', 'selected whole, so typing replaces it')
+      t.eq(fakeModalHost.last.resolve('Bassline'), 'Bassline (var 1)', 'a joining name previews')
+      t.eq(fakeModalHost.last.resolve('Lead'), '', 'a name standing as typed previews nothing')
+      fakeModalHost.last.callback('Lead')
+      t.deepEq(fakeArrange.calls.fork, { take = 'i0', name = 'Lead' },
+               'forked the instance the modal opened on, under the name committed')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 9, 'and selected the fork')
+
+      tp:bindFromSelection()                       -- the next frame's resolve
+      t.eq(tp:currentTake(), 'f0', 'the tracker rebound onto the fork')
+      t.deepEq(fakeArrange.calls.loopTo, { 4, 8 }, 'the loop moved onto its placement')
+    end,
+  },
+
+  {
+    name = 'a fork with the tracker in no instance opens nothing',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'parked' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.takeByKey['0:0'] = 'parked'       -- bound, but on no placement
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()
+      fakeModalHost:reset()
+
+      h.cmgr:invoke('fork')
+      t.eq(fakeModalHost.last, nil, 'no instance to fork, so no modal')
+    end,
+  },
+
+  -- stepVariant: the current instance moved along its family.
   -- see docs/trackerPage.md § Stepping the family
   {
     name = 'the variant step rebinds the tracker to the slot stepped to and follows its placement',
@@ -734,8 +798,7 @@ return {
       fakeArrange.instances = {
         { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 4, lengthQN = 4 },
       }
-      -- am:stepVariant drops the neighbour in the instance's place; past the last of
-      -- the family that is a fresh variant slot (am_spec pins the real one).
+      -- am:stepVariant drops the neighbour in the instance's place (am_spec pins the real one).
       fakeArrange.stepVariant = function(inst, dir)
         fakeArrange.calls.stepVariant = { take = inst.take, dir = dir }
         fakeArrange.instances = {
@@ -1416,16 +1479,88 @@ return {
     end,
   },
 
+  -- Map mode: a modal scope over the tracker's, whose plain keys act on the arrangement.
+  -- see docs/trackerRender.md § Map mode
   {
-    name = 'the pin key holds the map up as the palette default, and drops it when pressed again',
+    name = 'map mode holds the pane on the map, and its verbs go live over the grid\'s',
     run = function(harness)
       local tv, h = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
                                           startQN = 0, lengthQN = 4 }, 3)
+      h.cmgr:installManifest(require('manifest'), fakeImGui)
       h.cmgr:push('tracker')
-      h.cmgr:invoke('pinMap')
-      t.eq(tv:paletteTab('0,0', true), 'map', 'the map defaults up over an available chain')
-      h.cmgr:invoke('pinMap')
-      t.eq(tv:paletteTab('0,0', true), 'fx', 'pressing again drops the pin')
+      fakeArrange.duplicateBelow = function() fakeArrange.calls.dup = true end
+
+      h.cmgr:invoke('mapDuplicate')
+      t.falsy(fakeArrange.calls.dup, 'a map verb is dead outside the mode')
+
+      h.cmgr:invoke('mapMode')
+      t.eq(tv:paletteTab('0,0', true), 'map', 'the map holds the pane over an available chain')
+      h.cmgr:invoke('mapDuplicate')
+      t.truthy(fakeArrange.calls.dup, 'and its verbs act on the current instance')
+
+      local row = tv:ec():row()
+      h.cmgr:invoke('cursorDown')
+      t.eq(tv:ec():row(), row, 'a grid verb is blocked while the mode stands')
+      h.cmgr:invoke('playFromTop')
+      t.eq(fakeArrange.calls.playFrom, 0, 'but the transport stays live')
+    end,
+  },
+
+  {
+    name = 'Esc leaves map mode dropping the map, and Enter leaves it holding the map up',
+    run = function(harness)
+      local tv, h = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                          startQN = 0, lengthQN = 4 }, 3)
+      h.cmgr:installManifest(require('manifest'), fakeImGui)
+      h.cmgr:push('tracker')
+      local function gridLive()
+        local row = tv:ec():row()
+        h.cmgr:invoke('cursorDown')
+        return tv:ec():row() ~= row
+      end
+
+      h.cmgr:invoke('mapMode')
+      h.cmgr:invoke('mapLeavePinned')
+      t.eq(tv:paletteTab('0,0', true), 'map', 'Enter leaves the map up')
+      t.truthy(gridLive(), 'with the grid\'s keys back')
+
+      h.cmgr:invoke('mapMode')
+      h.cmgr:invoke('mapLeave')
+      t.eq(tv:paletteTab('0,0', true), 'fx', 'Esc drops even a pinned map')
+      t.truthy(gridLive(), 'with the grid\'s keys back')
+    end,
+  },
+
+  {
+    name = 'the menu key leaves map mode holding the map, then opens the menu over the tracker',
+    run = function(harness)
+      local tv, h = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                          startQN = 0, lengthQN = 4 }, 3)
+      h.cmgr:installManifest(require('manifest'), fakeImGui)
+      h.cmgr:push('tracker')
+      local modalAtOpen
+      h.cmgr:register('openMenu', function() modalAtOpen = h.cmgr:isModal() end)
+
+      h.cmgr:invoke('mapMode')
+      h.cmgr:invoke('mapOpenMenu')
+      t.eq(modalAtOpen, false, 'the menu opened with the map scope already off the stack')
+      t.eq(tv:inMapMode(), false, 'map mode is over')
+      t.eq(tv:paletteTab('0,0', true), 'map', 'and the map stays up')
+    end,
+  },
+
+  {
+    name = 'leaving the page leaves map mode, so the page\'s own scope is on top to pop',
+    run = function(harness)
+      local tv, h, tp = mapTracker(harness, { take = 'i0', trackIdx = 0, slotIdx = 0,
+                                              startQN = 0, lengthQN = 4 }, 3)
+      h.cmgr:installManifest(require('manifest'), fakeImGui)
+      h.cmgr:push('tracker')
+      h.cmgr:invoke('mapMode')
+      t.eq(tv:paletteTab('0,0', true), 'map', 'in map mode (precondition)')
+
+      tp:unbind()
+      t.truthy(pcall(function() h.cmgr:pop('tracker') end), 'the coordinator\'s pop finds its page on top')
     end,
   },
 

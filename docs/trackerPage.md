@@ -263,9 +263,9 @@ wheel ignores command return codes.
    is claimed at that mask.
 
 1. Two guards decide whether the scan is asked at all: the host's
-   `inputAllowed`, which folds the active-item state, and a scope's
-   letter sink, since the menu's walk owns the whole keyboard while it
-   is up. A press a guard suppresses stays in the queue. A modal, a
+   `inputAllowed`, which folds the active-item state, and a modal
+   scope, since the menu's walk and map mode each own the whole keyboard
+   while up. A press a guard suppresses stays in the queue. A modal, a
    picker or the right-hand pane needs no guard here, since it owns
    the queue (`docs/keyQueue.md` § Ownership).
 
@@ -494,7 +494,7 @@ A resolve that lands on an instance by gesture — a named one or a slot
 change, rather than a play head or stickiness — raises the arrange
 mini-map for one command (`docs/trackerRender.md` § Palette tabs). The
 flag it reads is the one that brackets the loop to item, so the dive,
-the slot step, the walk, again and vary all raise it.
+the slot step, the walk, again and fork all raise it.
 
 Leaving an instance writes nothing. Playback running into a gap, over
 another slot's take, or off the end of the song leaves the tracker where
@@ -593,7 +593,7 @@ through `arrangeBeatPerRow`, the tracker through the metric the play row
 uses.
 
 The return leg carries the track and the slot as well as the row. That
-is the half that earns its keep: Alt-arrows, `gotoTrack` and again/vary
+is the half that earns its keep: Alt-arrows, `gotoTrack` and again/fork
 all move the tracker to another placement, and an arrange cursor left
 where the dive began would point at the take you started from rather
 than the one you edited.
@@ -661,7 +661,7 @@ rest read per-track config.
 
 ### Duplicate below
 
-`duplicateBelow` (Alt+Shift+↓) appends another instance of the bound
+`duplicateBelow` (D in map mode) appends another instance of the bound
 slot at the current instance's append point, through `am:duplicateBelow`
 (`docs/arrangeManager.md` § The append point). The palette does not grow:
 four presses give four placements of one source, so a column of repeats
@@ -678,17 +678,29 @@ where the free span below is shorter than the source. An instance cut
 short by a neighbour therefore always refuses, its append point being
 that neighbour's start.
 
+### Forking
+
+`fork` (F in map mode) moves the current instance onto a slot of its own, through
+`am:fork` (`docs/arrangeManager.md` § Forking), so edits from here reach
+this placement alone. Its prompt opens on the name the family's next
+variant would carry, selected whole, so Enter varies and a typed name
+replaces it. Where a typed name joins a family rather than standing as
+typed, the line under the field shows the name it resolves to.
+
+The instance is taken when the prompt opens rather than when it commits.
+A rolling transport can move the current instance while the prompt
+stands, and the fork belongs to the placement the prompt was opened on.
+
+The fork lands as a step does (§ Stepping the family), so the tracker
+rebinds to it and loop to item follows it. The verb opens nothing where
+the tracker is in no instance.
+
 ### Stepping the family
 
-`prevVariant` and `nextVariant` (Alt+Shift+←/→) move the current instance
+`prevVariant` and `nextVariant` ([ and ] in map mode) move the current instance
 one step along its slot's family, through `am:stepVariant`
 (`docs/arrangeManager.md` § Variants). The placement then plays the
 neighbour, and the family is walked from either end by holding the key.
-
-A forward step off the last of the family varies instead: a fresh variant
-slot with its own pool, carrying a copy of the source's events and
-metadata, so edits from here reach this placement alone and the parent
-slot keeps its other instances.
 
 `tv:selectSlot` selects the slot stepped onto, so the tracker rebinds to
 it on the next frame, and `tv:nameInstance` names its placement, so loop
@@ -696,8 +708,7 @@ to item moves the loop onto it. Both name the same take, the one just
 dropped where the old instance stood.
 
 The verb refuses in silence where the tracker is in no instance, and
-`am:stepVariant` refuses on its own off the front of the family, and
-where the vary it falls through to has a single instance to fork.
+`am:stepVariant` refuses on its own off either end of the family.
 
 ### The walk
 
@@ -804,9 +815,8 @@ carried on the toolbar as a checkbox and on Cmd+P.
 
 ### Deleting the instance
 
-`deleteInstance` (Alt+Shift+↑) deletes the placement the tracker stands
-in and lands on the stop before it, the mirror of duplicate below on
-Alt+Shift+↓. Only the drop goes: deleting a slot's last live placement
+`deleteInstance` (Delete in map mode) deletes the placement the tracker
+stands in and lands on the stop before it, the mirror of duplicate below. Only the drop goes: deleting a slot's last live placement
 parks it (`docs/arrangeManager.md` § Parking), so the material outlives
 the gesture and the slot stays editable.
 

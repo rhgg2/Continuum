@@ -1003,8 +1003,8 @@ end
 ----- Variants
 
 -- The family of the slot at slotIdx in step order (root then variants by ordinal), with
--- that root and the slot's place. See docs/arrangeManager.md § Variants.
---shape: ({ {idx = n, ordinal = n}, ... }, root, pos)
+-- the slot's place in it. See docs/arrangeManager.md § Variants.
+--shape: ({ {idx = n, ordinal = n}, ... }, pos)
 local function variantFamily(trackIdx, slotIdx)
   local slots, root = am:trackSlots(trackIdx), nil
   for _, slot in ipairs(slots) do
@@ -1033,16 +1033,9 @@ local function variantFamily(trackIdx, slotIdx)
 
   local pos
   for i, member in ipairs(family) do if member.idx == slotIdx then pos = i end end
-  return family, root, pos
+  return family, pos
 end
 
--- Next name in the family: the highest ordinal in use plus one, so a deleted
--- variant keeps its name out of circulation.
-local function nextVariantName(trackIdx, slotIdx)
-  local family, root = variantFamily(trackIdx, slotIdx)
-  local last = family[#family]
-  return ('%s (var %d)'):format(root, (last and last.ordinal or 0) + 1)
-end
 
 -- A base's members are its assigned slots plus the pinned slots already carrying it,
 -- ordered as a family is. See docs/arrangeManager.md § Tidy.
@@ -1113,20 +1106,28 @@ function am:seedTidy(trackIdx)
   return bases, assignment
 end
 
-local function liveInstances(trackIdx, slotIdx)
-  local n = 0
-  for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.slotIdx == slotIdx then n = n + 1 end
+-- The high-water mark over every slot with the root, parked ones included, so a deleted
+-- variant keeps its name out of circulation. See docs/arrangeManager.md § Forking.
+--post: result = name unless name's non-empty root names a MIDI slot on take's track
+--post: else result = '<root> (var n)', n one past that family's highest ordinal
+function am:forkName(take, name)
+  local root = util.variantRoot(name)
+  if root == '' then return name end
+  local high
+  for _, slot in ipairs(am:trackSlots(take.trackIdx)) do
+    local slotRoot, ordinal = util.variantRoot(slot.name)
+    if slot.kind == 'midi' and slotRoot == root then high = math.max(high or 0, ordinal or 0) end
   end
-  return n
+  return high and ('%s (var %d)'):format(root, high + 1) or name
 end
 
---contract: (slotIdx, take) for a variant slot in take's place; nil iff non-MIDI or lone instance
-function am:vary(take)
+--post: (slotIdx, take) for a fresh slot named forkName(take, name) in take's place
+--post: nil if take is non-MIDI or the track has no free slot
+--invariant: a lone source parks rather than going, so a fork loses no slot's events
+function am:fork(take, name)
   if take.kind ~= 'midi' then return end
-  if liveInstances(take.trackIdx, take.slotIdx) < 2 then return end
   local trackIdx, startQN = take.trackIdx, take.startQN
-  local slotIdx = am:mintParkedTake(trackIdx, nextVariantName(trackIdx, take.slotIdx), nil, take.take)
+  local slotIdx = am:mintParkedTake(trackIdx, am:forkName(take, name), nil, take.take)
   if not slotIdx then return end
   am:deleteTake(take)
   return slotIdx, am:dropInstance(trackIdx, slotIdx, startQN)
@@ -1134,17 +1135,14 @@ end
 
 -- The drop names no length, so the neighbour arrives at its own pool's full length and
 -- relayout caps it where it capped the placement it replaces.
---contract: (slotIdx, take) for the placement moved ±1 along its family; varies past the last
---contract: nil off the front, on a non-MIDI take, or where the vary refuses
+--post: (slotIdx, take) for the placement moved ±1 along its family
+--post: nil off either end of the family, or on a non-MIDI take
 function am:stepVariant(take, dir)
   if take.kind ~= 'midi' then return end
-  local family, _, pos = variantFamily(take.trackIdx, take.slotIdx)
+  local family, pos = variantFamily(take.trackIdx, take.slotIdx)
   if not pos then return end
   local target = family[pos + dir]
-  if not target then
-    if dir < 0 then return end
-    return am:vary(take)
-  end
+  if not target then return end
   local placed = am:dropInstance(take.trackIdx, target.idx, take.startQN)
   if not placed then return end
   return target.idx, placed

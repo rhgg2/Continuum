@@ -705,6 +705,25 @@ modalHost:registerKind('createSlot', function(s, close)
   elseif cancel or modalHost:takeEscape() then close(false) end
 end)
 
+-- The name opens on the family's next variant, selected, so Enter varies and typing names
+-- another family or founds one. See docs/arrangeManager.md § Forking.
+local function openForkModal()
+  local take = av:singleTarget()
+  if not (take and take.kind == 'midi') then return end
+  local seed = av:forkName(take, util.variantRoot(take.name))
+  modalHost:openPrompt{
+    title    = 'Fork take',
+    prompt   = 'Name',
+    buf      = seed,
+    selectTo = #seed,
+    resolve  = function(buf)
+      local name = av:forkName(take, buf)
+      return name ~= buf and name or ''
+    end,
+    callback = util.atomic('Fork take', function(name) av:fork(take, name) end),
+  }
+end
+
 -- The tidy editor. A row's dropdown assigns its slot to a base, and '(keep)' drops it from
 -- the assignment, pinning the name it holds; the base list above is edited in place.
 local TIDY_KEEP = '(keep)'
@@ -1051,6 +1070,7 @@ arrange:registerAll {
     local slot     = slotEntry(av:trackSlots(trackIdx), av:cursorSlot())
     if slot then openDeleteModal(trackIdx, slot) end
   end,
+  arrangeFork = openForkModal,
   -- Page-prefixed because the tracker scope registers a toggleFollowPlay of its
   -- own; cmgr.commands is flat, so the shared name clobbered this one's gate.
   arrangeFollowPlay = function() av:setFollowPlay(not av:followsPlay()) end,

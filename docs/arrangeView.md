@@ -77,26 +77,27 @@ neighbour advances the caret only as far as it sounds. The fixed step
 survives the toggle, so Ctrl+digit still sets what the caret goes back
 to.
 
-The duplicate (Ctrl-D, Alt+Shift+↓) ends with nothing selected: the copy
+The duplicate (Ctrl-D) ends with nothing selected: the copy
 lands, the selection clears, and the caret advances onto the copy. The
 caret alone therefore carries a run of presses down the track, each
 duplicating the copy the last one made — a held selection would pin
 every press to the same source and refuse for want of room.
 
-Alt+Shift+↑ is that gesture's mirror. It deletes the targets and retreats
+Comma is that gesture's mirror, and Period's. It deletes the targets and retreats
 the caret to the start row of the nearest take left above it in the
 cursor's column, so a run of presses walks back up the track the way the
 duplicate walked down it. The retreat is measured before the delete and
 over the takes it spares, which keeps the caret off a row the gesture
 just emptied. With nothing above it the caret holds.
 
-The copy is pooled with its source. The caret lands on it, so the
-variant step (Alt+Shift+→) reaches it next and forks it onto a slot of
-its own: two keys for a copy that edits independently, named from the
-parent root rather than through a prompt.
-The variant step (Alt+Shift+←/→) moves neither, the slot stepped onto
-standing exactly where the source stood; the source's handle prunes
-itself from the selection when the take goes.
+The copy is pooled with its source. The caret lands on it, so the fork
+(Ctrl-F) reaches it next and moves it onto a slot of its own: two keys
+and an Enter for a copy that edits independently, its name offered as
+the family's next variant and replaceable in the same prompt
+(`docs/arrangeManager.md` § Forking). The fork and the variant step
+([ and ]) move neither the caret nor the selection, the slot forked or
+stepped onto standing exactly where the source stood; the source's
+handle prunes itself from the selection when the take goes.
 
 Selection is decoupled from action. An edit command resolves its
 targets through `actionTargets`: the whole selection if one is held,
@@ -107,7 +108,7 @@ no-ops. Boot lands the cursor on REAPER's selected item but selects
 nothing (`seedCursor`).
 
 Single-take commands — dive, take-properties, duplicate-below, the
-variant step — go
+fork, the variant step — go
 through `singleTarget` and no-op unless exactly one take is targeted:
 you can't dive into five takes, and a duplicate has one copy to advance
 onto. Group commands — nudge, resize, delete — act on every target in

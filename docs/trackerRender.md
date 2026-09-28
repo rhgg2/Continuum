@@ -87,11 +87,12 @@ grabbing focus**: the grid keeps the keys until you click into the pane (a param
 row, a field label) or use the keyboard. The override lapses on the next caret
 move — the `tabOverride` generalises the old parameters-only override.
 
-**Alt-M** (`pinMap`) **pins** the map, the arrange mini-map, as the default tab
-in the derivation's place; pressed again it drops the pin. The derivation itself
-never yields **map**, and a pin never lapses on a caret move, so an override
-falling away reveals the pinned map rather than a chain. Like a tab click, the
-pin takes no keyboard focus.
+Map mode (§ Map mode) holds the pane on the **map**, the arrange mini-map,
+outranking any override. Leaving it by Enter **pins** the map as the default
+tab in the derivation's place, and leaving it by Esc drops the pin. The
+derivation itself never yields **map**, and a pin never lapses on a caret move,
+so an override falling away reveals the pinned map rather than a chain. Like a
+tab click, the pin takes no keyboard focus.
 
 A gesture that moves the current instance **raises** the map for one command:
 `tv:resolveCurrentInstance` writes an override of its own on the frame the
@@ -125,6 +126,40 @@ session `handleFxChainKeys` binds **Super-R** to commit-then-raise-parameters an
 One pane, one focus: `drawParamPalette` forces `paletteFocus = nil` whenever the
 active tab isn't parameters, so the fx tab runs on `stripFocus` alone and the
 two panes never both wash the grid.
+
+## Map mode
+
+**Alt-M** (`mapMode`) pushes `map`, a modal cmgr scope, over the tracker's
+(`docs/commandManager.md` § Scope stack), and `tv` holds the mode while the
+scope stands.
+
+The grid puts a modifier on every take verb because a plain key enters a note.
+Under a modal scope note entry is not asked at all (`docs/trackerPage.md`
+§ Keys), so the map's verbs take plain keys: the arrows walk instances and
+tracks, `,` and `.` step the take, `[` and `]` step the family, D duplicates, F
+forks, N makes a new take, P opens take properties and Delete deletes the
+instance. Each acts and lands as its tracker twin does, so the current instance
+moves with it and the map's mark follows. The twins keep their menu paths, and
+the map verbs carry none, since the mode exists for pressing them fast.
+
+The scope passes through what the menu passes — the transport and travel to a
+page — and undo, redo and the cheat sheet as well: a map verb is an edit, and
+the cheat sheet opened in the mode shows the map's own keys. Everything else is
+blocked, the grid's verbs included.
+
+Esc or Alt-M leaves the mode and drops the pin, and Enter leaves it pinning the
+map (§ Palette tabs), so the map stays up to watch while the grid has the keys
+back. A click in the grid hands the keys back too, and leaves as Enter does.
+
+`/` leaves as Enter does and then opens the menu. The menu reads the surface as
+it opens (`docs/menu.md`), and over the map's scope that surface would hold the
+map's unpathed verbs and little else, so the walk opens over the tracker's.
+
+The tracker's unbind leaves the mode as Enter does, since the coordinator pops
+the page's scope straight after and the map's has to come off first.
+
+While the mode stands the grid is washed as it is under palette focus, which
+shows where the keys have gone.
 
 ## The mini-map
 

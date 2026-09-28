@@ -6,8 +6,10 @@ is a menu letter rather than a page verb.**
 
 ## A modal scope
 
-1. `menu.lua` owns the scope named `menu`, the one production scope
-   declaring `modal = true` (`docs/commandManager.md` § Scope stack).
+1. `menu.lua` owns the scope named `menu`, one of two production scopes
+   declaring `modal = true` (`docs/commandManager.md` § Scope stack);
+   the tracker's map mode is the other (`docs/trackerRender.md` § Map
+   mode).
    Opening pushes it over the active page's scope; closing pops it.
 
 1. The menu holds the path walked so far as the nodes descended into,
@@ -28,6 +30,11 @@ is a menu letter rather than a page verb.**
    mode bails the mode first, and the walk reads the tracker page's own
    surface. Every region verb is fluent, so no path leaves with the
    mode.
+
+1. Map mode is modal, so `/` reaches no global binding under it; the
+   mode binds `/` to a verb of its own that leaves the mode and then
+   opens the menu (`docs/trackerRender.md` § Map mode). The walk
+   therefore reads the tracker page's surface there as well.
 
 1. A page that suppresses its own bindings suppresses none of the
    menu's: the walk's keys hang off a modal scope, and key dispatch

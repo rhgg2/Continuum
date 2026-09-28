@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-28** — Forking a placement is one verb, fork, whose typed name joins the family its root
+  names on the track and otherwise founds one, over a forward variant step that varied past the
+  family's last member. The step minted a slot as a side effect of navigation and could vary only
+  the last member. The tracker's take verbs move to map mode, a modal scope whose plain keys reach
+  the arrangement because note entry stands off under any modal scope, over Shift+Alt chords that
+  sat beside the Alt navigation and were easily misfired.
+
 - **2026-09-28** — A rebuild stage that reads a seed's positions takes its snapshot and its uuid's
   live seat on the channel, through one helper in either frame, over the journal's logical
   positions. The journal misses raw-only moves -- a delay edit, a nudge, a swing reseat -- and the

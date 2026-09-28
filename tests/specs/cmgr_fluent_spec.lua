@@ -42,6 +42,14 @@ local unwalked = {
   region = {
     'regionExit', 'regionBail', 'regionPaintExtend', 'regionPaintShrink',
   },
+  -- The map is a mode for pressing plain keys fast, so every verb in it is a reflex. The
+  -- deliberate ones the menu walks to stand in the tracker's own scope as well.
+  map = {
+    'mapLeave', 'mapLeavePinned', 'mapOpenMenu', 'mapPrevInstance', 'mapNextInstance',
+    'mapPrevTrack', 'mapNextTrack', 'mapPrevTake', 'mapNextTake',
+    'mapPrevVariant', 'mapNextVariant', 'mapDuplicate', 'mapFork',
+    'mapNewTake', 'mapTakeProperties', 'mapDeleteInstance',
+  },
   arrange = {
     'arrangeCursorUp', 'arrangeCursorDown', 'arrangeCursorLeft', 'arrangeCursorRight',
     'arrangePageUp', 'arrangePageDown', 'arrangeHome', 'arrangeEnd',

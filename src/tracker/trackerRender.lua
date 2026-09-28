@@ -729,6 +729,7 @@ help:registerPage('tracker', {
   { group = 'Swing',           anchor = 'toolbar.swing',  place = 'pin' },
   { group = 'Sample',          anchor = 'status.sample',  place = 'pin' },
   { group = 'Loop',            anchor = 'status.modes',   place = 'pin' },
+  { group = 'Map',             anchor = 'body',           place = 'flow' },
   { group = 'Movement',        anchor = 'body',           place = 'flow' },
   { group = 'Editing',         anchor = 'body',           place = 'flow' },
   { group = 'Selection',       anchor = 'body',           place = 'flow' },
@@ -1666,6 +1667,24 @@ modalHost:registerKind('newTake', function(s, close)
   end
 end)
 
+-- The instance is taken at the open, so a play head crossing into another while the modal
+-- stands cannot redirect the fork. See docs/trackerPage.md § Forking.
+local function openForkModal()
+  local inst = tv:currentInstance(); if not inst then return end
+  local seed = tv:forkName(inst, util.variantRoot(inst.name))
+  modalHost:openPrompt{
+    title    = 'Fork take',
+    prompt   = 'Name',
+    buf      = seed,
+    selectTo = #seed,
+    resolve  = function(buf)
+      local name = tv:forkName(inst, buf)
+      return name ~= buf and name or ''
+    end,
+    callback = util.atomic('Fork take', function(name) tv:fork(inst, name) end),
+  }
+end
+
 -- Super-R toggles the parameters tab: park it over an auto-shown chain and land on the find box, or,
 -- if already parked, drop the override back to the auto chain. Super-X (editFx) is the mirror, owning fx.
 local function focusParams()
@@ -1700,6 +1719,7 @@ tracker:registerAll{
   duplicateBelow         = { function() tv:duplicateBelow() end, 'Duplicate take' },
   prevVariant            = { function() tv:stepVariant(-1) end, 'Previous variant' },
   nextVariant            = { function() tv:stepVariant(1)  end, 'Next variant' },
+  fork                   = openForkModal,
   deleteBoundSlot        = deleteBoundSlot,
 
   prevTrack    = { function() tv:gotoTrack(-1)    end, 'Previous track' },
@@ -1729,7 +1749,28 @@ tracker:registerAll{
 
   editNoteFx        = editFx,
   focusParamPalette = focusParams,
-  pinMap            = function() tv:setMapPinned(not tv:mapPinned()) end,
+  mapMode           = function() tv:enterMapMode() end,
+}
+
+-- The map's own verbs, live only while map mode stands. See docs/trackerRender.md § Map mode.
+cmgr:scope('map'):registerAll{
+  mapLeave          = function() tv:leaveMapMode(false) end,
+  mapLeavePinned    = function() tv:leaveMapMode(true)  end,
+  -- The menu reads the surface as it opens, so it has to open over the tracker's scope, not the map's.
+  mapOpenMenu       = function() tv:leaveMapMode(true); cmgr:invoke('openMenu') end,
+  mapPrevInstance   = { function() tv:stepInstance(-1) end, 'Previous instance' },
+  mapNextInstance   = { function() tv:stepInstance(1)  end, 'Next instance' },
+  mapPrevTrack      = { function() tv:gotoTrack(-1)    end, 'Previous track' },
+  mapNextTrack      = { function() tv:gotoTrack(1)     end, 'Next track' },
+  mapPrevTake       = { function() tv:gotoTake(-1)     end, 'Previous take' },
+  mapNextTake       = { function() tv:gotoTake(1)      end, 'Next take' },
+  mapPrevVariant    = { function() tv:stepVariant(-1)  end, 'Previous variant' },
+  mapNextVariant    = { function() tv:stepVariant(1)   end, 'Next variant' },
+  mapDuplicate      = { function() tv:duplicateBelow() end, 'Duplicate take' },
+  mapDeleteInstance = { function() tv:deleteInstance() end, 'Delete instance' },
+  mapFork           = openForkModal,
+  mapNewTake        = openNewTakeModal,
+  mapTakeProperties = function() tr:openTakeProperties() end,
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
@@ -1797,7 +1838,7 @@ function tr:renderBody(_, w, h, dispatch)
   local plan     = stripPlan(fxChosen)   -- fxChosen shows the bare add row when the fx tab is picked on an empty host
   if stripFocus and not plan then exitStrip() end   -- the pinned host vanished (undo/removal); tidy and drop focus
   gridPane:draw(gridW, h)   -- half-row bottom breathing is built into gridPane; fx chain lives in the palette now
-  if stripFocus or paletteFocus then   -- focus lives in the palette: wash the grid to disabled
+  if stripFocus or paletteFocus or tv:inMapMode() then   -- the keys live in the palette: wash the grid
     ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
       ox, oy, ox + gridW, oy + h, chrome.colour('tracker.focusScrim'))
   end
@@ -1809,10 +1850,13 @@ function tr:renderBody(_, w, h, dispatch)
   tv:pollLearn(ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_AnyWindow))
 
   if not help:wasOpenAtFrameStart() then gridPane:handleMouse() end
-  if stripFocus and ImGui.IsMouseClicked(ctx, 0) then   -- a click in the grid commits the strip and returns focus
+  local clickedGrid = false
+  if ImGui.IsMouseClicked(ctx, 0) then
     local mx, my = ImGui.GetMousePos(ctx)
-    if mx >= ox and mx < ox + gridW and my >= oy and my < oy + h then stripExitReq = true end
+    clickedGrid = mx >= ox and mx < ox + gridW and my >= oy and my < oy + h
   end
+  if stripFocus and clickedGrid then stripExitReq = true end   -- a click in the grid commits the strip and returns focus
+  if clickedGrid then tv:leaveMapMode(true) end                -- and hands the keys back from map mode, the map kept up
   if dispatch then dispatch(self:focusState()) end
   gridPane:handleKeys()
   if stripExitReq then exitStrip() end   -- an in-draw exit, landing with the draw that read the focus over

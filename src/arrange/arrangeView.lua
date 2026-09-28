@@ -523,6 +523,9 @@ function av:paletteSlot() return paletteSlot end
 --contract: the take shape under the grid cursor; nil over empty space.
 function av:cursorTake() return takeAtCursor() end
 
+--post: result = the one take an edit command targets; nil unless exactly one is targeted
+function av:singleTarget() return singleTarget() end
+
 --contract: the slot index of the take under the grid cursor; nil over empty space.
 function av:cursorSlot()
   local take = takeAtCursor()
@@ -675,6 +678,8 @@ function av:newTakeBelow(take, name, lengthQN)
 end
 function av:duplicateBelow(take) return am:duplicateBelow(take) end
 function av:stepVariant(take, dir) return am:stepVariant(take, dir) end
+function av:forkName(take, name) return am:forkName(take, name) end
+function av:fork(take, name)     return am:fork(take, name) end
 function av:deleteTake(take)   return am:deleteTake(take) end
 function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:ownerTrack(take)   return am:ownerTrack(take) end

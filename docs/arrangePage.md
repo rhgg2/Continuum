@@ -47,8 +47,8 @@ Registration is split along the render/operation line. av registers
 the command *bodies* — it owns what they do. The renderer registers
 the *key bindings*: it holds the ImGui key constants, and mapping a key
 to a command name is an input concern. The renderer also registers
-`createSlot`, the one command whose body belongs here because it opens
-the renderer's modal.
+the commands whose bodies open its modals — `createSlot`, `deleteSlot`
+and `arrangeFork` — since the modal is the renderer's.
 
 ## Render + input only
 

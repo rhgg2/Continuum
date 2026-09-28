@@ -79,6 +79,7 @@ function tp:bind(t)
 end
 --contract: leaving hands the caret back to arrange as a QN; no instance, no move
 function tp:unbind()
+  tv:leaveMapMode(true)   -- the coordinator pops the page's scope next, so the map's comes off first
   local inst, qn = tv:currentInstance(), tv:cursorQN()
   if qn then arrange().setCursorAt(inst.trackIdx, qn) end
   tm:bindTake(nil); wasDormant = true

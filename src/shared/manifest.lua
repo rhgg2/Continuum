@@ -111,13 +111,14 @@ manifest.tracker = {
     command('nextInstance',          'Next instance',               'Alt+Down'),
     command('takeProperties',        'Take properties',             'Alt+P',            'Take/Properties'),
     command('newTakeBelow',          'New take',                    'Alt+Enter',        'Take/New'),
-    command('duplicateBelow',        'Duplicate',                   'Shift+Alt+Down',   'Take/Duplicate'),
-    command('deleteInstance',        'Delete instance',             'Shift+Alt+Up',     'Take/Remove/Instance'),
-    command('prevVariant',           'Previous variant',            'Shift+Alt+Left',   'Take/Variant/Previous'),
-    command('nextVariant',           'Next variant / vary',         'Shift+Alt+Right',  'Take/Variant/Next'),
+    command('duplicateBelow',        'Duplicate',                   nil,                'Take/Duplicate'),
+    command('deleteInstance',        'Delete instance',             nil,                'Take/Remove/Instance'),
+    command('prevVariant',           'Previous variant',            nil,                'Take/Variant/Previous'),
+    command('nextVariant',           'Next variant',                nil,                'Take/Variant/Next'),
+    command('fork',                  'Fork',                        nil,                'Take/Fork'),
     command('deleteBoundSlot',       'Delete take + instances',     { 'Ctrl+Delete', 'Ctrl+Backspace' },
                                                                                         'Take/Remove/Take + instances'),
-    command('pinMap',                'Pin the arrange map',         'Alt+M',            'View/Map'),
+    command('mapMode',               'Map mode',                    'Alt+M',            'View/Map'),
   },
   Editing = {
     command('noteOff',               'Note off',                    '1'),
@@ -231,6 +232,31 @@ manifest.region = {
   },
 }
 
+----- map (modal overlay within the tracker page; bodies in trackerRender, the mode on tv)
+
+-- Plain keys reach the arrangement here because the scope is modal: no note entry below it.
+-- Every map verb is fluent, so the scope carries no path. See docs/trackerRender.md § Map mode.
+manifest.map = {
+  Map = {
+    command('mapLeave',           'Leave map',                   { 'Escape', 'Alt+M' }),
+    command('mapLeavePinned',     'Leave map, keep it up',       { 'Enter', 'KeypadEnter' }),
+    command('mapOpenMenu',        'Menu',                        'Slash'),
+    command('mapPrevInstance',    'Previous instance',           'Up'),
+    command('mapNextInstance',    'Next instance',               'Down'),
+    command('mapPrevTrack',       'Previous track',              'Left'),
+    command('mapNextTrack',       'Next track',                  'Right'),
+    command('mapPrevTake',        'Previous take',               'Comma'),
+    command('mapNextTake',        'Next take',                   'Period'),
+    command('mapPrevVariant',     'Previous variant',            'LeftBracket'),
+    command('mapNextVariant',     'Next variant',                'RightBracket'),
+    command('mapDuplicate',       'Duplicate',                   'D'),
+    command('mapFork',            'Fork',                        'F'),
+    command('mapNewTake',         'New take',                    'N'),
+    command('mapTakeProperties',  'Take properties',             'P'),
+    command('mapDeleteInstance',  'Delete instance',             { 'Delete', 'Backspace' }),
+  },
+}
+
 ----- arrange (bodies in arrangeView + arrangeRender)
 
 -- Cursor-nav and take-edit commands reuse the tracker scope's keys but not its
@@ -268,13 +294,13 @@ manifest.arrange = {
     command('arrangeDeleteTake',      'Delete take',              { 'Delete', 'Backspace' },
                                                                                       'Take/Remove/Instance'),
     command('arrangeDeleteAdvance',   'Delete take, advance',     'Period'),
-    command('arrangeDeleteRetreat',   'Delete take, retreat',     'Shift+Alt+Up'),
+    command('arrangeDeleteRetreat',   'Delete take, retreat',     'Comma'),
     command('arrangeDive',            'Dive to tracker',          'Enter',            'Navigate/Dive'),
     command('arrangeTakeProperties',  'Take properties',          'Super+Backspace',  'Take/Properties'),
-    command('arrangeDuplicateBelow',  'Duplicate take',           { 'Ctrl+D', 'Shift+Alt+Down' },
-                                                                                      'Take/Duplicate'),
-    command('arrangePrevVariant',     'Previous variant',         'Shift+Alt+Left',   'Take/Variant/Previous'),
-    command('arrangeNextVariant',     'Next variant',             'Shift+Alt+Right',  'Take/Variant/Next'),
+    command('arrangeDuplicateBelow',  'Duplicate take',           'Ctrl+D',           'Take/Duplicate'),
+    command('arrangeFork',            'Fork take',                'Ctrl+F',           'Take/Fork'),
+    command('arrangePrevVariant',     'Previous variant',         'LeftBracket',      'Take/Variant/Previous'),
+    command('arrangeNextVariant',     'Next variant',             'RightBracket',     'Take/Variant/Next'),
   },
   -- Replace and advance are fluent: each reinterprets the drop that follows it, and
   -- the drops are fluent by construction. See docs/commandManager.md § Menu tree.
