@@ -117,6 +117,16 @@ local function mmBatch()
   }
 end
 
+-- The dirty channels, ascending. Each is tested as the walk reaches it, so a stage that dirties
+-- a later channel mid-walk still visits it.
+local function dirtyChannels()
+  local chan = 0
+  return function()
+    repeat chan = chan + 1 until chan > 16 or dirt.has(chan)
+    if chan <= 16 then return chan end
+  end
+end
+
 local EPS = 1 -- ppq tolerance for "raw agrees with its logical projection"
 
 local function rawDivergesFromLogical(evt)
@@ -180,16 +190,14 @@ end
 -- stale-swing.
 local function rebuildInternals()
   local internal, external = {}, {}
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      if not dirt.wholesale(chan) then
-        exciseEvents(frame.channels[chan].authored.notes, dirt.ppqs(chan, 'note'), notParked)
-      end
-      for _, raw in mm:notesRaw(chan) do
-        if not raw.derived and dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
-          local note = columnEvent(raw)
-          util.add(rawDivergesFromLogical(note) and external or internal, note)
-        end
+  for chan in dirtyChannels() do
+    if not dirt.wholesale(chan) then
+      exciseEvents(frame.channels[chan].authored.notes, dirt.ppqs(chan, 'note'), notParked)
+    end
+    for _, raw in mm:notesRaw(chan) do
+      if not raw.derived and dirt.covers(chan, raw.ppqL or raw.ppq, 'note') then
+        local note = columnEvent(raw)
+        util.add(rawDivergesFromLogical(note) and external or internal, note)
       end
     end
   end
@@ -340,17 +348,17 @@ local function fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
   for _, entry in ipairs(raw.pas) do reconcileCcPpq(entry, fxInWindows, ccWrites) end
   for _, col in pairs(frame.channels[chan].authored.ccs) do util.sortByPPQ(col.events) end
   for _, key in ipairs{ 'at', 'pc', 'pb' } do
-    if frame.channels[chan].authored[key] then util.sortByPPQ(frame.channels[chan].authored[key].events) end
+    if frame.channels[chan].authored[key] then
+      util.sortByPPQ(frame.channels[chan].authored[key].events)
+    end
   end
 end
 
 local function rebuildCCs(fxInWindows, pbLimCents)
   local ccWrites = mmBatch()
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
-      else spliceChannelCCs(chan)
-      end
+  for chan in dirtyChannels() do
+    if dirt.wholesale(chan) then fullRebuildChannelCCs(chan, fxInWindows, ccWrites, pbLimCents)
+    else spliceChannelCCs(chan)
     end
   end
   ccWrites.commit()
@@ -513,10 +521,10 @@ local function rebuildSamples()
       sampleWrites.assign(entry, { sample = sample })
     end
   end
-  for chan = 1, 16 do
+  for chan in dirtyChannels() do
     if dirt.wholesale(chan) then
       for _, entry in ipairs(index.raw(chan).notes) do stamp(entry) end
-    elseif dirt.has(chan) then
+    else
       for _, s in ipairs(dirt.has(chan)) do
         local entry = s.uuid and index.byUuid(s.uuid)
         if entry then stamp(entry) end
@@ -611,12 +619,10 @@ local parkKinds do
   -- The kind's unparked events on dirty channels with onsets under a window on their column.
   local function scanWindows(stage, kind)
     local candidates = {}
-    for chan = 1, 16 do
-      if dirt.has(chan) then
-        for _, col in ipairs(kind.columns(chan)) do
-          for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, col.cc or kind.evType)]) do
-            if evt.evType == kind.evType and not evt.parked then util.add(candidates, evt) end
-          end
+    for chan in dirtyChannels() do
+      for _, col in ipairs(kind.columns(chan)) do
+        for evt in onsetsIn(col.events, stage.windowSpans[util.key(chan, col.cc or kind.evType)]) do
+          if evt.evType == kind.evType and not evt.parked then util.add(candidates, evt) end
         end
       end
     end
@@ -628,12 +634,10 @@ local parkKinds do
     local candidates = scanWindows(stage, kind)
     local seen = {}
     for _, evt in ipairs(candidates) do seen[evt] = true end
-    for chan = 1, 16 do
-      if dirt.has(chan) then
-        for host in pairs(frame.channels[chan].fxHosts) do
-          -- a host under its own region has already arrived from the window
-          if not seen[host] and not host.parked and generators.parksNotes(host) then util.add(candidates, host) end
-        end
+    for chan in dirtyChannels() do
+      for host in pairs(frame.channels[chan].fxHosts) do
+        -- a host under its own region has already arrived from the window
+        if not seen[host] and not host.parked and generators.parksNotes(host) then util.add(candidates, host) end
       end
     end
     return candidates
@@ -642,13 +646,11 @@ local parkKinds do
   -- A pa rides its host note, so only a lane holding a parked note has any to offer.
   local function scanPas(stage, kind)
     local candidates = {}
-    for chan = 1, 16 do
-      if dirt.has(chan) then
-        for _, col in ipairs(kind.columns(chan)) do
-          if #stage.parkedNotesIn(col) > 0 then
-            for _, evt in ipairs(col.events) do
-              if evt.evType == 'pa' and not evt.parked then util.add(candidates, evt) end
-            end
+    for chan in dirtyChannels() do
+      for _, col in ipairs(kind.columns(chan)) do
+        if #stage.parkedNotesIn(col) > 0 then
+          for _, evt in ipairs(col.events) do
+            if evt.evType == 'pa' and not evt.parked then util.add(candidates, evt) end
           end
         end
       end
@@ -881,17 +883,15 @@ end
 -- Dispatches on-take pas only; a parked one is seated from the stash.
 local function rebuildPA()
   local reachPpq = OVERLAP_CEILING_BEATS * mm:resolution()
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      local takeLenL = time:toLogical(chan, time:length())
-      for _, evt in ipairs(index.raw(chan).pas) do
-        if dirt.covers(chan, evt.ppqL, 'note') then
-          local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt, takeLenL, reachPpq)
-          if noteCol then
-            local colEvt = columnEvent(evt, { lane = lane })
-            projectEvent(colEvt, chan)
-            frame.spliceEvent(chan, lane, colEvt)
-          end
+  for chan in dirtyChannels() do
+    local takeLenL = time:toLogical(chan, time:length())
+    for _, evt in ipairs(index.raw(chan).pas) do
+      if dirt.covers(chan, evt.ppqL, 'note') then
+        local noteCol, lane = findNoteColumnForPitch(frame.channels[chan], evt, takeLenL, reachPpq)
+        if noteCol then
+          local colEvt = columnEvent(evt, { lane = lane })
+          projectEvent(colEvt, chan)
+          frame.spliceEvent(chan, lane, colEvt)
         end
       end
     end
@@ -1455,11 +1455,9 @@ local function rebuildFx(fxOutWindows, fxInWindows, fxRegions, pbLimCents)
     ccWrites.commit()
   end
 
-  for chan = 1, 16 do
-    -- A clean channel's derived output stands in mm; leaving its fxOut empty makes tails, pbs and
-    -- pcs skip it too.
-    if dirt.has(chan) then expandChannel(chan) end
-  end
+  -- A clean channel's derived output stands in mm; leaving its fxOut empty makes tails, pbs and
+  -- pcs skip it too.
+  for chan in dirtyChannels() do expandChannel(chan) end
   return fxOut
 end
 
@@ -1792,30 +1790,28 @@ local function rebuildTails(fxOut, windows)
   -- rebuildFx's uncommitted batch, so its fresh specs are clipped in place and reach mm clipped.
   local writes = fxOut.deferredWrite
 
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      --shape: notes = { onTake = raw index notes, reran = the pass's derived specs, carried = filter over onTake }
-      local notes = {
-        onTake  = index.raw(chan).notes,
-        reran   = util.clone(fxOut.notes[chan]),
-        carried = carriedFor(fxOut.ran[chan])
-      }
-      -- Seeded with the lane pass's re-bounded events; each walk adds what it disturbs and probes.
-      local bound = {}
-      for _, uuid in ipairs(dirt.tails.has(chan) or {}) do
-        local note = index.byUuid(uuid)
-        if note then bound[note] = true end
-      end
-      local rules = makeTailRules(chan, resolution, windows, writes)
-
-      -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once.
-      local sparse    = not dirt.wholesale(chan) and #dirt.has(chan) + #notes.reran <= FRONTIER_SEED_CAP
-      local walkTails = sparse and frontierTails or linearTails
-      walkTails(chan, rules, notes, bound)
-
-      -- Past the cap this collapses the channel to wholesale
-      dirt.add(chan, rules.nudgeSeeds())
+  for chan in dirtyChannels() do
+    --shape: notes = { onTake = raw index notes, reran = the pass's derived specs, carried = filter over onTake }
+    local notes = {
+      onTake  = index.raw(chan).notes,
+      reran   = util.clone(fxOut.notes[chan]),
+      carried = carriedFor(fxOut.ran[chan])
+    }
+    -- Seeded with the lane pass's re-bounded events; each walk adds what it disturbs and probes.
+    local bound = {}
+    for _, uuid in ipairs(dirt.tails.has(chan) or {}) do
+      local note = index.byUuid(uuid)
+      if note then bound[note] = true end
     end
+    local rules = makeTailRules(chan, resolution, windows, writes)
+
+    -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once.
+    local sparse    = not dirt.wholesale(chan) and #dirt.has(chan) + #notes.reran <= FRONTIER_SEED_CAP
+    local walkTails = sparse and frontierTails or linearTails
+    walkTails(chan, rules, notes, bound)
+
+    -- Past the cap this collapses the channel to wholesale
+    dirt.add(chan, rules.nudgeSeeds())
   end
   writes.commit()
 end
@@ -2206,30 +2202,28 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
   local extras = extraColumns or {}
   local pbWrites = mmBatch()
 
-  for chan = 1, 16 do
+  for chan in dirtyChannels() do
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild
     -- entry). I8: rebuild is a fixpoint.
-    if dirt.has(chan) then
-      local baseVoice   = buildBaseVoice(chan, fxOut)
-      local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
-      local onTake      = onTakePbsFor(chan)
-      local scopeSpans  = buildScopeSpans(chan, replaceWins, baseVoice, onTake)   -- nil = ungated
+    local baseVoice   = buildBaseVoice(chan, fxOut)
+    local replaceWins = replaceWindows(chan, fxOut, gridStep, pbLimCents)
+    local onTake      = onTakePbsFor(chan)
+    local scopeSpans  = buildScopeSpans(chan, replaceWins, baseVoice, onTake)   -- nil = ungated
 
-      local points, onsetAt = pbPointsFor(chan, replaceWins, scopeSpans, baseVoice, onTake, gridStep)
-      reconcilePoints(chan, points, onsetAt, replaceWins, scopeSpans, baseVoice, onTake,
-                      pbLimCents, pbWrites)
+    local points, onsetAt = pbPointsFor(chan, replaceWins, scopeSpans, baseVoice, onTake, gridStep)
+    reconcilePoints(chan, points, onsetAt, replaceWins, scopeSpans, baseVoice, onTake,
+                    pbLimCents, pbWrites)
 
-      -- An out-of-scope column pb keeps last pass's cue: no base voice around it moved.
-      for _, p in ipairs(onTake) do
-        if inScope(scopeSpans, p.ppq) then
-          frame.setEvent(p.evt, 'detune', baseVoice.detuneAt(p.ppq))
-        end
+    -- An out-of-scope column pb keeps last pass's cue: no base voice around it moved.
+    for _, p in ipairs(onTake) do
+      if inScope(scopeSpans, p.ppq) then
+        frame.setEvent(p.evt, 'detune', baseVoice.detuneAt(p.ppq))
       end
-      -- A pb column exists when it holds an event or extraColumns asks for it.
-      local authored = frame.channels[chan].authored
-      if authored.pb and #authored.pb.events == 0 and not (extras[chan] and extras[chan].pb) then
-        authored.pb = nil
-      end
+    end
+    -- A pb column exists when it holds an event or extraColumns asks for it.
+    local authored = frame.channels[chan].authored
+    if authored.pb and #authored.pb.events == 0 and not (extras[chan] and extras[chan].pb) then
+      authored.pb = nil
     end
   end
 
@@ -2237,8 +2231,6 @@ local function rebuildPbs(fxOut, extraColumns, pbLimCents)
 end
 
 ----- Rebuild PCs
-
-local WHOLE_CHANNEL = { { -math.huge, math.huge } }
 
 -- A note's claim on its onset's pc. Authored notes rank by lane, derived output after them all: a
 -- derived note holds no lane, being off-column. An authored note's lane and sample are its seat stamp's.
@@ -2289,11 +2281,11 @@ local function synthesisePCs(chan, writes, seedSpans)
   return consumed
 end
 
---shape: pcSeedSpans(chan, fxNotes) -> raw span set ({ {lo, hi}, ... }, merged); WHOLE_CHANNEL = wholesale
+--shape: pcSeedSpans(chan, fxNotes) -> raw span set ({ {lo, hi}, ... }, merged)
 local function pcSeedSpans(chan, fxNotes)
   -- Any derived output at all means a host of this channel re-ran, and its PCs are the pass's to
   -- decide wholesale; a kept host contributes no entry here.
-  if dirt.wholesale(chan) or #fxNotes > 0 then return WHOLE_CHANNEL end
+  if dirt.wholesale(chan) or #fxNotes > 0 then return { { -math.huge, math.huge } } end
   local points = {}
   for _, s in ipairs(dirt.has(chan)) do
     util.add(points, s.ppq)
@@ -2310,35 +2302,25 @@ local function pcSeedSpans(chan, fxNotes)
   return spans.merge(raw)
 end
 
--- Outside trackerMode emission synthesises no PCs, so the previous emission's leave mm whole-channel.
-local function sweepSynthesisedPCs()
-  local pcWrites = mmBatch()
-  for chan = 1, 16 do
-    if dirt.has(chan) then
-      for _, e in ipairs(index.raw(chan).pcs) do
-        if e.derived then pcWrites.delete(e) end
-      end
-    end
-  end
-  pcWrites.commit()
-end
-
 -- PC synthesis, after the sample stamp. Seed-list dirt closes to spans; claims and writes clip to
 -- them, so out-of-span PCs stand. see docs/trackerManager.md § PC synthesis
 local function rebuildPCs(fxOut, extraColumns)
-  if not cm:get('trackerMode') then return sweepSynthesisedPCs() end
   local pcWrites = mmBatch()
-  for chan = 1, 16 do
-    -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
-    if dirt.has(chan) then
+  if cm:get('trackerMode') then
+    for chan in dirtyChannels() do
       local consumed = synthesisePCs(chan, pcWrites, pcSeedSpans(chan, fxOut.notes[chan]))
-      -- Synthesis consumes authored pcs, so they leave the column the walk projected them into; a
-      -- column left empty stands only where extraColumns asks for it.
       if #consumed > 0 then
         local authored = frame.channels[chan].authored
         exciseEvents({ authored.pc }, consumed)
         local wanted = extraColumns and extraColumns[chan] and extraColumns[chan].pc
         if #authored.pc.events == 0 and not wanted then authored.pc = nil end
+      end
+    end
+  else
+    -- Outside trackerMode, we sweep all synthetic PCs.
+    for chan in dirtyChannels() do
+      for _, e in ipairs(index.raw(chan).pcs) do
+        if e.derived then pcWrites.delete(e) end
       end
     end
   end
@@ -2505,7 +2487,7 @@ function rebuild.pipeline(context)
   rebuildPA()
 
   dirt.tails.clear()
-  for chan = 1, 16 do if dirt.has(chan) then clipTails(chan) end end
+  for chan in dirtyChannels() do clipTails(chan) end
 
   local fxOutWindows = buildFxWindows(sources.fxRegions)
   local parkedByHost = rebuildRegionPark(fxOutWindows, sources.fxParked, parkedColEvts, pbRangeCents)
