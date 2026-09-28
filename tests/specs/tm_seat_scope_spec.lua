@@ -155,17 +155,17 @@ return {
   },
 
   {
-    name = 'a seed kind the branches do not recognise ungates the channel',
+    name = 'a pa seed closes to nothing',
     run = function(harness)
       local h = fixture(harness)
       plantSentinel(h)
 
-      -- A param-automation seed carries no lane and an evType outside the cc/at/pc family, so no
-      -- branch can close it to a span. The conservative answer is the whole channel.
-      h.tm:addEvent({ evType = 'pa', ppq = 1440, chan = 1, pitch = 60, vel = 90 })
+      -- Poly aftertouch on the lane-1 note at 960. A pa is a laneless record in mm and moves no pb
+      -- seat -- no more than cc/at/pc do -- so an edit to one leaves every cue carried.
+      h.tm:addEvent({ evType = 'pa', ppq = 1000, chan = 1, pitch = 62, vel = 90 })
       h.tm:flush()
 
-      assertPartition(h, PB_PPQS, 'unrecognised seed')
+      assertPartition(h, {}, 'pa seed at 1000')
     end,
   },
 
