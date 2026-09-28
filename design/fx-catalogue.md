@@ -1,6 +1,7 @@
 # FX catalogue — a taxonomy Continuum owns, seeded from what REAPER records
 
-> opened: 2026-08-24 · status: working design; not started
+> opened: 2026-08-24 · status: in flight — plan/fx-catalogue.md,
+> before phase 1 (keys and entries).
 
 **Continuum holds a catalogue of the installed plugins: a nested
 taxonomy over a per-format stable identity, in which a plugin may be
