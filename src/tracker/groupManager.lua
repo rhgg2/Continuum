@@ -613,7 +613,7 @@ tm:subscribe('rebuild', function(takeChanged)
     for _, p in pairs(gp) do
       for _, rec in pairs(p) do
         local uuid = rec.uuid or (rec.evt and rec.evt.uuid)
-        local live = uuid and tm:byUuid(uuid)
+        local live = tm:byUuid(uuid)
         if live then rec.evt = live end
       end
     end

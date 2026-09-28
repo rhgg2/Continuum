@@ -502,6 +502,7 @@ do
   function index.colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
 
   -- The live index entry for a uuid, valid until the next rebuild.
+  --post: result = nil iff uuid is nil or unindexed; callers pass a seed's absent uuid unguarded
   function index.byUuid(uuid) return byUuid[uuid] end
   -- gm and tv resolve a uuid through tm; the entry itself is the index's.
   function tm:byUuid(uuid) return index.byUuid(uuid) end
@@ -797,7 +798,7 @@ do
     seedEvent(evt, 'delete')
     -- index.delete matches by object identity; the PC mutation hook deletes projected column
     -- events, so resolve the raw record via byUuid first or the index entry strands.
-    index.delete(evt.uuid and index.byUuid(evt.uuid) or evt)
+    index.delete(index.byUuid(evt.uuid) or evt)
     if evt.uuid then index.forget(evt.uuid) end
 
     if evt.committed then

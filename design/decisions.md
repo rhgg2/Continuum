@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-28** — A rebuild stage that reads a seed's positions takes its snapshot and its uuid's
+  live seat on the channel, through one helper in either frame, over the journal's logical
+  positions. The journal misses raw-only moves -- a delay edit, a nudge, a swing reseat -- and the
+  snapshot with the live seat names the net change without the positions passed through. The
+  scope-span pass drops its lane filter to share the helper, at the cost of one extra span when a
+  lane-1 note changes lane.
+
 - **2026-09-28** — The absorber pass and PC synthesis read every note off um's index after the tail
   walk's commit, over unioning the index with fxOut.notes at each stage. The commit lands the pass's
   derived notes settled, so the tail walk is the one stage that must see the specs beside the index.

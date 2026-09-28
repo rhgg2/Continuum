@@ -127,6 +127,15 @@ local function dirtyChannels()
   end
 end
 
+-- A seed's snapshot and its uuid's live seat on chan, in one frame ('ppq' raw, 'ppqL' logical): a
+-- move dirties the ground it left and the ground it joined. see docs/trackerManager.md § Interval seeds
+local function seedPpqs(seed, chan, frameKey)
+  local ppqs = { seed[frameKey] }
+  local live = index.byUuid(seed.uuid)
+  if live and live.chan == chan then util.add(ppqs, live[frameKey] or live.ppq) end
+  return ppqs
+end
+
 local EPS = 1 -- ppq tolerance for "raw agrees with its logical projection"
 
 local function rawDivergesFromLogical(evt)
@@ -526,7 +535,7 @@ local function rebuildSamples()
       for _, entry in ipairs(index.raw(chan).notes) do stamp(entry) end
     else
       for _, s in ipairs(dirt.has(chan)) do
-        local entry = s.uuid and index.byUuid(s.uuid)
+        local entry = index.byUuid(s.uuid)
         if entry then stamp(entry) end
       end
     end
@@ -1115,19 +1124,15 @@ local function classifyHosts(chan, hosts)
   end
 
   for _, seed in ipairs(dirt.has(chan)) do
-    -- A breakpoint seeds its stream at its snapshot and at its live seat, so a move names both the
-    -- cover it left and the one it joined.
-    local liveEvt = seed.uuid and index.byUuid(seed.uuid)
-    local livePpq = liveEvt and (liveEvt.ppqL or liveEvt.ppq)
+    local ppqs = seedPpqs(seed, chan, 'ppqL')
     local stream = (seed.evType == 'pb' and 'pb') or (seed.evType == 'cc' and seed.cc)
     if stream then
-      util.bucket(seedsOn, stream, seed.ppqL)
-      if livePpq then util.bucket(seedsOn, stream, livePpq) end
+      for _, ppq in ipairs(ppqs) do util.bucket(seedsOn, stream, ppq) end
     end
     -- Base-voice detune holds forward, so a lane-1 or region seed (whose host may gain or lose base
     -- voices) reaches every pb window after it. see docs/tuning.md § Seat-span-scoped onset walk
     if seed.lane == 1 or seed.evType == nil then
-      detuneHoldFrom = math.min(detuneHoldFrom, seed.ppqL, livePpq or seed.ppqL)
+      detuneHoldFrom = math.min(detuneHoldFrom, table.unpack(ppqs))
     end
   end
 
@@ -1700,7 +1705,7 @@ local function frontierTails(chan, rules, notes, bound)
   -- channel and type), else its seat. see docs/trackerManager.md § What the walk visits
   for _, note in ipairs(notes.reran) do disturbed[note] = true end
   for _, seed in ipairs(dirt.has(chan)) do
-    local named = seed.uuid and index.byUuid(seed.uuid)
+    local named = index.byUuid(seed.uuid)
     if named and named.evType == 'note' and named.chan == chan then disturbed[named] = true
     else for _, note in ipairs(seatMatches(notes, seed)) do disturbed[note] = true end end
   end
@@ -1953,9 +1958,7 @@ local function buildScopeSpans(chan, replaceWins, baseVoice, onTake)
   if dirt.wholesale(chan) or baseVoice.hasDerived then return nil end
   local scopeSpans = {}
   for _, seed in ipairs(dirt.has(chan)) do
-    local ppqs = { seed.ppq }
-    local live = seed.uuid and index.byUuid(seed.uuid)
-    if live and live.chan == chan and live.lane == seed.lane then util.add(ppqs, live.ppq) end
+    local ppqs = seedPpqs(seed, chan, 'ppq')
     -- A seed names an authored event so base voice = lane 1. Other lanes, pas, cc/at/pc and region
     -- verbs move no pb point, and close to nothing.
     if seed.lane == 1 then for _, ppq in pairs(ppqs) do
@@ -2288,9 +2291,7 @@ local function pcSeedSpans(chan, fxNotes)
   if dirt.wholesale(chan) or #fxNotes > 0 then return { { -math.huge, math.huge } } end
   local points = {}
   for _, s in ipairs(dirt.has(chan)) do
-    util.add(points, s.ppq)
-    local live = s.uuid and index.byUuid(s.uuid)
-    if live then util.add(points, live.ppq) end
+    for _, ppq in ipairs(seedPpqs(s, chan, 'ppq')) do util.add(points, ppq) end
   end
   local raw, notes = {}, index.raw(chan).notes
   for _, ppq in ipairs(points) do

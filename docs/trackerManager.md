@@ -302,6 +302,11 @@ seed mid-pass and the next question still be answered truly. The snapshot's othe
 the event moves and its uuid dangles as the event dies; each consumer reads whichever the seed still
 answers. The seek walk the snapshot feeds is § What the walk visits, and what it emits.
 
+The journal's positions are logical, and a stage working in the raw frame cannot read them: a delay
+edit, a nudge or a swing reseat moves the raw seat and leaves `ppqL` alone, so the fold never records
+it. `seedPpqs` (trackerRebuild.lua) answers in either frame with the snapshot and the uuid's live
+seat on the channel -- the event's net change, without the positions it passed through.
+
 A chan reassign counts as a move too: the vacated slot lands in the *old* channel's dirt, which no
 other seed for this pass would otherwise reach, so `assignLowlevel` snapshots it exactly like an
 onset shift. The fold runs within a channel, so the vacated row stays with the old channel and the
