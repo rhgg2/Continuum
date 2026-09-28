@@ -1309,17 +1309,16 @@ tier inside the bind's suppression window. So the mode tracks the
 bug that leaked synthetic PCs onto a non-tracker take's note-ons).
 
 Synthesis runs in one place, and this stage is it. The delta goes to mm.
-Its `records` list is the channel's raw-index notes, which the tail walk's
-commit has brought up to this pass's derived output, and feeds through the
-pure `reconcilePCsForChan` helper; records lost to the rank get
-`sampleShadowed = true` for renderer dimming. Authored records rank by lane
-and derived ones after them all, in index order. Records walk um's raw index
-for raw order, and an authored note's lane, sample and logical onset come
-through its seat stamp; a derived record carries its own. An authored note
-carries its column event as `evt` and marks through `setEvent` (§ Note-lane
-renewal). A derived note takes no mark: the view draws it only as a ghost, off
-a copy of its fx spec, and a ghost shows no shadow. The flag is realisation, re-derived every rebuild, so a park
-round-trip drops it.
+`synthesisePCs` takes each of a channel's raw-index notes as a claim on its
+onset's pc — the tail walk's commit has brought the index up to this pass's
+derived output — and claims lost to the rank get `sampleShadowed = true` for
+renderer dimming. Authored claims rank by lane and derived ones after them
+all, in index order. An authored note's lane and sample come through its seat
+stamp; a derived note carries its own. An authored claim carries its column
+event as `evt` and marks through `setEvent` (§ Note-lane renewal). A derived
+note takes no mark: the view draws it only as a ghost, off a copy of its fx
+spec, and a ghost shows no shadow. The flag is realisation, re-derived every
+rebuild, so a park round-trip drops it.
 
 The previous emission is the channel's pcs in um's raw index — raw, the
 frame the prediction carries, so a delayed or swung note's pc keys equal to
@@ -1327,8 +1326,7 @@ its prediction and stands. Under `trackerMode` synthesis consumes authored
 pcs: the sample stamp has already read each into the bare notes it prevails
 over, and the reconcile's key never matches an authored pc, so it deletes
 it. The walk has projected that pc into the column, so the stage excises it
-there after its commit, and a column left empty goes unless `extraColumns`
-asks for it. Nothing else here writes the pc column.
+there too, and a column left empty goes unless `extraColumns` asks for it. Nothing else here writes the pc column.
 
 Seed dirt narrows the sweep to spans rather than rows. `pcSeedSpans` closes
 each seed onset to the raw span `[onset, next onset)` — the interval over

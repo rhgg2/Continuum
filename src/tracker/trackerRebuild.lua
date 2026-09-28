@@ -2238,50 +2238,50 @@ end
 
 ----- Rebuild PCs
 
---post: a synthesised PC carries derived='pc', its winning record's raw onset, and no ppqL
---contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
---contract: appends removals/adds to the writes batch {delete(event), add(spec)}
---post: every seated record lost to its onset's rank has sampleShadowed set on its column event
---pre: seedSpans (from pcSeedSpans) narrow existing to its raw spans; nil = whole channel
+local WHOLE_CHANNEL = { { -math.huge, math.huge } }
+
+-- A note's claim on its onset's pc. Authored notes rank by lane, derived output after them all: a
+-- derived note holds no lane, being off-column. An authored note's lane and sample are its seat stamp's.
+local function pcClaim(note)
+  if note.derived then return { rank = math.huge, sample = note.sample or 0 } end
+  local evt = note.colEvt
+  return { rank = evt.lane, sample = evt.sample, evt = evt }
+end
+
+--post: a synthesised PC carries derived='pc', its winning claim's raw onset, and no ppqL
+--post: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
+--post: its deletes and adds are staged on writes, uncommitted
+--post: every seated claim lost to its onset's rank has sampleShadowed set on its column event
+--pre: seedSpans is pcSeedSpans's raw span set
 --post: returns the logical seats of the authored pcs it deletes, read before writes commit
 --invariant: marks go through setEvent, so no lane renews an event it lacks
-local function reconcilePCsForChan(chan, records, writes, seedSpans)
+local function synthesisePCs(chan, writes, seedSpans)
+  local raw = index.raw(chan)
   -- The previous emission is um's raw index, in the frame the prediction carries.
-  local pcs, existing = index.raw(chan).pcs, {}
-  if seedSpans then
-    for e in onsetsIn(pcs, seedSpans) do util.add(existing, e) end
-  else
-    for _, e in ipairs(pcs) do util.add(existing, e) end
-  end
-  local consumed = {}
-  for _, e in ipairs(existing) do
+  local existing, consumed = {}, {}
+  for e in onsetsIn(raw.pcs, seedSpans) do
+    util.add(existing, e)
     if not e.derived then util.add(consumed, e.ppqL) end
   end
 
-  local groups = {}
-  for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
-
-  local winners = {}
-  for _, g in pairs(groups) do
-    -- Authored records rank by lane, derived output after them all: a derived note holds no lane,
-    -- being off-column. table.sort is unstable, so `ord` is what makes the rank total.
-    table.sort(g, function(a, b)
-      local aLane, bLane = a.lane or math.huge, b.lane or math.huge
-      if aLane ~= bLane then return aLane < bLane end
-      return a.ord < b.ord
-    end)
-    util.add(winners, g[1])
-    for i = 2, #g do
-      local lost = g[i]
-      -- A derived note is drawn only as a ghost, which shows no shadow, so only a seated record
-      -- takes the mark.
-      if lost.evt then frame.setEvent(lost.evt, 'sampleShadowed', true) end
-    end
+  local claimsByOnset = {}
+  for note in onsetsIn(raw.notes, seedSpans) do
+    if note.ppqL ~= nil then util.bucket(claimsByOnset, note.ppq, pcClaim(note)) end -- else foreign MIDI
   end
 
   local predicted = {}
-  for _, w in ipairs(winners) do
-    util.add(predicted, { ppq = w.ppq, val = w.sample, evType = 'pc', chan = chan, derived = 'pc' })
+  for ppq, claims in pairs(claimsByOnset) do
+    -- Claims arrive in index order, and the strict < keeps the first of an equal rank.
+    local winner = claims[1]
+    for i = 2, #claims do
+      if claims[i].rank < winner.rank then winner = claims[i] end
+    end
+    for _, claim in ipairs(claims) do
+      -- A derived note is drawn only as a ghost, which shows no shadow, so only a seated claim
+      -- takes the mark.
+      if claim ~= winner and claim.evt then frame.setEvent(claim.evt, 'sampleShadowed', true) end
+    end
+    util.add(predicted, { ppq = ppq, val = winner.sample, evType = 'pc', chan = chan, derived = 'pc' })
   end
 
   diffEvents(existing, predicted, writes,
@@ -2289,12 +2289,11 @@ local function reconcilePCsForChan(chan, records, writes, seedSpans)
   return consumed
 end
 
---shape: pcSeedSpans(chan, fxNotes) -> raw span set ({ {lo, hi}, ... }, merged); nil = wholesale
+--shape: pcSeedSpans(chan, fxNotes) -> raw span set ({ {lo, hi}, ... }, merged); WHOLE_CHANNEL = wholesale
 local function pcSeedSpans(chan, fxNotes)
-  if dirt.wholesale(chan) then return nil end
   -- Any derived output at all means a host of this channel re-ran, and its PCs are the pass's to
   -- decide wholesale; a kept host contributes no entry here.
-  if #fxNotes > 0 then return nil end
+  if dirt.wholesale(chan) or #fxNotes > 0 then return WHOLE_CHANNEL end
   local points = {}
   for _, s in ipairs(dirt.has(chan)) do
     util.add(points, s.ppq)
@@ -2324,54 +2323,26 @@ local function sweepSynthesisedPCs()
   pcWrites.commit()
 end
 
--- PC synthesis, after the sample stamp. Seed-list dirt closes to spans; records and writes clip to
+-- PC synthesis, after the sample stamp. Seed-list dirt closes to spans; claims and writes clip to
 -- them, so out-of-span PCs stand. see docs/trackerManager.md § PC synthesis
 local function rebuildPCs(fxOut, extraColumns)
   if not cm:get('trackerMode') then return sweepSynthesisedPCs() end
-  local fxNotes = fxOut.notes
   local pcWrites = mmBatch()
-  local consumedByChan = {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
-    if not dirt.has(chan) then goto nextChan end
-    local seedSpans = pcSeedSpans(chan, fxNotes[chan])
-    local records = {}
-    -- The gather ordinal is index order: the rank's tie-break under the lane, which a derived
-    -- record lacks, so derived records sharing an onset rank as the index orders them.
-    local function addRecord(rec)
-      rec.ord = #records + 1
-      util.add(records, rec)
-    end
-    -- A region's notes ride no note host, so inherit no sample.
-    local function recordNote(entry)
-      if entry.ppqL == nil then return end -- foreign MIDI
-      if entry.derived then
-        addRecord{ ppq = entry.ppq, ppqL = entry.ppqL, sample = entry.sample or 0 }
-      else
-        -- Raw order is the index's; the note's intent is its seat stamp's (colEvt.ppq is logical).
-        local evt = entry.colEvt
-        addRecord{ ppq = entry.ppq, ppqL = evt.ppq, lane = evt.lane, sample = evt.sample, evt = evt }
+    if dirt.has(chan) then
+      local consumed = synthesisePCs(chan, pcWrites, pcSeedSpans(chan, fxOut.notes[chan]))
+      -- Synthesis consumes authored pcs, so they leave the column the walk projected them into; a
+      -- column left empty stands only where extraColumns asks for it.
+      if #consumed > 0 then
+        local authored = frame.channels[chan].authored
+        exciseEvents({ authored.pc }, consumed)
+        local wanted = extraColumns and extraColumns[chan] and extraColumns[chan].pc
+        if #authored.pc.events == 0 and not wanted then authored.pc = nil end
       end
     end
-    if seedSpans then
-      for entry in onsetsIn(index.raw(chan).notes, seedSpans) do recordNote(entry) end
-    else
-      for _, entry in ipairs(index.raw(chan).notes) do recordNote(entry) end
-    end
-    local consumed = reconcilePCsForChan(chan, records, pcWrites, seedSpans)
-    if #consumed > 0 then consumedByChan[chan] = consumed end
-    ::nextChan::
   end
   pcWrites.commit()
-
-  -- Synthesis consumes authored pcs, so they leave the column the walk projected them into; a
-  -- column left empty stands only where extraColumns asks for it.
-  for chan, ppqLs in pairs(consumedByChan) do
-    local authored = frame.channels[chan].authored
-    exciseEvents({ authored.pc }, ppqLs)
-    local wanted = extraColumns and extraColumns[chan] and extraColumns[chan].pc
-    if #authored.pc.events == 0 and not wanted then authored.pc = nil end
-  end
 end
 
 ----- Fx output maps
