@@ -9,6 +9,7 @@ local util    = require 'util'
 local tuning  = require 'tuning'
 local timing  = require 'timing'
 local generators = require 'generators'
+local painter = require 'painter'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -518,10 +519,36 @@ end
 
 -- The arrange mini-map body: one filled box per instance over a window of tracks and QN, the current instance in the focused fill and nothing else.
 -- The pane's pixels are this renderer's business — tv is asked for a window in columns and QN, as gridPane asks with setGridSize.
-local MAP_COLS, MAP_PX_PER_QN = 5, 2
+local MAP_COLS, MAP_PX_PER_QN = 5, 3
 local MAP_CELL_QN, MAP_BAR_QN, MAP_PHRASE_QN = 4, 16, 64
--- Snap a press's QN down to the top edge of the cell it sits in.
+local MAP_NAME_SIZE = 8   -- the take names' type, well under the ui font's
 local function floorToCell(qn) return math.floor(qn / MAP_CELL_QN) * MAP_CELL_QN end
+-- A box's label: the variant ordinal right-aligned at the top, and the root wrapping in tiny type
+-- in the width left of it. See docs/trackerRender.md § The mini-map.
+local function drawBoxLabel(p, name, xLo, xHi, yLo, yHi)
+  local root, ordinal = util.variantRoot(name)
+  local boxH = yHi - yLo - 2
+  local function widthAt(size) return function(s) return (p.measure(s, uiFont, size)) end end
+  local nameWidth = widthAt(MAP_NAME_SIZE)
+  local _, nameH  = p.measure('Mg', uiFont, MAP_NAME_SIZE)
+
+  p.pushClip({ x0 = xLo + 2, y0 = yLo + 1, x1 = xHi - 1, y1 = yHi })
+  local rootW    = xHi - xLo - 4
+  if ordinal then
+    local ordinalText = tostring(ordinal)
+    local ordinalW, ordinalY = p.measure(ordinalText, uiFont, MAP_NAME_SIZE), yLo + 1
+    p.text(xHi - 1 - ordinalW, ordinalY, 'text', ordinalText, uiFont, MAP_NAME_SIZE)
+    rootW = rootW - (ordinalW + 3)
+  end
+  local rootRows = math.floor(boxH / nameH)
+  if root ~= '' and rootRows >= 1 and rootW > 0 then
+    for i, line in ipairs(painter.wrapLines(root, rootW, rootRows, nameWidth)) do
+      p.text(xLo + 2, yLo + 1 + (i - 1) * nameH, 'text', line, uiFont, MAP_NAME_SIZE)
+    end
+  end
+  p.popClip()
+end
+
 --shape: mapPress = { qn, moved } — nil when no button is down over the map's margin; moved flips at the drag threshold.
 --invariant: a margin press drives the transport: release seeks the cursor, drag sets the loop.
 local mapPress = nil
@@ -594,6 +621,7 @@ local function drawMapBody()
     p.fill({ x0 = xLo + 1, y0 = yLo + 1, x1 = xHi, y1 = yHi },
            chrome.slotFill(tk.colourIdx, tk.take == win.current))
     p.border({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, 'arrange.itemBorder')
+    drawBoxLabel(p, tk.name, xLo, xHi, yLo, yHi)
     if boxClick and not travelTk
        and mx >= xLo and mx < xHi and my >= yLo and my < yHi then travelTk = tk end
   end

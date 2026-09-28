@@ -169,7 +169,13 @@ is hand-drawn). An instance is a filled box in its slot's colour —
 `chrome.slotFill`, the pair the arrange grid paints from, so a slot's colour
 means one thing across the two — under the grid's own 1px border. The current
 instance (`docs/trackerPage.md` § The current instance) carries the focused
-fill. Nothing else is drawn: no notes, waveforms or names.
+fill. The variant is the datum the map is read for, so a variant's ordinal
+(`docs/arrangeManager.md` § Variants) — the bare number, without its `(var …)`
+— sits right-aligned at the head of its box in the ui size, falling to the names'
+size and centring on a box too short for it. The root of the name is set in tiny
+type, left-aligned in the width left of the ordinal and wrapping to as many lines
+as the box holds, as the arrange grid's names do; a box too short for one line
+shows no root. Nothing else is drawn: no notes or waveforms.
 
 The boxes sit on a grid at the arrange page's cadence: a cell every 4 QN ruled
 off, the bar (16 QN) and phrase (64 QN) cells tinted as the grid tints their
