@@ -578,7 +578,7 @@ untouched base voice ahead of it. A window may be small provided it knows
 what it is a window onto.
 
 **2** A note without authored detune reads 0 — ingestion's default on
-the cell. An ungated call (`seatSpans == nil`, dirty-wholesale channels)
+the cell. An ungated call (`scopeSpans == nil`, dirty-wholesale channels)
 walks `{0, math.huge}`: the whole channel, same as before scoping.
 
 **3** Spans are coalesced to disjoint ascending order first
