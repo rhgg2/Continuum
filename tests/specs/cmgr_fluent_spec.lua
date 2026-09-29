@@ -28,6 +28,7 @@ local unwalked = {
     'goTop', 'goBottom', 'goLeft', 'goRight',
     'pageUp', 'pageDown', 'colLeft', 'colRight', 'channelLeft', 'channelRight',
     'prevTrack', 'nextTrack', 'prevTake', 'nextTake', 'prevInstance', 'nextInstance',
+    'prevFamily', 'nextFamily',
     'noteOff', 'shrinkNote', 'growNote', 'nudgeBack', 'nudgeForward',
     'eventShiftLeft', 'eventShiftRight', 'delete', 'deleteSel',
     'nudgeCoarseUp', 'nudgeCoarseDown', 'nudgeFineUp', 'nudgeFineDown',
@@ -47,7 +48,7 @@ local unwalked = {
   map = {
     'mapLeave', 'mapLeavePinned', 'mapOpenMenu', 'mapPrevInstance', 'mapNextInstance',
     'mapPrevTrack', 'mapNextTrack', 'mapPrevTake', 'mapNextTake',
-    'mapPrevVariant', 'mapNextVariant', 'mapDuplicate', 'mapFork',
+    'mapPrevVariant', 'mapNextVariant', 'mapPrevFamily', 'mapNextFamily', 'mapDuplicate', 'mapFork',
     'mapNewTake', 'mapTakeProperties', 'mapDeleteInstance',
   },
   arrange = {
@@ -57,7 +58,7 @@ local unwalked = {
     'arrangeSelectUp', 'arrangeSelectDown', 'arrangeSelectLeft', 'arrangeSelectRight',
     'arrangeClearSelection',
     'arrangeNudgeBack', 'arrangeNudgeForward', 'arrangeEdgeUp', 'arrangeEdgeDown',
-    'arrangeDeleteAdvance', 'arrangeDeleteRetreat',
+    'arrangeDeleteAdvance', 'arrangeDeleteRetreat', 'arrangePrevFamily', 'arrangeNextFamily',
     -- Each mode reinterprets the drop that follows it, and the drops are fluent.
     'arrangeReplaceMode', 'arrangeAdvanceMode',
   },

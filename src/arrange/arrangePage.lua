@@ -60,6 +60,7 @@ facade.publish('arrange', {
   newTakeBelow    = function(inst, name, lengthQN) return av:newTakeBelow(inst, name, lengthQN) end,
   duplicateBelow  = function(take) return av:duplicateBelow(take) end,
   stepVariant     = function(take, dir) return av:stepVariant(take, dir) end,
+  stepFamily      = function(take, dir) return av:stepFamily(take, dir) end,
   forkName        = function(take, name) return av:forkName(take, name) end,
   fork            = function(take, name) return av:fork(take, name) end,
   dropSlot        = function(trackIdx, slotIdx, qnPos) return av:dropSlot(trackIdx, slotIdx, qnPos) end,

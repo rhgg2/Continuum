@@ -28,6 +28,7 @@ local specs = {
   'cmgr_menu_spec',
   'keyQueue_spec',
   'cmgr_fluent_spec',
+  'cmgr_map_keys_spec',
   'menu_spec',
   'config_schema_spec',
   'library_spec',

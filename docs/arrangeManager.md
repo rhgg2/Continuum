@@ -480,6 +480,18 @@ on a track never overlap.
    passed through survive with their events, whether or not anything
    stands on them.
 
+1. A family's **head** is the first slot of its step order: the plain
+   root where one slot holds it. Each unnamed slot and each namesake
+   heads a family of its own, and the variants of a doubled root head
+   theirs from the lowest ordinal. Every MIDI slot on a track is thus a
+   head or reached from one by variant steps, parked slots included.
+
+1. `am:stepFamily(take, dir)` moves a placement onto the head of the
+   neighbouring family, on the terms of a variant step. The families run
+   in slot order, each placed by its lowest slot index, and a step off
+   either end does nothing. The family step and the variant step
+   together address every take on the track.
+
 ## Forking
 
 1. A **fork** is a slot minted from one instance of another slot,

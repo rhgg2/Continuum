@@ -1463,6 +1463,80 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- stepFamily
+  --------------------------------------------------------------------
+  {
+    -- Alphabetical order would put Bass first and leave Verse nothing after it, so a
+    -- landing on Bass from Verse's family witnesses slot order.
+    name = 'stepFamily lands the placement on the neighbouring family\'s root, families in slot order',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0,  len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Verse' },
+                    { kind = 'midi', pos = 4,  len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bass' },
+                    { kind = 'midi', pos = 8,  len = 4, srcLen = 4, poolGuid = '{p3}', takeName = 'Verse (var 1)' },
+                    { kind = 'midi', pos = 12, len = 4, srcLen = 4, poolGuid = '{p4}', takeName = 'Bass (var 1)' } } },
+      })
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
+      end
+      local verse, bass, verseVar = takeAt(0).slotIdx, takeAt(4).slotIdx, takeAt(8).slotIdx
+      t.truthy(verse < bass and bass < verseVar, 'Verse\'s family opens the slot order (precondition)')
+
+      t.eq(am:stepFamily(takeAt(8), 1), bass, 'a variant steps on to the next family')
+      t.eq(takeAt(8).name, 'Bass', 'and lands on its plain root')
+      t.eq(am:stepFamily(takeAt(8), -1), verse, 'stepping back reaches Verse\'s family')
+      t.eq(takeAt(8).name, 'Verse', 'at its root, not the variant the placement left')
+      t.eq(#am:tracksTakes(0), 4, 'placements moved, none added')
+    end,
+  },
+
+  {
+    name = 'stepFamily off either end of the track\'s families does nothing',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = 'Verse' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = 'Bass' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p3}', takeName = 'Bass (var 1)' } } },
+      })
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
+      end
+      t.eq(am:stepFamily(takeAt(0), -1), nil, 'the first family has nothing before it')
+      t.eq(am:stepFamily(takeAt(8), 1), nil, 'a member of the last family has nothing after it')
+      t.eq(takeAt(0).name, 'Verse', 'the first placement stands as it was')
+      t.eq(takeAt(8).name, 'Bass (var 1)', 'and so does the last')
+    end,
+  },
+
+  {
+    name = 'every unnamed slot is a family of its own, so the family step reaches each',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}', takeName = '' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 4, poolGuid = '{p2}', takeName = '' },
+                    { kind = 'midi', pos = 8, len = 4, srcLen = 4, poolGuid = '{p3}', takeName = 'Lead' } } },
+      })
+      local function takeAt(qn)
+        for _, tk in ipairs(am:tracksTakes(0)) do if tk.startQN == qn then return tk end end
+      end
+      local unnamed = { [takeAt(0).slotIdx] = true, [takeAt(4).slotIdx] = true }
+      t.eq(#util.keys(unnamed), 2, 'two unnamed slots (precondition)')
+      t.truthy(unnamed[takeAt(8).slotIdx] == nil and takeAt(8).slotIdx > math.max(table.unpack(util.keys(unnamed))),
+               'Lead\'s slot comes last (precondition)')
+
+      local reached = {}
+      for _ = 1, 3 do
+        local slotIdx = am:stepFamily(takeAt(8), -1)
+        if slotIdx then reached[slotIdx] = true end
+      end
+      t.deepEq(reached, unnamed, 'walking back from Lead stood the placement on each unnamed slot')
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- Boot cursor
   --------------------------------------------------------------------
   {

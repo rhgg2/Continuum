@@ -136,11 +136,17 @@ scope stands.
 The grid puts a modifier on every take verb because a plain key enters a note.
 Under a modal scope note entry is not asked at all (`docs/trackerPage.md`
 § Keys), so the map's verbs take plain keys: the arrows walk instances and
-tracks, `,` and `.` step the take, `[` and `]` step the family, D duplicates, F
-forks, N makes a new take, P opens take properties and Delete deletes the
-instance. Each acts and lands as its tracker twin does, so the current instance
-moves with it and the map's mark follows. The twins keep their menu paths, and
-the map verbs carry none, since the mode exists for pressing them fast.
+tracks, `,` and `.` step the take, `[` and `]` step the family, `{` and `}` step
+between families, D duplicates, F forks, N makes a new take, P opens take
+properties and Delete deletes the instance. Each acts and lands as its tracker
+twin does, so the current instance moves with it and the map's mark follows. The
+twins keep their menu paths where they have them, and the map verbs carry none,
+since the mode exists for pressing them fast.
+
+Every map key binds under Alt as well, and outside the mode that Alt chord is
+its tracker twin's. A hand that keeps Alt down after Alt-M presses the same
+chords in the mode and out of it, and each means one thing either way. The keys
+that are the mode's own — Esc, Enter and `/` — take no Alt chord outside it.
 
 The scope passes through what the menu passes — the transport and travel to a
 page — and undo, redo and the cheat sheet as well: a map verb is an edit, and

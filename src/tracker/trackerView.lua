@@ -501,6 +501,16 @@ function tv:stepVariant(dir)
   return slot
 end
 
+--post: the current instance moved onto the head of the family ±1; nil with none, or off either end
+--invariant: the tracker rebinds to that slot, and its placement becomes the current instance
+function tv:stepFamily(dir)
+  local inst = self:currentInstance(); if not inst then return end
+  local slot, take = arrange().stepFamily(inst, dir); if not slot then return end
+  self:selectSlot(slot)
+  self:nameInstance(take)
+  return slot
+end
+
 --contract: the current instance stepped ±1 along its track's placements, in start order
 --contract: only a MIDI take in a slot is a stop; holds at the ends, crosses to no other track
 --contract: nil with no current instance

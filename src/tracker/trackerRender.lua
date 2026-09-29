@@ -1747,6 +1747,8 @@ tracker:registerAll{
   duplicateBelow         = { function() tv:duplicateBelow() end, 'Duplicate take' },
   prevVariant            = { function() tv:stepVariant(-1) end, 'Previous variant' },
   nextVariant            = { function() tv:stepVariant(1)  end, 'Next variant' },
+  prevFamily             = { function() tv:stepFamily(-1)  end, 'Previous family' },
+  nextFamily             = { function() tv:stepFamily(1)   end, 'Next family' },
   fork                   = openForkModal,
   deleteBoundSlot        = deleteBoundSlot,
 
@@ -1794,6 +1796,8 @@ cmgr:scope('map'):registerAll{
   mapNextTake       = { function() tv:gotoTake(1)      end, 'Next take' },
   mapPrevVariant    = { function() tv:stepVariant(-1)  end, 'Previous variant' },
   mapNextVariant    = { function() tv:stepVariant(1)   end, 'Next variant' },
+  mapPrevFamily     = { function() tv:stepFamily(-1)   end, 'Previous family' },
+  mapNextFamily     = { function() tv:stepFamily(1)    end, 'Next family' },
   mapDuplicate      = { function() tv:duplicateBelow() end, 'Duplicate take' },
   mapDeleteInstance = { function() tv:deleteInstance() end, 'Delete instance' },
   mapFork           = openForkModal,

@@ -661,7 +661,7 @@ rest read per-track config.
 
 ### Duplicate below
 
-`duplicateBelow` (D in map mode) appends another instance of the bound
+`duplicateBelow` (Alt+D, D in map mode) appends another instance of the bound
 slot at the current instance's append point, through `am:duplicateBelow`
 (`docs/arrangeManager.md` § The append point). The palette does not grow:
 four presses give four placements of one source, so a column of repeats
@@ -680,7 +680,7 @@ that neighbour's start.
 
 ### Forking
 
-`fork` (F in map mode) moves the current instance onto a slot of its own, through
+`fork` (Alt+F, F in map mode) moves the current instance onto a slot of its own, through
 `am:fork` (`docs/arrangeManager.md` § Forking), so edits from here reach
 this placement alone. Its prompt opens on the name the family's next
 variant would carry, selected whole, so Enter varies and a typed name
@@ -697,7 +697,7 @@ the tracker is in no instance.
 
 ### Stepping the family
 
-`prevVariant` and `nextVariant` ([ and ] in map mode) move the current instance
+`prevVariant` and `nextVariant` (Alt+[ and Alt+], [ and ] in map mode) move the current instance
 one step along its slot's family, through `am:stepVariant`
 (`docs/arrangeManager.md` § Variants). The placement then plays the
 neighbour, and the family is walked from either end by holding the key.
@@ -709,6 +709,14 @@ dropped where the old instance stood.
 
 The verb refuses in silence where the tracker is in no instance, and
 `am:stepVariant` refuses on its own off either end of the family.
+
+### Stepping between families
+
+`prevFamily` and `nextFamily` (Alt+{ and Alt+}, { and } in map mode) move
+the current instance onto the head of the neighbouring family on its
+track, through `am:stepFamily` (`docs/arrangeManager.md` § Variants). It
+lands as the variant step does and refuses where it does, so the two
+steps together reach every take on the track from any placement on it.
 
 ### The walk
 
@@ -815,7 +823,7 @@ carried on the toolbar as a checkbox and on Cmd+P.
 
 ### Deleting the instance
 
-`deleteInstance` (Delete in map mode) deletes the placement the tracker
+`deleteInstance` (Alt+Delete, Delete in map mode) deletes the placement the tracker
 stands in and lands on the stop before it, the mirror of duplicate below. Only the drop goes: deleting a slot's last live placement
 parks it (`docs/arrangeManager.md` § Parking), so the material outlives
 the gesture and the slot stays editable.

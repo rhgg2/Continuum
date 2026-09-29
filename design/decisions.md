@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-29** — Every map-mode key binds bare and under Alt, and its Alt chord is the tracker
+  twin's outside the mode, over take verbs on keys unrelated to the map's. New take leaves Alt+Enter
+  for Super+Enter, as on the arrange page, since Alt+Enter leaves the mode. Unnamed slots each head
+  a family, so the family and variant steps together address every take on a track.
+
 - **2026-09-28** — Forking a placement is one verb, fork, whose typed name joins the family its root
   names on the track and otherwise founds one, over a forward variant step that varied past the
   family's last member. The step minted a slot as a side effect of navigation and could vary only

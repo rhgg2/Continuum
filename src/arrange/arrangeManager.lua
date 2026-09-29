@@ -1148,6 +1148,43 @@ function am:stepVariant(take, dir)
   return target.idx, placed
 end
 
+-- A family stands under its head, the first of its step order, and is placed by its lowest
+-- slot index. See docs/arrangeManager.md § Variants.
+--shape: { {head = slotIdx, first = slotIdx}, ... } -- ascending by first
+local function trackFamilies(trackIdx)
+  local families = {}
+  for _, slot in ipairs(am:trackSlots(trackIdx)) do
+    if slot.kind == 'midi' then
+      local family, pos = variantFamily(trackIdx, slot.idx)
+      if pos == 1 then
+        local first = slot.idx
+        for _, member in ipairs(family) do first = math.min(first, member.idx) end
+        util.add(families, { head = slot.idx, first = first })
+      end
+    end
+  end
+  table.sort(families, function(a, b)
+    if a.first ~= b.first then return a.first < b.first end
+    return a.head < b.head
+  end)
+  return families
+end
+
+--post: (slotIdx, take) for the placement moved onto the head of the family ±1 along its track
+--post: nil off either end of the track's families, or on a non-MIDI take
+function am:stepFamily(take, dir)
+  if take.kind ~= 'midi' then return end
+  local own = variantFamily(take.trackIdx, take.slotIdx)[1]
+  if not own then return end
+  local families, pos = trackFamilies(take.trackIdx), nil
+  for i, family in ipairs(families) do if family.head == own.idx then pos = i end end
+  local target = pos and families[pos + dir]
+  if not target then return end
+  local placed = am:dropInstance(take.trackIdx, target.head, take.startQN)
+  if not placed then return end
+  return target.head, placed
+end
+
 ----- Per-take edits
 
 --contract: QN from startQN to the next take start on trackIdx; math.huge with nothing downstream

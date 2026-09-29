@@ -382,6 +382,12 @@ local function stepVariantOfSelected(dir)
   if take then am:stepVariant(take, dir) end
 end
 
+--invariant: stepFamily: as stepVariant, onto the neighbouring family's head.
+local function stepFamilyOfSelected(dir)
+  local take = singleTarget()
+  if take then am:stepFamily(take, dir) end
+end
+
 --invariant: drop0..dropZ place a fresh instance at the cursor and advance the caret past it.
 --invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the step; arrangeAdvanceMode (Ctrl-`) picks it.
 --invariant: drop on an empty slot is a no-op; new takes arrive at the slot's full pool length.
@@ -678,6 +684,7 @@ function av:newTakeBelow(take, name, lengthQN)
 end
 function av:duplicateBelow(take) return am:duplicateBelow(take) end
 function av:stepVariant(take, dir) return am:stepVariant(take, dir) end
+function av:stepFamily(take, dir)  return am:stepFamily(take, dir) end
 function av:forkName(take, name) return am:forkName(take, name) end
 function av:fork(take, name)     return am:fork(take, name) end
 function av:deleteTake(take)   return am:deleteTake(take) end
@@ -976,6 +983,8 @@ arrange:registerAll {
   arrangeDuplicateBelow         = { duplicateSelectedBelow,         'Duplicate take' },
   arrangePrevVariant            = { function() stepVariantOfSelected(-1) end, 'Previous variant' },
   arrangeNextVariant            = { function() stepVariantOfSelected( 1) end, 'Next variant' },
+  arrangePrevFamily             = { function() stepFamilyOfSelected(-1) end,  'Previous family' },
+  arrangeNextFamily             = { function() stepFamilyOfSelected( 1) end,  'Next family' },
   arrangeReplaceMode            = toggleReplaceMode,
   arrangeAdvanceMode            = toggleAdvanceByLength,
   arrangeClearSelection         = { function() setSelection {} end, 'Clear selection' },

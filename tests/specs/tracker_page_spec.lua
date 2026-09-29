@@ -841,6 +841,44 @@ return {
     end,
   },
 
+  -- stepFamily: the current instance moved onto the neighbouring family's head.
+  -- see docs/trackerPage.md § Stepping between families
+  {
+    name = 'the family step rebinds the tracker to the slot stepped to and follows its placement',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      seedItems(h, { 'i0', 'd0' })
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeArrange.slotsByIdx[0] = { { idx = 0, name = 'Bassline', kind = 'midi' },
+                                    { idx = 5, name = 'Drums', kind = 'midi' } }
+      fakeArrange.takeByKey['0:0'] = 'i0'
+      fakeArrange.takeByKey['0:5'] = 'd0'
+      fakeArrange.instances = {
+        { take = 'i0', trackIdx = 0, slotIdx = 0, startQN = 4, lengthQN = 4 },
+      }
+      -- am:stepFamily drops the neighbour's head in the instance's place (am_spec pins the real one).
+      fakeArrange.stepFamily = function(inst, dir)
+        fakeArrange.calls.stepFamily = { take = inst.take, dir = dir }
+        fakeArrange.instances = {
+          { take = 'd0', trackIdx = 0, slotIdx = 5, startQN = 4, lengthQN = 4 },
+        }
+        return 5, 'd0'
+      end
+      h.cmgr:push('tracker')
+      tp:bindFromSelection()                       -- seed track 0 / slot 0, bind i0
+      h.cm:set('global', 'trackerLoopToItem', true)
+
+      h.cmgr:invoke('nextFamily')
+      t.deepEq(fakeArrange.calls.stepFamily, { take = 'i0', dir = 1 }, 'stepped the instance the tracker is in')
+      t.eq(h.cm:getAt('track', 'trackerSlot'), 5, 'and selected the slot it landed on')
+
+      tp:bindFromSelection()                       -- the next frame's resolve
+      t.eq(tp:currentTake(), 'd0', 'the tracker rebound onto the other family')
+      t.deepEq(fakeArrange.calls.loopTo, { 4, 8 }, 'the loop moved onto its placement')
+    end,
+  },
+
   {
     name = 'prev/next track + take drive the tv selection, not the arrange cursor',
     run = function(harness)

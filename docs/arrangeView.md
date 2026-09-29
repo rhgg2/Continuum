@@ -94,9 +94,10 @@ The copy is pooled with its source. The caret lands on it, so the fork
 (Ctrl-F) reaches it next and moves it onto a slot of its own: two keys
 and an Enter for a copy that edits independently, its name offered as
 the family's next variant and replaceable in the same prompt
-(`docs/arrangeManager.md` § Forking). The fork and the variant step
-([ and ]) move neither the caret nor the selection, the slot forked or
-stepped onto standing exactly where the source stood; the source's
+(`docs/arrangeManager.md` § Forking). The fork, the variant step
+([ and ]) and the family step ({ and }) move neither the caret nor the
+selection, the slot forked or stepped onto standing exactly where the
+source stood; the source's
 handle prunes itself from the selection when the take goes.
 
 Selection is decoupled from action. An edit command resolves its
