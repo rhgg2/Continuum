@@ -103,8 +103,9 @@ single override a click does, so the later of the two wins, and it takes no
 keyboard focus either.
 
 Two sets of commands sit under a standing raise without lowering it (`HOLDS_MAP`):
-the transport, which moves nothing in the tracker, and the walk, so that Alt-up
-and Alt-down holding at the ends of a track leave the map where it is.
+the transport, which moves nothing in the tracker, and the walk — the Alt-arrows,
+`,` `.` `[` `]` and their Shift forms — so that a step which holds, at the end of
+a track or the edge of the track list, leaves the map where it is.
 
 Two symmetric toggles bind the two panes: **Super-R** owns **parameters**,
 **Super-X** owns the **fx** palette. Super-R (`focusParams`) parks parameters

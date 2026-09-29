@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-29** — A standing map raise holds through every step of the walk — instance, track,
+  take, variant and family — over the instance steps alone, so a step that holds anywhere leaves the
+  map up. The set is listed by hand rather than derived from the map verbs' tracker twins, since the
+  twins include the take-management verbs, which are not steps.
+
 - **2026-09-29** — Every map-mode key binds bare and under Alt, and its Alt chord is the tracker
   twin's outside the mode, over take verbs on keys unrelated to the map's. New take leaves Alt+Enter
   for Super+Enter, as on the arrange page, since Alt+Enter leaves the mode. Unnamed slots each head

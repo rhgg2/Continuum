@@ -4200,12 +4200,15 @@ function tv:caretKey()
 end
 
 -- Commands a standing raise sits through: the transport, which moves nothing in the tracker,
--- and the walk, which would otherwise take the map away at the ends of a track.
+-- and the walk, which would otherwise take the map away wherever a step holds.
 local HOLDS_MAP = { play = true, playPause = true, stop = true,
                     playFromTop = true, playFromCursor = true,
-                    prevInstance = true, nextInstance = true,
                     loopToItemNow = true, toggleLoopToItem = true,
-                    clearLoop = true}
+                    clearLoop = true,
+                    prevInstance = true, nextInstance = true,
+                    prevTrack = true, nextTrack = true, prevTake = true, nextTake = true,
+                    prevVariant = true, nextVariant = true,
+                    prevFamily = true, nextFamily = true }
 
 -- A clicked, keyboard, or raise override claims a tab; absent one, fx auto-wins whenever a
 -- chain is showable — anchors and lapse rules: docs/trackerRender.md § Palette tabs.

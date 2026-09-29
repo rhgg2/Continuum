@@ -117,6 +117,9 @@ local function resetArrange()
       if inst.take == take then return inst end
     end
   end
+  -- No instance here belongs to a family, so every variant or family step refuses.
+  fakeArrange.stepVariant = function() end
+  fakeArrange.stepFamily  = function() end
   -- The slot a take sits in, live or parked — am scans the slot dicts by take id.
   fakeArrange.slotOfTake = function(take)
     for key, tk in pairs(fakeArrange.takeByKey) do
@@ -1636,6 +1639,14 @@ return {
       h.cmgr:invoke('nextInstance')                -- i8 is the last placement, so the walk stalls
       tp:bindFromSelection()
       t.eq(tab(), 'map', 'and a walk never lowers it, even where it holds')
+
+      -- One track, one slot, no variants: each of these stalls, as the walk did above.
+      for _, name in ipairs{ 'prevTrack', 'nextTrack', 'prevTake', 'nextTake',
+                             'prevVariant', 'nextVariant', 'prevFamily', 'nextFamily' } do
+        h.cmgr:invoke(name)
+        tp:bindFromSelection()
+        t.eq(tab(), 'map', name .. ' leaves a standing raise alone, even where it holds')
+      end
 
       h.cmgr:invoke('cursorDown')
       tp:bindFromSelection()
