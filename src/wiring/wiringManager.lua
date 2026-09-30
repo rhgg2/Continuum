@@ -371,11 +371,13 @@ function wm:checkUserAddable(ident)
   end
 end
 
---contract: AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}
---contract: unknown ident → fxId=nil, ins=outs=0, empty name lists
+--post: AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}
+--post: records one use of the plugin in the fx catalogue, unless the ident is unknown
+--post: unknown ident → fxId=nil, ins=outs=0, empty name lists
 function wm:instantiateFxOnScratch(ident)
   local fxId = rm:addFx(scratch.id(), { ident = ident })
   if not fxId then return { fxId = nil, ins = 0, outs = 0, inNames = {}, outNames = {} } end
+  rm:recordFxUse(fxId)
   markState()
   -- minted on scratch out of band; splice the scratch entry back so the model stays truthful and the
   -- next reconcile's diff relocates the instance onto its real track.

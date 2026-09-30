@@ -2,6 +2,7 @@
 -- REAPER's audio/MIDI graph.
 --invariant: id is a track/fx GUID string — opaque to callers, stable across reload
 --invariant: stateless; fx/bus meta are project-scope ds keys, so they ride ds's undo mirror
+--invariant: fxCatalogue is a global ds key, so a use rm records survives undo
 --invariant: non-native record fields are metadata; rm persists them (see docs/routingManager.md)
 
 local util        = require('util')
@@ -369,10 +370,14 @@ local function isRoutingFx(fxType)
      and (fxType:find('^VST') or fxType:find('^AU') or fxType:find('^CLAP')) ~= nil
 end
 
+local function ioPins(track, idx)
+  local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
+  return inPins or 0, outPins or 0
+end
+
 local function readFx(track, idx)
   local fxType = fxTypeAt(track, idx)
-  local _, inPins, outPins = reaper.TrackFX_GetIOSize(track, idx)
-  inPins, outPins = inPins or 0, outPins or 0
+  local inPins, outPins = ioPins(track, idx)
   return {
     id       = reaper.TrackFX_GetFXGUID(track, idx),
     ident    = fxIdentAt(track, idx, fxType),
@@ -1052,6 +1057,15 @@ function rm:showFx(id)
   if not track then return false end
   reaper.TrackFX_Show(track, idx, 3)
   return true
+end
+
+--post: the fx's catalogue entry takes its audio ports and one bump; no-op if gone or keyless
+function rm:recordFxUse(id)
+  local track, idx = locateFx(id)
+  local key = track and fxCatalogue.keyAt(track, idx)
+  if not key then return end
+  local inPins, outPins = ioPins(track, idx)
+  fxCatalogue.recordUse(ds, key, { ins = inPins / 2, outs = outPins / 2 })
 end
 
 --post: fresh fxCatalogue.installed() rows, each JS row's ident canonicalised to the 'JS:' form

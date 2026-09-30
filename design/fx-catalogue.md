@@ -14,14 +14,13 @@ Landed in `docs/fxCatalogue.md`.
 
 ## The catalogue
 
-1. The **catalogue** maps a catalogue key to an **entry**, and is
-   global (`docs/dataStore.md`).
+1. The catalogue, its entries and their independent facts: landed in
+   `docs/fxCatalogue.md` § The catalogue.
 
-1. An entry carries category paths, a favourite flag, traits, audio
-   ports, a developer name and a usage score. These are independent: an
-   entry may carry any of them and lack the rest.
+1. An entry also carries category paths, a favourite flag, traits and
+   a developer name.
 
-1. An entry under an unresolved key stands, and can be relinked.
+1. An entry under an unresolved key can be relinked.
 
 ## The taxonomy
 
@@ -76,11 +75,8 @@ Landed in `docs/fxCatalogue.md`.
 
 ## Probing
 
-1. A plugin's **audio ports** are its counts of audio ins and outs,
-   known only from an instance. An entry holds them.
-
-1. Instantiating a plugin writes its audio ports into its entry, so
-   ordinary use fills them in.
+1. Audio ports and their write on use: landed in `docs/fxCatalogue.md`
+   § Audio ports.
 
 1. A **probe** instantiates a chosen set of plugins to write their
    ports without waiting for use.
@@ -89,18 +85,8 @@ Landed in `docs/fxCatalogue.md`.
 
 ## Usage
 
-1. An entry's **usage score** orders it against other plugins, higher
-   first. A score never filters.
-
-1. Adding a plugin to the graph **bumps** its score. A bump advances the
-   catalogue's use counter by one, decays the entry's score by the uses
-   elapsed since its last bump, and adds one.
-
-1. Decay counts uses, not time. A month in which nothing is
-   instantiated costs an entry nothing.
-
-1. Parameter frecency: landed in `docs/fxCatalogue.md` § An instance's
-   key.
+Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
+§ An instance's key.
 
 ## The sources
 

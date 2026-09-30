@@ -8,6 +8,12 @@
 -- (VST3 adds '{' and 32 hex, unclosed), but the installed list keeps '<id'
 -- only for a shell file's members; so the instance resolves against the
 -- installed set, and falls back to the bare file key when not installed.
+--
+-- recordUse writes one use into the global catalogue: the entry takes the
+-- ports given and its usage score decays by the catalogue-wide uses since
+-- its last, then gains one. The write patches the entry, so its other facts
+-- stand, and it never consults the installed set, so an entry no installed
+-- plugin resolves to stands too.
 local t           = require('support')
 local harness     = require('harness')
 local fxCatalogue = require('fxCatalogue')
@@ -34,11 +40,16 @@ local ROWS = {
 }
 
 local function seed(rows)
-  local reaper = harness.mk().reaper
+  local h = harness.mk()
   local list = {}
   for i, row in ipairs(rows) do list[i] = { name = row.name, ident = row.ident } end
-  reaper:setInstalledFx(list)
-  return reaper
+  h.reaper:setInstalledFx(list)
+  return h.reaper, h.ds
+end
+
+local function near(actual, expected, msg)
+  t.truthy(math.abs(actual - expected) < 1e-9,
+    (msg or '') .. ': ' .. tostring(actual) .. ' ~= ' .. tostring(expected))
 end
 
 local VST3DIR = '/Library/Audio/Plug-Ins/VST3/'
@@ -172,6 +183,45 @@ return {
       t.eq(installedKey, 'Aeolus.vst3')
       t.eq(fxCatalogue.key('VST3',  ident), installedKey, 'bare VST3')
       t.eq(fxCatalogue.key('VST3i', ident), installedKey, 'VST3i')
+    end,
+  },
+  {
+    name = 'recordUse decays an entry by the catalogue-wide uses since its last, then adds one',
+    run = function()
+      local ds = harness.mk().ds
+      fxCatalogue.recordUse(ds, 'a', { ins = 1, outs = 1 })
+      fxCatalogue.recordUse(ds, 'b', { ins = 0, outs = 1 })
+      fxCatalogue.recordUse(ds, 'a', { ins = 2, outs = 3 })
+      local catalogue = ds:get('fxCatalogue')
+      t.truthy(catalogue, 'the uses wrote the catalogue')
+      t.eq(catalogue.n, 3, 'the counter advances once per use')
+      local a, b = catalogue.entries.a, catalogue.entries.b
+      near(a.usage.s, 1 * 0.98 ^ 2 + 1, 'A decays by the two uses since its first, not by one')
+      t.eq(a.usage.n0, 3, 'A rebased to the latest use')
+      t.deepEq(a.ports, { ins = 2, outs = 3 }, 'the latest instantiation\'s ports')
+      near(b.usage.s, 1, 'B has one undecayed use')
+      t.eq(b.usage.n0, 2)
+      t.deepEq(b.ports, { ins = 0, outs = 1 })
+    end,
+  },
+  {
+    name = 'recordUse on an entry no installed plugin resolves to keeps it and its other facts',
+    run = function()
+      local _, ds = seed(ROWS)
+      for _, row in ipairs(fxCatalogue.installed()) do
+        t.truthy(row.key ~= 'gone.vst3', 'precondition: gone.vst3 is installed under no key')
+      end
+      ds:assign('fxCatalogue', { n = 0, entries = { ['gone.vst3'] = { favourite = true } } })
+      fxCatalogue.recordUse(ds, 'gone.vst3', { ins = 1, outs = 2 })
+      fxCatalogue.recordUse(ds, 'Canvas_Audio___8K.vst3', { ins = 1, outs = 1 })
+      local entries = ds:get('fxCatalogue').entries
+      local gone = entries['gone.vst3']
+      t.truthy(gone, 'the unresolved entry stands')
+      t.eq(gone.favourite, true, 'a use leaves the entry\'s other facts alone')
+      t.deepEq(gone.ports, { ins = 1, outs = 2 })
+      near(gone.usage.s, 1)
+      t.eq(gone.usage.n0, 1)
+      t.truthy(entries['Canvas_Audio___8K.vst3'], 'the installed key is written beside it')
     end,
   },
 }

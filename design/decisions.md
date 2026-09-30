@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-30** — routingManager writes a plugin's catalogue entry when wiringManager mints it on
+  scratch, over fxCatalogue taking ds as a dependency and keying instances itself, since only rm
+  holds both an instance's handle and ds. The catalogue is a global ds key outside undo, so undoing
+  an add leaves its bump. Usage decays by catalogue-wide uses at 0.98 each, a half-life of about 34,
+  and a write patches the entry, leaving its other facts.
+
 - **2026-09-30** — Adding a plugin to the graph bumps its score, over every instantiation bumping
   it, so a probe's instances leave scores alone. The probe leaves phase 2 until the surface the
   catalogue is edited from exists, over a bridge recipe as its caller; ordinary use fills ports, and

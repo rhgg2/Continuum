@@ -1,8 +1,10 @@
 # fxCatalogue
 
 **The installed plugins, each under a catalogue key that names one
-plugin across an update moving its files.** The module is stateless,
-and re-reads REAPER's installed set on every call.
+plugin across an update moving its files, and a catalogue of facts
+about each.** The module holds no state of its own. It re-reads
+REAPER's installed set on every call, and the catalogue is a
+dataStore key.
 
 ## The catalogue key
 
@@ -51,3 +53,46 @@ and re-reads REAPER's installed set on every call.
    (`docs/reaper_routing_for_reascript.md` § 6.2).
 
 1. A key matching nothing installed is **unresolved**.
+
+## The catalogue
+
+1. The **catalogue** maps a catalogue key to an **entry**. It is a
+   global dataStore key (`docs/dataStore.md`), so one catalogue serves
+   every project.
+
+1. An entry holds facts about its plugin: its audio ports and its
+   usage score. The facts are independent. An entry may carry any of
+   them and lack the rest, and a write to one leaves the others alone.
+
+1. Adding a plugin to the wiring graph (`docs/wiring.md`) is a **use**
+   of it, and writes to its entry. A plugin Continuum adds for its own
+   plumbing is not a use.
+
+1. The catalogue sits outside undo. Undoing the add of a plugin leaves
+   the use it recorded in place.
+
+1. Nothing prunes the catalogue. An entry under an unresolved key
+   stands, and keeps its facts.
+
+## Audio ports
+
+1. A plugin's **audio ports** are its counts of stereo audio ins and
+   outs, half its pin counts. They are known only from an instance.
+
+1. A use writes the instance's audio ports into the plugin's entry,
+   overwriting any it held. Ordinary use thus fills them in.
+
+## Usage
+
+1. An entry's **usage score** orders it against other plugins, higher
+   first. A score never filters.
+
+1. A use **bumps** the plugin's score. A bump advances the catalogue's
+   use counter by one, decays the entry's score by the uses elapsed
+   since its last bump, and adds one.
+
+1. Decay counts uses across the whole catalogue. A month in which
+   nothing is instantiated costs an entry nothing.
+
+1. Each use scales a score by 0.98, so a score halves over about 34
+   uses of other plugins.

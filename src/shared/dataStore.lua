@@ -38,6 +38,7 @@ local registry = {
   busMeta             = 'project',
   guardedTrack        = 'project',
   paramFrecency       = 'global',
+  fxCatalogue         = 'global',
 }
 
 local GLOBAL_SLOT = 'data'   -- continuum-data.lua, the lone global disk file

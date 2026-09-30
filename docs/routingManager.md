@@ -281,6 +281,10 @@ stays private.
    paramAutomation's CC bus is the one graph write rm does not own (§ Sends
    are a track attribute).
 
+1. When wm mints a user fx, it records the use through rm. rm keys the
+   instance and writes its audio ports and a bump into the plugin's entry in
+   the global catalogue (`docs/fxCatalogue.md` § The catalogue).
+
 1. The owned-block contiguity and CU policy stay in wm, expressed over rm
    methods. `docs/wiringManager.md § The reaper seam` covers the small reaper
    residue wm keeps.

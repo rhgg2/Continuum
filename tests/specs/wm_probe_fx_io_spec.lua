@@ -108,4 +108,21 @@ return {
       t.deepEq(n.ports.audio.outNames, { 'Out' })
     end,
   },
+  {
+    name = 'addFxNode records one use of the plugin, with its ports, in the catalogue',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      local ident = '/Library/Audio/Plug-Ins/VST3/Effects/EQ/Canvas Audio - 8K.vst3'
+      reaper:setInstalledFx({ { name = 'VST3: 8K (Canvas Audio)', ident = ident } })
+      reaper:setFxIO(ident, { ins = 4, outs = 2 })
+      local id = wm:addFxNode(0, 0, { name = 'VST3: 8K (Canvas Audio)', ident = ident })
+      t.truthy(id, 'precondition: the fx was added')
+      local catalogue = h.ds:get('fxCatalogue')
+      t.truthy(catalogue, 'the add wrote the catalogue')
+      t.eq(catalogue.n, 1, 'one bump per add')
+      local entry = catalogue.entries['Canvas_Audio___8K.vst3']
+      t.deepEq(entry.ports, { ins = 2, outs = 1 }, 'stereo ports, pins/2')
+      t.deepEq(entry.usage, { s = 1, n0 = 1 })
+    end,
+  },
 }

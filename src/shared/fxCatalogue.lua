@@ -1,7 +1,9 @@
 -- The installed plugins, each under a catalogue key that survives an update
 -- moving the plugin's files. REAPER builds the list once and serves it from memory.
---invariant: stateless; each call re-reads REAPER, so a plugin installed mid-session shows up
+--invariant: holds no state; the catalogue is a global ds key, and installed() re-reads REAPER
 --shape: row = { key, name, ident, format }  -- ident raw from REAPER; format the name's prefix before ':', or ''
+--shape: fxCatalogue (ds global) = { n = int, entries = { [catalogueKey] = entry } }
+--shape: entry = { ports = { ins = int, outs = int }, usage = { s = num, n0 = int } }  -- any field may be absent
 
 local util = require 'util'
 
@@ -48,6 +50,24 @@ function fxCatalogue.keyAt(track, fxIdx)
     if row.key == withId or row.key == bare then return row.key end
   end
   return bare
+end
+
+-- Usage decays per catalogue-wide use, not per day, so an unused month
+-- costs nothing; 0.98 halves a score over about 34 uses.
+local DECAY = 0.98
+
+--post: catalogue n advances by 1; entries[key].usage decays by the uses since its n0, then +1
+--post: entries[key].ports = ports; the entry's other fields kept
+function fxCatalogue.recordUse(ds, key, ports)
+  local catalogue = ds:get('fxCatalogue') or { n = 0, entries = {} }
+  local n     = catalogue.n + 1
+  local entry = catalogue.entries[key] or {}
+  local usage = entry.usage
+  entry.usage = { s = (usage and usage.s * DECAY ^ (n - usage.n0) or 0) + 1, n0 = n }
+  entry.ports = ports
+  catalogue.entries[key] = entry
+  catalogue.n = n
+  ds:assign('fxCatalogue', catalogue)
 end
 
 return fxCatalogue

@@ -27,6 +27,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-30 wiring: record a plugin's ports and usage in the catalogue on add (§ The catalogue, § Probing 1–2, § Usage 1–3)
 - 2026-09-30 tracker: key parameter frecency on the catalogue key (§ Usage 4)
 - 2026-09-30 wiring: key each installed plugin, re-read the set on every call (§ Identity)
 
@@ -36,20 +37,6 @@
 
 ## Queued (current phase; one-liners)
 
-- **The catalogue and its first writers** (§ The catalogue, § Probing
-  1–2, § Usage 1–3) — `fxCatalogue` becomes a global ds key holding the
-  catalogue's use counter and its entries by catalogue key, read and
-  written through the fxCatalogue module. `wm:instantiateFxOnScratch`,
-  where a user plugin is minted, keys the new instance
-  (`fxCatalogue.keyAt`), writes its audio ins and outs into the entry,
-  and bumps its score: the counter advances by one, the score decays by
-  the uses elapsed since the entry's last bump, and one is added. The
-  decay per use is a module constant; paramFrecency's `n`/`n0` scheme
-  (`paramAutomation`) is the precedent. CU bridges and the ccManager
-  node write nothing. An entry whose key matches nothing installed
-  stands. Spec: the bump arithmetic and a standing unresolved entry in
-  `fxCatalogue_spec`; `wm:addFxNode` writing ports and bumping once in a
-  wm spec.
 - **Traits** (§ Traits) — fxCatalogue resolves a plugin's midi in, midi
   out and instrument authored over parsed over the mark. Authored comes
   from the entry's `traits`, which only a ds write sets for now. Parsed

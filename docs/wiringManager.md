@@ -84,7 +84,9 @@ Three rules keep instance churn minimal and state-preserving:
 
 - **Mint on a scratch track.** `wm:addFxNode` instantiates the FX
   immediately via `instantiateFxOnScratch`, so the node has a real
-  `fxId` (and probed I/O) before it is ever hosted. The scratch track
+  `fxId` (and probed I/O) before it is ever hosted. The mint records a
+  use of the plugin in the catalogue (`docs/fxCatalogue.md` § Usage);
+  CU bridges, which rm adds during reconcile, record none. The scratch track
   is owned by `scratch.lua` (`docs/scratch.md`); it also parks FX whose
   `srcSet` is empty (disconnected, or inert `__scratch__` nodes) so they
   exist without polluting the audible topology.
