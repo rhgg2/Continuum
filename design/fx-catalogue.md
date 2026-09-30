@@ -29,6 +29,14 @@ thereafter authored in place, and the picker browses it.**
    other than a letter, a digit or `.` written as `_`. REAPER's own
    files key a VST plugin that way.
 
+1. An instance reports its VST ident with the `<id` suffix whether or
+   not its file exposes several plugins. A VST3 instance's ident also
+   ends in the plugin's class id, written after `{`.
+
+1. An instance's key is thus the installed key its ident matches: the
+   base name with the `<id` where an installed key carries it, and
+   without it otherwise.
+
 1. The installed set is re-read while Continuum runs, so a plugin
    installed meanwhile is keyed like any other.
 
@@ -121,7 +129,7 @@ thereafter authored in place, and the picker browses it.**
 1. Decay counts uses, not time. A month in which nothing is
    instantiated costs an entry nothing.
 
-1. Parameter frecency (`docs/dataStore.md`) keys on the catalogue key,
+1. Parameter frecency (`docs/trackerRender.md`) keys on the catalogue key,
    so that a plugin's parameter scores survive a relocation.
 
 ## The sources
@@ -274,6 +282,10 @@ thereafter authored in place, and the picker browses it.**
    classification, but maps a base name to a display name, a vendor and
    the instrument mark for every plugin ever scanned, including those
    no longer reported as installed.
+
+1. How an AU whose files are deleted is treated. REAPER's AU cache
+   (`reaper-auplugins*.ini`) still reports it as installed, and an
+   instance of it reports an empty ident.
 
 1. Ident forms on Windows and Linux, where a VST ident is a backslash
    path and AU does not exist.

@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-30** — An fx instance's catalogue key resolves its VST ident against the installed set,
+  keeping the `<id` only where an installed key carries it, over deriving the key from the
+  instance's ident alone. Every VST instance reports `<id` and a VST3 its class id besides, so the
+  ident cannot tell a shell member from a single-plugin file. Parameter scores held under absolute
+  VST paths are orphaned, with no migration.
+
 - **2026-09-30** — A VST's catalogue key is its file's base name spelled as REAPER's plugin ini
   spells it, with the `<id` suffix REAPER adds for a shell file's plugins, over the base name
   together with the reported name. The suffix already tells apart a shell's plugins, and the name is

@@ -8,9 +8,10 @@
 --shape: paramAutomation (ds track key) = { [chan] = { [lane] = binding } }
 --shape: binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
 --shape: trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
---shape: paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [paramIndex]={s=num,n0=int} } } }
+--shape: paramFrecency (ds global) = { [catalogueKey] = { n=int, params={ [paramIndex]={s=num,n0=int} } } }
 --contract: apply() is a full-project idempotent reconcile; mirror-matching tracks are untouched
 local util = require 'util'
+local fxCatalogue = require 'fxCatalogue'
 local cm, ds, facade, ccm = (...).cm, (...).ds, (...).facade, (...).ccm
 
 -- Source-track resolution is logical, not physical: a parked take hosts on the scratch track,
@@ -277,16 +278,11 @@ end
 ----- Frecency + param cache
 
 -- Frecency decays per plugin-use, not per day: each bump advances the
--- ident's counter and rebases the score, so an unused month costs nothing.
+-- plugin's counter and rebases the score, so an unused month costs nothing.
 local DECAY = 0.9
 
 local paramCache  = {}   -- [fxGuid] = { count, params, gen, sorted }
 local frecencyGen = 0    -- bumped on every frecency write; stales sorted caches
-
-local function fxIdentAt(track, fxIdx)
-  local _, ident = reaper.TrackFX_GetNamedConfigParm(track, fxIdx, 'fx_ident')
-  return ident ~= '' and ident or nil
-end
 
 --contract: pure, stable: decayed score desc, then param index; fxScores may be nil
 function pa.frecencyOrder(params, fxScores)
@@ -397,24 +393,24 @@ function pa:params(trackGuid, fxGuid)
   if cached.gen ~= frecencyGen then
     cached.gen    = frecencyGen
     cached.sorted = pa.frecencyOrder(cached.params,
-      (ds:get('paramFrecency') or {})[fxIdentAt(track, fxIdx)])
+      (ds:get('paramFrecency') or {})[fxCatalogue.keyAt(track, fxIdx)])
   end
   return cached.sorted
 end
 
---contract: advances the ident's use counter; the param's score decays to it, then +1
+--post: advances the plugin's use counter; the param's score decays to it, then +1
 function pa:bumpFrecency(trackGuid, fxGuid, paramIndex)
   local track, fxIdx = resolveFx(trackGuid, fxGuid)
-  local ident = track and fxIdentAt(track, fxIdx)
-  if not ident then return end
+  local pluginKey = track and fxCatalogue.keyAt(track, fxIdx)
+  if not pluginKey then return end
   local all = ds:get('paramFrecency') or {}
-  local fxScores = all[ident] or { n = 0, params = {} }
+  local fxScores = all[pluginKey] or { n = 0, params = {} }
   local n = fxScores.n + 1
   local entry = fxScores.params[paramIndex]
   fxScores.params[paramIndex] =
     { s = (entry and entry.s * DECAY ^ (n - entry.n0) or 0) + 1, n0 = n }
   fxScores.n = n
-  all[ident] = fxScores
+  all[pluginKey] = fxScores
   ds:assign('paramFrecency', all)
   frecencyGen = frecencyGen + 1
 end

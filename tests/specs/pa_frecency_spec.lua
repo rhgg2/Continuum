@@ -1,7 +1,9 @@
--- Frecency decays per plugin-use, not per day: each bump advances the fx
--- ident's counter and rebases the param's score against it, so idle
+-- Frecency decays per plugin-use, not per day: each bump advances the
+-- plugin's counter and rebases the param's score against it, so idle
 -- wall-clock costs nothing. Pins frecencyOrder (decayed score desc, index
--- tie-break) and the bump arithmetic through cm's global tier.
+-- tie-break) and the bump arithmetic through cm's global tier. Scores are
+-- held under the plugin's catalogue key, so an update moving a VST's files
+-- keeps them.
 
 local t    = require('support')
 local util = require('util')
@@ -11,6 +13,11 @@ local pa = util.instantiate('paramAutomation', {})
 local PARAMS = { { index = 0, name = 'Gain' },
                  { index = 1, name = 'Cutoff' },
                  { index = 2, name = 'Res' } }
+
+local EQ_DIR  = '/Library/Audio/Plug-Ins/VST3/Effects/EQ/'
+local TOP_DIR = '/Library/Audio/Plug-Ins/VST3/'
+local FILE    = 'Canvas Audio - 8K.vst3'
+local ID      = '<1886275761{ABCDEF019182FAEB436E764F4B636444'
 
 local function names(params)
   local out = {}
@@ -70,19 +77,43 @@ return {
       local dst = 'dst/track'
       r._state.projectTracks = { dst }
       r._state.trackGuids[dst] = '{DST}'
-      r:setTrackFX(dst, { { ident = 'VST3:Synth' } })
+      r:setInstalledFx({ { name = 'VST3: 8K (Canvas Audio)', ident = EQ_DIR .. FILE } })
+      r:setTrackFX(dst, { { ident = EQ_DIR .. FILE .. ID, fxType = 'VST3' } })
       r:setFxGuid(dst, 0, '{FX-synth}')
-      r:setFxParamNames('VST3:Synth', { 'Gain', 'Cutoff', 'Res' })
+      r:setFxParamNames(EQ_DIR .. FILE .. ID, { 'Gain', 'Cutoff', 'Res' })
 
       h.pa:bumpFrecency('{DST}', '{FX-synth}', 2)   -- Res
       h.pa:bumpFrecency('{DST}', '{FX-synth}', 2)
 
-      local f = h.ds:get('paramFrecency')['VST3:Synth']
-      t.eq(f.n, 2, 'two uses on the ident')
+      local f = h.ds:get('paramFrecency')['Canvas_Audio___8K.vst3']
+      t.eq(f.n, 2, 'two uses on the plugin')
       t.eq(f.params[2].n0, 2)
       t.truthy(math.abs(f.params[2].s - 1.9) < 1e-9, 'decayed 1×0.9 then +1')
 
       t.deepEq(names(h.pa:params('{DST}', '{FX-synth}')), { 'Res', 'Gain', 'Cutoff' })
+    end,
+  },
+
+  {
+    name = 'a VST\'s scores survive a change of its ident\'s directory',
+    run = function(harness)
+      local h = harness.mk{}
+      local r = h.reaper
+      local dst = 'dst/track'
+      r._state.projectTracks = { dst }
+      r._state.trackGuids[dst] = '{DST}'
+      r:setTrackFX(dst, { { ident = EQ_DIR .. FILE .. ID, fxType = 'VST3' },
+                          { ident = TOP_DIR .. FILE .. ID, fxType = 'VST3' } })
+      r:setFxGuid(dst, 0, '{FX-old}')
+      r:setFxGuid(dst, 1, '{FX-new}')
+      r:setFxParamNames(EQ_DIR .. FILE .. ID, { 'Gain', 'Cutoff', 'Res' })
+      r:setFxParamNames(TOP_DIR .. FILE .. ID, { 'Gain', 'Cutoff', 'Res' })
+
+      r:setInstalledFx({ { name = 'VST3: 8K (Canvas Audio)', ident = EQ_DIR .. FILE } })
+      h.pa:bumpFrecency('{DST}', '{FX-old}', 2)   -- Res
+      r:setInstalledFx({ { name = 'VST3: 8K (Canvas Audio)', ident = TOP_DIR .. FILE } })
+
+      t.deepEq(names(h.pa:params('{DST}', '{FX-new}')), { 'Res', 'Gain', 'Cutoff' })
     end,
   },
 

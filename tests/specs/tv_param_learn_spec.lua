@@ -8,6 +8,8 @@ local t = require('support')
 local NOTE = { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                detune = 0, delay = 0, lane = 1 }
 
+local IDENT = '/Library/Audio/Plug-Ins/VST3/Canvas Audio - 8K.vst3<1886275761{ABCDEF019182FAEB436E764F4B636444'
+
 local ROW = { trackGuid = '{DST}', fxGuid = '{FX-synth}', name = 'Synth' }
 
 local function mkScenario(harness)
@@ -18,9 +20,11 @@ local function mkScenario(harness)
   r._state.trackGuids[src] = '{SRC}'
   r._state.trackGuids[dst] = '{DST}'
   r._state.projectItems = { { takes = { 'take1' } } }
-  r:setTrackFX(dst, { { ident = 'VST3:Synth' } })
+  r:setInstalledFx({ { name = 'VST3: 8K (Canvas Audio)',
+                       ident = '/Library/Audio/Plug-Ins/VST3/Canvas Audio - 8K.vst3' } })
+  r:setTrackFX(dst, { { ident = IDENT, fxType = 'VST3' } })
   r:setFxGuid(dst, 0, '{FX-synth}')
-  r:setFxParamNames('VST3:Synth', { 'Gain', 'Cutoff', 'Res' })
+  r:setFxParamNames(IDENT, { 'Gain', 'Cutoff', 'Res' })
   return h, r, src, dst
 end
 
@@ -110,7 +114,7 @@ return {
       h.vm:automateParam()
       t.truthy(h.vm:paramBinding(1, 119), 'bound at the top lane')
       t.falsy(h.vm:learnFxGuid(), 'learn cancelled')
-      t.eq(h.ds:get('paramFrecency')['VST3:Synth'].n, 1, 'one bump')
+      t.eq(h.ds:get('paramFrecency')['Canvas_Audio___8K.vst3'].n, 1, 'one bump')
     end,
   },
 

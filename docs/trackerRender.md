@@ -69,7 +69,8 @@ fx-name / section-heading column, so flat and grouped fx line up.
 Frecency is keyed by param *index*, not name (`paramAutomation`), so
 identically-named params — ReaEQ's eight “Freq” — score independently. The
 transient touch-learn hoist was already index-keyed; this aligns the persisted
-scores with it.
+scores with it. Scores are held per plugin under its catalogue key
+(`fxCatalogue.keyAt`), so an update moving a VST's files keeps them.
 
 ## Palette tabs
 

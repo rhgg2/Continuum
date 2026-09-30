@@ -26,6 +26,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-09-30 tracker: key parameter frecency on the catalogue key (§ Usage 4)
 - 2026-09-30 wiring: key each installed plugin, re-read the set on every call (§ Identity)
 
 ## Now
@@ -34,9 +35,3 @@
 
 ## Queued (current phase; one-liners)
 
-- tracker: key parameter frecency on the catalogue key (§ Usage 4) —
-  the shared module derives an instance's key from its `fx_type` and
-  `fx_ident`, and `pa` reads and bumps `paramFrecency` under that key in
-  place of the raw ident. Scores held under an absolute VST path are
-  orphaned, with no migration. The spec shows a VST's scores surviving
-  a change of its ident's directory.
