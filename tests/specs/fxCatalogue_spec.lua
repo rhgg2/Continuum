@@ -14,6 +14,17 @@
 -- its last, then gains one. The write patches the entry, so its other facts
 -- stand, and it never consults the installed set, so an entry no installed
 -- plugin resolves to stands too.
+--
+-- traits resolves midi in, midi out and instrument each on its own: the
+-- entry's authored value, over a JSFX's parse, over the format's trailing-'i'
+-- instrument mark (an instrument accepts MIDI), over the default of both midi
+-- present and instrument absent. Bus awareness comes only from the parse.
+--
+-- A JSFX's traits parse from its source under the Effects directory, read
+-- once per path for the session: midirecv means midi in, midisend or midisyx
+-- midi out, and an uncommented `ext_midi_bus = 1` bus awareness. The module is
+-- fresh per scenario, so these tests require it after harness.mk rather than
+-- using the top-level handle, whose memo is older.
 local t           = require('support')
 local harness     = require('harness')
 local fxCatalogue = require('fxCatalogue')
@@ -92,6 +103,22 @@ local INSTANCES = {
 -- match on the file alone picks the wrong plugin.
 local GALAXY = { name = 'VST3: Galaxy (Sapphire)',
                  ident = VST3DIR .. 'Effects/Filter/Sapphire.vst3<1323625663' }
+
+-- A fresh module over a fresh fake, with the given JSFX sources seeded.
+local function freshCatalogue(sources)
+  local reaper = harness.mk().reaper
+  for path, content in pairs(sources or {}) do reaper:setJsfx(path, content) end
+  return require('fxCatalogue'), reaper
+end
+
+-- A JSFX's traits with no catalogue, so the parse answers every trait it gives.
+local function parse(content)
+  return freshCatalogue({ ['probe/fx'] = content }).traits(nil, 'JS', 'probe/fx')
+end
+
+local function catalogueOf(entries) return { n = 0, entries = entries } end
+
+local RECV_ONLY = 'desc:r\n@block\nwhile (midirecv(o,a,b)) ( x = a; );\n'
 
 return {
   {
@@ -222,6 +249,131 @@ return {
       near(gone.usage.s, 1)
       t.eq(gone.usage.n0, 1)
       t.truthy(entries['Canvas_Audio___8K.vst3'], 'the installed key is written beside it')
+    end,
+  },
+
+  -- ---- traits
+  {
+    name = 'traits: an authored midiOut alone leaves midi in and instrument to the default',
+    run = function()
+      local cat = freshCatalogue()
+      local catalogue = catalogueOf({ ['Comp.vst3'] = { traits = { midiOut = false } } })
+      t.deepEq(cat.traits(catalogue, 'VST3', 'Comp.vst3'),
+               { midiIn = true, midiOut = false, instrument = false, busAware = false })
+    end,
+  },
+  {
+    name = 'traits: the instrument mark makes an instrument that accepts midi',
+    run = function()
+      local cat = freshCatalogue()
+      local got = cat.traits(catalogueOf({}), 'VST3i', 'Aeolus.vst3')
+      t.eq(got.instrument, true)
+      t.eq(got.midiIn,     true)
+      t.eq(got.midiOut,    true, 'midi out untouched by the mark: the default')
+    end,
+  },
+  {
+    name = 'traits: an authored instrument = false overrides the mark, which still gives midi in',
+    run = function()
+      local cat = freshCatalogue()
+      local catalogue = catalogueOf({ ['Aeolus.vst3'] = { traits = { instrument = false } } })
+      local got = cat.traits(catalogue, 'VST3i', 'Aeolus.vst3')
+      t.eq(got.instrument, false, 'authored over the mark')
+      t.eq(got.midiIn,     true,  'the mark still answers midi in')
+    end,
+  },
+  {
+    name = 'traits: a JSFX\'s parse answers its midi traits, and authored answers over it',
+    run = function()
+      local cat = freshCatalogue({ ['midi/recv'] = RECV_ONLY })
+      local parsed = cat.traits(catalogueOf({}), 'JS', 'midi/recv')
+      t.eq(parsed.midiIn,  true)
+      t.eq(parsed.midiOut, false, 'no midisend: the parse, over the default')
+      local authored = cat.traits(catalogueOf({ ['midi/recv'] = { traits = { midiOut = true } } }),
+                                  'JS', 'midi/recv')
+      t.eq(authored.midiOut, true,  'authored over parsed')
+      t.eq(authored.midiIn,  true,  'the parse still answers midi in')
+    end,
+  },
+  {
+    name = 'traits: bus awareness comes from the JSFX parse',
+    run = function()
+      local cat = freshCatalogue({ ['midi/bus'] = 'desc:b\next_midi_bus = 1\n', ['midi/recv'] = RECV_ONLY })
+      t.eq(cat.traits(catalogueOf({}), 'JS', 'midi/bus').busAware,  true)
+      t.eq(cat.traits(catalogueOf({}), 'JS', 'midi/recv').busAware, false)
+    end,
+  },
+  {
+    name = 'traits: a missing JSFX, a nil key or a nil catalogue fall to the defaults, the mark still applying',
+    run = function()
+      local cat = freshCatalogue()
+      local DEFAULTS = { midiIn = true, midiOut = true, instrument = false, busAware = false }
+      t.deepEq(cat.traits(catalogueOf({}), 'JS', 'gone/fx'), DEFAULTS, 'missing JSFX')
+      t.deepEq(cat.traits(catalogueOf({}), 'VST3', nil),     DEFAULTS, 'nil key')
+      t.deepEq(cat.traits(nil, 'AU', 'Apple: AUDelay'),      DEFAULTS, 'nil catalogue')
+      t.eq(cat.traits(nil, 'CLAPi', nil).instrument, true, 'the mark reads the format alone')
+    end,
+  },
+
+  -- ---- jsfx parse
+  {
+    name = 'jsfx: ext_midi_bus = 1 marks bus awareness, spaced, unspaced or with a semicolon',
+    run = function()
+      t.eq(parse('ext_midi_bus = 1\n').busAware,  true)
+      t.eq(parse('ext_midi_bus=1\n').busAware,    true)
+      t.eq(parse('ext_midi_bus = 1;\n').busAware, true)
+    end,
+  },
+  {
+    name = 'jsfx: a commented ext_midi_bus = 1 does not mark bus awareness',
+    run = function()
+      t.eq(parse('//ext_midi_bus = 1\n').busAware,  false)
+      t.eq(parse('// ext_midi_bus = 1\n').busAware, false)
+      t.eq(parse('  // ext_midi_bus=1\n').busAware, false)
+    end,
+  },
+  {
+    name = 'jsfx: ext_midi_bus = 0 or 10 does not mark bus awareness (frontier on the digit)',
+    run = function()
+      t.eq(parse('ext_midi_bus = 0\n').busAware,  false)
+      t.eq(parse('ext_midi_bus = 10\n').busAware, false)
+    end,
+  },
+  {
+    name = 'jsfx: a declaration buried in a multi-line desc marks bus awareness; none does not',
+    run = function()
+      t.eq(parse('desc:Thing\nin_pin:left\nout_pin:left\next_midi_bus = 1\n@sample\nspl0 *= 1;\n').busAware, true)
+      t.eq(parse('desc:Plain\nin_pin:left\nout_pin:left\n@sample\nspl0 *= 1;\n').busAware, false)
+      t.eq(parse('').busAware, false, 'empty source')
+    end,
+  },
+  {
+    name = 'jsfx: midirecv gives midi in, midisend or midisyx midi out, comments stripped',
+    run = function()
+      local function midi(content)
+        local got = parse(content)
+        return { busAware = got.busAware, midiIn = got.midiIn, midiOut = got.midiOut }
+      end
+      t.deepEq(midi('desc:x\n@sample\nspl0 *= 1;\n'),
+               { busAware = false, midiIn = false, midiOut = false })
+      t.deepEq(midi('desc:x\n@block\nwhile (midirecv(o,a,b)) ( midisend(o,a,b); );\n'),
+               { busAware = false, midiIn = true, midiOut = true })
+      t.deepEq(midi('desc:x\n@block\n// midirecv(o,a,b)\nx = 1; // midisend too\n'),
+               { busAware = false, midiIn = false, midiOut = false })
+      t.deepEq(midi('desc:x\n@block\nmidisyx(o, ptr, len);\n'),
+               { busAware = false, midiIn = false, midiOut = true })
+      t.deepEq(midi('ext_midi_bus = 1\n@block\nmidirecv(o,a,b);\n'),
+               { busAware = true, midiIn = true, midiOut = false })
+    end,
+  },
+  {
+    name = 'jsfx: a path parses once per session; new source under it is not re-read',
+    run = function()
+      t.eq(parse(RECV_ONLY).midiIn, true, 'precondition: the second source parses as midi in')
+      local cat, reaper = freshCatalogue({ ['probe/fx'] = 'desc:x\n@sample\nspl0 *= 1;\n' })
+      t.eq(cat.traits(nil, 'JS', 'probe/fx').midiIn, false)
+      reaper:setJsfx('probe/fx', RECV_ONLY)
+      t.eq(cat.traits(nil, 'JS', 'probe/fx').midiIn, false, 'the first parse answers')
     end,
   },
 }

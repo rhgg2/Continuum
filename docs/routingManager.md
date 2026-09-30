@@ -173,6 +173,11 @@ stays private.
 1. `rm:fx(id)` always reads the chunk, and refreshes the cache from what it
    finds.
 
+1. Every fx record carries its plugin's resolved traits
+   (`docs/fxCatalogue.md` § Traits). Keying a VST instance walks the
+   installed set, so a read walks it once, on the first VST record, and
+   shares the rows across the rest; a read with no VST never walks it.
+
 ## Metadata
 
 1. A record field REAPER itself backs is **native**; any other key on a

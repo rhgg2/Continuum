@@ -2,9 +2,9 @@
 
 **The installed plugins, each under a catalogue key that names one
 plugin across an update moving its files, and a catalogue of facts
-about each.** The module holds no state of its own. It re-reads
-REAPER's installed set on every call, and the catalogue is a
-dataStore key.
+about each.** Its only state is a session memo of parsed JSFX
+descriptions (§ Traits). It re-reads REAPER's installed set on every
+call, and the catalogue is a dataStore key.
 
 ## The catalogue key
 
@@ -60,8 +60,8 @@ dataStore key.
    global dataStore key (`docs/dataStore.md`), so one catalogue serves
    every project.
 
-1. An entry holds facts about its plugin: its audio ports and its
-   usage score. The facts are independent. An entry may carry any of
+1. An entry holds facts about its plugin: its audio ports, its usage
+   score and any authored traits. The facts are independent. An entry may carry any of
    them and lack the rest, and a write to one leaves the others alone.
 
 1. Adding a plugin to the wiring graph (`docs/wiring.md`) is a **use**
@@ -81,6 +81,42 @@ dataStore key.
 
 1. A use writes the instance's audio ports into the plugin's entry,
    overwriting any it held. Ordinary use thus fills them in.
+
+## Traits
+
+1. A plugin's **traits** are three facts about it: whether it accepts
+   MIDI (**midi in**), whether it emits MIDI (**midi out**), and
+   whether it is an **instrument**.
+
+1. REAPER marks an instrument with a trailing `i` on its format prefix
+   — `VST3i`, `VSTi`, `AUi`, `CLAPi`. An instrument accepts MIDI. An
+   instance's mark is read from the type it reports, which carries the
+   same prefix.
+
+1. A JSFX's midi in and midi out come from its description: it accepts
+   MIDI where it calls `midirecv`, and emits MIDI where it calls
+   `midisend` or `midisyx`. The same parse gives its **bus awareness**,
+   a declaration of `ext_midi_bus = 1` outside a comment.
+
+1. A description is parsed once per session, and the parse is
+   remembered by the JSFX's path.
+
+1. Whether a plugin of any other format emits MIDI cannot be read, and
+   is authored on its entry.
+
+1. Each trait resolves on its own, authored over parsed over the mark.
+
+1. Where nothing resolves them, midi in and midi out are taken as
+   present, and instrument as absent. A JSFX whose description cannot
+   be read resolves the same way.
+
+1. The resolved traits carry bus awareness alongside, which only a
+   parse gives.
+
+1. routingManager resolves the traits of every fx record it reads
+   (`docs/routingManager.md` § Read cost). A read reads the catalogue
+   once, and walks the installed set at most once, for the first VST
+   it keys.
 
 ## Usage
 

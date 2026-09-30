@@ -8,7 +8,7 @@ local function mkWm(harness)
   local rm = util.instantiate('routingManager', { ds = h.ds })
   local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   -- 'JS:plain' scans as audio-only so the move tests stay bracket-free.
-  wm.readJSFXContent = function() return 'desc:plain\n@sample\nspl0 *= 1;\n' end
+  h.reaper:setJsfx('plain', 'desc:plain\n@sample\nspl0 *= 1;\n')
   wm:load()
   return h, wm
 end

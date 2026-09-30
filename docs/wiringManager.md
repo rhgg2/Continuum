@@ -190,6 +190,10 @@ certain fields exist and which side fills them:
   (`nodeHasMidiOut`) and the allocator (`fxMidiBus`); snap reads it from
   the rm record. Mismatch drives `setFXChain`; `reconcileFXChain` issues
   `rm:assignFx{midi}`, which writes only the bytes that differ.
+- **`traits`** ride only on snapshot entries, copied from the rm record
+  (`docs/fxCatalogue.md` § Traits). Read takes an fx node's midi ports and
+  bus awareness from them, and a JSFX's midi surface where it has no routing
+  record; the differ ignores them.
 - **`pinMaps`** carries pair-lists for every port with a route (target:
   allocator-touched; snap: REAPER non-empty); an absent port means
   disconnected. It rides inline on each `fx` entry — including FX the
@@ -432,10 +436,8 @@ second `rm:tracks()` pass.
 
 The reconcile pipeline *and* the live poke path route every topology read and
 write through rm, so wm names tracks and FX by record `id`, never a handle.
-Two raw `reaper.*` calls remain — neither a routing op:
+One raw `reaper.*` call remains, and it is not a routing op:
 
-- **`readJSFXContent`** — reads a JSFX file off disk (`fs.join` +
-  `GetResourcePath`) to parse its bus-aware desc. A filesystem read.
 - **Take guard** — `wm:deleteSource` counts a source track's media items
   (`CountTrackMediaItems`) to refuse deleting authored takes. An item-count
   query rm's track/FX vocabulary doesn't model.

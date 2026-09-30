@@ -11,6 +11,8 @@ local function mkWm(harness)
   return h, wm
 end
 
+local readGraph = require('fixtures.snapshotTraits').readGraph
+
 local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
@@ -96,7 +98,7 @@ local function roundtrip(harness, fixture)
       target[rmId(id, n)].hasMidiTake = true
     end
   end
-  local nfR = normalForm(wm.readGraph(target))
+  local nfR = normalForm(readGraph(wm, target))
   t.deepEq(nfR.kinds, nfG.kinds, fixture.name .. ': node identity')
   local onlyRead, onlyG = edgeDiff(nfR.edges, nfG.edges)
   t.deepEq(onlyRead, fixture.expectExtra   or {}, fixture.name .. ': phantom edges')

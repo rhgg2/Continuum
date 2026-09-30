@@ -269,7 +269,8 @@ the park) and moves the FX's emission onto its output bus — or swallows it wit
 JSFX would hear, eat, or feed the phantom bus-0 stream the graph says it is not
 wired to. A JSFX whose source never touches `midirecv`/`midisend` needs no
 brackets at all — MIDI passes it untouched; that capability arrives on
-`ports.midi` from wm's source scan. VST/AU slots take chunk surgery on their
+`ports.midi` from the plugin's resolved traits (`docs/fxCatalogue.md` §
+Traits). VST/AU slots take chunk surgery on their
 trailer in/out bus bytes instead (see `docs/wiringManager.md § Per-FX MIDI
 routing`). The allocator surfaces `state.fxMidiBus[fxId] = { inBus, outBus }` for
 native FX; a bus-aware JSFX other than the first-party CU is refused at

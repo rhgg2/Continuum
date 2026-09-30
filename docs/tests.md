@@ -56,6 +56,12 @@ Isolation between scenarios:
   redirects those paths to temp files at require time and truncates
   them in each `mk()`, so one scenario's `cm:set('global', …)`
   can't leak into the next.
+- A path under the resource directory's `Effects/` is a JSFX source,
+  and the harness serves it from the fake's `r:setJsfx` store; an
+  unseeded path opens as nil.
+- fxCatalogue memoises JSFX parses module-level, so each `mk()` drops
+  `package.loaded.fxCatalogue`. A spec's top-level handle to it holds
+  an older memo; a spec that parses requires it after `mk()`.
 
 Seeding: payload notes get `evType = 'note'`; a stamped note (ppqL
 present) is defaulted `lane = 1, detune = 0, delay = 0` because tm

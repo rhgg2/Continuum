@@ -71,8 +71,8 @@ return {
     end,
   },
   {
-    -- snapshot probes JSFX descs so read can quarantine a bus-aware fx; only true is stamped.
-    name = 'fx: a bus-aware JSFX is stamped busAware, a plain one is not',
+    -- snapshot carries each fx's traits so read can quarantine a bus-aware fx.
+    name = 'fx: a bus-aware JSFX carries busAware traits, a plain one does not',
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
@@ -85,13 +85,12 @@ return {
         g.nodes['fp'] = { kind='fx', fxIdent='JS:Plain', fxId='{FX-p}',
                           pos={x=0,y=0}, ports={audio={ins=1,outs=1},midi={ins=1,outs=1}} }
       end)
-      wm.readJSFXContent = function(_, ident)
-        return ident == 'JS:BusAware' and 'desc:B\next_midi_bus = 1\n' or 'desc:P\n@sample\n'
-      end
+      h.reaper:setJsfx('BusAware', 'desc:B\next_midi_bus = 1\n')
+      h.reaper:setJsfx('Plain',    'desc:P\n@sample\n')
       local fxBy = {}
       for _, e in ipairs(wm:snapshot()['guid-A'].fx) do fxBy[e.id] = e end
-      t.eq(fxBy['{FX-b}'].busAware, true, 'bus-aware fx stamped')
-      t.eq(fxBy['{FX-p}'].busAware, nil,  'plain fx left unstamped')
+      t.eq(fxBy['{FX-b}'].traits.busAware, true,  'bus-aware fx')
+      t.eq(fxBy['{FX-p}'].traits.busAware, false, 'plain fx')
     end,
   },
   {

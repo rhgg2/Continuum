@@ -36,7 +36,7 @@ end
 
 -- Scan the test JSFX as audio-only. A MIDI-capable scan brackets the chain with a bus-route
 -- CU when the graph is re-read from REAPER, which the authored-node stacks above never see.
-local function audioOnlyJSFX() return 'desc:plain\n@sample\nspl0 *= 1;\n' end
+local AUDIO_ONLY_JSFX = 'desc:plain\n@sample\nspl0 *= 1;\n'
 
 return {
   {
@@ -143,7 +143,7 @@ return {
     name = 'enableLive: a settled project reconciles to zero ops and opens no undo block',
     run = function(harness)
       local h, wm = mkWm(harness)
-      wm.readJSFXContent = audioOnlyJSFX
+      h.reaper:setJsfx('foo', AUDIO_ONLY_JSFX)
       seedSource(h, 'guid-A')
       wm:enableLive()
       wm:mutate(function(g)
@@ -161,7 +161,6 @@ return {
       -- REAPER state has nothing to apply, so enableLive's reconcile must write nothing.
       local rm2 = util.instantiate('routingManager', { ds = h.ds })
       local wm2 = util.instantiate('wiringManager', { cm = h.cm, rm = rm2 })
-      wm2.readJSFXContent = audioOnlyJSFX
       wm2:load()
       wm2:enableLive()
 

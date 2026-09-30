@@ -28,6 +28,7 @@ function M.new()
     loopEnd      = 0,
     calls        = {},
     installedFx  = {},
+    jsfx         = {},
     console      = {},
     messages     = {},
     gmem         = {},
@@ -1357,6 +1358,10 @@ function M.new()
   end
   function r:setInstalledFx(list)
     state.installedFx = list
+  end
+  -- A JSFX's source by its Effects-relative path; the harness's io.open serves it from here.
+  function r:setJsfx(path, content)
+    state.jsfx[path] = content
   end
   function r:setFxGuid(track, idx, guid)
     -- Two-arg call (track, guid) is legacy: pins fxIdx 0 to guid.

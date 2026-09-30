@@ -13,6 +13,8 @@ local function mkWm(harness)
   return h, wm
 end
 
+local readGraph = require('fixtures.snapshotTraits').readGraph
+
 local function seedSource(h, guid)
   local track = { __label = 'src-' .. guid }
   table.insert(h.reaper._state.projectTracks, track)
@@ -73,7 +75,7 @@ return {
                                 midi={ inBus=0, outBus=0, inDisabled=false, outDisabled=true },
                                 pinMaps={ ins={}, outs={ [1]={1} } } } } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-arp.1->master.-',
         'midi guid-A.-->g-arp.-',
@@ -97,7 +99,7 @@ return {
       end)
       -- A midi source's take is REAPER-resident; targetState doesn't author it, so overlay it.
       local target = wm:targetState(); target['guid-A'].hasMidiTake = true
-      local rg = wm.readGraph(target)
+      local rg = readGraph(wm, target)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['g-syn']='fx', ['g-f2']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -127,7 +129,7 @@ return {
         util.add(g.edges, { type='audio', from='sb', to='f' })
         util.add(g.edges, { type='audio', from='f',  to='master' })
       end)
-      local rg = wm.readGraph(wm:targetState())
+      local rg = readGraph(wm, wm:targetState())
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['guid-B']='source', ['g-f']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -150,7 +152,7 @@ return {
         util.add(g.edges, { type='audio', from='s', to='f' })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
-      local rg = wm.readGraph(wm:targetState())
+      local rg = readGraph(wm, wm:targetState())
       t.deepEq(edgeSet(rg), {
         'audio g-f.1->master.-',
         'audio guid-A.1->g-f.1',
@@ -170,7 +172,7 @@ return {
         util.add(g.edges, { type='audio', from='s', to='f', ops={gain=0.5} })
         util.add(g.edges, { type='audio', from='f', to='master' })
       end)
-      local rg = wm.readGraph(wm:targetState())
+      local rg = readGraph(wm, wm:targetState())
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['g-f']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -195,7 +197,7 @@ return {
         util.add(g.edges, { type='audio', from='f1', to='master', ops={gain=0.7} })
         util.add(g.edges, { type='audio', from='f2', to='master' })
       end)
-      local rg = wm.readGraph(wm:targetState())
+      local rg = readGraph(wm, wm:targetState())
       t.deepEq(edgeSet(rg), {
         'audio g-f1.1->master.- @0.7',
         'audio g-f2.1->master.-',
@@ -219,7 +221,7 @@ return {
         ['guid-C'] = { trackKind='newTrack', id='guid-C', nchan=2, mainSend={on=false}, sends={},
           fx = { { id='g-m', ident='VST:M', ins=0, outs=1, midi={ inBus=0, outBus=0, outDisabled=true } } } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['guid-B']='source', ['g-m']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -240,7 +242,7 @@ return {
         ['guid-C'] = { trackKind='newTrack', id='guid-C', nchan=2, mainSend={on=false}, sends={},
           fx = { { id='g-m', ident='VST:M', ins=0, outs=1, midi={ inBus=0, outBus=0, outDisabled=true } } } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'midi guid-A.-->g-m.-',
       })
@@ -267,7 +269,7 @@ return {
           },
         },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['g-A']='fx', ['g-B']='fx', ['g-C']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -302,7 +304,7 @@ return {
             bOut,
           } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-a']='source', ['guid-b']='source',
                  fxC1='fx', fxC2='fx' })
@@ -330,7 +332,7 @@ return {
               midi = { inBus=0, outBus=0, inDisabled=false, outDisabled=true } },
           } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), { 'midi guid-a.-->g-n.-' },
                'JSFX unwired; the native fx still hears the restored source stream')
     end,
@@ -341,18 +343,16 @@ return {
     name = 'read: pure-audio JSFX leaves the bus-0 producer untouched',
     run = function(harness)
       local _, wm = mkWm(harness)
-      wm.readJSFXContent = function(_, ident)
-        if ident == 'JS:AudioOnly' then return 'desc:gain\n@sample\nspl0 *= 0.5;\n' end
-      end
       local snap = {
         ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
-            { id='g-a', ident='JS:AudioOnly', ins=1, outs=1 },
+            { id='g-a', ident='JS:AudioOnly', ins=1, outs=1,
+              traits = { midiIn=false, midiOut=false, instrument=false, busAware=false } },
             { id='g-n', ident='VST:Synth', ins=1, outs=1,
               midi = { inBus=0, outBus=0, inDisabled=false, outDisabled=true } },
           } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), { 'midi guid-a.-->g-n.-' },
                'no phantom edges through the audio-only JSFX')
     end,
@@ -361,20 +361,16 @@ return {
     name = 'read: recv-only JSFX consumes bus 0 — nothing downstream hears it',
     run = function(harness)
       local _, wm = mkWm(harness)
-      wm.readJSFXContent = function(_, ident)
-        if ident == 'JS:RecvOnly' then
-          return 'desc:eater\n@block\nwhile (midirecv(o, m1, m23)) ( 0; );\n'
-        end
-      end
       local snap = {
         ['guid-a'] = { trackKind='sourceTrack', id='guid-a', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
-            { id='g-r', ident='JS:RecvOnly', ins=1, outs=1 },
+            { id='g-r', ident='JS:RecvOnly', ins=1, outs=1,
+              traits = { midiIn=true, midiOut=false, instrument=false, busAware=false } },
             { id='g-n', ident='VST:Synth', ins=1, outs=1,
               midi = { inBus=0, outBus=0, inDisabled=false, outDisabled=true } },
           } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), { 'midi guid-a.-->g-r.-' },
                'the recv-only JSFX is the bus-0 consumer; the native fx hears nothing')
     end,
@@ -389,10 +385,11 @@ return {
         ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, hasMidiTake=true, sends={},
           fx = {
             { id='g-f', ident='JS:Plain',    ins=1, outs=1 },
-            { id='g-b', ident='JS:BusAware', ins=1, outs=1, busAware=true },
+            { id='g-b', ident='JS:BusAware', ins=1, outs=1,
+              traits = { midiIn=true, midiOut=true, instrument=false, busAware=true } },
           } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.eq(rg.nodes['g-b'].busAware, true, 'busAware copied onto the node')
       local byNodes = {}
       for _, c in ipairs(rg.components) do byNodes[table.concat(c.nodes, ',')] = c.reason or false end
@@ -416,7 +413,7 @@ return {
       snap['guid-P'].id, snap['guid-Q'].id = 'guid-P', 'guid-Q'
       snap['guid-P'].fx = { { id='fp', ident='VST:F', ins=1, outs=1, pinMaps={ins={[1]={1}}, outs={[1]={1}} } } }
       snap['guid-Q'].fx = { { id='fq', ident='VST:F', ins=1, outs=1, pinMaps={ins={[1]={1}}, outs={[1]={1}} } } }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg), { master='master', fp='fx', fq='fx' })
       local byNodes = {}
       for _, c in ipairs(rg.components) do byNodes[table.concat(c.nodes, ',')] = c.reason or false end
@@ -494,7 +491,7 @@ return {
         ['guid-A'] = { trackKind='sourceTrack', id='guid-A', nchan=2, mainSend={on=false}, sends={},
           fx = { { id='g-eq', ident='VST3:ReaEQ', name='VST3: ReaEQ (Cockos)', ins=1, outs=1 } } },
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.eq(rg.nodes['g-eq'].fxDisplay, 'ReaEQ', 'short name strips type prefix and author')
     end,
   },

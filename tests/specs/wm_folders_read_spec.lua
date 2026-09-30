@@ -46,6 +46,8 @@ local function audioFx(id, ident)
 end
 local function withId(entry, id) entry.id = id; return entry end
 
+local readGraph = require('fixtures.snapshotTraits').readGraph
+
 return {
   {
     -- The starburst: two children sum into their folder parent, which feeds master.
@@ -58,7 +60,7 @@ return {
         ['guid-B'] = withId(child('guid-P'), 'guid-B'),
         ['guid-P'] = withId(parent(), 'guid-P'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['guid-B']='source', ['guid-P']='source' })
       t.deepEq(edgeSet(rg), {
@@ -80,7 +82,7 @@ return {
         ['guid-A'] = withId(child('guid-P'), 'guid-A'),
         ['guid-P'] = withId(p, 'guid-P'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg),
                { master='master', ['guid-A']='source', ['guid-P']='source', ['g-eq']='fx' })
       t.deepEq(edgeSet(rg), {
@@ -102,7 +104,7 @@ return {
                  pinMaps={ ins={}, outs={ [1]={1} } } } }
       local a = withId(child('guid-P'), 'guid-A'); a.hasMidiTake = true
       local snap = { ['guid-A'] = a, ['guid-P'] = withId(p, 'guid-P') }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-syn.1->master.-',
         'audio guid-A.1->guid-P.1',
@@ -126,7 +128,7 @@ return {
         ['guid-A'] = withId(child('guid-P'), 'guid-A'),  -- audio-only child: no midi take
         ['guid-P'] = withId(p, 'guid-P'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-arp.1->master.-',
         'audio guid-A.1->guid-P.1',
@@ -148,7 +150,7 @@ return {
         ['guid-A'] = withId(child('guid-P'), 'guid-A'),  -- audio-only child: makes guid-P a folderSink
         ['guid-P'] = withId(p, 'guid-P'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-arp.1->master.-',
         'audio guid-A.1->guid-P.1',
@@ -171,7 +173,7 @@ return {
         ['guid-P'] = withId(parent(), 'guid-P'),
         ['guid-Q'] = withId(q, 'guid-Q'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-q.1->master.-',
         'audio guid-A.1->g-q.1',
@@ -191,7 +193,7 @@ return {
         ['guid-Inner'] = withId(child('guid-Outer'), 'guid-Inner'),
         ['guid-Outer'] = withId(parent(), 'guid-Outer'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(nodeKinds(rg), { master='master',
                ['guid-Leaf']='source', ['guid-Inner']='source', ['guid-Outer']='source' })
       t.deepEq(edgeSet(rg), {
@@ -217,7 +219,7 @@ return {
         ['guid-P'] = withId(parent(), 'guid-P'),
         ['guid-Q'] = withId(q, 'guid-Q'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-q.1->master.-',
         'audio guid-A.1->guid-P.1',
@@ -262,7 +264,7 @@ return {
                  midi={ inBus=1, outBus=0, inDisabled=false, outDisabled=true },
                  pinMaps={ ins={ [1]={1} }, outs={ [1]={1} } } } }
       local snap = { ['guid-A'] = withId(a, 'guid-A'), ['guid-P'] = withId(p, 'guid-P') }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio g-arp.1->master.-',
         'audio guid-A.1->guid-P.1',
@@ -294,7 +296,7 @@ return {
         ['guid-B'] = withId(b, 'guid-B'),
         ['guid-P'] = withId(p, 'guid-P'),
       }
-      local rg = wm.readGraph(snap)
+      local rg = readGraph(wm, snap)
       t.deepEq(edgeSet(rg), {
         'audio guid-A.1->guid-P.1',
         'audio guid-B.1->guid-P.1',

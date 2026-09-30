@@ -27,6 +27,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-01 fxCatalogue: resolve a plugin's traits, authored over parsed over mark (§ Traits)
 - 2026-09-30 wiring: record a plugin's ports and usage in the catalogue on add (§ The catalogue, § Probing 1–2, § Usage 1–3)
 - 2026-09-30 tracker: key parameter frecency on the catalogue key (§ Usage 4)
 - 2026-09-30 wiring: key each installed plugin, re-read the set on every call (§ Identity)
@@ -37,17 +38,4 @@
 
 ## Queued (current phase; one-liners)
 
-- **Traits** (§ Traits) — fxCatalogue resolves a plugin's midi in, midi
-  out and instrument authored over parsed over the mark. Authored comes
-  from the entry's `traits`, which only a ds write sets for now. Parsed
-  comes from a JSFX description: midi in on `midirecv`, midi out on
-  `midisend` or `midisyx`. The mark is the `i` ending the format prefix,
-  and an instrument accepts MIDI. Where nothing resolves, midi in and out
-  are present and instrument absent. wm's JSFX parse
-  (`parseJSFXMidiTraits`, `readJSFXContent` and the session memo) moves
-  into fxCatalogue, with `busAware` read from the same parse. wm's
-  `fxMidiPorts` and its two `recv` reads go through the resolved traits,
-  so a native plugin's authored midi out reaches its node's midi ports.
-  Spec: the resolution order in `fxCatalogue_spec`; wm's existing
-  midi-port specs pass unchanged.
 

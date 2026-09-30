@@ -58,6 +58,8 @@ local function flagBusTrack(target, guid)
   end
 end
 
+local readGraph = require('fixtures.snapshotTraits').readGraph
+
 return {
   {
     name = 'matrix round-trip: flagged track mints the bus, gains land on the right edges',
@@ -78,7 +80,7 @@ return {
       end)
       local target = wm:targetState()
       t.truthy(flagBusTrack(target, 'guid-bus'), 'summing track present in target')
-      local rg = wm.readGraph(target, { ['bus-1'] = { trackId = 'guid-bus' } })
+      local rg = readGraph(wm, target, { ['bus-1'] = { trackId = 'guid-bus' } })
       t.eq(rg.nodes['bus-1'].kind, 'bus')
       t.eq(rg.nodes['bus-1'].ports.audio.ins,  1)
       t.eq(rg.nodes['bus-1'].ports.audio.outs, 1)
@@ -100,7 +102,7 @@ return {
         ['orphan']     = { trackKind = 'newTrack', id = 'guid-bus', fx = {}, sends = {},
                            mainSend = { on = false } },
       }
-      local rg = wm.readGraph(snap, { ['bus-1'] = { trackId = 'guid-bus' } })
+      local rg = readGraph(wm, snap, { ['bus-1'] = { trackId = 'guid-bus' } })
       t.eq(rg.nodes['bus-1'].kind, 'bus', 'bus minted with no inputs')
       t.falsy(rg.nodes['guid-bus'], 'no source node minted for the flagged track')
       t.eq(#rg.edges, 0)
@@ -120,7 +122,7 @@ return {
         util.add(g.edges, { type='audio', from='sb', to='bus-1' })
         util.add(g.edges, { type='audio', from='bus-1', to='master', ops={gain=0.9} })
       end)
-      local rg = wm.readGraph(wm:targetState(), { ['bus-1'] = {
+      local rg = readGraph(wm, wm:targetState(), { ['bus-1'] = {
         ins  = { { node = 'guid-A', port = 1, gain = 0.5 }, { node = 'guid-B', port = 1 } },
         outs = { { node = 'master', port = 1, gain = 0.9 } },
       } })
@@ -141,7 +143,7 @@ return {
         ['srcA'] = { trackKind = 'sourceTrack', id = 'guid-A', fx = {}, sends = {},
                      mainSend = { on = false } },
       }
-      local rg = wm.readGraph(snap, {
+      local rg = readGraph(wm, snap, {
         ['bus-1'] = { ins = { { node = 'guid-A', port = 1, gain = 0.5 },
                               { node = 'guid-ghost', port = 1 } }, outs = {} },
         ['bus-2'] = {},
@@ -156,7 +158,7 @@ return {
     run = function(harness)
       local _, wm = mkWm(harness)
       local snap = { ['__master__'] = { trackKind = 'master', fx = {} } }
-      local rg = wm.readGraph(snap, {
+      local rg = readGraph(wm, snap, {
         ['bus-1'] = { outs = { { node = 'bus-2', port = 1 } } },
         ['bus-2'] = { ins  = { { node = 'bus-1', port = 1 } } },
       })

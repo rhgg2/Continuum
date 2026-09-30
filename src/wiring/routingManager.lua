@@ -335,7 +335,7 @@ end
 
 ----- FX read
 
---shape: fx = { id=guid, ident=string, fxType=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- ident JS-normalised; midi only for VST/AU/CLAP; rm:fx adds trackId
+--shape: fx = { id=guid, ident=string, fxType=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled}, traits=traits }  -- ident JS-normalised; midi only for VST/AU/CLAP; traits per fxCatalogue; rm:fx adds trackId
 
 -- Display name: a user instance rename wins, else the plugin's own name.
 local function fxName(track, idx)
@@ -351,7 +351,7 @@ local function fxTypeAt(track, idx)
 end
 
 -- REAPER hands JSFX idents as bare paths ('utility/volume') from fx_ident and
--- EnumInstalledFX; JS keys on a 'JS:' prefix (CU_IDENT, isJS, readJSFXContent).
+-- EnumInstalledFX; JS keys on a 'JS:' prefix (CU_IDENT, isJS).
 local function jsIdent(ident)
   if ident:sub(1, 3) == 'JS:' then return ident end
   return 'JS:' .. ident
@@ -389,6 +389,19 @@ local function readFx(track, idx)
     outNames = portNames(track, idx, 'out', outPins),
     pinMaps  = readPinMaps(track, idx),
   }
+end
+
+-- One catalogue read per pass, and the installed set walked at most once: only a VST's
+-- key needs it. see docs/routingManager.md § Read cost.
+local function stampTraits(fxRecords)
+  local catalogue = ds:get('fxCatalogue')
+  local rows
+  for _, fx in ipairs(fxRecords) do
+    if not rows and fx.fxType:sub(1, 3) == 'VST' then rows = fxCatalogue.installed() end
+    local raw = fx.fxType == 'JS' and fx.ident:sub(4) or fx.ident
+    local key = fxCatalogue.instanceKey(fx.fxType, raw, rows)
+    fx.traits = fxCatalogue.traits(catalogue, fx.fxType, key)
+  end
 end
 
 -- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
@@ -799,10 +812,14 @@ function rm:tracks()
   end
   local master = reaper.GetMasterTrack(PROJ)
   if master then util.add(out, readTrack(master, true)) end
-  local meta = readMeta('fx')
+  local meta, allFx = readMeta('fx'), {}
   for _, tr in ipairs(out) do
-    for _, fx in ipairs(tr.fx) do applyMuteReport(util.assign(fx, meta[fx.id])) end
+    for _, fx in ipairs(tr.fx) do
+      applyMuteReport(util.assign(fx, meta[fx.id]))
+      util.add(allFx, fx)
+    end
   end
+  stampTraits(allFx)
   stampParents(out)
   pruneMidiCache(out)
   return out
@@ -815,6 +832,7 @@ function rm:track(id)
   local rec  = readTrack(track, track == reaper.GetMasterTrack(PROJ))
   local meta = readMeta('fx')
   for _, fx in ipairs(rec.fx) do applyMuteReport(util.assign(fx, meta[fx.id])) end
+  stampTraits(rec.fx)
   return rec
 end
 
@@ -998,6 +1016,7 @@ function rm:fx(id)
     midiCache[id] = fx.midi
   end
   applyMuteReport(util.assign(fx, readMeta('fx')[id]))
+  stampTraits({ fx })
   return fx
 end
 

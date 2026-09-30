@@ -54,24 +54,7 @@ Landed in `docs/fxCatalogue.md`.
 
 ## Traits
 
-1. An entry's **traits** are three facts about the plugin: whether it
-   accepts MIDI (**midi in**), whether it emits MIDI (**midi out**),
-   and whether it is an **instrument**.
-
-1. REAPER marks an instrument with a trailing `i` on its format prefix
-   — `VST3i`, `VSTi`, `AUi`, `CLAPi`. An instrument accepts MIDI.
-
-1. A JSFX's midi in and midi out come from its description: it accepts
-   MIDI where it calls `midirecv`, and emits MIDI where it calls
-   `midisend` or `midisyx`.
-
-1. Whether a plugin of any other format emits MIDI cannot be read, and
-   is authored.
-
-1. Traits resolve authored over parsed over the mark.
-
-1. Where nothing resolves them, midi in and midi out are taken as
-   present, and instrument as absent.
+Landed in `docs/fxCatalogue.md` § Traits.
 
 ## Probing
 

@@ -9,7 +9,7 @@
 --shape: snapshotPinMap = { ins={[port]={pair,...}}, outs={[port]={pair,...}} }
 --shape: snapshotSend = { to=trackKey, kind='audio'|'midi', gain?=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }
 --shape: snapshotFxOrigin = {kind='bracketIn'|'bracketOut',id=string}|{kind='merge',consumer=string,trackKey=trackKey}  -- CU bridges only; node fx carry their fxId as id
---shape: snapshotFxEntry = { id?=string, ident=string, name?=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, busAware?=bool }  -- ins/outs are audio pair counts, for read; name feeds fxDisplay
+--shape: snapshotFxEntry = { id?=string, ident=string, name?=string, ins?=int, outs?=int, params?=table, origin?=snapshotFxOrigin, midi?={inBus=int,outBus=int,inDisabled=bool,outDisabled=bool}, pinMaps?=snapshotPinMap, traits?=traits }  -- ins/outs are audio pair counts, for read; name feeds fxDisplay; traits on every snapshot entry, never target
 --shape: wiringSnapshot = { [trackKey] = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', id?=string, parent?=guid, nchan?=int, hasMidiTake?=bool, mainSend={on=bool,gain?,tgtOffset?,nchan?}, fx=snapshotFxEntry[], sends=snapshotSend[] } }; rm:tracks() record + trackKey overlay (full chain, no ownership filter). see docs/wiringManager.md § wiringSnapshot.
 --shape: wiringOp = { op='createTrack'|'deleteTrack'|'setFXChain'|'setMainSend'|'setSends'|'setNchan'|'setPinMaps'|'moveFxAcrossTracks', ... }
 -- full-replace ops; see docs/wiringManager.md § wiringOp for per-op field detail.
@@ -21,7 +21,7 @@
 
 local util = require 'util'
 local DAG  = require 'DAG'
-local fs   = require 'fs'
+local fxCatalogue = require 'fxCatalogue'
 local scratch = require 'scratch'
 
 local rm = (...).rm
@@ -134,39 +134,8 @@ local function ensureCompiled()
   return compiledCache
 end
 
--- JSFX midi traits: busAware iff ext_midi_bus=1, recv/send iff midirecv/midisend present
--- (midisyx counts as send). Unreadable source → assume both recv and send.
-local function parseJSFXMidiTraits(content)
-  if not content then return { busAware = false, recv = true, send = true } end
-  local traits = { busAware = false, recv = false, send = false }
-  for line in content:gmatch('[^\r\n]+') do
-    local code = line:gsub('//.*', '')
-    if code:match('^%s*ext_midi_bus%s*=%s*1%f[%D]') then traits.busAware = true end
-    if code:find('midirecv', 1, true) then traits.recv = true end
-    if code:find('midisend', 1, true) or code:find('midisyx', 1, true) then
-      traits.send = true
-    end
-  end
-  return traits
-end
-local function parseJSFXBusAware(content)
-  return parseJSFXMidiTraits(content).busAware
-end
-
--- One disk read per ident, memoised for the session (a JSFX's midi traits are static).
-local jsfxTraitsMemo = {}
-local function jsfxTraits(ident)
-  if not jsfxTraitsMemo[ident] then
-    jsfxTraitsMemo[ident] = parseJSFXMidiTraits(wm:readJSFXContent(ident))
-  end
-  return jsfxTraitsMemo[ident]
-end
-
--- Native fx keep the optimistic {1,1}; a JSFX's real midi surface comes from the scan.
-local function fxMidiPorts(ident)
-  if not isJS(ident) then return { ins = 1, outs = 1 } end
-  local traits = jsfxTraits(ident)
-  return { ins = traits.recv and 1 or 0, outs = traits.send and 1 or 0 }
+local function fxMidiPorts(traits)
+  return { ins = traits.midiIn and 1 or 0, outs = traits.midiOut and 1 or 0 }
 end
 
 ---------- PUBLIC
@@ -348,30 +317,16 @@ function wm:setSourceTagPos(nodeId, key, pos)
   return true
 end
 
---contract: read JSFX desc file for ident from REAPER's Effects dir; nil if non-JS or read fails
-function wm:readJSFXContent(ident)
-  if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
-  local path = fs.join(reaper.GetResourcePath(), 'Effects/' .. ident:sub(4))
-  local f = io.open(path, 'rb')
-  if not f then return nil end
-  local content = f:read('*a')
-  f:close()
-  return content
-end
-
--- Exposed for unit tests; production paths use `wm:isUserAddRefused` below.
-wm.parseJSFXBusAware   = parseJSFXBusAware
-wm.parseJSFXMidiTraits = parseJSFXMidiTraits
-
+-- Runs before any instance exists, so it resolves from the ident rather than an rm record.
 --contract: refuses JSFX whose desc declares ext_midi_bus=1; nil on accept, structured err on refuse
 function wm:checkUserAddable(ident)
-  if not (ident and ident:sub(1, 3) == 'JS:') then return nil end
-  if jsfxTraits(ident).busAware then
+  if not isJS(ident) then return nil end
+  if fxCatalogue.traits(nil, 'JS', ident:sub(4)).busAware then
     return { code = 'ext_midi_bus_user_fx', ident = ident }
   end
 end
 
---post: AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames}
+--post: AddByName on scratch + keep; returns {fxId, ins, outs, inNames, outNames, traits}
 --post: records one use of the plugin in the fx catalogue, unless the ident is unknown
 --post: unknown ident → fxId=nil, ins=outs=0, empty name lists
 function wm:instantiateFxOnScratch(ident)
@@ -384,7 +339,7 @@ function wm:instantiateFxOnScratch(ident)
   refreshStateTrack(scratch.id(), SCRATCH_KEY, 'scratch')
   local rec = rm:fx(fxId)
   return { fxId = fxId, ins = rec.ins, outs = rec.outs,
-           inNames = rec.inNames, outNames = rec.outNames }
+           inNames = rec.inNames, outNames = rec.outNames, traits = rec.traits }
 end
 
 --contract: true iff `track` is the live scratch track (never mints — peek only)
@@ -556,7 +511,7 @@ function wm:addFxNode(x, y, fx, opts)
   rm:transaction('wiring: add ' .. display, function()
     local io         = self:instantiateFxOnScratch(fx.ident)
     if not io.fxId then ok, err = false, { code = 'fx_instantiate_failed', ident = fx.ident }; return end
-    local midiPorts  = fxMidiPorts(fx.ident)
+    local midiPorts  = fxMidiPorts(io.traits)
     local autoSource = io.ins == 0 and midiPorts.ins > 0
                        and not (opts and opts.autoSource == false)
     sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
@@ -878,19 +833,18 @@ local function flattenCuParams(params)
   return flat
 end
 
--- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, JSFX a busAware flag;
--- native fx carry midi routing. fxId is the identity the differ matches fxOrder by.
+-- One rm fx record → snapshotFxEntry: CU bridges carry decoded params, native fx midi
+-- routing, every fx its traits. fxId is the identity the differ matches fxOrder by.
 local function snapFx(fx)
-  local entry = { id = fx.id, ident = fx.ident, name = fx.name, ins = fx.ins, outs = fx.outs }
+  local entry = { id = fx.id, ident = fx.ident, name = fx.name, ins = fx.ins, outs = fx.outs,
+                  traits = fx.traits }
   if fx.pinMaps and (next(fx.pinMaps.ins) or next(fx.pinMaps.outs)) then
     entry.pinMaps = fx.pinMaps
   end
   if fx.ident == CU_IDENT then
     local params = rm:params(fx.id)
     if params then entry.params = flattenCuParams(readCuParams(params)) end
-  elseif isJS(fx.ident) then
-    if jsfxTraits(fx.ident).busAware then entry.busAware = true end
-  else
+  elseif not isJS(fx.ident) then
     entry.midi = fx.midi
   end
   return entry
@@ -1163,7 +1117,7 @@ local function readGraph(snap, busMeta)
         local m = fxe.midi
         local inBus = m and m.inBus or 0
         local hears = m and not m.inDisabled
-        if not m then hears = (isJS(fxe.ident) and jsfxTraits(fxe.ident) or { recv = true }).recv end
+        if not m then hears = fxe.traits.midiIn end
         if hears and inBus == 0 then return true end
       end
     end
@@ -1363,10 +1317,10 @@ local function readGraph(snap, busMeta)
         collapseCu(fxe)
       else
         local id = fxe.id
-        nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, busAware = fxe.busAware or nil,
+        nodes[id] = { kind = 'fx', fxIdent = fxe.ident, fxId = id, busAware = fxe.traits.busAware or nil,
                       fxDisplay = fxe.name and shortFxName(fxe.name) or nil,
                       ports = { audio = { ins = fxe.ins or 0, outs = fxe.outs or 0 },
-                                midi = fxMidiPorts(fxe.ident) } }
+                                midi = fxMidiPorts(fxe.traits) } }
         if isCyclic then feedbackSeeds[id] = true end
         local pinMaps = fxe.pinMaps or { ins = {}, outs = {} }
         for port, prs in pairs(pinMaps.ins or {}) do
@@ -1374,17 +1328,13 @@ local function readGraph(snap, busMeta)
             for _, ref in ipairs(liveAudio[pair] or {}) do addAudioEdge(ref, id, port) end
           end
         end
-        -- MIDI: native fx read stored routing; a JSFX's surface is the midirecv/midisend
-        -- scan — no recv: deaf (its input bus passes), no send: drains the bus it heard.
+        -- MIDI: native fx read stored routing; without one (JS) the traits answer — no midi
+        -- in: deaf (its input bus passes), no midi out: drains the bus it heard.
         local m = fxe.midi
         local inBus, outBus = m and m.inBus or 0, m and m.outBus or 0
         local hears  = m and not m.inDisabled
         local drives = m and not m.outDisabled
-        if not m then
-          local traits = isJS(fxe.ident) and jsfxTraits(fxe.ident)
-                         or { recv = true, send = true }
-          hears, drives = traits.recv, traits.send
-        end
+        if not m then hears, drives = fxe.traits.midiIn, fxe.traits.midiOut end
         if hears then
           for _, ref in ipairs(liveMidi[inBus] or {}) do
             util.add(edges, { type = 'midi', from = ref.node, to = id })

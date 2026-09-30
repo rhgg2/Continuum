@@ -117,7 +117,7 @@ return {
     name = 'live reconcile stamps record.trackId for a matrix buss; sub-threshold clears it',
     run = function(harness)
       local h, wm, rm = mkWm(harness)
-      wm.readJSFXContent = function() return 'desc:plain\n@sample\nspl0 *= 1;\n' end
+      h.reaper:setJsfx('foo', 'desc:plain\n@sample\nspl0 *= 1;\n')
       seedTrack(h, 'guid-A'); seedTrack(h, 'guid-B')
       wm:load()  -- read mints source nodes guid-A/guid-B from the live tracks
       wm:enableLive()
@@ -170,7 +170,7 @@ return {
     name = 'fan tap pokes ride the splice: 1:1 on the many side, group fader on the lone side',
     run = function(harness)
       local h, wm, rm = mkWm(harness)
-      wm.readJSFXContent = function() return 'desc:plain\n@sample\nspl0 *= 1;\n' end
+      h.reaper:setJsfx('foo', 'desc:plain\n@sample\nspl0 *= 1;\n')
       seedTrack(h, 'guid-A'); seedTrack(h, 'guid-B')
       wm:load()
       wm:enableLive()

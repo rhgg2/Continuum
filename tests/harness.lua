@@ -10,13 +10,30 @@ local harness = {}
 
 -- configManager + dataStore global tiers do real io.open on continuum-config.lua /
 -- continuum-data.lua; redirect to temp files so specs never clobber the real ones.
+-- A path under the resource dir's Effects/ is a JSFX, served from the fake's r:setJsfx store.
 local realOpen       = io.open
 local globalCfgStub  = os.tmpname()
 local globalDataStub = os.tmpname()
+local fs             = require('fs')
+local function jsfxFile(path)
+  if not reaper._state then return false end  -- a spec's own reaper stand-in, not the fake
+  local effects = fs.join(reaper.GetResourcePath(), 'Effects/')
+  if path:sub(1, #effects) ~= effects then return false end
+  local content = reaper._state.jsfx[path:sub(#effects + 1)]
+  if not content then return nil end
+  local f = io.tmpfile()
+  f:write(content)
+  f:seek('set')
+  return f
+end
 io.open = function(path, ...)
   if type(path) == 'string' then
     if path:find('continuum%-config%.lua$') then return realOpen(globalCfgStub, ...)  end
     if path:find('continuum%-data%.lua$')   then return realOpen(globalDataStub, ...) end
+    if reaper then
+      local jsfx = jsfxFile(path)
+      if jsfx ~= false then return jsfx end
+    end
   end
   return realOpen(path, ...)
 end
@@ -63,6 +80,8 @@ local function buildMM(opts)
 
   fakeReaper = require('fakeReaper').new()
   _G.reaper  = fakeReaper
+  -- fxCatalogue memoises JSFX parses module-level; a fresh module per scenario keeps them apart.
+  package.loaded.fxCatalogue = nil
 
   local take       = opts.take or 'take1'
   local resolution = seed.resolution or 240

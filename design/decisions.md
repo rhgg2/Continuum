@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-01** — routingManager resolves a plugin's traits and stamps them on every fx record it
+  reads, over wiringManager resolving from the ident, since rm alone holds ds, the reported fx type
+  and the raw ident; the snapshot copies them, and a target snapshot carries none. The JSFX parse
+  stays private to fxCatalogue, over a public jsfx(path): the add gate, which runs before any
+  instance exists, reads bus awareness from traits resolved with no catalogue.
+
 - **2026-09-30** — routingManager writes a plugin's catalogue entry when wiringManager mints it on
   scratch, over fxCatalogue taking ds as a dependency and keying instances itself, since only rm
   holds both an instance's handle and ds. The catalogue is a global ds key outside undo, so undoing
