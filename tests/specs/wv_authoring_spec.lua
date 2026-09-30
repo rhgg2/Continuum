@@ -199,14 +199,14 @@ return {
     run = function(harness)
       local _, wv = mkWv(harness)
       reaper.EnumInstalledFX = function(i)
-        if i == 0 then return true, 'VST3: ReaEQ (Cockos)',   'VST3:ReaEQ (Cockos)'   end
-        if i == 1 then return true, 'VST3: ReaComp (Cockos)', 'VST3:ReaComp (Cockos)' end
+        if i == 0 then return true, 'VST3: ReaEQ (Cockos)',   '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3'   end
+        if i == 1 then return true, 'VST3: ReaComp (Cockos)', '/Library/Audio/Plug-Ins/VST3/ReaComp.vst3' end
         return false
       end
       local list = wv:listInstalledFX()
       t.eq(#list, 2)
       t.eq(list[1].name,  'VST3: ReaEQ (Cockos)',   'raw name passes through')
-      t.eq(list[2].ident, 'VST3:ReaComp (Cockos)',  'ident untouched')
+      t.eq(list[2].ident, '/Library/Audio/Plug-Ins/VST3/ReaComp.vst3', 'ident untouched')
     end,
   },
   {

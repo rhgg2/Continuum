@@ -298,7 +298,7 @@ to keep in sync, nothing to go stale.
 | audio pins | `TrackFX_GetIOSize`, `TrackFX_Get`/`SetPinMappings` |
 | track channels & folders | `Get`/`SetMediaTrackInfo_Value` (`I_NCHAN`, `I_FOLDERDEPTH`, …) |
 | per-FX MIDI bus | none — `Get`/`SetTrackStateChunk`, then **5.3** |
-| installed plugins | `EnumInstalledFX` — fixed for the session; enumerate once and cache |
+| installed plugins | `EnumInstalledFX` — REAPER builds the list on the first call and serves it from memory after |
 | one undo step | `Undo_BeginBlock`/`Undo_EndBlock2`, inside `PreventUIRefresh(1)`/`(-1)` |
 
 **6.3** Where the means run out. The API cannot express three things: the

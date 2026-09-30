@@ -2732,7 +2732,6 @@ end
 openFxPicker = function()
   local x, y = spawnPos()
   local sx, sy = sourcePosFor(x, y)
-  -- listInstalledFX is memoised below wv — copy before prepending the synthetic entry
   local items = { { name = 'Buss (vertical)',   bus = true, orient = 'V' },
                   { name = 'Buss (horizontal)', bus = true, orient = 'H' } }
   for _, fx in ipairs(wv:listInstalledFX()) do util.add(items, fx) end

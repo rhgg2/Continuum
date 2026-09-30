@@ -22,11 +22,12 @@ thereafter authored in place, and the picker browses it.**
    plugin's reverse-DNS id.
 
 1. A VST ident is an absolute path, which an update may change. A VST's
-   key is its file's base name together with the reported name, since
-   one file may expose several plugins under a single base name.
+   key is its file's base name, with the `<id` suffix REAPER adds to
+   the ident where one file exposes several plugins.
 
-1. That base name is spelled as REAPER spells it, with spaces written
-   as underscores. REAPER's own files key a VST plugin that way.
+1. That base name is spelled as REAPER spells it, with every character
+   other than a letter, a digit or `.` written as `_`. REAPER's own
+   files key a VST plugin that way.
 
 1. The installed set is re-read while Continuum runs, so a plugin
    installed meanwhile is keyed like any other.

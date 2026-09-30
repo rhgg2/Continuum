@@ -473,7 +473,8 @@ function M.new()
     return false, -1, -1, -1, -1, -1
   end
 
-  -- Installed-FX enumeration (runtime-fixed set). Seed via r:setInstalledFx.
+  -- Installed-FX enumeration. Seed via r:setInstalledFx; a re-seed between reads
+  -- stands for a plugin REAPER picked up mid-session.
   function r.EnumInstalledFX(i)
     local entry = state.installedFx[i + 1]
     if not entry then return false end

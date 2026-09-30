@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-30** — A VST's catalogue key is its file's base name spelled as REAPER's plugin ini
+  spells it, with the `<id` suffix REAPER adds for a shell file's plugins, over the base name
+  together with the reported name. The suffix already tells apart a shell's plugins, and the name is
+  left out of every key. The installed set is re-read on every call with no memo, since REAPER
+  builds the list once per session and serves it from memory after.
+
 - **2026-09-29** — A standing map raise holds through every step of the walk — instance, track,
   take, variant and family — over the instance steps alone, so a step that holds anywhere leaves the
   map up. The set is listed by hand rather than derived from the map verbs' tracker twins, since the

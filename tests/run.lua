@@ -307,6 +307,7 @@ local specs = {
   'rm_metadata_spec',
   'rm_mute_spec',
   'scratch_spec',
+  'fxCatalogue_spec',
   'wv_authoring_spec',
   'wv_fx_mute_spec',
   'wv_activate_spec',

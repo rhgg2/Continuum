@@ -1,5 +1,5 @@
--- routingManager Phase 7: installedFx + showFx. Static plugin enumeration
--- (memoised) and floating the window for a live fx id.
+-- routingManager Phase 7: installedFx + showFx. Plugin enumeration, read
+-- afresh on each call, and floating the window for a live fx id.
 local t       = require('support')
 local harness = require('harness')
 local util    = require('util')
@@ -36,18 +36,25 @@ return {
       t.eq(#fx, 4, 'every plugin enumerated')
       t.eq(fx[1].ident, '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3', 'VST3 path ident untouched')
       t.eq(fx[1].name,  'VST3: ReaEQ (Cockos)')
+      t.eq(fx[1].key,   'ReaEQ.vst3', 'VST3 keyed on the path basename')
       t.eq(fx[2].ident, 'JS:utility/volume', "JS ident canonicalised to the 'JS:' form")
+      t.eq(fx[2].key,   'utility/volume', 'JS keyed on the bare ident')
       t.eq(fx[3].ident, 'Airwindows: BitShiftGain', 'AU ident untouched')
       t.eq(fx[4].ident, 'com.ArthurBenilov.Aeolus', 'CLAP plugin id untouched')
     end,
   },
   {
-    name = 'installedFx memoises the runtime-fixed list',
+    name = 'installedFx sees a plugin installed since the previous read',
     run = function()
       local reaper, rm = mkRm()
-      reaper:setInstalledFx({ { name = 'A', ident = 'a' } })
-      local first = rm:installedFx()
-      t.eq(first, rm:installedFx(), 'second call returns the cached table')
+      local reaEq  = { name = 'VST3: ReaEQ (Cockos)',  ident = '/Library/Audio/Plug-Ins/VST3/ReaEQ.vst3' }
+      local aeolus = { name = 'CLAPi: Aeolus (Arthur Benilov)', ident = 'com.ArthurBenilov.Aeolus' }
+      reaper:setInstalledFx({ reaEq })
+      t.eq(#rm:installedFx(), 1, 'precondition: first read sees one plugin')
+      reaper:setInstalledFx({ reaEq, aeolus })
+      local fx = rm:installedFx()
+      t.eq(#fx, 2, 'second read sees the new plugin')
+      t.eq(fx[2].ident, 'com.ArthurBenilov.Aeolus')
     end,
   },
   {

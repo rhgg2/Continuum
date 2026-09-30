@@ -26,7 +26,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-09-30 wiring: key each installed plugin, re-read the set on every call (§ Identity)
 
 ## Now
 
@@ -34,20 +34,9 @@
 
 ## Queued (current phase; one-liners)
 
-- shared: key each installed plugin, and re-read the set on demand
-  (§ Identity 1–7) — a new shared module derives the key from a
-  reported name and ident. JS, AU and CLAP take the ident, and VST
-  takes its file's base name — spaces written as `_` — with the reported
-  name. The module enumerates `EnumInstalledFX` on each call into an
-  index from key to name, ident and format, and answers whether a key
-  resolves. `rm:installedFx` delegates to it, and drops its memo and
-  its fixed-at-runtime contract, so each picker open reads the set
-  afresh. The spec covers one ident per format, one VST file exposing
-  two plugins, and a plugin appearing between two reads;
-  `wm_installed_fx_spec` follows the delegation.
 - tracker: key parameter frecency on the catalogue key (§ Usage 4) —
-  the shared module derives an instance's key from its `fx_ident` and
-  `fx_name`, and `pa` reads and bumps `paramFrecency` under that key in
+  the shared module derives an instance's key from its `fx_type` and
+  `fx_ident`, and `pa` reads and bumps `paramFrecency` under that key in
   place of the raw ident. Scores held under an absolute VST path are
   orphaned, with no migration. The spec shows a VST's scores surviving
   a change of its ident's directory.

@@ -37,10 +37,9 @@ stays private.
 1. rm is **stateless**: `locateTrack` and `locateFx` resolve an id by
    sweeping the live project for its guid, on every call.
 
-1. Three tables persist between calls. `installedFxCache` and
-   `paramIdxByIdent` memoise REAPER's installed-plugin set, and a
-   plugin type's param layout. Both are fixed for the life of the
-   process, so neither memo invalidates. `midiCache` caches live
+1. Two tables persist between calls. `paramIdxByIdent` memoises a
+   plugin type's param layout, which is fixed for the life of the
+   process, so the memo never invalidates. `midiCache` caches live
    project state; see § Read cost.
 
 ## Sends are a track attribute

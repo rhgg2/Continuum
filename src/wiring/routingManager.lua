@@ -4,7 +4,8 @@
 --invariant: stateless; fx/bus meta are project-scope ds keys, so they ride ds's undo mirror
 --invariant: non-native record fields are metadata; rm persists them (see docs/routingManager.md)
 
-local util = require('util')
+local util        = require('util')
+local fxCatalogue = require('fxCatalogue')
 
 local deps = ...
 local ds   = assert(deps and deps.ds, 'routingManager requires a dataStore dep { ds = ... }')
@@ -12,7 +13,6 @@ local ds   = assert(deps and deps.ds, 'routingManager requires a dataStore dep {
 local PROJ = 0
 
 local rm = {}
-local installedFxCache = nil  -- reaper's installed-FX set is fixed at runtime
 
 ---------- PRIVATE
 
@@ -1054,20 +1054,13 @@ function rm:showFx(id)
   return true
 end
 
---contract: enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
---contract: JS rows enumerate bare; their ident is canonicalised to the 'JS:' form
+--post: fresh fxCatalogue.installed() rows, each JS row's ident canonicalised to the 'JS:' form
 function rm:installedFx()
-  if installedFxCache then return installedFxCache end
-  local out, i = {}, 0
-  while true do
-    local ok, name, ident = reaper.EnumInstalledFX(i)
-    if not ok then break end
-    if name:sub(1, 3) == 'JS:' then ident = jsIdent(ident) end
-    util.add(out, { ident = ident, name = name })
-    i = i + 1
+  local rows = fxCatalogue.installed()
+  for _, row in ipairs(rows) do
+    if row.format == 'JS' then row.ident = jsIdent(row.ident) end
   end
-  installedFxCache = out
-  return out
+  return rows
 end
 
 function rm:transaction(label, fn)
