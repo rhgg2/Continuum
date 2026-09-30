@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-09-30** — Adding a plugin to the graph bumps its score, over every instantiation bumping
+  it, so a probe's instances leave scores alone. The probe leaves phase 2 until the surface the
+  catalogue is edited from exists, over a bridge recipe as its caller; ordinary use fills ports, and
+  an unprobed plugin passes every audio test. Traits land with the authored layer, which only a ds
+  write sets until then.
+
 - **2026-09-30** — An fx instance's catalogue key resolves its VST ident against the installed set,
   keeping the `<id` only where an installed key carries it, over deriving the key from the
   instance's ident alone. Every VST instance reports `<id` and a VST3 its class id besides, so the

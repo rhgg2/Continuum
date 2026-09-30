@@ -1,7 +1,7 @@
 # FX catalogue — a taxonomy Continuum owns, seeded from what REAPER records
 
 > opened: 2026-08-24 · status: in flight — plan/fx-catalogue.md,
-> before phase 1 (keys and entries).
+> phase 2 (facts on an entry).
 
 **Continuum holds a catalogue of the installed plugins: a nested
 taxonomy over a per-format stable identity, in which a plugin may be
@@ -10,37 +10,7 @@ thereafter authored in place, and the picker browses it.**
 
 ## Identity
 
-1. A **catalogue key** names one plugin, and is unchanged by an update
-   that moves the plugin's files.
-
-1. A key is derived from each plugin REAPER reports as installed, from
-   the name and the **ident** reported with it.
-
-1. For JS, AU and CLAP the key is the ident, none of which changes
-   under an update. A JSFX ident is a path relative to the effects
-   directory, an AU ident is `Vendor: Name`, and a CLAP ident is the
-   plugin's reverse-DNS id.
-
-1. A VST ident is an absolute path, which an update may change. A VST's
-   key is its file's base name, with the `<id` suffix REAPER adds to
-   the ident where one file exposes several plugins.
-
-1. That base name is spelled as REAPER spells it, with every character
-   other than a letter, a digit or `.` written as `_`. REAPER's own
-   files key a VST plugin that way.
-
-1. An instance reports its VST ident with the `<id` suffix whether or
-   not its file exposes several plugins. A VST3 instance's ident also
-   ends in the plugin's class id, written after `{`.
-
-1. An instance's key is thus the installed key its ident matches: the
-   base name with the `<id` where an installed key carries it, and
-   without it otherwise.
-
-1. The installed set is re-read while Continuum runs, so a plugin
-   installed meanwhile is keyed like any other.
-
-1. A key matching nothing installed is **unresolved**.
+Landed in `docs/fxCatalogue.md`.
 
 ## The catalogue
 
@@ -122,15 +92,15 @@ thereafter authored in place, and the picker browses it.**
 1. An entry's **usage score** orders it against other plugins, higher
    first. A score never filters.
 
-1. Instantiating a plugin **bumps** its score. A bump advances the
+1. Adding a plugin to the graph **bumps** its score. A bump advances the
    catalogue's use counter by one, decays the entry's score by the uses
    elapsed since its last bump, and adds one.
 
 1. Decay counts uses, not time. A month in which nothing is
    instantiated costs an entry nothing.
 
-1. Parameter frecency (`docs/trackerRender.md`) keys on the catalogue key,
-   so that a plugin's parameter scores survive a relocation.
+1. Parameter frecency: landed in `docs/fxCatalogue.md` § An instance's
+   key.
 
 ## The sources
 

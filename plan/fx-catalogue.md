@@ -8,12 +8,13 @@
 1. **Phase 1 — Keys and entries** (§ Identity, § The catalogue, § Usage 4)
    — the per-format catalogue key with REAPER's VST base-name spelling,
    the installed set re-read and indexed by key, and parameter frecency
-   rekeyed onto the catalogue key.  ← in flight
-2. **Phase 2 — Facts on an entry** (§ The catalogue, § Traits, § Probing,
-   § Usage 1–3) — the catalogue as a global ds key with unresolved
-   entries standing, landing with its first writers: traits resolved
-   authored over parsed JSFX over the format mark, audio ports written on
-   instantiation, the use-counted bump, and a probe over a chosen set.
+   rekeyed onto the catalogue key. — landed 2026-09-30, 2 commits.
+2. **Phase 2 — Facts on an entry** (§ The catalogue, § Traits, § Probing
+   1–2, § Usage 1–3) — the catalogue as a global ds key with unresolved
+   entries standing, landing with its first writers: audio ports written
+   on instantiation, the use-counted bump, and traits resolved authored
+   over parsed JSFX over the format mark. The probe waits on the surface
+   the catalogue is edited from (§ Open).  ← in flight
 3. **Phase 3 — Taxonomy and import** (§ The taxonomy, § Unfiled, § The
    sources, § Import, § The seed nesting) — category paths with the list
    and rename, parsers for the install tree and the two ini files, import
@@ -34,4 +35,32 @@
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
+
+- **The catalogue and its first writers** (§ The catalogue, § Probing
+  1–2, § Usage 1–3) — `fxCatalogue` becomes a global ds key holding the
+  catalogue's use counter and its entries by catalogue key, read and
+  written through the fxCatalogue module. `wm:instantiateFxOnScratch`,
+  where a user plugin is minted, keys the new instance
+  (`fxCatalogue.keyAt`), writes its audio ins and outs into the entry,
+  and bumps its score: the counter advances by one, the score decays by
+  the uses elapsed since the entry's last bump, and one is added. The
+  decay per use is a module constant; paramFrecency's `n`/`n0` scheme
+  (`paramAutomation`) is the precedent. CU bridges and the ccManager
+  node write nothing. An entry whose key matches nothing installed
+  stands. Spec: the bump arithmetic and a standing unresolved entry in
+  `fxCatalogue_spec`; `wm:addFxNode` writing ports and bumping once in a
+  wm spec.
+- **Traits** (§ Traits) — fxCatalogue resolves a plugin's midi in, midi
+  out and instrument authored over parsed over the mark. Authored comes
+  from the entry's `traits`, which only a ds write sets for now. Parsed
+  comes from a JSFX description: midi in on `midirecv`, midi out on
+  `midisend` or `midisyx`. The mark is the `i` ending the format prefix,
+  and an instrument accepts MIDI. Where nothing resolves, midi in and out
+  are present and instrument absent. wm's JSFX parse
+  (`parseJSFXMidiTraits`, `readJSFXContent` and the session memo) moves
+  into fxCatalogue, with `busAware` read from the same parse. wm's
+  `fxMidiPorts` and its two `recv` reads go through the resolved traits,
+  so a native plugin's authored midi out reaches its node's midi ports.
+  Spec: the resolution order in `fxCatalogue_spec`; wm's existing
+  midi-port specs pass unchanged.
 
