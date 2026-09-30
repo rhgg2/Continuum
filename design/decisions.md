@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-01** — fx-catalogue phase 3 lands the model only, with import and rename reached through
+  the bridge; their surface waits with the probe's. A VST's install-tree roots are the
+  architecture's vstpath key in reaper.ini, and a JSFX's root is the effects directory. A JS
+  category key is the file name without its subdirectory, as reaper-fxfolders.ini shows, and
+  resolves to every JSFX carrying that name. Replace mode clears every entry's paths, favourite flag
+  and developer name, and the standing paths, before importing. [deleted_categories] is left unread.
+
 - **2026-10-01** — routingManager resolves a plugin's traits and stamps them on every fx record it
   reads, over wiringManager resolving from the ident, since rm alone holds ds, the reported fx type
   and the raw ident; the snapshot copies them, and a target snapshot carries none. The JSFX parse

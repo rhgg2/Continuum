@@ -1,7 +1,7 @@
 # FX catalogue — a taxonomy Continuum owns, seeded from what REAPER records
 
 > opened: 2026-08-24 · status: in flight — plan/fx-catalogue.md,
-> phase 2 (facts on an entry).
+> phase 3 (taxonomy and import).
 
 **Continuum holds a catalogue of the installed plugins: a nested
 taxonomy over a per-format stable identity, in which a plugin may be
@@ -17,8 +17,8 @@ Landed in `docs/fxCatalogue.md`.
 1. The catalogue, its entries and their independent facts: landed in
    `docs/fxCatalogue.md` § The catalogue.
 
-1. An entry also carries category paths, a favourite flag, traits and
-   a developer name.
+1. An entry also carries category paths, a favourite flag and a
+   developer name.
 
 1. An entry under an unresolved key can be relinked.
 
@@ -79,6 +79,11 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
 1. The **install tree** is the directory structure the plugins sit
    under, read from the ident. Its depth varies by installation.
 
+1. A VST's plugin roots are REAPER's VST path setting in `reaper.ini`,
+   and a JSFX's root is the effects directory. A VST under no root
+   sits in no install tree. An AU or CLAP ident names no directory, so
+   neither format has an install tree.
+
 1. **User categories** are `reaper-fxfolders.ini` `[category]`: one or
    more names per plugin separated by `|`, written where the user
    assigns them. `[categories]` names the categories the user created,
@@ -97,9 +102,9 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
    manufacturer name per plugin. A developer name filters, and is never
    a category path.
 
-1. A folder item names a plugin by its ident. A category key names it
-   by its ident too, except for VST, where it is the base name in
-   REAPER's spelling.
+1. A folder item names a plugin by its ident. A category key names an
+   AU or CLAP plugin by its ident, a VST by its base name in REAPER's
+   spelling, and a JSFX by its file name without the subdirectory.
 
 1. A folder section's `Type` field gives the plugin's format.
 
@@ -127,6 +132,9 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
 1. A source's plugin references resolve to catalogue keys against the
    installed set. References resolving to nothing are dropped, and
    their number is stated.
+
+1. A JS category key naming a file name several JSFX share resolves
+   to each of them.
 
 1. An install-tree directory becomes a category path, one segment per
    directory below the format's plugin root.
@@ -211,10 +219,6 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
 1. How LV2 is handled. A category key may name an LV2 plugin by URI
    while `EnumInstalledFX` reports no LV2 at all, so classification can
    exist for plugins that cannot be offered.
-
-1. Whether a JS category key carries the plugin's subdirectory. A
-   folder item does, and the join needs to know whether a category key
-   agrees.
 
 1. Whether REAPER's plugin cache (`reaper-vstplugins*.ini`,
    `reaper-auplugins*.ini`) is read, and for what. It carries no
