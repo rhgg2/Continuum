@@ -3,8 +3,9 @@
 --invariant: only state is a session memo of JSFX parses by path; the catalogue is a global ds key
 --invariant: installed() re-reads REAPER on every call
 --shape: row = { key, name, ident, format }  -- ident raw from REAPER; format the name's prefix before ':', or ''
---shape: fxCatalogue (ds global) = { n = int, entries = { [catalogueKey] = entry } }
---shape: entry = { ports?={ ins=int, outs=int }, usage?={ s=num, n0=int }, traits?={ midiIn?=bool, midiOut?=bool, instrument?=bool } }
+--shape: fxCatalogue (ds global) = { n = int, entries = { [catalogueKey] = entry }, standing = { [path] = true } }
+--shape: entry = { ports?={ ins=int, outs=int }, usage?={ s=num, n0=int }, traits?={ midiIn?=bool, midiOut?=bool, instrument?=bool }, paths?={ [path] = true } }
+--shape: path = string  -- names joined by '/', none empty
 --shape: traits = { midiIn=bool, midiOut=bool, instrument=bool, busAware=bool }  -- resolved; all four present
 --shape: jsfxParse = { busAware=bool, midiIn=bool, midiOut=bool }
 
@@ -108,6 +109,13 @@ function fxCatalogue.traits(catalogue, format, key)
   return resolved
 end
 
+-- The persisted catalogue, defaulted; one written before standing paths lacks them.
+local function load(ds)
+  local catalogue = ds:get('fxCatalogue') or { n = 0, entries = {} }
+  catalogue.standing = catalogue.standing or {}
+  return catalogue
+end
+
 -- Usage decays per catalogue-wide use, not per day, so an unused month
 -- costs nothing; 0.98 halves a score over about 34 uses.
 local DECAY = 0.98
@@ -115,7 +123,7 @@ local DECAY = 0.98
 --post: catalogue n advances by 1; entries[key].usage decays by the uses since its n0, then +1
 --post: entries[key].ports = ports; the entry's other fields kept
 function fxCatalogue.recordUse(ds, key, ports)
-  local catalogue = ds:get('fxCatalogue') or { n = 0, entries = {} }
+  local catalogue = load(ds)
   local n     = catalogue.n + 1
   local entry = catalogue.entries[key] or {}
   local usage = entry.usage
@@ -123,6 +131,105 @@ function fxCatalogue.recordUse(ds, key, ports)
   entry.ports = ports
   catalogue.entries[key] = entry
   catalogue.n = n
+  ds:assign('fxCatalogue', catalogue)
+end
+
+----- Taxonomy: see docs/fxCatalogue.md § The taxonomy
+
+--invariant: UNFILED is compared by identity; it is returned, never stored
+fxCatalogue.UNFILED = {}
+
+local function checkPath(path)
+  if ('/' .. path .. '/'):find('//', 1, true) then
+    error('fxCatalogue: a name is empty in path ' .. string.format('%q', path), 3)
+  end
+end
+
+-- Every path an entry names or standing holds, with each one's prefixes.
+local function listedPaths(catalogue)
+  local listed = {}
+  local function list(path)
+    for slash in path:gmatch('()/') do listed[path:sub(1, slash - 1)] = true end
+    listed[path] = true
+  end
+  for _, entry in pairs(catalogue.entries) do
+    for path in pairs(entry.paths or {}) do list(path) end
+  end
+  for path in pairs(catalogue.standing) do list(path) end
+  return listed
+end
+
+--post: fresh; each listed path once, name by name ignoring case, the raw string breaking a tie
+--post: UNFILED last
+function fxCatalogue.categories(ds)
+  local paths   = util.keys(listedPaths(load(ds)))
+  local sortKey = {}
+  for _, path in ipairs(paths) do sortKey[path] = (path:lower():gsub('/', '\0')) end
+  table.sort(paths, function(a, b)
+    if sortKey[a] ~= sortKey[b] then return sortKey[a] < sortKey[b] end
+    return a < b
+  end)
+  util.add(paths, fxCatalogue.UNFILED)
+  return paths
+end
+
+--post: path standing, so listed whatever is filed under it
+function fxCatalogue.makePath(ds, path)
+  checkPath(path)
+  local catalogue = load(ds)
+  catalogue.standing[path] = true
+  ds:assign('fxCatalogue', catalogue)
+end
+
+--post: entries[key] holds path, created if absent; its other paths and facts kept
+function fxCatalogue.file(ds, key, path)
+  checkPath(path)
+  local catalogue = load(ds)
+  local entry = catalogue.entries[key] or {}
+  entry.paths = entry.paths or {}
+  entry.paths[path] = true
+  catalogue.entries[key] = entry
+  ds:assign('fxCatalogue', catalogue)
+end
+
+--post: entries[key] no longer holds path, and paths is nil once none remain; no-op when not held
+function fxCatalogue.unfile(ds, key, path)
+  local catalogue = load(ds)
+  local entry = catalogue.entries[key]
+  if not (entry and entry.paths and entry.paths[path]) then return end
+  entry.paths[path] = nil
+  if next(entry.paths) == nil then entry.paths = nil end
+  ds:assign('fxCatalogue', catalogue)
+end
+
+--pre: from is listed in categories, else raises
+--post: from and each path under it re-rooted at to, in every entry and standing; unions on a clash
+function fxCatalogue.renamePath(ds, from, to)
+  checkPath(from)
+  checkPath(to)
+  local catalogue = load(ds)
+  if not listedPaths(catalogue)[from] then
+    error('fxCatalogue: no path ' .. string.format('%q', from) .. ' to rename', 2)
+  end
+  local under = from .. '/'
+  local function rewrite(paths)
+    local rewritten = {}
+    for path in pairs(paths) do
+      if path == from then rewritten[to] = true
+      elseif path:sub(1, #under) == under then rewritten[to .. path:sub(#from + 1)] = true
+      else rewritten[path] = true end
+    end
+    return rewritten
+  end
+
+  local entryPaths = {}
+  for key, entry in pairs(catalogue.entries) do
+    if entry.paths then entryPaths[key] = rewrite(entry.paths) end
+  end
+  local standing = rewrite(catalogue.standing)
+
+  for key, paths in pairs(entryPaths) do catalogue.entries[key].paths = paths end
+  catalogue.standing = standing
   ds:assign('fxCatalogue', catalogue)
 end
 

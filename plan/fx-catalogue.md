@@ -29,10 +29,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-01 fxCatalogue: add category paths, standing paths and the category list (design § The taxonomy)
 - 2026-10-01 fxCatalogue: resolve a plugin's traits, authored over parsed over mark (§ Traits)
 - 2026-09-30 wiring: record a plugin's ports and usage in the catalogue on add (§ The catalogue, § Probing 1–2, § Usage 1–3)
 - 2026-09-30 tracker: key parameter frecency on the catalogue key (§ Usage 4)
-- 2026-09-30 wiring: key each installed plugin, re-read the set on every call (§ Identity)
 
 ## Now
 
@@ -40,14 +40,6 @@
 
 ## Queued (current phase; one-liners)
 
-- **fxCatalogue: category paths and the category list** (§ The
-  taxonomy, § Unfiled) — an entry's set of paths, each a `/`-joined
-  sequence of names; the catalogue's standing paths, made before
-  anything is filed under them; the category list as every named path
-  with its prefixes, the standing paths, and unfiled; filing a plugin
-  at a path and removing it; rename rewriting a path and its
-  descendants in every entry and in the standing paths, a move being a
-  rename under a new parent. Pure model over the global dataStore key.
 - **fxCatalogue: read the sources, resolved to catalogue keys** (§ The
   sources, § Import 2, 4–5) — an ini reader that skips a section it
   cannot parse; `reaper-fxfolders.ini` `[category]`, `[categories]`,

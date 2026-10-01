@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-01** — An entry's category paths are a set of `/`-joined strings, nil when empty, and
+  names are kept as given, so case distinguishes them, over trimming or folding case, since the inis
+  import writes from are case-faithful. The list sorts name by name ignoring case, the raw string
+  breaking a tie, so a child follows its parent. Unfiled is a sentinel the list returns and the
+  catalogue never stores. Rename takes only a listed path, and merges onto one that exists by set
+  union.
+
 - **2026-10-01** — fx-catalogue phase 3 lands the model only, with import and rename reached through
   the bridge; their surface waits with the probe's. A VST's install-tree roots are the
   architecture's vstpath key in reaper.ini, and a JSFX's root is the effects directory. A JS

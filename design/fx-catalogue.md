@@ -17,40 +17,17 @@ Landed in `docs/fxCatalogue.md`.
 1. The catalogue, its entries and their independent facts: landed in
    `docs/fxCatalogue.md` § The catalogue.
 
-1. An entry also carries category paths, a favourite flag and a
-   developer name.
+1. An entry also carries a favourite flag and a developer name.
 
 1. An entry under an unresolved key can be relinked.
 
 ## The taxonomy
 
-1. An entry carries a set of **category paths**, each a sequence of
-   names written with `/` between them. `Effects/Reverb/Plate` names a
-   path three deep.
-
-1. A plugin filed under more than one path is **hard-linked**: each
-   path is a full membership, and none is primary.
-
-1. The **category list** holds three kinds of thing:
-
-   - every path an entry names, with those paths' prefixes — `Effects`
-     and `Effects/Reverb` wherever `Effects/Reverb/Plate` is;
-   - paths nothing is filed under, so one can be made before it is
-     filled;
-   - **unfiled**, which is no path but stands in the list beside them.
-
-1. A **place** is an entry in the category list.
-
-1. Renaming a path rewrites it in every entry naming it, in the
-   category list, and in its descendants. Moving a path is renaming it
-   under a new parent.
+Landed in `docs/fxCatalogue.md` § The taxonomy.
 
 ## Unfiled
 
-1. A plugin is unfiled where its key has no entry, or where its entry
-   carries no category path.
-
-1. A newly installed plugin is unfiled.
+Landed in `docs/fxCatalogue.md` § The taxonomy.
 
 ## Traits
 
@@ -239,6 +216,9 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
 1. Where the catalogue is edited from — filing a plugin, making a
    path, authoring a trait, running a probe — and whether that surface
    is a page of its own.
+
+1. Whether a path can be deleted, and what becomes of the plugins
+   filed under it.
 
 1. What a probe costs over a large installation, and whether it runs
    over everything or only over what the user asks for.

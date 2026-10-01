@@ -1,8 +1,8 @@
 # fxCatalogue
 
 **The installed plugins, each under a catalogue key that names one
-plugin across an update moving its files, and a catalogue of facts
-about each.** Its only state is a session memo of parsed JSFX
+plugin across an update moving its files, and a catalogue holding
+facts about each and the paths they are filed under.** Its only state is a session memo of parsed JSFX
 descriptions (§ Traits). It re-reads REAPER's installed set on every
 call, and the catalogue is a dataStore key.
 
@@ -61,8 +61,9 @@ call, and the catalogue is a dataStore key.
    every project.
 
 1. An entry holds facts about its plugin: its audio ports, its usage
-   score and any authored traits. The facts are independent. An entry may carry any of
-   them and lack the rest, and a write to one leaves the others alone.
+   score, any authored traits and its category paths (§ The taxonomy).
+   The facts are independent. An entry may carry any of them and lack
+   the rest, and a write to one leaves the others alone.
 
 1. Adding a plugin to the wiring graph (`docs/wiring.md`) is a **use**
    of it, and writes to its entry. A plugin Continuum adds for its own
@@ -132,3 +133,49 @@ call, and the catalogue is a dataStore key.
 
 1. Each use scales a score by 0.98, so a score halves over about 34
    uses of other plugins.
+
+## The taxonomy
+
+1. An entry carries a set of **category paths**, each a sequence of
+   names written with `/` between them. `Effects/Reverb/Plate` names a
+   path three deep.
+
+1. A name is never empty. It is kept as given, so `Reverb` and
+   `reverb` are two names.
+
+1. **Filing** a plugin under a path adds the path to its entry, and
+   **unfiling** removes it. An entry left with no path keeps its other
+   facts.
+
+1. A plugin filed under more than one path is **hard-linked**: each
+   path is a full membership, and none is primary.
+
+1. A **standing path** is made on its own, as a place to file into.
+   The catalogue holds the standing paths beside its entries. A
+   standing path stands whether or not anything is filed under it.
+
+1. The **category list** holds three kinds of thing:
+
+   - every path an entry names, with those paths' prefixes — `Effects`
+     and `Effects/Reverb` wherever `Effects/Reverb/Plate` is;
+   - every standing path, with its prefixes;
+   - **unfiled**, which is no path but stands in the list beside them.
+
+1. The list orders its paths name by name, ignoring case, so a path
+   follows its parent. Two paths differing only in case order by their
+   bytes. Unfiled comes last.
+
+1. A **place** is an entry in the category list.
+
+1. A plugin is unfiled where its key has no entry, or where its entry
+   carries no category path. A newly installed plugin is thus unfiled.
+
+1. Renaming a path rewrites it in every entry naming it, among the
+   standing paths, and in its descendants. A path renamed onto one that
+   exists merges with it.
+
+1. Moving a path is renaming it under a new parent. A parent listed
+   only as a prefix of the moved path leaves the list with it.
+
+1. Filing, unfiling and renaming never read the installed set, so a
+   path held by an entry under an unresolved key stands like any other.
