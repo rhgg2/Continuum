@@ -1,7 +1,7 @@
 # FX catalogue — a taxonomy Continuum owns, seeded from what REAPER records
 
 > opened: 2026-08-24 · status: in flight — plan/fx-catalogue.md,
-> phase 3 (taxonomy and import).
+> phase 4 (the picker).
 
 **Continuum holds a catalogue of the installed plugins: a nested
 taxonomy over a per-format stable identity, in which a plugin may be
@@ -81,8 +81,8 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 
 1. There are four contexts.
 
-   - **new** — the plugin stands alone on the canvas. Admits
-     instruments.
+   - **new** — the plugin stands alone on the canvas. Admits every
+     plugin.
    - **splice** — the plugin is inserted into a wire. Admits plugins
      carrying both an in and an out of that wire's type.
    - **branch** — the plugin is fed from a port. Admits plugins
@@ -90,10 +90,63 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
    - **replace** — the plugin takes another's place. Admits plugins
      whose ports cover the wires the other carries.
 
+1. A plugin's ports **cover** a node's wires where each audio wire on
+   the node's pair *k* finds a pair *k* on the same side, each MIDI
+   wire in finds midi in, and each MIDI wire out finds midi out.
+
 1. Candidacy over MIDI reads the entry's traits, and candidacy over
    audio its ports. An unprobed plugin passes every audio test.
 
-1. Absent a context, every installed plugin is a candidate.
+## Opening the picker
+
+1. Each context opens from one gesture on the wiring canvas
+   (`docs/wiringPage.md`). The picker anchors where the gesture is
+   made.
+
+1. **new** opens from a right-click on empty canvas, or from `N`. The
+   pick drops the plugin at the cursor.
+
+1. **splice** opens from **Insert fx…** in a wire's menu. The pick
+   lands the plugin on the wire's triangle and splices it in
+   (§ The splice).
+
+1. **branch** opens where a forward draft is released over empty
+   canvas. The pick lands the plugin at the release point, wired from
+   the draft's port into the plugin's first in of that port's type.
+
+1. A draft dragged from a source row in the palette branches over MIDI.
+
+1. While a draft is over empty canvas, its loose end draws a ghost
+   node. The release is thus seen to branch before it is made.
+
+1. Escape or a click outside the picker cancels a branch, and the
+   graph stands as it was before the draft. Escape during the draft
+   cancels it without opening the picker.
+
+1. **replace** opens from **Replace…** in an fx node's menu. The pick
+   puts the plugin at the node's position, moves every wire on the
+   node's ports onto it, and removes the node. An instrument's source
+   stays wired to the plugin that replaces it.
+
+1. In every context, adding the plugin and wiring it in are one undo
+   step.
+
+## The splice
+
+1. A splice re-points a wire into a node's first in of the wire's
+   type, and adds a leg from the node's first out of that type to the
+   wire's old destination.
+
+1. A wire of either type takes a splice. Over audio the node needs a
+   free pair 1 both ways, and over MIDI an unwired midi in and midi
+   out.
+
+1. A spliced audio wire keeps its gain on the input side
+   (`docs/wiringPage.md` § Splice on drop).
+
+1. Dropping a dragged node onto a wire and picking from **Insert fx…**
+   make the same splice. A dragged node thus splices into a MIDI wire
+   as it does into an audio one.
 
 ## Open
 

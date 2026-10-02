@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — The fx picker's new context admits every plugin, over instruments alone, since
+  drag-splice starts from an effect standing alone. Splice, branch and replace open from Insert fx…,
+  a forward draft released on empty canvas, and Replace… on an fx node. A branch is cancelled from
+  the picker, over a release modifier, with a ghost node shown first; a palette draft branches over
+  MIDI. A splice takes either wire type, drag-splice included.
+
 - **2026-10-02** — The seed nesting places a derived name one level under Effects, Instruments or
   Tools, and maps a non-category (a channel layout, MIDI, a developer) to no path, over passing it
   bare. It is applied when sources() builds the derived source, over at import, so the counts shown
