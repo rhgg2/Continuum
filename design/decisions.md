@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — Import takes back the table a sources() call returned, over re-reading the inis,
+  so what it writes is exactly what the counts described. A developer name is written only to an
+  entry holding none, in both modes, so augment keeps a held name and replace, clearing first,
+  overwrites it; where several names resolve to one key the lowest-sorting by bytes is taken.
+  Replace clears favourites and developer names even when neither source is chosen.
+
 - **2026-10-02** — A source's references resolve in three steps: the installed key equal to one,
   else every JSFX whose file name it is, else either ignoring case; folder items take the same
   lookup, over excluding the file-name step for them, since folded matching already reaches file

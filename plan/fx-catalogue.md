@@ -29,10 +29,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-02 fxCatalogue: import the chosen sources (§ Import)
 - 2026-10-02 fxCatalogue: read the sources, resolved to catalogue keys (§ The sources)
 - 2026-10-01 fxCatalogue: add category paths, standing paths and the category list (design § The taxonomy)
 - 2026-10-01 fxCatalogue: resolve a plugin's traits, authored over parsed over mark (§ Traits)
-- 2026-09-30 wiring: record a plugin's ports and usage in the catalogue on add (§ The catalogue, § Probing 1–2, § Usage 1–3)
 
 ## Now
 
@@ -40,13 +40,6 @@
 
 ## Queued (current phase; one-liners)
 
-- **fxCatalogue: import the chosen sources** (§ Import) — each source
-  taken or declined; category and folder names split on `/` into
-  paths; folder id 0 setting the favourite flag; developer names
-  written and filing nothing; `[categories]` names made standing
-  paths. Augment adds to what the catalogue holds. Replace first
-  clears every entry's paths, favourite flag and developer name, and
-  the standing paths, and leaves ports, usage and traits.
 - **fxCatalogue: the seed nesting** (§ The seed nesting) — a shipped
   table from derived names to paths, placing names such as `Reverb`
   and `Compressor` under broader ones; applied when derived categories

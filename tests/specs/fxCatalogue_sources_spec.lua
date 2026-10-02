@@ -1,4 +1,4 @@
--- fxCatalogue.sources: REAPER's five classification sources, each resolved to
+-- fxCatalogue.sources and import: REAPER's five classification sources, each resolved to
 -- catalogue keys against the installed set, with the names per key, the
 -- installed keys covered, the distinct names and the references dropped.
 --
@@ -16,6 +16,12 @@
 -- and a name with an empty '/'-segment (the empty one after a trailing '|') is
 -- not kept, nor counted as a drop. A missing ini reads as empty.
 --
+-- Import files each chosen path source's names on its keys, flags folder id 0's
+-- members favourite, makes [categories] standing, and names a developer only
+-- on an entry holding none. Replace first clears every entry's paths, favourite
+-- and developer, and the standing paths, whichever sources are chosen; ports,
+-- usage and traits stand, as does an entry under an unresolved key.
+--
 -- The fixtures under tests/fixtures/fxSources are trimmed from a real install.
 -- Fabricated: the vstpath64 key (the x64 key name is unverified), the
 -- old/volume and TDR Kotelnikov plugins, and every extra row a case adds.
@@ -23,6 +29,7 @@
 -- root hides a prefix match on VST; the whole-root case needs its own row.
 local t       = require('support')
 local harness = require('harness')
+local util    = require('util')
 
 local specDir  = debug.getinfo(1, 'S').source:match('^@?(.*)/[^/]+$')
 local FIXTURES = specDir .. '/../fixtures/fxSources'
@@ -55,15 +62,17 @@ local ROWS = {
     key = 'Model_80_Five_Voice_Synthesizer.vst3' },
 }
 
--- The sources over the ROWS installed set and any extra rows, read from the inis in dir.
+-- The sources over the ROWS installed set and any extra rows, read from the inis in dir,
+-- with the same fake's ds.
 local function sourcesAt(dir, extra)
-  local reaper = harness.mk().reaper
+  local h = harness.mk()
+  local reaper = h.reaper
   local list = {}
   for i, row in ipairs(ROWS) do list[i] = { name = row.name, ident = row.ident } end
   for _, row in ipairs(extra or {}) do list[#list + 1] = { name = row.name, ident = row.ident } end
   reaper:setInstalledFx(list)
   reaper._state.resourcePath = dir
-  return require('fxCatalogue').sources()
+  return require('fxCatalogue').sources(), h.ds
 end
 
 local function set(list)
@@ -77,6 +86,13 @@ local function named(byRow)
   local names = {}
   for row, list in pairs(byRow) do names[ROWS[row].key] = set(list) end
   return names
+end
+
+local function entriesOf(ds) return ds:get('fxCatalogue').entries end
+
+local function raises(fn, msg)
+  local ok = pcall(fn)
+  t.falsy(ok, msg)
 end
 
 local function counts(source, covered, distinct, dropped, label)
@@ -182,6 +198,91 @@ return {
         [7] = { 'loser' }, [8] = { 'guitar' }, [9] = { 'utility' }, [10] = { 'old' },
       }, 'JSFX directories need no file')
       counts(sources.tree, 4, 4, 0, 'tree')
+    end,
+  },
+  {
+    name = 'augment files the chosen sources\' names beside held paths, and touches no other fact',
+    run = function()
+      local sources, ds = sourcesAt(FIXTURES)
+      local fxCatalogue = require('fxCatalogue')
+      local usage = { s = 2, n0 = 3 }
+      ds:assign('fxCatalogue', { n = 3, entries = {
+        [ROWS[1].key] = { paths = { Held = true }, usage = usage, ports = { ins = 1, outs = 1 } },
+      }, standing = { Kept = true } })
+      fxCatalogue.import(ds, sources, { tree = true, derived = true }, 'augment')
+      local entries = entriesOf(ds)
+      t.deepEq(entries[ROWS[1].key], { paths = set{ 'Held', 'Effects/EQ', 'EQ' }, usage = usage,
+        ports = { ins = 1, outs = 1 } }, 'tree and derived union with the held path')
+      t.deepEq(entries[ROWS[13].key], { paths = set{ 'Synth', 'Organ' } }, 'a derived-only key gains an entry')
+      t.eq(entries[ROWS[12].key], nil, 'user categories were declined')
+      t.deepEq(ds:get('fxCatalogue').standing, set{ 'Kept' }, 'standing untouched')
+    end,
+  },
+  {
+    name = 'folders file by name and flag id 0 favourite; user categories make [categories] standing',
+    run = function()
+      local sources, ds = sourcesAt(FIXTURES)
+      local fxCatalogue = require('fxCatalogue')
+      fxCatalogue.import(ds, sources, { user = true, folders = true }, 'augment')
+      local entries = entriesOf(ds)
+      t.deepEq(entries[ROWS[13].key], { favourite = true }, 'a favourite files nothing')
+      t.deepEq(entries[ROWS[2].key].paths, set{ 'Filter', 'Mad' }, 'user names filed')
+      t.deepEq(entries[ROWS[14].key].paths, set{ 'Beta' }, 'folder names filed')
+      t.deepEq(ds:get('fxCatalogue').standing, set{ 'Clipper', 'FSU/Lofi', 'Mad' }, '[categories] stand')
+      local listed = set(fxCatalogue.categories(ds))
+      t.truthy(listed.Clipper and listed.FSU and listed.Alpha, 'standing, prefix and folder paths listed')
+    end,
+  },
+  {
+    name = 'developers name an entry and file nothing; augment keeps a held name, replace overwrites it',
+    run = function()
+      local sources, ds = sourcesAt(FIXTURES)
+      local fxCatalogue = require('fxCatalogue')
+      ds:assign('fxCatalogue', { n = 0, entries = { [ROWS[3].key] = { developer = 'Korg Inc' } } })
+      fxCatalogue.import(ds, sources, { developers = true }, 'augment')
+      local entries = entriesOf(ds)
+      t.deepEq(entries[ROWS[1].key], { developer = 'Canvas Audio' }, 'named, unfiled')
+      t.eq(entries[ROWS[3].key].developer, 'Korg Inc', 'augment keeps a held developer')
+      fxCatalogue.import(ds, sources, { developers = true }, 'replace')
+      t.eq(entriesOf(ds)[ROWS[3].key].developer, 'KORG', 'replace overwrites it')
+    end,
+  },
+  {
+    name = 'a key with several developer names takes the lowest-sorting',
+    run = function()
+      local sources, ds = sourcesAt(FIXTURES)
+      sources.developers.names = { [ROWS[3].key] = set{ 'Korg', 'KORG' } }
+      require('fxCatalogue').import(ds, sources, { developers = true }, 'augment')
+      t.eq(entriesOf(ds)[ROWS[3].key].developer, 'KORG', 'byte order picks KORG')
+    end,
+  },
+  {
+    name = 'replace clears all classification and standing, chosen or not, leaving ports, usage and traits',
+    run = function()
+      local sources, ds = sourcesAt(FIXTURES)
+      local fxCatalogue = require('fxCatalogue')
+      local kept = { ports = { ins = 1, outs = 2 }, usage = { s = 1, n0 = 1 }, traits = { midiOut = false } }
+      ds:assign('fxCatalogue', { n = 1, entries = {
+        [ROWS[1].key] = util.assign({ paths = { Held = true }, favourite = true, developer = 'X' }, kept),
+        ['gone.vst3'] = { paths = { Held = true }, favourite = true, usage = { s = 1, n0 = 1 } },
+      }, standing = { Kept = true } })
+      fxCatalogue.import(ds, sources, { tree = true }, 'replace')
+      local entries = entriesOf(ds)
+      t.deepEq(entries[ROWS[1].key], util.assign({ paths = set{ 'Effects/EQ' } }, kept),
+        'only the chosen tree path, the other facts kept')
+      t.deepEq(entries['gone.vst3'], { usage = { s = 1, n0 = 1 } }, 'the unresolved entry stands, cleared')
+      t.deepEq(ds:get('fxCatalogue').standing, {}, 'standing cleared')
+      t.eq(entries[ROWS[13].key], nil, 'the declined favourite is not re-flagged')
+    end,
+  },
+  {
+    name = 'an unknown mode or source raises, and writes nothing',
+    run = function()
+      local sources, ds = sourcesAt(FIXTURES)
+      local fxCatalogue = require('fxCatalogue')
+      raises(function() fxCatalogue.import(ds, sources, { tree = true }, 'merge') end, 'unknown mode')
+      raises(function() fxCatalogue.import(ds, sources, { cache = true }, 'augment') end, 'unknown source')
+      t.eq(ds:get('fxCatalogue'), nil, 'nothing written')
     end,
   },
 }

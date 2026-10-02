@@ -4,7 +4,7 @@
 --invariant: installed() re-reads REAPER on every call
 --shape: row = { key, name, ident, format }  -- ident raw from REAPER; format the name's prefix before ':', or ''
 --shape: fxCatalogue (ds global) = { n = int, entries = { [catalogueKey] = entry }, standing = { [path] = true } }
---shape: entry = { ports?={ ins=int, outs=int }, usage?={ s=num, n0=int }, traits?={ midiIn?=bool, midiOut?=bool, instrument?=bool }, paths?={ [path] = true } }
+--shape: entry = { ports?={ ins=int, outs=int }, usage?={ s=num, n0=int }, traits?={ midiIn?=bool, midiOut?=bool, instrument?=bool }, paths?={ [path] = true }, favourite?=true, developer?=string }
 --shape: path = string  -- names joined by '/', none empty
 --shape: traits = { midiIn=bool, midiOut=bool, instrument=bool, busAware=bool }  -- resolved; all four present
 --shape: jsfxParse = { busAware=bool, midiIn=bool, midiOut=bool }
@@ -407,6 +407,66 @@ function fxCatalogue.sources()
     derived    = source(fromSection(fxTags.category, index, categoryNames)),
     developers = source(fromSection(fxTags.developer, index, developerNames)),
   }
+end
+
+----- Import: see docs/fxCatalogue.md § Import
+
+local PATH_SOURCES = { 'tree', 'user', 'folders', 'derived' }
+local IMPORTABLE   = { tree = true, user = true, folders = true, derived = true, developers = true }
+local MODES        = { augment = true, replace = true }
+
+local function lowest(names)
+  local found
+  for name in pairs(names) do
+    if not found or name < found then found = name end
+  end
+  return found
+end
+
+--pre: sources a sources() result; chosen a set of its source names
+--pre: mode augment or replace, else raises
+--post: replace first clears standing and each entry's paths, favourite and developer, chosen or not
+--post: developer written only to an entry holding none, the lowest-sorting where a key has several
+function fxCatalogue.import(ds, sources, chosen, mode)
+  if not MODES[mode] then
+    error('fxCatalogue: no import mode ' .. string.format('%q', tostring(mode)), 2)
+  end
+  for name in pairs(chosen) do
+    if not IMPORTABLE[name] then
+      error('fxCatalogue: no source ' .. string.format('%q', tostring(name)) .. ' to import', 2)
+    end
+  end
+
+  local catalogue = load(ds)
+  local entries   = catalogue.entries
+  if mode == 'replace' then
+    for _, entry in pairs(entries) do entry.paths, entry.favourite, entry.developer = nil, nil, nil end
+    catalogue.standing = {}
+  end
+  local function entryAt(key)
+    entries[key] = entries[key] or {}
+    return entries[key]
+  end
+
+  for _, name in ipairs(PATH_SOURCES) do
+    if chosen[name] then
+      for key, names in pairs(sources[name].names) do
+        local entry = entryAt(key)
+        entry.paths = util.assign(entry.paths or {}, names)
+      end
+    end
+  end
+  if chosen.folders then
+    for key in pairs(sources.folders.favourites) do entryAt(key).favourite = true end
+  end
+  if chosen.user then util.assign(catalogue.standing, sources.user.standing) end
+  if chosen.developers then
+    for key, names in pairs(sources.developers.names) do
+      local entry = entryAt(key)
+      entry.developer = entry.developer or lowest(names)
+    end
+  end
+  ds:assign('fxCatalogue', catalogue)
 end
 
 return fxCatalogue

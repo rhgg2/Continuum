@@ -17,8 +17,6 @@ Landed in `docs/fxCatalogue.md`.
 1. The catalogue, its entries and their independent facts: landed in
    `docs/fxCatalogue.md` § The catalogue.
 
-1. An entry also carries a favourite flag and a developer name.
-
 1. An entry under an unresolved key can be relinked.
 
 ## The taxonomy
@@ -54,31 +52,7 @@ Landed in `docs/fxCatalogue.md` § The sources.
 
 ## Import
 
-1. **Import** reads chosen sources into the catalogue. It sets the
-   catalogue up, and is run when the user asks.
-
-1. Each source is taken or declined on its own. Import states each
-   source's coverage and how many distinct names it yields, so the
-   choice among them rests on what a given installation holds.
-
-1. Import runs in one of two modes. **Augment** adds, and **replace**
-   overwrites.
-
-1. A source's references resolving to catalogue keys, and the
-   references dropped: landed in `docs/fxCatalogue.md` § The sources.
-
-1. An install-tree directory becomes a category path, one segment per
-   directory below the format's plugin root.
-
-1. A category name becomes a category path, split on `/`.
-
-1. A folder name becomes a category path the same way. Membership of
-   folder id 0 sets the favourite flag instead.
-
-1. The names in `[categories]` enter the category list, whether or not
-   anything is filed under them.
-
-1. A developer name is written to the entry, and files nothing.
+Landed in `docs/fxCatalogue.md` § Import.
 
 ## The seed nesting
 

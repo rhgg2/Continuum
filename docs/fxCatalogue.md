@@ -61,7 +61,8 @@ call, and the catalogue is a dataStore key.
    every project.
 
 1. An entry holds facts about its plugin: its audio ports, its usage
-   score, any authored traits and its category paths (§ The taxonomy).
+   score, any authored traits, its category paths (§ The taxonomy), a
+   favourite flag and a developer name.
    The facts are independent. An entry may carry any of them and lack
    the rest, and a write to one leaves the others alone.
 
@@ -256,3 +257,42 @@ call, and the catalogue is a dataStore key.
    **covers**, the distinct names it yields, and the references it
    dropped. A plugin is covered where the source gives it a name, and
    for user folders also where it is a favourite.
+
+## Import
+
+1. **Import** writes chosen sources (§ The sources) into the
+   catalogue. It is run when the user asks.
+
+1. Each source is taken or declined on its own. Its counts are stated
+   before the choice, so the choice rests on what a given installation
+   holds.
+
+1. An entry's **classification** is its category paths, its favourite
+   flag and its developer name.
+
+1. Import runs in one of two modes. **Augment** adds to what the
+   catalogue holds. **Replace** first clears every entry's
+   classification and every standing path, whichever sources are
+   taken.
+
+1. Replace leaves an entry's other facts in place. An entry under an
+   unresolved key is cleared like any other, and stands.
+
+1. An install-tree directory becomes a category path, one name per
+   directory below the plugin root.
+
+1. A category name becomes a category path, split on `/`. A folder name
+   becomes one the same way.
+
+1. Membership of folder id 0 sets the favourite flag, and files
+   nothing.
+
+1. The names in user `[categories]` become standing paths, so they are
+   listed whether or not anything is filed under them.
+
+1. A developer name is written only to an entry holding none, and
+   files nothing. Under replace the clear comes first, so the taken
+   developers overwrite.
+
+1. Where several developer names resolve to one key, the
+   lowest-sorting by bytes is written.
