@@ -22,10 +22,11 @@
    shipped seed nesting. The model only: import and rename are reached
    through the bridge, and their surface waits with the probe's.
    — landed 2026-10-02, 4 commits.
-4. **Phase 4 — The picker** (§ The picker, § The filtering seam) — the
-   wiring picker grouped by place with favourites above and unfiled last,
-   usage and in-project ordering within a place, and the candidate
-   predicate over the four contexts, with `new` the one opened today.
+4. **Phase 4 — The picker** (§ Favourites, § The picker, § The
+   filtering seam, § Opening the picker, § The splice) — favourites as a
+   path, the wiring picker as path completion with in-project and usage
+   ordering, the candidate predicate over the four contexts, and the
+   gesture opening each.
 
 ## Landed  (newest first; prune below ~4)
 

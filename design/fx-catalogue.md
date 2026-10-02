@@ -58,20 +58,66 @@ Landed in `docs/fxCatalogue.md` § Import.
 
 Landed in `docs/fxCatalogue.md` § The seed nesting.
 
+## Favourites
+
+1. Favourites is a category path like any other. Favouriting a plugin
+   files it under `Favourites`.
+
+1. An entry's classification is thus its category paths and its
+   developer name (`docs/fxCatalogue.md` § Import).
+
+1. Import files the members of folder id 0 under `Favourites`.
+
 ## The picker
 
-1. The picker offers the installed plugins under the category list, a
-   plugin appearing at each place its entry names.
+1. The picker offers the installed plugins for one pick. Its text is a
+   path: the part before the last `/` is the **current place**, and the
+   part after it is the **stem**.
 
-1. Favourites form a further place, above the list.
+1. The picker opens at the root, with no text.
 
-1. Unfiled comes last.
+1. The current place resolves to the place spelled the same, else to
+   the one place spelled the same ignoring case. A current place
+   resolving to nothing lists nothing.
 
-1. Within a place, plugins sort by usage score.
+1. The list holds the current place's child places whose names begin
+   with the stem, then the plugins below the current place whose names
+   contain it. Both match ignoring case.
 
-1. A plugin already in the project sorts above one that is not.
+1. A plugin is **below** a place where it is filed at that place or at
+   a path beneath it. Every installed plugin is below the root, filed
+   or not, so typing from the root reaches any of them.
 
-1. Typing narrows the list by name.
+1. A plugin below the current place through several paths is listed
+   once.
+
+1. A plugin's name is the name REAPER reports, which carries its format
+   and developer — `VST3: Pro-Q 3 (FabFilter)`.
+
+1. Child places keep the category list's order (`docs/fxCatalogue.md`
+   § The taxonomy).
+
+1. Plugins sort with those in the project first, then by usage score,
+   then by name ignoring case. A plugin is **in the project** where an
+   instance of it sits in the project's wiring graph.
+
+1. With no text, the root thus lists the top-level places and then
+   every plugin, ranked.
+
+1. Up and Down move the cursor through the whole list. The cursor
+   returns to the first row when the text changes.
+
+1. Tab or Enter on a place replaces the stem with the place's name and
+   a `/`, so the place becomes the current place. Tab acts only on a
+   place.
+
+1. Enter on a plugin picks it.
+
+1. The list depends on the text alone. Deleting back past a `/` thus
+   widens the list to the parent place.
+
+1. In **new**, the two busses lead the plugins at the root, and the
+   stem narrows them by name as it does a plugin.
 
 ## The filtering seam
 
@@ -96,6 +142,8 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 
 1. Candidacy over MIDI reads the entry's traits, and candidacy over
    audio its ports. An unprobed plugin passes every audio test.
+
+1. A place with no candidate below it is hidden.
 
 ## Opening the picker
 
@@ -150,12 +198,8 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
 
 ## Open
 
-1. Whether typing gains a token grammar — path, developer, trait,
-   favourite — in place of separate controls.
-
-1. Whether the shared typeahead picker (`docs/chrome.md` § Picker)
-   serves this list, given that it groups rows already but is built for
-   smaller ones.
+1. Whether the stem gains a token grammar — developer, trait — once
+   the picker has landed.
 
 1. Whether `[deleted_categories]` should suppress a name at import.
    The list records the user's own hiding, which bears on the user
@@ -195,4 +239,5 @@ Landed in `docs/fxCatalogue.md` § The seed nesting.
    over everything or only over what the user asks for.
 
 1. Whether the picker offers a filter the user states — four audio ins
-   and a compressor, to find a plugin to sidechain into.
+   and a compressor, to find a plugin to sidechain into — once it has
+   landed.

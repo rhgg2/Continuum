@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — The fx picker's text is a path, completed vertico-style — Tab or Enter inserts
+  the place under the cursor — over a collapsible tree, since one rule computes the list from the
+  text alone. A place lists every plugin below it once, so typing from the root reaches any plugin
+  and unfiled plugins sit at the root. Favourites is an ordinary path, over a flag, and the picker
+  is its own, over the shared drawPicker, whose flat groups fit no path.
+
 - **2026-10-02** — The fx picker's new context admits every plugin, over instruments alone, since
   drag-splice starts from an effect standing alone. Splice, branch and replace open from Insert fx…,
   a forward draft released on empty canvas, and Replace… on an fx node. A branch is cancelled from
