@@ -4,6 +4,12 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — The fx catalogue is edited in an FX tab on the editor page, over a page of its
+  own: a place tree in the palette beside a plugin list holding what is below the place, as the
+  picker does. Filing is by drop or File under…, each adding a path. Edits stay outside undo, so a
+  merging rename and replace import confirm, over a tab-owned undo. Unfiled sits at the root, over a
+  sentinel place, since it is the lack of a path.
+
 - **2026-10-02** — Import files folder id 0 under Continuum's spelling `Favourites`, over the
   folder's own Name (REAPER writes `Favorites`), and from there the folder takes the one branch
   every folder takes. A live entry's stale favourite flag is left inert, over a migration, since

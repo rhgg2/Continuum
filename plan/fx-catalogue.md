@@ -22,8 +22,8 @@
    shipped seed nesting. The model only: import and rename are reached
    through the bridge, and their surface waits with the probe's.
    — landed 2026-10-02, 4 commits.
-4. **Phase 4 — The picker** (§ Favourites, § The picker, § The
-   filtering seam, § Opening the picker, § The splice) — favourites as a
+4. **Phase 4 — The picker** (§ Unfiled, § Favourites, § The picker,
+   § The filtering seam, § Opening the picker, § The splice) — favourites as a
    path, the wiring picker as path completion with in-project and usage
    ordering, the candidate predicate over the four contexts, and the
    gesture opening each. ← in flight
@@ -41,6 +41,11 @@
 
 ## Queued (current phase; one-liners)
 
+- fxCatalogue: unfiled sits at the root (§ Unfiled) — `categories()`
+  returns paths alone and the `UNFILED` sentinel goes;
+  `docs/fxCatalogue.md` § The taxonomy takes a place as the root or a
+  listed path, with an unfiled plugin at the root. Spec:
+  fxCatalogue_spec's category-list cases drop the sentinel.
 - fxCatalogue: the picker's list as a function of its text (§ The picker
   3–10, 14–15) — split at the last `/` into current place and stem;
   the place resolves exact, else to the one case-insensitive match,

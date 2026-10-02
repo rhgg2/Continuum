@@ -6,61 +6,44 @@
 **Continuum holds a catalogue of the installed plugins: a nested
 taxonomy over a per-format stable identity, in which a plugin may be
 hard-linked in several places. It is seeded from what REAPER records,
-thereafter authored in place, and the picker browses it.**
+thereafter authored in the FX tab, and the picker browses it.**
 
-## Identity
+## Landed
 
-Landed in `docs/fxCatalogue.md`.
+1. The catalogue key, the catalogue and its entries, audio ports,
+   traits, usage, the taxonomy, the sources, import and the seed
+   nesting have landed in `docs/fxCatalogue.md`.
 
 ## The catalogue
 
-1. The catalogue, its entries and their independent facts: landed in
-   `docs/fxCatalogue.md` § The catalogue.
-
 1. An entry under an unresolved key can be relinked.
-
-## The taxonomy
-
-Landed in `docs/fxCatalogue.md` § The taxonomy.
 
 ## Unfiled
 
-Landed in `docs/fxCatalogue.md` § The taxonomy.
+1. A plugin is **unfiled** where it carries no category path.
 
-## Traits
+1. A plugin sits **at** each path it is filed under. An unfiled plugin
+   sits at the root.
 
-Landed in `docs/fxCatalogue.md` § Traits.
+1. The category list holds paths alone (`docs/fxCatalogue.md`
+   § The taxonomy). A **place** is the root or a path in the list.
 
 ## Probing
-
-1. Audio ports and their write on use: landed in `docs/fxCatalogue.md`
-   § Audio ports.
 
 1. A **probe** instantiates a chosen set of plugins to write their
    ports without waiting for use.
 
 1. A plugin whose entry holds no audio ports is **unprobed**.
 
-## Usage
-
-Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
-§ An instance's key.
-
-## The sources
-
-Landed in `docs/fxCatalogue.md` § The sources.
-
-## Import
-
-Landed in `docs/fxCatalogue.md` § Import.
-
-## The seed nesting
-
-Landed in `docs/fxCatalogue.md` § The seed nesting.
-
 ## Favourites
 
-Landed in `docs/fxCatalogue.md` § Import.
+1. Favourites is a category path like any other. Favouriting a plugin
+   files it under `Favourites`.
+
+1. An entry's classification is thus its category paths and its
+   developer name (`docs/fxCatalogue.md` § Import).
+
+1. Import files the members of folder id 0 under `Favourites`.
 
 ## The picker
 
@@ -191,6 +174,91 @@ Landed in `docs/fxCatalogue.md` § Import.
    make the same splice. A dragged node thus splices into a MIDI wire
    as it does into an audio one.
 
+## The FX tab
+
+1. The catalogue is edited in the **FX tab**, a pane of the editor page
+   beside Swing and Tuning (`docs/editorPage.md`).
+
+1. The palette holds the **place tree**: the root, with the category
+   list nested by path beneath it.
+
+1. The content pane holds the **plugin list** for the place selected in
+   the tree, over a **detail strip** for the plugin selected in the
+   list.
+
+1. The detail strip shows the plugin's key, its category paths, its
+   traits, its audio ports or that it is unprobed, its usage score and
+   its developer name.
+
+1. The tab opens from the editor page's pane selector, or from **Show
+   in catalogue** in an fx node's menu (`docs/wiringPage.md`).
+
+1. Show in catalogue selects the root and the node's plugin. Escape
+   then returns to the wiring page (`docs/editorPage.md` § Entry and
+   exit).
+
+## The plugin list
+
+1. The plugin list holds the installed plugins below the selected place
+   (§ The picker), and the entries under unresolved keys filed below
+   it.
+
+1. An installed plugin is named as REAPER reports it. An unresolved
+   entry is named by its key, and drawn dimmed.
+
+1. Each row shows the plugin's paths beneath the selected place,
+   written relative to it.
+
+1. The plugins at the selected place lead the list, and the rest
+   follow. Each group sorts by name ignoring case. At the root, the
+   unfiled plugins thus lead.
+
+1. A filter narrows the list to the plugins whose names contain its
+   text, ignoring case.
+
+1. Several rows may be selected at once. Filing and unfiling act on
+   every selected row.
+
+## Editing in the tab
+
+1. Dropping the selected rows on a path in the place tree files them
+   under it.
+
+1. **File under…** files the selected rows under a path picked from the
+   category list. Where its text names a path the list does not hold,
+   the picker offers it as new (`docs/chrome.md` § Picker), and picking
+   it makes the path and files under it.
+
+1. Filing adds a path to a plugin and leaves its others in place.
+
+1. **Unfile** removes the selected path from each selected row filed
+   under it. A row below the path only through a path beneath it keeps
+   its paths.
+
+1. The detail strip carries a control on each of the plugin's paths
+   that unfiles the plugin from it.
+
+1. The place tree carries **new**, **rename** and **import**.
+
+1. New makes a standing path under the selected place, its last name
+   typed.
+
+1. Rename edits the selected path whole. A path thus moves by retyping
+   its parent (`docs/fxCatalogue.md` § The taxonomy).
+
+1. Import shows each source with its counts, takes or declines each,
+   and sets the mode (`docs/fxCatalogue.md` § Import).
+
+1. Each trait in the detail strip is authored present, authored absent
+   or left to resolve (`docs/fxCatalogue.md` § Traits). A trait left
+   to resolve shows the value it resolves to.
+
+1. Edits in the tab sit outside undo, with the rest of the catalogue
+   (`docs/fxCatalogue.md` § The catalogue).
+
+1. Two edits confirm before they write: a rename onto a path the list
+   holds, which merges the two, and import in replace mode.
+
 ## Open
 
 1. Whether the stem gains a token grammar — developer, trait — once
@@ -218,17 +286,14 @@ Landed in `docs/fxCatalogue.md` § Import.
    path and AU does not exist.
 
 1. What relinking an unresolved entry looks like, and whether a
-   relinked key can be inferred from the entry's other facts.
+   relinked key can be inferred from the entry's other facts. An
+   unresolved entry carrying no path has no row in the plugin list.
 
-1. Where the catalogue is edited from — filing a plugin (favouriting
-   one files it under `Favourites`), making a path, authoring a trait,
-   running a probe — and whether that surface is a page of its own.
+1. Whether the place tree can delete a path, and what becomes of the
+   plugins filed under it.
 
-1. Whether a path can be deleted, and what becomes of the plugins
-   filed under it.
-
-1. What a probe costs over a large installation, and whether it runs
-   over everything or only over what the user asks for.
+1. What a probe costs over a large installation, and whether the tab
+   probes the selected rows or every unprobed plugin below a place.
 
 1. Whether the picker offers a filter the user states — four audio ins
    and a compressor, to find a plugin to sidechain into — once it has
