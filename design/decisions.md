@@ -4,6 +4,13 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-02** — A source's references resolve in three steps: the installed key equal to one,
+  else every JSFX whose file name it is, else either ignoring case; folder items take the same
+  lookup, over excluding the file-name step for them, since folded matching already reaches file
+  names and folder items are full idents. A VST root holds a plugin only as a whole directory, the
+  deepest winning. A section with an unparseable line is skipped whole, and a missing ini reads as
+  empty.
+
 - **2026-10-01** — An entry's category paths are a set of `/`-joined strings, nil when empty, and
   names are kept as given, so case distinguishes them, over trimming or folding case, since the inis
   import writes from are case-faithful. The list sorts name by name ignoring case, the raw string

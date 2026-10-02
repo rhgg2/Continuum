@@ -179,3 +179,80 @@ call, and the catalogue is a dataStore key.
 
 1. Filing, unfiling and renaming never read the installed set, so a
    path held by an entry under an unresolved key stands like any other.
+
+## The sources
+
+1. A **source** is classification readable without the user authoring
+   it. There are five, across two of REAPER's files and the idents
+   themselves. Reading them writes nothing.
+
+1. The **install tree** is the directory structure the plugins sit
+   under, read from the ident. Its depth varies by installation.
+
+1. A VST's plugin roots are the paths each VST path key in
+   `reaper.ini` lists, one key per architecture. A JSFX's root is the
+   effects directory. A root holds a plugin only as a whole directory,
+   so `Plug-Ins/VST` does not hold what sits under `Plug-Ins/VST3`.
+
+1. Where roots nest, a plugin sits under the deepest one holding it.
+
+1. A plugin's install-tree name is its directories below its root,
+   joined by `/`. A plugin directly at a root has none, and neither has
+   a VST under no root. An AU or CLAP ident names no directory, so
+   neither format has an install tree.
+
+1. **User categories** are `reaper-fxfolders.ini` `[category]`: one or
+   more names per plugin separated by `|`, written where the user
+   assigns them. `[categories]` names the categories the user created,
+   and `[deleted_categories]` those hidden from REAPER's own browser.
+
+1. **User folders** are the `[Folder<n>]` sections of the same file,
+   each listing one FX-browser folder's members, indexed by id and name
+   in `[Folders]`. A plugin may sit in several folders. Folder id 0 is
+   `Favorites` on every installation.
+
+1. **Derived categories** are `reaper-fxtags.ini` `[category]`: one or
+   more names per plugin separated by `|`, written by REAPER at scan
+   time.
+
+1. **Developers** are `reaper-fxtags.ini` `[developer]`: one
+   manufacturer name per plugin. A developer name filters, and is never
+   a category path.
+
+1. A folder item names a plugin by its ident. A category key names an
+   AU or CLAP plugin by its ident, a VST by its base name in REAPER's
+   spelling, and a JSFX by its file name without the subdirectory.
+
+1. A folder section's `Type` field gives the plugin's format.
+
+   | Type | format |
+   |---|---|
+   | 2 | JS |
+   | 3 | VST2 and VST3 |
+   | 5 | AU |
+   | 7 | CLAP |
+
+1. A **smart folder** holds its filter in place of members, as one
+   item of `Type` 1048576. That item names no plugin.
+
+1. A section holding a line that does not parse is skipped, and the
+   rest of the file is read. A missing file reads as empty, so its
+   sources hold nothing.
+
+1. A source's plugin references resolve to catalogue keys against the
+   installed set. A reference matching no key exactly resolves to those
+   matching it ignoring case, since REAPER's files spell one plugin in
+   more than one case. A reference resolving to nothing is **dropped**.
+
+1. A JS category key naming a file name several JSFX share resolves
+   to each of them. A key matching exactly takes precedence over a file
+   name, and a file name over a match ignoring case.
+
+1. A name with an empty name in its path is not kept (§ The taxonomy),
+   so the empty name after a trailing `|` yields nothing. It is not a
+   dropped reference.
+
+1. Each source states three counts: the installed plugins it
+   **covers**, the distinct names it yields, and the references it
+   dropped. A plugin is covered where the source gives it a name, and
+   for user folders also where it is a favourite.

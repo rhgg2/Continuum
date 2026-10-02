@@ -8,6 +8,8 @@
 --shape: path = string  -- names joined by '/', none empty
 --shape: traits = { midiIn=bool, midiOut=bool, instrument=bool, busAware=bool }  -- resolved; all four present
 --shape: jsfxParse = { busAware=bool, midiIn=bool, midiOut=bool }
+--shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source+{ favourites={ [catalogueKey]=true } }, derived=source, developers=source }
+--shape: source = { names={ [catalogueKey]={ [name]=true } }, covered=int, distinct=int, dropped=int }
 
 local util = require 'util'
 local fs   = require 'fs'
@@ -139,8 +141,10 @@ end
 --invariant: UNFILED is compared by identity; it is returned, never stored
 fxCatalogue.UNFILED = {}
 
+local function isPath(name) return not ('/' .. name .. '/'):find('//', 1, true) end
+
 local function checkPath(path)
-  if ('/' .. path .. '/'):find('//', 1, true) then
+  if not isPath(path) then
     error('fxCatalogue: a name is empty in path ' .. string.format('%q', path), 3)
   end
 end
@@ -231,6 +235,178 @@ function fxCatalogue.renamePath(ds, from, to)
   for key, paths in pairs(entryPaths) do catalogue.entries[key].paths = paths end
   catalogue.standing = standing
   ds:assign('fxCatalogue', catalogue)
+end
+
+----- Sources: see docs/fxCatalogue.md § The sources
+
+-- An ini file's sections by header, each { [key] = value }; empty when unreadable.
+-- A section holding a non-blank line that is not key=value is left out whole.
+local function readIni(path)
+  local sections, broken, current = {}, {}, nil
+  for line in (fs.readText(path) or ''):gmatch('[^\r\n]+') do
+    local header = line:match('^%[(.*)%]%s*$')
+    if header then
+      current = header
+      sections[current] = sections[current] or {}
+    elseif current and line:find('%S') then
+      local key, value = line:match('^([^=]*)=(.*)$')
+      if key then sections[current][key] = value else broken[current] = true end
+    end
+  end
+  for header in pairs(broken) do sections[header] = nil end
+  return sections
+end
+
+-- Every root a [REAPER] vstpath key lists, without its trailing '/'.
+local function vstRoots(settings)
+  local roots, home = {}, os.getenv('HOME')
+  for key, value in pairs(settings) do
+    if key:match('^vstpath') and key ~= 'vstpath_root' then
+      for part in value:gmatch('[^;]+') do
+        util.add(roots, (part:gsub('^~', function() return home end):gsub('/+$', '')))
+      end
+    end
+  end
+  return roots
+end
+
+-- A row's install-tree name: its ident's directories below the deepest root holding it.
+local function treeName(row, roots)
+  if row.format == 'JS' then return row.ident:match('^(.*)/[^/]*$') end
+  if not isVst(row.format) then return nil end
+  local deepest
+  for _, root in ipairs(roots) do
+    local under = root .. '/'
+    if row.ident:sub(1, #under) == under and (not deepest or #root > #deepest) then deepest = root end
+  end
+  return deepest and row.ident:sub(#deepest + 2):match('^(.*)/[^/]*$')
+end
+
+-- The installed keys a reference may name: exactly, by JSFX file name, and either ignoring case.
+local function keyIndex(rows)
+  local index = { exact = {}, jsBase = {}, folded = {} }
+  local function enter(byName, name, key)
+    byName[name] = byName[name] or {}
+    byName[name][key] = true
+  end
+  for _, row in ipairs(rows) do
+    index.exact[row.key] = { [row.key] = true }
+    enter(index.folded, row.key:lower(), row.key)
+    if row.format == 'JS' then
+      local base = fs.basename(row.key)
+      enter(index.jsBase, base, row.key)
+      enter(index.folded, base:lower(), row.key)
+    end
+  end
+  return index
+end
+
+-- The key set a reference resolves to, nil when it resolves to none.
+local function resolve(index, reference)
+  return index.exact[reference] or index.jsBase[reference] or index.folded[reference:lower()]
+end
+
+local function addName(names, key, name)
+  names[key] = names[key] or {}
+  names[key][name] = true
+end
+
+-- A category value's names: split on '|', each kept only if a path.
+local function categoryNames(value)
+  local names = {}
+  for name in (value .. '|'):gmatch('([^|]*)|') do
+    if isPath(name) then util.add(names, name) end
+  end
+  return names
+end
+
+local function developerNames(value) return value ~= '' and { value } or {} end
+
+-- A key=value section's references resolved, each value's names filed under every key it resolves to.
+local function fromSection(section, index, namesOf)
+  local names, dropped = {}, 0
+  for reference, value in pairs(section or {}) do
+    local keys = resolve(index, reference)
+    if keys then
+      for key in pairs(keys) do
+        for _, name in ipairs(namesOf(value)) do addName(names, key, name) end
+      end
+    else
+      dropped = dropped + 1
+    end
+  end
+  return names, dropped
+end
+
+local FOLDER_FORMAT = { ['2'] = 'JS', ['3'] = 'VST', ['5'] = 'AU', ['7'] = 'CLAP' }
+local SMART_FILTER  = '1048576'
+local FAVOURITES    = '0'
+
+-- Each folder's members, its sections found by id; id 0's members are the favourites.
+local function fromFolders(ini, index)
+  local names, favourites, dropped = {}, {}, 0
+  local folders = ini.Folders or {}
+  for i = 0, (tonumber(folders.NbFolders) or 0) - 1 do
+    local id, name = folders['Id' .. i], folders['Name' .. i]
+    local members  = id and ini['Folder' .. id]
+    if members and (id == FAVOURITES or (name and isPath(name))) then
+      for n = 0, (tonumber(members.Nb) or 0) - 1 do
+        local item, itemType = members['Item' .. n], members['Type' .. n]
+        local format = FOLDER_FORMAT[itemType]
+        local keys   = format and item and resolve(index, fxCatalogue.key(format, item))
+        if itemType == SMART_FILTER then -- a filter, naming no plugin
+        elseif not keys then dropped = dropped + 1
+        elseif id == FAVOURITES then util.assign(favourites, keys)
+        else for key in pairs(keys) do addName(names, key, name) end end
+      end
+    end
+  end
+  return names, favourites, dropped
+end
+
+-- A source over its names, covering also the keys in alsoCovered.
+local function source(names, dropped, alsoCovered)
+  local covered, distinct = util.assign({}, alsoCovered or {}), {}
+  for key, held in pairs(names) do
+    covered[key] = true
+    util.assign(distinct, held)
+  end
+  return { names = names, covered = #util.keys(covered), distinct = #util.keys(distinct), dropped = dropped }
+end
+
+--post: fresh; each source's references resolved to installed keys, unresolved ones counted dropped
+--post: a missing ini reads as empty, so its sources are empty
+function fxCatalogue.sources()
+  local resource = reaper.GetResourcePath()
+  local settings = readIni(fs.join(resource, 'reaper.ini'))
+  local fxFolders = readIni(fs.join(resource, 'reaper-fxfolders.ini'))
+  local fxTags   = readIni(fs.join(resource, 'reaper-fxtags.ini'))
+  local rows     = fxCatalogue.installed()
+  local index    = keyIndex(rows)
+  local roots    = vstRoots(settings.REAPER or {})
+
+  local treeNames = {}
+  for _, row in ipairs(rows) do
+    local name = treeName(row, roots)
+    if name and isPath(name) then addName(treeNames, row.key, name) end
+  end
+  local folderNames, favourites, folderDrops = fromFolders(fxFolders, index)
+  local user = source(fromSection(fxFolders.category, index, categoryNames))
+  user.standing = {}
+  for path in pairs(fxFolders.categories or {}) do
+    if isPath(path) then user.standing[path] = true end
+  end
+  local folders = source(folderNames, folderDrops, favourites)
+  folders.favourites = favourites
+
+  return {
+    installed  = #rows,
+    tree       = source(treeNames, 0),
+    user       = user,
+    folders    = folders,
+    derived    = source(fromSection(fxTags.category, index, categoryNames)),
+    developers = source(fromSection(fxTags.developer, index, developerNames)),
+  }
 end
 
 return fxCatalogue

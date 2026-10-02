@@ -50,49 +50,7 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
 
 ## The sources
 
-1. A **source** is classification readable without the user authoring
-   it. There are five, across two files and the idents themselves.
-
-1. The **install tree** is the directory structure the plugins sit
-   under, read from the ident. Its depth varies by installation.
-
-1. A VST's plugin roots are REAPER's VST path setting in `reaper.ini`,
-   and a JSFX's root is the effects directory. A VST under no root
-   sits in no install tree. An AU or CLAP ident names no directory, so
-   neither format has an install tree.
-
-1. **User categories** are `reaper-fxfolders.ini` `[category]`: one or
-   more names per plugin separated by `|`, written where the user
-   assigns them. `[categories]` names the categories the user created,
-   and `[deleted_categories]` those hidden from REAPER's own browser.
-
-1. **User folders** are the `[Folder<n>]` sections of the same file,
-   each listing one FX-browser folder's members, indexed by id and name
-   in `[Folders]`. A plugin may sit in several folders. Folder id 0 is
-   `Favorites` on every installation.
-
-1. **Derived categories** are `reaper-fxtags.ini` `[category]`: one or
-   more names per plugin separated by `|`, written by REAPER at scan
-   time.
-
-1. **Developers** are `reaper-fxtags.ini` `[developer]`: one
-   manufacturer name per plugin. A developer name filters, and is never
-   a category path.
-
-1. A folder item names a plugin by its ident. A category key names an
-   AU or CLAP plugin by its ident, a VST by its base name in REAPER's
-   spelling, and a JSFX by its file name without the subdirectory.
-
-1. A folder section's `Type` field gives the plugin's format.
-
-   | Type | format |
-   |---|---|
-   | 2 | JS |
-   | 3 | VST2 and VST3 |
-   | 5 | AU |
-   | 7 | CLAP |
-
-1. A section that does not parse is skipped, and the rest is read.
+Landed in `docs/fxCatalogue.md` § The sources.
 
 ## Import
 
@@ -106,12 +64,8 @@ Landed in `docs/fxCatalogue.md` § Usage, and parameter frecency in
 1. Import runs in one of two modes. **Augment** adds, and **replace**
    overwrites.
 
-1. A source's plugin references resolve to catalogue keys against the
-   installed set. References resolving to nothing are dropped, and
-   their number is stated.
-
-1. A JS category key naming a file name several JSFX share resolves
-   to each of them.
+1. A source's references resolving to catalogue keys, and the
+   references dropped: landed in `docs/fxCatalogue.md` § The sources.
 
 1. An install-tree directory becomes a category path, one segment per
    directory below the format's plugin root.

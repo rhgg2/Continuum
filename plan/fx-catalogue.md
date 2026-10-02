@@ -29,10 +29,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-02 fxCatalogue: read the sources, resolved to catalogue keys (§ The sources)
 - 2026-10-01 fxCatalogue: add category paths, standing paths and the category list (design § The taxonomy)
 - 2026-10-01 fxCatalogue: resolve a plugin's traits, authored over parsed over mark (§ Traits)
 - 2026-09-30 wiring: record a plugin's ports and usage in the catalogue on add (§ The catalogue, § Probing 1–2, § Usage 1–3)
-- 2026-09-30 tracker: key parameter frecency on the catalogue key (§ Usage 4)
 
 ## Now
 
@@ -40,19 +40,6 @@
 
 ## Queued (current phase; one-liners)
 
-- **fxCatalogue: read the sources, resolved to catalogue keys** (§ The
-  sources, § Import 2, 4–5) — an ini reader that skips a section it
-  cannot parse; `reaper-fxfolders.ini` `[category]`, `[categories]`,
-  `[Folders]` and `[Folder<n>]`, each item's format from its `Type`;
-  `reaper-fxtags.ini` `[category]` and `[developer]`; the install tree
-  from each installed ident, one segment per directory between its
-  root and its file. The VST roots are the architecture's `vstpath`
-  key in `reaper.ini`, split on `;` with `~` expanded, and the JS root
-  is `Effects/`. Each source yields names per catalogue key, with its
-  coverage of the installed set, its count of distinct names and its
-  count of dropped references. A JS category key is a file name, and
-  resolves to every JSFX carrying it. Ini fixtures under
-  `tests/fixtures`.
 - **fxCatalogue: import the chosen sources** (§ Import) — each source
   taken or declined; category and folder names split on `/` into
   paths; folder id 0 setting the favourite flag; developer names

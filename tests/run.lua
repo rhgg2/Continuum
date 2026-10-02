@@ -310,6 +310,7 @@ local specs = {
   'rm_fx_traits_spec',
   'scratch_spec',
   'fxCatalogue_spec',
+  'fxCatalogue_sources_spec',
   'wv_authoring_spec',
   'wv_fx_mute_spec',
   'wv_activate_spec',
