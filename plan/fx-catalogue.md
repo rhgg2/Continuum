@@ -30,10 +30,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-10-03 fxCatalogue: the picker's list as a function of its text (§ The picker 3–10, 14–15)
 - 2026-10-03 fxCatalogue: unfiled sits at the root (design § Unfiled)
 - 2026-10-02 fxCatalogue: file favourites under a path, dropping the flag (§ Favourites)
 - 2026-10-02 fxCatalogue: nest derived categories by the seed (§ The seed nesting)
-- 2026-10-02 fxCatalogue: import the chosen sources (§ Import)
 
 ## Now
 
@@ -41,17 +41,6 @@
 
 ## Queued (current phase; one-liners)
 
-- fxCatalogue: the picker's list as a function of its text (§ The picker
-  3–10, 14–15) — split at the last `/` into current place and stem;
-  the place resolves exact, else to the one case-insensitive match,
-  else lists nothing; child places are category paths under it whose
-  last name begins with the stem, in category-list order, with no
-  unfiled place; plugins below it (at the root every installed plugin)
-  whose REAPER name contains the stem, once each, ranked in-project
-  first, then usage score decayed to the catalogue's current count,
-  then name ignoring case. In-project keys arrive from the caller, and
-  in **new** the two busses lead the root's plugins, narrowed by the
-  stem. Pure, with its own spec.
 - wiringRender: the fx picker as path completion (§ The picker 1–2,
   11–14) — `renderFxPicker` draws places then plugins from the list
   function, fed through wv/wm with the installed rows, the catalogue and

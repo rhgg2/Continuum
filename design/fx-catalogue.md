@@ -295,6 +295,11 @@ thereafter authored in the FX tab, and the picker browses it.**
 1. What a probe costs over a large installation, and whether the tab
    probes the selected rows or every unprobed plugin below a place.
 
+1. Whether the busses become catalogue entries under keys of their
+   own, filed like any plugin — under `Tools` by the seed — and listed
+   in the FX tab. Adding a bus is not a use, so such an entry gains no
+   usage score.
+
 1. Whether the picker offers a filter the user states — four audio ins
    and a compressor, to find a plugin to sidechain into — once it has
    landed.

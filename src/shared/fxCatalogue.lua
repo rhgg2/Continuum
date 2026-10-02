@@ -10,6 +10,7 @@
 --shape: jsfxParse = { busAware=bool, midiIn=bool, midiOut=bool }
 --shape: sources = { installed=int, tree=source, user=source+{ standing={ [path]=true } }, folders=source, derived=source, developers=source }  -- derived names nested by the seed
 --shape: source = { names={ [catalogueKey]={ [name]=true } }, covered=int, distinct=int, dropped=int }
+--shape: pickerItem = { place=path, name=string } | row  -- a place and its last name, or the caller's own row; told apart by place
 
 local util = require 'util'
 local fs   = require 'fs'
@@ -111,12 +112,12 @@ function fxCatalogue.traits(catalogue, format, key)
   return resolved
 end
 
--- The persisted catalogue, defaulted; one written before standing paths lacks them.
-local function load(ds)
-  local catalogue = ds:get('fxCatalogue') or { n = 0, entries = {} }
-  catalogue.standing = catalogue.standing or {}
-  return catalogue
+-- A fresh top over a persisted catalogue, defaulted; one written before standing paths lacks them.
+local function defaulted(catalogue)
+  return util.assign({ n = 0, entries = {}, standing = {} }, catalogue or {})
 end
+
+local function load(ds) return defaulted(ds:get('fxCatalogue')) end
 
 -- Usage decays per catalogue-wide use, not per day, so an unused month
 -- costs nothing; 0.98 halves a score over about 34 uses.
@@ -160,9 +161,9 @@ local function listedPaths(catalogue)
   return listed
 end
 
---post: fresh; each listed path once, name by name ignoring case, the raw string breaking a tie
-function fxCatalogue.categories(ds)
-  local paths   = util.keys(listedPaths(load(ds)))
+-- The category list: each listed path once, name by name ignoring case, raw breaking a tie.
+local function categoryList(catalogue)
+  local paths   = util.keys(listedPaths(catalogue))
   local sortKey = {}
   for _, path in ipairs(paths) do sortKey[path] = (path:lower():gsub('/', '\0')) end
   table.sort(paths, function(a, b)
@@ -171,6 +172,9 @@ function fxCatalogue.categories(ds)
   end)
   return paths
 end
+
+--post: fresh; each listed path once, name by name ignoring case, the raw string breaking a tie
+function fxCatalogue.categories(ds) return categoryList(load(ds)) end
 
 --post: path standing, so listed whatever is filed under it
 function fxCatalogue.makePath(ds, path)
@@ -230,6 +234,82 @@ function fxCatalogue.renamePath(ds, from, to)
   for key, paths in pairs(entryPaths) do catalogue.entries[key].paths = paths end
   catalogue.standing = standing
   ds:assign('fxCatalogue', catalogue)
+end
+
+----- Picker
+
+-- The category path a place spelling names: '' the root, else the path spelled the same,
+-- else the one path spelled the same ignoring case; nil for none or several.
+local function resolvePlace(paths, spelling)
+  if spelling == '' then return '' end
+  local lower   = spelling:lower()
+  local matches = util.filter(paths, function(path) return path:lower() == lower end)
+  for _, path in ipairs(matches) do
+    if path == spelling then return path end
+  end
+  return #matches == 1 and matches[1] or nil
+end
+
+--pre: catalogue as ds holds it (nil reads empty); rows installed() rows; leading rows with a name
+--post: fresh, the catalogue and rows unwritten; {} when the text's place resolves to no path
+--post: child places beginning with the stem, leading (root only), then ranked plugins containing it
+function fxCatalogue.pickerList(catalogue, rows, inProject, text, leading)
+  catalogue = defaulted(catalogue)
+  local paths = categoryList(catalogue)
+  local spelling, stem = text:match('^(.*)/([^/]*)$')
+  if not spelling then spelling, stem = '', text end
+  local place = resolvePlace(paths, spelling)
+  if not place then return {} end
+  stem = stem:lower()
+  local function contains(name) return name:lower():find(stem, 1, true) ~= nil end
+  local under = place == '' and '' or place .. '/'
+
+  local places = {}
+  for _, path in ipairs(paths) do
+    local name = path:sub(#under + 1)
+    if path:sub(1, #under) == under and not name:find('/', 1, true)
+       and name:lower():sub(1, #stem) == stem then
+      util.add(places, { place = path, name = name })
+    end
+  end
+
+  local function below(entry)
+    if place == '' then return true end
+    for path in pairs(entry and entry.paths or {}) do
+      if path == place or path:sub(1, #under) == under then return true end
+    end
+    return false
+  end
+  local plugins, rank = {}, {}
+  for _, row in ipairs(rows) do
+    local entry = catalogue.entries[row.key]
+    if below(entry) and contains(row.name) then
+      local usage = entry and entry.usage
+      util.add(plugins, row)
+      rank[row] = {
+        inProject = inProject[row.key] == true,
+        score     = usage and usage.s * DECAY ^ (catalogue.n - usage.n0) or 0,
+        lower     = row.name:lower(),
+      }
+    end
+  end
+  table.sort(plugins, function(a, b)
+    local rankA, rankB = rank[a], rank[b]
+    if rankA.inProject ~= rankB.inProject then return rankA.inProject end
+    if rankA.score ~= rankB.score then return rankA.score > rankB.score end
+    if rankA.lower ~= rankB.lower then return rankA.lower < rankB.lower end
+    if a.name ~= b.name then return a.name < b.name end
+    return a.key < b.key
+  end)
+
+  local list = places
+  if place == '' then
+    for _, row in ipairs(leading) do
+      if contains(row.name) then util.add(list, row) end
+    end
+  end
+  for _, row in ipairs(plugins) do util.add(list, row) end
+  return list
 end
 
 ----- Sources: see docs/fxCatalogue.md § The sources

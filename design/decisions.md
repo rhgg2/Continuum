@@ -4,6 +4,11 @@ A list of all design decisions that bear on active work. One dated
 entry each: what was chosen, over what, and why. Three or four lines,
 not eight or ten.
 
+- **2026-10-03** — The fx picker's list is a pure fxCatalogue function of the text, the installed
+  rows, the catalogue and the in-project keys. Rows the caller passes lead the root's plugins, which
+  is how the busses reach it, over fxCatalogue knowing of busses. Whether the busses instead become
+  catalogue entries filed under Tools is left open.
+
 - **2026-10-02** — The fx catalogue is edited in an FX tab on the editor page, over a page of its
   own: a place tree in the palette beside a plugin list holding what is below the place, as the
   picker does. Filing is by drop or File under…, each adding a path. Edits stay outside undo, so a
